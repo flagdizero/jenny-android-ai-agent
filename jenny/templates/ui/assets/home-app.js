@@ -2128,6 +2128,8 @@ class HomeApp {
     /* La barra di una scheda tenuta premuta: Indietro la chiude (e spegne i
        fili) prima di lasciare la bacheca. */
     if (this.view === 'board' && this.board?.closeCardBar?.()) return true;
+    /* Il ventaglio del «+» nel cassetto: Indietro lo chiude, e si resta li'. */
+    if (this.view === 'drawer' && this.drawer?.closeDial?.()) return true;
     /* La modalita' ordina: ogni uscita **salva**, come nei launcher (scelta
        dell'utente, 10/10/2026). Fino ad allora Indietro e Home uscivano
        senza salvare, e il nuovo ordine spariva senza dirlo. Se la scrittura

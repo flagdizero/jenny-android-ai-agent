@@ -78,7 +78,9 @@ the pages of the next. For each, call `board_write_summary` once, as soon as its
 Write it from the pages, not from memory: every sentence must be backed by a page you cite, and
 written as plain prose — no `[[links]]`: the drawer already lists each section's pages under it. Never
 quote a live value (an app reading, a cron's last result): the drawer shows those itself, and
-a summary that carried them would need rewriting at every reading.{% else %}No drawer needs rewriting.{% endif %}
+a summary that carried them would need rewriting at every reading. Never restate a scheduled
+reminder or its date either: the drawer opens on the card's own care calendar, and the same date
+told twice is one too many.{% else %}No drawer needs rewriting.{% endif %}
 
 ### 4. Reminders
 

@@ -474,7 +474,7 @@ correlate a reply to.
 | `staged.install` | `id`, `target_sha256` | Write a draft into place. `target_sha256` is the one `staged.list` returned (`null` for a new file): if the file changed since, the answer is `conflict` and nothing is written. No tool of the model can call this. |
 | `staged.discard` | `id` | Throw a draft away; the file stays as it was. |
 | `board.seen` | `wiki`, `card` | Record that the user looked: the notebook's board (no `card`), or one card's drawer. Drives the "since you last looked" row and the blue dots. A notebook without a board is a no-op. |
-| `board.move` | `wiki`, `kind`, `id`, `x`, `y` | Move a card (`kind: card`) or a reminder's sticky note (`kind: note`) to `x`,`y` percent of the board. The position becomes the user's, and the gardener never moves it again. |
+| `board.move` | `wiki`, `kind`, `id`, `x`, `y` | Move a card (`kind: card`, with its `id`) or the board's agenda of reminders (`kind: agenda`, no `id`) to `x`,`y` percent of the board. The position becomes the user's, and the gardener never moves it again. |
 | `board.card.add` | `wiki`, `title`, `near`?, `glyph`?, `app`?, `link`? | Make a card yourself. With `app` (`{slug, params}`) the card **is** that app: its value takes the place of the photo, a tap opens the app, and the title defaults to the app's name; with `link` (a card id) it is tied to that card by a thread and lands next to it. It lands in the free spot nearest `near` (`{x, y}` in board coordinates: the point the user held on the empty wall, or the centre of the view), with no pages yet; its title and place are the user's. A full board refuses with `conflict`. Replies `{card: {id, title, pos}}`. |
 | `board.card.rename` | `wiki`, `id`, `title` | Rename a card. The title becomes the user's, and the gardener no longer rewrites it. |
 | `board.card.remove` | `wiki`, `id` | Remove a card from the board, with an undo. The card, its threads and its place are kept for 7 days (at most 5 cards); its notebook crons and micro apps are paused and its reminders stay quiet meanwhile. The wiki is not touched. Replies `{title}`. |
@@ -489,6 +489,8 @@ correlate a reply to.
 | `board.section.remove` | `wiki`, `card`, `id` | Remove a section the user added. The wiki is not touched; a reminder section drops its reminder, a micro app goes to `board/micro/.trash/` and loses its approval, a notebook cron is removed from the scheduler. |
 | `board.section.reorder` | `wiki`, `card`, `order` | Reorder the sections the user added (`order` is their ids). |
 | `board.reminder.done` | `wiki`, `id` | Mark a reminder done: it leaves the board and becomes a journal line. |
+| `board.reminder.update` | `wiki`, `id`, `text`?, `when`? | Edit an open reminder by its id — one Jenny wrote too, which has no drawer section — from the care calendar. The reminder becomes the user's. |
+| `board.reminder.drop` | `wiki`, `id` | Remove an open reminder by its id: it stays in `reminders.json` as `dropped`, and the drawer section that pointed to it, if any, goes. |
 | `board.cron.pause` | `wiki`, `job`, `paused` | Pause (`true`) or resume (`false`) a notebook cron from its drawer; only a job bound to this notebook. |
 
 **Authorization is the handshake's, not the frame's.** Only a connection that presented

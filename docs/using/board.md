@@ -17,12 +17,12 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 | Thing | What it is |
 |---|---|
 | **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. A card can also **be an app** (*Portfolio*, *WaterBot*): its live value takes the place of the photo, and tapping it opens the app — see [App cards](#app-cards). |
-| **Sticky notes** | Yellow notes for the open reminders of a card, with what and when. They sit next to their card; tapping one opens that card's drawer. |
+| **The agenda** | One yellow sheet for the whole notebook, **Coming up**: the next three open reminders, each with its date and its card, and *+N later* for the rest. A thread runs from its pin to every card it lists — one per card, however many of its rows are that card's. Tapping a row opens that card's drawer; *+N later* opens all of them, by month. |
 | **Threads** | Thin red lines between two cards that a page ties together. See [Threads](#threads). |
 | **The envelope** | Bottom left: Jenny's proposals for changing the board's shape, with a count. See [The envelope](#the-envelope-jennys-proposals). |
 | **Since you last looked · N new** | A row at the top, shown only when something changed since you last opened the board, or proposals are waiting. See [Since you last looked](#since-you-last-looked). |
 
-The board is a **wall** you move around in every direction, with its origin in the middle: the screen you see when you open it is the origin, and there is room to the left, right, above and below. One finger on the background moves the wall, two fingers zoom and move it like a map — a pinch can start with a finger on a card, which then stays where it was — a double tap on the background goes back to the origin at normal size; on a computer the wheel moves it and Ctrl + wheel zooms. Drag a card near the edge of the screen and the wall moves with it. A card you accept from the envelope is placed in the free spot nearest to the middle of what you are looking at, and a sticky note next to its card wherever that card is. It holds at most **40 items**, cards and sticky notes together, and up to 16 threads. Positions are stored as percentages of the screen, from −1,000 to 1,000 (the screen to the right starts at 100, the one to the left at −100), so the same board fits a square screen and a tall one.
+The board is a **wall** you move around in every direction, with its origin in the middle: the screen you see when you open it is the origin, and there is room to the left, right, above and below. One finger on the background moves the wall, two fingers zoom and move it like a map — a pinch can start with a finger on a card, which then stays where it was — a double tap on the background goes back to the origin at normal size; on a computer the wheel moves it and Ctrl + wheel zooms. Drag a card near the edge of the screen and the wall moves with it. A card you accept from the envelope is placed in the free spot nearest to the middle of what you are looking at; the agenda starts beside the cards, top right, until you move it. It holds at most **40 items** — the cards, plus the agenda when there are reminders — and up to 16 threads. Positions are stored as percentages of the screen, from −1,000 to 1,000 (the screen to the right starts at 100, the one to the left at −100), so the same board fits a square screen and a tall one.
 
 Three buttons in the header work on the board: **+** makes a new card (see [Your cards](#your-cards)), the **lens** opens [search](#search), and the **list** icon swaps the board for a plain list of the same cards — name, next reminder, signal, and the envelope as its last row — for anyone who prefers a list, and for screen readers.
 
@@ -40,8 +40,8 @@ No signal means nothing needs you.
 
 ### Gestures
 
-- **Tap** a card or a sticky note to open the drawer.
-- **Drag** a card or a sticky note to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note on her own — not the ones you placed, not the ones she placed; she does it when you ask her to (see [Asking Jenny](#asking-jenny)). A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
+- **Tap** a card to open its drawer, or a row of the agenda to open the drawer of that row's card.
+- **Drag** a card or the agenda to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or the agenda on her own — not the ones you placed, not the ones she placed; she does it when you ask her to (see [Asking Jenny](#asking-jenny)). A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
 - **Press and hold** a card (about half a second) to lift it: its threads turn bold and show their labels, the cards at the other end lift, the rest of the board dims, and a bar rises at the bottom with **Rename** and **Remove from the board**. Tap the background, the **×** on the bar or Back to put everything back.
 - **Press and hold** the empty wall to make a new card right there, under your finger.
 
@@ -75,16 +75,16 @@ A thread is always visible as a thin line with no words on it; its label — the
 
 ## The drawer
 
-<p align="center"><img src="../img/notebook-drawer.png" alt="The drawer of the card Acero: its brief, the next reminder as a sticky note, and a section with a correction waiting, with links to its two source pages" width="300"></p>
+<p align="center"><img src="../img/notebook-drawer.png" alt="The drawer of the card Acero: its brief, its next reminder, and a section with a correction waiting, with links to its two source pages" width="300"></p>
 
 Tap a card and its drawer opens. From the top:
 
 1. **The title**, the number of wiki pages the drawer covers and when it was last updated.
 2. **The brief**: one or two sentences on the state of this subject now.
 3. A warning when a mini-app section in this drawer is in alarm or stalled, saying that the data comes from the app, not from the wiki.
-4. **Next up**: the card's nearest open reminder, with a **Done** button.
-5. **The sections.** Every notebook has a *skeleton*, the list of sections every drawer has, in the same order on every card — for a plant notebook, *Pot and repotting, Water, Feeding, Light, History*. Each section is two short sentences, with chips that open the pages it was written from. A section the pages have nothing on is left out rather than filled with "no data". A blue dot beside a section's title means its text changed since you last opened the drawer.
-6. **Your sections**, if you added any (see below), then **+ Add a section**.
+4. **The care calendar**: the card's open reminders, each shown once, on a timeline — the overdue ones first, in red, then **Today**, then one group per month, then the ones that wait for an app's value (**When it happens**). The nearest is a yellow card with a **Done** button; every reminder has a **⋯** with **Edit**, **Done** and **Remove**. The brief and the sections do not repeat the dates: the calendar is where they are.
+5. **The sections.** Every notebook has a *skeleton*, the list of sections every drawer has, in the same order on every card — for a plant notebook, *Pot and repotting, Water, Feeding, Light, History*. Each section is two short sentences, with chips that open the pages it was written from. Sections are folded: a row with the title and the first line; tap it to read the rest, the pages and **Correct**. A section the pages have nothing on is left out rather than filled with "no data". A blue dot beside a section's title means its text changed since you last opened the drawer.
+6. **Your sections**, if you added any (see below).
 7. **Threads**, if the card has any.
 8. **The pages (N)**: a collapsed list of every page in this drawer.
 
@@ -94,7 +94,7 @@ A drawer that has not been written yet says so, and is written on the next garde
 
 The drawer is written by Jenny from the wiki, so you do not edit it directly: you correct it, and the correction goes to the page it came from.
 
-1. Tap **Correct** under a section. Its text becomes a text field, and a line under it names the page the correction will go to — the section's first source page.
+1. Open a section and tap **Correct** under it. Its text becomes a text field, and a line under it names the page the correction will go to — the section's first source page.
 2. Write what it should say, and tap **Send to Jenny**.
 3. The correction is filed as a report on that page — the same kind of audit file as [Report](./wiki.md#telling-jenny-something-is-wrong) in the reader, marked as coming from the board. Until it is dealt with, the section shows your text in italics with a paperclip: *your correction, I'm working it in*.
 4. On the next [board pass](./gardener.md#the-board-pass) the gardener applies the correction to the wiki page, closes the report, and rewrites the drawer from the corrected page. The section then shows **✓ Applied to the wiki** until you next open the drawer.
@@ -103,7 +103,7 @@ Unlike Report, a correction does not take you to the chat: it is handled between
 
 ### Adding a section
 
-**+ Add a section** offers six kinds: note, reminder, app, cron, photo and other. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). An app or a cron always comes that way: Jenny makes it **because you asked for it**.
+The yellow **+** at the bottom right, just left of Jenny, stays on screen while the drawer scrolls. It opens a fan of six kinds: reminder, note, app, cron, photo and other; tap outside it, the **×** or Back to close it. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). An app or a cron always comes that way: Jenny makes it **because you asked for it**.
 
 The rule behind apps and crons: **everything a notebook does by itself is on its board, where you can see it.** An app's reader reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
 
@@ -113,7 +113,7 @@ Something to remember, in your words — *it stays on the south windowsill only 
 
 #### Reminder
 
-Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder becomes a sticky note on the board and the card's **Next up** when it is the nearest. **Done** closes it — it is not deleted, it is marked done and a `[said]` journal line records that it was done. Removing the section drops the reminder. See [Reminders and the notebook clock](#reminders-and-the-notebook-clock) for when you are told.
+Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder goes into the card's care calendar and, when it is among the next three, onto the board's agenda. **Done** closes it — it is not deleted, it is marked done and a `[said]` journal line records that it was done. **Remove**, from its **⋯**, drops it; **Edit** changes its text or date, and makes a reminder Jenny wrote yours. See [Reminders and the notebook clock](#reminders-and-the-notebook-clock) for when you are told.
 
 #### App
 
@@ -220,7 +220,7 @@ A system job, **`reminders`** — the notebook clock — runs **every 15 minutes
 
 - A **dated** reminder is announced from **09:00** (your time zone) on its day, or on the first of the month when only the month is known. If the app was not running at nine, it is announced at the next round.
 - The announcement is written by Jenny in a silent turn whose only way to reach you is a message, and it has to say **why**: what is due, the reason taken from the page the reminder points to, and a short question about when you will do it. It arrives in the personal chat like her other proactive messages (see [Android notifications](./scheduling.md#android-notifications)), and a *since you last looked* row is added on the board.
-- Each reminder is announced **once**. It stays on the board until you tap **Done** or remove its section.
+- Each reminder is announced **once**. It stays in the agenda and the calendar until you tap **Done** or **Remove** it.
 
 The reminder format also allows a trigger on an app's data instead of a date — *when moisture is below 20* — which the clock checks against the latest value recorded, and only if that value is fresh: stale data triggers nothing. It is announced once when the condition becomes true, re-armed only after it has been false at **two checks in a row** (a sensor hovering on the threshold does not fire at every round), and never announced twice within **12 hours**. You set one from the section in a drawer: **Remind me when…** asks what to do and whether the value should drop below or rise above a threshold.
 

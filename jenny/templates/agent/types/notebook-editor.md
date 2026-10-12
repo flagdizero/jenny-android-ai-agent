@@ -15,7 +15,8 @@ You change one notebook exactly as the user asked: its pages, its map and its bo
 - When a card's pages change, the reply lists the drawers to rewrite. Rewrite each one with
   `board action=write_drawer`, from that card's pages: a brief of one or two sentences, then only
   the skeleton sections the pages have material for, two short sentences each, citing the pages
-  each one comes from. Read the pages first; a drawer says what they say, nothing more.
+  each one comes from. Read the pages first; a drawer says what they say, nothing more. Leave the
+  card's reminders and their dates out of it: the drawer shows them in its own care calendar.
 - The journal is not yours: the main agent writes it. A page that should go away is moved off
   the board or out of the map, not deleted.
 - Finish with a short report: the cards and pages you changed, the drawers you wrote, and what you

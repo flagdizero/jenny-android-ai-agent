@@ -412,7 +412,7 @@ def parse_when(raw: Any) -> dict[str, Any]:
 
 
 def add_reminder(root: Path, ref: str, text: Any, when: Any) -> str:
-    """Un'attesa dell'utente nel cassetto: sulla bacheca è un post-it."""
+    """Un'attesa dell'utente nel cassetto: sulla bacheca è una riga dell'agenda."""
     body = model.clean_text(text, model.MAX_TITLE * 2)
     if not body:
         raise BoardEditError("bad_request", "text required")
@@ -476,12 +476,17 @@ def update_reminder(root: Path, ref: str, sid: str, text: Any, when: Any = None)
     _card, section = _section(root, ref, sid)
     if section["kind"] != "reminder":
         raise BoardEditError("bad_request", "only notes and reminders can be edited")
+    update_reminder_by_id(root, section["reminder"], text, when)
+
+
+def update_reminder_by_id(root: Path, rid: str, text: Any, when: Any = None) -> None:
+    """Correggi un'attesa aperta dal calendario di cura: anche una di Jenny, che diventa tua."""
     body = model.clean_text(text, model.MAX_TITLE * 2)
     parsed = parse_when(when) if when is not None else None
 
     def apply_rem(rems: dict[str, Any]) -> None:
         for rem in rems["reminders"]:
-            if rem["id"] == section["reminder"]:
+            if rem["id"] == rid and rem["state"] == "open":
                 if body:
                     rem["text"] = body
                 if parsed:
@@ -492,6 +497,36 @@ def update_reminder(root: Path, ref: str, sid: str, text: Any, when: Any = None)
         raise BoardEditError("not_found", "reminder not found")
 
     mutate_reminders(root, apply_rem)
+
+
+def drop_reminder(root: Path, rid: str) -> None:
+    """Togli un'attesa: resta nel file come ``dropped`` (nessuna attesa sparisce).
+
+    Se è nata da un cassetto, se ne va anche la sua sezione: altrimenti
+    resterebbe una sezione che punta a un'attesa chiusa.
+    """
+    def apply_rem(rems: dict[str, Any]) -> None:
+        for rem in rems["reminders"]:
+            if rem["id"] == rid and rem["state"] == "open":
+                rem["state"] = "dropped"
+                rem["closedAt"] = model.now_iso()
+                rem["by"] = model.USER
+                return
+        raise BoardEditError("not_found", "reminder not found")
+
+    mutate_reminders(root, apply_rem)
+
+    def apply(board: dict[str, Any]) -> bool | None:
+        changed = False
+        for card in board["cards"]:
+            keep = [s for s in card["userSections"]
+                    if not (s.get("kind") == "reminder" and s.get("reminder") == rid)]
+            if len(keep) != len(card["userSections"]):
+                card["userSections"] = keep
+                changed = True
+        return None if changed else False
+
+    mutate_board(root, apply)
 
 
 async def remove_section(root: Path, ref: str, sid: str, *, cron: Any = None) -> bool:

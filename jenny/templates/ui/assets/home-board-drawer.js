@@ -1,10 +1,16 @@
 /** La casa — il cassetto di una scheda della bacheca.
  *
  *  Il retro di una polaroid: un `index.md` per quel soggetto, scritto da Jenny
- *  dalla wiki. In alto «in breve» e la prossima cosa da fare; poi le sezioni
- *  dello **scheletro del quaderno** (le stesse per ogni scheda, nello stesso
- *  ordine: l'utente sa sempre dove guardare), due righe ciascuna con i link alle
- *  pagine vere da cui vengono; poi le sezioni che hai aggiunto tu; poi i fili.
+ *  dalla wiki. In alto «in breve»; poi il **calendario di cura**, le attese
+ *  della scheda una volta sola, per mese; poi le sezioni dello **scheletro del
+ *  quaderno** (le stesse per ogni scheda, nello stesso ordine: l'utente sa
+ *  sempre dove guardare), chiuse a fisarmonica con la prima riga in vista; poi
+ *  le sezioni che hai aggiunto tu; poi i fili. Aggiungere passa dal «+»
+ *  flottante accanto a Jenny, che si apre a ventaglio.
+ *
+ *  Fino al 12/10/2026 un'attesa compariva fino a quattro volte (il riquadro
+ *  «Prossima cosa», una sezione «Promemoria» con Fatto/Togli/↑, e le date
+ *  ripetute nel riassunto), e «+ Aggiungi sezione» era testo nudo in fondo.
  *
  *  **Le tue modifiche sono richieste, non scritture.** «Correggi» non riscrive
  *  la riga: apre una segnalazione sulla pagina da cui viene (`board.fix`), e la
@@ -23,7 +29,7 @@ import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
-import { whenLabel } from './home-board.js';
+import { reminderGroups, whenLabel } from './home-board.js';
 import { describeSchedule } from './shared/cron-view.js';
 import { renderBlock } from './home-board-blocks.js';
 
@@ -41,6 +47,23 @@ export function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
   if (diff === 0) return i18n.t('board.drawer.today', { time });
   if (diff === 1) return i18n.t('board.drawer.yesterday', { time });
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
+}
+
+/** Quanto manca a *date* (`AAAA-MM-GG`), a parole: «tra 3 settimane», «ieri».
+ *  Giorni fino a due settimane, poi settimane fino a due mesi, poi mesi. */
+export function untilLabel(date, today = new Date(), locale = i18n.locale) {
+  const [y, m, d] = String(date || '').split('-').map(Number);
+  if (!y || !m) return '';
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.round((new Date(y, m - 1, d || 1) - from) / 86_400_000);
+  const abs = Math.abs(days);
+  const [n, unit] = abs < 14 ? [days, 'day'] : abs < 60 ? [Math.round(days / 7), 'week']
+    : [Math.round(days / 30), 'month'];
+  try {
+    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(n, unit);
+  } catch (_) {
+    return '';
+  }
 }
 
 /** Un andamento come una riga sola: niente assi, niente librerie. */
@@ -96,7 +119,7 @@ export class BoardDrawer {
    * @param onOpenApp    `(slug)` — «Apri l'app».
    * @param onRenameCard `(cardId, title)` — «Rinomina», in fondo al cassetto.
    * @param onRemoveCard `(cardId, title)` — «Togli dalla bacheca», in fondo.
-   * @param sheet        il foglio della bacheca, per «Aggiungi sezione».
+   * @param sheet        il foglio della bacheca, per i moduli e le azioni.
    */
   constructor({ onOpenPage, onOpenCard, onAskJenny, onOpenApp, onRenameCard, onRemoveCard,
     onAppCard, sheet } = {}) {
@@ -121,8 +144,102 @@ export class BoardDrawer {
     });
     /** La sezione che si sta correggendo, per titolo. */
     this.editing = null;
+    /** Le sezioni dello scheletro aperte, per titolo: chiuse a ogni cassetto nuovo. */
+    this.unfolded = new Set();
     this._token = 0;
     this._photoUrls = [];
+    this._buildFab();
+  }
+
+  /* ── Il «+» flottante e il suo ventaglio ── */
+
+  /** Il tondo e il ventaglio stanno nel guscio della casa, non nel cassetto che
+   *  scorre: fermi sullo schermo, a sinistra di Jenny come il ↓ dell'officina
+   *  (`#chat-scroll-fab`), che a destra si prenderebbe il tocco. Niente
+   *  `z-index` (in casa l'unico e' di Jenny): vengono dopo il cassetto nel DOM,
+   *  e prima della mascotte, che col suo resta sopra anche al velo. Si vedono
+   *  solo quando la stanza e' il cassetto (`home-style.css`). */
+  _buildFab() {
+    const shell = this.el?.closest('.home-shell');
+    if (!shell) return;
+    this.dial = el('div', 'home-drawer-dial');
+    this.dial.hidden = true;
+    this.dial.addEventListener('click', (e) => {
+      if (e.target === this.dial) this.closeDial();
+    });
+    this.dial.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.closeDial();
+        this.fab.focus();
+      }
+    });
+    this.dialMenu = el('div', 'home-drawer-dial-menu');
+    this.dialMenu.setAttribute('role', 'menu');
+    this.dial.appendChild(this.dialMenu);
+    /* Da tastiera (un click con `detail` 0) il fuoco va alla prima scelta; col
+       dito no, o l'anello del fuoco resterebbe acceso su «Promemoria». */
+    this.fab = button('home-drawer-fab', '', (e) => (this.dial.hidden
+      ? this.openDial({ focus: e.detail === 0 }) : this.closeDial()));
+    this.fab.setAttribute('aria-haspopup', 'menu');
+    this.fab.setAttribute('aria-expanded', 'false');
+    this.fab.innerHTML = '<i class="ti ti-plus" aria-hidden="true"></i>';
+    this._labelFab();
+    const mascot = shell.querySelector(':scope > .jenny-duo');
+    shell.insertBefore(this.dial, mascot);
+    shell.insertBefore(this.fab, mascot);
+  }
+
+  _labelFab() {
+    if (!this.fab) return;
+    const open = !this.dial.hidden;
+    this.fab.setAttribute('aria-label', i18n.t(open ? 'board.section.close' : 'board.section.addFab'));
+    this.fab.classList.toggle('is-open', open);
+    this.fab.setAttribute('aria-expanded', String(open));
+  }
+
+  /** Le cose che si aggiungono a un cassetto: le stesse, con gli stessi moduli,
+   *  del menu che c'era prima nel foglio. */
+  _addChoices() {
+    return [
+      ['reminder', 'ti-clock', () => this._addReminder()],
+      ['note', 'ti-pencil', () => this._addNote()],
+      ['micro', 'ti-gauge', () => this._addMicro()],
+      ['photo', 'ti-photo', () => this._addPhoto()],
+      ['cron', 'ti-repeat', () => this.onAskJenny?.(i18n.t('board.cron.prompt', { card: this.data.title }))],
+      ['other', 'ti-message', () => this.onAskJenny?.(i18n.t('board.section.otherPrompt', { card: this.data.title }))],
+    ];
+  }
+
+  /** Apre il ventaglio: il cassetto si vela, le scelte salgono dal tondo. */
+  openDial({ focus = true } = {}) {
+    if (!this.dial || !this.data) return;
+    this.dialMenu.innerHTML = '';
+    /* Dal basso: la prima scelta e' la piu' vicina al pollice. */
+    for (const [kind, icon, run] of this._addChoices().reverse()) {
+      const row = button(`home-drawer-dial-row is-${kind}`, '', () => {
+        this.closeDial();
+        run();
+      });
+      row.setAttribute('role', 'menuitem');
+      const badge = el('span', 'home-drawer-dial-icon');
+      const i = el('i', `ti ${icon}`);
+      i.setAttribute('aria-hidden', 'true');
+      badge.appendChild(i);
+      row.append(el('span', 'home-drawer-dial-name', i18n.t(`board.section.kind.${kind}`)), badge);
+      this.dialMenu.appendChild(row);
+    }
+    this.dial.hidden = false;
+    this._labelFab();
+    if (focus) this.dialMenu.lastElementChild?.focus();
+  }
+
+  /** Chiude il ventaglio. Vero se era aperto (per Indietro). */
+  closeDial() {
+    if (!this.dial || this.dial.hidden) return false;
+    this.dial.hidden = true;
+    this._labelFab();
+    return true;
   }
 
   get title() {
@@ -142,6 +259,8 @@ export class BoardDrawer {
     this.notebook = notebook;
     this.card = card;
     this.editing = null;
+    this.closeDial();
+    if (!same) this.unfolded = new Set();
     if (same) {
       this.render();
       this.el.scrollTop = top;
@@ -177,6 +296,7 @@ export class BoardDrawer {
   }
 
   applyTranslations() {
+    this._labelFab();
     if (this.data) this.render();
   }
 
@@ -201,7 +321,7 @@ export class BoardDrawer {
           i18n.t(`board.app.alert.${state}`, { app: s.view.name || s.app })));
       }
     }
-    if (d.next) root.appendChild(this._next(d.next));
+    if (d.reminders?.length) root.appendChild(this._calendar(d.reminders));
 
     const sections = el('div', 'home-drawer-sections');
     if (!d.sections.length) {
@@ -213,7 +333,6 @@ export class BoardDrawer {
       if (node) sections.appendChild(node);
     }
     root.appendChild(sections);
-    root.appendChild(button('home-drawer-add', i18n.t('board.section.add'), () => this.openAddMenu()));
 
     if (d.connections.length) {
       const threads = el('div', 'home-drawer-threads');
@@ -259,21 +378,162 @@ export class BoardDrawer {
     }
   }
 
-  _next(rem) {
-    const box = el('div', 'home-drawer-next');
-    box.append(el('span', 'home-drawer-next-key', i18n.t('board.drawer.next')),
-      el('span', 'home-drawer-next-text', `${rem.text} · ${whenLabel(rem.when)}`));
-    box.appendChild(button('home-drawer-link', i18n.t('board.reminder.done'), () => this._done(rem.id)));
+  /* ── Il calendario di cura ── */
+
+  /** Le attese della scheda su una linea del tempo: quelle in ritardo, «oggi»,
+   *  un gruppo per mese, quelle a condizione. La prima e' la carta gialla con
+   *  «Fatto»; le altre sono righe, con ⋯ per correggerle o toglierle. */
+  _calendar(rems) {
+    const box = el('section', 'home-drawer-cal');
+    box.setAttribute('aria-labelledby', 'home-drawer-cal-title');
+    const title = el('h3', 'home-drawer-h4', i18n.t('board.drawer.calendar.title'));
+    title.id = 'home-drawer-cal-title';
+    box.appendChild(title);
+    const line = el('div', 'home-drawer-cal-line');
+    const today = new Date();
+    const groups = reminderGroups(rems, today);
+    const first = rems[0];
+    const todayMark = () => el('div', 'home-drawer-cal-today',
+      i18n.t('board.drawer.calendar.today', {
+        date: new Intl.DateTimeFormat(i18n.locale, { day: 'numeric', month: 'short' }).format(today),
+      }));
+    if (groups[0]?.kind !== 'overdue') line.appendChild(todayMark());
+    for (const group of groups) {
+      line.appendChild(el('div', `home-drawer-cal-group is-${group.kind}`, group.kind === 'month'
+        ? group.label : i18n.t(`board.drawer.calendar.${group.kind}`)));
+      for (const rem of group.items) {
+        line.appendChild(rem === first ? this._calNext(rem, group.kind) : this._calRow(rem, group.kind));
+      }
+      if (group.kind === 'overdue') line.appendChild(todayMark());
+    }
+    box.appendChild(line);
     return box;
   }
 
-  /** Una sezione dello scheletro: due righe, le fonti, e «Correggi». */
+  /** La prossima attesa: la carta gialla, col tasto «Fatto» a portata. */
+  _calNext(rem, kind) {
+    const card = el('div', `home-drawer-cal-next${kind === 'overdue' ? ' is-late' : ''}`);
+    const key = [whenLabel(rem.when)];
+    if (rem.when?.kind === 'date' && rem.when.precision !== 'month') key.push(untilLabel(rem.when.date));
+    card.append(el('div', 'home-drawer-cal-next-key', key.filter(Boolean).join(' · ')),
+      el('p', 'home-drawer-cal-next-text', rem.text));
+    const bar = el('div', 'home-drawer-cal-next-bar');
+    bar.append(button('home-drawer-cal-done', i18n.t('board.reminder.done'), () => this._done(rem.id)),
+      this._remMore(rem));
+    card.appendChild(bar);
+    return card;
+  }
+
+  /** Un'altra attesa: il giorno (il mese lo dice il gruppo), il testo, ⋯. */
+  _calRow(rem, kind) {
+    const row = el('div', `home-drawer-cal-row${kind === 'overdue' ? ' is-late' : ''}`);
+    const when = rem.when || {};
+    let day = whenLabel(when);
+    if (kind === 'month') day = when.precision === 'month' ? '—' : String(Number(String(when.date).slice(8, 10)));
+    row.append(el('span', 'home-drawer-cal-day', day), el('span', 'home-drawer-cal-text', rem.text),
+      this._remMore(rem));
+    return row;
+  }
+
+  _remMore(rem) {
+    const more = button('home-drawer-cal-more', '', () => this._reminderActions(rem));
+    more.setAttribute('aria-label', i18n.t('board.reminder.actions', { text: rem.text }));
+    more.innerHTML = '<i class="ti ti-dots" aria-hidden="true"></i>';
+    return more;
+  }
+
+  /** ⋯ di un'attesa: Correggi, Fatto, Togli — nel foglio, come ogni scelta. */
+  _reminderActions(rem) {
+    const menu = el('div', 'home-board-menu');
+    const items = [
+      ['edit', 'ti-pencil', () => this._reminderForm(rem)],
+      ['done', 'ti-check', () => {
+        this.sheet.close();
+        this._done(rem.id);
+      }],
+      ['drop', 'ti-trash', async () => {
+        this.sheet.close();
+        if (!(await confirmDialog(i18n.t('board.reminder.dropConfirm', { text: rem.text })))) return;
+        await this._write('reminder.drop', { id: rem.id });
+      }],
+    ];
+    for (const [key, icon, run] of items) {
+      const row = button('home-board-menu-row', '', run);
+      const i = el('i', `ti ${icon}`);
+      i.setAttribute('aria-hidden', 'true');
+      row.append(i, el('span', 'home-board-menu-name', i18n.t(`board.reminder.${key}`)));
+      menu.appendChild(row);
+    }
+    this.sheet.open(rem.text, menu);
+  }
+
+  /** Il modulo di un'attesa: nuova (`section.add`) o da correggere
+   *  (`reminder.update`). Una a condizione si corregge solo nel testo: la
+   *  soglia si cambia dalla sua app, dove il dato c'e'. */
+  _reminderForm(rem = null) {
+    const form = el('form', 'home-board-form');
+    const what = el('input', 'home-board-input');
+    what.placeholder = i18n.t('board.section.reminderWhat');
+    what.setAttribute('aria-label', what.placeholder);
+    if (rem) what.value = rem.text;
+    const dated = !rem || rem.when?.kind !== 'condition';
+    const when = el('input', 'home-board-input');
+    when.type = 'date';
+    when.setAttribute('aria-label', i18n.t('board.section.reminderWhen'));
+    const month = el('label', 'home-board-check');
+    const monthBox = el('input');
+    monthBox.type = 'checkbox';
+    month.append(monthBox, document.createTextNode(i18n.t('board.section.reminderMonth')));
+    if (rem && dated) {
+      when.value = rem.when?.date || '';
+      monthBox.checked = rem.when?.precision === 'month';
+    }
+    const actions = el('div', 'home-board-actions');
+    const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+    save.type = 'submit';
+    actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
+    form.append(what, ...(dated ? [when, month] : []), actions);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!what.value.trim() || (dated && !when.value)) return;
+      this.sheet.close();
+      const date = dated ? { kind: 'date', date: when.value, precision: monthBox.checked ? 'month' : 'day' } : undefined;
+      if (rem) {
+        await this._write('reminder.update', { id: rem.id, text: what.value, ...(date ? { when: date } : {}) });
+      } else {
+        await this._write('section.add', { card: this.card, kind: 'reminder', text: what.value, when: date });
+      }
+    });
+    this.sheet.open(rem ? i18n.t('board.reminder.edit') : i18n.t('board.section.kind.reminder'), form);
+    what.focus();
+  }
+
+  /** Una sezione dello scheletro, a fisarmonica: chiusa mostra il titolo e la
+   *  prima riga; aperta il testo, le fonti e «Correggi». Si apre da sola mentre
+   *  la si corregge. */
   _section(section) {
-    const row = el('div', 'home-drawer-section');
+    const open = this.unfolded.has(section.title) || this.editing === section.title;
+    const row = el('div', `home-drawer-section is-fold${open ? ' is-open' : ''}`);
     const h3 = el('h3', 'home-drawer-section-title');
-    if (section.fresh) h3.appendChild(el('span', 'home-drawer-fresh'));
-    h3.appendChild(document.createTextNode(section.title));
+    const toggle = button('home-drawer-fold', '', () => {
+      if (open) this.unfolded.delete(section.title);
+      else this.unfolded.add(section.title);
+      this.render();
+      /* Ridisegnato, il fuoco resta sulla stessa sezione. */
+      [...this.el.querySelectorAll('.home-drawer-fold')]
+        .find((b) => b.dataset.title === section.title)?.focus();
+    });
+    toggle.dataset.title = section.title;
+    toggle.setAttribute('aria-expanded', String(open));
+    const name = el('span', 'home-drawer-fold-name');
+    if (section.fresh) name.appendChild(el('span', 'home-drawer-fresh'));
+    name.appendChild(document.createTextNode(section.title));
+    const chevron = el('i', 'ti ti-chevron-down home-drawer-fold-icon');
+    chevron.setAttribute('aria-hidden', 'true');
+    toggle.append(name, el('span', 'home-drawer-fold-preview', open ? '' : section.text), chevron);
+    h3.appendChild(toggle);
     row.appendChild(h3);
+    if (!open) return row;
     const body = el('div', 'home-drawer-section-body');
     const fix = [...this.data.corrections].reverse().find((c) => c.section === section.title);
     const source = section.sources[0];
@@ -356,13 +616,6 @@ export class BoardDrawer {
       tools.appendChild(el('span', `home-drawer-tag${section.status === 'integrated' ? ' is-done' : ''}`,
         i18n.t(section.status === 'integrated' ? 'board.section.noteIntegrated' : 'board.section.notePending')));
       tools.append(button('home-drawer-link', i18n.t('board.section.edit'), () => this._editNote(section)), remove);
-    } else if (section.kind === 'reminder') {
-      const rem = section.reminderData;
-      if (!rem || rem.state !== 'open') return null;
-      h3.textContent = i18n.t('board.section.kind.reminder');
-      body.appendChild(el('p', 'home-drawer-text', rem.text));
-      tools.appendChild(el('span', 'home-drawer-tag', `◷ ${whenLabel(rem.when)}`));
-      tools.append(button('home-drawer-link', i18n.t('board.reminder.done'), () => this._done(rem.id)), remove);
     } else if (section.kind === 'app') {
       const v = section.view || {};
       h3.append(v.name || section.app, el('span', 'home-drawer-owner', i18n.t('board.section.kind.app')));
@@ -735,34 +988,7 @@ export class BoardDrawer {
     return true;
   }
 
-  /* ── «Aggiungi sezione»: una domanda, mai un foglio bianco ── */
-
-  openAddMenu() {
-    const menu = el('div', 'home-board-menu');
-    const items = [
-      ['note', 'ti-pencil', () => this._addNote()],
-      ['reminder', 'ti-clock', () => this._addReminder()],
-      ['micro', 'ti-gauge', () => this._addMicro()],
-      ['cron', 'ti-repeat', () => {
-        this.sheet.close();
-        this.onAskJenny?.(i18n.t('board.cron.prompt', { card: this.data.title }));
-      }],
-      ['photo', 'ti-photo', () => this._addPhoto()],
-      ['other', 'ti-dots', () => {
-        this.sheet.close();
-        this.onAskJenny?.(i18n.t('board.section.otherPrompt', { card: this.data.title }));
-      }],
-    ];
-    for (const [kind, icon, run] of items) {
-      const row = button('home-board-menu-row', '', run);
-      const i = el('i', `ti ${icon}`);
-      i.setAttribute('aria-hidden', 'true');
-      row.append(i, el('span', 'home-board-menu-name', i18n.t(`board.section.kind.${kind}`)),
-        el('span', 'home-board-menu-hint', i18n.t(`board.section.hint.${kind}`)));
-      menu.appendChild(row);
-    }
-    this.sheet.open(i18n.t('board.section.addTitle', { card: this.data.title }), menu);
-  }
+  /* ── Aggiungere: una domanda, mai un foglio bianco ── */
 
   async _addNote() {
     this.sheet.close();
@@ -776,33 +1002,7 @@ export class BoardDrawer {
   /** «Cosa?» e «Quando?»: una data, oppure niente — una condizione su un dato
    *  vivo si aggancia da una mini app, dove il dato c'e'. */
   _addReminder() {
-    const form = el('form', 'home-board-form');
-    const what = el('input', 'home-board-input');
-    what.placeholder = i18n.t('board.section.reminderWhat');
-    what.setAttribute('aria-label', what.placeholder);
-    const when = el('input', 'home-board-input');
-    when.type = 'date';
-    when.setAttribute('aria-label', i18n.t('board.section.reminderWhen'));
-    const month = el('label', 'home-board-check');
-    const monthBox = el('input');
-    monthBox.type = 'checkbox';
-    month.append(monthBox, document.createTextNode(i18n.t('board.section.reminderMonth')));
-    const actions = el('div', 'home-board-actions');
-    const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
-    save.type = 'submit';
-    actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
-    form.append(what, when, month, actions);
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (!what.value.trim() || !when.value) return;
-      this.sheet.close();
-      await this._write('section.add', {
-        card: this.card, kind: 'reminder', text: what.value,
-        when: { kind: 'date', date: when.value, precision: monthBox.checked ? 'month' : 'day' },
-      });
-    });
-    this.sheet.open(i18n.t('board.section.kind.reminder'), form);
-    what.focus();
+    this._reminderForm();
   }
 
   /** «Cosa vuoi vedere?»: una frase, e l'app la scrive Jenny nella chat del

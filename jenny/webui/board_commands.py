@@ -23,7 +23,6 @@ from typing import Any
 from jenny.board import edit, model
 from jenny.board.store import (
     mutate_board,
-    mutate_reminders,
     read_board,
     read_card_summary,
 )
@@ -137,25 +136,23 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     """Trascina = sposta: la posizione diventa dell'utente, e Jenny non la tocca più."""
     root = _project(ctx, params)
     kind = params.get("kind", "card")
-    item = _card_id(params, "id")
     pos = {"x": _number(params, "x"), "y": _number(params, "y"), "by": model.USER}
 
     if kind == "card":
+        item = _card_id(params, "id")
+
         def apply(board: dict[str, Any]) -> None:
             _need_card(board, item)["pos"] = pos
 
         await _run(mutate_board, root, apply)
-    elif kind == "note":
-        def apply_rem(rems: dict[str, Any]) -> None:
-            for rem in rems["reminders"]:
-                if rem["id"] == item:
-                    rem["pos"] = pos
-                    return
-            raise CommandError("not_found", "reminder not found")
+    elif kind == "agenda":
+        # L'agenda e' una sola per bacheca: niente id.
+        def apply_agenda(board: dict[str, Any]) -> None:
+            board.setdefault("agenda", {})["pos"] = pos
 
-        await _run(mutate_reminders, root, apply_rem)
+        await _run(mutate_board, root, apply_agenda)
     else:
-        raise CommandError("bad_request", "kind must be card or note")
+        raise CommandError("bad_request", "kind must be card or agenda")
     return {"ok": True}
 
 
@@ -492,6 +489,22 @@ async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) ->
     return {"ok": True}
 
 
+async def board_reminder_update(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Correggi un'attesa dal calendario di cura, per id: anche le attese di Jenny
+    non hanno una sezione da cui passare."""
+    root = _project(ctx, params)
+    await _run(edit.update_reminder_by_id, root, _card_id(params, "id"), params.get("text"),
+               params.get("when"))
+    return {"ok": True}
+
+
+async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Togli un'attesa dal calendario di cura: v. :func:`jenny.board.edit.drop_reminder`."""
+    root = _project(ctx, params)
+    await _run(edit.drop_reminder, root, _card_id(params, "id"))
+    return {"ok": True}
+
+
 async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Pausa e ripresa di un cron del quaderno, dal suo cassetto: ``paused: true|false``.
 
@@ -528,4 +541,6 @@ BOARD_COMMANDS = {
     "board.section.remove": board_section_remove,
     "board.section.reorder": board_section_reorder,
     "board.reminder.done": board_reminder_done,
+    "board.reminder.update": board_reminder_update,
+    "board.reminder.drop": board_reminder_drop,
 }

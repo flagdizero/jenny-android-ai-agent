@@ -2426,6 +2426,9 @@ body.home {
 .home-board-threads line.is-rest { stroke-width: 1.7; opacity: 0.7; }
 .home-board-threads line.is-on { stroke-width: 2.4; opacity: 1; }
 .home-board-threads line.is-off { stroke-width: 1.5; opacity: 0.12; }
+/* Il filo dell'agenda: del colore del suo foglio, per non confondersi coi fili
+   fra le schede. */
+.home-board-threads line.is-agenda { stroke: var(--board-agenda-thread, var(--board-postit)); }
 
 .home-board-thread-label {
   position: absolute;
@@ -2808,21 +2811,105 @@ body.home {
 .home-board-sig-corner.is-soon { background: var(--board-soon); }
 .home-board-sig-corner.is-alert { background: var(--board-alert); }
 
-.home-board-postit {
-  width: 14cqw;
-  aspect-ratio: 1;
+/* L'agenda: un foglio giallo, largo 30 (`model.AGENDA_BOX`). Le misure in `cqw`
+   come il resto del muro: si ingrandisce con lui. Una riga e' alta 7cqw, un
+   dito sul quadrato del Titan a ingrandimento pieno. */
+.home-board-agenda {
+  width: 30cqw;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.4cqw;
-  padding: 1.6cqw 1.3cqw;
+  padding: 2.2cqw 1.6cqw 1cqw;
   background: var(--board-postit);
   color: var(--board-postit-ink);
   font-family: var(--font-hand);
   box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
 }
-.home-board-postit-text { font-size: 2.6cqw; line-height: 1.1; font-weight: 700; overflow: hidden; }
-.home-board-postit-when { font-size: 2.3cqw; line-height: 1.1; }
+.home-board-agenda-title {
+  padding: 0 1cqw 0.8cqw;
+  font-family: var(--font-sans);
+  font-size: 1.8cqw;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.home-board-agenda-row {
+  display: grid;
+  grid-template-columns: 8.5cqw minmax(0, 1fr);
+  gap: 1cqw;
+  align-items: center;
+  min-height: 7cqw;
+  padding: 0.6cqw 1cqw;
+  border: none;
+  border-top: 1px dashed color-mix(in srgb, var(--board-postit-ink) 30%, transparent);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-agenda-title + .home-board-agenda-row { border-top: none; }
+.home-board-agenda-when { font-size: 2.7cqw; font-weight: 700; line-height: 1.1; }
+.home-board-agenda-row.is-late .home-board-agenda-when { color: var(--board-alert); }
+.home-board-agenda-what { display: flex; flex-direction: column; min-width: 0; }
+.home-board-agenda-card {
+  font-family: var(--font-sans);
+  font-size: 1.6cqw;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Il testo su due righe al massimo: su una sola, a bacheca inquadrata, restava
+   «Rinvaso e inci…». */
+.home-board-agenda-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 2.2cqw;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+}
+.home-board-agenda-more {
+  min-height: 6cqw;
+  padding: 0 1cqw;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 2.1cqw;
+  font-weight: 700;
+  opacity: 0.8;
+  text-align: left;
+  cursor: pointer;
+}
+/* L'elenco intero, nel foglio: le stesse righe a misura di schermo. */
+.home-board-agenda-all { display: flex; flex-direction: column; }
+.home-board-agenda-group {
+  margin: 14px 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.home-board-agenda-group:first-child { margin-top: 0; }
+.home-board-agenda-group.is-overdue { color: var(--board-alert); }
+.home-board-agenda-all .home-board-agenda-row {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-sans);
+}
+.home-board-agenda-all .home-board-agenda-when { font-size: 14px; color: var(--board-soon); }
+.home-board-agenda-all .is-late .home-board-agenda-when { color: var(--board-alert); }
+.home-board-agenda-all .home-board-agenda-card { font-size: 10px; color: var(--text-muted); }
+.home-board-agenda-all .home-board-agenda-text { font-size: 15px; font-weight: 500; -webkit-line-clamp: unset; }
 
 /* La busta sta in basso a **sinistra**: a destra c'e' Jenny, che sporge dal
    bordo e si prende i tocchi di quell'angolo. Il posto e' suo, e la busta lo
@@ -3112,6 +3199,9 @@ body.home {
   container-type: inline-size;
   padding: 14px 20px var(--jenny-away-floor);
 }
+/* In fondo al cassetto l'aria per il «+» flottante, che non deve coprire
+   l'ultima riga. */
+.home-board-drawer > .home-drawer { padding-bottom: calc(var(--jenny-away-floor) + 72px); }
 .home-drawer-note { margin: 0; padding: 24px 20px; color: var(--text-muted); }
 .home-drawer-own { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-top: 4px; border-top: 0.5px solid var(--border); }
 .home-drawer-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; letter-spacing: 0.01em; }
@@ -3123,22 +3213,93 @@ body.home {
   background: color-mix(in srgb, var(--board-alert) 10%, transparent);
   font-size: 13px;
 }
-.home-drawer-next {
-  align-self: flex-start;
+/* Il calendario di cura: le attese della scheda su una linea del tempo. La
+   carta gialla e' la prossima; le altre sono righe col giorno e ⋯. */
+.home-drawer-cal-line {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  padding-left: 30px;
+}
+.home-drawer-cal-line::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: var(--border);
+}
+.home-drawer-cal-today,
+.home-drawer-cal-group {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  min-height: 30px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.home-drawer-cal-today { color: var(--accent); }
+.home-drawer-cal-group { margin-top: 6px; color: var(--text-muted); }
+.home-drawer-cal-group.is-overdue { color: var(--board-alert); }
+.home-drawer-cal-today::before,
+.home-drawer-cal-group::before {
+  content: '';
+  position: absolute;
+  left: -26px;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.home-drawer-cal-today::before { background: var(--accent); }
+.home-drawer-cal-group::before { border: 2px solid var(--board-soon); background: var(--bg); }
+.home-drawer-cal-group.is-overdue::before { border-color: var(--board-alert); }
+.home-drawer-cal-next {
+  margin: 4px 0 8px;
+  padding: 12px 14px 8px;
   background: var(--board-postit);
   color: var(--board-postit-ink);
-  font-family: var(--font-hand);
-  transform: rotate(-1deg);
-  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
 }
-.home-drawer-next-key { font-family: var(--font-sans); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7; }
-.home-drawer-next-text { font-weight: 700; font-size: 16px; }
-.home-drawer-next .home-drawer-link { color: inherit; }
+.home-drawer-cal-next-key { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.home-drawer-cal-next.is-late .home-drawer-cal-next-key { color: var(--board-alert); }
+.home-drawer-cal-next-text { margin: 5px 0 0; font-family: var(--font-hand); font-size: 18px; font-weight: 700; line-height: 1.25; }
+.home-drawer-cal-next-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.home-drawer-cal-done {
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 6px;
+  background: var(--board-postit-ink);
+  color: var(--board-postit);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.home-drawer-cal-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 48px;
+}
+.home-drawer-cal-day { color: var(--board-soon); font-size: 14px; font-weight: 700; }
+.home-drawer-cal-row.is-late .home-drawer-cal-day { color: var(--board-alert); }
+.home-drawer-cal-text { font-size: 15px; line-height: 1.35; }
+.home-drawer-cal-more {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-drawer-cal-next .home-drawer-cal-more { color: inherit; }
 
 .home-drawer-sections { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
 .home-drawer-section {
@@ -3159,6 +3320,50 @@ body.home {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+/* Le sezioni dello scheletro a fisarmonica: chiuse sono una riga — titolo,
+   la prima riga del testo, la freccia — alta un dito. */
+.home-drawer-section.is-fold { padding: 0; }
+.home-drawer-section.is-fold > .home-drawer-section-title { grid-column: 1 / -1; padding: 0; }
+.home-drawer-section.is-fold.is-open { padding-bottom: 12px; }
+.home-drawer-section.is-fold > .home-drawer-section-body { grid-column: 2; }
+@container (max-width: 440px) {
+  .home-drawer-section.is-fold > .home-drawer-section-body { grid-column: 1; }
+}
+.home-drawer-fold {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) 20px;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-drawer-fold-preview {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-drawer-fold-preview:empty { display: none; }
+.home-drawer-fold-icon { color: var(--text-muted); font-size: 16px; transition: transform 0.18s; }
+.home-drawer-section.is-open .home-drawer-fold-icon { transform: rotate(180deg); }
+@container (max-width: 440px) {
+  .home-drawer-fold { grid-template-columns: minmax(0, 1fr) 20px; }
+  .home-drawer-fold-preview { grid-column: 1; grid-row: 2; margin-bottom: 8px; }
+  .home-drawer-fold-icon { grid-column: 2; grid-row: 1; }
 }
 .home-drawer-fresh {
   display: inline-block;
@@ -3283,14 +3488,94 @@ body.home {
 .home-drawer-app.is-quarantined .home-drawer-app-number,
 .home-drawer-app.is-paused .home-drawer-app-number { color: var(--text-faint); }
 .home-drawer-photo { max-width: 100%; max-height: 260px; border-radius: 6px; object-fit: cover; }
-.home-drawer-add {
-  align-self: flex-start;
+/* Il «+» flottante del cassetto e il suo ventaglio. Stanno nel guscio, fermi
+   mentre il cassetto scorre, e solo nella stanza del cassetto. A sinistra di
+   Jenny, come il ↓ dell'officina (`#chat-scroll-fab` in mobile-style.css): a
+   destra lei si prenderebbe il tocco. Niente z-index: vengono dopo il cassetto
+   nel DOM e prima della mascotte, che col suo resta sopra anche al velo. */
+.home-drawer-fab,
+.home-drawer-dial { display: none; }
+.home-shell[data-view='drawer'] .home-drawer-fab { display: flex; }
+.home-shell[data-view='drawer'] .home-drawer-dial:not([hidden]) { display: flex; }
+.home-drawer-fab {
+  position: absolute;
+  right: calc(var(--jenny-size, 120px) * 0.6 + 14px);
+  bottom: calc(var(--jenny-floor, 52px) + 10px);
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+  font-size: 26px;
+  /* L'anello del colore del fondo lo stacca dalla carta gialla del calendario,
+     che e' dello stesso giallo quando ci scorre sotto. */
+  box-shadow: 0 0 0 4px var(--bg), 0 6px 18px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: transform 0.18s;
+}
+.home-drawer-fab.is-open { transform: rotate(45deg); }
+.home-drawer-fab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.home-drawer-dial {
+  position: absolute;
+  inset: 0;
+  align-items: flex-end;
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  animation: home-drawer-dial-in 0.16s ease-out;
+}
+/* Le scelte salgono dal tondo, allineate al suo centro: l'icona sopra
+   l'icona, l'etichetta a sinistra. */
+.home-drawer-dial-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0 calc(var(--jenny-size, 120px) * 0.6 + 20px) calc(var(--jenny-floor, 52px) + 80px) 16px;
+}
+.home-drawer-dial-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
   padding: 0;
   border: none;
   background: none;
   color: var(--text);
   font: inherit;
   cursor: pointer;
+}
+.home-drawer-dial-name {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 15px;
+  font-weight: 600;
+}
+.home-drawer-dial-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 20px;
+}
+.home-drawer-dial-row.is-reminder .home-drawer-dial-name,
+.home-drawer-dial-row.is-reminder .home-drawer-dial-icon {
+  border-color: transparent;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+}
+.home-drawer-dial-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 22px; }
+@keyframes home-drawer-dial-in {
+  from { opacity: 0; }
 }
 .home-drawer-h4 {
   margin: 0 0 6px;
@@ -3351,7 +3636,10 @@ body.home {
 @media (prefers-reduced-motion: reduce) {
   .home-board-item,
   .home-board-item.is-appearing,
-  .home-board-cardbar { transition: none; animation: none; }
+  .home-board-cardbar,
+  .home-drawer-fab,
+  .home-drawer-dial,
+  .home-drawer-fold-icon { transition: none; animation: none; }
 }
 
 /* ── Una pagina, letta ── */

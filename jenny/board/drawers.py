@@ -33,6 +33,23 @@ class DrawerError(ValueError):
     """Un cassetto rifiutato per intero: nessuna sezione valida."""
 
 
+def _clip(value: Any, limit: int) -> str:
+    """Il testo pulito, e se sfora *limit* tagliato all'ultima parola intera, con «…».
+
+    ``clean_block`` taglia al carattere, e nel cassetto si leggeva «la divisione
+    in du»: un taglio a metà parola sembra un errore, i puntini dicono che c'è
+    dell'altro.
+    """
+    full = model.clean_block(value, limit + 1)
+    if len(full) <= limit:
+        return full
+    cut = full[:limit - 1]
+    space = cut.rfind(" ")
+    if space > limit // 2:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:.—-") + "…"
+
+
 def page_text(root: Path, page: str) -> str:
     try:
         return (root / "wiki" / page).read_text(encoding="utf-8")
@@ -127,7 +144,7 @@ def write_drawer(
     for raw in as_list(sections):
         item = as_dict(raw)
         title = model.clean_text(item.get("title"), model.MAX_TITLE)
-        text = model.clean_block(plain(item.get("text")), MAX_SECTION_CHARS)
+        text = _clip(plain(item.get("text")), MAX_SECTION_CHARS)
         sources = [p for p in as_list(item.get("sources")) if isinstance(p, str)]
         if skeleton and title not in skeleton:
             problems.append(f"`{title}` is not a skeleton section")
@@ -151,7 +168,7 @@ def write_drawer(
     write_card_summary(root, card_id, {
         "generated": stamp,
         "fingerprint": fingerprint,
-        "brief": model.clean_block(plain(brief), MAX_BRIEF_CHARS),
+        "brief": _clip(plain(brief), MAX_BRIEF_CHARS),
         "sections": out,
     })
     return out, sum(1 for sec in out if sec["changed"] == stamp), problems

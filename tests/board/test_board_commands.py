@@ -351,3 +351,116 @@ async def test_an_accepted_card_lands_near_the_view(ctx, notebook) -> None:
 
     card = next(c for c in _rb(notebook)["cards"] if c["title"] == "Ginkgo")
     assert 250 <= card["pos"]["x"] <= 320 and -200 <= card["pos"]["y"] <= -130
+
+
+# ── L'agenda delle attese e il calendario di cura ────────────────────────────
+
+
+def _three_reminders(notebook: Path) -> None:
+    def apply(rems):
+        rems["reminders"] += [
+            {"id": "r-poltiglia", "card": "acero", "text": "Poltiglia",
+             "when": {"kind": "date", "date": "2026-11-02"}},
+            {"id": "r-umido", "card": "acero", "text": "Annaffia",
+             "when": {"kind": "condition", "app": "waterbot", "params": {},
+                      "field": "moisture", "op": "<", "value": 30}},
+            {"id": "r-concime", "card": "monstera", "text": "Concime",
+             "when": {"kind": "date", "date": "2026-10-10"}},
+            {"id": "r-marzo", "card": "acero", "text": "Rinvaso",
+             "when": {"kind": "date", "date": "2027-03-01", "precision": "month"}},
+        ]
+
+    mutate_reminders(notebook, apply)
+
+
+def test_the_board_view_carries_one_agenda_in_date_order(notebook: Path) -> None:
+    _seed(notebook)
+    _three_reminders(notebook)
+    view = build_board_view(notebook, today=date(2026, 10, 4))
+    # Dalla più vicina; quelle a condizione, senza giorno, in fondo.
+    assert [n["id"] for n in view["notes"]] == ["r-concime", "r-poltiglia", "r-marzo", "r-umido"]
+    assert all("pos" not in n for n in view["notes"])
+    agenda = view["agenda"]
+    assert agenda["rows"] == model.AGENDA_ROWS and agenda["pos"]["by"] == "jenny"
+    # Il posto calcolato non copre le schede.
+    rect = (agenda["pos"]["x"], agenda["pos"]["y"],
+            agenda["pos"]["x"] + model.AGENDA_BOX[0], agenda["pos"]["y"] + model.AGENDA_BOX[1])
+    for card in view["cards"]:
+        box = (card["pos"]["x"], card["pos"]["y"],
+               card["pos"]["x"] + card["box"][0], card["pos"]["y"] + card["box"][1])
+        assert model._overlap(rect, box) == 0
+
+
+def test_no_open_reminders_no_agenda(notebook: Path) -> None:
+    _seed(notebook)
+    assert build_board_view(notebook)["agenda"] is None
+    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 2
+    _three_reminders(notebook)
+    # Quattro attese, un oggetto solo: l'agenda.
+    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 3
+
+
+async def test_moving_the_agenda_makes_its_place_the_users(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    _three_reminders(notebook)
+    await dispatch_command(ctx, "board.move", {
+        "wiki": "piante", "kind": "agenda", "x": 70, "y": 12.5,
+    })
+    assert read_board(notebook)["agenda"]["pos"] == {"x": 70.0, "y": 12.5, "by": "user"}
+    assert build_board_view(notebook)["agenda"]["pos"]["by"] == "user"
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "board.move", {
+            "wiki": "piante", "kind": "note", "id": "r-concime", "x": 1, "y": 1,
+        })
+    assert exc.value.code == "bad_request"
+
+
+def test_jenny_does_not_move_the_agenda() -> None:
+    before = model.normalize_board({"agenda": {"pos": {"x": 70, "y": 10, "by": "user"}}})
+    after = model.normalize_board({"agenda": {"pos": {"x": 10, "y": 10, "by": "user"}}})
+    assert "agenda changed" in model.ownership_violations(before, after)
+
+
+async def test_a_reminder_of_jenny_is_edited_and_dropped_by_id(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    _three_reminders(notebook)
+    await dispatch_command(ctx, "board.reminder.update", {
+        "wiki": "piante", "id": "r-poltiglia", "text": "Poltiglia bordolese",
+        "when": {"kind": "date", "date": "2026-11-05"},
+    })
+    rem = next(r for r in read_reminders(notebook)["reminders"] if r["id"] == "r-poltiglia")
+    assert rem["text"] == "Poltiglia bordolese" and rem["when"]["date"] == "2026-11-05"
+    assert rem["by"] == "user"
+    await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": "r-poltiglia"})
+    rem = next(r for r in read_reminders(notebook)["reminders"] if r["id"] == "r-poltiglia")
+    assert rem["state"] == "dropped"
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": "r-poltiglia"})
+    assert exc.value.code == "not_found"
+
+
+async def test_dropping_a_drawer_reminder_takes_its_section_too(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    await dispatch_command(ctx, "board.section.add", {
+        "wiki": "piante", "card": "acero", "kind": "reminder", "text": "Potatura",
+        "when": {"kind": "date", "date": "2027-02-15"},
+    })
+    rid = read_reminders(notebook)["reminders"][0]["id"]
+    await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": rid})
+    assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
+
+
+async def test_the_drawer_shows_a_reminder_once(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    _three_reminders(notebook)
+    await dispatch_command(ctx, "board.section.add", {
+        "wiki": "piante", "card": "acero", "kind": "reminder", "text": "Potatura",
+        "when": {"kind": "date", "date": "2027-02-15"},
+    })
+    view = build_card_view(notebook, "acero")
+    assert "next" not in view
+    # Nel calendario, in ordine; non anche come sezione dell'utente.
+    assert [r["text"] for r in view["reminders"]] == [
+        "Poltiglia", "Potatura", "Rinvaso", "Annaffia",
+    ]
+    assert all(s["kind"] != "reminder" for s in view["userSections"])

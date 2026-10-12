@@ -26,9 +26,9 @@ BOARD = {
     ],
     "notes": [
         {"id": "r-concime", "card": "monstera", "text": "Concime",
-         "when": {"kind": "date", "date": "2026-10-10", "precision": "day"},
-         "pos": {"x": 62, "y": 35, "by": "jenny"}},
+         "when": {"kind": "date", "date": "2026-10-10", "precision": "day"}},
     ],
+    "agenda": {"pos": {"x": 62, "y": 35, "by": "jenny"}, "rows": 3},
     "connections": [{"a": "acero", "b": "monstera", "label": "vasi dello stesso ordine",
                      "by": "jenny"}],
     "suggestions": [{"id": "sg-ginkgo", "kind": "add_card", "subject": "Ginkgo",
@@ -51,9 +51,8 @@ CARD = {
         "title": "Vaso e travaso", "text": "Vaso 20 comprato il 04/09.", "fresh": True,
         "sources": [{"path": "travaso-acero.md", "title": "travaso acero", "exists": True}],
     }],
-    "next": {"id": "r-travaso", "card": "acero", "text": "Travaso nel vaso 20",
-             "when": {"kind": "date", "date": "2027-03-01", "precision": "month"}},
-    "reminders": [],
+    "reminders": [{"id": "r-travaso", "card": "acero", "text": "Travaso nel vaso 20",
+                   "when": {"kind": "date", "date": "2027-03-01", "precision": "month"}}],
     "userSections": [],
     "connections": [{"to": "monstera", "title": "Monstera", "label": "vasi dello stesso ordine",
                      "by": "jenny"}],
@@ -108,7 +107,9 @@ def test_a_notebook_opens_on_its_board() -> None:
       // La puntina dice chi ha scelto il posto.
       assert.ok(polaroids[0].querySelector('.home-board-pin.is-jenny'));
       assert.ok(polaroids[1].querySelector('.home-board-pin.is-user'));
-      assert.equal(document.querySelectorAll('.home-board-postit').length, 1);
+      // Le attese: un foglio solo, con la sua riga e il filo verso la scheda.
+      assert.equal(document.querySelectorAll('.home-board-agenda').length, 1);
+      assert.equal(document.querySelectorAll('.home-board-agenda-row').length, 1);
       // La busta col numero, e «dall'ultima volta»: una riga piu' la busta.
       assert.equal(document.querySelector('.home-board-envelope-count').textContent, '1');
       assert.equal($('home-board-since').hidden, false);
@@ -157,6 +158,9 @@ def test_a_correction_is_a_request_not_a_write() -> None:
     _run("""
       await app.openCard('acero', 'Acero');
       await tick(40);
+      // La sezione e' chiusa a fisarmonica: «Correggi» sta dentro.
+      assert.equal(document.querySelector('.home-drawer-link.is-fix'), null);
+      document.querySelector('.home-drawer-fold').click();
       const fix = [...document.querySelectorAll('.home-drawer-link.is-fix')][0];
       fix.click();
       const area = document.querySelector('.home-drawer-fix-area');
@@ -347,13 +351,13 @@ def test_the_add_menu_offers_a_micro_app_and_still_links_an_app() -> None:
     _run("""
       await app.openCard('acero', 'Acero');
       await tick(40);
-      document.querySelector('.home-drawer-add').click();
+      document.querySelector('.home-drawer-fab').click();
       await tick(10);
-      const rows = [...document.querySelectorAll('.home-board-menu-row')];
+      const rows = [...document.querySelectorAll('.home-drawer-dial-row')];
       // Dal 06/10/2026 la voce si chiama «App»: una micro app e' un'app.
-      const micro = rows.find((r) => r.querySelector('.home-board-menu-name')?.textContent === 'App');
+      const micro = rows.find((r) => r.querySelector('.home-drawer-dial-name')?.textContent === 'App');
       assert.ok(micro, 'niente voce App');
-      assert.ok(!rows.some((r) => /^Mini app/.test(r.querySelector('.home-board-menu-name')?.textContent || '')));
+      assert.ok(!rows.some((r) => /^Mini app/.test(r.querySelector('.home-drawer-dial-name')?.textContent || '')));
       micro.click();
       await tick(10);
       const input = document.querySelector('.home-board-form .home-board-input');
@@ -375,10 +379,10 @@ def test_an_app_from_a_drawer_becomes_a_card_next_to_it() -> None:
       rpcAnswers['board.card.add'] = () => ({ ok: true, card: { id: 'portafoglio' } });
       await app.openCard('acero', 'Acero');
       await tick(40);
-      document.querySelector('.home-drawer-add').click();
+      document.querySelector('.home-drawer-fab').click();
       await tick(10);
-      [...document.querySelectorAll('.home-board-menu-row')]
-        .find((r) => r.querySelector('.home-board-menu-name')?.textContent === 'App').click();
+      [...document.querySelectorAll('.home-drawer-dial-row')]
+        .find((r) => r.querySelector('.home-drawer-dial-name')?.textContent === 'App').click();
       await tick(10);
       [...document.querySelectorAll('.home-board-menu-row')]
         .find((r) => /next to it/.test(r.textContent)).click();
@@ -678,15 +682,16 @@ def test_a_card_carried_to_the_edge_scrolls_the_wall_and_stays_in_hand() -> None
 
 
 # Le schede con una misura, che jsdom non da': quella che avrebbero nel
-# quadrato da 400 (polaroid 76 x 100, post-it 56 x 60), alla vista del momento.
+# quadrato da 400 (polaroid 76 x 100), alla vista del momento. L'agenda qui e'
+# piccola, 56 x 60, quanto il post-it che c'era al suo posto: i conti restano quelli.
 # Con ``BOARD`` l'ingombro va da (20, 16) a (304, 200): sta nella finestra a
 # grandezza naturale, quindi l'inquadratura lo centra senza ingrandirlo.
 _SIZED = """
 const realRect = window.HTMLElement.prototype.getBoundingClientRect;
 window.HTMLElement.prototype.getBoundingClientRect = function () {
-  if (!this.matches('.home-board-polaroid, .home-board-postit')) return realRect.call(this);
+  if (!this.matches('.home-board-polaroid, .home-board-agenda')) return realRect.call(this);
   const v = B.view;
-  const note = this.classList.contains('home-board-postit');
+  const note = this.classList.contains('home-board-agenda');
   const x = parseFloat(this.style.left) * 4, y = parseFloat(this.style.top) * 4;
   const w = note ? 56 : 76, h = note ? 60 : 100;
   return { left: v.x + x * v.k, top: v.y + y * v.k, right: v.x + (x + w) * v.k,
@@ -834,7 +839,7 @@ def test_another_notebook_does_not_show_the_old_wall_while_it_loads() -> None:
       const loading = app.board.load('altro');
       await tick(5);
       assert.equal(document.querySelectorAll('.home-board-polaroid').length, 0);
-      assert.equal(document.querySelectorAll('.home-board-postit').length, 0);
+      assert.equal(document.querySelectorAll('.home-board-agenda').length, 0);
       assert.equal(document.querySelector('.home-board-envelope'), null);
       assert.equal($('home-board-since').hidden, true);
       assert.equal($('home-board-empty').hidden, true);
@@ -1304,4 +1309,177 @@ def test_a_new_card_can_be_an_app() -> None:
       const call = rpcs('board.card.add').at(-1);
       assert.deepEqual(call.params.app, { slug: 'waterbot', params: { sensor: 'acerello' } });
       assert.equal(call.params.title, 'WaterBot');
+    """)
+
+
+# ── L'agenda delle attese, il calendario di cura, il «+» flottante ───────────
+
+
+def _agenda_board() -> dict:
+    board = json.loads(json.dumps(BOARD))
+    when = lambda d: {"kind": "date", "date": d, "precision": "day"}  # noqa: E731
+    board["notes"] = [
+        {"id": "r-1", "card": "monstera", "text": "Concime", "when": when("2099-01-10")},
+        {"id": "r-2", "card": "acero", "text": "Poltiglia", "when": when("2099-02-01")},
+        {"id": "r-3", "card": "monstera", "text": "Rinvaso", "when": when("2099-03-01")},
+        {"id": "r-4", "card": "acero", "text": "Margotta", "when": when("2099-04-01")},
+    ]
+    return board
+
+
+@requires_jsdom
+def test_the_agenda_shows_three_rows_and_one_thread_per_card() -> None:
+    _run_wall("""
+      routes['/api/board'] = __AGENDA__;
+      await B.load('altro');
+      const agenda = document.querySelector('.home-board-agenda');
+      assert.ok(agenda.querySelector('.home-board-pin.is-jenny'), 'il suo chiodo');
+      const rows = [...agenda.querySelectorAll('.home-board-agenda-row')];
+      assert.deepEqual(rows.map((r) => r.dataset.card), ['monstera', 'acero', 'monstera']);
+      assert.match(rows[0].textContent, /Monstera.*Concime/);
+      assert.equal(agenda.querySelector('.home-board-agenda-more').textContent, '+1 later');
+      // Tre righe, due schede: due fili gialli, piu' quello rosso fra le schede.
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-agenda').length, 2);
+      assert.equal(document.querySelectorAll('#home-board-threads line').length, 3);
+      // Una scheda tenuta premuta accende anche il filo dell'agenda.
+      B.setFocus('acero', { quiet: true });
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-agenda.is-on').length, 1);
+      assert.ok(agenda.classList.contains('is-linked'));
+      B.setFocus(null);
+      // «+1 più avanti»: tutte, per mese, nel foglio.
+      agenda.querySelector('.home-board-agenda-more').click();
+      const sheet = $('home-board-sheet-body');
+      assert.equal(sheet.querySelectorAll('.home-board-agenda-row').length, 4);
+      assert.equal(sheet.querySelectorAll('.home-board-agenda-group').length, 4);
+      // Una riga porta al cassetto della sua scheda.
+      rows[1].click();
+      await tick(40);
+      assert.equal(app.view, 'drawer');
+      assert.equal(rpcs('board.seen').at(-1).params.card, 'acero');
+    """.replace("__AGENDA__", json.dumps(_agenda_board())))
+
+
+@requires_jsdom
+def test_dragging_the_agenda_tells_the_server() -> None:
+    _run("""
+      const el = document.querySelector('.home-board-agenda');
+      const ev = (type, x, y) => {
+        const e = new window.Event(type, { bubbles: true });
+        Object.assign(e, { clientX: x, clientY: y, button: 0, pointerId: 1 });
+        el.dispatchEvent(e);
+      };
+      ev('pointerdown', 10, 10);
+      ev('pointermove', 60, 50);
+      ev('pointerup', 60, 50);
+      await tick(20);
+      const move = rpcs('board.move').at(-1);
+      assert.equal(move.params.kind, 'agenda');
+      assert.ok(el.querySelector('.home-board-pin.is-user'));
+      assert.equal(app.view, 'board', 'portarla non apre niente');
+    """)
+
+
+@requires_jsdom
+def test_the_drawer_shows_its_reminders_once_on_a_care_calendar() -> None:
+    card = json.loads(json.dumps(CARD))
+    day = lambda d: {"kind": "date", "date": d, "precision": "day"}  # noqa: E731
+    card["reminders"] = [
+        {"id": "r-old", "card": "acero", "text": "Old one", "when": day("2020-01-05")},
+        {"id": "r-a", "card": "acero", "text": "Poltiglia", "when": day("2099-02-01")},
+        {"id": "r-b", "card": "acero", "text": "Rinvaso", "when": day("2099-02-10")},
+        {"id": "r-c", "card": "acero", "text": "Margotta",
+         "when": {"kind": "date", "date": "2099-03-01", "precision": "month"}},
+        {"id": "r-d", "card": "acero", "text": "Annaffia",
+         "when": {"kind": "condition", "field": "moisture", "op": "<", "value": 30}},
+    ]
+    _run("""
+      routes['/api/board/card'] = __CARD2__;
+      for (const m of ['board.reminder.done', 'board.reminder.update']) rpcAnswers[m] = () => ({ ok: true });
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const cal = document.querySelector('.home-drawer-cal');
+      // In ritardo, poi oggi, poi un gruppo per mese, poi quelle a condizione.
+      const marks = [...cal.querySelectorAll('.home-drawer-cal-group, .home-drawer-cal-today')]
+        .map((m) => m.textContent);
+      assert.equal(marks[0], 'Overdue');
+      assert.match(marks[1], /^Today · /);
+      assert.deepEqual(marks.slice(2), ['February 2099', 'March 2099', 'When it happens']);
+      // La prima e' la carta gialla, in ritardo; le altre righe, col giorno.
+      const next = cal.querySelector('.home-drawer-cal-next');
+      assert.ok(next.classList.contains('is-late'));
+      assert.match(next.textContent, /Old one/);
+      const days = [...cal.querySelectorAll('.home-drawer-cal-day')].map((d) => d.textContent);
+      assert.deepEqual(days, ['1', '10', '—', 'moisture < 30']);
+      // Una volta sola: niente riquadro a parte, niente sezioni «Promemoria».
+      assert.equal(document.querySelectorAll('.home-drawer-cal-next').length, 1);
+      assert.equal($('home-board-drawer').textContent.match(/Rinvaso/g).length, 1);
+      next.querySelector('.home-drawer-cal-done').click();
+      await tick(20);
+      assert.equal(rpcs('board.reminder.done').at(-1).params.id, 'r-old');
+      // ⋯ → Edit: il modulo gia' compilato, e la correzione va per id.
+      const row = [...cal.querySelectorAll('.home-drawer-cal-row')].find((r) => /Rinvaso/.test(r.textContent));
+      row.querySelector('.home-drawer-cal-more').click();
+      const menu = [...$('home-board-sheet-body').querySelectorAll('.home-board-menu-row')];
+      assert.deepEqual(menu.map((r) => r.textContent), ['Edit', 'Done', 'Remove']);
+      menu[0].click();
+      const inputs = $('home-board-sheet-body').querySelectorAll('.home-board-input');
+      assert.equal(inputs[0].value, 'Rinvaso');
+      assert.equal(inputs[1].value, '2099-02-10');
+      inputs[0].value = 'Rinvaso nel vaso 45';
+      inputs[0].closest('form').dispatchEvent(new Event('submit', { cancelable: true }));
+      await tick(20);
+      const update = rpcs('board.reminder.update').at(-1).params;
+      assert.equal(update.id, 'r-b');
+      assert.equal(update.text, 'Rinvaso nel vaso 45');
+      assert.deepEqual(update.when, { kind: 'date', date: '2099-02-10', precision: 'day' });
+    """.replace("__CARD2__", json.dumps(card)))
+
+
+@requires_jsdom
+def test_the_skeleton_sections_fold() -> None:
+    _run("""
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const fold = document.querySelector('.home-drawer-fold');
+      assert.equal(fold.getAttribute('aria-expanded'), 'false');
+      assert.match(fold.textContent, /Vaso e travaso.*Vaso 20 comprato/);
+      assert.equal(document.querySelector('.home-drawer-section-body .home-drawer-chip'), null);
+      fold.click();
+      const open = document.querySelector('.home-drawer-fold');
+      assert.equal(open.getAttribute('aria-expanded'), 'true');
+      assert.equal(document.activeElement, open, 'il fuoco resta sulla sezione');
+      assert.ok(document.querySelector('.home-drawer-section-body .home-drawer-chip'));
+    """)
+
+
+@requires_jsdom
+def test_the_floating_plus_opens_a_fan_and_back_closes_it() -> None:
+    _run("""
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const fab = document.querySelector('.home-drawer-fab');
+      const dial = document.querySelector('.home-drawer-dial');
+      // Nel guscio, non nel cassetto che scorre; e prima della mascotte.
+      assert.ok(fab.parentElement.classList.contains('home-shell'));
+      assert.equal(document.querySelector('.home-drawer-add'), null);
+      assert.equal(fab.getAttribute('aria-expanded'), 'false');
+      fab.click();
+      assert.equal(dial.hidden, false);
+      assert.equal(fab.getAttribute('aria-expanded'), 'true');
+      const names = [...dial.querySelectorAll('.home-drawer-dial-name')].map((n) => n.textContent);
+      // Dal basso la prima e' il promemoria: e' l'ultima nel DOM, la piu' vicina al tondo.
+      assert.equal(names.at(-1), 'Reminder');
+      // Indietro chiude il ventaglio e si resta nel cassetto.
+      app.handleHardwareBack();
+      await tick(10);
+      assert.equal(dial.hidden, true);
+      assert.equal(app.view, 'drawer');
+      // Un tocco sul velo lo chiude; una scelta apre il suo modulo.
+      fab.click();
+      dial.click();
+      assert.equal(dial.hidden, true);
+      fab.click();
+      [...dial.querySelectorAll('.home-drawer-dial-row')].at(-1).click();
+      assert.equal(dial.hidden, true);
+      assert.ok($('home-board-sheet-body').querySelector('input[type="date"]'));
     """)

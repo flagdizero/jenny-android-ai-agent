@@ -171,7 +171,8 @@ class BoardWriteSummaryTool(_BoardTool):
             "Write the drawer of a card listed as needing it: a brief, and one entry per skeleton "
             "section that its pages have material for — two short sentences each, with the pages "
             "it comes from. Leave out a section with no material rather than inventing one. "
-            "Copy a section unchanged when its pages did not change what it says."
+            "Copy a section unchanged when its pages did not change what it says. Do not "
+            "restate scheduled reminders or their dates: the drawer shows its own care calendar."
         )
 
     async def execute(self, card: str = "", brief: str = "", sections: Any = None,

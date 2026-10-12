@@ -106,3 +106,30 @@ def test_a_drawer_written_before_the_rule_reads_without_links(notebook: Path) ->
 ])
 def test_plain_wikilinks(raw, plain) -> None:
     assert model.plain_wikilinks(raw) == plain
+
+
+def test_a_long_section_is_cut_at_a_word_with_an_ellipsis(notebook: Path) -> None:
+    """Il cassetto tagliava al carattere: «la divisione in du»."""
+    from jenny.board.drawers import MAX_SECTION_CHARS
+
+    card = _card(notebook, ["ginkgo.md", "ginkgo-vaso.md"])
+    text = ("Comprato a inizio ottobre e arrivato con il fico, quasi spoglio; " * 8).strip()
+    out, _, _ = _write(notebook, card, [{"title": "Vaso", "text": text,
+                                         "sources": ["ginkgo-vaso.md"]}])
+    clipped = out[0]["text"]
+    assert len(clipped) <= MAX_SECTION_CHARS and clipped.endswith("…")
+    assert text.startswith(clipped[:-1]) and text[len(clipped) - 1] == " "
+    short = "Vaso da 20."
+    out, _, _ = _write(notebook, card, [{"title": "Vaso", "text": short,
+                                         "sources": ["ginkgo-vaso.md"]}])
+    assert out[0]["text"] == short
+
+
+def test_the_drawer_writers_are_told_not_to_repeat_reminder_dates() -> None:
+    """Il cassetto mostra le attese nel suo calendario: il riassunto non le ripete."""
+    from jenny.agent.board_tools import BoardWriteSummaryTool
+
+    templates = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "agent"
+    assert "Never restate a scheduled\nreminder" in (templates / "board_pass.md").read_text()
+    assert "care calendar" in (templates / "types" / "notebook-editor.md").read_text()
+    assert "care calendar" in BoardWriteSummaryTool.description.fget(None)

@@ -1,7 +1,7 @@
 """Quel che la bacheca e un cassetto mostrano, calcolato dal server.
 
 Il client non legge mai ``board.json``: riceve una vista già risolta — i
-segnali di ogni scheda, i post-it delle attese aperte, le righe di «dall'ultima
+segnali di ogni scheda, l'agenda delle attese aperte, le righe di «dall'ultima
 volta» successive all'ultima apertura, quante pagine stanno fuori bacheca. Così
 le regole (un segnale per scheda, e in quale ordine) stanno in un posto solo, e
 la WebView disegna e basta.
@@ -78,22 +78,21 @@ def card_signal(
     return None
 
 
-def _note_pos(
-    board: Mapping[str, Any],
-    reminders: Mapping[str, Any],
-    card: Mapping[str, Any],
-    placed: list[tuple[float, float, float, float]],
-) -> dict[str, Any]:
-    """Il posto di un post-it che non ne ha uno: il posto libero piu' vicino al suo soggetto.
+def _agenda_pos(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> dict[str, Any]:
+    """Il posto dell'agenda finché l'utente non la sposta: libero, in alto a destra delle schede.
 
-    Calcolato e non salvato: le attese nate senza un posto (quelle della
-    passata, quelle dell'utente) compaiono vicino alla loro scheda senza coprire
-    niente, e restano dove sono finché qualcuno non le sposta.
+    Calcolato e non salvato, come il posto di una scheda nuova: è un foglio
+    solo, e dei fili partono dal suo chiodo verso le schede, quindi sta di lato
+    al gruppo invece che in mezzo.
     """
-    w, h = model.card_box(card)
-    near = (float(card["pos"]["x"]) + w * 0.6, float(card["pos"]["y"]) + h * 0.75)
-    x, y = model.free_slot(board, reminders, box=model.NOTE_BOX, near=near, extra=placed)
-    placed.append((x, y, x + model.NOTE_BOX[0], y + model.NOTE_BOX[1]))
+    cards = board.get("cards") or []
+    if cards:
+        right = max(float(c["pos"]["x"]) + model.card_box(c)[0] for c in cards)
+        top = min(float(c["pos"]["y"]) for c in cards)
+        near = (right + 2.0, top)
+    else:
+        near = (2.0, 3.0)
+    x, y = model.free_slot(board, reminders, box=model.AGENDA_BOX, near=near)
     return {"x": x, "y": y, "by": model.JENNY}
 
 
@@ -153,6 +152,7 @@ def build_board_view(
             "exists": False,
             "cards": [],
             "notes": [],
+            "agenda": None,
             "connections": [],
             "suggestions": [],
             "since": [],
@@ -190,19 +190,16 @@ def build_board_view(
             "auto": auto,
             **(_app_card(workspace, card) if workspace is not None else {}),
         })
-    notes: list[dict[str, Any]] = []
-    placed: list[tuple[float, float, float, float]] = []
-    for rem in model.open_reminders(reminders):
-        card = on_board.get(rem.get("card", ""))
-        if card is None:
-            continue
-        notes.append({
-            "id": rem["id"],
-            "card": card["id"],
-            "text": rem["text"],
-            "when": rem["when"],
-            "pos": rem.get("pos") or _note_pos(board, reminders, card, placed),
-        })
+    # Le attese aperte, dalla più vicina: le prime righe sono l'agenda sul muro,
+    # tutte insieme l'elenco dietro «+N più avanti».
+    notes = [
+        {"id": rem["id"], "card": rem["card"], "text": rem["text"], "when": rem["when"]}
+        for rem in model.board_reminders(board, reminders)
+    ]
+    agenda = None
+    if notes:
+        saved = (board.get("agenda") or {}).get("pos")
+        agenda = {"pos": saved or _agenda_pos(board, reminders), "rows": model.AGENDA_ROWS}
     last_seen = _stamp(board.get("lastSeen"))
     since = [row for row in board.get("since") or [] if _stamp(row.get("at")) > last_seen]
     offboard = offboard_pages(board, titles)
@@ -211,6 +208,7 @@ def build_board_view(
         "skeleton": board["skeleton"],
         "cards": cards_out,
         "notes": notes,
+        "agenda": agenda,
         "connections": [
             c for c in board["connections"] if c["a"] in on_board and c["b"] in on_board
         ],
@@ -280,7 +278,6 @@ def build_card_view(
                 "to": other, "title": by_id[other]["title"], "label": conn["label"],
                 "by": conn["by"],
             })
-    nxt = model.next_reminder(reminders, card_id)
     user_sections = []
     # Il cassetto di una scheda che **e'** un'app comincia dall'app: la sua
     # striscia intera (la scheda senza schermo si apre qui, non altrove).
@@ -288,6 +285,10 @@ def build_card_view(
              "params": card["app"].get("params") or {}, "own": True}]
            if isinstance(card.get("app"), dict) else [])
     for section in [*own, *(card.get("userSections") or [])]:
+        # Un promemoria aggiunto dal cassetto ha ancora una sua sezione, ma si
+        # mostra una volta sola: nel calendario di cura, con quelli di Jenny.
+        if section.get("kind") == "reminder":
+            continue
         resolved = dict(section)
         if sections_resolver is not None:
             resolved.update(sections_resolver(section, {
@@ -308,10 +309,10 @@ def build_card_view(
         "generated": summary.get("generated") or "",
         "brief": summary.get("brief") or "",
         "sections": sections,
-        "next": nxt,
-        "reminders": [
+        # Il calendario di cura: le attese aperte della scheda, dalla più vicina.
+        "reminders": model.sorted_reminders(
             r for r in model.open_reminders(reminders) if r.get("card") == card_id
-        ],
+        ),
         "userSections": user_sections,
         "connections": connections,
         # Una correzione integrata mostra la sua ✓ fino alla prossima apertura

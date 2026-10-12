@@ -1363,7 +1363,6 @@
       "threads": "Threads",
       "allPages": "The pages ({count})",
       "foot": "Jenny writes the summary from the wiki. To change it, correct it: the correction goes to the right page and comes back here.",
-      "next": "Next up",
       "fix": "Correct",
       "fixLabel": "Correction",
       "fixTarget": "Goes as a report on “{page}”.",
@@ -1372,10 +1371,20 @@
       "fixDone": "Applied to the wiki",
       "fixFailed": "I couldn't send the correction.",
       "threadRemove": "Remove the thread to {card}",
-      "threadRemoveConfirm": "Remove the thread to {card}? Jenny will not propose it again."
+      "threadRemoveConfirm": "Remove the thread to {card}? Jenny will not propose it again.",
+      "calendar": {
+        "title": "Care calendar",
+        "today": "Today · {date}",
+        "overdue": "Overdue",
+        "whenever": "When it happens"
+      }
     },
     "reminder": {
-      "done": "Done"
+      "done": "Done",
+      "edit": "Edit",
+      "drop": "Remove",
+      "dropConfirm": "Remove “{text}”?",
+      "actions": "More on “{text}”"
     },
     "app": {
       "open": "Open the app",
@@ -1411,8 +1420,6 @@
       "restore": "Put the app back"
     },
     "section": {
-      "add": "+ Add a section",
-      "addTitle": "Add a section to {card}",
       "remove": "Remove",
       "removeConfirm": "Remove this section? The wiki does not change.",
       "edit": "Edit",
@@ -1441,15 +1448,8 @@
         "micro": "App",
         "cron": "Cron"
       },
-      "hint": {
-        "note": "Something to remember, in your words",
-        "reminder": "Something to do, with a date",
-        "app": "Data that updates by itself",
-        "photo": "A picture, for example how it was",
-        "other": "Describe it and I'll build it",
-        "micro": "A live value, or something to use: Jenny builds it",
-        "cron": "Something Jenny does on her own, on a schedule"
-      }
+      "addFab": "Add to the drawer",
+      "close": "Close"
     },
     "micro": {
       "what": "What do you want to see, or do?",
@@ -1526,6 +1526,11 @@
       "dec": "minus {label}",
       "inc": "plus {label}",
       "failed": "That didn't work: try from the app"
+    },
+    "agenda": {
+      "title": "Coming up",
+      "more": "+{count} later",
+      "all": "Everything coming up"
     }
   }
 }

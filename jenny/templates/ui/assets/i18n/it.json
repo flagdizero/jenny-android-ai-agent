@@ -1363,7 +1363,6 @@
       "threads": "Fili",
       "allPages": "Le pagine ({count})",
       "foot": "Il riassunto lo scrive Jenny dalla wiki. Per cambiarlo, correggi: la correzione va nella pagina giusta e torna qui.",
-      "next": "Prossima cosa",
       "fix": "Correggi",
       "fixLabel": "Correzione",
       "fixTarget": "Va come segnalazione su «{page}».",
@@ -1372,10 +1371,20 @@
       "fixDone": "Integrata nella wiki",
       "fixFailed": "Non sono riuscita a mandare la correzione.",
       "threadRemove": "Togli il filo con {card}",
-      "threadRemoveConfirm": "Togliere il filo con {card}? Jenny non lo riproporrà."
+      "threadRemoveConfirm": "Togliere il filo con {card}? Jenny non lo riproporrà.",
+      "calendar": {
+        "title": "Calendario di cura",
+        "today": "Oggi · {date}",
+        "overdue": "In ritardo",
+        "whenever": "Quando succede"
+      }
     },
     "reminder": {
-      "done": "Fatto"
+      "done": "Fatto",
+      "edit": "Correggi",
+      "drop": "Togli",
+      "dropConfirm": "Togliere «{text}»?",
+      "actions": "Altro su «{text}»"
     },
     "app": {
       "open": "Apri l'app",
@@ -1411,8 +1420,6 @@
       "restore": "Rimetti l'app"
     },
     "section": {
-      "add": "+ Aggiungi sezione",
-      "addTitle": "Aggiungi una sezione a {card}",
       "remove": "Togli",
       "removeConfirm": "Togliere questa sezione? La wiki non cambia.",
       "edit": "Modifica",
@@ -1441,15 +1448,8 @@
         "micro": "App",
         "cron": "Cron"
       },
-      "hint": {
-        "note": "Una cosa da ricordare, scritta da te",
-        "reminder": "Una cosa da fare, con una data",
-        "app": "Dati che si aggiornano da soli",
-        "photo": "Un'immagine, per esempio com'era",
-        "other": "Descrivila e la preparo io",
-        "micro": "Un dato vivo, o qualcosa da usare: la prepara Jenny",
-        "cron": "Una cosa che Jenny fa da sola, a orario"
-      }
+      "addFab": "Aggiungi al cassetto",
+      "close": "Chiudi"
     },
     "micro": {
       "what": "Cosa vuoi vedere, o fare?",
@@ -1526,6 +1526,11 @@
       "dec": "meno {label}",
       "inc": "più {label}",
       "failed": "Non è andata: riprova dall'app"
+    },
+    "agenda": {
+      "title": "In arrivo",
+      "more": "+{count} più avanti",
+      "all": "Tutte le attese"
     }
   }
 }

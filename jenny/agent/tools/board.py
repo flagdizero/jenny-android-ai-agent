@@ -193,7 +193,8 @@ class BoardTool(Tool):
             when = {"kind": "date", "date": kw.get("date"),
                     "precision": kw.get("precision") or "day"}
             sid = edit.add_reminder(root, card, kw.get("text"), when)
-            return f"Reminder added as section `{sid}`: a post-it on the board."
+            return (f"Reminder added as section `{sid}`: a line in the board's agenda and in "
+                    "the card's care calendar.")
         if action == "close_reminder":
             text = edit.close_reminder(root, str(kw.get("id") or ""),
                                        timezone_name=self._timezone)
