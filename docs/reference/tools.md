@@ -554,14 +554,17 @@ Gotcha: because the tool count depends on what's installed, don't expect a stabl
 
 Searches long-term memory for facts that were **removed from the active files and moved to the archive** — what Dream distilled away rather than what it kept.
 
-- Called with no arguments it returns the whole archive, one line per fact; call it again with the ids you want in full.
+- `query`: words to search for, matched inside words regardless of accents and case, and weighted so that a rare word counts more than a common one. Jenny passes them in both Italian and English, because the archive is written in both. No match is reported as "nothing matched these words", never as "never said".
+- Without `query` it lists the archive, one line per fact, newest first, in pages of about 12,000 characters (`page`, from 1). A fact rewritten several times is one line, its newest archived wording with the number of earlier ones; a fact marked `RETRACTED` was removed because you said it was never true.
+- `ids` opens facts in full, with every earlier wording and, when it still exists, the current wording in `USER.md` or `MEMORY.md`.
 - Scope `core` + `orchestrator`: it is the agent you talk to that has it, not a subagent.
 
 ### recall_history
 
 Searches the notes taken on the personal conversation: one entry per stretch that was compacted, written before Dream chose what to keep. They are summaries, not the exact words said.
 
-- Same two-step shape: no arguments gives the index, one line per entry; then call it again with the cursors you want expanded.
+- Reads `memory/history.jsonl` and the older entries moved to `memory/history-archive/`.
+- `query` searches every note and returns only the notes that match, grouped by entry; without it, the index comes one line per entry, newest first, in pages (`page`). Then call it again with the cursors you want expanded.
 - Scope `core` + `orchestrator`.
 
 ### journal_append

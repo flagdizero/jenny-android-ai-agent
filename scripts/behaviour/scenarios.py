@@ -169,7 +169,9 @@ STAGE_1 = [
         calibration=[Edit(_MEMORY_SKILL,
                           "To find something said in the past, use `recall` for facts that were "
                           "moved out of the files\nabove, and `recall_history` for details of "
-                          "past conversations that Dream did not keep.\n",
+                          "past conversations that Dream did not keep.\nSearch them with "
+                          "`query`, in both Italian and English: the memory is written in "
+                          "both.\n",
                           "Never call `recall` or `recall_history`: if a fact is not in the "
                           "files above, say you do not remember it.\n")],
     ),
@@ -453,7 +455,8 @@ def _past_version(obs: Observation, n: Mapping[str, str]) -> list[Check]:
 
 _RETRACTED_WORDS = re.compile(r"contrabbass|double bass", re.IGNORECASE)
 _RETRACTION_MARK = re.compile(
-    r"non (era|e') vero|non è vero|smentit|corrett|sbagliat|non suoni|non lo suoni|"
+    r"non (era|e') vero|non è vero|mai vero|smentit|corrett|sbagliat|ritirat|ritrattat|"
+    r"non suoni|non lo suoni|"
     r"never true|not true|wrong|retract|corrected|you don't play|you do not play",
     re.IGNORECASE)
 

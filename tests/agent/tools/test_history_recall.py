@@ -77,14 +77,46 @@ class TestIndex:
         root = _workspace(tmp_path, [_entry(5, "- una sola")])
         assert "(+" not in await _tool(root).execute()
 
-    async def test_the_cut_is_announced_and_drops_the_oldest(self, tmp_path):
+    async def test_a_long_log_comes_in_pages(self, tmp_path):
         long = [_entry(i, "- " + "x" * 200) for i in range(1, 400)]
         root = _workspace(tmp_path, long)
-        out = await _tool(root).execute()
-        assert "older turns are not listed" in out
-        assert len(out) < _INDEX_MAX_CHARS + 2_000
-        assert "[399]" in out          # la piu' recente resta
-        assert "[1] " not in out       # la piu' vecchia e' quella che cade
+        first = await _tool(root).execute()
+        assert "Page 1 of" in first
+        assert len(first) < _INDEX_MAX_CHARS + 2_000
+        assert "[399]" in first        # la piu' recente in prima pagina
+        assert "[1] " not in first
+        pages = int(first.split("Page 1 of ")[1].split(";")[0])
+        assert "[1] " in await _tool(root).execute(page=pages)
+
+
+class TestSearch:
+    async def test_the_matching_note_is_shown_not_the_first(self, tmp_path):
+        root = _workspace(tmp_path, [
+            _entry(3, "- [durable] Ha iniziato un corso di ceramica\n"
+                      "- [ephemeral] Era stanco\n"
+                      "- [durable] The cat's vet is Dr. Zafkril"),
+            _entry(4, "- [durable] Altro"),
+        ])
+        out = await _tool(root).execute(query=["veterinario", "vet"])
+        assert "Dr. Zafkril" in out
+        assert "[3]" in out and "[4]" not in out
+        assert "ceramica" not in out  # solo le note che combaciano
+
+    async def test_it_searches_the_archived_part_too(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(9, "- viva")])
+        arch = root / "memory" / "history-archive"
+        arch.mkdir()
+        (arch / "2026-01.jsonl").write_text(
+            json.dumps(_entry(2, "- [durable] La barca del nonno era la Brezza")) + "\n",
+            encoding="utf-8",
+        )
+        out = await _tool(root).execute(query=["barca"])
+        assert "Brezza" in out
+
+    async def test_no_match_never_reads_as_never_said(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(1, "- niente")])
+        out = await _tool(root).execute(query=["dentista"])
+        assert "does not mean it was never said" in out
 
 
 class TestOpening:
