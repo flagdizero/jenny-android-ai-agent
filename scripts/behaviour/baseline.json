@@ -662,6 +662,48 @@
    },
    "runs": 3
   },
+  "greeting_after_notebook_no_recap|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "greeting_after_notebook_no_recap|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "heartbeat_alarm_speaks_once|claude-haiku-5-5|normal": {
    "checks": {
     "heartbeat_ran": [
@@ -830,6 +872,56 @@
    },
    "runs": 3
   },
+  "notebook_event_reaches_personal|claude-haiku-5-5|normal": {
+   "checks": {
+    "knows_it": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ],
+    "without_digging": [
+     0,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_event_reaches_personal|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "knows_it": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ],
+    "without_digging": [
+     0,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "notebook_fact_goes_to_journal|claude-haiku-5-5|normal": {
    "checks": {
     "fact_in_journal": [
@@ -870,6 +962,48 @@
      3
     ],
     "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_topic_stays_out|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_topic_stays_out|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
      3,
      3
     ],

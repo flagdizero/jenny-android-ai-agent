@@ -139,9 +139,13 @@ class Runner:
                 self._fresh_personal_session()
             self._reset_files()
             created = self._write_fixtures(scenario, nonces)
-            if scenario.chat == "notebook":
+            if scenario.chat == "notebook" or scenario.notebook_prelude:
                 project = f"bh-{nonces[scenario.nonces[0]]}"
-                dev.rpc("project.create", {"name": project, "seed": "Le piante del terrazzo."})
+                dev.rpc("project.create", {"name": project, "seed": scenario.notebook_seed})
+            prelude_calls: list[Any] = []
+            if scenario.notebook_prelude:
+                prelude_calls = self._prelude(scenario, nonces, project)
+            if scenario.chat == "notebook":
                 chat_id = f"project:{project}"
                 session_file = f"sessions/project_{project}.jsonl"
             else:
@@ -171,6 +175,7 @@ class Runner:
             rows = _rows(dev.read(session_file) or "")
             extra: dict[str, Any] = {
                 "last_turn_calls": observation_from_rows(rows[last_turn_start:], []).tool_calls,
+                "prelude_calls": prelude_calls,
             }
             if scenario.archive_after:
                 extra["archive_entry"] = self._archive_now()
@@ -356,6 +361,22 @@ class Runner:
             if scenario.append_consumed:
                 dev.write("memory/.dream_cursor", str(last))
         return created
+
+    def _prelude(self, scenario: Scenario, nonces: Mapping[str, str], project: str | None) -> list:
+        """I turni di ``notebook_prelude`` nel quaderno, e le loro chiamate a tool.
+
+        Si aspetta che i subagent del quaderno finiscano (un ``notebook-editor``
+        acceso li' scriverebbe a meta' del turno osservato) e se ne restituiscono
+        le chiamate, per distinguere un rosso di qua da un fatto mai annotato di la'.
+        """
+        session_file = f"sessions/project_{project}.jsonl"
+        for turn in scenario.notebook_prelude:
+            outcome = self.device.turn(scenario.render(turn, nonces), chat_id=f"project:{project}")
+            if _PROVIDER_FAILED.search(outcome.reply):
+                raise ProviderDownError(outcome.reply.splitlines()[-1][:200])
+        self._wait_subagents_done(session_file)
+        rows = _rows(self.device.read(session_file) or "")
+        return observation_from_rows(rows, []).tool_calls
 
     def _seed_session(self, scenario: Scenario, nonces: Mapping[str, str], session_file: str,
                       key: str) -> None:

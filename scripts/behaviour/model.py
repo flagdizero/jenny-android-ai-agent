@@ -105,6 +105,13 @@ class Scenario:
     #: ``personal`` (la chat unificata, sessione nuova) o ``notebook`` (un
     #: quaderno usa e getta, creato e cancellato attorno al giro).
     chat: str = "personal"
+    #: Turni detti **prima**, in un quaderno usa e getta, quando ``chat`` e'
+    #: ``personal``: quel che succede di la' e poi si chiede di qua. Il quaderno
+    #: prende il nome dal primo nonce e il tema da ``notebook_seed``; le sue
+    #: chiamate a tool stanno in ``extra["prelude_calls"]``, non nella sessione
+    #: osservata.
+    notebook_prelude: list[str] = field(default_factory=list)
+    notebook_seed: str = "Le piante del terrazzo."
     #: File da leggere dopo il giro; un percorso che finisce in ``/`` legge
     #: tutta la cartella.
     read_after: tuple[str, ...] = ()

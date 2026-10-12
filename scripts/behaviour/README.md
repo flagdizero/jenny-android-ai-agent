@@ -47,6 +47,10 @@ session JSONL and the workspace files.
 - **Fixtures.** Before each run the files listed in `runner.RESET_FILES` go back to how they were
   at the start, then the scenario writes its own. History entries get cursors above the
   session's floor, or they would not reach the prompt.
+- **Across chats.** A personal-chat scenario can first speak in a throwaway notebook
+  (`notebook_prelude`): those turns run there, the runner waits for the notebook's subagents, and
+  their tool calls go to `extra["prelude_calls"]` — so a red in the personal chat can be told
+  apart from a fact the notebook never wrote down. Stage 4 (the diary) is built on this.
 - **Cleanup.** Subagents the run started are cancelled and waited for, cron jobs it created are
   removed, its notebook is deleted.
 

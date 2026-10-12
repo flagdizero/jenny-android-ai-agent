@@ -888,7 +888,75 @@ STAGE_3.append(Scenario(
                       "`subagent_send` for a\nfinished one.")],
 ))
 
-SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3]}
+# -- stadio 4: il diario (una Jenny sola fra chat e quaderni) ----------------------
+#
+# Le scene del piano del diario: quel che succede in un quaderno, la chat
+# personale deve saperlo senza andarselo a cercare; e quel che e' di un
+# quaderno non deve saltar fuori quando si parla d'altro. Il preludio gira in un
+# quaderno usa e getta, la domanda nella chat personale, sessione nuova.
+
+#: Gli strumenti con cui Jenny va a *cercare*: saperlo cercando e' la Jenny di
+#: oggi («ah gia'», dopo aver riletto il quaderno), non quella del diario.
+_DIGGING = ("recall_history", "recall", "read_file", "grep", "find_files", "list_dir",
+            "python_exec")
+
+
+def _journaled(obs: Observation, n: Mapping[str, str]) -> Check:
+    calls = [c for c in obs.extra.get("prelude_calls") or [] if c.name == "journal_append"]
+    return Check("prelude_journaled", any(n["n"].lower() in c.arg_text().lower() for c in calls),
+                 str(len(calls)))
+
+
+def _knows_from_notebook(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    dug = [c.name for c in obs.tool_calls if c.name in _DIGGING]
+    return [
+        _journaled(obs, n),
+        Check("knows_it", n["n"].lower() in obs.reply.lower(), obs.reply[:160]),
+        Check("without_digging", not dug, ",".join(dug)),
+    ]
+
+
+def _stays_out(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    return [
+        _journaled(obs, n),
+        Check("notebook_stays_out", n["n"].lower() not in obs.reply.lower(), obs.reply[:160]),
+    ]
+
+
+DIARY = [
+    Scenario(
+        name="notebook_event_reaches_personal",
+        stage=4, area="diary", nonces=("p", "n"),
+        promise="un film visto e commentato in un quaderno: la chat personale lo sa, senza cercarlo",
+        notebook_seed="I film che guardo e cosa ne penso.",
+        notebook_prelude=["Ho appena finito di vedere il film «{n}»: mi è piaciuto tantissimo, "
+                          "lo rivedrei."],
+        turns=["Qual è l'ultimo film che ho visto? Solo il titolo; se non lo sai, dimmelo."],
+        check=_knows_from_notebook, kind="probe",
+    ),
+    Scenario(
+        name="notebook_topic_stays_out",
+        stage=4, area="diary", nonces=("p", "n"),
+        promise="un fatto di lavoro detto in un quaderno non salta fuori parlando di cucina",
+        notebook_seed="Il lavoro con i clienti: preventivi e scadenze.",
+        notebook_prelude=["Il cliente {n} vuole il preventivo del sito entro venerdì, "
+                          "segnatelo."],
+        turns=["Mi dai un'idea veloce per la cena di stasera? Due righe."],
+        check=_stays_out, kind="probe",
+    ),
+    Scenario(
+        name="greeting_after_notebook_no_recap",
+        stage=4, area="diary", nonces=("p", "n"),
+        promise="tornando in chat dopo un quaderno, un saluto non diventa un riassunto del quaderno",
+        notebook_seed="I lavori in casa.",
+        notebook_prelude=["L'idraulico {n} viene martedì alle 9 per la guarnizione del bagno, "
+                          "segnatelo."],
+        turns=["Ciao Jenny!"],
+        check=_stays_out, kind="probe",
+    ),
+]
+
+SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

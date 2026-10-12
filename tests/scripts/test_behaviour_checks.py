@@ -269,3 +269,28 @@ def test_task_state_needs_the_compaction_and_the_early_flags() -> None:
     assert not lost["early_flags_kept"] and lost["late_flag_kept"]
     fresh = {"sessions/project_bh-p1.jsonl": json.dumps({"_type": "metadata"}) + "\n"}
     assert not _ok("compaction_keeps_task_state", _obs(reply, files=fresh), nonces)["compacted"]
+
+
+def test_knowing_a_notebook_event_means_without_searching() -> None:
+    nonces = {"p": "p1", "n": "zafkril"}
+    noted = [ToolCall("journal_append", {"text": "Ha visto «Zafkril», gli è piaciuto"})]
+    known = _obs("Zafkril.", prelude_calls=noted)
+    assert all(_ok("notebook_event_reaches_personal", known, nonces).values())
+    dug = _obs("Zafkril.", [ToolCall("grep", {"pattern": "film"})], prelude_calls=noted)
+    assert not _ok("notebook_event_reaches_personal", dug, nonces)["without_digging"]
+    unknown = _ok("notebook_event_reaches_personal", _obs("Non lo so.", prelude_calls=noted),
+                  nonces)
+    assert not unknown["knows_it"] and unknown["prelude_journaled"]
+    never_noted = _ok("notebook_event_reaches_personal", _obs("Non lo so."), nonces)
+    assert not never_noted["prelude_journaled"]
+
+
+def test_a_notebook_fact_must_stay_out_of_other_talk() -> None:
+    nonces = {"p": "p1", "n": "zafkril"}
+    noted = [ToolCall("journal_append", {"text": "Il cliente Zafkril vuole il preventivo"})]
+    for name in ("notebook_topic_stays_out", "greeting_after_notebook_no_recap"):
+        quiet = _ok(name, _obs("Pasta al limone: dieci minuti.", prelude_calls=noted), nonces)
+        assert all(quiet.values())
+        leaked = _ok(name, _obs("Ciao! Ricorda il preventivo per Zafkril.", prelude_calls=noted),
+                     nonces)
+        assert not leaked["notebook_stays_out"]
