@@ -43,7 +43,7 @@ Cross-boundary rule: no technical configs in USER.md, no user facts in SOUL.md, 
 Conversation History may contain Consolidator tags. Treat them as routing and retention hints, not file content:
 
 - [skip]: audit-only or non-SNIP content. Do not write it to SOUL.md, USER.md, MEMORY.md, or SKILL.md.
-- [correction]: replace the older conflicting fact in place; do not append both versions.
+- [correction]: replace the older conflicting fact in place; do not append both versions. If the correction says the old fact was never true and nothing takes its place, `remove` it with `wrong: true`.
 - [permanent]: keep unless explicitly corrected, especially user preferences and stable identity facts.
 - [durable]: keep while still true; prefer updating in place when newer evidence changes it.
 - [ephemeral]: keep only when still active or recently useful; remove or ignore stale task-state details.

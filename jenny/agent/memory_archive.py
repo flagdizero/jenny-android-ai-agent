@@ -64,6 +64,13 @@ class ArchivedEntry:
     diventa un indovinello. ``retention`` è il tag del Consolidator quando si
     conosce — spesso non si conosce, perché i tag vengono tolti dal testo prima
     che arrivi nei file, quindi è opzionale e non si inventa.
+
+    ``superseded_by`` è l'id della voce che ha preso il suo posto, quando la si
+    conosce: senza, sette riformulazioni dello stesso fatto stanno in archivio
+    come sette fatti, e nessuna dice di essere vecchia (misurato sul telefono
+    il 12/10/2026: 271 file su 479 erano versioni di 65 fatti). ``retracted``
+    dice che il fatto non era mai stato vero, non solo che è cambiato: un fatto
+    smentito, altrimenti, si rilegge in archivio identico a uno vero.
     """
 
     id: str
@@ -72,6 +79,8 @@ class ArchivedEntry:
     heading: str = ""
     retention: str = ""
     demoted: str = ""
+    superseded_by: str = ""
+    retracted: bool = False
 
 
 def archive_dir(memory_dir: Path) -> Path:
@@ -101,6 +110,8 @@ def render_archived(entry: ArchivedEntry) -> str:
         ("heading", entry.heading),
         ("retention", entry.retention),
         ("demoted", entry.demoted),
+        ("superseded_by", entry.superseded_by),
+        ("retracted", "yes" if entry.retracted else ""),
     ]
     head = [f"{k}: {v}" for k, v in fields if v]
     body = _BULLET_PREFIX.sub("", entry.text.strip()).strip()
@@ -131,9 +142,17 @@ def archive_entry(
     riscriverlo. Serve perché nella fase 2 questa funzione la chiama ``remove``,
     e un fatto può benissimo essere riaggiunto e ritolto — l'archivio deve dire
     "questo fatto è passato di qui", non quante volte.
+
+    Con un'eccezione sola: ``superseded_by`` e ``retracted`` si **aggiungono** al
+    file esistente se lì mancano. Due percorsi archiviano la stessa voce nella
+    stessa scrittura — ``memory replace`` col legame, poi la rete al confine del
+    file senza — e quale arrivi primo non deve decidere se il legame resta. Un
+    campo già pieno non si tocca: la prima sostituzione è quella che lo ha
+    tolto dai file caldi.
     """
     existing = find_archived(memory_dir, entry.id)
     if existing is not None:
+        _add_lineage(existing, entry)
         return existing
 
     day = when or date.today()
@@ -144,6 +163,8 @@ def archive_entry(
         heading=entry.heading,
         retention=entry.retention,
         demoted=entry.demoted or day.isoformat(),
+        superseded_by=entry.superseded_by,
+        retracted=entry.retracted,
     )
     directory = archive_dir(memory_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -153,6 +174,38 @@ def archive_entry(
     # troncamento a metà sarebbe la perdita che tutta la fase esiste per impedire.
     atomic_write(path, render_archived(stamped))
     return path
+
+
+def _add_lineage(path: Path, entry: ArchivedEntry) -> None:
+    """Aggiunge a un file già in archivio i campi di discendenza che gli mancano.
+
+    Riga per riga dentro l'intestazione, e non ri-renderizzando il file: un
+    file aperto e ritoccato a mano può portare chiavi che questo modulo non
+    conosce, e riscriverlo da :class:`ArchivedEntry` le butterebbe.
+    """
+    wanted = {"superseded_by": entry.superseded_by, "retracted": "yes" if entry.retracted else ""}
+    if not any(wanted.values()):
+        return
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    fields, body = _parse_archived(text)
+    missing = [f"{k}: {v}" for k, v in wanted.items() if v and not fields.get(k)]
+    if not missing or not body:
+        return
+    lines = text.splitlines()
+    if lines and lines[0].strip() == _SEPARATOR:
+        close = next(
+            i for i, line in enumerate(lines[1:], 1) if line.strip() == _SEPARATOR
+        )
+        lines[close:close] = missing
+        updated = "\n".join(lines) + "\n"
+    else:
+        # Un file senza intestazione (semplificato a mano) ne riceve una con i
+        # soli campi nuovi: il corpo resta com'è.
+        updated = "\n".join([_SEPARATOR, *missing, _SEPARATOR, "", body, ""])
+    atomic_write(path, updated)
 
 
 def archived_ids(memory_dir: Path) -> set[str]:
@@ -225,6 +278,8 @@ def read_archived(path: Path) -> ArchivedEntry | None:
         heading=fields.get("heading", ""),
         retention=fields.get("retention", ""),
         demoted=fields.get("demoted", ""),
+        superseded_by=fields.get("superseded_by", ""),
+        retracted=fields.get("retracted", "").lower() in {"yes", "true"},
     )
 
 

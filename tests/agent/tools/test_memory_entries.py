@@ -960,6 +960,142 @@ class TestReplacingAlsoKeepsTheOldVersion:
         assert len(list(archive_dir(tmp_path / "memory").glob("*.md"))) == 1
 
 
+class TestTheArchiveKnowsWhatReplacedWhat:
+    """Il legame fra la versione archiviata e quella che ne ha preso il posto.
+
+    Sul telefono, il 12/10/2026, 271 file d'archivio su 479 erano versioni di 65
+    fatti, senza un segno di quale sostituisse quale: per chi rilegge, sette
+    riformulazioni sono sette fatti, e nessuna dice di essere vecchia.
+    """
+
+    @pytest.fixture
+    def tool(self, tmp_path: Path):
+        (tmp_path / "USER.md").write_text(_REAL_SHAPE, encoding="utf-8")
+        from jenny.agent.tools.memory_entries import make_entry_archiver
+
+        return MemoryEntryTool(
+            tmp_path,
+            file_states=FileStates(),
+            entry_archiver=make_entry_archiver(tmp_path),
+        )
+
+    @staticmethod
+    def _archived(tmp_path: Path, text: str):
+        from jenny.agent.memory_archive import read_archived
+
+        path = find_archived(tmp_path / "memory", entry_id(text))
+        assert path is not None, text
+        return read_archived(path)
+
+    async def test_replace_links_the_old_version_to_the_new(self, tool, tmp_path):
+        await tool.execute(
+            action="replace", file="user", target="Short answers",
+            text="Very short answers, never a report",
+        )
+        old = self._archived(tmp_path, "- Short answers, no formal reports")
+        assert old.superseded_by == entry_id("- Very short answers, never a report")
+
+    async def test_replace_links_even_a_wholly_different_wording(self, tool, tmp_path):
+        """Da ``replace`` il legame è certo, somiglianza o no."""
+        await tool.execute(
+            action="replace", file="user", target="Short answers", text="Brevity first",
+        )
+        old = self._archived(tmp_path, "- Short answers, no formal reports")
+        assert old.superseded_by == entry_id("- Brevity first")
+
+    async def test_a_refused_replace_archives_nothing(self, tmp_path):
+        from jenny.agent.tools.memory_entries import make_entry_archiver
+
+        (tmp_path / "USER.md").write_text(_REAL_SHAPE, encoding="utf-8")
+        tool = MemoryEntryTool(
+            tmp_path,
+            file_states=FileStates(),
+            entry_archiver=make_entry_archiver(tmp_path),
+            write_size_guard=lambda path, text: "over budget",
+        )
+        out = await tool.execute(
+            action="replace", file="user", target="Short answers", text="x" * 50,
+        )
+        assert "over budget" in out
+        assert not archive_dir(tmp_path / "memory").exists()
+
+    async def test_replace_with_the_same_text_archives_nothing(self, tool, tmp_path):
+        await tool.execute(
+            action="replace", file="user", target="Short answers",
+            text="Short answers, no formal reports",
+        )
+        assert not archive_dir(tmp_path / "memory").exists()
+
+    async def test_remove_wrong_marks_the_fact_retracted(self, tool, tmp_path):
+        await tool.execute(action="remove", file="user", target="delegating", wrong=True)
+        gone = self._archived(tmp_path, "- Prefers delegating technical work to subagents")
+        assert gone.retracted
+        assert gone.superseded_by == ""
+
+    async def test_a_plain_remove_is_not_a_retraction(self, tool, tmp_path):
+        await tool.execute(action="remove", file="user", target="delegating")
+        assert not self._archived(
+            tmp_path, "- Prefers delegating technical work to subagents",
+        ).retracted
+
+    def test_a_whole_file_rewrite_pairs_by_similarity(self, tmp_path):
+        """``apply_patch`` porta solo il prima e il dopo: il legame si ricava."""
+        from jenny.agent.tools.memory_entries import make_entry_archiver
+
+        (tmp_path / "USER.md").write_text(_REAL_SHAPE, encoding="utf-8")
+        after = _REAL_SHAPE.replace(
+            "- Short answers, no formal reports",
+            "- Short answers in plain Italian, no formal reports",
+        ).replace(
+            "- Prefers delegating technical work to subagents\n",
+            "- Plays the double bass on Thursdays\n",
+        )
+        make_entry_archiver(tmp_path)(tmp_path / "USER.md", after)
+
+        reworded = self._archived(tmp_path, "- Short answers, no formal reports")
+        assert reworded.superseded_by == entry_id(
+            "- Short answers in plain Italian, no formal reports",
+        )
+        # Un fatto tolto e uno diverso aggiunto nella stessa scrittura non sono
+        # la stessa cosa riscritta.
+        unrelated = self._archived(tmp_path, "- Prefers delegating technical work to subagents")
+        assert unrelated.superseded_by == ""
+
+
+class TestPairSuccessors:
+    @staticmethod
+    def _entries(*texts: str):
+        return parse_entries("\n".join(f"- {t}" for t in texts))
+
+    def test_each_entry_is_paired_at_most_once(self):
+        from jenny.agent.tools.memory_entries import pair_successors
+
+        gone = self._entries("Lives in Rome, Pigneto", "Lives in Rome")
+        arrived = self._entries("Lives in Rome, Marranella")
+        # Due candidate sopra soglia, una voce comparsa sola: un solo legame, alla
+        # più simile ({lives, rome} su tre radici contro due su quattro).
+        assert pair_successors(gone, arrived) == {gone[1].id: arrived[0].id}
+
+    def test_two_rewrites_pair_crosswise_correctly(self):
+        from jenny.agent.tools.memory_entries import pair_successors
+
+        gone = self._entries("Plays Magic the Gathering on Fridays", "Allergic to dust mites")
+        arrived = self._entries(
+            "Allergic to dust mites and pollen", "Plays Magic the Gathering on Saturdays",
+        )
+        assert pair_successors(gone, arrived) == {
+            gone[0].id: arrived[1].id,
+            gone[1].id: arrived[0].id,
+        }
+
+    def test_below_the_threshold_nothing_is_paired(self):
+        from jenny.agent.tools.memory_entries import pair_successors
+
+        gone = self._entries("Prefers short answers")
+        arrived = self._entries("Has a brother who moved in last month")
+        assert pair_successors(gone, arrived) == {}
+
+
 
 # ---------------------------------------------------------------------------
 # T7.9 — igiene: l'argomento non coercito, e il ``create()`` senza difese
