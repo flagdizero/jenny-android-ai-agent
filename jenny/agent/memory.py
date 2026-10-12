@@ -18,7 +18,7 @@ from jenny.agent.internal_run import (
     internal_run_should_commit as _internal_run_should_commit,
 )
 from jenny.agent.internal_run import prune_internal_sessions as _prune_internal_sessions
-from jenny.agent.memory_archive import archive_dir
+from jenny.agent.memory_archive import archive_dir, history_archive_dir
 from jenny.session.keys import (
     DREAM_SESSION_PREFIX,
     internal_session_kind,
@@ -858,7 +858,7 @@ class MemoryStore:
         ]
 
     def compact_history(self) -> None:
-        """Drop oldest entries if the file exceeds *max_history_entries*.
+        """Move the oldest entries out of the file past *max_history_entries*.
 
         The read→rewrite must hold ``_append_lock``: ``append_history`` runs on
         real threads (Consolidator via ``asyncio.to_thread``) and fsyncs a new
@@ -884,6 +884,13 @@ class MemoryStore:
         aveva nessuno. Le voci interne invece si tagliano come prima: Dream non le
         legge, e trattenerle vorrebbe dire non tagliarle mai su un'installazione
         dove parla solo l'heartbeat.
+
+        **E quel che esce non si cancella**: va in ``memory/history-archive/
+        <anno>.jsonl`` (v. :meth:`_archive_history_entries`), dove
+        ``recall_history`` lo ritrova. Prima il tetto cancellava: misurato sul
+        telefono il 12/10/2026, 498 voci in due mesi a 10–16 al giorno, cioè le
+        prime perdite a metà novembre — di appunti che sono l'unica copia del
+        dettaglio che Dream non ha tenuto.
         """
         if self.max_history_entries <= 0:
             return
@@ -893,14 +900,45 @@ class MemoryStore:
                 return
             dream_cursor = self.get_last_dream_cursor()
             cut = len(entries) - self.max_history_entries
-            kept = [
-                entry
-                for index, entry in enumerate(entries)
-                if index >= cut or self._awaits_dream(entry, dream_cursor)
-            ]
-            if len(kept) == len(entries):
+            kept: list[dict[str, Any]] = []
+            dropped: list[dict[str, Any]] = []
+            for index, entry in enumerate(entries):
+                if index >= cut or self._awaits_dream(entry, dream_cursor):
+                    kept.append(entry)
+                else:
+                    dropped.append(entry)
+            if not dropped:
+                return
+            # Prima l'archivio, poi la riscrittura: un crash in mezzo lascia le
+            # voci in tutti e due i posti, e chi legge deduplica per cursore. Al
+            # contrario, le perderebbe. Se l'archivio non si scrive, il vivo resta
+            # com'è: sforare il tetto costa spazio, cancellare costa la storia.
+            try:
+                self._archive_history_entries(dropped)
+            except OSError as exc:
+                logger.warning(
+                    "history archive not writable, keeping {} entries in history.jsonl: {}",
+                    len(dropped), exc,
+                )
                 return
             self._write_entries(kept)
+
+    def _archive_history_entries(self, entries: list[dict[str, Any]]) -> None:
+        """Accoda *entries* a ``memory/history-archive/<anno>.jsonl``, una riga ciascuna.
+
+        L'anno viene dal ``timestamp`` della voce (``"%Y-%m-%d %H:%M"``); una
+        voce senza un anno leggibile va in ``unknown.jsonl`` invece di sparire.
+        Un file per anno tiene ogni file sotto qualche MB al ritmo misurato, e
+        un append non riscrive mai quel che c'è già.
+        """
+        by_year: dict[str, list[str]] = {}
+        for entry in entries:
+            ts = entry.get("timestamp")
+            year = ts[:4] if isinstance(ts, str) and ts[:4].isdigit() else "unknown"
+            by_year.setdefault(year, []).append(json.dumps(entry, ensure_ascii=False))
+        target = ensure_dir(history_archive_dir(self.memory_dir))
+        for year, lines in sorted(by_year.items()):
+            append_lines_durable(target / f"{year}.jsonl", lines)
 
     @classmethod
     def _awaits_dream(cls, entry: dict[str, Any], dream_cursor: int) -> bool:

@@ -122,6 +122,47 @@ class TestDifficultFiles:
         assert "sana" in out
 
 
+class TestTheArchivedPart:
+    """Quel che ``compact_history`` sposta in ``history-archive/`` resta cronologia."""
+
+    @staticmethod
+    def _archive(root: Path, year: str, entries: list[dict]) -> None:
+        arch = root / "memory" / "history-archive"
+        arch.mkdir(parents=True, exist_ok=True)
+        (arch / f"{year}.jsonl").write_text(
+            "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries),
+            encoding="utf-8",
+        )
+
+    async def test_the_index_reaches_into_the_archive(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(9, "- viva")])
+        self._archive(root, "2026", [_entry(3, "- archiviata")])
+        out = await _tool(root).execute()
+        assert out.index("[9]") < out.index("[3]")
+        assert "holds 2 turns" in out
+
+    async def test_an_archived_cursor_opens(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(9, "- viva")])
+        self._archive(root, "2025", [_entry(3, "- archiviata", ts="2025-12-30 10:00")])
+        out = await _tool(root).execute(cursors=["3"])
+        assert "archiviata" in out
+        assert "No entry" not in out
+
+    async def test_a_cursor_in_both_places_counts_once(self, tmp_path):
+        """Un crash fra l'archiviazione e la riscrittura lascia la voce in due posti."""
+        root = _workspace(tmp_path, [_entry(3, "- doppia"), _entry(4, "- dopo")])
+        self._archive(root, "2026", [_entry(3, "- doppia")])
+        out = await _tool(root).execute()
+        assert "holds 2 turns" in out
+        assert out.count("[3]") == 1
+
+    async def test_only_the_archive_is_enough(self, tmp_path):
+        (tmp_path / "memory").mkdir()
+        self._archive(tmp_path, "2026", [_entry(3, "- sola in archivio")])
+        out = await _tool(tmp_path).execute()
+        assert "sola in archivio" in out
+
+
 class TestProjectBoundary:
     async def test_inside_a_project_stays_silent(self, tmp_path):
         root = _workspace(tmp_path, [_entry(1, "- personale")])

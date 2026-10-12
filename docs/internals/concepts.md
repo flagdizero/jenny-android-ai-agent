@@ -96,7 +96,7 @@ Jenny uses three related stores:
 | Memory | `<workspace>/memory/MEMORY.md` and `<workspace>/memory/history.jsonl` | Long-term facts and consolidated history that survive session compaction |
 | Wikis | `<workspace>/wikis/<name>/` | Your own knowledge bases; the personal prompt lists them by name and scope, read from disk, and opens pages on demand |
 
-Dream is a periodic consolidation job (`jenny/agent/memory.py`): every 2 hours by default, it reads accumulated `history.jsonl` entries (capped at 1000, oldest dropped first) and rewrites `MEMORY.md`, `SOUL.md`, `USER.md`, and skill files — it prunes stale material as well as adding new material, and it takes a workspace snapshot right before running so a bad consolidation can be rolled back. Dream's deadline survives an app restart: a run missed while the app was down is caught up shortly after the gateway comes back.
+Dream is a periodic consolidation job (`jenny/agent/memory.py`): every 2 hours by default, it reads accumulated `history.jsonl` entries (capped at 1000; older entries move to `memory/history-archive/`) and rewrites `MEMORY.md`, `SOUL.md`, `USER.md`, and skill files — it prunes stale material as well as adding new material, and it takes a workspace snapshot right before running so a bad consolidation can be rolled back. Dream's deadline survives an app restart: a run missed while the app was down is caught up shortly after the gateway comes back.
 
 ## Tools and safety
 

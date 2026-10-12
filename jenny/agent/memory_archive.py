@@ -41,6 +41,12 @@ from jenny.utils.path import atomic_write
 
 ARCHIVE_DIRNAME = "archive"
 
+# Dove vanno le voci di ``history.jsonl`` che escono dal tetto (v.
+# ``MemoryStore.compact_history``): un file per anno, stesse righe JSON del file
+# vivo. Sta qui e non in ``memory.py`` perché la leggono sia lo store sia
+# ``recall_history``, e questo modulo è la foglia che entrambi importano già.
+HISTORY_ARCHIVE_DIRNAME = "history-archive"
+
 # Il trattino del bullet appartiene al file di provenienza, non al fatto: lì era
 # un elenco, qui è una frase. Toglierlo tiene il corpo pulito per chi legge e per
 # qualunque cosa lo indicizzi.
@@ -70,6 +76,10 @@ class ArchivedEntry:
 
 def archive_dir(memory_dir: Path) -> Path:
     return Path(memory_dir) / ARCHIVE_DIRNAME
+
+
+def history_archive_dir(memory_dir: Path) -> Path:
+    return Path(memory_dir) / HISTORY_ARCHIVE_DIRNAME
 
 
 def archive_filename(entry_id: str, when: date) -> str:

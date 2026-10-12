@@ -268,6 +268,84 @@ class TestHistoryWithCursor:
         assert len(entries) == 2
         assert entries[0]["cursor"] in {4, 5}
 
+    def test_compact_history_moves_what_it_drops_to_the_archive(self, tmp_path):
+        """Il tetto sposta, non cancella: ogni cursore resta in uno dei due posti."""
+        store = MemoryStore(tmp_path, max_history_entries=2)
+        for i in range(5):
+            store.append_history(f"event {i}")
+        store.set_last_dream_cursor(5)
+        store.compact_history()
+
+        year = store.read_unprocessed_history(since_cursor=0)[0]["timestamp"][:4]
+        archived = [
+            json.loads(line)
+            for line in (tmp_path / "memory" / "history-archive" / f"{year}.jsonl")
+            .read_text(encoding="utf-8").splitlines()
+        ]
+        assert [e["cursor"] for e in archived] == [1, 2, 3]
+        assert [e["content"] for e in archived] == ["event 0", "event 1", "event 2"]
+
+        # Un secondo giro accoda, non riscrive.
+        store.append_history("event 5")
+        store.set_last_dream_cursor(6)
+        store.compact_history()
+        lines = (tmp_path / "memory" / "history-archive" / f"{year}.jsonl").read_text(
+            encoding="utf-8").splitlines()
+        assert [json.loads(line)["cursor"] for line in lines] == [1, 2, 3, 4]
+
+    def test_compact_history_files_entries_by_their_year(self, tmp_path):
+        store = MemoryStore(tmp_path, max_history_entries=1)
+        rows = [
+            {"cursor": 1, "timestamp": "2025-12-31 23:59", "content": "old year"},
+            {"cursor": 2, "timestamp": "garbage", "content": "no year"},
+            {"cursor": 3, "timestamp": "2026-01-01 00:01", "content": "kept"},
+        ]
+        store._write_entries(rows)
+        store.set_last_dream_cursor(3)
+        store.compact_history()
+
+        arch = tmp_path / "memory" / "history-archive"
+        assert sorted(p.name for p in arch.iterdir()) == ["2025.jsonl", "unknown.jsonl"]
+        assert "old year" in (arch / "2025.jsonl").read_text(encoding="utf-8")
+        assert "no year" in (arch / "unknown.jsonl").read_text(encoding="utf-8")
+
+    def test_compact_history_keeps_everything_when_the_archive_fails(
+        self, tmp_path, monkeypatch,
+    ):
+        """Se l'archivio non si scrive, il vivo resta intero: sforare costa spazio,
+        cancellare costerebbe la storia."""
+        store = MemoryStore(tmp_path, max_history_entries=2)
+        for i in range(5):
+            store.append_history(f"event {i}")
+        store.set_last_dream_cursor(5)
+
+        def boom(entries):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(store, "_archive_history_entries", boom)
+        store.compact_history()
+        assert len(store.read_unprocessed_history(since_cursor=0)) == 5
+
+    def test_a_crash_after_archiving_loses_nothing(self, tmp_path, monkeypatch):
+        """Archiviato ma non ancora riscritto: le voci stanno in tutti e due i
+        posti, e il giro dopo le archivia di nuovo invece di perderle."""
+        store = MemoryStore(tmp_path, max_history_entries=2)
+        for i in range(5):
+            store.append_history(f"event {i}")
+        store.set_last_dream_cursor(5)
+
+        def crash(entries):
+            raise KeyboardInterrupt  # il processo muore dopo l'append
+
+        monkeypatch.setattr(store, "_write_entries", crash)
+        with pytest.raises(KeyboardInterrupt):
+            store.compact_history()
+        monkeypatch.undo()
+        assert len(store.read_unprocessed_history(since_cursor=0)) == 5
+
+        store.compact_history()
+        assert [e["cursor"] for e in store.read_unprocessed_history(since_cursor=0)] == [4, 5]
+
     def test_compact_history_serializes_with_concurrent_append(self, tmp_path):
         """A ``append_history`` landing during compact's read→rewrite window must
         not be lost by the atomic overwrite. ``compact_history`` holds

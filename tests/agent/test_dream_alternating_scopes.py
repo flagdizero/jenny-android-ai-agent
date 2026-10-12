@@ -16,6 +16,7 @@ le voci che Dream deve ancora leggere.
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -205,6 +206,11 @@ class TestCompactHistory:
 
         left = [e["cursor"] for e in store.read_unprocessed_history(0)]
         assert left == [4, 5, 6, 7, 8]
+        archived = "".join(
+            p.read_text(encoding="utf-8")
+            for p in (tmp_path / "memory" / "history-archive").glob("*.jsonl")
+        )
+        assert [json.loads(line)["cursor"] for line in archived.splitlines()] == [1, 2, 3]
 
     def test_internal_entries_are_not_held_back(self, tmp_path: Path):
         """Dream non legge le voci interne: tenerle vorrebbe dire non tagliarle mai."""

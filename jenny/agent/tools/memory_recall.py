@@ -39,7 +39,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.agent.memory_archive import ArchivedEntry, list_archived
+from jenny.agent.memory_archive import ArchivedEntry, history_archive_dir, list_archived
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
 from jenny.security.workspace_access import current_tool_workspace
@@ -232,38 +232,53 @@ _HISTORY_SNIPPET_CHARS = 110
 
 
 def _read_history(memory_dir: Path) -> list[dict[str, Any]]:
-    """Legge ``history.jsonl``, dalla più recente alla più vecchia.
+    """Legge la cronologia intera, dalla voce più recente alla più vecchia.
+
+    Intera vuol dire ``history.jsonl`` più ``history-archive/*.jsonl``, dove
+    ``MemoryStore.compact_history`` sposta quel che esce dal tetto: per chi
+    chiede "ti ricordi?" sono la stessa cronologia, e un cursore archiviato
+    che risponde "non esiste" sarebbe una bugia. Un cursore presente in tutti e
+    due i posti (un crash fra l'archiviazione e la riscrittura) conta una volta.
 
     Lettore locale e non ``MemoryStore``: l'unico che quella classe espone è
     ``read_recent_history_for_prompt``, che è sagomato per il blocco del prompt
     (parte da un cursore, filtra per tipo di sessione, applica i suoi tetti).
-    Qui serve il file intero.
+    Qui serve tutto.
 
     Una riga illeggibile si salta invece di far fallire la lettura: un file
     append-only troncato a metà da uno spegnimento non deve nascondere le
     centoquattro righe sane che lo precedono.
     """
-    path = Path(memory_dir) / "history.jsonl"
-    if not path.exists():
-        return []
-    out: list[dict[str, Any]] = []
-    try:
-        raw = path.read_text(encoding="utf-8", errors="replace")
-    except OSError as exc:
-        logger.warning("history.jsonl illeggibile: {}", exc)
-        return []
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
+    memory_dir = Path(memory_dir)
+    paths = sorted(history_archive_dir(memory_dir).glob("*.jsonl"))
+    paths.append(memory_dir / "history.jsonl")
+    by_cursor: dict[Any, dict[str, Any]] = {}
+    for path in paths:
+        if not path.exists():
             continue
         try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
+            raw = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            logger.warning("{} illeggibile: {}", path.name, exc)
             continue
-        if isinstance(rec, dict) and rec.get("content"):
-            out.append(rec)
-    out.sort(key=lambda r: r.get("cursor", 0), reverse=True)
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(rec, dict) and rec.get("content"):
+                by_cursor[rec.get("cursor")] = rec
+    out = list(by_cursor.values())
+    out.sort(key=_cursor_key, reverse=True)
     return out
+
+
+def _cursor_key(rec: dict[str, Any]) -> int:
+    cursor = rec.get("cursor")
+    return cursor if isinstance(cursor, int) else 0
 
 
 def _history_index_line(rec: dict[str, Any]) -> str:
