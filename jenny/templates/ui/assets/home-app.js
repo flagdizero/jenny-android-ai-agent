@@ -616,6 +616,11 @@ class HomeApp {
     /* Un `session_boundary` rilegge il filo da qui, cosi' una lettura che
        non arriva si dice come tutte le altre. */
     this.chat.onSessionBoundary = () => this._readThread();
+    /* «Ci spostiamo?»: il tasto sotto una risposta apre la chat del quaderno
+       proposto, dove Jenny trova nel diario da dove venite. */
+    this.chat.onOpenNotebook = (name) => {
+      if (isOpenableProjectName(name)) this.switchConversation(projectKey(name));
+    };
     /* Un filo che non e' arrivato si riprova quando torni a guardare: la casa
        e' il launcher, e fra un'occhiata e l'altra il gateway e' tornato. */
     document.addEventListener('visibilitychange', () => {

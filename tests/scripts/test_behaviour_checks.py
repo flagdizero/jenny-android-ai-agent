@@ -330,3 +330,14 @@ def test_board_fixtures_fire_yesterday_and_render_their_nonces() -> None:
     files = _board_files("bh-{p}", [("r1", "Chiamare {n}")])
     rems = json.loads(files["wikis/bh-{p}/board/reminders.json"])
     assert rems["reminders"][0]["notifiedAt"] and "{n}" in rems["reminders"][0]["text"]
+
+
+def test_quiet_filing_allows_a_word_but_not_where() -> None:
+    nonces = {"p": "p1", "n": "zafkril"}
+    filed = [ToolCall("journal_append", {"notebook": "bh-p1", "text": "batteria giovedi"})]
+    quiet = _ok("passing_fact_goes_to_its_notebook", _obs("Segnato: giovedi mattina.", filed),
+                nonces)
+    assert quiet["quiet_filing"] and quiet["filed_in_its_notebook"]
+    loud = _ok("passing_fact_goes_to_its_notebook",
+               _obs("Ok, l'ho messo nel quaderno del camper.", filed), nonces)
+    assert not loud["quiet_filing"]

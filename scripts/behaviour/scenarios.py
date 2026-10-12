@@ -1063,8 +1063,134 @@ THREADS = [
     ),
 ]
 
+# -- stadio 4, tappe 3 e 4: i cassetti -----------------------------------------------
+#
+# Dalla chat personale un fatto finisce nel quaderno a cui appartiene, senza che
+# l'utente lo apra; un fatto sulla persona resta alla persona; un argomento nuovo
+# non diventa un quaderno alla prima frase. Il quaderno finto e' il camper: sul
+# jenny_s22 non c'e' niente che gli somigli (piante, gatti, cassa, serra).
+
+_CAMPER = "Il camper: manutenzione, officine, ricambi e viaggi in camper."
+
+
+def _camper_files(notebook: str) -> dict[str, str]:
+    root = f"wikis/{notebook}"
+    return {f"{root}/wiki/index.md": "# Camper\n",
+            f"{root}/AGENTS.md": f"---\nsummary: {_CAMPER}\n---\n\n# Camper\n"}
+
+
+# Dire *dove* e' andato: la mezza frase che l'utente ha scartato a favore del segno
+# (12/10/2026). Un «segnato» di una parola e' come risponde una persona, e resta.
+_ANNOUNCED = re.compile(r"l'ho (messo|salvat|registrat|annotat)\w*|nel quaderno|nel notebook|"
+                        r"\bregistrat\w*|in (the|your) notebook|\bfiled\b", re.IGNORECASE)
+
+
+def _filed(obs: Observation, notebook: str, needle: str = "") -> list:
+    return [c for c in obs.tool_calls if c.name == "journal_append"
+            and str(c.args.get("notebook") or "") == notebook
+            and needle.lower() in c.arg_text().lower()]
+
+
+def _drawer_fact(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    # La riga giusta e' quella sulla batteria: il nome inventato del meccanico il
+    # modello a volte lo lascia cadere, e la riga resta giusta (12/10/2026).
+    calls = [c.name for c in obs.tool_calls]
+    return [Check("filed_in_its_notebook", bool(_filed(obs, f"bh-{n['p']}", "batteria")),
+                  ",".join(calls)),
+            Check("no_move_for_a_passing_fact", not obs.called("suggest_notebook"),
+                  ",".join(calls)),
+            # Il segno discreto sotto la risposta dice gia' «annotato»: la frase no
+            # (scelta dell'utente, 12/10/2026). Un solo quaderno possibile, quindi
+            # nessuna ambiguita' da dichiarare.
+            Check("quiet_filing", not _ANNOUNCED.search(obs.reply), obs.reply[:160])]
+
+
+def _suggests_move(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    offers = [c for c in obs.called("suggest_notebook")
+              if str(c.args.get("notebook") or "") == f"bh-{n['p']}"]
+    return [Check("offers_the_notebook", bool(offers), ",".join(c.name for c in obs.tool_calls)),
+            Check("offers_once", len(obs.called("suggest_notebook")) <= 1,
+                  str(len(obs.called("suggest_notebook"))))]
+
+
+def _drawer_research(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    calls = [c.name for c in obs.tool_calls]
+    return [Check("filed_in_its_notebook", bool(_filed(obs, f"bh-{n['p']}")), ",".join(calls))]
+
+
+def _personal_stays_personal(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    leaked = [c.arg_text()[:80] for c in _filed(obs, f"bh-{n['p']}") if "caviglia" in
+              c.arg_text().lower() or n["n"].lower() in c.arg_text().lower()]
+    return [Check("health_not_in_the_notebook", not leaked, " | ".join(leaked))]
+
+
+def _no_new_notebook(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    into = [str(c.args.get("notebook")) for c in obs.tool_calls
+            if c.name == "journal_append" and c.args.get("notebook")]
+    made = [c.name for c in obs.tool_calls if c.name in ("project", "notebook", "board")]
+    return [Check("no_notebook_created", not made, ",".join(made)),
+            Check("not_filed_in_a_drawer", not into, ",".join(into))]
+
+
+_CAMPER_WORK = [
+    ("user", "Voglio mettere in ordine la manutenzione del camper, è tutto sparso."),
+    ("assistant", "Volentieri. Partiamo da cosa hai già fatto quest'anno?"),
+    ("user", "Tagliando a marzo, gomme cambiate a maggio. Il gas lo controllo ogni anno."),
+    ("assistant", "Bene. Poi ci sono le cose a scadenza: revisione, estintore, cinghia."),
+    ("user", "La revisione scade a gennaio, l'estintore non so."),
+    ("assistant", "Allora l'estintore lo segniamo come da verificare."),
+]
+
+DRAWERS = [
+    Scenario(
+        name="passing_fact_goes_to_its_notebook",
+        stage=4, area="diary", nonces=("p", "n"),
+        promise="un fatto di passaggio detto in chat finisce nel quaderno giusto",
+        files=_camper_files("bh-{p}"),
+        turns=["Ah, il meccanico {n} mi cambia la batteria dei servizi del camper giovedì "
+               "mattina."],
+        check=_drawer_fact, kind="probe",
+    ),
+    Scenario(
+        name="research_goes_to_its_notebook",
+        stage=4, area="diary", nonces=("p",),
+        promise="«informati su» un argomento che ha un quaderno: il risultato finisce li'",
+        files=_camper_files("bh-{p}"),
+        turns=["Informati su ogni quanto va cambiato il liquido refrigerante di un camper "
+               "Ducato. Due righe."],
+        check=_drawer_research, kind="probe", final_reply_after_subagents=True,
+    ),
+    Scenario(
+        name="personal_fact_stays_personal",
+        stage=4, area="diary", nonces=("p", "n"),
+        promise="un fatto sulla persona detto parlando di un quaderno non va nel quaderno",
+        files=_camper_files("bh-{p}"),
+        turns=["Sistemando il gradino del camper mi sono storto la caviglia, il dottor {n} "
+               "dice una settimana di riposo."],
+        check=_personal_stays_personal, kind="probe",
+    ),
+    Scenario(
+        name="work_session_offers_the_notebook",
+        stage=4, area="diary", nonces=("p",),
+        promise="quando la chat e' diventata lavoro su un quaderno, propone di spostarsi (una volta)",
+        files=_camper_files("bh-{p}"),
+        seed_session=_CAMPER_WORK,
+        turns=["Ok, facciamolo per bene: voglio un piano completo con tutte le scadenze, le "
+               "officine e i ricambi da tenere a bordo."],
+        check=_suggests_move, kind="probe",
+    ),
+    Scenario(
+        name="new_subject_is_not_a_notebook",
+        stage=4, area="diary", nonces=("p", "n"),
+        promise="un argomento nuovo detto una volta non diventa un quaderno",
+        files=_camper_files("bh-{p}"),
+        turns=["Sto pensando di prendere un cane, forse un levriero di nome {n}."],
+        check=_no_new_notebook, kind="probe",
+    ),
+]
+
 SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
-                                 *THREADS]}
+                                 *THREADS, *DRAWERS]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

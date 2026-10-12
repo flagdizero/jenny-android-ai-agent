@@ -108,3 +108,19 @@ async def test_an_app_placed_mid_turn_is_usable_in_the_same_turn(notebook: Path)
     mutate_board(notebook / "wikis" / "soldi", lambda b: b["cards"].append(
         {"id": "todo", "title": "Todo", "pos": {"x": 2, "y": 1}, "app": {"slug": "todo"}}))
     assert "todo_add" in view.tool_names
+
+
+async def test_the_move_offer_is_only_for_the_personal_chat_in_the_app(notebook: Path) -> None:
+    """«Ci spostiamo?» e' un tasto: dove non c'e' un tasto da toccare, non c'e'."""
+    loop, captured = _loop_with_capture(notebook)
+    await loop._process_message(InboundMessage(
+        channel="websocket", sender_id="u", chat_id="default", content="ciao"))
+    assert "suggest_notebook" in _offered_names(captured)
+    captured.clear()
+    await loop._process_message(InboundMessage(
+        channel="websocket", sender_id="u", chat_id="project:soldi", content="ciao"))
+    assert "suggest_notebook" not in _offered_names(captured)
+    captured.clear()
+    await loop._process_message(InboundMessage(
+        channel="telegram", sender_id="u", chat_id="42", content="ciao"))
+    assert "suggest_notebook" not in _offered_names(captured)

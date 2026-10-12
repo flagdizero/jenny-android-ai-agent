@@ -922,6 +922,48 @@
    },
    "runs": 3
   },
+  "new_subject_is_not_a_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_notebook_created": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_filed_in_a_drawer": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "new_subject_is_not_a_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_notebook_created": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_filed_in_a_drawer": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "notebook_chatter_stays_out|claude-haiku-5-5|normal": {
    "checks": {
     "no_journal_write": [
@@ -1106,6 +1148,56 @@
    },
    "runs": 3
   },
+  "passing_fact_goes_to_its_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     3,
+     3
+    ],
+    "no_move_for_a_passing_fact": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "quiet_filing": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "passing_fact_goes_to_its_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     3,
+     3
+    ],
+    "no_move_for_a_passing_fact": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "quiet_filing": [
+     2,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "pending_thread_stays_out_mid_topic|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [
@@ -1130,6 +1222,40 @@
      3
     ],
     "thread_stays_out": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "personal_fact_stays_personal|claude-haiku-5-5|normal": {
+   "checks": {
+    "health_not_in_the_notebook": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "personal_fact_stays_personal|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "health_not_in_the_notebook": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
      3,
      3
     ],
@@ -1376,6 +1502,40 @@
    },
    "runs": 5
   },
+  "research_goes_to_its_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     1,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "research_goes_to_its_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "temporal_past_state|claude-haiku-5-5|normal": {
    "checks": {
     "dated_answer": [
@@ -1492,6 +1652,48 @@
      3
     ],
     "spawned": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "work_session_offers_the_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "offers_once": [
+     3,
+     3
+    ],
+    "offers_the_notebook": [
+     0,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "work_session_offers_the_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "offers_once": [
+     3,
+     3
+    ],
+    "offers_the_notebook": [
      3,
      3
     ],

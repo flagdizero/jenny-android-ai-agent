@@ -193,7 +193,11 @@ class TestShape:
         block = _section(ContextBuilder(workspace).build_system_prompt(session_key="unified:default"))
 
         assert "... (truncated)" in block
-        assert len(block) < 1500 * 4 + 200
+        # Il tetto e' dell'elenco; la frase dei cassetti, fissa, gli sta dopo.
+        from jenny.agent.context import _WIKIS_BLOCK_DRAWERS, _WIKIS_BLOCK_MOVE
+
+        rest = block.replace(_WIKIS_BLOCK_DRAWERS, "").replace(_WIKIS_BLOCK_MOVE, "")
+        assert len(rest) < 1500 * 4 + 200
 
     def test_survives_an_untouched_memory_template(self, tmp_path):
         """La regressione piu' facile: annidare il blocco nella guardia di MEMORY.md."""
@@ -210,3 +214,19 @@ class TestShape:
         assert WIKIS in prompt
         assert "## Long-term Memory" not in prompt
         assert prompt.count("# Memory\n") == 1
+
+
+def test_the_drawers_rule_comes_with_the_tool_that_files(tmp_path):
+    """Dire «archivia con journal_append» a chi non ce l'ha e' un invito a sbagliare."""
+    from jenny.agent.context import _WIKIS_BLOCK_DRAWERS
+
+    workspace = _workspace(tmp_path)
+    _wiki(workspace, "camper", summary="Il camper: manutenzione e viaggi")
+    builder = ContextBuilder(workspace)
+    with_tool = builder.build_system_prompt(session_key="unified:default",
+                                            available_tools=["journal_append", "read_file"])
+    without = builder.build_system_prompt(session_key="unified:default",
+                                          available_tools=["read_file"])
+    assert _WIKIS_BLOCK_DRAWERS in with_tool
+    assert _WIKIS_BLOCK_DRAWERS not in without
+    assert "camper" in without

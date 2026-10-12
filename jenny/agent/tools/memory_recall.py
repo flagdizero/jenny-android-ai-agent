@@ -408,7 +408,44 @@ def _history_index_line(rec: dict[str, Any]) -> str:
     # hanno più di una (74 su 108, misurate), quindi senza questo il modello
     # crederebbe che la voce sia solo la sua prima riga.
     extra = f" (+{len(notes) - 1})" if len(notes) > 1 else ""
-    return f"[{rec.get('cursor', '?')}] {rec.get('timestamp', '')} {head}{extra}"
+    return f"[{rec.get('cursor', '?')}] {rec.get('timestamp', '')}{_diary_tag(rec)} {head}{extra}"
+
+
+def _diary_tag(rec: dict[str, Any]) -> str:
+    """Per una riga del diario: dove e di chi. Una nota del consolidatore non ha tag."""
+    kind = rec.get("kind")
+    if not kind:
+        return ""
+    where = f"notebook {rec['about']}" if rec.get("about") else "chat"
+    who = {"said": "the user said", "inferred": "you noted"}.get(str(kind), str(kind))
+    return f" ({where}, {who})"
+
+
+# Le righe vere attorno a quella che una riga del diario indica: il giro di
+# ReadAgent, dall'indice alla pagina, senza che il modello debba cercare il file.
+_SOURCE_CONTEXT_LINES = 3
+
+
+def _source_excerpt(root: Path, ref: Any) -> str:
+    """Le righe del journal attorno a ``ref`` (``percorso:riga``), o ``""``.
+
+    Solo dentro l'installazione: ``ref`` sta in un file che chiunque puo'
+    riscrivere a mano, e non deve diventare un modo di leggere fuori.
+    """
+    if not isinstance(ref, str) or ":" not in ref:
+        return ""
+    rel, _, number = ref.rpartition(":")
+    try:
+        line_no = int(number)
+        path = (root / rel).resolve()
+        path.relative_to(root.resolve())
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (ValueError, OSError):
+        return ""
+    start = max(1, line_no - _SOURCE_CONTEXT_LINES)
+    end = min(len(lines), line_no + _SOURCE_CONTEXT_LINES)
+    body = "\n".join(lines[start - 1:end])
+    return f"Source, {rel} lines {start}-{end}:\n{body}"
 
 
 @tool_parameters(
@@ -523,7 +560,10 @@ class HistoryRecallTool(Tool):
             rec = by_cursor.get(c)
             if rec is None:
                 continue
-            block = f"[{rec.get('cursor')}] {rec.get('timestamp', '')}\n{rec.get('content', '')}"
+            block = (f"[{rec.get('cursor')}] {rec.get('timestamp', '')}{_diary_tag(rec)}\n"
+                     f"{rec.get('content', '')}")
+            if excerpt := _source_excerpt(self._root, rec.get("ref")):
+                block += "\n\n" + excerpt
             if used + len(block) > _HISTORY_ENTRY_MAX_CHARS:
                 parts.append(
                     f"(stopped at {len(shown)} of {len(wanted)} entries: the rest would not "

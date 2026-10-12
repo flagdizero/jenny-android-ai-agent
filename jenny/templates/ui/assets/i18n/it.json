@@ -901,6 +901,13 @@
     "askAboutReadonly": "Chiedi qualcosa su {name} (sola lettura)…"
   },
   "home": {
+    "moveOffer": {
+      "open": "Apri il quaderno «{notebook}»"
+    },
+    "journalMark": {
+      "label": "Annotato in «{notebook}»",
+      "where": "«{notebook}»"
+    },
     "staged": {
       "title": "Da approvare · {count}",
       "file": "Modifica a {path}",

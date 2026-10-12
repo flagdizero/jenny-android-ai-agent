@@ -91,6 +91,42 @@ const HISTORY_PAGE_SIZE = 50;
    li' e' un messaggio come gli altri. */
 const THREAD_NODES = ':scope > .home-msg, :scope > .home-msg-work, :scope > .home-boundary, :scope > .home-note';
 
+/** Quel che un turno ha messo nei cassetti: le chiamate a `journal_append` con un
+ *  quaderno, riuscite. Gli eventi arrivano due volte (inizio e fine) e la storia
+ *  li fonde per `call_id`: conta la fine, e solo se il tool ha scritto davvero —
+ *  un rifiuto («No notebook named…») non e' un'annotazione.
+ *  @param {any[]} events  `tool_events` dal vivo o `toolEvents` della storia */
+export function journalNotes(events) {
+  const out = [];
+  const seen = new Set();
+  for (const ev of Array.isArray(events) ? events : []) {
+    if (!ev || ev.name !== 'journal_append' || ev.phase !== 'end') continue;
+    const args = ev.arguments || {};
+    const notebook = typeof args.notebook === 'string' ? args.notebook.trim() : '';
+    if (!notebook || !String(ev.result || '').startsWith('Appended to')) continue;
+    const key = ev.call_id || `${notebook}\u0000${args.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ notebook, text: String(args.text || '') });
+  }
+  return out;
+}
+
+/** I quaderni che il turno ha proposto di aprire («ci spostiamo?»): le chiamate a
+ *  `suggest_notebook` riuscite. La scelta e' dell'utente, con un tocco: il tasto
+ *  lo disegna `_moveOfferOf`.
+ *  @param {any[]} events */
+export function moveOffers(events) {
+  const out = [];
+  for (const ev of Array.isArray(events) ? events : []) {
+    if (!ev || ev.name !== 'suggest_notebook' || ev.phase !== 'end') continue;
+    const notebook = String(ev.arguments?.notebook || '').trim();
+    if (notebook && String(ev.result || '').startsWith('The user now sees a button')
+        && !out.includes(notebook)) out.push(notebook);
+  }
+  return out;
+}
+
 function mediaKind(entry) {
   if (entry.kind) return entry.kind;
   const name = (entry.name || entry.url || '').toLowerCase();
@@ -150,6 +186,14 @@ export class HomeChat {
     this._files = new WeakMap();
     /* I secondi dell'ultimo `turn_end`, in attesa che la bolla si chiuda. */
     this._seconds = null;
+    /* Le annotazioni nei cassetti del turno in corso (`journalNotes`): lo
+       strumento gira prima che la risposta abbia una bolla, e il segno si
+       disegna quando la bolla si chiude. */
+    this._pendingJournal = [];
+    /* I quaderni proposti nel turno in corso, per il tasto «Apri». */
+    this._pendingMoves = [];
+    /* Chi apre un quaderno (il guscio, `home-app.js`): senza, il tasto non c'e'. */
+    this.onOpenNotebook = null;
     /* L'ultimo invio, finché il gateway non ha dimostrato di averlo preso.
        `null` = non c'è niente da riprendere. */
     this._pendingSend = null;
@@ -273,6 +317,16 @@ export class HomeChat {
       if (!e.defaultPrevented) this._openLink(e, link);
       return;
     }
+    const offer = e.target.closest('.home-move-offer');
+    if (offer && this.el.contains(offer)) {
+      this.onOpenNotebook?.(offer.dataset.notebook);
+      return;
+    }
+    const mark = e.target.closest('.home-journal-mark');
+    if (mark && this.el.contains(mark)) {
+      this._toggleJournal(mark);
+      return;
+    }
     const btn = e.target.closest('.home-copy');
     if (btn && this.el.contains(btn)) this._copy(btn.closest('.home-msg'));
   }
@@ -370,7 +424,8 @@ export class HomeChat {
         for (const turn of this._buildTurns(messages)) {
           if (turn.boundary) this._appendBoundary();
           else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at);
-          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at, turn.error);
+          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at, turn.error,
+            turn.journal, turn.moves);
         }
       });
     } finally {
@@ -401,7 +456,8 @@ export class HomeChat {
       for (const turn of this._buildTurns(messages).reverse()) {
         if (turn.boundary) this._appendBoundary(true);
         else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true, turn.at);
-        else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs, turn.at);
+        else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs, turn.at, null,
+          turn.journal, turn.moves);
       }
     });
   }
@@ -483,7 +539,16 @@ export class HomeChat {
          E la condizione "solo se non c'e' altro testo" non si puo' nemmeno
          valutare qui: il testo vero arriva *dopo*, in un frame successivo dello
          stesso turno. */
-      if (msg.kind === 'trace' || msg.role === 'tool') continue;
+      if (msg.kind === 'trace' || msg.role === 'tool') {
+        /* Tranne una cosa: quel che il turno ha messo in un cassetto, che diventa
+           il segno sotto la risposta (v. `_journalMarkOf`). */
+        const events = msg.toolEvents || msg.tool_events;
+        const notes = journalNotes(events);
+        if (notes.length) (current.journal ||= []).push(...notes);
+        const moves = moveOffers(events);
+        if (moves.length) (current.moves ||= []).push(...moves);
+        continue;
+      }
       const text = msg.text || msg.content || '';
       if (text) current.content += (current.content ? '\n\n' : '') + text;
     }
@@ -607,6 +672,12 @@ export class HomeChat {
       else this.reload().catch((err) => console.warn('home: thread reload after a boundary failed', err));
       return;
     }
+    /* Prima di buttare i frame degli strumenti, quel che hanno messo nei
+       cassetti: il segno sotto la risposta (v. `_journalMarkOf`). */
+    const notes = journalNotes(msg.tool_events);
+    if (notes.length) this._pendingJournal.push(...notes);
+    const moves = moveOffers(msg.tool_events);
+    if (moves.length) this._pendingMoves.push(...moves);
     // Un suggerimento di strumento e' esattamente cio' che la casa non mostra.
     if (msg.kind === 'tool_hint') return;
     // L'annuncio o il resoconto di un lavoro che e' gia' una bolla: la bolla
@@ -745,6 +816,8 @@ export class HomeChat {
          una, e per una risposta appena chiusa dice la stessa cosa del
          transcript (che la rilettura usera'). */
       this._tailOf(closed, this._seconds, Date.now());
+      this._journalMarkOf(closed, this._pendingJournal);
+      this._moveOfferOf(closed, this._pendingMoves);
       /* La coda dell'ultima risposta scende nella fascia e non allunga niente;
          quella di una risposta con qualcosa sotto si', e chi era in fondo deve
          restarci. Solo se la bolla e' ancora nel filo — `reload()` passa di
@@ -752,6 +825,8 @@ export class HomeChat {
       if (closed.isConnected) this._follow();
     }
     this._seconds = null;
+    this._pendingJournal = [];
+    this._pendingMoves = [];
     this.turnNode = null;
     this.blockNode = null;
     this.buffer = '';
@@ -797,7 +872,8 @@ export class HomeChat {
     return this._append(node, toTop);
   }
 
-  _appendAssistant(content, media, toTop = false, latencyMs = null, at = null, error = null) {
+  _appendAssistant(content, media, toTop = false, latencyMs = null, at = null, error = null,
+    journal = null, moves = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-jenny';
     if (content) {
@@ -811,6 +887,8 @@ export class HomeChat {
     if (media?.length) this._appendMedia(node, media);
     /* Prima di `_append`, che rifa la sagoma: il nodo va misurato intero. */
     this._tailOf(node, latencyMs, at);
+    this._journalMarkOf(node, journal);
+    this._moveOfferOf(node, moves);
     this._append(node, toTop);
     /* Dopo: `_append` toglie i «Riprova» di prima, e la storia piu' vecchia
        (`toTop`) non ne ha — il presente e' in fondo. */
@@ -873,6 +951,68 @@ export class HomeChat {
    *  secondi possono mancare del tutto: una consegna proattiva non ha un
    *  turno dietro, quindi nessuno ha misurato niente, e resta «⧉ 11:40».
    */
+  /** Il segno discreto dei cassetti: un'icona nella coda della risposta quando
+   *  il turno ha annotato qualcosa in un quaderno. Niente frase «l'ho messo
+   *  in…» nella risposta (scelta dell'utente, 12/10/2026): chi vuole sapere
+   *  dove, tocca, e vede il quaderno e la riga. */
+  _journalMarkOf(node, notes) {
+    if (!node || !notes?.length || node.querySelector('.home-journal-mark')) return;
+    let row = node.querySelector('.home-tail');
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'home-tail';
+      node.appendChild(row);
+    }
+    const names = [...new Set(notes.map((n) => n.notebook))];
+    const label = i18n.t('home.journalMark.label', { notebook: names.join(', ') });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-journal-mark';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<i class="ti ti-notebook" aria-hidden="true"></i>';
+    row.insertBefore(btn, row.firstChild);
+    const detail = document.createElement('div');
+    detail.className = 'home-journal-detail';
+    detail.hidden = true;
+    for (const note of notes) {
+      const line = document.createElement('div');
+      line.className = 'home-journal-line';
+      const where = document.createElement('span');
+      where.className = 'home-journal-where';
+      where.textContent = i18n.t('home.journalMark.where', { notebook: note.notebook });
+      line.appendChild(where);
+      line.appendChild(document.createTextNode(' ' + note.text));
+      detail.appendChild(line);
+    }
+    node.appendChild(detail);
+  }
+
+  /** «Ci spostiamo?»: il tasto che apre il quaderno proposto. Resta anche
+   *  dopo, nella storia: la proposta e' stata fatta, e toccarla piu' tardi apre
+   *  lo stesso quaderno. */
+  _moveOfferOf(node, notebooks) {
+    if (!node || !notebooks?.length || !this.onOpenNotebook) return;
+    if (node.querySelector('.home-move-offer')) return;
+    for (const notebook of notebooks) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'home-move-offer';
+      btn.dataset.notebook = notebook;
+      btn.innerHTML = '<i class="ti ti-notebook" aria-hidden="true"></i> ';
+      btn.appendChild(document.createTextNode(i18n.t('home.moveOffer.open', { notebook })));
+      node.appendChild(btn);
+    }
+  }
+
+  _toggleJournal(btn) {
+    const detail = btn.closest('.home-msg')?.querySelector('.home-journal-detail');
+    if (!detail) return;
+    detail.hidden = !detail.hidden;
+    btn.setAttribute('aria-expanded', String(!detail.hidden));
+  }
+
   _tailOf(node, latencyMs, at = null) {
     if (!node || node.querySelector('.home-tail')) return;
     /* Solo sulle risposte. Quel che hai scritto tu ha gia' la sua bolla col

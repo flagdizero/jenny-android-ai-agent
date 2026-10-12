@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
@@ -109,6 +109,8 @@ function makeChat() {
     __APPEND_BOUNDARY__,
     __APPEND__,
     __TAIL__,
+    __JOURNAL_MARK__,
+    __MOVE_OFFER__,
     __REGISTER__,
     __TEXT__,
   };
@@ -143,7 +145,9 @@ def _harness() -> str:
         .replace("__TAIL__", member(src, "_tailOf"))
         .replace("__REGISTER__", member(src, "_register"))
         .replace("__TEXT__", member(src, "_textOf"))
-    )
+        .replace("__JOURNAL_MARK__", member(src, "_journalMarkOf"))
+        .replace("__MOVE_OFFER__", member(src, "_moveOfferOf"))
+    ) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
 
 
 def _run_js(script: str) -> None:

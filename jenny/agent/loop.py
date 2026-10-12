@@ -741,6 +741,10 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         def hidden(name: str, tool: Any) -> bool:
             if name == "nothing_to_report":
                 return not silent
+            # «Ci spostiamo?» ha senso solo dove c'e' un tasto da toccare: la
+            # chat personale, nell'app (non Telegram, non una notifica).
+            if name == "suggest_notebook":
+                return in_project or silent or msg.channel != "websocket"
             if not in_project:
                 return False
             if name == "recall_history":

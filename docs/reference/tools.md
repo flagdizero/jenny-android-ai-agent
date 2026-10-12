@@ -565,15 +565,25 @@ Searches the notes taken on the personal conversation: one entry per stretch tha
 
 - Reads `memory/history.jsonl` and the older entries moved to `memory/history-archive/`.
 - `query` searches every note and returns only the notes that match, grouped by entry; without it, the index comes one line per entry, newest first, in pages (`page`). Then call it again with the cursors you want expanded.
+- A [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks) line is tagged with where it comes from and who said it (`(notebook film, the user said)`); opened, it also shows the journal lines around the one it copies.
 - Scope `core` + `orchestrator`.
 
 ### journal_append
 
-Appends one line to the current project's working journal (`raw/journal/<today>.md`).
+Appends one line to a notebook's working journal (`raw/journal/<today>.md`) — the notebook of the conversation, or, from the personal chat, the one named in `notebook` — and leaves a short copy of it in the [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks).
 
-- Meant for the moment something is said that will still be true next week — a constraint, a decision, a preference, a name, a date.
+- Meant for the moment something is said that will still be true next week — a constraint, a decision, a preference, a name, a date, something done.
+- `notebook` (personal chat only) files the fact into that notebook without you opening it: the notebooks are Jenny's drawers. A name that is not an existing notebook is refused with the list of the ones that exist — the tool never creates a notebook. Without `notebook`, from the personal chat the line goes to Jenny's own diary only. Inside a notebook, only that notebook's journal can be written, and a subagent cannot fill the drawers from outside them.
 - Parameters: `text` (required, one short line, at most 500 characters — a longer one is refused as page material; the timestamp and the leading dash are added for you) and `attribution`, `said` when you stated the fact yourself or `inferred` when Jenny concluded it (default `inferred`). Only a `said` line can later become a decided page.
 - The only tool in this group a subagent also gets (`core`, `orchestrator`, `subagent`), and it has no config toggle: it is always registered.
+
+### suggest_notebook
+
+Offers to continue the conversation in one of your notebooks: a button «Open the notebook …» appears under the reply, and you decide with a tap.
+
+- Meant for the moment a personal-chat conversation has become work on one notebook's subject — several exchanges, a plan to lay out — and never for a passing fact (that is `journal_append` with `notebook`). Offered once: if you stay, Jenny goes on where you are.
+- Parameters: `notebook` (an existing notebook; any other name is refused with the list) and `context`, one line on what you were working on. That line is written to the [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks) as being about the notebook, so in the notebook's chat Jenny knows where you came from.
+- Only in the personal chat in the app: hidden in a notebook, on Telegram, in a notification reply and in silent turns. Scope `core` + `orchestrator`; not for subagents.
 
 ### board
 

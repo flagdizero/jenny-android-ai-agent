@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
@@ -27,6 +27,8 @@ HOME_CHAT_JS = ASSETS / "home-chat.js"
 pytestmark = requires_node
 
 _METHODS = (
+    "_journalMarkOf",
+    "_moveOfferOf",
     "load",
     "_read",
     "prependTurns",
@@ -122,7 +124,7 @@ def _run(script: str) -> None:
     nodes = re.search(r"(?m)^const THREAD_NODES = .*;$", src)
     assert nodes, "const THREAD_NODES non trovata"
     harness = _HARNESS.replace("__METHODS__", methods).replace("__THREAD_NODES__", nodes.group(0))
-    run_js(harness + "\n" + script)
+    run_js(harness + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers") + "\n" + script)
 
 
 def test_a_history_page_measures_the_shape_once() -> None:

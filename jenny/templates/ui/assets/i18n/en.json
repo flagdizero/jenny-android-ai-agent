@@ -901,6 +901,13 @@
     "askAboutReadonly": "Ask about {name} (read-only)…"
   },
   "home": {
+    "moveOffer": {
+      "open": "Open the notebook “{notebook}”"
+    },
+    "journalMark": {
+      "label": "Noted in “{notebook}”",
+      "where": "“{notebook}”"
+    },
     "staged": {
       "title": "To approve · {count}",
       "file": "Change to {path}",

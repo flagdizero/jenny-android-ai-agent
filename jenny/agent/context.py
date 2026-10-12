@@ -96,6 +96,34 @@ _WIKIS_BLOCK_LEAD = (
     "recorded anywhere, grep `{wikis_dir}/`."
 )
 
+# I cassetti: cosa fare con l'elenco quando si ha ``journal_append``. Prosa che
+# decide un comportamento, come la frase sopra: si tara con gli scenari di
+# ``scripts/behaviour`` (stadio 4), non a occhio.
+_WIKIS_BLOCK_DRAWERS = (
+    "These notebooks are your drawers. When the user tells you something that will still be "
+    "true next week and belongs to one of them — a fact, a decision, a date, something done — "
+    "file it with `journal_append` and `notebook=<name>` before answering, one line per fact; "
+    "the user does not have to open the notebook. When they ask you to find something out "
+    "about one of these subjects (\"informati su…\", \"look into…\"), what you answer goes "
+    "into that notebook too, in a line or two with where it comes from — also when you answer "
+    "from what you already know, and when a subagent brings it back. Whenever you file, the "
+    "user sees a small notebook mark under your reply: never say that you noted, saved or "
+    "filed something — just answer. Something about the user themselves (their "
+    "health, their feelings, their life) stays out of the notebooks, even when it comes up "
+    "while talking about one. Only if two notebooks could fit, use the likelier and say which "
+    "in half a sentence. Never create a notebook: when a subject with no notebook keeps coming "
+    "back on different days, ask whether to open one; until then, an event worth dating can "
+    "go to your own diary (`journal_append` without `notebook`)."
+)
+
+# «Ci spostiamo?»: quando proporre di passare in un quaderno. Solo con il tool.
+_WIKIS_BLOCK_MOVE = (
+    "When the conversation has become work on one notebook's subject — several exchanges, "
+    "things to write down, a plan to lay out — offer once to continue there with "
+    "`suggest_notebook`; the user decides with a tap. Never for a passing fact, and never "
+    "again in this conversation if they stay here."
+)
+
 # Il nome del tool che fa da interruttore ad ``agent/scheduling.md``. Costante e
 # non ``CronTool.name``: importare il tool qui tirerebbe dentro tutto il package
 # cron, e ``context.py`` lo importa mezzo repo. L'accoppiamento lo tiene fermo un
@@ -887,7 +915,8 @@ class ContextBuilder:
         # invito a sbagliare. Il template non nomina l'elenco in nessun punto,
         # quindi togliergliela non lascia una promessa scoperta (T6.12).
         if not (is_project or is_gardener):
-            wikis_block = self._get_wikis_context()
+            wikis_block = self._get_wikis_context(drawers=has("journal_append"),
+                                                  move=has("suggest_notebook"))
             if wikis_block:
                 memory_sections.append(wikis_block)
         # Terza sottosezione, e la piu' economica: una riga che dice che il tier
@@ -1038,7 +1067,7 @@ class ContextBuilder:
             # ancora stato estratto: si perde l'inventario, non il prompt.
             return None
 
-    def _get_wikis_context(self) -> str:
+    def _get_wikis_context(self, drawers: bool = False, move: bool = False) -> str:
         """Il blocco ``## Wikis``: nome e scope di ogni wiki, letti dal disco.
 
         **Il prompt conosce le wiki per nome e scope; il contenuto si legge.** E'
@@ -1081,7 +1110,12 @@ class ContextBuilder:
             for name, root in roots.items()
         ]
         body = _WIKIS_BLOCK_LEAD.format(wikis_dir=self.wikis_dir_name) + "\n" + "\n".join(lines)
-        return "## Wikis\n" + truncate_text_to_tokens(body, _WIKIS_BLOCK_MAX_TOKENS)
+        block = "## Wikis\n" + truncate_text_to_tokens(body, _WIKIS_BLOCK_MAX_TOKENS)
+        if drawers:
+            block += "\n\n" + _WIKIS_BLOCK_DRAWERS
+        if move:
+            block += " " + _WIKIS_BLOCK_MOVE if drawers else "\n\n" + _WIKIS_BLOCK_MOVE
+        return block
 
     def _get_identity(
         self,

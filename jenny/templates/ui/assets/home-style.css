@@ -1020,6 +1020,50 @@ body.home {
   margin-top: -2px;
 }
 
+/* Il segno dei cassetti: un'icona nella coda, come il Copia; toccata, apre le
+   righe annotate sotto la risposta. */
+.home-journal-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-journal-mark i { font-size: 14px; }
+.home-journal-mark[aria-expanded="true"] { color: var(--text); }
+.home-journal-detail {
+  margin: 2px 0 4px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--text-faint);
+  font-size: 13px;
+  color: var(--text-faint);
+}
+.home-journal-where { font-weight: 600; }
+/* «Ci spostiamo?»: una proposta, non un comando — un tasto leggero sotto la
+   risposta, che l'utente puo' ignorare. */
+.home-move-offer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 2px;
+  padding: 6px 12px;
+  border: 1px solid var(--text-faint);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .home-copy {
   display: inline-flex;
   align-items: center;

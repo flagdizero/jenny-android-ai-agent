@@ -247,3 +247,36 @@ class TestAlongsideRecall:
     def test_create_takes_the_root(self):
         t = HistoryRecallTool.create(SimpleNamespace(workspace="/tmp/radice"))
         assert t._memory_dir == Path("/tmp/radice/memory")
+
+
+async def test_a_diary_row_opens_with_its_journal_lines(tmp_path: Path) -> None:
+    """Dall'indice alla pagina: la riga del diario porta con se' le righe vere attorno."""
+    from jenny.agent.memory import MemoryStore
+
+    journal = tmp_path / "wikis" / "film" / "raw" / "journal" / "20261011.md"
+    journal.parent.mkdir(parents=True)
+    journal.write_text("# 2026-10-11\n\n- 18:09 — [said] Lady Vendetta visto\n"
+                       "- 18:09 — [said] Preferisce Old Boy: Lady Vendetta è confuso\n",
+                       encoding="utf-8")
+    store = MemoryStore(tmp_path)
+    cursor = store.append_history("Lady Vendetta visto", session_key="project:film",
+                                  kind="said", about="film",
+                                  ref="wikis/film/raw/journal/20261011.md:3")
+    tool = HistoryRecallTool(workspace=tmp_path)
+    listing = await tool.execute()
+    assert "(notebook film, the user said) Lady Vendetta visto" in listing
+    opened = await tool.execute(cursors=[str(cursor)])
+    assert "Source, wikis/film/raw/journal/20261011.md lines 1-4" in opened
+    assert "Preferisce Old Boy" in opened
+
+
+async def test_a_ref_outside_the_installation_is_not_read(tmp_path: Path) -> None:
+    from jenny.agent.memory import MemoryStore
+
+    outside = tmp_path.parent / "segreto.txt"
+    outside.write_text("non leggermi", encoding="utf-8")
+    root = tmp_path / "ws"
+    store = MemoryStore(root)
+    cursor = store.append_history("x", kind="said", ref="../segreto.txt:1")
+    opened = await HistoryRecallTool(workspace=root).execute(cursors=[str(cursor)])
+    assert "non leggermi" not in opened

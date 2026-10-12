@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
@@ -33,6 +33,8 @@ HOME_CSS = ASSETS / "home-style.css"
 pytestmark = requires_node
 
 _METHODS = (
+    "_journalMarkOf",
+    "_moveOfferOf",
     "_tailOf",
     "_timeEl",
     "_appendUser",
@@ -126,7 +128,7 @@ const ultima = (chat) => chat.el.children[chat.el.children.length - 1];
 def _harness() -> str:
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     methods = ",\n    ".join(member(src, name) for name in _METHODS)
-    return _HARNESS.replace("__METHODS__", methods)
+    return _HARNESS.replace("__METHODS__", methods) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
 
 
 def _run_js(script: str) -> None:
