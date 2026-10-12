@@ -99,6 +99,7 @@ def main() -> int:
     original_model = device.http_get("/webui/bootstrap").get("model_name")
     models = [m for m in args.models.split(",") if m] or [original_model]
     results = []
+    down = 0  # giri di fila col provider giu'
     try:
         for model in models:
             if model != device.http_get("/webui/bootstrap").get("model_name"):
@@ -117,6 +118,10 @@ def main() -> int:
                         for i in range(args.runs):
                             r = runner.run(scenario, model, calibrated=calibrated)
                             results.append(r)
+                            down = down + 1 if r.error.startswith("ProviderDownError") else 0
+                            if down >= 2:
+                                raise SystemExit(f"[{model}] provider unreachable twice in a "
+                                                 f"row, stopping: {r.error}")
                             status = r.error or " ".join(
                                 f"{c.name}={'ok' if c.ok else 'NO'}" for c in r.checks)
                             print(f"[{model}] {scenario.name}{' (calibrated)' if calibrated else ''}"

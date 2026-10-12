@@ -255,136 +255,136 @@
   "english_reply_over_italian_content|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [
-     3,
-     3
+     5,
+     5
     ],
     "reply_in_english": [
-     3,
-     3
+     5,
+     5
     ],
     "turn_finished": [
-     3,
-     3
+     5,
+     5
     ]
    },
-   "runs": 3
+   "runs": 5
   },
   "english_reply_over_italian_content|deepseek-v4.1-flash|normal": {
    "checks": {
     "no_unknown_tool": [
-     3,
-     3
+     5,
+     5
     ],
     "reply_in_english": [
-     2,
-     3
+     3,
+     5
     ],
     "turn_finished": [
-     3,
-     3
+     5,
+     5
     ]
    },
-   "runs": 3
+   "runs": 5
   },
   "follow_up_goes_back_to_the_subagent|claude-haiku-5-5|normal": {
    "checks": {
     "delegated_first": [
-     3,
-     3
+     5,
+     5
     ],
     "no_fresh_spawn": [
-     1,
-     3
+     5,
+     5
     ],
     "no_unknown_tool": [
-     3,
-     3
+     5,
+     5
     ],
     "subagent_send": [
-     1,
-     3
+     5,
+     5
     ],
     "turn_finished": [
-     3,
-     3
+     5,
+     5
     ]
    },
-   "runs": 3
+   "runs": 5
   },
   "follow_up_goes_back_to_the_subagent|deepseek-v4.1-flash|normal": {
    "checks": {
     "delegated_first": [
-     3,
-     3
+     5,
+     5
     ],
     "no_fresh_spawn": [
-     3,
-     3
+     5,
+     5
     ],
     "no_unknown_tool": [
-     3,
-     3
+     5,
+     5
     ],
     "subagent_send": [
-     3,
-     3
+     5,
+     5
     ],
     "turn_finished": [
-     3,
-     3
+     5,
+     5
     ]
    },
-   "runs": 3
+   "runs": 5
   },
   "forget_names_dream|claude-haiku-5-5|normal": {
    "checks": {
     "memory_untouched": [
-     3,
-     3
+     5,
+     5
     ],
     "names_dream": [
-     3,
-     3
+     5,
+     5
     ],
     "no_done_claim": [
-     3,
-     3
+     5,
+     5
     ],
     "no_unknown_tool": [
-     3,
-     3
+     5,
+     5
     ],
     "turn_finished": [
-     3,
-     3
+     5,
+     5
     ]
    },
-   "runs": 3
+   "runs": 5
   },
   "forget_names_dream|deepseek-v4.1-flash|normal": {
    "checks": {
     "memory_untouched": [
-     3,
-     3
+     4,
+     4
     ],
     "names_dream": [
-     3,
-     3
+     4,
+     4
     ],
     "no_done_claim": [
-     1,
-     3
+     0,
+     4
     ],
     "no_unknown_tool": [
-     3,
-     3
+     4,
+     4
     ],
     "turn_finished": [
-     3,
-     3
+     4,
+     4
     ]
    },
-   "runs": 3
+   "runs": 4
   },
   "goal_that_must_ask_stays_open|claude-haiku-5-5|normal": {
    "checks": {
@@ -865,5 +865,5 @@
    "runs": 3
   }
  },
- "updated": "2026-10-11"
+ "updated": "2026-10-12"
 }

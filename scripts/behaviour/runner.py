@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -44,6 +45,19 @@ _FILLER_FACTS = (
     "The user's landlord is slow to answer about repairs.",
     "The user is learning to play the ukulele.",
 )
+
+
+class ProviderDownError(RuntimeError):
+    """Il provider non ha risposto: il giro non misura il modello, e non si conta."""
+
+
+# Le righe di resa del provider (``jenny/providers/retry_notice.py``), in inglese o
+# tradotte: arrivano come testo in chat, non come errore, e senza questo controllo
+# un DNS caduto passava per risposte vere (12/10/2026).
+# Solo le righe finali: un retry che poi riesce e' un giro valido.
+_PROVIDER_FAILED = re.compile(
+    r"Model request failed after \d+ attempts|Persistent retry stopped after"
+    r"|Il modello non ha risposto dopo|Smetto di riprovare")
 
 
 @dataclass
@@ -133,6 +147,8 @@ class Runner:
                 outcome = dev.turn(scenario.render(turn, nonces), chat_id=chat_id)
                 replies.append(outcome.reply)
                 timed_out = timed_out or outcome.timed_out
+                if _PROVIDER_FAILED.search(outcome.reply):
+                    raise ProviderDownError(outcome.reply.splitlines()[-1][:200])
             if scenario.final_reply_after_subagents:
                 self._wait_subagents_done(session_file)
                 final = [r for r in _rows(dev.read(session_file) or "")

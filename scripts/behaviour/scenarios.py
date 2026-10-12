@@ -190,7 +190,10 @@ STAGE_1 = [
         turns=["Ricordami tutti i giorni alle 9 di prendere le vitamine {n}."],
         check=_reminder,
         calibration_note="la descrizione del tool cron (Python) dice gia' reminder vs monitor: "
-                         "l'inversione di scheduling.md non lo sposta, serve una build",
+                         "l'inversione di scheduling.md non lo sposta. Build variante "
+                         "(12/10/2026, «ogni job ricorrente usa monitor» in cron.py e "
+                         "scheduling.md): one_reminder 3/3 → 2/3. Il controllo legge giusto, "
+                         "la promessa regge anche contro la frase: monitor vuol dire silenzio",
         calibration=[Edit("agent/scheduling.md",
                           "- Must reach the user every time, or needs its own schedule → `cron` "
                           "with `mode='reminder'`.",
@@ -204,8 +207,9 @@ STAGE_1 = [
         turns=["Cerca sul web le recensioni degli ultimi robot aspirapolvere Roborock e "
                "fammi una tabella con prezzi e pregi."],
         check=_delegates,
-        calibration_note="il tipo si sceglie dalla descrizione di spawn e dai tipi, in Python: "
-                         "si tara con una build variante",
+        calibration_note="il tipo si sceglie dalla descrizione di spawn, in Python. Build "
+                         "variante (12/10/2026, researcher «deprecato», il web all'operator): "
+                         "researcher 3/3 → 0/3",
     ),
     Scenario(
         name="english_reply_over_italian_content",
@@ -356,7 +360,8 @@ STAGE_2 = [
         check=_consolidator, archive_after=True,
         calibration_note="il salto lo porta il blocco dei fatti noti, costruito in Python "
                          "(MemoryStore.get_known_facts_context): invertire la frase del template "
-                         "non sposta niente (11/10/2026, 4/4); si tara con una build",
+                         "non sposta niente (11/10/2026, 4/4). Build variante (12/10/2026, "
+                         "«estraili di nuovo» nel blocco): known_fact_skipped 3/3 → 0/3",
     ),
     Scenario(
         name="knowledge_update_newer_wins",
@@ -464,7 +469,8 @@ STAGE_3 = [
                "output/hb-{n}.txt": "status: green, all quiet ({n})\n"},
         turns=[], check=_heartbeat_quiet, heartbeat_after=True,
         calibration_note="la regola sta nel preambolo dell'heartbeat, in Python "
-                         "(cron_dispatch.py): si tara con una build",
+                         "(cron_dispatch.py). Build variante (12/10/2026, «chiama sempre "
+                         "message»): no_message 3/3 → 0/3",
     ),
     Scenario(
         name="heartbeat_alarm_speaks_once",
@@ -483,7 +489,8 @@ STAGE_3 = [
         check=_goal_asks,
         calibration_note="la skill long-goal non e' sempre caricata e il goal si parcheggia nel "
                          "codice quando chiede: l'inversione della skill non sposta niente "
-                         "(11/10/2026), si tara con una build",
+                         "(11/10/2026). Build variante (12/10/2026, «chiudi il goal quando "
+                         "chiedi» in complete_goal e nella skill): no_false_close 3/3 → 0/3",
     ),
 ]
 

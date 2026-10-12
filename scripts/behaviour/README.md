@@ -73,8 +73,11 @@ edited live; they are calibrated with a variant build, and the scenario says so 
 The first calibration (11/10/2026, DeepSeek v4.1 flash, 2+2 runs) inverted live: forget → names
 Dream 2→0, notebook fact → journal 2→0, board change → notebook-editor 2→1, follow-up →
 `subagent_send` 2→0, chatter stays out 2→1, conditional check → monitor 2→1, recall 2→1, tool
-error owned 2→1. Build-only: plain reminder, researcher type, consolidator skip, heartbeat
-silence, goal stays open. Inverting Dream's budget rule did not move it, so that scenario is a probe. A scenario whose promise has no sentence at all is a **probe**
+error owned 2→1. The five that live in Python were calibrated on 12/10/2026 with a variant build
+(the inverted sentences in a throwaway worktree, `assembleDebug`, then the normal build back),
+3+3 runs: researcher type 3→0, consolidator skip 3→0, heartbeat silence 3→0, goal stays open
+3→0; plain reminder only 3→2 — the check reads it right, but DeepSeek keeps `reminder` for a
+daily nudge even when told to use `monitor`. Inverting Dream's budget rule did not move it, so that scenario is a probe. A scenario whose promise has no sentence at all is a **probe**
 (`kind="probe"`): it says how Jenny behaves, not whether a prompt edit changed it.
 
 ## Usage

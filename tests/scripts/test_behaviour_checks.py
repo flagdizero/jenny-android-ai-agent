@@ -138,3 +138,15 @@ def test_abstention_reads_never_mentioned() -> None:
                {"n": "x"})["says_it_does_not_know"]
     assert not _ok("abstains_when_unknown", _obs("Si chiama dottor Rossi."),
                    {"n": "x"})["says_it_does_not_know"]
+
+
+def test_only_a_provider_that_gave_up_voids_a_run() -> None:
+    from behaviour.runner import _PROVIDER_FAILED
+
+    gave_up = ("Model request failed, retry in 1s (attempt 1).\n"
+               "Model request failed after 4 attempts, giving up.\n"
+               "I can't reach the model.")
+    recovered = "Model request failed, retry in 1s (attempt 1).\nFatto, l'ho salvato."
+    assert _PROVIDER_FAILED.search(gave_up)
+    assert _PROVIDER_FAILED.search("Il modello non ha risposto dopo 4 tentativi: mi fermo.")
+    assert not _PROVIDER_FAILED.search(recovered)
