@@ -16,6 +16,7 @@ import json
 import random
 import re
 from collections.abc import Mapping
+from datetime import datetime, timedelta
 
 from .model import Check, Edit, Observation, Scenario, finished, language_of, no_unknown_tool
 
@@ -341,10 +342,14 @@ def _dream(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     ]
 
 
-def history_line(cursor_offset: int, timestamp: str, content: str) -> str:
-    """Una voce di ``history.jsonl``: il cursore lo assegna l'esecutore (``{cursor+k}``)."""
+def history_line(cursor_offset: int, timestamp: str, content: str, **extra: str) -> str:
+    """Una voce di ``history.jsonl``: il cursore lo assegna l'esecutore (``{cursor+k}``).
+
+    *extra* aggiunge (o sostituisce) campi: una riga del diario porta ``kind``,
+    ``about`` e una ``session_key`` di quaderno.
+    """
     return json.dumps({"cursor": "{cursor+%d}" % cursor_offset, "timestamp": timestamp,
-                       "content": content, "session_key": "unified:default"},
+                       "content": content, "session_key": "unified:default", **extra},
                       ensure_ascii=False) + "\n"
 
 
@@ -954,14 +959,112 @@ DIARY = [
         stage=4, area="diary", nonces=("p", "n"),
         promise="tornando in chat dopo un quaderno, un saluto non diventa un riassunto del quaderno",
         notebook_seed="I lavori in casa.",
-        notebook_prelude=["L'idraulico {n} viene martedì alle 9 per la guarnizione del bagno, "
-                          "segnatelo."],
+        # Un fatto concluso e non un appuntamento: un appuntamento di domani al
+        # saluto e' il livello 1 (una cosa che conta), e lo scenario lo contava
+        # come riassunto — successo il 12/10/2026, 1 giro su 3 per modello.
+        notebook_prelude=["L'idraulico {n} ha rifatto la guarnizione del bagno, adesso non "
+                          "perde più. Segnatelo."],
         turns=["Ciao Jenny!"],
         check=_stays_out, kind="probe",
     ),
 ]
 
-SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY]}
+# -- stadio 4, seconda tappa: le cose in sospeso --------------------------------------
+#
+# Un'attesa della bacheca scattata e non chiusa e' un filo aperto: la chat personale
+# lo vede, lo chiede una volta in un'apertura, non lo tira fuori a meta' discorso, e
+# non ricorda come da fare una cosa di cui l'utente ha gia' parlato nel quaderno.
+# I quaderni sono finti (``bh-<nonce>``, solo bacheca e attese) e il giro li toglie.
+
+
+def _ago(**delta: float) -> datetime:
+    return datetime.now() - timedelta(**delta)
+
+
+def _board_files(notebook: str, reminders: list[tuple[str, str]]) -> dict[str, str]:
+    """Un quaderno con una scheda e le sue attese gia' scattate (ieri mattina)."""
+    fired = _ago(days=1).replace(hour=9, minute=0, second=0, microsecond=0)
+    board = {"version": 1, "cards": [{"id": "c1", "title": "Cose", "pos": {"x": 5, "y": 5}}]}
+    rems = {"version": 1, "reminders": [
+        {"id": rid, "card": "c1", "text": text, "by": "jenny", "state": "open",
+         "when": {"kind": "date", "date": fired.date().isoformat(), "precision": "day"},
+         "notifiedAt": fired.isoformat(timespec="seconds")}
+        for rid, text in reminders]}
+    root = f"wikis/{notebook}"
+    return {f"{root}/wiki/index.md": "# Index\n",
+            f"{root}/board/board.json": json.dumps(board),
+            f"{root}/board/reminders.json": json.dumps(rems)}
+
+
+# Le parole che una persona ripete di un'attesa: il nome inventato del
+# commercialista o dell'officina il modello lo lascia cadere, e giustamente
+# («hai chiamato il commercialista per il 730?»). Misurato il 12/10/2026: contare
+# i nonce dava 0/3 a risposte che chiedevano proprio di una cosa sola.
+_TAX, _CAR = "commercialista", "tagliando"
+_DONE = re.compile(r"\bvist[oa]\b|\bfatt[oa]\b|chius[oa]|non (lo )?conto|non .{0,20}da fare|"
+                   r"non .{0,12}in sospeso|piaciut", re.IGNORECASE)
+
+
+def _asks_one(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    reply = obs.reply.lower()
+    named = [word for word in (_TAX, _CAR) if word in reply]
+    return [Check("asks_about_one", len(named) == 1, obs.reply[:200]),
+            Check("not_a_list", len(named) < 2, ",".join(named))]
+
+
+def _maybe_done(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    # Il film puo' essere nominato, ma solo come fatto: ogni riga che lo cita
+    # deve dirlo visto, fatto, chiuso.
+    film = [line for line in obs.reply.splitlines() if n["n"].lower() in line.lower()]
+    return [Check("open_one_listed", _CAR in obs.reply.lower(), obs.reply[:200]),
+            Check("maybe_done_not_a_todo", all(_DONE.search(line) for line in film),
+                  " | ".join(film)[:200])]
+
+
+def _thread_stays_out(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    return [Check("thread_stays_out", _TAX not in obs.reply.lower(), obs.reply[:200])]
+
+
+THREADS = [
+    Scenario(
+        name="greeting_asks_one_pending_thing",
+        stage=4, area="diary", nonces=("p", "n", "m"),
+        promise="al buongiorno, con due cose in sospeso, ne chiede una sola",
+        files=_board_files("bh-{p}", [("r1", "Chiamare il commercialista {n} per il 730"),
+                                       ("r2", "Prenotare il tagliando dell'auto da {m}")]),
+        # Fuori da questo scenario nessuna delle due parole: la persona inventata
+        # dell'emulatore non ha ne' un commercialista ne' un'auto.
+        turns=["Buongiorno Jenny!"],
+        check=_asks_one, kind="probe",
+    ),
+    Scenario(
+        name="maybe_done_is_not_reminded",
+        stage=4, area="diary", nonces=("p", "n", "m"),
+        promise="un'attesa di cui l'utente ha poi parlato nel quaderno non torna come da fare",
+        files={**_board_files("bh-{p}", [("r1", "Stasera: vedere il film {n}")]),
+               **_board_files("bh-{p}x", [("r2", "Prenotare il tagliando dell'auto da {m}")])},
+        append={"memory/history.jsonl": history_line(
+            1, _ago(hours=3).strftime("%Y-%m-%d %H:%M"),
+            "Ha visto il film {n}: gli è piaciuto molto", kind="said", about="bh-{p}",
+            session_key="project:bh-{p}")},
+        turns=["Dai quaderni, cosa mi resta ancora da fare? Elenca solo quello che è davvero "
+               "ancora da fare."],
+        check=_maybe_done, kind="probe",
+    ),
+    Scenario(
+        name="pending_thread_stays_out_mid_topic",
+        stage=4, area="diary", nonces=("p", "n"),
+        promise="una cosa in sospeso non salta fuori in mezzo a un altro discorso",
+        files=_board_files("bh-{p}", [("r1", "Chiamare il commercialista {n} per il 730")]),
+        seed_session=[("user", "Sto pensando a cosa cucinare stasera."),
+                      ("assistant", "Hai già qualcosa in frigo o parto da zero?")],
+        turns=["Ho zucchine e uova. Idea veloce? Due righe."],
+        check=_thread_stays_out, kind="probe",
+    ),
+]
+
+SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
+                                 *THREADS]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

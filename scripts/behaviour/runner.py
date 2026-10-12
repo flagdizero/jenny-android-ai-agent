@@ -421,6 +421,12 @@ class Runner:
             else:
                 for path in created:
                     dev.remove(path)
+            # Un quaderno finto scritto dai file di prova (``wikis/bh-<nonce>/``)
+            # se ne va intero: le cartelle vuote resterebbero un quaderno per chi
+            # cerca ``wiki/``, e il giro dopo lo troverebbe nell'elenco.
+            for notebook in sorted({p.split("/")[1] for p in created
+                                    if p.startswith("wikis/bh-") and p.count("/") > 1}):
+                dev.remove(f"wikis/{notebook}")
         except Exception as exc:  # noqa: BLE001
             self.log(f"  cleanup: {exc}")
 

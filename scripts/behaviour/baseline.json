@@ -669,7 +669,7 @@
      3
     ],
     "notebook_stays_out": [
-     2,
+     3,
      3
     ],
     "prelude_journaled": [
@@ -694,6 +694,48 @@
      3
     ],
     "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "greeting_asks_one_pending_thing|claude-haiku-5-5|normal": {
+   "checks": {
+    "asks_about_one": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_list": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "greeting_asks_one_pending_thing|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "asks_about_one": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_list": [
      3,
      3
     ],
@@ -838,6 +880,48 @@
    },
    "runs": 3
   },
+  "maybe_done_is_not_reminded|claude-haiku-5-5|normal": {
+   "checks": {
+    "maybe_done_not_a_todo": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "open_one_listed": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "maybe_done_is_not_reminded|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "maybe_done_not_a_todo": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "open_one_listed": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "notebook_chatter_stays_out|claude-haiku-5-5|normal": {
    "checks": {
     "no_journal_write": [
@@ -924,7 +1008,7 @@
      3
     ],
     "without_digging": [
-     3,
+     2,
      3
     ]
    },
@@ -1012,6 +1096,40 @@
      3
     ],
     "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "pending_thread_stays_out_mid_topic|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "thread_stays_out": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "pending_thread_stays_out_mid_topic|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "thread_stays_out": [
      3,
      3
     ],

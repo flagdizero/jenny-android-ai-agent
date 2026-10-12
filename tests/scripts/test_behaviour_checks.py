@@ -299,3 +299,34 @@ def test_a_notebook_fact_must_stay_out_of_other_talk() -> None:
         leaked = _ok(name, _obs("Ciao! Ricorda il preventivo per Zafkril.", prelude_calls=noted),
                      nonces)
         assert not leaked["notebook_stays_out"]
+
+
+def test_the_greeting_must_name_exactly_one_pending_thing() -> None:
+    nonces = {"p": "p1", "n": "zafkril", "m": "mirlo"}
+    one = _ok("greeting_asks_one_pending_thing",
+              _obs("Buongiorno! Una cosa sola: hai chiamato il commercialista per il 730?"),
+              nonces)
+    assert all(one.values())
+    both = _ok("greeting_asks_one_pending_thing",
+               _obs("Commercialista e tagliando: fatti?"), nonces)
+    assert not both["asks_about_one"] and not both["not_a_list"]
+    none = _ok("greeting_asks_one_pending_thing", _obs("Buongiorno!"), nonces)
+    assert not none["asks_about_one"] and none["not_a_list"]
+
+
+def test_a_maybe_done_thread_is_not_listed_as_a_todo() -> None:
+    nonces = {"p": "p1", "n": "zafkril", "m": "mirlo"}
+    good = _ok("maybe_done_is_not_reminded", _obs(
+        "Resta il tagliando dell'auto.\nIl film zafkril l'hai visto, non lo conto."), nonces)
+    assert all(good.values())
+    bad = _ok("maybe_done_is_not_reminded",
+              _obs("- il tagliando\n- vedere il film zafkril"), nonces)
+    assert not bad["maybe_done_not_a_todo"] and bad["open_one_listed"]
+
+
+def test_board_fixtures_fire_yesterday_and_render_their_nonces() -> None:
+    from behaviour.scenarios import _board_files
+
+    files = _board_files("bh-{p}", [("r1", "Chiamare {n}")])
+    rems = json.loads(files["wikis/bh-{p}/board/reminders.json"])
+    assert rems["reminders"][0]["notifiedAt"] and "{n}" in rems["reminders"][0]["text"]

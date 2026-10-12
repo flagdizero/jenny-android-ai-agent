@@ -89,11 +89,13 @@ It has two grades, the way memory does:
 - **the rest of the week as a trace**: one line per day, with the notebooks touched and how many things happened in each, so Jenny knows *that* something happened on Tuesday and opens the source for *what*;
 - nothing older: past a week Jenny searches with `recall_history`.
 
+Below the lines the personal chat also sees **what is still waiting**: every reminder on a notebook's [board](./board.md) that has come due and is not marked done yet, for up to two weeks. Nothing new is stored for it — the board's `reminders.json` already knows which reminders fired and which were closed, and the diary only reads it. When you have talked about the same notebook since the reminder fired (you told the film notebook you watched the film, say), the reminder shows as *maybe done*, so Jenny does not remind you of something you already did. And at an opening — your first message after a pause, a greeting, the start of a day — she may ask about **one** of them, the one that matters most, in a sentence: never a list, never in the middle of another topic, and not again in the same conversation if you let it drop.
+
 A line is an index, not the whole story, and the prompt tells Jenny so: she uses a line only when the conversation touches it, never brings up one notebook's matters while you talk about something else, and checks the source before stating a detail the line does not contain.
 
 What it leaves out on purpose. A notebook sees only lines *about itself* written elsewhere, never another notebook's. Dream, the gardener, cron jobs and subagents see none of it. A line written while Jenny had an untrusted result in view — a web page she read — stays in its own conversation instead of reaching another one as a fact (see the [security model](../internals/security-model.md#subagents-and-untrusted-content)). And the lines are not Dream's input: the notebook's conversation already reaches Dream through its own archive entry, so reading both would extract the same fact twice.
 
-The block is part of the cached prompt, so it does not change on every write. It is frozen at a point in time; lines written after that reach Jenny once, with the turn that follows them, and the block is rebuilt only when the provider's cache would be cold anyway — after an hour's pause — or when more than twelve new lines have piled up.
+The block is part of the cached prompt, so it does not change on every write. It is frozen at a point in time; lines written after that — and a reminder that fires, closes or becomes *maybe done* — reach Jenny once, with the turn that follows them, and the block is rebuilt only when the provider's cache would be cold anyway — after an hour's pause — or when more than twelve changes have piled up. `/new` rebuilds it too.
 
 ## The files
 

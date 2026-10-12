@@ -145,6 +145,12 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
     # Dream resta dov'e' — quelle voci devono ancora finire in MEMORY.md. Vedi
     # ``memory.HISTORY_FLOOR_METADATA_KEY``.
     session.metadata[HISTORY_FLOOR_METADATA_KEY] = loop.context.memory.current_history_cursor()
+    # La vista del diario si ricongela: le sue righe «nuove da allora» e «non
+    # piu' in sospeso» parlavano alla conversazione appena buttata. Il diario
+    # resta (e' memoria, non conversazione): cambia solo da quando si conta.
+    from jenny.agent.diary import DIARY_STATE_KEY
+
+    session.metadata.pop(DIARY_STATE_KEY, None)
     loop.sessions.save(session)
     loop.sessions.invalidate(session.key)
     # La conversazione e' vuota, quindi non contiene piu' il contenuto di nessun
