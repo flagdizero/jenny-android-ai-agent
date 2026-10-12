@@ -276,10 +276,10 @@ class TestHistoryWithCursor:
         store.set_last_dream_cursor(5)
         store.compact_history()
 
-        year = store.read_unprocessed_history(since_cursor=0)[0]["timestamp"][:4]
+        month = store.read_unprocessed_history(since_cursor=0)[0]["timestamp"][:7]
         archived = [
             json.loads(line)
-            for line in (tmp_path / "memory" / "history-archive" / f"{year}.jsonl")
+            for line in (tmp_path / "memory" / "history-archive" / f"{month}.jsonl")
             .read_text(encoding="utf-8").splitlines()
         ]
         assert [e["cursor"] for e in archived] == [1, 2, 3]
@@ -289,25 +289,29 @@ class TestHistoryWithCursor:
         store.append_history("event 5")
         store.set_last_dream_cursor(6)
         store.compact_history()
-        lines = (tmp_path / "memory" / "history-archive" / f"{year}.jsonl").read_text(
+        lines = (tmp_path / "memory" / "history-archive" / f"{month}.jsonl").read_text(
             encoding="utf-8").splitlines()
         assert [json.loads(line)["cursor"] for line in lines] == [1, 2, 3, 4]
 
-    def test_compact_history_files_entries_by_their_year(self, tmp_path):
+    def test_compact_history_files_entries_by_their_month(self, tmp_path):
+        """Un file al mese: ``grep`` salta i file oltre 2 MB, e un anno ci arriva."""
         store = MemoryStore(tmp_path, max_history_entries=1)
         rows = [
             {"cursor": 1, "timestamp": "2025-12-31 23:59", "content": "old year"},
-            {"cursor": 2, "timestamp": "garbage", "content": "no year"},
-            {"cursor": 3, "timestamp": "2026-01-01 00:01", "content": "kept"},
+            {"cursor": 2, "timestamp": "2026-01-01 00:01", "content": "new month"},
+            {"cursor": 3, "timestamp": "garbage", "content": "no month"},
+            {"cursor": 4, "timestamp": "2026-01-02 00:01", "content": "kept"},
         ]
         store._write_entries(rows)
-        store.set_last_dream_cursor(3)
+        store.set_last_dream_cursor(4)
         store.compact_history()
 
         arch = tmp_path / "memory" / "history-archive"
-        assert sorted(p.name for p in arch.iterdir()) == ["2025.jsonl", "unknown.jsonl"]
-        assert "old year" in (arch / "2025.jsonl").read_text(encoding="utf-8")
-        assert "no year" in (arch / "unknown.jsonl").read_text(encoding="utf-8")
+        assert sorted(p.name for p in arch.iterdir()) == [
+            "2025-12.jsonl", "2026-01.jsonl", "unknown.jsonl",
+        ]
+        assert "old year" in (arch / "2025-12.jsonl").read_text(encoding="utf-8")
+        assert "no month" in (arch / "unknown.jsonl").read_text(encoding="utf-8")
 
     def test_compact_history_keeps_everything_when_the_archive_fails(
         self, tmp_path, monkeypatch,

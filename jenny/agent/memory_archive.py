@@ -42,7 +42,7 @@ from jenny.utils.path import atomic_write
 ARCHIVE_DIRNAME = "archive"
 
 # Dove vanno le voci di ``history.jsonl`` che escono dal tetto (v.
-# ``MemoryStore.compact_history``): un file per anno, stesse righe JSON del file
+# ``MemoryStore.compact_history``): un file al mese, stesse righe JSON del file
 # vivo. Sta qui e non in ``memory.py`` perché la leggono sia lo store sia
 # ``recall_history``, e questo modulo è la foglia che entrambi importano già.
 HISTORY_ARCHIVE_DIRNAME = "history-archive"

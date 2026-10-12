@@ -43,6 +43,9 @@ from jenny.utils.prompt_templates import render_template
 # punto in cui la curva si appiattisce. Zero disattiva la finestra.
 _DREAM_PROJECT_REPLAY = 3
 
+# L'anno e il mese in testa a un ``timestamp`` di ``history.jsonl``.
+_MONTH = re.compile(r"\d{4}-\d{2}")
+
 # Il tetto in caratteri della storia di un batch di Dream, a voci intere (v.
 # ``MemoryStore.build_dream_prompt``). Prima c'era un taglio a 500 caratteri per
 # voce su 20 voci, cioe' al piu' 10.000 caratteri: questo tetto ne tiene lo stesso
@@ -886,7 +889,7 @@ class MemoryStore:
         dove parla solo l'heartbeat.
 
         **E quel che esce non si cancella**: va in ``memory/history-archive/
-        <anno>.jsonl`` (v. :meth:`_archive_history_entries`), dove
+        <AAAA-MM>.jsonl`` (v. :meth:`_archive_history_entries`), dove
         ``recall_history`` lo ritrova. Prima il tetto cancellava: misurato sul
         telefono il 12/10/2026, 498 voci in due mesi a 10–16 al giorno, cioè le
         prime perdite a metà novembre — di appunti che sono l'unica copia del
@@ -924,21 +927,23 @@ class MemoryStore:
             self._write_entries(kept)
 
     def _archive_history_entries(self, entries: list[dict[str, Any]]) -> None:
-        """Accoda *entries* a ``memory/history-archive/<anno>.jsonl``, una riga ciascuna.
+        """Accoda *entries* a ``memory/history-archive/<AAAA-MM>.jsonl``, una riga ciascuna.
 
-        L'anno viene dal ``timestamp`` della voce (``"%Y-%m-%d %H:%M"``); una
-        voce senza un anno leggibile va in ``unknown.jsonl`` invece di sparire.
-        Un file per anno tiene ogni file sotto qualche MB al ritmo misurato, e
-        un append non riscrive mai quel che c'è già.
+        Il mese viene dal ``timestamp`` della voce (``"%Y-%m-%d %H:%M"``); una
+        voce senza un mese leggibile va in ``unknown.jsonl`` invece di sparire.
+        Un file al mese e non all'anno per ``grep``, che è come il modello cerca
+        davvero (misurato sull'emulatore il 12/10/2026) e che salta in silenzio i
+        file oltre 2 MB: al ritmo del telefono un anno ci arriva, un mese resta
+        sui 300 kB. Un append non riscrive mai quel che c'è già.
         """
-        by_year: dict[str, list[str]] = {}
+        by_month: dict[str, list[str]] = {}
         for entry in entries:
             ts = entry.get("timestamp")
-            year = ts[:4] if isinstance(ts, str) and ts[:4].isdigit() else "unknown"
-            by_year.setdefault(year, []).append(json.dumps(entry, ensure_ascii=False))
+            month = ts[:7] if isinstance(ts, str) and _MONTH.match(ts) else "unknown"
+            by_month.setdefault(month, []).append(json.dumps(entry, ensure_ascii=False))
         target = ensure_dir(history_archive_dir(self.memory_dir))
-        for year, lines in sorted(by_year.items()):
-            append_lines_durable(target / f"{year}.jsonl", lines)
+        for month, lines in sorted(by_month.items()):
+            append_lines_durable(target / f"{month}.jsonl", lines)
 
     @classmethod
     def _awaits_dream(cls, entry: dict[str, Any], dream_cursor: int) -> bool:
