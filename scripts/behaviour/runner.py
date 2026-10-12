@@ -22,7 +22,9 @@ import json
 import random
 import re
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any
 
 from .device import PERSONAL_CHAT, Device, DeviceError
@@ -145,6 +147,9 @@ class Runner:
             else:
                 chat_id = PERSONAL_CHAT
                 session_file = "sessions/unified_default.jsonl"
+            if scenario.seed_session:
+                self._seed_session(scenario, nonces, session_file,
+                                   f"project:{project}" if project else "unified:default")
             replies, timed_out = [], False
             last_turn_start = 0
             for index, turn in enumerate(scenario.turns):
@@ -351,6 +356,31 @@ class Runner:
             if scenario.append_consumed:
                 dev.write("memory/.dream_cursor", str(last))
         return created
+
+    def _seed_session(self, scenario: Scenario, nonces: Mapping[str, str], session_file: str,
+                      key: str) -> None:
+        """La conversazione di ``seed_session`` sul file, metadati di prima compresi.
+
+        I messaggi sono datati a un minuto l'uno dall'altro, finendo un minuto fa:
+        per il gateway e' una sessione appena usata, non una da compattare per
+        inattivita'.
+        """
+        dev = self.device
+        rows = _rows(dev.read(session_file) or "")
+        meta = next((r for r in rows if r.get("_type") == "metadata"), None) or {
+            "_type": "metadata", "key": key, "metadata": {},
+            "created_at": datetime.now().isoformat(),
+        }
+        meta["last_consolidated"] = 0
+        meta["updated_at"] = datetime.now().isoformat()
+        start = datetime.now() - timedelta(minutes=len(scenario.seed_session) + 1)
+        lines = [json.dumps(meta, ensure_ascii=False)]
+        for i, (role, text) in enumerate(scenario.seed_session):
+            lines.append(json.dumps({
+                "role": role, "content": scenario.render(text, nonces),
+                "timestamp": (start + timedelta(minutes=i)).isoformat(),
+            }, ensure_ascii=False))
+        dev.write(session_file, "\n".join(lines) + "\n")
 
     def _filler(self) -> str:
         """Un MEMORY.md oltre il tetto di Dream (``memoryBudgetChars``, 3.000 di default)."""

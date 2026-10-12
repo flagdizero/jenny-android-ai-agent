@@ -243,3 +243,29 @@ def test_dream_retraction_needs_the_mark() -> None:
                  _archive_file("Plays the double bass in the band Zafkril.")}
     assert all(_ok("dream_marks_retraction", _obs(files=marked), {"n": "zafkril"}).values())
     assert not _ok("dream_marks_retraction", _obs(files=plain), {"n": "zafkril"})["marked_retracted"]
+
+
+def test_the_early_flags_fall_outside_the_replayed_window() -> None:
+    """La premessa della sonda: le due segnalazioni dell'inizio stanno nella parte
+    che la compattazione toglie (oltre i 120 messaggi rigiocati), quella della
+    fine no. Se il copione si accorcia, la sonda smette di misurare la
+    compattazione senza che niente diventi rosso."""
+    seed = SCENARIOS["compaction_keeps_task_state"].seed_session
+    cut = len(seed) + 1 - 120  # +1: il turno della sonda
+    first_cut = [text for _, text in seed[:cut]]
+    kept = [text for _, text in seed[cut:]]
+    assert any("{m}" in t for t in first_cut) and any("{k}" in t for t in first_cut)
+    assert not any("{m}" in t or "{k}" in t for t in kept)
+    assert any("{o}" in t for t in kept)
+
+
+def test_task_state_needs_the_compaction_and_the_early_flags() -> None:
+    nonces = {"p": "p1", "m": "zafkril", "k": "mirlo", "o": "brenta"}
+    session = {"sessions/project_bh-p1.jsonl":
+               json.dumps({"_type": "metadata", "last_consolidated": 15}) + "\n"}
+    reply = "Da ricontrollare: zafkril (rosmarino), mirlo (salvia), brenta (oleandro)."
+    assert all(_ok("compaction_keeps_task_state", _obs(reply, files=session), nonces).values())
+    lost = _ok("compaction_keeps_task_state", _obs("Solo brenta.", files=session), nonces)
+    assert not lost["early_flags_kept"] and lost["late_flag_kept"]
+    fresh = {"sessions/project_bh-p1.jsonl": json.dumps({"_type": "metadata"}) + "\n"}
+    assert not _ok("compaction_keeps_task_state", _obs(reply, files=fresh), nonces)["compacted"]

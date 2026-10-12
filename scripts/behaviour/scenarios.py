@@ -668,6 +668,124 @@ STAGE_2 = [
     ),
 ]
 
+# -- compattazione a meta' lavoro ---------------------------------------------------
+
+_PLANTS = ("basilico", "rosmarino", "salvia", "menta", "timo", "origano", "lavanda", "geranio",
+           "gelsomino", "limone", "ortensia", "felce", "aloe", "agave", "begonia", "ciclamino",
+           "edera", "ficus", "gardenia", "bouganville", "camelia", "azalea", "dalia", "fucsia",
+           "petunia", "peperoncino", "fragola", "erba cipollina", "prezzemolo", "alloro",
+           "oleandro", "pothos", "sansevieria", "clivia")
+_STEP_REPLIES = (
+    "Bene. Ora tocca al {plant}: vaso da {cm} cm, uno solo di misura piu' grande del vecchio. "
+    "Bagna la zolla un'ora prima, sfilala tenendo la pianta alla base, smuovi appena le radici "
+    "esterne, metti due dita di argilla espansa sul fondo e riempi senza premere troppo. Annaffia "
+    "a fondo una volta sola e poi aspetta che il terriccio asciughi in superficie.",
+    "Passiamo al {plant}. Qui il vaso giusto e' da {cm} cm, e conviene potare prima i rami secchi "
+    "cosi' la pianta spende meno dopo il trapianto. Libera le radici che girano in tondo, "
+    "accorciale di un terzo se sono troppe, e sistema la pianta alla stessa altezza di prima. "
+    "Niente acqua sulle foglie per qualche giorno.",
+    "Adesso il {plant}. Vaso da {cm} cm, meglio basso e largo. Togli il terriccio vecchio che "
+    "si stacca da solo senza forzare, controlla che non ci siano radici marce (scure e molli: "
+    "quelle vanno tagliate), poi rinvasa e compatta con le dita lungo il bordo. Mezz'ombra per "
+    "una settimana.",
+)
+_QUESTIONS = (
+    "Il {plant} ha le radici che escono dal fondo, e' normale?",
+    "Il {plant} lo metto subito al sole o aspetto?",
+    "Quanta acqua do al {plant} nei prossimi giorni?",
+    "Al {plant} sono cadute due foglie mentre lo spostavo, e' grave?",
+)
+_ANSWERS = (
+    "Si', e' proprio il segno che il vaso era stretto: hai fatto bene a cambiarlo. Le radici "
+    "che uscivano si sistemano da sole nel vaso nuovo in un paio di settimane.",
+    "Aspetta {days} giorni a mezz'ombra: le radici si sono mosse e con il sole pieno la pianta "
+    "perde piu' acqua di quanta ne riesca ad assorbire. Poi la riporti al suo posto.",
+    "Poca e regolare: controlla col dito, e annaffia solo quando il primo centimetro e' asciutto. "
+    "Nei primi {days} giorni il rischio vero e' il ristagno, non la sete.",
+    "No, e' lo stress del trapianto: capita spesso. Se nei prossimi {days} giorni le foglie "
+    "nuove escono verdi, la pianta si e' gia' ripresa.",
+)
+_ACKS = ("Fatto, il {prev} e' a posto. Prossima?", "Ok, finito il {prev}. Avanti.",
+         "Il {prev} e' sistemato. Che pianta faccio adesso?", "Fatto anche il {prev}. Poi?")
+
+
+def _repotting_session() -> list[tuple[str, str]]:
+    """Una mattina di rinvasi, 34 piante, con dei vasi da ricontrollare segnati strada facendo.
+
+    Il primo messaggio chiede di tenere la lista dei vasi segnalati con «occhio»;
+    il rosmarino (``{m}``) e la salvia (``{k}``) sono segnalati subito, l'oleandro
+    (``{o}``) verso la fine. Nessuna risposta dopo ripete la lista. Sono 134
+    messaggi, oltre i 120 che la sessione rigioca (``maxMessages``): al primo
+    turno il consolidatore toglie l'inizio, con le due segnalazioni e la
+    richiesta stessa, e lascia in prompt il suo riassunto. Non sono fatti da
+    ricordare fra due settimane: sono lo stato di questo lavoro.
+    """
+    rng = random.Random(7)
+    session: list[tuple[str, str]] = [
+        ("user", "Oggi rinvasiamo tutte le piante del terrazzo, una alla volta. Per ogni pianta "
+                 "dammi i passi in breve. Quando ti dico «occhio» su un vaso, tienilo da "
+                 "parte: alla fine mi serve la lista dei vasi da ricontrollare la settimana "
+                 "prossima."),
+        ("assistant", "D'accordo: passi brevi, e tengo la lista dei vasi con «occhio». "
+                      "Cominciamo dal basilico: vaso da 14 cm, bagna la zolla prima, sfilala "
+                      "dalla base e rinvasa senza premere. Dimmi quando hai fatto."),
+    ]
+    flags = {1: ("m", "rosmarino"), 2: ("k", "salvia"), 30: ("o", "oleandro")}
+    for i, plant in enumerate(_PLANTS[1:], start=1):
+        prev = _PLANTS[i - 1]
+        cm, days = rng.choice((12, 14, 16, 18, 20, 24)), rng.choice((3, 4, 5, 7))
+        session += [
+            ("user", rng.choice(_ACKS).format(prev=prev)),
+            ("assistant", _STEP_REPLIES[i % 3].format(plant=plant, cm=cm)),
+        ]
+        if i in flags:
+            nonce, name = flags[i]
+            session += [
+                ("user", f"Occhio al vaso {{{nonce}}}, quello del {name}: ha una macchia "
+                         "bianca sulle foglie vecchie."),
+                ("assistant", "Probabilmente e' oidio, preso presto. Togli le foglie macchiate, "
+                              "tienilo un po' distante dagli altri e non bagnare le foglie."),
+            ]
+        else:
+            session += [
+                ("user", _QUESTIONS[i % 4].format(plant=plant)),
+                ("assistant", _ANSWERS[i % 4].format(days=days)),
+            ]
+    return session
+
+
+def _task_state(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    session = next((v for k, v in obs.files.items() if k.startswith("sessions/")), "") or ""
+    meta = next((json.loads(line) for line in session.splitlines()
+                 if '"_type": "metadata"' in line), {})
+    summary = str(((meta.get("metadata") or {}).get("_last_summary") or {}).get("text") or "")
+    reply = obs.reply
+    return [
+        Check("compacted", int(meta.get("last_consolidated") or 0) > 0, summary[:600]),
+        # Le due segnalazioni dell'inizio, tolte dalla compattazione: la misura.
+        Check("early_flags_kept", n["m"] in reply and n["k"] in reply, reply[:300]),
+        # Quella della fine, ancora in prompt: il controllo che il modello faccia la lista.
+        Check("late_flag_kept", n["o"] in reply, reply[:300]),
+    ]
+
+
+COMPACTION = [
+    Scenario(
+        name="compaction_keeps_task_state",
+        stage=2, area="memory", chat="notebook", nonces=("p", "m", "k", "o"),
+        promise="un lavoro lungo compattato a meta': quel che si era segnato all'inizio per "
+                "questo lavoro resta",
+        seed_session=_repotting_session(),
+        turns=["Finito con le piante! Dammi la lista dei vasi da ricontrollare la settimana "
+               "prossima."],
+        check=_task_state, read_after=("sessions/project_bh-{p}.jsonl",), kind="probe",
+        calibration_note="vietare il segno [ephemeral] in consolidator_archive.md non sposta "
+                         "niente (12/10/2026, 3/3 e 3/3 su DeepSeek e Haiku): le segnalazioni "
+                         "arrivano al riassunto come [durable] o [skip], e il riassunto tiene "
+                         "ogni riga. Si tara solo con una build a riassunto vuoto",
+    ),
+]
+
 # -- stadio 3: giri silenziosi e a piu' turni --------------------------------------
 
 _HEARTBEAT = ("# Heartbeat Tasks\n\n## Active Tasks\n\n"
@@ -770,7 +888,7 @@ STAGE_3.append(Scenario(
                       "`subagent_send` for a\nfinished one.")],
 ))
 
-SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *STAGE_3]}
+SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

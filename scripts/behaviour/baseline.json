@@ -160,6 +160,56 @@
    },
    "runs": 3
   },
+  "compaction_keeps_task_state|claude-haiku-5-5|normal": {
+   "checks": {
+    "compacted": [
+     4,
+     4
+    ],
+    "early_flags_kept": [
+     4,
+     4
+    ],
+    "late_flag_kept": [
+     4,
+     4
+    ],
+    "no_unknown_tool": [
+     4,
+     4
+    ],
+    "turn_finished": [
+     4,
+     4
+    ]
+   },
+   "runs": 4
+  },
+  "compaction_keeps_task_state|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "compacted": [
+     4,
+     4
+    ],
+    "early_flags_kept": [
+     4,
+     4
+    ],
+    "late_flag_kept": [
+     4,
+     4
+    ],
+    "no_unknown_tool": [
+     4,
+     4
+    ],
+    "turn_finished": [
+     4,
+     4
+    ]
+   },
+   "runs": 4
+  },
   "conditional_check_is_a_monitor|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [

@@ -97,6 +97,11 @@ class Scenario:
     #: (``.dream_cursor`` portato all'ultima): stanno sotto il cursore, fuori dal
     #: prompt, come la cronologia vecchia di un'installazione vera.
     append_consumed: bool = False
+    #: Messaggi gia' in sessione prima del primo turno, ``(role, testo)``: una
+    #: conversazione lunga senza pagarla turno per turno. Si scrive sul file di
+    #: sessione, che il gateway rilegge perche' non l'ha ancora in cache (un
+    #: quaderno appena creato, o la chat personale dopo ``/new``).
+    seed_session: list[tuple[str, str]] = field(default_factory=list)
     #: ``personal`` (la chat unificata, sessione nuova) o ``notebook`` (un
     #: quaderno usa e getta, creato e cancellato attorno al giro).
     chat: str = "personal"
