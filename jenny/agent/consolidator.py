@@ -99,6 +99,10 @@ def _estimate_tokens(text: str) -> int:
 # Quanto riassunto archiviato torna nel prompt di un quaderno, al massimo.
 SUMMARY_MAX_CHARS = 6_000
 
+# Le righe che un riassunto oltre il tetto perde per prime, in quest'ordine
+# (v. :func:`accumulate_summary`).
+_PRUNED_FIRST = ("[skip]", "[ephemeral]")
+
 
 def accumulate_summary(previous: Any, texts: list[str], when: datetime) -> dict[str, Any]:
     """Il riassunto di un quaderno con i pezzi nuovi in coda, datati.
@@ -122,15 +126,20 @@ def accumulate_summary(previous: Any, texts: list[str], when: datetime) -> dict[
         return sum(len(p["text"]) + 40 for p in pieces)
 
     # Prima di perdere un pezzo intero se ne tolgono, dal piu' vecchio, le righe
-    # ``[ephemeral]`` (lo stato di un lavoro di quel momento): sul Titan, dopo
-    # un'ora di prove, il tetto faceva gia' cadere i primi pezzi, e con loro le
-    # app create all'inizio della sessione.
-    for piece in pieces[:-1]:
-        if size() <= SUMMARY_MAX_CHARS:
-            break
-        kept = [ln for ln in piece["text"].splitlines()
-                if not ln.lstrip("- ").startswith("[ephemeral]")]
-        piece["text"] = "\n".join(kept).strip()
+    # che valgono meno: sul Titan, dopo un'ora di prove, il tetto faceva gia'
+    # cadere i primi pezzi, e con loro le app create all'inizio della sessione.
+    # Prima le ``[skip]``, che il consolidatore stesso ha giudicato da non
+    # tenere, poi le ``[ephemeral]`` (lo stato di un lavoro di quel momento).
+    # Fino al 12/10/2026 si toglievano solo le seconde, e le ``[skip]`` restavano
+    # tutte: nel quaderno etf-finance del Titan erano 1.531 caratteri su 4.837,
+    # mentre i pezzi piu' vecchi, con i loro fatti, erano gia' caduti.
+    for mark in _PRUNED_FIRST:
+        for piece in pieces[:-1]:
+            if size() <= SUMMARY_MAX_CHARS:
+                break
+            kept = [ln for ln in piece["text"].splitlines()
+                    if not ln.lstrip("- ").startswith(mark)]
+            piece["text"] = "\n".join(kept).strip()
     pieces = [p for p in pieces if p["text"]]
     dropped = 0
     while len(pieces) > 1 and size() > SUMMARY_MAX_CHARS:

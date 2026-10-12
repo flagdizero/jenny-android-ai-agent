@@ -155,6 +155,37 @@ def test_the_ephemeral_lines_of_old_pieces_go_before_whole_pieces() -> None:
     assert len(summary["text"]) <= SUMMARY_MAX_CHARS
 
 
+def test_the_skip_lines_go_before_the_ephemeral_ones() -> None:
+    """Una riga che il consolidatore ha giudicato da non tenere vale meno dello
+    stato del lavoro: oltre il tetto se ne va per prima, e se basta lei lo stato
+    resta."""
+    from datetime import datetime
+
+    from jenny.agent.consolidator import SUMMARY_MAX_CHARS, accumulate_summary
+
+    first = ("- [durable] app meteo-milano live\n- [ephemeral] vasi da ricontrollare: A12\n"
+             + "- [skip] " + "s" * 2500)
+    summary = accumulate_summary(None, [first], datetime(2026, 10, 7, 21, 0))
+    for i in range(3):
+        summary = accumulate_summary(summary, ["- [durable] " + "d" * 1200],
+                                     datetime(2026, 10, 7, 22, i))
+    assert "[skip]" not in summary["text"]
+    assert "vasi da ricontrollare: A12" in summary["text"]
+    assert "app meteo-milano live" in summary["text"]
+    assert len(summary["text"]) <= SUMMARY_MAX_CHARS
+
+
+def test_under_the_cap_the_skip_lines_stay() -> None:
+    from datetime import datetime
+
+    from jenny.agent.consolidator import accumulate_summary
+
+    one = accumulate_summary(None, ["- [skip] basilico fatto, vaso da 14 cm"],
+                             datetime(2026, 10, 7, 21, 0))
+    two = accumulate_summary(one, ["- [durable] secondo"], datetime(2026, 10, 7, 22, 0))
+    assert "basilico fatto" in two["text"]
+
+
 async def test_a_notebook_turn_sees_the_summary_written_before_it(tmp_path) -> None:
     from jenny.agent.autocompact import AutoCompact
 
