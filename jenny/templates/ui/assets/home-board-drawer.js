@@ -154,8 +154,7 @@ export class BoardDrawer {
   /* ── Il «+» flottante e il suo ventaglio ── */
 
   /** Il tondo e il ventaglio stanno nel guscio della casa, non nel cassetto che
-   *  scorre: fermi sullo schermo, a sinistra di Jenny come il ↓ dell'officina
-   *  (`#chat-scroll-fab`), che a destra si prenderebbe il tocco. Niente
+   *  scorre: fermi sullo schermo, nell'angolo del + dei Quaderni. Niente
    *  `z-index` (in casa l'unico e' di Jenny): vengono dopo il cassetto nel DOM,
    *  e prima della mascotte, che col suo resta sopra anche al velo. Si vedono
    *  solo quando la stanza e' il cassetto (`home-style.css`). */

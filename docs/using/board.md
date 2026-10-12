@@ -103,7 +103,7 @@ Unlike Report, a correction does not take you to the chat: it is handled between
 
 ### Adding a section
 
-The yellow **+** at the bottom right, just left of Jenny, stays on screen while the drawer scrolls. It opens a fan of six kinds: reminder, note, app, cron, photo and other; tap outside it, the **×** or Back to close it. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). An app or a cron always comes that way: Jenny makes it **because you asked for it**.
+The yellow **+** at the bottom right — the same corner as the + of the Notebooks page — stays on screen while the drawer scrolls. It opens a fan of six kinds: reminder, note, app, cron, photo and other; tap outside it, the **×** or Back to close it. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). An app or a cron always comes that way: Jenny makes it **because you asked for it**.
 
 The rule behind apps and crons: **everything a notebook does by itself is on its board, where you can see it.** An app's reader reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
 

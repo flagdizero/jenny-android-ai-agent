@@ -3489,18 +3489,19 @@ body.home {
 .home-drawer-app.is-paused .home-drawer-app-number { color: var(--text-faint); }
 .home-drawer-photo { max-width: 100%; max-height: 260px; border-radius: 6px; object-fit: cover; }
 /* Il «+» flottante del cassetto e il suo ventaglio. Stanno nel guscio, fermi
-   mentre il cassetto scorre, e solo nella stanza del cassetto. A sinistra di
-   Jenny, come il ↓ dell'officina (`#chat-scroll-fab` in mobile-style.css): a
-   destra lei si prenderebbe il tocco. Niente z-index: vengono dopo il cassetto
-   nel DOM e prima della mascotte, che col suo resta sopra anche al velo. */
+   mentre il cassetto scorre, e solo nella stanza del cassetto. Nello stesso
+   posto del + dei Quaderni (`.home-notebooks-new`), per scelta dell'utente
+   (12/10/2026): stesso gesto, stesso angolo. Niente z-index: vengono dopo il
+   cassetto nel DOM e prima della mascotte, che col suo resta sopra anche al
+   velo. */
 .home-drawer-fab,
 .home-drawer-dial { display: none; }
 .home-shell[data-view='drawer'] .home-drawer-fab { display: flex; }
 .home-shell[data-view='drawer'] .home-drawer-dial:not([hidden]) { display: flex; }
 .home-drawer-fab {
   position: absolute;
-  right: calc(var(--jenny-size, 120px) * 0.6 + 14px);
-  bottom: calc(var(--jenny-floor, 52px) + 10px);
+  right: 18px;
+  bottom: 16px;
   width: 56px;
   height: 56px;
   align-items: center;
@@ -3527,14 +3528,14 @@ body.home {
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   animation: home-drawer-dial-in 0.16s ease-out;
 }
-/* Le scelte salgono dal tondo, allineate al suo centro: l'icona sopra
-   l'icona, l'etichetta a sinistra. */
+/* Le scelte salgono dal tondo, allineate al suo centro (18 + (56 - 44) / 2):
+   l'icona sopra l'icona, l'etichetta a sinistra. */
 .home-drawer-dial-menu {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  margin: 0 calc(var(--jenny-size, 120px) * 0.6 + 20px) calc(var(--jenny-floor, 52px) + 80px) 16px;
+  margin: 0 24px 84px 16px;
 }
 .home-drawer-dial-row {
   display: flex;
