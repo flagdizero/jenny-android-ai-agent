@@ -47,6 +47,13 @@ _FILLER_FACTS = (
 )
 
 
+#: Oltre questo numero di file uno scenario si scrive con un tar solo.
+_BULK_FILES = 20
+
+#: Il segnaposto del cursore in una riga di ``history.jsonl`` (``history_line``).
+_CURSOR_SLOT = re.compile(r'"\{cursor\+(\d+)\}"')
+
+
 class ProviderDownError(RuntimeError):
     """Il provider non ha risposto: il giro non misura il modello, e non si conta."""
 
@@ -299,9 +306,20 @@ class Runner:
     def _write_fixtures(self, scenario: Scenario, nonces: dict[str, str]) -> list[str]:
         dev = self.device
         created = []
-        for raw_path, raw_text in scenario.files.items():
-            path = scenario.render(raw_path, nonces)
-            text = scenario.render(raw_text, nonces).replace("{filler}", self._filler())
+        rendered = {
+            scenario.render(raw_path, nonces):
+                scenario.render(raw_text, nonces).replace("{filler}", self._filler())
+            for raw_path, raw_text in scenario.files.items()
+        }
+        if len(rendered) > _BULK_FILES:
+            # Una lettura per cartella invece di una per file, e un tar solo.
+            present: set[str] = set()
+            for directory in {p.rsplit("/", 1)[0] for p in rendered if "/" in p}:
+                present |= {f"{directory}/{name}" for name in dev.listdir(directory)}
+            created = [p for p in rendered if p not in present and "/" in p]
+            dev.write_many(rendered)
+            rendered = {}
+        for path, text in rendered.items():
             if dev.read(path) is None:
                 created.append(path)
             dev.write(path, text)
@@ -315,13 +333,15 @@ class Runner:
         for raw_path, raw_text in scenario.append.items():
             path = scenario.render(raw_path, nonces)
             text = scenario.render(raw_text, nonces)
-            for k in range(1, 10):
-                if "{cursor+%d}" % k in text:
-                    last = cursor + k
-                text = text.replace('"{cursor+%d}"' % k, str(cursor + k))
+            offsets = [int(k) for k in _CURSOR_SLOT.findall(text)]
+            if offsets:
+                last = max(last, cursor + max(offsets))
+            text = _CURSOR_SLOT.sub(lambda m: str(cursor + int(m.group(1))), text)
             dev.write(path, (dev.read(path) or "") + text)
         if last != cursor:
             dev.write("memory/.cursor", str(last))
+            if scenario.append_consumed:
+                dev.write("memory/.dream_cursor", str(last))
         return created
 
     def _filler(self) -> str:
@@ -337,8 +357,11 @@ class Runner:
                 dev.remove_cron_job(job)
             if project:
                 self._delete_project(project)
-            for path in created:
-                dev.remove(path)
+            if len(created) > _BULK_FILES:
+                dev.remove_many(created)
+            else:
+                for path in created:
+                    dev.remove(path)
         except Exception as exc:  # noqa: BLE001
             self.log(f"  cleanup: {exc}")
 

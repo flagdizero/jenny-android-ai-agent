@@ -150,3 +150,62 @@ def test_only_a_provider_that_gave_up_voids_a_run() -> None:
     assert _PROVIDER_FAILED.search(gave_up)
     assert _PROVIDER_FAILED.search("Il modello non ha risposto dopo 4 tentativi: mi fermo.")
     assert not _PROVIDER_FAILED.search(recovered)
+
+
+def test_deep_recall_takes_recall_or_grep_and_the_nonce() -> None:
+    by_recall = _obs("Si chiamava Zafkril.", [ToolCall("recall", {"query": ["barca"]})])
+    by_grep = _obs("Si chiamava Zafkril.", [ToolCall("grep", {"pattern": "barca"})])
+    guessed = _obs("Si chiamava Zafkril.")
+    missed = _obs("Non lo trovo.", [ToolCall("recall", {})])
+    assert all(_ok("recall_deep_archive", by_recall, {"n": "zafkril"}).values())
+    assert all(_ok("recall_deep_archive", by_grep, {"n": "zafkril"}).values())
+    assert not _ok("recall_deep_archive", guessed, {"n": "zafkril"})["searched_memory"]
+    assert not _ok("recall_deep_archive", missed, {"n": "zafkril"})["nonce_in_reply"]
+
+
+def test_deep_history_needs_its_tool_and_the_nonce() -> None:
+    hit = _obs("È il dottor Zafkril.", [ToolCall("recall_history", {})])
+    wrong_tool = _obs("È il dottor Zafkril.", [ToolCall("recall", {})])
+    assert all(_ok("recall_history_deep", hit, {"n": "zafkril"}).values())
+    assert not _ok("recall_history_deep", wrong_tool, {"n": "zafkril"})["searched_history"]
+
+
+def test_a_retracted_fact_may_be_named_only_as_wrong() -> None:
+    asserted = _obs("Suoni il contrabbasso con i Zafkril!")
+    flagged = _obs("Avevo segnato il contrabbasso, ma mi avevi corretto: non era vero.")
+    silent = _obs("Non me l'hai mai detto.")
+    assert not _ok("recall_retracted", asserted, {"n": "zafkril"})["retracted_not_asserted"]
+    assert _ok("recall_retracted", flagged, {"n": "zafkril"})["retracted_not_asserted"]
+    assert _ok("recall_retracted", silent, {"n": "zafkril"})["retracted_not_asserted"]
+
+
+def test_abstaining_after_a_search_needs_both() -> None:
+    good = _obs("Non me l'hai mai detto, nella memoria non c'è.", [ToolCall("recall", {})])
+    unsearched = _obs("Non me l'hai mai detto.")
+    invented = _obs("Si chiamava Fido!", [ToolCall("recall", {})])
+    assert all(_ok("abstains_after_search", good, {"n": "x"}).values())
+    assert not _ok("abstains_after_search", unsearched, {"n": "x"})["searched_memory"]
+    assert not _ok("abstains_after_search", invented, {"n": "x"})["says_it_does_not_know"]
+
+
+def test_the_synthetic_archive_hides_the_needle_past_the_index() -> None:
+    """L'ago deve stare oltre i 24.000 caratteri dell'indice di ``recall``, o lo
+    scenario non misura il recupero ma la sola lettura dell'elenco."""
+    from behaviour.scenarios import synthetic_archive
+
+    files = synthetic_archive()
+    assert len(files) == 450
+    index = sum(len(body.split("---\n\n", 1)[1]) + 20 for body in files.values())
+    assert index > 24_000
+    needle = SCENARIOS["recall_deep_archive"].files
+    oldest = min(needle)
+    assert "0a0a0a0a" in oldest  # il nome col giorno più vecchio: ultimo nell'elenco
+
+
+def test_cursor_slots_are_numbered_past_nine() -> None:
+    from behaviour.runner import _CURSOR_SLOT
+    from behaviour.scenarios import history_line
+
+    line = history_line(42, "2026-08-01 10:00", "x")
+    assert _CURSOR_SLOT.sub(lambda m: str(100 + int(m.group(1))), line).startswith(
+        '{"cursor": 142,')

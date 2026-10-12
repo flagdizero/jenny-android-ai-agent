@@ -9,8 +9,10 @@ WebUI, lo stesso che la WebUI usa per parlare al gateway.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import subprocess
+import tarfile
 import time
 import urllib.error
 import urllib.request
@@ -80,6 +82,28 @@ class Device:
 
     def remove(self, rel: str) -> None:
         self.sh(f"rm -rf {WORKSPACE}/{rel}", check=False)
+
+    def write_many(self, files: dict[str, str]) -> None:
+        """Molti file in un colpo solo: un tar sullo stdin di ``run-as``.
+
+        Un ``write`` per file costa un ``adb shell``; i ~450 file d'archivio di
+        uno scenario di recupero, uno alla volta, erano minuti per giro.
+        """
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as tar:
+            for rel, text in files.items():
+                data = text.encode("utf-8")
+                info = tarfile.TarInfo(rel)
+                info.size = len(data)
+                info.mode = 0o600
+                info.mtime = int(time.time())
+                tar.addfile(info, io.BytesIO(data))
+        self.sh(f"cd {WORKSPACE} && tar -xf -", input_bytes=buf.getvalue())
+
+    def remove_many(self, rels: list[str], *, chunk: int = 100) -> None:
+        for i in range(0, len(rels), chunk):
+            paths = " ".join(f"{WORKSPACE}/{rel}" for rel in rels[i:i + chunk])
+            self.sh(f"rm -rf {paths}", check=False)
 
     def listdir(self, rel: str) -> list[str]:
         out = self.sh(f"ls -1 {WORKSPACE}/{rel} 2>/dev/null", check=False)

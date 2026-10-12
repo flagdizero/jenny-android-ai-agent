@@ -13,6 +13,7 @@ nonce, mai un giudizio di un altro modello.
 from __future__ import annotations
 
 import json
+import random
 import re
 from collections.abc import Mapping
 
@@ -345,6 +346,192 @@ def history_line(cursor_offset: int, timestamp: str, content: str) -> str:
                       ensure_ascii=False) + "\n"
 
 
+# -- il recupero oltre la finestra ------------------------------------------------
+#
+# Sul telefono, il 12/10/2026, ``recall`` vedeva 119 dei 479 fatti archiviati e
+# ``recall_history`` 191 delle 498 voci: tutto il resto c'era e non si trovava.
+# Questi scenari seminano un archivio di quella taglia, inventato, e l'ago oltre
+# la finestra.
+
+_PEOPLE = ("Marta", "Giulio", "Elena", "Davide", "Sara", "Pietro", "Chiara", "Luca",
+           "Anna", "Marco", "Irene", "Paolo")
+_FACTS_IT = (
+    "{p} lavora come {x} e passa spesso a trovare l'utente il sabato",
+    "L'utente ha comprato da {p} un vecchio {y} usato",
+    "{p} ha consigliato all'utente un corso di {z}",
+    "L'utente va a correre con {p} lungo il fiume quando non piove",
+    "L'utente deve restituire a {p} il libro sul {z} prestato in estate",
+)
+_FACTS_EN = (
+    "{p} works as a {x} and often visits the user on Saturdays",
+    "The user bought a used {y} from {p}",
+    "{p} recommended a {z} course to the user",
+    "The user goes running with {p} along the river when it doesn't rain",
+    "The user owes {p} the book about {z} lent in the summer",
+)
+_X = ("idraulica", "architetto", "fornaio", "infermiera", "grafico", "plumber", "teacher")
+_Y = ("tavolo da disegno", "giradischi", "microscope", "telescope", "armadio", "piano")
+_Z = ("ceramica", "fotografia", "pottery", "salsa", "scacchi", "jazz", "orticoltura")
+
+
+def _archive_file(day: int, ident: str, text: str, superseded_by: str = "") -> tuple[str, str]:
+    month, dom = 8 + day // 28, 1 + day % 28
+    date = f"2026-{month:02d}-{dom:02d}"
+    head = f"---\nid: {ident}\nsource: USER.md\ndemoted: {date}\n"
+    if superseded_by:
+        head += f"superseded_by: {superseded_by}\n"
+    return f"memory/archive/{date}-{ident}.md", head + f"---\n\n{text}\n"
+
+
+def synthetic_archive(count: int = 450, *, seed: int = 7) -> dict[str, str]:
+    """~*count* fatti archiviati, inventati, fra agosto e ottobre 2026.
+
+    Un quinto sono catene di tre riformulazioni legate da ``superseded_by``,
+    come quelle misurate sul telefono. Gli id sono esadecimali finti: basta che
+    siano unici e della forma giusta.
+    """
+    rng = random.Random(seed)
+    files: dict[str, str] = {}
+    i = 0
+    while len(files) < count:
+        pool = _FACTS_IT if rng.random() < 0.6 else _FACTS_EN
+        text = rng.choice(pool).format(p=rng.choice(_PEOPLE), x=rng.choice(_X),
+                                       y=rng.choice(_Y), z=rng.choice(_Z))
+        day = rng.randrange(0, 64)
+        versions = 3 if rng.random() < 0.2 else 1
+        ids = [f"{(0x10000000 + i * 7919 + v) & 0xffffffff:08x}" for v in range(versions)]
+        for v in range(versions):
+            wording = text if v == 0 else f"{text} ({'aggiornato' if v == 1 else 'confermato'})"
+            nxt = ids[v + 1] if v + 1 < versions else ""
+            path, body = _archive_file(min(day + v, 69), ids[v], wording, nxt)
+            files[path] = body
+        i += 1
+    return files
+
+
+def synthetic_history(count: int = 400, *, seed: int = 11) -> str:
+    """~*count* voci di ``history.jsonl``, tre o quattro note ciascuna."""
+    rng = random.Random(seed)
+    out = []
+    for k in range(count):
+        notes = []
+        for _ in range(rng.randint(3, 4)):
+            text = rng.choice(_FACTS_EN).format(p=rng.choice(_PEOPLE), x=rng.choice(_X),
+                                                y=rng.choice(_Y), z=rng.choice(_Z))
+            notes.append(f"- [{rng.choice(('durable', 'ephemeral'))}] {text}")
+        day = k * 70 // count
+        ts = f"2026-{8 + day // 28:02d}-{1 + day % 28:02d} {9 + k % 12:02d}:00"
+        out.append(history_line(k + 2, ts, "\n".join(notes)))
+    return "".join(out)
+
+
+_NEEDLE_FILE = _archive_file(-28, "0a0a0a0a",
+                             "Il nonno dell'utente aveva una barca a vela chiamata {n}, "
+                             "venduta nel 2019.")
+
+
+def _deep_recall(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    return [
+        Check("searched_memory", bool(obs.called("recall") or obs.called("grep")),
+              ",".join(c.name for c in obs.tool_calls)),
+        Check("nonce_in_reply", n["n"].lower() in obs.reply.lower(), obs.reply[:160]),
+    ]
+
+
+def _deep_history(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    return [
+        Check("searched_history", bool(obs.called("recall_history") or obs.called("grep")),
+              ",".join(c.name for c in obs.tool_calls)),
+        Check("nonce_in_reply", n["n"].lower() in obs.reply.lower(), obs.reply[:160]),
+    ]
+
+
+def _past_version(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    reply = obs.reply.lower()
+    return [Check("older_version_found", n["n"].lower() in reply, obs.reply[:160])]
+
+
+_RETRACTED_WORDS = re.compile(r"contrabbass|double bass", re.IGNORECASE)
+_RETRACTION_MARK = re.compile(
+    r"non (era|e') vero|non è vero|smentit|corrett|sbagliat|non suoni|non lo suoni|"
+    r"never true|not true|wrong|retract|corrected|you don't play|you do not play",
+    re.IGNORECASE)
+
+
+def _not_asserted(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    reply = obs.reply
+    asserted = bool(_RETRACTED_WORDS.search(reply)) and not _RETRACTION_MARK.search(reply)
+    return [Check("retracted_not_asserted", not asserted, reply[:160])]
+
+
+def _abstain_searched(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    searched = obs.called("recall") or obs.called("recall_history") or obs.called("grep")
+    return [
+        Check("searched_memory", bool(searched), ",".join(c.name for c in obs.tool_calls)),
+        Check("says_it_does_not_know", bool(_DONT_KNOW.search(obs.reply)), obs.reply[:160]),
+    ]
+
+
+RECALL = [
+    Scenario(
+        name="recall_deep_archive",
+        stage=2, area="memory",
+        promise="un fatto archiviato oltre la finestra dell'indice si ritrova, anche chiesto "
+                "in un'altra lingua",
+        files={**synthetic_archive(), _NEEDLE_FILE[0]: _NEEDLE_FILE[1]},
+        turns=["What was the name of my grandfather's sailing boat? I can't remember it."],
+        check=_deep_recall, kind="probe", final_reply_after_subagents=True,
+    ),
+    Scenario(
+        name="recall_history_deep",
+        stage=2, area="memory",
+        promise="una nota della cronologia vecchia, non la prima della sua voce, si ritrova",
+        append={"memory/history.jsonl": history_line(
+            1, "2026-07-20 18:00",
+            "- [durable] The user started a pottery course in town\n"
+            "- [ephemeral] The user was tired after work\n"
+            "- [durable] The user's cat is treated by a vet named Dr. {n}\n"
+            "- [ephemeral] The user planned groceries for Sunday") + synthetic_history()},
+        append_consumed=True,
+        turns=["Come si chiama il veterinario del mio gatto?"],
+        # Come per l'astensione: spesso cerca con un subagent e risponde dopo.
+        check=_deep_history, kind="probe", final_reply_after_subagents=True,
+    ),
+    Scenario(
+        name="recall_superseded",
+        stage=2, area="memory", nonces=("n", "m"),
+        promise="la versione vecchia di un fatto cambiato si ritrova dall'archivio",
+        files={"USER.md": "- Works as a baker at the bakery {m}.\n",
+               "memory/archive/2026-09-01-0b0b0b0b.md":
+                   "---\nid: 0b0b0b0b\nsource: USER.md\ndemoted: 2026-09-01\n"
+                   "superseded_by: 0c0c0c0c\n---\n\n"
+                   "Works as a barista at the café {n}.\n"},
+        turns=["Prima del forno {m}, dove lavoravo? Solo il nome del posto."],
+        check=_past_version, kind="probe",
+    ),
+    Scenario(
+        name="recall_retracted",
+        stage=2, area="memory",
+        promise="un fatto smentito, rimasto in archivio, non torna come vero",
+        files={"memory/archive/2026-09-17-0d0d0d0d.md":
+               "---\nid: 0d0d0d0d\nsource: USER.md\ndemoted: 2026-09-17\n"
+               "retracted: yes\n---\n\n"
+               "Il giovedì sera suona il contrabbasso nel gruppo {n}, quindi non è mai "
+               "disponibile.\n"},
+        turns=["Che strumento suono il giovedì sera? Controlla nella tua memoria."],
+        check=_not_asserted, kind="probe",
+    ),
+    Scenario(
+        name="abstains_after_search",
+        stage=2, area="memory",
+        promise="cercata in un archivio grande e non trovata, una cosa mai detta resta non "
+                "saputa",
+        files=synthetic_archive(),
+        turns=["Ti ricordi come si chiamava il cane che avevo da bambino?"],
+        check=_abstain_searched, kind="probe", final_reply_after_subagents=True,
+    ),
+]
+
 STAGE_2 = [
     Scenario(
         name="consolidator_skips_known_keeps_new",
@@ -513,7 +700,7 @@ STAGE_3.append(Scenario(
                       "`subagent_send` for a\nfinished one.")],
 ))
 
-SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *STAGE_3]}
+SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *STAGE_3]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

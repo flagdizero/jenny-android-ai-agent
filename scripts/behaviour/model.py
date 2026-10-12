@@ -93,6 +93,10 @@ class Scenario:
     files: dict[str, str] = field(default_factory=dict)
     #: Righe da aggiungere in coda a file esistenti (es. ``history.jsonl``).
     append: dict[str, str] = field(default_factory=dict)
+    #: Le voci aggiunte a ``history.jsonl`` risultano gia' lette da Dream
+    #: (``.dream_cursor`` portato all'ultima): stanno sotto il cursore, fuori dal
+    #: prompt, come la cronologia vecchia di un'installazione vera.
+    append_consumed: bool = False
     #: ``personal`` (la chat unificata, sessione nuova) o ``notebook`` (un
     #: quaderno usa e getta, creato e cancellato attorno al giro).
     chat: str = "personal"
