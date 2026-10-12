@@ -294,6 +294,27 @@ class TestTheEvidenceIsNowCounted:
             before=before, history_text=correction, stuck=0, replaced=1
         )
 
+    def test_a_remove_settles_a_correction(self, store):
+        """Una correzione che smentisce senza sostituire si applica con una
+        remove: anche quella è il consolidamento, o il batch si rigioca."""
+        store.user_file.write_text("y" * 1999, encoding="utf-8")
+        before = _report(store, user=2000)
+        store.user_file.write_text("y" * 1900, encoding="utf-8")
+        correction = "[2026-10-12 09:00] - [correction] Non ha mai suonato il contrabbasso\n"
+
+        assert not batch_was_not_consolidated(
+            before=before, history_text=correction, stuck=0, removed=1, attempted=1
+        )
+
+    def test_a_bare_remove_does_not_settle_a_batch_of_new_facts(self, store):
+        store.user_file.write_text("y" * 1999, encoding="utf-8")
+        before = _report(store, user=2000)
+        store.user_file.write_text("y" * 1900, encoding="utf-8")
+
+        assert batch_was_not_consolidated(
+            before=before, history_text=_REAL_BATCH, stuck=0, removed=1, attempted=1
+        )
+
     def test_a_correction_batch_with_no_replace_is_still_held(self, store):
         store.user_file.write_text("y" * 1999, encoding="utf-8")
         before = _report(store, user=2000)
@@ -321,6 +342,7 @@ class TestARunWithoutTheEntryTool:
 
         assert NO_ENTRIES.entries_added == 0
         assert NO_ENTRIES.entries_replaced == 0
+        assert NO_ENTRIES.entries_removed == 0
         assert NO_ENTRIES.entries_already_present == 0
 
     def test_which_leaves_the_size_net_in_charge(self, store):

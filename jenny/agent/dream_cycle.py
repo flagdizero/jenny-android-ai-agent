@@ -188,7 +188,7 @@ _RETAINED_TAGS = ("[durable]", "[permanent]", "[correction]")
 class _NoEntries:
     """Esito in voci di un run che non aveva il tool per voci.
 
-    Zero su tutti e tre, che è la lettura giusta: nessuna voce è entrata,
+    Zero su tutti, che è la lettura giusta: nessuna voce è entrata,
     nessuna sostituita, nessuna trovata già presente. Esiste perche i doppi di
     ``build_dream_tools`` nei test non espongono ``memory_entries``, e un
     ``getattr`` che tornasse ``None`` costringerebbe ogni chiamante a un ramo.
@@ -196,6 +196,7 @@ class _NoEntries:
 
     entries_added = 0
     entries_replaced = 0
+    entries_removed = 0
     entries_already_present = 0
 
 
@@ -242,6 +243,7 @@ def batch_was_not_consolidated(
     replaced: int = 0,
     already_present: int = 0,
     attempted: int = 0,
+    removed: int = 0,
 ) -> bool:
     """True quando il cursore **non** va avanzato pur avendo il run scritto qualcosa.
 
@@ -283,6 +285,12 @@ def batch_was_not_consolidated(
     ciò che questa funzione esiste per prendere. Ma quando il batch *chiede* una
     correzione, sostituire in place è la mossa giusta e il prompt la chiede
     esplicitamente, quindi lì la ``replace`` è il consolidamento.
+
+    ``removed`` vale lo stesso, alla stessa condizione: una correzione che dice
+    «non era mai vero, niente lo sostituisce» si applica con una ``remove``, e
+    il prompt chiede proprio quella. Senza contarla il batch restava trattenuto,
+    e il run dopo rigiocava una correzione già applicata (emulatore, 12/10/2026:
+    6 run su 6, il cursore fermo fino al timeout della sonda).
 
     ``batch_carries_retained_facts`` resta: un batch che non chiede niente non è
     stato mancato.
@@ -331,7 +339,7 @@ def batch_was_not_consolidated(
         return False
     if added or already_present:
         return False
-    if replaced and "[correction]" in history_text:
+    if (replaced or removed) and "[correction]" in history_text:
         return False
     return not consolidation_landed(before)
 
@@ -796,6 +804,7 @@ async def _run_dream_batch(
         added=entries.entries_added,
         replaced=entries.entries_replaced,
         already_present=entries.entries_already_present,
+        removed=getattr(entries, "entries_removed", 0),
         # Se non ha tentato nessuna scrittura non ha mancato niente: ha deciso
         # che non c'era da scrivere.
         attempted=getattr(dream_file_states, "writes_attempted", 0),

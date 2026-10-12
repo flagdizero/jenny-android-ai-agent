@@ -627,11 +627,14 @@ class MemoryEntryTool(Tool):
         self._entry_archiver = entry_archiver
         # Esito del run in voci, non in byte. È tutto il punto della fase 1: "il
         # fatto è atterrato?" smette di essere una differenza di dimensioni e
-        # diventa una risposta. I tre contatori restano distinti perché rispondono
+        # diventa una risposta. I contatori restano distinti perché rispondono
         # a domande diverse, e chi li legge (``batch_was_not_consolidated``) li
         # tratta in modo diverso a ragione.
         self.entries_added = 0
         self.entries_replaced = 0
+        # Una ``remove`` riuscita: conta solo per un batch che porta una
+        # ``[correction]`` (v. ``batch_was_not_consolidated``).
+        self.entries_removed = 0
         # Una ``add`` di un fatto che c'era già. Non è un fallimento e non è un
         # no-op: dice che *quel contenuto è in memoria*, cioè esattamente quel che
         # il chiamante voleva sapere. Senza questo numero un batch di soli
@@ -914,6 +917,7 @@ class MemoryEntryTool(Tool):
                 # perché quella è una proprietà del guard, non di questo tool, e
                 # ingoiare un rifiuto direbbe "rimossa" su un file intatto.
                 return refusal
+            self.entries_removed += 1
             return self._report(
                 file, path, f"Removed {entry.id}. Kept in the archive as {archived.name}.",
             )

@@ -656,6 +656,19 @@ class TestAddTakesAWholeBatch:
         assert tool.entries_added == 1
         assert tool.entries_already_present == 1
 
+    async def test_a_removal_is_counted(self, tool):
+        """Per Dream una correzione che smentisce si applica così: senza il
+        conto, il batch che la porta resterebbe trattenuto."""
+        out = await tool.execute(action="remove", file="user", target="Short answers")
+
+        assert out.startswith("Removed")
+        assert tool.entries_removed == 1
+
+    async def test_a_failed_removal_is_not_counted(self, tool):
+        await tool.execute(action="remove", file="user", target="nothing like this")
+
+        assert tool.entries_removed == 0
+
     async def test_the_answer_names_each_fact(self, tool):
         out = await tool.execute(
             action="add", file="user",
