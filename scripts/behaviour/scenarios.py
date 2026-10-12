@@ -475,6 +475,41 @@ def _abstain_searched(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     ]
 
 
+def _archived_with(obs: Observation, needle: str) -> list[str]:
+    """Le intestazioni dei file d'archivio il cui corpo contiene *needle*."""
+    heads = []
+    for path, text in obs.files.items():
+        if path.startswith("memory/archive/") and text and needle.lower() in text.lower():
+            heads.append(text.split("\n---\n", 1)[0])
+    return heads
+
+
+def _dream_links(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    user = obs.files.get("USER.md") or ""
+    heads = _archived_with(obs, n["n"])
+    return [
+        Check("new_fact_live", n["m"].lower() in user.lower(), user[:120]),
+        Check("old_fact_archived", bool(heads), f"{len(obs.files)} files read"),
+        Check("linked_to_successor", any("superseded_by:" in h for h in heads),
+              " | ".join(heads)[:160]),
+    ]
+
+
+def _dream_retracts(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    user = obs.files.get("USER.md") or ""
+    heads = _archived_with(obs, n["n"])
+    return [
+        Check("false_fact_gone", n["n"].lower() not in user.lower(), user[:120]),
+        Check("marked_retracted", any("retracted: yes" in h for h in heads),
+              " | ".join(heads)[:160]),
+    ]
+
+
+_DREAM_RETRACTION_LINE = (
+    "- [correction]: replace the older conflicting fact in place; do not append both versions. "
+    "If the correction says the old fact was never true and nothing takes its place, `remove` it "
+    "with `wrong: true`.\n")
+
 RECALL = [
     Scenario(
         name="recall_deep_archive",
@@ -532,6 +567,38 @@ RECALL = [
         files=synthetic_archive(),
         turns=["Ti ricordi come si chiamava il cane che avevo da bambino?"],
         check=_abstain_searched, kind="probe", final_reply_after_subagents=True,
+    ),
+    Scenario(
+        name="dream_replace_links_versions",
+        stage=2, area="memory", nonces=("n", "m"),
+        promise="Dream che applica una correzione lascia in archivio la versione vecchia "
+                "legata alla nuova",
+        files={"USER.md": "# User Profile\n\n## Work\n\n"
+                          "- Works as a barista at the café {n}.\n"},
+        append={"memory/history.jsonl": history_line(
+            1, "2026-10-12 09:00",
+            "- [correction] The user no longer works at the café {n}: since October he works "
+            "as a baker at the bakery {m}.")},
+        turns=[], check=_dream_links, dream_after=True,
+        read_after=("USER.md", "memory/archive/"), kind="probe",
+        calibration_note="il legame lo scrive il codice (memory replace e la rete al confine "
+                         "del file): misura se Dream sostituisce invece di togliere e aggiungere",
+    ),
+    Scenario(
+        name="dream_marks_retraction",
+        stage=2, area="memory",
+        promise="Dream che toglie un fatto mai vero lo archivia come smentito",
+        files={"USER.md": "# User Profile\n\n## Habits\n\n"
+                          "- Plays the double bass in the band {n} on Thursday evenings.\n"},
+        append={"memory/history.jsonl": history_line(
+            1, "2026-10-12 09:00",
+            "- [correction] The user does not play the double bass and was never in the band "
+            "{n}: that fact was never true, nothing replaces it.")},
+        turns=[], check=_dream_retracts, dream_after=True,
+        read_after=("USER.md", "memory/archive/"),
+        calibration=[Edit("agent/dream.md", _DREAM_RETRACTION_LINE,
+                          "- [correction]: replace the older conflicting fact in place; do not "
+                          "append both versions. Never pass `wrong` to `remove`.\n")],
     ),
 ]
 

@@ -100,7 +100,8 @@ class Scenario:
     #: ``personal`` (la chat unificata, sessione nuova) o ``notebook`` (un
     #: quaderno usa e getta, creato e cancellato attorno al giro).
     chat: str = "personal"
-    #: File da leggere dopo il giro.
+    #: File da leggere dopo il giro; un percorso che finisce in ``/`` legge
+    #: tutta la cartella.
     read_after: tuple[str, ...] = ()
     #: Togliere la garanzia: il tasso deve crollare, o la sonda non misura niente.
     calibration: list[Edit] = field(default_factory=list)

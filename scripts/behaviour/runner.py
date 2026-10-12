@@ -182,7 +182,15 @@ class Runner:
                 hb_rows, ran = self._heartbeat_now()
                 extra["heartbeat_ran"] = ran
                 rows = hb_rows
-            files = {p: dev.read(scenario.render(p, nonces)) for p in scenario.read_after}
+            files: dict[str, str | None] = {}
+            for raw in scenario.read_after:
+                path = scenario.render(raw, nonces)
+                if path.endswith("/"):
+                    # Una cartella: ogni file che contiene, letto per intero.
+                    for name in dev.listdir(path.rstrip("/")):
+                        files[path + name] = dev.read(path + name)
+                else:
+                    files[path] = dev.read(path)
             obs = observation_from_rows(rows, replies, files=files, timed_out=timed_out)
             obs.extra = extra
             result.replies = replies

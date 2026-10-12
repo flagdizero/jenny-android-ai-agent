@@ -294,6 +294,140 @@
    },
    "runs": 3
   },
+  "dream_marks_retraction|claude-haiku-5-5|calibrated": {
+   "checks": {
+    "false_fact_gone": [
+     3,
+     3
+    ],
+    "marked_retracted": [
+     0,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_marks_retraction|claude-haiku-5-5|normal": {
+   "checks": {
+    "false_fact_gone": [
+     5,
+     5
+    ],
+    "marked_retracted": [
+     5,
+     5
+    ],
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "dream_marks_retraction|deepseek-v4.1-flash|calibrated": {
+   "checks": {
+    "false_fact_gone": [
+     3,
+     3
+    ],
+    "marked_retracted": [
+     0,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_marks_retraction|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "false_fact_gone": [
+     5,
+     5
+    ],
+    "marked_retracted": [
+     5,
+     5
+    ],
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "dream_replace_links_versions|claude-haiku-5-5|normal": {
+   "checks": {
+    "linked_to_successor": [
+     3,
+     3
+    ],
+    "new_fact_live": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "old_fact_archived": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_replace_links_versions|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "linked_to_successor": [
+     3,
+     3
+    ],
+    "new_fact_live": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "old_fact_archived": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "english_reply_over_italian_content|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [

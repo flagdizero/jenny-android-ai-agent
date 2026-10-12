@@ -214,3 +214,32 @@ def test_cursor_slots_are_numbered_past_nine() -> None:
     line = history_line(42, "2026-08-01 10:00", "x")
     assert _CURSOR_SLOT.sub(lambda m: str(100 + int(m.group(1))), line).startswith(
         '{"cursor": 142,')
+
+
+def _archive_file(body: str, *extra: str) -> str:
+    return "\n".join(["---", "id: 0a0a0a0a", "source: USER.md", *extra, "---", "", body, ""])
+
+
+def test_dream_replace_needs_the_link() -> None:
+    files = {"USER.md": "- Works as a baker at the bakery Mirlo.\n",
+             "memory/archive/2026-10-12-0a0a0a0a.md":
+                 _archive_file("Works as a barista at the café Zafkril.",
+                               "superseded_by: 0b0b0b0b")}
+    unlinked = dict(files)
+    unlinked["memory/archive/2026-10-12-0a0a0a0a.md"] = _archive_file(
+        "Works as a barista at the café Zafkril.")
+    nonces = {"n": "zafkril", "m": "mirlo"}
+    assert all(_ok("dream_replace_links_versions", _obs(files=files), nonces).values())
+    assert not _ok("dream_replace_links_versions", _obs(files=unlinked),
+                   nonces)["linked_to_successor"]
+
+
+def test_dream_retraction_needs_the_mark() -> None:
+    marked = {"USER.md": "# User Profile\n",
+              "memory/archive/2026-10-12-0a0a0a0a.md":
+                  _archive_file("Plays the double bass in the band Zafkril.", "retracted: yes")}
+    plain = {"USER.md": "# User Profile\n",
+             "memory/archive/2026-10-12-0a0a0a0a.md":
+                 _archive_file("Plays the double bass in the band Zafkril.")}
+    assert all(_ok("dream_marks_retraction", _obs(files=marked), {"n": "zafkril"}).values())
+    assert not _ok("dream_marks_retraction", _obs(files=plain), {"n": "zafkril"})["marked_retracted"]
