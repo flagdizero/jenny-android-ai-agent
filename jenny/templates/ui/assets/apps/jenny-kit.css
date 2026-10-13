@@ -81,7 +81,9 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { -webkit-text-size-adjust: 100%; }
+/* Il lampo blu del WebView al tocco, spento per tutta l'app (si eredita): i
+   pulsanti del kit rispondono con il loro `:active`. */
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 
 body {
   min-height: 100vh;

@@ -101,7 +101,6 @@ body.home {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .home-strip-more:active { background: var(--overlay); }
 
@@ -150,9 +149,9 @@ body.home {
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
 }
+.home-strip-entry:active { opacity: .6; }
 
 .home-strip-entry.is-on {
   /* Il nome dove sei: tronca prima di spingere fuori le altre. Un quaderno
@@ -232,6 +231,7 @@ body.home {
   font-weight: 600;
   cursor: pointer;
 }
+.home-sort-done:active { filter: brightness(0.92); }
 
 .home-sort-pills {
   display: flex;
@@ -292,6 +292,7 @@ body.home {
   cursor: pointer;
   position: relative;
 }
+.home-sort-remove:active { box-shadow: inset 0 0 0 999px var(--active); }
 /* Il bersaglio del dito, piu' grande del segno: 24 px dentro una pastiglia
    che si trascina, e mancarla di poco faceva partire un trascinamento (giro
    UX del 10/10/2026). Lo stesso anello di `.home-pending-x`. */
@@ -376,7 +377,6 @@ body.home {
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .home-path-root:active { color: var(--text); }
 
@@ -601,6 +601,7 @@ body.home {
   font-size: 13px;
   cursor: pointer;
 }
+.home-staged-toggle:active { opacity: .6; }
 .home-staged-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .home-staged-diff {
   margin: 0;
@@ -937,6 +938,7 @@ body.home {
   font-size: 18px;
   cursor: pointer;
 }
+.home-attach:active { background: var(--active); }
 
 .home-input::placeholder { color: var(--text-faint); }
 
@@ -1034,8 +1036,8 @@ body.home {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.home-journal-mark:active { background: var(--active); }
 .home-journal-mark i { font-size: 14px; }
 .home-journal-mark[aria-expanded="true"] { color: var(--text); }
 .home-journal-detail {
@@ -1061,8 +1063,8 @@ body.home {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.home-move-offer:active { background: var(--active); }
 
 .home-copy {
   display: inline-flex;
@@ -1076,7 +1078,6 @@ body.home {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   transition: color .12s, background .12s;
 }
 .home-copy i { font-size: 14px; }
@@ -1135,8 +1136,8 @@ body.home {
   pointer-events: none;
   visibility: hidden;
   transition: opacity .15s ease, transform .15s ease, visibility 0s linear .15s;
-  -webkit-tap-highlight-color: transparent;
 }
+.home-scroll-fab:active { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 0 0 999px var(--active); }
 .home-scroll-fab.visible {
   opacity: 1;
   transform: translateY(0);
@@ -1176,7 +1177,6 @@ body.home {
   font: inherit;
   font-size: 14px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .home-retry i { font-size: 16px; }
 .home-retry:active { opacity: .7; }
@@ -1398,6 +1398,7 @@ body.home {
   cursor: pointer;
   padding: 0;
 }
+.home-pending-x:active { box-shadow: 0 0 0 1px var(--border-strong), inset 0 0 0 999px var(--active); }
 /* L'area di tocco e' piu' grande del disegno: la crocetta resta da 20 px, ma
    un anello invisibile di 6 px tutt'attorno porta il bersaglio a 32 px —
    sopra i 24 di WCAG 2.5.8, che 20 px da soli non facevano. */
@@ -1539,8 +1540,8 @@ body.home {
   color: var(--text-muted);
   font-size: 13px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.home-who-search-clear:active { box-shadow: inset 0 0 0 999px var(--active); }
 .home-who-search-clear[hidden] { display: none; }
 
 /* L'intestazione di una mensola: il nome, quanti, e l'ordine. */
@@ -1570,8 +1571,8 @@ body.home {
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.home-who-sort:active { opacity: .6; }
 .home-who-sort::after {
   content: '';
   display: inline-block;
@@ -1626,7 +1627,6 @@ body.home {
   text-align: left;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
   /* Tenere premuto un quaderno apre la sua scheda, e il testo non deve
      selezionarsi: la selezione di Chromium scatta a ~500 ms, **prima** dei
      600 della pressione lunga, e il suo `pointercancel` la spegne. Visto sul
@@ -1751,8 +1751,8 @@ body.home {
   font-weight: 600;
   text-align: center;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.home-who-slot:active { background: var(--active); }
 .home-who-slot .ti { font-size: 22px; }
 .home-who-ghost {
   border-radius: var(--tile-radius);
@@ -1772,8 +1772,8 @@ body.home {
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.home-who-create:active { filter: brightness(0.92); }
 
 /* La targhetta: il nome intero della copertina che ha il fuoco da tastiera.
    Ferma in fondo, a sinistra del +, e non prende tocchi. */
@@ -1888,7 +1888,6 @@ body.home {
   font-size: 26px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 .home-notebooks-new:active { filter: brightness(0.92); }
@@ -2250,7 +2249,6 @@ body.home {
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .home-edit .ti { font-size: 15px; }
 
@@ -2274,7 +2272,6 @@ body.home {
   font-family: inherit;
   font-size: 18px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 /* Serve, e non e' ridondante: `[hidden]` e' una regola del foglio del
@@ -2354,6 +2351,7 @@ body.home {
   font-size: 18px;
   cursor: pointer;
 }
+.home-board-tool:active { background: var(--active); }
 .home-board-tool[hidden] { display: none; }
 .home-board-tool[aria-pressed='true'] { color: var(--text); background: var(--overlay); }
 
@@ -2374,6 +2372,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-board-since:active { background: var(--active); }
 .home-board-since[hidden] { display: none; }
 .home-board-since b { color: var(--text); font-weight: 500; }
 .home-board-since-dot {
@@ -2675,7 +2674,9 @@ body.home {
   text-overflow: ellipsis;
   cursor: pointer;
 }
+.home-board-block-btn:active, .home-board-block-round:active { background: color-mix(in srgb, var(--board-ink) 12%, transparent); }
 .home-board-block-btn.is-primary { background: var(--board-ink); color: var(--board-paper); border-color: var(--board-ink); }
+.home-board-block-btn.is-primary:active { opacity: .8; }
 .home-board-block-round { width: calc(var(--slip-row) - 0.3cqw); padding: 0; flex: none; }
 
 .home-board-block.is-counter { display: flex; gap: 1.5cqw; align-items: center; }
@@ -2862,6 +2863,7 @@ body.home {
   transform: rotate(4deg);
   cursor: pointer;
 }
+.home-board-envelope:active { filter: brightness(0.92); }
 .home-board-envelope::before {
   content: "";
   position: absolute;
@@ -2909,6 +2911,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-board-list-row:active { background: var(--active); }
 .home-board-list-name { font-weight: 500; }
 .home-board-list-next { color: var(--text-muted); font-size: 13px; }
 .home-board-list-sig { margin-left: auto; font-size: 12px; color: var(--text-muted); }
@@ -2940,6 +2943,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-board-empty-example:active { background: var(--active); }
 
 /* ── Il foglio della bacheca ── */
 
@@ -2979,6 +2983,7 @@ body.home {
   font-size: 13px;
   cursor: pointer;
 }
+.home-board-btn:active { background: var(--active); }
 .home-board-btn.is-primary {
   border-color: var(--text);
   background: var(--text);
@@ -3051,6 +3056,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-board-result:active { background: var(--active); }
 .home-board-result-badge { margin-left: auto; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .home-board-result-badge.is-in { color: var(--text); font-family: var(--font-hand); font-weight: 700; font-size: 13px; }
 
@@ -3069,6 +3075,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-board-menu-row:active { background: var(--active); }
 .home-board-menu-row.is-new { display: block; color: var(--text-muted); }
 .home-board-menu-name { font-weight: 500; }
 .home-board-menu-hint { color: var(--text-muted); font-size: 13px; }
@@ -3110,6 +3117,7 @@ body.home {
   white-space: nowrap;
   cursor: pointer;
 }
+.home-board-cardbar-btn:active { background: var(--active); }
 .home-board-cardbar-btn:hover { background: var(--hover); }
 .home-board-cardbar-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .home-board-cardbar-btn.is-close { padding: 0 10px; color: var(--text-muted); }
@@ -3183,6 +3191,7 @@ body.home {
   font-weight: 600;
   cursor: pointer;
 }
+.home-notes-all:active { opacity: .6; }
 /* Il mazzetto: `isolation` tiene l'ordine delle carte (lo scrive il JS, in
    linea) dentro di lui, sotto Jenny e sotto il foglio. */
 .home-notes-deck {
@@ -3293,6 +3302,7 @@ body.home {
   font-weight: 600;
   cursor: pointer;
 }
+.home-notes-new:active { background: var(--active); }
 .home-notes-tile {
   position: relative;
   min-height: 118px;
@@ -3312,6 +3322,7 @@ body.home {
   cursor: pointer;
   animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+.home-notes-tile:active { filter: brightness(0.92); }
 .home-notes-tile:nth-child(even) { transform: rotate(1.2deg); }
 .home-notes-tile-text {
   display: -webkit-box;
@@ -3381,6 +3392,8 @@ body.home {
   cursor: pointer;
 }
 .home-notes-btn.is-primary { background: var(--board-note-ink); color: var(--board-note); font-weight: 700; }
+.home-notes-btn:not(.is-primary):active { background: color-mix(in srgb, var(--board-note-ink) 12%, transparent); }
+.home-notes-btn.is-primary:active { opacity: .8; }
 .home-notes-btn.is-danger { color: #8a2d3b; }
 @keyframes home-notes-in {
   from { opacity: 0; transform: translateY(-14px) scale(0.94); }
@@ -3458,6 +3471,7 @@ body.home {
   font-weight: 700;
   cursor: pointer;
 }
+.home-drawer-cal-done:active { opacity: .8; }
 .home-drawer-cal-row {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr) 44px;
@@ -3477,6 +3491,7 @@ body.home {
   font-size: 18px;
   cursor: pointer;
 }
+.home-drawer-cal-more:active { background: var(--active); }
 .home-drawer-cal-next .home-drawer-cal-more { color: inherit; }
 
 .home-drawer-sections { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
@@ -3525,6 +3540,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-drawer-fold:active { background: var(--active); }
 .home-drawer-fold-preview {
   color: var(--text);
   font-size: 14px;
@@ -3568,6 +3584,7 @@ body.home {
   font-size: 12.5px;
   cursor: pointer;
 }
+.home-drawer-chip:active { background: var(--active); }
 .home-drawer-link {
   padding: 0;
   border: none;
@@ -3579,6 +3596,7 @@ body.home {
   text-underline-offset: 3px;
   cursor: pointer;
 }
+.home-drawer-link:active { opacity: .6; }
 .home-drawer-link.is-fix { margin-left: 4px; }
 .home-drawer-link.is-move { text-decoration: none; }
 .home-drawer-tag { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-muted); font-size: 12px; }
@@ -3696,6 +3714,7 @@ body.home {
   cursor: pointer;
   transition: transform 0.18s;
 }
+.home-drawer-fab:active { filter: brightness(0.92); }
 .home-drawer-fab.is-open { transform: rotate(45deg); }
 .home-drawer-fab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 .home-drawer-dial {
@@ -3752,6 +3771,10 @@ body.home {
   background: var(--board-postit);
   color: var(--board-postit-ink);
 }
+/* Al tocco si accende il tondo, non la riga: la riga sta sul velo. Il velo
+   va sopra il fondo del tondo (che sia di superficie o giallo) invece di
+   sostituirlo. */
+.home-drawer-dial-row:active .home-drawer-dial-icon { box-shadow: inset 0 0 0 999px var(--active); }
 .home-drawer-dial-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 22px; }
 @keyframes home-drawer-dial-in {
   from { opacity: 0; }
@@ -3776,6 +3799,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-drawer-thread:active { background: var(--active); }
 .home-drawer-thread-line { display: flex; align-items: baseline; gap: 10px; }
 .home-drawer-link.is-cut { text-decoration: none; font-size: 15px; }
 .home-board-row { display: flex; gap: 8px; }
@@ -3786,6 +3810,7 @@ body.home {
 .home-drawer-thread-why { color: var(--text-muted); font-size: 13px; }
 .home-drawer-pages { display: flex; flex-direction: column; gap: 6px; }
 .home-drawer-pages summary { color: var(--text-muted); font-size: 13px; cursor: pointer; }
+.home-drawer-pages summary:active { opacity: .6; }
 .home-drawer-pages .home-drawer-chip { align-self: flex-start; margin: 3px 0; }
 .home-drawer-foot { margin: 0; color: var(--text-muted); font-size: 12px; }
 
@@ -4104,6 +4129,7 @@ body.home {
   font-size: 13px;
   cursor: pointer;
 }
+.launcher-trash:active { background: var(--active); }
 .launcher-trash[hidden] { display: none; }
 .launcher-trash:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .apps-trash-body { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
@@ -4130,6 +4156,7 @@ body.home {
   font-size: 13px;
   cursor: pointer;
 }
+.apps-trash-btn:active { background: var(--active); }
 .apps-trash-btn.is-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .apps-trash-btn.is-danger { color: var(--error); border-color: var(--error); }
 .apps-trash-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
@@ -4201,7 +4228,6 @@ body.home {
   color: var(--text);
   font: inherit;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   /* Il tocco lungo apre la scheda: niente selezione del nome a meta' strada
      (v. `.home-who-row`, stessa lezione). */
   -webkit-user-select: none;
@@ -4522,6 +4548,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-row:active { background: var(--active); }
 
 /* Il filo fra una riga e l'altra sta *fra*: sulla prima sarebbe il bordo
    della scheda disegnato due volte. */
@@ -4655,6 +4682,7 @@ body.home {
   white-space: nowrap;
   cursor: pointer;
 }
+.home-brand:active { background: var(--active); }
 
 /* Di chi stai leggendo l'elenco: piena. Era `--overlay-strong`, e nei temi
    chiari quello e' quasi lo stesso bianco di `--overlay` — a schermo non si
@@ -4728,6 +4756,7 @@ body.home {
   font-size: 12px;
   cursor: pointer;
 }
+.home-key-btn:active { background: var(--active); }
 
 .home-key-edit {
   display: flex;
