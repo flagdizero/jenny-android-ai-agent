@@ -1422,15 +1422,9 @@
     "section": {
       "remove": "Remove",
       "removeConfirm": "Remove this section? The wiki does not change.",
-      "edit": "Edit",
-      "yours": "yours",
       "moveUp": "Move up",
       "failed": "I couldn't save it.",
       "save": "Save",
-      "noteIntegrated": "✓ in the wiki",
-      "notePending": "waiting",
-      "notePrompt": "Something to remember",
-      "notePlaceholder": "For example: it stays on the south windowsill only in winter.",
       "reminderWhat": "What?",
       "reminderWhen": "When?",
       "reminderMonth": "Month only",
@@ -1529,6 +1523,20 @@
     },
     "postit": {
       "more": "+{count} more"
+    },
+    "notes": {
+      "title": "Your notes",
+      "all": "All ›",
+      "new": "New note",
+      "hint": "tap a note to read it all",
+      "readMore": "Read all",
+      "deck": "Note {n} of {count}: {text}. Tap for the next one.",
+      "edit": "Edit",
+      "close": "Close",
+      "removeConfirm": "Remove this note? What already went into the wiki stays.",
+      "integrated": "✓ in the wiki",
+      "pending": "waiting for the wiki",
+      "placeholder": "For example: it stays on the south windowsill only in winter."
     }
   }
 }

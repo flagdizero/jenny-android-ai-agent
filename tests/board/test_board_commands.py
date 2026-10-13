@@ -471,3 +471,29 @@ async def test_the_drawer_shows_a_reminder_once(ctx, notebook: Path) -> None:
         "Poltiglia", "Potatura", "Rinvaso", "Annaffia",
     ]
     assert all(s["kind"] != "reminder" for s in view["userSections"])
+
+
+def test_the_drawer_takes_the_notes_out_of_the_sections(notebook: Path) -> None:
+    """Le note sono il mazzetto accanto al titolo, non sezioni fra le altre."""
+    from jenny.board.sections import section_resolver
+
+    _seed(notebook)
+
+    def apply(board):
+        model.card_by_id(board, "acero")["userSections"] += [
+            {"id": "s-note-1", "kind": "note", "created": "2026-10-03T09:00:00+02:00",
+             "text": "Le gemme tonde sono a fiore."},
+            {"id": "s-photo-1", "kind": "photo", "created": "2026-10-05T09:00:00+02:00",
+             "path": "raw/photos/acero.jpg", "caption": ""},
+            {"id": "s-note-2", "kind": "note", "created": "2026-10-12T09:00:00+02:00",
+             "text": "Il vaso bianco in cantina."},
+        ]
+
+    mutate_board(notebook, apply)
+    view = build_card_view(notebook, "acero",
+                           sections_resolver=section_resolver(notebook.parent.parent, notebook))
+    # Dalla più recente, con lo stato verso la wiki (qui senza riga di diario: in attesa).
+    assert [n["id"] for n in view["notes"]] == ["s-note-2", "s-note-1"]
+    assert view["notes"][0] == {"id": "s-note-2", "text": "Il vaso bianco in cantina.",
+                                "created": "2026-10-12T09:00:00+02:00", "status": "pending"}
+    assert [s["kind"] for s in view["userSections"]] == ["photo"]

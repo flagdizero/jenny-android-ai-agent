@@ -1,7 +1,8 @@
 /** La casa — il cassetto di una scheda della bacheca.
  *
  *  Il retro di una polaroid: un `index.md` per quel soggetto, scritto da Jenny
- *  dalla wiki. In alto «in breve»; poi il **calendario di cura**, le attese
+ *  dalla wiki. In alto il titolo e «in breve», e accanto il mazzetto delle tue
+ *  note (`home-board-notes.js`); poi il **calendario di cura**, le attese
  *  della scheda una volta sola, per mese; poi le sezioni dello **scheletro del
  *  quaderno** (le stesse per ogni scheda, nello stesso ordine: l'utente sa
  *  sempre dove guardare), chiuse a fisarmonica con la prima riga in vista; poi
@@ -18,10 +19,9 @@
  *  non l'ha integrato nella wiki — poi «✓ Integrata», e il riassunto che si
  *  vede torna a essere quello rigenerato dalla wiki.
  *
- *  Le sezioni dell'utente invece sono sue: una nota resta come l'hai scritta
- *  (e diventa una riga di diario), un promemoria e' un'attesa, una mini app e'
- *  una finestra sui dati di un'app con la sua firma — ora e fonte —, una foto
- *  e' una foto.
+ *  Le sezioni dell'utente invece sono sue: un promemoria e' un'attesa, una
+ *  mini app e' una finestra sui dati di un'app con la sua firma — ora e fonte
+ *  —, una foto e' una foto. Le note hanno il loro modulo.
  */
 
 import { api } from './shared/api-client.js';
@@ -30,6 +30,7 @@ import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { reminderGroups, whenLabel } from './home-board.js';
+import { DrawerNotes } from './home-board-notes.js';
 import { describeSchedule } from './shared/cron-view.js';
 import { renderBlock } from './home-board-blocks.js';
 
@@ -148,6 +149,7 @@ export class BoardDrawer {
     this.unfolded = new Set();
     this._token = 0;
     this._photoUrls = [];
+    this.notes = new DrawerNotes({ sheet, write: (method, params) => this._write(method, params) });
     this._buildFab();
   }
 
@@ -202,7 +204,7 @@ export class BoardDrawer {
   _addChoices() {
     return [
       ['reminder', 'ti-clock', () => this._addReminder()],
-      ['note', 'ti-pencil', () => this._addNote()],
+      ['note', 'ti-pencil', () => this.notes.openList({ compose: true })],
       ['micro', 'ti-gauge', () => this._addMicro()],
       ['photo', 'ti-photo', () => this._addPhoto()],
       ['cron', 'ti-repeat', () => this.onAskJenny?.(i18n.t('board.cron.prompt', { card: this.data.title }))],
@@ -255,11 +257,13 @@ export class BoardDrawer {
     const token = ++this._token;
     const same = keepPlace && this.data && this.notebook === notebook && this.card === card;
     const top = same ? this._top : 0;
+    /* Le sezioni aperte restano aperte finche' si resta nello stesso cassetto,
+       anche quando una scrittura lo ricarica. */
+    if (this.notebook !== notebook || this.card !== card) this.unfolded = new Set();
     this.notebook = notebook;
     this.card = card;
     this.editing = null;
     this.closeDial();
-    if (!same) this.unfolded = new Set();
     if (same) {
       this.render();
       this.el.scrollTop = top;
@@ -304,15 +308,22 @@ export class BoardDrawer {
     this._photoUrls = [];
     const d = this.data;
     const root = el('div', 'home-drawer');
+    /* La testa: titolo e «in breve» a sinistra, il mazzetto delle note a destra
+       (sotto, quando il cassetto e' stretto). */
+    const top = el('div', 'home-drawer-top');
+    const lead = el('div', 'home-drawer-lead');
     const head = el('div', 'home-drawer-head');
     head.appendChild(el('h2', 'home-drawer-title', d.title));
     const meta = [i18n.t(d.pages.length === 1 ? 'board.drawer.pagesOne' : 'board.drawer.pagesMany',
       { count: d.pages.length })];
     if (d.generated) meta.push(i18n.t('board.drawer.updated', { when: relativeStamp(d.generated) }));
     head.appendChild(el('div', 'home-drawer-meta', meta.join(' · ')));
-    root.appendChild(head);
-
-    if (d.brief) root.appendChild(el('p', 'home-drawer-brief', d.brief));
+    lead.appendChild(head);
+    if (d.brief) lead.appendChild(el('p', 'home-drawer-brief', d.brief));
+    top.appendChild(lead);
+    const notes = this.notes.render(d);
+    if (notes) top.appendChild(notes);
+    root.appendChild(top);
     for (const s of d.userSections) {
       const state = s.view?.state;
       if (s.kind === 'app' && (state === 'alarm' || state === 'stale')) {
@@ -609,13 +620,7 @@ export class BoardDrawer {
     const tools = el('div', 'home-drawer-row');
     const remove = button('home-drawer-link', i18n.t('board.section.remove'),
       () => this._remove(section));
-    if (section.kind === 'note') {
-      h3.append(i18n.t('board.section.kind.note'), el('span', 'home-drawer-owner', i18n.t('board.section.yours')));
-      body.appendChild(el('p', 'home-drawer-text', section.text));
-      tools.appendChild(el('span', `home-drawer-tag${section.status === 'integrated' ? ' is-done' : ''}`,
-        i18n.t(section.status === 'integrated' ? 'board.section.noteIntegrated' : 'board.section.notePending')));
-      tools.append(button('home-drawer-link', i18n.t('board.section.edit'), () => this._editNote(section)), remove);
-    } else if (section.kind === 'app') {
+    if (section.kind === 'app') {
       const v = section.view || {};
       h3.append(v.name || section.app, el('span', 'home-drawer-owner', i18n.t('board.section.kind.app')));
       if (section.slip?.blocks?.length) {
@@ -957,12 +962,6 @@ export class BoardDrawer {
     await this._write('section.remove', { card: this.card, id: section.id });
   }
 
-  async _editNote(section) {
-    const text = await promptDialog(i18n.t('board.section.kind.note'), { initial: section.text });
-    if (text === null || !text.trim() || text === section.text) return;
-    await this._write('section.update', { card: this.card, id: section.id, text });
-  }
-
   async _moveUp(section) {
     const ids = this.data.userSections.map((s) => s.id);
     const i = ids.indexOf(section.id);
@@ -988,15 +987,6 @@ export class BoardDrawer {
   }
 
   /* ── Aggiungere: una domanda, mai un foglio bianco ── */
-
-  async _addNote() {
-    this.sheet.close();
-    const text = await promptDialog(i18n.t('board.section.notePrompt'), {
-      placeholder: i18n.t('board.section.notePlaceholder'),
-    });
-    if (!text || !text.trim()) return;
-    await this._write('section.add', { card: this.card, kind: 'note', text });
-  }
 
   /** «Cosa?» e «Quando?»: una data, oppure niente — una condizione su un dato
    *  vivo si aggancia da una mini app, dove il dato c'e'. */

@@ -1422,15 +1422,9 @@
     "section": {
       "remove": "Togli",
       "removeConfirm": "Togliere questa sezione? La wiki non cambia.",
-      "edit": "Modifica",
-      "yours": "tua",
       "moveUp": "Sposta su",
       "failed": "Non sono riuscita a salvarla.",
       "save": "Salva",
-      "noteIntegrated": "✓ nella wiki",
-      "notePending": "in attesa",
-      "notePrompt": "Una cosa da ricordare",
-      "notePlaceholder": "Per esempio: lo tengo sul davanzale sud solo d'inverno.",
       "reminderWhat": "Cosa?",
       "reminderWhen": "Quando?",
       "reminderMonth": "Solo il mese",
@@ -1529,6 +1523,20 @@
     },
     "postit": {
       "more": "+{count} altre"
+    },
+    "notes": {
+      "title": "Le tue note",
+      "all": "Tutte ›",
+      "new": "Nuova nota",
+      "hint": "tocca una nota per leggerla tutta",
+      "readMore": "Leggi tutto",
+      "deck": "Nota {n} di {count}: {text}. Tocca per la prossima.",
+      "edit": "Correggi",
+      "close": "Chiudi",
+      "removeConfirm": "Togliere questa nota? Quello che è già finito nella wiki resta.",
+      "integrated": "✓ nella wiki",
+      "pending": "in attesa della wiki",
+      "placeholder": "Per esempio: lo tengo sul davanzale sud solo d'inverno."
     }
   }
 }

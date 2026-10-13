@@ -285,6 +285,7 @@ def build_card_view(
                 "by": conn["by"],
             })
     user_sections = []
+    notes = []
     # Il cassetto di una scheda che **e'** un'app comincia dall'app: la sua
     # striscia intera (la scheda senza schermo si apre qui, non altrove).
     own = ([{"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
@@ -303,7 +304,14 @@ def build_card_view(
                 "cronJobs": cron_jobs or {},
                 "cronResults": board.get("cronResults") or {},
             }))
-        user_sections.append(resolved)
+        # Le note dell'utente non sono sezioni fra le altre: sono il mazzetto
+        # di post-it accanto al titolo (``home-board-notes.js``).
+        if section.get("kind") == "note":
+            notes.append({key: resolved[key] for key in ("id", "text", "created", "status")
+                          if key in resolved})
+        else:
+            user_sections.append(resolved)
+    notes.sort(key=lambda n: n.get("created") or "", reverse=True)
     return {
         "id": card["id"],
         "title": card["title"],
@@ -319,6 +327,8 @@ def build_card_view(
         "reminders": model.sorted_reminders(
             r for r in model.open_reminders(reminders) if r.get("card") == card_id
         ),
+        # Le note dell'utente, dalla più recente.
+        "notes": notes,
         "userSections": user_sections,
         "connections": connections,
         # Una correzione integrata mostra la sua ✓ fino alla prossima apertura

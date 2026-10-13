@@ -80,7 +80,7 @@ A thread is always visible as a thin line with no words on it; its label — the
 Tap a card and its drawer opens. From the top:
 
 1. **The title**, the number of wiki pages the drawer covers and when it was last updated.
-2. **The brief**: one or two sentences on the state of this subject now.
+2. **The brief**: one or two sentences on the state of this subject now. Beside the title and the brief — below them on a narrow screen — sit **your notes**, if the card has any: a small deck of lilac sticky notes (see [Note](#note)).
 3. A warning when a mini-app section in this drawer is in alarm or stalled, saying that the data comes from the app, not from the wiki.
 4. **The care calendar**: the card's open reminders, each shown once, on a timeline — the overdue ones first, in red, then **Today**, then one group per month, then the ones that wait for an app's value (**When it happens**). The nearest is a yellow card with a **Done** button; every reminder has a **⋯** with **Edit**, **Done** and **Remove**. The brief and the sections do not repeat the dates: the calendar is where they are.
 5. **The sections.** Every notebook has a *skeleton*, the list of sections every drawer has, in the same order on every card — for a plant notebook, *Pot and repotting, Water, Feeding, Light, History*. Each section is two short sentences, with chips that open the pages it was written from. Sections are folded: a row with the title and the first line; tap it to read the rest, the pages and **Correct**. A section the pages have nothing on is left out rather than filled with "no data". A blue dot beside a section's title means its text changed since you last opened the drawer.
@@ -103,13 +103,17 @@ Unlike Report, a correction does not take you to the chat: it is handled between
 
 ### Adding a section
 
-The yellow **+** at the bottom right — the same corner as the + of the Notebooks page — stays on screen while the drawer scrolls. It opens a fan of six kinds: reminder, note, app, cron, photo and other; tap outside it, the **×** or Back to close it. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat — and each one can be moved up or removed (removing a section never changes the wiki). An app or a cron always comes that way: Jenny makes it **because you asked for it**.
+The yellow **+** at the bottom right — the same corner as the + of the Notebooks page — stays on screen while the drawer scrolls. It opens a fan of six kinds: reminder, note, app, cron, photo and other; tap outside it, the **×** or Back to close it. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat. Apps, crons and photos are sections that can be moved up or removed; removing one never changes the wiki. An app or a cron always comes that way: Jenny makes it **because you asked for it**.
 
 The rule behind apps and crons: **everything a notebook does by itself is on its board, where you can see it.** An app's reader reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
 
 #### Note
 
-Something to remember, in your words — *it stays on the south windowsill only in winter*. The note stays on the card as you wrote it, and it is also written to the notebook's journal as a line marked `[said]`, so the gardener promotes it into the wiki like anything you say in the chat. The note shows **waiting** until a gardener pass has read that line, then **✓ in the wiki**. Editing a note writes a new journal line; the old one stays, because the journal is append-only.
+Something to remember, in your words — *it stays on the south windowsill only in winter*. Notes are lilac sticky notes — yellow is for reminders — and they live only in the drawer, never on the board. A card's notes are a small deck pinned beside the drawer's title, newest in front, under **YOUR NOTES · N**: tap the deck and the front note slides off to the side and goes to the back, bringing the next one forward.
+
+**All ›** opens them all in a sheet, two to a row, with **New note** first. A note there shows at most four lines, and **Read all** when it is longer; tap a note to open it in full, with its date and whether it is in the wiki yet. **Edit** turns it into text you can change — **Save**, **Cancel**, and **Remove**, which asks first. **Note** in the drawer's **+** opens the sheet straight on a new note.
+
+The note stays on the card as you wrote it, and it is also written to the notebook's journal as a line marked `[said]`, so the gardener promotes it into the wiki like anything you say in the chat. The note shows **waiting for the wiki** until a gardener pass has read that line, then **✓ in the wiki**. Editing a note writes a new journal line; the old one stays, because the journal is append-only.
 
 #### Reminder
 

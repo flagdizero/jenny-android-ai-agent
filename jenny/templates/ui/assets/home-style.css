@@ -3141,6 +3141,250 @@ body.home {
 .home-drawer-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; letter-spacing: 0.01em; }
 .home-drawer-meta { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
 .home-drawer-brief { margin: 0; max-width: 60ch; font-size: 15px; line-height: 1.5; }
+/* La testa del cassetto: titolo e «in breve» a sinistra, le note a destra;
+   in un cassetto stretto le note vanno sotto. */
+.home-drawer-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+}
+.home-drawer-lead { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+@container (max-width: 440px) {
+  .home-drawer-top { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Le note dell'utente (`home-board-notes.js`) ──
+   Post-it lilla: il giallo e' delle attese. */
+.home-notes { display: flex; flex-direction: column; gap: 6px; width: 210px; }
+.home-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding-right: 22px;
+}
+.home-notes-title {
+  margin: 0;
+  color: var(--board-note);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.home-notes-all {
+  min-height: 32px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* Il mazzetto: `isolation` tiene l'ordine delle carte (lo scrive il JS, in
+   linea) dentro di lui, sotto Jenny e sotto il foglio. */
+.home-notes-deck {
+  position: relative;
+  isolation: isolate;
+  width: 210px;
+  height: 140px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.home-notes-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 188px;
+  height: 122px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 13px 9px;
+  color: var(--board-note-ink);
+  font-family: var(--font-hand);
+  transition: transform 0.3s cubic-bezier(0.33, 0, 0.2, 1), opacity 0.25s ease,
+    background-color 0.3s ease, box-shadow 0.3s ease;
+}
+.home-notes-card.is-slot-0 {
+  transform: rotate(2deg);
+  background: var(--board-note);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+.home-notes-card.is-slot-1 {
+  transform: translate(8px, 7px) rotate(5deg);
+  background: color-mix(in srgb, var(--board-note) 90%, #000);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
+}
+.home-notes-card.is-slot-2,
+.home-notes-card.is-hidden {
+  transform: translate(15px, 12px) rotate(-3deg);
+  background: color-mix(in srgb, var(--board-note) 82%, #000);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+.home-notes-card.is-hidden { opacity: 0; }
+/* Delle carte dietro si vede il bordo, non quel che c'e' scritto: la data di
+   quella in fondo spuntava sotto il mazzetto. Si scrivono mentre avanzano. */
+.home-notes-card > * { transition: opacity 0.2s ease; }
+.home-notes-card.is-slot-1 > *,
+.home-notes-card.is-slot-2 > *,
+.home-notes-card.is-hidden > * { opacity: 0; }
+/* Sfilata: di lato, alzata e girata, come una carta tolta dal mazzo. */
+.home-notes-card.is-out {
+  transform: translate(150px, -18px) rotate(14deg);
+  background: var(--board-note);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55);
+}
+.home-notes-card-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.22;
+}
+.home-notes-card-foot,
+.home-notes-tile-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+}
+.home-notes-card-foot span:first-child,
+.home-notes-tile-foot span:first-child { opacity: 0.75; }
+.home-notes-pin {
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  border-radius: 50%;
+  background: var(--board-pin-user);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Tutte le note, nel foglio: la stessa carta, in griglia. */
+.home-notes-list { display: flex; flex-direction: column; gap: 16px; }
+.home-board-sheet-body .home-notes-sub { color: var(--text-muted); font-size: 13px; }
+.home-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 14px;
+  padding-top: 6px;
+}
+.home-notes-new {
+  min-height: 118px;
+  border: 2px dashed color-mix(in srgb, var(--board-note) 45%, transparent);
+  border-radius: 4px;
+  background: none;
+  color: var(--board-note);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-notes-tile {
+  position: relative;
+  min-height: 118px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 12px 9px;
+  border: none;
+  background: var(--board-note);
+  color: var(--board-note-ink);
+  font-family: var(--font-hand);
+  text-align: left;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transform: rotate(-1.4deg);
+  cursor: pointer;
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-notes-tile:nth-child(even) { transform: rotate(1.2deg); }
+.home-notes-tile-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.22;
+}
+.home-notes-more[hidden] { display: none; }
+/* Aperta (o in correzione): larga quanto il foglio. */
+.home-notes-open {
+  position: relative;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px 10px;
+  background: var(--board-note);
+  color: var(--board-note-ink);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-notes-open.is-editing { padding-top: 16px; }
+.home-board-sheet-body .home-notes-open-text {
+  font-family: var(--font-hand);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.32;
+  white-space: pre-wrap;
+}
+.home-notes-area {
+  min-height: 96px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px dashed color-mix(in srgb, var(--board-note-ink) 35%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, #fff 35%, transparent);
+  color: var(--board-note-ink);
+  font-family: var(--font-hand);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  max-height: 46dvh;
+  resize: none;
+}
+.home-notes-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--board-note-ink) 30%, transparent);
+}
+.home-notes-when { margin-right: auto; font-size: 11px; font-weight: 700; opacity: 0.75; }
+.home-notes-gap { flex: 1; }
+.home-notes-btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--board-note-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-notes-btn.is-primary { background: var(--board-note-ink); color: var(--board-note); font-weight: 700; }
+.home-notes-btn.is-danger { color: #8a2d3b; }
+@keyframes home-notes-in {
+  from { opacity: 0; transform: translateY(-14px) scale(0.94); }
+}
 .home-drawer-alert {
   padding: 6px 10px;
   border-left: 3px solid var(--board-alert);
@@ -3574,7 +3818,10 @@ body.home {
   .home-board-cardbar,
   .home-drawer-fab,
   .home-drawer-dial,
-  .home-drawer-fold-icon { transition: none; animation: none; }
+  .home-drawer-fold-icon,
+  .home-notes-card,
+  .home-notes-tile,
+  .home-notes-open { transition: none; animation: none; }
 }
 
 /* ── Una pagina, letta ── */

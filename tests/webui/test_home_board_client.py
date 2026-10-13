@@ -1489,3 +1489,145 @@ def test_the_floating_plus_opens_a_fan_and_back_closes_it() -> None:
       assert.equal(dial.hidden, true);
       assert.ok($('home-board-sheet-body').querySelector('input[type="date"]'));
     """)
+
+
+# ── Le note dell'utente: il mazzetto accanto al titolo, la lista nel foglio ──
+
+
+def _notes_card() -> dict:
+    card = json.loads(json.dumps(CARD))
+    card["notes"] = [
+        {"id": "s-note-2", "text": "Il vaso bianco in cantina.",
+         "created": "2026-10-12T09:00:00+02:00", "status": "pending"},
+        {"id": "s-note-1", "text": "Al vivaio dicono di potarlo subito dopo la fioritura e mai "
+         "d'inverno, perché i rami a zig-zag li fa solo sui getti dell'anno; e di concimarlo a "
+         "fine estate con poco azoto.",
+         "created": "2026-10-03T09:00:00+02:00", "status": "integrated"},
+    ]
+    return card
+
+
+_NOTES = """
+routes['/api/board/card'] = __NOTES_CARD__;
+for (const m of ['board.section.add', 'board.section.update', 'board.section.remove']) {
+  rpcAnswers[m] = () => ({ ok: true });
+}
+// jsdom non misura: un testo lungo «sfora» le sue quattro righe.
+Object.defineProperty(window.HTMLElement.prototype, 'scrollHeight', {
+  configurable: true, get() { return this.textContent.length > 100 ? 200 : 40; } });
+Object.defineProperty(window.HTMLElement.prototype, 'clientHeight', {
+  configurable: true, get() { return 80; } });
+await app.openCard('acero', 'Acero');
+await tick(40);
+const sheetBody = () => $('home-board-sheet-body');
+"""
+
+
+def _run_notes(script: str) -> None:
+    _run(_NOTES.replace("__NOTES_CARD__", json.dumps(_notes_card())) + script)
+
+
+@requires_jsdom
+def test_a_drawer_without_notes_has_no_notes_block() -> None:
+    _run("""
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      assert.equal(document.querySelector('.home-notes'), null);
+    """)
+
+
+@requires_jsdom
+def test_the_notes_are_a_deck_beside_the_title() -> None:
+    _run_notes("""
+      const block = document.querySelector('.home-drawer-top .home-notes');
+      assert.ok(block, 'il mazzetto sta nella testa del cassetto');
+      assert.equal(block.querySelector('.home-notes-title').textContent, 'Your notes · 2');
+      // Le note non sono piu' sezioni fra le altre.
+      assert.equal(document.querySelectorAll('.home-drawer-section.is-user').length, 0);
+      const deck = block.querySelector('.home-notes-deck');
+      const cards = [...deck.querySelectorAll('.home-notes-card')];
+      assert.match(cards[0].className, /is-slot-0/, 'davanti la piu\\u2019 recente');
+      assert.match(deck.getAttribute('aria-label'), /^Note 1 of 2: Il vaso bianco/);
+      deck.click();
+      // La carta davanti si sfila mentre l'altra avanza; un tocco adesso non conta.
+      assert.match(cards[0].className, /is-out/);
+      assert.match(cards[1].className, /is-slot-0/);
+      deck.click();
+      assert.match(cards[0].className, /is-out/);
+      await tick(220);
+      assert.match(cards[0].className, /is-slot-1/, 'rientrata in fondo al mazzo');
+      assert.match(deck.getAttribute('aria-label'), /^Note 2 of 2: Al vivaio/);
+      // L'ordine delle carte e' in linea, dentro il mazzetto.
+      assert.ok(Number(cards[1].style.zIndex) > Number(cards[0].style.zIndex));
+    """)
+
+
+@requires_jsdom
+def test_all_notes_open_in_the_sheet_long_ones_read_in_full_and_are_edited() -> None:
+    _run_notes("""
+      document.querySelector('.home-notes-all').click();
+      await tick(20);
+      assert.equal($('home-board-sheet-title').textContent, 'Your notes · 2');
+      assert.ok(sheetBody().querySelector('.home-notes-new'));
+      const tiles = [...sheetBody().querySelectorAll('.home-notes-tile')];
+      assert.equal(tiles.length, 2);
+      // «Leggi tutto» solo sulla nota che non sta nelle sue righe.
+      assert.equal(tiles[0].querySelector('.home-notes-more').hidden, true);
+      assert.equal(tiles[1].querySelector('.home-notes-more').hidden, false);
+      // Il tocco la apre per esteso, con lo stato verso la wiki.
+      tiles[1].click();
+      const open = sheetBody().querySelector('.home-notes-open');
+      assert.match(open.textContent, /getti dell'anno; e di concimarlo/);
+      assert.match(open.textContent, /✓ in the wiki/);
+      // Correggi → si scrive; Salva → la stessa sezione, testo nuovo.
+      [...open.querySelectorAll('button')].find((b) => b.textContent === 'Edit').click();
+      const area = sheetBody().querySelector('.home-notes-area');
+      assert.match(area.value, /^Al vivaio/);
+      area.value = 'Potarlo dopo la fioritura.';
+      area.dispatchEvent(new Event('input'));
+      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      await tick(40);
+      const call = rpcs('board.section.update').at(-1).params;
+      assert.deepEqual([call.card, call.id, call.text], ['acero', 's-note-1', 'Potarlo dopo la fioritura.']);
+      // Il cassetto si ricarica e la lista torna a riposo, nel foglio ancora aperto.
+      assert.equal(sheetBody().querySelector('.home-notes-area'), null);
+      assert.equal(sheetBody().querySelectorAll('.home-notes-tile').length, 2);
+    """)
+
+
+@requires_jsdom
+def test_a_new_note_and_a_removed_one() -> None:
+    _run_notes("""
+      document.querySelector('.home-notes-all').click();
+      await tick(20);
+      sheetBody().querySelector('.home-notes-new').click();
+      const area = sheetBody().querySelector('.home-notes-area');
+      assert.equal(document.activeElement, area);
+      area.value = 'Sta meglio a est.';
+      area.dispatchEvent(new Event('input'));
+      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      await tick(40);
+      const add = rpcs('board.section.add').at(-1).params;
+      assert.deepEqual([add.card, add.kind, add.text], ['acero', 'note', 'Sta meglio a est.']);
+      // Togli chiede prima.
+      sheetBody().querySelector('.home-notes-tile').click();
+      [...sheetBody().querySelectorAll('.home-notes-open button')].find((b) => b.textContent === 'Edit').click();
+      [...sheetBody().querySelectorAll('button')].find((b) => /Remove/.test(b.textContent)).click();
+      await tick(10);
+      assert.equal(rpcs('board.section.remove').length, 0);
+      $('oc-confirm-ok').click();
+      await tick(40);
+      assert.equal(rpcs('board.section.remove').at(-1).params.id, 's-note-2');
+    """)
+
+
+@requires_jsdom
+def test_the_floating_plus_writes_a_note_in_the_sheet() -> None:
+    _run_notes("""
+      document.querySelector('.home-drawer-fab').click();
+      [...document.querySelectorAll('.home-drawer-dial-row')]
+        .find((r) => r.querySelector('.home-drawer-dial-name').textContent === 'Note').click();
+      await tick(20);
+      assert.ok(sheetBody().querySelector('.home-notes-area'), 'il foglio e\\u2019 gia\\u2019 sulla nota nuova');
+      assert.equal(document.querySelector('.home-drawer-dial').hidden, true);
+    """)

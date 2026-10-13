@@ -113,6 +113,10 @@
   --board-ink:         #29251f;
   --board-postit:      #e8d26a;
   --board-postit-ink:  #3a321c;
+  /* Le note dell'utente: post-it lilla, per non confondersi col giallo delle
+     attese. Come il giallo, uguale in ogni tema. */
+  --board-note:        #d7c4f0;
+  --board-note-ink:    #34264a;
   --board-thread:      #c4473c;
   --board-new:         #5b97e0;
   --board-soon:        #e6c341;
