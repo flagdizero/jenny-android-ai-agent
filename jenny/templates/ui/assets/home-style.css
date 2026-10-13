@@ -3174,7 +3174,7 @@ body.home {
 }
 .home-notes-title {
   margin: 0;
-  color: var(--board-note);
+  color: var(--board-note-label, var(--board-note));
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -3293,10 +3293,10 @@ body.home {
 }
 .home-notes-new {
   min-height: 118px;
-  border: 2px dashed color-mix(in srgb, var(--board-note) 45%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--board-note-label, var(--board-note)) 45%, transparent);
   border-radius: 4px;
   background: none;
-  color: var(--board-note);
+  color: var(--board-note-label, var(--board-note));
   font: inherit;
   font-size: 14px;
   font-weight: 600;

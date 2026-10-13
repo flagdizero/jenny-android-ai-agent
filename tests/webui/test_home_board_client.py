@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 
+from support import theme_tokens
 from support.home_dom import UI, requires_jsdom, run_home
 from support.js_harness import ASSETS, function, requires_node, run_js
 
@@ -1631,3 +1632,18 @@ def test_the_floating_plus_writes_a_note_in_the_sheet() -> None:
       assert.ok(sheetBody().querySelector('.home-notes-area'), 'il foglio e\\u2019 gia\\u2019 sulla nota nuova');
       assert.equal(document.querySelector('.home-drawer-dial').hidden, true);
     """)
+
+
+def test_the_notes_lilac_reads_as_text_in_every_theme() -> None:
+    """Il titoletto «Le tue note» e «Nuova nota» sono lilla sulla pagina, non
+    sulla carta: nei temi chiari il lilla della carta si leggeva a 1,3:1, e lo
+    sostituisce `--board-note-label`."""
+    low = []
+    for theme in theme_tokens.themes():
+        t = theme_tokens.tokens(theme)
+        ink = t.get("board-note-label") or t["board-note"]
+        for ground in ("bg", "surface"):
+            ratio = theme_tokens.contrast(ink, t[ground], t["bg"])
+            if ratio < 4.5:
+                low.append(f"{theme} su --{ground}: {ratio:.2f}:1")
+    assert not low, f"il lilla delle note non si legge: {low}"
