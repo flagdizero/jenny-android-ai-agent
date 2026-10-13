@@ -68,6 +68,7 @@ from jenny.providers.base import LLMProvider
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
+from jenny.runtime.screen import has_screen, screen_runtime_lines
 from jenny.runtime.user_text import say
 from jenny.security.subagent_policy import (
     bind_turn_taint,
@@ -741,6 +742,11 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         def hidden(name: str, tool: Any) -> bool:
             if name == "nothing_to_report":
                 return not silent
+            # Lo schermo si legge solo nel turno nato da un tocco sulla
+            # mascotte, che ne porta la lettura (``runtime/screen.py``): da
+            # Telegram, da un promemoria o dall'app non c'e' niente da vedere.
+            if name == "screen":
+                return not has_screen(msg.metadata)
             # «Ci spostiamo?» ha senso solo dove c'e' un tasto da toccare: la
             # chat personale, nell'app (non Telegram, non una notifica).
             if name == "suggest_notebook":
@@ -794,7 +800,10 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             workspace=scope.project_path,
             include_memory_recent_history=include_memory_recent_history,
             session_key=session.key,
-            current_runtime_lines=self._location_runtime_lines(msg.channel, chat_id),
+            current_runtime_lines=[
+                *self._location_runtime_lines(msg.channel, chat_id),
+                *screen_runtime_lines(msg.metadata),
+            ],
         )
 
     async def _dispatch_command_inline(

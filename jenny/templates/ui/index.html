@@ -468,6 +468,18 @@
              testo nudo, e a taglia grande le finirebbe addosso — le schede le
              passano davanti perche' sono opache, una riga di testo no. -->
         <div class="home-card-note" id="home-jenny-floating-note" hidden></div>
+        <!-- La lettura dello schermo, al tocco sulla mascotte. Vive di lei, e
+             sta qui sotto: senza la finestra flottante non c'e' niente da
+             toccare, e la riga sparisce. L'interruttore vero e' di Android
+             (Accessibilita'): questo lo mostra e porta li'. -->
+        <div class="home-row" id="home-jenny-screen-row" hidden>
+          <span class="home-row-label" id="home-jenny-screen-label"></span>
+          <button class="home-switch" id="home-jenny-screen" type="button" role="switch"
+                  aria-labelledby="home-jenny-screen-label">
+            <span class="home-switch-knob"></span>
+          </button>
+        </div>
+        <div class="home-card-note" id="home-jenny-screen-note" hidden></div>
       </div>
 
       <!-- Chi e'. Non e' `SOUL.md` intero: e' **la tua parte** di quel file.

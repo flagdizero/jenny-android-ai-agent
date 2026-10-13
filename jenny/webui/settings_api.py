@@ -1481,6 +1481,14 @@ async def update_floating_settings(query: QueryParams) -> dict[str, Any]:
     # Ciò che Android ha concesso, non ciò che l'utente ha chiesto: è la
     # differenza che l'interruttore deve poter raccontare.
     payload["floating"]["active"] = applied
+    # E lo stato della lettura dello schermo, che vive sotto la mascotte: senza,
+    # la riga «Legge lo schermo» non compariva accendendo la mascotte, ma solo
+    # alla prossima apertura delle Impostazioni (visto su ``jenny_s22``,
+    # 13/10/2026).
+    if payload["floating"].get("available"):
+        from jenny.runtime.screen import screen_state
+
+        payload["floating"]["screen"] = await screen_state()
     return payload
 
 

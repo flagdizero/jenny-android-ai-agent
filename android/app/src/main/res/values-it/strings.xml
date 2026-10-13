@@ -30,4 +30,8 @@
     <string name="update_channel_description">Mostrata quando un aggiornamento già scaricato aspetta la tua conferma per installarsi</string>
     <string name="update_notification_title">Aggiornamento pronto da installare</string>
     <string name="update_notification_text">Tocca per confermare — poi Jenny riparte da sola</string>
+
+    <string name="screen_service_label">Jenny — lettura dello schermo</string>
+    <string name="screen_service_summary">Jenny legge lo schermo solo quando tocchi la mascotte flottante</string>
+    <string name="screen_service_description">Quando tocchi la mascotte flottante, Jenny legge una volta l\'app che sta sotto — il testo, l\'indirizzo della pagina e uno screenshot di quella sola app — così puoi chiederle qualcosa o fargliela salvare. Non legge mai da sola, non tocca e non scrive niente, e salta le app che vietano gli screenshot, come quelle bancarie e le schede in incognito. La lettura resta sul telefono, in memoria, finché non la usa o non passano dieci minuti.</string>
 </resources>

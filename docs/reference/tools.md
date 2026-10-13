@@ -239,7 +239,7 @@ Config: no dedicated toggle (always registered) — but **subagent-only** in the
 
 ## 4. Device
 
-`get_location` is Android-only — it needs the platform location bridge. `ui_view` is not gated on Android as such: it registers whenever a WebUI query service exists, which in the normal Android runtime is always, but the condition is the service, not the platform. Both are available to the orchestrator.
+`get_location` and `screen` are Android-only — they need the platform location bridge and the accessibility service. `ui_view` is not gated on Android as such: it registers whenever a WebUI query service exists, which in the normal Android runtime is always, but the condition is the service, not the platform. All three are available to the orchestrator; `screen` is available to nobody else.
 
 ### get_location
 
@@ -260,6 +260,26 @@ A **pull** model for letting Jenny see the screen: there is no ambient screen ac
 - HTML returned is capped at 48 KB per block (view HTML and app HTML each capped separately).
 
 Config: no dedicated toggle — it registers whenever the underlying query service exists (the normal runtime always has it).
+
+### screen
+
+What was on the phone's screen when you wrote to Jenny from the **floating mascot**. Not a live view: tapping the mascot takes one reading of the app underneath (its text, the page address if it is a browser, and a screenshot of that app's window alone, without the mascot, the status bar or the keyboard), and the tool reads that reading.
+
+| Parameter | Behavior |
+|---|---|
+| `action` | `read` — the app's text, with its title, address and numbered `[image N: …]` markers. For a web page this is the page from its top, including the parts scrolled off screen — the whole of an ordinary article. `screenshot` — the picture, saved under `uploads/screen/` and shown to the model. `image` — one of the numbered images, cut out of the screenshot and saved there too; if the page exposes the original's address it comes along, so `download_file` can fetch it at full size. An image that was off screen has no picture, only that address |
+| `image` | With `action=image`, the number `read` gave it |
+
+- **It exists only in the turn that came from the mascot.** From the app's chat, from Telegram, from a reminder, the tool is not offered at all, and there is no screen to read: the reading happens at the tap and nowhere else.
+- A reading lives in memory, one at a time, for ten minutes or until the next tap; after that the tool says it is gone. Nothing is written to disk until the tool is asked for a picture.
+- **Apps that block screenshots are not read at all**, text included. Android withholds a secure window's pixels (banking apps, password managers, incognito tabs) but not its accessibility text; Jenny drops both.
+- Password fields never come through.
+- Everything it returns is untrusted, like a web page: the turn is marked as such (see [Security model](../internals/security-model.md#subagents-and-untrusted-content)).
+- **The reading is timed.** It runs before the bubble opens — the open chat covers the app, and Android then hides it from the accessibility service — so it stops after about half a second and marks itself truncated. A long article arrives whole (about 0.15 s for 20,000 characters); a very long page arrives from the top, and the result says so and points to its address for the rest. Scrolling does not change what is read.
+- Text is capped at 30,000 characters per reading.
+- With the accessibility service off, Jenny is told so in the bubble's turn, and can say where to turn it on.
+
+Config: the **Reads the screen** switch under **Floating mascot** (home **Settings → Jenny**), which leads to Android's Accessibility settings — Android lets only you turn an accessibility service on. Requires Android 14 or newer.
 
 ---
 

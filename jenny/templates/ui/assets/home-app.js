@@ -261,6 +261,7 @@ class HomeApp {
     this.jennyRoom = new HomeJenny({
       onChange: () => this.you.sayJenny(this.jennyRoom.value()),
       onFloating: (floating) => this._keepFloating(floating),
+      onScreenBack: () => this._refreshFloating(),
       onName: (name) => this._keepName(name),
     });
     /* Chi risponde. Un salvataggio li' dentro torna col payload intero di
@@ -1272,6 +1273,15 @@ class HomeApp {
     this._settings?.then?.((data) => {
       if (data && floating) data.floating = floating;
     });
+  }
+
+  /* Di ritorno da Accessibilita': l'interruttore della lettura dello schermo
+     e' di Android, quindi lo stato vero si rilegge dal server. */
+  async _refreshFloating() {
+    const data = await this._askSettings({ fresh: true });
+    if (!data?.floating) return;
+    this._keepFloating(data.floating);
+    this.jennyRoom.setFloating(data.floating);
   }
 
   /* Il nome appena salvato nella stanza di lei: va nella cache, o alla

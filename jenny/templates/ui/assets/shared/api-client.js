@@ -541,6 +541,14 @@ class ApiClient {
     return res.json();
   }
 
+  /** Apre Impostazioni → Accessibilità, dove si accende la lettura dello
+   *  schermo: un'app non puo' accenderla da se'. */
+  async openScreenSettings() {
+    const res = await this._postWithQuery('/api/settings/floating/screen-settings', {});
+    if (!res.ok) throw new Error(`Screen settings failed: ${res.status}`);
+    return res.json();
+  }
+
   async updatePower(params) {
     const res = await this._postWithQuery('/api/settings/power/update', params);
     if (!res.ok) throw new Error(`Power update failed: ${res.status}`);

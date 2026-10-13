@@ -97,6 +97,7 @@ def _reset_loop_bound_state() -> None:
         from jenny.runtime.native_input import reset_native_input
         from jenny.runtime.notifier import reset_notifier_state
         from jenny.runtime.power import reset_power_state
+        from jenny.runtime.screen import reset_screen_state
         from jenny.runtime.update_install import reset_install_state
         from jenny.webui.android_apps_api import reset_installed_apps_state
         from jenny.webui.settings_api import reset_update_check_state
@@ -110,6 +111,7 @@ def _reset_loop_bound_state() -> None:
         # contesto del giro precedente, e il lock dentro BridgeCache è legato a
         # un loop morto.
         reset_floating_state()
+        reset_screen_state()
         reset_location_state()
         # L'updater tiene una fase *sticky* e un ``UpdateBridge`` in cache: senza
         # questo reset un gateway che riparte nello stesso processo mostrerebbe

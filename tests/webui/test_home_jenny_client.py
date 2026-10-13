@@ -84,10 +84,17 @@ function makeEl(tag) {
 }
 
 const nodi = {};
+const docListeners = {};
 const document = {
+  visibilityState: 'visible',
   createElement: (tag) => makeEl(tag),
   getElementById: (id) => (nodi[id] ||= makeEl('div')),
+  addEventListener(type, fn) { (docListeners[type] ||= []).push(fn); },
 };
+/* Si torna nell'app: quel che fa Android quando chiudi Accessibilita'. */
+function comeBack() {
+  for (const fn of docListeners.visibilitychange || []) fn();
+}
 
 /* Le taglie sono vere; il resto delle preferenze no — stanno nel
    `localStorage`, che qui non c'e'. */
@@ -99,6 +106,9 @@ function setMascotSize(size) { currentSize = size; return size; }
 /* Quel che il server risponde all'interruttore, deciso dal banco. */
 let reply = null;
 let error = null;
+let screenOpens = 0;
+let screenOpened = true;
+let screenBacks = 0;
 const calls = [];
 /* E quel che c'e' su disco: `null` = il file non c'e' (404), una stringa = c'e'.
    `brokenRead` e' l'altra cosa: la risposta non e' arrivata affatto. */
@@ -115,6 +125,10 @@ const api = {
     return brokenName
       ? Promise.reject(new Error('rifiutato'))
       : Promise.resolve({});
+  },
+  openScreenSettings() {
+    screenOpens += 1;
+    return Promise.resolve({ opened: screenOpened });
   },
   updateFloating(params) {
     calls.push(params);
@@ -163,6 +177,8 @@ class HomeJenny {
   __MARK__
   __SWITCH__
   __SAY_FLOATING__
+  __SAY_SCREEN__
+  __OPEN_SCREEN__
   __LOAD_RULES__
   __MARK_RULES__
   __SAVE_RULES__
@@ -192,7 +208,12 @@ function room(floating, disk, broken) {
   changes = 0;
   floatingCalls.length = 0;
   spokenNames.length = 0;
+  for (const k of Object.keys(docListeners)) delete docListeners[k];
+  screenOpens = 0;
+  screenOpened = true;
+  screenBacks = 0;
   const she = new HomeJenny({
+    onScreenBack: () => { screenBacks += 1; },
     onChange: () => { changes += 1; },
     onFloating: (f) => { floatingCalls.push(f); },
     onName: (n) => { spokenNames.push(n); },
@@ -228,6 +249,8 @@ def _harness() -> str:
         .replace("__MARK__", member(src, "_mark"))
         .replace("__SWITCH__", member(src, "_switch"))
         .replace("__SAY_FLOATING__", member(src, "_sayFloating"))
+        .replace("__SAY_SCREEN__", member(src, "_sayScreen"))
+        .replace("__OPEN_SCREEN__", member(src, "openScreenSettings"))
         .replace("__LOAD_RULES__", member(src, "_loadRules"))
         .replace("__MARK_RULES__", member(src, "_markRules"))
         .replace("__SAVE_RULES__", member(src, "saveRules"))
@@ -597,4 +620,58 @@ def test_a_name_that_could_not_be_read_is_not_an_empty_name() -> None:
       she.setName('Jenny');
       assert.equal(nodi['home-name'].value, 'Ada', 'la risposta ha scritto sopra');
       assert.equal(nodi['home-name-save'].hidden, false);
+    """)
+
+
+# ── La lettura dello schermo ────────────────────────────────────────────────
+
+
+def test_the_screen_row_lives_under_the_mascot() -> None:
+    """Si legge solo al tocco sulla finestra flottante: senza di lei la riga non
+    c'e', e nemmeno dove Android non la permette (sotto il 14)."""
+    _run_js("""
+      for (const [floating, shown] of [
+        [{ available: true, enabled: true, active: true, screen: 'on' }, true],
+        [{ available: true, enabled: true, active: true, screen: 'off' }, true],
+        [{ available: true, enabled: false, active: false, screen: 'on' }, false],
+        [{ available: true, enabled: true, active: true, screen: 'unsupported' }, false],
+        [{ available: true, enabled: true, active: true }, false],
+        [{ available: false, enabled: true, screen: 'on' }, false],
+      ]) {
+        const she = room(floating);
+        assert.equal(she.screenRow.hidden, !shown, JSON.stringify(floating));
+        assert.equal(she.screenNote.hidden, !shown, JSON.stringify(floating));
+      }
+    """)
+
+
+def test_the_switch_shows_what_android_says_and_explains() -> None:
+    _run_js("""
+      const on = room({ available: true, enabled: true, active: true, screen: 'on' });
+      assert.equal(on.screenBtn.classList.contains('is-on'), true);
+      assert.equal(on.screenNote.textContent, i18n.t('settings.screenHint', { name: 'Jenny' }));
+
+      const off = room({ available: true, enabled: true, active: true, screen: 'off' });
+      assert.equal(off.screenBtn.classList.contains('is-on'), false);
+      assert.equal(off.screenNote.textContent, i18n.t('settings.screenOff', { name: 'Jenny' }));
+    """)
+
+
+def test_the_switch_leads_to_accessibility_and_rereads_on_the_way_back() -> None:
+    """L'interruttore vero e' di Android: questo porta li', e al ritorno la casa
+    rilegge — una volta sola, e solo se ci si e' andati da qui."""
+    _run_js("""
+      const she = room({ available: true, enabled: true, active: true, screen: 'off' });
+      comeBack();
+      assert.equal(screenBacks, 0, 'un ritorno qualunque non deve rileggere');
+      await she.openScreenSettings();
+      assert.equal(screenOpens, 1);
+      comeBack();
+      comeBack();
+      assert.equal(screenBacks, 1);
+
+      screenOpened = false;
+      await she.openScreenSettings();
+      comeBack();
+      assert.equal(screenBacks, 1, 'la pagina non si e\u2019 aperta: non c\u2019e\u2019 un ritorno');
     """)

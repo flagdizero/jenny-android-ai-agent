@@ -9,6 +9,7 @@ messaggio invece di consegnarlo.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import pathlib
 
 import pytest
@@ -140,14 +141,24 @@ class TestBoundaryWithKotlin:
         assert 'callAttr("on_native_text"' in self._gateway_service()
         assert callable(ni.on_native_text)
 
-    def test_kotlin_passes_source_and_thread(self):
-        """Tre argomenti, in quest'ordine: testo, sorgente, tag del filo. La
-        sorgente è una variabile da quando le superfici native sono due, quindi
-        il legame vero sono le costanti — v. il test qui sotto."""
+    def test_kotlin_passes_source_thread_and_screen(self):
+        """Quattro argomenti, in quest'ordine: testo, sorgente, tag del filo e
+        riassunto della lettura dello schermo. La sorgente è una variabile da
+        quando le superfici native sono due, quindi il legame vero sono le
+        costanti — v. il test qui sotto."""
         assert (
-            '.callAttr("on_native_text", text, source, sourceTag)'
+            '.callAttr("on_native_text", text, source, sourceTag, screen)'
             in self._gateway_service()
         )
+        assert list(inspect.signature(ni.on_native_text).parameters) == [
+            "text", "source", "thread", "screen",
+        ]
+
+    def test_the_mascot_sends_the_screen_summary(self):
+        """La lettura presa al tocco viaggia col testo del fumetto, e solo lì."""
+        src = self._gateway_service()
+        assert "ScreenSnapshots.await(SCREEN_WAIT_MS)?.summaryJson()" in src
+        assert "FLOATING_DELIVERY_BUDGET_MS, screen)" in src
 
     @pytest.mark.parametrize(
         "kotlin_const, python_source",
@@ -230,6 +241,39 @@ class TestDelivery:
         assert ni.on_native_text("ciao", ni.SOURCE_FLOATING) is True
         await asyncio.wait_for(bus.arrived.wait(), 2)
         assert ni.NATIVE_THREAD_KEY not in bus.inbound[0].metadata
+
+    async def test_the_mascot_carries_the_screen_reading(self):
+        """Il riassunto della lettura presa al tocco entra nei metadata del
+        turno, ridotto ai campi noti: da lì lo leggono il loop e il tool."""
+        from jenny.runtime.screen import SCREEN_META_KEY
+
+        bus = await _bound()
+        summary = '{"id": "s1", "app": "Chrome", "url": "x.org/a", "extra": "no"}'
+        assert ni.on_native_text("salvati questo", ni.SOURCE_FLOATING, None, summary) is True
+        await asyncio.wait_for(bus.arrived.wait(), 2)
+        assert bus.inbound[0].metadata[SCREEN_META_KEY] == {
+            "id": "s1", "app": "Chrome", "url": "x.org/a",
+        }
+
+    @pytest.mark.parametrize("summary", [None, "", "{not json", '{"app": "no id"}', "[1]"])
+    async def test_a_missing_or_broken_reading_still_delivers_the_text(self, summary):
+        """Le parole dell'utente arrivano comunque: si perde solo lo schermo."""
+        from jenny.runtime.screen import SCREEN_META_KEY
+
+        bus = await _bound()
+        assert ni.on_native_text("ciao", ni.SOURCE_FLOATING, None, summary) is True
+        await asyncio.wait_for(bus.arrived.wait(), 2)
+        assert SCREEN_META_KEY not in bus.inbound[0].metadata
+
+    async def test_only_the_mascot_carries_a_screen(self):
+        """Lo schermo si legge solo dal fumetto: da un'altra sorgente il
+        riassunto si ignora anche se arriva."""
+        from jenny.runtime.screen import SCREEN_META_KEY
+
+        bus = await _bound()
+        assert ni.on_native_text("ok", ni.SOURCE_NOTIFICATION, None, '{"id": "s1"}') is True
+        await asyncio.wait_for(bus.arrived.wait(), 2)
+        assert SCREEN_META_KEY not in bus.inbound[0].metadata
 
     async def test_the_thread_tag_enters_the_metadata(self):
         """È il tag della notifica da cui è partita la domanda: torna a valle e

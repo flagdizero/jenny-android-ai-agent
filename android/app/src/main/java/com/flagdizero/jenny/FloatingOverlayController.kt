@@ -460,6 +460,9 @@ object FloatingOverlayController {
     @Volatile
     private var expanded = false
 
+    /** Fra il tocco e l'apertura della chat, mentre si legge lo schermo. */
+    private var opening = false
+
     private var appContext: Context? = null
     private var windowManager: WindowManager? = null
 
@@ -922,6 +925,9 @@ object FloatingOverlayController {
         cancelTimeout()
         main.removeCallbacks(holdRunnable)
         expanded = false
+        // Una lettura ancora in corso finisce su `openChat`, che a finestra
+        // smontata non fa niente (`root == null`).
+        opening = false
         waitingForReply = false
         // Un volo lasciato aperto qui tornerebbe a mordere al prossimo
         // montaggio: `startFlight` nasconde la mascotte ferma con un `post`
@@ -1124,7 +1130,28 @@ object FloatingOverlayController {
      */
     private fun expand() {
         val ctx = appContext ?: return
-        if (expanded) return
+        if (expanded || opening) return
+        // Prima si legge lo schermo, poi si apre la chat: **in quest'ordine, e
+        // non in parallelo**. Il palco in CHAT è una finestra toccabile a
+        // schermo intero, e Android toglie dall'elenco delle finestre
+        // accessibili quelle che una finestra così copre per intero: con la
+        // chat aperta Chrome per il servizio non esiste, e quando torna
+        // ricostruisce l'albero un pezzo alla volta. Misurato su `jenny_s22`
+        // il 13/10/2026: lette in parallelo all'apertura, una pagina da 24k
+        // caratteri ne dava 880, e alla seconda prova zero. La lettura dura
+        // ~0,3 s e ha un tetto (v. [ScreenSnapshots.capture]); a servizio
+        // spento la chat si apre subito.
+        opening = true
+        ScreenSnapshots.capture(ctx) {
+            opening = false
+            openChat()
+        }
+    }
+
+    /** La seconda metà di [expand], quando lo schermo è stato letto. */
+    private fun openChat() {
+        val ctx = appContext ?: return
+        if (expanded || root == null) return
 
         // Il palco non si muove e non cambia taglia: cambia solo *cosa
         // accetta*. La maniglia resta toccabile e resta dov'è — è piccola e

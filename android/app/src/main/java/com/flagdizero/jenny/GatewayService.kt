@@ -94,6 +94,10 @@ class GatewayService : Service() {
          *  sarebbero una mascotte rotta. */
         private const val FLOATING_DELIVERY_BUDGET_MS = 5_000L
 
+        /** Attesa massima della lettura dello schermo prima di consegnare il
+         *  testo del fumetto. Misurata: ~0,3 s per una pagina lunga. */
+        private const val SCREEN_WAIT_MS = 1_500L
+
         /**
          * Consegna *text* al gateway insistendo finché il budget regge.
          *
@@ -117,13 +121,14 @@ class GatewayService : Service() {
             source: String,
             sourceTag: String?,
             budgetMs: Long,
+            screen: String? = null,
         ): Boolean {
             val deadline = SystemClock.elapsedRealtime() + budgetMs
             var wait = 500L
             var attempts = 0
             while (true) {
                 attempts++
-                if (tryDeliverNativeText(text, source, sourceTag)) {
+                if (tryDeliverNativeText(text, source, sourceTag, screen)) {
                     Log.i(TAG, "Native text delivered (source=$source, attempt $attempts)")
                     return true
                 }
@@ -155,13 +160,14 @@ class GatewayService : Service() {
             text: String,
             source: String,
             sourceTag: String?,
+            screen: String? = null,
         ): Boolean = try {
             if (!Python.isStarted()) {
                 false
             } else {
                 Python.getInstance()
                     .getModule("jenny.runtime.native_input")
-                    .callAttr("on_native_text", text, source, sourceTag)
+                    .callAttr("on_native_text", text, source, sourceTag, screen)
                     .toBoolean()
             }
         } catch (e: Exception) {
@@ -187,7 +193,13 @@ class GatewayService : Service() {
         fun deliverFloatingText(text: String, onResult: (Boolean) -> Unit) {
             thread(name = "jenny-floating-text") {
                 val ok = try {
-                    deliverWithRetry(text, NATIVE_SOURCE_FLOATING, null, FLOATING_DELIVERY_BUDGET_MS)
+                    // La lettura dello schermo presa al tocco viaggia col testo,
+                    // come riassunto: il turno sa cosa c'era, e il tool `screen`
+                    // la chiede per id. Di solito è pronta da secondi; se
+                    // l'utente è stato più veloce di lei si aspetta un poco.
+                    val screen = ScreenSnapshots.await(SCREEN_WAIT_MS)?.summaryJson()
+                        ?: ScreenSnapshots.offSummary()
+                    deliverWithRetry(text, NATIVE_SOURCE_FLOATING, null, FLOATING_DELIVERY_BUDGET_MS, screen)
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
                     Log.i(TAG, "Floating text delivery interrupted")

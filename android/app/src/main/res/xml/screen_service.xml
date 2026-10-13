@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Configurazione di ScreenService: sola lettura.
+
+     Nessun `accessibilityEventTypes`: il servizio non ascolta niente, legge le
+     finestre solo quando Jenny viene chiamata dalla mascotte (ScreenSnapshots).
+     Niente `canPerformGestures`: non può toccare né scrivere. Niente
+     `isAccessibilityTool`: non è uno strumento per la disabilità, e dichiararlo
+     sarebbe falso. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/screen_service_description"
+    android:summary="@string/screen_service_summary" />

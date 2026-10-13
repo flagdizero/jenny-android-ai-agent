@@ -61,8 +61,10 @@ export class HomeJenny {
    *  @param onFloating  com'e' finita la finestra flottante dopo un tocco: la
    *    casa ne tiene una copia (v. `HomeApp._keepFloating`).
    *  @param onName  il nome appena salvato: la casa lo scrive nella fila e nei
-   *    Quaderni, e nella sua copia delle impostazioni (v. `HomeApp._keepName`). */
-  constructor({ onChange, onFloating, onName } = {}) {
+   *    Quaderni, e nella sua copia delle impostazioni (v. `HomeApp._keepName`).
+   *  @param onScreenBack  si torna dalla pagina di Accessibilita' aperta da qui:
+   *    la casa rilegge le impostazioni, perche' l'interruttore e' di Android. */
+  constructor({ onChange, onFloating, onName, onScreenBack } = {}) {
     this.el = document.getElementById('home-jenny-room');
     this.sizeEl = document.getElementById('home-jenny-size');
     this.sizeLabel = document.getElementById('home-jenny-size-label');
@@ -70,6 +72,10 @@ export class HomeJenny {
     this.floatingBtn = document.getElementById('home-jenny-floating');
     this.floatingLabel = document.getElementById('home-jenny-floating-label');
     this.floatingNote = document.getElementById('home-jenny-floating-note');
+    this.screenRow = document.getElementById('home-jenny-screen-row');
+    this.screenBtn = document.getElementById('home-jenny-screen');
+    this.screenLabel = document.getElementById('home-jenny-screen-label');
+    this.screenNote = document.getElementById('home-jenny-screen-note');
     this.nameEl = document.getElementById('home-name');
     this.nameLabel = document.getElementById('home-name-label');
     this.nameNote = document.getElementById('home-name-note');
@@ -82,11 +88,20 @@ export class HomeJenny {
     this._onChange = onChange;
     this._onFloating = onFloating;
     this._onName = onName;
+    this._onScreenBack = onScreenBack;
+    /* Si e' andati in Accessibilita' da qui: al ritorno si rilegge. */
+    this._screenAway = false;
     /* Quel che il server dice della finestra: `null` finche' non l'ha detto. */
     this.floating = null;
     this._painted = false;
 
     this.floatingBtn?.addEventListener('click', () => this.toggleFloating());
+    this.screenBtn?.addEventListener('click', () => this.openScreenSettings());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' || !this._screenAway) return;
+      this._screenAway = false;
+      this._onScreenBack?.();
+    });
     this.sizeEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-size]');
       if (card) this.pickSize(card.dataset.size);
@@ -168,6 +183,7 @@ export class HomeJenny {
   applyTranslations() {
     if (this.sizeLabel) this.sizeLabel.textContent = i18n.t('settings.mascotSize');
     if (this.floatingLabel) this.floatingLabel.textContent = i18n.t('settings.floatingEnabled');
+    if (this.screenLabel) this.screenLabel.textContent = i18n.t('settings.screenEnabled');
     if (this.nameLabel) this.nameLabel.textContent = i18n.t('home.jenny.name');
     if (this.nameNote) this.nameNote.textContent = i18n.t('home.jenny.nameHint');
     if (this.nameSave) this.nameSave.textContent = i18n.t('home.jenny.rulesSave');
@@ -181,6 +197,7 @@ export class HomeJenny {
       }
     }
     this._sayFloating();
+    this._sayScreen();
   }
 
   /** Il valore da scrivere sulla riga di «Tu e Jenny». */
@@ -217,6 +234,19 @@ export class HomeJenny {
     this._mark();
     this._onChange?.();
     this._onFloating?.(this.floating);
+  }
+
+  /** Porta l'utente in Accessibilita': il servizio lo accende (o lo spegne)
+   *  solo lui, da li'. Lo stato si rilegge al ritorno (`onScreenBack`). */
+  async openScreenSettings() {
+    this._screenAway = true;
+    try {
+      const reply = await api.openScreenSettings();
+      if (!reply?.opened) this._screenAway = false;
+    } catch (err) {
+      this._screenAway = false;
+      console.warn('home.jenny: accessibility settings not opened', err);
+    }
   }
 
   /* Quel che ha scritto, una volta per apertura della stanza. Un campo che
@@ -304,7 +334,15 @@ export class HomeJenny {
     const available = !!this.floating?.available;
     if (this.floatingRow) this.floatingRow.hidden = !available;
     this._switch(this.floatingBtn, !!this.floating?.enabled);
+    /* La lettura dello schermo vive della mascotte: si vede solo con la
+       finestra accesa, e solo dove Android la permette (dal 14). */
+    const screen = this.floating?.screen;
+    const screenShown = available && !!this.floating?.enabled
+      && (screen === 'on' || screen === 'off');
+    if (this.screenRow) this.screenRow.hidden = !screenShown;
+    this._switch(this.screenBtn, screen === 'on');
     this._sayFloating();
+    this._sayScreen();
   }
 
   _switch(el, on) {
@@ -325,6 +363,17 @@ export class HomeJenny {
       blocked ? 'settings.floatingBlocked' : 'settings.floatingHint',
       { name: botName.get() },
     );
+  }
+
+  /* Cosa fa la lettura dello schermo, oppure dove si accende. */
+  _sayScreen() {
+    if (!this.screenNote) return;
+    const shown = !!this.screenRow && !this.screenRow.hidden;
+    this.screenNote.hidden = !shown;
+    if (!shown) return;
+    const on = this.floating?.screen === 'on';
+    this.screenNote.textContent = i18n.t(on ? 'settings.screenHint' : 'settings.screenOff',
+      { name: botName.get() });
   }
 
 }

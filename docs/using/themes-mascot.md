@@ -56,10 +56,13 @@ Her preferences are on the home's **Settings** page, in the row named after her 
 |---|---|---|
 | Mascot size | Small / Medium / Large | Small |
 | Floating mascot | on / off (Android only) | Off |
+| Reads the screen | on / off, in Android's Accessibility settings (Android 14+, with the floating mascot on) | Off |
 
 The same screen holds **Her name** (up to 40 characters). The Settings row, the chat page and the other places that name her follow it, and changing it erases nothing she remembers. Under the mascot settings sits **The rules you gave her**: a text of yours, up to 2,000 characters, that she reads every turn and never rewrites — Dream included. Both have their own **Save** button.
 
 **Floating mascot** puts her in a window above other apps: tap her there to talk, and the answer comes in a bubble, in the same conversation as the app. It needs Android's "Display over other apps" permission, and the page tells you when that is missing.
+
+**Reads the screen** lets her see what you were looking at when you tapped her: say "save this" over a recipe page, or "keep this picture", and she reads the app underneath — once, at the tap — and decides where it goes. She can't look by herself, and she skips apps that block screenshots. Android lets only you switch an accessibility service on, so the switch takes you to Accessibility; if Android calls it a restricted setting, allow it from Jenny's app info first.
 
 Size is the side of the square she occupies — 120, 160 or 210 px; she starts small. The rest of her geometry follows from it, so she stays coherent at every size.
 
