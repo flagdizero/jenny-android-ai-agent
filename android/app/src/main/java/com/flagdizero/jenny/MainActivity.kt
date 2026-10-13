@@ -1824,6 +1824,7 @@ class MainActivity : AppCompatActivity() {
                 a.getString(0), a.getString(1), a.getString(2),
                 a.getString(3), a.getString(4), a.getString(5)
             ).let { null }
+            "setFloatingBubble" -> FloatingOverlayController.setBubbleStyle(a.getString(0)).let { null }
             "chatOpened" -> chatOpened(if (a.isNull(0)) null else a.optString(0)).let { null }
             "chatClosed" -> chatClosed().let { null }
             "setEditableFocus" -> imeBinding.onDomFocus(a.getString(0)).let { null }

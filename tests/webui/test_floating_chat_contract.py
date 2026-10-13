@@ -138,20 +138,25 @@ class TestResetsOnlyOnClose:
 
 
 class TestTheTwoSides:
-    def test_your_message_sits_where_she_does_not(self):
+    def test_the_sides_are_the_ones_of_the_app_chat(self):
+        """Il tuo a destra, il suo a sinistra, come nella chat dell'app. Erano al
+        contrario (dal 24/09/2026), per stare vicino a lei che è sempre a destra,
+        e le due chat di Jenny si leggevano in due modi opposti."""
         source = _read()
-        # Lei sta sempre a destra (24/09/2026), quindi `mine` sta sempre a
-        # sinistra: la regola è una riga, nelle due funzioni che la usano.
-        assert source.count("val atStart = line.mine") == 2, (
-            "la regola dei lati è cambiata o si è duplicata altrove"
-        )
         body = _fun(source, "private fun renderHistory()")
-        assert "if (atStart) Gravity.START else Gravity.END" in body
+        assert "if (line.mine) Gravity.END else Gravity.START" in body
+        assert "val atStart" not in source
 
     def test_the_sharp_corner_is_on_the_speaker_side(self):
-        body = _fun(_read(), "private fun bubbleView(ctx: Context, line: Line): TextView")
-        assert "cornerRadii = corners" in body
-        assert "BUBBLE_CORNER_DP" in _read()
+        """Gli angoli sono quelli del tema (`--radius-bubble`, che nell'app ha
+        l'angolo stretto in basso a destra, dal lato tuo); i suoi, specchiati."""
+        source = _read()
+        body = _fun(
+            source,
+            "private fun lineBackground(ctx: Context, line: Line, hard: Shadow?, dx: Int, dy: Int): Drawable",
+        )
+        assert "if (line.mine) r else listOf(r[1], r[0], r[3], r[2])" in body
+        assert "BUBBLE_CORNER_DP" not in source and "BUBBLE_RADIUS_DP" not in source
 
 
 class TestTheHandoffToTheApp:

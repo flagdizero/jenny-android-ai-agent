@@ -196,6 +196,117 @@ function syncFloatingPalette() {
   }
 }
 
+/** I token della bolla dell'utente, gli stessi di `.home-msg-user .home-block`. */
+const BUBBLE_TOKENS = [
+  '--bubble-user-bg', '--bubble-user-text', '--bubble-user-border',
+  '--bubble-user-shadow', '--radius-bubble',
+];
+
+/** Le virgole di primo livello: quelle dentro `rgba(...)` non separano. */
+function splitTop(value) {
+  const out = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  out.push(value.slice(start).trim());
+  return out;
+}
+
+/** Una lunghezza CSS in px (lo `0` nudo compreso), o `NaN`. */
+function px(value) {
+  const m = (value || '').trim().match(/^(-?[\d.]+)(px)?$/);
+  return m && (m[2] || parseFloat(m[1]) === 0) ? parseFloat(m[1]) : NaN;
+}
+
+/** Il riempimento: un colore, o i due capi di una sfumatura dall'alto in basso. */
+function bubbleFill(value) {
+  const css = value.trim();
+  if (css === 'transparent') return ['#00000000'];
+  const grad = css.match(/^linear-gradient\((.*)\)$/i);
+  if (!grad) {
+    const c = argbHex(css);
+    return c ? [c] : null;
+  }
+  const parts = splitTop(grad[1]);
+  if (/^(180deg|to bottom)$/i.test(parts[0])) parts.shift();
+  else if (!argbHex(parts[0])) return null;  // un'altra direzione: non la so disegnare
+  const stops = parts.map(argbHex);
+  return stops.length === 2 && stops.every(Boolean) ? stops : null;
+}
+
+/** `none` o `<larghezza> solid <colore>`. */
+function bubbleStroke(value) {
+  const css = value.trim();
+  if (css === 'none') return null;
+  const m = css.match(/^(\S+)\s+solid\s+(.+)$/);
+  const width = m ? px(m[1]) : NaN;
+  const color = m ? argbHex(m[2]) : '';
+  return Number.isNaN(width) || !color ? undefined : { width, color };
+}
+
+/** La prima ombra **esterna**: l'`inset` di y2k e' un riflesso dentro la
+ *  bolla, che a quella taglia non si vede. */
+function bubbleShadow(value) {
+  const css = value.trim();
+  if (css === 'none') return null;
+  const outer = splitTop(css).find(s => !/^inset\b/.test(s));
+  if (!outer) return null;
+  const m = outer.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(.+)$/);
+  if (!m) return undefined;
+  const [dx, dy, blur] = [m[1], m[2], m[3]].map(px);
+  const color = argbHex(m[4]);
+  return [dx, dy, blur].some(Number.isNaN) || !color ? undefined : { dx, dy, blur, color };
+}
+
+/** I quattro angoli, in px, nell'ordine di `border-radius`. */
+function bubbleRadii(value) {
+  const r = value.trim().split(/\s+/).map(px);
+  if (!r.length || r.length > 4 || r.some(Number.isNaN)) return null;
+  const [a, b = a, c = a, d = b] = r;
+  return [a, b, c, d];
+}
+
+/** La bolla dell'utente come la disegna la chat, in una forma che il Kotlin
+ *  legge senza un parser CSS: colori in `#AARRGGBB`, misure in px CSS (cioè
+ *  dp: lo zoom del WebView e' bloccato). `null` se un valore non si legge. */
+export function bubbleStyle(read) {
+  const [bg, text, border, shadow, radius] = BUBBLE_TOKENS.map(read);
+  const fill = bubbleFill(bg);
+  const ink = argbHex(text);
+  const stroke = bubbleStroke(border);
+  const glow = bubbleShadow(shadow);
+  const radii = bubbleRadii(radius);
+  if (!fill || !ink || stroke === undefined || glow === undefined || !radii) return null;
+  return { fill, text: ink, stroke, shadow: glow, radii };
+}
+
+/** Veste le bolle della chat flottante come quelle dell'app.
+ *
+ *  La sola palette non bastava: la bolla dell'utente era `--accent`, e
+ *  `--bubble-user-*` in cinque temi su sette e' un'altra cosa — in Synthwave
+ *  un rosa piu' scuro col testo bianco e un alone, in Kyoto una bolla
+ *  trasparente col bordo. Come per la palette, la fonte di verita' resta qui. */
+function syncFloatingBubble() {
+  const native = window.JennyNative;
+  if (!native || typeof native.setFloatingBubble !== 'function') return;
+  const cs = getComputedStyle(document.documentElement);
+  const style = bubbleStyle(t => cs.getPropertyValue(t));
+  if (!style) return;
+  try {
+    native.setFloatingBubble(JSON.stringify(style));
+  } catch (e) {
+    /* ponte assente: le bolle restano come sono */
+  }
+}
+
 /** Toggle the dark/light syntax stylesheets (highlight.js + CodeMirror). */
 export function applySyntaxTheme(scheme) {
   for (const [id, s] of [
@@ -221,6 +332,7 @@ export function setTheme(id) {
   applySyntaxTheme(theme.scheme);
   syncNativeBars(theme.scheme);
   syncFloatingPalette();
+  syncFloatingBubble();
   window.dispatchEvent(new CustomEvent('themechange', { detail: theme }));
   return theme;
 }
@@ -230,3 +342,4 @@ export function setTheme(id) {
 applySyntaxTheme(currentTheme().scheme);
 syncNativeBars(currentTheme().scheme);
 syncFloatingPalette();
+syncFloatingBubble();

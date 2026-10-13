@@ -47,6 +47,7 @@
     'setLauncherUsage',
     'setMascotSize',
     'setFloatingPalette',
+    'setFloatingBubble',
     'chatOpened',
     'chatClosed',
     'setEditableFocus',

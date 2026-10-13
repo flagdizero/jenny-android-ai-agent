@@ -16,6 +16,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -54,6 +55,7 @@ import io.noties.markwon.ext.tables.TableTheme
 import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.linkify.LinkifyPlugin
+import org.json.JSONObject
 import java.io.File
 import kotlin.math.PI
 import kotlin.math.abs
@@ -269,10 +271,11 @@ object FloatingOverlayController {
      */
     private const val CHIP_GAP_DP = 10
 
-    /** La bolla: raggio pieno, e l'angolo stretto in basso dal lato di chi
-     *  parla — lo stesso `--radius-bubble` della chat, semplificato. */
-    private const val BUBBLE_RADIUS_DP = 16
-    private const val BUBBLE_CORNER_DP = 5
+    /** Il testo delle bolle: corpo e interlinea di `.home-block` nella chat
+     *  dell'app (14,5 px, 1,45; la tua 1,4). */
+    private const val BUBBLE_TEXT_SP = 14.5f
+    private const val BUBBLE_LINE_EM = 1.45f
+    private const val BUBBLE_MINE_LINE_EM = 1.4f
 
     /** Larghezza massima di una bolla, in frazione della lista: anche la più
      *  lunga lascia vedere da che parte sta chi l'ha scritta. */
@@ -362,6 +365,9 @@ object FloatingOverlayController {
      *  virgola, nell'ordine di [Palette]. */
     private const val PREF_PALETTE = "palette"
 
+    /** ...e la bolla dell'utente, nel JSON che la WebUI ha mandato. */
+    private const val PREF_BUBBLE = "bubble"
+
     /** Una riga della conversazione. `mine` = l'ha scritta l'utente. */
     private data class Line(val mine: Boolean, val text: String)
 
@@ -433,6 +439,42 @@ object FloatingOverlayController {
         hint = 0xFF6E6875.toInt(),      // --text-faint
         accent = 0xFFF92AAD.toInt(),    // --accent
         onAccent = 0xFF0A090B.toInt(),  // --on-accent
+    )
+
+    /** Un'ombra della bolla, in dp: `blur` zero è l'ombra piena e sfalsata di
+     *  Sticker e Fumetto, più di zero l'alone di Synthwave e Y2K. */
+    private data class Shadow(val dx: Float, val dy: Float, val blur: Float, val color: Int)
+
+    private data class Stroke(val width: Float, val color: Int)
+
+    /**
+     * La bolla dell'utente com'è nella chat dell'app: i token
+     * `--bubble-user-*` e `--radius-bubble` del tema attivo, spinti dalla WebUI
+     * (`bubbleStyle` in `shared/theme.js`).
+     *
+     * Era `--accent` con `--on-accent` sopra, e in cinque temi su sette la bolla
+     * dell'app è un'altra cosa: in Synthwave un rosa più scuro col testo bianco e
+     * un alone, in Kyoto una bolla trasparente col bordo, in Sticker un bordo
+     * bianco e un'ombra sfalsata. [fill] ha un colore, o i due capi di una
+     * sfumatura dall'alto in basso (Y2K); [radii] i quattro angoli in dp,
+     * nell'ordine di `border-radius`.
+     */
+    private data class BubbleStyle(
+        val fill: List<Int>,
+        val text: Int,
+        val stroke: Stroke?,
+        val shadow: Shadow?,
+        val radii: List<Float>,
+    )
+
+    /** Il ripiego, con lo stesso criterio di [DEFAULT_PALETTE]: i token
+     *  `synthwave` di `mobile-style.css`. */
+    private val DEFAULT_BUBBLE = BubbleStyle(
+        fill = listOf(0xFFD61A8F.toInt()),                      // --bubble-user-bg
+        text = 0xFFFFFFFF.toInt(),                              // --bubble-user-text
+        stroke = null,                                          // --bubble-user-border
+        shadow = Shadow(0f, 0f, 16f, 0x80D61A8F.toInt()),       // --bubble-user-shadow
+        radii = listOf(14f, 14f, 4f, 14f),                      // --radius-bubble
     )
 
     private val main = Handler(Looper.getMainLooper())
@@ -544,6 +586,10 @@ object FloatingOverlayController {
      *  prima che la SPA abbia caricato. */
     @Volatile
     private var palette = DEFAULT_PALETTE
+
+    /** La bolla dell'utente in vigore: v. [BubbleStyle]. */
+    @Volatile
+    private var userBubble = DEFAULT_BUBBLE
     /** Il riquadro della mascotte (corpo + faccia). Si chiama così da quando
      *  il fumetto ha smesso di stargli sopra in colonna. */
     private var column: FrameLayout? = null
@@ -796,6 +842,49 @@ object FloatingOverlayController {
     }
 
     /**
+     * La bolla dell'utente del tema attivo, spinta dalla **WebUI** in JSON (v.
+     * [BubbleStyle]). Come [setPalette]: da qualunque thread, a finestra
+     * montata o no. Un JSON che non si legge lascia la bolla di prima, intera.
+     */
+    fun setBubbleStyle(json: String) {
+        val wanted = parseBubble(json) ?: run {
+            Log.w(TAG, "Floating bubble: cannot read the style, keeping the current one")
+            return
+        }
+        main.post {
+            if (wanted == userBubble) return@post
+            userBubble = wanted
+            appContext?.let { ctx ->
+                ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit().putString(PREF_BUBBLE, json).apply()
+            }
+            renderHistory()
+            Log.i(TAG, "Floating bubble updated")
+        }
+    }
+
+    private fun parseBubble(json: String?): BubbleStyle? = try {
+        val o = JSONObject(json ?: return null)
+        val fill = o.getJSONArray("fill").let { a -> List(a.length()) { Color.parseColor(a.getString(it)) } }
+        val radii = o.getJSONArray("radii").let { a -> List(a.length()) { a.getDouble(it).toFloat() } }
+        val stroke = o.optJSONObject("stroke")?.let {
+            Stroke(it.getDouble("width").toFloat(), Color.parseColor(it.getString("color")))
+        }
+        val shadow = o.optJSONObject("shadow")?.let {
+            Shadow(
+                it.getDouble("dx").toFloat(), it.getDouble("dy").toFloat(),
+                it.getDouble("blur").toFloat(), Color.parseColor(it.getString("color")),
+            )
+        }
+        if (fill.size !in 1..2 || radii.size != 4) null
+        else BubbleStyle(fill, Color.parseColor(o.getString("text")), stroke, shadow, radii)
+    } catch (e: Exception) {
+        // JSONException o IllegalArgumentException di `parseColor`: è lo stesso
+        // «non si legge», e la risposta è la stessa.
+        null
+    }
+
+    /**
      * Ridipinge quello che è già a schermo.
      *
      * Il tema si cambia in Impostazioni → Personalizzazione, cioè con la
@@ -812,6 +901,10 @@ object FloatingOverlayController {
             it.setHintTextColor(palette.hint)
         }
         syncSend(bloom = false)
+        // Le bolle portano la superficie, il bordo e i colori del markdown
+        // della palette: senza, restavano del tema di prima fino al messaggio
+        // successivo.
+        renderHistory()
     }
 
     /**
@@ -1894,7 +1987,7 @@ object FloatingOverlayController {
     }
 
     /** Ricostruisce le bolle dal modello. È l'unico posto che tocca le view
-     *  della lista: un cambio di tema o di lato ripassa di qui. */
+     *  della lista: un cambio di tema ripassa di qui. */
     private fun renderHistory() {
         val ctx = appContext ?: return
         val list = historyList ?: return
@@ -1906,15 +1999,15 @@ object FloatingOverlayController {
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { gravity = Gravity.CENTER_HORIZONTAL })
         for (line in history) {
-            val bubble = bubbleView(ctx, line)
-            // Il tuo messaggio sta dal lato dove lei **non** sta — lei è a
-            // destra, quindi il tuo a sinistra — il suo dal suo.
-            val atStart = line.mine
-            list.addView(bubble, LinearLayout.LayoutParams(
+            val view = bubbleView(ctx, line)
+            // I lati della chat dell'app: il tuo a destra, il suo a sinistra.
+            // Erano al contrario, per stare vicino a lei che è sempre a destra,
+            // e le due chat si leggevano in due modi opposti.
+            list.addView(view, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
-                gravity = if (atStart) Gravity.START else Gravity.END
+                gravity = if (line.mine) Gravity.END else Gravity.START
                 topMargin = dp(ctx, BUBBLE_GAP_DP)
             })
         }
@@ -2019,33 +2112,35 @@ object FloatingOverlayController {
 
     /** Una bolla: il fondo, l'angolo stretto dal lato di chi parla, il testo. */
     private fun bubbleView(ctx: Context, line: Line): TextView {
-        val atStart = line.mine
-        val r = dp(ctx, BUBBLE_RADIUS_DP).toFloat()
-        val c = dp(ctx, BUBBLE_CORNER_DP).toFloat()
-        // topLeft, topRight, bottomRight, bottomLeft — due valori ciascuno.
-        val corners = floatArrayOf(
-            r, r,
-            r, r,
-            if (atStart) r else c, if (atStart) r else c,
-            if (atStart) c else r, if (atStart) c else r,
-        )
+        val style = userBubble
+        // L'ombra piena e sfalsata si disegna dentro la view, accanto alla
+        // bolla: il padding le fa posto dal suo lato.
+        val hard = style.shadow?.takeIf { line.mine && it.blur == 0f }
+        val dx = hard?.let { dpf(ctx, it.dx).toInt() } ?: 0
+        val dy = hard?.let { dpf(ctx, it.dy).toInt() } ?: 0
         return TextView(ctx).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(if (line.mine) palette.onAccent else palette.text)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, BUBBLE_TEXT_SP)
+            setLineSpacing(0f, lineEm(if (line.mine) BUBBLE_MINE_LINE_EM else BUBBLE_LINE_EM))
+            setTextColor(if (line.mine) style.text else palette.text)
             maxWidth = (listWidth(ctx) * BUBBLE_MAX_RATIO).toInt()
-            setPadding(dp(ctx, 13), dp(ctx, 9), dp(ctx, 13), dp(ctx, 9))
-            background = GradientDrawable().apply {
-                cornerRadii = corners
-                if (line.mine) {
-                    setColor(palette.accent)
-                } else {
-                    // Come la pillola: stessa superficie, stesso velo, stesso
-                    // bordo. Quello che dice «è lei» è il lato, non il colore.
-                    setColor(veiled(palette.surface))
-                    setStroke(dp(ctx, 1), palette.border)
-                }
+            setPadding(
+                dp(ctx, 13) + max(-dx, 0), dp(ctx, 9) + max(-dy, 0),
+                dp(ctx, 13) + max(dx, 0), dp(ctx, 9) + max(dy, 0),
+            )
+            background = lineBackground(ctx, line, hard, dx, dy)
+            // Sopra un'altra app ogni bolla si stacca dal fondo, come la
+            // pillola. L'ombra del tema prende il suo posto: quella piena è
+            // già disegnata, l'alone tinge l'ombra di sistema del suo colore.
+            val glow = style.shadow?.takeIf { line.mine && it.blur > 0f }
+            elevation = when {
+                hard != null -> 0f
+                glow != null -> max(dpf(ctx, glow.blur / 2f), dp(ctx, BUBBLE_ELEVATION_DP).toFloat())
+                else -> dp(ctx, BUBBLE_ELEVATION_DP).toFloat()
             }
-            elevation = dp(ctx, BUBBLE_ELEVATION_DP).toFloat()
+            if (glow != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                outlineSpotShadowColor = glow.color
+                outlineAmbientShadowColor = glow.color
+            }
             // **Il markdown è solo suo.** Quello che l'utente ha scritto si
             // mostra com'è scritto: se ha digitato `*ciao*` intendeva gli
             // asterischi. È anche quel che fa la SPA, che riempie la bolla
@@ -2074,6 +2169,58 @@ object FloatingOverlayController {
             }
         }
     }
+
+    /**
+     * Il fondo di una bolla.
+     *
+     * **La tua** è quella del tema ([userBubble]): riempimento o sfumatura, bordo,
+     * angoli, e l'ombra piena sotto, sfalsata di `dx, dy`. Un riempimento
+     * trasparente (Kyoto) nell'app lascia vedere la pagina; qui sotto c'è
+     * un'altra app, e il testo non si leggerebbe: prende la superficie velata
+     * della sua, e il bordo del tema resta.
+     *
+     * **La sua** è la superficie velata col bordo, come la pillola; gli angoli
+     * sono quelli del tema specchiati, con l'angolo stretto dal suo lato.
+     */
+    private fun lineBackground(ctx: Context, line: Line, hard: Shadow?, dx: Int, dy: Int): Drawable {
+        val style = userBubble
+        val r = style.radii.map { dpf(ctx, it) }
+        // `border-radius` va in senso orario da in alto a sinistra; lo
+        // specchio scambia sinistra e destra.
+        val (tl, tr, br, bl) = if (line.mine) r else listOf(r[1], r[0], r[3], r[2])
+        val radii = floatArrayOf(tl, tl, tr, tr, br, br, bl, bl)
+        val face = GradientDrawable().apply {
+            cornerRadii = radii
+            val see = line.mine && style.fill.any { Color.alpha(it) > 0 }
+            when {
+                see && style.fill.size == 2 -> {
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    colors = style.fill.toIntArray()
+                }
+                see -> setColor(style.fill[0])
+                else -> setColor(veiled(palette.surface))
+            }
+            if (line.mine) {
+                style.stroke?.let { setStroke(max(dpf(ctx, it.width).toInt(), 1), it.color) }
+            } else {
+                setStroke(dp(ctx, 1), palette.border)
+            }
+        }
+        if (hard == null) return face
+        val shade = GradientDrawable().apply {
+            cornerRadii = radii
+            setColor(hard.color)
+        }
+        return LayerDrawable(arrayOf(shade, face)).apply {
+            setLayerInset(0, max(dx, 0), max(dy, 0), max(-dx, 0), max(-dy, 0))
+            setLayerInset(1, max(-dx, 0), max(-dy, 0), max(dx, 0), max(dy, 0))
+        }
+    }
+
+    /** Il moltiplicatore di `setLineSpacing` che dà un'interlinea di `em`
+     *  volte il corpo, come `line-height` nel CSS: Android moltiplica la
+     *  spaziatura naturale del carattere, che è già più alta del corpo. */
+    private fun TextView.lineEm(em: Float): Float = em * textSize / paint.fontSpacing
 
     /** Il chip che porta all'app. Costruito una volta sola: cambia etichetta,
      *  non identità. */
@@ -2912,6 +3059,7 @@ object FloatingOverlayController {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (mascotPx <= 0) mascotPx = prefs.getInt(PREF_SIZE, 0)
         storedPalette(prefs.getString(PREF_PALETTE, null))?.let { palette = it }
+        parseBubble(prefs.getString(PREF_BUBBLE, null))?.let { userBubble = it }
     }
 
     private fun saveParkPosition(ctx: Context) {
