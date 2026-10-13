@@ -526,6 +526,10 @@ object FloatingOverlayController {
      *  layout. È quel che fa salire lei quando il testo va a capo: v. [parkTop]. */
     private var pillHeightPx = 0
 
+    /** Dov'era il bordo alto della pillola, in px schermo, l'ultima volta che
+     *  lei ci si è messa sopra; `-1` = da rimisurare (v. [followPill]). */
+    private var lastPillTopPx = -1
+
     /** Quanto la tastiera (o la barra di sistema) alza il composer, in px. Vale
      *  solo a chat aperta, che è l'unico momento in cui arrivano gli insets. */
     private var chatBottomInsetPx = 0
@@ -925,6 +929,7 @@ object FloatingOverlayController {
         cancelTimeout()
         main.removeCallbacks(holdRunnable)
         expanded = false
+        lastPillTopPx = -1
         // Una lettura ancora in corso finisce su `openChat`, che a finestra
         // smontata non fa niente (`root == null`).
         opening = false
@@ -1218,6 +1223,7 @@ object FloatingOverlayController {
         if (!expanded) return
         hideKeyboard(ctx)
         expanded = false
+        lastPillTopPx = -1
         scrim?.visibility = View.GONE
         inputRow?.visibility = View.GONE
         // Chiudere è un gesto, e vale come «ho finito»: la conversazione se ne
@@ -1528,17 +1534,8 @@ object FloatingOverlayController {
             setPadding(dp(ctx, BAR_TEXT_PAD_DP), pad, pad, pad)
             background = barBackground(ctx)
             elevation = dp(ctx, PILL_ELEVATION_DP).toFloat()
-            // Quando il testo va a capo la pillola cresce verso l'alto, e lei
-            // — che ci sta in piedi sopra — sale con la pillola: `parkTop`
-            // legge l'altezza misurata da qui.
-            addOnLayoutChangeListener { _, _, t, _, b, _, _, _, _ ->
-                val h = b - t
-                if (h <= 0 || h == pillHeightPx) return@addOnLayoutChangeListener
-                pillHeightPx = h
-                if (expanded && flight == null) {
-                    slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
-                }
-            }
+            // Lei sta in piedi sulla pillola, quindi la segue: v. [followPill].
+            viewTreeObserver.addOnGlobalLayoutListener { followPill(ctx) }
         }
         val field = EditText(ctx).apply {
             hint = ctx.getString(R.string.floating_input_hint)
@@ -2138,16 +2135,29 @@ object FloatingOverlayController {
      * pillola cresce, la tastiera si alza — e senza questo conto le bolle
      * uscirebbero dal bordo di sopra, dove la colonna cresce e non c'è nessuno
      * a fermarle.
+     *
+     * **Il posto si misura sul palco, non sullo schermo.** Il conto era «schermo
+     * meno l'inset della tastiera», e alla prima apertura dopo l'avvio
+     * quell'inset non arriva: il sistema rimpicciolisce la finestra invece di
+     * dichiararlo (v. [followPill]). Con una risposta lunga la lista si
+     * prendeva allora l'altezza di uno schermo senza tastiera e spingeva la
+     * pillola fuori dalla finestra — il campo spariva, e lei finiva sopra le
+     * bolle (`jenny_s22`, 13/10/2026). L'altezza del palco segue tutti e due i
+     * casi: nel primo la finestra è più bassa, nel secondo l'inset sta già nel
+     * padding della riga. Lo schermo resta il ripiego prima del primo layout.
      */
     private fun syncListCap(ctx: Context) {
         val scroll = historyScroll ?: return
+        val row = inputRow ?: return
         val pill = max(inputBar?.height ?: 0, dp(ctx, PILL_DP))
-        val bottom = max(chatBottomInsetPx, navInset(ctx))
-        val cap = max(
-            screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - pill -
-                standHeight(ctx) - dp(ctx, COMPOSER_PAD_TOP_DP) - dp(ctx, LIST_TOP_MARGIN_DP),
-            0,
-        )
+        val host = (row.parent as? View)?.height ?: 0
+        val room = if (host > 0) {
+            host - row.paddingTop - row.paddingBottom
+        } else {
+            val bottom = max(chatBottomInsetPx, navInset(ctx))
+            screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - dp(ctx, COMPOSER_PAD_TOP_DP)
+        }
+        val cap = max(room - pill - standHeight(ctx) - dp(ctx, LIST_TOP_MARGIN_DP), 0)
         if (cap == scroll.maxHeight) return
         scroll.maxHeight = cap
         scroll.requestLayout()
@@ -2816,6 +2826,33 @@ object FloatingOverlayController {
         // i piedi 24 dp *dentro* la pillola. Era così anche prima, solo che
         // con la banda a tutto schermo l'errore si leggeva come «aria a caso».
         return max(pillTop - dp(ctx, FEET_GAP_DP) - feet - statusInset(ctx), dp(ctx, 8))
+    }
+
+    /**
+     * Lei segue la pillola: dopo **ogni** layout della finestra, se la pillola
+     * sta altrove sullo schermo o è cresciuta, lei ci torna sopra.
+     *
+     * Non basta ascoltare gli insets della tastiera, né l'altezza della pillola.
+     * Alla prima apertura dopo l'avvio il sistema non consegna l'inset dell'IME
+     * a questa finestra (`ime=0` per tutta l'apertura, con la tastiera su) e la
+     * **ridimensiona** invece: la pillola sale sopra la tastiera senza cambiare
+     * né padding né altezza, e lei restava dov'era — dietro la tastiera
+     * (`jenny_s22`, 13/10/2026). Guardando dove la pillola è *disegnata*, ogni
+     * causa — inset, finestra ridimensionata, testo che va a capo — porta allo
+     * stesso conto.
+     */
+    private fun followPill(ctx: Context) {
+        if (!expanded || flight != null) return
+        // Prima il tetto della lista: se la finestra si è ristretta, è lui che
+        // rimette la pillola dentro (v. [syncListCap]), e solo dopo la pillola
+        // sta dove lei deve andare.
+        syncListCap(ctx)
+        val top = measuredPillTop() ?: return
+        val h = inputBar?.height ?: return
+        if (top == lastPillTopPx && h == pillHeightPx) return
+        lastPillTopPx = top
+        pillHeightPx = h
+        slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
     }
 
     /**

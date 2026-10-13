@@ -199,6 +199,16 @@ class TestTheGeometry:
         assert "LIST_TOP_MARGIN_DP" in body
         assert "LIST_MAX_DP" not in source, "è tornato un tetto fisso in dp"
 
+    def test_the_list_cap_is_measured_on_the_stage(self):
+        """Il posto si misura sul palco, che segue anche la finestra
+        rimpicciolita dalla tastiera; lo schermo meno l'inset è solo il ripiego.
+        Col conto sullo schermo una risposta lunga spingeva la pillola fuori
+        dalla finestra (``jenny_s22``, 13/10/2026)."""
+        source = _read()
+        body = _fun(source, "private fun syncListCap(ctx: Context)")
+        assert "(row.parent as? View)?.height" in body
+        assert "row.paddingTop - row.paddingBottom" in body
+
     def test_bubbles_are_wider_than_the_pill(self):
         """La conversazione vuole i bordi; la pillola resta al suo 62%."""
         source = _read()
