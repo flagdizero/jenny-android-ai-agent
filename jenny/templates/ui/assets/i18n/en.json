@@ -995,7 +995,8 @@
       "step": "Step {at} of {of}",
       "time": {
         "now": "now",
-        "min": "{min} min"
+        "min": "{min} min",
+        "sec": "{sec} s"
       }
     },
     "threadError": "I can't read the conversation.\nTry again shortly.",

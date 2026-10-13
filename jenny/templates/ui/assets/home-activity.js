@@ -1,27 +1,37 @@
-/** La casa — la bolla di Jenny che scrive.
+/** La casa — Jenny al lavoro, come un divisore nel filo.
  *
- *  Mentre Jenny lavora, in fondo alla conversazione c'e' una bolla che dice
+ *  Mentre Jenny lavora, in fondo alla conversazione c'e' una riga che dice
  *  cosa sta facendo, con una parola scelta male apposta: *elucubro*, *rovisto*,
- *  *scartabello*. Quando ha finito, sparisce. Fino al 05/10/2026 era una riga
- *  piccola sotto la chat; adesso e' l'ultima delle bolle di lavoro, nel posto
- *  vivo del filo (`home-work.js`), con la stessa pelle delle altre. Il nome
- *  della classe e' rimasto quello di prima: il comportamento e' lo stesso.
+ *  *scartabello*. Quando ha finito, sparisce.
+ *
+ *  **Ha la forma di un separatore, non di un messaggio** (13/10/2026). Dal
+ *  05/10 era l'ultima bolla del posto vivo, con la stessa pelle delle bolle di
+ *  lavoro: un bordo, un fondo, nel punto dove arrivano le risposte. Si leggeva
+ *  come una cosa che Jenny ti diceva — «almost there, promise…». Adesso e' una
+ *  riga sottile da un bordo all'altro, interrotta al centro dal ✿, dalla parola
+ *  in maiuscoletto e dai secondi del turno: la famiglia di `.home-boundary`, il
+ *  segno che il filo usa per le cose che non sono dette da nessuno. (La prova
+ *  con lo stato nel campo del composer e' sul ramo `feat/composer-status-ring`:
+ *  scartata a occhio.)
  *
  *  **La regola che la tiene onesta: non si mostra mai un verbo di una famiglia
  *  che non sta girando.** E' l'unica cosa che distingue questa riga da
  *  un'animazione di caricamento, e il giorno che la violiamo tanto vale mettere
  *  tre puntini. I nomi degli strumenti arrivano gia' nei frame `tool_events`
  *  (v. `jenny/agent/progress_events.py`): la riga non inventa niente, traduce.
+ *  I secondi sono il segno di vita: contano dall'inizio del turno, e un turno
+ *  fermo da un minuto si vede.
  *
  *  Mentre la risposta si sta formando la riga **sparisce**: il testo e' li' che
  *  arriva, e dirti che sto scrivendo mentre leggi quel che scrivo e' rumore.
  *  Torna se dopo il testo ricominciano gli strumenti — un turno puo' alternare
- *  le due cose piu' volte.
+ *  le due cose piu' volte — e i secondi ripartono da dove erano, perche' il
+ *  turno e' lo stesso.
  *
  *  La parola entra lettera per lettera nel colore del fiore del tema, e un
- *  luccichio la attraversa; i puntini finali saltellano. Davanti le gira il ✿
- *  (`home-flower.js`), che si muove secondo la stessa famiglia: il fiore non
- *  racconta niente che la parola non dica gia'.
+ *  luccichio la attraversa. Davanti le gira il ✿ (`home-flower.js`), che si
+ *  muove secondo la stessa famiglia: il fiore non racconta niente che la
+ *  parola non dica gia'.
  */
 
 import { i18n } from './shared/i18n.js';
@@ -90,6 +100,10 @@ export class ActivityLine {
     this.turnId = null;
     this._showTimer = null;
     this._rotateTimer = null;
+    this._clockTimer = null;
+    /* Quando e' partito il turno: sopravvive al silenzio della risposta, si
+       azzera solo a turno finito (`stop`). */
+    this.since = null;
     this._onOpen = onOpenInWorkshop;
     this._reduced = reducedMotion();
 
@@ -103,7 +117,18 @@ export class ActivityLine {
     this.words.setAttribute('aria-hidden', 'true');
     this.plain = document.createElement('span');
     this.plain.className = 'home-activity-text';
-    this.el.append(svg, this.words, this.plain);
+    /* I due tratti del divisore, ai lati, e i secondi del turno. Fuori dalla
+       lettura: sono disegno e orologio, la notizia e' la parola. */
+    const rule = () => {
+      const r = document.createElement('span');
+      r.className = 'home-typing-rule';
+      r.setAttribute('aria-hidden', 'true');
+      return r;
+    };
+    this.clock = document.createElement('span');
+    this.clock.className = 'home-typing-clock';
+    this.clock.setAttribute('aria-hidden', 'true');
+    this.el.append(rule(), svg, this.words, this.clock, rule(), this.plain);
     this.flower = new Flower(svg, { reducedMotion: this._reduced });
 
     if (this._onOpen) {
@@ -156,6 +181,7 @@ export class ActivityLine {
   stop() {
     this._clear();
     this.turnId = null;
+    this.since = null;
   }
 
   /* ── La riga ── */
@@ -163,6 +189,7 @@ export class ActivityLine {
   _setFamily(family) {
     if (this.family === family) return;
     this.family = family;
+    if (this.since === null) this.since = Date.now();
     clearTimeout(this._showTimer);
     clearInterval(this._rotateTimer);
     if (this.el.hidden) {
@@ -187,6 +214,17 @@ export class ActivityLine {
     this._rotateTimer = setInterval(() => {
       this._setWord(this._word());
     }, ROTATE_MS);
+    this._tickClock();
+    clearInterval(this._clockTimer);
+    this._clockTimer = setInterval(() => this._tickClock(), 1_000);
+  }
+
+  /* I secondi del turno, poi i minuti: «4 s», «2 min». */
+  _tickClock() {
+    const sec = Math.max(0, Math.floor((Date.now() - (this.since ?? Date.now())) / 1000));
+    this.clock.textContent = sec < 60
+      ? i18n.t('home.work.time.sec', { sec })
+      : i18n.t('home.work.time.min', { min: Math.floor(sec / 60) });
   }
 
   /* La parola nuova entra mentre la vecchia esce verso l'alto: stanno nella
@@ -243,14 +281,17 @@ export class ActivityLine {
   _clear() {
     clearTimeout(this._showTimer);
     clearInterval(this._rotateTimer);
+    clearInterval(this._clockTimer);
     this._showTimer = null;
     this._rotateTimer = null;
+    this._clockTimer = null;
     this.family = null;
     this.lastWord = null;
     const vanished = !this.el.hidden;
     this.el.hidden = true;
     this.words.replaceChildren();
     this.plain.textContent = '';
+    this.clock.textContent = '';
     this.flower.reset();
     if (vanished) this._onChange?.();
   }

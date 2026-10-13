@@ -213,8 +213,8 @@ export class HomeChat {
     this._userSent = new WeakMap();
 
     /* **Il posto vivo**, sempre sotto i messaggi e sopra la fascia: le bolle di chi sta
-       lavorando adesso (`home-work.js`) e, per ultima, quella di Jenny che
-       scrive (`home-activity.js`). I messaggi entrano sopra di lui, quindi chi
+       lavorando adesso (`home-work.js`) e, per ultima, la riga di Jenny al
+       lavoro (`home-activity.js`, un divisore e non una bolla). I messaggi entrano sopra di lui, quindi chi
        lavora resta sotto l'ultima cosa detta, come un messaggio in arrivo. */
     this.live = document.createElement('div');
     this.live.className = 'home-live';

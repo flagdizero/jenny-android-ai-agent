@@ -4,8 +4,9 @@
  *  c'e' una bolla, come un messaggio di Jenny che sta per arrivare. Una sola
  *  forma per chiunque lavori: una passata del giardiniere (`/gardener`, o quella
  *  automatica se sei dentro il suo quaderno), un ciclo di Dream chiesto a mano,
- *  gli aiutanti (subagent) che Jenny ha messo al lavoro. Il turno di Jenny ha la
- *  sua, la stessa pelle, disegnata da `home-activity.js`.
+ *  gli aiutanti (subagent) che Jenny ha messo al lavoro. Il turno di Jenny non
+ *  ha una bolla: e' un divisore in fondo al posto vivo (`home-activity.js`),
+ *  perche' con la stessa pelle si leggeva come un messaggio.
  *
  *  Quattro stati, e nessuno ne racconta piu' del necessario:
  *  - **in corso**: chi lavora, cosa fa (una riga), da quanto, una barra;

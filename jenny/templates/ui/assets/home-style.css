@@ -748,20 +748,76 @@ body.home {
 .home-work-action[hidden] { display: none; }
 .home-work-action:disabled { opacity: 0.5; }
 
-/* La bolla di Jenny che scrive (`home-activity.js`): la stessa pelle, ma una
-   riga sola — il fiore e la parola scelta male apposta, nel colore del fiore.
-   Ogni movimento qui resta nel piano — lettere che salgono, puntini che
-   saltano, un luccichio di colore — niente sfocature ne' scale che la facciano
+/* Jenny al lavoro (`home-activity.js`): un divisore, non una bolla
+   (13/10/2026). Come bolla, con la pelle delle bolle di lavoro, si leggeva come
+   un messaggio. Adesso e' della famiglia di `.home-boundary` — una riga sottile
+   da un bordo all'altro, il segno del filo per le cose che non dice nessuno —
+   interrotta al centro dal fiore, dalla parola in maiuscoletto e dai secondi.
+   Niente fondo, niente bordo, niente corsivo: tutto quello che faceva
+   «messaggio» e' tolto.
+
+   Ogni movimento qui resta nel piano — lettere che salgono, un luccichio di
+   colore, i tratti che respirano — niente sfocature ne' scale che la facciano
    sembrare arrivare da lontano. */
-.home-work.home-typing {
-  width: auto;
-  flex-direction: row;
+.home-typing {
+  align-self: stretch;
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 6px 0;
   color: var(--flower);
-  font-size: 14px;
-  font-style: italic;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.home-typing[hidden] { display: none; }
+
+/* Da bordo a bordo dello schermo, non della colonna: un separatore taglia il
+   filo, non una scatola che si scansa. Il posto vivo si stringe per lasciare
+   spazio alla testa di Jenny (`--jenny-dodge`) e il filo ha 18px di margine; la
+   riga si riprende tutti e due, e il tratto destro le passa sotto — lei sta
+   sopra a tutto. (Detto dall'utente il 13/10/2026, alla prima prova.) */
+.home-live > .home-typing {
+  margin-left: -18px;
+  margin-right: calc(-18px - var(--jenny-dodge));
+}
+
+/* I due tratti: sfumano verso i bordi, e respirano verso il centro. Cedono
+   per primi: su un telefono stretto la frase piu' lunga del vocabolario
+   («snooping through your stuff», 13/10/2026 su jenny_s22) li mangia fino a
+   zero prima di essere tagliata lei. A frase corta si dividono il posto a
+   meta', e la riga resta centrata. */
+.home-typing-rule {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--flower) 45%, transparent));
+  transform-origin: 100% 50%;
+  animation: home-typing-breathe 2.4s ease-in-out infinite;
+}
+.home-typing-clock + .home-typing-rule {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--flower) 45%, transparent), transparent);
+  transform-origin: 0 50%;
+}
+@keyframes home-typing-breathe {
+  0%, 100% { opacity: 0.5; transform: scaleX(0.85); }
+  50%      { opacity: 1;   transform: scaleX(1); }
+}
+
+/* Una parola lunga si taglia, non spinge via i tratti; e niente puntini: il
+   segno di vita qui sono i secondi. */
+.home-typing .home-activity-words { min-width: 0; overflow: hidden; }
+.home-typing .home-ellipsis { display: none; }
+
+.home-typing-clock {
+  flex: none;
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-activity-flower {
@@ -830,6 +886,7 @@ body.home {
   .home-ellipsis-dot,
   .home-word.exits { animation: none; }
   .home-work-sweep { animation: none; }
+  .home-typing-rule { animation: none; }
 }
 
 /* ── Lo stato del filo ── */

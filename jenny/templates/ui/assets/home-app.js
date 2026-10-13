@@ -189,12 +189,13 @@ class HomeApp {
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
        la sua taglia si legge da lei, non da un numero copiato. */
     this.chat.band = new HomeBand(this.chat.bandEl, this.jenny.el);
-    /* **Chi lavora, in fondo al filo** (05/10/2026, `home-work.js`). La bolla
-       di Jenny che scrive e' l'ultima del posto vivo; sopra di lei quelle del
-       lavoro lungo (giardiniere, Dream) e degli aiutanti, che durano oltre la
-       fine del turno. Prima erano una riga piccola e un chip sotto la chat. */
+    /* **Chi lavora, in fondo al filo** (05/10/2026, `home-work.js`). Jenny al
+       lavoro e' l'ultima riga del posto vivo; sopra di lei le bolle del lavoro
+       lungo (giardiniere, Dream) e degli aiutanti, che durano oltre la fine del
+       turno. Dal 13/10/2026 la sua non e' piu' una bolla ma un divisore
+       (`home-activity.js`): come bolla si leggeva come un messaggio. */
     const typing = document.createElement('div');
-    typing.className = 'home-work home-typing';
+    typing.className = 'home-typing';
     typing.hidden = true;
     this.chat.live.appendChild(typing);
     this.activity = new ActivityLine(typing, {
