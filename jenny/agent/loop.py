@@ -797,6 +797,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             sender_id=msg.sender_id,
             session_summary=pending_summary,
             session_metadata=session.metadata,
+            # L'ultimo messaggio salvato, prima di questo: quel che l'utente ha
+            # appuntato sulla bacheca dopo, il turno lo dice.
+            board_since=session.messages[-1].get("timestamp") if session.messages else None,
             workspace=scope.project_path,
             include_memory_recent_history=include_memory_recent_history,
             session_key=session.key,

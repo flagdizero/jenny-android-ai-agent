@@ -38,6 +38,17 @@ DRAWER_MAX_CHARS = 2500
 # Quanti cassetti al più entrano in un turno, se il messaggio nomina più schede.
 MAX_DRAWERS_PER_TURN = 2
 
+# Le foto di un cassetto nel turno: le più recenti, e un tetto alla riga, che
+# viene prima delle pagine (le pagine Jenny le ritrova da sola, le foto no).
+DRAWER_PHOTOS = 6
+PHOTOS_LINE_MAX_CHARS = 700
+
+# Le aggiunte dell'utente alla bacheca dall'ultimo messaggio: al più tre.
+MAX_RECENT = 3
+
+# Una parola del titolo aggancia la scheda se è lunga almeno così.
+TITLE_WORD_MIN = 4
+
 
 def _when(rem: Mapping[str, Any]) -> str:
     when = rem.get("when") or {}
@@ -246,16 +257,35 @@ def _workspace_of(root: Path) -> Path | None:
         return root.parent.parent if root.parent.name else None
 
 
+def _says(text: str, words: str) -> bool:
+    return bool(words) and re.search(rf"(?<!\w){re.escape(words)}(?!\w)", text) is not None
+
+
 def named_cards(root: Path, message: str) -> list[dict[str, Any]]:
-    """Le schede che il messaggio nomina, per titolo, nell'ordine della bacheca."""
+    """Le schede che il messaggio nomina, nell'ordine della bacheca.
+
+    Il titolo intero, o se no **una parola del titolo** che sta in quello di una
+    scheda sola: «acero» nomina «Acero giapponese». Fino al 14/10/2026 valeva
+    solo il titolo intero, e «ho messo una foto dell'acero» non portava il
+    cassetto. Una parola che sta in due titoli («vaso») non nomina nessuna delle
+    due; una corta (sotto ``TITLE_WORD_MIN``) nemmeno.
+    """
     board = read_board(root)
     if board is None or not message:
         return []
     text = message.casefold()
+    words: dict[str, set[str]] = {}
+    for card in board["cards"]:
+        for word in re.findall(r"\w+", card["title"].casefold()):
+            if len(word) >= TITLE_WORD_MIN:
+                words.setdefault(word, set()).add(card["id"])
     out = []
     for card in board["cards"]:
         title = card["title"].casefold().strip()
-        if title and re.search(rf"(?<!\w){re.escape(title)}(?!\w)", text):
+        if _says(text, title) or any(
+            len(words.get(word, ())) == 1 and _says(text, word)
+            for word in re.findall(r"\w+", title)
+        ):
             out.append(card)
     return out[:MAX_DRAWERS_PER_TURN]
 
@@ -288,10 +318,80 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     for rem in model.open_reminders(reminders):
         if rem.get("card") == card["id"]:
             parts.append(f"- Reminder: {rem['text']}, {_when(rem)}")
+    photos = _photos_line(root, card)
+    if photos:
+        parts.append(photos)
     pages = ", ".join(f"[[{Path(p).stem}]]" for p in card.get("pages") or [])
     if pages:
         parts.append(f"Its pages: {pages}")
     return "\n".join(parts)[:DRAWER_MAX_CHARS]
+
+
+def _day(iso: Any) -> str:
+    stamp = model.parse_iso(iso)
+    return stamp.strftime("%d %b") if stamp else ""
+
+
+def _photo_words(section: Mapping[str, Any]) -> str:
+    caption = section.get("caption") or ""
+    note = f"«{caption}»" if caption else "(no note)"
+    return f"{_day(section.get('created'))} {note} {section.get('path')}".strip()
+
+
+def _photos_line(root: Path, card: Mapping[str, Any]) -> str:
+    """Le foto del cassetto, dalla più recente: data, nota e percorso.
+
+    Fino al 14/10/2026 il cassetto nel turno le saltava: «ho messo una foto
+    dell'acero» costava otto chiamate (``uploads/``, grep, ``board.json``) prima
+    di trovarla.
+    """
+    photos = sorted(
+        (s for s in card.get("userSections") or []
+         if s.get("kind") == "photo" and (root / str(s.get("path"))).is_file()),
+        key=lambda s: s.get("created") or "", reverse=True,
+    )
+    if not photos:
+        return ""
+    shown = "; ".join(_photo_words(s) for s in photos[:DRAWER_PHOTOS])
+    more = f"; +{len(photos) - DRAWER_PHOTOS} more" if len(photos) > DRAWER_PHOTOS else ""
+    line = (f"- Photos the user pinned ({len(photos)}, newest first): {shown}{more}"
+            f" — read_file a path to look at it.")
+    return line if len(line) <= PHOTOS_LINE_MAX_CHARS else line[:PHOTOS_LINE_MAX_CHARS - 1] + "…"
+
+
+def recent_line(root: Path, since: Any) -> str:
+    """Quel che l'utente ha appuntato sulla bacheca dopo *since* (l'ultimo
+    messaggio della conversazione): foto e note, le più recenti.
+
+    Vale anche se il messaggio non nomina nessuna scheda: «l'hai vista la foto?»
+    è proprio il caso in cui Jenny deve sapere dov'è.
+    """
+    after = model.parse_iso(since)
+    board = read_board(root)
+    if after is None or board is None:
+        return ""
+    found = []
+    for card in board["cards"]:
+        for section in card.get("userSections") or []:
+            if section.get("kind") not in ("photo", "note"):
+                continue
+            if section["kind"] == "photo" and not (root / str(section.get("path"))).is_file():
+                continue
+            created = model.parse_iso(section.get("created"))
+            if created is not None and created > after:
+                found.append((created, card, section))
+    if not found:
+        return ""
+    found.sort(key=lambda item: item[0], reverse=True)
+    bits = []
+    for _created, card, section in found[:MAX_RECENT]:
+        if section["kind"] == "photo":
+            caption = section.get("caption") or ""
+            note = f", their note: «{caption}»" if caption else ", no note"
+            bits.append(f"a photo on «{card['title']}» ({section.get('path')}{note})")
+        else:
+            bits.append(f"a note on «{card['title']}»: «{section.get('text')}»")
+    return "Since the last message the user pinned on the board: " + "; ".join(bits) + "."
 
 
 def _app_line(view: Mapping[str, Any]) -> str:
@@ -313,6 +413,10 @@ def _app_line(view: Mapping[str, Any]) -> str:
             f"{view.get('at') or '—'}; {status}")
 
 
-def turn_lines(root: Path, message: str) -> list[str]:
-    """Le righe da aggiungere al contesto del turno: i cassetti delle schede nominate."""
-    return [drawer_text(root, card) for card in named_cards(root, message)]
+def turn_lines(root: Path, message: str, *, since: Any = None) -> list[str]:
+    """Le righe da aggiungere al contesto del turno: quel che l'utente ha
+    appuntato sulla bacheca dall'ultimo messaggio, e i cassetti delle schede
+    nominate."""
+    recent = recent_line(root, since) if since else ""
+    return [*([recent] if recent else []),
+            *(drawer_text(root, card) for card in named_cards(root, message))]

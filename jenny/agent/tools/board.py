@@ -290,6 +290,15 @@ def _redraw_if_stale(root: Path, card: dict[str, Any]) -> str:
     return _redraw(root, [card["id"]])
 
 
+def _section_words(section: dict) -> str:
+    """Una sezione dell'utente nella vista della bacheca; una foto con percorso e
+    nota, perché chi lavora sulla scheda sappia cos'è e dove aprirla."""
+    words = f"`{section['id']}` {section['kind']}"
+    if section["kind"] == "photo":
+        caption = section.get("caption") or ""
+        words += f" {section.get('path')}" + (f" «{caption}»" if caption else "")
+    return words
+
 def show(root: Path) -> str:
     """La bacheca in testo: quel che serve all'editore per decidere, e gli id per agire."""
     from jenny.board.view import offboard_pages, wiki_titles
@@ -311,7 +320,7 @@ def show(root: Path) -> str:
         if card.get("app"):
             lines.append(f"- `{card['id']}` «{card['title']}» — the app `{card['app']['slug']}`")
             continue
-        sections = ", ".join(f"`{s['id']}` {s['kind']}" for s in card["userSections"])
+        sections = ", ".join(_section_words(s) for s in card["userSections"])
         lines.append(
             f"- `{card['id']}` «{card['title']}» — pages: {', '.join(card['pages']) or 'none'}"
             f"; drawer: {_drawer_state(root, card, titles)}"
