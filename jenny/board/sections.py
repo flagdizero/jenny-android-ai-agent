@@ -11,7 +11,10 @@ queste sono dell'utente, e ognuna ha la sua verità altrove:
   ``section`` del manifest). **L'app produce, la bacheca trattiene**: la sezione
   legge l'ultimo valore che l'app ha lasciato nei suoi dati, con la sua firma
   (ora e fonte), e non la chiama mai.
-- **foto** — un file in ``raw/photos/``, perché ``raw/`` è il materiale grezzo.
+- **foto** — un file in ``raw/photos/``, perché ``raw/`` è il materiale grezzo,
+  con la nota dell'utente. La nota segue le regole della nota: una riga
+  ``[said]`` del diario, che finisce con ``(photo: <percorso>)``. Una foto
+  senza nota non scrive nel diario: non dà al giardiniere niente da portare.
 """
 
 from __future__ import annotations
@@ -213,14 +216,18 @@ def section_resolver(
     def resolve(section: Mapping[str, Any], ctx: Mapping[str, Any]) -> dict[str, Any]:
         nonlocal cursor
         kind = section.get("kind")
-        if kind == "note":
+
+        def journal_status() -> str:
+            nonlocal cursor
             ref = section.get("journalLine")
             if not isinstance(ref, str) or not ref:
-                return {"status": "pending"}
+                return "pending"
             if cursor is None:
                 cursor = _gardener_cursor(project_root)
-            return {"status": "integrated" if _note_integrated(ref, cursor)
-                    else "pending"}
+            return "integrated" if _note_integrated(ref, cursor) else "pending"
+
+        if kind == "note":
+            return {"status": journal_status()}
         if kind == "reminder":
             reminders = ctx.get("reminders") or {}
             rem = next(
@@ -243,7 +250,9 @@ def section_resolver(
             return out
         if kind == "photo":
             path = project_root / str(section.get("path"))
-            return {"exists": path.is_file()}
+            # Senza nota la foto non ha una riga di diario, e quindi nessuno stato.
+            status = journal_status() if section.get("caption") else "none"
+            return {"exists": path.is_file(), "status": status}
         if kind == "cron":
             jobs = ctx.get("cronJobs") or {}
             results = ctx.get("cronResults") or {}
@@ -277,12 +286,17 @@ def alert_probe(workspace: Path) -> Callable[[Mapping[str, Any]], bool]:
     return probe
 
 
-def journal_note(project_root: Path, text: str, *, timezone_name: str | None = None) -> str:
+def journal_note(project_root: Path, text: str, *, photo: str | None = None,
+                 timezone_name: str | None = None) -> str:
     """Scrive la riga ``[said]`` di una nota appena aggiunta; ne restituisce il riferimento.
 
     La nota resta sulla scheda come l'hai scritta; la riga è quel che il
     giardiniere promuove. Il riferimento (``raw/journal/AAAAMMGG.md:<riga>``)
     dice alla scheda quando la nota è entrata nella wiki.
+
+    Con *photo* è la nota scritta su una foto, e la riga finisce con
+    ``(photo: raw/photos/…)``: lo stesso in ogni lingua, perché il giardiniere
+    la riconosce dalla forma e non dalle parole.
     """
     from jenny.agent.tools.journal import SAID_MARKER, append_journal_entry
     from jenny.utils.helpers import safe_zoneinfo
@@ -293,6 +307,8 @@ def journal_note(project_root: Path, text: str, *, timezone_name: str | None = N
     day = stamp.date()
     page = wiki_journal_dir(project_root) / journal_page_name(day)
     line = " ".join(text.split())[:500]
+    if photo:
+        line = f"{line} (photo: {photo})"
     number = append_journal_entry(page, day, f"- {stamp:%H:%M} — {SAID_MARKER} {line}\n")
     return f"{page.relative_to(project_root).as_posix()}:{number}"
 

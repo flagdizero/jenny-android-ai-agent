@@ -453,7 +453,7 @@ def update_note(root: Path, ref: str, sid: str, text: Any, *,
 
     card_id, section = _section(root, ref, sid)
     if section["kind"] != "note":
-        raise BoardEditError("bad_request", "only notes and reminders can be edited")
+        raise BoardEditError("bad_request", "only notes, photos and reminders can be edited")
     body = model.clean_block(text, model.MAX_NOTE)
     if not body:
         raise BoardEditError("bad_request", "text required")
@@ -472,10 +472,42 @@ def update_note(root: Path, ref: str, sid: str, text: Any, *,
     mutate_board(root, apply)
 
 
+def update_photo_caption(root: Path, ref: str, sid: str, text: Any, *,
+                         timezone_name: str | None = None) -> None:
+    """La nota di una foto, corretta: come una nota, una riga di diario **nuova**.
+
+    Svuotata, la foto resta senza nota e non scrive niente: la riga di prima,
+    se c'era, resta la verità di quando è stata detta.
+    """
+    from jenny.board.sections import journal_note
+
+    card_id, section = _section(root, ref, sid)
+    if section["kind"] != "photo":
+        raise BoardEditError("bad_request", "only notes, photos and reminders can be edited")
+    body = model.clean_text(text, model.MAX_TEXT)
+    line = None
+    if body:
+        try:
+            line = journal_note(root, body, photo=section["path"], timezone_name=timezone_name)
+        except OSError as exc:
+            logger.warning("board: photo note not journaled in {}: {}", root.name, exc)
+
+    def apply(board: dict[str, Any]) -> None:
+        for s in need_card(board, card_id)["userSections"]:
+            if s["id"] == sid:
+                s["caption"] = body
+                if line:
+                    s["journalLine"] = line
+                elif not body:
+                    s.pop("journalLine", None)
+
+    mutate_board(root, apply)
+
+
 def update_reminder(root: Path, ref: str, sid: str, text: Any, when: Any = None) -> None:
     _card, section = _section(root, ref, sid)
     if section["kind"] != "reminder":
-        raise BoardEditError("bad_request", "only notes and reminders can be edited")
+        raise BoardEditError("bad_request", "only notes, photos and reminders can be edited")
     update_reminder_by_id(root, section["reminder"], text, when)
 
 

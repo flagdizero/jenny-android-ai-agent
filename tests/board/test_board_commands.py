@@ -474,7 +474,7 @@ async def test_the_drawer_shows_a_reminder_once(ctx, notebook: Path) -> None:
 
 
 def test_the_drawer_takes_the_notes_out_of_the_sections(notebook: Path) -> None:
-    """Le note sono il mazzetto accanto al titolo, non sezioni fra le altre."""
+    """Le note e le foto sono i due mazzetti sotto il brief, non sezioni fra le altre."""
     from jenny.board.sections import section_resolver
 
     _seed(notebook)
@@ -496,4 +496,179 @@ def test_the_drawer_takes_the_notes_out_of_the_sections(notebook: Path) -> None:
     assert [n["id"] for n in view["notes"]] == ["s-note-2", "s-note-1"]
     assert view["notes"][0] == {"id": "s-note-2", "text": "Il vaso bianco in cantina.",
                                 "created": "2026-10-12T09:00:00+02:00", "status": "pending"}
-    assert [s["kind"] for s in view["userSections"]] == ["photo"]
+    assert view["userSections"] == []
+    # La foto (qui il file non c'è, e non ha nota: nessuno stato verso il diario).
+    assert view["photos"] == [{"id": "s-photo-1", "path": "raw/photos/acero.jpg", "caption": "",
+                               "created": "2026-10-05T09:00:00+02:00", "exists": False,
+                               "status": "none"}]
+
+
+# ── Le foto: la galleria, la loro nota nel diario; le note sulla bacheca ─────
+
+
+def _photo(notebook: Path, name: str, created: str, caption: str = "") -> dict:
+    (notebook / "raw" / "photos").mkdir(parents=True, exist_ok=True)
+    (notebook / "raw" / "photos" / name).write_bytes(b"\xff\xd8 fake")
+    return {"id": f"s-photo-{name[:-4]}", "kind": "photo", "created": created,
+            "path": f"raw/photos/{name}", "caption": caption}
+
+
+def _journal(notebook: Path) -> str:
+    return "".join(p.read_text() for p in sorted((notebook / "raw" / "journal").glob("*.md")))
+
+
+async def test_a_photo_with_a_note_is_a_said_line_without_one_none(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    data = base64.b64encode(b"\xff\xd8 fake").decode()
+    await dispatch_command(ctx, "board.section.add", {
+        "wiki": "piante", "card": "acero", "kind": "photo", "mime": "image/jpeg",
+        "data": data, "caption": "Il germoglio nuovo è rosso!",
+    })
+    first = model.card_by_id(read_board(notebook), "acero")["userSections"][0]
+    assert first["journalLine"].startswith("raw/journal/")
+    assert f"[said] Il germoglio nuovo è rosso! (photo: {first['path']})" in _journal(notebook)
+    # Senza nota non c'è niente da portare nella wiki: nessuna riga.
+    before = _journal(notebook)
+    await dispatch_command(ctx, "board.section.add", {
+        "wiki": "piante", "card": "monstera", "kind": "photo", "mime": "image/jpeg",
+        "data": data, "caption": "  ",
+    })
+    second = model.card_by_id(read_board(notebook), "monstera")["userSections"][0]
+    assert "journalLine" not in second and second["caption"] == ""
+    assert _journal(notebook) == before
+
+
+async def test_correcting_a_photo_note_writes_a_new_line(ctx, notebook: Path) -> None:
+    from jenny.board.sections import section_resolver
+
+    _seed(notebook)
+
+    def apply(board):
+        model.card_by_id(board, "acero")["userSections"].append(
+            _photo(notebook, "a.jpg", "2026-10-14T17:48:43+02:00"))
+
+    mutate_board(notebook, apply)
+    resolver = section_resolver(notebook.parent.parent, notebook)
+    assert build_card_view(notebook, "acero", sections_resolver=resolver)["photos"][0]["status"] \
+        == "none"
+    await dispatch_command(ctx, "board.section.update", {
+        "wiki": "piante", "card": "acero", "id": "s-photo-a", "text": "Prime punte rosse",
+    })
+    photo = model.card_by_id(read_board(notebook), "acero")["userSections"][0]
+    assert photo["caption"] == "Prime punte rosse" and photo["journalLine"]
+    assert "[said] Prime punte rosse (photo: raw/photos/a.jpg)" in _journal(notebook)
+    view = build_card_view(notebook, "acero", sections_resolver=resolver)
+    assert view["photos"][0]["status"] == "pending" and view["photos"][0]["exists"] is True
+    # Svuotata: la foto resta senza nota, e la riga di prima resta nel diario.
+    before = _journal(notebook)
+    await dispatch_command(ctx, "board.section.update", {
+        "wiki": "piante", "card": "acero", "id": "s-photo-a", "text": "",
+    })
+    photo = model.card_by_id(read_board(notebook), "acero")["userSections"][0]
+    assert photo["caption"] == "" and "journalLine" not in photo
+    assert _journal(notebook) == before
+    # Togliere la foto toglie la sezione, non il file: ``raw/`` è il grezzo.
+    await dispatch_command(ctx, "board.section.remove", {
+        "wiki": "piante", "card": "acero", "id": "s-photo-a",
+    })
+    assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
+    assert (notebook / "raw" / "photos" / "a.jpg").is_file()
+
+
+def _notes_and_photos(notebook: Path) -> None:
+    def apply(board):
+        model.card_by_id(board, "acero")["userSections"] += [
+            {"id": "s-note-1", "kind": "note", "created": "2026-10-02T20:30:00+02:00",
+             "text": "Il vaso nuovo è da 20 cm."},
+            {"id": "s-note-2", "kind": "note", "created": "2026-10-14T17:55:00+02:00",
+             "text": "Rossa senza essere una cultivar."},
+            {"id": "s-note-3", "kind": "note", "created": "2026-10-10T09:10:00+02:00",
+             "text": "Niente concime fino a marzo."},
+            _photo(notebook, "p1.jpg", "2026-09-20T10:15:00+02:00", "Appena rientrato"),
+            _photo(notebook, "p2.jpg", "2026-10-01T09:30:00+02:00", "Prime punte rosse"),
+            _photo(notebook, "p3.jpg", "2026-10-08T17:40:00+02:00"),
+            _photo(notebook, "p4.jpg", "2026-10-14T17:48:43+02:00", "Il germoglio è rosso!"),
+            {"id": "s-photo-gone", "kind": "photo", "created": "2026-10-15T08:00:00+02:00",
+             "path": "raw/photos/gone.jpg", "caption": "il file non c'è più"},
+        ]
+
+    mutate_board(notebook, apply)
+
+
+def test_the_board_has_a_lilac_postit_and_a_gallery_per_card(notebook: Path) -> None:
+    _seed(notebook)
+    _three_reminders(notebook)
+    _notes_and_photos(notebook)
+    view = build_board_view(notebook, today=date(2026, 10, 14))
+    # Solo l'acero ha note e foto.
+    assert [n["card"] for n in view["notePostits"]] == ["acero"]
+    lilac = view["notePostits"][0]
+    assert lilac["count"] == 3
+    assert [r["text"] for r in lilac["rows"]] == [
+        "Rossa senza essere una cultivar.", "Niente concime fino a marzo.",
+    ]
+    gallery = view["galleries"][0]
+    # Una foto il cui file non c'è più non conta e non si mostra.
+    assert gallery["card"] == "acero" and gallery["count"] == 4
+    assert [p["path"] for p in gallery["photos"]] == [
+        "raw/photos/p4.jpg", "raw/photos/p3.jpg", "raw/photos/p2.jpg",
+    ]
+    assert gallery["photos"][0]["caption"] == "Il germoglio è rosso!"
+    # Nati accanto alla scheda senza coprire niente: schede, gialli, fra loro.
+    rects = [(p["pos"]["x"], p["pos"]["y"], p["pos"]["x"] + model.POSTIT_BOX[0],
+              p["pos"]["y"] + model.POSTIT_BOX[1]) for p in view["postits"]]
+    rects.append((lilac["pos"]["x"], lilac["pos"]["y"], lilac["pos"]["x"] + model.NOTES_BOX[0],
+                  lilac["pos"]["y"] + model.NOTES_BOX[1]))
+    rects.append((gallery["pos"]["x"], gallery["pos"]["y"],
+                  gallery["pos"]["x"] + model.GALLERY_BOX[0],
+                  gallery["pos"]["y"] + model.GALLERY_BOX[1]))
+    for card in view["cards"]:
+        rects.append((card["pos"]["x"], card["pos"]["y"],
+                      card["pos"]["x"] + card["box"][0], card["pos"]["y"] + card["box"][1]))
+    for i, a in enumerate(rects):
+        for b in rects[i + 1:]:
+            assert model._overlap(a, b) == 0, (a, b)
+    # I gialli restano dove nascevano prima che il lilla e la galleria esistessero.
+    plain = build_board_view(notebook, today=date(2026, 10, 14))
+    assert [p["pos"] for p in plain["postits"]] == [p["pos"] for p in view["postits"]]
+    # Il lilla e la galleria non contano nei 40 oggetti.
+    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 4
+
+
+def test_a_card_without_notes_or_photos_has_neither(notebook: Path) -> None:
+    _seed(notebook)
+    view = build_board_view(notebook)
+    assert view["notePostits"] == [] and view["galleries"] == []
+
+
+async def test_moving_the_lilac_and_the_gallery_makes_their_place_the_users(
+    ctx, notebook: Path,
+) -> None:
+    _seed(notebook)
+    _notes_and_photos(notebook)
+    await dispatch_command(ctx, "board.move", {
+        "wiki": "piante", "kind": "notes", "id": "acero", "x": 30, "y": 60,
+    })
+    await dispatch_command(ctx, "board.move", {
+        "wiki": "piante", "kind": "photos", "id": "acero", "x": 70, "y": 5.5,
+    })
+    card = model.card_by_id(read_board(notebook), "acero")
+    assert card["notesPos"] == {"x": 30.0, "y": 60.0, "by": "user"}
+    assert card["photosPos"] == {"x": 70.0, "y": 5.5, "by": "user"}
+    view = build_board_view(notebook)
+    assert view["notePostits"][0]["pos"] == card["notesPos"]
+    assert view["galleries"][0]["pos"] == card["photosPos"]
+    # Dove li ha messi l'utente, occupano il muro: una scheda nuova non ci va sopra.
+    x, y = model.free_slot(read_board(notebook), read_reminders(notebook),
+                           near=(70.0, 5.5))
+    assert model._overlap((x, y, x + model.CARD_BOX[0], y + model.CARD_BOX[1]),
+                          (70.0, 5.5, 70.0 + model.GALLERY_BOX[0],
+                           5.5 + model.GALLERY_BOX[1])) == 0
+
+
+def test_jenny_does_not_move_the_lilac_or_the_gallery() -> None:
+    card = {"id": "acero", "title": "Acero", "pos": {"x": 1, "y": 1}}
+    for key in ("notesPos", "photosPos"):
+        before = model.normalize_board({"cards": [{**card, key: {"x": 70, "y": 10}}]})
+        after = model.normalize_board({"cards": [{**card, key: {"x": 10, "y": 10}}]})
+        assert f"card acero: {key} changed" in model.ownership_violations(before, after)

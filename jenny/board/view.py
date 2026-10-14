@@ -78,24 +78,48 @@ def card_signal(
     return None
 
 
+def _place_near(
+    board: Mapping[str, Any],
+    reminders: Mapping[str, Any],
+    near: tuple[float, float],
+    box: tuple[float, float],
+    placed: list[tuple[float, float, float, float]],
+) -> dict[str, Any]:
+    """Il posto libero più vicino a *near* per un oggetto di ingombro *box*.
+
+    Calcolato e non salvato: l'oggetto nasce accanto alla sua scheda senza
+    coprire niente (né le schede né gli altri oggetti già messi in questo giro),
+    e resta lì finché qualcuno non lo porta altrove.
+    """
+    x, y = model.free_slot(board, reminders, box=box, near=near, extra=placed)
+    placed.append((x, y, x + box[0], y + box[1]))
+    return {"x": x, "y": y, "by": model.JENNY}
+
+
 def _postit_pos(
     board: Mapping[str, Any],
     reminders: Mapping[str, Any],
     card: Mapping[str, Any],
     placed: list[tuple[float, float, float, float]],
 ) -> dict[str, Any]:
-    """Il posto del post-it di una scheda finché l'utente non lo sposta: il
-    posto libero più vicino all'angolo in basso a destra della sua polaroid.
-
-    Calcolato e non salvato: il post-it nasce accanto alla scheda senza coprire
-    niente (né le schede né gli altri post-it già messi in questo giro), e resta
-    lì finché qualcuno non lo porta altrove.
-    """
+    """Il posto del post-it delle attese finché l'utente non lo sposta: vicino
+    all'angolo in basso a destra della sua polaroid."""
     w, h = model.card_box(card)
     near = (float(card["pos"]["x"]) + w * 0.6, float(card["pos"]["y"]) + h * 0.75)
-    x, y = model.free_slot(board, reminders, box=model.POSTIT_BOX, near=near, extra=placed)
-    placed.append((x, y, x + model.POSTIT_BOX[0], y + model.POSTIT_BOX[1]))
-    return {"x": x, "y": y, "by": model.JENNY}
+    return _place_near(board, reminders, near, model.POSTIT_BOX, placed)
+
+
+def _card_notes(card: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Le note dell'utente su una scheda, dalla più recente."""
+    notes = [s for s in card.get("userSections") or [] if s.get("kind") == "note"]
+    return sorted(notes, key=lambda s: s.get("created") or "", reverse=True)
+
+
+def _card_photos(project_root: Path, card: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Le foto di una scheda il cui file c'è ancora, dalla più recente."""
+    photos = [s for s in card.get("userSections") or []
+              if s.get("kind") == "photo" and (project_root / str(s.get("path"))).is_file()]
+    return sorted(photos, key=lambda s: s.get("created") or "", reverse=True)
 
 
 def _app_card(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
@@ -155,6 +179,8 @@ def build_board_view(
             "cards": [],
             "notes": [],
             "postits": [],
+            "notePostits": [],
+            "galleries": [],
             "connections": [],
             "suggestions": [],
             "since": [],
@@ -205,6 +231,39 @@ def build_board_view(
          "pos": card.get("postitPos") or _postit_pos(board, reminders, card, placed)}
         for card in board["cards"] if card["id"] in with_notes
     ]
+    # Le note dell'utente, accorpate in un post-it lilla per scheda (sotto la
+    # polaroid), e le sue foto in un mazzetto (a destra). Dopo i gialli, così i
+    # posti calcolati dei gialli restano quelli di sempre.
+    note_postits = []
+    for card in board["cards"]:
+        jots = _card_notes(card)
+        if not jots:
+            continue
+        h = model.card_box(card)[1]
+        near = (float(card["pos"]["x"]), float(card["pos"]["y"]) + h + 1)
+        note_postits.append({
+            "card": card["id"],
+            "pos": card.get("notesPos")
+            or _place_near(board, reminders, near, model.NOTES_BOX, placed),
+            "count": len(jots),
+            "rows": [{"text": n.get("text") or "", "created": n.get("created") or ""}
+                     for n in jots[:model.NOTE_ROWS]],
+        })
+    galleries = []
+    for card in board["cards"]:
+        photos = _card_photos(project_root, card)
+        if not photos:
+            continue
+        w = model.card_box(card)[0]
+        near = (float(card["pos"]["x"]) + w + 3, float(card["pos"]["y"]))
+        galleries.append({
+            "card": card["id"],
+            "pos": card.get("photosPos")
+            or _place_near(board, reminders, near, model.GALLERY_BOX, placed),
+            "count": len(photos),
+            "photos": [{"id": p["id"], "path": p["path"], "caption": p.get("caption") or ""}
+                       for p in photos[:model.GALLERY_SHOWN]],
+        })
     last_seen = _stamp(board.get("lastSeen"))
     since = [row for row in board.get("since") or [] if _stamp(row.get("at")) > last_seen]
     offboard = offboard_pages(board, titles)
@@ -215,6 +274,8 @@ def build_board_view(
         "notes": notes,
         "postits": postits,
         "postitRows": model.POSTIT_ROWS,
+        "notePostits": note_postits,
+        "galleries": galleries,
         "connections": [
             c for c in board["connections"] if c["a"] in on_board and c["b"] in on_board
         ],
@@ -286,6 +347,7 @@ def build_card_view(
             })
     user_sections = []
     notes = []
+    photos = []
     # Il cassetto di una scheda che **e'** un'app comincia dall'app: la sua
     # striscia intera (la scheda senza schermo si apre qui, non altrove).
     own = ([{"id": model.APP_CARD, "kind": "app", "app": card["app"]["slug"],
@@ -304,14 +366,20 @@ def build_card_view(
                 "cronJobs": cron_jobs or {},
                 "cronResults": board.get("cronResults") or {},
             }))
-        # Le note dell'utente non sono sezioni fra le altre: sono il mazzetto
-        # di post-it accanto al titolo (``home-board-notes.js``).
+        # Le note e le foto dell'utente non sono sezioni fra le altre: sono i
+        # due mazzetti sotto il brief, post-it lilla e polaroid
+        # (``home-board-notes.js``, ``home-board-photos.js``).
         if section.get("kind") == "note":
             notes.append({key: resolved[key] for key in ("id", "text", "created", "status")
                           if key in resolved})
+        elif section.get("kind") == "photo":
+            photos.append({key: resolved[key] for key in
+                           ("id", "path", "caption", "created", "exists", "status")
+                           if key in resolved})
         else:
             user_sections.append(resolved)
     notes.sort(key=lambda n: n.get("created") or "", reverse=True)
+    photos.sort(key=lambda p: p.get("created") or "", reverse=True)
     return {
         "id": card["id"],
         "title": card["title"],
@@ -327,8 +395,9 @@ def build_card_view(
         "reminders": model.sorted_reminders(
             r for r in model.open_reminders(reminders) if r.get("card") == card_id
         ),
-        # Le note dell'utente, dalla più recente.
+        # Le note e le foto dell'utente, dalla più recente.
         "notes": notes,
+        "photos": photos,
         "userSections": user_sections,
         "connections": connections,
         # Una correzione integrata mostra la sua ✓ fino alla prossima apertura
