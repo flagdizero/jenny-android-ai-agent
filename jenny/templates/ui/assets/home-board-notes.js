@@ -19,12 +19,7 @@
 
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
-
-/* Le carte del mazzetto che si vedono; le altre aspettano sotto la terza. */
-const DECK_SLOTS = 3;
-/* Quanto resta fuori, di lato, la carta sfilata prima di passare sotto: a meta'
-   della sua corsa, cosi' uscire e rientrare sono un movimento solo. */
-const OUT_MS = 170;
+import { PinnedDeck } from './home-board-deck.js';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -47,10 +42,6 @@ function noteDate(iso, locale = i18n.locale) {
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
 }
 
-function reducedMotion() {
-  return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
-}
-
 export class DrawerNotes {
   /**
    * @param sheet  il foglio condiviso della bacheca (`HomeBoardSheet`).
@@ -65,7 +56,6 @@ export class DrawerNotes {
     this.notes = [];
     /** La nota davanti al mazzetto, per indice. */
     this.front = 0;
-    this._busy = false;
     /** Nel foglio: la nota aperta per esteso, quella in correzione ('new' per
      *  una nota nuova), e il testo che si sta scrivendo. */
     this.openId = null;
@@ -104,58 +94,24 @@ export class DrawerNotes {
   /* ── Il mazzetto ── */
 
   _deck() {
-    const deck = button('home-notes-deck', '', () => this._next());
-    this.cards = this.notes.map((note, i) => {
-      const card = el('span', 'home-notes-card');
-      card.setAttribute('aria-hidden', 'true');
-      const foot = el('span', 'home-notes-card-foot');
-      foot.append(el('span', '', noteDate(note.created)), el('span', '', `${i + 1}/${this.notes.length}`));
-      card.append(el('span', 'home-notes-pin'), el('span', 'home-notes-card-text', note.text), foot);
-      deck.appendChild(card);
-      return card;
-    });
-    this.deck = deck;
-    this._layout(null);
-    return deck;
-  }
-
-  /** Ogni carta al suo posto (una classe: posizione, colore e ombra sono del
-   *  CSS). L'ordine di sovrapposizione si scrive qui, in linea: il mazzetto ha
-   *  `isolation: isolate`, quindi resta dentro di lui e non puo' salire sopra
-   *  Jenny o sopra il foglio — e il foglio di stile della casa resta senza
-   *  `z-index`, come vuole la regola (l'unico e' di Jenny). */
-  _layout(flyer) {
     const n = this.notes.length;
-    this.cards.forEach((card, i) => {
-      const k = (i - this.front + n) % n;
-      const slot = i === flyer ? 'is-out' : k < DECK_SLOTS ? `is-slot-${k}` : 'is-hidden';
-      card.className = `home-notes-card ${slot}`;
-      card.style.zIndex = String(i === flyer ? DECK_SLOTS + 2 : DECK_SLOTS - Math.min(k, DECK_SLOTS));
+    this._pinned = new PinnedDeck({
+      className: 'home-notes-deck',
+      cardClass: 'home-notes-card',
+      count: n,
+      front: this.front,
+      onTurn: (front) => { this.front = front; },
+      drawCard: (i) => {
+        const note = this.notes[i];
+        const foot = el('span', 'home-notes-card-foot');
+        foot.append(el('span', '', noteDate(note.created)), el('span', '', `${i + 1}/${n}`));
+        return [el('span', 'home-notes-pin'), el('span', 'home-notes-card-text', note.text), foot];
+      },
+      label: (i) => i18n.t('board.notes.deck', { n: i + 1, count: n, text: this.notes[i].text }),
     });
-    const note = this.notes[this.front];
-    this.deck.setAttribute('aria-label', i18n.t('board.notes.deck', {
-      n: this.front + 1, count: n, text: note.text,
-    }));
-  }
-
-  /** La nota davanti si sfila di lato mentre le altre avanzano di un posto;
-   *  a meta' passa sotto e rientra in fondo. Un tocco durante il movimento
-   *  non conta. */
-  _next() {
-    const n = this.notes.length;
-    if (n < 2 || this._busy) return;
-    const flyer = this.front;
-    this.front = (this.front + 1) % n;
-    if (reducedMotion()) {
-      this._layout(null);
-      return;
-    }
-    this._busy = true;
-    this._layout(flyer);
-    setTimeout(() => {
-      this._busy = false;
-      if (this.cards[flyer]?.isConnected) this._layout(null);
-    }, OUT_MS);
+    this.deck = this._pinned.el;
+    this.cards = this._pinned.cards;
+    return this.deck;
   }
 
   /* ── Tutte le note, nel foglio ── */

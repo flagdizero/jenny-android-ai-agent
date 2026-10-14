@@ -18,6 +18,12 @@
  *    sposti, come una scheda. Fino al 12/10/2026 ogni *attesa* era un post-it a
  *    se', senza filo: sette foglietti per tre piante, e di chi fossero lo
  *    diceva solo la vicinanza.
+ *  - **post-it lilla** = le tue note di una scheda, accorpate: le ultime due e
+ *    «+N note». **galleria** = le sue foto, un mazzetto di polaroid col numero.
+ *    Stessa grammatica del giallo (un filo verso la scheda, trascina per
+ *    spostarli), ma il tocco apre il foglio delle note o la galleria **qui**,
+ *    sulla bacheca, senza passare dal cassetto. Fino al 14/10/2026 le note
+ *    stavano solo nel cassetto e le foto erano sezioni in fondo al cassetto.
  *  - **busta** = le proposte di Jenny. E' l'unico modo in cui la bacheca cambia
  *    forma senza che sia tu a farlo.
  *  - **un segnale per scheda, al massimo**: angolo rosso (un problema), angolo
@@ -40,6 +46,8 @@ import { i18n } from './shared/i18n.js';
 import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 import { metaText, renderBlock } from './home-board-blocks.js';
+import { DrawerNotes } from './home-board-notes.js';
+import { DrawerPhotos, PhotoUrls, photoDate } from './home-board-photos.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
 export const LONG_PRESS_MS = 450;
@@ -152,7 +160,7 @@ const ZOOM_EXTENT = [0.3, 2.2];
    quando una riga supera NEAR_ROW_PX pixel sullo schermo. */
 const SLIP_ROW = 0.0355;
 const NEAR_ROW_PX = 30;
-const ITEM_BOX = { card: [20, 40], postit: [24, 44] };
+const ITEM_BOX = { card: [20, 40], postit: [24, 44], notes: [24, 36], photos: [21, 32] };
 /* Entrando, la bacheca si inquadra tutta (`zoomToFit`): l'aria in pixel fra le
    schede e il bordo, e l'ingrandimento massimo di quell'inquadratura — a
    grandezza naturale, non oltre: due schede sole non diventano due manifesti. */
@@ -233,6 +241,16 @@ export class HomeBoard {
     /** La barra della scheda tenuta premuta, creata la prima volta che serve. */
     this._cardBar = null;
 
+    /* Le note e le foto di una scheda si aprono anche da qui, nello stesso
+       foglio del cassetto: una scrittura rilegge la scheda e ridisegna il muro. */
+    this.photoUrls = new PhotoUrls();
+    const write = (method, params) => this._writeAttached(method, params);
+    this.cardNotes = sheet ? new DrawerNotes({ sheet, write }) : null;
+    this.cardPhotos = sheet
+      ? new DrawerPhotos({ sheet, write, notebook: () => this.notebook, urls: this.photoUrls })
+      : null;
+    if (this.cardPhotos) this.cardPhotos.onFailed = () => showToast(i18n.t('board.section.failed'), 'error');
+
     this.sinceBtn?.addEventListener('click', () => this.openSince());
     /* Il menu del browser sulla pressione lunga non deve mai comparire sopra
        una scheda. */
@@ -267,6 +285,7 @@ export class HomeBoard {
        sembrava la sua. Lo stesso quaderno invece resta com'e' fino alla
        risposta: ridisegnare da vuoto sarebbe un lampo per niente. */
     if (notebook !== this.notebook) {
+      this.photoUrls.drop();
       this._graph = null;
       this.focus = null;
       this.data = null;
@@ -328,9 +347,18 @@ export class HomeBoard {
       this._drawList();
       return;
     }
-    /* I post-it prima delle schede: se una gli sta sopra, si legge la scheda. */
+    /* I post-it prima delle schede: se una gli sta sopra, si legge la scheda.
+       Il giallo, il lilla, la galleria. */
     for (const postit of data.postits || []) {
       const el = this._postit(postit, data);
+      if (el) this.wall.appendChild(el);
+    }
+    for (const np of data.notePostits || []) {
+      const el = this._notePostit(np, data);
+      if (el) this.wall.appendChild(el);
+    }
+    for (const g of data.galleries || []) {
+      const el = this._gallery(g, data);
       if (el) this.wall.appendChild(el);
     }
     /* Una scheda-app con dati e' una striscia; le altre, polaroid. */
@@ -488,6 +516,8 @@ export class HomeBoard {
       take(c.pos, w, h);
     }
     for (const p of this.data.postits || []) take(p.pos, ITEM_BOX.postit[0], ITEM_BOX.postit[1]);
+    for (const p of this.data.notePostits || []) take(p.pos, ITEM_BOX.notes[0], ITEM_BOX.notes[1]);
+    for (const p of this.data.galleries || []) take(p.pos, ITEM_BOX.photos[0], ITEM_BOX.photos[1]);
     this._zoom.translateExtent([
       [((x0 - AIR) / 100) * W, ((y0 - AIR) / 100) * H],
       [((x1 + AIR) / 100) * W, ((y1 + AIR) / 100) * H],
@@ -542,7 +572,7 @@ export class HomeBoard {
     if (!this._zoom || !this.canvas || this.listView) return false;
     const box = this.canvas.getBoundingClientRect();
     if (!box?.width || !box?.height) return false;
-    const items = this.wall.querySelectorAll('.home-board-card, .home-board-postit');
+    const items = this.wall.querySelectorAll('.home-board-card, .home-board-postit, .home-board-gallery');
     if (!items.length) {
       this._lookAt(window.d3.zoomIdentity);
       return true;
@@ -859,6 +889,125 @@ export class HomeBoard {
     return el;
   }
 
+  /** Il post-it lilla delle note di una scheda: le ultime `noteRows` (due),
+   *  data e testo, e «+N note». Una nota sola e' un foglio; di piu', sotto ne
+   *  spunta un secondo. Il tocco apre le note della scheda nel foglio, qui. */
+  _notePostit(np, data) {
+    const card = data.cards.find((c) => c.id === np.card);
+    if (!card || !np.rows?.length) return null;
+    const item = np;
+    item.id = np.card;
+    const el = document.createElement('div');
+    el.className = `home-board-item home-board-postit is-notes${np.count > 1 ? ' is-many' : ''}`;
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.style.setProperty('--tilt', `${this._tilt(np.card) - 2}deg`);
+    const words = [];
+    for (const note of np.rows) {
+      const row = document.createElement('span');
+      row.className = 'home-board-postit-row';
+      const when = document.createElement('span');
+      when.className = 'home-board-postit-when';
+      when.textContent = photoDate(note.created);
+      const text = document.createElement('span');
+      text.className = 'home-board-postit-text';
+      text.textContent = note.text;
+      row.append(when, text);
+      el.appendChild(row);
+      words.push(`${when.textContent}: ${note.text}`);
+    }
+    const rest = np.count - np.rows.length;
+    if (rest > 0) {
+      const more = document.createElement('span');
+      more.className = 'home-board-postit-more';
+      more.textContent = i18n.t(rest === 1 ? 'board.notesPostit.moreOne' : 'board.notesPostit.more',
+        { count: rest });
+      el.appendChild(more);
+      words.push(more.textContent);
+    }
+    el.setAttribute('aria-label', i18n.t('board.notesPostit.label',
+      { card: card.title, notes: words.join('; ') }));
+    el.dataset.card = np.card;
+    this._place(el, item);
+    this._bind(el, item, 'notes');
+    return el;
+  }
+
+  /** La galleria di una scheda: le ultime tre foto a ventaglio, la prima con la
+   *  sua nota, e quante sono. Il tocco apre la galleria nel foglio, qui. */
+  _gallery(g, data) {
+    const card = data.cards.find((c) => c.id === g.card);
+    if (!card || !g.photos?.length) return null;
+    const item = g;
+    item.id = g.card;
+    const el = document.createElement('div');
+    /* Grande quanto le polaroid che porta: v. `.home-board-gallery` nel CSS. */
+    el.className = `home-board-item home-board-gallery is-n${Math.min(3, g.photos.length)}`;
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.style.setProperty('--tilt', `${this._tilt(g.card) + 1}deg`);
+    /* Dal fondo: l'ultima nel DOM e' quella davanti, senza `z-index`. */
+    g.photos.slice(0, 3).forEach((photo, i) => {
+      const pol = document.createElement('span');
+      pol.className = `home-board-gallery-photo is-${i}`;
+      const img = document.createElement('img');
+      img.alt = '';
+      this.photoUrls.fill(img, this.notebook, photo.path);
+      const cap = document.createElement('span');
+      cap.className = 'home-board-gallery-cap';
+      cap.textContent = i === 0 ? photo.caption : '';
+      pol.append(img, cap);
+      el.prepend(pol);
+    });
+    const count = document.createElement('span');
+    count.className = 'home-board-gallery-count';
+    count.textContent = String(g.count);
+    el.appendChild(count);
+    el.setAttribute('aria-label', i18n.t(g.count === 1 ? 'board.gallery.labelOne' : 'board.gallery.label',
+      { card: card.title, count: g.count }));
+    el.dataset.card = g.card;
+    this._place(el, item);
+    this._bind(el, item, 'photos');
+    return el;
+  }
+
+  /** Le note o le foto di una scheda nel foglio, sopra la bacheca. */
+  async _openAttached(kind, cardId) {
+    const view = kind === 'notes' ? this.cardNotes : this.cardPhotos;
+    if (!view) return;
+    let data;
+    try {
+      data = await api.getBoardCard(this.notebook, cardId);
+    } catch (err) {
+      console.warn('home.board: card failed', err);
+      showToast(i18n.t('board.failed'), 'error');
+      return;
+    }
+    view.render(data);
+    view.openList();
+  }
+
+  /** Una scrittura dal foglio aperto sulla bacheca: poi la scheda si rilegge
+   *  (il foglio si ridisegna dai dati nuovi) e il muro si ridisegna. */
+  async _writeAttached(method, params) {
+    try {
+      await rpc.board(method, this.notebook, params);
+    } catch (err) {
+      console.warn(`home.board: ${method} failed`, err);
+      showToast(i18n.t('board.section.failed'), 'error');
+      return false;
+    }
+    try {
+      const data = await api.getBoardCard(this.notebook, params.card);
+      this.cardNotes?.render(data);
+      this.cardPhotos?.render(data);
+    } catch (err) {
+      console.warn('home.board: card failed', err);
+    }
+    await this.load(this.notebook);
+    return true;
+  }
+
   /* Un'inclinazione piccola e stabile per oggetto: la bacheca deve sembrare
      appuntata a mano, non stampata — ma sempre allo stesso modo. */
   _tilt(id) {
@@ -899,6 +1048,18 @@ export class HomeBoard {
         when.className = 'home-board-list-next';
         when.textContent = `${next.text} · ${whenLabel(next.when)}`;
         row.appendChild(when);
+      }
+      /* Quante note e quante foto, a parole: le immagini nell'elenco no. */
+      const counts = [];
+      const nNotes = this.data.notePostits?.find((p) => p.card === card.id)?.count || 0;
+      const nPhotos = this.data.galleries?.find((g) => g.card === card.id)?.count || 0;
+      if (nNotes) counts.push(i18n.t(nNotes === 1 ? 'board.list.notesOne' : 'board.list.notes', { count: nNotes }));
+      if (nPhotos) counts.push(i18n.t(nPhotos === 1 ? 'board.list.photosOne' : 'board.list.photos', { count: nPhotos }));
+      if (counts.length) {
+        const kept = document.createElement('span');
+        kept.className = 'home-board-list-kept';
+        kept.textContent = counts.join(' · ');
+        row.appendChild(kept);
       }
       if (card.signal) {
         const sig = document.createElement('span');
@@ -946,6 +1107,11 @@ export class HomeBoard {
       /* Il post-it apre sempre il cassetto della sua scheda, anche di un'app. */
       if (kind === 'postit') {
         this.onOpenCard?.(item.id, card?.title || '');
+        return;
+      }
+      /* Il lilla e la galleria aprono il loro foglio qui, sulla bacheca. */
+      if (kind === 'notes' || kind === 'photos') {
+        this._openAttached(kind, item.id);
         return;
       }
       /* La polaroid di un'app apre l'app. */
@@ -1423,8 +1589,9 @@ export class HomeBoard {
       label.style.top = `${from.y + (to.y - from.y) * LABEL_AT}px`;
       this.wall.appendChild(label);
     }
-    /* Il filo di ogni post-it, dal suo chiodo a quello della sua scheda. */
-    for (const postit of this.wall.querySelectorAll('.home-board-postit')) {
+    /* Il filo di ogni post-it (giallo e lilla) e di ogni galleria, dal suo
+       chiodo a quello della sua scheda. */
+    for (const postit of this.wall.querySelectorAll('.home-board-postit, .home-board-gallery')) {
       const card = elOf(postit.dataset.card);
       if (!card) continue;
       const on = this.focus === postit.dataset.card;

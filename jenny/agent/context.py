@@ -192,14 +192,15 @@ def _goal_lines_once(lines: list[str], history: Sequence[Mapping[str, Any]]) -> 
     return list(lines)
 
 
-def _board_turn_lines(root: Path, message: Any) -> list[str]:
-    """I cassetti delle schede che il messaggio nomina, per il contesto del turno."""
+def _board_turn_lines(root: Path, message: Any, since: Any = None) -> list[str]:
+    """I cassetti delle schede che il messaggio nomina, e quel che l'utente ha
+    appuntato sulla bacheca dopo *since*, per il contesto del turno."""
     if not isinstance(message, str) or not message.strip() or not is_wiki_root(root):
         return []
     try:
         from jenny.board.context_block import turn_lines
 
-        return turn_lines(root, message)
+        return turn_lines(root, message, since=since)
     except Exception as exc:  # noqa: BLE001 — un cassetto in meno, non un turno in meno
         logger.warning("turn context: drawers of {} not read: {}", root, exc)
         return []
@@ -1632,8 +1633,14 @@ class ContextBuilder:
         session_key: str | None = None,
         available_tools: list[str] | None = None,
         orchestrator: bool | None = None,
+        board_since: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Build the complete message list for an LLM call."""
+        """Build the complete message list for an LLM call.
+
+        ``board_since`` is when the conversation last moved (its last persisted
+        message): in a notebook, what the user pinned on the board after that is
+        said in this turn.
+        """
         root = workspace or self.workspace
         extra = _goal_lines_once(goal_state_runtime_lines(session_metadata), history)
         if current_runtime_lines:
@@ -1646,7 +1653,7 @@ class ContextBuilder:
         # prompt di sistema, che e' il prefisso in cache e non deve dipendere
         # dal messaggio.
         if current_role == "user":
-            extra.extend(_board_turn_lines(root, current_message))
+            extra.extend(_board_turn_lines(root, current_message, board_since))
         runtime_ctx = self._build_runtime_context(
             channel,
             chat_id,

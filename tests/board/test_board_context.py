@@ -6,8 +6,14 @@ from pathlib import Path
 
 from jenny.agent.context import ContextBuilder
 from jenny.board import model
-from jenny.board.context_block import BOARD_BLOCK_MAX_CHARS, board_block, turn_lines
-from jenny.board.store import mutate_board, mutate_reminders, write_card_summary
+from jenny.board.context_block import (
+    BOARD_BLOCK_MAX_CHARS,
+    board_block,
+    drawer_text,
+    named_cards,
+    turn_lines,
+)
+from jenny.board.store import mutate_board, mutate_reminders, read_board, write_card_summary
 
 
 def _notebook(tmp_path: Path) -> Path:
@@ -251,3 +257,96 @@ def test_the_chat_knows_what_waits_in_the_envelope(tmp_path) -> None:
         actor="jenny")
     assert "In the envelope, waiting for the user: «Ginkgo — Fico» (add_connection)." in \
         board_block(root)
+
+
+# ── Le foto del cassetto, le schede nominate per parola, le aggiunte recenti ──
+
+
+def _acero(root: Path) -> None:
+    (root / "raw" / "photos").mkdir(parents=True, exist_ok=True)
+    for i in range(8):
+        (root / "raw" / "photos" / f"a{i}.jpg").write_bytes(b"jpg")
+
+    def apply(board):
+        board["skeleton"] = ["Vaso"]
+        board["cards"] = [
+            {"id": "acero", "title": "Acero giapponese", "pos": {"x": 1, "y": 1}, "pages": [],
+             "userSections": [
+                 {"id": f"s-photo-{i}", "kind": "photo", "path": f"raw/photos/a{i}.jpg",
+                  "created": f"2026-10-{i + 1:02d}T10:00:00+02:00",
+                  "caption": "Il germoglio è rosso" if i == 7 else ""}
+                 for i in range(8)
+             ] + [{"id": "s-photo-gone", "kind": "photo", "path": "raw/photos/gone.jpg",
+                   "created": "2026-10-30T10:00:00+02:00", "caption": "senza file"}]},
+            {"id": "acero-rosso", "title": "Acero rosso", "pos": {"x": 40, "y": 1}, "pages": []},
+            {"id": "limone", "title": "Limone", "pos": {"x": 80, "y": 1}, "pages": [],
+             "userSections": [{"id": "s-note-1", "kind": "note", "text": "Acqua calcarea?",
+                               "created": "2026-10-14T17:50:00+02:00"}]},
+        ]
+
+    mutate_board(root, apply)
+
+
+def test_the_drawer_in_the_turn_lists_the_photos(tmp_path) -> None:
+    root = _notebook(tmp_path)
+    _acero(root)
+    drawer = drawer_text(root, model.card_by_id(read_board(root), "acero"))
+    line = next(x for x in drawer.splitlines() if x.startswith("- Photos the user pinned"))
+    # Dalla più recente, con data, nota e percorso; sei, poi quante altre.
+    assert line.startswith("- Photos the user pinned (8, newest first): "
+                           "08 Oct «Il germoglio è rosso» raw/photos/a7.jpg; "
+                           "07 Oct (no note) raw/photos/a6.jpg;")
+    assert "raw/photos/a2.jpg" in line and "raw/photos/a1.jpg" not in line
+    assert "+2 more" in line and "read_file a path" in line
+    # Una foto il cui file non c'è più non si nomina.
+    assert "gone.jpg" not in line
+
+
+def test_a_word_of_the_title_names_a_card_only_when_it_is_its_own(tmp_path) -> None:
+    root = _notebook(tmp_path)
+    _acero(root)
+    # «giapponese» sta in un titolo solo; «acero» in due, e non nomina nessuno.
+    assert [c["id"] for c in named_cards(root, "e l'acero giapponese?")] == ["acero"]
+    assert [c["id"] for c in named_cards(root, "il giapponese come sta?")] == ["acero"]
+    assert named_cards(root, "ho messo una foto dell'acero") == []
+    assert [c["id"] for c in named_cards(root, "il limone ha sete")] == ["limone"]
+    # Un pezzo di parola non conta.
+    assert named_cards(root, "limoncello") == []
+
+
+def test_a_single_word_of_a_title_is_enough(tmp_path) -> None:
+    root = _notebook(tmp_path)
+
+    def apply(board):
+        board["cards"] = [{"id": "acero", "title": "Acero giapponese", "pos": {"x": 1, "y": 1}}]
+
+    mutate_board(root, apply)
+    assert [c["id"] for c in named_cards(root, "Ho messo una foto dell'acero la vedi?")] \
+        == ["acero"]
+
+
+def test_what_was_pinned_since_the_last_message_reaches_the_turn(tmp_path) -> None:
+    root = _notebook(tmp_path)
+    _acero(root)
+    # Nessuna scheda nominata, e lo stesso il turno sa della foto e della nota.
+    lines = turn_lines(root, "l'hai vista?", since="2026-10-07T12:00:00+02:00")
+    assert lines == [
+        "Since the last message the user pinned on the board: "
+        "a note on «Limone»: «Acqua calcarea?»; "
+        "a photo on «Acero giapponese» (raw/photos/a7.jpg, their note: «Il germoglio è rosso»). "
+        "Their notes are already in the notebook's journal: do not write them there again."
+    ]
+    # Una foto il cui file non c'è più non si nomina. Un istante senza fuso (come i messaggi della sessione) si legge come locale.
+    assert turn_lines(root, "l'hai vista?", since="2099-01-01T00:00:00") == []
+    assert turn_lines(root, "l'hai vista?") == []
+
+
+def test_the_turn_gets_board_since_from_the_caller(tmp_path) -> None:
+    root = _notebook(tmp_path)
+    _acero(root)
+    messages = ContextBuilder(tmp_path).build_messages(
+        [], "la vedi?", workspace=root, channel="websocket", chat_id="project:piante",
+        board_since="2026-10-14T17:00:00+02:00",
+    )
+    assert "a note on «Limone»" in str(messages[-1]["content"])
+    assert "pinned on the board" not in messages[0]["content"], "nel prefisso in cache"

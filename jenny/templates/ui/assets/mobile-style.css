@@ -2923,6 +2923,24 @@ body {
   animation: lightbox-fade 0.12s ease-out;
 }
 
+/* Una lightbox che e' un `<dialog>` nel top layer (la foto della galleria a
+   tutto schermo, `home-photo-viewer.js`, che si apre dal foglio della
+   bacheca): via le misure e i bordi che il browser da' a un dialog, e il velo
+   lo fa il suo fondo. Nel top layer sta anche sopra Jenny, come il foglio da
+   cui si apre. */
+dialog.image-lightbox {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  box-sizing: border-box;
+  color: inherit;
+}
+dialog.image-lightbox:not([open]) { display: none; }
+dialog.image-lightbox::backdrop { background: transparent; }
+
 @keyframes lightbox-fade {
   from { opacity: 0; }
   to { opacity: 1; }

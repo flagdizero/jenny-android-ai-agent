@@ -359,6 +359,11 @@ def _normalize_card(raw: Any) -> dict[str, Any] | None:
     postit = _normalize_pos(raw.get("postitPos"), USER)
     if postit:
         known["postitPos"] = postit
+    # Lo stesso per il post-it lilla delle sue note e per la sua galleria.
+    for key in ("notesPos", "photosPos"):
+        pos = _normalize_pos(raw.get(key), USER)
+        if pos:
+            known[key] = pos
     # La taglia della striscia, se la scheda e' un'app che ne ha una.
     if raw.get("size") in SLIP_ROWS:
         known["size"] = raw["size"]
@@ -566,6 +571,11 @@ def items_on_board(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> in
     Le attese non sono più un post-it ciascuna: quelle di una scheda stanno
     tutte sul suo, che è un oggetto solo. Così la seconda attesa di una scheda
     non trova mai la bacheca piena.
+
+    Il post-it lilla delle note e la galleria delle foto **non contano**: sono
+    allegati della scheda e nascono dal cassetto, dove non c'è un «bacheca
+    piena» con cui rifiutarli. Contarli vorrebbe dire che una foto può riempire
+    la bacheca e bloccare la scheda dopo.
     """
     cards = {c["id"] for c in board.get("cards") or []}
     with_notes = {r.get("card") for r in open_reminders(reminders)} & cards
@@ -587,6 +597,16 @@ CARD_BOX = (20.0, 40.0)
 POSTIT_BOX = (24.0, 44.0)
 # Quante attese mostra un post-it; le altre stanno dietro «+N», nel cassetto.
 POSTIT_ROWS = 3
+# Il post-it lilla delle note di una scheda: largo come il giallo, alto due
+# righe e «+N». E la sua galleria: al piu' tre polaroid da 16 a ventaglio, in
+# una scatola di 21 x 21 cqw (la taglia piu' grande, v. ``.home-board-gallery``
+# nel CSS), cioe' ~32 in altezza sul quadrato basso del Titan 2. Stime, come
+# quella del giallo, da misurare sul Titan.
+NOTES_BOX = (24.0, 36.0)
+GALLERY_BOX = (21.0, 32.0)
+# Quante note mostra il post-it lilla, e quante foto il mazzetto della galleria.
+NOTE_ROWS = 2
+GALLERY_SHOWN = 3
 # La striscia: la forma compatta di un'app (``jenny/apps/slip_spec.py``). Larga
 # due polaroid, alta una di quattro taglie fisse, contate in righe di contenuto
 # (una riga = 3,55% della larghezza: il 28 px del mockup sulla polaroid da 150).
@@ -627,6 +647,13 @@ def _boxes(board: Mapping[str, Any], reminders: Mapping[str, Any] | None) -> lis
         if isinstance(pos, Mapping) and card["id"] in with_notes:
             x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
             out.append((x, y, x + POSTIT_BOX[0], y + POSTIT_BOX[1]))
+        # Il lilla e la galleria, alla stessa maniera: solo se ci sono.
+        kinds = {s.get("kind") for s in card.get("userSections") or []}
+        for key, kind, box in (("notesPos", "note", NOTES_BOX), ("photosPos", "photo", GALLERY_BOX)):
+            pos = card.get(key)
+            if isinstance(pos, Mapping) and kind in kinds:
+                x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
+                out.append((x, y, x + box[0], y + box[1]))
     return out
 
 
@@ -722,6 +749,8 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
             "app": card.get("app"),
             "size": card.get("size"),
             "postitPos": card.get("postitPos"),
+            "notesPos": card.get("notesPos"),
+            "photosPos": card.get("photosPos"),
         }
     return {
         "cards": cards,
@@ -754,7 +783,7 @@ def ownership_violations(
         if other is None:
             continue
         for field_name in ("pos", "pinned", "userSections", "lastOpened", "titleBy", "title",
-                           "app", "size", "postitPos"):
+                           "app", "size", "postitPos", "notesPos", "photosPos"):
             if view[field_name] != other[field_name]:
                 problems.append(f"card {card_id}: {field_name} changed")
     old_pages = {c["id"]: c.get("pages") or [] for c in before.get("cards") or []}

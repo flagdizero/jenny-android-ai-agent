@@ -1,8 +1,9 @@
 /** La casa — il cassetto di una scheda della bacheca.
  *
  *  Il retro di una polaroid: un `index.md` per quel soggetto, scritto da Jenny
- *  dalla wiki. In alto il titolo e «in breve», e accanto il mazzetto delle tue
- *  note (`home-board-notes.js`); poi il **calendario di cura**, le attese
+ *  dalla wiki. In alto il titolo e «in breve», e sotto i due mazzetti appuntati:
+ *  le tue foto (`home-board-photos.js`) e le tue note (`home-board-notes.js`);
+ *  poi il **calendario di cura**, le attese
  *  della scheda una volta sola, per mese; poi le sezioni dello **scheletro del
  *  quaderno** (le stesse per ogni scheda, nello stesso ordine: l'utente sa
  *  sempre dove guardare), chiuse a fisarmonica con la prima riga in vista; poi
@@ -21,7 +22,7 @@
  *
  *  Le sezioni dell'utente invece sono sue: un promemoria e' un'attesa, una
  *  mini app e' una finestra sui dati di un'app con la sua firma — ora e fonte
- *  —, una foto e' una foto. Le note hanno il loro modulo.
+ *  —. Le note e le foto hanno il loro modulo.
  */
 
 import { api } from './shared/api-client.js';
@@ -31,12 +32,9 @@ import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { reminderGroups, whenLabel } from './home-board.js';
 import { DrawerNotes } from './home-board-notes.js';
+import { DrawerPhotos } from './home-board-photos.js';
 import { describeSchedule } from './shared/cron-view.js';
 import { renderBlock } from './home-board-blocks.js';
-
-/* Il lato lungo di una foto mandata al server: il telefono ne fa di 4000 px, e
-   in un cassetto largo 590 ne servono meno di un terzo. */
-const PHOTO_MAX_SIDE = 1600;
 
 /** «oggi alle 04:12», «ieri», «3 ott»: quando e' stato riscritto il cassetto. */
 export function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
@@ -79,23 +77,6 @@ export function sparkline(values, width = 84, height = 18) {
     .map((v, i) => `${(i * step).toFixed(1)},${(height - 1 - ((v - lo) / span) * (height - 2)).toFixed(1)}`)
     .join(' ');
   return `<svg class="home-drawer-spark" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-hidden="true"><polyline points="${points}"/></svg>`;
-}
-
-/** Riduce una foto prima di mandarla: JPEG, lato lungo `PHOTO_MAX_SIDE`. */
-async function shrinkPhoto(file) {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-  const buffer = new Uint8Array(await blob.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < buffer.length; i += 0x8000) {
-    binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
-  }
-  return { mime: 'image/jpeg', data: btoa(binary) };
 }
 
 function el(tag, className, text) {
@@ -150,6 +131,10 @@ export class BoardDrawer {
     this._token = 0;
     this._photoUrls = [];
     this.notes = new DrawerNotes({ sheet, write: (method, params) => this._write(method, params) });
+    this.photos = new DrawerPhotos({
+      sheet, write: (method, params) => this._write(method, params), notebook: () => this.notebook,
+    });
+    this.photos.onFailed = () => showToast(i18n.t('board.section.failed'), 'error');
     this._buildFab();
   }
 
@@ -206,7 +191,7 @@ export class BoardDrawer {
       ['reminder', 'ti-clock', () => this._addReminder()],
       ['note', 'ti-pencil', () => this.notes.openList({ compose: true })],
       ['micro', 'ti-gauge', () => this._addMicro()],
-      ['photo', 'ti-photo', () => this._addPhoto()],
+      ['photo', 'ti-photo', () => this.photos.compose()],
       ['cron', 'ti-repeat', () => this.onAskJenny?.(i18n.t('board.cron.prompt', { card: this.data.title }))],
       ['other', 'ti-message', () => this.onAskJenny?.(i18n.t('board.section.otherPrompt', { card: this.data.title }))],
     ];
@@ -308,8 +293,9 @@ export class BoardDrawer {
     this._photoUrls = [];
     const d = this.data;
     const root = el('div', 'home-drawer');
-    /* La testa: titolo e «in breve» a sinistra, il mazzetto delle note a destra
-       (sotto, quando il cassetto e' stretto). */
+    /* La testa: titolo e «in breve» a tutta larghezza; sotto, la fila dei due
+       mazzetti appuntati, le foto a sinistra e le note a destra (una sotto
+       l'altra, quando il cassetto e' stretto). */
     const top = el('div', 'home-drawer-top');
     const lead = el('div', 'home-drawer-lead');
     const head = el('div', 'home-drawer-head');
@@ -321,9 +307,13 @@ export class BoardDrawer {
     lead.appendChild(head);
     if (d.brief) lead.appendChild(el('p', 'home-drawer-brief', d.brief));
     top.appendChild(lead);
-    const notes = this.notes.render(d);
-    if (notes) top.appendChild(notes);
     root.appendChild(top);
+    const pinned = [this.photos.render(d), this.notes.render(d)].filter(Boolean);
+    if (pinned.length) {
+      const pins = el('div', 'home-drawer-pins');
+      pins.append(...pinned);
+      root.appendChild(pins);
+    }
     for (const s of d.userSections) {
       const state = s.view?.state;
       if (s.kind === 'app' && (state === 'alarm' || state === 'stale')) {
@@ -696,19 +686,6 @@ export class BoardDrawer {
           remove,
         );
       }
-    } else if (section.kind === 'photo') {
-      h3.textContent = i18n.t('board.section.kind.photo');
-      const img = el('img', 'home-drawer-photo');
-      img.alt = section.caption || '';
-      if (section.exists) {
-        api.getBoardPhotoUrl(this.notebook, section.path).then((url) => {
-          this._photoUrls.push(url);
-          img.src = url;
-        }).catch((err) => console.warn('home.drawer: photo failed', err));
-        body.appendChild(img);
-      }
-      if (section.caption) body.appendChild(el('p', 'home-drawer-hint', section.caption));
-      tools.appendChild(remove);
     } else {
       return null;
     }
@@ -1064,26 +1041,5 @@ export class BoardDrawer {
     }
     showToast(i18n.t('board.card.appPlaced', { name: app.name, card: this.data.title }), 'success');
     await this.onAppCard?.(out?.card?.id || null);
-  }
-
-  _addPhoto() {
-    const input = el('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.addEventListener('change', async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      this.sheet.close();
-      let photo;
-      try {
-        photo = await shrinkPhoto(file);
-      } catch (err) {
-        console.warn('home.drawer: photo unreadable', err);
-        showToast(i18n.t('board.section.failed'), 'error');
-        return;
-      }
-      await this._write('section.add', { card: this.card, kind: 'photo', ...photo });
-    });
-    input.click();
   }
 }

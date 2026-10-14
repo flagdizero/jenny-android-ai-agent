@@ -20,6 +20,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from jenny.board import edit, model
 from jenny.board.store import (
     mutate_board,
@@ -132,6 +134,10 @@ async def board_seen(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
 # ── La forma: spostare ───────────────────────────────────────────────────────
 
 
+# Gli oggetti appesi a una scheda, e il campo della scheda che ne tiene il posto.
+_ATTACHED_POS = {"postit": "postitPos", "notes": "notesPos", "photos": "photosPos"}
+
+
 async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Trascina = sposta: la posizione diventa dell'utente, e Jenny non la tocca più."""
     root = _project(ctx, params)
@@ -145,16 +151,17 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
             _need_card(board, item)["pos"] = pos
 
         await _run(mutate_board, root, apply)
-    elif kind == "postit":
-        # Il post-it delle attese di una scheda: l'id e' quello della scheda.
+    elif kind in _ATTACHED_POS:
+        # Il post-it delle attese, quello lilla delle note, la galleria: l'id e'
+        # quello della scheda, il posto e' un campo suo.
         card_id = _card_id(params, "id")
 
-        def apply_postit(board: dict[str, Any]) -> None:
-            _need_card(board, card_id)["postitPos"] = pos
+        def apply_attached(board: dict[str, Any]) -> None:
+            _need_card(board, card_id)[_ATTACHED_POS[kind]] = pos
 
-        await _run(mutate_board, root, apply_postit)
+        await _run(mutate_board, root, apply_attached)
     else:
-        raise CommandError("bad_request", "kind must be card or postit")
+        raise CommandError("bad_request", "kind must be card, postit, notes or photos")
     return {"ok": True}
 
 
@@ -426,6 +433,17 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
     await _run(atomic_write, root / rel, raw)
     section = {"kind": "photo", "created": model.now_iso(), "path": rel,
                "caption": model.clean_text(params.get("caption"), model.MAX_TEXT)}
+    # Con una nota, la foto è anche una riga [said] del diario (prima della
+    # sezione, come una nota): il giardiniere la porta nella wiki. Senza nota
+    # non c'è niente da portare, e nessuna riga.
+    if section["caption"]:
+        from jenny.board.sections import journal_note
+
+        try:
+            section["journalLine"] = await _run(
+                journal_note, root, section["caption"], photo=rel, timezone_name=_timezone())
+        except OSError as exc:
+            logger.warning("board: photo note not journaled in {}: {}", root.name, exc)
 
     def apply(board: dict[str, Any]) -> None:
         card = edit.need_card(board, card_id)
@@ -437,7 +455,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
 
 
 async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Modifica una nota o un promemoria dell'utente."""
+    """Modifica una nota, la nota di una foto o un promemoria dell'utente."""
     root = _project(ctx, params)
     card_id = _card_id(params)
     sid = _card_id(params, "id")
@@ -454,8 +472,11 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
     elif section["kind"] == "reminder":
         await _run(edit.update_reminder, root, card_id, sid, params.get("text"),
                    params.get("when"))
+    elif section["kind"] == "photo":
+        await _run(edit.update_photo_caption, root, card_id, sid, params.get("text"),
+                   timezone_name=_timezone())
     else:
-        raise CommandError("bad_request", "only notes and reminders can be edited")
+        raise CommandError("bad_request", "only notes, photos and reminders can be edited")
     return {"ok": True}
 
 

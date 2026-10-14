@@ -2095,6 +2095,17 @@ class HomeApp {
         return true;
       }
     }
+    /* L'immagine ingrandita: si apre anche *dalla* chat sopra la pagina, e le
+       sta davanti (115 contro 112), quindi si chiude prima di lei. E dal
+       14/10/2026 si apre anche *dal* foglio della bacheca (una foto della
+       galleria), come dialog sopra di lui: per questo viene prima dei fogli.
+       Prima Indietro chiudeva il foglio e lasciava aperta la foto. */
+    const lightbox = document.querySelector('.image-lightbox');
+    if (lightbox) {
+      if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
+      else lightbox.remove();
+      return true;
+    }
     /* Poi i fogli che si aprono con una pressione lunga: quello di
        un quaderno **dai** Quaderni, e i due delle app **dal** cassetto (Open,
        Edit, Delete). Sono `<dialog>` con `showModal()`: stanno nel top layer,
@@ -2108,14 +2119,6 @@ class HomeApp {
         sheet.close();
         return true;
       }
-    }
-    /* L'immagine ingrandita: si apre anche *dalla* chat sopra la pagina, e le
-       sta davanti (115 contro 112), quindi si chiude prima di lei. */
-    const lightbox = document.querySelector('.image-lightbox');
-    if (lightbox) {
-      if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
-      else lightbox.remove();
-      return true;
     }
     /* La chat sopra la pagina (dal 05/10/2026, al posto della minichat): sta
        sopra le mini-app, perche' Jenny si apre anche li', quindi si chiude

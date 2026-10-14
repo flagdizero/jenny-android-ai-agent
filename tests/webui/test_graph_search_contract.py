@@ -55,6 +55,7 @@ _STUBS = {
         "export const showUndo = () => () => {};\n"
         "export const ensureVendor = async () => {};\n"
     ),
+    "dialog.js": "export const confirmDialog = async () => true;\n",
 }
 
 _HARNESS = r"""
@@ -106,6 +107,12 @@ def _harness_dir(tmp_path: Path) -> Path:
     shutil.copy(ASSETS / "home-board.js", assets / "home-board.js")
     # Le strisce: un modulo vero, che non tocca la ricerca (06/10/2026).
     shutil.copy(ASSETS / "home-board-blocks.js", assets / "home-board-blocks.js")
+    # Le note e le foto di una scheda, che la bacheca apre nel suo foglio (14/10/2026).
+    for name in ("home-board-deck.js", "home-board-notes.js", "home-board-photos.js",
+                 "home-photo-viewer.js"):
+        shutil.copy(ASSETS / name, assets / name)
+    for name in ("pinch-zoom.js", "horizontal-swipe.js"):
+        shutil.copy(ASSETS / "shared" / name, assets / "shared" / name)
     shutil.copy(ASSETS / "shared" / "wiki-search.js", assets / "shared" / "wiki-search.js")
     for name, text in _STUBS.items():
         (assets / "shared" / name).write_text(text, encoding="utf-8")

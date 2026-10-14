@@ -207,3 +207,17 @@ def test_the_editor_built_by_the_manager_has_the_cron_and_the_time_zone(tmp_path
     tool = registry.get("board")
     assert tool is not None and tool._cron is cron and tool._timezone == "Europe/Rome"
     assert registry.get("cron") is None, "il tool cron resta fuori dai subagent"
+
+
+async def test_the_board_shows_a_photo_with_its_path_and_note(notebook_chat: Path) -> None:
+    mutate_board(notebook_chat, lambda b: model.card_by_id(b, "nuove")["userSections"].extend([
+        {"id": "s-photo", "kind": "photo", "created": "2026-10-14T17:48:43+02:00",
+         "path": "raw/photos/nuove-1.jpg", "caption": "Il fico ha messo due foglie"},
+        {"id": "s-photo-2", "kind": "photo", "created": "2026-10-14T18:00:00+02:00",
+         "path": "raw/photos/nuove-2.jpg", "caption": ""},
+    ]))
+    shown = await BoardTool().execute(action="show")
+    assert "`s-photo` photo raw/photos/nuove-1.jpg «Il fico ha messo due foglie»" in shown
+    # Senza nota, il percorso e basta.
+    assert "`s-photo-2` photo raw/photos/nuove-2.jpg" in shown
+    assert "nuove-2.jpg «" not in shown

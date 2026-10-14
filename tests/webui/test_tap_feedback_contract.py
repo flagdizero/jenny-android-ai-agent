@@ -35,6 +35,7 @@ STATE_IS_THE_FEEDBACK = {
     ".format-card": "la scelta si accende",
     ".onboarding-model-item": "la scelta si accende",
     ".home-notes-deck": "la carta davanti sfila via",
+    ".home-photos-deck": "la polaroid davanti sfila via",
     ".chat-media img": "la foto si apre a tutto schermo",
     ".chat-content img": "la foto si apre a tutto schermo",
     ".home-media img": "la foto si apre a tutto schermo",

@@ -1547,6 +1547,43 @@
       "integrated": "✓ nella wiki",
       "pending": "in attesa della wiki",
       "placeholder": "Per esempio: lo tengo sul davanzale sud solo d'inverno."
+    },
+    "photos": {
+      "title": "Le tue foto",
+      "hint": "dalla più recente; ogni foto con la sua nota finisce nel diario, e Jenny la vede",
+      "new": "Nuova foto",
+      "noNote": "Senza nota",
+      "deck": "Foto {n} di {count}: {text}, {when}. Tocca per la prossima.",
+      "placeholder": "Due parole su questa foto",
+      "noteLabel": "La nota della foto",
+      "now": "Adesso",
+      "integrated": "✓ nella wiki",
+      "pending": "in attesa della wiki",
+      "removeConfirm": "Togliere questa foto dalla scheda? Il file resta fra il materiale del quaderno, e quel che è già nella wiki resta.",
+      "full": "Vedi la foto intera, a tutto schermo",
+      "back": "Tutte le foto",
+      "pager": "{n} di {count}",
+      "prev": "Foto precedente",
+      "next": "Foto successiva",
+      "fullShort": "A tutto schermo",
+      "edit": "Correggi la nota",
+      "remove": "Togli dalla scheda",
+      "viewer": "{card} · {n} di {count}"
+    },
+    "notesPostit": {
+      "label": "{card}, le tue note — {notes}. Tocca per vederle tutte.",
+      "more": "+{count} note",
+      "moreOne": "+1 nota"
+    },
+    "gallery": {
+      "label": "{card}, {count} foto. Tocca per vederle.",
+      "labelOne": "{card}, 1 foto. Tocca per vederla."
+    },
+    "list": {
+      "notes": "{count} note",
+      "notesOne": "1 nota",
+      "photos": "{count} foto",
+      "photosOne": "1 foto"
     }
   }
 }
