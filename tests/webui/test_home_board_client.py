@@ -1798,3 +1798,127 @@ def test_a_drawer_without_photos_has_only_the_notes() -> None:
       const pins = document.querySelector('.home-drawer-pins');
       assert.deepEqual([...pins.children].map((c) => c.className), ['home-notes']);
     """)
+
+
+# ── Sulla bacheca: le note accorpate in un post-it lilla, le foto in una galleria ──
+
+
+def _kept_board() -> dict:
+    board = json.loads(json.dumps(BOARD))
+    board["notePostits"] = [{
+        "card": "acero", "pos": {"x": 5, "y": 50, "by": "jenny"}, "count": 2,
+        "rows": [
+            {"text": "Il vaso bianco in cantina.", "created": "2026-10-12T09:00:00+02:00"},
+            {"text": "Al vivaio dicono di potarlo.", "created": "2026-10-03T09:00:00+02:00"},
+        ],
+    }]
+    board["galleries"] = [{
+        "card": "acero", "pos": {"x": 28, "y": 6, "by": "jenny"}, "count": 5,
+        "photos": [{"id": f"s-photo-{i}", "path": f"raw/photos/acero-{i}.jpg",
+                    "caption": f"Foto numero {i}"} for i in range(3)],
+    }]
+    return board
+
+
+def _run_kept(script: str) -> None:
+    _run(_PHOTOS + """
+      // La tela con una misura, che jsdom non ha: senza, i fili non si disegnano.
+      $('home-board-canvas').getBoundingClientRect = () => ({ left: 0, top: 0, right: 400,
+        bottom: 400, width: 400, height: 400, x: 0, y: 0 });
+      routes['/api/board'] = __KEPT__;
+      routes['/api/board/card'] = __CARD3__;
+      for (const m of ['board.section.add', 'board.section.update', 'board.section.remove']) {
+        rpcAnswers[m] = () => ({ ok: true });
+      }
+      await app.board.load('orto');
+      await tick(30);
+      const sheetBody = () => $('home-board-sheet-body');
+    """.replace("__KEPT__", json.dumps(_kept_board()))
+       .replace("__CARD3__", json.dumps(_photos_card())) + script)
+
+
+@requires_jsdom
+def test_the_board_shows_a_lilac_note_and_a_gallery_by_their_card() -> None:
+    _run_kept("""
+      const lilac = document.querySelector('.home-board-postit.is-notes');
+      assert.ok(lilac.classList.contains('is-many'), 'sotto spunta un secondo foglio');
+      const rows = [...lilac.querySelectorAll('.home-board-postit-text')].map((t) => t.textContent);
+      assert.deepEqual(rows, ['Il vaso bianco in cantina.', 'Al vivaio dicono di potarlo.']);
+      assert.equal(lilac.dataset.card, 'acero');
+      assert.match(lilac.getAttribute('aria-label'), /^Acero, your notes — /);
+      const gallery = document.querySelector('.home-board-gallery');
+      assert.equal(gallery.querySelector('.home-board-gallery-count').textContent, '5');
+      const photos = [...gallery.querySelectorAll('.home-board-gallery-photo')];
+      // L'ultima nel DOM e' quella davanti, con la sua nota.
+      assert.equal(photos.at(-1).className, 'home-board-gallery-photo is-0');
+      assert.equal(photos.at(-1).textContent, 'Foto numero 0');
+      await tick(20);
+      assert.ok(photos.every((p) => p.querySelector('img').getAttribute('src')));
+      assert.equal(gallery.getAttribute('aria-label'), 'Acero, 5 photos. Tap to see them.');
+      // Un filo per il giallo, il lilla e la galleria, piu' quello fra le schede.
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-postit').length, 3);
+      // La scheda tenuta premuta accende anche i loro fili.
+      app.board.setFocus('acero', { quiet: true });
+      assert.ok(lilac.classList.contains('is-linked') && gallery.classList.contains('is-linked'));
+      app.board.setFocus(null);
+    """)
+
+
+@requires_jsdom
+def test_the_lilac_note_and_the_gallery_open_their_sheet_on_the_board() -> None:
+    _run_kept("""
+      document.querySelector('.home-board-gallery').click();
+      await tick(40);
+      assert.equal(app.view, 'board', 'il cassetto non si apre');
+      assert.equal($('home-board-sheet-title').textContent, 'Your photos · 5');
+      assert.equal(sheetBody().querySelectorAll('.home-photos-tile').length, 5);
+      // Una nota corretta da qui: la scrittura, poi il muro si ridisegna.
+      sheetBody().querySelector('.home-photos-tile').click();
+      [...sheetBody().querySelectorAll('.home-photos-open button')].find((b) => b.textContent === 'Edit').click();
+      const area = sheetBody().querySelector('.home-photos-area');
+      area.value = 'Rossa';
+      area.dispatchEvent(new Event('input'));
+      const { calls } = await import('./boot.mjs');
+      const boards = calls.filter((c) => c.startsWith('/api/board?')).length;
+      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      await tick(60);
+      assert.deepEqual(rpcs('board.section.update').at(-1).params.text, 'Rossa');
+      assert.ok(calls.filter((c) => c.startsWith('/api/board?')).length > boards, 'il muro riletto');
+      assert.equal(sheetBody().querySelector('.home-photos-area'), null);
+      // Il lilla apre le note.
+      document.querySelector('.home-board-postit.is-notes').click();
+      await tick(40);
+      assert.equal($('home-board-sheet-title').textContent, 'Your notes · 2');
+      assert.equal(app.view, 'board');
+    """)
+
+
+@requires_jsdom
+def test_dragging_the_lilac_note_and_the_gallery_tells_the_server() -> None:
+    _run_kept("""
+      for (const [sel, kind] of [['.home-board-postit.is-notes', 'notes'], ['.home-board-gallery', 'photos']]) {
+        const el = document.querySelector(sel);
+        const ev = (type, x, y) => {
+          const e = new window.Event(type, { bubbles: true });
+          Object.assign(e, { clientX: x, clientY: y, button: 0, pointerId: 1 });
+          el.dispatchEvent(e);
+        };
+        ev('pointerdown', 10, 10);
+        ev('pointermove', 60, 50);
+        ev('pointerup', 60, 50);
+        await tick(20);
+        const move = rpcs('board.move').at(-1);
+        assert.deepEqual([move.params.kind, move.params.id], [kind, 'acero']);
+        assert.equal(app.view, 'board', 'portarlo non apre niente');
+      }
+    """)
+
+
+@requires_jsdom
+def test_the_list_view_counts_the_notes_and_the_photos() -> None:
+    _run_kept("""
+      app.board.toggleList();
+      const row = [...document.querySelectorAll('.home-board-list-row')]
+        .find((r) => r.querySelector('.home-board-list-name')?.textContent === 'Acero');
+      assert.equal(row.querySelector('.home-board-list-kept').textContent, '2 notes · 5 photos');
+    """)

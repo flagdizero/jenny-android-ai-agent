@@ -1560,6 +1560,21 @@
       "integrated": "✓ in the wiki",
       "pending": "waiting for the wiki",
       "removeConfirm": "Remove this photo from the card? The file stays with the notebook's material, and what already went into the wiki stays."
+    },
+    "notesPostit": {
+      "label": "{card}, your notes — {notes}. Tap to see them all.",
+      "more": "+{count} notes",
+      "moreOne": "+1 note"
+    },
+    "gallery": {
+      "label": "{card}, {count} photos. Tap to see them.",
+      "labelOne": "{card}, 1 photo. Tap to see it."
+    },
+    "list": {
+      "notes": "{count} notes",
+      "notesOne": "1 note",
+      "photos": "{count} photos",
+      "photosOne": "1 photo"
     }
   }
 }

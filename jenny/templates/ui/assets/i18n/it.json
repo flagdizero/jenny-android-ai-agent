@@ -1560,6 +1560,21 @@
       "integrated": "✓ nella wiki",
       "pending": "in attesa della wiki",
       "removeConfirm": "Togliere questa foto dalla scheda? Il file resta fra il materiale del quaderno, e quel che è già nella wiki resta."
+    },
+    "notesPostit": {
+      "label": "{card}, le tue note — {notes}. Tocca per vederle tutte.",
+      "more": "+{count} note",
+      "moreOne": "+1 nota"
+    },
+    "gallery": {
+      "label": "{card}, {count} foto. Tocca per vederle.",
+      "labelOne": "{card}, 1 foto. Tocca per vederla."
+    },
+    "list": {
+      "notes": "{count} note",
+      "notesOne": "1 nota",
+      "photos": "{count} foto",
+      "photosOne": "1 foto"
     }
   }
 }

@@ -2911,6 +2911,79 @@ body.home {
   overflow: hidden;
 }
 .home-board-postit-more { font-size: 2cqw; font-weight: 700; opacity: 0.75; }
+/* Il post-it lilla: le note di una scheda, accorpate (il giallo e' delle
+   attese). Con piu' di una nota, sotto spunta il bordo di un secondo foglio:
+   un'ombra piena spostata, non un elemento — niente `z-index` in questo foglio. */
+.home-board-postit.is-notes {
+  background: var(--board-note);
+  color: var(--board-note-ink);
+}
+.home-board-postit.is-notes .home-board-postit-row + .home-board-postit-row {
+  border-top-color: color-mix(in srgb, var(--board-note-ink) 30%, transparent);
+}
+.home-board-postit.is-notes.is-many {
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4),
+    1cqw 1cqw 0 0 color-mix(in srgb, var(--board-note) 80%, #000),
+    1cqw 1cqw 6px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* La galleria di una scheda: tre polaroid da 16 a ventaglio, in `cqw` come il
+   resto del muro, e quante foto ha in un bollino. Largo 22 (`GALLERY_BOX` in
+   jenny/board/model.py). La prima nel DOM e' quella in fondo. */
+.home-board-gallery {
+  width: 22cqw;
+  height: 25cqw;
+}
+.home-board-gallery-photo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 16cqw;
+  box-sizing: border-box;
+  padding: 0.9cqw 0.9cqw 0;
+  background: var(--board-paper);
+  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.45);
+}
+.home-board-gallery-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
+}
+.home-board-gallery-cap {
+  display: block;
+  min-height: 2.4cqw;
+  padding: 0.6cqw 0.2cqw 0.9cqw;
+  color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-size: 2cqw;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-board-gallery-photo.is-0 { transform: rotate(-4deg); }
+.home-board-gallery-photo.is-1 { transform: translate(2.6cqw, 1cqw) rotate(5deg); filter: brightness(0.85); }
+.home-board-gallery-photo.is-2 { transform: translate(4.6cqw, 1.8cqw) rotate(11deg); filter: brightness(0.72); }
+.home-board-gallery-count {
+  position: absolute;
+  right: 1.2cqw;
+  top: -1.2cqw;
+  min-width: 4.6cqw;
+  height: 4.6cqw;
+  padding: 0 1cqw;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--board-ink);
+  color: var(--board-paper);
+  font-size: 2.4cqw;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+.home-board-gallery > .home-board-pin { left: 8cqw; }
 
 /* La busta sta in basso a **sinistra**: a destra c'e' Jenny, che sporge dal
    bordo e si prende i tocchi di quell'angolo. Il posto e' suo, e la busta lo
@@ -2980,6 +3053,7 @@ body.home {
 .home-board-list-row:active { background: var(--active); }
 .home-board-list-name { font-weight: 500; }
 .home-board-list-next { color: var(--text-muted); font-size: 13px; }
+.home-board-list-kept { color: var(--text-muted); font-size: 12px; }
 .home-board-list-sig { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 .home-board-list-sig.is-alert { color: var(--board-alert); }
 .home-board-list-envelope { color: var(--text-muted); }
