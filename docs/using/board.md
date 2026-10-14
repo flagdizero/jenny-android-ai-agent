@@ -18,13 +18,15 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 |---|---|
 | **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. A card can also **be an app** (*Portfolio*, *WaterBot*): its live value takes the place of the photo, and tapping it opens the app — see [App cards](#app-cards). |
 | **Sticky notes** | One yellow note per card that has open reminders: its next three, each with its date, and *+N more* for the rest. A thread runs from the note's pin to its card's pin. Tapping it opens that card's drawer, where the [care calendar](#the-drawer) lists them all. |
+| **Lilac notes** | One lilac note per card that has [your notes](#note), gathered: the two newest, each with its date, and *+N notes* for the rest; with more than one, the edge of a second sheet shows under it. Tied to its card by a thread, like the yellow one. Tapping it opens all the card's notes in a sheet, right there on the board. |
+| **Galleries** | A card's [photos](#photo): the three newest fanned out as small polaroids, the front one with its note, and how many there are. Tied to its card by a thread. Tapping it opens the card's gallery in a sheet, right there on the board. |
 | **Threads** | Thin red lines between two cards that a page ties together. See [Threads](#threads). |
 | **The envelope** | Bottom left: Jenny's proposals for changing the board's shape, with a count. See [The envelope](#the-envelope-jennys-proposals). |
 | **Since you last looked · N new** | A row at the top, shown only when something changed since you last opened the board, or proposals are waiting. See [Since you last looked](#since-you-last-looked). |
 
-The board is a **wall** you move around in every direction, with its origin in the middle: the screen you see when you open it is the origin, and there is room to the left, right, above and below. One finger on the background moves the wall, two fingers zoom and move it like a map — a pinch can start with a finger on a card, which then stays where it was — a double tap on the background goes back to the origin at normal size; on a computer the wheel moves it and Ctrl + wheel zooms. Drag a card near the edge of the screen and the wall moves with it. A card you accept from the envelope is placed in the free spot nearest to the middle of what you are looking at, and a card's sticky note next to it, wherever that card is. It holds at most **40 items**, cards and sticky notes together — one note per card, however many reminders it holds — and up to 16 threads. Positions are stored as percentages of the screen, from −1,000 to 1,000 (the screen to the right starts at 100, the one to the left at −100), so the same board fits a square screen and a tall one.
+The board is a **wall** you move around in every direction, with its origin in the middle: the screen you see when you open it is the origin, and there is room to the left, right, above and below. One finger on the background moves the wall, two fingers zoom and move it like a map — a pinch can start with a finger on a card, which then stays where it was — a double tap on the background goes back to the origin at normal size; on a computer the wheel moves it and Ctrl + wheel zooms. Drag a card near the edge of the screen and the wall moves with it. A card you accept from the envelope is placed in the free spot nearest to the middle of what you are looking at, and a card's sticky note next to it, wherever that card is. It holds at most **40 items**, cards and yellow sticky notes together — one note per card, however many reminders it holds — and up to 16 threads. Lilac notes and galleries do not count: they come from a card's drawer, and a photo should never be what fills the board. Positions are stored as percentages of the screen, from −1,000 to 1,000 (the screen to the right starts at 100, the one to the left at −100), so the same board fits a square screen and a tall one.
 
-Three buttons in the header work on the board: **+** makes a new card (see [Your cards](#your-cards)), the **lens** opens [search](#search), and the **list** icon swaps the board for a plain list of the same cards — name, next reminder, signal, and the envelope as its last row — for anyone who prefers a list, and for screen readers.
+Three buttons in the header work on the board: **+** makes a new card (see [Your cards](#your-cards)), the **lens** opens [search](#search), and the **list** icon swaps the board for a plain list of the same cards — name, next reminder, how many notes and photos, signal, and the envelope as its last row — for anyone who prefers a list, and for screen readers.
 
 ### One signal per card
 
@@ -40,8 +42,8 @@ No signal means nothing needs you.
 
 ### Gestures
 
-- **Tap** a card or a sticky note to open the drawer.
-- **Drag** a card or a sticky note to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note on her own — not the ones you placed, not the ones she placed; she does it when you ask her to (see [Asking Jenny](#asking-jenny)). A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
+- **Tap** a card or a yellow sticky note to open the drawer; a lilac note or a gallery opens its sheet on the board.
+- **Drag** a card, a sticky note or a gallery to move it. Its pin turns red: a red pin marks something you placed, a grey one something placed by the code when it was created. Jenny never moves a card or a note on her own — not the ones you placed, not the ones she placed; she does it when you ask her to (see [Asking Jenny](#asking-jenny)). A card's position is chosen once, when it is created: in the free spot nearest to where it was asked for — the middle of what you are looking at, or the point you held.
 - **Press and hold** a card (about half a second) to lift it: its threads turn bold and show their labels, the cards at the other end lift, the rest of the board dims, and a bar rises at the bottom with **Rename** and **Remove from the board**. Tap the background, the **×** on the bar or Back to put everything back.
 - **Press and hold** the empty wall to make a new card right there, under your finger.
 
@@ -80,7 +82,7 @@ A thread is always visible as a thin line with no words on it; its label — the
 Tap a card and its drawer opens. From the top:
 
 1. **The title**, the number of wiki pages the drawer covers and when it was last updated.
-2. **The brief**: one or two sentences on the state of this subject now. Beside the title and the brief — below them on a narrow screen — sit **your notes**, if the card has any: a small deck of lilac sticky notes (see [Note](#note)).
+2. **The brief**: one or two sentences on the state of this subject now. Under it, in a row, **your photos** and **your notes**, if the card has any: a small deck of polaroids on the left (see [Photo](#photo)) and one of lilac sticky notes on the right (see [Note](#note)); on a narrow screen one goes under the other.
 3. A warning when a mini-app section in this drawer is in alarm or stalled, saying that the data comes from the app, not from the wiki.
 4. **The care calendar**: the card's open reminders, each shown once, on a timeline — the overdue ones first, in red, then **Today**, then one group per month, then the ones that wait for an app's value (**When it happens**). The nearest is a yellow card with a **Done** button; every reminder has a **⋯** with **Edit**, **Done** and **Remove**. The brief and the sections do not repeat the dates: the calendar is where they are.
 5. **The sections.** Every notebook has a *skeleton*, the list of sections every drawer has, in the same order on every card — for a plant notebook, *Pot and repotting, Water, Feeding, Light, History*. Each section is two short sentences, with chips that open the pages it was written from. Sections are folded: a row with the title and the first line; tap it to read the rest, the pages and **Correct**. A section the pages have nothing on is left out rather than filled with "no data". A blue dot beside a section's title means its text changed since you last opened the drawer.
@@ -103,15 +105,15 @@ Unlike Report, a correction does not take you to the chat: it is handled between
 
 ### Adding a section
 
-The yellow **+** at the bottom right — the same corner as the + of the Notebooks page — stays on screen while the drawer scrolls. It opens a fan of six kinds: reminder, note, app, cron, photo and other; tap outside it, the **×** or Back to close it. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat. Apps, crons and photos are sections that can be moved up or removed; removing one never changes the wiki. An app or a cron always comes that way: Jenny makes it **because you asked for it**.
+The yellow **+** at the bottom right — the same corner as the + of the Notebooks page — stays on screen while the drawer scrolls. It opens a fan of six kinds: reminder, note, app, cron, photo and other; tap outside it, the **×** or Back to close it. They are yours: Jenny does not add, change or remove them on her own — only when you ask her in the chat. Apps and crons are sections that can be moved up or removed; removing one never changes the wiki. Notes and photos are not sections: they are the two decks under the brief. An app or a cron always comes that way: Jenny makes it **because you asked for it**.
 
 The rule behind apps and crons: **everything a notebook does by itself is on its board, where you can see it.** An app's reader reads a value for free; a cron is a job Jenny does on a schedule. Both carry the same signature — how often, the last run, the next one, and whether it uses the model.
 
 #### Note
 
-Something to remember, in your words — *it stays on the south windowsill only in winter*. Notes are lilac sticky notes — yellow is for reminders — and they live only in the drawer, never on the board. A card's notes are a small deck pinned beside the drawer's title, newest in front, under **YOUR NOTES · N**: tap the deck and the front note slides off to the side and goes to the back, bringing the next one forward.
+Something to remember, in your words — *it stays on the south windowsill only in winter*. Notes are lilac sticky notes — yellow is for reminders. In the drawer a card's notes are a small deck under the brief, newest in front, under **YOUR NOTES · N**; on the board they are gathered on the card's [lilac note](#what-is-on-the-board). In the drawer tap the deck and the front note slides off to the side and goes to the back, bringing the next one forward.
 
-**All ›** opens them all in a sheet, two to a row, with **New note** first. A note there shows at most four lines, and **Read all** when it is longer; tap a note to open it in full, with its date and whether it is in the wiki yet. **Edit** turns it into text you can change — **Save**, **Cancel**, and **Remove**, which asks first. **Note** in the drawer's **+** opens the sheet straight on a new note.
+**All ›** — or a tap on the lilac note on the board — opens them all in a sheet, two to a row, with **New note** first. A note there shows at most four lines, and **Read all** when it is longer; tap a note to open it in full, with its date and whether it is in the wiki yet. **Edit** turns it into text you can change — **Save**, **Cancel**, and **Remove**, which asks first. **Note** in the drawer's **+** opens the sheet straight on a new note.
 
 The note stays on the card as you wrote it, and it is also written to the notebook's journal as a line marked `[said]`, so the gardener promotes it into the wiki like anything you say in the chat. The note shows **waiting for the wiki** until a gardener pass has read that line, then **✓ in the wiki**. Editing a note writes a new journal line; the old one stays, because the journal is append-only.
 
@@ -158,7 +160,15 @@ The section shows what the job does, how often, its next run, its last result �
 
 #### Photo
 
-A picture — how the plant looked when it arrived, say. It is resized on the phone before it is sent (longest side 1,600 pixels, JPEG) and stored in the notebook's `raw/photos/`.
+A picture — how the plant looked when it arrived, how it turns red in October — with a few words of yours about it. A card's photos are a **gallery**: white polaroids held by tape (lilac is for notes, yellow for reminders). In the drawer they are a small deck under the brief, newest in front, under **YOUR PHOTOS · N**: tap the deck and the front photo slides off to the side and goes to the back, bringing the next one forward. On the board they are the card's [gallery](#what-is-on-the-board).
+
+**All ›** — or a tap on the gallery on the board — opens them all in a sheet, three to a row, newest first, with **New photo** first. Tap a photo to open it at the top of the sheet, wide, with its whole note, its date and whether the note is in the wiki yet; **Edit** changes the note — **Save**, **Cancel**, and **Remove**, which asks first.
+
+**New photo**, or **Photo** in the drawer's **+**, asks for a picture and opens it at the top of the sheet with a field for its note. The note is optional. Nothing is sent until **Save**: **Cancel** leaves nothing behind. The picture is resized on the phone first (longest side 1,600 pixels, JPEG) and stored in the notebook's `raw/photos/`.
+
+A photo's note follows a note's rules: it is written to the notebook's journal as a `[said]` line that ends with the photo's path, so the gardener carries it into the wiki — the note, not the picture — and the photo shows **waiting for the wiki**, then **✓ in the wiki**. A photo without a note writes nothing to the journal. Removing a photo takes it off the card; the file stays in `raw/photos/`, and what already reached the wiki stays.
+
+Jenny sees a card's photos: when you talk about a card — its whole name, or a word of it that no other card has — its drawer reaches her with its photos, their notes and their paths, and she opens one when she needs to look at it. In the message right after you pin a photo or a note, she is told what you pinned, even if you do not name the card: *did you see it?* is enough.
 
 #### Other
 
