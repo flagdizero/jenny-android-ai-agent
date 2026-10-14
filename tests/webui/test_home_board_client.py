@@ -1538,10 +1538,10 @@ def test_a_drawer_without_notes_has_no_notes_block() -> None:
 
 
 @requires_jsdom
-def test_the_notes_are_a_deck_beside_the_title() -> None:
+def test_the_notes_are_a_deck_under_the_brief() -> None:
     _run_notes("""
-      const block = document.querySelector('.home-drawer-top .home-notes');
-      assert.ok(block, 'il mazzetto sta nella testa del cassetto');
+      const block = document.querySelector('.home-drawer-pins .home-notes');
+      assert.ok(block, 'il mazzetto sta nella fila sotto il brief');
       assert.equal(block.querySelector('.home-notes-title').textContent, 'Your notes · 2');
       // Le note non sono piu' sezioni fra le altre.
       assert.equal(document.querySelectorAll('.home-drawer-section.is-user').length, 0);
@@ -1647,3 +1647,154 @@ def test_the_notes_lilac_reads_as_text_in_every_theme() -> None:
             if ratio < 4.5:
                 low.append(f"{theme} su --{ground}: {ratio:.2f}:1")
     assert not low, f"il lilla delle note non si legge: {low}"
+
+
+# ── Le foto: il mazzetto di polaroid, la galleria, una foto nuova con la nota ──
+
+
+def _photos_card() -> dict:
+    card = _notes_card()
+    card["photos"] = [
+        {"id": f"s-photo-{i}", "path": f"raw/photos/acero-{i}.jpg",
+         "caption": "" if i == 2 else f"Foto numero {i}",
+         "created": f"2026-10-{14 - i:02d}T10:00:00+02:00",
+         "exists": True, "status": "none" if i == 2 else ("integrated" if i == 4 else "pending")}
+        for i in range(5)
+    ]
+    return card
+
+
+_PHOTOS = """
+// Le immagini: un blob finto per ogni foto, e un url che dice di chi e'.
+let blobs = 0;
+URL.createObjectURL = () => `blob:${++blobs}`;
+URL.revokeObjectURL = () => {};
+hooks.fetch = (u) => (u.pathname === '/api/board/photo'
+  ? { ok: true, status: 200, blob: async () => new Blob([u.searchParams.get('path')]) }
+  : undefined);
+"""
+
+
+def _run_photos(script: str) -> None:
+    _run(_PHOTOS + _NOTES.replace("__NOTES_CARD__", json.dumps(_photos_card())) + script)
+
+
+@requires_jsdom
+def test_the_photos_are_a_deck_beside_the_notes() -> None:
+    _run_photos("""
+      const pins = document.querySelector('.home-drawer-pins');
+      // Le foto prima, le note dopo.
+      assert.deepEqual([...pins.children].map((c) => c.className), ['home-photos', 'home-notes']);
+      assert.equal(pins.querySelector('.home-photos-title').textContent, 'Your photos · 5');
+      // Una foto non e' piu' una sezione del cassetto.
+      assert.equal(document.querySelectorAll('.home-drawer-section.is-user').length, 0);
+      const deck = pins.querySelector('.home-photos-deck');
+      const cards = [...deck.querySelectorAll('.home-photos-card')];
+      assert.equal(cards.length, 5);
+      assert.match(cards[0].className, /is-slot-0/);
+      assert.match(cards[0].textContent, /Foto numero 0/);
+      // Si prendono solo le immagini che si vedono: le prime tre.
+      await tick(20);
+      const loaded = cards.map((c) => Boolean(c.querySelector('img').getAttribute('src')));
+      assert.deepEqual(loaded, [true, true, true, false, false]);
+      assert.match(deck.getAttribute('aria-label'), /^Photo 1 of 5: Foto numero 0/);
+      deck.click();
+      assert.match(cards[0].className, /is-out/);
+      assert.match(cards[1].className, /is-slot-0/);
+      await tick(220);
+      assert.match(deck.getAttribute('aria-label'), /^Photo 2 of 5: Foto numero 1/);
+      // La quarta arriva fra quelle che si vedono, e la sua immagine con lei.
+      await tick(20);
+      assert.ok(cards[3].querySelector('img').getAttribute('src'));
+    """)
+
+
+@requires_jsdom
+def test_the_gallery_opens_a_photo_and_corrects_its_note() -> None:
+    _run_photos("""
+      document.querySelector('.home-photos .home-notes-all').click();
+      await tick(20);
+      assert.equal($('home-board-sheet-title').textContent, 'Your photos · 5');
+      assert.ok(sheetBody().querySelector('.home-photos-new'));
+      const tiles = [...sheetBody().querySelectorAll('.home-photos-tile')];
+      assert.equal(tiles.length, 5);
+      assert.equal(tiles[2].querySelector('.home-photos-tile-text').textContent, 'No note');
+      // Aperta: in testa al foglio, con la nota intera e lo stato.
+      tiles[4].click();
+      const open = sheetBody().querySelector('.home-photos-open');
+      assert.equal(sheetBody().querySelector('.home-photos-grid').firstChild, open);
+      assert.match(open.textContent, /Foto numero 4/);
+      assert.match(open.textContent, /✓ in the wiki/);
+      assert.equal(sheetBody().querySelectorAll('.home-photos-tile').length, 4);
+      // Una foto senza nota non ha uno stato verso la wiki.
+      sheetBody().querySelectorAll('.home-photos-tile')[2].click();
+      const bare = sheetBody().querySelector('.home-photos-open');
+      assert.doesNotMatch(bare.textContent, /wiki/);
+      [...bare.querySelectorAll('button')].find((b) => b.textContent === 'Edit').click();
+      const area = sheetBody().querySelector('.home-photos-area');
+      assert.equal(document.activeElement, area);
+      area.value = 'Le foglie in basso virano';
+      area.dispatchEvent(new Event('input'));
+      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      await tick(40);
+      const call = rpcs('board.section.update').at(-1).params;
+      assert.deepEqual([call.card, call.id, call.text], ['acero', 's-photo-2', 'Le foglie in basso virano']);
+      assert.equal(sheetBody().querySelector('.home-photos-area'), null, 'di nuovo a riposo');
+      // Togli chiede prima.
+      sheetBody().querySelector('.home-photos-tile').click();
+      [...sheetBody().querySelectorAll('.home-photos-open button')].find((b) => b.textContent === 'Edit').click();
+      [...sheetBody().querySelectorAll('button')].find((b) => /Remove/.test(b.textContent)).click();
+      await tick(10);
+      assert.equal(rpcs('board.section.remove').length, 0);
+      $('oc-confirm-ok').click();
+      await tick(40);
+      assert.equal(rpcs('board.section.remove').at(-1).params.id, 's-photo-0');
+    """)
+
+
+@requires_jsdom
+def test_a_new_photo_opens_on_its_note_and_goes_out_only_on_save() -> None:
+    _run_photos("""
+      // Il selettore di file: si prende l'input che il tocco apre, e gli si da' un file.
+      let picker = null;
+      HTMLInputElement.prototype.click = function () { if (this.type === 'file') picker = this; };
+      const choose = async () => {
+        Object.defineProperty(picker, 'files', { value: [new Blob(['jpg'])], configurable: true });
+        picker.dispatchEvent(new Event('change'));
+        await tick(20);
+      };
+      app.drawer.photos.shrink = async () => ({ mime: 'image/jpeg', data: 'AAAA' });
+      document.querySelector('.home-drawer-fab').click();
+      [...document.querySelectorAll('.home-drawer-dial-row')]
+        .find((r) => r.querySelector('.home-drawer-dial-name').textContent === 'Photo').click();
+      assert.equal(picker.accept, 'image/*');
+      await choose();
+      assert.equal($('home-board-sheet-title').textContent, 'New photo');
+      const editor = sheetBody().querySelector('.home-photos-open.is-editing');
+      assert.match(editor.querySelector('img').src, /^blob:/, 'l\u2019anteprima del file scelto');
+      assert.equal(document.activeElement, sheetBody().querySelector('.home-photos-area'));
+      // Annulla: non parte niente.
+      [...editor.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+      assert.equal(rpcs('board.section.add').length, 0);
+      assert.equal($('home-board-sheet-title').textContent, 'Your photos · 5');
+      // Dal riquadro della galleria, questa volta con la nota.
+      sheetBody().querySelector('.home-photos-new').click();
+      await choose();
+      const area = sheetBody().querySelector('.home-photos-area');
+      area.value = 'Il germoglio nuovo è rosso!';
+      area.dispatchEvent(new Event('input'));
+      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      await tick(40);
+      const add = rpcs('board.section.add').at(-1).params;
+      assert.deepEqual([add.card, add.kind, add.mime, add.data, add.caption],
+        ['acero', 'photo', 'image/jpeg', 'AAAA', 'Il germoglio nuovo è rosso!']);
+      assert.equal(sheetBody().querySelector('.home-photos-area'), null);
+    """)
+
+
+@requires_jsdom
+def test_a_drawer_without_photos_has_only_the_notes() -> None:
+    _run_notes("""
+      const pins = document.querySelector('.home-drawer-pins');
+      assert.deepEqual([...pins.children].map((c) => c.className), ['home-notes']);
+    """)

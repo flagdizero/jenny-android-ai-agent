@@ -1547,6 +1547,19 @@
       "integrated": "✓ in the wiki",
       "pending": "waiting for the wiki",
       "placeholder": "For example: it stays on the south windowsill only in winter."
+    },
+    "photos": {
+      "title": "Your photos",
+      "hint": "newest first; each photo with its note goes into the journal, and Jenny sees it",
+      "new": "New photo",
+      "noNote": "No note",
+      "deck": "Photo {n} of {count}: {text}, {when}. Tap for the next one.",
+      "placeholder": "A few words about this photo",
+      "noteLabel": "The photo's note",
+      "now": "Now",
+      "integrated": "✓ in the wiki",
+      "pending": "waiting for the wiki",
+      "removeConfirm": "Remove this photo from the card? The file stays with the notebook's material, and what already went into the wiki stays."
     }
   }
 }

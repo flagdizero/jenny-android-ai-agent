@@ -3215,17 +3215,20 @@ body.home {
 .home-drawer-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; letter-spacing: 0.01em; }
 .home-drawer-meta { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
 .home-drawer-brief { margin: 0; max-width: 60ch; font-size: 15px; line-height: 1.5; }
-/* La testa del cassetto: titolo e «in breve» a sinistra, le note a destra;
-   in un cassetto stretto le note vanno sotto. */
-.home-drawer-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: start;
-}
+/* La testa del cassetto: titolo e «in breve» a tutta larghezza. Fino al
+   14/10/2026 le note stavano a destra del brief; ora scendono nella fila dei
+   mazzetti, accanto alle foto, e il brief prende tutta la riga. */
+.home-drawer-top { display: block; }
 .home-drawer-lead { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-@container (max-width: 440px) {
-  .home-drawer-top { grid-template-columns: minmax(0, 1fr); }
+/* La fila dei mazzetti appuntati: le foto a sinistra, le note a destra. Se ce
+   n'e' uno solo sta a sinistra; in un cassetto stretto vanno uno sotto l'altro
+   (`wrap`: due mazzetti da 210 piu' lo spazio fra loro non ci stanno). */
+.home-drawer-pins {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px 18px;
 }
 
 /* ── Le note dell'utente (`home-board-notes.js`) ──
@@ -3346,6 +3349,190 @@ body.home {
   border-radius: 50%;
   background: var(--board-pin-user);
   box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Le foto dell'utente (`home-board-photos.js`) ──
+   Polaroid di carta bianca fissate con lo scotch: il lilla e' delle note, il
+   giallo delle attese. Il mazzetto e' quello delle note (`home-board-deck.js`):
+   stesse classi dei posti, carta diversa. */
+.home-photos { display: flex; flex-direction: column; gap: 6px; width: 210px; }
+.home-notes-title.home-photos-title { color: var(--text-muted); }
+.home-photos-deck {
+  position: relative;
+  isolation: isolate;
+  width: 210px;
+  height: 200px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.home-photos-card {
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 168px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 0;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  transition: transform 0.3s cubic-bezier(0.33, 0, 0.2, 1), opacity 0.25s ease,
+    filter 0.3s ease, box-shadow 0.3s ease;
+}
+.home-photos-card.is-slot-0 {
+  transform: rotate(-2.5deg);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+.home-photos-card.is-slot-1 {
+  transform: translate(12px, 6px) rotate(4deg);
+  filter: brightness(0.86);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
+}
+.home-photos-card.is-slot-2,
+.home-photos-card.is-hidden {
+  transform: translate(22px, 10px) rotate(8.5deg);
+  filter: brightness(0.74);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+.home-photos-card.is-hidden { opacity: 0; }
+/* Delle polaroid dietro si vede la foto, non la nota: si scrive mentre arriva. */
+.home-photos-card > .home-photos-cap,
+.home-photos-card > .home-photos-tape { transition: opacity 0.2s ease; }
+.home-photos-card:not(.is-slot-0):not(.is-out) > .home-photos-cap,
+.home-photos-card:not(.is-slot-0):not(.is-out) > .home-photos-tape { opacity: 0; }
+.home-photos-card.is-out {
+  transform: translate(150px, -18px) rotate(14deg);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55);
+}
+.home-photos-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
+}
+.home-photos-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 2px 8px;
+  font-family: var(--font-hand);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.home-photos-cap-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.home-photos-cap-when { flex: none; font-family: var(--font-sans); font-size: 10.5px; opacity: 0.7; }
+/* Lo scotch: carta semitrasparente sul bordo alto, al posto del chiodo. */
+.home-photos-tape {
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  width: 54px;
+  height: 18px;
+  margin-left: -27px;
+  background: rgba(240, 232, 200, 0.6);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transform: rotate(-4deg);
+}
+
+/* La galleria, nel foglio: tre polaroid per riga, «Nuova foto» in testa. */
+.home-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 12px;
+  padding-top: 8px;
+}
+.home-photos-new {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  aspect-ratio: 0.8;
+  border: 2px dashed color-mix(in srgb, var(--text-muted) 55%, transparent);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-photos-new i { font-size: 26px; }
+.home-photos-new:active { background: var(--active); }
+.home-photos-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 7px 7px 0;
+  border: none;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  text-align: left;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transform: rotate(-1.3deg);
+  cursor: pointer;
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-photos-tile:nth-child(even) { transform: rotate(1.4deg); }
+.home-photos-tile:active { filter: brightness(0.92); }
+.home-photos-tile-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: 6px 2px 0;
+  font-family: var(--font-hand);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.home-photos-tile-text.is-empty,
+.home-photos-open-text.is-empty { color: color-mix(in srgb, var(--board-ink) 50%, transparent); font-weight: 600; }
+.home-photos-tile-when { padding: 3px 2px 7px; font-size: 10.5px; font-weight: 700; opacity: 0.65; }
+/* Aperta (o in scrittura): in testa, larga quanto il foglio. */
+.home-photos-open {
+  position: relative;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 10px 10px 0;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-photos-big {
+  display: block;
+  width: 100%;
+  height: 170px;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
+}
+.home-board-sheet-body .home-photos-open-text {
+  margin: 0;
+  padding: 0 4px;
+  font-family: var(--font-hand);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: pre-wrap;
+}
+.home-photos-bar { border-top-color: color-mix(in srgb, var(--board-ink) 25%, transparent); padding-bottom: 6px; }
+.home-photos-bar .home-notes-btn { color: var(--board-ink); }
+.home-photos-bar .home-notes-btn.is-primary { background: var(--board-ink); color: var(--board-paper); }
+.home-photos-bar .home-notes-btn:not(.is-primary):active { background: color-mix(in srgb, var(--board-ink) 12%, transparent); }
+.home-notes-area.home-photos-area {
+  min-height: 64px;
+  border-color: color-mix(in srgb, var(--board-ink) 35%, transparent);
+  background: color-mix(in srgb, #fff 55%, transparent);
+  color: var(--board-ink);
 }
 
 /* Tutte le note, nel foglio: la stessa carta, in griglia. */
@@ -3749,7 +3936,6 @@ body.home {
 .home-drawer-app.is-broken .home-drawer-app-number,
 .home-drawer-app.is-quarantined .home-drawer-app-number,
 .home-drawer-app.is-paused .home-drawer-app-number { color: var(--text-faint); }
-.home-drawer-photo { max-width: 100%; max-height: 260px; border-radius: 6px; object-fit: cover; }
 /* Il «+» flottante del cassetto e il suo ventaglio. Stanno nel guscio, fermi
    mentre il cassetto scorre, e solo nella stanza del cassetto. Nello stesso
    posto del + dei Quaderni (`.home-notebooks-new`), per scelta dell'utente
@@ -3912,7 +4098,10 @@ body.home {
   .home-drawer-fold-icon,
   .home-notes-card,
   .home-notes-tile,
-  .home-notes-open { transition: none; animation: none; }
+  .home-notes-open,
+  .home-photos-card,
+  .home-photos-tile,
+  .home-photos-open { transition: none; animation: none; }
 }
 
 /* ── Una pagina, letta ── */
