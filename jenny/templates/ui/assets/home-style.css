@@ -3574,49 +3574,231 @@ body.home {
   font-weight: 700;
   line-height: 1.15;
 }
-.home-photos-tile-text.is-empty,
-.home-photos-open-text.is-empty { color: color-mix(in srgb, var(--board-ink) 50%, transparent); font-weight: 600; }
+.home-photos-tile-text.is-empty { color: color-mix(in srgb, var(--board-ink) 50%, transparent); font-weight: 600; }
 .home-photos-tile-when { padding: 3px 2px 7px; font-size: 10.5px; font-weight: 700; opacity: 0.65; }
-/* Aperta (o in scrittura): in testa, larga quanto il foglio. */
-.home-photos-open {
-  position: relative;
-  grid-column: 1 / -1;
+/* ── La pagina d'album di una foto (aperta, in correzione, nuova) ──
+   In alto «Tutte le foto» e le frecce; la polaroid **quadrata** a sinistra,
+   con la nota nel suo margine bianco; a destra la data per esteso, lo stato e
+   i comandi. Sta tutta in uno schermo del Titan (574 x 566). La foto intera
+   e' a tutto schermo (`.home-photo-viewer`, un tocco sulla polaroid). */
+.home-photos-page { display: flex; flex-direction: column; padding: 2px 0 8px; }
+.home-photos-nav {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 6px;
-  padding: 10px 10px 0;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.home-photos-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 4px 0 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.home-photos-act i { font-size: 18px; color: var(--text-muted); }
+.home-photos-act.is-quiet { color: var(--text-muted); }
+.home-photos-act:active { opacity: 0.6; }
+.home-photos-back { gap: 4px; font-size: 13px; }
+.home-photos-back i { color: var(--text); }
+.home-photos-pager { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+.home-photos-pager-at { min-width: 44px; text-align: center; }
+.home-photos-step {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-photos-step:disabled { opacity: 0.28; cursor: default; }
+.home-photos-step:not(:disabled):active { background: var(--active); }
+.home-photos-album { display: flex; align-items: center; gap: 26px; padding-left: 6px; }
+.home-photos-pol {
+  position: relative;
+  flex: none;
+  width: 236px;
+  box-sizing: border-box;
+  padding: 11px 11px 0;
   background: var(--board-paper);
   color: var(--board-ink);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.55), 0 2px 5px rgba(0, 0, 0, 0.35);
+  transform: rotate(-1.6deg);
   animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-.home-photos-big {
+.home-photos-pol .home-photos-tape { top: -10px; width: 66px; height: 20px; margin-left: -33px; }
+.home-photos-pol-img {
+  position: relative;
   display: block;
   width: 100%;
-  height: 170px;
-  object-fit: cover;
-  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--board-ink) 85%, #000);
 }
-.home-board-sheet-body .home-photos-open-text {
-  margin: 0;
-  padding: 0 4px;
+button.home-photos-pol-img { cursor: zoom-in; }
+button.home-photos-pol-img:active { filter: brightness(0.9); }
+.home-photos-pol-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.home-photos-pol-full {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(14, 12, 10, 0.45);
+  color: #fff;
+  font-size: 15px;
+  backdrop-filter: blur(6px);
+}
+.home-photos-pol-cap { display: flex; align-items: flex-end; min-height: 30px; padding: 10px 4px 14px; }
+.home-photos-pol-note {
   font-family: var(--font-hand);
   font-size: 17px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.2;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-.home-photos-bar { border-top-color: color-mix(in srgb, var(--board-ink) 25%, transparent); padding-bottom: 6px; }
-.home-photos-bar .home-notes-btn { color: var(--board-ink); }
-.home-photos-bar .home-notes-btn.is-primary { background: var(--board-ink); color: var(--board-paper); }
-.home-photos-bar .home-notes-btn:not(.is-primary):active { background: color-mix(in srgb, var(--board-ink) 12%, transparent); }
-.home-notes-area.home-photos-area {
-  min-height: 64px;
-  border-color: color-mix(in srgb, var(--board-ink) 35%, transparent);
+.home-photos-pol-note.is-empty { color: color-mix(in srgb, var(--board-ink) 45%, transparent); font-weight: 600; }
+/* La nota si scrive dove sta: nel margine della polaroid, a mano. */
+.home-photos-pol-area {
+  width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px dashed color-mix(in srgb, var(--board-ink) 35%, transparent);
+  border-radius: 3px;
   background: color-mix(in srgb, #fff 55%, transparent);
   color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  resize: none;
 }
+.home-photos-side { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.home-photos-day { font-family: var(--font-display); font-size: 22px; color: var(--text); }
+.home-photos-state { display: inline-flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: 12.5px; font-weight: 600; }
+.home-photos-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--board-soon); }
+.home-photos-state.is-integrated i { background: var(--ok); }
+.home-photos-rule { align-self: stretch; height: 1px; margin: 14px 0 10px; background: var(--border); }
+.home-photos-acts { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.home-photos-save {
+  min-height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.home-photos-save:active { opacity: 0.8; }
+.home-photos-save:disabled { opacity: 0.5; }
+@container (max-width: 440px) {
+  .home-photos-album { flex-direction: column; align-items: center; }
+  .home-photos-side { align-items: center; text-align: center; }
+  .home-photos-acts { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+}
+
+/* ── Una foto a tutto schermo (`home-photo-viewer.js`) ──
+   Un `<dialog>` nel top layer (sopra il foglio da cui si apre), con la classe
+   `image-lightbox` per la catena di Indietro: qui si rifa' la sua forma. La
+   foto intera con un filo di carta, su un fondo che e' lei stessa sfocata. */
+dialog.home-photo-viewer {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  overflow: hidden;
+  background: #0b0a09;
+  color: #f3efe6;
+}
+dialog.home-photo-viewer[open] { display: flex; }
+.home-photo-viewer-bg {
+  position: absolute;
+  inset: -60px;
+  background: center / cover no-repeat;
+  filter: blur(40px) brightness(0.32) saturate(1.3);
+  pointer-events: none;
+}
+.home-photo-viewer-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 12px) 14px 8px 20px;
+}
+.home-photo-viewer-count { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.75; }
+.home-photo-viewer-close {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-photo-viewer-close:active { background: rgba(255, 255, 255, 0.2); }
+.home-photo-viewer-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 22px;
+}
+.home-photo-viewer-frame {
+  display: flex;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 6px;
+  background: var(--board-paper);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.65);
+}
+.home-photo-viewer-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100dvh - 200px);
+  object-fit: contain;
+  touch-action: none;
+}
+.home-photo-viewer-bottom {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 24px calc(env(safe-area-inset-bottom) + 16px);
+  text-align: center;
+}
+.home-photo-viewer-note { margin: 0; font-family: var(--font-hand); font-size: 20px; font-weight: 700; line-height: 1.2; }
+.home-photo-viewer-note[hidden] { display: none; }
+.home-photo-viewer-sub { margin: 0; font-size: 11.5px; font-weight: 600; opacity: 0.6; }
+.home-photo-viewer-dots { display: flex; gap: 6px; padding-top: 4px; }
+.home-photo-viewer-dots i { width: 5px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.3); transition: width 0.2s ease; }
+.home-photo-viewer-dots i.is-on { width: 14px; background: #fff; }
 
 /* Tutte le note, nel foglio: la stessa carta, in griglia. */
 .home-notes-list { display: flex; flex-direction: column; gap: 16px; }
@@ -4184,7 +4366,8 @@ body.home {
   .home-notes-open,
   .home-photos-card,
   .home-photos-tile,
-  .home-photos-open { transition: none; animation: none; }
+  .home-photos-pol,
+  .home-photo-viewer-dots i { transition: none; animation: none; }
 }
 
 /* ── Una pagina, letta ── */

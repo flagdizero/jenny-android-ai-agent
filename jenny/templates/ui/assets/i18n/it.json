@@ -1559,7 +1559,16 @@
       "now": "Adesso",
       "integrated": "✓ nella wiki",
       "pending": "in attesa della wiki",
-      "removeConfirm": "Togliere questa foto dalla scheda? Il file resta fra il materiale del quaderno, e quel che è già nella wiki resta."
+      "removeConfirm": "Togliere questa foto dalla scheda? Il file resta fra il materiale del quaderno, e quel che è già nella wiki resta.",
+      "full": "Vedi la foto intera, a tutto schermo",
+      "back": "Tutte le foto",
+      "pager": "{n} di {count}",
+      "prev": "Foto precedente",
+      "next": "Foto successiva",
+      "fullShort": "A tutto schermo",
+      "edit": "Correggi la nota",
+      "remove": "Togli dalla scheda",
+      "viewer": "{card} · {n} di {count}"
     },
     "notesPostit": {
       "label": "{card}, le tue note — {notes}. Tocca per vederle tutte.",

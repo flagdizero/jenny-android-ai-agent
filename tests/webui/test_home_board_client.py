@@ -1710,7 +1710,7 @@ def test_the_photos_are_a_deck_beside_the_notes() -> None:
 
 
 @requires_jsdom
-def test_the_gallery_opens_a_photo_and_corrects_its_note() -> None:
+def test_an_opened_photo_is_an_album_page_and_its_note_is_corrected_in_place() -> None:
     _run_photos("""
       document.querySelector('.home-photos .home-notes-all').click();
       await tick(20);
@@ -1719,31 +1719,41 @@ def test_the_gallery_opens_a_photo_and_corrects_its_note() -> None:
       const tiles = [...sheetBody().querySelectorAll('.home-photos-tile')];
       assert.equal(tiles.length, 5);
       assert.equal(tiles[2].querySelector('.home-photos-tile-text').textContent, 'No note');
-      // Aperta: in testa al foglio, con la nota intera e lo stato.
+      // Aperta: la pagina d'album, al posto della griglia, col nome della scheda.
       tiles[4].click();
-      const open = sheetBody().querySelector('.home-photos-open');
-      assert.equal(sheetBody().querySelector('.home-photos-grid').firstChild, open);
-      assert.match(open.textContent, /Foto numero 4/);
-      assert.match(open.textContent, /✓ in the wiki/);
-      assert.equal(sheetBody().querySelectorAll('.home-photos-tile').length, 4);
-      // Una foto senza nota non ha uno stato verso la wiki.
-      sheetBody().querySelectorAll('.home-photos-tile')[2].click();
-      const bare = sheetBody().querySelector('.home-photos-open');
-      assert.doesNotMatch(bare.textContent, /wiki/);
-      [...bare.querySelectorAll('button')].find((b) => b.textContent === 'Edit').click();
-      const area = sheetBody().querySelector('.home-photos-area');
+      assert.equal(sheetBody().querySelector('.home-photos-grid'), null);
+      assert.equal($('home-board-sheet-title').textContent, 'Acero');
+      const page = sheetBody().querySelector('.home-photos-page');
+      assert.match(page.querySelector('.home-photos-pol-note').textContent, /Foto numero 4/);
+      assert.match(page.querySelector('.home-photos-state').textContent, /in the wiki/);
+      assert.equal(page.querySelector('.home-photos-pager-at').textContent, '5 of 5');
+      assert.ok(page.querySelectorAll('.home-photos-step')[1].disabled, 'l\u2019ultima: niente avanti');
+      // Le frecce: la precedente, senza nota e senza stato verso la wiki.
+      page.querySelectorAll('.home-photos-step')[0].click();
+      sheetBody().querySelectorAll('.home-photos-step')[0].click();
+      const bare = sheetBody().querySelector('.home-photos-page');
+      assert.equal(bare.querySelector('.home-photos-pager-at').textContent, '3 of 5');
+      assert.equal(bare.querySelector('.home-photos-pol-note').textContent, 'No note');
+      assert.equal(bare.querySelector('.home-photos-state'), null);
+      // Correggi: la nota si scrive nella polaroid.
+      [...bare.querySelectorAll('.home-photos-act')].find((b) => b.textContent === 'Edit the note').click();
+      const area = sheetBody().querySelector('.home-photos-pol .home-photos-pol-area');
       assert.equal(document.activeElement, area);
       area.value = 'Le foglie in basso virano';
       area.dispatchEvent(new Event('input'));
-      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      sheetBody().querySelector('.home-photos-save').click();
       await tick(40);
       const call = rpcs('board.section.update').at(-1).params;
       assert.deepEqual([call.card, call.id, call.text], ['acero', 's-photo-2', 'Le foglie in basso virano']);
-      assert.equal(sheetBody().querySelector('.home-photos-area'), null, 'di nuovo a riposo');
+      // Salvata, si torna alla sua pagina, a riposo.
+      assert.equal(sheetBody().querySelector('.home-photos-pol-area'), null);
+      assert.ok(sheetBody().querySelector('.home-photos-page'));
+      // Tutte le foto: di nuovo la griglia.
+      sheetBody().querySelector('.home-photos-back').click();
+      assert.equal(sheetBody().querySelectorAll('.home-photos-tile').length, 5);
       // Togli chiede prima.
       sheetBody().querySelector('.home-photos-tile').click();
-      [...sheetBody().querySelectorAll('.home-photos-open button')].find((b) => b.textContent === 'Edit').click();
-      [...sheetBody().querySelectorAll('button')].find((b) => /Remove/.test(b.textContent)).click();
+      [...sheetBody().querySelectorAll('.home-photos-act')].find((b) => b.textContent === 'Remove from the card').click();
       await tick(10);
       assert.equal(rpcs('board.section.remove').length, 0);
       $('oc-confirm-ok').click();
@@ -1770,25 +1780,26 @@ def test_a_new_photo_opens_on_its_note_and_goes_out_only_on_save() -> None:
       assert.equal(picker.accept, 'image/*');
       await choose();
       assert.equal($('home-board-sheet-title').textContent, 'New photo');
-      const editor = sheetBody().querySelector('.home-photos-open.is-editing');
-      assert.match(editor.querySelector('img').src, /^blob:/, 'l\u2019anteprima del file scelto');
-      assert.equal(document.activeElement, sheetBody().querySelector('.home-photos-area'));
+      const page = sheetBody().querySelector('.home-photos-page.is-editing');
+      assert.match(page.querySelector('.home-photos-pol img').src, /^blob:/, 'l\u2019anteprima del file scelto');
+      assert.equal(page.querySelector('.home-photos-day').textContent, 'Now');
+      assert.equal(document.activeElement, page.querySelector('.home-photos-pol-area'));
       // Annulla: non parte niente.
-      [...editor.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+      [...page.querySelectorAll('.home-photos-act')].find((b) => b.textContent === 'Cancel').click();
       assert.equal(rpcs('board.section.add').length, 0);
       assert.equal($('home-board-sheet-title').textContent, 'Your photos · 5');
       // Dal riquadro della galleria, questa volta con la nota.
       sheetBody().querySelector('.home-photos-new').click();
       await choose();
-      const area = sheetBody().querySelector('.home-photos-area');
+      const area = sheetBody().querySelector('.home-photos-pol-area');
       area.value = 'Il germoglio nuovo è rosso!';
       area.dispatchEvent(new Event('input'));
-      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      sheetBody().querySelector('.home-photos-save').click();
       await tick(40);
       const add = rpcs('board.section.add').at(-1).params;
       assert.deepEqual([add.card, add.kind, add.mime, add.data, add.caption],
         ['acero', 'photo', 'image/jpeg', 'AAAA', 'Il germoglio nuovo è rosso!']);
-      assert.equal(sheetBody().querySelector('.home-photos-area'), null);
+      assert.equal(sheetBody().querySelector('.home-photos-pol-area'), null);
     """)
 
 
@@ -1886,17 +1897,17 @@ def test_the_lilac_note_and_the_gallery_open_their_sheet_on_the_board() -> None:
       assert.equal(sheetBody().querySelectorAll('.home-photos-tile').length, 5);
       // Una nota corretta da qui: la scrittura, poi il muro si ridisegna.
       sheetBody().querySelector('.home-photos-tile').click();
-      [...sheetBody().querySelectorAll('.home-photos-open button')].find((b) => b.textContent === 'Edit').click();
-      const area = sheetBody().querySelector('.home-photos-area');
+      [...sheetBody().querySelectorAll('.home-photos-act')].find((b) => b.textContent === 'Edit the note').click();
+      const area = sheetBody().querySelector('.home-photos-pol-area');
       area.value = 'Rossa';
       area.dispatchEvent(new Event('input'));
       const { calls } = await import('./boot.mjs');
       const boards = calls.filter((c) => c.startsWith('/api/board?')).length;
-      [...sheetBody().querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+      sheetBody().querySelector('.home-photos-save').click();
       await tick(60);
       assert.deepEqual(rpcs('board.section.update').at(-1).params.text, 'Rossa');
       assert.ok(calls.filter((c) => c.startsWith('/api/board?')).length > boards, 'il muro riletto');
-      assert.equal(sheetBody().querySelector('.home-photos-area'), null);
+      assert.equal(sheetBody().querySelector('.home-photos-pol-area'), null);
       // Il lilla apre le note.
       document.querySelector('.home-board-postit.is-notes').click();
       await tick(40);
@@ -1934,3 +1945,66 @@ def test_the_list_view_counts_the_notes_and_the_photos() -> None:
         .find((r) => r.querySelector('.home-board-list-name')?.textContent === 'Acero');
       assert.equal(row.querySelector('.home-board-list-kept').textContent, '2 notes · 5 photos');
     """)
+
+
+@requires_jsdom
+def test_an_opened_photo_goes_full_screen_whole_and_back_closes_it_first() -> None:
+    _run_photos("""
+      let revoked = 0;
+      URL.revokeObjectURL = () => { revoked += 1; };
+      document.querySelector('.home-photos .home-notes-all').click();
+      await tick(20);
+      sheetBody().querySelectorAll('.home-photos-tile')[1].click();
+      await tick(20);
+      const shot = sheetBody().querySelector('button.home-photos-pol-img');
+      assert.equal(shot.getAttribute('aria-label'), 'See the whole photo, full screen');
+      shot.click();
+      await tick(20);
+      // Un dialog nel top layer, sopra il foglio, con la foto intera.
+      const box = document.querySelector('dialog.home-photo-viewer');
+      assert.ok(box && box.open, 'la foto a tutto schermo e\u2019 un dialog aperto');
+      assert.ok(box.classList.contains('image-lightbox'), 'per la catena di Indietro');
+      assert.equal(box.querySelector('.home-photo-viewer-count').textContent, 'Acero · 2 of 5');
+      assert.equal(box.querySelector('.home-photo-viewer-note').textContent, 'Foto numero 1');
+      assert.equal(box.querySelector('.home-photo-viewer-img').getAttribute('src'),
+        sheetBody().querySelector('.home-photos-pol img').getAttribute('src'));
+      assert.equal(box.querySelectorAll('.home-photo-viewer-dots i').length, 5);
+      assert.ok(box.querySelectorAll('.home-photo-viewer-dots i')[1].classList.contains('is-on'));
+      // Col dito verso sinistra, la prossima; e la pagina d'album sotto la segue.
+      const stage = box.querySelector('.home-photo-viewer-stage');
+      const touch = (type, x) => {
+        const e = new window.Event(type, { bubbles: true, cancelable: true });
+        const t = { screenX: x, screenY: 200, clientX: x, clientY: 200 };
+        Object.assign(e, { touches: type === 'touchend' ? [] : [t], changedTouches: [t] });
+        stage.querySelector('img').dispatchEvent(e);
+      };
+      touch('touchstart', 300);
+      touch('touchmove', 250);
+      touch('touchmove', 150);
+      touch('touchend', 120);
+      await tick(10);
+      assert.equal(box.querySelector('.home-photo-viewer-count').textContent, 'Acero · 3 of 5');
+      assert.equal(sheetBody().querySelector('.home-photos-pager-at').textContent, '3 of 5');
+      // Indietro chiude prima la foto, e il foglio resta.
+      app.handleHardwareBack();
+      await tick(10);
+      assert.equal(document.querySelector('.image-lightbox'), null);
+      assert.ok($('home-board-sheet').open, 'il foglio e\u2019 ancora aperto');
+      assert.equal(revoked, 0, 'i blob: della galleria non si revocano');
+      app.handleHardwareBack();
+      await tick(10);
+      assert.ok(!$('home-board-sheet').open);
+    """)
+
+
+def test_the_album_polaroid_is_square_and_the_viewer_shows_the_whole_photo() -> None:
+    """Aperta, la polaroid e' quadrata (ritagliata, come una polaroid); intera la
+    foto e' a tutto schermo. Il 14/10/2026 una foto aperta ``contain`` su
+    un'altezza fissa era una striscia fra due bande grigie (Titan)."""
+    from support import css_levels
+
+    css = (css_levels.ASSETS / "home-style.css").read_text(encoding="utf-8")
+    rules = {sel.strip(): body for sel, body, _ in css_levels.rules(css)}
+    assert "aspect-ratio: 1" in rules[".home-photos-pol-img"]
+    assert "object-fit: cover" in rules[".home-photos-pol-img img"]
+    assert "object-fit: contain" in rules[".home-photo-viewer-img"]

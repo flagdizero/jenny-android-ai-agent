@@ -1559,7 +1559,16 @@
       "now": "Now",
       "integrated": "✓ in the wiki",
       "pending": "waiting for the wiki",
-      "removeConfirm": "Remove this photo from the card? The file stays with the notebook's material, and what already went into the wiki stays."
+      "removeConfirm": "Remove this photo from the card? The file stays with the notebook's material, and what already went into the wiki stays.",
+      "full": "See the whole photo, full screen",
+      "back": "All photos",
+      "pager": "{n} of {count}",
+      "prev": "Previous photo",
+      "next": "Next photo",
+      "fullShort": "Full screen",
+      "edit": "Edit the note",
+      "remove": "Remove from the card",
+      "viewer": "{card} · {n} of {count}"
     },
     "notesPostit": {
       "label": "{card}, your notes — {notes}. Tap to see them all.",

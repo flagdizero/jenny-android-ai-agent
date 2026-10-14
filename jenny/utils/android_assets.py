@@ -228,6 +228,7 @@ _UI_MANIFEST = [
     "assets/home-board-deck.js",
     "assets/home-board-notes.js",
     "assets/home-board-photos.js",
+    "assets/home-photo-viewer.js",
     "assets/home-board-blocks.js",
     "assets/home-apps-trash.js",
     "assets/home-staged.js",
