@@ -51,6 +51,7 @@ from jenny.agent.subagent_records import (
     SubagentSpec,
     cancellation_stop_reason,
     cancellation_summary,
+    default_label,
 )
 from jenny.agent.tools.context import ToolContext
 from jenny.agent.tools.file_state import FileStates
@@ -1085,7 +1086,7 @@ class SubagentManager:
         """
         spec = SubagentSpec(
             task=task,
-            label=label or task[:30] + ("..." if len(task) > 30 else ""),
+            label=label or default_label(task),
             agent_type=agent_type,
             temperature=temperature,
             workspace_scope=workspace_scope,

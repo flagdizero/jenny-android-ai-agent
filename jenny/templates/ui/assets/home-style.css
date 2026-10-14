@@ -646,6 +646,15 @@ body.home {
   font-size: 12.5px;
   color: var(--text-muted);
 }
+/* Il titolo di una mini-me porta il suo label («Ho mandato una mini-me:
+   prezzi dei voli per Lisbona»): su una riga sola il label, che e' la parte
+   che dice qualcosa, era proprio quella tagliata. Va a capo, fino a due righe. */
+.home-work-helpers .home-work-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
 
 /* La barra: un tratto per fase, o una barra che scorre quando le fasi non si
    sanno. */

@@ -211,9 +211,41 @@ frame({ event: 'subagent_status', chat_id: 'project:orto',
 assert.equal(bubbles().length, 1, 'due aiutanti sono due bolle');
 assert.equal(bubbles()[0].querySelectorAll('.home-work-row').length, 2);
 
+app.work.doneLingerMs = 30;
 frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
-        recent: [worker({ state: 'done' })] });
-assert.equal(bubbles().length, 0, 'il lavoro e\\u2019 finito e la bolla e\\u2019 ancora li\\u2019');
+        recent: [worker({ state: 'done' }), worker({ task_id: 't2', label: 'other', state: 'done' })] });
+assert.equal(bubbles().length, 1, 'due mini-me tornate insieme sono una bolla sola');
+assert.ok(bubbles()[0].classList.contains('is-done'), 'la bolla non dice che hanno finito');
+assert.match(text(bubbles()[0]), new RegExp(W.helpersDoneMany.replace('{count}', '2')));
+await tick(60);
+assert.equal(bubbles().length, 0, 'la bolla «ha finito» e\\u2019 rimasta li\\u2019');
+assert.equal(live().hidden, true);
+""")
+
+
+def test_a_mini_me_that_comes_back_says_so_by_name() -> None:
+    run_home(_HEAD + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [worker()], recent: [] });
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [worker({ state: 'done' })] });
+assert.equal(bubbles().length, 1);
+assert.equal(text(bubbles()[0]), W.helperDone.replace('{label}', 'plant cards'));
+assert.equal(settled().length, 0, '«ha finito» non resta nel filo: il resoconto lo fa Jenny');
+""")
+
+
+def test_a_mini_me_finished_before_the_home_opened_is_not_news() -> None:
+    """Lo snapshot di una riapertura porta anche le mini-me finite da ore: solo
+    quelle che questa casa ha visto lavorare, finendo, dicono «ho finito»."""
+    run_home(_HEAD + """
+agents['project:orto'] = { running: [], recent: [worker({ state: 'done' })] };
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [worker({ state: 'done' })] });
+assert.equal(bubbles().length, 0);
 """)
 
 

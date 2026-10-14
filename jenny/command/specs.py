@@ -100,7 +100,7 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "/stop",
         "Stop current task",
         (
-            "Cancel the active agent turn for this chat. Helpers working in the "
+            "Cancel the active agent turn for this chat. Mini-mes working in the "
             "background keep going: stop each from its own bubble, or send /stop all "
             "to stop everything."
         ),

@@ -14,6 +14,7 @@ from jenny.agent.subagent_records import (
     SubagentRecord,
     SubagentRecordStore,
     SubagentSpec,
+    default_label,
 )
 from jenny.security.workspace_access import (
     WorkspaceScope,
@@ -235,3 +236,12 @@ class TestRecordStoreCorruption:
         store.append(_record("t1"))  # nessuna eccezione
         assert store.load("s1") == []
         assert store.load_all() == []
+
+
+def test_the_default_label_stops_at_a_word() -> None:
+    """Senza label la casa mostra le prime parole del task: mai mezza parola."""
+    assert default_label("Research the best way to configure the home router firewall") == (
+        "Research the best way to configure the…"
+    )
+    assert default_label("  short\n task ") == "short task"
+    assert default_label("A" * 50) == "A" * 40 + "…"

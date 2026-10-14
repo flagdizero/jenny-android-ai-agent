@@ -4,7 +4,7 @@
  *  c'e' una bolla, come un messaggio di Jenny che sta per arrivare. Una sola
  *  forma per chiunque lavori: una passata del giardiniere (`/gardener`, o quella
  *  automatica se sei dentro il suo quaderno), un ciclo di Dream chiesto a mano,
- *  gli aiutanti (subagent) che Jenny ha messo al lavoro. Il turno di Jenny non
+ *  le mini-me (i subagent) che Jenny ha messo al lavoro. Il turno di Jenny non
  *  ha una bolla: e' un divisore in fondo al posto vivo (`home-activity.js`),
  *  perche' con la stessa pelle si leggeva come un messaggio.
  *
@@ -46,6 +46,11 @@ export const SLOW_AFTER_MS = 60_000;
 /* Un aiutante fallito si racconta solo se e' finito da poco: lo snapshot porta
    anche i finiti di ore fa, e riaprire la chat non deve tirarli fuori. */
 const FAILED_FRESH_MS = 10 * 60_000;
+
+/* Quanto resta la bolla «la mini-me ha finito»: il tempo di leggerla. Il
+   risultato vero lo racconta Jenny subito dopo, nel filo; questa bolla dice
+   solo che la mini-me e' tornata, e non deve restare a fare da doppione. */
+const DONE_LINGER_MS = 6_000;
 
 const ICON = {
   gardener: 'ti-plant',
@@ -102,6 +107,14 @@ export class WorkBubbles {
     this._helpersNode = null;
     this._helpersAt = 0;
     this._failedShown = new Set();
+    /* task_id -> label delle mini-me che questa home ha visto lavorare: solo
+       loro, finendo, dicono «ho finito». Una conclusa da ore che arriva con lo
+       snapshot di una riapertura non e' una notizia. */
+    this._seenRunning = new Map();
+    this._doneNode = null;
+    this._doneTimer = null;
+    this._doneLabels = [];
+    this.doneLingerMs = DONE_LINGER_MS;
     /* lineage -> { node, attempt, open, stops } delle bolle «si e' fermato».
        Una linea ha una bolla sola: quando riparte (dal tuo «Riprova», da Jenny,
        dall'officina) la bolla esce dal filo, perche' il tentativo nuovo ha gia'
@@ -292,6 +305,7 @@ export class WorkBubbles {
     const recent = Array.isArray(snapshot?.recent) ? snapshot.recent : [];
     const all = [...running, ...recent];
     for (const entry of recent) this._maybeFailedHelper(entry, all);
+    this._maybeDoneHelpers(running, recent);
     this._resolveRestarted(all);
     this._changed();
   }
@@ -319,7 +333,7 @@ export class WorkBubbles {
     }
     const stalled = running.some((e) => e.state === 'stalled'
       || (Number(e.idle_s) || 0) * 1000 + since > SLOW_AFTER_MS);
-    this._slow(node, stalled ? i18n.t('home.work.slow') : '');
+    this._slow(node, stalled ? i18n.t('home.work.helperSlow') : '');
     this._note(node, '');
     this._action(node, null);
   }
@@ -387,8 +401,64 @@ export class WorkBubbles {
     const button = node.querySelector('.home-work-action');
     button.disabled = false;
     this._action(node, entry.can_restart && this.deps.restartSubagent
-      ? { label: i18n.t('home.work.retryAction'), run: () => this._restartFailed(node, entry.task_id) }
+      ? { label: i18n.t('home.work.helperRetry'), run: () => this._restartFailed(node, entry.task_id) }
       : null);
+  }
+
+  /* Le mini-me appena tornate. Si guardano solo quelle viste lavorare qui, e
+     quelle finite insieme fanno una bolla sola. */
+  _maybeDoneHelpers(running, recent) {
+    for (const entry of running) {
+      if (entry.task_id) this._seenRunning.set(entry.task_id, String(entry.label || '').trim());
+    }
+    const done = [];
+    for (const entry of recent) {
+      if (!entry || entry.state !== 'done' || !this._seenRunning.has(entry.task_id)) continue;
+      done.push(String(entry.label || '').trim() || this._seenRunning.get(entry.task_id));
+      this._seenRunning.delete(entry.task_id);
+    }
+    if (done.length) this._showDone(done);
+  }
+
+  _showDone(labels) {
+    /* Se ne torna un'altra mentre la bolla e' ancora li', la bolla le conta
+       tutte e due, e il tempo riparte. */
+    this._doneLabels = [...this._doneLabels, ...labels];
+    if (!this._doneNode) {
+      this._doneNode = this._bubble('helpers');
+      this._doneNode.classList.add('is-done');
+      this._mountLive(this._doneNode);
+    }
+    this._paintDone();
+    clearTimeout(this._doneTimer);
+    this._doneTimer = setTimeout(() => this._hideDone(), this.doneLingerMs);
+    this._doneTimer?.unref?.();
+  }
+
+  _paintDone() {
+    const node = this._doneNode;
+    const labels = this._doneLabels;
+    const label = labels.length === 1 ? labels[0] : '';
+    const title = labels.length > 1
+      ? i18n.t('home.work.helpersDoneMany', { count: labels.length })
+      : (label ? i18n.t('home.work.helperDone', { label }) : i18n.t('home.work.helperDoneUnnamed'));
+    this._head(node, ICON.done, title, '');
+    this._bar(node, null);
+    this._line(node, '', false);
+    this._rows(node, []);
+    this._slow(node, '');
+    this._note(node, '');
+    this._action(node, null);
+  }
+
+  _hideDone() {
+    clearTimeout(this._doneTimer);
+    this._doneTimer = null;
+    this._doneLabels = [];
+    if (!this._doneNode) return;
+    this._doneNode.remove();
+    this._doneNode = null;
+    this.deps.chat.liveChanged();
   }
 
   /* Il tap su «Riprova»: il bottone si spegne subito (un secondo tap
@@ -403,7 +473,7 @@ export class WorkBubbles {
       await this.deps.restartSubagent(taskId, this.deps.currentKey());
     } catch (err) {
       button.disabled = false;
-      this._note(node, err?.message || i18n.t('subagents.actionFailed'));
+      this._note(node, err?.message || i18n.t('home.work.helperRetryFailed'));
       return;
     }
     this._markRestarted(node);
@@ -442,12 +512,15 @@ export class WorkBubbles {
     this._helpersNode = null;
     this.helpers = [];
     this._lineageCards.clear();
+    this._seenRunning.clear();
+    this._hideDone();
     this._changed();
   }
 
   applyTranslations() {
     for (const entry of this.works.values()) this._paintWork(entry);
     if (this._helpersNode) this._paintHelpers();
+    if (this._doneNode) this._paintDone();
   }
 
   /* ── La bolla ── */

@@ -49,7 +49,7 @@
       "title": "Chat nuova"
     },
     "stop": {
-      "title": "Ferma la risposta (gli aiutanti continuano)"
+      "title": "Ferma la risposta (le mini-me continuano)"
     },
     "status": {
       "title": "Stato di runtime e provider"
@@ -83,12 +83,12 @@
     }
   },
   "subagents": {
-    "title": "Subagent",
-    "headCount": "{running} attivi",
-    "headCountFinished": "{running} attivi · {finished} appena conclusi",
+    "title": "Mini-me",
+    "headCount": "{running} attive",
+    "headCountFinished": "{running} attive · {finished} appena concluse",
     "untitled": "senza titolo",
-    "openDetail": "Apri il dettaglio del subagent",
-    "idle": "fermo {duration}",
+    "openDetail": "Apri il dettaglio della mini-me",
+    "idle": "ferma {duration}",
     "attempt": "tentativo {n}",
     "stalledHint": "Nessun progresso da un po' — rilanciare?",
     "autoCapReached": "Tentativi automatici esauriti ({attempt}/3) — rilanciare a mano non li ricarica.",
@@ -125,17 +125,17 @@
       "loading": "Caricamento…",
       "failed": "Attività non caricata.",
       "live": "Ancora al lavoro: questa è un'anteprima e cambierà.",
-      "empty": "Nessuna attività registrata per questo subagent"
+      "empty": "Nessuna attività registrata per questa mini-me"
     },
-    "stopped": "Subagent fermato",
-    "relaunched": "Subagent rilanciato",
+    "stopped": "Mini-me fermata",
+    "relaunched": "Mini-me rilanciata",
     "actionFailed": "Azione non riuscita",
     "state": {
       "running": "in corso",
-      "stalled": "fermo",
-      "done": "concluso",
-      "failed": "fallito",
-      "cancelled": "annullato"
+      "stalled": "ferma",
+      "done": "conclusa",
+      "failed": "fallita",
+      "cancelled": "annullata"
     },
     "phase": {
       "initializing": "avvio",
@@ -789,7 +789,7 @@
       "fileUnreadable": "HEARTBEAT.md c'è ma non si legge: controlla i permessi del file.",
       "taskOk": "regolare",
       "taskBroken": "non parte da {n} giri",
-      "taskPending": "affidato a un subagent, in attesa del verdetto",
+      "taskPending": "affidato a una mini-me, aspetto il suo verdetto",
       "orphans": "Voci senza task",
       "orphansHint": "Controlli rimasti nello stato dopo che la riga è stata tolta da HEARTBEAT.md. Spiegano i contatori qui sopra e non richiedono niente."
     },
@@ -940,9 +940,9 @@
         "gardener": "Sistemo il quaderno",
         "gardenerAuto": "Sistemo il quaderno da sola",
         "dream": "Riordino i ricordi",
-        "helperOne": "Un aiutante: {label}",
-        "helperUnnamed": "Un aiutante al lavoro",
-        "helpersMany": "{count} aiutanti al lavoro"
+        "helperOne": "Ho mandato una mini-me: {label}",
+        "helperUnnamed": "Una mini-me è al lavoro",
+        "helpersMany": "{count} mini-me al lavoro"
       },
       "phase": {
         "start": "Comincio",
@@ -958,7 +958,7 @@
         "write": "Scrive",
         "out": "È in rete",
         "run": "Fa girare del codice",
-        "delegate": "Chiede aiuto",
+        "delegate": "Chiama una mini-me",
         "busy": "Lavora"
       },
       "writesOne": "1 scritta",
@@ -968,9 +968,15 @@
       "autoNote": "Se mi scrivi adesso mi fermo, e riprendo più tardi.",
       "done": "Fatto",
       "failed": "Non ci sono riuscita",
-      "helperFailed": "L'aiutante si è fermato: {label}",
-      "helperFailedUnnamed": "L'aiutante si è fermato",
-      "helperStoppedAgain": "Si è fermato di nuovo: è la {count}ª volta.",
+      "helperFailed": "La mini-me si è inceppata: {label}",
+      "helperFailedUnnamed": "La mini-me si è inceppata",
+      "helperStoppedAgain": "Di nuovo inciampata: è la {count}ª volta.",
+      "helperDone": "La mini-me ha finito: {label}",
+      "helperDoneUnnamed": "La mini-me ha finito",
+      "helpersDoneMany": "{count} mini-me hanno finito",
+      "helperSlow": "È piccola ma testarda: ci mette un po'",
+      "helperRetry": "Rimettila in piedi",
+      "helperRetryFailed": "Non sono riuscita a rimetterla in piedi.",
       "result": {
         "pagesOne": "1 pagina aggiornata.",
         "pagesMany": "{count} pagine aggiornate.",
@@ -986,8 +992,8 @@
         "model": "Il modello non ha risposto. Quello che avevo già scritto resta.",
         "notAProject": "Qui non c'è un quaderno da sistemare.",
         "error": "Qualcosa è andato storto.",
-        "helperBudget": "Ha finito i passi prima di concludere.",
-        "helperError": "Si è fermato per un errore."
+        "helperBudget": "Le è finito il fiato prima di arrivare in fondo.",
+        "helperError": "È inciampata in un errore."
       },
       "openBoard": "Apri la bacheca",
       "retryAction": "Riprova",
@@ -1052,11 +1058,11 @@
         "lo faccio girare…"
       ],
       "delegate": [
-        "chiamo rinforzi…",
+        "mi faccio in due…",
+        "chiamo una mini-me…",
+        "clono me stessa, torno subito…",
         "mica faccio tutto io 💅…",
-        "sveglio qualcuno…",
-        "delego, che sono brava…",
-        "metto qualcuno al lavoro…"
+        "mando una piccola me…"
       ],
       "busy": [
         "sto facendo cose…",

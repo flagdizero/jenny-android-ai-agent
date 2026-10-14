@@ -41,7 +41,7 @@ def test_an_unknown_language_falls_back_to_english() -> None:
 
 
 def test_fields_are_filled() -> None:
-    assert say("stop.helpers_running", "it", count=3).startswith("3 aiutanti")
+    assert say("stop.helpers_running", "it", count=3).startswith("3 mini-me")
     assert "(7)" in say("turn.max_iterations", "en", max_iterations=7)
 
 

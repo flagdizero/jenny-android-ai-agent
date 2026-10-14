@@ -31,7 +31,7 @@ Server-side command responses follow the language set for Jenny (`agents.default
 | Command | Arguments | What it does |
 |---|---|---|
 | `/new` | none | Stops the active task (if any) and clears the model's context for a fresh conversation |
-| `/stop` | `[all]` | Cancels the active agent turn for this chat; background helpers keep going unless you send `/stop all` |
+| `/stop` | `[all]` | Cancels the active agent turn for this chat; background mini-mes (subagents) keep going unless you send `/stop all` |
 | `/status` | none | Shows a runtime snapshot: version, model, token usage, context budget, session size, uptime, active tasks |
 | `/model` | `[preset]` | Shows the current model/preset, or switches the active preset |
 | `/history` | `[n]` | Prints the last `n` persisted user/assistant messages (default 10, max 50) |
@@ -69,7 +69,7 @@ While a turn runs, the home's send button turns into **Stop** and sends this com
 
 `/stop` also cancels an active `/goal`. It does **not** stop the helpers (subagents) already working in the background for this chat: each one has its own bubble, and you stop it from there. When some are still running, the reply says how many keep going.
 
-`/stop all` stops everything: the turn, the goal, and every helper of this chat — a helper that finishes after being stopped has its result silently thrown away.
+`/stop all` stops everything: the turn, the goal, and every mini-me (subagent) of this chat — one that finishes after being stopped has its result silently thrown away.
 
 ### `/status` — runtime snapshot
 

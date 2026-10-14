@@ -49,7 +49,7 @@
       "title": "New chat"
     },
     "stop": {
-      "title": "Stop the reply (helpers keep going)"
+      "title": "Stop the reply (the mini-mes keep going)"
     },
     "status": {
       "title": "Runtime and provider status"
@@ -83,11 +83,11 @@
     }
   },
   "subagents": {
-    "title": "Subagents",
+    "title": "Mini-mes",
     "headCount": "{running} running",
     "headCountFinished": "{running} running · {finished} just finished",
     "untitled": "untitled",
-    "openDetail": "Open subagent details",
+    "openDetail": "Open mini-me details",
     "idle": "idle {duration}",
     "attempt": "attempt {n}",
     "stalledHint": "No progress for a while — relaunch?",
@@ -125,10 +125,10 @@
       "loading": "Loading…",
       "failed": "Could not load the activity.",
       "live": "Still running: this is a preview and will change.",
-      "empty": "No activity was recorded for this subagent"
+      "empty": "No activity was recorded for this mini-me"
     },
-    "stopped": "Subagent stopped",
-    "relaunched": "Subagent relaunched",
+    "stopped": "Mini-me stopped",
+    "relaunched": "Mini-me relaunched",
     "actionFailed": "Action failed",
     "state": {
       "running": "running",
@@ -789,7 +789,7 @@
       "fileUnreadable": "HEARTBEAT.md is there but cannot be read: check the file permissions.",
       "taskOk": "fine",
       "taskBroken": "has not run for {n} cycles",
-      "taskPending": "handed to a subagent, waiting for its verdict",
+      "taskPending": "handed to a mini-me, waiting for her verdict",
       "orphans": "Entries with no task",
       "orphansHint": "Checks left in the state after their line was removed from HEARTBEAT.md. They explain the counters above and need nothing."
     },
@@ -940,9 +940,9 @@
         "gardener": "Tidying the notebook",
         "gardenerAuto": "Tidying the notebook on my own",
         "dream": "Sorting my memories",
-        "helperOne": "A helper: {label}",
-        "helperUnnamed": "A helper at work",
-        "helpersMany": "{count} helpers at work"
+        "helperOne": "I sent a mini-me: {label}",
+        "helperUnnamed": "A mini-me is on it",
+        "helpersMany": "{count} mini-mes at work"
       },
       "phase": {
         "start": "Getting started",
@@ -958,7 +958,7 @@
         "write": "Writing",
         "out": "Online",
         "run": "Running code",
-        "delegate": "Asking for help",
+        "delegate": "Calling a mini-me",
         "busy": "Working"
       },
       "writesOne": "1 written",
@@ -968,9 +968,15 @@
       "autoNote": "If you write to me now I'll stop, and pick it up later.",
       "done": "Done",
       "failed": "I couldn't finish",
-      "helperFailed": "The helper stopped: {label}",
-      "helperFailedUnnamed": "The helper stopped",
-      "helperStoppedAgain": "It stopped again: that's {count} times.",
+      "helperFailed": "My mini-me got stuck: {label}",
+      "helperFailedUnnamed": "My mini-me got stuck",
+      "helperStoppedAgain": "Tripped again: that's {count} times.",
+      "helperDone": "My mini-me is done: {label}",
+      "helperDoneUnnamed": "My mini-me is done",
+      "helpersDoneMany": "{count} mini-mes are done",
+      "helperSlow": "She's small but stubborn: this takes a while",
+      "helperRetry": "Get her back up",
+      "helperRetryFailed": "I couldn't get her back up.",
       "result": {
         "pagesOne": "1 page updated.",
         "pagesMany": "{count} pages updated.",
@@ -986,8 +992,8 @@
         "model": "The model didn't answer. What I had already written stays.",
         "notAProject": "There's no notebook to tidy here.",
         "error": "Something went wrong.",
-        "helperBudget": "It ran out of steps before finishing.",
-        "helperError": "It stopped because of an error."
+        "helperBudget": "She ran out of breath before the end.",
+        "helperError": "She tripped on an error."
       },
       "openBoard": "Open the board",
       "retryAction": "Try again",
@@ -1052,11 +1058,11 @@
         "running it…"
       ],
       "delegate": [
-        "calling backup…",
+        "splitting myself in two…",
+        "calling a mini-me…",
+        "cloning myself, back in a sec…",
         "not doing all this myself 💅…",
-        "waking someone up…",
-        "delegating, i'm good at it…",
-        "putting someone on it…"
+        "sending a little me…"
       ],
       "busy": [
         "doing stuff…",

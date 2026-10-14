@@ -60,10 +60,11 @@ export const FAMILY_BY_TOOL = {
   install_update: 'out',
   // Esegue: fa girare qualcosa.
   python_exec: 'run', write_stdin: 'run',
-  // Delega: mette al lavoro qualcun altro, o il se' stesso di dopo.
+  // Delega: manda una mini-me. Solo i subagent: cron, long_task e message non
+  // mettono al lavoro nessuno, e qui dicevano «chiamo una mini-me» mentre Jenny
+  // fissava un promemoria; cadono sul vocabolario generico.
   spawn: 'delegate', subagent_send: 'delegate', subagent_cancel: 'delegate',
-  subagent_restart: 'delegate', long_task: 'delegate', cron: 'delegate',
-  message: 'delegate',
+  subagent_restart: 'delegate',
 };
 
 const FALLBACK_FAMILY = 'busy';

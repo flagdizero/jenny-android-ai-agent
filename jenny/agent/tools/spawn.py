@@ -27,7 +27,12 @@ if TYPE_CHECKING:
 @tool_parameters(
     tool_parameters_schema(
         task=StringSchema("The task for the subagent to complete"),
-        label=StringSchema("Optional short label for the task (for display)"),
+        label=StringSchema(
+            "Short label the user sees while the subagent works: 2-5 words naming "
+            "what it does, in the language you are speaking with the user (e.g. "
+            "'flight prices to Lisbon'). Without one the user sees the first words "
+            "of the task, cut off."
+        ),
         agent_type=StringSchema(
             "Which kind of subagent to run. Pick deliberately — it decides which "
             "tools the subagent gets. "

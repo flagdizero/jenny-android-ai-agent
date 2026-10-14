@@ -27,11 +27,11 @@ _TEXT: dict[str, dict[str, str]] = {
         "stop.done": "I stopped.",
         "stop.none": "There was nothing to stop.",
         "stop.helper_running": (
-            "One helper keeps working in the background: stop it from its own bubble, "
+            "A mini-me keeps working in the background: stop her from her own bubble, "
             "or with /stop all."
         ),
         "stop.helpers_running": (
-            "{count} helpers keep working in the background: stop them from their own "
+            "{count} mini-mes keep working in the background: stop them from their own "
             "bubbles, or with /stop all."
         ),
         # Errori del provider, uno per tipo: ognuno dice cosa fare.
@@ -322,7 +322,7 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "cmd.help.new": "Stop the current task and start a fresh conversation.",
         "cmd.help.stop": (
-            "Cancel the active agent turn for this chat. Helpers working in the background keep "
+            "Cancel the active agent turn for this chat. Mini-mes working in the background keep "
             "going: stop each from its own bubble, or send /stop all to stop everything."
         ),
         "cmd.help.status": "Display runtime, provider, and channel status.",
@@ -361,11 +361,11 @@ _TEXT: dict[str, dict[str, str]] = {
         "stop.done": "Mi sono fermata.",
         "stop.none": "Non stavo facendo niente da fermare.",
         "stop.helper_running": (
-            "Un aiutante continua a lavorare in background: lo fermi dalla sua bolla, "
+            "Una mini-me continua a lavorare in background: la fermi dalla sua bolla, "
             "o con /stop all."
         ),
         "stop.helpers_running": (
-            "{count} aiutanti continuano a lavorare in background: li fermi dalla loro "
+            "{count} mini-me continuano a lavorare in background: le fermi dalla loro "
             "bolla, o con /stop all."
         ),
         "error.connection": (
@@ -660,8 +660,8 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "cmd.help.new": "Ferma il lavoro in corso e inizia una conversazione nuova.",
         "cmd.help.stop": (
-            "Ferma la risposta in corso in questa chat. Gli aiutanti che lavorano in "
-            "background continuano: fermali dalla loro bolla, o manda /stop all per fermare "
+            "Ferma la risposta in corso in questa chat. Le mini-me che lavorano in "
+            "background continuano: fermale dalla loro bolla, o manda /stop all per fermare "
             "tutto."
         ),
         "cmd.help.status": "Mostra lo stato di runtime, provider e canali.",

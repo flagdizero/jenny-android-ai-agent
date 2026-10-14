@@ -189,7 +189,7 @@ class TestSpawn:
         long_task = "A" * 50
         await sm.spawn(long_task, session_key="s1")
         status = next(iter(sm._task_statuses.values()))
-        assert status.label == long_task[:30] + "..."
+        assert status.label == "A" * 40 + "…"
 
         block.set()
         await _drain_subagent_tasks(sm)

@@ -164,6 +164,28 @@ def _coerce_str(value: Any, default: str = "") -> str:
     return value if isinstance(value, str) else default
 
 
+# Lunghezza massima del label ricavato dal task quando il modello non ne da uno.
+_DEFAULT_LABEL_CHARS = 40
+
+
+def default_label(task: str) -> str:
+    """Il label di ripiego, dalle prime parole del task.
+
+    La casa lo mostra in «Ho mandato una mini-me: {label}». Fino al 14/10/2026
+    era ``task[:30] + "..."``, che tagliava a meta parola («Research the best
+    way to co...»); ora si ferma all'ultimo spazio, e taglia secco solo se in
+    quei caratteri uno spazio non c'e.
+    """
+    text = " ".join(task.split())
+    if len(text) <= _DEFAULT_LABEL_CHARS:
+        return text
+    head = text[:_DEFAULT_LABEL_CHARS]
+    cut = head.rfind(" ")
+    if cut > 0:
+        head = head[:cut]
+    return head.rstrip(" ,;:.-") + "…"
+
+
 def _coerce_float(value: Any, default: float = 0.0) -> float:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else default
 
@@ -264,7 +286,7 @@ class SubagentSpec:
         temperature = raw.get("temperature")
         return cls(
             task=task,
-            label=_coerce_str(raw.get("label")) or task[:30],
+            label=_coerce_str(raw.get("label")) or default_label(task),
             agent_type=coerce_agent_type(raw.get("agent_type")),
             temperature=(
                 float(temperature)
