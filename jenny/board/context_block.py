@@ -391,7 +391,11 @@ def recent_line(root: Path, since: Any) -> str:
             bits.append(f"a photo on «{card['title']}» ({section.get('path')}{note})")
         else:
             bits.append(f"a note on «{card['title']}»: «{section.get('text')}»")
-    return "Since the last message the user pinned on the board: " + "; ".join(bits) + "."
+    # Le note, e la nota di una foto, sono gia' righe [said] del diario: sul
+    # jenny_s22 (14/10/2026) Jenny le ha riscritte tutte e tre con journal_append.
+    return ("Since the last message the user pinned on the board: " + "; ".join(bits)
+            + ". Their notes are already in the notebook's journal: do not write them there"
+            " again.")
 
 
 def _app_line(view: Mapping[str, Any]) -> str:

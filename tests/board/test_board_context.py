@@ -333,7 +333,8 @@ def test_what_was_pinned_since_the_last_message_reaches_the_turn(tmp_path) -> No
     assert lines == [
         "Since the last message the user pinned on the board: "
         "a note on «Limone»: «Acqua calcarea?»; "
-        "a photo on «Acero giapponese» (raw/photos/a7.jpg, their note: «Il germoglio è rosso»)."
+        "a photo on «Acero giapponese» (raw/photos/a7.jpg, their note: «Il germoglio è rosso»). "
+        "Their notes are already in the notebook's journal: do not write them there again."
     ]
     # Una foto il cui file non c'è più non si nomina. Un istante senza fuso (come i messaggi della sessione) si legge come locale.
     assert turn_lines(root, "l'hai vista?", since="2099-01-01T00:00:00") == []
