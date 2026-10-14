@@ -1861,6 +1861,18 @@ def test_the_board_shows_a_lilac_note_and_a_gallery_by_their_card() -> None:
       app.board.setFocus('acero', { quiet: true });
       assert.ok(lilac.classList.contains('is-linked') && gallery.classList.contains('is-linked'));
       app.board.setFocus(null);
+      // La scatola e' grande quanto le polaroid che porta: tre qui, una sotto.
+      assert.ok(gallery.classList.contains('is-n3'));
+      const one = JSON.parse(JSON.stringify(routes['/api/board']));
+      one.galleries[0].photos = one.galleries[0].photos.slice(0, 1);
+      one.galleries[0].count = 1;
+      routes['/api/board'] = one;
+      await app.board.load('orto');
+      await tick(20);
+      const single = document.querySelector('.home-board-gallery');
+      assert.ok(single.classList.contains('is-n1'));
+      assert.equal(single.querySelectorAll('.home-board-gallery-photo').length, 1);
+      assert.equal(single.getAttribute('aria-label'), 'Acero, 1 photo. Tap to see it.');
     """)
 
 

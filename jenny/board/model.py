@@ -598,11 +598,12 @@ POSTIT_BOX = (24.0, 44.0)
 # Quante attese mostra un post-it; le altre stanno dietro «+N», nel cassetto.
 POSTIT_ROWS = 3
 # Il post-it lilla delle note di una scheda: largo come il giallo, alto due
-# righe e «+N». E la sua galleria: tre polaroid da 16 a ventaglio e il numero.
-# Le altezze sono stime dal mockup sul quadrato basso del Titan 2, come quella
-# del giallo.
+# righe e «+N». E la sua galleria: al piu' tre polaroid da 16 a ventaglio, in
+# una scatola di 21 x 21 cqw (la taglia piu' grande, v. ``.home-board-gallery``
+# nel CSS), cioe' ~32 in altezza sul quadrato basso del Titan 2. Stime, come
+# quella del giallo, da misurare sul Titan.
 NOTES_BOX = (24.0, 36.0)
-GALLERY_BOX = (22.0, 34.0)
+GALLERY_BOX = (21.0, 32.0)
 # Quante note mostra il post-it lilla, e quante foto il mazzetto della galleria.
 NOTE_ROWS = 2
 GALLERY_SHOWN = 3

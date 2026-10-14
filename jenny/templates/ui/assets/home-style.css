@@ -2927,13 +2927,22 @@ body.home {
     1cqw 1cqw 6px 0 rgba(0, 0, 0, 0.35);
 }
 
-/* La galleria di una scheda: tre polaroid da 16 a ventaglio, in `cqw` come il
-   resto del muro, e quante foto ha in un bollino. Largo 22 (`GALLERY_BOX` in
-   jenny/board/model.py). La prima nel DOM e' quella in fondo. */
-.home-board-gallery {
-  width: 22cqw;
-  height: 25cqw;
-}
+/* La galleria di una scheda: fino a tre polaroid da 16 a ventaglio, in `cqw`
+   come il resto del muro, e quante foto ha in un bollino. La prima nel DOM e'
+   quella in fondo.
+
+   La scatola e' grande quanto le polaroid che porta (`is-n1/2/3`): una
+   polaroid e' 16 x ~19 (0,9 di bordo, 14,2 di foto, 3,9 di didascalia), il
+   ventaglio aggiunge 2,6 / 4,6 in larghezza e 1 / 1,8 in altezza. Fino al
+   14/10/2026 era sempre quella di tre, e sul Titan una galleria con una foto
+   sola, trascinata, si portava dietro un'ombra piu' grande della foto.
+   L'ingombro sul muro e' `GALLERY_BOX` in jenny/board/model.py. */
+.home-board-gallery { width: 21cqw; height: 21cqw; }
+.home-board-gallery.is-n2 { width: 19cqw; height: 20.5cqw; }
+.home-board-gallery.is-n1 { width: 16cqw; height: 19.5cqw; }
+/* Trascinata, l'ombra sollevata e' della polaroid davanti, non della scatola. */
+.home-board-gallery.is-dragging { box-shadow: none; }
+.home-board-gallery.is-dragging .home-board-gallery-photo.is-0 { box-shadow: 0 14px 26px rgba(0, 0, 0, 0.55); }
 .home-board-gallery-photo {
   position: absolute;
   left: 0;

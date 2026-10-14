@@ -160,7 +160,7 @@ const ZOOM_EXTENT = [0.3, 2.2];
    quando una riga supera NEAR_ROW_PX pixel sullo schermo. */
 const SLIP_ROW = 0.0355;
 const NEAR_ROW_PX = 30;
-const ITEM_BOX = { card: [20, 40], postit: [24, 44], notes: [24, 36], photos: [22, 34] };
+const ITEM_BOX = { card: [20, 40], postit: [24, 44], notes: [24, 36], photos: [21, 32] };
 /* Entrando, la bacheca si inquadra tutta (`zoomToFit`): l'aria in pixel fra le
    schede e il bordo, e l'ingrandimento massimo di quell'inquadratura — a
    grandezza naturale, non oltre: due schede sole non diventano due manifesti. */
@@ -941,7 +941,8 @@ export class HomeBoard {
     const item = g;
     item.id = g.card;
     const el = document.createElement('div');
-    el.className = 'home-board-item home-board-gallery';
+    /* Grande quanto le polaroid che porta: v. `.home-board-gallery` nel CSS. */
+    el.className = `home-board-item home-board-gallery is-n${Math.min(3, g.photos.length)}`;
     el.setAttribute('role', 'button');
     el.tabIndex = 0;
     el.style.setProperty('--tilt', `${this._tilt(g.card) + 1}deg`);
