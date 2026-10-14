@@ -278,6 +278,7 @@ _UI_MANIFEST = [
     "assets/mobile-header.js",
     "assets/mobile-jenny.js",
     "assets/mobile-launcher.js",
+    "assets/mobile-remote-access.js",
     "assets/mobile-settings.js",
     "assets/mobile-style.css",
     "assets/mobile-ui-query.js",
@@ -426,6 +427,8 @@ _UI_MANIFEST = [
     "assets/vendor/highlight.js@11.11.1/styles/github.min.css",
     "assets/vendor/marked@15.0.7/LICENSE",
     "assets/vendor/marked@15.0.7/marked.min.js",
+    "assets/vendor/qrcode-generator@1.4.4/LICENSE",
+    "assets/vendor/qrcode-generator@1.4.4/qrcode.min.js",
     # I documenti della WebUI (v. _SHELL_DOCUMENTS in jenny/webui/ws_http.py).
     # Chi ne aggiunge uno e si dimentica questa riga non ottiene un 404:
     # `_serve_static` ricade su index.html e serve un'altra interfaccia.

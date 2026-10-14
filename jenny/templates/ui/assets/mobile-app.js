@@ -153,6 +153,12 @@ class MobileApp {
       writeSwitch.render();
       // La riga d'identita' e il chip dei comandi, per la stessa ragione.
       this.controllers.chat?.applyTranslations?.();
+      /* I cassetti, se si sono gia' disegnati: le etichette le scrive JS e la
+         `load` qui sopra non e' attesa. Sul telefono il file arriva da
+         loopback e vince quasi sempre; aperta da Tailscale, con un giro di
+         rete in piu', l'officina restava con «settings.telegram.title». Senza
+         dati `render()` esce e non disegna niente. */
+      this._settings?.render();
     });
 
     // Sidebar navigation

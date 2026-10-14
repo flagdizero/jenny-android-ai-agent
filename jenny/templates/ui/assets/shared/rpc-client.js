@@ -68,6 +68,14 @@ export const rpc = {
     return send(`board.${method}`, { wiki, ...params });
   },
 
+  /** Jenny dagli altri dispositivi (`remote.status`, `remote.set`,
+   *  `remote.rotate`): li serve il canale stesso, in
+   *  `jenny/channels/websocket.py::_handle_remote_rpc`. Sul WebSocket e non su
+   *  /api/ perche' la risposta porta la chiave del link. */
+  remote(method, params = {}) {
+    return send(`remote.${method}`, params);
+  },
+
   /** Il cestino delle app (`apps.trash`, `apps.restore`, `apps.purge`):
    *  `jenny/webui/apps_commands.py`. */
   apps(method, params = {}) {

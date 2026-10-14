@@ -1,10 +1,12 @@
 /** Mobile Settings Controller — i gruppi aperti dei tre cassetti dell'officina. */
 
 import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
+import { RemoteAccessPanel, remoteSummary } from './mobile-remote-access.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { botName } from './shared/bot-name.js';
 import { NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
@@ -89,7 +91,7 @@ export const DRAWERS = {
     sections: ['whoThinks', 'parameters', 'battery', 'system'],
   },
   hands: {
-    sections: ['webSearch', 'position', 'ssh', 'telegram', 'skill', 'scheduling'],
+    sections: ['webSearch', 'position', 'ssh', 'telegram', 'remote', 'skill', 'scheduling'],
   },
   /* In Memoria «file» e' l'**ultima**, e non e' un dettaglio d'ordine: da
      quando quella scheda contiene l'esploratore vero la sua altezza dipende da
@@ -387,6 +389,7 @@ export class SettingsController {
       position: () => this._group('position', i18n.t('settings.location.section'), this._renderLocation(d)),
       ssh: () => this._group('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._group('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
+      remote: () => this._group('remote', i18n.t('settings.remote.title'), this._renderRemote()),
       skill: () => this._group('skill', i18n.t('workshop.groups.skill'), this._renderSkill()),
       scheduling: () => this._group('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       // Memoria
@@ -843,6 +846,42 @@ export class SettingsController {
   _writeTelegramSummary(state) {
     const el = this.contentEl?.querySelector('#summary-telegram');
     if (el) el.textContent = telegramSummary(state);
+  }
+
+  // ── Da altri dispositivi ───────────────────────────────────────────
+
+  /** Come Telegram: in cassetto una riga («spento», «acceso · macbook
+   *  collegato»), il pannello dietro il tocco. */
+  _renderRemote() {
+    return this._summary('remote', i18n.t('settings.remote.rowName'), i18n.t('settings.loading'));
+  }
+
+  _openRemote() {
+    const body = document.getElementById('drawer-remote-body');
+    if (!body) return;
+    this._remotePanel?.destroy();
+    this._remotePanel = new RemoteAccessPanel(body, {
+      onStatus: (status) => this._writeRemoteSummary(status),
+    });
+    this._remotePanel.refresh();
+  }
+
+  async _loadRemoteSummary() {
+    if (!this.contentEl?.querySelector('#summary-remote')) return;
+    const gen = this._gen;
+    let status = null;
+    try {
+      status = await rpc.remote('status');
+    } catch {
+      status = null;
+    }
+    if (this._stale(gen)) return;
+    this._writeRemoteSummary(status);
+  }
+
+  _writeRemoteSummary(status) {
+    const el = this.contentEl?.querySelector('#summary-remote');
+    if (el) el.textContent = status ? remoteSummary(status) : '—';
   }
 
   // ── Models & Providers ─────────────────────────────────────────────
@@ -2341,6 +2380,7 @@ export class SettingsController {
     return {
       history: this._openHistory,
       telegram: this._openTelegram,
+      remote: this._openRemote,
       skill: this._openSkill,
       caps: this._openCaps,
     };
@@ -3101,6 +3141,9 @@ export class SettingsController {
     // Telegram: in cassetto solo la riga. Il widget lo monta `_openTelegram`
     // quando il pannello si apre — prima, il suo contenitore non esiste.
     this._loadTelegramSummary();
+
+    // Da altri dispositivi: stessa forma di Telegram.
+    this._loadRemoteSummary();
 
     // Skill: stessa forma: la riga si riempie da sé, il pannello all'apertura.
     this._loadSkillsSummary();

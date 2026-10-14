@@ -780,12 +780,27 @@ class HeartbeatConfig(Base):
     keep_recent_messages: int = 8
 
 
+class RemoteAccessConfig(Base):
+    """Jenny raggiungibile dagli altri dispositivi del tailnet (``gateway.remoteAccess``).
+
+    Spento di default. ``key`` è la chiave del link che si apre da fuori, ed è
+    **un'altra** rispetto a ``websocket.token_issue_secret``: vale solo sul
+    secondo ascoltatore (``channels.ws_remote``), quindi cambiarla scollega gli
+    altri dispositivi senza toccare la WebView del telefono, che continua con la
+    sua. Vuota finché l'utente non accende l'opzione la prima volta.
+    """
+
+    enabled: bool = False
+    key: str = ""
+
+
 class GatewayConfig(Base):
     """Gateway/server configuration."""
 
     host: str = "127.0.0.1"  # Safer default: local-only bind.
     port: int = 18790
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
+    remote_access: RemoteAccessConfig = Field(default_factory=RemoteAccessConfig)
 
 
 class ToolsConfig(Base):

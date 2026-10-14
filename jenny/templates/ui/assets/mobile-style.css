@@ -4888,6 +4888,97 @@ dialog.image-lightbox::backdrop { background: transparent; }
   word-break: break-all;
 }
 
+/* ── Da altri dispositivi (mobile-remote-access.js) ─────────────────── */
+.remote-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.remote-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.remote-dot-ok { background: var(--ok); }
+.remote-dot-warn { background: var(--warning); }
+.remote-sub {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.remote-addr {
+  display: block;
+  padding: 8px 10px;
+  font: 12.5px var(--font-mono, monospace);
+  word-break: break-all;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.remote-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.remote-actions .settings-btn-add {
+  flex: 1;
+  justify-content: center;
+}
+.remote-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.remote-hint-center { text-align: center; }
+.remote-here,
+.remote-ts-down { margin: 10px 0; }
+/* Il QR resta nero su bianco in ogni tema: un lettore lo vuole cosi'. */
+.remote-qr {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 2px;
+}
+.remote-qr-box {
+  width: 168px;
+  padding: 10px;
+  line-height: 0;
+  background: #fff;
+  border-radius: 10px;
+}
+.remote-qr-box svg { width: 100%; height: auto; }
+.remote-peer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-top: 0.5px solid var(--border);
+}
+.remote-peer i { font-size: 18px; color: var(--text-muted); }
+.remote-peer-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.remote-peer-ip { font: 11px var(--font-mono, monospace); color: var(--text-faint); }
+.remote-peer-when { font-size: 12px; color: var(--text-faint); }
+/* Due classi: `.settings-btn-add` sta piu' in basso nel file e, a pari
+   specificita', vincerebbe col suo colore. */
+.settings-btn-add.remote-danger {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+}
+
 
 /* ── Gruppi di impostazioni ──────────────────────────────────────────────
    Una soprascritta fuori, una scheda aperta sotto. Erano fisarmoniche: testa

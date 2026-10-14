@@ -316,7 +316,7 @@ class GatewayHTTPHandler:
             get_workspace_root=lambda: self._get_workspace_root(),
             log=self._log,
             check_app_token=self.check_app_secret,
-            get_secret=lambda: self.config.token_issue_secret.strip(),
+            get_secret=lambda: self._auth_secret(),
         )
 
         from jenny.webui.backup_routes import BackupRoutes
@@ -383,17 +383,29 @@ class GatewayHTTPHandler:
 
     # -- Token management ---------------------------------------------------
 
+    def _auth_secret(self) -> str:
+        """La chiave contro cui si controlla questa richiesta.
+
+        Il segreto della WebView, tranne sull'ascoltatore Tailscale, dove vale
+        solo la chiave di ``gateway.remoteAccess`` (v. ``channels.ws_remote``).
+        Anche il token di una Jenny App ne deriva: coniato e verificato sullo
+        stesso ascoltatore, torna.
+        """
+        from jenny.channels.ws_remote import auth_secret
+
+        return auth_secret(self.config.token_issue_secret.strip())
+
     def check_api_secret(self, request: WsRequest) -> bool:
         from jenny.channels.http_utils import check_api_secret as _check
 
-        return _check(request.headers, request.path, self.config.token_issue_secret.strip())
+        return _check(request.headers, request.path, self._auth_secret())
 
     def check_app_secret(self, request: WsRequest, slug: str) -> bool:
         """Il segreto, **o** il token della Jenny App *slug*: solo per le sue route."""
         from jenny.channels.http_utils import check_app_secret as _check
 
         return _check(
-            request.headers, request.path, self.config.token_issue_secret.strip(), slug
+            request.headers, request.path, self._auth_secret(), slug
         )
 
     # -- Main dispatch ------------------------------------------------------
@@ -492,7 +504,7 @@ class GatewayHTTPHandler:
     # -- Bootstrap ----------------------------------------------------------
 
     def _handle_bootstrap(self, connection: Any, request: Any) -> Response:
-        secret = self.config.token_issue_secret.strip()
+        secret = self._auth_secret()
         if secret:
             if not _issue_route_secret_matches(request.headers, secret):
                 return _http_error(401, "Unauthorized")

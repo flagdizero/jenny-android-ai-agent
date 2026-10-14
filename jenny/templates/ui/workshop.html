@@ -43,6 +43,9 @@
 <!-- DOMPurify (HTML sanitizer for model markdown — C1) -->
 <script src="/html-mobile/assets/vendor/dompurify@3/purify.min.js" defer></script>
 
+<!-- QR Code Generator: il QR del link «Da altri dispositivi» (mobile-remote-access.js) -->
+<script src="/html-mobile/assets/vendor/qrcode-generator@1.4.4/qrcode.min.js" defer></script>
+
 <!-- Highlight.js (Syntax highlighting) -->
 <link rel="stylesheet" id="hljs-theme-dark" href="/html-mobile/assets/vendor/highlight.js@11.11.1/styles/github-dark.min.css" media="all">
 <link rel="stylesheet" id="hljs-theme-light" href="/html-mobile/assets/vendor/highlight.js@11.11.1/styles/github.min.css" media="not all">
@@ -112,6 +115,20 @@
           </div>
         </div>
         <div class="drawer-body"><div id="drawer-telegram-body"></div></div>
+      </div>
+
+      <!-- DRAWER: Jenny dagli altri dispositivi, via Tailscale. Interruttore,
+           indirizzo, link e QR, chi e' collegato, cambio della chiave: il
+           pannello lo disegna `mobile-remote-access.js`. -->
+      <div class="drawer" id="drawer-remote">
+        <div class="drawer-header">
+          <div class="drawer-handle"></div>
+          <div class="drawer-header-row">
+            <span class="drawer-title" data-i18n="settings.remote.title">Da altri dispositivi</span>
+            <button class="drawer-close" data-close aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div class="drawer-body"><div id="drawer-remote-body"></div></div>
       </div>
 
       <!-- DRAWER: un host SSH ─ tutto quel che si fa **a** un host.
