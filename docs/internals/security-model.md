@@ -192,6 +192,14 @@ behind a weaker gate than a read.
 
 The gateway listens on `127.0.0.1:18790` by default (WebSocket and HTTP share the same host/port). If you were to reconfigure `websocket.host` to `0.0.0.0` (all interfaces) without setting `tokenIssueSecret`, the config itself refuses to validate — this is rejected before the gateway can even start, specifically to prevent an unauthenticated gateway from being exposed to the rest of your network.
 
+**A second listener, only on Tailscale, only when you turn it on.** With `gateway.remoteAccess.enabled`, the gateway also listens on the phone's Tailscale addresses, so the WebUI can be opened from your other devices on the same tailnet. Three rules hold it:
+
+- It binds to the addresses Tailscale assigned, never to `0.0.0.0`: the home Wi-Fi never reaches it, and the link — which carries a key — never travels in clear over a LAN (Tailscale encrypts it end to end). Tailscale is recognised by its own IPv6 range (`fd7a:115c:a1e0::/48`), because the IPv4 range it uses, `100.64.0.0/10`, is also what mobile carriers hand out behind CGNAT.
+- Every connection is checked before anything else: it must have arrived on one of the bound addresses **and** come from a tailnet address. Linux accepts a packet for any of its addresses on any interface, so a Wi-Fi neighbour sending to the phone's `100.x` would otherwise get as far as the handshake. Anything else gets a bare `403`.
+- It takes its own key, `gateway.remoteAccess.key`, and only that one; the WebView's secret is refused there, and the remote key is refused on `127.0.0.1`. Changing the remote key disconnects the other devices and leaves the phone's own WebView as it was. The network rules narrow who can try; the key is still what grants access.
+
+Two things don't work from another device: the Jenny Apps' external views, whose proxy is bound to `127.0.0.1`, and anything that needs the Android shell (the native bridge simply isn't there, and the UI already degrades for that).
+
 ## Smaller boundaries, and where they stop
 
 These are narrower than the four levels, but each one is load-bearing, and each has a limit

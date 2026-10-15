@@ -35,6 +35,8 @@ export class UnseenReplies {
     this._spoke = new Set();
     /** Le chat con una risposta non vista. */
     this._unseen = new Set();
+    /** Le chat il cui turno in corso e' partito da un altro dispositivo. */
+    this._elsewhere = new Set();
     this._lit = false;
     this._onFrame = (e) => this.ingest(e.detail);
     wsManager.addEventListener('chat:message', this._onFrame);
@@ -45,6 +47,14 @@ export class UnseenReplies {
     if (!msg || typeof msg !== 'object') return;
     const id = msg.chat_id || sessionManager.currentChatId;
     if (!id) return;
+    /* Una domanda scritta dal Mac: la risposta la stai leggendo li', e sul
+       telefono non e' «una cosa per te da guardare». Il turno che apre non
+       accende il pallino (ne' una notifica: v. `ws_sender.send`). */
+    if (msg.event === 'user') {
+      if (msg.origin === 'remote') this._elsewhere.add(id);
+      else this._elsewhere.delete(id);
+      return;
+    }
     const speaks = (msg.event === 'delta' && msg.text)
       || (msg.event === 'message' && msg.text && msg.kind !== 'tool_hint' && msg.kind !== 'progress');
     if (speaks) {
@@ -52,6 +62,10 @@ export class UnseenReplies {
       return;
     }
     if (msg.event !== 'turn_end' && msg.event !== 'error') return;
+    if (this._elsewhere.delete(id)) {
+      this._spoke.delete(id);
+      return;
+    }
     if (!this._spoke.delete(id)) return;
     if (!this._onScreen(id)) this._unseen.add(id);
     this.refresh();

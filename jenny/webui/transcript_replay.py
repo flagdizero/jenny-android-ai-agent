@@ -432,6 +432,9 @@ def replay_transcript_to_ui_messages(
         origin = rec.get("origin")
         if isinstance(origin, str) and origin:
             row["origin"] = origin
+        device = rec.get("device")
+        if isinstance(device, str) and device:
+            row["device"] = device
         if media_att:
             row["media"] = media_att
             if all(m.get("kind") == "image" for m in media_att):

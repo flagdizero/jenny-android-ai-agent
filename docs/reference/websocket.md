@@ -363,6 +363,14 @@ is human-readable, `reason` is the stable token for a client to branch on (`miss
 {"event": "rpc_result", "id": "rpc-9f2a", "ok": true, "result": {"path": "SOUL.md", "bytes": 4213}}
 ```
 
+**`pong`** — the answer to a `ping` envelope, with no other fields. It proves the socket is still
+alive end to end, which a WebSocket-level ping (sent only by the server, invisible to page
+JavaScript) cannot prove to the browser:
+
+```json
+{"event": "pong"}
+```
+
 ### Client → Server
 
 **Legacy (default chat):** send a plain string, or a JSON object with a recognized text field:
@@ -388,6 +396,7 @@ Recognized fields: `content`, `text`, `message` (checked in that order). Invalid
 | `subagent_unwatch` | `task_id` | Stop them. Replies with `subagent_unwatched`. Idempotent. |
 | `ui_result` | `correlation_id`, `payload` or `error` | Answer a `ui_query`. `payload` is a JSON object of at most 256 KB (the WebUI sends `{view, drawer, html, app?}`); `error` reports that the client could not collect it. An answer from a connection other than the one asked, or for an unknown or expired `correlation_id`, is dropped. |
 | `rpc` | `id`, `method`, `params` | Run a gateway command and reply with `rpc_result`. See [Commands (rpc)](#commands-rpc). |
+| `ping` | — | Replies with `pong` and nothing else. The WebUI sends it every 25 s, and when its tab becomes visible again, only when it was opened from another device (not over loopback): a socket left half-open by a dropped Tailscale tunnel looks `OPEN` to the browser, and only a frame sent on it finds out. No answer within 10 s and the WebUI drops the socket and reconnects. |
 
 **`chat_id`** (in `attach`, `detach` and `message`) picks the conversation: `"project:<name>"`
 is that project's chat, and anything else — missing, `"default"`, an unknown string — is the

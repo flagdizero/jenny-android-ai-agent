@@ -1292,7 +1292,8 @@ export class ChatController {
     if (!origin || origin === 'websocket') return;
     const badge = document.createElement('div');
     badge.className = 'chat-origin-badge';
-    const icon = origin === 'telegram' ? 'ti-brand-telegram' : 'ti-arrows-exchange';
+    const icon = origin === 'telegram' ? 'ti-brand-telegram'
+      : origin === 'remote' ? 'ti-device-laptop' : 'ti-arrows-exchange';
     const label = origin.charAt(0).toUpperCase() + origin.slice(1);
     badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
     msg.insertBefore(badge, msg.firstChild);

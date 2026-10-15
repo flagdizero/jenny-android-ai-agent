@@ -41,6 +41,7 @@
  *     una bolla sola.
  */
 
+import { api } from './shared/api-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
@@ -64,6 +65,9 @@ const ORIGINS = {
   telegram: { icon: 'ti-brand-telegram', key: 'home.origin.telegram' },
   notification: { icon: 'ti-bell', key: 'home.origin.notification' },
   floating: { icon: 'ti-message-circle', key: 'home.origin.floating' },
+  /* Scritto da un altro dispositivo del tailnet (il Mac, un secondo
+     telefono). Col nome che gli da' MagicDNS, quando c'e': «dal mac». */
+  remote: { icon: 'ti-device-laptop', key: 'home.origin.remote', named: 'home.origin.remoteNamed' },
 };
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
@@ -403,6 +407,7 @@ export class HomeChat {
     }
     if (gen !== this._readGen || res.stale) return null;
     const { thread } = res;
+    this.rev = thread?.rev || null;
     /* Cosa se ne va si decide adesso, a storia arrivata, e non alla partenza:
        nel frattempo puo' essere entrata in cima una pagina piu' vecchia
        chiesta con lo scorrimento. Contata alla partenza restava a schermo, la
@@ -423,7 +428,7 @@ export class HomeChat {
       this._inBatch(() => {
         for (const turn of this._buildTurns(messages)) {
           if (turn.boundary) this._appendBoundary();
-          else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at);
+          else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at, turn.device);
           else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at, turn.error,
             turn.journal, turn.moves);
         }
@@ -455,7 +460,7 @@ export class HomeChat {
     this._inBatch(() => {
       for (const turn of this._buildTurns(messages).reverse()) {
         if (turn.boundary) this._appendBoundary(true);
-        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true, turn.at);
+        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true, turn.at, turn.device);
         else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs, turn.at, null,
           turn.journal, turn.moves);
       }
@@ -509,6 +514,7 @@ export class HomeChat {
           user: true,
           text: msg.text || msg.content || '',
           origin: msg.origin,
+          device: msg.device || null,
           media: Array.isArray(msg.media) ? msg.media : [],
           at: msg.sentAt ?? null,
         });
@@ -562,6 +568,10 @@ export class HomeChat {
   /** Un frame del websocket. Tutto cio' che non e' qui sotto non riguarda la casa. */
   handleFrame(msg) {
     if (!this._belongsHere(msg)) return;
+    /* Fin qui il filo e' completo: la revisione che `isStale` confronta. La
+       portano solo `turn_end` e l'eco di un messaggio scritto altrove, cioe'
+       i frame dopo i quali non resta niente in volo. */
+    if (msg.rev && (msg.event === 'turn_end' || msg.event === 'user')) this.rev = msg.rev;
     /* La prova che l'ultimo invio è entrato: il gateway sta rispondendo di
        qualcosa che non è un rifiuto. Da qui in poi quella bolla non è più in
        sospeso, e un errore che arrivasse dopo è un errore di altro. */
@@ -784,7 +794,7 @@ export class HomeChat {
     const media = msg.media_urls || msg.media || [];
     if (!text && !media.length) return;
     this._resetTurn();
-    this._appendUser(text, msg.origin_channel || msg.origin, media, false, Date.now());
+    this._appendUser(text, msg.origin_channel || msg.origin, media, false, Date.now(), msg.device);
     this._follow();
   }
 
@@ -833,6 +843,29 @@ export class HomeChat {
     this.turnId = null;
   }
 
+  /** Il filo a schermo e' rimasto indietro rispetto a quello vero?
+   *
+   *  Una richiesta piccola (l'ultima riga) e un confronto di revisione: la
+   *  casa la fa tornando visibile, e rilegge solo se serve. Le chat scritte
+   *  dal Mac arrivano gia' dal vivo; questo copre quel che il vivo puo'
+   *  perdere. Senza revisione (gateway vecchio, lettura mai riuscita) o con
+   *  una lettura in corso risponde «no». Un turno in corso lo esclude chi
+   *  chiama (la casa sa se Jenny sta lavorando): a meta' turno il filo cresce
+   *  e rileggerlo strapperebbe la risposta che sta arrivando. */
+  async isStale() {
+    if (!this.rev || this._reading) return false;
+    const key = sessionManager.currentKey;
+    const known = this.rev;
+    let data;
+    try {
+      data = await api.fetchWebuiThread(key, { limit: 1 });
+    } catch {
+      return false;
+    }
+    if (key !== sessionManager.currentKey || known !== this.rev) return false;
+    return Boolean(data?.rev) && data.rev !== known;
+  }
+
   /** Ributta giu' la conversazione da capo.
    *
    *  E' anche il modo in cui si cambia quaderno: la chiave la sa il session
@@ -851,10 +884,10 @@ export class HomeChat {
 
   /* ── Disegno ── */
 
-  _appendUser(text, origin, media, toTop = false, at = null) {
+  _appendUser(text, origin, media, toTop = false, at = null, device = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-user';
-    const badge = this._originBadge(origin);
+    const badge = this._originBadge(origin, device);
     if (badge) node.appendChild(badge);
     if (text) {
       const block = document.createElement('div');
@@ -1093,13 +1126,14 @@ export class HomeChat {
     this._append(hr, toTop);
   }
 
-  _originBadge(origin) {
+  _originBadge(origin, device = null) {
     if (!origin || origin === 'websocket') return null;
     const known = ORIGINS[origin];
     const badge = document.createElement('div');
     badge.className = 'home-origin';
     const icon = known ? known.icon : 'ti-arrows-exchange';
-    const label = known ? i18n.t(known.key) : origin;
+    const label = !known ? origin
+      : (device && known.named) ? i18n.t(known.named, { device }) : i18n.t(known.key);
     badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
     return badge;
   }

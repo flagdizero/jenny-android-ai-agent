@@ -629,6 +629,7 @@ class HomeApp {
       if (document.visibilityState === 'hidden') return;
       this._retryThread();
       this._reportChatOnScreen();
+      this._rereadIfStale();
     });
     /* Un foglio o una domanda che si chiude sopra la chat la rimette a
        schermo: `close` non risale, ma passa dalla cattura del documento. */
@@ -669,6 +670,15 @@ class HomeApp {
   /* Un filo che non e' arrivato, riprovato: a visibilita', a Home, quando la
      chat torna a schermo. Niente se e' arrivato, o se una lettura e' gia' in
      volo. */
+  /** Tornando a guardare: se il filo e' cambiato altrove — una chat dal Mac
+   *  che il vivo non ha portato fin qui — si rilegge. Non a meta' turno: la
+   *  risposta che sta arrivando la porta il filo, e una rilettura la
+   *  strapperebbe. La domanda costa una riga (`HomeChat.isStale`). */
+  async _rereadIfStale() {
+    if (this._running || this._threadReads > 0) return;
+    if (await this.chat.isStale() && !this._running) this._readThread();
+  }
+
   _retryThread() {
     if (!this._threadFailed || this._threadReads > 0) return;
     this._readThread();

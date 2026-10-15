@@ -185,6 +185,17 @@ export class AppsSource {
     const before = this.androidApps;
     let apps = null;
     let failed = false;
+    /* Da un altro dispositivo la pagina App mostra solo le mini-app: le app
+       Android si aprirebbero sul telefono nel cassetto, e il server le rifiuta
+       comunque (`phone_only`). Lista vuota, caricata, nessun guasto. */
+    if (await api.isRemote()) {
+      if (token !== this._seqAndroid) return;
+      this.androidApps = [];
+      this._failed.android = false;
+      this._androidLoaded = true;
+      this._emit();
+      return;
+    }
     try {
       const data = await api.getAndroidApps();
       apps = data.apps || [];

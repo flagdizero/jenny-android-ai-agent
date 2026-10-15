@@ -24,6 +24,25 @@ export function chatIdOf(key) {
   return key;
 }
 
+/* Il battito, solo per una pagina aperta da un altro dispositivo (Tailscale).
+ *
+ * Una WebUI su loopback non ne ha bisogno: il gateway sta sullo stesso
+ * telefono, e un socket non puo' restare mezzo aperto. Da fuori si': se cade
+ * Tailscale sul telefono, la chiusura del server non arriva mai, e quando il
+ * tunnel torna il browser tiene un socket «OPEN» che il telefono non conosce
+ * piu'. Il ping dei frame WebSocket lo manda solo il server, e JS non lo vede:
+ * la pagina restava muta, convinta di essere collegata (visto il 14/10/2026 su
+ * jenny_s22, Tailscale fermato e riaperto). Un `ping` applicativo basta: su un
+ * socket orfano la risposta e' un RST e il browser chiude da se'; in un tunnel
+ * ancora giu' non torna niente, e dopo `PONG_WAIT_MS` il socket si scarta. */
+const LIVENESS_EVERY_MS = 25000;
+const PONG_WAIT_MS = 10000;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
+
+function isRemotePage() {
+  return typeof window !== 'undefined' && !LOOPBACK_HOSTS.has(window.location?.hostname);
+}
+
 class WebSocketManager extends EventTarget {
   constructor() {
     super();
@@ -49,7 +68,10 @@ class WebSocketManager extends EventTarget {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
     this._netListenersBound = true;
     this._onVisible = () => {
-      if (document.visibilityState === 'visible') this._resyncNow();
+      if (document.visibilityState !== 'visible') return;
+      this._resyncNow();
+      // Tornati sulla scheda: un socket morto si scopre adesso, non fra 25 s.
+      this._probeNow();
     };
     this._onOnline = () => this._resyncNow();
     document.addEventListener('visibilitychange', this._onVisible);
@@ -94,6 +116,7 @@ class WebSocketManager extends EventTarget {
     this.chatWs.onopen = () => {
       this.chatConnected = true;
       this._reconnectAttempts = 0;
+      this._startLiveness();
       this.dispatchEvent(new CustomEvent('chat:open'));
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
@@ -105,8 +128,12 @@ class WebSocketManager extends EventTarget {
     };
 
     this.chatWs.onmessage = (event) => {
+      // Qualunque frame dice che il socket e' vivo.
+      clearTimeout(this._pongTimer);
+      this._pongTimer = null;
       try {
         const msg = JSON.parse(event.data);
+        if (msg.event === 'pong') return;
         if (msg.event === 'rpc_result') {
           this._settleRpc(msg);
           return;
@@ -117,20 +144,61 @@ class WebSocketManager extends EventTarget {
       }
     };
 
-    this.chatWs.onclose = () => {
-      this.chatConnected = false;
-      // Una richiesta in volo su un socket chiuso non riceverà mai risposta:
-      // rifiutarla subito è ciò che evita un editor appeso fino al timeout.
-      this._rejectAllRpc('connection closed');
-      this.dispatchEvent(new CustomEvent('chat:close'));
-      this._reconnectAttempts++;
-      // Retry indefinito con backoff esponenziale (cap 30s): una WebView locale
-      // verso un gateway locale non deve mai arrendersi. Il backoff resta per
-      // non innescare loop di reconnect stretti.
-      const delay = Math.min(3000 * Math.pow(1.5, this._reconnectAttempts - 1), 30000);
-      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = setTimeout(() => this.connectChat(), delay);
-    };
+    this.chatWs.onclose = () => this._onChatClosed();
+  }
+
+  _onChatClosed() {
+    this._stopLiveness();
+    this.chatConnected = false;
+    // Una richiesta in volo su un socket chiuso non riceverà mai risposta:
+    // rifiutarla subito è ciò che evita un editor appeso fino al timeout.
+    this._rejectAllRpc('connection closed');
+    this.dispatchEvent(new CustomEvent('chat:close'));
+    this._reconnectAttempts++;
+    // Retry indefinito con backoff esponenziale (cap 30s): una WebView locale
+    // verso un gateway locale non deve mai arrendersi. Il backoff resta per
+    // non innescare loop di reconnect stretti.
+    const delay = Math.min(3000 * Math.pow(1.5, this._reconnectAttempts - 1), 30000);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => this.connectChat(), delay);
+  }
+
+  _startLiveness() {
+    this._stopLiveness();
+    if (!isRemotePage()) return;
+    this._livenessTimer = setInterval(() => this._probeNow(), LIVENESS_EVERY_MS);
+  }
+
+  _stopLiveness() {
+    clearInterval(this._livenessTimer);
+    clearTimeout(this._pongTimer);
+    this._livenessTimer = null;
+    this._pongTimer = null;
+  }
+
+  /* Un `ping`, se non ce n'e' gia' uno in attesa. */
+  _probeNow() {
+    if (!isRemotePage() || this._pongTimer) return;
+    if (this.chatWs?.readyState !== WebSocket.OPEN) return;
+    try {
+      this.chatWs.send(JSON.stringify({ type: 'ping' }));
+    } catch {
+      return;
+    }
+    this._pongTimer = setTimeout(() => this._dropDeadSocket(), PONG_WAIT_MS);
+  }
+
+  /* Il socket non risponde: lo si stacca e si riparte come da una chiusura.
+     `close()` su una connessione morta aspetterebbe la stretta di chiusura che
+     non arrivera': i gestori si tolgono prima, e la chiusura la si fa qui. */
+  _dropDeadSocket() {
+    const dead = this.chatWs;
+    this._pongTimer = null;
+    if (!dead) return;
+    dead.onopen = dead.onmessage = dead.onclose = dead.onerror = null;
+    try { dead.close(); } catch { /* gia' chiuso */ }
+    this.chatWs = null;
+    this._onChatClosed();
   }
 
   attachChat(chatId) {

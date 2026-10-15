@@ -31,6 +31,8 @@ _NEIGHBORS = {
         "  getSecret() { return 'segreto'; },\n"
         # Il token dell'app, non il segreto: e' quello che finisce nella cornice.
         "  async appToken(slug) { return 'app-' + slug; },\n"
+        # Il telefono, non un altro dispositivo: v. test_home_remote_phone_only_client.
+        "  async isRemote() { return false; },\n"
         "};\n"
     ),
     "utils.js": """

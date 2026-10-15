@@ -736,7 +736,10 @@ class OutboundSenderMixin:
         conns = only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
         if not conns:
             return []
-        raw = json.dumps(body, ensure_ascii=False)
+        # La revisione del filo dopo questa riga, solo sul filo e non su disco:
+        # chi la riceve sa di avere tutto fino a qui (v. ``transcript_revision``).
+        wire = {**body, "rev": self._transcripts.revision(chat_id)}
+        raw = json.dumps(wire, ensure_ascii=False)
         return await self._fanout(conns, raw, label=" turn_end ")
 
     async def send_goal_status(

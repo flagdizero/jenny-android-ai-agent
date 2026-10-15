@@ -22,6 +22,7 @@ from websockets.http11 import Response
 
 from jenny.bus.queue import MessageBus
 from jenny.channels.http_utils import QueryParams, parse_flag
+from jenny.webui.phone_only import refuse_if_remote
 from jenny.webui.settings_api import (
     WebUISettingsError,
     delete_provider,
@@ -279,6 +280,8 @@ class WebUISettingsRouter:
     async def _handle_settings_floating_update(self, request: WsRequest) -> Response:
         if not self._authorized(request):
             return self._unauthorized()
+        if (refused := refuse_if_remote()) is not None:
+            return refused
         try:
             payload = await update_floating_settings(self._query(request))
         except WebUISettingsError as e:
@@ -298,6 +301,8 @@ class WebUISettingsRouter:
         il massimo che può fare è portare l'utente sulla pagina giusta."""
         if not self._authorized(request):
             return self._unauthorized()
+        if (refused := refuse_if_remote()) is not None:
+            return refused
         from jenny.runtime.screen import open_screen_settings
 
         return self._json_response({"opened": await open_screen_settings()})
@@ -368,6 +373,8 @@ class WebUISettingsRouter:
         """
         if not self._authorized(request):
             return self._unauthorized()
+        if (refused := refuse_if_remote()) is not None:
+            return refused
         try:
             payload = await start_update_install()
         except WebUISettingsError as e:
