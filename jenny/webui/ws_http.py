@@ -81,6 +81,7 @@ from jenny.webui.android_apps_api import (
 from jenny.webui.file_preview import WebUIFilePreviewError, file_preview_payload
 from jenny.webui.media_gateway import WebUIMediaGateway
 from jenny.webui.transcript import build_webui_thread_response
+from jenny.webui.transcript_store import transcript_revision
 from jenny.webui.workspaces import WebUIWorkspaceController
 
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
@@ -572,6 +573,10 @@ class GatewayHTTPHandler:
             except ValueError:
                 return _http_error(400, "invalid limit")
         before = _query_first(query, "before")
+        # Prima della lettura e non dopo: una riga entrata nel frattempo rende
+        # la revisione vecchia, e il prossimo confronto rilegge. Al contrario
+        # direbbe «aggiornato» a una storia che quella riga non ce l'ha.
+        rev = transcript_revision(webui_transcript_key(decoded_key))
         data = build_webui_thread_response(
             # La trascrizione sta sotto ``websocket:<chat_id>``, anche per un
             # progetto che il client chiede come ``project:<nome>``: v.
@@ -597,6 +602,7 @@ class GatewayHTTPHandler:
         )
         if data is None:
             return _http_error(404, "webui thread not found")
+        data["rev"] = rev
         # Il client non legge ``sessionKey``, ma la risposta resta indirizzata con
         # la chiave che ha chiesto.
         data["sessionKey"] = decoded_key

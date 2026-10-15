@@ -142,3 +142,25 @@ await tick(30);
 assert.equal(app.chatOver, true);
 assert.ok(!app.jenny.el.classList.contains('has-dot'), 'aperta la chat il pallino resta');
 """)
+
+
+def test_a_turn_asked_from_another_device_lights_nothing() -> None:
+    """Scrivi dal Mac: la risposta la leggi li', e sul telefono il pallino
+    direbbe «c'e' qualcosa per te» di una cosa gia' letta."""
+    _run("""
+      send({ event: 'user', chat_id: 'default', text: 'dal Mac', origin: 'remote' });
+      turn('default');
+      assert.deepEqual(painted, []);
+      // Il turno dopo, chiesto dal telefono, torna come sempre.
+      turn('default');
+      assert.deepEqual(painted, [true]);
+    """)
+
+
+def test_a_message_from_this_phone_after_one_from_the_mac_counts_again() -> None:
+    _run("""
+      send({ event: 'user', chat_id: 'default', text: 'dal Mac', origin: 'remote' });
+      send({ event: 'user', chat_id: 'default', text: 'da Telegram', origin: 'telegram' });
+      turn('default');
+      assert.deepEqual(painted, [true]);
+    """)

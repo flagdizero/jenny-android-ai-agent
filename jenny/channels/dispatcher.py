@@ -533,7 +533,11 @@ class WebSocketDispatcher:
         # foreground sta nel bridge Kotlin; `skip_persist` esclude i retry.
         # Il `chat_id` porta il quaderno nella notifica solo dalla WebUI: è
         # l'unico canale in cui un `chat_id` può nominarne uno.
-        if not skip_persist and msg.content.strip():
+        # Un turno con ``origin_channel`` e' partito altrove — oggi un altro
+        # dispositivo del tailnet (v. ``channels.ws_remote``): la risposta la
+        # stai leggendo li', e il telefono non suona. Stessa regola del ramo non
+        # streammato in ``ws_sender.send``; questo e' il caso normale.
+        if not skip_persist and msg.content.strip() and not msg.metadata.get("origin_channel"):
             chat_id = msg.chat_id if msg.channel == WEBUI_CHANNEL else None
             notify_delivery(msg.content, msg.metadata, chat_id=chat_id)
         return None

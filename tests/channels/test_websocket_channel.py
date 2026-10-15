@@ -42,6 +42,7 @@ from jenny.session.manager import SessionManager
 from jenny.webui.gateway_services import GatewayServices, build_gateway_services
 from jenny.webui.settings_api import settings_payload, update_provider
 from jenny.webui.transcript import append_transcript_object, read_transcript_lines
+from jenny.webui.transcript_store import transcript_revision
 
 # -- Shared helpers (aligned with test_websocket_integration.py) ---------------
 
@@ -944,9 +945,11 @@ async def test_send_turn_end_emits_turn_end_event() -> None:
         metadata={"_turn_end": True},
     ))
 
-    assert _sent_ws_payloads(mock_ws) == [
-        {"event": "turn_end", "chat_id": "default"},
-    ]
+    [frame] = _sent_ws_payloads(mock_ws)
+    # ``rev``: la revisione del filo a riga scritta, che la casa del telefono
+    # confronta tornando visibile (v. ``transcript_store.transcript_revision``).
+    assert frame.pop("rev") == transcript_revision("websocket:default")
+    assert frame == {"event": "turn_end", "chat_id": "default"}
 
 
 @pytest.mark.asyncio
@@ -963,9 +966,9 @@ async def test_send_turn_end_includes_latency_ms_when_present() -> None:
         metadata={"_turn_end": True, "latency_ms": 1500},
     ))
 
-    assert _sent_ws_payloads(mock_ws) == [
-        {"event": "turn_end", "chat_id": "default", "latency_ms": 1500},
-    ]
+    [frame] = _sent_ws_payloads(mock_ws)
+    assert frame.pop("rev")
+    assert frame == {"event": "turn_end", "chat_id": "default", "latency_ms": 1500}
 
 
 @pytest.mark.asyncio
@@ -1386,6 +1389,7 @@ async def test_end_to_end_server_pushes_streaming_deltas_to_client(bus: MagicMoc
             ))
 
             turn_end = json.loads(await client.recv())
+            assert turn_end.pop("rev")
             assert turn_end == {"event": "turn_end", "chat_id": chat_id}
     finally:
         await channel.stop()

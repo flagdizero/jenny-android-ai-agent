@@ -1053,7 +1053,9 @@
     "origin": {
       "telegram": "da Telegram",
       "notification": "dalla tendina",
-      "floating": "dal fumetto"
+      "floating": "dal fumetto",
+      "remote": "da un altro dispositivo",
+      "remoteNamed": "da {device}"
     },
     "retry": "Riprova",
     "stop": "Ferma",

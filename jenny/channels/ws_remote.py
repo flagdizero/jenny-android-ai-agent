@@ -210,6 +210,7 @@ class RemoteListener:
         self._error: str | None = None
         self._peers: dict[Any, _Peer] = {}
         self._names: dict[str, str | None] = {}
+        self._lookups: set[asyncio.Task[Any]] = set()
         # Uno scambio alla volta: il giro e un `set` che arrivano insieme
         # chiuderebbero e riaprirebbero lo stesso server due volte.
         self._lock = asyncio.Lock()
@@ -248,6 +249,29 @@ class RemoteListener:
     def track(self, connection: Any) -> None:
         ip = _host_of(getattr(connection, "remote_address", None)) or "?"
         self._peers[connection] = _Peer(ip=ip, since=time.time())
+        # Il nome si chiede subito, in disparte: quando arriva il primo
+        # messaggio da questa connessione ``origin_of`` lo trova gia' pronto,
+        # invece di far aspettare il turno al DNS.
+        if ip not in self._names:
+            task = asyncio.get_running_loop().create_task(self._name_of(ip))
+            self._lookups.add(task)
+            task.add_done_callback(self._lookups.discard)
+
+    def origin_of(self, connection: Any) -> dict[str, str] | None:
+        """Da dove arriva un messaggio: ``None`` se non da fuori.
+
+        ``{"origin": "remote", "device": "mac"}`` per una connessione
+        dell'ascoltatore Tailscale; ``device`` c'e' solo se MagicDNS ha dato un
+        nome. Non aspetta niente: legge il nome gia' chiesto da ``track``.
+        """
+        peer = self._peers.get(connection)
+        if peer is None:
+            return None
+        origin = {"origin": "remote"}
+        name = self._names.get(peer.ip)
+        if name:
+            origin["device"] = name.split(".", 1)[0]
+        return origin
 
     def forget(self, connection: Any) -> None:
         self._peers.pop(connection, None)

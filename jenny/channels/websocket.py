@@ -433,6 +433,25 @@ class WebSocketChannel(OutboundSenderMixin):
         self._server_task = asyncio.create_task(runner())
         await self._server_task
 
+    async def _echo_user_to_others(
+        self, sender: Any, chat_id: str, event: dict[str, Any],
+    ) -> None:
+        """Il messaggio appena scritto, alle altre finestre della stessa chat.
+
+        Chi l'ha scritto l'ha gia' disegnato; le altre — il telefono mentre
+        scrivi dal Mac, il Mac mentre scrivi dal telefono — lo vedevano solo al
+        ricaricamento, e intanto ricevevano dal vivo la risposta: risposte senza
+        domanda. L'evento e' gia' nel transcript: qui si consegna e basta, mai
+        ``prepare_and_append``, o la riga si raddoppia.
+        """
+        conns = [c for c in self._subs.get(chat_id, ()) if c is not sender]
+        if not conns:
+            return
+        wire = self._user_echo_wire(event)
+        wire["rev"] = self._transcripts.revision(chat_id)
+        raw = json.dumps(wire, ensure_ascii=False)
+        await self._fanout(conns, raw, label=" user_echo ")
+
     # -- Ascoltatore Tailscale ---------------------------------------------
 
     async def _serve_remote(self, hosts: tuple[str, ...]) -> Any:
@@ -815,13 +834,26 @@ class WebSocketChannel(OutboundSenderMixin):
             conn_id = self._conn_ids.get(connection)
             if conn_id is not None:
                 metadata["conn_id"] = conn_id
+            # Da fuori (ascoltatore Tailscale): la provenienza viaggia col turno.
+            # ``origin_channel`` e' la stessa chiave dei turni da Telegram, e ne
+            # eredita le regole: la risposta la porta come ``origin``, e il
+            # telefono non suona per una conversazione che stai leggendo altrove
+            # (v. ``ws_sender.send``).
+            origin = self._remote.origin_of(connection)
+            if origin:
+                metadata["origin_channel"] = origin["origin"]
+                if origin.get("device"):
+                    metadata["origin_device"] = origin["device"]
             if self.is_allowed(client_id):
-                self._transcripts.append_user_message(
+                written = self._transcripts.append_user_message(
                     cid,
                     content,
                     metadata=metadata,
                     media_paths=media_paths or None,
+                    origin=origin,
                 )
+                if written is not None:
+                    await self._echo_user_to_others(connection, cid, written)
             await self._handle_message(
                 sender_id=client_id,
                 chat_id=cid,

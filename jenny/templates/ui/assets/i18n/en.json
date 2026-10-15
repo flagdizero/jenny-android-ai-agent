@@ -1053,7 +1053,9 @@
     "origin": {
       "telegram": "from Telegram",
       "notification": "from the shade",
-      "floating": "from the bubble"
+      "floating": "from the bubble",
+      "remote": "from another device",
+      "remoteNamed": "from {device}"
     },
     "retry": "Try again",
     "stop": "Stop",
