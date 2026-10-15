@@ -161,10 +161,10 @@ Two disclosures I would rather you hear from me than discover:
 
 - **Your prompts go to whichever provider you chose.** On-device storage is not on-device
   inference. If a location fix ends up in the agent's reasoning, it ends up in that prompt.
-- **`android:allowBackup="true"` is set on purpose** — losing your memory when you change
-  phone would be worse. But with Google backup on, the app's private storage, *including the
-  config file that holds your API keys in plain text*, is eligible for your Google account's
-  backup. Turn backup off for this app and use Jenny's own encrypted backup instead.
+- **Android's own cloud backup takes nothing from Jenny.** It would have taken everything,
+  *including the config file that holds your API keys in plain text*, so it is excluded. The
+  phone-to-phone transfer when you set up a new phone still carries everything, from one of
+  your phones to the other; to keep a copy off the phone, export Jenny's encrypted backup.
   → [Privacy in detail](https://jenny.flagdizero.com/docs/internals/privacy/)
 
 Security, short version: **`python_exec` is not a sandbox** — arbitrary Python, in-process; the

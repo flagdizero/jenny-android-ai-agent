@@ -50,7 +50,7 @@ This table only covers what Android permission system involves. For the layers o
 
 ## See also
 
-- [Install the APK](../start/install.md) — the build these permissions come from, and the `allowBackup` caveat
+- [Install the APK](../start/install.md) — the build these permissions come from, and what Android's own backup takes (nothing)
 - [First run](../start/first-run.md) — what happens the moment the app opens for the first time
 - [Location](../using/location.md) — the location toggle and permission interaction in detail
 - [Configuration reference](./configuration.md#power) — the `power.*` keys behind the wake lock, the watchdog and the scheduled wake-ups
