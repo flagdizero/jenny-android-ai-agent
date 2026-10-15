@@ -2498,10 +2498,21 @@ class HomeApp {
 
   /* Il campo cresce col testo fino al tetto del CSS, poi scorre. Si azzera
      l'altezza prima di leggere `scrollHeight`, o il campo non torna mai piu'
-     piccolo dopo essere cresciuto. */
+     piccolo dopo essere cresciuto.
+
+     **Vuoto non si misura: e' di una riga, e basta.** Da vuoto lo
+     `scrollHeight` di Chromium conta anche il segnaposto, che va a capo come
+     un testo: misurato quando il campo e' stretto — la WebView che parte
+     senza ancora una larghezza — dava il tetto di 140px, e nessuno rimisurava
+     finche' non scrivevi una lettera. Senza altezza scritta valgono `rows=1`
+     e il `min-height` del CSS, a qualunque larghezza. */
   _autosize() {
-    this.input.style.height = 'auto';
-    this.input.style.height = `${this.input.scrollHeight}px`;
+    if (this.input.value) {
+      this.input.style.height = 'auto';
+      this.input.style.height = `${this.input.scrollHeight}px`;
+    } else {
+      this.input.style.height = '';
+    }
     /* Ogni cambio del campo passa di qui: il tasto dice se manda o ferma. */
     this._paintSend();
   }

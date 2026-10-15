@@ -258,8 +258,13 @@ export class ChatMove {
     }
     /* La bozza e' della conversazione di chi scatta la foto, e resta con lei
        (`_drafts`): in una copia mostrerebbe testo che non e' di quella pagina.
-       Un clone di `<textarea>` si porta dietro il valore, per specifica. */
-    for (const field of copy.querySelectorAll('textarea')) field.value = '';
+       Un clone di `<textarea>` si porta dietro il valore, per specifica — e
+       l'altezza che `_autosize` gli aveva scritto: senza toglierla, la foto
+       mostrerebbe un campo vuoto alto quanto la bozza. */
+    for (const field of copy.querySelectorAll('textarea')) {
+      field.value = '';
+      field.style.height = '';
+    }
     const messages = copy.querySelectorAll('.home-msg');
     for (let i = 0; i < messages.length - SNAPSHOT_MESSAGES; i += 1) messages[i].remove();
     copy.classList.add('home-snapshot');

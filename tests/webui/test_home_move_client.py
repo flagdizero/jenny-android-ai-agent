@@ -96,8 +96,23 @@ function create(tag, { id, cls, text } = {}) {
     querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
   };
   el.classList = makeClassList(el);
+  el.style = makeStyle(el);
   if (id) el.attrs.id = id;
   return el;
+}
+/* Lo stile in linea sta nell'attributo `style`, come nel DOM vero: e' per
+   questo che un clone se lo porta dietro. Basta l'altezza. */
+function makeStyle(el) {
+  return {
+    get height() {
+      const m = /height:\s*([^;]+)/.exec(el.attrs.style || '');
+      return m ? m[1].trim() : '';
+    },
+    set height(v) {
+      if (v) el.attrs.style = `height: ${v};`;
+      else delete el.attrs.style;
+    },
+  };
 }
 function makeClassList(el) {
   return {
@@ -275,6 +290,21 @@ def test_what_belongs_to_a_moment_stays_out_of_the_photo() -> None:
         "}\n"
         "assert.equal(snapshot.querySelector('textarea').value, '');\n"
         "assert.equal(field.value, 'mezza frase', 'la bozza vera e stata toccata');\n"
+    )
+
+
+def test_the_photo_does_not_keep_the_height_of_the_draft() -> None:
+    """Svuotato il campo della foto, va tolta anche l'altezza che la bozza gli
+    aveva dato: un clone se la porta dietro, e la foto mostrava un campo vuoto
+    alto quanto tre righe che non c'erano piu'."""
+    _run(
+        "field.value = 'una\\ndue\\ntre';\n"
+        "field.style.height = '83px';\n"
+        "t.arrives(p1, 'B');\n"
+        "const copy = snapshotOf(p0).querySelector('textarea');\n"
+        "assert.equal(copy.value, '');\n"
+        "assert.equal(copy.style.height, '', 'la foto ha tenuto l altezza della bozza');\n"
+        "assert.equal(field.style.height, '83px', 'il campo vero e stato toccato');\n"
     )
 
 
