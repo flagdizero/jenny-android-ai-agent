@@ -13,6 +13,7 @@
  *  differenza non la scopre piu' nessuno.
  */
 
+import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { UpdateFlow, checkLines, phaseKey } from './shared/update-flow.js';
@@ -89,6 +90,16 @@ export class HomeUpdates {
 
     this.installBtn?.addEventListener('click', () => this.flow.start());
     this.checkBtn?.addEventListener('click', () => this.check());
+
+    /* Da un altro dispositivo l'aggiornamento si vede ma non si installa: lo
+       scarica e lo installa il telefono, e da fuori potrebbe aprire la sua
+       conferma su uno schermo che nessuno guarda, o riavviare Jenny mentre le
+       parli. Il server lo rifiuta comunque (`phone_only`). */
+    this._remote = false;
+    api.isRemote().then((remote) => {
+      this._remote = remote;
+      if (remote) this._paint();
+    });
   }
 
   /** Quel che il server dice della versione. */
@@ -174,9 +185,9 @@ export class HomeUpdates {
     }
     if (this.installBtn) {
       this.installBtn.hidden = !v.update_available;
-      this.installBtn.disabled = this.flow.busy;
-      this.installBtn.textContent = i18n.t('settings.update.install');
-      this.installBtn.classList.toggle('is-critical', !!v.critical);
+      this.installBtn.disabled = this.flow.busy || this._remote;
+      this.installBtn.textContent = i18n.t(this._remote ? 'settings.update.installOnPhone' : 'settings.update.install');
+      this.installBtn.classList.toggle('is-critical', !!v.critical && !this._remote);
     }
   }
 

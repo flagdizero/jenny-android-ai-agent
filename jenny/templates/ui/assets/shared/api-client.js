@@ -71,6 +71,19 @@ class ApiClient {
   // il bootstrap non è ancora avvenuto.
   getBootstrapInfo() { return this._bootstrapInfo; }
 
+  /** Aperta da un altro dispositivo (il Mac via Tailscale)? Lo dice il server
+   *  nel bootstrap: non `!window.JennyNative`, che e' vero anche in un banco di
+   *  prova sul Mac e non dice da dove arrivi. Da fuori la pagina nasconde
+   *  quel che ha senso solo col telefono in mano (v. `jenny/webui/phone_only.py`). */
+  async isRemote() {
+    try {
+      await this.bootstrap();
+    } catch {
+      return false;
+    }
+    return !!this._bootstrapInfo?.remote;
+  }
+
   // Reload the page while re-injecting the bootstrap secret into the URL
   // fragment. A plain window.location.reload() would drop the secret: the
   // fragment was consumed and stripped at initial load (see

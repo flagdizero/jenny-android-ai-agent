@@ -27,6 +27,7 @@ from jenny.channels.http_utils import (
     parse_query,
     query_first,
 )
+from jenny.webui.phone_only import refuse_if_remote
 
 # Il nome di un'immagine di un'app: niente cartelle, niente punti in testa.
 _MEDIA_NAME_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
@@ -238,6 +239,8 @@ class AppsRoutes:
         """
         if not self._check_api_token(request):
             return http_error(401, "Unauthorized")
+        if (refused := refuse_if_remote()) is not None:
+            return refused
         disabled = self._check_apps_enabled()
         if disabled is not None:
             return disabled

@@ -73,7 +73,11 @@ const document = {
 
 const toasts = [];
 function showToast(m, t) { toasts.push([m, t]); }
-const api = { _fetch: () => Promise.reject(new Error('il banco non chiama la rete')) };
+const api = {
+  _fetch: () => Promise.reject(new Error('il banco non chiama la rete')),
+  // Il telefono, non un altro dispositivo: v. test_home_remote_phone_only_client.
+  isRemote: async () => false,
+};
 
 /* Il flusso vero, con la rete spenta: qui interessa la vista, non la
    macchina — quella ha il suo banco. */

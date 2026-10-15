@@ -25,6 +25,7 @@ from jenny.channels.http_utils import (
     parse_flag,
     query_first,
 )
+from jenny.channels.ws_remote import on_remote_listener
 from jenny.config import store
 from jenny.config.loader import get_config_path, load_config
 from jenny.config.schema import KEEP_AWAKE_MODES, Config, FloatingConfig
@@ -949,11 +950,13 @@ def settings_payload(
         },
         # Mascotte flottante. ``available`` dice se la finestra può esistere su
         # questo dispositivo: fuori da Android no, e la UI nasconde la voce
-        # invece di offrire un interruttore che non farebbe nulla.
+        # invece di offrire un interruttore che non farebbe nulla. Nemmeno da un
+        # altro dispositivo (Tailscale): la mascotte compare sul telefono, che
+        # e' nel cassetto, e la route la rifiuta (v. ``phone_only``).
         "floating": {
             "enabled": config.floating.enabled,
             "reply_hold_s": config.floating.reply_hold_s,
-            "available": _android_context() is not None,
+            "available": _android_context() is not None and not on_remote_listener(),
         },
         "runtime": {
             "config_path": str(_safe_expanduser(get_config_path())),

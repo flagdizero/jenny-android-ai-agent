@@ -261,12 +261,24 @@ export class AppsActions {
     this.shell?.onAppOpened?.(slug);
   }
   async _openExternalView(slug, app) {
+    /* Da un altro dispositivo una vista esterna non si apre: passa dal proxy
+       del telefono su 127.0.0.1, che dal Mac e' il Mac stesso. Lo si dice,
+       invece di montare una cornice vuota (e il server la rifiuta comunque,
+       `phone_only`). */
+    if (await api.isRemote()) {
+      showToast(i18n.t('apps.viewPhoneOnly', { name: app?.name || slug }));
+      return;
+    }
     let url;
     try {
       const res = await fetch(`/api/webui/apps/${encodeURIComponent(slug)}/view`, {
         headers: { 'Authorization': `Bearer ${api.getSecret()}` },
       });
       const body = await res.json().catch(() => ({}));
+      if (body.error === 'phone_only') {
+        showToast(i18n.t('apps.viewPhoneOnly', { name: app?.name || slug }));
+        return;
+      }
       if (!res.ok || !body.url) throw new Error(body.error || `HTTP ${res.status}`);
       url = body.url;
     } catch (e) {
