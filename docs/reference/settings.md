@@ -77,7 +77,7 @@ Under the buttons, a line says when the last successful check happened. When the
 
 ### Backup
 
-**Export a backup** makes one encrypted file with a passphrase you choose. **Restore from a file** replaces everything with the file's contents and restarts Jenny. A note at the bottom describes the automatic local history, which is browsed in the workshop (see [Local history](#local-history)). Full details, including the irrecoverable-passphrase warning: [Backup and restore](../using/backup.md).
+**Export a backup** makes one encrypted file with a passphrase you choose. **Restore from a file** replaces everything with the file's contents and restarts Jenny. **Local history** says what the automatic local history is, and opens the list of snapshots right below it: tapping one restores it after a confirmation (the same restore as the workshop's, see [Local history](#local-history)). Full details, including the irrecoverable-passphrase warning: [Backup and restore](../using/backup.md).
 
 ## Brain
 

@@ -611,8 +611,14 @@
       </div>
 
       <!-- La storia locale: somiglia abbastanza da essere scambiata per un
-           backup, e non lo e' — vive sullo stesso telefono. -->
-      <div class="home-card-note" id="home-backup-snapshots"></div>
+           backup, e non lo e' — vive sullo stesso telefono. Si sfoglia e si
+           ripristina qui, senza andare in officina: l'elenco si apre sotto la
+           sua riga. -->
+      <div class="home-card home-history-card">
+        <button class="home-history-row" id="home-backup-history" type="button"
+                aria-expanded="false" aria-controls="home-backup-history-list"></button>
+        <div class="home-history-list" id="home-backup-history-list" hidden></div>
+      </div>
     </div>
   </section>
 

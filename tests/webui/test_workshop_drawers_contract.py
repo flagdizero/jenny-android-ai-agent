@@ -237,9 +237,10 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
 
     Due schermate che sanno esportare sono due posti da tenere allineati per un
     gesto che si fa una volta al mese — e due posti in cui puo' comparire una
-    passphrase. In officina resta la **storia locale**, che e' quel che la casa
-    manda a sfogliare qui: «si sfoglia in officina. Vive pero' su questo
-    telefono — di un telefono perso non salva niente».
+    passphrase. La **storia locale** invece sta in tutti e due: la casa la
+    sfoglia e la ripristina sotto la sua riga, perche' chi cerca «il file di
+    stamattina» non deve sapere che esiste un'officina; le manopole (crearne
+    uno a mano, per quanto tenerla) restano solo di qua.
     """
     workshop = _src("mobile-settings.js")
     for flow in ("runExportFlow", "runImportFlow"):
@@ -258,12 +259,12 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
         "toglierebbe dall'app"
     )
 
-    # Quel che resta di qua: la storia locale, con le sue tre manopole.
+    # La storia locale: il ripristino in tutti e due, le manopole solo qui.
     for piece in ("btn-snapshot-create", "snapshot-retention", "runSnapshotRestore"):
         assert piece in workshop, f"la storia locale ha perso {piece}"
-    assert "runSnapshotRestore" not in home, (
-        "la casa ha preso anche gli snapshot: la sua frase manda a sfogliarli qui"
-    )
+    assert "runSnapshotRestore" in home, "la casa non ripristina piu' gli snapshot"
+    for knob in ("createSnapshot", "updateSnapshotRetention"):
+        assert knob not in home, f"la casa ha preso anche {knob}, che sta in officina"
 
 
 def test_choosing_the_model_saves_model_and_brand_together() -> None:

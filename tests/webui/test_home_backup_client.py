@@ -15,7 +15,8 @@ questa pagina.
 
 **La storia locale non e' un backup**, e somiglia abbastanza da essere
 scambiata per uno: vive sullo stesso telefono, quindi di un telefono perso non
-salva niente. La stanza lo dice in una frase invece di lasciarlo capire.
+salva niente. La sua riga lo dice; e aperta si sfoglia e si ripristina qui,
+senza passare dall'officina.
 """
 
 from __future__ import annotations
@@ -72,6 +73,22 @@ const actions = [];
 function runExportFlow() { actions.push('export'); return Promise.resolve(exportOutcome); }
 function runImportFlow() { actions.push('import'); return Promise.resolve(importOutcome); }
 function backupNativeAvailable() { return nativePresent; }
+const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
+const HISTORY_FIRST = 8;
+const DAY_MS = 86400000;
+const SNAPS = { list: [] };
+const api = {
+  getSnapshotHistory: async () => {
+    actions.push('api:history');
+    if (!SNAPS.list) throw new Error('offline');
+    return { snapshots: SNAPS.list };
+  },
+};
+const CONFIRM = { answer: true, asked: [] };
+async function confirmDialog(text) { CONFIRM.asked.push(text); return CONFIRM.answer; }
+async function runSnapshotRestore(id) { actions.push(`restore:${id}`); }
+__SNAPSHOT_WHEN__
 
 __WHEN_TEXT__
 __BACKUP_VALUE__
@@ -84,6 +101,9 @@ class HomeBackup {
   __APPLY_TRANSLATIONS__
   __RUN_EXPORT__
   __RUN_IMPORT__
+  __TOGGLE_HISTORY__
+  __HISTORY_CLICK__
+  __HISTORY_HTML__
   __PAINT__
 }
 
@@ -118,6 +138,10 @@ def _harness() -> str:
         .replace("__APPLY_TRANSLATIONS__", member(room, "applyTranslations"))
         .replace("__RUN_EXPORT__", member(room, "runExport"))
         .replace("__RUN_IMPORT__", member(room, "runImport"))
+        .replace("__TOGGLE_HISTORY__", member(room, "_toggleHistory"))
+        .replace("__HISTORY_CLICK__", member(room, "_onHistoryClick"))
+        .replace("__HISTORY_HTML__", member(room, "_historyHtml"))
+        .replace("__SNAPSHOT_WHEN__", function(room, "snapshotWhen"))
         .replace("__PAINT__", member(room, "_paint"))
     )
 
@@ -229,13 +253,92 @@ def test_the_local_history_is_told_apart_from_a_backup() -> None:
     telefono, quindi di un telefono perso non salva niente."""
     _run_js("""
       room({ snapshots_enabled: true });
-      const active = nodi['home-backup-snapshots'].textContent;
-      assert.equal(active, i18n.t('home.backup.snapshots'));
-      assert.ok(active.length > 40, 'la frase non spiega niente');
+      const active = nodi['home-backup-history'].innerHTML;
+      assert.ok(active.includes(i18n.t('home.backup.history.title')));
+      assert.ok(active.includes(i18n.t('home.backup.history.sub')));
+      assert.ok(i18n.t('home.backup.history.sub').length > 40, 'la frase non spiega niente');
 
       room({ snapshots_enabled: false });
-      assert.equal(nodi['home-backup-snapshots'].textContent,
-                   i18n.t('home.backup.snapshotsOff'));
-      assert.notEqual(i18n.t('home.backup.snapshots'), i18n.t('home.backup.snapshotsOff'),
+      assert.ok(nodi['home-backup-history'].innerHTML.includes(i18n.t('home.backup.history.off')));
+      assert.notEqual(i18n.t('home.backup.history.sub'), i18n.t('home.backup.history.off'),
         'spenta e accesa si leggono uguali');
     """)
+
+
+_TAP = """
+const tap = (dataset) => ({ target: { closest: () => ({ dataset }) } });
+const click = async (id, ev) => { for (const fn of nodi[id].listeners.click || []) await fn(ev); };
+const H = 3600 * 1000;
+const NOW = Date.now();
+const snap = (i, extra = {}) => ({
+  id: `s${i}`, created_at_ms: NOW - i * H, trigger: 'auto', label: '', file_count: 500 + i, ...extra,
+});
+"""
+
+
+def test_local_history_opens_here_and_restores_after_a_confirmation() -> None:
+    """Non porta in officina: l'elenco si apre sotto la riga, e un tocco su uno
+    snapshot chiede conferma e poi fa lo stesso ripristino dell'officina."""
+    _run_js(_TAP + """
+      SNAPS.list = [snap(1), snap(2, { trigger: 'pre_gardener' }), snap(3, { trigger: 'boh', label: 'prima del trasloco' })];
+      room({ snapshots_enabled: true });
+      const list = nodi['home-backup-history-list'];
+      assert.equal(list.hidden, true, 'storia aperta da sola');
+      await click('home-backup-history');
+      assert.equal(list.hidden, false);
+      assert.equal(nodi['home-backup-history'].attrs['aria-expanded'], 'true');
+      assert.equal((list.innerHTML.match(/data-snapshot=/g) || []).length, 3);
+      assert.ok(list.innerHTML.includes(i18n.t('backup.trigger.pre_gardener')), 'giardiniere senza nome');
+      assert.ok(list.innerHTML.includes('boh · prima del trasloco'), 'motivo sconosciuto o etichetta persi');
+      assert.ok(list.innerHTML.includes(`501 ${i18n.t('backup.files')}`));
+
+      await click('home-backup-history-list', tap({ snapshot: 's2', when: 'oggi alle 9:40' }));
+      assert.deepEqual(CONFIRM.asked, [i18n.t('backup.snapshotRestoreConfirm', { date: 'oggi alle 9:40' })]);
+      assert.ok(actions.includes('restore:s2'));
+
+      CONFIRM.answer = false;
+      await click('home-backup-history-list', tap({ snapshot: 's3', when: 'ieri' }));
+      assert.ok(!actions.includes('restore:s3'), 'ripristina senza il si');
+
+      await click('home-backup-history');
+      assert.equal(list.hidden, true, 'il secondo tocco non la richiude');
+    """)
+
+
+def test_local_history_shows_eight_then_the_others() -> None:
+    _run_js(_TAP + """
+      SNAPS.list = Array.from({ length: 11 }, (_, i) => snap(i + 1));
+      room({ snapshots_enabled: true });
+      await click('home-backup-history');
+      const list = nodi['home-backup-history-list'];
+      assert.equal((list.innerHTML.match(/data-snapshot=/g) || []).length, 8);
+      assert.ok(list.innerHTML.includes(i18n.t('home.backup.history.showAll', { n: 3 })));
+      await click('home-backup-history-list', tap({ historyAll: '' }));
+      assert.equal((list.innerHTML.match(/data-snapshot=/g) || []).length, 11);
+      assert.ok(!actions.some((a) => a.startsWith('restore:')), 'mostra gli altri ha ripristinato');
+    """)
+
+
+def test_local_history_says_when_it_is_empty_or_unreadable() -> None:
+    _run_js(_TAP + """
+      SNAPS.list = [];
+      room({ snapshots_enabled: true });
+      await click('home-backup-history');
+      assert.ok(nodi['home-backup-history-list'].innerHTML.includes(i18n.t('backup.snapshotHistoryEmpty')));
+      SNAPS.list = null;
+      room({ snapshots_enabled: false });
+      await click('home-backup-history');
+      assert.ok(nodi['home-backup-history-list'].innerHTML.includes(i18n.t('backup.snapshotHistoryUnavailable')));
+    """)
+
+
+def test_snapshot_dates_stay_apart_past_a_week() -> None:
+    """Oltre la settimana «3 ott» non basta: due snapshot dello stesso giorno
+    devono restare distinguibili, quindi c'e' anche l'ora."""
+    _run_js(_TAP + """
+      assert.ok(snapshotWhen(NOW - 60000, NOW, 'it').startsWith('oggi alle '));
+      const old = snapshotWhen(NOW - 20 * 24 * H, NOW, 'it');
+      assert.match(old, /\\d{1,2}:\\d{2}/, old);
+    """)
+
+

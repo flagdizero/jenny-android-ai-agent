@@ -15,7 +15,7 @@ Jenny keeps two independent safety nets for your workspace: automatic local snap
 
 If you only care about undoing something Jenny (or you) did to a file, snapshots already cover you. If you want to survive an uninstall, a phone upgrade, or a debug-to-release signature change, you need to export a `.jbk` backup and move it off the device.
 
-Exporting and restoring from a file are on the home's **Settings → Backup** page. The local snapshots are browsed in the workshop, under **Memory → Local history**. See the [Settings reference](../reference/settings.md#backup).
+Exporting and restoring from a file are on the home's **Settings → Backup** page. The local snapshots can be browsed and restored right there, under **Local history**, and also in the workshop, under **Memory → Local history**, which is where they are turned on or off and created by hand. See the [Settings reference](../reference/settings.md#backup).
 
 ## Encrypted backup (.jbk)
 
@@ -106,7 +106,7 @@ Snapshots are an automatic, content-addressed version history of your workspace.
 | Daily safety net | If no snapshot has been taken in the last 24 hours, one is taken regardless |
 | App shutdown | Every time the app closes |
 | Before memory consolidation | Right before each Dream run |
-| Before a gardener pass | Right before each [gardener](gardener.md) pass on a notebook (tagged `pre_gardener`) — the local history list may show that tag as the raw id rather than a translated label |
+| Before a gardener pass | Right before each [gardener](gardener.md) pass on a notebook (tagged `pre_gardener`, shown as *before the gardener*) |
 | Before export / before restore | Automatically, as described above (`pre-export`, `pre-restore`) |
 | Manual | Tap **Create snapshot now** in the workshop's **Memory → Local history** panel |
 
@@ -130,7 +130,7 @@ And, as covered above, the SSH key directory is outside the workspace entirely, 
 
 ### Restoring from a snapshot
 
-Open **Memory → Local history** in the workshop and tap any entry in the list. You'll be asked to confirm: *"Bring Jenny back to its state from {date}? A snapshot of the current state is saved first, so you can undo this."* Like the `.jbk` import, this applies at the next app restart, and — because the snapshot history lives outside the workspace — a restore from a snapshot is always reversible: you can always step forward again afterward.
+Open **Settings → Backup → Local history** in the home — it opens the list in place, newest first, eight at a time with **Show the others** below — or **Memory → Local history** in the workshop, and tap any entry. You'll be asked to confirm: *"Bring Jenny back to its state from {date}? A snapshot of the current state is saved first, so you can undo this."* Like the `.jbk` import, this applies at the next app restart, and — because the snapshot history lives outside the workspace — a restore from a snapshot is always reversible: you can always step forward again afterward.
 
 ## APK updates, uninstalling, and signature mismatches
 

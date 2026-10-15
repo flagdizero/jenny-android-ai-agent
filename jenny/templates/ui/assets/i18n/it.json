@@ -751,7 +751,8 @@
       "pre_restore": "pre-ripristino",
       "pre_export": "pre-export",
       "import": "importato",
-      "manual": "manuale"
+      "manual": "manuale",
+      "pre_gardener": "prima del giardiniere"
     },
     "passphraseRequired": "Inserisci una passphrase",
     "retentionLabel": "Conserva la storia per",
@@ -1231,8 +1232,16 @@
       "import": "Ripristina da un file",
       "exportHint": "Un file cifrato con una passphrase che scegli tu: dentro c'è tutto — le conversazioni, i quaderni, le impostazioni. Mettilo da qualche parte che non sia questo telefono.",
       "importHint": "Sostituisce tutto quello che c'è adesso con quello che c'è nel file, e riavvia Jenny.",
-      "snapshots": "Jenny tiene anche una storia locale del workspace, automatica: serve a rimettere a posto una cosa cancellata per sbaglio, e si sfoglia in officina. Vive però su questo telefono — di un telefono perso non salva niente.",
-      "snapshotsOff": "La storia locale del workspace è spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina."
+      "history": {
+        "title": "Storia locale",
+        "sub": "Automatica: rimette a posto un file cancellato per sbaglio. Vive però su questo telefono — di un telefono perso non salva niente.",
+        "off": "Spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina, Memoria → Storia locale.",
+        "loading": "Un attimo…",
+        "showAll": "Mostra gli altri ({n})",
+        "today": "oggi alle {time}",
+        "yesterday": "ieri alle {time}",
+        "weekday": "{day} alle {time}"
+      }
     },
     "audit": {
       "report": "Segnala",
