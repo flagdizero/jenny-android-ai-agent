@@ -12,6 +12,14 @@ a few simple rules keep things sane for everyone.
   writing code — it saves you from building something that can't be merged.
 - **Small fixes** (typos, docs, obvious bugs): just send the PR.
 
+## Branches
+
+Pull requests target **`next`**, where all work lands. `next` has no Google library, so
+that F-Droid and self-built APKs stay free of one. The one feature that needs Google — the
+encrypted copy on Google Drive — lives on **`next-google`**, which is `next` plus that copy
+and nothing else, kept in sync by merging `next` into it. Changes to the Drive copy itself
+target `next-google`. `main` is for releases.
+
 ## Developer Certificate of Origin (DCO)
 
 All contributions require a DCO sign-off. This is a simple statement that you

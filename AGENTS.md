@@ -99,6 +99,24 @@ reason in the comment itself. The public references are
   changes a public URL and the site's navigation — it is not a repo-local edit. The
   content itself stays canonical here: the site holds no copy.
 
+## Branches
+
+Three long-lived branches, and no others: short-lived ones are deleted as soon as they land.
+
+- **`main`** — releases.
+- **`next`** — where every change lands. Jenny with **no Google library**: the GitHub APK and
+  F-Droid are built from here (through `main`).
+- **`next-google`** — `next` plus the encrypted copy on Google Drive and nothing else:
+  `jenny/snapshot/cloud*.py`, `DriveBridge.kt` with `play-services-auth`, the Drive card on the
+  Backup page, its i18n keys (`cloudBackup.*`) and its docs. Only the Play Store build comes from
+  here.
+
+The direction is one way. Generic work goes to `next`, then `next` is merged into `next-google`
+(`git switch next-google && git merge next`, then the tests); `next-google` is never merged into
+`next`. A change to the Drive copy itself goes to `next-google` only. `git diff next next-google`
+must show the Drive copy and nothing else — if it shows anything generic, that piece belongs on
+`next`. Merges conflict mostly in the i18n JSON, `home-backup.js` and `docs/using/backup.md`.
+
 ## Contribution Flow
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution flow and PR guidelines.
