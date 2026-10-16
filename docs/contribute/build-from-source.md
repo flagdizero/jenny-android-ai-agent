@@ -25,10 +25,30 @@ Confirm the device is visible first, then build straight to it:
 ```bash
 adb devices                 # must show your device as "device", not "unauthorized"
 cd android
-./gradlew app:installDebug
+./gradlew app:installFossDebug
 ```
 
-`app:installDebug` is the canonical command (also the one used in `AGENTS.md`): it compiles the debug variant and pushes it to the connected device over `adb` in one step, no separate `adb install` needed. The first build is slow — Gradle has to fetch the Chaquopy Python runtime and every pinned wheel, then Chaquopy compiles them per target ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`). Later builds are much faster since the toolchain and wheels are cached.
+`app:installFossDebug` is the canonical command (also the one used in `AGENTS.md`): it compiles the debug variant of the `foss` flavor and pushes it to the connected device over `adb` in one step, no separate `adb install` needed. The first build is slow — Gradle has to fetch the Chaquopy Python runtime and every pinned wheel, then Chaquopy compiles them per target ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`). Later builds are much faster since the toolchain and wheels are cached.
+
+### Two flavors
+
+The same code builds two flavors: `foss` (GitHub, F-Droid-ready: no Google library) and `play`
+(the Play Store build, which adds the encrypted copy on Google Drive). `installPlayDebug`
+builds and installs the second. The two are the same app signed by different keys in release,
+so on a device you switch between them by uninstalling.
+
+What a flavor adds lives outside the core, so the `foss` build doesn't contain its code at all:
+
+| | Core (every build) | Only in `play` |
+|---|---|---|
+| Python and WebUI | `jenny/` | `jenny_extensions/` — packaged by Chaquopy only in `play` (`build.gradle.kts`) |
+| Kotlin | `android/app/src/main/` | `android/app/src/play/` |
+| Gradle dependencies | `implementation(...)` | `playImplementation(...)` |
+
+The core reaches an extension only through generic hooks — `jenny/extensions.py` on the Python
+side, `shared/extensions.js` in the WebUI, `NativeExtension.kt` in the shell — and
+`tests/test_extensions.py` fails if the core names anything of the Drive. To check a built APK,
+run `python3 scripts/check_foss_apk.py <apk>` (and `--play` for the opposite check).
 
 If `adb devices` lists nothing, or the device shows as `unauthorized`, USB debugging isn't enabled yet, or you haven't accepted the RSA key fingerprint prompt on the device screen.
 
@@ -36,18 +56,18 @@ Opening `android/` in Android Studio and hitting Run does the same build through
 
 ### Redeploying UI-only changes
 
-Changes under `jenny/templates/ui/` (the WebUI's HTML/CSS/JS) are bundled into the APK's assets and re-extracted into the workspace at gateway startup — they do **not** show up just by restarting the app. You need to rebuild and reinstall (`./gradlew app:installDebug`) for the new UI to reach the device, every time.
+Changes under `jenny/templates/ui/` (the WebUI's HTML/CSS/JS) are bundled into the APK's assets and re-extracted into the workspace at gateway startup — they do **not** show up just by restarting the app. You need to rebuild and reinstall (`./gradlew app:installFossDebug`) for the new UI to reach the device, every time.
 
 ## Release builds and signing
 
-`./gradlew app:assembleRelease` also works from a clean clone, but by default it produces an **unsigned APK that Android refuses to install**. There is no keystore in this repository — release signing is left to whoever is building, via one of two sources (checked in this order):
+`./gradlew app:assembleFossRelease` also works from a clean clone, but by default it produces an **unsigned APK that Android refuses to install**. There is no keystore in this repository — release signing is left to whoever is building, via one of two sources (checked in this order):
 
 - Environment variables: `JENNY_KEYSTORE_PATH`, `JENNY_KEYSTORE_PASSWORD`, `JENNY_KEY_ALIAS`, `JENNY_KEY_PASSWORD`
 - A gitignored `android/keystore.properties` file with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`
 
-If neither source supplies a complete set of four values, `app/build.gradle.kts` deliberately leaves the release build **unsigned rather than failing** — so `assembleRelease` keeps working for anyone who just wants to reproduce and inspect the artifact, even without a signing key. Gradle prints an explicit warning at build time in that case. When signing does apply, it's schemes v2 and v3 (v1/JAR signing is intentionally disabled — the app's `minSdk` of 26 makes it dead weight).
+If neither source supplies a complete set of four values, `app/build.gradle.kts` deliberately leaves the release build **unsigned rather than failing** — so `assembleFossRelease` keeps working for anyone who just wants to reproduce and inspect the artifact, even without a signing key. Gradle prints an explicit warning at build time in that case. When signing does apply, it's schemes v2 and v3 (v1/JAR signing is intentionally disabled — the app's `minSdk` of 26 makes it dead weight).
 
-There's no reason to build a release variant for day-to-day development; `installDebug` is the right command unless you're distributing the APK yourself.
+There's no reason to build a release variant for day-to-day development; `installFossDebug` is the right command unless you're distributing the APK yourself.
 
 ## Verifying the device
 

@@ -10,7 +10,7 @@ Jenny is a lightweight AI agent framework written in Python with a built-in mobi
 
 ```bash
 pytest tests/config/ -v
-ruff check jenny/
+ruff check jenny/ jenny_extensions/
 ```
 
 The gateway is started by the Android runtime via `jenny.android_entry.run_gateway()`.
@@ -27,8 +27,12 @@ other device, even when one shows up in `adb devices`: pin the emulator with
 ```bash
 ~/Library/Android/sdk/emulator/emulator -avd jenny_square -no-snapshot-save &
 adb devices -l   # emulator-5554 must be listed
-cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installDebug
+cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installFossDebug
 ```
+
+Two flavors build from the same code: `foss` (GitHub, no Google library) and `play` (Play Store,
+adds the copy on Google Drive). `installPlayDebug` installs the second; the two debug builds share
+the debug key, so they replace each other in place.
 
 Debug and release APKs are signed differently: switching between them on the emulator needs
 `adb uninstall com.flagdizero.jenny` first, which wipes the emulator's workspace — and brings
@@ -99,23 +103,25 @@ reason in the comment itself. The public references are
   changes a public URL and the site's navigation — it is not a repo-local edit. The
   content itself stays canonical here: the site holds no copy.
 
-## Branches
+## Branches and flavors
 
-Three long-lived branches, and no others: short-lived ones are deleted as soon as they land.
+Two long-lived branches: **`main`** for releases and **`next`**, where every change lands.
+Short-lived ones are deleted as soon as they land.
 
-- **`main`** — releases.
-- **`next`** — where every change lands. Jenny with **no Google library**: the GitHub APK and
-  F-Droid are built from here (through `main`).
-- **`next-google`** — `next` plus the encrypted copy on Google Drive and nothing else:
-  `jenny/snapshot/cloud*.py`, `DriveBridge.kt` with `play-services-auth`, the Drive card on the
-  Backup page, its i18n keys (`cloudBackup.*`) and its docs. Only the Play Store build comes from
-  here.
+The Play Store and GitHub builds come from the same commit as two Gradle flavors, `play` and
+`foss`. The one thing only `play` has — the encrypted copy on Google Drive — lives where the
+`foss` build cannot pick it up, so that build contains **no Google library and none of its code**:
 
-The direction is one way. Generic work goes to `next`, then `next` is merged into `next-google`
-(`git switch next-google && git merge next`, then the tests); `next-google` is never merged into
-`next`. A change to the Drive copy itself goes to `next-google` only. `git diff next next-google`
-must show the Drive copy and nothing else — if it shows anything generic, that piece belongs on
-`next`. Merges conflict mostly in the i18n JSON, `home-backup.js` and `docs/using/backup.md`.
+- Python and its WebUI files in **`jenny_extensions/drive/`**, a package next to `jenny/` that
+  Chaquopy packages only in `play` (`android/app/build.gradle.kts`);
+- Kotlin in **`android/app/src/play/`**, with `play-services-auth` as a `playImplementation`.
+
+The core reaches an extension only through generic hooks and never names it: `jenny/extensions.py`
+(periodic jobs, `/api/` routers, WebUI files served under `assets/ext/<name>/`, a free-form
+`extensions` config section), `shared/extensions.js` (loaded from `/webui/bootstrap`, mounted with
+the shell's hooks) and `NativeExtension.kt` (one generic bridge command, `extensionCall`).
+`tests/test_extensions.py` fails if `jenny/` or `android/app/src/{main,foss}` names the Drive, and
+`scripts/check_foss_apk.py` checks a built APK.
 
 ## Contribution Flow
 
@@ -135,11 +141,11 @@ Run these before committing or opening a PR:
 
 ```bash
 # Lint
-ruff check jenny/ tests/
+ruff check jenny/ jenny_extensions/ tests/
 
 # Static type check (pyright basic, zero runtime impact; config: pyrightconfig.json)
 # BLOCKING subset — must stay green (already error-clean):
-npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
+npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 # Full-perimeter visibility (non-blocking; shows residual errors to tighten over time):
 npx pyright || true
 
@@ -147,7 +153,7 @@ npx pyright || true
 pytest -q
 
 # Full CI-equivalent check (lint + type check + tests)
-ruff check jenny/ tests/ && npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py && pytest -q
+ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
 ```
 
 ## Common File Locations

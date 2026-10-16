@@ -37,7 +37,7 @@ Most controls take effect the moment you use them. These ask you to confirm firs
 | **Who answers** | Opens the page where you choose the model. The row shows the provider that answers now. | — |
 | **Jenny** (her name, if you renamed her) | Opens her page: name, mascot and rules (below). The page's title is her name too. The row shows how she is now, for example "small · floating". | — |
 | **Updates** | Opens the update check and install page. The row shows the installed version, and the new one when an update is waiting. | — |
-| **Backup** | Opens export and restore. The row shows when you last exported a backup. | — |
+| **Backup** | Opens export, restore and the local history — and, in the Play Store build, the copy on Google Drive. The row says when you last exported a file, or "never". In the Play Store build, with the Drive copy on, it says how the copy is going instead ("safe · today at 3:12 AM", "no copy for 4 days", "stopped: needs your permission"), and with it off, "only on this phone" until you export a file. | — |
 | **Workshop** | Opens the workshop. | — |
 
 There is no language setting. The interface follows the phone's language (Italian or English, English for anything else).
@@ -77,7 +77,9 @@ Under the buttons, a line says when the last successful check happened. When the
 
 ### Backup
 
-**Export a backup** makes one encrypted file with a passphrase you choose. **Restore from a file** replaces everything with the file's contents and restarts Jenny. **Local history** says what the automatic local history is, and opens the list of snapshots right below it: tapping one restores it after a confirmation (the same restore as the workshop's, see [Local history](#local-history)). Full details, including the irrecoverable-passphrase warning: [Backup and restore](../using/backup.md).
+In the GitHub and F-Droid build, three rows, all open: **Copy to a file** makes one encrypted file with a passphrase you choose (the row says when you last did), **Restore from a file** replaces everything with the file's contents and restarts Jenny, and **Local history** opens the list of snapshots right below it — tapping one restores it after a confirmation (the same restore as the workshop's, see [Local history](#local-history)).
+
+In the Play Store build, two blocks. The **copy on Google Drive** card: its state in one line, the last seven nights as dots, what's in it, where, and one big button that is always the gesture needed now — **Turn on the Google Drive copy**, **Make a copy now**, **Give Google permission again**, **Type the copy's password**, **Choose a password** or **Find my copy**. Turning the copy on asks for the copy's password (at least 8 characters, twice); it's needed again only on a new phone. **More options**, closed (just its name): **Copy to a file** makes one encrypted file with a passphrase you choose, **Restore from a file** replaces everything with the file's contents and restarts Jenny, **Local history** opens the list of snapshots right below it, and tapping one restores it after a confirmation (the same restore as the workshop's, see [Local history](#local-history)), **The copy's password** changes it (the old one isn't needed), and **Turn off the Drive copy**. Full details, including the irrecoverable-passphrase warning: [Backup and restore](../using/backup.md).
 
 ## Brain
 

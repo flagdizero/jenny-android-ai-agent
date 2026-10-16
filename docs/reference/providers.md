@@ -99,7 +99,7 @@ Jenny picks the active provider in this order:
 
 Every `apiKey` value sits in `workspace/config.json` as plain text. The only thing standing between that file and the rest of the world is Android's normal per-app sandbox — there is no separate encryption, keychain, or OS credential store involved.
 
-Android's own cloud backup is excluded for this app, so the file doesn't travel to Google in plaintext that way. It does travel in one deliberate, encrypted way — a `.jbk` you export — and in clear in one: the phone-to-phone transfer when you set up a new phone. See [Backup and restore](../using/backup.md).
+Android's own cloud backup is excluded for this app, so the file doesn't travel to Google in plaintext that way. It does travel in two deliberate, encrypted ways — the copy on Google Drive, if you turn it on (Play Store build only), and a `.jbk` you export — and in clear in one: the phone-to-phone transfer when you set up a new phone. See [Backup and restore](../using/backup.md).
 
 If you export an unencrypted copy of `config.json` yourself (e.g. by pulling it off the device for debugging), you are exporting your API keys in the clear; handle that file accordingly.
 

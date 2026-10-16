@@ -161,10 +161,11 @@ Two disclosures I would rather you hear from me than discover:
 
 - **Your prompts go to whichever provider you chose.** On-device storage is not on-device
   inference. If a location fix ends up in the agent's reasoning, it ends up in that prompt.
-- **Android's own cloud backup takes nothing from Jenny.** It would have taken everything,
-  *including the config file that holds your API keys in plain text*, so it is excluded. The
-  phone-to-phone transfer when you set up a new phone still carries everything, from one of
-  your phones to the other; to keep a copy off the phone, export Jenny's encrypted backup.
+- **The copy on Google Drive (Play Store build) is only as strong as the password you choose for it.** It is
+  encrypted and opt-in, and it opens with that password alone — Google holds the copy, not a
+  way to read it. Forget the password and lose the phone, and the copy is gone too: nobody can
+  recover it. Someone who gets into your Google account can try passwords against it, so pick
+  a long one. (Android's own backup takes nothing from Jenny.)
   → [Privacy in detail](https://jenny.flagdizero.com/docs/internals/privacy/)
 
 Security, short version: **`python_exec` is not a sandbox** — arbitrary Python, in-process; the

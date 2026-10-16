@@ -14,11 +14,11 @@ a few simple rules keep things sane for everyone.
 
 ## Branches
 
-Pull requests target **`next`**, where all work lands. `next` has no Google library, so
-that F-Droid and self-built APKs stay free of one. The one feature that needs Google — the
-encrypted copy on Google Drive — lives on **`next-google`**, which is `next` plus that copy
-and nothing else, kept in sync by merging `next` into it. Changes to the Drive copy itself
-target `next-google`. `main` is for releases.
+Pull requests target **`next`**, where all work lands; `main` is for releases. The code builds
+two Gradle flavors: `foss` (GitHub and F-Droid, no Google library) and `play` (the Play Store,
+which adds the encrypted copy on Google Drive). Code only `play` needs lives outside the core —
+`jenny_extensions/` for Python and its WebUI files, `android/app/src/play/` for Kotlin — so the
+`foss` build contains none of it. See [Building from source](docs/contribute/build-from-source.md#two-flavors).
 
 ## Developer Certificate of Origin (DCO)
 

@@ -219,7 +219,7 @@ dell'APK** per vederle sul dispositivo: Chaquopy ri-estrae il bundle
 riavvio dell'app non basta.
 
 ```bash
-./gradlew app:installDebug
+./gradlew app:installFossDebug
 ```
 
 ## Stato attuale

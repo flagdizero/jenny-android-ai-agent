@@ -1,21 +1,86 @@
 # Backup and restore
 
-Jenny keeps two independent safety nets for your workspace: automatic local snapshots and an encrypted backup file you export yourself. They solve different problems, and only one of them protects you against uninstalling the app.
+Jenny keeps three safety nets for your workspace: automatic local snapshots, an automatic encrypted copy on your Google Drive, and an encrypted backup file you export yourself. They solve different problems, and only the last two protect you against losing the phone.
 
-## Two different things, don't confuse them
+The copy on Google Drive is only in the **Play Store build** of Jenny. The build from GitHub and F-Droid contains no Google library and no code for it — not switched off, absent — so there you have the other two. See [Install](../start/install.md) for the two builds.
 
-| | Local snapshots | Encrypted backup (`.jbk`) |
+## Three different things, don't confuse them
+
+| | Local snapshots | Copy on Google Drive | Encrypted backup (`.jbk`) |
+|---|---|---|---|
+| What it is | Automatic version history of your workspace | An automatic, encrypted copy of that history in your Drive | A single encrypted file you export and store yourself |
+| Where it lives | Inside app storage, alongside the workspace | A "Jenny" folder in your Google Drive | Wherever you save it (SD card, a computer, a cloud folder) |
+| Survives uninstalling the app or losing the phone | **No** | Yes | Yes |
+| What you have to remember | Nothing | A password you choose, needed only on a new phone, unrecoverable if lost | A passphrase, unrecoverable if lost |
+| Created automatically | Yes | Yes, every night while charging on Wi-Fi | No, you trigger it manually |
+| In which build | Every build | Play Store build only, with Google Play Services | Every build |
+
+If you only care about undoing something Jenny (or you) did to a file, snapshots already cover you. If you want to survive a lost phone, an uninstall or a phone upgrade without thinking about it, turn on the **copy on Google Drive**. The `.jbk` export is the manual alternative, and the only one in the GitHub and F-Droid build or on a phone without Google services.
+
+They are all on the home's **Settings → Backup** page. In the GitHub and F-Droid build the page is three rows, all open: the file export, restoring from a file, and the local history. In the Play Store build the Drive copy sits at the top and those rows move under **More options** (closed), together with the copy's password and turning the Drive copy off; on a phone without Google services, More options opens by itself. The local snapshots can be browsed and restored right there, under **Local history**, and also in the workshop, under **Memory → Local history**, which is where they are turned on or off and created by hand. See the [Settings reference](../reference/settings.md#backup).
+
+## Copy on Google Drive
+
+*Play Store build only.*
+
+**Settings → Backup → Turn on the Drive copy.** Google asks once which account to use and whether Jenny may keep its own files in your Drive; then you choose **the copy's password** — at least 8 characters, typed twice — and Jenny makes the first copy straight away. That's all the setup there is. You'll need the password only on a new phone. If you forget it, the copy can't be opened: neither Jenny nor Google can recover it.
+
+From then on it is invisible. Once a day — when at least 20 hours have passed since the last copy, the phone is charging and the network is not metered (Wi-Fi, not mobile data) — Jenny takes a snapshot and sends what changed. If three days go by without a charge on Wi-Fi, she sends the copy anyway, still never over mobile data. Once a week, after a copy, she downloads the latest one again with the key on the phone, rebuilds it in a scratch folder, checks every file against its hash and throws it away — no tap from you. A backup that is written but never read back is not a backup. If the copy doesn't rebuild, the card says so and the next copy sends everything again; if the check simply couldn't finish (no network), nothing is shown and it's tried again later.
+
+The Backup page answers three questions without reading anything else: what it does, whether it works, and how long it hasn't. The card at the top says it in one line — **"You're safe · Last copy on Google Drive: today at 3:12 AM"** — and under it seven dots show the last seven nights: filled for a night with a copy, dashed for a night without (today stays open until the night has passed; days before you turned the copy on are grey, not gaps). Below that: what's in the copy and how much it takes in your Drive, and where it is. The weekly check (below) has no line of its own: when it passes there is nothing to say, and when it fails the whole card changes.
+
+When something needs you, the card changes and its big button becomes the fix:
+
+| What you see | When | Button |
 |---|---|---|
-| What it is | Automatic version history of your workspace | A single encrypted file you export and store yourself |
-| Where it lives | Inside app storage, alongside the workspace | Wherever you save it (Google Drive, SD card, another device) |
-| Survives uninstalling the app | **No** | Yes — that's the whole point |
-| Survives a phone swap | No | Yes |
-| Needs a passphrase | No | Yes, and it's unrecoverable if lost |
-| Created automatically | Yes | No, you trigger it manually |
+| **No copy for N days** (amber), with *Why* and *What to do* | three days without a successful copy | Make a copy now |
+| **The copy has stopped** (red) | Google's permission was removed, or this phone no longer has the key that opens the copy (for instance another phone remade it) — the only cases Jenny can't fix by herself | Give Google permission again · Type the copy's password |
+| **The copy has no password** (amber) | the copy works, but has no password: copies made before passwords existed, or `key.jbk` deleted from Drive. A new phone couldn't open it | Choose a password |
+| **Making a copy…** with a bar and "5.1 MB of 8.4 MB" | a copy is running; you can leave the page | — |
+| **The last copy doesn't open properly** (amber) | the weekly check downloaded the copy and it didn't rebuild | Make a copy now — this one re-sends everything, not just what changed |
+| **Almost there** | turned on, first copy not done yet | Make a copy now |
+| **I only exist on this phone** | the copy is off | Turn on the Google Drive copy |
 
-If you only care about undoing something Jenny (or you) did to a file, snapshots already cover you. If you want to survive an uninstall, a phone upgrade, or a debug-to-release signature change, you need to export a `.jbk` backup and move it off the device.
+A single night without a copy doesn't light anything up — it's one dashed dot. After three, the card turns amber and Jenny tells you in chat, once, in her own words. The **Backup** row in Settings carries the same state in a few words ("safe · today at 3:12 AM", "no copy for 4 days", "stopped: needs your permission").
 
-Exporting and restoring from a file are on the home's **Settings → Backup** page. The local snapshots can be browsed and restored right there, under **Local history**, and also in the workshop, under **Memory → Local history**, which is where they are turned on or off and created by hand. See the [Settings reference](../reference/settings.md#backup).
+**What Jenny can see in your Drive.** The permission is `drive.file`: Jenny sees only the files she created herself, in a folder called **Jenny**, and nothing else in your Drive. The folder holds a short `LEGGIMI.txt`, a `repo.json` naming the format, `keycheck.jbk` and `key.jbk` (the key, locked with your password), and three subfolders of encrypted files. Don't move or edit them.
+
+**What's in it, and how it's protected.** Everything the local snapshots contain — the whole workspace, `config.json` with your API keys included — encrypted with AES-256-GCM before it leaves the phone. Files travel as they sit in the snapshot store, grouped into packs of about 8 MB, and only what Drive doesn't have yet is sent: the first copy is the size of your workspace compressed, the next ones are a few kB to a few MB. The data is encrypted with a key of 32 random bytes that stays on the phone — that's what lets the nightly copy run without asking you anything. Off the phone the key exists only locked with **your password**, in a small `key.jbk` file in the Drive folder, through PBKDF2 at 600,000 rounds (the same as the `.jbk` export). Nothing else opens it: not Google, not Jenny without the password. Jenny never stores the password — not on the phone, not in Drive.
+
+**Changing the password** (**More options → The copy's password**): type the new one twice. The old one isn't needed — the phone already holds the key — and only `key.jbk` is rewritten: nothing is uploaded again, and the copies already made open with the new password.
+
+**If you forget it**: with the old phone still in your hands, choose a new one as above. With the phone gone, the copy is gone too. That's the price of a copy nobody else can open, the same deal as WhatsApp's end-to-end encrypted backup.
+
+What protects the copy is your Google account (to reach the files at all) and the password (to read them). Someone who gets into your Google account can download the folder and try passwords on their own computer, as fast as 600,000 rounds allow: that's why the minimum is 8 characters, and a longer one is better.
+
+**Turning it off** (**More options → Turn off the Drive copy**) stops the nightly copies. The copy already in your Drive stays there, and turning it back on continues it with the same key and the same password.
+
+### Getting Jenny back on a new phone
+
+1. Install Jenny. On the first screen of the setup, below the provider choice, Jenny asks **"Have we met before?"** — tap **Yes, find my copy**.
+2. Pick your Google account and allow Drive, as on the first phone.
+3. Type **the copy's password**. If it's wrong Jenny says so and you try again; nothing has been touched yet. If there is no copy on that Drive, she says that instead, without asking for a password.
+4. Pick the copy — the latest is first — and Jenny downloads it, then shows **Restore ready → Restart now**. After the restart the setup is skipped: she's back with her memory, notebooks, conversations and your provider.
+
+The swap uses the same protocol as a file restore, so the phone's previous workspace is kept as a safety copy and a `pre-restore` snapshot is taken first. The same **Find my copy** button appears on the Backup page if you turn on the Drive copy on a phone and Drive already holds a copy made by another phone: Jenny never overwrites it.
+
+### Without Jenny
+
+`scripts/restore_drive_copy.py` in the repository rebuilds the workspace on a computer from a downloaded "Jenny" folder (right-click → Download in Drive, then unzip) and the copy's password, which it asks for without echoing it:
+
+```bash
+pip install cryptography
+python3 scripts/restore_drive_copy.py ~/Downloads/Jenny --list
+python3 scripts/restore_drive_copy.py ~/Downloads/Jenny --out ./jenny-restored
+```
+
+The format is documented at the top of `jenny_extensions/drive/cloud.py`.
+
+### Limits worth knowing
+
+- **It needs Google Play Services.** On a phone without them the card says so and only the manual export is offered.
+- **Old copies are never deleted from Drive yet.** Thanks to deduplication the folder grows slowly — roughly by what you add — but it only grows.
+- **Two phones restored from the same copy keep writing to the same folder.** Nothing breaks (the copies interleave), but the list on a new phone will show both.
 
 ## Encrypted backup (.jbk)
 
@@ -25,9 +90,9 @@ This is disaster recovery: a single file containing your whole workspace — mem
 
 ### Exporting
 
-The **Backup** row on the Settings page says when you last exported one ("never" until you do), and the page it opens says it in full: "Last backup: …" or "You haven't exported a backup yet."
+The **Backup** row on the Settings page says when you last exported a file ("never" until you do; in the Play Store build with the Drive copy off, "only on this phone"); the **Copy to a file** row adds "Last file: …".
 
-1. Open **Settings → Backup** and tap **Export a backup**.
+1. Open **Settings → Backup** (in the Play Store build, then **More options**) and tap **Copy to a file**.
 2. Choose a passphrase and type it twice to confirm.
 3. Jenny takes a `pre-export` snapshot, encrypts everything, and hands the file to Android's Storage Access Framework (SAF) "save as" picker — you can save it to Google Drive, an SD card, or any location the picker offers. No storage permission is requested; SAF handles it.
 4. The suggested filename is `jenny-backup-YYYYMMDD-HHMMSS.jbk`.
@@ -60,9 +125,9 @@ The export/import picker uses Android's standard document APIs, so Drive should 
 
 ### Importing
 
-1. From **Settings → Backup**, tap **Restore from a file** (worded as "Restore from backup" during onboarding — see below).
+1. From **Settings → Backup** (in the Play Store build, **More options**), tap **Restore from a file** (worded as "Restore from backup" during onboarding — see below).
 2. Pick the `.jbk` file with Android's file picker. The picker has no MIME filter for `.jbk` (it isn't a registered file type), so it shows up as a generic file — just pick it by name.
-3. Enter the passphrase. There is no separate confirmation after this: the warning is the note under the button, *"Replaces everything there is now with what's in the file, and restarts Jenny."* This is not a merge of your current workspace and the backup — it's a full replacement.
+3. Enter the passphrase. There is no separate confirmation after this: the warning is the line under the row, *"Replaces everything with what's in the file, then restarts."* This is not a merge of your current workspace and the backup — it's a full replacement.
 4. Jenny decrypts and validates the backup first, **then** takes a `pre-restore` snapshot of your **current** state, and finally shows a non-cancellable **"Restore ready"** dialog with a single **Restart now** button. You cannot back out of this dialog with the Android back button.
 5. Tapping Restart now kills and relaunches the app. The actual workspace swap happens at that restart, not before — the app restarts itself to do the swap cleanly.
 
@@ -130,10 +195,11 @@ And, as covered above, the SSH key directory is outside the workspace entirely, 
 
 ### Restoring from a snapshot
 
-Open **Settings → Backup → Local history** in the home — it opens the list in place, newest first, eight at a time with **Show the others** below — or **Memory → Local history** in the workshop, and tap any entry. You'll be asked to confirm: *"Bring Jenny back to its state from {date}? A snapshot of the current state is saved first, so you can undo this."* Like the `.jbk` import, this applies at the next app restart, and — because the snapshot history lives outside the workspace — a restore from a snapshot is always reversible: you can always step forward again afterward.
+Open **Settings → Backup → Local history** in the home (under **More options** in the Play Store build) — it opens the list in place, newest first, eight at a time with **Show the others** below — or **Memory → Local history** in the workshop, and tap any entry. You'll be asked to confirm: *"Bring Jenny back to its state from {date}? A snapshot of the current state is saved first, so you can undo this."* Like the `.jbk` import, this applies at the next app restart, and — because the snapshot history lives outside the workspace — a restore from a snapshot is always reversible: you can always step forward again afterward.
 
 ## APK updates, uninstalling, and signature mismatches
 
 - **Updating the APK preserves your workspace.** Reinstalling a new build with the same signing key keeps everything — memory, conversations, config, uploads, wiki, mini-apps. The one thing that always gets refreshed on every app start, update or not, is the UI bundle and the built-in skills; those are re-extracted from whatever APK is currently installed, overwriting any local changes to them.
-- **Uninstalling deletes everything**, workspace included. This is standard Android behavior for private app storage, and neither snapshots nor anything else in the app protects you from it — snapshots live in the same storage that uninstalling wipes out. The only thing that survives an uninstall is a `.jbk` file you've already exported and moved off the device.
+- **Uninstalling deletes everything** on the phone, workspace and key included. This is standard Android behavior for private app storage, and snapshots don't protect you from it — they live in the same storage that uninstalling wipes out. What survives is the copy on Google Drive (if you remember its password) and any `.jbk` file you've already exported and moved off the device.
+- **Android's own backup takes nothing from Jenny.** Google's automatic app backup is excluded for this app: it would fail anyway (the app data is far above its 25 MB quota) and would carry `config.json` with your keys. The phone-to-phone transfer when you set up a new phone with a cable or over Wi-Fi does carry Jenny's data, keys included — it's a move between two phones of yours.
 - **A debug build and a release build (or two release builds signed with different keystores) are, to Android, different apps that happen to share a package name.** Installing one over the other is refused; Android forces you to uninstall the old one first, which erases the workspace. If you ever need to switch between a debug and a release build of Jenny — or re-sign a release build with a new keystore — **export a `.jbk` backup first**. There's no way around the uninstall once the signatures don't match.

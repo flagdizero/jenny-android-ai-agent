@@ -4,6 +4,20 @@ Jenny is not on the Play Store. The normal way to get it onto a phone is to down
 signed APK from GitHub Releases, verify it, and sideload it. Building from source is the
 alternative, described further down, for anyone who'd rather not run someone else's binary.
 
+## Two builds from the same code
+
+The source builds Jenny in two flavors:
+
+| | `foss` | `play` |
+|---|---|---|
+| Where it comes from | GitHub Releases, or your own build | The Play Store build (not published yet) |
+| Google libraries | None | Google Play Services, for sign-in to Drive |
+| Encrypted copy on Google Drive | Not there — not even its code | Yes, opt-in ([Backup and restore](../using/backup.md#copy-on-google-drive)) |
+
+Everything else is the same app. It is also the same Android package, signed by different
+keys, so Android won't install one over the other: switching means uninstalling, which erases
+Jenny's data. Export a `.jbk` backup first and restore it after.
+
 ## Download the APK
 
 Grab it from [**Releases**](https://github.com/flagdizero/jenny-android-ai-agent/releases/latest). It targets Android 8.0 or newer and is
@@ -52,10 +66,10 @@ From the `android/` directory of the cloned repository:
 
 ```bash
 adb devices          # confirm the device shows up as "device", not "unauthorized"
-./gradlew app:installDebug
+./gradlew app:installFossDebug
 ```
 
-`app:installDebug` compiles the debug variant and installs it straight to the connected device over `adb` — no separate `adb install` step needed. The first run is slow: Gradle has to fetch the Chaquopy runtime and all the pinned Python wheels, and Chaquopy has to compile them for every target ABI. Subsequent builds are much faster.
+`app:installFossDebug` compiles the debug variant of the `foss` flavor (the one on GitHub) and installs it straight to the connected device over `adb` — no separate `adb install` step needed. The first run is slow: Gradle has to fetch the Chaquopy runtime and all the pinned Python wheels, and Chaquopy has to compile them for every target ABI. Subsequent builds are much faster.
 
 If `adb devices` doesn't list your phone, USB debugging isn't enabled (Settings → About phone → tap "Build number" seven times to unlock Developer options, then enable USB debugging there), or the device hasn't accepted the RSA key fingerprint prompt yet.
 
@@ -63,14 +77,14 @@ Opening `android/` in Android Studio and hitting Run does the same thing through
 
 ### About release builds
 
-`./gradlew app:assembleRelease` also works, but by default it produces an **unsigned APK that Android will refuse to install**. Release builds are only installable if you supply your own signing key, via one of:
+`./gradlew app:assembleFossRelease` (or `app:assemblePlayRelease`) also works, but by default it produces an **unsigned APK that Android will refuse to install**. Release builds are only installable if you supply your own signing key, via one of:
 
 - Environment variables: `JENNY_KEYSTORE_PATH`, `JENNY_KEYSTORE_PASSWORD`, `JENNY_KEY_ALIAS`, `JENNY_KEY_PASSWORD`
 - A gitignored `android/keystore.properties` file with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`
 
 Without a complete set of credentials, the build still succeeds (so you can reproduce and inspect the artifact) but prints a warning and leaves the APK unsigned. There is no keystore in the repository — you would be signing with your own key, not the project's.
 
-For day-to-day use on your own device, `installDebug` is the right command; there's no reason to build a release variant unless you're distributing the APK yourself.
+For day-to-day use on your own device, `installFossDebug` is the right command (`installPlayDebug` if you want the Drive copy); there's no reason to build a release variant unless you're distributing the APK yourself.
 
 ## What the app declares about itself
 
@@ -79,7 +93,7 @@ A few things worth knowing before you install, none of them bugs — all deliber
 - **Jenny declares itself as a home-screen launcher**, not just an app. Alongside the normal launcher/app-drawer entry, its manifest also lists the `HOME` intent category. Press the phone's Home button and Android may offer Jenny as a candidate default launcher. This is intentional — the project is designed as much for a spare "phone in a drawer acting as a server" as for a primary phone — but it will surprise you if you install it on your daily driver. See [Set it as your launcher](launcher-setup.md) for what that actually looks like and how to say no.
 - **The gateway runs as a persistent foreground service**, which means an ongoing, low-priority, silent notification stays in your notification shade the entire time Jenny is running: "Jenny is running", with the body "Ready to reply and to run scheduled tasks". It follows your *phone's* language (Italian or English), not Jenny's own UI language setting, because it's an Android string resource rather than part of the WebUI. **Tap it to open Jenny** — which is the fastest way back into the app if you're not using Jenny as your launcher. Its notification channel is called "Background service" and carries a description explaining that Android requires the notification and that it stays until Jenny is stopped, so the shade itself can answer "what is this and why can't I dismiss it?". The notification can't be swiped away without stopping the service (which also stops the agent), and it deliberately survives you swiping Jenny out of Recents (`stopWithTask=false`) — closing the recent-apps card does not stop Jenny.
 - **Jenny restarts itself after a device reboot.** A boot receiver relaunches the gateway service automatically, so after you restart the phone, Jenny comes back on its own without you opening the app — useful for the "server in a drawer" case, but worth knowing if you expect a fresh reboot to leave things off. Coming back after Android has *killed* it is a different matter: on Android 12+ that needs exact alarms allowed or the battery-optimization exemption, and without either Jenny posts a **"Jenny has stopped — Tap to restart her"** notification instead. See [Android permissions](../reference/android-permissions.md).
-- **Android's cloud backup takes nothing from Jenny.** Google's automatic app-data backup is excluded for this app, so your plaintext API keys don't end up in it. To survive a lost phone, export a `.jbk` file yourself. See [Backup and restore](../using/backup.md) and [Privacy](../internals/privacy.md).
+- **Android's cloud backup takes nothing from Jenny; Jenny's own copy is opt-in.** Google's automatic app-data backup is excluded for this app, so your plaintext API keys don't end up in it. To survive a lost phone, export a `.jbk` file yourself, or — in the Play Store build — turn on **Settings → Backup → copy on Google Drive** (encrypted, nightly). See [Backup and restore](../using/backup.md) and [Privacy](../internals/privacy.md).
 
 ## Permissions
 
