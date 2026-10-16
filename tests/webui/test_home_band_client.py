@@ -240,15 +240,42 @@ def test_the_old_dodge_is_gone_everywhere() -> None:
 
 def test_the_band_and_the_tail_are_css() -> None:
     """La fascia e' alta meta' di lei, e la coda dell'ultima risposta ci scende
-    con una regola sola, senza JS. Il `--jenny-dodge` delle scatole e' lo
-    stesso conto della larghezza di `shapeOf`."""
+    con una regola sola, appesa alla classe che `_mark` sposta. Il
+    `--jenny-dodge` delle scatole e' lo stesso conto della larghezza di
+    `shapeOf`."""
     css = HOME_CSS.read_text(encoding="utf-8")
     assert "--home-band-h: calc(var(--jenny-size) * var(--jenny-art-h) / 2);" in css
     assert re.search(r"\.home-band \{[^}]*height: var\(--home-band-h\);", css)
-    last = r"\.home-msg-jenny:has\(\+ \.home-live\[hidden\] \+ \.home-band\)"
+    last = r"\.home-msg-jenny\.home-at-band"
     assert re.search(last + r" > \.home-tail \{[^}]*position: absolute;", css)
+    # WebKit non ricalcola un `:has()` sui fratelli quando un messaggio entra
+    # in mezzo (16/10/2026): la coda di prima restava sopra il testo dopo.
+    rules = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    assert ":has(+" not in rules, "un :has() sui fratelli: WebKit non lo ricalcola"
     assert ("--jenny-dodge: calc(var(--jenny-size) * (1 - var(--jenny-out) - 0.275) - 18px + 6px);"
             in css)
     chat = HOME_CHAT_JS.read_text(encoding="utf-8")
     ctor = member(chat, "constructor")
     assert ctor.index("this.live") < ctor.index("this.bandEl"), "la fascia va dopo il posto vivo"
+
+
+def test_the_mark_follows_what_sits_above_the_band() -> None:
+    """`AT_BAND` sta sull'ultima cosa sopra la fascia, salta il posto vivo
+    spento, e non c'e' su nessuno quando il posto vivo e' acceso."""
+    _run_js("""
+const { t, msg, live, band, mascot } = thread();
+const hb = new HomeBand(band, mascot);
+assert.ok(msg.classList.contains(AT_BAND), 'la risposta sopra la fascia non e\\' segnata');
+
+const next = new El('home-msg home-msg-user');
+t.children.splice(t.children.indexOf(live), 0, next);
+next.parentElement = t;
+hb.refresh();
+assert.equal(msg.classList.contains(AT_BAND), false, 'la risposta di prima e\\' ancora segnata');
+assert.ok(next.classList.contains(AT_BAND));
+
+live.hidden = false;
+hb.refresh();
+assert.equal(next.classList.contains(AT_BAND), false, 'segnata col posto vivo acceso');
+""")
+

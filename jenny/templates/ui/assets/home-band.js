@@ -9,10 +9,11 @@
  *  Lo spazio per lei e' fatto di due pezzi, e uno solo vive in questo file.
  *
  *  - **La fascia** (`.home-band`, l'ultimo figlio del filo, v. `HomeChat`):
- *    alta meta' di lei, ed e' tutta CSS. Ci scende la coda dell'ultima risposta
- *    (Copia, ora, secondi) con una regola `:has()` di home-style.css, quindi
- *    la riga che la coda occupava comunque si recupera. Ed e' il posto per una
- *    striscia animata di chi lavora.
+ *    alta meta' di lei. Ci scende la coda dell'ultima risposta (Copia, ora,
+ *    secondi), quindi la riga che la coda occupava comunque si recupera. Ed e'
+ *    il posto per una striscia animata di chi lavora. Il CSS fa tutto, ma chi
+ *    sta subito sopra la fascia glielo dice questo file, con la classe
+ *    `AT_BAND` (v. `_mark`).
  *  - **La sagoma**, qui: sopra la fascia resta la sua testa, e le ultime righe
  *    dell'ultima risposta le girano attorno. Sono due float in testa all'ultimo
  *    blocco: il primo, largo zero, spinge il secondo in fondo, e il secondo ha
@@ -64,6 +65,9 @@ export function shapeOf({ size, padRight, distance, blockHeight }) {
 
 /** I due float. Il nome della classe sul blocco e' anche il segno per toglierli. */
 export const SHAPED = 'has-jenny-shape';
+/** L'ultima cosa del filo subito sopra la fascia: la sua coda scende nella
+ *  fascia, e una scatola si scansa da lei (home-style.css). */
+export const AT_BAND = 'home-at-band';
 const PUSH = 'home-shape-push';
 const SHAPE = 'home-shape';
 
@@ -75,6 +79,7 @@ export class HomeBand {
     this.thread = band?.parentElement || null;
     this.mascot = mascot;
     this._block = null;
+    this._atBand = null;
     /* Le due cose che cambiano la sagoma senza cambiare il testo: la taglia di
        lei e la larghezza del filo (una rotazione, la chat che si sposta in una
        pagina). Osservate come scatole, non come contenuto: scorrere non le
@@ -84,10 +89,25 @@ export class HomeBand {
       if (this.thread) this._observer.observe(this.thread);
       if (mascot) this._observer.observe(mascot);
     }
+    /* Chi sta sopra la fascia cambia quando entra (o esce) un figlio del filo
+       e quando il posto vivo si accende o si spegne. Era un `:has()` sui
+       fratelli, che WebKit non ricalcola a un inserimento (16/10/2026, la
+       casa aperta dal Mac): la classe si sposta qui, a ogni mutazione,
+       prima del disegno. */
+    if (typeof MutationObserver === 'function' && this.thread) {
+      this._mutations = new MutationObserver(() => this._mark());
+      this._mutations.observe(this.thread, { childList: true });
+      const live = band.previousElementSibling;
+      if (live?.classList.contains('home-live')) {
+        this._mutations.observe(live, { attributes: true, attributeFilter: ['hidden'] });
+      }
+    }
+    this._mark();
   }
 
   /** Rifa la sagoma. Da chiamare quando il testo in fondo al filo cambia. */
   refresh() {
+    this._mark();
     this._clear();
     const block = this._lastBlock();
     if (!block) return;
@@ -126,15 +146,32 @@ export class HomeBand {
    *  vogliono dire che la sua testa non e' accanto a una risposta. Un'immagine
    *  in fondo non si avvolge: la scansa il CSS. */
   _lastBlock() {
+    const prev = this._aboveBand();
+    if (!prev?.classList.contains('home-msg-jenny')) return null;
+    const content = [...prev.children].filter((c) => !c.classList.contains('home-tail'));
+    const last = content[content.length - 1];
+    return last?.classList.contains('home-block') ? last : null;
+  }
+
+  /** Il figlio del filo subito sopra la fascia, saltando il posto vivo se e'
+   *  spento; `null` se il posto vivo e' acceso (sopra la fascia c'e' lui). */
+  _aboveBand() {
     let prev = this.band?.previousElementSibling || null;
     if (prev?.classList.contains('home-live')) {
       if (!prev.hidden) return null;
       prev = prev.previousElementSibling;
     }
-    if (!prev?.classList.contains('home-msg-jenny')) return null;
-    const content = [...prev.children].filter((c) => !c.classList.contains('home-tail'));
-    const last = content[content.length - 1];
-    return last?.classList.contains('home-block') ? last : null;
+    return prev;
+  }
+
+  /** Sposta `AT_BAND` su chi sta sopra la fascia adesso. Non misura niente:
+   *  si puo' chiamare a ogni mutazione. */
+  _mark() {
+    const now = this._aboveBand();
+    if (now === this._atBand) return;
+    this._atBand?.classList.remove(AT_BAND);
+    now?.classList.add(AT_BAND);
+    this._atBand = now;
   }
 
   _clear() {

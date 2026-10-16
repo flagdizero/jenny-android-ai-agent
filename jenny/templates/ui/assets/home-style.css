@@ -510,10 +510,17 @@ body.home {
 
 /* L'ultima risposta, quando subito sotto c'e' la fascia (il posto vivo spento
    in mezzo non conta): la sua coda esce dal flusso e si mette nella fascia, a
-   sinistra di lei. Tutto CSS: quando arriva un messaggio dopo, la regola smette
-   di valere e la coda torna sotto il suo testo. */
-.home-msg-jenny:has(+ .home-live[hidden] + .home-band) { position: relative; }
-.home-msg-jenny:has(+ .home-live[hidden] + .home-band) > .home-tail {
+   sinistra di lei. Quando arriva un messaggio dopo, la coda torna sotto il suo
+   testo.
+
+   Chi e' «subito sopra la fascia» lo dice la classe `home-at-band`, che mette
+   e sposta `home-band.js`. Era un `:has(+ .home-live[hidden] + .home-band)`,
+   ma WebKit non lo ricalcola quando un messaggio nuovo entra in mezzo: dal Mac
+   (16/10/2026) la coda della risposta di prima restava nella posizione
+   assoluta e finiva sopra il testo di quella dopo. La WebView del telefono
+   (Chromium) lo ricalcolava. */
+.home-msg-jenny.home-at-band { position: relative; }
+.home-msg-jenny.home-at-band > .home-tail {
   position: absolute;
   left: 0;
   top: calc(100% + var(--home-thread-gap));
@@ -525,9 +532,9 @@ body.home {
    attorno (la sagoma, qui sotto); le scatole no — una bolla tua, una bolla di
    lavoro, un'immagine — e allora si scansano di lato. Solo l'ultima cosa del
    filo, e solo finche' lo e': cambia quando arriva qualcosa, mai scorrendo. */
-.home-msg-user:has(+ .home-live[hidden] + .home-band),
-.home-msg-work:has(+ .home-live[hidden] + .home-band),
-.home-msg-jenny:has(+ .home-live[hidden] + .home-band) > .home-media,
+.home-msg-user.home-at-band,
+.home-msg-work.home-at-band,
+.home-msg-jenny.home-at-band > .home-media,
 .home-live:not([hidden]) {
   margin-right: var(--jenny-dodge);
 }
