@@ -17,6 +17,7 @@ ordine di costruzione, stesso drain ordinato allo shutdown.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from loguru import logger
@@ -196,6 +197,41 @@ class GatewayContainer:
         """
         agent = self._agent
         return getattr(agent, "record_channel_delivery", None) if agent is not None else None
+
+    def _extension_job_runners(self) -> dict[str, Callable[[], Awaitable[str | None]]]:
+        """``id → giro`` per i job di sistema delle estensioni (``jenny/extensions.py``)."""
+        from jenny import extensions
+
+        def runner(job: extensions.SystemJob) -> Callable[[], Awaitable[str | None]]:
+            async def run() -> str | None:
+                # Lo snapshot si legge a ogni giro, non alla costruzione: il
+                # servizio può nascere dopo, e l'agente cambia con l'onboarding.
+                return await job.run(
+                    extensions.ExtensionHost(snapshot=self.snapshot, get_agent=lambda: self._agent)
+                )
+
+            return run
+
+        return {job_id: runner(job) for job_id, job in extensions.system_jobs().items()}
+
+    def _retire_orphan_system_jobs(self) -> None:
+        """Ritira i job di sistema che nessuno, in questa build, sa eseguire.
+
+        Ci arrivano con lo store del cron, che sta nel workspace: un backup o una
+        copia fatti da una build con un'estensione, ripristinati su una build
+        senza. Senza questo, quel job cadrebbe su «unbound» a ogni scadenza, per
+        sempre. Si guarda all'elenco dei job **noti** (core ed estensioni), non a
+        quelli registrati in questo avvio: un lavoratore del core spento resta
+        nello store di proposito, e il suo cancello è nel dispatcher.
+        """
+        from jenny import extensions
+        from jenny.cron.purposes import SYSTEM_JOB_PURPOSES
+
+        known = set(SYSTEM_JOB_PURPOSES) | set(extensions.system_jobs())
+        for job in self.cron.list_jobs(include_disabled=True):
+            if job.payload.kind == "system_event" and job.id not in known:
+                if self.cron.retire_system_job(job.id):
+                    logger.info("Cron: retired system job '{}' (nothing runs it here)", job.id)
 
     async def _snapshot_before_dream(self) -> bool:
         """Checkpoint del workspace prima che Dream riscriva la memoria.
@@ -572,6 +608,7 @@ class GatewayContainer:
             cron=self.cron,
             heartbeat_cfg=hb_cfg,
             snapshot_before_dream=self._snapshot_before_dream,
+            extension_jobs=self._extension_job_runners(),
         ).dispatch
 
         # I lavoratori periodici che questa versione **non esegue piu'**. Il loro
@@ -582,6 +619,7 @@ class GatewayContainer:
         # lavoratore aggiunge il suo id qui, e nessun altro punto lo conosce.
         for retired in _RETIRED_SYSTEM_JOBS:
             self.cron.retire_system_job(retired)
+        self._retire_orphan_system_jobs()
 
         # Register Dream system job (idempotent on restart).
         dream_cfg = config.agents.defaults.dream
@@ -669,6 +707,23 @@ class GatewayContainer:
             logger.info("Update check: every {}h", updates_cfg.check_interval_h)
         else:
             logger.info("Update check: disabled")
+
+        # I giri delle estensioni impacchettate in questa build. Registrati
+        # **sempre**: il loro interruttore si gira dalla WebUI a gateway acceso,
+        # e il cancello «acceso o spento» vive nel giro stesso, letto da disco.
+        from jenny import extensions
+
+        for job in extensions.system_jobs().values():
+            self.cron.register_system_job(CronJob(
+                id=job.id,
+                name=job.id,
+                schedule=CronSchedule(
+                    kind="every",
+                    every_ms=job.every_ms,
+                    tz=config.agents.defaults.timezone,
+                ),
+                payload=CronPayload(kind="system_event"),
+            ))
 
     def _instantiate_agent(self, config: Config, provider: Any) -> Any:
         """Costruisce e cabla un ``AgentLoop`` (wiring condiviso build/onboarding).

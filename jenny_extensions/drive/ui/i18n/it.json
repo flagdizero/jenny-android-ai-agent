@@ -1,0 +1,203 @@
+{
+  "cloudBackup": {
+    "steps": {
+      "connecting": "Chiedo il permesso a Google…",
+      "first_copy": "Faccio la prima copia…"
+    },
+    "copied": "Copia fatta.",
+    "turnOff": "Spegni la copia su Drive",
+    "turnOffConfirm": "Spegnere la copia su Google Drive? Quella che c'è resta nel tuo Drive, e si riaccende quando vuoi.",
+    "errors": {
+      "generic": "Non è riuscita. Riprovo da sola stanotte.",
+      "denied": "Senza il permesso di Google, Jenny non può salvare su Drive.",
+      "unavailable": "Su questo telefono mancano i servizi Google.",
+      "consent_needed": "Google ha tolto a Jenny il permesso di salvare su Drive.",
+      "existing_backup": "Su questo Drive c'è già una copia di Jenny fatta da un altro telefono. Se è la tua, puoi tornare a quella.",
+      "missing_key": "Questo telefono non ha più la chiave della copia: scrivi la password per riaprirla.",
+      "wrong_key": "La copia su Drive l'ha rifatta un altro telefono: scrivi la password della copia per tornare a quella.",
+      "no_backup": "Su questo Drive non c'è nessuna copia di Jenny.",
+      "not_charging_or_no_wifi": "Il telefono non è stato in carica sul Wi-Fi: la copia aspetta quel momento.",
+      "no_such_copy": "Quella copia non c'è più.",
+      "nothing_to_verify": "Non c'è ancora una copia da controllare.",
+      "mismatch": "La copia riscaricata non corrisponde: ne rifaccio una stanotte.",
+      "busy": "Un momento: c'è già un'operazione in corso.",
+      "disabled": "La copia su Drive è spenta.",
+      "already_running": "Una copia è già in corso.",
+      "wrong_password": "Non è questa. Riprova.",
+      "weak_password": "Almeno 8 caratteri.",
+      "no_password": "Questa copia è stata fatta prima che esistesse la password, e non si apre così. Sul telefono di prima scegline una (Backup → Scegli la password), poi riprova.",
+      "password_needed": "Serve una password per la copia.",
+      "cancelled": "Annullato."
+    },
+    "restore": {
+      "question": "Ci conosciamo già?",
+      "hint": "Se avevi Jenny su un altro telefono con la copia su Google Drive, posso tornare com'ero: conversazioni, quaderni, ricordi.",
+      "yes": "Sì, ritrova la mia copia",
+      "searching": "Cerco la mia copia nel tuo Drive…",
+      "pick": "Ho trovato la mia copia. A quale torno?",
+      "latest": "la più recente",
+      "restoreThis": "Torna a questa copia",
+      "restoring": "Scarico la copia… con molte foto può volerci qualche minuto."
+    },
+    "strip": {
+      "today": "oggi",
+      "caption": "Le ultime 7 notti: un pallino pieno è una copia riuscita.",
+      "aria": "Ultime 7 notti: {copies} con la copia, {missed} senza."
+    },
+    "when": {
+      "today": "oggi alle {time}",
+      "yesterday": "ieri alle {time}",
+      "weekday": "{day} alle {time}"
+    },
+    "safe": {
+      "title": "Sei al sicuro",
+      "sub": "Ultima copia su Google Drive: {when}"
+    },
+    "late": {
+      "title": "Da {days} giorni nessuna copia",
+      "sub": "L'ultima su Google Drive: {when}",
+      "subNever": "Non è ancora riuscita nessuna copia",
+      "calm": "Non si è perso niente: è tutto ancora qui sul telefono.",
+      "calmAlerted": "Non si è perso niente: è tutto ancora qui sul telefono. Te l'ho scritto anche in chat."
+    },
+    "blocked": {
+      "title": "La copia è ferma",
+      "sub": "Ultima copia: {when}",
+      "subNever": "Non è ancora riuscita nessuna copia",
+      "calm": "Appena risolto faccio subito una copia. Intanto è tutto ancora qui sul telefono."
+    },
+    "first": {
+      "title": "Quasi pronta",
+      "sub": "La prima copia arriva stanotte, mentre il telefono è in carica sul Wi-Fi.",
+      "subFailed": "La prima copia non è riuscita: riprovo stanotte."
+    },
+    "running": {
+      "titleFirst": "Sto facendo la prima copia…",
+      "title": "Sto facendo una copia…",
+      "sub": "{done} di {total}",
+      "subStart": "Preparo i file…",
+      "note": "Puoi uscire da qui: continuo da sola. Dalla seconda copia in poi mando solo quello che è cambiato."
+    },
+    "off": {
+      "title": "Esisto solo su questo telefono",
+      "sub": "Se lo perdi o si rompe, perdi anche me",
+      "p1": "Ogni notte, mentre il telefono è in carica, metto una copia di me nel tuo Google Drive. Da sola.",
+      "p2": "Cifrata con una password che scegli tu: dentro ci sono le conversazioni, i quaderni, i ricordi, le app — e senza la password nessuno li legge, nemmeno Google.",
+      "p3": "Sul telefono nuovo rispondi «Sì» a «Ci conosciamo già?» e torno com'ero.",
+      "note": "Ti chiederò l'account Google e una password per la copia, una volta sola. Ti servirà solo su un telefono nuovo."
+    },
+    "unavailable": {
+      "title": "Qui non posso fare la copia su Drive",
+      "sub": "Mancano i servizi Google. Puoi fare una copia su un file, in «Altre opzioni»."
+    },
+    "facts": {
+      "inside": "Cosa c'è dentro",
+      "insideValue": "Conversazioni, quaderni, ricordi, app e impostazioni · {size}",
+      "insideValueNoSize": "Conversazioni, quaderni, ricordi, app e impostazioni",
+      "where": "Dove",
+      "whereValue": "Nel tuo Google Drive, cartella «Jenny». È cifrata: senza la tua password nessuno la legge."
+    },
+    "promise": "Se per 3 notti di fila non riesco a farla, te lo scrivo io in chat.",
+    "why": "Perché:",
+    "todo": "Cosa fare:",
+    "reasons": {
+      "waiting": {
+        "why": "in queste notti il telefono non è mai stato in carica con il Wi-Fi acceso.",
+        "todo": "stanotte lascialo in carica sul Wi-Fi, oppure fai la copia adesso."
+      },
+      "consent_needed": {
+        "why": "Google ha tolto a Jenny il permesso di salvare nel tuo Drive. Succede togliendolo dalle impostazioni dell'account, o cambiando password.",
+        "todo": "ridarlo: scegli l'account e conferma, due tocchi."
+      },
+      "missing_key": {
+        "why": "questo telefono non ha più la chiave che apre la copia su Drive.",
+        "todo": "scrivere la password della copia: la riapre, e la copia riprende."
+      },
+      "verify_mismatch": {
+        "why": "l'ultimo controllo ha trovato la copia rovinata.",
+        "todo": "ne faccio una nuova stanotte, oppure falla adesso."
+      },
+      "other": {
+        "why": "Google Drive non ha risposto.",
+        "todo": "fai la copia adesso; se non va, riprovo io stanotte."
+      }
+    },
+    "actions": {
+      "turnOn": "Attiva la copia su Google Drive",
+      "copyNow": "Fai una copia adesso",
+      "giveBack": "Ridai il permesso a Google",
+      "findCopy": "Ritrova la mia copia",
+      "unlock": "Scrivi la password della copia",
+      "setPassword": "Scegli la password"
+    },
+    "more": {
+      "off": "Spegni la copia su Drive",
+      "offSub": "Quella che c'è resta nel tuo Drive.",
+      "password": "Password della copia",
+      "passwordSub": "Cambiala quando vuoi: la vecchia non serve, e le copie già fatte si apriranno con la nuova."
+    },
+    "row": {
+      "safe": "al sicuro · {when}",
+      "late": "da {days} giorni nessuna copia",
+      "consent": "ferma: serve il tuo permesso",
+      "key": "ferma: serve la password",
+      "first": "quasi pronta",
+      "running": "copia in corso",
+      "onlyHere": "solo su questo telefono",
+      "damaged": "copia da rifare",
+      "nopass": "senza password"
+    },
+    "damaged": {
+      "title": "L'ultima copia non si apre bene",
+      "sub": "Ultima copia su Google Drive: {when}"
+    },
+    "nopass": {
+      "title": "La copia non ha una password",
+      "sub": "Qui va tutto, ma su un telefono nuovo non potrei riaprirla",
+      "why": "Scegli una password: la chiederò solo su un telefono nuovo. Le copie già fatte si apriranno con quella.",
+      "calm": "Le copie notturne intanto continuano."
+    },
+    "password": {
+      "choose": {
+        "title": "Scegli la password della copia",
+        "text": "Ti servirà solo su un telefono nuovo, per riaprire la copia. Se la dimentichi la copia non si apre: né io né Google possiamo recuperarla.",
+        "field": "Password (almeno {n} caratteri)",
+        "ok": "Usa questa password",
+        "done": "Password scelta."
+      },
+      "change": {
+        "title": "Nuova password della copia",
+        "text": "La vecchia non serve. Le copie già fatte si apriranno con la nuova.",
+        "field": "Nuova password (almeno {n} caratteri)",
+        "ok": "Cambia password",
+        "done": "Password cambiata."
+      },
+      "type": {
+        "title": "La password della copia",
+        "text": "Quella che hai scelto quando hai acceso la copia sul telefono di prima.",
+        "field": "Password",
+        "ok": "Apri la copia"
+      },
+      "repeat": "Ripetila",
+      "show": "Mostra la password",
+      "tooShort": "Almeno {n} caratteri.",
+      "mismatch": "Le due password non sono uguali.",
+      "working": "Un attimo…"
+    }
+  },
+  "backup": {
+    "trigger": {
+      "pre_cloud": "copia esterna"
+    }
+  },
+  "home": {
+    "backup": {
+      "more": {
+        "fileSub": "Un file cifrato con una password scelta da te, da tenere dove vuoi. Per chi non usa Google."
+      },
+      "history": {
+        "off": "Spenta: si riaccende in officina, Memoria → Storia locale."
+      }
+    }
+  }
+}

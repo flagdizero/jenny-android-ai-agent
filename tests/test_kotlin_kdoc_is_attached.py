@@ -20,7 +20,8 @@ ANDROID_SRC = Path(__file__).resolve().parents[1] / "android/app/src/main/java/c
 
 
 def test_no_kdoc_is_followed_by_another_kdoc() -> None:
-    files = sorted(ANDROID_SRC.glob("*.kt"))
+    # Tutti i source set: ``main`` e quelli dei flavor (``src/play``, ``src/foss``).
+    files = sorted(ANDROID_SRC.parents[4].glob("*/java/com/flagdizero/jenny/*.kt"))
     if not files:
         pytest.skip("sorgente Android non presente in questo checkout")
     orphans = []

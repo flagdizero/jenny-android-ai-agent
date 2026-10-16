@@ -365,6 +365,10 @@ class MainActivity : AppCompatActivity() {
     private var loadingView: FrameLayout? = null
     private var errorView: FrameLayout? = null
     private var webView: WebView? = null
+
+    // Le estensioni native di questo flavor, agganciate a questa Activity
+    // (v. [NativeExtension]); vuoto nel flavor `foss`.
+    private var nativeExtensions: Map<String, NativeExtension.Attached> = emptyMap()
     // Il callback del tasto Indietro. Abilitato solo mentre la SPA è a schermo:
     // v. onCreate, onPageFinished, showLoading e showError.
     private var backCallback: OnBackPressedCallback? = null
@@ -707,6 +711,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Le estensioni del flavor, prima di qualunque `return`: registrano i
+        // loro launcher, e l'ordine di registrazione dev'essere sempre lo
+        // stesso (v. [NativeExtension.attach]).
+        nativeExtensions = Extensions.all.associate { it.name to it.attach(this) }
         // Una ricreazione (onRenderProcessGone, un cambio di configurazione)
         // rilegge `intent`, che onNewIntent può aver sostituito con quello di
         // una notifica: chi è nata home lo resta, e lo dice lo stato salvato.
@@ -1839,7 +1847,21 @@ class MainActivity : AppCompatActivity() {
             "requestLocationPermission" -> requestLocationPermission().let { null }
             "requestExactAlarmPermission" -> requestExactAlarmPermission()
             "openBatterySettings" -> openBatterySettings()
+            "extensionCall" -> extensionCall(a).let { null }
             else -> throw IllegalArgumentException("unknown native command")
+        }
+
+        /**
+         * `extensionCall(nome, metodo, …argomenti)`: il comando di
+         * un'estensione nativa (v. [NativeExtension]). Uno solo e generico,
+         * così questo elenco chiuso non nomina quel che una build non ha.
+         */
+        private fun extensionCall(a: JSONArray) {
+            val extension = nativeExtensions[a.getString(0)]
+                ?: throw IllegalArgumentException("unknown native extension")
+            val args = JSONArray()
+            for (i in 2 until a.length()) args.put(a.get(i))
+            extension.call(a.getString(1), args)
         }
 
         /**
@@ -2471,9 +2493,18 @@ class MainActivity : AppCompatActivity() {
     // ── Backup: helper I/O (thread di background + callback JS) ──
 
     private fun notifyBackupJs(callback: String, ok: Boolean) {
+        notifyJs("jennyBackup", callback, ok.toString())
+    }
+
+    /**
+     * Chiama `window.<global>.<callback>(<argJs>)` nella pagina, se c'è.
+     * [argJs] è già JavaScript: un booleano, o una stringa passata da
+     * `JSONObject.quote`. Lo usano il backup e le estensioni native.
+     */
+    internal fun notifyJs(global: String, callback: String, argJs: String) {
         runOnUiThread {
             webView?.evaluateJavascript(
-                "window.jennyBackup && window.jennyBackup.$callback && window.jennyBackup.$callback($ok)",
+                "window.$global && window.$global.$callback && window.$global.$callback($argJs)",
                 null
             )
         }

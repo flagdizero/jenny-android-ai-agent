@@ -1180,6 +1180,12 @@ class Config(BaseSettings):
         # come chiave «ignota», vincendo a ogni lettura sulle modifiche dalla UI.
         serialization_alias="modelPresets",
     )
+    # Le impostazioni delle estensioni impacchettate solo in alcune build
+    # (``jenny/extensions.py``): una sezione per nome, che il core non legge.
+    # Sta qui e non in un file loro perché così passa da ``mutate`` e viaggia
+    # negli snapshot come il resto. Le chiavi interne restano come le scrive
+    # l'estensione: un dict senza modelli dentro non viene camelizzato.
+    extensions: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod

@@ -57,6 +57,10 @@
     'restartApp',
     'requestBatteryExemption',
     'requestLocationPermission',
+    /* `extensionCall(estensione, metodo, ...argomenti)`: il comando di
+       un'estensione nativa (`NativeExtension.kt`). Uno solo e generico, così
+       questo elenco non nomina le estensioni che una build non ha. */
+    'extensionCall',
   ];
 
   /* Domande: tornano una Promise col valore che il metodo nativo restituiva.

@@ -1,27 +1,28 @@
 /** La casa — «Backup».
  *
- *  Il giro c'e' gia' tutto e non e' di qui: `shared/backup-flow.js` — cifratura
- *  con passphrase, i due picker SAF del guscio nativo, il riavvio — lo usano
- *  gia' l'officina e l'onboarding. Qui c'e' la terza vista, e **una cosa che
- *  non esisteva**: la data.
+ *  Disegno: la versione D della tela del 15/10/2026. La pagina e' fatta di
+ *  righe che dicono cosa fanno senza istruzioni:
  *
- *  «Ultimo backup: ieri alle 23:10» non aveva nessuna fonte. Non c'era un
- *  `last_backup` in nessun file: il gateway prepara il container cifrato in
- *  staging, e se quel file finisca su disco lo decide il picker di sistema,
- *  che risponde solo al client. Adesso il client lo dice
- *  (`/api/backup/exported`, scritto dal funnel di `store.mutate`), e lo dice
- *  **dopo** la schermata di sistema: fra le due cose c'e' un annullabile, e
- *  scrivere «ultimo backup: adesso» su un file mai salvato sarebbe la bugia
- *  peggiore di questa pagina.
+ *  - **Copia su un file**: il file cifrato con una password scelta
+ *    dall'utente (`shared/backup-flow.js`, lo stesso giro di officina e
+ *    onboarding). La sua data sta nella riga: «ultimo file: ieri alle 23:10».
+ *    Quella data non aveva nessuna fonte; adesso il client la dice
+ *    (`/api/backup/exported`, scritto dal funnel di `store.mutate`), e la dice
+ *    **dopo** la schermata di sistema: fra le due cose c'e' un annullabile, e
+ *    scrivere «adesso» su un file mai salvato sarebbe la bugia peggiore della
+ *    pagina.
+ *  - **Ripristina da un file**, che non torna: riavvia.
+ *  - **La storia locale**, che si sfoglia e si ripristina qui. Somiglia
+ *    abbastanza da essere scambiata per un backup, e non lo e': vive sullo
+ *    stesso telefono, quindi di un telefono perso non salva niente. La riga lo
+ *    dice. Accenderla, spegnerla e farne uno a mano restano in officina.
  *
- *  **Due cose che si somigliano e non sono la stessa.** La storia locale degli
- *  snapshot e' automatica e serve a rimettere a posto una cosa cancellata per
- *  sbaglio — ma vive sullo stesso telefono, quindi di un telefono perso non
- *  salva niente. Un backup esportato si'. La riga porta il **secondo**, perche'
- *  e' quello che la parola «backup» promette; il primo ha la sua scheda qui
- *  sotto, che lo dice e lo sfoglia: un tocco su uno snapshot, una conferma, e
- *  lo stesso ripristino dell'officina. Accenderla, spegnerla e farne uno a
- *  mano restano in officina.
+ *  **Le estensioni.** Una build con un'estensione di backup (`jenny/extensions.py`)
+ *  la aggancia con `attachExtension`: disegna una sua scheda sopra
+ *  (`#home-backup-ext`), aggiunge le sue righe in fondo e puo' dire la riga di
+ *  «Tu e Jenny». Allora le righe del core scendono sotto «Altre opzioni»,
+ *  chiuse. Senza estensioni sono aperte, e il bottone «Altre opzioni» non c'e':
+ *  non c'e' niente sopra di cui essere «altre».
  */
 
 import { i18n } from './shared/i18n.js';
@@ -69,17 +70,25 @@ export function backupValue(backup) {
   return when ? whenText(when * 1000) : i18n.t('home.backup.never');
 }
 
+/** Una riga della pagina: icona, titolo, sottotitolo, e il segno a destra.
+ *  Esportata perche' le righe di un'estensione siano uguali alle nostre. */
+export function rowHtml(iconName, label, sub, go = 'chevron-right') {
+  return `${icon(iconName)}<span>${escapeHtml(label)}${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`
+    + `<i class="ti ti-${go} home-backup-go" aria-hidden="true"></i>`;
+}
+
 export class HomeBackup {
-  /** @param onExported  un export riuscito: la riga di «Tu e Jenny» si
-   *                     riscrive senza aspettare la prossima apertura. */
+  /** @param onExported  qualcosa e' cambiato (un file salvato, lo stato di
+   *                     un'estensione): la riga di «Tu e Jenny» si riscrive
+   *                     senza aspettare la prossima apertura. */
   constructor({ onExported } = {}) {
     this.el = document.getElementById('home-backup-room');
-    this.whenEl = document.getElementById('home-backup-when');
+    this.extCard = document.getElementById('home-backup-ext');
+    this.extRows = document.getElementById('home-backup-ext-rows');
+    this.moreToggle = document.getElementById('home-backup-more-toggle');
+    this.more = document.getElementById('home-backup-more');
     this.exportBtn = document.getElementById('home-backup-export');
-    this.exportNote = document.getElementById('home-backup-export-note');
     this.importBtn = document.getElementById('home-backup-import');
-    this.importCard = document.getElementById('home-backup-import-card');
-    this.importNote = document.getElementById('home-backup-import-note');
     this.historyBtn = document.getElementById('home-backup-history');
     this.historyList = document.getElementById('home-backup-history-list');
 
@@ -87,11 +96,37 @@ export class HomeBackup {
     this.backup = null;
     /* La storia locale: `null` chiusa, altrimenti `{snapshots, all, error}`. */
     this._history = null;
+    /* «Altre opzioni» aperte o chiuse a mano; `null` = la scelta di default. */
+    this._moreOpen = null;
+    /* L'estensione agganciata (v. `attachExtension`), e se la sua scheda si vede. */
+    this._ext = null;
+    this._extShown = false;
 
+    this.moreToggle?.addEventListener('click', () => this._toggleMore());
     this.exportBtn?.addEventListener('click', () => this.runExport());
     this.importBtn?.addEventListener('click', () => this.runImport());
     this.historyBtn?.addEventListener('click', () => this._toggleHistory());
     this.historyList?.addEventListener('click', (e) => this._onHistoryClick(e));
+  }
+
+  /** Aggancia un'estensione di backup. Tutti i metodi sono facoltativi:
+   *
+   *  - `paintCard(el, now)` disegna la scheda in `el` e dice se mostrarla;
+   *  - `paintRows(el)` disegna le sue righe in fondo alle «Altre opzioni»;
+   *  - `value(backup, now)` la riga di «Tu e Jenny», o `null` per la nostra;
+   *  - `moreOpenByDefault()` se le «Altre opzioni» partono aperte;
+   *  - `open()` la stanza si e' aperta (per rileggere uno stato).
+   *
+   *  Quando il suo stato cambia, l'estensione chiama `refresh()`. */
+  attachExtension(ext) {
+    this._ext = ext || null;
+    this.refresh();
+  }
+
+  /** Ridisegna e riscrive la riga di «Tu e Jenny». */
+  refresh() {
+    this._paint();
+    this._onExported?.();
   }
 
   /** Quel che il server dice: `{last_export_at, snapshots_enabled}`. */
@@ -102,18 +137,19 @@ export class HomeBackup {
 
   open() {
     this._paint();
+    this._ext?.open?.();
   }
 
   /** Il valore per la riga di «Tu e Jenny». */
   value() {
-    return backupValue(this.backup);
+    return this._ext?.value?.(this.backup, Date.now()) || backupValue(this.backup);
   }
 
   applyTranslations() {
     this._paint();
   }
 
-  /** Esporta. Il giro intero — passphrase, cifratura, picker — sta nel flusso
+  /** Esporta. Il giro intero — password, cifratura, picker — sta nel flusso
    *  condiviso; di qui si guarda solo l'esito. */
   async runExport() {
     if (!this.exportBtn || this.exportBtn.disabled) return;
@@ -127,8 +163,7 @@ export class HomeBackup {
          server — differiscono di un giro di rete, e «oggi alle 17:49» e'
          identico in tutti e due i casi. */
       this.backup = { ...(this.backup || {}), last_export_at: Date.now() / 1000 };
-      this._paint();
-      this._onExported?.();
+      this.refresh();
     } finally {
       this.exportBtn.disabled = false;
     }
@@ -207,49 +242,69 @@ export class HomeBackup {
     return rows + more;
   }
 
-  /* ── Sotto ──────────────────────────────────────────────────────────── */
+  /* ── «Altre opzioni» ─────────────────────────────────────────────────── */
+
+  _toggleMore() {
+    this._moreOpen = !this._isMoreOpen();
+    this._paint();
+  }
+
+  _isMoreOpen() {
+    /* Senza una scheda sopra, le righe sono la pagina: sempre aperte. */
+    if (!this._extShown) return true;
+    if (this._moreOpen !== null) return this._moreOpen;
+    return !!this._ext?.moreOpenByDefault?.();
+  }
+
+  /* ── Il disegno ──────────────────────────────────────────────────────── */
 
   _paint() {
-    if (this.whenEl) {
-      const when = Number(this.backup?.last_export_at) || 0;
-      this.whenEl.textContent = when
-        ? i18n.t('home.backup.last', { when: whenText(when * 1000) })
-        : i18n.t('home.backup.neverLong');
-      this.whenEl.classList.toggle('is-warn', !when);
+    if (this.extCard) {
+      this._extShown = !!this._ext?.paintCard?.(this.extCard, Date.now());
+      this.extCard.hidden = !this._extShown;
+      if (!this._extShown) this.extCard.innerHTML = '';
     }
-    if (this.exportBtn) this.exportBtn.textContent = i18n.t('home.backup.export');
-    if (this.importBtn) this.importBtn.textContent = i18n.t('home.backup.import');
-    if (this.exportNote) this.exportNote.textContent = i18n.t('home.backup.exportHint');
-    if (this.importNote) this.importNote.textContent = i18n.t('home.backup.importHint');
+    const open = this._isMoreOpen();
+    if (this.moreToggle) {
+      this.moreToggle.hidden = !this._extShown;
+      this.moreToggle.innerHTML = rowHtml('dots', i18n.t('home.backup.more.title'), '',
+        open ? 'chevron-up' : 'chevron-down');
+      this.moreToggle.setAttribute('aria-expanded', String(open));
+    }
+    if (this.more) this.more.hidden = !open;
 
-    /* Fuori dall'APK i due picker non esistono, e un bottone che non fa niente
-       e' peggio di un bottone che manca. La spiegazione di **cosa sia** un
-       backup pero' resta: e' vera comunque, e sostituirla col motivo lascia
-       una pagina che non dice piu' di cosa parla. La scheda del ripristino
-       invece sparisce tutta — una nota senza il suo bottone e' una frase che
-       promette un gesto che non c'e' (visto sul rig). */
+    /* Fuori dall'APK i due picker non esistono, e una riga che non fa niente
+       e' peggio di una riga che manca. */
     const native = backupNativeAvailable();
-    if (this.exportBtn) this.exportBtn.hidden = !native;
-    if (this.importBtn) this.importBtn.hidden = !native;
-    if (this.importCard) this.importCard.hidden = !native;
-    if (!native && this.exportNote) {
-      this.exportNote.textContent = `${i18n.t('home.backup.exportHint')} ${i18n.t('backup.androidOnly')}`;
+    const exported = Number(this.backup?.last_export_at) || 0;
+    if (this.exportBtn) {
+      const sub = i18n.t('home.backup.more.fileSub')
+        + (exported ? ` ${i18n.t('home.backup.more.fileLast', { when: whenText(exported * 1000) })}` : '');
+      this.exportBtn.innerHTML = rowHtml('file-download', i18n.t('home.backup.more.file'), sub);
+      this.exportBtn.hidden = !native;
     }
-
+    if (this.importBtn) {
+      this.importBtn.innerHTML = rowHtml('file-upload', i18n.t('home.backup.more.restore'),
+        i18n.t('home.backup.more.restoreSub'));
+      this.importBtn.hidden = !native;
+    }
     if (this.historyBtn) {
       /* La storia locale e' un'altra cosa, e somiglia abbastanza da essere
          scambiata per questa: la riga dice cos'e' e cosa **non** e'. Spenta,
          gli snapshot gia' fatti restano, e si sfogliano lo stesso. */
       const on = this.backup?.snapshots_enabled !== false;
-      const sub = i18n.t(on ? 'home.backup.history.sub' : 'home.backup.history.off');
-      this.historyBtn.innerHTML = `${icon('history')}<span>${escapeHtml(i18n.t('home.backup.history.title'))}`
-        + `<small>${escapeHtml(sub)}</small></span>`
-        + `<i class="ti ti-${this._history ? 'chevron-up' : 'chevron-down'} home-history-go" aria-hidden="true"></i>`;
+      this.historyBtn.innerHTML = rowHtml('history', i18n.t('home.backup.history.title'),
+        i18n.t(on ? 'home.backup.history.sub' : 'home.backup.history.off'),
+        this._history ? 'chevron-up' : 'chevron-down');
       this.historyBtn.setAttribute('aria-expanded', String(!!this._history));
     }
     if (this.historyList) {
       this.historyList.hidden = !this._history;
       this.historyList.innerHTML = this._historyHtml();
+    }
+    if (this.extRows) {
+      if (this._ext?.paintRows) this._ext.paintRows(this.extRows);
+      else this.extRows.innerHTML = '';
     }
   }
 }

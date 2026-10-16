@@ -872,6 +872,15 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     # Extract UI assets into workspace/ui/
     n_ui = extract_package_dir("jenny.templates.ui", workspace / "ui")
     added.append(f"ui/ ({n_ui} files)")
+    # E quelli delle estensioni impacchettate in questa build (``jenny/extensions.py``).
+    from jenny.utils.android_assets import extract_extension_ui
+
+    try:
+        n_ext = extract_extension_ui(workspace / "ui")
+        if n_ext:
+            added.append(f"ui/assets/ext/ ({n_ext} files)")
+    except Exception:  # noqa: BLE001 — un'estensione senza UI non ferma la sync
+        logger.opt(exception=True).error("Could not extract the extensions' UI files")
     # Il codice che il package non spedisce piu' (un file rinominato lascia la
     # copia col nome vecchio, e il gateway la servirebbe ancora).
     from jenny.utils.android_assets import retire_withdrawn_ui_files

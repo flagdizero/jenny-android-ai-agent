@@ -67,10 +67,14 @@ include = [
     "jenny/skills/**/*.md",
     "jenny/skills/**/*.py",
     "jenny/templates/ui/**/*",
+    "jenny_extensions/**/*.py",
+    "jenny_extensions/**/ui/**/*",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["jenny"]
+# ``jenny_extensions`` sta accanto a ``jenny`` (``jenny/extensions.py``): nell'APK
+# entra solo nel flavor ``play``, qui c'è perché test e strumenti lo vedano.
+packages = ["jenny", "jenny_extensions"]
 
 [tool.hatch.build.targets.wheel.sources]
 "jenny" = "jenny"
@@ -78,6 +82,7 @@ packages = ["jenny"]
 [tool.hatch.build.targets.sdist]
 include = [
     "jenny/",
+    "jenny_extensions/",
     "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",

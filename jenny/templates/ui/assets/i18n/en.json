@@ -1226,12 +1226,14 @@
     "backup": {
       "title": "Backup",
       "never": "never",
-      "neverLong": "You haven't exported a backup yet.",
-      "last": "Last backup: {when}.",
-      "export": "Export a backup",
-      "import": "Restore from a file",
-      "exportHint": "One encrypted file, with a passphrase you choose: everything is in it — conversations, notebooks, settings. Keep it somewhere that isn't this phone.",
-      "importHint": "Replaces everything there is now with what's in the file, and restarts Jenny.",
+      "more": {
+        "title": "More options",
+        "file": "Copy to a file",
+        "fileSub": "One file encrypted with a password you choose: everything is in it. Keep it somewhere that isn't this phone.",
+        "fileLast": "Last file: {when}.",
+        "restore": "Restore from a file",
+        "restoreSub": "Replaces everything with what's in the file, then restarts."
+      },
       "history": {
         "title": "Local history",
         "sub": "Automatic: puts back a file deleted by mistake. It lives on this phone, though — a lost phone takes it with it.",

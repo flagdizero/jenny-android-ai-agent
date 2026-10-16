@@ -243,9 +243,12 @@ class GatewayHTTPHandler:
         # (senza restart del processo → senza sync) riservirebbe altrimenti una
         # copia manomessa. Per il contenuto attivo (HTML/JS/CSS) serviamo i byte
         # canonici del package, mai il disco. Cache lazy (una lettura per file).
-        from jenny.utils.android_assets import _UI_MANIFEST
+        # I file delle estensioni (``jenny/extensions.py``) stanno sotto
+        # ``assets/ext/<nome>/`` e si servono dal **loro** pacchetto, con la
+        # stessa regola: mai dalla copia su disco.
+        from jenny.utils.android_assets import ui_sources
 
-        self._ui_manifest_set = frozenset(_UI_MANIFEST)
+        self._ui_sources = ui_sources()
         self._canonical_ui_cache: dict[str, bytes | None] = {}
         self.runtime_model_name = runtime_model_name
         self.bus = bus
@@ -332,6 +335,18 @@ class GatewayHTTPHandler:
             get_backup_manager=self._get_backup_manager,
             log=self._log,
         )
+
+        # Le route delle estensioni impacchettate in questa build. Ognuna
+        # dichiara il suo ``prefix``; il token lo controlla il core, prima di
+        # passargliela, come per ogni altra route ``/api/``.
+        from jenny import extensions
+
+        self.extension_routes: list[Any] = [
+            router
+            for ext in extensions.load()
+            if ext.make_routers is not None
+            for router in ext.make_routers(snapshot_service, self._log)
+        ]
 
         from jenny.webui.home_routes import HomeRoutes
 
@@ -508,6 +523,8 @@ class GatewayHTTPHandler:
     # -- Bootstrap ----------------------------------------------------------
 
     def _handle_bootstrap(self, connection: Any, request: Any) -> Response:
+        from jenny import extensions
+
         secret = self._auth_secret()
         if secret:
             if not _issue_route_secret_matches(request.headers, secret):
@@ -526,6 +543,9 @@ class GatewayHTTPHandler:
                 # Aperta da un altro dispositivo (Tailscale): la pagina nasconde
                 # quel che ha senso solo col telefono in mano (v. ``phone_only``).
                 "remote": on_remote_listener(),
+                # Le estensioni di questa build: le shell ne caricano il modulo
+                # e le traduzioni prima del primo render (``jenny/extensions.py``).
+                "extensions": extensions.bootstrap_info(),
             }
         )
 
@@ -687,6 +707,15 @@ class GatewayHTTPHandler:
         backup_response = await self.backup_routes.dispatch(request, got)
         if backup_response is not None:
             return backup_response
+
+        for router in self.extension_routes:
+            if not got.startswith(router.prefix):
+                continue
+            if not self.check_api_secret(request):
+                return _http_error(401, "Unauthorized")
+            extension_response = await router.dispatch(request, got)
+            if extension_response is not None:
+                return extension_response
 
         home_response = await self.home_routes.dispatch(request, got)
         if home_response is not None:
@@ -862,13 +891,14 @@ class GatewayHTTPHandler:
         """
         if not rel.endswith(self._CANONICAL_UI_SUFFIXES):
             return None
-        if rel not in self._ui_manifest_set:
+        source = self._ui_sources.get(rel)
+        if source is None:
             return None
         if rel not in self._canonical_ui_cache:
             try:
                 from jenny.utils.android_assets import read_asset
 
-                self._canonical_ui_cache[rel] = read_asset("jenny.templates.ui", rel)
+                self._canonical_ui_cache[rel] = read_asset(*source)
             except Exception:  # noqa: BLE001 - lettura best-effort, fallback al disco
                 self._canonical_ui_cache[rel] = None
         return self._canonical_ui_cache[rel]

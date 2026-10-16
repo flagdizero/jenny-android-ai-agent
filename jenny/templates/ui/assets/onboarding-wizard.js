@@ -56,6 +56,8 @@ const PLACEHOLDER_SUFFIX = {
 export class OnboardingController {
   constructor() {
     this.contentEl = document.getElementById('onboarding-content');
+    /* I ganci delle estensioni sul primo passo (v. `addWelcomeExtension`). */
+    this._welcomeHooks = [];
     this.step = 0;
     this.format = null;
     this.providerName = '';
@@ -167,10 +169,11 @@ export class OnboardingController {
         <div class="onboarding-nav onboarding-nav-center">
           <button id="btn-next-0" class="onboarding-btn onboarding-btn-primary onboarding-btn-lg" ${this.format ? '' : 'disabled'}>${i18n.t('onboarding.next')}</button>
         </div>
+        <div class="onboarding-ext-welcome" id="onboarding-ext-welcome"></div>
         <button id="btn-restore-backup" class="onboarding-btn" style="margin-top:18px;opacity:.85">
           <i class="ti ti-file-import" aria-hidden="true"></i> ${i18n.t('onboarding.restoreFromBackup')}
         </button>
-        <p class="onboarding-desc" style="font-size:11px;margin-top:6px">${i18n.t('onboarding.restoreFromBackupHint')}</p>
+        <p class="onboarding-desc" id="onboarding-restore-hint" style="font-size:11px;margin-top:6px">${i18n.t('onboarding.restoreFromBackupHint')}</p>
       </div>`;
 
     this.contentEl.querySelectorAll('.format-card').forEach(card => {
@@ -184,6 +187,27 @@ export class OnboardingController {
     this.contentEl.querySelector('#btn-restore-backup').addEventListener('click', () => {
       runImportFlow();
     });
+    const slot = this.contentEl.querySelector('#onboarding-ext-welcome');
+    for (const hook of this._welcomeHooks) {
+      try {
+        hook(slot, {
+          fileButton: this.contentEl.querySelector('#btn-restore-backup'),
+          fileHint: this.contentEl.querySelector('#onboarding-restore-hint'),
+        });
+      } catch (err) {
+        console.error('Onboarding extension failed:', err);
+      }
+    }
+  }
+
+  /** Il gancio di un'estensione sul primo passo (`shared/extensions.js`):
+   *  `hook(slot, {fileButton, fileHint})` a ogni disegno del passo, con lo
+   *  spazio sopra il ripristino da file e i due pezzi di quel ripristino. */
+  addWelcomeExtension(hook) {
+    this._welcomeHooks.push(hook);
+    if (this.step === 0 && this.contentEl?.querySelector('#onboarding-ext-welcome')) {
+      this._renderStep0();
+    }
   }
 
   _selectFormat(format) {

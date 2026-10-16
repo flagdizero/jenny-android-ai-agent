@@ -299,6 +299,7 @@ _UI_MANIFEST = [
     "assets/shared/cron-view.js",
     "assets/shared/dialog.js",
     "assets/shared/editable-focus.js",
+    "assets/shared/extensions.js",
     "assets/shared/first-run.js",
     "assets/shared/history-pager.js",
     "assets/shared/horizontal-swipe.js",
@@ -442,6 +443,44 @@ _UI_MANIFEST = [
 ]
 
 _extracted_registry: dict[str, Path] = {}
+
+
+def ui_sources() -> dict[str, tuple[str, str]]:
+    """Ogni file della WebUI: ``percorso sotto ui/`` → ``(pacchetto, file)``.
+
+    Il core da ``_UI_MANIFEST``, più i file delle estensioni impacchettate in
+    questa build sotto ``assets/ext/<nome>/`` (``jenny/extensions.py``). È
+    l'elenco di cosa si estrae, di cosa si serve dai byte del pacchetto e di
+    cosa ``retire_withdrawn_ui_files`` lascia stare.
+    """
+    from jenny import extensions
+
+    sources = {rel: ("jenny.templates.ui", rel) for rel in _UI_MANIFEST}
+    sources.update(extensions.ui_sources())
+    return sources
+
+
+def extract_extension_ui(ui_dir: Path) -> int:
+    """Estrae i file WebUI delle estensioni in ``ui_dir/assets/ext/<nome>/``.
+
+    Come ``extract_package_dir`` per il core: dal manifest dichiarato
+    dall'estensione, riscrivendo solo i file cambiati.
+    """
+    from jenny import extensions
+
+    count = 0
+    for rel, (package, path) in extensions.ui_sources().items():
+        data = read_asset(package, path)
+        if data is None:
+            logger.warning("Extension UI file missing from its package: {}/{}", package, path)
+            continue
+        target = ui_dir / rel
+        if _already_identical(target, data):
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _write_bytes_force(target, data)
+        count += 1
+    return count
 
 
 def read_asset(module: str, path: str) -> bytes | None:
@@ -744,6 +783,38 @@ def retire_withdrawn_templates(dest: Path) -> list[str]:
     return rewritten
 
 
+def _retire_absent_extensions(ui_dir: Path) -> list[str]:
+    """Toglie per intero ``assets/ext/<nome>/`` delle estensioni che questa build non ha.
+
+    Per intero, traduzioni comprese: una cartella d'estensione è tutta nostra, e
+    un'estensione assente non deve lasciare niente di servibile. Ci arriva per
+    esempio da una build che l'aveva, sostituita da una che non ce l'ha.
+    """
+    import shutil
+
+    from jenny import extensions
+
+    root = ui_dir / extensions.EXT_UI_DIR
+    if not root.is_dir() or root.is_symlink():
+        return []
+    present = {ext.name for ext in extensions.load()}
+    removed: list[str] = []
+    for child in sorted(root.iterdir()):
+        if child.name in present:
+            continue
+        rel = child.relative_to(ui_dir).as_posix()
+        try:
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        except OSError:
+            logger.opt(exception=True).warning("Withdrawn extension UI not removed: {}", rel)
+            continue
+        removed.append(rel + "/")
+    return removed
+
+
 #: I suffissi del codice della WebUI: gli stessi che ``ws_http`` serve dai byte
 #: canonici del package. Solo questi si ritirano da ``ui/``.
 _UI_CODE_SUFFIXES = (".html", ".js", ".css")
@@ -768,8 +839,8 @@ def retire_withdrawn_ui_files(ui_dir: Path) -> list[str]:
     """
     if not ui_dir.is_dir():
         return []
-    shipped = set(_UI_MANIFEST)
-    removed: list[str] = []
+    shipped = set(ui_sources())
+    removed = _retire_absent_extensions(ui_dir)
     for path in sorted(ui_dir.rglob("*")):
         if path.suffix not in _UI_CODE_SUFFIXES or path.is_symlink() or not path.is_file():
             continue

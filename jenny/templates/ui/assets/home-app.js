@@ -36,6 +36,7 @@ import { HomeJenny } from './home-jenny.js';
 import { HomeModel } from './home-model.js';
 import { HomeUpdates } from './home-updates.js';
 import { HomeBackup } from './home-backup.js';
+import { prepareExtensions, mountExtensions } from './shared/extensions.js';
 import { HomeYou } from './home-you.js';
 import { WhoPanel } from './home-who.js';
 import { dotColor } from './shared/spines.js';
@@ -153,6 +154,8 @@ const SHARED_DIALOGS = [
      sull'emulatore il 29/09/2026). Il riavvio rifiuta `cancel`, quindi la
      pressione e' consumata senza chiuderlo: e' quel che deve fare. */
   'oc-backup-passphrase-dialog', 'oc-backup-restart-dialog',
+  /* E quelli delle estensioni, che li aggiungono con `registerSharedDialog`
+     quando si montano (`shared/extensions.js`). */
 ];
 
 class HomeApp {
@@ -495,8 +498,15 @@ class HomeApp {
     /* Le traduzioni prima della storia: la conversazione porta etichette
        tradotte (la provenienza di un messaggio entrato da fuori), e disegnarla
        prima vorrebbe dire scriverci dentro le chiavi grezze. */
+    prepareExtensions();
     await i18n.load(i18n.locale);
     this._applyTranslations();
+    /* Le estensioni di questa build (`shared/extensions.js`): i ganci che la
+       casa offre sono la pagina Backup e i dialoghi che Indietro chiude. */
+    mountExtensions('home', {
+      homeBackup: this.backupRoom,
+      registerSharedDialog: (id) => { if (!SHARED_DIALOGS.includes(id)) SHARED_DIALOGS.push(id); },
+    });
 
     // La barra di selezione che riappariva al rientro: v. `releaseSelectionOnBlur`.
     releaseSelectionOnBlur();

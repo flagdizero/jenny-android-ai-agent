@@ -590,34 +590,33 @@
   </section>
 
   <!-- ── L'ottava stanza: «Backup» ───────────────────────────────────────
-       La terza vista di `shared/backup-flow.js` (le altre due: officina e
-       onboarding). L'unica cosa nuova e' la data: «ultimo backup» non aveva
-       nessuna fonte, in nessun file — v. `home-backup.js`. -->
+       Le righe del core: il file cifrato e il suo ripristino (la terza vista
+       di `shared/backup-flow.js`) e la storia locale, tutte aperte. Una build
+       con un'estensione di backup (`jenny/extensions.py`) monta la sua scheda
+       sopra, in `#home-backup-ext`, e allora le righe scendono sotto «Altre
+       opzioni», chiuse — v. `home-backup.js`. -->
   <section class="home-backup-room" id="home-backup-room">
     <div class="home-you-scroll">
 
-      <div class="home-card">
-        <div class="home-card-head">
-          <i class="ti ti-archive" aria-hidden="true"></i>
-          <span class="home-card-label" id="home-backup-when"></span>
+      <!-- La scheda di un'estensione; senza, resta vuota e nascosta. -->
+      <div class="home-card home-backup-ext" id="home-backup-ext" aria-live="polite" hidden></div>
+
+      <div class="home-card home-backup-group">
+        <button class="home-backup-row is-flat" id="home-backup-more-toggle" type="button"
+                aria-expanded="true" aria-controls="home-backup-more" hidden></button>
+        <div class="home-backup-more" id="home-backup-more">
+          <button class="home-backup-row is-flat" id="home-backup-export" type="button"></button>
+          <button class="home-backup-row is-flat" id="home-backup-import" type="button"></button>
+          <!-- La storia locale: somiglia abbastanza da essere scambiata per un
+               backup, e non lo e' — vive sullo stesso telefono. Si sfoglia e
+               si ripristina qui, senza andare in officina: l'elenco si apre
+               sotto la sua riga. -->
+          <button class="home-backup-row is-flat" id="home-backup-history" type="button"
+                  aria-expanded="false" aria-controls="home-backup-history-list"></button>
+          <div class="home-history-list" id="home-backup-history-list" hidden></div>
+          <!-- Le righe di un'estensione (le sue impostazioni). -->
+          <div class="home-backup-ext-rows" id="home-backup-ext-rows"></div>
         </div>
-        <div class="home-card-note" id="home-backup-export-note"></div>
-        <button class="home-save" id="home-backup-export" type="button"></button>
-      </div>
-
-      <div class="home-card" id="home-backup-import-card">
-        <div class="home-card-note" id="home-backup-import-note"></div>
-        <button class="home-key-btn" id="home-backup-import" type="button"></button>
-      </div>
-
-      <!-- La storia locale: somiglia abbastanza da essere scambiata per un
-           backup, e non lo e' — vive sullo stesso telefono. Si sfoglia e si
-           ripristina qui, senza andare in officina: l'elenco si apre sotto la
-           sua riga. -->
-      <div class="home-card home-history-card">
-        <button class="home-history-row" id="home-backup-history" type="button"
-                aria-expanded="false" aria-controls="home-backup-history-list"></button>
-        <div class="home-history-list" id="home-backup-history-list" hidden></div>
       </div>
     </div>
   </section>

@@ -12,7 +12,9 @@
   device-transfer (da telefono a telefono, col cavo o il Wi-Fi alla prima
   configurazione): tutto, chiavi comprese — è un trasloco fra due telefoni
   dell'utente, ed è una migrazione che funziona. Fuori solo quel che si
-  rigenera da sé (l'interprete estratto da Chaquopy) e i temporanei.
+  rigenera da sé (l'interprete estratto da Chaquopy) e i temporanei — anche
+  quelli delle estensioni che una build può avere, tutti sotto `ext_tmp/`
+  (v. `jenny/extensions.py`).
 -->
 <data-extraction-rules>
     <cloud-backup>
@@ -25,5 +27,6 @@
     <device-transfer>
         <exclude domain="file" path="chaquopy/" />
         <exclude domain="file" path="backup_staging/" />
+        <exclude domain="file" path="ext_tmp/" />
     </device-transfer>
 </data-extraction-rules>

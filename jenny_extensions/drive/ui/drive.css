@@ -1,0 +1,98 @@
+/* La copia su Google Drive: la scheda della pagina Backup della casa e la
+   domanda «Ci conosciamo già?» del primo passo dell'onboarding. Foglio
+   dell'estensione Drive, agganciato da `shared/extensions.js`: la build senza
+   estensioni non lo contiene. Le righe della pagina (`.home-backup-row`) sono
+   del core, in `home-style.css`. */
+
+/* ── La copia su Google Drive (versione D) ───────────────────────────────
+   Un bollino che dice lo stato col colore del tono, un titolo che lo dice a
+   parole, i pallini delle ultime 7 notti, poi le risposte. Solo token del
+   tema: in chanel `--ok` e' quasi bianco, e il pallino diventa bianco con la
+   spunta scura — giusto in un tema in bianco e nero. */
+.home-cloud-hero { display: flex; align-items: center; gap: 14px; }
+.home-cloud-badge {
+  flex: none; width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 25px;
+  background: var(--surface-2); color: var(--text-muted);
+}
+.home-cloud-badge.is-ok { background: rgba(var(--ok-rgb), 0.14); color: var(--ok); }
+.home-cloud-badge.is-warn, .home-cloud-badge.is-soft {
+  background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning);
+}
+.home-cloud-badge.is-soft { background: color-mix(in srgb, var(--warning) 8%, transparent); }
+.home-cloud-badge.is-err { background: color-mix(in srgb, var(--error) 13%, transparent); color: var(--error); }
+.home-cloud-badge.is-busy { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); }
+.home-cloud-title {
+  font-family: var(--font-display); font-size: 21px; line-height: 1.15; color: var(--heading);
+}
+.home-cloud-sub { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+.home-cloud-strip {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 18px 0 8px;
+}
+.home-cloud-day {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--text-muted);
+}
+.home-cloud-day.is-today { color: var(--heading); font-weight: 600; }
+.home-cloud-dot {
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 16px;
+}
+.home-cloud-dot.is-ok { background: var(--ok); color: var(--surface); }
+.home-cloud-dot.is-miss, .home-cloud-dot.is-today { border: 2px dashed var(--border-strong); }
+.home-cloud-dot.is-before { background: var(--surface-2); }
+.home-cloud-day.is-today .home-cloud-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.home-cloud-caption { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+.home-cloud-facts {
+  display: grid; gap: 11px; margin: 14px 0 2px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.home-cloud-fact {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start;
+  font-size: 13.5px; line-height: 1.35; color: var(--text);
+}
+.home-cloud-fact > .ti { color: var(--accent); font-size: 18px; margin-top: 1px; }
+.home-cloud-fact small {
+  display: block; font-size: 11.5px; color: var(--text-muted); margin-bottom: 1px;
+}
+.home-cloud-box {
+  margin-top: 14px; padding: 12px 13px; border-radius: 12px; background: var(--surface-2);
+  font-size: 13px; line-height: 1.45; color: var(--text);
+}
+.home-cloud-box b { font-weight: 600; }
+.home-cloud-list { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.home-cloud-list li {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 9px;
+  font-size: 13.5px; line-height: 1.35; color: var(--text);
+}
+.home-cloud-list .ti { color: var(--ok); font-size: 17px; margin-top: 1px; }
+.home-cloud-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 14px; }
+.home-cloud-bar > i {
+  display: block; height: 100%; background: var(--accent); border-radius: 999px;
+  transition: width 0.6s ease;
+}
+.home-cloud-note {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px;
+  font-size: 12.5px; line-height: 1.4; color: var(--text-muted); margin-top: 12px;
+}
+.home-cloud-note .ti { font-size: 16px; margin-top: 1px; }
+.home-cloud-action { width: 100%; min-height: 42px; margin-top: 14px; font-size: 14px; }
+.home-cloud-action[hidden] { display: none; }
+
+/* «Ci conosciamo già?»: in fondo al primo passo, sotto la scelta del formato.
+   Una domanda vera e non una nota: chi ha avuto Jenny su un altro telefono
+   deve vederla prima di rifare tutto da capo. Le due strade — la copia su
+   Drive e il file — una sotto l'altra, la prima piena. */
+.onboarding-met {
+  width: 100%;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.onboarding-met-question { margin: 0 0 6px; font-size: 16px; font-weight: 600; color: var(--text); }
+.onboarding-met-hint { font-size: 12px; margin: 0 0 12px; }
+.onboarding-met-btn { width: 100%; max-width: 360px; }
+.onboarding-met-file { margin-top: 10px; opacity: 0.85; }
+.onboarding-met-status { font-size: 13px; color: var(--text); margin: 10px 0 0; }
+.onboarding-met-status[hidden] { display: none; }

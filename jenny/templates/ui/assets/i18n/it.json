@@ -1226,12 +1226,14 @@
     "backup": {
       "title": "Backup",
       "never": "mai fatto",
-      "neverLong": "Non hai ancora esportato nessun backup.",
-      "last": "Ultimo backup: {when}.",
-      "export": "Esporta un backup",
-      "import": "Ripristina da un file",
-      "exportHint": "Un file cifrato con una passphrase che scegli tu: dentro c'è tutto — le conversazioni, i quaderni, le impostazioni. Mettilo da qualche parte che non sia questo telefono.",
-      "importHint": "Sostituisce tutto quello che c'è adesso con quello che c'è nel file, e riavvia Jenny.",
+      "more": {
+        "title": "Altre opzioni",
+        "file": "Copia su un file",
+        "fileSub": "Un file cifrato con una password scelta da te: dentro c'è tutto. Tienilo da qualche parte che non sia questo telefono.",
+        "fileLast": "Ultimo file: {when}.",
+        "restore": "Ripristina da un file",
+        "restoreSub": "Sostituisce tutto con quello che c'è nel file, poi riavvio."
+      },
       "history": {
         "title": "Storia locale",
         "sub": "Automatica: rimette a posto un file cancellato per sbaglio. Vive però su questo telefono — di un telefono perso non salva niente.",

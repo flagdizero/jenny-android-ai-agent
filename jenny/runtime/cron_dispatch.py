@@ -191,6 +191,36 @@ UPDATE_SESSION_KEY = "cron:update_check"
 # annunciate in passato sono rumore che tornerebbe nel contesto a ogni release.
 _UPDATE_HISTORY_KEEP = 4
 
+
+async def run_silent_alert_turn(
+    agent: "CronCapableAgent",
+    prompt: str,
+    *,
+    session_key: str,
+    label: str,
+) -> None:
+    """Un turno silenzioso in cui Jenny avvisa l'utente con il tool ``message``.
+
+    È la forma dell'annuncio di un aggiornamento, offerta ai giri delle
+    estensioni: il prompt deve dire che la risposta non arriva a nessuno e che
+    l'unico modo di parlare è ``message``. La sessione *session_key* (``cron:…``)
+    tiene solo una coda cortissima, perché gli avvisi passati sono rumore.
+    """
+    from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
+
+    await agent.process_direct(
+        prompt,
+        session_key=session_key,
+        channel="websocket",
+        chat_id="default",
+        on_progress=silent_progress,
+        visibility=TurnVisibility.SILENT,
+        metadata={WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": label}},
+    )
+    session = agent.sessions.get_or_create(session_key)
+    session.retain_recent_legal_suffix(_UPDATE_HISTORY_KEEP)
+    agent.sessions.save(session)
+
 _UPDATE_PREAMBLE = (
     "[This is the scheduled update check, and it is SILENT: whatever you write "
     "as your answer is NOT delivered to anyone. The only way to reach the user "
@@ -319,8 +349,13 @@ class CronDispatcher:
         # messaggio dell'utente — un test che non può muoverlo non può provare
         # niente su quel confronto.
         now_ms: Callable[[], int] | None = None,
+        # I giri delle estensioni (``jenny/extensions.py``): ``id → giro``.
+        # Instradati per id prima del controllo sull'agente, perché un giro di
+        # un'estensione può non aver bisogno del modello.
+        extension_jobs: dict[str, Callable[[], Awaitable[str | None]]] | None = None,
     ) -> None:
         self._get_agent = get_agent
+        self._extension_jobs = dict(extension_jobs or {})
         self._config = config
         self._cron = cron
         self._hb_cfg = heartbeat_cfg
@@ -380,8 +415,12 @@ class CronDispatcher:
         memoria, e che non le fermava.
 
         Da disco e non da ``self._config``, perché quel ``Config`` è catturato
-        quando il container si costruisce e niente lo aggiorna.
+        quando il container si costruisce e niente lo aggiorna. Per i giri delle
+        estensioni il cancello sta nel giro stesso.
         """
+        if job.payload.kind == "system_event" and job.id in self._extension_jobs:
+            return await self._extension_jobs[job.id]()
+
         agent = self._get_agent()
         if not agent:
             logger.warning("Cron: skipped job '{}' - no provider configured", job.name)

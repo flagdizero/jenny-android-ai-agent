@@ -5425,28 +5425,42 @@ dialog.home-photo-viewer[open] { display: flex; }
   color: var(--on-error);
 }
 
-/* ── «Backup» ────────────────────────────────────────────────────────────
-   Due bottoni larghi e tre frasi: esportare e importare sono le uniche due
-   cose che si fanno qui, e una pastiglia stretta in mezzo al testo
-   sembrerebbe una nota. «Mai fatto» si segnala — e' l'unica volta in cui
-   quella riga va letta davvero. */
-
-#home-backup-export, #home-backup-import { width: 100%; min-height: 38px; margin-top: 10px; }
-.home-card-label.is-warn { color: var(--warning); }
-/* La storia locale: una riga che si apre, e sotto gli snapshot rientrati
-   all'altezza del testo, con l'icona del ripristino a destra. */
-.home-history-card { padding: 0; overflow: hidden; }
-.home-history-row {
+/* ── «Backup» (versione D) ────────────────────────────────────────────────
+   Righe con icona, titolo e una riga che spiega: il file, il suo ripristino,
+   la storia locale. Sopra, la scheda di un'estensione se la build ne ha una
+   (`#home-backup-ext`, disegnata da lei); allora le righe stanno sotto «Altre
+   opzioni». Le righe sono un menu solo: una scheda, divise da un filo —
+   cinque schede staccate si leggevano come cinque cose diverse (visto sul
+   telefono il 15/10/2026). */
+#home-backup-room .home-you-scroll { gap: 12px; }
+.home-backup-ext { padding: 14px 16px; }
+.home-backup-ext[hidden] { display: none; }
+.home-backup-row {
   display: grid; grid-template-columns: 24px minmax(0, 1fr) 16px; gap: 10px; align-items: center;
-  width: 100%; padding: 13px 16px; border: 0; background: transparent;
-  color: var(--text); font-family: inherit; font-size: 14px; text-align: left; cursor: pointer;
+  width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px;
+  text-align: left; cursor: pointer;
 }
-.home-history-row:active { background: var(--hover); }
-.home-history-row > .ti:first-child { color: var(--accent); font-size: 19px; }
-.home-history-row small {
+.home-backup-row[hidden] { display: none; }
+.home-backup-row:active { background: var(--hover); }
+.home-backup-row > .ti:first-child { color: var(--accent); font-size: 19px; }
+.home-backup-row small {
   display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.35;
 }
-.home-history-row .home-history-go { color: var(--text-faint); font-size: 16px; }
+.home-backup-row .home-backup-go { color: var(--text-faint); font-size: 16px; }
+.home-backup-group { padding: 0; overflow: hidden; }
+.home-backup-row.is-flat {
+  border: 0; border-radius: 0; background: transparent; padding: 13px 16px;
+}
+.home-backup-row.is-flat:active { background: var(--hover); }
+.home-backup-more { display: flex; flex-direction: column; }
+.home-backup-more[hidden] { display: none; }
+/* Il filo fra le righe; non sopra la prima quando «Altre opzioni» non c'e'. */
+.home-backup-more .home-backup-row { border-top: 1px solid var(--border); }
+#home-backup-more-toggle[hidden] + .home-backup-more > .home-backup-row:first-child { border-top: 0; }
+.home-backup-ext-rows { display: flex; flex-direction: column; }
+/* La storia locale: sotto la sua riga gli snapshot rientrati all'altezza del
+   testo, con l'icona del ripristino a destra. */
 .home-history-list { border-top: 1px solid var(--border); padding: 4px 0; background: var(--surface-2); }
 .home-history-list[hidden] { display: none; }
 .home-history-snap {

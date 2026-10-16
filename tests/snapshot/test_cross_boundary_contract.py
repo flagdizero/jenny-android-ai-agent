@@ -57,7 +57,8 @@ def test_kotlin_anti_traversal_guard_uses_same_staging_dir() -> None:
 def test_js_backup_callbacks_shared() -> None:
     kotlin = _kotlin_source()
     js = _js(BACKUP_FLOW_JS)
-    assert "window.jennyBackup" in kotlin
+    # ``notifyJs`` compone ``window.<global>.<callback>``: il nome è il suo primo argomento.
+    assert 'notifyJs("jennyBackup"' in kotlin
     assert "window.jennyBackup" in js
     for callback in ("onExportDone", "onImportPicked"):
         assert callback in kotlin, f"callback {callback} assente in MainActivity.kt"

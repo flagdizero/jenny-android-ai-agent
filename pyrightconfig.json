@@ -8,8 +8,9 @@
   //     we intend to tighten over time.
   //   - CI's BLOCKING step runs pyright only over the already-error-clean subset
   //     (jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot
-  //     jenny/gateway_runtime.py) via CLI path args, which reuse the settings below. That
-  //     subset is 0 errors today and must stay green.
+  //     jenny/gateway_runtime.py jenny/extensions.py jenny_extensions) via CLI path args,
+  //     which reuse the settings below. That subset is 0 errors today and must stay green.
+  //     `jenny_extensions` is the code only some builds ship (jenny/extensions.py).
   //
   // Tightening waves (promote a directory into the blocking CLI path list once it is
   // error-clean). Measured on 2026-09-26 with pyright 1.1.411, 201 errors in total:
@@ -23,7 +24,7 @@
   // pydantic_compat is dynamic metaprogramming (homemade BaseModel) -> relaxed environment.
   "typeCheckingMode": "basic",
   "pythonVersion": "3.11",
-  "include": ["jenny"],
+  "include": ["jenny", "jenny_extensions"],
   "exclude": ["jenny/templates", "jenny/skills", "**/__pycache__"],
   "reportMissingImports": false,
   "executionEnvironments": [

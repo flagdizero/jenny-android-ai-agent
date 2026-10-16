@@ -62,10 +62,10 @@ jobs:
       # The `dev` extra pins pytest, pytest-asyncio, ruff and the test-only
       # backends to exact versions (pyproject.toml).
       - run: pip install -e ".[dev]"
-      - run: ruff check jenny/ tests/
+      - run: ruff check jenny/ jenny_extensions/ tests/
       # pyright is a static check only (zero runtime impact); config in pyrightconfig.json.
       # BLOCKING: restricted to the already-error-clean subset — must stay green.
-      - run: npx --yes pyright@1.1.411 jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
+      - run: npx --yes pyright@1.1.411 jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
       # NON-BLOCKING visibility: full perimeter, surfaces residual errors without failing CI.
       - run: npx --yes pyright@1.1.411 || true
 

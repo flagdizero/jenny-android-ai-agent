@@ -368,6 +368,14 @@ Local versioning of the workspace, plus the key derivation used by encrypted bac
 
 Default excludes: `ui/**`, `logs/**`, `.jenny/logs/**`, `.jenny/snapshots/**`, `.jenny/backup_staging/**`, `**/__pycache__/**`, `*.tmp`, `*.tmp.*`. See [Backup and restore](../using/backup.md).
 
+## extensions
+
+Settings that belong to an extension, one object per extension name. Extensions are parts of Jenny that only some builds include: the GitHub and F-Droid build has none, the Play Store build has `drive` (the encrypted copy on Google Drive). A build without an extension leaves its section untouched.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `extensions.drive.provider` | string | `""` | `"drive"` while the copy on Google Drive is switched on, `""` when it is off. Written by the app when the copy is set up from Settings → Backup, not meant to be edited by hand. Play Store build only. See [Backup and restore](../using/backup.md). |
+
 ## apps
 
 | Key | Type | Default | Effect |

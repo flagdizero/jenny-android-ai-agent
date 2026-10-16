@@ -47,5 +47,13 @@ UNKNOWN_SYSTEM_JOB_PURPOSE = "System-managed internal job."
 
 
 def system_job_purpose(job_id: str) -> str:
-    """La riga di presentazione di *job_id*, o il fallback se non la conosciamo."""
-    return SYSTEM_JOB_PURPOSES.get(job_id, UNKNOWN_SYSTEM_JOB_PURPOSE)
+    """La riga di presentazione di *job_id*, o il fallback se non la conosciamo.
+
+    I job delle estensioni (``jenny/extensions.py``) portano la loro riga con sé.
+    """
+    if job_id in SYSTEM_JOB_PURPOSES:
+        return SYSTEM_JOB_PURPOSES[job_id]
+    from jenny import extensions
+
+    job = extensions.system_jobs().get(job_id)
+    return job.purpose if job is not None else UNKNOWN_SYSTEM_JOB_PURPOSE

@@ -1,0 +1,203 @@
+{
+  "cloudBackup": {
+    "steps": {
+      "connecting": "Asking Google for permission…",
+      "first_copy": "Making the first copy…"
+    },
+    "copied": "Copy done.",
+    "turnOff": "Turn off the Drive copy",
+    "turnOffConfirm": "Turn off the copy on Google Drive? The one that is there stays in your Drive, and you can turn it back on any time.",
+    "errors": {
+      "generic": "It did not work. I will try again tonight.",
+      "denied": "Without Google's permission, Jenny cannot save to Drive.",
+      "unavailable": "This phone has no Google services.",
+      "consent_needed": "Google took away Jenny's permission to save to Drive.",
+      "existing_backup": "This Drive already holds a copy of Jenny made by another phone. If it is yours, you can go back to it.",
+      "missing_key": "This phone no longer has the copy's key: type the password to open it again.",
+      "wrong_key": "Another phone has remade the copy on Drive: type the copy's password to go back to it.",
+      "no_backup": "There is no copy of Jenny on this Drive.",
+      "not_charging_or_no_wifi": "The phone has not been charging on Wi-Fi: the copy waits for that moment.",
+      "no_such_copy": "That copy is no longer there.",
+      "nothing_to_verify": "There is no copy to check yet.",
+      "mismatch": "The downloaded copy does not match: I will make a new one tonight.",
+      "busy": "One moment: something is already in progress.",
+      "disabled": "The Drive copy is off.",
+      "already_running": "A copy is already in progress.",
+      "wrong_password": "That's not it. Try again.",
+      "weak_password": "At least 8 characters.",
+      "no_password": "This copy was made before passwords existed, and can't be opened this way. On the old phone choose one (Backup → Choose a password), then try again.",
+      "password_needed": "The copy needs a password.",
+      "cancelled": "Cancelled."
+    },
+    "restore": {
+      "question": "Have we met before?",
+      "hint": "If you had Jenny on another phone with the copy on Google Drive, I can come back as I was: conversations, notebooks, memories.",
+      "yes": "Yes, find my copy",
+      "searching": "Looking for my copy in your Drive…",
+      "pick": "I found my copy. Which one do I go back to?",
+      "latest": "the latest",
+      "restoreThis": "Go back to this copy",
+      "restoring": "Downloading the copy… with many photos it can take a few minutes."
+    },
+    "strip": {
+      "today": "today",
+      "caption": "The last 7 nights: a filled dot is a copy that worked.",
+      "aria": "Last 7 nights: {copies} with a copy, {missed} without."
+    },
+    "when": {
+      "today": "today at {time}",
+      "yesterday": "yesterday at {time}",
+      "weekday": "{day} at {time}"
+    },
+    "safe": {
+      "title": "You're safe",
+      "sub": "Last copy on Google Drive: {when}"
+    },
+    "late": {
+      "title": "No copy for {days} days",
+      "sub": "The last one on Google Drive: {when}",
+      "subNever": "No copy has worked yet",
+      "calm": "Nothing is lost: everything is still here on the phone.",
+      "calmAlerted": "Nothing is lost: everything is still here on the phone. I told you in chat too."
+    },
+    "blocked": {
+      "title": "The copy has stopped",
+      "sub": "Last copy: {when}",
+      "subNever": "No copy has worked yet",
+      "calm": "As soon as it's fixed I'll make a copy straight away. Meanwhile everything is still here on the phone."
+    },
+    "first": {
+      "title": "Almost there",
+      "sub": "The first copy comes tonight, while the phone charges on Wi-Fi.",
+      "subFailed": "The first copy didn't work: I'll try again tonight."
+    },
+    "running": {
+      "titleFirst": "Making the first copy…",
+      "title": "Making a copy…",
+      "sub": "{done} of {total}",
+      "subStart": "Getting the files ready…",
+      "note": "You can leave this page: I'll carry on by myself. From the second copy on I only send what changed."
+    },
+    "off": {
+      "title": "I only exist on this phone",
+      "sub": "If you lose it or it breaks, you lose me too",
+      "p1": "Every night, while the phone charges, I put a copy of myself in your Google Drive. By myself.",
+      "p2": "Encrypted with a password you choose: our conversations, notebooks, memories and apps are in it — and without the password nobody can read them, not even Google.",
+      "p3": "On a new phone, answer \"Yes\" to \"Have we met before?\" and I'm back as I was.",
+      "note": "I'll ask for your Google account and a password for the copy, once. You'll only need it on a new phone."
+    },
+    "unavailable": {
+      "title": "I can't copy to Drive here",
+      "sub": "This phone has no Google services. You can make a copy to a file, under \"More options\"."
+    },
+    "facts": {
+      "inside": "What's in it",
+      "insideValue": "Conversations, notebooks, memories, apps and settings · {size}",
+      "insideValueNoSize": "Conversations, notebooks, memories, apps and settings",
+      "where": "Where",
+      "whereValue": "In your Google Drive, folder \"Jenny\". It's encrypted: without your password nobody can read it."
+    },
+    "promise": "If I can't make it three nights in a row, I'll tell you in chat.",
+    "why": "Why:",
+    "todo": "What to do:",
+    "reasons": {
+      "waiting": {
+        "why": "these nights the phone was never charging with Wi-Fi on.",
+        "todo": "leave it charging on Wi-Fi tonight, or make a copy now."
+      },
+      "consent_needed": {
+        "why": "Google took away Jenny's permission to save to your Drive. That happens when it's removed from the account settings, or after a password change.",
+        "todo": "give it back: pick the account and confirm, two taps."
+      },
+      "missing_key": {
+        "why": "this phone no longer has the key that opens the copy on Drive.",
+        "todo": "type the copy's password: it opens it again, and the copy resumes."
+      },
+      "verify_mismatch": {
+        "why": "the last check found the copy damaged.",
+        "todo": "I'll make a new one tonight, or make it now."
+      },
+      "other": {
+        "why": "Google Drive didn't answer.",
+        "todo": "make a copy now; if that doesn't work, I'll try again tonight."
+      }
+    },
+    "actions": {
+      "turnOn": "Turn on the Google Drive copy",
+      "copyNow": "Make a copy now",
+      "giveBack": "Give Google permission again",
+      "findCopy": "Find my copy",
+      "unlock": "Type the copy's password",
+      "setPassword": "Choose a password"
+    },
+    "more": {
+      "off": "Turn off the Drive copy",
+      "offSub": "The copy that's there stays in your Drive.",
+      "password": "The copy's password",
+      "passwordSub": "Change it whenever you like: the old one isn't needed, and the copies already made will open with the new one."
+    },
+    "row": {
+      "safe": "safe · {when}",
+      "late": "no copy for {days} days",
+      "consent": "stopped: needs your permission",
+      "key": "stopped: needs the password",
+      "first": "almost there",
+      "running": "copying",
+      "onlyHere": "only on this phone",
+      "damaged": "copy needs redoing",
+      "nopass": "no password"
+    },
+    "damaged": {
+      "title": "The last copy doesn't open properly",
+      "sub": "Last copy on Google Drive: {when}"
+    },
+    "nopass": {
+      "title": "The copy has no password",
+      "sub": "Everything works here, but a new phone couldn't open it",
+      "why": "Choose a password: I'll only ask for it on a new phone. The copies already made will open with it.",
+      "calm": "The nightly copies keep going meanwhile."
+    },
+    "password": {
+      "choose": {
+        "title": "Choose the copy's password",
+        "text": "You'll only need it on a new phone, to open the copy. If you forget it the copy won't open: neither I nor Google can recover it.",
+        "field": "Password (at least {n} characters)",
+        "ok": "Use this password",
+        "done": "Password chosen."
+      },
+      "change": {
+        "title": "New password for the copy",
+        "text": "The old one isn't needed. The copies already made will open with the new one.",
+        "field": "New password (at least {n} characters)",
+        "ok": "Change password",
+        "done": "Password changed."
+      },
+      "type": {
+        "title": "The copy's password",
+        "text": "The one you chose when you turned the copy on, on your previous phone.",
+        "field": "Password",
+        "ok": "Open the copy"
+      },
+      "repeat": "Repeat it",
+      "show": "Show the password",
+      "tooShort": "At least {n} characters.",
+      "mismatch": "The two passwords don't match.",
+      "working": "One moment…"
+    }
+  },
+  "backup": {
+    "trigger": {
+      "pre_cloud": "off-device copy"
+    }
+  },
+  "home": {
+    "backup": {
+      "more": {
+        "fileSub": "One file encrypted with a password you choose, to keep wherever you like. For people who don't use Google."
+      },
+      "history": {
+        "off": "Off: turn it back on in the workshop, Memory → Local history."
+      }
+    }
+  }
+}

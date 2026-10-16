@@ -52,6 +52,13 @@ class ApiClient {
     }
   }
 
+  /** Le estensioni di questa build (`jenny/extensions.py`), dalla risposta di
+   *  `/webui/bootstrap`: `[{name, entry, css, i18n}]`. Vuoto prima del bootstrap. */
+  extensions() {
+    const list = this._bootstrapInfo?.extensions;
+    return Array.isArray(list) ? list : [];
+  }
+
   async _fetch(url, opts = {}) {
     if (!this._secret) await this.bootstrap();
     const headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${this._secret}` };

@@ -1,4 +1,5 @@
-"""«Backup» in casa: la data che prima non esisteva, e due cose che si somigliano.
+"""«Backup» in casa: la data che prima non esisteva, due cose che si somigliano,
+e il gancio per un'estensione.
 
 Il giro — passphrase, cifratura, i due picker SAF, il riavvio — sta in
 `shared/backup-flow.js` e lo usano gia' l'officina e l'onboarding. Qui si
@@ -17,6 +18,11 @@ questa pagina.
 scambiata per uno: vive sullo stesso telefono, quindi di un telefono perso non
 salva niente. La sua riga lo dice; e aperta si sfoglia e si ripristina qui,
 senza passare dall'officina.
+
+**Un'estensione si aggancia, il core non la conosce.** Senza estensioni (la
+build ``foss``) le righe sono la pagina, tutte aperte, e «Altre opzioni» non
+c'e'. Con una scheda sopra le righe scendono sotto «Altre opzioni», chiuse. La
+copia su Drive vera si prova in ``tests/extensions/drive/``.
 """
 
 from __future__ import annotations
@@ -92,9 +98,12 @@ __SNAPSHOT_WHEN__
 
 __WHEN_TEXT__
 __BACKUP_VALUE__
+__ROW_HTML__
 
 class HomeBackup {
   __CTOR__
+  __ATTACH__
+  __REFRESH__
   __SET_BACKUP__
   __OPEN__
   __VALUE__
@@ -104,6 +113,8 @@ class HomeBackup {
   __TOGGLE_HISTORY__
   __HISTORY_CLICK__
   __HISTORY_HTML__
+  __TOGGLE_MORE__
+  __IS_MORE_OPEN__
   __PAINT__
 }
 
@@ -131,7 +142,12 @@ def _harness() -> str:
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
         .replace("__BACKUP_VALUE__", function(room, "backupValue"))
+        .replace("__ROW_HTML__", function(room, "rowHtml"))
         .replace("__CTOR__", member(room, "constructor"))
+        .replace("__ATTACH__", member(room, "attachExtension"))
+        .replace("__REFRESH__", member(room, "refresh"))
+        .replace("__TOGGLE_MORE__", member(room, "_toggleMore"))
+        .replace("__IS_MORE_OPEN__", member(room, "_isMoreOpen"))
         .replace("__SET_BACKUP__", member(room, "setBackup"))
         .replace("__OPEN__", member(room, "open"))
         .replace("__VALUE__", member(room, "value"))
@@ -157,10 +173,12 @@ def test_never_having_made_one_is_said_out_loud() -> None:
       assert.equal(backupValue(null), i18n.t('home.backup.never'));
       assert.equal(backupValue({ last_export_at: 0 }), i18n.t('home.backup.never'));
 
-      const s = room(null);
-      assert.equal(nodi['home-backup-when'].textContent, i18n.t('home.backup.neverLong'));
-      assert.ok(nodi['home-backup-when'].classList.contains('is-warn'),
-        'mai fatto non si distingue da un backup di ieri');
+      /* Nella riga del file, senza un file fatto, nessuna data inventata. */
+      room(null);
+      const row = nodi['home-backup-export'].innerHTML;
+      assert.ok(row.includes(i18n.t('home.backup.more.file')));
+      const last = i18n.t('home.backup.more.fileLast', { when: '@@' }).split('@@')[0];
+      assert.ok(!row.includes(last), 'la riga del file dice una data che non esiste');
     """)
 
 
@@ -178,9 +196,9 @@ def test_the_row_says_when_like_a_person_would() -> None:
       assert.ok(!backupValue({ last_export_at: threeDays }).includes('1970'),
         backupValue({ last_export_at: threeDays }));
 
-      const s = room({ last_export_at: now });
-      assert.ok(nodi['home-backup-when'].textContent.includes('oggi alle '));
-      assert.equal(nodi['home-backup-when'].classList.contains('is-warn'), false);
+      room({ last_export_at: now });
+      assert.ok(nodi['home-backup-export'].innerHTML.includes('oggi alle '),
+        nodi['home-backup-export'].innerHTML);
     """)
 
 
@@ -227,9 +245,9 @@ def test_a_second_tap_while_exporting_does_nothing() -> None:
     """)
 
 
-def test_without_the_native_bridge_the_buttons_are_not_there() -> None:
-    """Fuori dall'APK i due picker non esistono, e un bottone che non fa niente
-    e' peggio di un bottone che manca: si dice perche'."""
+def test_without_the_native_bridge_the_rows_are_not_there() -> None:
+    """Fuori dall'APK i due picker non esistono, e una riga che non fa niente
+    e' peggio di una riga che manca. La storia locale resta: non li usa."""
     _run_js("""
       for (const k of Object.keys(nodi)) delete nodi[k];
       nativePresent = false;
@@ -237,13 +255,73 @@ def test_without_the_native_bridge_the_buttons_are_not_there() -> None:
       s.setBackup(null);
       assert.equal(nodi['home-backup-export'].hidden, true);
       assert.equal(nodi['home-backup-import'].hidden, true);
-      /* Una nota senza il suo bottone promette un gesto che non c'e': la
-         scheda del ripristino sparisce tutta (visto sul rig). */
-      assert.equal(nodi['home-backup-import-card'].hidden, true);
-      const note = nodi['home-backup-export-note'].textContent;
-      assert.ok(note.includes(i18n.t('backup.androidOnly')), 'non dice perche non si puo');
-      assert.ok(note.includes(i18n.t('home.backup.exportHint')),
-        'il motivo ha mangiato la spiegazione di cosa sia un backup');
+      assert.equal(nodi['home-backup-history'].hidden, false);
+    """)
+
+
+def test_without_an_extension_the_rows_are_the_page() -> None:
+    """La build senza estensioni: niente scheda sopra, quindi niente «Altre
+    opzioni» — le righe sono aperte e il bottone per aprirle non c'e'."""
+    _run_js("""
+      const s = room(null);
+      assert.equal(nodi['home-backup-ext'].hidden, true);
+      assert.equal(nodi['home-backup-more-toggle'].hidden, true);
+      assert.equal(nodi['home-backup-more'].hidden, false);
+      assert.equal(nodi['home-backup-ext-rows'].innerHTML, '');
+      assert.equal(s.value(), i18n.t('home.backup.never'));
+    """)
+
+
+_EXTENSION = """
+const ext = {
+  shown: true, openByDefault: false, opened: 0,
+  paintCard(el) { if (this.shown) el.innerHTML = '<p>scheda</p>'; return this.shown; },
+  paintRows(el) { el.innerHTML = '<button>spegni</button>'; },
+  value() { return 'al sicuro'; },
+  moreOpenByDefault() { return this.openByDefault; },
+  open() { this.opened += 1; },
+};
+"""
+
+
+def test_an_extension_card_closes_the_rows_under_more_options() -> None:
+    """Con una scheda sopra le righe sono «altre»: chiuse, dietro un tocco. La
+    riga di «Tu e Jenny» la dice l'estensione, e le sue righe stanno in fondo."""
+    _run_js(_EXTENSION + """
+      const s = room(null);
+      s.attachExtension(ext);
+      assert.equal(nodi['home-backup-ext'].hidden, false);
+      assert.equal(nodi['home-backup-ext'].innerHTML, '<p>scheda</p>');
+      assert.equal(nodi['home-backup-more-toggle'].hidden, false);
+      assert.equal(nodi['home-backup-more'].hidden, true, 'le altre opzioni partono aperte');
+      assert.equal(nodi['home-backup-more-toggle'].attrs['aria-expanded'], 'false');
+      assert.equal(nodi['home-backup-ext-rows'].innerHTML, '<button>spegni</button>');
+      assert.equal(s.value(), 'al sicuro');
+      assert.deepEqual(notices, ['riga riscritta'], 'la riga di «Tu e Jenny» non si riscrive');
+
+      for (const fn of nodi['home-backup-more-toggle'].listeners.click) fn();
+      assert.equal(nodi['home-backup-more'].hidden, false);
+
+      s.open();
+      assert.equal(ext.opened, 1, 'la stanza aperta non avvisa l estensione');
+    """)
+
+
+def test_an_extension_can_keep_more_options_open() -> None:
+    """Quando la sua scheda non offre un gesto (qui la copia non si puo' fare),
+    il file e' la strada, e non deve stare dietro un tocco in piu'. E senza
+    scheda le righe tornano la pagina."""
+    _run_js(_EXTENSION + """
+      const s = room(null);
+      ext.openByDefault = true;
+      s.attachExtension(ext);
+      assert.equal(nodi['home-backup-more'].hidden, false);
+
+      ext.shown = false;
+      s.refresh();
+      assert.equal(nodi['home-backup-ext'].hidden, true);
+      assert.equal(nodi['home-backup-more-toggle'].hidden, true);
+      assert.equal(nodi['home-backup-more'].hidden, false);
     """)
 
 
