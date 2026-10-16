@@ -32,6 +32,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.animation.LinearInterpolator
@@ -986,6 +987,8 @@ object FloatingOverlayController {
             expanded = false
             val container = buildViews(ctx)
             val lp = stageParams()
+            // Nasce fermo, quindi nascosto: v. [applyStage].
+            container.visibility = View.GONE
             wm.addView(container, lp)
             windowManager = wm
             root = container
@@ -1161,6 +1164,21 @@ object FloatingOverlayController {
         val wm = windowManager ?: return
         val view = root ?: return
         val lp = params ?: return
+        // **Da fermo il palco non c'è**, non solo non si tocca. Era una finestra
+        // a schermo intero, vuota e trasparente, sopra ogni app: ogni tocco del
+        // telefono la attraversava, e Android lo segnalava all'app sotto come
+        // «schermata coperta» (`FLAG_WINDOW_IS_OBSCURED`). Le app normali lo
+        // ignorano; le schermate che si difendono dal tapjacking
+        // (`filterTouchesWhenObscured`: «Accedi con Google», le conferme) lo
+        // scartano — e non si poteva toccare niente finché c'era la mascotte.
+        // Visto il 15/10/2026: Claude rispondeva, Accedi con Google no; su
+        // jenny_s22 `dumpsys window` dava il palco `fillxfill`, `isVisible=true`
+        // con Jenny parcheggiata. Da fermo non disegna niente (velo, arte del
+        // volo e campo sono tutti GONE), quindi toglierlo non toglie niente; una
+        // vista radice GONE rende invisibile la finestra, che smette di coprire.
+        val asleep = flags == STAGE_ASLEEP
+        val visibility = if (asleep) View.GONE else View.VISIBLE
+        if (view.visibility != visibility) view.visibility = visibility
         if (lp.flags == flags && lp.softInputMode == softInput) return
         lp.flags = flags
         lp.softInputMode = softInput
@@ -1169,6 +1187,32 @@ object FloatingOverlayController {
         } catch (e: Exception) {
             Log.i(TAG, "Could not change the stage: ${e.javaClass.simpleName}")
         }
+    }
+
+    /**
+     * Esegue [action] dopo il prossimo fotogramma disegnato dal palco.
+     *
+     * Se il palco non disegna mai (il sistema nasconde gli overlay, v. le
+     * Impostazioni) l'azione non parte: lei resta accesa sopra l'arte del volo,
+     * cioè due Jenny sovrapposte per un istante — mai nessuna.
+     */
+    private fun afterStageDrawn(action: () -> Unit) {
+        val view = root ?: run { main.post(action); return }
+        var done = false
+        val listener = object : ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                if (done) return
+                done = true
+                // Toglierlo dentro `onDraw` non è permesso: al giro dopo,
+                // insieme all'azione.
+                main.post {
+                    if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(this)
+                    action()
+                }
+            }
+        }
+        view.viewTreeObserver.addOnDrawListener(listener)
+        view.invalidate()
     }
 
     /**
@@ -2524,7 +2568,11 @@ object FloatingOverlayController {
         art.scaleY = 1f
         art.setImageBitmap(sprite("jenny-hang"))
         art.visibility = View.VISIBLE
-        main.post { if (flight != null) mascot.visibility = View.INVISIBLE }
+        // Il palco era nascosto (v. [applyStage]) e il suo primo fotogramma
+        // arriva dopo una relayout: spegnere lei «al giro dopo» poteva cadere
+        // prima, e per un fotogramma non c'era nessuna delle due. Si aspetta che
+        // il palco abbia disegnato davvero.
+        afterStageDrawn { if (flight != null) mascot.visibility = View.INVISIBLE }
 
         val width = screenWidth(ctx)
         val dockY = parkTop(ctx).toFloat() + size * FloatingFlight.PIVOT_Y
