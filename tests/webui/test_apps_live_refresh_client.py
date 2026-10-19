@@ -124,6 +124,41 @@ def test_a_list_nobody_asked_for_is_not_read() -> None:
     )
 
 
+def test_a_reopened_socket_reads_the_list_again() -> None:
+    """Un ``apps_list_changed`` perso a socket giu' non torna: la riapertura
+    rilegge. Il 19/10/2026 sul Titan un'app ripubblicata con lo schermo restava
+    «senza schermo» per il telefono, e il tocco nel cassetto apriva il suo
+    foglio, fino al riavvio."""
+    _run(
+        """
+        let screen = false;
+        api.getJennyApps = async () => {
+          api.reads += 1;
+          return { apps: [{ slug: 'spesa', name: 'Spesa', has_screen: screen }] };
+        };
+        const source = new AppsSource();
+        await source.loadJennyApps();
+        // A socket giu' l'app prende lo schermo, e il frame non arriva.
+        screen = true;
+        wsManager.dispatchEvent(new CustomEvent('chat:open'));
+        await tick();
+        assert.equal(api.reads, 2, 'la riapertura non ha riletto l\\u2019elenco');
+        assert.equal(source.jennyApps[0].has_screen, true);
+        """
+    )
+
+
+def test_a_reopened_socket_does_not_read_a_list_nobody_asked_for() -> None:
+    _run(
+        """
+        new AppsSource();
+        wsManager.dispatchEvent(new CustomEvent('chat:open'));
+        await tick();
+        assert.equal(api.reads, 0);
+        """
+    )
+
+
 def test_the_open_app_hears_that_its_data_changed() -> None:
     _run(
         """

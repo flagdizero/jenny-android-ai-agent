@@ -63,6 +63,16 @@ export class AppsSource {
        tutto, la pagina app della casa — nasce dopo che la sorgente e' stata
        costruita: chi c'e' da avvisare, trova gia' qualcuno in ascolto. */
     wsManager.addEventListener('chat:message', (e) => this._onFrame(e.detail));
+    /* Un `apps_list_changed` mandato a socket giu' non lo ridice nessuno: alla
+       riapertura l'elenco si rilegge, se era gia' stato letto. Il 19/10/2026
+       sul Titan il gateway ha chiuso il socket della casa in pausa («keepalive
+       ping timeout»), e intanto da remoto l'app `spesa`, che era senza
+       schermo, ne ha avuto uno: per il telefono restava `has_screen: false`, e
+       il tocco nel cassetto apriva il suo foglio invece dell'app, fino al
+       riavvio. */
+    wsManager.addEventListener('chat:open', () => {
+      if (this._jennyLoaded) this.loadJennyApps();
+    });
   }
 
   /* ── Chi guarda ─────────────────────────────────────────────────────────── */
