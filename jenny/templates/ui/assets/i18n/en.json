@@ -1447,7 +1447,8 @@
         "today": "Today · {date}",
         "overdue": "Overdue",
         "whenever": "When it happens"
-      }
+      },
+      "automations": "Automations"
     },
     "reminder": {
       "done": "Done",
@@ -1539,15 +1540,14 @@
       "moreRows": "and {count} more"
     },
     "cron": {
-      "gone": "Cron",
-      "missing": "This cron is gone: you can remove it.",
       "paused": "paused",
       "next": "next {when}",
       "costs": "Jenny does it (uses the model)",
       "last": "Last result ({when}): {text}",
       "quiet": "Last run {when}: nothing to tell you.",
       "changePrompt": "In the {card} drawer, the cron «{name}»: I'd like ",
-      "prompt": "In the {card} drawer, every "
+      "prompt": "In the {card} drawer, every ",
+      "removeConfirm": "Remove «{name}»? Jenny stops doing it."
     },
     "card": {
       "add": "New card",

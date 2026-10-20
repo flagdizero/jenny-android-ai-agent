@@ -156,6 +156,63 @@ def record_result(
         logger.warning("cron: result of {} not recorded in {}: {}", job_name, root.name, exc)
 
 
+async def detach_job(cron: Any, job_id: str) -> str:
+    """Toglie un job e, se era di un quaderno, quel che ne resta sulla bacheca.
+
+    L'unico smontaggio di un cron: lo usano il tool ``cron``, l'officina e la
+    bacheca. Restituisce l'esito di ``CronService.remove_job`` (``removed``,
+    ``protected``, ``not_found``). Va chiamata sul loop, come ogni gesto sullo
+    scheduler.
+    """
+    job = cron.get_job(job_id)
+    link = dict(job.payload.board) if job is not None and job.payload.board else None
+    result = cron.remove_job(job_id)
+    if result == "removed" and link is not None:
+        await forget_job(link, job_id)
+    return result
+
+
+async def forget_job(link: dict[str, Any], job_id: str) -> None:
+    """Dopo che un job del quaderno se n'è andato: via l'esito e l'eventuale sezione vecchia.
+
+    Scritto come ``user``: toglierlo è stato un gesto dell'utente, o di Jenny su
+    sua richiesta. La posizione della sua etichetta resta: appartiene all'ambito,
+    e la ritrova il prossimo cron dello stesso ambito.
+    """
+    from jenny.board.notify import board_changed
+    from jenny.board.store import mutate_board
+
+    notebook = str(link.get("notebook"))
+    root = notebook_root(notebook)
+    if root is None:
+        return
+    legacy_key = legacy_result_key(link)
+    scope = scope_of(link)
+
+    def apply(board: dict[str, Any]) -> bool | None:
+        changed = False
+        results = dict(board.get("cronResults") or {})
+        for key in (job_id, legacy_key):
+            if key and key in results:
+                results.pop(key)
+                changed = True
+        board["cronResults"] = results
+        card = model.card_by_id(board, scope) if scope != model.NOTEBOOK else None
+        if card is not None:
+            sections = card.get("userSections") or []
+            keep = [x for x in sections if not (x.get("kind") == "cron" and x.get("job") == job_id)]
+            if len(keep) != len(sections):
+                card["userSections"] = keep
+                changed = True
+        return None if changed else False
+
+    try:
+        mutate_board(root, apply)
+    except Exception as exc:  # noqa: BLE001 — il job è già andato, la bacheca è contorno
+        logger.warning("cron: board of {} not cleaned after {}: {}", notebook, job_id, exc)
+    await board_changed(notebook)
+
+
 def last_message_text(session: Any) -> str:
     """Il testo dell'ultimo ``message`` mandato in una sessione (il monitor che ha parlato)."""
     for msg in reversed(getattr(session, "messages", None) or []):
@@ -176,8 +233,24 @@ def last_message_text(session: Any) -> str:
     return ""
 
 
+def notebook_jobs(cron: Any, notebook: str) -> dict[str, dict[str, Any]]:
+    """``{id: istantanea}`` dei job legati al quaderno *notebook*.
+
+    Va chiamata **sul loop**: ``list_jobs`` legge lo store dello scheduler, che un
+    thread potrebbe trovare a metà di una scrittura (v. ``webui/cron_routes.py``).
+    """
+    if cron is None:
+        return {}
+    try:
+        jobs = cron.list_jobs(include_disabled=True)
+    except Exception:  # noqa: BLE001 — una bacheca senza job resta una bacheca
+        return {}
+    return {j.id: job_snapshot(j) for j in jobs
+            if (j.payload.board or {}).get("notebook") == notebook}
+
+
 def job_snapshot(job: Any) -> dict[str, Any]:
-    """Quel che il cassetto mostra di un job: nome, quando, prossimo giro, stato."""
+    """Quel che la bacheca mostra di un job: nome, quando, prossimo giro, stato, ambito."""
     from jenny.cron.types import job_display_name
 
     sched = job.schedule
@@ -202,4 +275,7 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         "lastStatus": job.state.last_status,
         "paused": job.paused_at_ms is not None,
         "enabled": job.enabled,
+        "scope": scope_of(job.payload.board) if job.payload.board else None,
+        # Solo per ritrovare l'esito scritto da un legame vecchio (v. ``result_of``).
+        "legacySection": legacy_section(job.payload.board) if job.payload.board else None,
     }

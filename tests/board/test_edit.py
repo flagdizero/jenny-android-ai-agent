@@ -64,6 +64,13 @@ class _Cron:
     def get_job(self, job_id: str) -> object:
         return object()
 
+    def list_jobs(self, include_disabled: bool = False) -> list:
+        """Il cron del cassetto dell'Acero: chi lo ferma lo trova dal job, non dalla sezione."""
+        from types import SimpleNamespace
+
+        link = {"notebook": "piante", "card": "acero", "section": "s-cron"}
+        return [SimpleNamespace(id="j1", payload=SimpleNamespace(board=link))]
+
 
 def test_a_card_born_with_pages_takes_them_from_the_card_that_had_them(notebook: Path) -> None:
     _seed(notebook)

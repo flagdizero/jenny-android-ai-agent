@@ -295,7 +295,7 @@ def test_the_logs_of_a_failing_getter_are_in_english(workspace):
     routes = CronRoutes(check_api_token=lambda _r: True, get_cron_service=_boom, log=log)
 
     asyncio.run(routes.dispatch(_request(), _PATH))
-    routes._act(_request(), "abc12345", "pause")
+    asyncio.run(routes._act(_request(), "abc12345", "pause"))
 
     messages = [c.args[0] for c in log.exception.call_args_list]
     assert messages == ["Cron routes: the service getter raised"] * 2

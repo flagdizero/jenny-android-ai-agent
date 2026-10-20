@@ -62,9 +62,9 @@ async def test_a_cron_asked_in_a_notebook_lands_in_a_drawer(notebook, tmp_path) 
                              cron_expr="0 9 * * 1", mode="monitor")
     assert "in the drawer of «Annunci»" in out
     job = CronService(store).list_jobs()[0]
-    section = read_board(root)["cards"][0]["userSections"][0]
-    assert section["kind"] == "cron" and section["job"] == job.id
-    assert job.payload.board == {"notebook": "casa", "card": "annunci", "section": section["id"]}
+    # Nessuna sezione nel cassetto: la bacheca lo deriva dal legame del job.
+    assert read_board(root)["cards"][0]["userSections"] == []
+    assert job.payload.board == {"notebook": "casa", "card": "annunci", "section": "@auto"}
     # Consegna nella chat del quaderno.
     assert (job.payload.origin_channel, job.payload.origin_chat_id) == ("websocket", "project:casa")
     listed = await tool.execute(action="list")
@@ -221,3 +221,23 @@ def test_a_whole_notebook_result_has_its_own_line(notebook) -> None:
     assert board["cronResults"]["j2"]["text"] == "gelo stanotte"
     assert board["since"][-1]["kind"] == "cron_result_notebook"
     assert board["since"][-1]["app"] == "Gelo" and "card" not in board["since"][-1]
+
+
+async def test_removing_a_notebook_cron_from_anywhere_cleans_its_board(notebook, tmp_path) -> None:
+    """Anche dalla chat personale o dall'officina: niente sezioni orfane nel cassetto."""
+    from jenny.cron.types import CronSchedule
+
+    _ws, root = notebook
+    store = tmp_path / "jobs.json"
+    service = CronService(store)
+    old = {"notebook": "casa", "card": "annunci", "section": "s-cron"}
+    job = service.add_job("annunci", CronSchedule(kind="every", every_ms=3_600_000), "cerca",
+                          session_key="project:casa", board=old)
+    mutate_board(root, lambda b: (
+        b["cards"][0]["userSections"].append({"id": "s-cron", "kind": "cron", "job": job.id}),
+        b.__setitem__("cronResults", {"annunci/s-cron": {"at": "x", "status": "ok"}})))
+    personal = _tool(store, key="unified:default")
+    out = await personal.execute(action="remove", job_id=job.id)
+    assert out == f"Removed job {job.id}"
+    board = read_board(root)
+    assert board["cards"][0]["userSections"] == [] and board["cronResults"] == {}

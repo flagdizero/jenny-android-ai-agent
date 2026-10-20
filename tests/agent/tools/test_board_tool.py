@@ -184,8 +184,12 @@ async def test_the_editor_is_told_what_a_removal_paused(notebook_chat: Path) -> 
         def get_job(self, job_id: str) -> object:
             return object()
 
-    mutate_board(notebook_chat, lambda b: model.card_by_id(b, "nuove")["userSections"].append(
-        {"id": "s-cron", "kind": "cron", "job": "j1", "name": "meteo"}))
+        def list_jobs(self, include_disabled: bool = False) -> list:
+            from types import SimpleNamespace
+
+            link = {"notebook": notebook_chat.name, "card": "nuove", "section": "@auto"}
+            return [SimpleNamespace(id="j1", payload=SimpleNamespace(board=link))]
+
     cron = _Cron()
     tool = BoardTool(cron=cron)
     out = await tool.execute(action="remove_card", card="nuove")

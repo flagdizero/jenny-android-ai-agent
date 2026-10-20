@@ -242,7 +242,7 @@ class CronTool(Tool, ContextAware):
         elif action == "list":
             return self._list_jobs()
         elif action == "remove":
-            return self._remove_job(job_id)
+            return await self._remove_job(job_id)
         return f"Unknown action: {action}"
 
     # -- i cron del quaderno ---------------------------------------------------
@@ -269,10 +269,9 @@ class CronTool(Tool, ContextAware):
         scheda e sezione, gira col recinto del quaderno e consegna nella sua chat;
         la sezione ``cron`` nel cassetto lo mostra e lo toglie.
         """
-        from jenny.board import model
+        from jenny.board.cron_link import detach_job, make_link
         from jenny.board.micro import find_card
         from jenny.board.notify import board_changed
-        from jenny.board.store import mutate_board
 
         found = self._notebook_root()
         if found is None:
@@ -292,25 +291,9 @@ class CronTool(Tool, ContextAware):
         if current_turn_is_readonly():
             return READONLY_TOOL_REFUSAL
         if action == "remove":
-            job = next((j for j in mine if j.id == job_id), None)
-            if job is None:
+            if not any(j.id == job_id for j in mine):
                 return f"No job `{job_id}` in this notebook (action='list' shows them)."
-            out = self._remove_job(job_id)
-            link = job.payload.board or {}
-
-            def drop(b: dict[str, Any]) -> bool | None:
-                card = model.card_by_id(b, str(link.get("card")))
-                if card is None:
-                    return False
-                keep = [x for x in card["userSections"] if x.get("id") != link.get("section")]
-                if len(keep) == len(card["userSections"]):
-                    return False
-                card["userSections"] = keep
-                return None
-
-            mutate_board(root, drop)
-            await board_changed(notebook)
-            return out
+            return self._remove_message(job_id, await detach_job(self._cron, str(job_id)))
         if action != "add":
             return f"Unknown action: {action}"
         if self._in_cron_context.get():
@@ -320,32 +303,12 @@ class CronTool(Tool, ContextAware):
             titles = ", ".join(f"«{c['title']}»" for c in board["cards"])
             return ("Say which card's drawer this job belongs in (`card`): the user will see it "
                     f"there. Cards: {titles}. If none fits, ask the user.")
-        taken = {x["id"] for c in board["cards"] for x in c.get("userSections") or []}
-        section_id = model.unique_id("s-cron", taken)
-        link = {"notebook": notebook, "card": card["id"], "section": section_id}
+        # Il job è la sola cosa che dice se il cron esiste: la bacheca e il cassetto
+        # lo derivano dal suo legame, senza una sezione da tenere allineata.
+        link = make_link(notebook, card["id"])
         out = self._add_job(name, message, every_seconds, cron_expr, tz, at, mode, board=link)
-        created = out.rsplit("(id: ", 1)
-        if not out.startswith("Created job") or len(created) != 2:
+        if not out.startswith("Created job"):
             return out
-        new_id = created[1].rstrip(")")
-
-        def attach(b: dict[str, Any]) -> None:
-            target = model.card_by_id(b, card["id"])
-            if target is None:
-                raise ValueError("card gone")
-            target["userSections"].append({
-                # Il cassetto vuole un nome da scrivere: senza, l'inizio del
-                # messaggio, come prima. Il titolo della notifica non lo vede
-                # (``job_user_label``).
-                "id": section_id, "kind": "cron", "job": new_id, "name": name or message[:30],
-                "by": "jenny-on-request", "created": model.now_iso(),
-            })
-
-        try:
-            mutate_board(root, attach)
-        except Exception:  # noqa: BLE001 — senza la sezione il job non avrebbe casa
-            self._cron.remove_job(new_id)
-            return "Error: the job could not be put in the drawer, so it was not created."
         await board_changed(notebook)
         return f"{out} — it is in the drawer of «{card['title']}», and delivers in this notebook."
 
@@ -592,10 +555,15 @@ class CronTool(Tool, ContextAware):
             lines.append("\n".join(parts))
         return "Scheduled jobs:\n" + "\n".join(lines)
 
-    def _remove_job(self, job_id: str | None) -> str:
+    async def _remove_job(self, job_id: str | None) -> str:
+        """Toglie un job; se era di un quaderno, anche quel che ne resta sulla bacheca."""
+        from jenny.board.cron_link import detach_job
+
         if not job_id:
             return "Error: job_id is required for remove"
-        result = self._cron.remove_job(job_id)
+        return self._remove_message(job_id, await detach_job(self._cron, job_id))
+
+    def _remove_message(self, job_id: str, result: str) -> str:
         if result == "removed":
             return f"Removed job {job_id}"
         if result == "protected":

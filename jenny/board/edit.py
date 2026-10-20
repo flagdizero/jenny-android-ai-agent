@@ -262,12 +262,11 @@ def _trash(board: dict[str, Any], card: dict[str, Any]) -> dict[str, Any]:
 async def _pause_trashed(root: Path, card: Mapping[str, Any], cron: Any) -> dict[str, list[str]]:
     """Dopo il cestino: si ferma quel che la scheda faceva da sé, e lo si annota."""
     jobs = []
-    if cron is not None:
-        for job_id in removed.card_crons(card):
-            # Solo quelli che questa «Togli» ha fermato: l'Annulla non deve
-            # riprendere un cron che l'utente aveva già messo in pausa lui.
-            if cron.set_paused(job_id, True) == "paused":
-                jobs.append(job_id)
+    for job_id in removed.card_jobs(cron, root.name, card["id"]):
+        # Solo quelli che questa «Togli» ha fermato: l'Annulla non deve
+        # riprendere un cron che l'utente aveva già messo in pausa lui.
+        if cron.set_paused(job_id, True) == "paused":
+            jobs.append(job_id)
     paused = {"jobs": jobs}
     if not jobs:
         return paused

@@ -85,11 +85,18 @@ class CronRoutes:
             return await self._get(request)
         m = _ACTION_RE.match(path)
         if m:
-            return self._act(request, m.group(1), m.group(2))
+            return await self._act(request, m.group(1), m.group(2))
         return None
 
-    def _act(self, request: WsRequest, job_id: str, action: str) -> Response:
-        """Pausa, ripresa o eliminazione: **sul loop**, v. il cappello."""
+    async def _act(self, request: WsRequest, job_id: str, action: str) -> Response:
+        """Pausa, ripresa o eliminazione: **sul loop**, v. il cappello.
+
+        Un job di un quaderno vive anche sulla sua bacheca: l'eliminazione passa da
+        ``cron_link.detach_job`` (che ripulisce la bacheca), e pausa e ripresa le
+        dicono alla bacheca aperta.
+        """
+        from jenny.board.cron_link import detach_job
+        from jenny.board.notify import board_changed
         if not self._check_api_token(request):
             return http_error(401, "Unauthorized")
         if not _JOB_ID_RE.match(job_id):
@@ -102,10 +109,14 @@ class CronRoutes:
         if cron is None:
             return http_error(503, "scheduler not available")
         try:
+            job = cron.get_job(job_id)
+            notebook = ((job.payload.board or {}).get("notebook") if job is not None else None)
             if action == "remove":
-                result = cron.remove_job(job_id)
+                result = await detach_job(cron, job_id)
             else:
                 result = cron.set_paused(job_id, action == "pause")
+                if notebook and result in ("paused", "resumed"):
+                    await board_changed(str(notebook))
         except Exception:
             self._log.exception("Cron {} {} failed", action, job_id)
             return http_error(500, f"cron {action} failed")

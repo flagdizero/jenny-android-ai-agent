@@ -1447,7 +1447,8 @@
         "today": "Oggi · {date}",
         "overdue": "In ritardo",
         "whenever": "Quando succede"
-      }
+      },
+      "automations": "Automazioni"
     },
     "reminder": {
       "done": "Fatto",
@@ -1539,15 +1540,14 @@
       "moreRows": "e altre {count}"
     },
     "cron": {
-      "gone": "Cron",
-      "missing": "Questo cron non c'è più: si può togliere.",
       "paused": "in pausa",
       "next": "prossimo {when}",
       "costs": "lo fa Jenny (usa il modello)",
       "last": "Ultimo esito ({when}): {text}",
       "quiet": "Ultimo giro {when}: niente da dirti.",
       "changePrompt": "Nel cassetto {card}, il cron «{name}»: vorrei ",
-      "prompt": "Nel cassetto {card}, ogni "
+      "prompt": "Nel cassetto {card}, ogni ",
+      "removeConfirm": "Togliere «{name}»? Jenny smette di farlo."
     },
     "card": {
       "add": "Nuova scheda",

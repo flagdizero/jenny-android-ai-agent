@@ -318,7 +318,9 @@ def test_remove_protected_dream_job_returns_clear_feedback(tmp_path) -> None:
         payload=CronPayload(kind="system_event"),
     ))
 
-    result = tool._remove_job("dream")
+    import asyncio
+
+    result = asyncio.run(tool._remove_job("dream"))
 
     assert "Cannot remove job `dream`." in result
     assert "Dream memory consolidation job for long-term memory" in result

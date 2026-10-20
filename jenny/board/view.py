@@ -158,17 +158,43 @@ def _app_card(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def automations(
+    board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None, scope: str,
+) -> list[dict[str, Any]]:
+    """I cron del quaderno con ambito *scope*, dal prossimo giro, ognuno col suo ultimo esito.
+
+    Derivati dai job dello scheduler (``cron_link.notebook_jobs``), mai da una
+    sezione del cassetto: il job è l'unica cosa che dice se un cron esiste.
+    """
+    from jenny.board.cron_link import result_of
+
+    results = board.get("cronResults") or {}
+    out = []
+    for job_id, snap in (cron_jobs or {}).items():
+        if snap.get("scope") != scope:
+            continue
+        item = {k: v for k, v in snap.items() if k != "legacySection"}
+        legacy = {"card": scope, "section": snap.get("legacySection")}
+        item["result"] = result_of(results, job_id, legacy) or None
+        out.append(item)
+    out.sort(key=lambda a: (a.get("nextRunAtMs") is None, a.get("nextRunAtMs") or 0, a["id"]))
+    return out
+
+
 def build_board_view(
     project_root: Path,
     *,
     today: date | None = None,
     alert_probe: AlertProbe | None = None,
     workspace: Path | None = None,
+    cron_jobs: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """La risposta di ``GET /api/board``.
 
     Con *workspace*, una scheda che e' un'app porta anche la sua **striscia**
     (``slip``: la forma compatta dell'app, coi suoi blocchi) e l'ingombro vero.
+    *cron_jobs* sono i job legati al quaderno (``{id: istantanea}``), presi sul
+    loop da chi chiama.
     """
     board = read_board(project_root)
     reminders = read_reminders(project_root)
@@ -204,7 +230,7 @@ def build_board_view(
         ))
         # Il segno ⟳: la scheda ha qualcosa che gira da solo (un cron). E' un
         # segno, non un segnale: non e' rosso.
-        auto = any(sec.get("kind") == "cron" for sec in card.get("userSections") or [])
+        auto = any(snap.get("scope") == card["id"] for snap in (cron_jobs or {}).values())
         on_board[card["id"]] = card
         cards_out.append({
             "id": card["id"],
@@ -354,9 +380,10 @@ def build_card_view(
              "params": card["app"].get("params") or {}, "own": True}]
            if isinstance(card.get("app"), dict) else [])
     for section in [*own, *(card.get("userSections") or [])]:
-        # Un promemoria aggiunto dal cassetto ha ancora una sua sezione, ma si
-        # mostra una volta sola: nel calendario di cura, con quelli di Jenny.
-        if section.get("kind") == "reminder":
+        # Un promemoria o un cron scritti prima del 20/10/2026 hanno ancora una
+        # sezione, ma si mostrano una volta sola: il promemoria nel calendario di
+        # cura, il cron fra le ``automations`` (derivate dai job).
+        if section.get("kind") in ("reminder", "cron"):
             continue
         resolved = dict(section)
         if sections_resolver is not None:
@@ -395,6 +422,8 @@ def build_card_view(
         "reminders": model.sorted_reminders(
             r for r in model.open_reminders(reminders) if r.get("card") == card_id
         ),
+        # I cron della scheda, dal prossimo giro.
+        "automations": automations(board, cron_jobs, card_id),
         # Le note e le foto dell'utente, dalla più recente.
         "notes": notes,
         "photos": photos,

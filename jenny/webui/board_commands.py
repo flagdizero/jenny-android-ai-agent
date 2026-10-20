@@ -546,12 +546,35 @@ async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> di
     return {"ok": True, "result": result}
 
 
+async def board_cron_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Togli un cron del quaderno dalla bacheca: il job e quel che ne resta sulla bacheca.
+
+    Come la pausa, solo un job legato a questo quaderno. Lo smontaggio è quello di
+    sempre, ``cron_link.detach_job``: tool, officina e bacheca ne usano uno solo.
+    """
+    from jenny.board.cron_link import detach_job
+
+    root = _project(ctx, params)
+    job_id = _card_id(params, "job")
+    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
+    if cron is None:
+        raise CommandError("unavailable", "scheduler not running")
+    job = cron.get_job(job_id)
+    if job is None or (job.payload.board or {}).get("notebook") != root.name:
+        raise CommandError("not_found", "job not found in this notebook")
+    result = await detach_job(cron, job_id)
+    if result != "removed":
+        raise CommandError("conflict", f"cron not removed: {result}")
+    return {"ok": True}
+
+
 BOARD_COMMANDS = {
     "board.card.add": board_card_add,
     "board.card.rename": board_card_rename,
     "board.card.remove": board_card_remove,
     "board.card.restore": board_card_restore,
     "board.cron.pause": board_cron_pause,
+    "board.cron.remove": board_cron_remove,
     "board.seen": board_seen,
     "board.move": board_move,
     "board.suggestion.respond": board_suggestion_respond,

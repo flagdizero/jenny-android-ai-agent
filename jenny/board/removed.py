@@ -10,7 +10,6 @@ comuni stanno qui.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +17,22 @@ from jenny.board import model
 from jenny.board.store import delete_card_summary, mutate_board, mutate_reminders, read_board
 
 
-def card_crons(card: Mapping[str, Any]) -> list[str]:
-    return [str(s["job"]) for s in card.get("userSections") or [] if s.get("kind") == "cron"]
+def card_jobs(cron: Any, notebook: str, card_id: str) -> list[str]:
+    """Gli id dei cron della scheda *card_id* del quaderno *notebook*.
+
+    Dai job dello scheduler, non dalle sezioni del cassetto: dal 20/10/2026 un
+    cron non ne scrive più, e un legame vecchio porta comunque la sua scheda.
+    """
+    from jenny.board.cron_link import scope_of
+
+    if cron is None:
+        return []
+    try:
+        jobs = cron.list_jobs(include_disabled=True)
+    except Exception:  # noqa: BLE001 — senza scheduler non c'è niente da fermare
+        return []
+    return [j.id for j in jobs if (j.payload.board or {}).get("notebook") == notebook
+            and scope_of(j.payload.board) == card_id]
 
 
 def purge_removed_cards(root: Path, cron: Any = None, now: Any = None) -> int:
@@ -53,8 +66,7 @@ def purge_removed_cards(root: Path, cron: Any = None, now: Any = None) -> int:
     mutate_reminders(root, drop)
     for entry in expired:
         card = entry["card"]
-        if cron is not None:
-            for job_id in card_crons(card):
-                cron.remove_job(job_id)
+        for job_id in card_jobs(cron, root.name, card["id"]):
+            cron.remove_job(job_id)
         delete_card_summary(root, card["id"])
     return len(expired)

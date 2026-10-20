@@ -312,17 +312,28 @@ async def _root_app_tool(env: Env) -> Path:
 
 
 async def _root_cron(env: Env) -> Path:
-    """Un cron del quaderno: la radice è quella la cui bacheca riceve la sezione."""
+    """Un cron del quaderno: la radice è quella la cui bacheca dà la scheda al job.
+
+    Dal 20/10/2026 un cron non scrive più una sezione nel cassetto: la bacheca lo
+    deriva dal legame del job. La radice si misura allora da quale bacheca il tool
+    legge per trovare la scheda: le due bacheche hanno schede diverse, e il job
+    nasce legato solo se ha letto quella del progetto.
+    """
     from types import SimpleNamespace
 
     from jenny.agent.tools.context import RequestContext
     from jenny.agent.tools.cron import CronTool
-    from jenny.board.store import read_board
+    from jenny.board.store import mutate_board
 
-    _seed_board(env)
+    mutate_board(env.project, lambda b: b["cards"].append(
+        {"id": "schede", "title": "Schede", "pages": [], "pos": {"x": 1, "y": 1}}))
+    mutate_board(env.other, lambda b: b["cards"].append(
+        {"id": "estranea", "title": "Estranea", "pages": [], "pos": {"x": 1, "y": 1}}))
+    added: list[dict[str, Any]] = []
 
     class _Cron:
         def add_job(self, **kw: Any) -> Any:
+            added.append(kw["board"])
             return SimpleNamespace(id="j1", name="probe")
 
         def list_jobs(self, include_disabled: bool = False) -> list[Any]:
@@ -335,11 +346,9 @@ async def _root_cron(env: Env) -> Path:
     tool.set_context(RequestContext(channel="websocket", chat_id="project:palestra",
                                     session_key="project:palestra"))
     out = await tool.execute(action="add", card="schede", message="x", every_seconds=3600)
-    assert "Created job" in out, out
-    hits = [d for d in (env.project, env.other)
-            if any(s.get("kind") == "cron" for s in read_board(d)["cards"][0]["userSections"])]
-    assert len(hits) == 1, f"una sola bacheca deve ricevere il cron, trovate {hits}"
-    return hits[0]
+    if "Created job" in out and added and added[0]["card"] == "schede":
+        return env.project
+    return env.other
 
 
 async def _root_board_tool(env: Env) -> Path:

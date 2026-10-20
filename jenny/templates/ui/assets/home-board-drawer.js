@@ -33,7 +33,7 @@ import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { reminderGroups, whenLabel } from './home-board.js';
 import { DrawerNotes } from './home-board-notes.js';
 import { DrawerPhotos } from './home-board-photos.js';
-import { describeSchedule } from './shared/cron-view.js';
+import { automationRow } from './home-board-automation.js';
 import { renderBlock } from './home-board-blocks.js';
 
 /** «oggi alle 04:12», «ieri», «3 ott»: quando e' stato riscritto il cassetto. */
@@ -333,6 +333,9 @@ export class BoardDrawer {
       if (node) sections.appendChild(node);
     }
     root.appendChild(sections);
+    /* I cron della scheda: dal job, non da una sezione (v. `home-board-automation.js`).
+       Sono il retro dell'etichetta menta che sulla bacheca pende da questa scheda. */
+    if (d.automations?.length) root.appendChild(this._automations(d.automations));
 
     if (d.connections.length) {
       const threads = el('div', 'home-drawer-threads');
@@ -651,41 +654,6 @@ export class BoardDrawer {
       }
       /* L'app della scheda-app non si toglie dal suo cassetto: si toglie la scheda. */
       if (!section.own) tools.appendChild(remove);
-    } else if (section.kind === 'cron') {
-      /* Un cron del quaderno: cosa fa, ogni quanto, l'ultimo esito, il prossimo
-         giro. Lavora Jenny, quindi costa: lo dice la firma. */
-      const job = section.job;
-      const result = section.result;
-      h3.append(job?.name || i18n.t('board.cron.gone'),
-        el('span', 'home-drawer-owner', i18n.t('board.section.kind.cron')));
-      if (!job) {
-        body.appendChild(el('p', 'home-drawer-hint', i18n.t('board.cron.missing')));
-        tools.appendChild(remove);
-      } else {
-        const tr = (key, vars) => i18n.t(key, vars);
-        const sign = [describeSchedule(job.schedule, { tr, locale: i18n.locale })];
-        if (job.paused) sign.push(i18n.t('board.cron.paused'));
-        else if (job.nextRunAtMs) {
-          sign.push(i18n.t('board.cron.next', { when: relativeStamp(new Date(job.nextRunAtMs).toISOString()) }));
-        }
-        sign.push(i18n.t('board.cron.costs'));
-        if (job.message) body.appendChild(el('p', 'home-drawer-text', job.message));
-        if (result?.text) {
-          body.appendChild(el('p', 'home-drawer-proof',
-            i18n.t('board.cron.last', { when: relativeStamp(result.textAt || result.at), text: result.text })));
-        } else if (result?.at) {
-          body.appendChild(el('p', 'home-drawer-hint',
-            i18n.t('board.cron.quiet', { when: relativeStamp(result.at) })));
-        }
-        body.appendChild(el('div', 'home-drawer-hint', sign.join(' · ')));
-        tools.append(
-          button('home-drawer-link', i18n.t(job.paused ? 'board.micro.resume' : 'board.micro.pause'),
-            () => this._write('cron.pause', { job: job.id, paused: !job.paused })),
-          button('home-drawer-link', i18n.t('board.micro.change'),
-            () => this.onAskJenny?.(i18n.t('board.cron.changePrompt', { card: this.data.title, name: job.name }))),
-          remove,
-        );
-      }
     } else {
       return null;
     }
@@ -697,6 +665,28 @@ export class BoardDrawer {
     body.appendChild(tools);
     row.append(h3, body);
     return row;
+  }
+
+  /* ── Le automazioni ── */
+
+  _automations(jobs) {
+    const group = el('div', 'home-drawer-automations');
+    group.appendChild(el('h4', 'home-drawer-h4', i18n.t('board.drawer.automations')));
+    for (const job of jobs) {
+      group.appendChild(automationRow(job, {
+        stamp: (iso) => relativeStamp(iso),
+        onPause: (j) => this._write('cron.pause', { job: j.id, paused: !j.paused }),
+        onChange: (j) => this.onAskJenny?.(i18n.t('board.cron.changePrompt',
+          { card: this.data.title, name: j.name })),
+        onRemove: (j) => this._removeCron(j),
+      }));
+    }
+    return group;
+  }
+
+  async _removeCron(job) {
+    if (!(await confirmDialog(i18n.t('board.cron.removeConfirm', { name: job.name })))) return;
+    await this._write('cron.remove', { job: job.id });
   }
 
   async _restoreApp(v) {

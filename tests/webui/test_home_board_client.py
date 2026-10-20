@@ -404,18 +404,18 @@ def test_an_app_from_a_drawer_becomes_a_card_next_to_it() -> None:
 def test_a_notebook_cron_shows_in_its_drawer_and_pauses_there() -> None:
     board = json.loads(json.dumps(BOARD))
     card = json.loads(json.dumps(CARD))
-    card["userSections"] = [{
-        "id": "s-cron", "kind": "cron",
-        "job": {"id": "ab12cd34", "name": "Meteo", "message": "guarda il meteo e dimmi se annaffiare",
-                "mode": "monitor", "schedule": {"kind": "every", "every_ms": 86400000},
-                "nextRunAtMs": 1791172800000, "lastRunAtMs": None, "lastStatus": None,
-                "paused": False, "enabled": True},
+    card["automations"] = [{
+        "id": "ab12cd34", "name": "Meteo", "message": "guarda il meteo e dimmi se annaffiare",
+        "mode": "monitor", "schedule": {"kind": "every", "every_ms": 86400000},
+        "nextRunAtMs": 1791172800000, "lastRunAtMs": None, "lastStatus": None,
+        "paused": False, "enabled": True, "scope": "acero",
         "result": {"at": "2026-10-05T09:00:00+02:00", "status": "ok",
                    "text": "Oggi piove: niente acqua.", "textAt": "2026-10-05T09:00:00+02:00"},
     }]
     head = (
         _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(card))
         + "rpcAnswers['board.cron.pause'] = () => ({ ok: true });\n"
+        + "rpcAnswers['board.cron.remove'] = () => ({ ok: true });\n"
     )
     run_home(head + """
       await app.openCard('acero', 'Acero');
@@ -431,6 +431,7 @@ def test_a_notebook_cron_shows_in_its_drawer_and_pauses_there() -> None:
       const call = rpcs('board.cron.pause').at(-1);
       assert.equal(call.params.job, 'ab12cd34');
       assert.equal(call.params.paused, true);
+      assert.ok(drawer.querySelector('.home-drawer-automations .is-automation'));
     """)
 
 

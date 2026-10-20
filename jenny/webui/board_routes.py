@@ -50,18 +50,11 @@ class BoardRoutes:
         self._get_cron_service = get_cron_service
 
     def _cron_jobs(self, notebook: str) -> dict[str, Any]:
-        """I job dello scheduler legati a questo quaderno, come li mostra un cassetto."""
-        from jenny.board.cron_link import job_snapshot
+        """I job dello scheduler legati a questo quaderno. Sul loop, mai in un thread."""
+        from jenny.board.cron_link import notebook_jobs
 
         cron = self._get_cron_service() if self._get_cron_service is not None else None
-        if cron is None:
-            return {}
-        try:
-            jobs = cron.list_jobs(include_disabled=True)
-        except Exception:  # noqa: BLE001 — un cassetto senza job resta un cassetto
-            return {}
-        return {j.id: job_snapshot(j) for j in jobs
-                if (j.payload.board or {}).get("notebook") == notebook}
+        return notebook_jobs(cron, notebook)
 
     async def dispatch(self, request: WsRequest, path: str) -> Response | None:
         if path == "/api/board":
@@ -97,9 +90,10 @@ class BoardRoutes:
         from jenny.board.view import build_board_view
 
         workspace = self._get_workspace_root()
+        jobs = self._cron_jobs(root.name)
         payload: dict[str, Any] = await asyncio.to_thread(
             build_board_view, root, alert_probe=alert_probe(workspace),
-            workspace=workspace
+            workspace=workspace, cron_jobs=jobs,
         )
         return http_json_response(payload)
 

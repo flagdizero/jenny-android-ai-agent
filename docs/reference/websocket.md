@@ -501,6 +501,7 @@ correlate a reply to.
 | `board.reminder.update` | `wiki`, `id`, `text`?, `when`? | Edit an open reminder by its id — one Jenny wrote too, which has no drawer section — from the care calendar. The reminder becomes the user's. |
 | `board.reminder.drop` | `wiki`, `id` | Remove an open reminder by its id: it stays in `reminders.json` as `dropped`, and the drawer section that pointed to it, if any, goes. |
 | `board.cron.pause` | `wiki`, `job`, `paused` | Pause (`true`) or resume (`false`) a notebook cron from its drawer; only a job bound to this notebook. |
+| `board.cron.remove` | `wiki`, `job` | Remove a notebook cron and what it leaves on the board (its last result); only a job bound to this notebook. |
 
 **Authorization is the handshake's, not the frame's.** Only a connection that presented
 `token_issue_secret` at handshake time may run a command, even if `websocket_requires_token`
