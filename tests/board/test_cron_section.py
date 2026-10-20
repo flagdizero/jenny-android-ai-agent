@@ -176,3 +176,54 @@ def test_a_whole_notebook_once_cron_is_a_row_of_the_free_postit(notebook, tmp_pa
     [row] = [n for n in view["notes"] if n.get("job") == once.id]
     assert row["card"] == "" and row["text"] == "Chiama il vivaio"
     assert view["postits"][-1]["card"] == ""
+
+
+def test_a_label_that_does_not_fit_hangs_beside_its_card(notebook, tmp_path) -> None:
+    """Fra i due post-it non c'è un varco: l'etichetta va accanto alla sua scheda.
+
+    Il caso visto sul telefono il 20/10/2026: misurata da un punto sotto la scheda,
+    finiva in fondo al muro col filo che lo attraversava. Né più in alto della
+    scheda: il filo arriva al chiodino in cima e le passerebbe sopra le righe.
+    """
+    from jenny.board import model
+    from jenny.board.cron_link import job_snapshot, make_link
+    from jenny.board.store import mutate_reminders
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronSchedule
+
+    mutate_board(notebook, lambda b: b.__setitem__("cards", [
+        {"id": "salvia", "title": "Salvia", "pages": [], "pos": {"x": 10, "y": 20}},
+        {"id": "fico", "title": "Fico", "pages": [], "pos": {"x": 55, "y": 20}}]))
+    mutate_reminders(notebook, lambda r: r["reminders"].extend(
+        {"id": f"r-{card}", "card": card, "text": "Concime", "state": "open", "by": "user",
+         "when": {"kind": "date", "date": "2099-03-01", "precision": "day"}}
+        for card in ("salvia", "fico")))
+    service = CronService(tmp_path / "jobs.json")
+    origin = {"session_key": "project:piante", "origin_channel": "websocket",
+              "origin_chat_id": "project:piante"}
+    jobs = {}
+    for card in ("salvia", "fico"):
+        job = service.add_job(f"Acqua {card}", CronSchedule(kind="every", every_ms=86_400_000),
+                              "annaffia", board=make_link("piante", card), **origin)
+        jobs[job.id] = job_snapshot(job)
+    before = build_board_view(notebook)
+    view = build_board_view(notebook, cron_jobs=jobs)
+    assert view["postits"] == before["postits"]
+    postits = [(p["pos"]["x"], p["pos"]["y"], p["pos"]["x"] + model.POSTIT_BOX[0],
+                p["pos"]["y"] + model.POSTIT_BOX[1]) for p in view["postits"]]
+    [label] = [lab for lab in view["autoLabels"] if lab["card"] == "fico"]
+    w, h = model.auto_box(len(label["rows"]))
+    x, y = label["pos"]["x"], label["pos"]["y"]
+    rect = (x, y, x + w, y + h)
+    assert y >= 20, "never above its card"
+    assert model._gap(rect, (55, 20, 55 + model.CARD_BOX[0], 20 + model.CARD_BOX[1])) <= 4 ** 2
+    assert not any(model._overlap(rect, p) for p in postits)
+
+
+def test_a_labels_box_grows_with_its_rows_up_to_the_shown_ones() -> None:
+    from jenny.board import model
+
+    one, two, three, many = (model.auto_box(n) for n in (1, 2, 3, 9))
+    assert one[1] < two[1] < three[1] < many[1]
+    assert model.auto_box(0) == one and model.auto_box(4) == many
+    assert two == model.AUTO_BOX, "a label placed by the user is sized as two crons"

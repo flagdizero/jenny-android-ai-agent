@@ -139,7 +139,7 @@ def record_result(
         elif before.get("text"):
             # Un giro senza niente da dire non cancella l'ultimo esito che diceva qualcosa.
             entry["text"] = before["text"]
-            entry["textAt"] = before.get("textAt") or before.get("at")
+            entry["textAt"] = str(before.get("textAt") or before.get("at") or entry["at"])
         results[job_id] = entry
         board["cronResults"] = results
         if clean and status == "ok":

@@ -84,14 +84,17 @@ def _place_near(
     near: tuple[float, float],
     box: tuple[float, float],
     placed: list[tuple[float, float, float, float]],
+    anchor: tuple[float, float, float, float] | None = None,
 ) -> dict[str, Any]:
     """Il posto libero più vicino a *near* per un oggetto di ingombro *box*.
 
     Calcolato e non salvato: l'oggetto nasce accanto alla sua scheda senza
     coprire niente (né le schede né gli altri oggetti già messi in questo giro),
-    e resta lì finché qualcuno non lo porta altrove.
+    e resta lì finché qualcuno non lo porta altrove. Con *anchor* (il riquadro
+    della scheda) «vicino» si misura dal bordo della scheda: vedi
+    :func:`model.free_slot`.
     """
-    x, y = model.free_slot(board, reminders, box=box, near=near, extra=placed)
+    x, y = model.free_slot(board, reminders, box=box, near=near, extra=placed, anchor=anchor)
     placed.append((x, y, x + box[0], y + box[1]))
     return {"x": x, "y": y, "by": model.JENNY}
 
@@ -359,12 +362,14 @@ def build_board_view(
         rows = _recurring(board, cron_jobs, card["id"])
         if not rows:
             continue
-        h = model.card_box(card)[1]
-        near = (float(card["pos"]["x"]) - model.AUTO_BOX[0] * 0.5, float(card["pos"]["y"]) + h * 0.8)
+        w, h = model.card_box(card)
+        cx, cy = float(card["pos"]["x"]), float(card["pos"]["y"])
+        box = model.auto_box(len(rows))
+        near = (cx - box[0] * 0.5, cy + h * 0.8)
         auto_labels.append({
             "card": card["id"],
             "pos": card.get("autoPos")
-            or _place_near(board, reminders, near, model.AUTO_BOX, placed),
+            or _place_near(board, reminders, near, box, placed, anchor=(cx, cy, cx + w, cy + h)),
             "rows": rows,
         })
     # L'etichetta di tutto il quaderno: libera, senza filo, e c'è anche su una
@@ -374,7 +379,7 @@ def build_board_view(
         auto_labels.append({
             "card": model.NOTEBOOK,
             "pos": board.get("notebookAutoPos")
-            or _place_free(board, reminders, model.AUTO_BOX, placed),
+            or _place_free(board, reminders, model.auto_box(len(rows)), placed),
             "rows": rows,
         })
     last_seen = _stamp(board.get("lastSeen"))

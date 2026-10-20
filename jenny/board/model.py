@@ -641,10 +641,23 @@ POSTIT_BOX = (24.0, 44.0)
 # Quante attese mostra un post-it; le altre stanno dietro «+N», nel cassetto.
 POSTIT_ROWS = 3
 # L'etichetta menta dei cron di un ambito: un po' più larga del post-it (il ritmo
-# in grande sta su una riga), alta quanto
-# tre righe (ritmo, cosa fa, ultimo giro) e «+N» sul quadrato basso del Titan 2.
+# in grande sta su una riga). Alta quanto due cron sul quadrato basso del Titan 2:
+# è l'ingombro di un'etichetta messa dall'utente, di cui qui non si sanno le righe.
+# Quella che piazza la vista si misura sulle righe vere, con :func:`auto_box`.
 AUTO_BOX = (30.0, 40.0)
 AUTO_ROWS = 3
+# Un cron sull'etichetta (ritmo, cosa fa, ultimo giro) e i bordi, sul Titan 2.
+# Il testo è in cqw e le y in cqh: su un telefono in verticale la stessa
+# etichetta prende meno unità, quindi la stima vale per il caso stretto.
+AUTO_ROW_H = 16.0
+AUTO_PAD_H = 8.0
+
+
+def auto_box(rows: int) -> tuple[float, float]:
+    """L'ingombro di un'etichetta con *rows* cron: le prime :data:`AUTO_ROWS`, più «+N»."""
+    shown = max(1, min(rows, AUTO_ROWS))
+    more = 6.0 if rows > AUTO_ROWS else 0.0
+    return (AUTO_BOX[0], AUTO_PAD_H + AUTO_ROW_H * shown + more)
 # Il post-it lilla delle note di una scheda: largo come il giallo, alto due
 # righe e «+N». E la sua galleria: al piu' tre polaroid da 16 a ventaglio, in
 # una scatola di 21 x 21 cqw (la taglia piu' grande, v. ``.home-board-gallery``
@@ -721,6 +734,13 @@ def _overlap(a: tuple[float, float, float, float], b: tuple[float, float, float,
     return w * h if w > 0 and h > 0 else 0.0
 
 
+def _gap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    """Il quadrato della distanza fra due riquadri: zero se si toccano o si coprono."""
+    dx = max(b[0] - a[2], a[0] - b[2], 0.0)
+    dy = max(b[1] - a[3], a[1] - b[3], 0.0)
+    return dx * dx + dy * dy
+
+
 def free_slot(
     board: Mapping[str, Any],
     reminders: Mapping[str, Any] | None = None,
@@ -728,6 +748,7 @@ def free_slot(
     box: tuple[float, float] = CARD_BOX,
     near: tuple[float, float] | None = None,
     extra: list[tuple[float, float, float, float]] | None = None,
+    anchor: tuple[float, float, float, float] | None = None,
 ) -> tuple[float, float]:
     """Il posto per un oggetto nuovo: quello che copre di meno quel che c'e' gia'.
 
@@ -736,9 +757,16 @@ def free_slot(
     parita', la piu' vicina a *near* (la scheda, per un post-it) o, senza, la
     prima in ordine di lettura. Deterministico: due aperture della stessa
     bacheca danno lo stesso posto.
+
+    *anchor* (il riquadro della scheda) cambia cosa vuol dire «vicino»: conta la
+    distanza dal bordo della scheda, e *near* resta solo lo spareggio. Così un
+    oggetto che non entra nel suo posto preferito va accanto alla scheda invece
+    che lontano sotto di lei col filo che attraversa il muro. Mai più in alto
+    della scheda, finché c'è un altro posto libero: l'oggetto *pende* da lei, e il
+    filo, che arriva al chiodino in cima, gli passerebbe sopra le righe.
     """
     taken = _boxes(board, reminders) + list(extra or [])
-    best: tuple[float, float, float] | None = None
+    best: tuple[float, float, float, float] | None = None
     if near is not None:
         # **Vicino a dove si guarda** (o alla sua scheda, per un post-it): una finestra
         # attorno a *near*, ovunque sia sul muro. Gli angoli riservati qui non
@@ -753,7 +781,9 @@ def free_slot(
             for x in xs:
                 rect = (float(x), float(y), x + box[0], y + box[1])
                 cost = sum(_overlap(rect, t) for t in taken)
-                key = (cost, (x - cx) ** 2 + (y - cy) ** 2, 0.0)
+                dist = (x - cx) ** 2 + (y - cy) ** 2
+                key = ((cost, float(y < anchor[1]), _gap(rect, anchor), dist) if anchor
+                       else (cost, 0.0, dist, 0.0))
                 if best is None or key < best:
                     best, best_pos = key, (float(x), float(y))
         return best_pos
@@ -768,7 +798,7 @@ def free_slot(
             if any(_overlap(rect, r) for r in _RESERVED):
                 continue
             cost = sum(_overlap(rect, t) for t in taken)
-            key = (cost, float(y * 100 + x), 0.0)
+            key = (cost, 0.0, float(y * 100 + x), 0.0)
             if best is None or key < best:
                 best, best_pos = key, (float(x), float(y))
     return best_pos
