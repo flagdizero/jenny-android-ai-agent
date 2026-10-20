@@ -886,7 +886,7 @@ def test_the_plus_makes_a_card_in_the_middle_of_the_view() -> None:
       await tick(10);
       // Prima la scelta: una scheda, un promemoria di tutto il quaderno, un'automazione.
       const rows = [...$('home-board-sheet-body').querySelectorAll('.home-board-menu-row')];
-      assert.deepEqual(rows.map((r) => r.className.match(/is-(\w+)/)[1]),
+      assert.deepEqual(rows.map((r) => r.className.match(/is-(\\w+)/)[1]),
         ['card', 'reminder', 'automation']);
       rows[0].click();
       await tick(10);
