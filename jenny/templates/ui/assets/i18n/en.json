@@ -1648,7 +1648,9 @@
       "notes": "{count} notes",
       "notesOne": "1 note",
       "photos": "{count} photos",
-      "photosOne": "1 photo"
+      "photosOne": "1 photo",
+      "auto": "{count} automations",
+      "autoOne": "1 automation"
     },
     "auto": {
       "more": "+{count} more",
@@ -1657,6 +1659,12 @@
       "last": "last: «{text}»",
       "quiet": "last run {when}: nothing",
       "onlyIf": "writes only if it matters"
+    },
+    "agenda": {
+      "title": "The whole notebook",
+      "empty": "No reminders for the whole notebook.",
+      "add": "+ Reminder",
+      "new": "Reminder for the whole notebook"
     }
   }
 }

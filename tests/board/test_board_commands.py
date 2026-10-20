@@ -239,6 +239,8 @@ async def test_a_reminder_can_be_for_the_whole_notebook(ctx, notebook: Path) -> 
     assert out["id"] == rem["id"] and rem["card"] == "" and rem["by"] == "user"
     view = build_board_view(notebook)
     assert [n["id"] for n in view["notes"] if n["card"] == ""] == [rem["id"]]
+    # Un post-it libero, senza scheda, dopo quelli delle schede.
+    assert view["postits"][-1]["card"] == "" and view["postits"][-1]["pos"]["by"] == "jenny"
     with pytest.raises(CommandError):
         await dispatch_command(ctx, "board.reminder.add", {
             "wiki": "piante", "card": "Fico!", "text": "x",

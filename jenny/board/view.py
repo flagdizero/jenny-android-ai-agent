@@ -278,6 +278,14 @@ def build_board_view(
          "pos": card.get("postitPos") or _postit_pos(board, reminders, card, placed)}
         for card in board["cards"] if card["id"] in with_notes
     ]
+    # Il post-it libero dei promemoria di tutto il quaderno: senza filo, dopo
+    # quelli delle schede (i loro posti calcolati restano quelli di sempre).
+    if model.NOTEBOOK in with_notes:
+        postits.append({
+            "card": model.NOTEBOOK,
+            "pos": board.get("notebookPostitPos")
+            or _place_free(board, reminders, model.POSTIT_BOX, placed),
+        })
     # Le note dell'utente, accorpate in un post-it lilla per scheda (sotto la
     # polaroid), e le sue foto in un mazzetto (a destra). Dopo i gialli, così i
     # posti calcolati dei gialli restano quelli di sempre.

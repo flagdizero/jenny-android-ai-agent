@@ -2918,6 +2918,20 @@ body.home {
   overflow: hidden;
 }
 .home-board-postit-more { font-size: 2cqw; font-weight: 700; opacity: 0.75; }
+/* Il foglio dei promemoria di tutto il quaderno: quando, cosa, «Fatto» e «Togli». */
+.home-board-agenda { display: flex; flex-direction: column; margin-bottom: 12px; }
+.home-board-agenda-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.home-board-agenda-when { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+.home-board-agenda-text { color: var(--text); font-size: 15px; }
+.home-board-agenda-tools { grid-column: 2; display: flex; gap: 14px; margin-top: 4px; }
+
 /* L'etichetta menta delle automazioni (i cron) di una scheda o di tutto il
    quaderno: un nastro pieno con l'icona tonda scura, e per ogni cron il ritmo in
    grande, il suo nome e l'ultimo giro. I capi dentellati la dicono nastro, non

@@ -49,6 +49,7 @@ import { metaText, renderBlock } from './home-board-blocks.js';
 import { DrawerNotes } from './home-board-notes.js';
 import { DrawerPhotos, PhotoUrls, photoDate } from './home-board-photos.js';
 import { automationRow, rhythmLabel } from './home-board-automation.js';
+import { agendaList, reminderForm } from './home-board-agenda.js';
 import { confirmDialog } from './shared/dialog.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
@@ -893,9 +894,10 @@ export class HomeBoard {
    *  scrive: lo dice il filo verso la sua polaroid (`drawThreads`). Si tocca
    *  tutto intero e apre il cassetto, dove c'e' il calendario completo. */
   _postit(postit, data) {
-    const card = data.cards.find((c) => c.id === postit.card);
+    /* `card` vuoto: il post-it libero di tutto il quaderno, senza scheda né filo. */
+    const card = postit.card ? data.cards.find((c) => c.id === postit.card) : null;
     const notes = data.notes.filter((n) => n.card === postit.card);
-    if (!card || !notes.length) return null;
+    if ((postit.card && !card) || !notes.length) return null;
     const shown = notes.slice(0, data.postitRows || 3);
     /* L'oggetto della vista stesso: trascinato, il posto nuovo e' subito quello
        che `_fitExtent` misura. L'id e' quello della scheda, come vuole `board.move`. */
@@ -931,8 +933,9 @@ export class HomeBoard {
       el.appendChild(more);
       words.push(more.textContent);
     }
-    el.setAttribute('aria-label', `${card.title} — ${words.join('; ')}`);
-    el.dataset.card = postit.card;
+    el.setAttribute('aria-label', `${card ? card.title : i18n.t('board.auto.notebook')} — ${words.join('; ')}`);
+    if (card) el.dataset.card = postit.card;
+    else el.classList.add('is-notebook');
     this._place(el, item);
     this._bind(el, item, 'postit');
     return el;
@@ -1163,8 +1166,10 @@ export class HomeBoard {
       const counts = [];
       const nNotes = this.data.notePostits?.find((p) => p.card === card.id)?.count || 0;
       const nPhotos = this.data.galleries?.find((g) => g.card === card.id)?.count || 0;
+      const nAuto = this.data.autoLabels?.find((l) => l.card === card.id)?.rows?.length || 0;
       if (nNotes) counts.push(i18n.t(nNotes === 1 ? 'board.list.notesOne' : 'board.list.notes', { count: nNotes }));
       if (nPhotos) counts.push(i18n.t(nPhotos === 1 ? 'board.list.photosOne' : 'board.list.photos', { count: nPhotos }));
+      if (nAuto) counts.push(i18n.t(nAuto === 1 ? 'board.list.autoOne' : 'board.list.auto', { count: nAuto }));
       if (counts.length) {
         const kept = document.createElement('span');
         kept.className = 'home-board-list-kept';
@@ -1180,12 +1185,43 @@ export class HomeBoard {
       row.addEventListener('click', () => this.openCard(card));
       this.listEl.appendChild(row);
     }
+    this._drawListNotebook();
     const envelope = document.createElement('button');
     envelope.type = 'button';
     envelope.className = 'home-board-list-row home-board-list-envelope';
     envelope.textContent = i18n.t('board.envelope.label', { count: this.data.suggestions.length });
     envelope.addEventListener('click', () => this.openEnvelope());
     this.listEl.appendChild(envelope);
+  }
+
+  /** La riga di tutto il quaderno nell'elenco: il suo promemoria più vicino e
+   *  quanti cron ha. Il tocco apre i promemoria, o i cron se ha solo quelli. */
+  _drawListNotebook() {
+    const rems = this.data.notes.filter((n) => !n.card);
+    const nAuto = this.data.autoLabels?.find((l) => !l.card)?.rows?.length || 0;
+    if (!rems.length && !nAuto) return;
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'home-board-list-row home-board-list-notebook';
+    row.setAttribute('role', 'listitem');
+    const name = document.createElement('span');
+    name.className = 'home-board-list-name';
+    name.textContent = i18n.t('board.auto.notebook');
+    row.appendChild(name);
+    if (rems.length) {
+      const when = document.createElement('span');
+      when.className = 'home-board-list-next';
+      when.textContent = `${rems[0].text} · ${whenLabel(rems[0].when)}`;
+      row.appendChild(when);
+    }
+    if (nAuto) {
+      const kept = document.createElement('span');
+      kept.className = 'home-board-list-kept';
+      kept.textContent = i18n.t(nAuto === 1 ? 'board.list.autoOne' : 'board.list.auto', { count: nAuto });
+      row.appendChild(kept);
+    }
+    row.addEventListener('click', () => this.openNotebookObject(rems.length ? 'postit' : 'auto'));
+    this.listEl.appendChild(row);
   }
 
   /* ── Il gesto: tocca, trascina, tieni premuto ── */
@@ -1734,6 +1770,38 @@ export class HomeBoard {
   /** Il foglio di un oggetto libero: i cron di tutto il quaderno, o i suoi promemoria. */
   openNotebookObject(kind) {
     if (kind === 'auto') this._openNotebookAutomations();
+    else this.openNotebookReminders();
+  }
+
+  /** Il foglio del post-it libero: i promemoria di tutto il quaderno, e «+ Promemoria». */
+  openNotebookReminders() {
+    const rems = (this.data?.notes || []).filter((n) => !n.card);
+    const body = document.createElement('div');
+    body.appendChild(agendaList(rems, {
+      when: (rem) => whenLabel(rem.when),
+      onDone: (rem) => this._cronAct('reminder.done', { id: rem.id }),
+      onDrop: async (rem) => {
+        if (!(await confirmDialog(i18n.t('board.reminder.dropConfirm', { text: rem.text })))) return;
+        await this._cronAct('reminder.drop', { id: rem.id });
+      },
+    }));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'home-board-btn';
+    add.textContent = i18n.t('board.agenda.add');
+    add.addEventListener('click', () => this.newNotebookReminder());
+    body.appendChild(add);
+    this.sheet.open(i18n.t('board.agenda.title'), body);
+  }
+
+  /** Un promemoria nuovo di tutto il quaderno: il modulo nel foglio. */
+  newNotebookReminder() {
+    const form = reminderForm({
+      onCancel: () => this.sheet.close(),
+      onSave: ({ text, when }) => this._cronAct('reminder.add', { card: '', text, when }),
+    });
+    this.sheet.open(i18n.t('board.agenda.new'), form);
+    form.querySelector('input')?.focus();
   }
 
   _openNotebookAutomations() {

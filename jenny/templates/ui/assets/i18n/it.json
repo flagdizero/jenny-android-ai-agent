@@ -1648,7 +1648,9 @@
       "notes": "{count} note",
       "notesOne": "1 nota",
       "photos": "{count} foto",
-      "photosOne": "1 foto"
+      "photosOne": "1 foto",
+      "auto": "{count} automazioni",
+      "autoOne": "1 automazione"
     },
     "auto": {
       "more": "+{count} altri",
@@ -1657,6 +1659,12 @@
       "last": "ultimo: «{text}»",
       "quiet": "ultimo giro {when}: niente",
       "onlyIf": "ti scrive solo se serve"
+    },
+    "agenda": {
+      "title": "Tutto il quaderno",
+      "empty": "Nessun promemoria di tutto il quaderno.",
+      "add": "+ Promemoria",
+      "new": "Promemoria di tutto il quaderno"
     }
   }
 }

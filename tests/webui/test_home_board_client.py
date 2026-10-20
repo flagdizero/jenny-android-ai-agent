@@ -1487,6 +1487,83 @@ def test_a_board_without_cards_still_shows_the_whole_notebook_label() -> None:
     """.replace("__AUTO__", json.dumps(board)))
 
 
+def _notebook_postit_board() -> dict:
+    board = _postit_board()
+    when = {"kind": "date", "date": "2099-12-01", "precision": "day"}
+    board["notes"].append({"id": "r-9", "card": "", "text": "Porta dentro le piante", "when": when})
+    board["postits"].append({"card": "", "pos": {"x": 5, "y": 70, "by": "jenny"}})
+    return board
+
+
+@requires_jsdom
+def test_the_free_postit_has_no_thread_and_opens_the_notebook_agenda() -> None:
+    _run_wall("""
+      routes['/api/board'] = __BOARD__;
+      rpcAnswers['board.reminder.add'] = () => ({ ok: true, id: 'r-10' });
+      rpcAnswers['board.reminder.done'] = () => ({ ok: true });
+      await B.load('altro');
+      const free = document.querySelector('.home-board-postit.is-notebook');
+      assert.ok(free && !free.dataset.card);
+      assert.match(free.textContent, /Porta dentro le piante/);
+      // I fili dei due post-it delle schede; quello libero non ne ha.
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-postit').length, 2);
+      free.click();
+      await tick(20);
+      const sheet = document.getElementById('home-board-sheet');
+      assert.match(sheet.textContent, /Porta dentro le piante/);
+      [...sheet.querySelectorAll('.home-drawer-link')].find((b) => /^(Fatto|Done)$/.test(b.textContent)).click();
+      await tick(40);
+      assert.equal(rpcs('board.reminder.done').at(-1).params.id, 'r-9');
+      // «+ Promemoria»: il modulo, e un'attesa di tutto il quaderno.
+      B.newNotebookReminder();
+      await tick(10);
+      const form = sheet.querySelector('form.home-board-form');
+      const [what, date] = form.querySelectorAll('input');
+      what.value = 'Rinnova il terriccio';
+      date.value = '2099-03-01';
+      form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+      await tick(40);
+      const add = rpcs('board.reminder.add').at(-1).params;
+      assert.equal(add.card, '');
+      assert.equal(add.text, 'Rinnova il terriccio');
+      assert.equal(add.when.date, '2099-03-01');
+    """.replace("__BOARD__", json.dumps(_notebook_postit_board())))
+
+
+@requires_jsdom
+def test_dragging_the_free_postit_tells_the_server_the_notebook() -> None:
+    _run_wall("""
+      routes['/api/board'] = __BOARD__;
+      await B.load('altro');
+      const el = document.querySelector('.home-board-postit.is-notebook');
+      pointer(el, 'pointerdown', 10, 10);
+      pointer(el, 'pointermove', 60, 50);
+      pointer(el, 'pointerup', 60, 50);
+      await tick(20);
+      const move = rpcs('board.move').at(-1);
+      assert.equal(move.params.kind, 'postit');
+      assert.equal(move.params.id, '');
+    """.replace("__BOARD__", json.dumps(_notebook_postit_board())))
+
+
+@requires_jsdom
+def test_the_list_view_has_a_row_for_the_whole_notebook() -> None:
+    board = _notebook_postit_board()
+    board["autoLabels"] = _auto_board(notebook=True)["autoLabels"]
+    _run_wall("""
+      routes['/api/board'] = __BOARD__;
+      await B.load('altro');
+      B.toggleList();
+      const row = document.querySelector('.home-board-list-notebook');
+      assert.ok(row);
+      assert.match(row.textContent, /Porta dentro le piante/);
+      assert.match(row.textContent, /1 automation/);
+      const acero = [...document.querySelectorAll('.home-board-list-row')]
+        .find((r) => /Acero/.test(r.textContent));
+      assert.match(acero.textContent, /4 automations/);
+    """.replace("__BOARD__", json.dumps(board)))
+
+
 def test_the_mint_label_reads_in_every_theme() -> None:
     """L'inchiostro dell'etichetta sul suo menta, e il filo menta sul sughero."""
     low = []
