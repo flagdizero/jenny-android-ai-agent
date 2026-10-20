@@ -1485,22 +1485,42 @@ export class HomeBoard {
   }
 
   /** Un colpo solo per una raffica; mai sotto il dito. Con *frameShape*, se la
-   *  forma e' cambiata fuori da qui — schede nate o spostate dall'editore — la
-   *  bacheca si inquadra: sul telefono il 09/10/2026 due schede su tre erano
-   *  fuori dallo schermo. Un cassetto riscritto non sposta la vista. */
+   *  forma e' cambiata fuori da qui — schede nate o spostate dall'editore, un
+   *  oggetto nuovo sul muro — la bacheca si inquadra: sul telefono il 09/10/2026
+   *  due schede su tre erano fuori dallo schermo, e il 21/10 l'etichetta di un
+   *  cron di tutto il quaderno e' nata sopra il bordo della vista. Un cassetto
+   *  riscritto, una riga in piu' su un post-it o un oggetto tolto non spostano
+   *  la vista. */
   _reloadSoon({ frameShape = false } = {}) {
     clearTimeout(this._refreshTimer);
     this._refreshTimer = setTimeout(async () => {
       if (this._itemDrag) return;
       const before = this._shape();
       await this.load(this.notebook);
-      if (frameShape && this._shape() !== before) this.zoomToFit();
+      if (frameShape && this._grew(before, this._shape())) this.zoomToFit();
     }, 250);
   }
 
-  /** Quali schede ci sono e dove: la firma di cio' che si vede del muro. */
+  /** La firma di cio' che si vede del muro: le schede e dove stanno, e quali
+   *  oggetti ci sono (post-it, etichette, note, gallerie, anche quelli liberi
+   *  di tutto il quaderno, che hanno ``card: ''``). */
   _shape() {
-    return JSON.stringify((this.data?.cards || []).map((c) => [c.id, c.pos?.x, c.pos?.y]));
+    const d = this.data || {};
+    const items = [
+      ...(d.postits || []).map((p) => `postit:${p.card}`),
+      ...(d.autoLabels || []).map((l) => `auto:${l.card}`),
+      ...(d.notePostits || []).map((p) => `notes:${p.card}`),
+      ...(d.galleries || []).map((g) => `gallery:${g.card}`),
+    ];
+    return {
+      cards: JSON.stringify((d.cards || []).map((c) => [c.id, c.pos?.x, c.pos?.y])),
+      items: new Set(items),
+    };
+  }
+
+  /** Va inquadrata? Se le schede sono cambiate o e' comparso un oggetto nuovo. */
+  _grew(before, after) {
+    return before.cards !== after.cards || [...after.items].some((k) => !before.items.has(k));
   }
 
   /** Indietro: chiude la barra (e spegne i fili). Vero se c'era da chiudere. */

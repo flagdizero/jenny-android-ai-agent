@@ -1280,6 +1280,32 @@ def test_a_board_changed_from_the_chat_redraws_itself() -> None:
       frame({ event: 'board_changed', notebook: 'orto' });
       await wait(400);
       assert.equal(fits, 2);
+      // Un oggetto nuovo che non e' una scheda: l'etichetta di un cron di tutto
+      // il quaderno nasce in alto a sinistra, magari sopra il bordo della vista
+      // (sul Titan il 21/10/2026). Si inquadra.
+      const labelled = structuredClone(moved);
+      labelled.autoLabels = [{ card: '', pos: { x: 2, y: 3, by: 'jenny' }, rows: [] }];
+      labelled.autoRows = 3;
+      routes['/api/board'] = labelled;
+      frame({ event: 'board_changed', notebook: 'orto' });
+      await wait(400);
+      assert.equal(fits, 3);
+      // La stessa etichetta riletta, o un post-it libero che se ne va: la vista resta.
+      frame({ event: 'board_changed', notebook: 'orto' });
+      await wait(400);
+      const fewer = structuredClone(labelled);
+      fewer.postits = [];
+      routes['/api/board'] = fewer;
+      frame({ event: 'board_changed', notebook: 'orto' });
+      await wait(400);
+      assert.equal(fits, 3);
+      // Il post-it libero di tutto il quaderno che compare: si inquadra.
+      const freePostit = structuredClone(fewer);
+      freePostit.postits = [{ card: '', pos: { x: 30, y: 3, by: 'jenny' } }];
+      routes['/api/board'] = freePostit;
+      frame({ event: 'board_changed', notebook: 'orto' });
+      await wait(400);
+      assert.equal(fits, 4);
     """)
 
 
