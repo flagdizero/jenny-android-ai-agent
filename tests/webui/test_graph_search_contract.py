@@ -111,7 +111,9 @@ def _harness_dir(tmp_path: Path) -> Path:
     for name in ("home-board-deck.js", "home-board-notes.js", "home-board-photos.js",
                  "home-photo-viewer.js"):
         shutil.copy(ASSETS / name, assets / name)
-    for name in ("pinch-zoom.js", "horizontal-swipe.js"):
+    # L'etichetta dei cron e il ritmo a parole, che la bacheca disegna (20/10/2026).
+    shutil.copy(ASSETS / "home-board-automation.js", assets / "home-board-automation.js")
+    for name in ("pinch-zoom.js", "horizontal-swipe.js", "cron-view.js"):
         shutil.copy(ASSETS / "shared" / name, assets / "shared" / name)
     shutil.copy(ASSETS / "shared" / "wiki-search.js", assets / "shared" / "wiki-search.js")
     for name, text in _STUBS.items():

@@ -117,6 +117,13 @@
      attese. Come il giallo, uguale in ogni tema. */
   --board-note:        #d7c4f0;
   --board-note-ink:    #34264a;
+  /* Le automazioni (i cron del quaderno): l'etichetta menta, con l'icona tonda
+     scura e il filo menta. Come il giallo e il lilla, uguale in ogni tema; il
+     filo si scurisce nei temi chiari, dove il menta chiaro non si vedrebbe. */
+  --board-auto:        #b4e6cf;
+  --board-auto-ink:    #0f3326;
+  --board-auto-icon:   #0f3326;
+  --board-auto-thread: #7cc7a6;
   --board-thread:      #c4473c;
   --board-new:         #5b97e0;
   --board-soon:        #e6c341;
@@ -379,6 +386,8 @@
   --board-done:    #3f8a3c;
   /* Il giallo del post-it, sulla carta chiara, non si vede: un ocra. */
   --board-postit-thread: #a8841c;
+  /* E il filo menta, per la stessa ragione, un verde bottiglia. */
+  --board-auto-thread: #2f7d5c;
   /* Il lilla delle note come testo sulla pagina (il titoletto, «Nuova nota»):
      sul fondo chiaro si leggeva a 1,3:1. Questo regge almeno 5,5:1 sui fondi
      e le superfici di tutti e tre. */

@@ -101,3 +101,34 @@ async def test_a_cron_section_from_before_still_shows_once_and_goes_with_it(
     await dispatch_command(with_cron, "board.section.remove", {"wiki": "piante", "card": "acero",
                                                                "id": "s-cron"})
     assert service.get_job(job.id) is None
+
+
+def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, tmp_path) -> None:
+    """Un'etichetta per scheda coi suoi cron che si ripetono; un «una volta sola» è una data."""
+    from jenny.board.cron_link import job_snapshot, make_link
+    from jenny.board.store import mutate_reminders
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronSchedule
+
+    service = CronService(tmp_path / "jobs.json")
+    first = _meteo(service, notebook, make_link("piante", "acero"))
+    second = service.add_job("Gelo", CronSchedule(kind="cron", expr="0 7 * * *", tz="Europe/Rome"),
+                             "guarda se gela", session_key="project:piante",
+                             board=make_link("piante", "acero"))
+    once = service.add_job("Vivaio", CronSchedule(kind="at", at_ms=4_102_444_800_000), "chiama",
+                           session_key="project:piante", board=make_link("piante", "acero"))
+    mutate_reminders(notebook, lambda r: r["reminders"].append({
+        "id": "r-1", "card": "acero", "text": "Rinvaso", "state": "open", "by": "user",
+        "when": {"kind": "date", "date": "2099-03-01", "precision": "day"}}))
+    before = build_board_view(notebook)
+    jobs = {j.id: job_snapshot(j) for j in (first, second, once)}
+    view = build_board_view(notebook, cron_jobs=jobs)
+    [label] = view["autoLabels"]
+    assert label["card"] == "acero" and label["pos"]["by"] == "jenny"
+    assert {r["id"] for r in label["rows"]} == {first.id, second.id}
+    assert label["rows"][0]["schedule"].get("shape") or label["rows"][1]["schedule"].get("shape")
+    # L'etichetta arriva dopo: il post-it resta dov'era.
+    assert view["postits"] == before["postits"]
+    # Una scheda che non è più sulla bacheca non ha etichetta.
+    mutate_board(notebook, lambda b: b.__setitem__("cards", []))
+    assert build_board_view(notebook, cron_jobs=jobs)["autoLabels"] == []

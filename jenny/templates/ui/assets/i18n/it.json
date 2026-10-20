@@ -1551,7 +1551,8 @@
       "quiet": "Ultimo giro {when}: niente da dirti.",
       "changePrompt": "Nel cassetto {card}, il cron «{name}»: vorrei ",
       "prompt": "Nel cassetto {card}, ogni ",
-      "removeConfirm": "Togliere «{name}»? Jenny smette di farlo."
+      "removeConfirm": "Togliere «{name}»? Jenny smette di farlo.",
+      "changeNotebookPrompt": "Nelle automazioni di tutto il quaderno, «{name}»: vorrei "
     },
     "card": {
       "add": "Nuova scheda",
@@ -1648,6 +1649,14 @@
       "notesOne": "1 nota",
       "photos": "{count} foto",
       "photosOne": "1 foto"
+    },
+    "auto": {
+      "more": "+{count} altri",
+      "notebook": "Tutto il quaderno",
+      "trouble": "non riesce a guardare da {count} giri",
+      "last": "ultimo: «{text}»",
+      "quiet": "ultimo giro {when}: niente",
+      "onlyIf": "ti scrive solo se serve"
     }
   }
 }

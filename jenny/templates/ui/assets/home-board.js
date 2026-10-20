@@ -48,6 +48,8 @@ import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 import { metaText, renderBlock } from './home-board-blocks.js';
 import { DrawerNotes } from './home-board-notes.js';
 import { DrawerPhotos, PhotoUrls, photoDate } from './home-board-photos.js';
+import { automationRow, rhythmLabel } from './home-board-automation.js';
+import { confirmDialog } from './shared/dialog.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
 export const LONG_PRESS_MS = 450;
@@ -85,6 +87,42 @@ export function whenLabel(when, locale = i18n.locale) {
   } catch (_) {
     return when.date;
   }
+}
+
+/** Un istante in breve, per i fogli della bacheca: «dom 25, 18:30». */
+export function shortStamp(iso, locale = i18n.locale) {
+  const at = iso ? new Date(iso) : null;
+  if (!at || Number.isNaN(at.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(at);
+  } catch {
+    return at.toISOString();
+  }
+}
+
+/** L'ultima riga dell'etichetta di un cron: com'è andato l'ultimo giro.
+ *
+ *  In pausa lo dice per primo; poi un monitor che non riesce a guardare (va
+ *  detto, o il suo silenzio sembra un «niente da dire»); poi l'ultimo esito, o
+ *  l'ultimo giro muto. Un monitor che non ha ancora girato dice come lavora. */
+export function autoLastLine(job, locale = i18n.locale) {
+  if (job.paused) return i18n.t('board.cron.paused');
+  if (job.couldNotCheck > 0) return i18n.t('board.auto.trouble', { count: job.couldNotCheck });
+  const result = job.result;
+  if (result?.text) return i18n.t('board.auto.last', { text: result.text });
+  if (result?.at) {
+    let when = '';
+    try {
+      when = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric' })
+        .format(new Date(result.at));
+    } catch {
+      when = '';
+    }
+    return i18n.t('board.auto.quiet', { when });
+  }
+  return job.mode === 'monitor' ? i18n.t('board.auto.onlyIf') : '';
 }
 
 /** Il giorno di *d* come `AAAA-MM-GG`, nell'ora di chi guarda (non in UTC). */
@@ -160,7 +198,7 @@ const ZOOM_EXTENT = [0.3, 2.2];
    quando una riga supera NEAR_ROW_PX pixel sullo schermo. */
 const SLIP_ROW = 0.0355;
 const NEAR_ROW_PX = 30;
-const ITEM_BOX = { card: [20, 40], postit: [24, 44], notes: [24, 36], photos: [21, 32] };
+const ITEM_BOX = { card: [20, 40], postit: [24, 44], notes: [24, 36], photos: [21, 32], auto: [30, 40] };
 /* Entrando, la bacheca si inquadra tutta (`zoomToFit`): l'aria in pixel fra le
    schede e il bordo, e l'ingrandimento massimo di quell'inquadratura — a
    grandezza naturale, non oltre: due schede sole non diventano due manifesti. */
@@ -361,6 +399,11 @@ export class HomeBoard {
       const el = this._gallery(g, data);
       if (el) this.wall.appendChild(el);
     }
+    /* Le etichette menta dei cron: una per scheda, e una di tutto il quaderno. */
+    for (const label of data.autoLabels || []) {
+      const el = this._autoLabel(label, data);
+      if (el) this.wall.appendChild(el);
+    }
     /* Una scheda-app con dati e' una striscia; le altre, polaroid. */
     for (const card of data.cards) {
       this.wall.appendChild(card.slip ? this._slip(card) : this._polaroid(card));
@@ -518,6 +561,7 @@ export class HomeBoard {
     for (const p of this.data.postits || []) take(p.pos, ITEM_BOX.postit[0], ITEM_BOX.postit[1]);
     for (const p of this.data.notePostits || []) take(p.pos, ITEM_BOX.notes[0], ITEM_BOX.notes[1]);
     for (const p of this.data.galleries || []) take(p.pos, ITEM_BOX.photos[0], ITEM_BOX.photos[1]);
+    for (const p of this.data.autoLabels || []) take(p.pos, ITEM_BOX.auto[0], ITEM_BOX.auto[1]);
     this._zoom.translateExtent([
       [((x0 - AIR) / 100) * W, ((y0 - AIR) / 100) * H],
       [((x1 + AIR) / 100) * W, ((y1 + AIR) / 100) * H],
@@ -572,7 +616,8 @@ export class HomeBoard {
     if (!this._zoom || !this.canvas || this.listView) return false;
     const box = this.canvas.getBoundingClientRect();
     if (!box?.width || !box?.height) return false;
-    const items = this.wall.querySelectorAll('.home-board-card, .home-board-postit, .home-board-gallery');
+    const items = this.wall.querySelectorAll(
+      '.home-board-card, .home-board-postit, .home-board-gallery, .home-board-autolabel');
     if (!items.length) {
       this._lookAt(window.d3.zoomIdentity);
       return true;
@@ -889,6 +934,67 @@ export class HomeBoard {
     return el;
   }
 
+  /** L'etichetta menta dei cron di un ambito: una riga per cron (il ritmo in
+   *  grande, il suo nome, l'ultimo giro), le prime `autoRows`, e «+N». Con la
+   *  scheda ha il suo filo; quella di tutto il quaderno sta libera. Il tocco apre
+   *  il cassetto della scheda, o il foglio dei cron di tutto il quaderno. */
+  _autoLabel(label, data) {
+    const card = label.card ? data.cards.find((c) => c.id === label.card) : null;
+    if ((label.card && !card) || !label.rows?.length) return null;
+    const item = label;
+    item.id = label.card || '';
+    const el = document.createElement('div');
+    el.className = `home-board-item home-board-autolabel${label.card ? '' : ' is-notebook'}`;
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.style.setProperty('--tilt', `${this._tilt(`auto-${item.id}`) - 1}deg`);
+    const icon = document.createElement('span');
+    icon.className = 'home-board-autolabel-icon';
+    icon.innerHTML = '<i class="ti ti-repeat" aria-hidden="true"></i>';
+    const list = document.createElement('div');
+    list.className = 'home-board-autolabel-rows';
+    const shown = label.rows.slice(0, data.autoRows || 3);
+    const words = [];
+    for (const job of shown) {
+      const row = document.createElement('div');
+      row.className = 'home-board-autolabel-row';
+      row.classList.toggle('is-paused', Boolean(job.paused));
+      row.classList.toggle('is-trouble', !job.paused && job.couldNotCheck > 0);
+      row.classList.toggle('is-alert', !job.paused && job.lastStatus === 'error');
+      const rhythm = document.createElement('span');
+      rhythm.className = 'home-board-autolabel-rhythm';
+      rhythm.textContent = rhythmLabel(job);
+      const what = document.createElement('span');
+      what.className = 'home-board-autolabel-what';
+      what.textContent = job.name;
+      row.append(rhythm, what);
+      const last = autoLastLine(job);
+      if (last) {
+        const line = document.createElement('span');
+        line.className = 'home-board-autolabel-last';
+        line.textContent = last;
+        row.appendChild(line);
+      }
+      list.appendChild(row);
+      words.push([rhythm.textContent, job.name, last].filter(Boolean).join(', '));
+    }
+    const rest = label.rows.length - shown.length;
+    if (rest > 0) {
+      const more = document.createElement('span');
+      more.className = 'home-board-autolabel-more';
+      more.textContent = i18n.t('board.auto.more', { count: rest });
+      list.appendChild(more);
+      words.push(more.textContent);
+    }
+    el.append(icon, list);
+    const owner = card ? card.title : i18n.t('board.auto.notebook');
+    el.setAttribute('aria-label', `${owner} — ${words.join('; ')}`);
+    if (label.card) el.dataset.card = label.card;
+    this._place(el, item);
+    this._bind(el, item, 'auto');
+    return el;
+  }
+
   /** Il post-it lilla delle note di una scheda: le ultime `noteRows` (due),
    *  data e testo, e «+N note». Una nota sola e' un foglio; di piu', sotto ne
    *  spunta un secondo. Il tocco apre le note della scheda nel foglio, qui. */
@@ -1104,8 +1210,13 @@ export class HomeBoard {
     let timer = null;
     const open = () => {
       const card = this.data?.cards.find((c) => c.id === item.id);
-      /* Il post-it apre sempre il cassetto della sua scheda, anche di un'app. */
-      if (kind === 'postit') {
+      /* Il post-it e l'etichetta aprono sempre il cassetto della loro scheda,
+         anche di un'app; quelli di tutto il quaderno, il loro foglio qui. */
+      if (kind === 'postit' || kind === 'auto') {
+        if (!item.id) {
+          this.openNotebookObject(kind);
+          return;
+        }
         this.onOpenCard?.(item.id, card?.title || '');
         return;
       }
@@ -1589,9 +1700,11 @@ export class HomeBoard {
       label.style.top = `${from.y + (to.y - from.y) * LABEL_AT}px`;
       this.wall.appendChild(label);
     }
-    /* Il filo di ogni post-it (giallo e lilla) e di ogni galleria, dal suo
-       chiodo a quello della sua scheda. */
-    for (const postit of this.wall.querySelectorAll('.home-board-postit, .home-board-gallery')) {
+    /* Il filo di ogni post-it (giallo e lilla), di ogni galleria e di ogni
+       etichetta, dal suo chiodo a quello della sua scheda. Quelli di tutto il
+       quaderno non hanno una scheda, e quindi niente filo. */
+    for (const postit of this.wall.querySelectorAll(
+      '.home-board-postit, .home-board-gallery, .home-board-autolabel')) {
       const card = elOf(postit.dataset.card);
       if (!card) continue;
       const on = this.focus === postit.dataset.card;
@@ -1602,13 +1715,55 @@ export class HomeBoard {
       line.setAttribute('y1', a.y);
       line.setAttribute('x2', b.x);
       line.setAttribute('y2', b.y);
-      line.setAttribute('class', `is-postit ${!this.focus ? 'is-rest' : on ? 'is-on' : 'is-off'}`);
+      const tone = postit.classList.contains('home-board-autolabel') ? 'is-auto' : 'is-postit';
+      line.setAttribute('class', `${tone} ${!this.focus ? 'is-rest' : on ? 'is-on' : 'is-off'}`);
       svg.appendChild(line);
       if (!on) continue;
       lit = true;
       postit.classList.add('is-linked');
     }
     return lit;
+  }
+
+  /* ── Gli oggetti di tutto il quaderno ── */
+
+  /** Il foglio di un oggetto libero: i cron di tutto il quaderno, o i suoi promemoria. */
+  openNotebookObject(kind) {
+    if (kind === 'auto') this._openNotebookAutomations();
+  }
+
+  _openNotebookAutomations() {
+    const label = (this.data?.autoLabels || []).find((l) => !l.card);
+    const body = document.createElement('div');
+    body.className = 'home-board-automations';
+    for (const job of label?.rows || []) {
+      body.appendChild(automationRow(job, {
+        stamp: shortStamp,
+        onPause: (j) => this._cronAct('cron.pause', { job: j.id, paused: !j.paused }),
+        onChange: (j) => {
+          this.sheet.close();
+          this.onAskJenny?.(i18n.t('board.cron.changeNotebookPrompt', { name: j.name }));
+        },
+        onRemove: async (j) => {
+          if (!(await confirmDialog(i18n.t('board.cron.removeConfirm', { name: j.name })))) return;
+          await this._cronAct('cron.remove', { job: j.id });
+        },
+      }));
+    }
+    this.sheet.open(i18n.t('board.auto.notebook'), body);
+  }
+
+  /** Un gesto su un cron dal foglio: lo dice al gateway, chiude e ridisegna. */
+  async _cronAct(method, params) {
+    try {
+      await rpc.board(method, this.notebook, params);
+    } catch (err) {
+      console.warn(`home.board: ${method} failed`, err);
+      showToast(i18n.t('board.section.failed'), 'error');
+      return;
+    }
+    this.sheet.close();
+    await this.load(this.notebook);
   }
 
   /* ── La busta ── */

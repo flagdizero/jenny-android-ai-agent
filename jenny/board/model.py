@@ -639,9 +639,10 @@ CARD_BOX = (20.0, 40.0)
 POSTIT_BOX = (24.0, 44.0)
 # Quante attese mostra un post-it; le altre stanno dietro «+N», nel cassetto.
 POSTIT_ROWS = 3
-# L'etichetta menta dei cron di un ambito: larga come il post-it, alta quanto
+# L'etichetta menta dei cron di un ambito: un po' più larga del post-it (il ritmo
+# in grande sta su una riga), alta quanto
 # tre righe (ritmo, cosa fa, ultimo giro) e «+N» sul quadrato basso del Titan 2.
-AUTO_BOX = (26.0, 40.0)
+AUTO_BOX = (30.0, 40.0)
 AUTO_ROWS = 3
 # Il post-it lilla delle note di una scheda: largo come il giallo, alto due
 # righe e «+N». E la sua galleria: al piu' tre polaroid da 16 a ventaglio, in

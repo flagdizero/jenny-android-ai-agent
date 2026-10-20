@@ -2918,6 +2918,60 @@ body.home {
   overflow: hidden;
 }
 .home-board-postit-more { font-size: 2cqw; font-weight: 700; opacity: 0.75; }
+/* L'etichetta menta delle automazioni (i cron) di una scheda o di tutto il
+   quaderno: un nastro pieno con l'icona tonda scura, e per ogni cron il ritmo in
+   grande, il suo nome e l'ultimo giro. I capi dentellati la dicono nastro, non
+   carta; il resto dei bordi resta dritto perché si legga. */
+.home-board-autolabel {
+  width: 30cqw;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 5cqw 1fr;
+  column-gap: 1.5cqw;
+  align-items: start;
+  padding: 1.6cqw 2.2cqw 1.6cqw 2cqw;
+  background: var(--board-auto);
+  color: var(--board-auto-ink);
+  font-family: var(--font-hand);
+  clip-path: polygon(0 0, 100% 0, 98.6% 12%, 100% 25%, 98.6% 38%, 100% 50%, 98.6% 62%,
+    100% 75%, 98.6% 88%, 100% 100%, 0 100%, 1.4% 88%, 0 75%, 1.4% 62%, 0 50%, 1.4% 38%,
+    0 25%, 1.4% 12%);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+}
+.home-board-autolabel-icon {
+  width: 5cqw;
+  height: 5cqw;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--board-auto-icon);
+  color: var(--board-auto);
+  font-size: 3cqw;
+}
+.home-board-autolabel-rows { display: flex; flex-direction: column; gap: 1cqw; min-width: 0; }
+.home-board-autolabel-row + .home-board-autolabel-row {
+  padding-top: 1cqw;
+  border-top: 1px dashed color-mix(in srgb, var(--board-auto-ink) 30%, transparent);
+}
+.home-board-autolabel-rhythm { display: block; font-size: 2.6cqw; font-weight: 700; line-height: 1.05; }
+.home-board-autolabel-rhythm::first-letter { text-transform: uppercase; }
+.home-board-autolabel-what {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 2.1cqw;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.home-board-autolabel-last { display: block; font-size: 1.75cqw; font-weight: 700; opacity: 0.7; }
+.home-board-autolabel-row.is-paused { opacity: 0.55; }
+.home-board-autolabel-row.is-trouble .home-board-autolabel-last,
+.home-board-autolabel-row.is-alert .home-board-autolabel-last { color: var(--board-alert); opacity: 1; }
+.home-board-autolabel-more { font-size: 1.9cqw; font-weight: 700; opacity: 0.75; }
+/* Il filo di un'etichetta: menta, come lei. */
+.home-board-threads line.is-auto { stroke: var(--board-auto-thread); }
+
 /* Il post-it lilla: le note di una scheda, accorpate (il giallo e' delle
    attese). Con piu' di una nota, sotto spunta il bordo di un secondo foglio:
    un'ombra piena spostata, non un elemento — niente `z-index` in questo foglio. */

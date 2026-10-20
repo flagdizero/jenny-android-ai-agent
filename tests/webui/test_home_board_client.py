@@ -1387,6 +1387,107 @@ def test_dragging_a_postit_tells_the_server() -> None:
     """)
 
 
+def _auto_board(notebook: bool = False) -> dict:
+    board = json.loads(json.dumps(BOARD))
+    sunday = {"kind": "cron", "expr": "30 18 * * 0", "tz": "Europe/Rome",
+              "shape": {"pattern": "weekly", "dow": [0], "hour": 18, "minute": 30}}
+    row = lambda i, **kw: {  # noqa: E731
+        "id": f"job{i}0000", "name": f"Cron {i}", "message": "m", "mode": "monitor",
+        "schedule": sunday, "nextRunAtMs": None, "lastStatus": None, "paused": False,
+        "enabled": True, "couldNotCheck": 0, "scope": "acero", "result": None, **kw}
+    board["autoLabels"] = [{"card": "acero", "pos": {"x": 30, "y": 55, "by": "jenny"}, "rows": [
+        row(1, result={"at": "2026-10-18T18:30:00+02:00", "status": "ok", "text": "Gela stanotte"}),
+        row(2, paused=True),
+        row(3, couldNotCheck=2),
+        row(4),
+    ]}]
+    if notebook:
+        board["autoLabels"].append({"card": "", "pos": {"x": 5, "y": 70, "by": "jenny"},
+                                    "rows": [row(5, scope="", name="Gelo")]})
+    board["autoRows"] = 3
+    return board
+
+
+@requires_jsdom
+def test_a_cards_crons_are_one_mint_label_with_its_own_thread() -> None:
+    _run_wall("""
+      routes['/api/board'] = __AUTO__;
+      await B.load('altro');
+      const labels = [...document.querySelectorAll('.home-board-autolabel')];
+      assert.equal(labels.length, 1);
+      const label = labels[0];
+      assert.equal(label.dataset.card, 'acero');
+      // Tre righe e «+1»: il ritmo a parole, il nome, l'ultimo giro.
+      const rows = [...label.querySelectorAll('.home-board-autolabel-row')];
+      assert.equal(rows.length, 3);
+      assert.match(rows[0].querySelector('.home-board-autolabel-rhythm').textContent, /Sunday/);
+      assert.equal(rows[0].querySelector('.home-board-autolabel-what').textContent, 'Cron 1');
+      assert.match(rows[0].textContent, /Gela stanotte/);
+      assert.ok(rows[1].classList.contains('is-paused'));
+      assert.ok(rows[2].classList.contains('is-trouble'));
+      assert.equal(label.querySelector('.home-board-autolabel-more').textContent, '+1 more');
+      // Il suo filo, menta, separato da quello del post-it.
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-auto').length, 1);
+      // Il tocco apre il cassetto della sua scheda.
+      label.click();
+      await tick(40);
+      assert.equal(app.view, 'drawer');
+      assert.equal(rpcs('board.seen').at(-1).params.card, 'acero');
+    """.replace("__AUTO__", json.dumps(_auto_board())))
+
+
+@requires_jsdom
+def test_dragging_a_label_tells_the_server_its_card() -> None:
+    _run_wall("""
+      routes['/api/board'] = __AUTO__;
+      await B.load('altro');
+      const el = document.querySelector('.home-board-autolabel');
+      pointer(el, 'pointerdown', 10, 10);
+      pointer(el, 'pointermove', 60, 50);
+      pointer(el, 'pointerup', 60, 50);
+      await tick(20);
+      const move = rpcs('board.move').at(-1);
+      assert.equal(move.params.kind, 'auto');
+      assert.equal(move.params.id, 'acero');
+    """.replace("__AUTO__", json.dumps(_auto_board())))
+
+
+@requires_jsdom
+def test_the_notebook_label_has_no_thread_and_opens_its_sheet() -> None:
+    _run_wall("""
+      routes['/api/board'] = __AUTO__;
+      rpcAnswers['board.cron.pause'] = () => ({ ok: true });
+      await B.load('altro');
+      const free = document.querySelector('.home-board-autolabel.is-notebook');
+      assert.ok(free && !free.dataset.card);
+      // Un solo filo menta: quello della scheda; il quaderno non ne ha.
+      assert.equal(document.querySelectorAll('#home-board-threads line.is-auto').length, 1);
+      free.click();
+      await tick(20);
+      const sheet = document.getElementById('home-board-sheet');
+      assert.match(sheet.textContent, /Gelo/);
+      const pause = [...sheet.querySelectorAll('.home-drawer-link')]
+        .find((b) => /^(Pausa|Pause)$/.test(b.textContent));
+      pause.click();
+      await tick(40);
+      assert.equal(rpcs('board.cron.pause').at(-1).params.job, 'job50000');
+    """.replace("__AUTO__", json.dumps(_auto_board(notebook=True))))
+
+
+def test_the_mint_label_reads_in_every_theme() -> None:
+    """L'inchiostro dell'etichetta sul suo menta, e il filo menta sul sughero."""
+    low = []
+    for theme in theme_tokens.themes():
+        t = theme_tokens.tokens(theme)
+        ink = theme_tokens.contrast(t["board-auto-ink"], t["board-auto"], t["bg"])
+        if ink < 4.5:
+            low.append(f"{theme}: inchiostro {ink:.2f}:1")
+        thread = theme_tokens.contrast(t["board-auto-thread"], t["board-bg"], t["bg"])
+        if thread < 1.8:
+            low.append(f"{theme}: filo {thread:.2f}:1")
+    assert not low, f"l'etichetta menta non si legge: {low}"
+
+
 @requires_jsdom
 def test_the_drawer_shows_its_reminders_once_on_a_care_calendar() -> None:
     card = json.loads(json.dumps(CARD))

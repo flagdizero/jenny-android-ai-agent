@@ -181,6 +181,14 @@ def automations(
     return out
 
 
+def _recurring(
+    board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None, scope: str,
+) -> list[dict[str, Any]]:
+    """I cron che si ripetono dell'ambito *scope*: le righe della sua etichetta."""
+    return [a for a in automations(board, cron_jobs, scope)
+            if (a.get("schedule") or {}).get("kind") != "at"]
+
+
 def build_board_view(
     project_root: Path,
     *,
@@ -207,6 +215,7 @@ def build_board_view(
             "postits": [],
             "notePostits": [],
             "galleries": [],
+            "autoLabels": [],
             "connections": [],
             "suggestions": [],
             "since": [],
@@ -290,6 +299,22 @@ def build_board_view(
             "photos": [{"id": p["id"], "path": p["path"], "caption": p.get("caption") or ""}
                        for p in photos[:model.GALLERY_SHOWN]],
         })
+    # Le etichette menta dei cron che si ripetono: una per scheda, col suo filo.
+    # Dopo tutto il resto, così i posti calcolati degli altri oggetti non cambiano.
+    # Un cron «una volta sola» è una data, e sta sul post-it (non qui).
+    auto_labels = []
+    for card in board["cards"]:
+        rows = _recurring(board, cron_jobs, card["id"])
+        if not rows:
+            continue
+        h = model.card_box(card)[1]
+        near = (float(card["pos"]["x"]) - model.AUTO_BOX[0] * 0.5, float(card["pos"]["y"]) + h * 0.8)
+        auto_labels.append({
+            "card": card["id"],
+            "pos": card.get("autoPos")
+            or _place_near(board, reminders, near, model.AUTO_BOX, placed),
+            "rows": rows,
+        })
     last_seen = _stamp(board.get("lastSeen"))
     since = [row for row in board.get("since") or [] if _stamp(row.get("at")) > last_seen]
     offboard = offboard_pages(board, titles)
@@ -302,6 +327,8 @@ def build_board_view(
         "postitRows": model.POSTIT_ROWS,
         "notePostits": note_postits,
         "galleries": galleries,
+        "autoLabels": auto_labels,
+        "autoRows": model.AUTO_ROWS,
         "connections": [
             c for c in board["connections"] if c["a"] in on_board and c["b"] in on_board
         ],

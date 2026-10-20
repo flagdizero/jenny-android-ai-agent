@@ -1551,7 +1551,8 @@
       "quiet": "Last run {when}: nothing to tell you.",
       "changePrompt": "In the {card} drawer, the cron «{name}»: I'd like ",
       "prompt": "In the {card} drawer, every ",
-      "removeConfirm": "Remove «{name}»? Jenny stops doing it."
+      "removeConfirm": "Remove «{name}»? Jenny stops doing it.",
+      "changeNotebookPrompt": "In the automations of the whole notebook, «{name}»: I'd like "
     },
     "card": {
       "add": "New card",
@@ -1648,6 +1649,14 @@
       "notesOne": "1 note",
       "photos": "{count} photos",
       "photosOne": "1 photo"
+    },
+    "auto": {
+      "more": "+{count} more",
+      "notebook": "The whole notebook",
+      "trouble": "couldn't look for {count} runs",
+      "last": "last: «{text}»",
+      "quiet": "last run {when}: nothing",
+      "onlyIf": "writes only if it matters"
     }
   }
 }

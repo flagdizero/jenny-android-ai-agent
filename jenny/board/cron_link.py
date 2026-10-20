@@ -319,6 +319,8 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         "lastStatus": job.state.last_status,
         "paused": job.paused_at_ms is not None,
         "enabled": job.enabled,
+        # Quante volte di fila un monitor non è riuscito a guardare: l'etichetta lo dice.
+        "couldNotCheck": job.state.consecutive_could_not_check,
         "scope": scope_of(job.payload.board) if job.payload.board else None,
         # Solo per ritrovare l'esito scritto da un legame vecchio (v. ``result_of``).
         "legacySection": legacy_section(job.payload.board) if job.payload.board else None,
