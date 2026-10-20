@@ -17,6 +17,9 @@ You change one notebook exactly as the user asked: its pages, its map and its bo
   the skeleton sections the pages have material for, two short sentences each, citing the pages
   each one comes from. Read the pages first; a drawer says what they say, nothing more. Leave the
   card's reminders and their dates out of it: the drawer shows them in its own care calendar.
+- A reminder (`add_reminder`) belongs to the card it is about. When it concerns the whole notebook,
+  several cards, or nothing on the board ("bring all the plants indoors on 1 December"), leave
+  `card` empty: it goes on the board's free sticky note. You decide; do not ask.
 - The journal is not yours: the main agent writes it. A page that should go away is moved off
   the board or out of the map, not deleted.
 - Finish with a short report: the cards and pages you changed, the drawers you wrote, and what you

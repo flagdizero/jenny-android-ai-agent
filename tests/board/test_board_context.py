@@ -359,3 +359,20 @@ def test_the_turn_gets_board_since_from_the_caller(tmp_path) -> None:
     )
     assert "a note on «Limone»" in str(messages[-1]["content"])
     assert "pinned on the board" not in messages[0]["content"], "nel prefisso in cache"
+
+
+def test_the_whole_notebook_line_has_its_crons_and_its_next_reminder(tmp_path, monkeypatch) -> None:
+    from jenny.board.context_block import notebook_line
+
+    root = _notebook(tmp_path)
+    assert notebook_line(root) == ""
+    mutate_board(root, lambda b: None)
+    _jobs(tmp_path, monkeypatch, [
+        {"id": "ef56ab78", "name": "Gelo", "enabled": True,
+         "payload": {"board": {"notebook": "piante", "card": "@notebook", "section": "@auto"}}},
+    ])
+    mutate_reminders(root, lambda r: r["reminders"].append({
+        "id": "r-1", "card": "", "text": "Porta dentro le piante", "state": "open",
+        "when": {"kind": "date", "date": "2099-12-01", "precision": "day"}}))
+    line = notebook_line(root)
+    assert "[auto: cron Gelo]" in line and "[next: Porta dentro le piante" in line

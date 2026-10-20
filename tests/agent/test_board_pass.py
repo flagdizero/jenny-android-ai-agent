@@ -188,6 +188,20 @@ async def test_reminders_are_not_added_twice(tmp_path) -> None:
     assert bad.startswith("Refused")
 
 
+async def test_the_gardener_can_give_a_reminder_to_the_whole_notebook(tmp_path) -> None:
+    ws, root = _notebook(tmp_path)
+    _seed_board(root)
+    tool = _tools(_state(root, ws))["board_add_reminder"]
+    out = await tool.execute(text="Porta dentro tutte le piante", date="2026-12-01")
+    assert "the whole notebook" in out
+    [rem] = read_reminders(root)["reminders"]
+    assert rem["card"] == "" and rem["by"] == "jenny"
+    again = await tool.execute(card="", text="porta dentro tutte le piante", date="2026-12-01")
+    assert again.startswith("Already")
+    nope = await tool.execute(card="cantina", text="x", date="2026-12-01")
+    assert nope.startswith("Refused") and "whole notebook" in nope
+
+
 def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
     """Un piano gia' in agenda come cron non si cerca: si legge nel prompt.
 

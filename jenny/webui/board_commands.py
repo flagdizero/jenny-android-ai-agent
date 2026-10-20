@@ -416,6 +416,7 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
         sid = await _run(edit.add_note, root, card_id, params.get("text"),
                          timezone_name=_timezone())
     elif kind == "reminder":
+        # Come ``board.reminder.add`` con la scheda: dal cassetto, l'attesa è sua.
         sid = await _run(edit.add_reminder, root, card_id, params.get("text"), params.get("when"))
     else:
         sid = await _add_photo(root, card_id, params)
@@ -538,6 +539,16 @@ async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) ->
     return {"ok": True}
 
 
+async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Un'attesa nuova: di una scheda (``card``) o di tutto il quaderno (``card`` vuoto)."""
+    root = _project(ctx, params)
+    card = params.get("card") or model.NOTEBOOK
+    if card != model.NOTEBOOK:
+        card = _card_id(params)
+    rid = await _run(edit.add_reminder, root, card, params.get("text"), params.get("when"))
+    return {"ok": True, "id": rid}
+
+
 async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Pausa e ripresa di un cron del quaderno, dal suo cassetto: ``paused: true|false``.
 
@@ -596,6 +607,7 @@ BOARD_COMMANDS = {
     "board.section.update": board_section_update,
     "board.section.remove": board_section_remove,
     "board.section.reorder": board_section_reorder,
+    "board.reminder.add": board_reminder_add,
     "board.reminder.done": board_reminder_done,
     "board.reminder.update": board_reminder_update,
     "board.reminder.drop": board_reminder_drop,

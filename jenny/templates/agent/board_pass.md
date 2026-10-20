@@ -46,7 +46,7 @@ returns the pages of the next, until the last. Write each drawer as soon as its 
 those pages and in plain prose (no `[[links]]`) — do not read ahead, and do not read a page the
 tools have already shown you. If you
 find dated plans in the pages (an unchecked `[ ]` with a date, "around March"), add them with
-`board_add_reminder` on the right card.
+`board_add_reminder` on the right card (or with no card, for the whole notebook).
 {% endif %}
 ### 1. The user first: corrections
 
@@ -86,10 +86,11 @@ told twice is one too many.{% else %}No drawer needs rewriting.{% endif %}
 
 {% if journal %}Read the new journal lines below. A line that decides or plans something **with a date** ("repot it
 around March", "next feed on the 10th") becomes a reminder with `board_add_reminder`, on the card
-it is about, with the page that explains why and the journal line as its source. Not a fact, not a
+it is about — or with no card when it concerns the whole notebook, several cards, or nothing on
+the board — with the page that explains why and the journal line as its source. Not a fact, not a
 wish without a date, not something already done. Everything already scheduled — the reminders
-**and the crons in the drawers** — is listed under "Already scheduled": a plan that is already
-there, as either, is done; do not add it again, and do not go looking for it elsewhere.{% else %}No new journal lines: nothing to extract.{% endif %}
+**and the notebook's crons** — is listed under "Already scheduled": a plan that is already there,
+as either, is done; do not add it again, and do not go looking for it elsewhere.{% else %}No new journal lines: nothing to extract.{% endif %}
 
 ### 5. Propose, do not impose
 

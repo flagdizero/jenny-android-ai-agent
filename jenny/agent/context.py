@@ -149,6 +149,17 @@ def _read_project_board(root: Path) -> str:
         return ""
 
 
+def _read_project_notebook_line(root: Path) -> str:
+    """Le cose di tutto il quaderno per il prompt, o ``""``. Mai un'eccezione."""
+    try:
+        from jenny.board.context_block import notebook_line
+
+        return notebook_line(root)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project block: the notebook items of {} are unreadable: {}", root, exc)
+        return ""
+
+
 def _read_project_board_absence(root: Path) -> str:
     """Perche' il quaderno *root* non ha bacheca, o ``""``. Mai un'eccezione.
 
@@ -1254,6 +1265,9 @@ class ContextBuilder:
             "project_board_absence": (
                 "" if project_board else _read_project_board_absence(root)
             ),
+            # I promemoria e i cron di tutto il quaderno, non legati a una scheda: ci
+            # sono anche su una bacheca senza schede, quindi in tutti e due i rami.
+            "project_board_notebook": _read_project_notebook_line(root),
             # T3, il gradino 1 di P4: la mappa del progetto entra **d'ufficio**,
             # non su richiesta. Il giro di wiki parte pagato, e la differenza si
             # vede alla prima domanda di una sessione nuova: senza, l'agente

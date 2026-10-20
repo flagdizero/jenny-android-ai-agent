@@ -351,7 +351,9 @@ class BoardPass:
             parts.append(self._section("Pages the user wants on the board", "\n".join(rows)))
         if journal.strip():
             parts.append(self._section("New journal lines", f"````markdown\n{journal}\n````"))
-        rems = [f"- reminder `{r['id']}` on `{r['card']}`: {r['text']} ({r['when'].get('date', '')})"
+        rems = [f"- reminder `{r['id']}` "
+                + ("for the whole notebook" if r['card'] == model.NOTEBOOK else f"on `{r['card']}`")
+                + f": {r['text']} ({r['when'].get('date', '')})"
                 for r in model.open_reminders(self.reminders)]
         parts.append(self._section("Already scheduled",
                                    "\n".join([*rems, *self._scheduled_crons()]) or "_(none)_"))

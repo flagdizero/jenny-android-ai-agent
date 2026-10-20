@@ -597,9 +597,10 @@ def open_reminders(reminders: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def board_reminders(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Le attese aperte delle schede sulla bacheca, dalla più vicina (v. :func:`sorted_reminders`)."""
-    cards = {c["id"] for c in board.get("cards") or []}
-    return sorted_reminders([r for r in open_reminders(reminders) if r.get("card") in cards])
+    """Le attese aperte che stanno sulla bacheca, dalla più vicina (v. :func:`sorted_reminders`):
+    quelle delle schede che ci sono e quelle di tutto il quaderno."""
+    return sorted_reminders([r for r in open_reminders(reminders)
+                             if scope_state(board, r.get("card")) != SCOPE_HIDDEN])
 
 
 def items_on_board(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> int:

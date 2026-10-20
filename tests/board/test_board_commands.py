@@ -222,12 +222,27 @@ async def test_reminder_section_creates_a_user_reminder(ctx, notebook: Path) -> 
     })
     rem = read_reminders(notebook)["reminders"][0]
     assert rem["by"] == "user" and rem["card"] == "acero"
-    section = model.card_by_id(read_board(notebook), "acero")["userSections"][0]
-    assert section["reminder"] == rem["id"]
-    await dispatch_command(ctx, "board.section.remove", {
-        "wiki": "piante", "card": "acero", "id": section["id"],
-    })
+    # Niente sezione nel cassetto: il calendario di cura la deriva da ``reminders.json``.
+    assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
+    await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": rem["id"]})
     assert read_reminders(notebook)["reminders"][0]["state"] == "dropped"
+
+
+async def test_a_reminder_can_be_for_the_whole_notebook(ctx, notebook: Path) -> None:
+    """Dal post-it libero, o dal «+» della bacheca: niente scheda, tutto il quaderno."""
+    _seed(notebook)
+    out = await dispatch_command(ctx, "board.reminder.add", {
+        "wiki": "piante", "card": "", "text": "Porta dentro tutte le piante",
+        "when": {"kind": "date", "date": "2026-12-01"},
+    })
+    rem = read_reminders(notebook)["reminders"][0]
+    assert out["id"] == rem["id"] and rem["card"] == "" and rem["by"] == "user"
+    view = build_board_view(notebook)
+    assert [n["id"] for n in view["notes"] if n["card"] == ""] == [rem["id"]]
+    with pytest.raises(CommandError):
+        await dispatch_command(ctx, "board.reminder.add", {
+            "wiki": "piante", "card": "Fico!", "text": "x",
+            "when": {"kind": "date", "date": "2026-12-01"}})
 
 
 async def test_photo_section_lands_in_raw_photos(ctx, notebook: Path) -> None:

@@ -63,7 +63,8 @@ _SECTION = ObjectSchema(
         "card. remove_card (card): into the trash, restorable. restore_card (card). "
         "move_pages (pages, card): onto that card, from another card or from off the board. "
         "connect (card, other, label?) / disconnect (card, other): a thread. "
-        "add_note (card, text). add_reminder (card, text, date, precision?). "
+        "add_note (card, text). add_reminder (card?, text, date, precision?): tie it to the "
+        "card it is about, or leave card empty for the whole notebook — you decide. "
         "close_reminder (id): done. remove_section (card, id). "
         "set_skeleton (skeleton): the drawer sections, only while the board has no cards. "
         "answer_proposal (id, answer): yes / no / later to a proposal in the envelope. "
@@ -193,9 +194,12 @@ class BoardTool(Tool):
         if action == "add_reminder":
             when = {"kind": "date", "date": kw.get("date"),
                     "precision": kw.get("precision") or "day"}
-            sid = edit.add_reminder(root, card, kw.get("text"), when)
-            return (f"Reminder added as section `{sid}`: a line in the board's agenda and in "
-                    "the card's care calendar.")
+            rid = edit.add_reminder(root, card, kw.get("text"), when)
+            if not card:
+                return (f"Reminder `{rid}` added for the whole notebook: a line on the board's "
+                        "free sticky note.")
+            return (f"Reminder `{rid}` added: a line on the card's sticky note and in its care "
+                    "calendar.")
         if action == "close_reminder":
             text = edit.close_reminder(root, str(kw.get("id") or ""),
                                        timezone_name=self._timezone)

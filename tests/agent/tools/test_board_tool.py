@@ -24,7 +24,7 @@ from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.board import model, notify
-from jenny.board.store import mutate_board, read_board, read_card_summary
+from jenny.board.store import mutate_board, read_board, read_card_summary, read_reminders
 from jenny.config.schema import ToolsConfig
 from jenny.security.workspace_access import (
     bind_workspace_scope,
@@ -246,3 +246,14 @@ async def test_show_lists_the_automations_of_cards_and_of_the_notebook(notebook_
     out = await BoardTool().execute(action="show")
     assert "- `ab12cd34` on `nuove`: Meteo" in out
     assert "- `ef56ab78` on the whole notebook: Gelo (paused)" in out
+
+
+async def test_the_editor_can_add_a_reminder_for_the_whole_notebook(notebook_chat: Path,
+                                                                     announced) -> None:
+    out = await BoardTool().execute(action="add_reminder", text="Porta dentro le piante",
+                                    date="2026-12-01")
+    assert "for the whole notebook" in out
+    rem = read_reminders(notebook_chat)["reminders"][-1]
+    assert rem["card"] == "" and rem["by"] == "user"
+    assert "on the whole notebook: Porta dentro le piante" in await BoardTool().execute(
+        action="show")

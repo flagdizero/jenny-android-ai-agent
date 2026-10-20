@@ -203,13 +203,14 @@ class BoardWriteSummaryTool(_BoardTool):
 
 
 @tool_parameters(tool_parameters_schema(
-    card=StringSchema("The card id the reminder is about."),
+    card=StringSchema("The card id the reminder is about. Leave it empty when it concerns the "
+                      "whole notebook, several cards, or nothing on the board."),
     text=StringSchema("What to do, in a few words, in the user's language."),
     date=StringSchema("When: YYYY-MM-DD. For something like 'around March', the first of the month."),
     precision=StringSchema("`day` for a precise date, `month` for 'in March'.", enum=["day", "month"]),
     why=StringSchema("The wiki page (relative to wiki/) that explains why, if there is one."),
     source=StringSchema("Where it was said: the journal line (`raw/journal/YYYYMMDD.md#HH:MM`) or page."),
-    required=["card", "text", "date"],
+    required=["text", "date"],
 ))
 class BoardAddReminderTool(_BoardTool):
     """Aggiunge un'attesa a data, estratta dal diario o da una pagina."""
@@ -224,15 +225,18 @@ class BoardAddReminderTool(_BoardTool):
             "Record something to do with a date — a decided repotting 'around March', a "
             "fertiliser 'on the 10th' — as a reminder on a card. Only for things that were "
             "decided or planned and have a date; never for something already done. A reminder "
-            "already on the list is not added twice."
+            "already on the list is not added twice. Tie it to the card it is about, or leave "
+            "`card` empty for the whole notebook."
         )
 
     async def execute(self, card: str = "", text: str = "", date: str = "",
                       precision: str = "day", why: str = "", source: str = "", **_: Any) -> str:
         st = self.state
         board = read_board(st.root) or model.empty_board()
-        if model.card_by_id(board, card) is None and card not in st.proposed_cards:
-            return st.refuse(f"there is no card `{card}`")
+        card = (card or "").strip()
+        if (card != model.NOTEBOOK and model.card_by_id(board, card) is None
+                and card not in st.proposed_cards):
+            return st.refuse(f"there is no card `{card}` (leave `card` empty for the whole notebook)")
         when = model._normalize_when({"kind": "date", "date": date, "precision": precision})
         clean = model.clean_text(text, model.MAX_TITLE * 2)
         if when is None or not clean:
@@ -261,7 +265,8 @@ class BoardAddReminderTool(_BoardTool):
         if dup:
             return f"Already on the list (`{dup[0]}`): not added again."
         st.reminders.append(rid_out[0])
-        return f"Reminder `{rid_out[0]}` added to `{card}`."
+        where = "the whole notebook" if card == model.NOTEBOOK else f"`{card}`"
+        return f"Reminder `{rid_out[0]}` added to {where}."
 
 
 @tool_parameters(tool_parameters_schema(

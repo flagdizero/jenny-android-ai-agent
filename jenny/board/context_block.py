@@ -120,6 +120,28 @@ def board_absence(root: Path) -> str:
     return "next_pass"
 
 
+def notebook_line(root: Path) -> str:
+    """Le cose di tutto il quaderno, non legate a una scheda, in una riga per il prompt.
+
+    ``[auto: cron Gelo] [next: Porta dentro le piante, 2026-12-01]``, o ``""``. Solo
+    i nomi dei cron e l'attesa più vicina, come il blocco della bacheca: un dato
+    che cambia a ogni giro romperebbe la cache del provider. C'è anche su una
+    bacheca senza schede, dove il blocco della bacheca tace.
+    """
+    if read_board(root) is None:
+        return ""
+    tags = []
+    names = [job["name"] or job["id"] for job in notebook_jobs_on_disk(root.name)
+             if job["scope"] == model.NOTEBOOK]
+    if names:
+        tags.append(f"[auto: {' · '.join(f'cron {n}' for n in names)}]")
+    nxt = model.next_reminder(read_reminders(root), model.NOTEBOOK)
+    if nxt is not None:
+        soon = " — coming up" if model.reminder_is_soon(nxt) else ""
+        tags.append(f"[next: {nxt['text']}, {_when(nxt)}{soon}]")
+    return " ".join(tags)
+
+
 def board_block(
     root: Path, *, alert: Callable[[Mapping[str, Any]], bool] | None = None
 ) -> str:

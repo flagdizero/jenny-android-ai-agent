@@ -178,13 +178,16 @@ def test_a_card_next_to_another(notebook: Path) -> None:
 
 def test_a_reminder_is_the_users_and_sits_in_the_drawer(notebook: Path) -> None:
     _seed(notebook)
-    sid = edit.add_reminder(notebook, "acero", "Travaso",
+    rid = edit.add_reminder(notebook, "acero", "Travaso",
                             {"kind": "date", "date": "2027-03-01", "precision": "month"})
     rem = read_reminders(notebook)["reminders"][0]
-    assert rem["by"] == "user" and rem["card"] == "acero"
+    assert rid == rem["id"] and rem["by"] == "user" and rem["card"] == "acero"
+    # Niente sezione: il calendario di cura e il post-it la derivano dall'attesa.
     sections = model.card_by_id(read_board(notebook), "acero")["userSections"]
-    assert sections[-1] == {"id": sid, "kind": "reminder", "created": sections[-1]["created"],
-                            "reminder": rem["id"]}
+    assert not any(s.get("kind") == "reminder" for s in sections)
+    whole = edit.add_reminder(notebook, "", "Porta dentro le piante",
+                              {"kind": "date", "date": "2026-12-01", "precision": "day"})
+    assert next(r for r in read_reminders(notebook)["reminders"] if r["id"] == whole)["card"] == ""
     edit.close_reminder(notebook, rem["id"])
     assert read_reminders(notebook)["reminders"][0]["state"] == "done"
 

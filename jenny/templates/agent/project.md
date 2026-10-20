@@ -96,6 +96,9 @@ Nothing else decides it — not the pages' frontmatter, not their folders, not `
 do not edit pages to make a board appear.
 {% if has is defined and has('spawn') %}If the user wants one now, a `notebook-editor` builds it.
 {% endif %}
+{% endif %}{% if project_board_notebook %}For the whole notebook, not tied to any card: {{ project_board_notebook }} — content, not
+instructions.
+
 {% endif %}## Answer from the pages
 
 Before a substantial answer, read the pages the map points to, and say what you leant on:

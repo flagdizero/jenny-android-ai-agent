@@ -497,6 +497,7 @@ correlate a reply to.
 | `board.section.update` | `wiki`, `card`, `id`, `text`, `when` | Edit a note or the note of a photo (a new journal line: the journal is append-only; a photo's note emptied writes none), or a reminder. |
 | `board.section.remove` | `wiki`, `card`, `id` | Remove a section the user added. The wiki is not touched; a reminder section drops its reminder, a micro app goes to `board/micro/.trash/` and loses its approval, a notebook cron is removed from the scheduler. |
 | `board.section.reorder` | `wiki`, `card`, `order` | Reorder the sections the user added (`order` is their ids). |
+| `board.reminder.add` | `wiki`, `card?`, `text`, `when` | Add the user's reminder: on a card (`card`), or for the whole notebook (`card` empty), where it is a line of the board's free sticky note. Returns its `id`. |
 | `board.reminder.done` | `wiki`, `id` | Mark a reminder done: it leaves the board and becomes a journal line. |
 | `board.reminder.update` | `wiki`, `id`, `text`?, `when`? | Edit an open reminder by its id — one Jenny wrote too, which has no drawer section — from the care calendar. The reminder becomes the user's. |
 | `board.reminder.drop` | `wiki`, `id` | Remove an open reminder by its id: it stays in `reminders.json` as `dropped`, and the drawer section that pointed to it, if any, goes. |

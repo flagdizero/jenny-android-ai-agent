@@ -411,12 +411,17 @@ def parse_when(raw: Any) -> dict[str, Any]:
 
 
 def add_reminder(root: Path, ref: str, text: Any, when: Any) -> str:
-    """Un'attesa dell'utente nel cassetto: sulla bacheca è una riga del post-it della sua scheda."""
+    """Un'attesa dell'utente: di una scheda (*ref*) o di tutto il quaderno (*ref* vuoto).
+
+    Sulla bacheca è una riga del post-it della sua scheda, o di quello libero del
+    quaderno. Restituisce l'id dell'attesa. Dal 20/10/2026 non scrive più una
+    sezione nel cassetto: il calendario di cura la deriva da ``reminders.json``.
+    """
     body = model.clean_text(text, model.MAX_TITLE * 2)
     if not body:
         raise BoardEditError("bad_request", "text required")
     parsed = parse_when(when)
-    card_id = card_id_of(root, ref)
+    scope = card_id_of(root, ref) if str(ref or "").strip() else model.NOTEBOOK
     stamp = model.now_iso()
     rid_holder: list[str] = []
 
@@ -425,14 +430,12 @@ def add_reminder(root: Path, ref: str, text: Any, when: Any) -> str:
                               [r["id"] for r in rems["reminders"]])
         rid_holder.append(rid)
         rems["reminders"].append({
-            "id": rid, "card": card_id, "text": body, "when": parsed, "by": model.USER,
+            "id": rid, "card": scope, "text": body, "when": parsed, "by": model.USER,
             "state": "open", "created": stamp, "source": "board",
         })
 
     mutate_reminders(root, add_rem)
-    return _append_section(root, card_id,
-                           {"kind": "reminder", "created": stamp, "reminder": rid_holder[0]},
-                           "s-rem")
+    return rid_holder[0]
 
 
 def _section(root: Path, ref: str, sid: str) -> tuple[str, dict[str, Any]]:
