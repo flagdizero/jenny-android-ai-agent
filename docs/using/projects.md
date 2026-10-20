@@ -152,7 +152,7 @@ When a notebook's history *is* compacted, the messages that leave the live sessi
 
 ## Renaming a notebook from the app
 
-In the home, press and hold the notebook's row on the **Notebooks** page and choose **Rename**. The name follows the same rule as at creation (letters, numbers, dot, dash and underscore; the rule is written under the field and a name that breaks it keeps the dialog open). Jenny renames the folder first and then moves the conversation after it, so the chat, its history and a page you pinned for the notebook all follow the new name; if you were inside it, you stay inside, under the new name.
+In the home, press and hold the notebook's row on the **Notebooks** page and choose **Rename**. The name follows the same rule as at creation (letters, numbers, dot, dash and underscore; the rule is written under the field and a name that breaks it keeps the dialog open). Jenny renames the folder first and then moves the conversation after it, so the chat, its history, a page you pinned for the notebook and its reminders and automations (the ones Jenny scheduled there) all follow the new name; if you were inside it, you stay inside, under the new name.
 
 It is refused, before anything moves, in three cases, each with its own message: she is still working in that notebook (a turn, a subagent, a gardener pass or an idle compaction is writing — try again once she has finished); the new name already belongs to a notebook or a conversation; or the notebook is no longer there. If the process dies between the folder and the chat, what is left is exactly the state the next section describes, and the gateway finishes the move on its own at the next turn or start.
 
@@ -162,7 +162,7 @@ The folder name is the conversation's address, so renaming it — from the file 
 
 | What happened | What you see |
 |---|---|
-| Renamed to a valid name | Jenny says it moved the history to the new name, nothing was lost, and asks you to open the new name (from **Notebooks** in the home, from the chip in the workshop). |
+| Renamed to a valid name | Jenny says it moved the history to the new name — its scheduled automations move with it — nothing was lost, and asks you to open the new name (from **Notebooks** in the home, from the chip in the workshop). |
 | Renamed to a name that cannot be a conversation (spaces, accents) | Jenny says it found the folder but left the history under the old name rather than moving it somewhere nothing could open, names the character rule, and points out that renaming it back also works. Nothing is moved. |
 | The folder is simply gone | Jenny says it could not find where it went, that nothing is lost, and that the chat comes back as soon as the folder does. |
 | A previous move stopped halfway | Jenny says part of the history is under each name, that nothing was deleted, and that restarting it finishes the join on the way up. This is the one case that does **not** claim "nothing is lost" in the same breath. |

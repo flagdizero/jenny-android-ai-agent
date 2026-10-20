@@ -1155,6 +1155,12 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             moved, why_not = follow_renamed_project(self.workspace, key, new_key)
             if not moved:
                 return ProjectFollowOutcome(why_not=why_not)
+            # Dietro la chat vanno anche i cron del quaderno: senza, ogni giro
+            # fallirebbe con «notebook gone» e consegnerebbe al nome vecchio.
+            from jenny.board.cron_link import follow_renamed_notebook
+
+            follow_renamed_notebook(self.cron_service, key[len(PROJECT_SESSION_PREFIX):],
+                                    target.name)
             return ProjectFollowOutcome(moved_to=target.name)
         except Exception:
             logger.opt(exception=True).error("Inseguimento del rinomino fallito per {}", key)

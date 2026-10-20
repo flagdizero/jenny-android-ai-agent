@@ -1454,6 +1454,56 @@ class CronService:
         logger.info("Cron: {} job '{}' ({})", "paused" if paused else "resumed", job.name, job.id)
         return "paused" if paused else "resumed"
 
+    def move_notebook(
+        self, old: str, new: str, *, old_session: str, new_session: str
+    ) -> list[str]:
+        """Porta dietro a un quaderno rinominato i job che erano suoi; ritorna gli id.
+
+        Un job resta legato a un quaderno in due modi: il link della bacheca
+        (``payload.board.notebook``), che decide recinto e posto sulla bacheca, e
+        la chat in cui consegna (``session_key`` / ``origin_chat_id``, cioè
+        ``project:<nome>``). Rinominato il quaderno, il primo faceva fallire ogni
+        giro con «notebook gone» e il secondo consegnava a una chat che non c'è
+        più. Si riscrivono tutti e due, nello stesso salvataggio, e solo dove
+        valgono esattamente il nome vecchio. La sessione interna di un monitor
+        (``cron:nb:<nome>/<id>``) si ricava dal link a ogni giro: segue da sola.
+
+        Stesso modo di persistere di :meth:`set_paused`: ``jobs.json`` se il
+        servizio gira, il giornale delle azioni se è fermo (l'avvio, quando la
+        riparazione di un rinomino interrotto arriva prima di ``start``).
+        """
+        store = self._load_store()
+        if store is None or old == new:
+            return []
+        now = _now_ms()
+        moved: list[CronJob] = []
+        for job in store.jobs:
+            if job.payload.kind == "system_event":
+                continue
+            payload = job.payload
+            changed = False
+            if payload.board is not None and payload.board.get("notebook") == old:
+                payload.board = {**payload.board, "notebook": new}
+                changed = True
+            if payload.session_key == old_session:
+                payload.session_key = new_session
+                changed = True
+            if payload.origin_chat_id == old_session:
+                payload.origin_chat_id = new_session
+                changed = True
+            if changed:
+                job.updated_at_ms = now
+                moved.append(job)
+        if not moved:
+            return []
+        if self._running:
+            self._save_store()
+        else:
+            for job in moved:
+                self._append_action("add", asdict(job))
+        logger.info("Cron: {} job(s) moved from notebook {} to {}", len(moved), old, new)
+        return [job.id for job in moved]
+
     def retire_system_job(self, job_id: str) -> bool:
         """Toglie un job di sistema che **questa versione non sa piu' eseguire**.
 

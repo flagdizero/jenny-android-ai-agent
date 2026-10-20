@@ -55,6 +55,9 @@ class GatewayContainer:
         self._provider_fingerprint: str | None = None
         self.session_manager: Any = None
         self.cron: Any = None
+        # I rinomini di quaderno ripresi all'avvio, ``(vecchio, nuovo)``: la
+        # ripresa arriva prima dello scheduler, e i cron li seguono appena c'è.
+        self._resumed_renames: list[tuple[str, str]] = []
         self.snapshot: Any = None
         self.channels: Any = None
         self._deliverer: Any = None
@@ -353,8 +356,10 @@ class GatewayContainer:
         metà", è "un rinomino a metà contro **nessun gateway**". Un rinomino
         lasciato aperto lo riprova l'avvio dopo; un gateway che non parte no.
         """
+        from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
         from jenny.session.project_rename import repair_pending_project_renames
 
+        self._resumed_renames = []
         try:
             for old_key, new_key in repair_pending_project_renames(
                 self.config.workspace_path
@@ -363,6 +368,9 @@ class GatewayContainer:
                     "Project rename resumed and completed: {} -> {}",
                     old_key, new_key,
                 )
+                if is_project_session_key(old_key) and is_project_session_key(new_key):
+                    self._resumed_renames.append((old_key[len(PROJECT_SESSION_PREFIX):],
+                                                  new_key[len(PROJECT_SESSION_PREFIX):]))
         except Exception:
             logger.opt(exception=True).error(
                 "Ripresa dei rinomini di progetto in sospeso fallita; il gateway "
@@ -512,6 +520,12 @@ class GatewayContainer:
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)
+        # Il seguito dei rinomini ripresi qui sopra: lo scheduler non gira ancora,
+        # quindi lo spostamento va nel suo giornale e si applica a ``start``.
+        from jenny.board.cron_link import follow_renamed_notebook
+
+        for old_name, new_name in self._resumed_renames:
+            follow_renamed_notebook(self.cron, old_name, new_name)
 
         # Versioning locale del workspace: snapshot automatici di sistema.
         # Lo store vive FUORI dal workspace (sibling), così lo swap atomico

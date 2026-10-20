@@ -1137,6 +1137,15 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
+    # I suoi cron lo seguono: link della bacheca e chat in cui consegnano. Sul
+    # loop e dopo il rinomino riuscito, come la pulizia dei cron della
+    # cancellazione (il perché del loop sta in ``remove_notebook_crons``).
+    from jenny.board.cron_link import follow_renamed_notebook
+
+    get_cron = getattr(ctx, "get_cron_service", None)
+    outcome["moved_crons"] = follow_renamed_notebook(get_cron() if get_cron else None,
+                                                     name, new_name)
+
     from jenny.webui.home_pages import rename_pages_of
 
     try:

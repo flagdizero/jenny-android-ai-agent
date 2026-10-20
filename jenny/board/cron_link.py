@@ -249,6 +249,32 @@ def notebook_jobs(cron: Any, notebook: str) -> dict[str, dict[str, Any]]:
             if (j.payload.board or {}).get("notebook") == notebook}
 
 
+def follow_renamed_notebook(cron: Any, old: str, new: str) -> list[str]:
+    """I cron del quaderno *old*, rinominato in *new*, lo seguono; ritorna gli id.
+
+    L'unico punto da cui passano le tre strade di un rinomino: il comando della
+    casa, la cartella rinominata a mano che la chat insegue al turno dopo, e la
+    ripresa all'avvio di un rinomino interrotto. Gli esiti dei giri non si
+    toccano: stanno nel ``board.json`` del quaderno, indicizzati per id del job,
+    e sono già partiti con la cartella.
+
+    **Sul loop**, come ogni gesto sullo scheduler. Non solleva: il quaderno è già
+    rinominato, e un job rimasto indietro fallisce a ogni giro con «notebook
+    gone» invece di girare senza recinto — si toglie a mano.
+    """
+    from jenny.session.keys import project_session_key
+
+    if cron is None:
+        return []
+    try:
+        return cron.move_notebook(old, new, old_session=project_session_key(old),
+                                  new_session=project_session_key(new))
+    except Exception:  # noqa: BLE001 — il rinomino è già riuscito
+        logger.opt(exception=True).warning("Cron jobs of notebook {} did not follow to {}",
+                                           old, new)
+        return []
+
+
 def notebook_jobs_on_disk(notebook: str, workspace: Path | None = None) -> list[dict[str, Any]]:
     """I cron del quaderno letti da ``cron/jobs.json``, per chi scrive un prompt.
 
