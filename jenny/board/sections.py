@@ -256,8 +256,11 @@ def section_resolver(
         if kind == "cron":
             jobs = ctx.get("cronJobs") or {}
             results = ctx.get("cronResults") or {}
-            return {"job": jobs.get(str(section.get("job"))),
-                    "result": results.get(f"{ctx.get('card')}/{section.get('id')}")}
+            from jenny.board.cron_link import result_of
+
+            job_id = str(section.get("job"))
+            legacy = {"card": ctx.get("card"), "section": section.get("id")}
+            return {"job": jobs.get(job_id), "result": result_of(results, job_id, legacy) or None}
         return {}
 
     return resolve

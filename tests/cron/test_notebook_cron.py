@@ -150,7 +150,7 @@ async def test_the_result_comes_back_to_the_drawer(notebook, tmp_path) -> None:
     await run_bound_cron_job(job, agent=agent, cron=_Recorder())
     assert agent.received[0].session_key_override == notebook_cron_session_key("casa", job.id)
     board = read_board(root)
-    result = board["cronResults"][f"annunci/{job.payload.board['section']}"]
+    result = board["cronResults"][job.id]
     assert result["text"] == "3 annunci nuovi in via Roma" and result["status"] == "ok"
     assert board["since"][-1]["kind"] == "cron_result"
 
@@ -178,3 +178,46 @@ async def test_a_whole_notebook_monitor_keeps_the_notebook_fence(notebook, tmp_p
     agent = _Agent("niente di nuovo")
     await run_bound_cron_job(job, agent=agent, cron=_Recorder())
     assert agent.received[0].session_key_override == notebook_cron_session_key("casa", job.id)
+
+
+async def test_a_run_tells_the_open_board(notebook, tmp_path, monkeypatch) -> None:
+    """L'ultimo giro sta sull'etichetta: la bacheca aperta si ridisegna dopo ogni giro."""
+    told: list[str] = []
+
+    async def note(name):
+        told.append(name)
+
+    monkeypatch.setattr("jenny.board.notify.board_changed", note)
+    store = tmp_path / "jobs.json"
+    await _tool(store).execute(action="add", card="annunci", message="cerca", every_seconds=3600)
+    job = CronService(store).list_jobs()[0]
+    told.clear()
+    await run_bound_cron_job(job, agent=_Agent("x"), cron=_Recorder())
+    assert told == ["casa"]
+
+
+def test_an_old_result_key_is_read_and_moved_on_the_next_run(notebook) -> None:
+    from jenny.board import cron_link
+
+    _ws, root = notebook
+    old = {"notebook": "casa", "card": "annunci", "section": "s-cron"}
+    mutate_board(root, lambda b: b.__setitem__("cronResults", {
+        "annunci/s-cron": {"at": "2026-10-01T09:00:00+02:00", "status": "ok", "text": "vecchio"}}))
+    assert cron_link.result_of(read_board(root)["cronResults"], "j1", old)["text"] == "vecchio"
+    cron_link.record_result(old, job_id="j1", status="silent", text="", job_name="Annunci")
+    results = read_board(root)["cronResults"]
+    assert "annunci/s-cron" not in results
+    # Un giro muto non cancella l'ultimo esito che diceva qualcosa.
+    assert results["j1"]["text"] == "vecchio" and results["j1"]["status"] == "silent"
+
+
+def test_a_whole_notebook_result_has_its_own_line(notebook) -> None:
+    from jenny.board import cron_link, model
+
+    _ws, root = notebook
+    link = cron_link.make_link("casa", model.NOTEBOOK)
+    cron_link.record_result(link, job_id="j2", status="ok", text="gelo stanotte", job_name="Gelo")
+    board = read_board(root)
+    assert board["cronResults"]["j2"]["text"] == "gelo stanotte"
+    assert board["since"][-1]["kind"] == "cron_result_notebook"
+    assert board["since"][-1]["app"] == "Gelo" and "card" not in board["since"][-1]

@@ -1376,7 +1376,8 @@
         "other": "Something changed on the board.",
         "micro_kept": "{title}: the micro app {app} is in the drawer and runs on its own.",
         "micro_fixed": "{title}: I fixed the micro app {app}.",
-        "cron_result": "{title}: {app} has something to tell you."
+        "cron_result": "{title}: {app} has something to tell you.",
+        "cron_result_notebook": "{app} has something to tell you."
       }
     },
     "signal": {

@@ -307,9 +307,14 @@ async def _run_bound_cron_job(
             except Exception:  # noqa: BLE001 — l'esito nel cassetto e' una cortesia
                 said = ""
             said = said or outcome.final_text
-        record_result(board_link, status="ok" if (outcome.spoke or not monitor) else "silent",
+        record_result(board_link, job_id=job.id,
+                      status="ok" if (outcome.spoke or not monitor) else "silent",
                       text=said if (outcome.spoke or not monitor) else "",
                       job_name=job_display_name(job))
+        # L'etichetta mostra l'ultimo giro: la bacheca aperta lo deve vedere subito.
+        from jenny.board.notify import board_changed
+
+        await board_changed(str(board_link.get("notebook")))
 
     if monitor:
         _prune_monitor_session(agent, turn_session_key)

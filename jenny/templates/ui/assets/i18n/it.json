@@ -1376,7 +1376,8 @@
         "other": "Qualcosa è cambiato in bacheca.",
         "micro_kept": "{title}: la micro app {app} è nel cassetto e gira da sola.",
         "micro_fixed": "{title}: ho sistemato la micro app {app}.",
-        "cron_result": "{title}: {app} ha qualcosa da dirti."
+        "cron_result": "{title}: {app} ha qualcosa da dirti.",
+        "cron_result_notebook": "{app} ha qualcosa da dirti."
       }
     },
     "signal": {

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
+from jenny.board.cron_link import result_of
 from jenny.board.store import read_board, read_card_summary, read_reminders
 from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
@@ -305,7 +306,8 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
         if section.get("kind") == "note":
             parts.append(f"- The user's note: {section.get('text')}")
         elif section.get("kind") == "cron":
-            last = results.get(f"{card['id']}/{section.get('id')}") or {}
+            last = result_of(results, str(section.get("job")),
+                             {"card": card["id"], "section": section.get("id")})
             # Una citazione datata, non una frase di Jenny al presente: il testo
             # di un giro vecchio («al prossimo messaggio ci guardo») arrivava
             # come un'istruzione da eseguire adesso.

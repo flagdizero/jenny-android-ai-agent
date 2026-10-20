@@ -94,41 +94,65 @@ def link_alive(link: dict[str, Any]) -> bool:
     return model.scope_state(board, scope_of(link)) != model.SCOPE_HIDDEN
 
 
-def record_result(link: dict[str, Any], *, status: str, text: str, job_name: str) -> None:
-    """L'esito di un giro nel cassetto: ``cronResults`` e, se ha parlato, una riga.
+def result_of(results: Any, job_id: str, link: dict[str, Any] | None = None) -> dict[str, Any]:
+    """L'ultimo esito di un job in ``board.cronResults``, o ``{}``.
+
+    Dal 20/10/2026 la chiave è l'id del job; un legame scritto prima lo teneva
+    sotto ``carta/sezione``, e lo si legge lì finché il prossimo giro non lo sposta.
+    """
+    if not isinstance(results, dict):
+        return {}
+    entry = results.get(job_id)
+    if not isinstance(entry, dict) and link is not None:
+        legacy = legacy_result_key(link)
+        entry = results.get(legacy) if legacy else None
+    return entry if isinstance(entry, dict) else {}
+
+
+def record_result(
+    link: dict[str, Any], *, job_id: str, status: str, text: str, job_name: str,
+) -> None:
+    """L'esito di un giro sulla bacheca: ``cronResults`` e, se ha parlato, una riga.
 
     Scritto come Jenny, fuori dalle cose dell'utente (come ``appStates``): non
-    tocca le sezioni, solo lo stato che le accompagna.
+    tocca né le sezioni né le posizioni, solo lo stato che le accompagna. La
+    chiave vecchia ``carta/sezione``, se c'è, se ne va nello stesso giro.
     """
     from jenny.board.store import mutate_board
 
     root = notebook_root(str(link.get("notebook")))
     if root is None:
         return
-    key = f"{link.get('card')}/{link.get('section')}"
+    legacy = legacy_result_key(link)
     clean = " ".join((text or "").split())[:MAX_RESULT]
+    scope = scope_of(link)
 
     def apply(board: dict[str, Any]) -> None:
         results = dict(board.get("cronResults") or {})
+        before = result_of(results, job_id, link)
+        if legacy:
+            results.pop(legacy, None)
         entry = {"at": model.now_iso(), "status": status}
         if clean:
             entry["text"] = clean
-        elif isinstance(results.get(key), dict) and results[key].get("text"):
-            # Un giro senza niente da dire non cancella l'ultimo esito che diceva qualcosa.
-            entry["text"] = results[key]["text"]
-            entry["textAt"] = results[key].get("textAt") or results[key].get("at")
-        if clean:
             entry["textAt"] = entry["at"]
-        results[key] = entry
+        elif before.get("text"):
+            # Un giro senza niente da dire non cancella l'ultimo esito che diceva qualcosa.
+            entry["text"] = before["text"]
+            entry["textAt"] = before.get("textAt") or before.get("at")
+        results[job_id] = entry
         board["cronResults"] = results
         if clean and status == "ok":
-            card = model.card_by_id(board, str(link.get("card")))
-            model.add_since(board, "cron_result", card=link.get("card"),
-                            title=card["title"] if card else "", app=job_name)
+            if scope == model.NOTEBOOK:
+                model.add_since(board, "cron_result_notebook", app=job_name)
+            else:
+                card = model.card_by_id(board, scope)
+                model.add_since(board, "cron_result", card=scope,
+                                title=card["title"] if card else "", app=job_name)
 
     try:
         mutate_board(root, apply, actor=model.JENNY)
-    except Exception as exc:  # noqa: BLE001 — l'esito nel cassetto e' una cortesia
+    except Exception as exc:  # noqa: BLE001 — l'esito sulla bacheca e' una cortesia
         logger.warning("cron: result of {} not recorded in {}: {}", job_name, root.name, exc)
 
 
