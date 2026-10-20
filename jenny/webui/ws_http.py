@@ -250,6 +250,11 @@ class GatewayHTTPHandler:
 
         self._ui_sources = ui_sources()
         self._canonical_ui_cache: dict[str, bytes | None] = {}
+        # L'impronta dei file serviti, per la pagina che deve accorgersi di un
+        # aggiornamento (``jenny/webui/ui_version.py``): si calcola in un thread.
+        from jenny.webui import ui_version
+
+        ui_version.warm()
         self.runtime_model_name = runtime_model_name
         self.bus = bus
         self.media = media
@@ -524,6 +529,7 @@ class GatewayHTTPHandler:
 
     def _handle_bootstrap(self, connection: Any, request: Any) -> Response:
         from jenny import extensions
+        from jenny.webui import ui_version
 
         secret = self._auth_secret()
         if secret:
@@ -546,6 +552,11 @@ class GatewayHTTPHandler:
                 # Le estensioni di questa build: le shell ne caricano il modulo
                 # e le traduzioni prima del primo render (``jenny/extensions.py``).
                 "extensions": extensions.bootstrap_info(),
+                # Quali file serve e quale processo: la pagina li confronta a ogni
+                # riconnessione e si ricarica dopo un aggiornamento
+                # (``jenny/webui/ui_version.py``, ``shared/update-watch.js``).
+                "ui_version": ui_version.current(),
+                "boot": ui_version.BOOT_ID,
             }
         )
 

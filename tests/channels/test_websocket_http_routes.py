@@ -693,3 +693,15 @@ def test_ensure_minimal_config_does_not_overwrite_explicit_secret(tmp_path: Path
     data = json.loads(config_path.read_text(encoding="utf-8"))
     assert "token_issue_secret" not in data["websocket"]
     assert data["websocket"]["token"] == "static-tok"
+
+
+def test_bootstrap_carries_the_webui_fingerprint_and_the_boot(
+        bus: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    """La pagina li confronta a ogni riconnessione e si ricarica dopo un aggiornamento."""
+    from jenny.webui import ui_version
+
+    monkeypatch.setattr(ui_version, "_value", "abc123")
+    channel = _ch(bus, host="127.0.0.1", tokenIssueSecret="")
+    body = json.loads(channel.gateway.http._handle_bootstrap(_LOCAL, _NO_HEADERS).body)
+    assert body["ui_version"] == "abc123"
+    assert body["boot"] == ui_version.BOOT_ID and len(body["boot"]) == 12

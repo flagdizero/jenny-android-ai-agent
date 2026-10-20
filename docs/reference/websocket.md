@@ -575,6 +575,8 @@ For production deployments where `websocketRequiresToken: true` (the default, an
 
 On the Android app specifically, Kotlin reads the secret from `config.json` and hands it to the WebView as a URL **fragment** (`#bs=...`), never as a query parameter, so it never ends up in logs or server-side request records; the WebView's JavaScript exchanges it at `/webui/bootstrap` for the actual WebSocket URL.
 
+The bootstrap also carries `ui_version`, a fingerprint of the WebUI files this gateway serves (empty for the first moments after start, while it is computed), and `boot`, an id of the gateway process. The WebUI reads them again every time its socket reopens: if the files changed — an update installed while a page stayed open, typically a browser on another device — the page reloads itself, but only once nothing is typed in a field, no finger is down, no dialog is open and no turn is running.
+
 ### Example setup
 
 ```json

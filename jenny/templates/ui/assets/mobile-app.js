@@ -16,6 +16,7 @@ import { LauncherController } from './mobile-launcher.js';
 import { ChatController } from './mobile-chat.js';
 import { WorkspaceController } from './mobile-workspace.js';
 import { AppsSource } from './shared/apps-source.js';
+import { UpdateWatch } from './shared/update-watch.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { SettingsController, VIEW_OF, viewElement } from './mobile-settings.js';
 import { isFirstRun } from './shared/first-run.js';
@@ -124,6 +125,9 @@ class MobileApp {
     } catch (err) {
       console.error('Bootstrap failed:', err);
     }
+    // Dopo un aggiornamento del gateway l'officina si ricarica da sola, quando
+    // non ha niente da perdere (`shared/update-watch.js`).
+    this.updateWatch = new UpdateWatch().start();
 
     /* Il primo avvio non si fa qui: e' un documento suo, `onboarding.html`, e
        l'officina ci rimanda come la casa. Un «non lo so» (impostazioni non

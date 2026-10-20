@@ -338,6 +338,7 @@ _UI_MANIFEST = [
     "assets/shared/telegram-pairing.js",
     "assets/shared/theme.js",
     "assets/shared/update-flow.js",
+    "assets/shared/update-watch.js",
     "assets/shared/when.js",
     "assets/shared/chat-time.js",
     "assets/shared/type-ahead.js",

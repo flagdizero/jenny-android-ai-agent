@@ -56,6 +56,7 @@ import { ChatMove } from './home-move.js';
 import { ChatOver } from './home-over.js';
 import { UnseenReplies } from './shared/unseen-replies.js';
 import { AppsSource } from './shared/apps-source.js';
+import { UpdateWatch } from './shared/update-watch.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { isOpenableProjectName, projectKey, projectNameOf } from './shared/conversation-list.js';
 import { createProjectFlow } from './shared/project-create.js';
@@ -489,6 +490,10 @@ class HomeApp {
       console.error('Bootstrap failed:', err);
       api.clientLog('error', 'home.bootstrap', String(err && err.stack || err));
     }
+    /* Dopo un aggiornamento del gateway la casa si ricarica da sola, quando non
+       ha niente da perdere (`shared/update-watch.js`). Non mentre trascini un
+       oggetto sulla bacheca. */
+    this.updateWatch = new UpdateWatch({ busy: () => !!this.board?._itemDrag }).start();
 
     /* Senza un provider la casa non ha nessuno che risponda: il primo avvio si
        fa in `onboarding.html`, e ci si va prima di aprire il filo o leggere la

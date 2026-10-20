@@ -78,6 +78,20 @@ class ApiClient {
   // il bootstrap non è ancora avvenuto.
   getBootstrapInfo() { return this._bootstrapInfo; }
 
+  /** `/webui/bootstrap` riletto adesso, senza toccare lo stato della pagina:
+   *  quel che il gateway di *ora* serve, da confrontare con quello con cui la
+   *  pagina è partita (`shared/update-watch.js`). `null` se non risponde. */
+  async freshBootstrapInfo() {
+    const headers = {};
+    if (this._bootstrapSecret) headers['X-Jenny-Auth'] = this._bootstrapSecret;
+    try {
+      const res = await fetch('/webui/bootstrap', { headers, cache: 'no-store' });
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Aperta da un altro dispositivo (il Mac via Tailscale)? Lo dice il server
    *  nel bootstrap: non `!window.JennyNative`, che e' vero anche in un banco di
    *  prova sul Mac e non dice da dove arrivi. Da fuori la pagina nasconde
