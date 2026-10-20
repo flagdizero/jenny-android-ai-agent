@@ -112,11 +112,12 @@ def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, 
 
     service = CronService(tmp_path / "jobs.json")
     first = _meteo(service, notebook, make_link("piante", "acero"))
+    origin = {"session_key": "project:piante", "origin_channel": "websocket",
+              "origin_chat_id": "project:piante"}
     second = service.add_job("Gelo", CronSchedule(kind="cron", expr="0 7 * * *", tz="Europe/Rome"),
-                             "guarda se gela", session_key="project:piante",
-                             board=make_link("piante", "acero"))
+                             "guarda se gela", board=make_link("piante", "acero"), **origin)
     once = service.add_job("Vivaio", CronSchedule(kind="at", at_ms=4_102_444_800_000), "chiama",
-                           session_key="project:piante", board=make_link("piante", "acero"))
+                           board=make_link("piante", "acero"), **origin)
     mutate_reminders(notebook, lambda r: r["reminders"].append({
         "id": "r-1", "card": "acero", "text": "Rinvaso", "state": "open", "by": "user",
         "when": {"kind": "date", "date": "2099-03-01", "precision": "day"}}))
@@ -129,6 +130,9 @@ def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, 
     assert label["rows"][0]["schedule"].get("shape") or label["rows"][1]["schedule"].get("shape")
     # L'etichetta arriva dopo: il post-it resta dov'era.
     assert view["postits"] == before["postits"]
+    # Il cron «una volta sola» è una riga del post-it della scheda, con la sua ora.
+    dated = [n for n in view["notes"] if n.get("job") == once.id]
+    assert dated and dated[0]["card"] == "acero" and dated[0]["when"]["time"]
     # Una scheda che non è più sulla bacheca non ha etichetta.
     mutate_board(notebook, lambda b: b.__setitem__("cards", []))
     assert build_board_view(notebook, cron_jobs=jobs)["autoLabels"] == []
@@ -143,10 +147,32 @@ def test_the_whole_notebook_label_is_free_even_without_cards(notebook, tmp_path)
     mutate_board(notebook, lambda b: b.__setitem__("cards", []))
     service = CronService(tmp_path / "jobs.json")
     job = service.add_job("Gelo", CronSchedule(kind="every", every_ms=3_600_000), "guarda",
-                          session_key="project:piante", board=make_link("piante", model.NOTEBOOK))
+                          session_key="project:piante", origin_channel="websocket",
+                          origin_chat_id="project:piante",
+                          board=make_link("piante", model.NOTEBOOK))
     jobs = {job.id: job_snapshot(job)}
     [label] = build_board_view(notebook, cron_jobs=jobs)["autoLabels"]
     assert label["card"] == "" and [r["id"] for r in label["rows"]] == [job.id]
     mutate_board(notebook, lambda b: b.__setitem__("notebookAutoPos", {"x": 40, "y": 60}))
     [label] = build_board_view(notebook, cron_jobs=jobs)["autoLabels"]
     assert label["pos"] == {"x": 40.0, "y": 60.0, "by": "user"}
+
+
+def test_a_whole_notebook_once_cron_is_a_row_of_the_free_postit(notebook, tmp_path) -> None:
+    """«Ricordami domani alle 9» detto nel quaderno: una data sul post-it libero, non un'etichetta."""
+    from jenny.board import model
+    from jenny.board.cron_link import job_snapshot, make_link
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronSchedule
+
+    mutate_board(notebook, lambda b: None)
+    service = CronService(tmp_path / "jobs.json")
+    once = service.add_job("Chiama il vivaio", CronSchedule(kind="at", at_ms=4_102_444_800_000),
+                           "chiama", session_key="project:piante", origin_channel="websocket",
+                           origin_chat_id="project:piante",
+                           board=make_link("piante", model.NOTEBOOK))
+    view = build_board_view(notebook, cron_jobs={once.id: job_snapshot(once)})
+    assert view["autoLabels"] == []
+    [row] = [n for n in view["notes"] if n.get("job") == once.id]
+    assert row["card"] == "" and row["text"] == "Chiama il vivaio"
+    assert view["postits"][-1]["card"] == ""

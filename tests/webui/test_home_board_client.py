@@ -1564,6 +1564,28 @@ def test_the_list_view_has_a_row_for_the_whole_notebook() -> None:
     """.replace("__BOARD__", json.dumps(board)))
 
 
+@requires_jsdom
+def test_a_once_cron_is_a_dated_row_and_done_removes_its_job() -> None:
+    board = _notebook_postit_board()
+    board["notes"].append({"id": "cron-ab12cd34", "job": "ab12cd34", "card": "",
+                           "text": "Chiama il vivaio",
+                           "when": {"kind": "date", "date": "2099-11-02", "precision": "day",
+                                    "time": "09:00"}})
+    _run_wall("""
+      routes['/api/board'] = __BOARD__;
+      rpcAnswers['board.cron.remove'] = () => ({ ok: true });
+      await B.load('altro');
+      const free = document.querySelector('.home-board-postit.is-notebook');
+      assert.match(free.textContent, /09:00/);
+      free.click();
+      await tick(20);
+      const row = document.querySelector('#home-board-sheet [data-reminder="cron-ab12cd34"]');
+      [...row.querySelectorAll('.home-drawer-link')].find((b) => /^(Fatto|Done)$/.test(b.textContent)).click();
+      await tick(40);
+      assert.equal(rpcs('board.cron.remove').at(-1).params.job, 'ab12cd34');
+    """.replace("__BOARD__", json.dumps(board)))
+
+
 def test_the_mint_label_reads_in_every_theme() -> None:
     """L'inchiostro dell'etichetta sul suo menta, e il filo menta sul sughero."""
     low = []

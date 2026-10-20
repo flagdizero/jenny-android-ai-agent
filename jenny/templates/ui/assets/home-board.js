@@ -84,7 +84,9 @@ export function whenLabel(when, locale = i18n.locale) {
     ? { month: 'short', year: 'numeric' }
     : { day: 'numeric', month: 'short' };
   try {
-    return new Intl.DateTimeFormat(locale, opts).format(day);
+    const date = new Intl.DateTimeFormat(locale, opts).format(day);
+    /* Un cron «una volta sola» ha anche l'ora: «21 ott, 09:00». */
+    return when.time ? `${date}, ${when.time}` : date;
   } catch (_) {
     return when.date;
   }
@@ -1779,10 +1781,15 @@ export class HomeBoard {
     const body = document.createElement('div');
     body.appendChild(agendaList(rems, {
       when: (rem) => whenLabel(rem.when),
-      onDone: (rem) => this._cronAct('reminder.done', { id: rem.id }),
+      /* Un cron «una volta sola» è una data come le altre, ma lo tiene lo
+         scheduler: «Fatto» e «Togli» lo tolgono. */
+      onDone: (rem) => (rem.job
+        ? this._cronAct('cron.remove', { job: rem.job })
+        : this._cronAct('reminder.done', { id: rem.id })),
       onDrop: async (rem) => {
         if (!(await confirmDialog(i18n.t('board.reminder.dropConfirm', { text: rem.text })))) return;
-        await this._cronAct('reminder.drop', { id: rem.id });
+        await (rem.job ? this._cronAct('cron.remove', { job: rem.job })
+          : this._cronAct('reminder.drop', { id: rem.id }));
       },
     }));
     const add = document.createElement('button');

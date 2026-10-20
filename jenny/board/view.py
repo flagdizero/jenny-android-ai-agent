@@ -183,7 +183,8 @@ def automations(
     results = board.get("cronResults") or {}
     out = []
     for job_id, snap in (cron_jobs or {}).items():
-        if snap.get("scope") != scope:
+        # Un job «una volta sola» già scattato resta nello store spento: non è più niente.
+        if snap.get("scope") != scope or not (snap.get("enabled") or snap.get("paused")):
             continue
         item = {k: v for k, v in snap.items() if k != "legacySection"}
         legacy = {"card": scope, "section": snap.get("legacySection")}
@@ -191,6 +192,34 @@ def automations(
         out.append(item)
     out.sort(key=lambda a: (a.get("nextRunAtMs") is None, a.get("nextRunAtMs") or 0, a["id"]))
     return out
+
+
+def _dated_crons(board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """I cron «una volta sola» ancora da fare, come righe dei post-it."""
+    out = []
+    for job_id, snap in (cron_jobs or {}).items():
+        sched = snap.get("schedule") or {}
+        if sched.get("kind") != "at" or not sched.get("at_ms") or not snap.get("enabled"):
+            continue
+        scope = snap.get("scope")
+        if model.scope_state(board, scope) == model.SCOPE_HIDDEN:
+            continue
+        at = datetime.fromtimestamp(sched["at_ms"] / 1000).astimezone()
+        out.append({
+            "id": f"cron-{job_id}", "job": job_id, "card": scope, "text": snap.get("name") or "",
+            "when": {"kind": "date", "date": at.strftime("%Y-%m-%d"), "precision": "day",
+                     "time": at.strftime("%H:%M")},
+        })
+    return out
+
+
+def _sorted_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Le righe dei post-it dalla più vicina (l'ordine di ``model.sorted_reminders``),
+    e a parità di giorno per ora; quelle a condizione in fondo."""
+    def key(note: Mapping[str, Any]) -> tuple[date, str, str]:
+        due = model.reminder_due(note) or date.max
+        return (due, str((note.get("when") or {}).get("time") or ""), str(note.get("id") or ""))
+    return sorted(notes, key=key)
 
 
 def _recurring(
@@ -251,7 +280,7 @@ def build_board_view(
         ))
         # Il segno ⟳: la scheda ha qualcosa che gira da solo (un cron). E' un
         # segno, non un segnale: non e' rosso.
-        auto = any(snap.get("scope") == card["id"] for snap in (cron_jobs or {}).values())
+        auto = bool(_recurring(board, cron_jobs, card["id"]))
         on_board[card["id"]] = card
         cards_out.append({
             "id": card["id"],
@@ -271,6 +300,9 @@ def build_board_view(
         {"id": rem["id"], "card": rem["card"], "text": rem["text"], "when": rem["when"]}
         for rem in model.board_reminders(board, reminders)
     ]
+    # Un cron «una volta sola» è una data: sta sul post-it del suo ambito, fra i
+    # promemoria, con la sua ora. Lo tiene lo scheduler, quindi porta il suo job.
+    notes = _sorted_notes([*notes, *_dated_crons(board, cron_jobs)])
     with_notes = {n["card"] for n in notes}
     placed: list[tuple[float, float, float, float]] = []
     postits = [
