@@ -198,6 +198,17 @@ def test_a_common_cron_expression_is_said_in_words() -> None:
     assert said["raw"] == 'cron.schedule.expr:{"expr":"0 9,21 * * *"}'
 
 
+def test_a_notebook_cron_says_its_notebook_and_its_card() -> None:
+    out = _run_js("""
+      console.log(JSON.stringify([
+        placeText({ notebook: 'Piante', card: 'acero', cardTitle: 'Acero' }),
+        placeText({ notebook: 'Piante', card: '', cardTitle: '' }),
+        placeText(null),
+      ]));
+    """)
+    assert json.loads(out) == ["Piante › Acero", "Piante", None]
+
+
 def test_a_non_round_interval_keeps_one_decimal_instead_of_vanishing() -> None:
     """«ogni 2,5 ore» arrotondato a 2 sarebbe una schedulazione diversa."""
     out = _run_js("""

@@ -511,3 +511,25 @@ def test_a_system_job_offers_no_action(cron, tmp_path):
     cron.register_system_job(_system("gardener"))
 
     assert _row(cron, tmp_path, "gardener")["actions"] == []
+
+
+def test_a_notebook_cron_carries_its_place_without_the_disk_placeholder(cron, tmp_path,
+                                                                         monkeypatch):
+    """«Piante › Acero» o «Piante»: il segnaposto ``@notebook`` non esce dal server."""
+    from jenny.board import model
+    from jenny.board.cron_link import make_link
+    from jenny.board.store import mutate_board
+
+    root = tmp_path / "wikis" / "piante"
+    (root / "wiki").mkdir(parents=True)
+    mutate_board(root, lambda b: b["cards"].append(
+        {"id": "acero", "title": "Acero", "pages": [], "pos": {"x": 1, "y": 1}}))
+    monkeypatch.setattr("jenny.board.cron_link.notebook_root",
+                        lambda name: root if name == "piante" else None)
+    cron.add_job("card", CronSchedule(kind="every", every_ms=60_000), _PILLS,
+                 session_key="project:piante", board=make_link("piante", "acero"))
+    cron.add_job("whole", CronSchedule(kind="every", every_ms=60_000), _PILLS,
+                 session_key="project:piante", board=make_link("piante", model.NOTEBOOK))
+    rows = {j["name"]: j for j in webui_cron_payload(cron, config=_config(tmp_path))["jobs"]}
+    assert rows["card"]["place"] == {"notebook": "piante", "card": "acero", "cardTitle": "Acero"}
+    assert rows["whole"]["place"] == {"notebook": "piante", "card": "", "cardTitle": ""}

@@ -83,6 +83,25 @@ def _job_kind(job: CronJob) -> str:
     return "system" if job.payload.kind == "system_event" else "user"
 
 
+def _place(link: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Dove sta un cron del quaderno: ``{notebook, card, cardTitle}``, ``card`` vuoto
+    per tutto il quaderno. Il segnaposto del disco (``cron_link``) non esce di qui."""
+    if not link:
+        return None
+    from jenny.board import model
+    from jenny.board.cron_link import notebook_root, scope_of
+    from jenny.board.store import read_board
+
+    notebook = str(link.get("notebook") or "")
+    scope = scope_of(link)
+    title = ""
+    if scope != model.NOTEBOOK:
+        root = notebook_root(notebook)
+        card = model.card_by_id(read_board(root) or {}, scope) if root is not None else None
+        title = card["title"] if card else ""
+    return {"notebook": notebook, "card": scope, "cardTitle": title}
+
+
 def _schedule_payload(job: CronJob) -> dict[str, Any]:
     """La schedulazione **strutturata**, non una frase.
 
@@ -256,9 +275,9 @@ def _job_payload(
         "actions": _job_actions(job, now_ms),
         "mode": job.payload.mode,
         "one_shot": job.delete_after_run,
-        # Un cron del quaderno: dove sta (``{notebook, card, section}``), cosi'
-        # l'elenco dell'officina lo dice «piante › Acero». ``None`` per gli altri.
-        "board": job.payload.board,
+        # Un cron del quaderno: dove sta, cosi' l'elenco dell'officina lo dice
+        # «Piante › Acero», o «Piante» per tutto il quaderno. ``None`` per gli altri.
+        "place": _place(job.payload.board),
         # Il testo del promemoria e' contenuto dell'utente: l'anteprima
         # nell'elenco, l'intero solo nel dettaglio. Per i job di sistema non c'e'
         # niente da mostrare — il container li registra senza messaggio e il

@@ -1474,6 +1474,19 @@ def test_the_notebook_label_has_no_thread_and_opens_its_sheet() -> None:
     """.replace("__AUTO__", json.dumps(_auto_board(notebook=True))))
 
 
+@requires_jsdom
+def test_a_board_without_cards_still_shows_the_whole_notebook_label() -> None:
+    board = _auto_board(notebook=True)
+    board["cards"], board["connections"], board["postits"], board["notes"] = [], [], [], []
+    board["autoLabels"] = [lab for lab in board["autoLabels"] if not lab["card"]]
+    _run_wall("""
+      routes['/api/board'] = __AUTO__;
+      await B.load('altro');
+      assert.ok(document.querySelector('.home-board-autolabel.is-notebook'));
+      assert.equal(document.querySelectorAll('#home-board-threads line').length, 0);
+    """.replace("__AUTO__", json.dumps(board)))
+
+
 def test_the_mint_label_reads_in_every_theme() -> None:
     """L'inchiostro dell'etichetta sul suo menta, e il filo menta sul sughero."""
     low = []

@@ -132,3 +132,21 @@ def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, 
     # Una scheda che non è più sulla bacheca non ha etichetta.
     mutate_board(notebook, lambda b: b.__setitem__("cards", []))
     assert build_board_view(notebook, cron_jobs=jobs)["autoLabels"] == []
+
+
+def test_the_whole_notebook_label_is_free_even_without_cards(notebook, tmp_path) -> None:
+    from jenny.board import model
+    from jenny.board.cron_link import job_snapshot, make_link
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronSchedule
+
+    mutate_board(notebook, lambda b: b.__setitem__("cards", []))
+    service = CronService(tmp_path / "jobs.json")
+    job = service.add_job("Gelo", CronSchedule(kind="every", every_ms=3_600_000), "guarda",
+                          session_key="project:piante", board=make_link("piante", model.NOTEBOOK))
+    jobs = {job.id: job_snapshot(job)}
+    [label] = build_board_view(notebook, cron_jobs=jobs)["autoLabels"]
+    assert label["card"] == "" and [r["id"] for r in label["rows"]] == [job.id]
+    mutate_board(notebook, lambda b: b.__setitem__("notebookAutoPos", {"x": 40, "y": 60}))
+    [label] = build_board_view(notebook, cron_jobs=jobs)["autoLabels"]
+    assert label["pos"] == {"x": 40.0, "y": 60.0, "by": "user"}

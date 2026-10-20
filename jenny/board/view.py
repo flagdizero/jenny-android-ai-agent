@@ -96,6 +96,18 @@ def _place_near(
     return {"x": x, "y": y, "by": model.JENNY}
 
 
+def _place_free(
+    board: Mapping[str, Any],
+    reminders: Mapping[str, Any],
+    box: tuple[float, float],
+    placed: list[tuple[float, float, float, float]],
+) -> dict[str, Any]:
+    """Il primo posto libero del muro per un oggetto senza scheda (di tutto il quaderno)."""
+    x, y = model.free_slot(board, reminders, box=box, extra=placed)
+    placed.append((x, y, x + box[0], y + box[1]))
+    return {"x": x, "y": y, "by": model.JENNY}
+
+
 def _postit_pos(
     board: Mapping[str, Any],
     reminders: Mapping[str, Any],
@@ -313,6 +325,16 @@ def build_board_view(
             "card": card["id"],
             "pos": card.get("autoPos")
             or _place_near(board, reminders, near, model.AUTO_BOX, placed),
+            "rows": rows,
+        })
+    # L'etichetta di tutto il quaderno: libera, senza filo, e c'è anche su una
+    # bacheca senza schede.
+    rows = _recurring(board, cron_jobs, model.NOTEBOOK)
+    if rows:
+        auto_labels.append({
+            "card": model.NOTEBOOK,
+            "pos": board.get("notebookAutoPos")
+            or _place_free(board, reminders, model.AUTO_BOX, placed),
             "rows": rows,
         })
     last_seen = _stamp(board.get("lastSeen"))

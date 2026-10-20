@@ -287,6 +287,12 @@ export function heartbeatView(block) {
   };
 }
 
+/** Dove sta un cron di un quaderno: «Piante › Acero», o «Piante» se è di tutto il quaderno. */
+export function placeText(place) {
+  if (!place?.notebook) return null;
+  return place.card ? `${place.notebook} › ${place.cardTitle || place.card}` : place.notebook;
+}
+
 /** Il modello di vista completo. Una chiamata, tutto quel che la sezione rende. */
 export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
   const stamp = Number.isFinite(nowMs) ? nowMs : payload?.now_ms;
@@ -318,7 +324,7 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
       monitor: job.mode === 'monitor',
       oneShot: job.one_shot,
       /* Un cron del quaderno dice dove sta: «piante › acero». */
-      place: job.board ? `${job.board.notebook} › ${job.board.card}` : null,
+      place: placeText(job.place),
       messagePreview: job.message_preview,
       message: job.message,
       schedule: describeSchedule(job.schedule, { tr, locale, timeZone: tz }),

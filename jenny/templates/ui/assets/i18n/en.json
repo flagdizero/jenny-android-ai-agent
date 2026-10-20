@@ -825,7 +825,7 @@
       "text": "Reminder text",
       "paused": "paused",
       "pausedSince": "Paused since {when}: it does not run until you resume it.",
-      "inNotebook": "It lives in the drawer {place}: you find it there too."
+      "inNotebook": "It lives in the notebook {place}: you find it on its board too."
     },
     "health": {
       "couldNotCheck": "Could not check {n} times in a row",

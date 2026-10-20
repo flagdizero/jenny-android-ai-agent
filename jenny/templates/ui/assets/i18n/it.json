@@ -825,7 +825,7 @@
       "text": "Testo del promemoria",
       "paused": "in pausa",
       "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi.",
-      "inNotebook": "Sta nel cassetto {place}: lo trovi anche lì."
+      "inNotebook": "Sta nel quaderno {place}: lo trovi anche sulla sua bacheca."
     },
     "health": {
       "couldNotCheck": "Non ha potuto controllare {n} volte di fila",

@@ -375,7 +375,11 @@ export class HomeBoard {
     if (!data) return;
     this._fitExtent();
     this._drawSince();
-    if (!data.cards.length) {
+    /* Una bacheca senza schede può avere lo stesso le cose di tutto il quaderno:
+       il post-it libero dei promemoria, l'etichetta libera dei cron. */
+    const free = (data.postits || []).some((p) => !p.card)
+      || (data.autoLabels || []).some((l) => !l.card);
+    if (!data.cards.length && !free) {
       this._empty(data.suggestions.length ? 'board.empty.proposed' : 'board.empty.title');
       this._drawEnvelope();
       return;

@@ -46,19 +46,25 @@ _PROJECT_REFUSAL = (
     "of the screen) and ask for it there; do not try another way of scheduling it from here."
 )
 
-# Un quaderno senza bacheca non ha un cassetto in cui mettere un cron: resta
-# la regola di prima, con la stessa indicazione di dove si fa.
+# Un quaderno senza bacheca non ha un posto in cui mostrare un cron: resta la
+# regola di prima, con la stessa indicazione di dove si fa. Una bacheca senza
+# schede invece basta: il cron sta sul quaderno intero.
 _NO_BOARD_REFUSAL = _PROJECT_REFUSAL
 
+# La scelta è di Jenny, e il testo lo dice: dal 20/10/2026 un cron di quaderno sta
+# su una scheda **o** sul quaderno intero, e chiedere all'utente «su quale scheda?»
+# era proprio il difetto («si appende a una scheda a caso»).
 _NOTEBOOK_NOTE = (
-    "In a notebook chat a job lives in the drawer of one card (`card`), runs inside this "
+    "In a notebook chat a job belongs to the card it is about (`card`), or to the whole "
+    "notebook when `card` is left empty; you decide, do not ask. It runs inside this "
     "notebook and delivers here; list and remove see only this notebook's jobs."
 )
 
 _CRON_PARAMETERS = tool_parameters_schema(
     card=StringSchema(
-        "Only in a notebook chat, and required there for action='add': the card (title or id) "
-        "whose drawer this job belongs in — the user sees it there. If no card fits, ask."
+        "Only in a notebook chat: the card (title or id) this job is about — it hangs from "
+        "that card on the board. Leave it empty when the job concerns the whole notebook, "
+        "several cards, or nothing on the board. Decide; do not ask the user."
     ),
     action=StringSchema("Action to perform", enum=["add", "list", "remove"]),
     name=StringSchema(
@@ -257,7 +263,7 @@ class CronTool(Tool, ContextAware):
         if root is None or not is_wiki_root(root):
             return None
         board = read_board(root)
-        return (root, board) if board is not None and board["cards"] else None
+        return (root, board) if board is not None else None
 
     async def _notebook(self, action: str, card_ref: Any, name: str | None, message: str,
                         every_seconds: int | None, cron_expr: str | None, tz: str | None,
@@ -271,6 +277,7 @@ class CronTool(Tool, ContextAware):
         """
         from jenny.board.cron_link import detach_job, make_link
         from jenny.board.micro import find_card
+        from jenny.board.model import NOTEBOOK
         from jenny.board.notify import board_changed
 
         found = self._notebook_root()
@@ -286,8 +293,7 @@ class CronTool(Tool, ContextAware):
                 return "No scheduled jobs in this notebook."
             return "Scheduled jobs in this notebook:\n" + "\n".join(
                 f"- {job_display_name(j)} (id: {j.id}, {self._format_timing(j.schedule)}, "
-                "in the drawer "
-                f"of `{(j.payload.board or {}).get('card')}`)" for j in mine)
+                f"{_where(j.payload.board)})" for j in mine)
         if current_turn_is_readonly():
             return READONLY_TOOL_REFUSAL
         if action == "remove":
@@ -298,19 +304,23 @@ class CronTool(Tool, ContextAware):
             return f"Unknown action: {action}"
         if self._in_cron_context.get():
             return "Error: cannot schedule new jobs from within a cron job execution"
-        card = find_card(board, str(card_ref or ""))
-        if card is None:
-            titles = ", ".join(f"«{c['title']}»" for c in board["cards"])
-            return ("Say which card's drawer this job belongs in (`card`): the user will see it "
-                    f"there. Cards: {titles}. If none fits, ask the user.")
+        ref = str(card_ref or "").strip()
+        card = find_card(board, ref) if ref else None
+        if ref and card is None:
+            titles = ", ".join(f"«{c['title']}»" for c in board["cards"]) or "none"
+            return (f"No card «{ref}» on this board. Cards: {titles}. Use one of them, or leave "
+                    "`card` empty if the job is for the whole notebook.")
         # Il job è la sola cosa che dice se il cron esiste: la bacheca e il cassetto
         # lo derivano dal suo legame, senza una sezione da tenere allineata.
-        link = make_link(notebook, card["id"])
+        link = make_link(notebook, card["id"] if card else NOTEBOOK)
         out = self._add_job(name, message, every_seconds, cron_expr, tz, at, mode, board=link)
         if not out.startswith("Created job"):
             return out
         await board_changed(notebook)
-        return f"{out} — it is in the drawer of «{card['title']}», and delivers in this notebook."
+        if card is None:
+            return f"{out} — it is on the board for the whole notebook, and delivers here."
+        return (f"{out} — it hangs from «{card['title']}» on the board (its drawer shows it), "
+                "and delivers in this notebook.")
 
     def _add_job(
         self,
@@ -538,8 +548,8 @@ class CronTool(Tool, ContextAware):
             parts = [f"- {job_display_name(j)} (id: {j.id}, {timing}{mode_note})"]
             if j.payload.board:
                 parts.append(
-                    f"  In the notebook {j.payload.board.get('notebook')}, in the drawer of "
-                    f"`{j.payload.board.get('card')}`: it belongs there."
+                    f"  In the notebook {j.payload.board.get('notebook')}, "
+                    f"{_where(j.payload.board)}: it belongs there."
                 )
             if j.payload.kind == "system_event":
                 parts.append(f"  Purpose: {self._system_job_purpose(j)}")
@@ -579,6 +589,15 @@ class CronTool(Tool, ContextAware):
                 "This is a protected system-managed cron job."
             )
         return f"Job {job_id} not found"
+
+
+def _where(link: dict[str, Any] | None) -> str:
+    """Dove sta un cron del quaderno, in una frase per il modello."""
+    from jenny.board.cron_link import scope_of
+    from jenny.board.model import NOTEBOOK
+
+    scope = scope_of(link or {})
+    return "for the whole notebook" if scope == NOTEBOOK else f"on the card `{scope}`"
 
 
 # Registrazione esplicita dei tool di questo modulo (Fase 5.3): il

@@ -60,7 +60,7 @@ async def test_a_cron_asked_in_a_notebook_lands_in_a_drawer(notebook, tmp_path) 
     tool = _tool(store)
     out = await tool.execute(action="add", card="annunci", message="cerca annunci nuovi",
                              cron_expr="0 9 * * 1", mode="monitor")
-    assert "in the drawer of «Annunci»" in out
+    assert "it hangs from «Annunci» on the board" in out
     job = CronService(store).list_jobs()[0]
     # Nessuna sezione nel cassetto: la bacheca lo deriva dal legame del job.
     assert read_board(root)["cards"][0]["userSections"] == []
@@ -68,14 +68,34 @@ async def test_a_cron_asked_in_a_notebook_lands_in_a_drawer(notebook, tmp_path) 
     # Consegna nella chat del quaderno.
     assert (job.payload.origin_channel, job.payload.origin_chat_id) == ("websocket", "project:casa")
     listed = await tool.execute(action="list")
-    assert job.id in listed and "in the drawer of `annunci`" in listed
+    assert job.id in listed and "on the card `annunci`" in listed
 
 
-async def test_without_a_card_it_asks_which_drawer(notebook, tmp_path) -> None:
-    tool = _tool(tmp_path / "jobs.json")
-    out = await tool.execute(action="add", message="x", every_seconds=3600)
-    assert "Say which card" in out and "«Annunci»" in out
-    assert CronService(tmp_path / "jobs.json").list_jobs() == []
+async def test_without_a_card_the_job_is_for_the_whole_notebook(notebook, tmp_path) -> None:
+    """Jenny sceglie, e non chiede: senza scheda il cron è di tutto il quaderno."""
+    store = tmp_path / "jobs.json"
+    tool = _tool(store)
+    out = await tool.execute(action="add", message="guarda se gela", every_seconds=3600)
+    assert "for the whole notebook" in out
+    job = CronService(store).list_jobs()[0]
+    assert job.payload.board == {"notebook": "casa", "card": "@notebook", "section": "@auto"}
+    assert "for the whole notebook" in await tool.execute(action="list")
+
+
+async def test_a_card_that_is_not_there_is_named_back(notebook, tmp_path) -> None:
+    store = tmp_path / "jobs.json"
+    out = await _tool(store).execute(action="add", card="Cantina", message="x",
+                                     every_seconds=3600)
+    assert "No card «Cantina»" in out and "«Annunci»" in out and "empty" in out
+    assert CronService(store).list_jobs() == []
+
+
+async def test_a_board_without_cards_takes_a_whole_notebook_cron(notebook, tmp_path) -> None:
+    _ws, root = notebook
+    mutate_board(root, lambda b: b.__setitem__("cards", []))
+    store = tmp_path / "jobs.json"
+    out = await _tool(store).execute(action="add", message="x", every_seconds=3600)
+    assert out.startswith("Created job") and "for the whole notebook" in out
 
 
 async def test_a_notebook_sees_and_removes_only_its_own_jobs(notebook, tmp_path) -> None:
