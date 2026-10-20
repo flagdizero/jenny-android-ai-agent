@@ -585,7 +585,7 @@ class HomeApp {
     this.boardSearchBtn = document.getElementById('home-board-search-open');
     this.boardListBtn = document.getElementById('home-board-list-toggle');
     this.boardAddBtn = document.getElementById('home-board-add');
-    this.boardAddBtn?.addEventListener('click', () => this.board.openNewCard());
+    this.boardAddBtn?.addEventListener('click', () => this.board.openAddMenu());
     /* I nomi subito, non solo al cambio di lingua: questo cablaggio arriva dopo
        il primo `_applyTranslations`, e fino al 06/10/2026 la lente e l'elenco
        restavano senza nome finche' non si cambiava lingua. */
@@ -2850,7 +2850,7 @@ class HomeApp {
 
   /** I nomi dei tre comandi della bacheca in testa, che sono solo icone. */
   _labelBoardTools() {
-    this.boardAddBtn?.setAttribute('aria-label', i18n.t('board.card.add'));
+    this.boardAddBtn?.setAttribute('aria-label', i18n.t('board.add.title'));
     this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'));
     this.boardListBtn?.setAttribute('aria-label', i18n.t('board.listView'));
   }

@@ -881,8 +881,14 @@ def test_the_plus_makes_a_card_in_the_middle_of_the_view() -> None:
     _run(_CARDS + """
       const plus = $('home-board-add');
       assert.equal(plus.hidden, false);
-      assert.equal(plus.getAttribute('aria-label'), 'New card');
+      assert.equal(plus.getAttribute('aria-label'), 'Add to the board');
       plus.click();
+      await tick(10);
+      // Prima la scelta: una scheda, un promemoria di tutto il quaderno, un'automazione.
+      const rows = [...$('home-board-sheet-body').querySelectorAll('.home-board-menu-row')];
+      assert.deepEqual(rows.map((r) => r.className.match(/is-(\w+)/)[1]),
+        ['card', 'reminder', 'automation']);
+      rows[0].click();
       await tick(10);
       assert.ok($('home-board-sheet').open);
       const input = $('home-board-sheet-body').querySelector('input');
@@ -897,6 +903,12 @@ def test_the_plus_makes_a_card_in_the_middle_of_the_view() -> None:
       assert.equal(call.params.title, 'Fico');
       assert.deepEqual(call.params.near, app.board.viewCenter());
       assert.equal($('home-board-sheet').open, false);
+      // Il promemoria: il modulo di tutto il quaderno, qui nel foglio.
+      plus.click();
+      await tick(10);
+      $('home-board-sheet-body').querySelector('.home-board-menu-row.is-reminder').click();
+      await tick(10);
+      assert.ok($('home-board-sheet-body').querySelector('form.home-board-form'));
       // Fuori dalla bacheca il + non c'e'.
       await app.openCard('acero', 'Acero');
       await tick(40);
@@ -1297,6 +1309,8 @@ def test_a_new_card_can_be_an_app() -> None:
         { slug: 'calc', name: 'Calc', broken: false, state: 'live', section: null },
       ] };
       $('home-board-add').click();
+      await tick(10);
+      $('home-board-sheet-body').querySelector('.home-board-menu-row.is-card').click();
       await tick(40);
       const select = $('home-board-sheet-body').querySelector('select');
       assert.ok(select, 'manca «Cosa ci metti?»');

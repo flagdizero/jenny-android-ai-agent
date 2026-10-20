@@ -1769,6 +1769,37 @@ export class HomeBoard {
 
   /* ── Gli oggetti di tutto il quaderno ── */
 
+  /** Il «+» in testa alla bacheca: una scheda, un promemoria di tutto il quaderno,
+   *  o un'automazione — questa la chiede a Jenny, che decide dove appenderla. */
+  openAddMenu(at = null) {
+    const menu = document.createElement('div');
+    menu.className = 'home-board-menu home-board-add-menu';
+    const items = [
+      ['card', 'ti-photo', () => this.openNewCard(at)],
+      ['reminder', 'ti-clock', () => this.newNotebookReminder()],
+      ['automation', 'ti-repeat', () => {
+        this.sheet.close();
+        this.onAskJenny?.(i18n.t('board.add.automationPrompt'));
+      }],
+    ];
+    for (const [key, icon, run] of items) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = `home-board-menu-row is-${key}`;
+      row.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>`;
+      const name = document.createElement('span');
+      name.className = 'home-board-menu-name';
+      name.textContent = i18n.t(`board.add.${key}`);
+      row.appendChild(name);
+      row.addEventListener('click', () => {
+        if (key !== 'automation') this.sheet.close();
+        run();
+      });
+      menu.appendChild(row);
+    }
+    this.sheet.open(i18n.t('board.add.title'), menu);
+  }
+
   /** Il foglio di un oggetto libero: i cron di tutto il quaderno, o i suoi promemoria. */
   openNotebookObject(kind) {
     if (kind === 'auto') this._openNotebookAutomations();

@@ -1665,6 +1665,13 @@
       "empty": "Nessun promemoria di tutto il quaderno.",
       "add": "+ Promemoria",
       "new": "Promemoria di tutto il quaderno"
+    },
+    "add": {
+      "title": "Aggiungi alla bacheca",
+      "card": "Una scheda",
+      "reminder": "Un promemoria di tutto il quaderno",
+      "automation": "Un'automazione: chiedila a Jenny",
+      "automationPrompt": "Un'automazione in questo quaderno: ogni "
     }
   }
 }

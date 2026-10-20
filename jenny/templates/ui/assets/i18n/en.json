@@ -1665,6 +1665,13 @@
       "empty": "No reminders for the whole notebook.",
       "add": "+ Reminder",
       "new": "Reminder for the whole notebook"
+    },
+    "add": {
+      "title": "Add to the board",
+      "card": "A card",
+      "reminder": "A reminder for the whole notebook",
+      "automation": "An automation: ask Jenny",
+      "automationPrompt": "An automation in this notebook: every "
     }
   }
 }
