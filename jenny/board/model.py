@@ -359,8 +359,9 @@ def _normalize_card(raw: Any) -> dict[str, Any] | None:
     postit = _normalize_pos(raw.get("postitPos"), USER)
     if postit:
         known["postitPos"] = postit
-    # Lo stesso per il post-it lilla delle sue note e per la sua galleria.
-    for key in ("notesPos", "photosPos"):
+    # Lo stesso per l'etichetta dei suoi cron, per il post-it lilla delle sue note
+    # e per la sua galleria.
+    for key in ("autoPos", "notesPos", "photosPos"):
         pos = _normalize_pos(raw.get(key), USER)
         if pos:
             known[key] = pos
@@ -432,6 +433,11 @@ def _normalize_removed(raw: Any) -> dict[str, Any] | None:
     return _keep_unknown(raw, known)
 
 
+# Le posizioni degli oggetti di tutto il quaderno: stanno sulla bacheca, non su
+# una scheda (v. :data:`NOTEBOOK`).
+NOTEBOOK_POS_KEYS = ("notebookPostitPos", "notebookAutoPos")
+
+
 def normalize_board(raw: Any) -> dict[str, Any]:
     """Una bacheca ben formata da un JSON qualunque. Mai un'eccezione.
 
@@ -497,6 +503,12 @@ def normalize_board(raw: Any) -> dict[str, Any]:
     }
     if isinstance(data.get("lastSeen"), str):
         known["lastSeen"] = data["lastSeen"]
+    # Il post-it e l'etichetta di tutto il quaderno, se l'utente li ha spostati:
+    # come quelli di una scheda, senza il posto lo calcola la vista.
+    for key in NOTEBOOK_POS_KEYS:
+        pos = _normalize_pos(data.get(key), USER)
+        if pos:
+            known[key] = pos
     return _keep_unknown(data, known)
 
 
@@ -600,11 +612,16 @@ def items_on_board(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> in
     Il post-it lilla delle note e la galleria delle foto **non contano**: sono
     allegati della scheda e nascono dal cassetto, dove non c'è un «bacheca
     piena» con cui rifiutarli. Contarli vorrebbe dire che una foto può riempire
-    la bacheca e bloccare la scheda dopo.
+    la bacheca e bloccare la scheda dopo. Per la stessa ragione non contano le
+    etichette dei cron: nascono da una frase detta a Jenny, e un cron non deve
+    poter impedire la scheda successiva.
     """
     cards = {c["id"] for c in board.get("cards") or []}
-    with_notes = {r.get("card") for r in open_reminders(reminders)} & cards
-    return len(cards) + len(with_notes)
+    scopes = {r.get("card") for r in open_reminders(reminders)}
+    with_notes = scopes & cards
+    # Il post-it libero dei promemoria di tutto il quaderno è un oggetto anche lui.
+    notebook = 1 if NOTEBOOK in scopes else 0
+    return len(cards) + len(with_notes) + notebook
 
 
 def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
@@ -622,6 +639,10 @@ CARD_BOX = (20.0, 40.0)
 POSTIT_BOX = (24.0, 44.0)
 # Quante attese mostra un post-it; le altre stanno dietro «+N», nel cassetto.
 POSTIT_ROWS = 3
+# L'etichetta menta dei cron di un ambito: larga come il post-it, alta quanto
+# tre righe (ritmo, cosa fa, ultimo giro) e «+N» sul quadrato basso del Titan 2.
+AUTO_BOX = (26.0, 40.0)
+AUTO_ROWS = 3
 # Il post-it lilla delle note di una scheda: largo come il giallo, alto due
 # righe e «+N». E la sua galleria: al piu' tre polaroid da 16 a ventaglio, in
 # una scatola di 21 x 21 cqw (la taglia piu' grande, v. ``.home-board-gallery``
@@ -667,11 +688,21 @@ def _boxes(board: Mapping[str, Any], reminders: Mapping[str, Any] | None) -> lis
     # Un post-it c'è solo con delle attese, e occupa il muro solo dove l'ha messo
     # l'utente: il posto calcolato lo sceglie la vista *dopo* le schede.
     with_notes = {r.get("card") for r in open_reminders(reminders or {})}
-    for card in board.get("cards") or []:
-        pos = card.get("postitPos")
-        if isinstance(pos, Mapping) and card["id"] in with_notes:
+
+    def put(pos: Any, box: tuple[float, float]) -> None:
+        if isinstance(pos, Mapping):
             x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
-            out.append((x, y, x + POSTIT_BOX[0], y + POSTIT_BOX[1]))
+            out.append((x, y, x + box[0], y + box[1]))
+
+    if NOTEBOOK in with_notes:
+        put(board.get("notebookPostitPos"), POSTIT_BOX)
+    # L'etichetta dei cron: il posto scelto dall'utente resta suo anche quando
+    # l'etichetta, per un po', non ha cron da mostrare.
+    put(board.get("notebookAutoPos"), AUTO_BOX)
+    for card in board.get("cards") or []:
+        if card["id"] in with_notes:
+            put(card.get("postitPos"), POSTIT_BOX)
+        put(card.get("autoPos"), AUTO_BOX)
         # Il lilla e la galleria, alla stessa maniera: solo se ci sono.
         kinds = {s.get("kind") for s in card.get("userSections") or []}
         for key, kind, box in (("notesPos", "note", NOTES_BOX), ("photosPos", "photo", GALLERY_BOX)):
@@ -774,10 +805,12 @@ def _user_view(board: Mapping[str, Any]) -> dict[str, Any]:
             "app": card.get("app"),
             "size": card.get("size"),
             "postitPos": card.get("postitPos"),
+            "autoPos": card.get("autoPos"),
             "notesPos": card.get("notesPos"),
             "photosPos": card.get("photosPos"),
         }
     return {
+        **{key: board.get(key) for key in NOTEBOOK_POS_KEYS},
         "cards": cards,
         "order": [c["id"] for c in board.get("cards") or []],
         "connections": board.get("connections"),
@@ -808,7 +841,7 @@ def ownership_violations(
         if other is None:
             continue
         for field_name in ("pos", "pinned", "userSections", "lastOpened", "titleBy", "title",
-                           "app", "size", "postitPos", "notesPos", "photosPos"):
+                           "app", "size", "postitPos", "autoPos", "notesPos", "photosPos"):
             if view[field_name] != other[field_name]:
                 problems.append(f"card {card_id}: {field_name} changed")
     old_pages = {c["id"]: c.get("pages") or [] for c in before.get("cards") or []}
@@ -816,7 +849,8 @@ def ownership_violations(
         missing = [p for p in old_pages.get(card["id"], []) if p not in (card.get("pages") or [])]
         if missing:
             problems.append(f"card {card['id']}: pages removed ({', '.join(missing)})")
-    for key in ("connections", "skeleton", "lastSeen", "declined", "removedCards"):
+    for key in ("connections", "skeleton", "lastSeen", "declined", "removedCards",
+                *NOTEBOOK_POS_KEYS):
         if old[key] != new[key]:
             problems.append(f"{key} changed")
     return problems

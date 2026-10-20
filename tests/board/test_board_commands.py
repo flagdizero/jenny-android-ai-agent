@@ -428,6 +428,55 @@ def test_jenny_does_not_move_a_postit() -> None:
     assert "card acero: postitPos changed" in model.ownership_violations(before, after)
 
 
+async def test_the_label_and_the_notebook_objects_move_like_a_postit(ctx, notebook: Path) -> None:
+    """L'etichetta dei cron di una scheda, e post-it ed etichetta di tutto il quaderno."""
+    _seed(notebook)
+    await dispatch_command(ctx, "board.move", {
+        "wiki": "piante", "kind": "auto", "id": "acero", "x": 50, "y": 20})
+    await dispatch_command(ctx, "board.move", {
+        "wiki": "piante", "kind": "postit", "id": "", "x": 5, "y": 60})
+    await dispatch_command(ctx, "board.move", {
+        "wiki": "piante", "kind": "auto", "id": "", "x": 40, "y": 60})
+    board = read_board(notebook)
+    assert model.card_by_id(board, "acero")["autoPos"] == {"x": 50.0, "y": 20.0, "by": "user"}
+    assert board["notebookPostitPos"] == {"x": 5.0, "y": 60.0, "by": "user"}
+    assert board["notebookAutoPos"] == {"x": 40.0, "y": 60.0, "by": "user"}
+    # Le altre cose appese a una scheda non hanno una versione di tutto il quaderno.
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "board.move", {
+            "wiki": "piante", "kind": "notes", "id": "", "x": 1, "y": 1})
+    assert exc.value.code == "bad_request"
+
+
+def test_jenny_does_not_move_a_label_nor_the_notebook_objects() -> None:
+    card = {"id": "acero", "title": "Acero", "pos": {"x": 1, "y": 1}}
+    before = model.normalize_board({"cards": [{**card, "autoPos": {"x": 70, "y": 10}}],
+                                    "notebookPostitPos": {"x": 5, "y": 60},
+                                    "notebookAutoPos": {"x": 40, "y": 60}})
+    after = model.normalize_board({"cards": [{**card, "autoPos": {"x": 10, "y": 10}}],
+                                   "notebookPostitPos": {"x": 6, "y": 60}})
+    problems = model.ownership_violations(before, after)
+    assert "card acero: autoPos changed" in problems
+    assert "notebookPostitPos changed" in problems and "notebookAutoPos changed" in problems
+
+
+def test_the_notebook_postit_counts_and_its_place_is_kept_free() -> None:
+    board = model.normalize_board({"cards": [{"id": "acero", "title": "Acero",
+                                              "pos": {"x": 2, "y": 3}}],
+                                   "notebookPostitPos": {"x": 40, "y": 3},
+                                   "notebookAutoPos": {"x": 70, "y": 3}})
+    reminders = {"reminders": [{"id": "r-1", "card": "", "text": "Porta dentro le piante",
+                                "state": "open", "when": {"kind": "date", "date": "2026-12-01"}}]}
+    assert model.items_on_board(board, reminders) == 2
+    boxes = model._boxes(board, reminders)
+    assert (40.0, 3.0, 40.0 + model.POSTIT_BOX[0], 3.0 + model.POSTIT_BOX[1]) in boxes
+    assert (70.0, 3.0, 70.0 + model.AUTO_BOX[0], 3.0 + model.AUTO_BOX[1]) in boxes
+    # Una posizione storta resta com'è sul disco (le chiavi si conservano), ma non
+    # occupa il muro: ``free_slot`` non la vede.
+    junk = model.normalize_board({"notebookAutoPos": "qui"})
+    assert model._boxes(junk, {}) == []
+
+
 async def test_a_reminder_of_jenny_is_edited_and_dropped_by_id(ctx, notebook: Path) -> None:
     _seed(notebook)
     _three_reminders(notebook)

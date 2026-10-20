@@ -135,7 +135,11 @@ async def board_seen(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
 
 
 # Gli oggetti appesi a una scheda, e il campo della scheda che ne tiene il posto.
-_ATTACHED_POS = {"postit": "postitPos", "notes": "notesPos", "photos": "photosPos"}
+_ATTACHED_POS = {"postit": "postitPos", "auto": "autoPos", "notes": "notesPos",
+                 "photos": "photosPos"}
+# Quelli che esistono anche per tutto il quaderno (``id`` vuoto), e il campo della
+# bacheca che ne tiene il posto.
+_NOTEBOOK_POS = {"postit": "notebookPostitPos", "auto": "notebookAutoPos"}
 
 
 async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -151,9 +155,15 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
             _need_card(board, item)["pos"] = pos
 
         await _run(mutate_board, root, apply)
+    elif kind in _NOTEBOOK_POS and params.get("id") == model.NOTEBOOK:
+        # Il post-it e l'etichetta di tutto il quaderno: il posto sta sulla bacheca.
+        def apply_notebook(board: dict[str, Any]) -> None:
+            board[_NOTEBOOK_POS[kind]] = pos
+
+        await _run(mutate_board, root, apply_notebook)
     elif kind in _ATTACHED_POS:
-        # Il post-it delle attese, quello lilla delle note, la galleria: l'id e'
-        # quello della scheda, il posto e' un campo suo.
+        # Il post-it delle attese, l'etichetta dei cron, quello lilla delle note, la
+        # galleria: l'id e' quello della scheda, il posto e' un campo suo.
         card_id = _card_id(params, "id")
 
         def apply_attached(board: dict[str, Any]) -> None:
@@ -161,7 +171,7 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
 
         await _run(mutate_board, root, apply_attached)
     else:
-        raise CommandError("bad_request", "kind must be card, postit, notes or photos")
+        raise CommandError("bad_request", "kind must be card, postit, auto, notes or photos")
     return {"ok": True}
 
 
