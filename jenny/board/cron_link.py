@@ -1,11 +1,19 @@
-"""I cron del quaderno: il legame fra un job dello scheduler e il suo cassetto.
+"""I cron del quaderno: il legame fra un job dello scheduler e la bacheca.
 
-Un cron chiesto nella chat di un quaderno nasce **nel cassetto di una scheda**:
-il job porta ``payload.board = {notebook, card, section}``, e la sezione
-``{kind: cron, job}`` lo mostra. Il turno gira col recinto del quaderno (la
-sessione ``cron:nb:<quaderno>/<id>``, v. ``jenny.session.keys``), consegna nella
-chat del quaderno (e con la notifica) quando ha qualcosa da dire, e lascia qui il
-suo esito: l'ultima riga nel cassetto e una in «Dall'ultima volta».
+Un cron chiesto nella chat di un quaderno appartiene a **una scheda o a tutto il
+quaderno**, e lo decide Jenny. Il job porta ``payload.board = {notebook, card,
+section}``, e questo modulo è l'unico che ne conosce la forma su disco (v.
+:func:`make_link`). Il turno gira col recinto del quaderno (la sessione
+``cron:nb:<quaderno>/<id>``, v. ``jenny.session.keys``), consegna nella chat del
+quaderno (e con la notifica) quando ha qualcosa da dire, e lascia qui il suo
+esito: l'ultimo giro sull'etichetta e una riga in «Dall'ultima volta».
+
+**Il quaderno si scrive con un segnaposto, mai con la stringa vuota.**
+``CronService._load_board_link`` trasforma un campo vuoto in «cron personale», e
+un monitor di quaderno girerebbe senza il recinto del quaderno. Col segnaposto,
+anche una versione vecchia vede un link vivo: ``link_alive`` non trova la scheda
+e il job va in errore invece di girare senza recinto. Fuori da qui l'ambito del
+quaderno è ``model.NOTEBOOK``.
 """
 
 from __future__ import annotations
@@ -18,6 +26,40 @@ from loguru import logger
 from jenny.board import model
 
 MAX_RESULT = 600
+
+# Il segnaposto del quaderno nel campo ``card`` (come ``model.APP_CARD``), e quello
+# del campo ``section`` dei legami nuovi: dal 20/10/2026 un cron non scrive più una
+# sezione nel cassetto, la bacheca lo deriva dal job.
+NOTEBOOK_CARD = "@notebook"
+NO_SECTION = "@auto"
+
+
+def make_link(notebook: str, scope: str) -> dict[str, str]:
+    """Il ``payload.board`` di un cron nuovo del quaderno *notebook*, con ambito *scope*."""
+    card = NOTEBOOK_CARD if scope == model.NOTEBOOK else scope
+    return {"notebook": notebook, "card": card, "section": NO_SECTION}
+
+
+def scope_of(link: dict[str, Any]) -> str:
+    """L'ambito di un legame: l'id della scheda, o ``model.NOTEBOOK``."""
+    card = link.get("card")
+    if card == NOTEBOOK_CARD:
+        return model.NOTEBOOK
+    return card if isinstance(card, str) else model.NOTEBOOK
+
+
+def legacy_section(link: dict[str, Any]) -> str | None:
+    """La sezione del cassetto di un legame scritto prima del 20/10/2026, o ``None``."""
+    section = link.get("section")
+    if scope_of(link) == model.NOTEBOOK or not isinstance(section, str) or section == NO_SECTION:
+        return None
+    return section
+
+
+def legacy_result_key(link: dict[str, Any]) -> str | None:
+    """La chiave ``carta/sezione`` con cui i legami vecchi scrivevano l'esito."""
+    section = legacy_section(link)
+    return f"{link.get('card')}/{section}" if section else None
 
 
 def notebook_root(name: str) -> Path | None:
@@ -36,14 +78,20 @@ def notebook_root(name: str) -> Path | None:
 
 
 def link_alive(link: dict[str, Any]) -> bool:
-    """Se il quaderno e la scheda di un cron esistono ancora."""
+    """Se la casa di un cron c'è ancora: il quaderno e, se ne ha una, la sua scheda.
+
+    Una scheda nel cestino non è una casa: il suo cron non gira (lo mette in
+    pausa ``edit._pause_trashed``, e questo è il controllo di riserva).
+    """
     from jenny.board.store import read_board
 
     root = notebook_root(str(link.get("notebook")))
     if root is None:
         return False
     board = read_board(root)
-    return board is not None and model.card_by_id(board, str(link.get("card"))) is not None
+    if board is None:
+        return False
+    return model.scope_state(board, scope_of(link)) != model.SCOPE_HIDDEN
 
 
 def record_result(link: dict[str, Any], *, status: str, text: str, job_name: str) -> None:

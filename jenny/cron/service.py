@@ -1288,6 +1288,12 @@ class CronService:
         """
         _validate_schedule_for_add(schedule)
         mode = _validate_mode_for_add(mode)
+        # Un legame storto, qui, non torna ``None`` in silenzio come al caricamento:
+        # un cron del quaderno diventerebbe personale, e un monitor perderebbe il
+        # recinto del quaderno. Chi chiama sbaglia, e lo deve sapere.
+        link = _load_board_link(board)
+        if board is not None and link is None:
+            raise ValueError(f"invalid board link: {board!r}")
         now = _now_ms()
 
         job = CronJob(
@@ -1303,7 +1309,7 @@ class CronService:
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
                 origin_metadata=origin_metadata or {},
-                board=_load_board_link(board),
+                board=link,
             ),
             state=CronJobState(next_run_at_ms=_next_run_with_catch_up(schedule, now)),
             created_at_ms=now,

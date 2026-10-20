@@ -163,3 +163,18 @@ async def test_a_cron_whose_card_is_gone_does_not_run(notebook, tmp_path) -> Non
     mutate_board(root, lambda b: b.__setitem__("cards", []))
     with pytest.raises(ValueError, match="notebook gone"):
         await run_bound_cron_job(job, agent=_Agent("x"), cron=_Recorder())
+
+
+async def test_a_whole_notebook_monitor_keeps_the_notebook_fence(notebook, tmp_path) -> None:
+    """Il segnaposto del quaderno non fa del job un cron personale: il turno resta nel recinto."""
+    from jenny.board import cron_link, model
+    from jenny.cron.types import CronSchedule
+
+    service = CronService(tmp_path / "jobs.json")
+    job = service.add_job("annunci", CronSchedule(kind="every", every_ms=3_600_000), "cerca",
+                          session_key="project:casa", origin_channel="websocket",
+                          origin_chat_id="project:casa", mode="monitor",
+                          board=cron_link.make_link("casa", model.NOTEBOOK))
+    agent = _Agent("niente di nuovo")
+    await run_bound_cron_job(job, agent=agent, cron=_Recorder())
+    assert agent.received[0].session_key_override == notebook_cron_session_key("casa", job.id)

@@ -513,6 +513,31 @@ def removed_card_ids(board: Mapping[str, Any]) -> set[str]:
             if isinstance(r.get("card"), Mapping)}
 
 
+# ── L'ambito ─────────────────────────────────────────────────────────────────
+#
+# Un promemoria o un cron del quaderno appartiene a una scheda oppure a tutto il
+# quaderno, e decide Jenny quando lo crea. L'ambito è l'id della scheda, o la
+# stringa vuota per il quaderno: la convenzione che ``reminder.card`` aveva già.
+# Sul disco dei cron il quaderno ha un segnaposto suo (``cron_link``): qui, sul
+# filo e nella vista resta la stringa vuota.
+
+NOTEBOOK = ""
+SCOPE_NOTEBOOK = "notebook"
+SCOPE_CARD = "card"
+# Una scheda che non è sulla bacheca: nel cestino, solo proposta, sparita. Le sue
+# cose non si mostrano e non diventano mai «di tutto il quaderno».
+SCOPE_HIDDEN = "hidden"
+
+
+def scope_state(board: Mapping[str, Any], scope: Any) -> str:
+    """Dove sta una cosa con ambito *scope*: il quaderno, una scheda viva, o da nessuna parte."""
+    if scope is None or scope == NOTEBOOK:
+        return SCOPE_NOTEBOOK
+    if isinstance(scope, str) and card_by_id(board, scope) is not None:
+        return SCOPE_CARD
+    return SCOPE_HIDDEN
+
+
 def expired_removed(board: Mapping[str, Any], now: datetime | None = None) -> list[dict[str, Any]]:
     """Le schede tolte da più di :data:`REMOVED_KEEP_DAYS` giorni: da buttare."""
     current = now or datetime.now().astimezone()

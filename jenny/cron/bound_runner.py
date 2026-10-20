@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
-from jenny.board.cron_link import last_message_text, link_alive, record_result
+from jenny.board.cron_link import last_message_text, link_alive, record_result, scope_of
 from jenny.bus.events import InboundMessage
 from jenny.cron.could_not_check import (
     ESCALATE_AFTER_FAILURES,
@@ -201,8 +201,9 @@ async def _run_bound_cron_job(
     monitor = job.payload.mode == "monitor"
     board_link = job.payload.board
     if board_link is not None and not link_alive(board_link):
-        # Il quaderno o la scheda non ci sono piu': il cron non ha piu' casa.
-        raise ValueError(f"notebook gone: {board_link.get('notebook')}/{board_link.get('card')}")
+        # Il quaderno o la sua scheda non ci sono piu': il cron non ha piu' casa.
+        where = scope_of(board_link) or "whole notebook"
+        raise ValueError(f"notebook gone: {board_link.get('notebook')}/{where}")
     # Un monitor gira in una sessione tutta sua: ``payload.session_key`` resta il
     # target di consegna e il valore registrato nella run record, ma non è più la
     # sessione in cui il turno viene eseguito. Quella di un cron del quaderno
