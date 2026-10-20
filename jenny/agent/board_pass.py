@@ -233,7 +233,7 @@ class BoardPass:
         return f"## {title}\n\n{body}"
 
     def _scheduled_crons(self) -> list[str]:
-        """I cron dei cassetti, una riga ciascuno: anche loro sono «gia' in agenda».
+        """I cron del quaderno, una riga ciascuno: anche loro sono «gia' in agenda».
 
         L'11/10/2026 sull'emulatore la passata ha letto «promemoria per novembre:
         dividere il prunus» nel diario, non l'ha trovato fra le attese — era un
@@ -242,30 +242,21 @@ class BoardPass:
         messaggio e la data si leggono da ``cron/jobs.json``, se si legge; se no
         restano il nome e la scheda, che bastano a non aggiungerlo due volte.
         """
-        import json
+        from jenny.board import model
+        from jenny.board.cron_link import notebook_jobs_on_disk
 
-        jobs: dict[str, Any] = {}
-        try:
-            raw = json.loads((self.workspace / "cron" / "jobs.json").read_text(encoding="utf-8"))
-            jobs = {j["id"]: j for j in raw.get("jobs") or [] if isinstance(j, dict) and "id" in j}
-        except (OSError, ValueError, AttributeError, TypeError):
-            pass
         rows = []
-        for card in (self.board or {}).get("cards") or []:
-            for section in card.get("userSections") or []:
-                if section.get("kind") != "cron":
-                    continue
-                job = jobs.get(str(section.get("job"))) or {}
-                name = section.get("name") or job.get("name") or section.get("job")
-                row = f"- cron «{name}» in the drawer of `{card['id']}`"
-                message = ((job.get("payload") or {}).get("message") or "").strip()
-                if message:
-                    row += f": {' '.join(message.split())[:200]}"
-                next_ms = (job.get("state") or {}).get("nextRunAtMs")
-                if isinstance(next_ms, (int, float)):
-                    when = datetime.fromtimestamp(next_ms / 1000).astimezone()
-                    row += f" (next {when:%Y-%m-%d})"
-                rows.append(row)
+        for job in notebook_jobs_on_disk(self.root.name, self.workspace):
+            where = ("for the whole notebook" if job["scope"] == model.NOTEBOOK
+                     else f"in the drawer of `{job['scope']}`")
+            row = f"- cron «{job['name'] or job['id']}» {where}"
+            if job["message"]:
+                row += f": {job['message'][:200]}"
+            next_ms = job["nextRunAtMs"]
+            if isinstance(next_ms, (int, float)):
+                when = datetime.fromtimestamp(next_ms / 1000).astimezone()
+                row += f" (next {when:%Y-%m-%d})"
+            rows.append(row)
         return rows
 
     def build_state(self) -> BoardPassState:

@@ -26,6 +26,7 @@ from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import current_request_session_key
 from jenny.agent.tools.schema import ArraySchema, ObjectSchema, StringSchema, tool_parameters_schema
 from jenny.board import edit, model
+from jenny.board.cron_link import notebook_jobs_on_disk
 from jenny.board.drawers import DrawerError, as_list, page_text, pages_fingerprint, write_drawer
 from jenny.board.store import read_board, read_card_summary, read_reminders
 from jenny.security.workspace_access import (
@@ -320,7 +321,10 @@ def show(root: Path) -> str:
         if card.get("app"):
             lines.append(f"- `{card['id']}` «{card['title']}» — the app `{card['app']['slug']}`")
             continue
-        sections = ", ".join(_section_words(s) for s in card["userSections"])
+        # Un cron scritto prima del 20/10/2026 ha ancora una sezione: si elenca una
+        # volta sola, fra le automazioni qui sotto.
+        sections = ", ".join(_section_words(s) for s in card["userSections"]
+                             if s["kind"] != "cron")
         lines.append(
             f"- `{card['id']}` «{card['title']}» — pages: {', '.join(card['pages']) or 'none'}"
             f"; drawer: {_drawer_state(root, card, titles)}"
@@ -333,7 +337,14 @@ def show(root: Path) -> str:
     open_rems = model.open_reminders(reminders)
     if open_rems:
         lines += ["", "Open reminders:"]
-        lines += [f"- `{r['id']}` on `{r['card']}`: {r['text']} ({_when(r)})" for r in open_rems]
+        lines += [f"- `{r['id']}` {_where(r['card'])}: {r['text']} ({_when(r)})"
+                  for r in open_rems]
+    # I cron li tiene lo scheduler: qui si vedono, li cambia il tool ``cron``.
+    jobs = notebook_jobs_on_disk(root.name)
+    if jobs:
+        lines += ["", "Automations (the cron tool changes them):"]
+        lines += [f"- `{j['id']}` {_where(j['scope'])}: {j['name']}"
+                  + (" (paused)" if j["paused"] else "") for j in jobs]
     off = offboard_pages(board, titles)
     lines += ["", f"Off the board ({len(off)}): {', '.join(off) or 'none'}"]
     if board["removedCards"]:
@@ -344,6 +355,11 @@ def show(root: Path) -> str:
         lines += [f"- `{s['id']}` {s['kind']} «{s.get('subject') or ''}»: {s['text']}"
                   for s in board["suggestions"]]
     return "\n".join(lines)
+
+
+def _where(scope: str) -> str:
+    """Dove sta un promemoria o un cron: su una scheda, o su tutto il quaderno."""
+    return "on the whole notebook" if scope == model.NOTEBOOK else f"on `{scope}`"
 
 
 def _drawer_state(root: Path, card: dict[str, Any], titles: dict[str, str]) -> str:

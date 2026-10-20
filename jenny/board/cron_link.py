@@ -249,6 +249,48 @@ def notebook_jobs(cron: Any, notebook: str) -> dict[str, dict[str, Any]]:
             if (j.payload.board or {}).get("notebook") == notebook}
 
 
+def notebook_jobs_on_disk(notebook: str, workspace: Path | None = None) -> list[dict[str, Any]]:
+    """I cron del quaderno letti da ``cron/jobs.json``, per chi scrive un prompt.
+
+    Sola lettura e fuori dal loop: chi costruisce il prompt di un turno o della
+    passata del giardiniere non ha lo scheduler in mano, e una lettura del file
+    non gli tocca lo stato (v. :func:`notebook_jobs` per chi lo ha). Restano i
+    job vivi, accesi o in pausa; un job ``at`` già scattato è spento e non conta.
+    """
+    import json
+
+    from jenny.config.paths import get_workspace_path
+
+    path = (workspace or get_workspace_path()) / "cron" / "jobs.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for job in raw.get("jobs") or [] if isinstance(raw, dict) else []:
+        if not isinstance(job, dict):
+            continue
+        payload = job.get("payload") or {}
+        link = payload.get("board") if isinstance(payload, dict) else None
+        if not isinstance(link, dict) or link.get("notebook") != notebook:
+            continue
+        paused = job.get("pausedAtMs") is not None
+        if not job.get("enabled", True) and not paused:
+            continue
+        state = job.get("state") or {}
+        out.append({
+            "id": str(job.get("id") or ""),
+            "name": str(job.get("name") or ""),
+            "message": " ".join(str(payload.get("message") or "").split()),
+            "kind": (job.get("schedule") or {}).get("kind"),
+            "scope": scope_of(link),
+            "nextRunAtMs": state.get("nextRunAtMs") if isinstance(state, dict) else None,
+            "paused": paused,
+            "link": link,
+        })
+    return out
+
+
 def job_snapshot(job: Any) -> dict[str, Any]:
     """Quel che la bacheca mostra di un job: nome, quando, prossimo giro, stato, ambito."""
     from jenny.cron.types import job_display_name

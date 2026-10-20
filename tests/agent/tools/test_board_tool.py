@@ -225,3 +225,24 @@ async def test_the_board_shows_a_photo_with_its_path_and_note(notebook_chat: Pat
     # Senza nota, il percorso e basta.
     assert "`s-photo-2` photo raw/photos/nuove-2.jpg" in shown
     assert "nuove-2.jpg «" not in shown
+
+
+async def test_show_lists_the_automations_of_cards_and_of_the_notebook(notebook_chat: Path,
+                                                                       tmp_path: Path,
+                                                                       monkeypatch) -> None:
+    """L'editore vede anche i cron: quelli di una scheda e quelli di tutto il quaderno."""
+    import json
+
+    (tmp_path / "cron").mkdir()
+    (tmp_path / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
+        {"id": "ab12cd34", "name": "Meteo", "enabled": True,
+         "payload": {"board": {"notebook": notebook_chat.name, "card": "nuove",
+                               "section": "@auto"}}},
+        {"id": "ef56ab78", "name": "Gelo", "pausedAtMs": 1, "enabled": False,
+         "payload": {"board": {"notebook": notebook_chat.name, "card": "@notebook",
+                               "section": "@auto"}}},
+    ]}), encoding="utf-8")
+    monkeypatch.setattr("jenny.config.paths.get_workspace_path", lambda: tmp_path)
+    out = await BoardTool().execute(action="show")
+    assert "- `ab12cd34` on `nuove`: Meteo" in out
+    assert "- `ef56ab78` on the whole notebook: Gelo (paused)" in out

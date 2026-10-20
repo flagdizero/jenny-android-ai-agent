@@ -193,31 +193,34 @@ def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
 
     L'11/10/2026 sull'emulatore la passata trovo' «promemoria per novembre» nel
     diario, le attese dicevano «nessuna» — era un cron nel cassetto — e lo cerco'
-    per sei minuti. Il messaggio e la data vengono da ``cron/jobs.json``; un job
-    illeggibile lascia nome e scheda."""
+    per sei minuti. Nome, messaggio, data e ambito vengono da ``cron/jobs.json``,
+    che dal 20/10/2026 è l'unica cosa che dice se un cron esiste."""
     import json
 
     ws, root = _notebook(tmp_path)
     _seed_board(root)
-    mutate_board(root, lambda b: b["cards"][0]["userSections"].extend([
-        {"id": "s-cron-1", "kind": "cron", "job": "ab12cd34", "name": "Travaso"},
-        {"id": "s-cron-2", "kind": "cron", "job": "sparito1", "name": "Concime"},
-    ]))
     (ws / "cron").mkdir()
-    (ws / "cron" / "jobs.json").write_text(json.dumps({"jobs": [{
-        "id": "ab12cd34", "name": "Travaso",
-        "payload": {"message": "Ricorda il travaso\n dell'acero."},
-        "state": {"nextRunAtMs": 1803974400000},
-    }]}), encoding="utf-8")
+    (ws / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
+        {"id": "ab12cd34", "name": "Travaso", "enabled": True,
+         "payload": {"message": "Ricorda il travaso\n dell'acero.",
+                     "board": {"notebook": root.name, "card": "acero", "section": "@auto"}},
+         "state": {"nextRunAtMs": 1803974400000}},
+        {"id": "ef56ab78", "name": "Gelo", "enabled": True,
+         "payload": {"message": "avvisa se gela",
+                     "board": {"notebook": root.name, "card": "@notebook", "section": "@auto"}}},
+        {"id": "aa11bb22", "name": "Altrove", "enabled": True,
+         "payload": {"board": {"notebook": "altro", "card": "acero", "section": "@auto"}}},
+    ]}), encoding="utf-8")
     bp = BoardPass(root, ws)
     prompt = bp.build_prompt(bp.build_state(), journal="- 18:46 — promemoria per marzo: travaso.")
     block = prompt.split("## Already scheduled", 1)[1].split("\n## ", 1)[0]
     assert "- cron «Travaso» in the drawer of `acero`: Ricorda il travaso dell'acero. (next 2027-" in block
-    assert "- cron «Concime» in the drawer of `acero`" in block
+    assert "- cron «Gelo» for the whole notebook: avvisa se gela" in block
+    assert "Altrove" not in block
     assert "Reminders already on the list" not in prompt
+    # Uno store illeggibile non rompe la passata.
     (ws / "cron" / "jobs.json").write_text("{rotto", encoding="utf-8")
-    assert "- cron «Travaso» in the drawer of `acero`" in BoardPass(root, ws).build_prompt(
-        bp.build_state(), journal="x")
+    assert "Travaso" not in BoardPass(root, ws).build_prompt(bp.build_state(), journal="x")
 
 
 async def test_at_most_two_proposals_and_a_no_does_not_come_back(tmp_path) -> None:

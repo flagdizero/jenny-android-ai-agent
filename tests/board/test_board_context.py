@@ -107,29 +107,38 @@ def test_the_open_questions_of_the_map_still_reach_the_turn(tmp_path) -> None:
     assert "## Pagine" not in block
 
 
-def test_a_cron_reaches_the_block_and_the_drawer(tmp_path) -> None:
+def _jobs(tmp_path: Path, monkeypatch, jobs: list[dict]) -> None:
+    """I cron del quaderno stanno nello scheduler: ``cron/jobs.json`` del workspace."""
+    import json
+
+    (tmp_path / "cron").mkdir(exist_ok=True)
+    (tmp_path / "cron" / "jobs.json").write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
+    monkeypatch.setattr("jenny.config.paths.get_workspace_path", lambda: tmp_path)
+
+
+def test_a_cron_reaches_the_block_and_the_drawer(tmp_path, monkeypatch) -> None:
     root = _notebook(tmp_path)
     _cards(root, 1, brief="In vaso 14.")
-
-    def apply(board):
-        board["cards"][0]["userSections"] += [
-            {"id": "s-cron", "kind": "cron", "job": "ab12cd34", "name": "Meteo"},
-        ]
-        board["cronResults"] = {"pianta-0/s-cron": {"at": "2026-10-05T09:00:00+02:00",
-                                                   "status": "ok", "text": "Oggi piove."}}
-
-    mutate_board(root, apply)
+    _jobs(tmp_path, monkeypatch, [
+        {"id": "ab12cd34", "name": "Meteo", "enabled": True,
+         "payload": {"message": "guarda il meteo",
+                     "board": {"notebook": "piante", "card": "pianta-0", "section": "@auto"}}},
+        {"id": "ef56ab78", "name": "Gelo", "enabled": True,
+         "payload": {"message": "avvisa se gela",
+                     "board": {"notebook": "piante", "card": "@notebook", "section": "@auto"}}},
+    ])
+    mutate_board(root, lambda b: b.__setitem__("cronResults", {
+        "ab12cd34": {"at": "2026-10-05T09:00:00+02:00", "status": "ok", "text": "Oggi piove."}}))
     # Solo i nomi nel prompt di sistema: l'esito arriva col cassetto.
     assert "[auto: cron Meteo]" in board_block(root)
     assert "Oggi piove." not in board_block(root)
     drawer = turn_lines(root, "come sta pianta 0?")[0]
     assert "Notebook cron «Meteo»" in drawer and "Oggi piove." in drawer
+    # Il cron di tutto il quaderno non è nel cassetto di una scheda.
+    assert "Gelo" not in drawer
     # Una citazione datata, non una frase al presente da eseguire.
     assert ("its last result (2026-10-05T09:00:00+02:00, its own words, may be out of date): "
             "«Oggi piove.»") in drawer
-
-
-# ── Senza bacheca: il perche' arriva nel prompt ─────────────────────────────
 
 
 def _research_archive(tmp_path: Path) -> tuple[Path, Path]:

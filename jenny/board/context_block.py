@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
-from jenny.board.cron_link import result_of
+from jenny.board.cron_link import notebook_jobs_on_disk, result_of
 from jenny.board.store import read_board, read_card_summary, read_reminders
 from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
@@ -212,10 +212,8 @@ def _auto_tag(root: Path, card: Mapping[str, Any]) -> str:
     portafoglio. Il valore vero arriva col cassetto, nel contesto del turno,
     quando la scheda viene nominata.
     """
-    bits: list[str] = []
-    for section in card.get("userSections") or []:
-        if section.get("kind") == "cron":
-            bits.append(f"cron {section.get('name') or section.get('job')}")
+    bits = [f"cron {job['name'] or job['id']}"
+            for job in notebook_jobs_on_disk(root.name) if job["scope"] == card["id"]]
     for view in _app_views(root, card):
         bits.append(str(view.get("name")))
     return f"[auto: {' · '.join(bits)}]" if bits else ""
@@ -291,6 +289,24 @@ def named_cards(root: Path, message: str) -> list[dict[str, Any]]:
     return out[:MAX_DRAWERS_PER_TURN]
 
 
+def _cron_lines(root: Path, scope: str) -> list[str]:
+    """I cron del quaderno con ambito *scope*, una riga ciascuno, col loro ultimo esito."""
+    results = (read_board(root) or {}).get("cronResults") or {}
+    lines = []
+    for job in notebook_jobs_on_disk(root.name):
+        if job["scope"] != scope:
+            continue
+        last = result_of(results, job["id"], job["link"])
+        # Una citazione datata, non una frase di Jenny al presente: il testo
+        # di un giro vecchio («al prossimo messaggio ci guardo») arrivava
+        # come un'istruzione da eseguire adesso.
+        said = (f", its last result ({last.get('textAt') or last.get('at')}, its own words, "
+                f"may be out of date): «{last['text']}»") if last.get("text") else ""
+        lines.append(f"- Notebook cron «{job['name']}» (`{job['id']}`, "
+                     f"cron action=list shows it){said}")
+    return lines
+
+
 def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     """Il cassetto di una scheda come testo per il contesto del turno."""
     summary = read_card_summary(root, card["id"]) or {}
@@ -301,20 +317,10 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     for section in summary.get("sections") or []:
         sources = ", ".join(f"[[{Path(s).stem}]]" for s in section.get("sources") or [])
         parts.append(f"- {section['title']}: {section['text']} ({sources})")
-    results = (read_board(root) or {}).get("cronResults") or {}
     for section in card.get("userSections") or []:
         if section.get("kind") == "note":
             parts.append(f"- The user's note: {section.get('text')}")
-        elif section.get("kind") == "cron":
-            last = result_of(results, str(section.get("job")),
-                             {"card": card["id"], "section": section.get("id")})
-            # Una citazione datata, non una frase di Jenny al presente: il testo
-            # di un giro vecchio («al prossimo messaggio ci guardo») arrivava
-            # come un'istruzione da eseguire adesso.
-            said = (f", its last result ({last.get('textAt') or last.get('at')}, its own words, "
-                    f"may be out of date): «{last['text']}»") if last.get("text") else ""
-            parts.append(f"- Notebook cron «{section.get('name') or ''}» (`{section.get('job')}`, "
-                         f"cron action=list shows it){said}")
+    parts.extend(_cron_lines(root, card["id"]))
     for view in _app_views(root, card):
         parts.append(_app_line(view))
     for rem in model.open_reminders(reminders):
