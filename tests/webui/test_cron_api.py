@@ -301,10 +301,12 @@ def test_the_schedule_travels_structured_not_as_an_english_sentence(cron, tmp_pa
     assert row["schedule"] == {
         "kind": "cron", "every_ms": None, "expr": "0 9 * * *",
         "at_ms": None, "tz": "Europe/Rome",
+        # La forma è struttura, non una frase: la frase la compone ancora il client.
+        "shape": {"pattern": "daily", "hour": 9, "minute": 0},
     }
     # Nessun campo pre-formattato: se un giorno ne comparisse uno, il client
     # smetterebbe di essere l'unico a decidere in che lingua si legge.
-    assert set(row["schedule"]) == {"kind", "every_ms", "expr", "at_ms", "tz"}
+    assert set(row["schedule"]) == {"kind", "every_ms", "expr", "at_ms", "tz", "shape"}
 
 
 def test_the_display_timezone_is_the_job_s_own_then_the_default(cron, tmp_path):

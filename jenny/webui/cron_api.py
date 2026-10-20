@@ -90,6 +90,8 @@ def _schedule_payload(job: CronJob) -> dict[str, Any]:
     il modello. Questa esce su una UI bilingue, quindi la frase la compone il
     client: `assets/shared/cron-view.js`, con le sue chiavi i18n.
     """
+    from jenny.cron.cronexpr import shape
+
     schedule = job.schedule
     return {
         "kind": schedule.kind,
@@ -97,6 +99,9 @@ def _schedule_payload(job: CronJob) -> dict[str, Any]:
         "expr": schedule.expr,
         "at_ms": schedule.at_ms,
         "tz": schedule.tz,
+        # La forma di un'espressione comune, per dirla a parole («ogni domenica
+        # alle 18:30»); ``None`` quando non ce l'ha, e il client mostra l'espressione.
+        "shape": shape(schedule.expr) if schedule.kind == "cron" and schedule.expr else None,
     }
 
 

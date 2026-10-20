@@ -302,7 +302,9 @@ def job_snapshot(job: Any) -> dict[str, Any]:
     if sched.kind == "every":
         when["every_ms"] = sched.every_ms
     elif sched.kind == "cron":
-        when.update({"expr": sched.expr, "tz": sched.tz})
+        from jenny.cron.cronexpr import shape
+
+        when.update({"expr": sched.expr, "tz": sched.tz, "shape": shape(sched.expr or "")})
     elif sched.kind == "at":
         when["at_ms"] = sched.at_ms
     return {

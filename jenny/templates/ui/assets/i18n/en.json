@@ -785,7 +785,11 @@
       "every": "every {every}",
       "expr": "schedule: {expr}",
       "at": "once, on {when}",
-      "unknown": "schedule not recognised"
+      "unknown": "schedule not recognised",
+      "daily": "every day at {time}",
+      "weekly": "every {days} at {time}",
+      "weekdays": "on weekdays at {time}",
+      "monthly": "on day {days} of every month at {time}"
     },
     "when": {
       "now": "now",

@@ -785,7 +785,11 @@
       "every": "ogni {every}",
       "expr": "orario: {expr}",
       "at": "una volta, il {when}",
-      "unknown": "schedulazione non riconosciuta"
+      "unknown": "schedulazione non riconosciuta",
+      "daily": "ogni giorno alle {time}",
+      "weekly": "ogni {days} alle {time}",
+      "weekdays": "nei giorni feriali alle {time}",
+      "monthly": "il {days} di ogni mese alle {time}"
     },
     "when": {
       "now": "adesso",

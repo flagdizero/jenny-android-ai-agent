@@ -172,6 +172,32 @@ def test_each_schedule_kind_gets_its_own_sentence() -> None:
     assert said["junk"] == "cron.schedule.unknown", "una schedulazione incompleta non inventa"
 
 
+def test_a_common_cron_expression_is_said_in_words() -> None:
+    """«orario: 30 18 * * 0» sul cassetto (20/10/2026): la forma la dà il server."""
+    out = _run_js("""
+      const say = (shape, expr = '0 0 * * *') => describeSchedule({ kind: 'cron', expr, shape },
+        { tr, locale: 'it', timeZone: 'Europe/Rome' });
+      console.log(JSON.stringify({
+        weekly: say({ pattern: 'weekly', dow: [0], hour: 18, minute: 30 }),
+        two: say({ pattern: 'weekly', dow: [1, 4], hour: 9, minute: 0 }),
+        weekdays: say({ pattern: 'weekly', dow: [1, 2, 3, 4, 5], hour: 9, minute: 0 }),
+        daily: say({ pattern: 'daily', hour: 7, minute: 5 }),
+        monthly: say({ pattern: 'monthly', dom: [1, 15], hour: 9, minute: 0 }),
+        hours: say({ pattern: 'hours', every: 3, minute: 15 }),
+        raw: say(null, '0 9,21 * * *'),
+      }));
+    """)
+    said = json.loads(out)
+    assert said["weekly"] == 'cron.schedule.weekly:{"days":"domenica","time":"18:30"}'
+    assert said["two"] == 'cron.schedule.weekly:{"days":"lunedì e giovedì","time":"09:00"}'
+    assert said["weekdays"] == 'cron.schedule.weekdays:{"time":"09:00"}'
+    assert said["daily"] == 'cron.schedule.daily:{"time":"07:05"}'
+    assert said["monthly"] == 'cron.schedule.monthly:{"days":"1 e 15","time":"09:00"}'
+    assert said["hours"].startswith("cron.schedule.every") and "cron.unit.hours" in said["hours"]
+    # Senza una forma comune, l'espressione com'è: resta vera.
+    assert said["raw"] == 'cron.schedule.expr:{"expr":"0 9,21 * * *"}'
+
+
 def test_a_non_round_interval_keeps_one_decimal_instead_of_vanishing() -> None:
     """«ogni 2,5 ore» arrotondato a 2 sarebbe una schedulazione diversa."""
     out = _run_js("""

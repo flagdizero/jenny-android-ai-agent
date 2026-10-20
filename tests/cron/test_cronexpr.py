@@ -376,3 +376,29 @@ def test_computing_a_run_launches_no_process_and_imports_no_croniter() -> None:
 def test_parse_is_reusable() -> None:
     spec = parse("0 9 * * 1")
     assert next_after(spec, _rome(2026, 9, 25, 10, 0)) == _rome(2026, 9, 28, 9, 0)
+
+
+@pytest.mark.parametrize(("expr", "expected"), [
+    ("30 18 * * 0", {"pattern": "weekly", "dow": [0], "hour": 18, "minute": 30}),
+    ("0 9 * * 1-5", {"pattern": "weekly", "dow": [1, 2, 3, 4, 5], "hour": 9, "minute": 0}),
+    ("0 9 * * *", {"pattern": "daily", "hour": 9, "minute": 0}),
+    ("@weekly", {"pattern": "weekly", "dow": [0], "hour": 0, "minute": 0}),
+    ("0 9 1,15 * *", {"pattern": "monthly", "dom": [1, 15], "hour": 9, "minute": 0}),
+    ("15 */3 * * *", {"pattern": "hours", "every": 3, "minute": 15}),
+    ("0 * * * *", {"pattern": "hours", "every": 1, "minute": 0}),
+    ("*/15 * * * *", {"pattern": "minutes", "every": 15}),
+])
+def test_a_common_expression_has_a_shape(expr: str, expected: dict) -> None:
+    from jenny.cron.cronexpr import shape
+
+    assert shape(expr) == expected
+
+
+@pytest.mark.parametrize("expr", [
+    "0 9,21 * * *", "0 9 * 3 *", "0 9 L * *", "0 0 * * mon#1", "*/5 9-17 * * *",
+    "0 9 1 * 1", "0 0 9 * * *", "rotta", "",
+])
+def test_an_uncommon_expression_has_no_shape_and_is_shown_as_it_is(expr: str) -> None:
+    from jenny.cron.cronexpr import shape
+
+    assert shape(expr) is None
