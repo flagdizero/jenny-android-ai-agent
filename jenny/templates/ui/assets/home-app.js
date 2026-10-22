@@ -227,7 +227,14 @@ class HomeApp {
     this.emptyText = document.getElementById('home-empty-text');
     this.wire = document.getElementById('home-wire');
     this.input = document.getElementById('home-input');
-    this.overTitle = document.getElementById('home-over-title');
+    /* La testa del velo: il percorso, nella chat di un quaderno. */
+    this.overHead = document.getElementById('home-over-head');
+    this.overBack = document.getElementById('home-over-back');
+    this.overNotebooks = document.getElementById('home-over-notebooks');
+    this.overNotebooksName = document.getElementById('home-over-notebooks-name');
+    this.overNotebook = document.getElementById('home-over-notebook');
+    this.overNotebookName = document.getElementById('home-over-notebook-name');
+    this.overSeps = Array.from(document.querySelectorAll('[data-over-sep]'));
     this.overName = document.getElementById('home-over-name');
     this.overDot = document.getElementById('home-over-dot');
     this.send = document.getElementById('home-send');
@@ -609,6 +616,10 @@ class HomeApp {
     this.backBtn?.addEventListener('click', () => this.goBackOneRoom());
     this.pathRoot?.addEventListener('click', () => this.goToPathRoot());
     this.editBtn?.addEventListener('click', () => this.reader.startEdit());
+    /* Le voci del percorso nel velo (v. `_applyOverTitle`). */
+    this.overBack?.addEventListener('click', () => this.closeChatOver());
+    this.overNotebooks?.addEventListener('click', () => this._overToNotebooks());
+    this.overNotebook?.addEventListener('click', () => this._overToBoard());
 
     sessionManager.init();
     this._applyConversation();
@@ -2838,19 +2849,63 @@ class HomeApp {
     this._applyOverTitle();
   }
 
-  /* Il titolo del velo: dove scrivi, nella lingua della fila. In un quaderno
-     il suo nome col pallino, e la riga del suo colore; nella chat di sempre il
-     nome di lei con la riga d'accento, com'e' nella fila quando ci sei. Segue
-     la conversazione e non il velo: se ne cambia una mentre e' aperto, la
-     riga dice gia' quella nuova. */
+  /* La testa del velo: dove scrivi. In un quaderno, il percorso della sua
+     bacheca con lei in fondo — «‹ QUADERNI › ● FILM › JENNY» — e la riga
+     sotto il suo nome del colore del quaderno: e' la Jenny di quel quaderno.
+     Nella chat di sempre solo il nome di lei, con la riga d'accento, com'e'
+     nella fila quando ci sei.
+
+     **Segue la conversazione, non la pagina sotto.** La personale sale anche
+     sopra un quaderno — un avviso toccato sulla sua bacheca, «parlane in
+     chat» da un'app aperta da una sua scheda — e li' un percorso direbbe che
+     scrivi nel quaderno. Se la conversazione cambia a velo aperto, la testa
+     dice gia' quella nuova. */
   _applyOverTitle() {
     if (!this.overName) return;
     const notebook = projectNameOf(sessionManager.currentKey);
     const color = notebook ? dotColor(notebook) : null;
-    this.overName.textContent = notebook || this._personalName || DEFAULT_BOT_NAME;
+    const path = Boolean(notebook);
+    this.overName.textContent = this._personalName || DEFAULT_BOT_NAME;
+    this.overHead?.classList.toggle('is-path', path);
+    for (const el of [this.overBack, this.overNotebooks, this.overNotebook, ...this.overSeps]) {
+      if (el) el.hidden = !path;
+    }
+    if (this.overNotebookName) this.overNotebookName.textContent = notebook || '';
+    if (this.overNotebooksName) this.overNotebooksName.textContent = i18n.t('home.strip.notebooks');
+    this.overNotebook?.setAttribute('aria-label', notebook ? i18n.t('home.over.toBoard', { name: notebook }) : '');
     this._paintDot(this.overDot, color);
-    if (color) this.overTitle?.style.setProperty('--path-line', color);
-    else this.overTitle?.style.removeProperty('--path-line');
+    if (color) this.overHead?.style.setProperty('--path-line', color);
+    else this.overHead?.style.removeProperty('--path-line');
+  }
+
+  /** QUADERNI, nella testa del velo: la chat scende e si va all'elenco dei
+   *  Quaderni, come dalla radice del percorso sulla bacheca (`goToPathRoot`).
+   *  Un'app aperta da una scheda e i fogli si chiudono con lei: si esce dal
+   *  quaderno. Un editor con modifiche lo chiede `_setView`, e alla risposta
+   *  affermativa il gesto riparte da li'. */
+  _overToNotebooks() {
+    this.closeChatOver();
+    this._closeAllOverlays();
+    const go = () => this.homePages?.goToId('notebooks', { animated: false });
+    if (this._setView('chat', go)) go();
+  }
+
+  /** Il quaderno, nella testa del velo: la chat scende e si torna alla sua
+   *  bacheca, anche se sotto c'era una pagina della wiki, un cassetto o
+   *  un'app aperta da una scheda — la voce dice il quaderno, e il quaderno e'
+   *  la bacheca. Per ritrovare la pagina di prima c'e' la freccia (o
+   *  Indietro, o Jenny). */
+  _overToBoard() {
+    const notebook = projectNameOf(sessionManager.currentKey);
+    if (!notebook) return;
+    const inside = NOTEBOOK_ROOMS.includes(this.view);
+    this.closeChatOver();
+    this._closeAllOverlays();
+    if (!inside) {
+      this.openNotebook(notebook);
+      return;
+    }
+    if (this.view !== 'board') this.openBoard();
   }
 
   /** I nomi dei tre comandi della bacheca in testa, che sono solo icone. */
@@ -2870,6 +2925,8 @@ class HomeApp {
     this._labelBoardTools();
     this.over?.host?.setAttribute('aria-label', i18n.t('home.over.label'));
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
+    document.getElementById('home-over-path')?.setAttribute('aria-label', i18n.t('home.path.label'));
+    this.overBack?.setAttribute('aria-label', i18n.t('home.over.close'));
     if (this.editLabel) this.editLabel.textContent = i18n.t('home.reader.edit');
     this.reader?.applyTranslations();
     this.audit?.applyTranslations();

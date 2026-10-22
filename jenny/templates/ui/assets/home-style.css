@@ -2148,48 +2148,45 @@ body.home {
 .home-over .home-time,
 .home-over .home-tail-sep { color: var(--text); }
 @keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
-/* Il titolo del velo: dove scrivi (v. `HomeApp._applyOverTitle`). Ha la forma
-   della voce accesa della fila (`.home-strip-entry.is-on`) e la sua altezza,
-   10 + 40 + 6, cosi' aprendo il velo la chat comincia dove cominciava la
-   pagina: la fila sotto e' sfocata, e il titolo ne prende il posto. La riga
-   e' del colore del quaderno (`--path-line`), o d'accento nella chat di
-   sempre. */
-.home-over-title {
+/* La testa del velo: dove scrivi (v. `HomeApp._applyOverTitle`). Le voci
+   sono quelle del percorso delle stanze (`.home-path-*`), e l'altezza quella
+   della fila e dell'intestazione, 10 + 40 + 6: aprendo il velo la chat
+   comincia dove cominciava la pagina.
+
+   Due geometrie. Nella chat di un quaderno (`.is-path`) i margini sono quelli
+   di `.home-head`, cosi' QUADERNI e il quaderno stanno al pixel dove stavano
+   sulla bacheca e la riga si allunga solo di «› JENNY». Nella chat di sempre
+   c'e' solo il nome di lei, e sta dove sta il suo nome nella fila: 18 px. */
+.home-over-head {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   min-height: 40px;
-  margin: 0;
   padding: 10px 18px 6px;
   box-sizing: content-box;
-  color: var(--heading);
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: normal;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
   -webkit-user-select: none;
   user-select: none;
 }
-.home-over-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-bottom: 4px;
-  box-shadow: inset 0 -2px 0 var(--path-line, var(--accent));
+.home-over-head.is-path { padding: 10px 12px 6px 4px; }
+/* `.home-path-root` e' un `inline-flex` dell'autore, che scavalca `[hidden]`
+   del browser (la trappola di `.home-back[hidden]`, sopra). */
+.home-over-head [hidden] { display: none; }
+
+/* Chi cede quando il nome del quaderno e' lungo: **il quaderno**, coi
+   puntini. QUADERNI resta intera, come sulla bacheca, e lei pure: e' la
+   risposta a «con chi sto parlando», e un «JE…» non la da'. Nelle stanze il
+   quaderno e' l'ultima voce e ha un minimo di 5 em (v. `.home-path-here`);
+   qui sta in mezzo e un minimo lasciava un buco dopo un nome corto. */
+.home-over-head .home-over-notebook {
+  flex: 0 1 auto;
+  max-width: none;
 }
-.home-over-dot {
+.home-over-head .home-over-title {
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  margin-bottom: 4px;
+  min-width: 0;
 }
-.home-over-dot[hidden] { display: none; }
 /* Quel che sta sotto il velo, sfocato (v. `ChatOver.show`; il raggio e il
    perche' stanno con `--chat-veil-blur` in mobile-style.css). **Il filtro non
    si anima**: a 18 px una transizione vorrebbe dire ricalcolare la sfocatura a

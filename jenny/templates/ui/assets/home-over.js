@@ -47,8 +47,10 @@ export class ChatOver {
   _isVeil(target) {
     if (!target) return false;
     if (target === this.host) return true;
-    /* Il titolo e' un'etichetta, non un comando: toccarlo e' toccare il velo. */
-    if (target.closest?.('.home-over-title')) return true;
+    /* La testa e' un'etichetta, salvo le sue voci da toccare (la freccia,
+       QUADERNI, il quaderno): toccare il nome di lei, o lo spazio tra le voci,
+       e' toccare il velo. */
+    if (target.closest?.('.home-over-head') && !target.closest('button')) return true;
     return target.id === 'home-chat' || target.id === 'home-thread';
   }
 

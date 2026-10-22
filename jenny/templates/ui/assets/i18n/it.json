@@ -1143,7 +1143,9 @@
       "label": "Dove sei"
     },
     "over": {
-      "label": "La chat, sopra la pagina"
+      "label": "La chat, sopra la pagina",
+      "close": "chiudi la chat",
+      "toBoard": "vai alla bacheca di {name}"
     },
     "door": {
       "open": "Apri la bacheca"

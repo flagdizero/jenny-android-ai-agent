@@ -627,14 +627,38 @@
        la pagina sotto resta visibile in trasparenza ma non si tocca. Si chiude
        ritoccando Jenny o con Indietro (v. `HomeApp.openChatOver`). -->
   <div class="home-over" id="home-over" role="dialog" aria-modal="true" hidden>
-    <!-- Il titolo del velo (06/10/2026): la fila delle pagine resta sotto,
-         sfocata, e senza questa riga non si sapeva piu' se si scriveva in un
-         quaderno o nella chat di sempre. E' un'etichetta, non un comando: il
-         velo si chiude da Jenny. La scrive `_applyOverTitle`. -->
-    <h2 class="home-over-title" id="home-over-title">
-      <span class="home-over-dot" id="home-over-dot" aria-hidden="true" hidden></span>
-      <span class="home-over-name" id="home-over-name"></span>
-    </h2>
+    <!-- La testa del velo: dove scrivi (06/10/2026). La fila delle pagine
+         resta sotto, sfocata, e senza questa riga non si sapeva piu' se si
+         scriveva in un quaderno o nella chat di sempre.
+
+         Nella chat di un quaderno e' il percorso della bacheca **piu' una
+         voce**: «‹ QUADERNI › ● FILM › JENNY» (22/10/2026, deciso con
+         l'utente su una tela). Le prime voci stanno allo stesso pixel
+         dell'intestazione delle stanze, quindi aprendo la chat la riga non
+         salta: si allunga. La freccia chiude il velo come Indietro, QUADERNI
+         porta all'elenco, il quaderno alla sua bacheca. Nella chat di sempre
+         c'e' solo il nome di lei: non sta dentro niente. L'ultima voce resta
+         un'etichetta — toccarla e' toccare il velo. La scrive
+         `_applyOverTitle`, e segue la conversazione, non la pagina sotto. -->
+    <div class="home-over-head" id="home-over-head">
+      <button class="home-back" id="home-over-back" type="button" hidden>
+        <i class="ti ti-chevron-left" aria-hidden="true"></i>
+      </button>
+      <nav class="home-path" id="home-over-path">
+        <button class="home-path-root" id="home-over-notebooks" type="button" hidden>
+          <span class="home-path-name" id="home-over-notebooks-name"></span>
+        </button>
+        <span class="home-path-sep" data-over-sep aria-hidden="true" hidden>›</span>
+        <button class="home-path-root home-over-notebook" id="home-over-notebook" type="button" hidden>
+          <span class="home-path-dot" id="home-over-dot" aria-hidden="true" hidden></span>
+          <span class="home-path-name" id="home-over-notebook-name"></span>
+        </button>
+        <span class="home-path-sep" data-over-sep aria-hidden="true" hidden>›</span>
+        <h2 class="home-path-here home-over-title" id="home-over-title">
+          <span class="home-path-name" id="home-over-name"></span>
+        </h2>
+      </nav>
+    </div>
   </div>
 
 </main>

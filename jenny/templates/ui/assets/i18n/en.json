@@ -1143,7 +1143,9 @@
       "label": "Where you are"
     },
     "over": {
-      "label": "The chat, over the page"
+      "label": "The chat, over the page",
+      "close": "close the chat",
+      "toBoard": "go to the {name} board"
     },
     "door": {
       "open": "Open the board"
