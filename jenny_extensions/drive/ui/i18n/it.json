@@ -16,7 +16,7 @@
       "missing_key": "Questo telefono non ha più la chiave della copia: scrivi la password per riaprirla.",
       "wrong_key": "La copia su Drive l'ha rifatta un altro telefono: scrivi la password della copia per tornare a quella.",
       "no_backup": "Su questo Drive non c'è nessuna copia di Jenny.",
-      "not_charging_or_no_wifi": "Il telefono non è stato in carica sul Wi-Fi: la copia aspetta quel momento.",
+      "no_wifi": "Il telefono non è stato sul Wi-Fi: la copia aspetta quel momento.",
       "no_such_copy": "Quella copia non c'è più.",
       "nothing_to_verify": "Non c'è ancora una copia da controllare.",
       "mismatch": "La copia riscaricata non corrisponde: ne rifaccio una stanotte.",
@@ -68,7 +68,7 @@
     },
     "first": {
       "title": "Quasi pronta",
-      "sub": "La prima copia arriva stanotte, mentre il telefono è in carica sul Wi-Fi.",
+      "sub": "La prima copia parte appena il telefono è sul Wi-Fi.",
       "subFailed": "La prima copia non è riuscita: riprovo stanotte."
     },
     "running": {
@@ -81,7 +81,7 @@
     "off": {
       "title": "Esisto solo su questo telefono",
       "sub": "Se lo perdi o si rompe, perdi anche me",
-      "p1": "Ogni notte, mentre il telefono è in carica, metto una copia di me nel tuo Google Drive. Da sola.",
+      "p1": "Ogni giorno, quando il telefono è sul Wi-Fi, metto una copia di me nel tuo Google Drive. Da sola.",
       "p2": "Cifrata con una password che scegli tu: dentro ci sono le conversazioni, i quaderni, i ricordi, le app — e senza la password nessuno li legge, nemmeno Google.",
       "p3": "Sul telefono nuovo rispondi «Sì» a «Ci conosciamo già?» e torno com'ero.",
       "note": "Ti chiederò l'account Google e una password per la copia, una volta sola. Ti servirà solo su un telefono nuovo."
@@ -102,8 +102,8 @@
     "todo": "Cosa fare:",
     "reasons": {
       "waiting": {
-        "why": "in queste notti il telefono non è mai stato in carica con il Wi-Fi acceso.",
-        "todo": "stanotte lascialo in carica sul Wi-Fi, oppure fai la copia adesso."
+        "why": "in questi giorni il telefono non è mai stato sul Wi-Fi, e la copia non usa i dati mobili.",
+        "todo": "basta qualche minuto sul Wi-Fi, oppure fai la copia adesso."
       },
       "consent_needed": {
         "why": "Google ha tolto a Jenny il permesso di salvare nel tuo Drive. Succede togliendolo dalle impostazioni dell'account, o cambiando password.",

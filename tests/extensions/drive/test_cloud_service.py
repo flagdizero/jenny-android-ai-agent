@@ -281,13 +281,13 @@ async def test_tick_runs_on_charge_and_wifi_and_verifies(tmp_path: Path) -> None
     assert status["last_verified_ms"] > 0  # prima prova di ripristino, subito
 
 
-async def test_tick_waits_for_the_charger_until_three_days(tmp_path: Path) -> None:
+async def test_tick_waits_for_the_charger_only_until_a_day(tmp_path: Path) -> None:
     env = _env(tmp_path)
     await env.service.enable(PW)
 
     now = _age(env, enabled_at_ms=21)
     assert (await env.service.tick(charging=False, unmetered=True, now_ms=now))["action"] == "wait"
-    now = _age(env, enabled_at_ms=73)
+    now = _age(env, enabled_at_ms=25)
     assert (await env.service.tick(charging=False, unmetered=True, now_ms=now))["action"] == "ran"
 
 
@@ -300,7 +300,7 @@ async def test_tick_never_uses_mobile_data_and_alerts_once(tmp_path: Path) -> No
     second = await env.service.tick(charging=True, unmetered=False, now_ms=now + _H)
 
     assert first["action"] == "wait"
-    assert first["alert"] == {"days": 3, "error": "not_charging_or_no_wifi", "never": True}
+    assert first["alert"] == {"days": 3, "error": "no_wifi", "never": True}
     assert second["alert"] is None  # una volta per serie
     assert not any(k.startswith("snapshots/") for k in env.sink.files)
 

@@ -16,7 +16,7 @@
       "missing_key": "This phone no longer has the copy's key: type the password to open it again.",
       "wrong_key": "Another phone has remade the copy on Drive: type the copy's password to go back to it.",
       "no_backup": "There is no copy of Jenny on this Drive.",
-      "not_charging_or_no_wifi": "The phone has not been charging on Wi-Fi: the copy waits for that moment.",
+      "no_wifi": "The phone has not been on Wi-Fi: the copy waits for that moment.",
       "no_such_copy": "That copy is no longer there.",
       "nothing_to_verify": "There is no copy to check yet.",
       "mismatch": "The downloaded copy does not match: I will make a new one tonight.",
@@ -68,7 +68,7 @@
     },
     "first": {
       "title": "Almost there",
-      "sub": "The first copy comes tonight, while the phone charges on Wi-Fi.",
+      "sub": "The first copy starts as soon as the phone is on Wi-Fi.",
       "subFailed": "The first copy didn't work: I'll try again tonight."
     },
     "running": {
@@ -81,7 +81,7 @@
     "off": {
       "title": "I only exist on this phone",
       "sub": "If you lose it or it breaks, you lose me too",
-      "p1": "Every night, while the phone charges, I put a copy of myself in your Google Drive. By myself.",
+      "p1": "Every day, when the phone is on Wi-Fi, I put a copy of myself in your Google Drive. By myself.",
       "p2": "Encrypted with a password you choose: our conversations, notebooks, memories and apps are in it — and without the password nobody can read them, not even Google.",
       "p3": "On a new phone, answer \"Yes\" to \"Have we met before?\" and I'm back as I was.",
       "note": "I'll ask for your Google account and a password for the copy, once. You'll only need it on a new phone."
@@ -102,8 +102,8 @@
     "todo": "What to do:",
     "reasons": {
       "waiting": {
-        "why": "these nights the phone was never charging with Wi-Fi on.",
-        "todo": "leave it charging on Wi-Fi tonight, or make a copy now."
+        "why": "these days the phone was never on Wi-Fi, and the copy doesn't use mobile data.",
+        "todo": "a few minutes on Wi-Fi are enough, or make a copy now."
       },
       "consent_needed": {
         "why": "Google took away Jenny's permission to save to your Drive. That happens when it's removed from the account settings, or after a password change.",

@@ -75,7 +75,9 @@ _VERIFY_DIR = "verify"
 DUE_AFTER_MS = 20 * 3600 * 1000
 # Oltre questo, la carica non si aspetta più: meglio una copia a batteria che
 # nessuna copia. Il Wi-Fi invece sì, sempre — i dati mobili sono dell'utente.
-OVERDUE_AFTER_MS = 72 * 3600 * 1000
+# Era 72 ore: su un telefono caricato ogni due o tre giorni, a orari sparsi, la
+# copia saltava un giorno su due. Una copia normale manda un paio di MB.
+OVERDUE_AFTER_MS = 24 * 3600 * 1000
 # Tre notti senza una copia riuscita: Jenny lo dice, una volta per serie.
 ALERT_AFTER_MS = 72 * 3600 * 1000
 VERIFY_EVERY_MS = 7 * 24 * 3600 * 1000
@@ -331,7 +333,7 @@ class CloudBackupService:
         - spento → niente;
         - una copia riuscita da meno di 20 ore → niente;
         - altrimenti, in carica e su una rete non a consumo → un giro;
-        - da più di 72 ore senza copia → un giro anche senza carica, ma mai
+        - da più di 24 ore senza copia → un giro anche senza carica, ma mai
           su rete a consumo;
         - dopo un giro riuscito, una prova di ripristino se l'ultima ha più di
           una settimana.
@@ -364,8 +366,7 @@ class CloudBackupService:
         if now - since_ref >= ALERT_AFTER_MS and (stored.get("alerted_ms") or 0) <= since_ref:
             alert = {
                 "days": int((now - since_ref) // (24 * 3600 * 1000)),
-                "error": stored.get("last_error") or ("not_charging_or_no_wifi"
-                                                      if action == "wait" else ""),
+                "error": stored.get("last_error") or ("no_wifi" if action == "wait" else ""),
                 "never": not stored.get("last_success_ms"),
             }
             self._write_status(alerted_ms=now)
