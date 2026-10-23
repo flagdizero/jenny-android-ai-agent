@@ -80,6 +80,10 @@ DEFAULT_EXCLUDE_GLOBS: tuple[str, ...] = (
 # corrente. Perdere snapshot vecchi si sopporta; scoprire a restore fatto che
 # l'unica copia di un deliverable non c'era, no.
 
+# Quanto prima dello snapshot precedente un file deve essere stato scritto per
+# riusarne l'hash (v. ``SnapshotEngine._reusable_entries``).
+_RACY_MARGIN_MS = 2000
+
 
 class SnapshotEngine:
     """Storia di snapshot content-addressed di una directory radice."""
@@ -196,13 +200,38 @@ class SnapshotEngine:
         trigger: str,
         label: str | None = None,
         now_ms: int | None = None,
+        reuse_unchanged: bool = False,
     ) -> SnapshotManifest | None:
-        """Crea uno snapshot; ritorna None se nulla è cambiato dal precedente."""
+        """Crea uno snapshot; ritorna None se nulla è cambiato dal precedente.
+
+        Con *reuse_unchanged* un file con la stessa ``(size, mtime_ns)`` della
+        sua voce nello snapshot precedente non viene riletto: se ne riusa
+        l'hash. Spento di default, perché lo snapshot del workspace è la rete
+        di sicurezza del restore e lì una lettura in più non costa niente
+        rispetto a un hash sbagliato. Lo accendono le foto dei piani, che ne
+        fanno una per passo: senza, ogni foto rilegge tutto il quaderno.
+        """
         created_at_ms = now_ms if now_ms is not None else int(time.time() * 1000)
         parent = self.head_id()
+        parent_manifest: SnapshotManifest | None = None
+        if parent is not None:
+            try:
+                parent_manifest = self.load_manifest(parent)
+            except (OSError, ValueError, KeyError):
+                parent_manifest = None
+        known = self._reusable_entries(parent_manifest) if reuse_unchanged else {}
 
         entries: list[FileEntry] = []
         for rel, full in self.iter_tracked_files():
+            previous = known.get(rel)
+            if previous is not None:
+                try:
+                    st = full.stat()
+                except OSError:
+                    continue
+                if (st.st_size, st.st_mtime_ns) == (previous.size, previous.mtime_ns):
+                    entries.append(previous)
+                    continue
             try:
                 content = full.read_bytes()
                 st = full.stat()
@@ -215,17 +244,12 @@ class SnapshotEngine:
                 FileEntry(path=rel, hash=blob_hash, size=len(content), mtime_ns=st.st_mtime_ns)
             )
 
-        if parent is not None:
-            try:
-                parent_manifest = self.load_manifest(parent)
-            except (OSError, ValueError, KeyError):
-                parent_manifest = None
-            if parent_manifest is not None:
-                same = {e.path: e.hash for e in parent_manifest.files} == {
-                    e.path: e.hash for e in entries
-                }
-                if same:
-                    return None
+        if parent_manifest is not None:
+            same = {e.path: e.hash for e in parent_manifest.files} == {
+                e.path: e.hash for e in entries
+            }
+            if same:
+                return None
 
         snapshot_id = self._compute_id(parent, trigger, created_at_ms, entries)
         manifest = SnapshotManifest(
@@ -254,6 +278,29 @@ class SnapshotEngine:
             manifest.total_bytes,
         )
         return manifest
+
+    def _reusable_entries(self, parent: SnapshotManifest | None) -> dict[str, FileEntry]:
+        """Le voci di *parent* il cui hash si può riusare senza rileggere il file.
+
+        Si esclude chi è «a rischio di corsa» (il *racy git* di git): un file
+        scritto poco prima dello snapshot precedente può essere stato riscritto
+        subito dopo con la stessa dimensione **nello stesso tick dell'orologio
+        del filesystem** — su alcuni kernel Android lo ``mtime`` avanza a
+        jiffy, millisecondi — e la sua ``(size, mtime_ns)`` sarebbe identica a
+        un contenuto diverso. Quei file si rileggono: sono pochi, quelli appena
+        toccati. Il margine copre anche i filesystem a due secondi (FAT).
+
+        E si esclude chi non ha più il blob: un hash riusato deve poter essere
+        materializzato, o il ritorno indietro lo scoprirebbe troppo tardi.
+        """
+        if parent is None:
+            return {}
+        racy_from_ns = (parent.created_at_ms - _RACY_MARGIN_MS) * 1_000_000
+        return {
+            entry.path: entry
+            for entry in parent.files
+            if entry.mtime_ns < racy_from_ns and object_path(self.objects_dir, entry.hash).is_file()
+        }
 
     @staticmethod
     def _compute_id(

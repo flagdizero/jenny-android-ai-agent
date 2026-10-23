@@ -7,7 +7,7 @@
   //     `npx pyright` against it is NON-blocking visibility: it surfaces the residual errors
   //     we intend to tighten over time.
   //   - CI's BLOCKING step runs pyright only over the already-error-clean subset
-  //     (jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot
+  //     (jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot
   //     jenny/gateway_runtime.py jenny/extensions.py jenny_extensions) via CLI path args,
   //     which reuse the settings below. That subset is 0 errors today and must stay green.
   //     `jenny_extensions` is the code only some builds ship (jenny/extensions.py).

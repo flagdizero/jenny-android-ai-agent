@@ -14,7 +14,7 @@
      this patch and passes with it". If you ran it on a device, say which. -->
 
 ```bash
-ruff check jenny/ tests/ && npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py && pytest -q
+ruff check jenny/ tests/ && npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py && pytest -q
 ```
 
 ## Checklist

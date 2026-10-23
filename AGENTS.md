@@ -145,7 +145,7 @@ ruff check jenny/ jenny_extensions/ tests/
 
 # Static type check (pyright basic, zero runtime impact; config: pyrightconfig.json)
 # BLOCKING subset — must stay green (already error-clean):
-npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
+npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 # Full-perimeter visibility (non-blocking; shows residual errors to tighten over time):
 npx pyright || true
 
@@ -153,7 +153,7 @@ npx pyright || true
 pytest -q
 
 # Full CI-equivalent check (lint + type check + tests)
-ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
+ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
 ```
 
 ## Common File Locations

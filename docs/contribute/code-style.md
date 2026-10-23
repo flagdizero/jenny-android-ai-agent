@@ -33,7 +33,7 @@ Pyright runs in `basic` mode (`pyrightconfig.json`, `include: ["jenny"]`, exclud
 
 ```bash
 # BLOCKING subset — must stay error-clean:
-npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
+npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 
 # Full perimeter — informational, never fails the build:
 npx pyright || true
@@ -57,7 +57,7 @@ CI pins the checker version (`npx --yes pyright@1.1.411`); a bare `npx pyright` 
 ## The full check before a PR
 
 ```bash
-ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
+ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
 ```
 
 Lint, blocking type check, tests — the same sequence CI gates on. Commits also need a DCO `Signed-off-by:` line; see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
