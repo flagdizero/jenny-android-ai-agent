@@ -10,8 +10,11 @@
  *    - la **striscia** in cima alla chat quando la scheda e' fuori schermo;
  *    - i **fogli dal basso**: cosa ha fatto un passo, cosa ha cambiato il
  *      piano, il conto del ritorno, Ferma, il piano completo;
- *    - il **tasto Piano** nel composer, e il composer spento mentre il piano
- *      corre;
+ *    - il **tasto Piano** nel composer, acceso finche' Jenny pianifica (la
+ *      pianificazione e' del gateway, e dura fino alla proposta), e il
+ *      composer spento mentre il piano corre;
+ *    - le **bozze** di un passo fermo (un file che Jenny carica da sola,
+ *      scritto da chi aveva letto da fuori), da decidere dentro la scheda;
  *    - chi e' **chiuso** (il quaderno in sola lettura per l'utente mentre un
  *      piano e' aperto) e il **bollino** sulla copertina.
  *
@@ -31,6 +34,9 @@ import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { AppState } from './shared/state.js';
+import { renderMarkdown } from './shared/markdown.js';
+import { stagedSources } from './home-staged.js';
+import { contentLinkOf, openContentLink } from './shared/content-link.js';
 
 /** Gli stati in cui il piano tiene il quaderno: l'utente non ci scrive, il
  *  composer della sua chat si spegne mentre corre, la copertina ha il bollino.
@@ -64,6 +70,35 @@ export function groupOf(path) {
 }
 
 export const KEEPABLE_GROUPS = ['pages', 'sources', 'board', 'other'];
+
+/** Il nome di un percorso dentro il suo gruppo, senza `.md`:
+ *  `wiki/entities/Acero/substrato.md` → `entities/Acero/substrato`. Il solo
+ *  nome del file non basta: in una wiki rifatta ci sono dieci `index` e dieci
+ *  `substrato`, e «index, calendario, index…» non diceva quali. */
+export function relInGroup(path) {
+  const p = String(path || '');
+  const g = groupOf(p);
+  const rest = g === 'pages' || g === 'sources' || g === 'board' ? p.slice(p.indexOf('/') + 1) : p;
+  return rest.replace(/\.md$/i, '');
+}
+
+/* Un percorso del workspace (`wikis/piante/AGENTS.md`, come lo scrive una
+   bozza) visto da dentro il quaderno: nella sua chat il prefisso e' rumore. */
+function inNotebook(path, notebook) {
+  const p = String(path || '');
+  const head = notebook ? `wikis/${notebook}/` : '';
+  return head && p.startsWith(head) ? p.slice(head.length) : p;
+}
+
+/* Le strategie della copertura (`plan_propose`): da dove viene cio' che il
+   lavoro richiede. L'ordine e' quello in cui la scheda le dice. */
+const COVER_STRATEGIES = ['notebook', 'web', 'leave', 'ask'];
+const COVER_LINE = { notebook: 'have', web: 'search', leave: 'leave', ask: 'ask' };
+const COVER_ICON = {
+  notebook: 'ti-notebook', web: 'ti-world-search', leave: 'ti-circle-dashed', ask: 'ti-help',
+};
+/* Quante voci si nominano in una riga della copertura: oltre, «e altre N». */
+const COVER_NAMED = 3;
 
 /** «13:09» da un ISO. Vuoto se non si legge. */
 export function clockOf(iso) {
@@ -116,6 +151,16 @@ function withBold(template, bold) {
 }
 
 const t = (key, params) => i18n.t(`home.plan.${key}`, params);
+
+/* Un testo del modello reso come markdown (il dettaglio di un passo, il suo
+   «fatto quando», la copertura): lo stesso renderer della chat, con lo
+   stesso sanificatore del lettore (`sanitizeContent`). Senza le librerie esce
+   il testo scappato: mai HTML crudo. */
+function md(cls, text) {
+  const box = el('div', `home-plan-md ${cls}`.trim());
+  box.innerHTML = renderMarkdown(String(text ?? ''));
+  return box;
+}
 
 /** Il testo di un rifiuto del gateway, per codice (v. il contratto in
  *  `jenny/webui/plan_commands.py`). `plan_running` e `rollback_failed` hanno
@@ -182,10 +227,15 @@ export class HomePlan {
    * @param onLockChange chiamata quando cambia l'elenco dei quaderni chiusi.
    * @param onComposerChange chiamata quando cambiano segnaposto o stato del composer.
    * @param sendText   manda un messaggio nella chat a schermo, con i campi in piu'.
+   * @param stagedItems `() => [...]`: le bozze in attesa come le ha lette
+   *                   `HomeStaged` (`staged.list`), per quelle di un passo fermo.
+   * @param refreshStaged rilegge le bozze (una che il piano nomina e l'elenco no).
+   * @param onDraftsChange chiamata quando cambiano le bozze che la scheda mostra.
    */
   constructor({
     live, thread, chatEl, composer = {}, currentNotebook, onChange, onLockChange,
     onComposerChange, sendText, appendOwn, turnRunning, sheet,
+    stagedItems, stagedFailed, refreshStaged, onDraftsChange,
   } = {}) {
     this.live = live;
     this.thread = thread;
@@ -245,6 +295,40 @@ export class HomePlan {
     /** Quando si e' aperto l'ultimo foglio: il tocco sintetico che segue una
      *  pressione non deve chiuderlo subito dal velo (come gli altri fogli). */
     this._sheetOpenedAt = 0;
+    /** La pianificazione in corso nel quaderno a schermo (`plan.get` →
+     *  `drafting`: `{since, revise, reads}`), o `null`. E' del gateway: il
+     *  tasto Piano resta acceso finche' c'e', anche fra una domanda di Jenny e
+     *  la tua risposta. */
+    this.drafting = null;
+    /** Un «Annulla il piano» in volo: una rilettura nel frattempo vedrebbe
+     *  ancora la pianificazione e riaccenderebbe il tasto appena spento. */
+    this._cancelling = false;
+    /** Cosa e' aperto nella scheda (la copertura voce per voce, «Decido io»,
+     *  la diff di una bozza), per chiave: un ridisegno non lo richiude. */
+    this._expanded = new Set();
+    /** Le bozze di un passo fermo: da dove leggerle, e chi avvisare. */
+    this.stagedItems = stagedItems || (() => []);
+    /** L'ultima lettura delle bozze e' fallita: una bozza che manca non e'
+     *  «gia' decisa», e' solo non letta. */
+    this.stagedFailed = stagedFailed || (() => false);
+    this.refreshStaged = refreshStaged || null;
+    this.onDraftsChange = onDraftsChange || null;
+    /** Le bozze con un Installa/Scarta in volo, per id. */
+    this._draftBusy = new Set();
+    /** Le bozze mostrate all'ultimo disegno (`draftIds`), e per quali id si e'
+     *  gia' chiesta una rilettura dell'elenco: una volta sola per insieme. */
+    this._draftKey = '';
+    this._stagedAskedFor = '';
+    this._stagedLoading = false;
+    /** Da quando il tasto si e' acceso e' partito un messaggio di
+     *  pianificazione: il gateway forse sta gia' pianificando anche se il suo
+     *  `plan_changed` non e' ancora arrivato, e spegnere il tasto va detto a
+     *  lui (`cancel_drafting`), o la rilettura dopo lo riaccenderebbe. */
+    this._planSent = false;
+    /** Il piano a schermo quando il tasto si e' acceso (`id@version`, o ''):
+     *  una proposta diversa da quella vuol dire che la pianificazione e'
+     *  finita, anche se il suo inizio non l'abbiamo mai visto. */
+    this._toggleBase = null;
 
     this._buildToggle();
     this.thread?.addEventListener('scroll', () => this._syncStrip());
@@ -253,6 +337,17 @@ export class HomePlan {
        non hanno un Annulla, e senza questo restavano aperti. */
     this.sheet?.addEventListener('click', (e) => {
       if (e.target === this.sheet && Date.now() - this._sheetOpenedAt > 400) this.closeSheet();
+    });
+    /* I link del markdown del modello nel piano completo: lasciati navigare,
+       un link relativo ricaricava la casa senza il `#bs=` (de-autenticata) e
+       un `#ancora` riscriveva l'hash del guscio. La stessa regola della chat
+       e del lettore (`shared/content-link.js`): l'ancora scorre il foglio,
+       un'altra origine si apre fuori, il resto e' inerte e lo si dice. */
+    this.sheetBody?.addEventListener('click', (e) => {
+      const link = contentLinkOf(e.target);
+      if (!link || !this.sheetBody.contains(link) || e.defaultPrevented) return;
+      openContentLink(e, link, this.sheetBody,
+        (type) => showToast(i18n.t('common.linkNotOpenable'), type));
     });
   }
 
@@ -285,10 +380,12 @@ export class HomePlan {
     const notebook = this.currentNotebook();
     const token = ++this._token;
     let plan = null;
+    let drafting = null;
     if (notebook) {
       try {
         const out = await rpc.plan('get', { notebook });
         plan = out?.plan || null;
+        drafting = out?.drafting || null;
       } catch (err) {
         console.warn('home.plan: get failed', err);
         if (token !== this._token) return this.plan;
@@ -304,6 +401,8 @@ export class HomePlan {
     if (token !== this._token) return this.plan;
     this._stale = false;
     this.plan = plan;
+    this._setDrafting(drafting);
+    this._endOnProposal(plan, drafting);
     this._draw();
     if (plan?.status === 'done' || plan?.status === 'stopped') this._loadChanges(plan);
     if (this._listStale) this.refreshList({ retry: false });
@@ -352,6 +451,71 @@ export class HomePlan {
     }
   }
 
+  /* La pianificazione del gateway decide il tasto. Comincia (o c'era gia',
+     rientrando nel quaderno o dopo un riavvio): il tasto si accende. Finisce
+     (la proposta, «Annulla il piano», `/stop`, la scadenza): si spegne. Solo
+     sui cambi: fra il tuo messaggio e l'inizio della pianificazione il gateway
+     risponde ancora «niente», e il tasto che hai appena acceso resta acceso. */
+  _setDrafting(drafting) {
+    const was = this.drafting;
+    this.drafting = drafting;
+    if (drafting && !this._cancelling && !AppState.planTurn) {
+      AppState.set('planTurn', true);
+      this._toggleBase = this._planKey();
+      this._planSent = true;
+    }
+    if (!drafting && was && AppState.planTurn) this._setToggle(false);
+  }
+
+  /* La proposta e' arrivata ma l'inizio della pianificazione no (un frame
+     perso, una pianificazione corta fra due letture): `_setDrafting` non vede
+     il cambio, e il tasto restava acceso sopra la scheda nuova. Una proposta
+     diversa da quella che c'era quando il tasto si e' acceso la chiude. */
+  _endOnProposal(plan, drafting) {
+    if (drafting || !AppState.planTurn || this._toggleBase == null) return;
+    if (plan?.status !== 'proposed') return;
+    if (`${plan.id}@${plan.version}` === this._toggleBase) return;
+    this._setToggle(false);
+  }
+
+  /* Il piano del quaderno a schermo, come chiave della base del tasto. */
+  _planKey() {
+    const plan = this.plan;
+    return plan && plan.notebook === this.currentNotebook() ? `${plan.id}@${plan.version}` : '';
+  }
+
+  /** La revisione in corso: quella che hai chiesto col tasto (Rivedi), o
+   *  quella che il gateway sta gia' preparando. Una sola fonte per la scheda,
+   *  il suggerimento e il messaggio. */
+  _revising() {
+    return AppState.planRevise || this.drafting?.revise || null;
+  }
+
+  /** «Annulla il piano»: la pianificazione finisce senza proposta, e il tasto
+   *  si spegne. Vero se il gateway l'ha presa. */
+  async cancelDrafting() {
+    const notebook = this.currentNotebook();
+    if (!notebook || this._cancelling) return false;
+    this._cancelling = true;
+    this._paintComposer();
+    let ok = false;
+    try {
+      await rpc.plan('cancel_drafting', { notebook });
+      ok = true;
+    } catch (err) {
+      console.warn('home.plan: cancel_drafting failed', err);
+      showToast(t('error.failed'), 'error');
+    } finally {
+      this._cancelling = false;
+    }
+    if (ok) {
+      this.drafting = null;
+      this._setToggle(false);
+    }
+    await this.refresh();
+    return ok;
+  }
+
   /** Il quaderno e' chiuso all'utente: c'e' un piano aperto che ci lavora. */
   isLocked(notebook) {
     return Boolean(notebook) && this.open.has(notebook);
@@ -372,10 +536,17 @@ export class HomePlan {
     this._draw();
   }
 
-  /** La conversazione e' cambiata: il tasto torna spento, la revisione si
-   *  perde, e la scheda si rilegge per il quaderno nuovo. */
+  /** La conversazione e' cambiata: il tasto torna spento (lo riaccende la
+   *  rilettura, se in quel quaderno Jenny sta pianificando), la revisione si
+   *  perde, i fogli del piano lasciato si chiudono, e la scheda si rilegge per
+   *  il quaderno nuovo. */
   onConversationChanged() {
     this._retry = null;
+    /* Un foglio aperto parla del piano di prima: restava sopra la bacheca
+       anche dopo aver lasciato la chat del quaderno. */
+    this.closeSheet();
+    this.drafting = null;
+    this._stagedAskedFor = '';
     this._setToggle(false);
     this.plan = null;
     this._draw();
@@ -392,24 +563,36 @@ export class HomePlan {
     this._call(method, params);
   }
 
-  /** Il composer ha mandato il suo messaggio: il tasto Piano vuol dire «il
-   *  **prossimo** messaggio chiede un piano», quindi si spegne, e la
-   *  revisione con lui. Restando acceso faceva delle domande che seguono dei
-   *  turni di pianificazione in sola lettura. La chiama solo il composer
-   *  (`home-app.js::_send`): `/stop` e i comandi delle bolle non la toccano. */
+  /** Il composer ha mandato il suo messaggio. Il tasto Piano **non** si
+   *  spegne: la pianificazione e' una conversazione (Jenny guarda, chiede, e
+   *  la tua risposta e' ancora pianificazione), e finisce con la proposta o
+   *  con «Annulla il piano» (v. `_setDrafting`). Spegnerlo qui faceva della
+   *  risposta a una sua domanda un turno normale, con la scrittura. La chiama
+   *  solo il composer (`home-app.js::_send`): `/stop` e i comandi delle bolle
+   *  non la toccano. */
   onSent() {
-    if (!AppState.planTurn && !AppState.planRevise) return;
-    this._setToggle(false);
+    if (!AppState.planTurn) return;
+    this._planSent = true;
     this._draw();
   }
 
   /** I campi del piano per il messaggio che il composer sta per mandare (il
    *  terzo argomento di `wsManager.sendToChat`): vuoti se il tasto e' spento
-   *  o non vale in questa chat. */
+   *  o non vale in questa chat. `plan: true` va su ogni messaggio a tasto
+   *  acceso, anche a pianificazione cominciata: se il gateway l'ha gia' chiusa
+   *  (una scadenza, un frame perso) il messaggio resta comunque in sola
+   *  lettura, come dice il tasto. La revisione invece viaggia solo col primo:
+   *  dopo la ricorda il gateway (`drafting.revise`). */
   composerExtra() {
     if (!this._inNotebook() || LIVE_STATUSES.has(this._status())) return {};
     if (AppState.planTurn !== true) return {};
-    return AppState.planRevise ? { plan: true, planRevise: AppState.planRevise } : { plan: true };
+    /* La revisione va col messaggio finche' il gateway non la sa: anche
+       dentro una pianificazione gia' aperta senza revisione (Rivedi toccato
+       mentre Jenny pianificava), che altrimenti non l'avrebbe mai saputa. */
+    if (AppState.planRevise && AppState.planRevise !== this.drafting?.revise) {
+      return { plan: true, planRevise: AppState.planRevise };
+    }
+    return { plan: true };
   }
 
   /* ── Il composer ─────────────────────────────────────────────────────── */
@@ -424,8 +607,18 @@ export class HomePlan {
     btn.appendChild(icon('ti-list-check'));
     btn.appendChild(el('span', 'home-plan-toggle-label'));
     btn.addEventListener('click', () => {
+      /* Spegnerlo mentre Jenny pianifica e' annullare il piano: lasciarla
+         pianificare a tasto spento renderebbe sola lettura un messaggio che
+         il tasto dice normale. */
+      if (AppState.planTurn && (this.drafting || this._planSent)) {
+        this.cancelDrafting();
+        return;
+      }
       this._setToggle(!AppState.planTurn);
-      this.composer.input?.focus?.();
+      /* Senza scorrimento: il campo e' gia' a schermo, e un `focus()` che
+         scorre porta in vista anche la radice del documento (che scorre da
+         programma), lasciando una banda vuota sotto il composer. */
+      this.composer.input?.focus?.({ preventScroll: true });
     });
     field.insertBefore(btn, field.firstChild);
     this.toggle = btn;
@@ -438,8 +631,13 @@ export class HomePlan {
   }
 
   _setToggle(on) {
+    if (on && !AppState.planTurn) this._toggleBase = this._planKey();
     if (Boolean(AppState.planTurn) !== Boolean(on)) AppState.set('planTurn', Boolean(on));
-    if (!on && AppState.planRevise) AppState.set('planRevise', null);
+    if (!on) {
+      if (AppState.planRevise) AppState.set('planRevise', null);
+      this._planSent = false;
+      this._toggleBase = null;
+    }
     this._paintComposer();
   }
 
@@ -447,7 +645,7 @@ export class HomePlan {
   placeholder() {
     if (!this._inNotebook()) return null;
     if (COMPOSER_OFF.has(this._status())) return t('composerOff');
-    if (AppState.planTurn) return t('placeholder');
+    if (AppState.planTurn) return this.drafting ? t('placeholderDrafting') : t('placeholder');
     return null;
   }
 
@@ -479,15 +677,20 @@ export class HomePlan {
       if (AppState.planRevise) AppState.set('planRevise', null);
     }
     const on = toggleable && Boolean(AppState.planTurn);
+    const drafting = on && Boolean(this.drafting);
     if (this.toggle) {
       this.toggle.hidden = !toggleable;
       this.toggle.setAttribute('aria-pressed', String(on));
-      this.toggle.setAttribute('aria-label', t(on ? 'toggleOn' : 'toggleOff'));
+      this.toggle.setAttribute('aria-label', t(drafting ? 'toggleDrafting' : (on ? 'toggleOn' : 'toggleOff')));
       this.toggle.querySelector('.home-plan-toggle-label').textContent = on ? t('toggle') : '';
+      this.toggle.disabled = this._cancelling;
     }
     field?.classList.toggle('is-plan', on);
     send?.classList.toggle('is-plan', on);
     field?.classList.toggle('is-plan-off', off);
+    /* Un campo col fuoco che si spegne non chiude la tastiera per la via
+       solita: la si chiude prima, come quando si esce dalla chat. */
+    if (off && input && document.activeElement === input) input.blur();
     for (const node of [input, attach, send]) {
       if (node) node.disabled = off;
     }
@@ -497,7 +700,7 @@ export class HomePlan {
       if (off) {
         text = t('hintRunning');
         name = 'ti-player-pause';
-      } else if (on && AppState.planRevise) {
+      } else if (on && this._revising()) {
         text = t('hintRevise', { version: this.plan?.version ?? 1 });
         name = 'ti-pencil';
       } else if (on) {
@@ -505,7 +708,17 @@ export class HomePlan {
         name = 'ti-lock';
       }
       this.hint.replaceChildren();
-      if (text) this.hint.append(icon(name), el('span', null, text));
+      if (text) this.hint.append(icon(name), el('span', 'home-plan-hint-text', text));
+      /* Mentre Jenny pianifica, la via d'uscita sta accanto a cio' che dice
+         il tasto: senza, l'unico modo era indovinare che spegnerlo annulla. */
+      if (drafting) {
+        const cancel = el('button', 'home-plan-hint-cancel', t('cancelDrafting'));
+        cancel.type = 'button';
+        cancel.dataset.planAction = 'cancel-drafting';
+        cancel.disabled = this._cancelling;
+        cancel.addEventListener('click', () => this.cancelDrafting());
+        this.hint.appendChild(cancel);
+      }
       this.hint.hidden = !text;
       this.hint.classList.toggle('is-off', off);
     }
@@ -534,6 +747,7 @@ export class HomePlan {
       this.card = null;
       this._drawnKey = '';
       this._syncStrip();
+      this._syncDrafts();
       this.onChange?.();
       return;
     }
@@ -551,7 +765,7 @@ export class HomePlan {
       this.live.insertBefore(this.card, first || typing || null);
     }
     this.card.className = `home-work home-plan is-${plan.status}`;
-    if (plan.status === 'proposed' && AppState.planRevise === plan.id) {
+    if (plan.status === 'proposed' && this._revising() === plan.id) {
       this.card.classList.add('is-review');
     }
     this.card.dataset.planId = plan.id;
@@ -559,7 +773,17 @@ export class HomePlan {
     this._paintCard(plan);
     this._syncStrip();
     this._scheduleTick(plan);
+    this._syncDrafts();
     this.onChange?.();
+  }
+
+  /* Le bozze mostrate dalla scheda sono cambiate (un blocco nuovo, uno
+     risolto, un'altra chat): la scheda delle bozze ridisegna senza quelle. */
+  _syncDrafts() {
+    const key = [...this.draftIds()].sort().join(',');
+    if (key === this._draftKey) return;
+    this._draftKey = key;
+    this.onDraftsChange?.();
   }
 
   /* Il ridisegno della scheda arriva a ogni frame (`goal_status`, ogni
@@ -570,7 +794,7 @@ export class HomePlan {
      tutto, perche' gli ascoltatori dei bottoni tengono il piano di allora. */
   _paintCard(plan) {
     const card = this.card;
-    const key = `${plan.id}@${plan.version}@${plan.status}@${AppState.planRevise === plan.id}`;
+    const key = `${plan.id}@${plan.version}@${plan.status}@${this._revising() === plan.id}`;
     const active = document.activeElement;
     const had = active && card.contains(active) ? active : null;
     const caret = had?.classList?.contains('home-plan-answer')
@@ -588,7 +812,7 @@ export class HomePlan {
     if (caret) heir = card.querySelector('.home-plan-answer');
     else if (action) heir = card.querySelector(`[data-plan-action="${action}"]`);
     else if (stepBox) heir = card.querySelector(`[data-step-id="${stepBox}"] .home-plan-box`);
-    heir?.focus?.();
+    heir?.focus?.({ preventScroll: true });
     if (caret && heir) {
       try {
         heir.setSelectionRange(Math.min(caret[0], heir.value.length), Math.min(caret[1], heir.value.length));
@@ -612,6 +836,12 @@ export class HomePlan {
 
   _cardParts(plan) {
     const parts = [this._head(plan)];
+    /* La proposta dice, sotto il titolo, cosa il lavoro trova gia' nel
+       quaderno e cosa va a cercare: e' la promessa che approvi. */
+    if (plan.status === 'proposed') {
+      const cover = this._coverage(plan);
+      if (cover) parts.push(cover);
+    }
     const meta = this._meta(plan);
     if (meta) parts.push(meta);
     if (LIVE_STATUSES.has(plan.status)) parts.push(this._bar(plan));
@@ -623,6 +853,10 @@ export class HomePlan {
     if (plan.status === 'rolled_back') parts.push(this._rolledBackNote(plan));
     if (plan.rollback_failed) parts.push(this._rollbackFailedNote(plan));
     parts.push(this._list(plan));
+    if (plan.status === 'proposed') {
+      const assumed = this._assumptions(plan);
+      if (assumed) parts.push(assumed);
+    }
     const note = this._footNote(plan);
     if (note) parts.push(note);
     parts.push(this._fullLink(plan));
@@ -664,7 +898,7 @@ export class HomePlan {
     let tone = '';
     switch (plan.status) {
       case 'proposed':
-        if (AppState.planRevise === plan.id) {
+        if (this._revising() === plan.id) {
           ver = t('reviewing');
           tone = 'is-hot';
         } else {
@@ -737,6 +971,86 @@ export class HomePlan {
       return meta;
     }
     return null;
+  }
+
+  /* Un'apertura della scheda (la copertura voce per voce, «Decido io»): un
+     bottone che dice se e' aperto, e la chiave per ricordarlo fra i ridisegni. */
+  _fold(key, label, cls) {
+    const open = this._expanded.has(key);
+    const btn = el('button', `home-plan-fold ${cls}`.trim());
+    btn.type = 'button';
+    btn.dataset.planAction = `fold-${cls.replace(/^home-plan-/, '')}`;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.append(el('span', null, label), icon(open ? 'ti-chevron-up' : 'ti-chevron-down'));
+    btn.addEventListener('click', () => {
+      if (this._expanded.has(key)) this._expanded.delete(key);
+      else this._expanded.add(key);
+      this._draw();
+    });
+    return btn;
+  }
+
+  /** La copertura della proposta: una riga per strategia («Cosa so gia'»,
+   *  «Cosa vado a cercare», e cio' che resta scoperto), col conto e le prime
+   *  voci; il resto voce per voce, a richiesta. Un piano senza copertura (uno
+   *  vecchio) non ha il blocco. */
+  _coverage(plan) {
+    const items = (Array.isArray(plan.coverage) ? plan.coverage : []).filter((c) => c && c.item);
+    if (!items.length) return null;
+    const box = shell(el('div', 'home-plan-cover'));
+    for (const strategy of COVER_STRATEGIES) {
+      const mine = items.filter((c) => c.strategy === strategy);
+      if (!mine.length) continue;
+      const line = el('div', `home-plan-cover-line is-${strategy}`);
+      line.dataset.strategy = strategy;
+      line.appendChild(icon(COVER_ICON[strategy]));
+      const text = el('span');
+      text.appendChild(el('b', null, t(`cover.${COVER_LINE[strategy]}`, { count: mine.length })));
+      const names = mine.slice(0, COVER_NAMED).map((c) => String(c.item)).join(', ');
+      const rest = mine.length - COVER_NAMED;
+      text.append(` ${names}${rest > 0 ? ` ${t('cover.more', { count: rest })}` : ''}`);
+      line.appendChild(text);
+      box.appendChild(line);
+    }
+    const key = `cover:${plan.id}@${plan.version}`;
+    const open = this._expanded.has(key);
+    box.appendChild(this._fold(key, open ? t('cover.hide') : t('cover.all'), 'home-plan-cover-more'));
+    if (open) {
+      const list = el('ul', 'home-plan-cover-list');
+      for (const c of items) {
+        const li = el('li', `is-${c.strategy || 'other'}`);
+        const head = el('div', 'home-plan-cover-item');
+        head.append(el('b', null, String(c.item)));
+        if (COVER_STRATEGIES.includes(c.strategy)) {
+          head.appendChild(el('span', `home-plan-tag is-${c.strategy}`, t(`cover.strategy.${c.strategy}`)));
+        }
+        li.appendChild(head);
+        for (const [field, label] of [['have', 'haveLabel'], ['missing', 'missingLabel'], ['why', 'whyLabel']]) {
+          if (c[field]) li.appendChild(el('div', 'home-plan-cover-sub', `${t(`cover.${label}`)}: ${c[field]}`));
+        }
+        list.appendChild(li);
+      }
+      box.appendChild(list);
+    }
+    return box;
+  }
+
+  /** «Decido io»: le decisioni che Jenny ha preso da sola, chiuse di default.
+   *  Approvando si approvano anche queste, quindi stanno nella scheda e non
+   *  solo nel piano completo. */
+  _assumptions(plan) {
+    const list = (Array.isArray(plan.assumptions) ? plan.assumptions : []).filter(Boolean);
+    if (!list.length) return null;
+    const box = shell(el('div', 'home-plan-assume'));
+    const key = `assume:${plan.id}@${plan.version}`;
+    box.appendChild(this._fold(key, t('assume.title', { count: list.length }), 'home-plan-assume-more'));
+    if (this._expanded.has(key)) {
+      box.appendChild(el('div', 'home-plan-assume-sub', t('assume.sub')));
+      const ul = el('ul', 'home-plan-assume-list');
+      for (const a of list) ul.appendChild(el('li', null, String(a)));
+      box.appendChild(ul);
+    }
+    return box;
   }
 
   _photoLine() {
@@ -845,7 +1159,9 @@ export class HomePlan {
       sub = step.note;
     }
     if (sub) item.appendChild(el('span', 'home-plan-sub', sub));
-    if (step.status === 'blocked' && plan.status === 'blocked') item.appendChild(this._askBox(plan));
+    if (step.status === 'blocked' && plan.status === 'blocked') {
+      item.appendChild(this._blockedOnDrafts(plan) ? this._draftsBox(plan) : this._askBox(plan));
+    }
     /* Un passo fatto si tocca per vedere cosa ha fatto: non si cambia. */
     if (step.status !== 'done' && step.status !== 'interrupted') shell(item);
     if (step.status === 'done' || step.status === 'interrupted') {
@@ -897,6 +1213,166 @@ export class HomePlan {
     return ask;
   }
 
+  /* ── Le bozze di un passo fermo ── */
+
+  /** Vero se il piano e' fermo perche' un passo ha lasciato delle bozze: un
+   *  file che Jenny carica da sola, scritto da un aiutante che aveva letto da
+   *  fuori. Il passo non si chiude finche' non decidi tu. */
+  _blockedOnDrafts(plan) {
+    return plan?.status === 'blocked' && plan.blocked?.kind === 'drafts';
+  }
+
+  /** Le bozze del passo fermo, `[{id, target}]`. Un id da solo (un gateway
+   *  che le scrive cosi') vale come bozza senza percorso. */
+  _blockedDrafts(plan) {
+    if (!this._blockedOnDrafts(plan)) return [];
+    return (Array.isArray(plan.blocked.drafts) ? plan.blocked.drafts : [])
+      .map((d) => (typeof d === 'string' ? { id: d, target: '' } : d))
+      .filter((d) => d && d.id);
+  }
+
+  /** Gli id delle bozze che la scheda a schermo mostra: la scheda delle bozze
+   *  (`HomeStaged`) non le ripete. */
+  draftIds() {
+    return new Set(this._blockedDrafts(this._shown()).map((d) => d.id));
+  }
+
+  /** Le bozze sono cambiate (`HomeStaged` ha riletto l'elenco): se la scheda
+   *  ne mostra, si ridisegna con le diff nuove. */
+  stagedChanged() {
+    if (this._blockedOnDrafts(this._shown())) this._draw();
+  }
+
+  _draftsBox(plan) {
+    const drafts = this._blockedDrafts(plan);
+    const items = new Map((this.stagedItems() || []).map((i) => [i.id, i]));
+    /* Una bozza che il piano nomina e l'elenco no: l'elenco e' di prima
+       della bozza (i frame arrivano in un ordine qualunque). Si rilegge, una
+       volta per insieme di bozze; se manca ancora, e' gia' stata decisa. */
+    const missing = drafts.filter((d) => !items.has(d.id)).map((d) => d.id).join(',');
+    /* Una lettura fallita non rilegge da sola (un gateway giu' la farebbe
+       girare a vuoto a ogni ridisegno): la riga dice di riprovare, e riprova
+       al tocco o alla prossima lettura riuscita. */
+    const failed = Boolean(missing) && this.stagedFailed();
+    if (failed) this._stagedAskedFor = '';
+    if (missing && !failed && this._stagedAskedFor !== missing && this.refreshStaged) {
+      this._stagedAskedFor = missing;
+      this._stagedLoading = true;
+      Promise.resolve()
+        .then(() => this.refreshStaged())
+        .catch(() => {})
+        .finally(() => {
+          this._stagedLoading = false;
+          this.stagedChanged();
+        });
+    }
+    const box = shell(el('div', 'home-plan-ask home-plan-drafts'));
+    const name = (d) => inNotebook(items.get(d.id)?.target || d.target, plan.notebook) || d.id;
+    box.appendChild(el('div', 'home-plan-question', drafts.length === 1
+      ? t('drafts.questionOne', { file: name(drafts[0]) })
+      : t('drafts.questionMany', { count: drafts.length })));
+    for (const d of drafts) {
+      const state = this._stagedLoading ? 'loading' : (failed ? 'failed' : 'gone');
+      box.appendChild(this._draftRow(plan, d, items.get(d.id), name(d), state));
+    }
+    return box;
+  }
+
+  _draftRow(plan, draft, item, path, missingState) {
+    const row = shell(el('div', 'home-plan-draft'));
+    row.dataset.stagedId = draft.id;
+    row.appendChild(el('div', 'home-plan-draft-file',
+      t(item?.new_file ? 'drafts.newFile' : 'drafts.file', { path })));
+    if (!item) {
+      row.appendChild(el('div', 'home-plan-draft-why', t(`drafts.${missingState}`)));
+      if (missingState === 'failed' && this.refreshStaged) {
+        const retry = this._button(t('drafts.retry'), 'is-small', 'ti-refresh');
+        retry.dataset.planAction = `draft-retry-${draft.id}`;
+        retry.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._stagedAskedFor = '';
+          Promise.resolve(this.refreshStaged()).catch(() => {});
+        });
+        row.appendChild(retry);
+      }
+      return row;
+    }
+    row.appendChild(el('div', 'home-plan-draft-why', t('drafts.why', { sources: stagedSources(item.sources) })));
+    const key = `draft:${item.id}`;
+    const open = this._expanded.has(key);
+    const toggle = el('button', 'home-staged-toggle',
+      i18n.t(open ? 'home.staged.hideDiff' : 'home.staged.showDiff'));
+    toggle.type = 'button';
+    toggle.dataset.planAction = `draft-diff-${item.id}`;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.addEventListener('click', () => {
+      if (this._expanded.has(key)) this._expanded.delete(key);
+      else this._expanded.add(key);
+      this._draw();
+    });
+    row.appendChild(toggle);
+    if (open) {
+      row.appendChild(el('pre', 'home-staged-diff', item.diff || ''));
+      if (item.truncated) row.appendChild(el('div', 'home-plan-draft-why', i18n.t('home.staged.truncated')));
+    }
+    const actions = shell(el('div', 'home-plan-actions'));
+    const busy = this._draftBusy.has(item.id);
+    const install = this._button(i18n.t('home.staged.install'), 'is-warn is-small', 'ti-check');
+    install.dataset.planAction = `draft-install-${item.id}`;
+    /* Lo sha nel nodo: un ridisegno con una bozza riscritta (sha nuovo) non
+       deve tenere il bottone di prima, che manderebbe lo sha vecchio. */
+    install.dataset.sha = item.target_sha256 ?? '';
+    install.disabled = busy;
+    install.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._draftAct(item, 'install', path);
+    });
+    const discard = this._button(i18n.t('home.staged.discard'), 'is-small');
+    discard.dataset.planAction = `draft-discard-${item.id}`;
+    discard.disabled = busy;
+    discard.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._draftAct(item, 'discard', path);
+    });
+    actions.append(install, discard);
+    row.appendChild(actions);
+    return row;
+  }
+
+  /* Installa o Scarta una bozza del passo, con le RPC della scheda delle
+     bozze (`staged.*`): nessun tool del modello le raggiunge, e il tocco e' la
+     conferma. Il piano non si tocca: il gateway vede la bozza decisa e, finite
+     quelle del passo, lo chiude e riparte da solo (`plan_changed`). */
+  async _draftAct(item, action, path) {
+    if (this._draftBusy.has(item.id)) return false;
+    this._draftBusy.add(item.id);
+    this._draw();
+    let ok = true;
+    try {
+      if (action === 'install') {
+        await rpc.staged('install', { id: item.id, target_sha256: item.target_sha256 ?? null });
+      } else {
+        await rpc.staged('discard', { id: item.id });
+      }
+    } catch (err) {
+      ok = false;
+      console.warn(`home.plan: staged ${action} failed`, err);
+      /* `conflict`: il file e' cambiato dopo la diff che hai visto. Niente e'
+         scritto: si rilegge, e la diff nuova e' quella da guardare. */
+      showToast(i18n.t(err?.code === 'conflict' ? 'home.staged.conflict' : 'home.staged.failed'), 'error');
+    } finally {
+      this._draftBusy.delete(item.id);
+    }
+    if (ok) {
+      showToast(action === 'install'
+        ? i18n.t('home.staged.installed', { path })
+        : i18n.t('home.staged.discarded'), action === 'install' ? 'success' : 'info');
+    }
+    await this.refreshStaged?.();
+    await this.refresh();
+    return ok;
+  }
+
   _footNote(plan) {
     if (plan.status === 'stopped' && this._stopError?.id === plan.id && !plan.rollback_failed) {
       const note = el('div', 'home-plan-note is-error');
@@ -905,8 +1381,17 @@ export class HomePlan {
       return note;
     }
     let key = '';
-    if (plan.status === 'blocked') key = 'blockedNote';
+    if (plan.status === 'blocked') key = this._blockedOnDrafts(plan) ? 'drafts.note' : 'blockedNote';
     if (plan.status === 'pausing') key = 'pausingNote';
+    const closing = this._closingKey(plan);
+    if (closing) {
+      /* Fra un passo e l'altro (la foto, il turno che chiude) il piano corre
+         senza un passo «adesso»: senza questa riga la scheda restava muta per
+         mezzo minuto, e alla fine per uno intero. */
+      const note = el('div', 'home-plan-note home-plan-closing');
+      note.append(icon('ti-hourglass'), el('span', null, t(closing)));
+      return note;
+    }
     if (plan.status === 'paused') {
       const next = countedSteps(plan).findIndex((s) => s.status === 'pending' || s.status === 'now');
       return el('div', 'home-plan-note', next < 0 ? t('pausedNoteEnd') : t('pausedNote', { step: next + 1 }));
@@ -916,6 +1401,17 @@ export class HomePlan {
     if (key === 'blockedNote') note.appendChild(withBold(t(key), t('blockedNoteBold')));
     else note.textContent = t(key);
     return note;
+  }
+
+  /** Cosa sta facendo un piano che corre senza un passo in corso: chiude un
+   *  passo, chiude il piano, o (all'inizio) prepara il primo. `null` se un
+   *  passo sta girando. Lo deduce la scheda: il gateway non ha un campo. */
+  _closingKey(plan) {
+    if (plan?.status !== 'running') return null;
+    const { done, total, steps } = this._progress(plan);
+    if (total > 0 && done >= total) return 'closingPlan';
+    if (plan.current_step_id || steps.some((s) => s.status === 'now')) return null;
+    return done > 0 ? 'closingStep' : 'startingPlan';
   }
 
   _rolledBackNote(plan) {
@@ -971,7 +1467,7 @@ export class HomePlan {
       case 'proposed': {
         /* In revisione la scheda aspetta il tuo messaggio: niente bottoni (il
            tasto Piano spento esce dalla revisione). */
-        if (AppState.planRevise === plan.id) break;
+        if (this._revising() === plan.id) break;
         const kept = countedSteps(plan).length - this._cutCount(plan);
         const approve = add(this.cut.size ? t('approveSome', { count: kept }) : t('approve'),
           'is-primary', 'ti-check', 'approve', () => this.approve());
@@ -1115,7 +1611,16 @@ export class HomePlan {
     let btnLabel = t('pause');
     let run = () => this._call('pause', { id: plan.id });
     let waits = false;
-    if (plan.status === 'blocked') {
+    if (plan.status === 'blocked' && this._blockedOnDrafts(plan)) {
+      /* La domanda di un blocco per bozze e' un ripiego inglese del gateway:
+         la striscia dice le sue parole, e i file. */
+      title = t('strip.drafts');
+      const files = this._blockedDrafts(plan).map((d) => inNotebook(d.target, plan.notebook) || d.id);
+      sub = t('strip.step', { n: index, title: files.join(', ') || current?.title || '' });
+      btnIcon = 'ti-arrow-down';
+      btnLabel = t('strip.show');
+      run = () => this.revealCard();
+    } else if (plan.status === 'blocked') {
       title = t('strip.blocked');
       sub = t('strip.step', { n: index, title: plan.blocked?.question || current?.title || '' });
       btnIcon = 'ti-arrow-down';
@@ -1136,6 +1641,9 @@ export class HomePlan {
       btnIcon = 'ti-arrow-down';
       btnLabel = t('strip.show');
       run = () => this.revealCard();
+    } else if (!current) {
+      const closing = this._closingKey(plan);
+      if (closing) sub = t(closing);
     }
     const tone = { blocked: 'var(--warning)', paused: 'var(--text-muted)' }[plan.status];
     const text = el('button', 'home-plan-strip-text');
@@ -1238,10 +1746,11 @@ export class HomePlan {
   startRevise() {
     const plan = this.plan;
     if (!plan) return;
+    if (!AppState.planTurn) this._toggleBase = this._planKey();
     AppState.set('planTurn', true);
     AppState.set('planRevise', plan.id);
     this._draw();
-    this.composer.input?.focus?.();
+    this.composer.input?.focus?.({ preventScroll: true });
   }
 
   /** Rifai il piano (dopo un ritorno): un messaggio in modo Piano, che chiede
@@ -1378,7 +1887,7 @@ export class HomePlan {
         line.dataset.kind = kind;
         line.appendChild(icon(glyph));
         line.appendChild(el('b', null, t(`changes.${kind}`, { count: paths.length, group: g })));
-        const names = paths.slice(0, 6).map((p) => p.split('/').pop().replace(/\.md$/i, ''));
+        const names = paths.slice(0, 6).map(relInGroup);
         line.append(` · ${names.join(', ')}${paths.length > 6 ? '…' : ''}`);
         box.appendChild(line);
       }
@@ -1467,7 +1976,7 @@ export class HomePlan {
     };
     box.appendChild(lines);
     if (left.length) {
-      const names = left.slice(0, 4).map((p) => p.split('/').pop().replace(/\.md$/i, ''));
+      const names = left.slice(0, 4).map(relInGroup);
       const line = el('div', 'is-keep');
       line.append(icon('ti-lock'), el('span', null, t('rollbackSheet.left', {
         names: names.join(', ') + (left.length > 4 ? '…' : ''),
@@ -1541,8 +2050,11 @@ export class HomePlan {
     return true;
   }
 
-  /** Il piano completo: i dettagli che Jenny rilegge a ogni passo. In sola
-   *  lettura per costruzione — per cambiarlo c'e' Rivedi. */
+  /** Il piano completo: i dettagli che Jenny rilegge a ogni passo, con cio'
+   *  che il lavoro richiede (la copertura), le decisioni che ha preso da sola
+   *  e, per ogni passo, quando e' fatto. In sola lettura per costruzione — per
+   *  cambiarlo c'e' Rivedi. I testi sono del modello e sono markdown: si
+   *  rendono come in chat, sanificati (v. `md`). */
   async openFull(plan = this.plan) {
     if (!plan) return null;
     let out;
@@ -1554,12 +2066,52 @@ export class HomePlan {
       return null;
     }
     const body = el('div', 'home-plan-full');
+    /* `plan.full` porta copertura e assunzioni; un gateway di prima no, e
+       allora valgono quelle della vista (o niente, per un piano vecchio). */
+    const listOf = (...xs) => xs.find(Array.isArray) || [];
+    const coverage = listOf(out?.coverage, plan.coverage).filter((c) => c && c.item);
+    if (coverage.length) {
+      body.appendChild(el('h3', 'home-plan-full-section', t('fullSheet.coverage')));
+      for (const c of coverage) {
+        const box = el('div', `home-plan-full-cover is-${c.strategy || 'other'}`);
+        const head = el('div', 'home-plan-cover-item');
+        head.append(el('b', null, String(c.item)));
+        if (COVER_STRATEGIES.includes(c.strategy)) {
+          head.appendChild(el('span', `home-plan-tag is-${c.strategy}`, t(`cover.strategy.${c.strategy}`)));
+        }
+        box.appendChild(head);
+        for (const [field, label] of [['have', 'haveLabel'], ['missing', 'missingLabel'], ['why', 'whyLabel']]) {
+          if (!c[field]) continue;
+          const line = el('div', 'home-plan-full-labeled');
+          line.append(el('span', 'home-plan-full-label', t(`cover.${label}`)), md('home-plan-full-text', c[field]));
+          box.appendChild(line);
+        }
+        body.appendChild(box);
+      }
+    }
+    const assumptions = listOf(out?.assumptions, plan.assumptions).filter(Boolean);
+    if (assumptions.length) {
+      body.appendChild(el('h3', 'home-plan-full-section', t('fullSheet.assumptions')));
+      const ul = el('ul', 'home-plan-full-assume');
+      for (const a of assumptions) {
+        const li = el('li');
+        li.appendChild(md('home-plan-full-text', a));
+        ul.appendChild(li);
+      }
+      body.appendChild(ul);
+    }
     (out?.steps || []).filter((s) => s.status !== 'cut').forEach((s, i) => {
       const h = el('h3', 'home-plan-full-step');
+      h.dataset.stepId = s.id || '';
       h.append(icon(KIND_ICON[s.kind] || KIND_ICON.other), el('span', null, `${i + 1}. ${s.title || ''}`));
       for (const tag of this._tags(s)) h.appendChild(tag);
       body.appendChild(h);
-      if (s.detail) body.appendChild(el('p', 'home-plan-full-detail', s.detail));
+      if (s.detail) body.appendChild(md('home-plan-full-detail', s.detail));
+      if (s.done_when) {
+        const done = el('div', 'home-plan-full-labeled home-plan-full-done');
+        done.append(el('span', 'home-plan-full-label', t('fullSheet.doneWhen')), md('home-plan-full-text', s.done_when));
+        body.appendChild(done);
+      }
     });
     const dropped = plan.dropped || [];
     if (dropped.length) {

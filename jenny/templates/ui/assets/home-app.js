@@ -223,7 +223,14 @@ class HomeApp {
     });
     /* Le bozze di un subagent che ha letto qualcosa da fuori: una scheda nel
        posto live, con Installa / Scarta (v. `home-staged.js`). */
-    this.staged = new HomeStaged(this.chat.live, { onChange: () => this.chat.liveChanged() });
+    this.staged = new HomeStaged(this.chat.live, {
+      onChange: () => this.chat.liveChanged(),
+      /* Le bozze di un passo fermo stanno nella scheda del piano (v.
+         `HomePlan._draftsBox`): li' si rilegge con l'elenco nuovo, e qui non
+         si ripetono finche' quella scheda e' a schermo. */
+      onItems: () => this.plan?.stagedChanged(),
+      hidden: () => this.plan?.draftIds() || null,
+    });
     this.chat.claimsWork = (workId) => this.work.claims(workId);
     this.empty = document.getElementById('home-empty');
     this.emptyText = document.getElementById('home-empty-text');
@@ -271,6 +278,10 @@ class HomeApp {
       sendText: (text, extra) => this._sendText(text, [], [], extra),
       appendOwn: (text) => this.chat.appendOwn(text, []),
       turnRunning: () => Boolean(this._running),
+      stagedItems: () => this.staged.items,
+      stagedFailed: () => this.staged.failed,
+      refreshStaged: () => this.staged.refresh(),
+      onDraftsChange: () => this.staged.redraw(),
     });
 
     this.backBtn = document.getElementById('home-back');
@@ -581,9 +592,10 @@ class HomeApp {
       this.plan.onConversationChanged();
       this._applyPlanLock();
     });
-    /* Il tasto Piano si spegne dopo il messaggio del composer, e solo dopo
-       quello: lo fa `_send` (v. `HomePlan.onSent`). Non qui su `chat:sent`,
-       che parte anche per `/stop` e per i comandi delle bolle di lavoro. */
+    /* Il tasto Piano lo segue `_send` (v. `HomePlan.onSent`): ricorda che un
+       messaggio di pianificazione e' partito, e il tasto resta acceso finche'
+       il gateway pianifica. Non qui su `chat:sent`, che parte anche per
+       `/stop` e per i comandi delle bolle di lavoro. */
 
     wsManager.addEventListener('chat:open', () => this._onWireOpen());
     wsManager.addEventListener('chat:close', () => this._setWire(false));
@@ -1244,6 +1256,9 @@ class HomeApp {
       this.chatMove.retune(home, back);
     }
     this.over.hide();
+    /* I fogli del piano (le modifiche, il piano completo…) sono della chat
+       del quaderno: chiusa lei, restavano aperti sopra la bacheca. */
+    this.plan?.closeSheet();
     this.jenny?.setExpanded?.(false);
     this.jenny?.setChatOnScreen?.(false);
     this.jenny?.setOut?.(false);
@@ -2548,6 +2563,11 @@ class HomeApp {
          veniva misurata al posto di quello vero. */
       const h = this.composer?.offsetHeight || 64;
       document.documentElement.style.setProperty('--home-composer-h', `${h}px`);
+      /* La riga del piano sopra il composer, a parte: il «↓» le sta sopra
+         (v. `.home-scroll-fab`), mentre Jenny resta coi piedi sul composer. */
+      const hint = this.plan?.hint;
+      const hintH = hint && !hint.hidden ? hint.offsetHeight : 0;
+      document.documentElement.style.setProperty('--home-plan-hint-h', `${hintH}px`);
     };
     /* Serve anche a chi rientra nella chat da un'altra stanza: li' il composer
        torna visibile e la sua altezza va rimisurata, o Jenny resta appoggiata
@@ -2565,9 +2585,13 @@ class HomeApp {
        `keepBottom` riaggancia solo se ci si era: chi sta rileggendo più su non
        viene strappato via. */
     if (window.ResizeObserver) {
-      const observer = new ResizeObserver(() => {
+      const observer = new ResizeObserver((entries) => {
         measure();
-        this.chat.keepBottom();
+        /* Il filo che cambia da solo (la tastiera, v. sotto) non porta niente
+           di nuovo sotto: si riaggancia se ci si era, senza accendere il
+           pallino del «↓». */
+        if (entries?.length && entries.every((e) => e.target === this.thread)) this._refollow();
+        else this.chat.keepBottom();
       });
       /* Anche la riga del piano sopra il composer (`.home-plan-hint`): compare
          col tasto Piano e mentre un piano corre, e senza osservarla l'ultimo
@@ -2576,7 +2600,25 @@ class HomeApp {
       for (const el of [this.composer, this.pending, this.wire, this.plan?.hint]) {
         if (el) observer.observe(el);
       }
+      /* **E il filo stesso.** La tastiera che sale accorcia il filo senza
+         cambiare niente di quel che gli sta sotto: nessuna delle righe sopra
+         si muove, e l'ultimo messaggio finiva sotto la riga del piano (visto
+         sul telefono col tasto Piano, che apre la tastiera). */
+      if (this.thread) observer.observe(this.thread);
     }
+    /* Dove la finestra non si ridimensiona con la tastiera (`adjustPan`), la
+       vede solo il `visualViewport`: stesso riaggancio. */
+    window.visualViewport?.addEventListener('resize', () => {
+      measure();
+      this._refollow();
+    });
+  }
+
+  /* Il filo resta in fondo se ci stava: per un cambio di misura, non per un
+     messaggio nuovo (quello e' `keepBottom`, che se sei risalito accende il
+     pallino del «↓»). */
+  _refollow() {
+    if (this.chat.following) this.chat.scrollToBottom();
   }
 
   /* Il campo cresce col testo fino al tetto del CSS, poi scorre. Si azzera
@@ -2662,8 +2704,10 @@ class HomeApp {
     /* Il tasto Piano (e una revisione) vale per questo messaggio, e lo si
        dice qui, esplicito: `sendToChat` non legge piu' uno stato globale, che
        avrebbe fatto di `/stop` o di un comando di una bolla un turno di
-       pianificazione. Partito il messaggio, il tasto si spegne: le domande
-       che seguono sono chiacchiera normale, non piani nuovi. */
+       pianificazione. Partito il messaggio, il tasto resta acceso: la
+       pianificazione e' una conversazione (Jenny puo' chiedere, e la tua
+       risposta e' ancora pianificazione), e lo spegne la proposta o
+       «Annulla il piano» (v. `HomePlan._setDrafting`). */
     const planExtra = this.plan?.composerExtra?.() || {};
     if (!this._sendText(text, this.files.getImages(), this.files.getAttachmentEntries(), planExtra)) {
       return false;

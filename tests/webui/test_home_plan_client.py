@@ -2,13 +2,16 @@
 
 Il piano lo muove il codice del gateway; la casa ne mostra lo stato e manda i
 tocchi dell'utente come RPC ``plan.*``. Qui si fissa il contratto fra le due
-parti, col gateway finto: che il tasto Piano viaggi nel messaggio (e non in
-uno stato sul server), che Approva mandi la versione vista e i passi tolti,
+parti, col gateway finto: che il tasto Piano viaggi nel messaggio e resti
+acceso finche' il gateway pianifica, che Approva mandi la versione vista e i
+passi tolti,
 che un ``conflict`` rilegga invece di insistere, che in corsa la chat sia
 spenta e il quaderno chiuso, e che il ritorno indietro mandi i gruppi tenuti.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from support.home_dom import requires_jsdom, run_home
 
@@ -30,7 +33,10 @@ const plan = (over = {}) => ({
   done: 0, total: 3, current_step_id: null, can_rollback: false, can_undo_rollback: false, ...over,
 });
 let current = null;
-rpcAnswers['plan.get'] = () => ({ ok: true, plan: current });
+/* La pianificazione del gateway (`plan.get` → `drafting`): c'e' anche senza un piano. */
+let drafting = null;
+const DRAFTING = { since: '2026-10-23T10:00:00Z', revise: null, reads: 0 };
+rpcAnswers['plan.get'] = () => ({ ok: true, plan: current, drafting });
 let open = [];
 rpcAnswers['plan.list'] = () => ({ ok: true, plans: open });
 const card = () => document.querySelector('#home-thread > .home-live > .home-plan');
@@ -70,10 +76,35 @@ const msg = messages().at(-1);
 assert.equal(msg.content, 'rebuild the wiki');
 assert.equal(msg.plan, true);
 assert.equal(msg.plan_revise, undefined, 'senza Rivedi non c\\'e\\' revisione');
-// Il tasto vuol dire «il prossimo messaggio chiede un piano»: partito, si spegne.
-assert.equal(toggle.getAttribute('aria-pressed'), 'false', 'dopo l\\'invio il tasto e\\' spento');
+// Partito il messaggio il tasto resta acceso: la pianificazione e' una
+// conversazione, e finisce con la proposta.
+assert.equal(toggle.getAttribute('aria-pressed'), 'true', 'dopo l\\'invio il tasto resta acceso');
+// Una rilettura prima che il gateway cominci («niente») non lo spegne.
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: '' });
+await tick(40);
+assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+// Il gateway pianifica: il campo dice a chi rispondi, e c'e' l'uscita.
+drafting = { ...DRAFTING };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: '' });
+await tick(40);
+assert.equal($('home-input').placeholder, P.placeholderDrafting);
+assert.match(text(document.querySelector('.home-plan-hint')), /touches nothing/, 'la riga resta');
+assert.equal(text(document.querySelector('[data-plan-action="cancel-drafting"]')), P.cancelDrafting);
+assert.equal(toggle.getAttribute('aria-label'), P.toggleDrafting);
+// Jenny fa una domanda, tu rispondi: e' ancora pianificazione.
+$('home-input').value = 'keep the camellia';
+$('home-send').click();
+assert.equal(messages().at(-1).plan, true, 'la risposta resta in sola lettura');
+assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+// La proposta chiude la pianificazione: il tasto si spegne da solo.
+drafting = null;
+current = plan();
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(toggle.getAttribute('aria-pressed'), 'false', 'finita la pianificazione il tasto e\\' spento');
 assert.equal(document.querySelector('.home-field').classList.contains('is-plan'), false);
 assert.notEqual($('home-input').placeholder, P.placeholder);
+assert.notEqual($('home-input').placeholder, P.placeholderDrafting);
 assert.equal(document.querySelector('.home-plan-hint').hidden, true);
 $('home-input').value = 'and how long will it take?';
 $('home-send').click();
@@ -89,12 +120,105 @@ assert.equal(toggle.getAttribute('aria-pressed'), 'true', '/stop non consuma il 
 $('home-input').value = 'now plan it';
 $('home-send').click();
 assert.equal(messages().at(-1).plan, true);
+// Spento subito dopo l'invio, prima che arrivi il `plan_changed`: il gateway
+// forse pianifica gia', quindi glielo si dice (e la rilettura non lo riaccende).
+rpcAnswers['plan.cancel_drafting'] = () => ({ ok: true, cancelled: false });
+toggle.click();
+await tick(40);
+assert.equal(rpcs('plan.cancel_drafting').length, 1);
 assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+// Acceso e rispento senza aver mandato niente: non c'e' niente da annullare.
+toggle.click();
+toggle.click();
+assert.equal(rpcs('plan.cancel_drafting').length, 1);
 // Cambiando conversazione il tasto torna spento.
+toggle.click();
 await app.switchConversation('unified:default');
 await tick(30);
 await toNotebook();
 assert.equal(document.querySelector('.home-field').classList.contains('is-plan'), false);
+""")
+
+
+def test_drafting_is_cancelled_from_the_hint_or_the_toggle() -> None:
+    run_home(_HEAD + """
+// Rientrando in un quaderno dove Jenny pianifica (o dopo un riavvio), il
+// tasto si riaccende da solo: lo stato e' del gateway.
+drafting = { ...DRAFTING, reads: 3 };
+await toNotebook();
+const toggle = document.querySelector('.home-plan-toggle');
+assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+assert.equal($('home-input').placeholder, P.placeholderDrafting);
+rpcAnswers['plan.cancel_drafting'] = () => { drafting = null; return { ok: true, cancelled: true }; };
+document.querySelector('[data-plan-action="cancel-drafting"]').click();
+await tick(40);
+assert.deepEqual(rpcs('plan.cancel_drafting')[0].params, { notebook: 'orto' });
+assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+assert.equal(document.querySelector('.home-plan-hint').hidden, true);
+// Spegnere il tasto mentre pianifica e' annullare.
+drafting = { ...DRAFTING };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: '' });
+await tick(40);
+assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+toggle.click();
+await tick(40);
+assert.equal(rpcs('plan.cancel_drafting').length, 2);
+assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+// Un annullamento rifiutato lo dice, e il tasto resta com'e' il gateway.
+drafting = { ...DRAFTING };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: '' });
+await tick(40);
+rpcAnswers['plan.cancel_drafting'] = () => rpcFailed('unavailable', 'x');
+toggle.click();
+await tick(40);
+assert.ok(toasts().includes(P.error.failed), toasts());
+assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+""")
+
+
+def test_a_proposal_ends_planning_even_if_its_start_was_never_seen() -> None:
+    run_home(_HEAD + """
+await toNotebook();
+const toggle = document.querySelector('.home-plan-toggle');
+toggle.click();
+$('home-input').value = 'rebuild the wiki';
+$('home-send').click();
+// L'inizio della pianificazione si perde: arriva direttamente la proposta.
+current = plan();
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(toggle.getAttribute('aria-pressed'), 'false', 'una proposta nuova chiude il tasto');
+// Riacceso sopra quella proposta, la stessa proposta non lo spegne.
+toggle.click();
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+// Una versione nuova si'.
+current = plan({ version: 2 });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+""")
+
+
+def test_revise_during_a_plain_drafting_still_reaches_the_gateway() -> None:
+    run_home(_HEAD + """
+current = plan();
+drafting = { ...DRAFTING };
+await toNotebook();
+// Jenny pianifica senza revisione, e tu tocchi Rivedi sulla proposta di prima.
+action('revise').click();
+$('home-input').value = 'drop step 2';
+$('home-send').click();
+assert.equal(messages().at(-1).plan, true);
+assert.equal(messages().at(-1).plan_revise, 'p1', 'la revisione va al gateway che non la sa');
+drafting = { ...DRAFTING, revise: 'p1' };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+$('home-input').value = 'and keep the photos';
+$('home-send').click();
+assert.equal(messages().at(-1).plan, true);
+assert.equal(messages().at(-1).plan_revise, undefined, 'quando la sa, non si ripete');
 """)
 
 
@@ -148,10 +272,25 @@ await tick(10);
 const msg = messages().at(-1);
 assert.equal(msg.plan, true);
 assert.equal(msg.plan_revise, 'p1');
-assert.equal(card().classList.contains('is-review'), false, 'la revisione vale un messaggio');
+// Il gateway rivede: la scheda resta in revisione, e la revisione la ricorda
+// lui, quindi il messaggio dopo non la ripete.
+drafting = { ...DRAFTING, revise: 'p1' };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.ok(card().classList.contains('is-review'), 'in revisione finche\\' Jenny rivede');
 $('home-input').value = 'and one more thing';
 $('home-send').click();
+assert.equal(messages().at(-1).plan, true);
 assert.equal(messages().at(-1).plan_revise, undefined);
+// La versione nuova chiude la pianificazione.
+drafting = null;
+current = plan({ version: 2 });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(card().classList.contains('is-review'), false);
+assert.ok(action('approve'));
+$('home-input').value = 'thanks';
+$('home-send').click();
 assert.equal(messages().at(-1).plan, undefined, 'dopo la revisione il messaggio dopo e\\' normale');
 assert.equal(document.querySelector('.home-plan-toggle').getAttribute('aria-pressed'), 'false');
 """)
@@ -722,4 +861,355 @@ assert.match(text(sheet()), /1 files come back/);
 row('confirm').click();
 await tick(40);
 assert.equal(rpcs('plan.rollback').at(-1).params.expect_end, 'P2', 'si conferma il conto nuovo');
+""")
+
+
+def test_a_proposal_shows_its_coverage_and_its_assumptions() -> None:
+    run_home(_HEAD + """
+current = plan({
+  coverage: [
+    { item: 'Acero', have: '3 notes', missing: '', strategy: 'notebook', why: '' },
+    { item: 'Ginkgo', have: 'a page', missing: '', strategy: 'notebook', why: '' },
+    { item: 'Fico', have: 'raw notes', missing: '', strategy: 'notebook', why: '' },
+    { item: 'Pino', have: 'a page', missing: '', strategy: 'notebook', why: '' },
+    { item: 'Glicine', have: '', missing: 'substrate mix', strategy: 'web', why: 'raw has nothing' },
+    { item: 'Camelia', have: '', missing: 'everything', strategy: 'leave', why: 'not your plant' },
+  ],
+  assumptions: ['Old concept pages go', 'Numbers only with a source'],
+});
+await toNotebook();
+// Sotto il titolo: cosa so gia', cosa vado a cercare, cosa resta scoperto.
+assert.ok(card().children[1].classList.contains('home-plan-cover'), 'la copertura sta sotto il titolo');
+const line = (s) => text(card().querySelector(`.home-plan-cover-line.is-${s}`));
+assert.equal(line('notebook'), `${P.cover.have.replace('{count}', '4')} Acero, Ginkgo, Fico ${P.cover.more.replace('{count}', '1')}`);
+assert.equal(line('web'), `${P.cover.search.replace('{count}', '1')} Glicine`);
+assert.match(line('leave'), /Camelia/);
+// Il resto voce per voce, a richiesta.
+assert.equal(card().querySelector('.home-plan-cover-list'), null, 'le voci partono chiuse');
+action('fold-cover-more').click();
+assert.match(text(card().querySelector('.home-plan-cover-list')), /substrate mix/);
+assert.match(text(card().querySelector('.home-plan-cover-list')), /not your plant/);
+// «Decido io»: chiuso di default, e apribile.
+const fold = action('fold-assume-more');
+assert.equal(text(fold), P.assume.title.replace('{count}', '2'));
+assert.equal(fold.getAttribute('aria-expanded'), 'false');
+assert.equal(card().querySelector('.home-plan-assume-list'), null);
+fold.click();
+assert.deepEqual([...card().querySelectorAll('.home-plan-assume-list li')].map(text),
+  ['Old concept pages go', 'Numbers only with a source']);
+// Un ridisegno non richiude quel che hai aperto.
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.ok(card().querySelector('.home-plan-assume-list'));
+// Un piano vecchio, senza copertura, non ha il blocco.
+current = plan({ id: 'p0' });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p0' });
+await tick(40);
+assert.equal(card().querySelector('.home-plan-cover'), null);
+assert.equal(card().querySelector('.home-plan-assume'), null);
+""")
+
+
+def test_the_full_plan_renders_markdown_safely_with_coverage_and_done_when() -> None:
+    vendor = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "vendor"
+    boot = f"""
+import {{ createRequire }} from 'node:module';
+const require = createRequire(import.meta.url);
+globalThis.DOMPurify = require({str(vendor / "dompurify@3" / "purify.min.js")!r})(window);
+window.DOMPurify = globalThis.DOMPurify;
+globalThis.marked = require({str(vendor / "marked@15.0.7" / "marked.min.js")!r});
+window.marked = globalThis.marked;
+"""
+    run_home(boot + _HEAD + """
+current = plan();
+await toNotebook();
+rpcAnswers['plan.full'] = () => ({ ok: true, title: 'Rebuild the wiki',
+  coverage: [{ item: 'Glicine', have: '', missing: 'the `substrate` mix', strategy: 'web', why: 'raw is empty' }],
+  assumptions: ['Delete `concepts/` pages'],
+  steps: [step('s1', 'Search maple', {
+    detail: 'Read `raw/acero.md` first.\\n\\n<img src=x onerror="globalThis.pwned=1"> and **bold**',
+    done_when: 'every page has **3** sourced facts, see [the rules](workshop.html) and [here](#nowhere)' })] });
+card().querySelector('.home-plan-open').click();
+await tick(40);
+const s = sheet();
+assert.ok(s.open);
+// Il markdown e' reso: i backtick diventano codice, non restano crudi.
+const detail = s.querySelector('.home-plan-full-detail');
+assert.equal(detail.querySelector('code')?.textContent, 'raw/acero.md');
+assert.ok(!text(detail).includes('`'), 'niente backtick crudi');
+assert.equal(detail.querySelector('strong')?.textContent, 'bold');
+// ...e sanificato: l'HTML del modello non passa.
+assert.equal(s.querySelector('[onerror]'), null, 'nessun attributo evento');
+assert.equal(globalThis.pwned, undefined);
+// Il «fatto quando» di ogni passo, la copertura e le assunzioni.
+const done = s.querySelector('.home-plan-full-done');
+assert.match(text(done), new RegExp(P.fullSheet.doneWhen));
+assert.equal(done.querySelector('strong')?.textContent, '3');
+assert.match(text(s), new RegExp(P.fullSheet.coverage));
+assert.equal(s.querySelector('.home-plan-full-cover code')?.textContent, 'substrate');
+assert.match(text(s), new RegExp(P.fullSheet.assumptions));
+assert.equal(s.querySelector('.home-plan-full-assume code')?.textContent, 'concepts/');
+// Un link del modello non naviga la WebView: si instrada come in chat.
+const link = s.querySelector('.home-plan-full-done a[href="workshop.html"]');
+assert.ok(link, 'il link e\\' reso');
+const tap = new MouseEvent('click', { bubbles: true, cancelable: true });
+link.dispatchEvent(tap);
+assert.equal(tap.defaultPrevented, true, 'niente navigazione del frame');
+assert.ok(toasts().includes(locales.en.common.linkNotOpenable), toasts());
+const hashBefore = location.hash;
+const hashTap = new MouseEvent('click', { bubbles: true, cancelable: true });
+s.querySelector('a[href="#nowhere"]').dispatchEvent(hashTap);
+assert.equal(hashTap.defaultPrevented, true, 'un #ancora non riscrive l\\'hash del guscio');
+assert.equal(location.hash, hashBefore);
+""")
+
+
+_DRAFTS = """
+const S = locales.en.home.staged;
+const draftItem = (over = {}) => ({ id: 'd1', target: 'wikis/orto/AGENTS.md',
+  sources: ['web_fetch:a.example', 'file:wikis/orto/.jenny/tool-results/call_1.txt',
+    'web_search:b', 'web_fetch:c.example', 'web_fetch:d.example'],
+  created_ms: 1, new_file: false, target_sha256: 'abc', diff: '--- a\\n+++ b\\n+one folder per plant\\n',
+  truncated: false, ...over });
+let pending = [draftItem()];
+rpcAnswers['staged.list'] = () => ({ ok: true, staged: pending });
+const blockedOnDrafts = (drafts = [{ id: 'd1', target: 'wikis/orto/AGENTS.md' }]) => plan({
+  status: 'blocked', done: 1, current_step_id: 's2',
+  blocked: { step: 's2', question: 'FALLBACK the change waits', reason: 'drafts',
+    at: '2026-10-23T11:25:00Z', kind: 'drafts', drafts },
+  steps: [step('s1', 'Rules', { status: 'done' }), step('s2', 'Write', { kind: 'write', status: 'blocked' }),
+    step('s3', 'Check', { kind: 'check' })] });
+const stagedCard = () => document.querySelector('#home-thread > .home-live > .home-staged');
+"""
+
+
+def test_a_step_blocked_on_drafts_shows_them_in_the_plan_card() -> None:
+    run_home(_HEAD + _DRAFTS + """
+current = blockedOnDrafts();
+await toNotebook();
+await tick(40);
+const box = card().querySelector('.home-plan-drafts');
+assert.ok(box, 'le bozze stanno nella scheda del piano');
+assert.equal(text(box.querySelector('.home-plan-question')), P.drafts.questionOne.replace('{file}', 'AGENTS.md'));
+assert.ok(!text(card()).includes('FALLBACK'), 'la domanda inglese del gateway e\\'  solo un ripiego');
+assert.equal(card().querySelector('.home-plan-answer'), null, 'non e\\' una domanda da scrivere');
+assert.equal(text(card().querySelector('.home-plan-note')), P.drafts.note);
+// Le fonti: le prime tre, senza i file interni, e il resto contato.
+const why = text(box.querySelector('.home-plan-draft-why'));
+assert.match(why, /a\\.example, web_search:b, web_fetch:c\\.example and 1 more/);
+assert.ok(!why.includes('tool-results'));
+// La scheda delle bozze non la ripete mentre questa e' a schermo.
+assert.equal(stagedCard(), null);
+// La diff, a richiesta.
+action('draft-diff-d1').click();
+assert.match(card().querySelector('.home-staged-diff').textContent, /one folder per plant/);
+// Installa: lo sha mostrato, e niente RPC del piano.
+rpcAnswers['staged.install'] = () => { pending = []; return { ok: true }; };
+action('draft-install-d1').click();
+await tick(40);
+assert.deepEqual(rpcs('staged.install')[0].params, { id: 'd1', target_sha256: 'abc' });
+assert.ok(toasts().includes(S.installed.replace('{path}', 'AGENTS.md')), toasts());
+assert.equal(rpcs('plan.answer').length, 0);
+// Il gateway chiude il passo e riparte da solo.
+current = plan({ status: 'running', done: 2, current_step_id: 's3', steps: [step('s1', 'Rules', { status: 'done' }),
+  step('s2', 'Write', { kind: 'write', status: 'done' }), step('s3', 'Check', { kind: 'check', status: 'now' })] });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.ok(card().classList.contains('is-running'));
+assert.equal(card().querySelector('.home-plan-drafts'), null);
+""")
+
+
+def test_a_draft_conflict_says_so_and_the_other_chats_still_see_the_draft() -> None:
+    run_home(_HEAD + _DRAFTS + """
+current = blockedOnDrafts();
+await toNotebook();
+await tick(40);
+const lists = rpcs('staged.list').length;
+rpcAnswers['staged.install'] = () => { pending = [draftItem({ target_sha256: 'new', diff: '+changed again' })]; return rpcFailed('conflict', 'x'); };
+action('draft-install-d1').click();
+await tick(60);
+assert.ok(toasts().includes(S.conflict), toasts());
+assert.ok(rpcs('staged.list').length > lists, 'si rilegge la diff nuova');
+assert.ok(card().querySelector('.home-plan-drafts'), 'la bozza resta da decidere');
+assert.equal(action('draft-install-d1').dataset.sha, 'new', 'il bottone porta lo sha nuovo');
+// Scarta.
+rpcAnswers['staged.discard'] = () => { pending = []; return { ok: true }; };
+action('draft-discard-d1').click();
+await tick(40);
+assert.deepEqual(rpcs('staged.discard')[0].params, { id: 'd1' });
+// Una bozza che l'elenco non ha piu': gia' decisa.
+assert.equal(text(card().querySelector('.home-plan-draft-why')), P.drafts.gone);
+// Fuori dalla chat del quaderno la scheda del piano non c'e': la bozza torna
+// nella scheda delle bozze, dove si puo' decidere lo stesso.
+pending = [draftItem()];
+await app.staged.refresh();
+await app.switchConversation('unified:default');
+await tick(40);
+assert.ok(stagedCard(), 'nelle altre chat la bozza resta visibile');
+assert.match(text(stagedCard()), /AGENTS\\.md/);
+""")
+
+
+def test_a_failed_drafts_read_offers_a_retry_instead_of_already_decided() -> None:
+    run_home(_HEAD + _DRAFTS + """
+rpcAnswers['staged.list'] = () => rpcFailed('unavailable', 'x');
+current = blockedOnDrafts();
+await toNotebook();
+await tick(60);
+const why = () => text(card().querySelector('.home-plan-draft-why'));
+assert.equal(why(), P.drafts.failed, 'una lettura fallita non e\\' «gia\\' decisa»');
+const asked = rpcs('staged.list').length;
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(60);
+assert.equal(rpcs('staged.list').length, asked, 'niente riletture a vuoto a ogni ridisegno');
+rpcAnswers['staged.list'] = () => ({ ok: true, staged: pending });
+action('draft-retry-d1').click();
+await tick(60);
+assert.ok(action('draft-install-d1'), 'riletta, la bozza si decide');
+""")
+
+
+def test_a_running_plan_between_steps_says_what_it_is_doing() -> None:
+    run_home(_HEAD + """
+current = plan({ status: 'running', done: 1, current_step_id: null, steps: [
+  step('s1', 'A', { status: 'done' }), step('s2', 'B'), step('s3', 'C')] });
+await toNotebook();
+assert.equal(text(card().querySelector('.home-plan-closing')), P.closingStep);
+current = { ...current, done: 3, steps: current.steps.map((x) => ({ ...x, status: 'done' })) };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(text(card().querySelector('.home-plan-closing')), P.closingPlan);
+current = { ...current, done: 0, steps: current.steps.map((x) => ({ ...x, status: 'pending' })) };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(text(card().querySelector('.home-plan-closing')), P.startingPlan);
+// Con un passo in corso, niente riga.
+current = { ...current, current_step_id: 's1', steps: [{ ...current.steps[0], status: 'now' }, ...current.steps.slice(1)] };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(card().querySelector('.home-plan-closing'), null);
+""")
+
+
+def test_the_plan_sheets_close_when_the_chat_goes() -> None:
+    run_home(_HEAD + """
+current = plan();
+rpcAnswers['plan.full'] = () => ({ ok: true, title: 'Rebuild the wiki', steps: current.steps });
+await toNotebook();
+card().querySelector('.home-plan-open').click();
+await tick(30);
+assert.ok(sheet().open);
+await app.switchConversation('unified:default');
+await tick(30);
+assert.equal(sheet().open, false, 'cambiata conversazione, il foglio del piano di prima si chiude');
+// La chat sopra la pagina che scende si porta via il foglio.
+assert.ok(app.openChatOver({ key: 'project:orto' }));
+await tick(60);
+card().querySelector('.home-plan-open').click();
+await tick(30);
+assert.ok(sheet().open);
+app.closeChatOver();
+assert.equal(sheet().open, false, 'chiusa la chat, il foglio non resta sopra la bacheca');
+""")
+
+
+def test_the_changes_sheet_names_pages_by_their_path_in_the_group() -> None:
+    run_home(_HEAD + """
+current = plan({ status: 'done', done: 3, steps: [step('s1', 'A', { status: 'done' })] });
+rpcAnswers['plan.changes'] = () => ({ ok: true, groups: {},
+  added: ['wiki/entities/Acero/substrato.md', 'wiki/entities/Fico/substrato.md', 'raw/research/2026-10-23-acero.md'],
+  changed: ['wiki/index.md', 'wiki/entities/Acero/index.md'], removed: [] });
+await toNotebook();
+await tick(30);
+action('changes').click();
+await tick(30);
+const added = text(sheet().querySelector('[data-kind="added"]'));
+assert.match(added, /entities\\/Acero\\/substrato, entities\\/Fico\\/substrato/);
+const changed = text(sheet().querySelector('[data-kind="changed"]'));
+assert.match(changed, /index, entities\\/Acero\\/index/, 'due index si distinguono');
+assert.match(text(sheet()), /research\\/2026-10-23-acero/);
+""")
+
+
+def test_the_thread_keeps_its_bottom_when_the_keyboard_opens() -> None:
+    head = _HEAD.replace("const app = await boot();", """
+const observed = [];
+const observers = [];
+window.ResizeObserver = globalThis.ResizeObserver = class {
+  constructor(cb) { this.cb = cb; observers.push(this); }
+  observe(node) { observed.push(node); (this.nodes ||= []).push(node); }
+  disconnect() {}
+};
+window.visualViewport = new window.EventTarget();
+const app = await boot();
+""")
+    run_home(head + """
+// La tastiera accorcia il filo senza toccare niente di quel che gli sta
+// sotto: si osserva anche lui.
+assert.ok(observed.includes($('home-thread')), 'il filo e\\' osservato');
+let kept = 0;
+const bottom = app.chat.scrollToBottom.bind(app.chat);
+app.chat.scrollToBottom = () => { kept += 1; bottom(); };
+window.visualViewport.dispatchEvent(new Event('resize'));
+assert.equal(kept, 1, 'il visualViewport che cambia riaggancia il fondo');
+const floor = observers.find((o) => o.nodes?.includes(document.querySelector('#home-chat .home-composer')));
+floor.cb([{ target: $('home-thread') }]);
+assert.equal(kept, 2, 'e cosi\\' il filo che si accorcia');
+// Chi e' risalito a rileggere resta dov'e', e il «↓» non dice «nuovo».
+app.chat._stick = false;
+floor.cb([{ target: $('home-thread') }]);
+assert.equal(kept, 2);
+assert.equal(app.chat.fab.classList.contains('has-new'), false);
+app.chat._stick = true;
+// La riga del piano entra nel conto del «↓»: la sua altezza in un token.
+await toNotebook();
+assert.ok(app.openChatOver({ key: 'project:orto' }));
+await tick(60);
+const hint = document.querySelector('.home-plan-hint');
+Object.defineProperty(hint, 'offsetHeight', { configurable: true, get: () => 34 });
+document.querySelector('.home-plan-toggle').click();
+floor.cb([{ target: hint }]);
+assert.equal(document.documentElement.style.getPropertyValue('--home-plan-hint-h'), '34px');
+document.querySelector('.home-plan-toggle').click();
+floor.cb([{ target: hint }]);
+assert.equal(document.documentElement.style.getPropertyValue('--home-plan-hint-h'), '0px');
+""")
+
+
+def test_the_composer_lets_go_of_the_keyboard_when_the_plan_turns_it_off() -> None:
+    run_home(_HEAD + """
+current = plan();
+await toNotebook();
+const input = $('home-input');
+// Il tasto porta il fuoco al campo senza far scorrere la pagina.
+const calls = [];
+const focus = input.focus.bind(input);
+input.focus = (opts) => { calls.push(opts); focus(opts); };
+document.querySelector('.home-plan-toggle').click();
+assert.deepEqual(calls.at(-1), { preventScroll: true });
+document.querySelector('.home-plan-toggle').click();
+input.focus();
+assert.equal(document.activeElement, input);
+// Approvato, il piano corre e il campo si spegne: prima lascia il fuoco.
+current = plan({ status: 'running', done: 0, current_step_id: 's1', steps: [
+  step('s1', 'A', { status: 'now' }), step('s2', 'B'), step('s3', 'C')] });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(input.disabled, true);
+assert.notEqual(document.activeElement, input, 'un campo spento non tiene la tastiera');
+""")
+
+
+def test_the_plan_toggle_is_not_copied_into_the_chat_photo() -> None:
+    run_home(_HEAD + """
+await toNotebook();
+document.querySelector('.home-plan-toggle').click();
+// La chat sale sopra la pagina: dove era resta la sua foto.
+assert.ok(app.openChatOver({ key: 'project:orto' }));
+await tick(60);
+assert.ok(document.querySelector('.home-snapshot'), 'c\\'e\\' una foto della chat');
+assert.equal(document.querySelectorAll('.home-plan-toggle').length, 1, 'un tasto solo nel documento');
+assert.equal(document.querySelectorAll('.home-plan-hint').length, 1);
+assert.equal(document.querySelector('.home-snapshot .is-plan'), null, 'la foto non dice «Piano acceso»');
 """)

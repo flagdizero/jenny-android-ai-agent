@@ -256,6 +256,17 @@ export class ChatMove {
     for (const sel of ['.home-live', '.home-wire', '.home-pending']) {
       for (const el of copy.querySelectorAll(sel)) el.setAttribute('hidden', '');
     }
+    /* Anche il piano a lista e' di un momento: il tasto Piano acceso, la riga
+       sopra il composer, la striscia. In foto direbbero «sto pianificando» in
+       una conversazione lasciata; e il tasto, che ha un ascoltatore solo
+       nell'originale, restava doppio nel documento — un `querySelector` per
+       classe prendeva quello morto della foto. Tolti, non nascosti. */
+    for (const el of copy.querySelectorAll('.home-plan-toggle, .home-plan-hint, .home-plan-strip')) {
+      el.remove();
+    }
+    for (const el of copy.querySelectorAll('.is-plan, .is-plan-off')) {
+      el.classList.remove('is-plan', 'is-plan-off');
+    }
     /* La bozza e' della conversazione di chi scatta la foto, e resta con lei
        (`_drafts`): in una copia mostrerebbe testo che non e' di quella pagina.
        Un clone di `<textarea>` si porta dietro il valore, per specifica — e

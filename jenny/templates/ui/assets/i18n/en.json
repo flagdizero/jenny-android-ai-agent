@@ -969,6 +969,8 @@
       "newFile": "New file: {path}",
       "why": "A Jenny job that read content from outside ({sources}) wants to change a file she uses on her own. It is not written yet.",
       "unknownSource": "unknown source",
+      "toolResults": "results her tools had saved",
+      "moreSources": "{list} and {count} more",
       "showDiff": "Show the changes",
       "hideDiff": "Hide the changes",
       "truncated": "The changes are longer: only the start is shown.",
@@ -984,10 +986,50 @@
       "toggleOn": "Plan on: the next message asks for a plan",
       "toggleOff": "Ask for a plan",
       "placeholder": "What do you want to plan?",
+      "placeholderDrafting": "Answer Jenny for the plan",
+      "toggleDrafting": "Jenny is drafting a plan: tap to cancel it",
+      "cancelDrafting": "Cancel the plan",
       "composerOff": "The chat is off while the plan runs",
       "hintPlan": "Jenny drafts a plan and touches nothing until you approve",
       "hintRevise": "You're revising plan v{version}: write what to change",
       "hintRunning": "While the plan runs: Pause to talk to her",
+      "closingStep": "Closing the step…",
+      "closingPlan": "Closing the plan…",
+      "startingPlan": "Getting the first step ready…",
+      "cover": {
+        "have": "What I already know · {count}:",
+        "search": "What I'll look up · {count}:",
+        "leave": "Stays uncovered · {count}:",
+        "ask": "Still to ask · {count}:",
+        "more": "and {count} more",
+        "all": "Item by item",
+        "hide": "Hide the items",
+        "haveLabel": "Already there",
+        "missingLabel": "Missing",
+        "whyLabel": "Why",
+        "strategy": {
+          "notebook": "notebook",
+          "web": "web",
+          "ask": "to ask",
+          "leave": "uncovered"
+        }
+      },
+      "assume": {
+        "title": "I decide · {count}",
+        "sub": "Approving the plan, you approve these too."
+      },
+      "drafts": {
+        "questionOne": "Jenny wants to change {file}: look at the change, then install or discard it.",
+        "questionMany": "Jenny wants to change {count} files: look at the changes, then install or discard them.",
+        "note": "The plan picks up again by itself as soon as you decide.",
+        "file": "Change to {path}",
+        "newFile": "New file: {path}",
+        "why": "It comes from a job that read content from outside ({sources}): that's why it waits for you.",
+        "loading": "Reading the draft…",
+        "gone": "Already decided: the plan picks up again by itself.",
+        "failed": "I couldn't read the draft.",
+        "retry": "Try again"
+      },
       "untitled": "Plan",
       "steps": "{count} steps",
       "stepsCut": "{count} of {total} steps",
@@ -1070,6 +1112,7 @@
       "strip": {
         "title": "Plan · {title}",
         "blocked": "Plan stuck: it needs an answer",
+        "drafts": "Plan stuck: a change to approve",
         "paused": "Plan paused · {title}",
         "step": "Step {n} · {title}",
         "resumeFrom": "picks up again at step {n}",
@@ -1128,7 +1171,10 @@
       },
       "fullSheet": {
         "sub": "The full plan, version {version}. Read-only: to change it, use Revise.",
-        "dropped": "Taken out by you"
+        "dropped": "Taken out by you",
+        "coverage": "What the work needs",
+        "assumptions": "I decide",
+        "doneWhen": "Done when"
       },
       "error": {
         "conflict": "The plan changed in the meantime: here is the latest version.",

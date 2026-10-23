@@ -592,6 +592,12 @@ body.home {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Un percorso lungo e senza spazi (una fonte, un file in fondo a tre
+     cartelle) andava oltre il bordo della scheda: va a capo dove serve.
+     `min-width: 0` perche' una riga flessibile non si stringe sotto il suo
+     contenuto da sola. */
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding-top: 8px;
   border-top: 0.5px solid var(--border);
 }
@@ -809,6 +815,67 @@ body.home {
   color: var(--text);
 }
 .home-plan-question { white-space: pre-wrap; }
+
+/* Le bozze di un passo fermo: la stessa riga della scheda delle bozze,
+   dentro la domanda del passo. */
+.home-plan-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-top: 8px;
+  border-top: .5px solid color-mix(in oklab, var(--warning) 35%, transparent);
+}
+.home-plan-draft-file { font-weight: 650; color: var(--heading); }
+.home-plan-draft-why { font-size: 12.5px; color: var(--text-muted); }
+
+/* La copertura e «Decido io» della proposta. */
+.home-plan-cover,
+.home-plan-assume {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.home-plan-cover-line { display: flex; gap: 7px; align-items: flex-start; }
+.home-plan-cover-line > .ti { flex: none; font-size: 16px; margin-top: 1px; }
+.home-plan-cover-line b { color: var(--text); font-weight: 600; }
+.home-plan-cover-line.is-notebook > .ti { color: var(--ok); }
+.home-plan-cover-line.is-web > .ti { color: var(--flower); }
+.home-plan-cover-line.is-leave > .ti,
+.home-plan-cover-line.is-ask > .ti { color: var(--warning); }
+.home-plan-fold {
+  align-self: flex-start;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.home-plan-fold:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-plan-cover-list,
+.home-plan-assume-list { margin: 0; padding-left: 18px; color: var(--text); }
+.home-plan-cover-list li,
+.home-plan-assume-list li { margin-bottom: 5px; }
+.home-plan-cover-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 0; color: var(--text); }
+.home-plan-cover-sub { font-size: 12.5px; color: var(--text-muted); }
+.home-plan-assume-sub { font-size: 12.5px; }
+.home-plan-tag.is-notebook { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 65%, transparent); }
+.home-plan-tag.is-web { color: var(--flower); border-color: color-mix(in oklab, var(--flower) 65%, transparent); }
+.home-plan-tag.is-leave,
+.home-plan-tag.is-ask { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 65%, transparent); }
+.home-plan-closing { display: flex; gap: 6px; align-items: center; }
+.home-plan-closing > .ti { color: var(--flower); }
 .home-plan-answer {
   width: 100%;
   box-sizing: border-box;
@@ -977,6 +1044,24 @@ body.home {
   color: var(--flower);
 }
 .home-plan-hint.is-off { color: var(--text-muted); }
+.home-plan-hint-text { min-width: 0; }
+/* «Annulla il piano», mentre Jenny pianifica: un link, non un bottone pieno —
+   la riga dice cosa succede, e l'uscita le sta accanto. */
+.home-plan-hint-cancel {
+  flex: none;
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.home-plan-hint-cancel:disabled { opacity: .5; }
+.home-plan-hint-cancel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .home-plan-hint[hidden] { display: none; }
 /* Jenny resta dov'e' (il suo pavimento e' il composer, v. `--jenny-floor`), e
    i piedi le cadono sulla riga: il testo si ferma prima della sua figura, che
@@ -1122,7 +1207,39 @@ body.home {
   color: var(--heading);
 }
 .home-plan-full-step > .ti { color: var(--flower); }
-.home-plan-full-detail { margin: 0 4px; font-size: 14px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
+.home-plan-full-detail { margin: 0 4px; font-size: 14px; line-height: 1.5; color: var(--text); }
+/* Il markdown del modello reso (v. `md` in `home-plan.js`): paragrafi stretti,
+   codice in linea leggibile, niente che esca dal foglio. */
+.home-plan-md { overflow-wrap: anywhere; }
+.home-plan-md > :first-child { margin-top: 0; }
+.home-plan-md > :last-child { margin-bottom: 0; }
+.home-plan-md p,
+.home-plan-md ul,
+.home-plan-md ol { margin: 0 0 6px; }
+.home-plan-md ul,
+.home-plan-md ol { padding-left: 18px; }
+.home-plan-md code {
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.06));
+  font-size: .92em;
+}
+.home-plan-md pre { overflow-x: auto; white-space: pre; }
+.home-plan-full-section { margin: 14px 4px 6px; font-size: 13px; font-weight: 700; letter-spacing: .02em; color: var(--text-muted); }
+.home-plan-full-cover {
+  margin: 0 4px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.home-plan-full-labeled { display: flex; flex-direction: column; gap: 1px; margin-top: 4px; }
+.home-plan-full-done { margin: 6px 4px 0; font-size: 13.5px; line-height: 1.45; color: var(--text); }
+.home-plan-full-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.home-plan-full-assume { margin: 0 4px; padding-left: 18px; font-size: 14px; line-height: 1.45; color: var(--text); }
+.home-plan-full-assume li { margin-bottom: 4px; }
 .home-plan-full-dropped { margin: 14px 4px 4px; font-size: 13px; color: var(--text-muted); }
 .home-plan-full-dropped-list { margin: 0 4px; padding-left: 18px; color: var(--text-faint); text-decoration: line-through; }
 .home-work.is-done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border-strong)); }
@@ -1693,7 +1810,9 @@ body.home {
 .home-scroll-fab {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--home-composer-h, 66px) + 12px);
+  /* Sopra il composer e sopra la riga del piano, quando c'e' (la misura
+     `_bindComposer`): col solo composer il tondo copriva la riga. */
+  bottom: calc(var(--home-composer-h, 66px) + var(--home-plan-hint-h, 0px) + 12px);
   width: 44px;
   height: 44px;
   margin-left: -22px;

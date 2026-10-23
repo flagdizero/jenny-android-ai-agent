@@ -17,13 +17,47 @@ import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 
+/* Le fonti che il registro della contaminazione scrive ma che all'utente non
+   dicono niente: i risultati di un tool che Jenny ha salvato in
+   `.jenny/tool-results/` dentro un quaderno (o nel workspace). Sono copie di
+   cose gia' elencate, con nomi come `call_x.txt`, e in fila erano proprio il
+   percorso lungo che usciva dal bordo della scheda. */
+const INTERNAL_SOURCE = /^file:(?:.*\/)?\.jenny\/tool-results\//;
+/* Quante fonti si nominano: oltre, «e altre N». */
+const SOURCES_SHOWN = 3;
+
+/** Le fonti di una bozza come si leggono: le prime tre, senza quelle interne,
+ *  e «e altre N». La usa anche la scheda del piano (`home-plan.js`), che
+ *  mostra le bozze di un passo con le stesse parole. */
+export function stagedSources(sources) {
+  const all = (Array.isArray(sources) ? sources : []).map(String);
+  const shown = all.filter((s) => !INTERNAL_SOURCE.test(s));
+  if (!shown.length) {
+    /* Solo fonti interne: c'erano, quindi «sconosciuta» direbbe il falso. */
+    return i18n.t(all.length ? 'home.staged.toolResults' : 'home.staged.unknownSource');
+  }
+  const head = shown.slice(0, SOURCES_SHOWN).join(', ');
+  if (shown.length <= SOURCES_SHOWN) return head;
+  return i18n.t('home.staged.moreSources', { list: head, count: shown.length - SOURCES_SHOWN });
+}
+
 export class HomeStaged {
   /** @param live    il posto live della chat (`HomeChat.live`).
-   *  @param onChange chiamata dopo ogni ridisegno (`chat.liveChanged`). */
-  constructor(live, { onChange } = {}) {
+   *  @param onChange chiamata dopo ogni ridisegno (`chat.liveChanged`).
+   *  @param onItems  chiamata quando l'elenco riletto e' arrivato: la scheda
+   *                  del piano mostra le bozze di un passo da qui.
+   *  @param hidden   `() => Set` degli id che un'altra scheda a schermo sta
+   *                  gia' mostrando (le bozze di un piano fermo). */
+  constructor(live, { onChange, onItems, hidden } = {}) {
     this.live = live;
     this.onChange = onChange;
+    this.onItems = onItems;
+    this.hidden = hidden || (() => null);
+    /** Tutte le bozze in attesa, anche quelle che questa scheda non mostra. */
     this.items = [];
+    /** L'ultima lettura e' fallita: «nessuna bozza» qui non vuol dire che non
+     *  ce ne sono. La scheda del piano lo distingue (v. `HomePlan._draftsBox`). */
+    this.failed = false;
     this.open = new Set();
     this.card = null;
   }
@@ -38,11 +72,14 @@ export class HomeStaged {
     try {
       const out = await rpc.staged('list');
       this.items = Array.isArray(out?.staged) ? out.staged : [];
+      this.failed = false;
     } catch (err) {
       console.warn('home.staged: list failed', err);
       this.items = [];
+      this.failed = true;
     }
     this._draw();
+    this.onItems?.(this.items);
     return this.items;
   }
 
@@ -50,9 +87,26 @@ export class HomeStaged {
     this._draw();
   }
 
+  /** Ridisegna senza rileggere: e' cambiato chi mostra cosa, non le bozze. */
+  redraw() {
+    this._draw();
+  }
+
+  /* Le bozze che questa scheda mostra. Quelle di un piano fermo stanno nella
+     scheda del piano, quando e' a schermo: lo stesso Installa in due schede
+     con parole diverse confondeva, e deciso in una l'altra sobbalzava. Nelle
+     altre chat restano qui, dove si possono decidere lo stesso (il piano
+     riparte da solo comunque). */
+  _shownItems() {
+    const hidden = this.hidden();
+    if (!hidden?.size) return this.items;
+    return this.items.filter((item) => !hidden.has(item.id));
+  }
+
   _draw() {
     if (!this.live) return;
-    if (!this.items.length) {
+    const items = this._shownItems();
+    if (!items.length) {
       this.card?.remove();
       this.card = null;
       this.onChange?.();
@@ -64,11 +118,11 @@ export class HomeStaged {
       const typing = this.live.querySelector(':scope > .home-typing');
       this.live.insertBefore(this.card, typing);
     }
-    this.card.replaceChildren(this._head(), ...this.items.map((item) => this._row(item)));
+    this.card.replaceChildren(this._head(items.length), ...items.map((item) => this._row(item)));
     this.onChange?.();
   }
 
-  _head() {
+  _head(count) {
     const head = document.createElement('div');
     head.className = 'home-work-head';
     const icon = document.createElement('i');
@@ -76,7 +130,7 @@ export class HomeStaged {
     icon.setAttribute('aria-hidden', 'true');
     const title = document.createElement('span');
     title.className = 'home-work-title';
-    title.textContent = i18n.t('home.staged.title', { count: this.items.length });
+    title.textContent = i18n.t('home.staged.title', { count });
     head.append(icon, title);
     return head;
   }
@@ -93,9 +147,7 @@ export class HomeStaged {
 
     const why = document.createElement('div');
     why.className = 'home-staged-why';
-    why.textContent = i18n.t('home.staged.why', {
-      sources: (item.sources || []).join(', ') || i18n.t('home.staged.unknownSource'),
-    });
+    why.textContent = i18n.t('home.staged.why', { sources: stagedSources(item.sources) });
 
     const toggle = document.createElement('button');
     toggle.type = 'button';

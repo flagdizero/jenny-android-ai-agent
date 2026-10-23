@@ -969,6 +969,8 @@
       "newFile": "Nuovo file: {path}",
       "why": "Un lavoro di Jenny che ha letto contenuti da fuori ({sources}) vuole cambiare un file che lei usa da sola. Non è ancora scritto.",
       "unknownSource": "fonte sconosciuta",
+      "toolResults": "risultati salvati dai suoi strumenti",
+      "moreSources": "{list} e altre {count}",
       "showDiff": "Mostra le modifiche",
       "hideDiff": "Nascondi le modifiche",
       "truncated": "Le modifiche sono più lunghe: qui c'è solo l'inizio.",
@@ -984,10 +986,50 @@
       "toggleOn": "Piano acceso: il prossimo messaggio chiede un piano",
       "toggleOff": "Chiedi un piano",
       "placeholder": "Cosa vuoi pianificare?",
+      "placeholderDrafting": "Rispondi a Jenny per il piano",
+      "toggleDrafting": "Jenny sta preparando un piano: tocca per annullarlo",
+      "cancelDrafting": "Annulla il piano",
       "composerOff": "Durante il piano la chat è spenta",
       "hintPlan": "Jenny prepara un piano e non tocca niente finché non approvi",
       "hintRevise": "Stai rivedendo il piano v{version}: scrivi cosa cambiare",
       "hintRunning": "Durante il piano: Pausa per parlarle",
+      "closingStep": "Chiudo il passo…",
+      "closingPlan": "Chiudo il piano…",
+      "startingPlan": "Preparo il primo passo…",
+      "cover": {
+        "have": "Cosa so già · {count}:",
+        "search": "Cosa vado a cercare · {count}:",
+        "leave": "Resta scoperto · {count}:",
+        "ask": "Ancora da chiedere · {count}:",
+        "more": "e altre {count}",
+        "all": "Voce per voce",
+        "hide": "Nascondi le voci",
+        "haveLabel": "C'è già",
+        "missingLabel": "Manca",
+        "whyLabel": "Perché",
+        "strategy": {
+          "notebook": "quaderno",
+          "web": "web",
+          "ask": "da chiedere",
+          "leave": "scoperto"
+        }
+      },
+      "assume": {
+        "title": "Decido io · {count}",
+        "sub": "Approvando il piano approvi anche queste."
+      },
+      "drafts": {
+        "questionOne": "Jenny vuole cambiare {file}: guarda la modifica, poi installala o scartala.",
+        "questionMany": "Jenny vuole cambiare {count} file: guarda le modifiche, poi installale o scartale.",
+        "note": "Il piano riparte da solo appena decidi.",
+        "file": "Modifica a {path}",
+        "newFile": "Nuovo file: {path}",
+        "why": "Viene da un lavoro che ha letto contenuti da fuori ({sources}): per questo aspetta te.",
+        "loading": "Rileggo la bozza…",
+        "gone": "Già decisa: il piano riparte da solo.",
+        "failed": "Non sono riuscita a leggere la bozza.",
+        "retry": "Riprova"
+      },
       "untitled": "Piano",
       "steps": "{count} passi",
       "stepsCut": "{count} passi su {total}",
@@ -1070,6 +1112,7 @@
       "strip": {
         "title": "Piano · {title}",
         "blocked": "Piano fermo: ti serve una risposta",
+        "drafts": "Piano fermo: una modifica da approvare",
         "paused": "Piano in pausa · {title}",
         "step": "Passo {n} · {title}",
         "resumeFrom": "riparte dal passo {n}",
@@ -1128,7 +1171,10 @@
       },
       "fullSheet": {
         "sub": "Il piano completo, versione {version}. Si legge e basta: per cambiarlo c'è Rivedi.",
-        "dropped": "Tolti da te"
+        "dropped": "Tolti da te",
+        "coverage": "Cosa serve al lavoro",
+        "assumptions": "Decido io",
+        "doneWhen": "Fatto quando"
       },
       "error": {
         "conflict": "Il piano è cambiato nel frattempo: ecco l'ultima versione.",
