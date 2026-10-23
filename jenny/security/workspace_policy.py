@@ -131,6 +131,30 @@ def refuse_board_write(path: str | Path) -> None:
         raise BoardWriteError(f"refused write to {path}")
     if is_app_code_path(path):
         raise AppCodeWriteError(f"refused write to {path}")
+    # Un quaderno tenuto da un piano a lista si scrive solo dal piano: import
+    # locale, perché ``workspace_access`` importa da qui.
+    from jenny.security.workspace_access import refuse_held_notebook_write
+
+    refuse_held_notebook_write(path)
+
+
+class HeldNotebookWriteError(PermissionError):
+    """Sollevata quando un tool scrive in un quaderno tenuto da un piano a lista.
+
+    Fra la foto A e la foto B di un piano tutto quel che cambia nel quaderno
+    dev'essere del piano: «Torna a prima» disfa tutto quello che trova, e una
+    pagina scritta nel frattempo dalla chat personale sparirebbe con il resto.
+    Scrive solo la conversazione del quaderno (i passi e i loro aiutanti).
+    """
+
+    def __init__(self, notebook: str, detail: str = "") -> None:
+        super().__init__(
+            f"The notebook {notebook} is running a plan; it is read-only until the plan "
+            "ends. Do not look for another path or tool: tell the user, and offer to do it "
+            "once the plan is done or stopped."
+            + (f" ({detail})" if detail else "")
+        )
+        self.notebook = notebook
 
 
 class AppCodeWriteError(PermissionError):

@@ -16,6 +16,7 @@ from jenny.agent.autocompact import AutoCompact
 from jenny.agent.context import ContextBuilder
 from jenny.agent.cron_turns import CronTurnCoordinator
 from jenny.agent.hook import AgentHook, CompositeHook
+from jenny.agent.loop_plan import PLAN_STALE_META, LoopPlanMixin, is_plan_turn
 from jenny.agent.loop_provider import ProviderPresetMixin
 from jenny.agent.loop_tasks import LoopTasksMixin
 from jenny.agent.memory import Consolidator
@@ -206,7 +207,9 @@ PROJECT_INIT_COMMAND = "/init"
 PROJECT_TIDY_COMMAND = "/tidy"
 
 
-class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, LoopTasksMixin):
+class AgentLoop(
+    StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, LoopTasksMixin, LoopPlanMixin,
+):
     """
     The agent loop is the core processing engine.
 
@@ -739,7 +742,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 board.update(sig=sig, placed=set(placed_slugs(root)))
             return board["placed"]
 
+        # I tool del piano a lista: il proprio filtro, che legge lo stato del
+        # piano una volta per turno (``loop_plan.py``).
+        plan_hidden = self._plan_tool_filter(msg, session_key)
+
         def hidden(name: str, tool: Any) -> bool:
+            plan_verdict = plan_hidden(name)
+            if plan_verdict is not None:
+                return plan_verdict
             if name == "nothing_to_report":
                 return not silent
             # Lo schermo si legge solo nel turno nato da un tocco sulla
@@ -806,6 +816,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             current_runtime_lines=[
                 *self._location_runtime_lines(msg.channel, chat_id),
                 *screen_runtime_lines(msg.metadata),
+                *self._plan_runtime_lines(msg, session, session.key),
             ],
         )
 
@@ -1493,7 +1504,12 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                     if isinstance(pending_msg.metadata, dict)
                     else None
                 )
-                if injected_event == SUBAGENT_RESULT_EVENT:
+                if is_plan_turn(pending_msg.metadata):
+                    # Un passo del piano arrivato a turno in volo (non dovrebbe:
+                    # il driver apre i passi a sessione ferma): resta riconoscibile
+                    # come riga sintetica, non diventa una bolla dell'utente.
+                    message[INJECTED_EVENT_META] = injected_event
+                elif injected_event == SUBAGENT_RESULT_EVENT:
                     message[INJECTED_EVENT_META] = SUBAGENT_RESULT_EVENT
                     task_id = pending_msg.metadata.get("subagent_task_id")
                     if task_id:
@@ -1507,11 +1523,28 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 return message
 
             items: list[dict[str, Any]] = []
+            deferred: list[InboundMessage] = []
             while len(items) < limit:
                 try:
-                    items.append(_to_user_message(pending_queue.get_nowait()))
+                    queued = pending_queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
+                # Un turno del piano a meta' turno: vecchio si scarta, dentro un
+                # cron aspetta la fine del cron (``LoopPlanMixin._plan_injection``).
+                verdict = self._plan_injection(queued, metadata)
+                if verdict == "drop":
+                    logger.info("Stale plan turn dropped mid-turn for session {}", session_key)
+                    continue
+                if verdict == "defer":
+                    deferred.append(queued)
+                    continue
+                items.append(_to_user_message(queued))
+            for queued in deferred:
+                # Rimesso in coda: a fine turno si ripubblica e diventa un turno suo.
+                try:
+                    pending_queue.put_nowait(queued)
+                except asyncio.QueueFull:
+                    await self.bus.publish_inbound(queued)
 
             return items
 
@@ -1952,6 +1985,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                             ))
                             stream_segment += 1
 
+                    # Un piano in pausa fa il turno in sola lettura; da bloccato,
+                    # il messaggio e' la risposta (``loop_plan.py``).
+                    await self._plan_before_turn(msg, session_key)
                     outcome = await self._process_message(
                         msg, on_stream=on_stream, on_stream_end=on_stream_end,
                         pending_queue=pending, turn_token=turn_token,
@@ -1981,6 +2017,11 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                                 session_key=session_key,
                                 metadata=msg.metadata,
                             )
+                            # Il piano a lista guarda il turno appena chiuso: passo
+                            # chiuso → il seguente; aperto senza aiutanti → il
+                            # promemoria, poi il blocco. Dopo la consegna, cosi'
+                            # la risposta del passo arriva prima del passo dopo.
+                            await self._plan_turn_ended(msg, session_key)
                     self._cron_turns.complete(msg, outcome=outcome)
                 except asyncio.CancelledError:
                     self._cron_turns.complete(
@@ -2040,6 +2081,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                                 session_key=session_key,
                                 metadata=msg.metadata,
                             )
+                            # Un turno caduto lascia il passo aperto come uno
+                            # finito senza chiuderlo: stesso giudizio.
+                            await self._plan_turn_ended(msg, session_key)
                     self._cron_turns.complete(msg, error=exc)
                 finally:
                     # Drain any messages still in the pending queue and re-publish
@@ -2109,6 +2153,17 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         silent = self._is_silent_turn(msg, key)
         if silent:
             mark_silent_turn(msg.metadata)
+        # Un turno di passo del piano parla del passo aperto *adesso*: uno
+        # rimasto sul bus dopo un Ferma o una Pausa non deve fare un passo che
+        # l'utente ha fermato (``PlanDriver.step_message_current``).
+        is_plan = is_plan_turn(msg.metadata)
+        if is_plan and (
+            self.plan_driver is None or not self.plan_driver.step_message_current(msg.metadata)
+        ):
+            logger.info("Stale plan turn dropped for session {}", key)
+            # Non e' un turno: il gancio di fine turno non deve giudicarlo.
+            msg.metadata[PLAN_STALE_META] = True
+            return TurnOutcome.silent()
         session = self.sessions.get_or_create(key)
         if self._restore_runtime_checkpoint(session):
             self.sessions.save(session)
@@ -2148,7 +2203,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             "max_messages": self._max_messages,
             "max_tokens": self._replay_token_budget(),
             "include_timestamps": True,
-            "extend_to_user": is_subagent,
+            "extend_to_user": is_subagent or is_plan,
             "replay_sent": True,
         }
         # La storia si legge PRIMA di scrivere il rientro, come fa la FSM con un
@@ -2165,7 +2220,25 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # Scritto da un turno d'annuncio interrotto: e' gia' in ``history``,
             # come ultima riga ``user``, e il contesto runtime ci si unisce sopra.
             self.sessions.save(session)
-        workspace_scope = self.workspace_scopes.for_message(msg, session.metadata)
+        plan_row: dict[str, Any] | None = None
+        if is_plan:
+            # Come il rientro di un aiutante: in storia prima del turno, marcato
+            # come riga sintetica, cosi' in chat non diventa una bolla
+            # dell'utente e il turno dopo lo rimanda com'e' partito.
+            plan_row = self._persist_plan_turn(session, msg)
+            self.sessions.save(session)
+        # Lo scope dal canale d'origine e dalla chiave, non da ``msg``: il canale
+        # di un turno di sistema e' ``system``, e ``for_message`` ci vedeva la
+        # radice del workspace — il prompt di un passo del piano, o del rientro
+        # di un aiutante nella chat di un quaderno, si costruiva con le
+        # istruzioni del workspace invece che con quelle del quaderno. E' lo
+        # stesso scope con cui ``_run_agent_loop`` fa girare i tool del turno.
+        workspace_scope = self.workspace_scopes.for_turn(
+            channel=channel,
+            message_metadata=msg.metadata,
+            session_metadata=session.metadata,
+            session_key=key,
+        )
 
         # Il rientro arriva al modello come messaggio ``user``, la stessa forma
         # dell'iniezione a meta' turno: e' una notizia, non una cosa che ha detto
@@ -2186,7 +2259,10 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             session_metadata=session.metadata,
             workspace=workspace_scope.project_path,
             session_key=key,
-            current_runtime_lines=self._location_runtime_lines(channel, chat_id),
+            current_runtime_lines=[
+                *self._location_runtime_lines(channel, chat_id),
+                *self._plan_runtime_lines(msg, session, key),
+            ],
         )
         # Il rientro si rimandera' com'e' partito (``SENT_CONTENT_META``): scritto
         # qui sopra, il messaggio costruito e' lui solo se in coda non c'era gia'
@@ -2199,6 +2275,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             or not (history and history[-1].get("role") == "user")
         ):
             record_sent_content(announce_row, messages)
+        if plan_row is not None and not (history and history[-1].get("role") == "user"):
+            record_sent_content(plan_row, messages)
         self._settle_closed_reasoning(session, messages)
         # Un controllo dell'heartbeat delegato con ``spawn`` non ha un esito nel
         # turno che lo delega: `spawn` ritorna subito. QUESTO turno è l'unico che
@@ -2222,7 +2300,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         # turno interrotto): si salta tutto il prompt, che sia finito in un
         # messaggio suo o unito a una coda ``user``. Un altro messaggio di
         # sistema invece va salvato, e salta solo cio' che lo precede.
-        save_skip = len(messages) if is_subagent else 1 + len(history)
+        save_skip = len(messages) if is_subagent or is_plan else 1 + len(history)
         t_wall = time.time()
         # Un turno d'annuncio che parlera' nella chat si fa vedere come un turno
         # dell'utente: ``running`` e i passi dei tool sulla chat d'origine, poi
@@ -2250,6 +2328,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 session_key=key,
                 pending_queue=pending_queue,
                 turn_token=turn_token,
+                # Il registro del loop meno i tool del piano che questo turno
+                # non puo' usare: un passo aperto li mostra, il resto no.
+                tools=self._plan_system_tools(msg, key),
             )
         finally:
             if origin is not None:
@@ -2315,6 +2396,11 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # sa di averlo rilanciato.
             logger.info("Subagent relaunched after a failure; no message to {}", key)
             return TurnOutcome.silent(final_text=final_content or "")
+        if is_plan and not (final_content or "").strip():
+            # Un passo chiuso coi soli tool non ha niente da dire: il riempitivo
+            # «Background task completed.» sarebbe una bolla vuota di senso, e la
+            # scheda del piano mostra gia' l'avanzamento.
+            return TurnOutcome.silent(final_text="")
         # Differenza deliberata dal path utente: nessuna soppressione MessageTool
         # (_assemble_outbound). Un turno di sistema VISIBILE ha un contratto di
         # outbound proprio e restituisce sempre una risposta (contenuto o fallback).

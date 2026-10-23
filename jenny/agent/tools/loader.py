@@ -85,6 +85,7 @@ _HARDCODED_TOOL_MODULES = [
     "ssh",
     "app_update",
     "board",
+    "plan",
 ]
 
 

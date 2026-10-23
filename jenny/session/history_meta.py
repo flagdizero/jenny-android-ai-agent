@@ -1,7 +1,7 @@
 """Righe di storia che portano ``role: "user"`` senza essere parole dell'utente.
 
 Una riga ``role: "user"`` nel JSONL di sessione è l'unico segno che Jenny ha di
-«ha parlato l'utente», e **tre** cose la scrivono senza essere l'utente:
+«ha parlato l'utente», e **quattro** cose la scrivono senza essere l'utente:
 
 - un turno di cron, che si persiste come un messaggio qualsiasi
   (``jenny/cron/session_turns.py::cron_history_overrides``);
@@ -10,11 +10,13 @@ Una riga ``role: "user"`` nel JSONL di sessione è l'unico segno che Jenny ha di
   al modello, o arrivato a turno chiuso, che il turno d'annuncio scrive con lo
   stesso ruolo (``TurnPersistenceMixin._persist_subagent_followup``);
 - la continuazione sintetica di un sustained goal
-  (``jenny/utils/runtime.py::build_goal_continue_message``).
+  (``jenny/utils/runtime.py::build_goal_continue_message``);
+- il turno con cui il driver di un piano apre un passo, o lo sollecita
+  (``jenny/plan/driver.py``).
 
 Chi legge la storia per rispondere a una domanda **sull'utente** — quale bolla
 mostrare in chat, come titolare la conversazione, «si è fatto vivo dopo che gli
-abbiamo scritto?» — deve saltarle tutte e tre. Prima ne esisteva il marcatore
+abbiamo scritto?» — deve saltarle tutte. Prima ne esisteva il marcatore
 per una sola (cron), e le altre due passavano: da qui la bolla con dentro il
 prompt di un subagent, un promemoria che si spacciava per una risposta e un
 riarmo di heartbeat davanti a uno schermo vuoto. Questo modulo è il posto unico
@@ -81,10 +83,25 @@ SENT_CONTENT_META = "sent_content"
 #: tool del turno prima (9,8k token fuori cache su DeepSeek, 11/10/2026).
 REASONING_DROPPED_META = "reasoning_dropped"
 
+#: Il turno con cui il driver di un piano a lista apre un passo
+#: (``jenny/plan/driver.py``): la lista, il passo e le regole, scritti dal
+#: codice. Come il rientro di un subagent, porta il ruolo ``user`` per il modello
+#: e non e' una bolla dell'utente.
+PLAN_STEP_EVENT = "plan_step"
+
+#: L'unico promemoria che il driver manda a un passo rimasto aperto senza
+#: aiutanti in volo, prima di dichiararlo bloccato.
+PLAN_REMINDER_EVENT = "plan_reminder"
+
+#: I due eventi del piano, per chi deve riconoscere un turno aperto dal driver.
+PLAN_TURN_EVENTS = frozenset({PLAN_STEP_EVENT, PLAN_REMINDER_EVENT})
+
 _INJECTED_EVENTS = frozenset({
     SUBAGENT_RESULT_EVENT,
     GOAL_CONTINUE_EVENT,
     LENGTH_RECOVERY_EVENT,
+    PLAN_STEP_EVENT,
+    PLAN_REMINDER_EVENT,
 })
 
 

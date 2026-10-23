@@ -342,7 +342,10 @@ def test_a_journal_with_a_traversal_is_refused(
 ) -> None:
     journal = _journal(tmp_path)
     journal.parent.mkdir(parents=True, exist_ok=True)
-    journal.write_text(json.dumps({"ops": [{"path": "../fuori.md", "hash": None}]}), "utf-8")
+    journal.write_text(
+        json.dumps({"format": 2, "ops": [{"path": "../fuori.md", "hash": None, "expect": None}]}),
+        "utf-8",
+    )
     with pytest.raises(RollbackError):
         photos.recover_pending(journal)
     assert journal.exists()
@@ -352,7 +355,10 @@ def test_the_journal_itself_never_gets_an_op(tmp_path: Path, nb: Path, photos: P
     journal = _journal(tmp_path)
     journal.parent.mkdir(parents=True, exist_ok=True)
     journal.write_text(
-        json.dumps({"ops": [{"path": "raw/journal/20261023.md", "hash": None}]}), "utf-8"
+        json.dumps(
+            {"format": 2, "ops": [{"path": "raw/journal/20261023.md", "hash": None, "expect": None}]}
+        ),
+        "utf-8",
     )
     with pytest.raises(RollbackError):
         photos.recover_pending(journal)
@@ -389,12 +395,16 @@ def test_crash_mid_rollback_then_recovery(
 
     # Al boot: un nuovo oggetto, come dopo un riavvio.
     fresh = PlanPhotos(photos.plan_dir, nb)
-    assert fresh.recover_pending(journal) is True
+    result = fresh.recover_pending(journal)
+    assert result is not None and result.complete
+    assert result.already == ["raw/research/acero.md", "wiki/quercia.md"]
+    assert len(result.applied) == 3 and result.left == []
+    assert result.header["before"] == b and result.after is not None
     assert not journal.exists()
     assert _read(nb, "wiki/acero.md") == "acero v1"
     assert _read(nb, "wiki/ginkgo.md") == "ginkgo v1"
     assert not (nb / "wiki" / "quercia.md").exists()
-    assert fresh.recover_pending(journal) is False
+    assert fresh.recover_pending(journal) is None
     assert fresh.diff(a, fresh.take("recovered"))["changed"] == ["raw/journal/20261023.md"]
 
 
@@ -417,3 +427,157 @@ def test_ops_are_deletes_first(
 
 def test_module_exposes_keepable_groups() -> None:
     assert set(photos_mod.KEEPABLE_GROUPS) == {"pages", "sources", "board", "other"}
+
+
+# ── Il journal non disfa quel che è venuto dopo ──────────────────────────────
+
+
+def test_a_journal_without_expected_hashes_is_refused(
+    tmp_path: Path, nb: Path, photos: PlanPhotos
+) -> None:
+    """Il formato 1 diceva solo «metti questo»: riapplicato tardi, sovrascrive."""
+    journal = _journal(tmp_path)
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    journal.write_text(json.dumps({"ops": [{"path": "wiki/acero.md", "hash": None}]}), "utf-8")
+    with pytest.raises(RollbackError):
+        photos.recover_pending(journal)
+    assert _read(nb, "wiki/acero.md") == "acero v1"
+
+
+def test_recovery_leaves_what_changed_after_the_crash(
+    tmp_path: Path, nb: Path, photos: PlanPhotos, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un journal rimasto lì mentre l'utente lavorava: il recupero non tocca il suo lavoro."""
+    a, b = _run_plan(nb, photos)
+    journal = _journal(tmp_path)
+    original = PlanPhotos._apply_one
+
+    def _crash_first(self: PlanPhotos, op) -> None:
+        raise KeyboardInterrupt("gateway killed")
+
+    monkeypatch.setattr(PlanPhotos, "_apply_one", _crash_first)
+    with pytest.raises(KeyboardInterrupt):
+        photos.rollback(a, b, journal_path=journal)
+    monkeypatch.setattr(PlanPhotos, "_apply_one", original)
+    assert journal.exists()
+    # Prima del riavvio l'utente riscrive due file che il ritorno toccherebbe.
+    _write(nb, "wiki/quercia.md", "quercia dell'utente", mtime_ns=None)
+    _write(nb, "wiki/acero.md", "acero dell'utente", mtime_ns=None)
+
+    result = PlanPhotos(photos.plan_dir, nb).recover_pending(journal)
+
+    assert result is not None and result.complete
+    assert sorted(result.left) == ["wiki/acero.md", "wiki/quercia.md"]
+    assert _read(nb, "wiki/quercia.md") == "quercia dell'utente"
+    assert _read(nb, "wiki/acero.md") == "acero dell'utente"
+    # Quel che nessuno ha toccato torna com'era.
+    assert _read(nb, "wiki/ginkgo.md") == "ginkgo v1"
+    assert not (nb / "raw" / "research" / "acero.md").exists()
+    assert not journal.exists()
+
+
+def test_a_disk_error_mid_rollback_removes_the_journal(
+    tmp_path: Path, nb: Path, photos: PlanPhotos, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Il processo è vivo: niente journal che scatti al prossimo avvio sul lavoro dell'utente."""
+    a, b = _run_plan(nb, photos)
+    journal = _journal(tmp_path)
+    original = PlanPhotos._apply_one
+    done: list[str] = []
+
+    def _disk_full_after_two(self: PlanPhotos, op) -> None:
+        if len(done) == 2:
+            raise OSError(28, "No space left on device")
+        original(self, op)
+        done.append(op.path)
+
+    monkeypatch.setattr(PlanPhotos, "_apply_one", _disk_full_after_two)
+    with pytest.raises(photos_mod.RollbackIncompleteError) as caught:
+        photos.rollback(a, b, journal_path=journal)
+    monkeypatch.setattr(PlanPhotos, "_apply_one", original)
+    assert (caught.value.applied, caught.value.total) == (2, 5)
+    assert not journal.exists()
+    # Riprovare è sicuro: le due già fatte sono «già com'era».
+    report = photos.rollback(a, b, journal_path=journal)
+    assert report.already == ["raw/research/acero.md", "wiki/quercia.md"]
+    assert _read(nb, "wiki/acero.md") == "acero v1"
+
+
+def test_a_file_cannot_come_back_over_a_folder_the_user_filled(
+    tmp_path: Path, nb: Path, photos: PlanPhotos
+) -> None:
+    """Il piano fa di un file una cartella; l'utente ci mette un suo file: il file
+    di prima non torna (resta «lasciato»), il resto del ritorno sì, e niente si
+    rompe a metà con ``IsADirectoryError``."""
+    _write(nb, "notes", "il file di prima")
+    a = photos.take("start")
+    (nb / "notes").unlink()
+    _write(nb, "notes/a.md", "del piano", mtime_ns=None)
+    b = photos.take("end")
+    _write(nb, "notes/b.md", "dell'utente", mtime_ns=None)
+
+    report = photos.rollback(a, b, journal_path=_journal(tmp_path))
+
+    assert "notes" in report.left
+    assert report.removed == ["notes/a.md"]
+    assert _read(nb, "notes/b.md") == "dell'utente"
+    assert not _journal(tmp_path).exists()
+
+
+def test_the_preview_photo_guards_the_confirmation(
+    tmp_path: Path, nb: Path, photos: PlanPhotos
+) -> None:
+    a, b = _run_plan(nb, photos)
+    preview = photos.rollback(a, b, journal_path=_journal(tmp_path), dry_run=True)
+    _write(nb, "wiki/acero.md", "toccata dopo il conto", mtime_ns=None)
+    with pytest.raises(photos_mod.RollbackConflictError):
+        photos.rollback(a, b, journal_path=_journal(tmp_path), expect_now=preview.before)
+    assert _read(nb, "wiki/acero.md") == "toccata dopo il conto"
+    # Il conto riletto vale.
+    again = photos.rollback(a, b, journal_path=_journal(tmp_path), dry_run=True)
+    real = photos.rollback(a, b, journal_path=_journal(tmp_path), expect_now=again.before)
+    assert "wiki/acero.md" in real.left
+
+
+def test_two_photo_objects_share_one_lock(tmp_path: Path, nb: Path) -> None:
+    one = PlanPhotos(tmp_path / "plans" / "p_0123456789ab", nb)
+    two = PlanPhotos(tmp_path / "plans" / "p_0123456789ab", nb)
+    other = PlanPhotos(tmp_path / "plans" / "p_ba9876543210", nb)
+    assert one._lock is two._lock
+    assert one._lock is not other._lock
+
+
+def test_take_waits_for_a_rollback_on_another_thread(
+    tmp_path: Path, nb: Path, photos: PlanPhotos, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un ``to_thread(photos.take)`` abbandonato da un ``/stop`` non scrive lo store
+    insieme al ritorno: la seconda foto aspetta la fine della prima operazione."""
+    import threading
+
+    a, b = _run_plan(nb, photos)
+    original = PlanPhotos._apply_one
+    inside = threading.Event()
+    release = threading.Event()
+    order: list[str] = []
+
+    def _slow(self: PlanPhotos, op) -> None:
+        inside.set()
+        release.wait(5)
+        original(self, op)
+
+    monkeypatch.setattr(PlanPhotos, "_apply_one", _slow)
+    worker = threading.Thread(
+        target=lambda: (photos.rollback(a, b, journal_path=_journal(tmp_path)),
+                        order.append("rollback"))
+    )
+    worker.start()
+    assert inside.wait(5)
+    other = PlanPhotos(photos.plan_dir, nb)
+    taker = threading.Thread(target=lambda: (other.take("stop"), order.append("take")))
+    taker.start()
+    taker.join(0.2)
+    assert taker.is_alive()
+    release.set()
+    worker.join(5)
+    taker.join(5)
+    assert order == ["rollback", "take"]

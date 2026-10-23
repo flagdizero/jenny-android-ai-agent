@@ -42,6 +42,14 @@ PLAN_STATUSES: tuple[str, ...] = (
 OPEN_STATUSES: frozenset[str] = frozenset({"proposed", "running", "pausing", "paused", "blocked"})
 CLOSED_STATUSES: frozenset[str] = frozenset(PLAN_STATUSES) - OPEN_STATUSES
 
+# Partito e non ancora chiuso: il piano *tiene* il quaderno. Finché è in uno di
+# questi stati l'utente non scrive nel quaderno (le RPC rispondono
+# ``plan_running``) e il giardiniere non ci passa: tutto quel che cambia fra la
+# foto A e la foto B dev'essere del piano, così il ritorno non indovina di chi è
+# un file. ``proposed`` ne resta fuori: una proposta non ha ancora fotografato
+# niente, e proporre non deve chiudere il quaderno.
+HELD_STATUSES: frozenset[str] = frozenset({"running", "pausing", "paused", "blocked"})
+
 # Chiusi dopo aver girato: hanno le foto, e sono quelli da cui si torna indietro.
 RAN_STATUSES: frozenset[str] = frozenset({"done", "stopped", "rolled_back"})
 
@@ -73,13 +81,16 @@ STEP_TAGS: tuple[str, ...] = ("new", "moved", "changed")
 # - ``pausing → blocked | done``: il passo corrente, che la pausa lascia finire,
 #   può bloccarsi o essere l'ultimo;
 # - ``rolled_back → done | stopped``: «Annulla il ritorno». Lo stato di prima
-#   lo sa la storia; il driver sceglie.
+#   lo sa la storia; il driver sceglie;
+# - ``blocked → paused``: il boot che trova un piano fermo su una domanda. Il
+#   riavvio a metà mette in pausa *qualunque* piano partito (deciso il 23/10):
+#   la domanda resta nella storia, e Riprendi rifà il passo, che è idempotente.
 PLAN_TRANSITIONS: dict[str, frozenset[str]] = {
     "proposed": frozenset({"running", "discarded", "superseded"}),
     "running": frozenset({"pausing", "paused", "blocked", "done", "stopped"}),
     "pausing": frozenset({"paused", "running", "blocked", "done", "stopped"}),
     "paused": frozenset({"running", "stopped"}),
-    "blocked": frozenset({"running", "stopped"}),
+    "blocked": frozenset({"running", "paused", "stopped"}),
     "done": frozenset({"rolled_back"}),
     "stopped": frozenset({"rolled_back"}),
     "rolled_back": frozenset({"done", "stopped"}),

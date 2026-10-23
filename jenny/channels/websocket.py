@@ -871,6 +871,16 @@ class WebSocketChannel(OutboundSenderMixin):
             # (v. ``readonly_from_metadata``).
             if envelope.get(WORKSPACE_READONLY_METADATA_KEY) is True:
                 metadata[WORKSPACE_READONLY_METADATA_KEY] = True
+            # Il tasto Piano: un turno di pianificazione, che propone la lista e
+            # non tocca niente (``jenny/plan/driver.py``). Solo nella chat di un
+            # quaderno: un piano fotografa un quaderno, e fuori non ce n'e' uno.
+            # La sola lettura la impone il server, non la fiducia nel client.
+            if envelope.get("plan") is True and is_project_chat_id(cid):
+                metadata["plan_mode"] = True
+                metadata[WORKSPACE_READONLY_METADATA_KEY] = True
+                revise = envelope.get("plan_revise")
+                if isinstance(revise, str) and revise.strip():
+                    metadata["plan_revise"] = revise.strip()[:64]
             if envelope.get("webui") is True:
                 metadata["webui"] = True
                 metadata.update(self._transcripts.client_turn_metadata(envelope.get("turn_id")))

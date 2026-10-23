@@ -68,6 +68,16 @@ async def _stop(ctx: CommandContext, *, spare_subagents: bool) -> OutboundMessag
         # propria risposta (v. `CommandContext.after_reply`).
         loop._restore_cancelled_turn(ctx.key)
         ctx.after_reply.append(lambda: loop._emit_stop_turn_end(msg, ctx.key))
+    # Nella chat di un quaderno con un piano partito, ``/stop`` e' «Ferma e
+    # tieni»: senza, il driver aprirebbe il passo dopo a turno fermato, e gli
+    # aiutanti del passo continuerebbero a scrivere nel quaderno.
+    driver = getattr(loop, "plan_driver", None)
+    if driver is not None and driver.held_status(ctx.key) is not None:
+        if await driver.stop_for_session(ctx.key):
+            return OutboundMessage(
+                channel=msg.channel, chat_id=msg.chat_id, content=say("plan.stopped"),
+                metadata=dict(msg.metadata or {}),
+            )
     parts = [say("stop.done" if total else "stop.none")]
     if spare_subagents:
         helpers = 0

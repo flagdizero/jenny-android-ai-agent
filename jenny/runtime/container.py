@@ -590,6 +590,9 @@ class GatewayContainer:
             get_llm=lambda: (
                 (self._agent.provider, self._agent.model) if self._agent is not None else None
             ),
+            # Il driver dei piani a lista nasce con l'agente: le RPC ``plan.*``
+            # lo chiedono a ogni chiamata.
+            get_plan_driver=lambda: getattr(self._agent, "plan_driver", None),
             # Telegram ci legge lo stato del turno: e' l'unico segnale di
             # inizio/fine che arriva a un canale che non riceve ne' progress
             # ne' turn_end.
@@ -781,7 +784,40 @@ class GatewayContainer:
         # Il checkpoint generico, per chi non ha il contratto di Dream: il
         # giardiniere lo chiama con il proprio trigger prima di scrivere pagine.
         agent.take_snapshot = self._take_snapshot
+        self._wire_plan_driver(agent, config)
         return agent
+
+    def _wire_plan_driver(self, agent: Any, config: Config) -> None:
+        """Il driver dei piani a lista: nasce con l'agente, perché lo guida.
+
+        Qui e non in ``build``: l'agente può nascere dopo il gateway
+        (onboarding), e questo è il punto che entrambe le nascite attraversano.
+        Al boot fa il giro di recupero (un piano trovato a metà va in pausa, un
+        ritorno rimasto a metà si riapplica) prima che il loop prenda il primo
+        messaggio. Un recupero fallito non vale un gateway che non parte: il
+        driver c'è comunque, e i piani restano come li ha lasciati il crollo.
+        """
+        from jenny.agent.plan_host import LoopPlanHost
+        from jenny.plan.driver import PlanDriver
+        from jenny.plan.store import PlanStore
+        from jenny.security.workspace_access import set_held_notebook_probe
+        from jenny.session.goal_state import set_plan_probe
+
+        driver = PlanDriver(
+            PlanStore.for_workspace(config.workspace_path), self.bus, LoopPlanHost(agent)
+        )
+        try:
+            paused = driver.recover()
+            if paused:
+                logger.info("Plans paused at boot: {}", paused)
+        except Exception:
+            logger.opt(exception=True).error("Plan recovery at boot failed")
+            driver.refresh_index()
+        agent.attach_plan_driver(driver)
+        set_plan_probe(driver)
+        # Il cancello di scrittura dei tool: un quaderno tenuto da un piano si
+        # scrive solo dalla sua conversazione (``workspace_access``).
+        set_held_notebook_probe(driver.held_notebook_roots)
 
     # -- onboarding: creazione differita dell'agent (DeferredAgentActivator) --
 

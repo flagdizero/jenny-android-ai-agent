@@ -236,6 +236,12 @@ class OutboundSenderMixin:
             count = msg.metadata.get("count")
             await self.send_staged_changed(count if isinstance(count, int) else 0)
             return []
+        if msg.metadata.get("_plan_changed"):
+            notebook = msg.metadata.get("notebook")
+            plan_id = msg.metadata.get("plan_id")
+            if isinstance(notebook, str) and notebook and isinstance(plan_id, str):
+                await self.send_plan_changed(notebook, plan_id)
+            return []
         if msg.metadata.get("_user_echo"):
             return await self._send_user_echo(
                 msg, only_conns=only_conns, skip_persist=skip_persist
@@ -1043,6 +1049,18 @@ class OutboundSenderMixin:
         raw = json.dumps({"event": "apps_list_changed"}, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next change replaces it).
         await self._fanout(conns, raw, label=" apps_list_changed ")
+
+    async def send_plan_changed(self, notebook: str, plan_id: str) -> None:
+        """Broadcast that a notebook's plan changed (the plan card re-reads ``plan.get``)."""
+        conns = list(self._conn_chats)
+        if not conns:
+            return
+        raw = json.dumps(
+            {"event": "plan_changed", "notebook": notebook, "plan_id": plan_id},
+            ensure_ascii=False,
+        )
+        # Idempotent refresh-hint, like board_changed: the next change replaces it.
+        await self._fanout(conns, raw, label=" plan_changed ")
 
     async def send_staged_changed(self, count: int) -> None:
         """Broadcast that the drafts awaiting approval changed (the home card redraws)."""

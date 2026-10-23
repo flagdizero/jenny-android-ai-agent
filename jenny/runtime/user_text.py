@@ -356,6 +356,13 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "cmd.scope_note.gardener": "The periodic pass is set in Settings → Workshop → Memory.",
         "cmd.scope_note.skill": "It lists what the installation has, not what this project holds.",
+        # Piano a lista (``jenny/plan/driver.py``).
+        "plan.stalled": (
+            "I stopped without saying whether this step is finished. Tell me how to go on, "
+            "or stop the plan."
+        ),
+        "plan.restarted": "I restarted during step {step}: tap Resume to do it again.",
+        "plan.stopped": "I stopped the plan. The notebook stays as it is now.",
     },
     "it": {
         "stop.done": "Mi sono fermata.",
@@ -701,6 +708,12 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.scope_note.skill": (
             "Elenca quel che ha l'installazione, non quel che contiene questo quaderno."
         ),
+        "plan.stalled": (
+            "Mi sono fermata senza dire se questo passo è finito. Dimmi come andare avanti, "
+            "o ferma il piano."
+        ),
+        "plan.restarted": "Mi sono riavviata durante il passo {step}: tocca Riprendi per rifarlo.",
+        "plan.stopped": "Ho fermato il piano. Il quaderno resta com'è adesso.",
     },
 }
 

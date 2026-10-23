@@ -65,6 +65,7 @@ class WebSocketDispatcher:
         get_cron_service: Callable[[], Any | None] | None = None,
         get_busy_session_keys: Callable[[], Collection[str]] | None = None,
         get_llm: Callable[[], tuple[Any, str] | None] | None = None,
+        get_plan_driver: Callable[[], Any | None] | None = None,
         runtime_events: Any | None = None,
     ):
         self.config = config
@@ -75,6 +76,7 @@ class WebSocketDispatcher:
         self._get_cron_service = get_cron_service
         self._get_busy_session_keys = get_busy_session_keys
         self._get_llm = get_llm
+        self._get_plan_driver = get_plan_driver
         self._webui_runtime_model_name = webui_runtime_model_name
         self._onboarding_event = onboarding_event
         self._on_settings_changed = on_settings_changed
@@ -122,6 +124,7 @@ class WebSocketDispatcher:
             get_cron_service=self._get_cron_service,
             get_busy_session_keys=self._get_busy_session_keys,
             get_llm=self._get_llm,
+            get_plan_driver=self._get_plan_driver,
             logger=logger,
             onboarding_event=self._onboarding_event,
             on_settings_changed=self._on_settings_changed,

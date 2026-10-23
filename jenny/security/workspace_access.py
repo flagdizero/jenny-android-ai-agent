@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, replace
@@ -356,6 +356,53 @@ def current_turn_is_readonly() -> bool:
     """
     scope = current_workspace_scope()
     return scope is not None and not scope.writable
+
+
+# I quaderni tenuti da un piano a lista partito (``jenny/plan/driver.py``):
+# ``{cartella risolta: nome}``. Il driver si registra (``GatewayContainer``) e
+# risponde dal suo indice in memoria, così il cancello costa un dizionario per
+# scrittura e nessun giro sul disco. Senza driver (i test, l'agente non ancora
+# nato) nessun quaderno è tenuto. Un gancio e non un import del driver, come
+# ``goal_state.set_plan_probe``: la sicurezza non dipende dal pacchetto dei piani.
+_held_notebook_probe: Callable[[], Mapping[Path, str]] | None = None
+
+
+def set_held_notebook_probe(probe: Callable[[], Mapping[Path, str]] | None) -> None:
+    global _held_notebook_probe
+    _held_notebook_probe = probe
+
+
+def refuse_held_notebook_write(path: str | Path) -> None:
+    """Rifiuta una scrittura dentro un quaderno tenuto da un piano, se non è del piano.
+
+    Scrive in un quaderno tenuto solo un turno il cui scope **è** quel
+    quaderno: la sua conversazione, cioè i passi del piano, e gli aiutanti che
+    i passi lanciano (ereditano lo scope del turno). La chat personale, i suoi
+    aiutanti e ogni altra sessione che arriverebbe lì attraverso la radice del
+    workspace ricevono :class:`HeldNotebookWriteError`. I turni della
+    conversazione del quaderno che non sono passi — una pausa, un cron — sono
+    già in sola lettura (``loop_plan.py``), quindi non passano di qui.
+    """
+    probe = _held_notebook_probe
+    if probe is None:
+        return
+    try:
+        held = probe()
+    except Exception:  # noqa: BLE001 — un indice rotto non deve rompere ogni scrittura
+        logger.opt(exception=True).warning("held-notebook probe failed")
+        return
+    if not held:
+        return
+    target = Path(os.path.abspath(path))
+    for root, name in held.items():
+        if target != root and root not in target.parents:
+            continue
+        scope = current_workspace_scope()
+        if scope is not None and scope.project_path == root:
+            return
+        from jenny.security.workspace_policy import HeldNotebookWriteError
+
+        raise HeldNotebookWriteError(name, f"refused write to {path}")
 
 
 def workspace_sandbox_status(

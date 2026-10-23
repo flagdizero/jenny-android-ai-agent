@@ -77,7 +77,7 @@ COORDINATION_FLAGS = (
     "_reasoning_delta", "_reasoning_end", "_retry_wait",
     "_turn_end", "_file_edit_events", "_goal_status",
     "_runtime_model_updated", "_app_data_changed", "_board_changed",
-    "_apps_list_changed", "_staged_changed", "_user_echo",
+    "_apps_list_changed", "_staged_changed", "_plan_changed", "_user_echo",
     "_subagent_status", "_subagent_activity", "_work_status",
 )
 

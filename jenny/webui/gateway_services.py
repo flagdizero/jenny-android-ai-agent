@@ -69,6 +69,9 @@ def build_gateway_services(
     # La coppia ``(provider, modello)`` dell'agente, per il saluto di un
     # quaderno nuovo (``project.greet``). Late-binding come i getter sopra.
     get_llm: Callable[[], tuple[Any, str] | None] | None = None,
+    # Il driver dei piani a lista, late-binding come i getter sopra: nasce con
+    # l'agente (``GatewayContainer._instantiate_agent``).
+    get_plan_driver: Callable[[], Any | None] | None = None,
     logger: Any = default_logger,
     onboarding_event: Any | None = None,
     on_settings_changed: Callable[[], None] | None = None,
@@ -139,6 +142,7 @@ def build_gateway_services(
             # avviso di Jenny, e lo chiede al modello dell'agente.
             bus=bus,
             get_llm=get_llm,
+            get_plan_driver=get_plan_driver,
         ),
         session_manager=session_manager,
         get_subagent_manager=get_subagent_manager,
