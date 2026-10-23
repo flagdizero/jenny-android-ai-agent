@@ -105,6 +105,79 @@ def test_a_page_that_does_not_exist_is_refused(notebook: Path) -> None:
     assert err.value.code == "not_found" and "relative to wiki/" in err.value.message
 
 
+def _seal(notebook: Path, card_id: str) -> None:
+    """Il cassetto scritto adesso, con l'impronta delle pagine com'è sul disco."""
+    from jenny.board.drawers import page_text, pages_fingerprint
+    from jenny.board.view import wiki_titles
+
+    card = model.card_by_id(read_board(notebook), card_id)
+    now = pages_fingerprint(card["pages"], wiki_titles(notebook),
+                            lambda p: page_text(notebook, p))
+    write_card_summary(notebook, card_id, {"generated": "2026-10-08T10:00:00+02:00",
+                                           "brief": "x", "sections": [], "fingerprint": now})
+
+
+def test_a_reference_to_a_deleted_page_comes_off_every_card(notebook: Path) -> None:
+    """Il caso della prova di ottobre: un riordino cancella pagine e la bacheca
+    resta coi riferimenti morti. Togliere un riferimento morto non rende vecchio
+    il cassetto: l'impronta conta solo le pagine vere."""
+    _seed(notebook)
+    (notebook / "wiki" / "dormienza.md").unlink()
+    _seal(notebook, "nuove")
+    taken, redraw = edit.remove_pages(notebook, ["dormienza.md"])
+    assert taken == {"nuove": ["dormienza.md"]} and redraw == []
+    assert "dormienza.md" not in model.card_by_id(read_board(notebook), "nuove")["pages"]
+    assert read_card_summary(notebook, "nuove") is not None
+
+
+def test_redraw_follows_the_stored_fingerprint(notebook: Path) -> None:
+    """Da riscrivere è il cassetto la cui impronta salvata non torna più — non
+    «una scheda che ha perso una pagina vera»: quello vecchio già prima lo è
+    anche se si toglie solo un riferimento morto."""
+    _seed(notebook)
+    (notebook / "wiki" / "dormienza.md").unlink()
+    # Mai sigillato: l'impronta salvata non c'è, il cassetto va scritto.
+    assert edit.remove_pages(notebook, ["dormienza.md"])[1] == ["nuove"]
+    _seal(notebook, "nuove")
+    assert edit.remove_pages(notebook, ["ginkgo.md"])[1] == ["nuove"]
+
+
+def test_a_page_taken_off_is_not_put_back_by_the_gardener(notebook: Path) -> None:
+    """Una pagina vera tolta da ogni scheda è un orfano; il giardiniere assegna gli
+    orfani *nuovi* alla scheda a cui appartengono chiaramente — quella da cui
+    l'utente l'ha appena tolta. Per lui deve essere un orfano già visto."""
+    from jenny.agent.board_pass import BoardPass
+
+    _seed(notebook)
+    (notebook / "wiki" / "dormienza.md").unlink()
+    edit.remove_pages(notebook, ["ginkgo.md", "dormienza.md"], "nuove")
+    board = read_board(notebook)
+    assert board["orphansSeen"] == ["ginkgo.md"], "un riferimento morto non è un orfano"
+    assert "ginkgo.md" in BoardPass(notebook, notebook.parents[1]).orphans()
+    assert "ginkgo.md" not in BoardPass(notebook, notebook.parents[1]).new_orphans()
+
+
+def test_removing_a_real_page_redraws_or_empties_the_drawer(notebook: Path) -> None:
+    _seed(notebook)
+    taken, redraw = edit.remove_pages(notebook, ["ginkgo.md"], "Nuove piante")
+    assert taken == {"nuove": ["ginkgo.md"]} and redraw == ["nuove"]
+    assert (notebook / "wiki" / "ginkgo.md").exists(), "la pagina resta nella wiki"
+    taken, redraw = edit.remove_pages(notebook, ["travaso-acero.md"], "acero")
+    assert redraw == [], "un cassetto rimasto senza pagine si cancella, non si riscrive"
+    assert model.card_by_id(read_board(notebook), "acero")["pages"] == []
+
+
+def test_remove_pages_on_one_card_leaves_the_others(notebook: Path) -> None:
+    _seed(notebook)
+    before = (notebook / "board" / "board.json").read_bytes()
+    taken, _ = edit.remove_pages(notebook, ["ginkgo.md"], "acero")
+    assert taken == {}, "l'Acero non l'aveva: niente da togliere"
+    assert (notebook / "board" / "board.json").read_bytes() == before, "e niente da scrivere"
+    with pytest.raises(edit.BoardEditError) as err:
+        edit.remove_pages(notebook, [], "acero")
+    assert err.value.code == "bad_request"
+
+
 def test_what_the_editor_does_the_gardener_cannot_undo(notebook: Path) -> None:
     """Il punto della separazione: le scritture su richiesta sono dell'utente."""
     _seed(notebook)

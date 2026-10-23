@@ -248,6 +248,8 @@ Every action on the wiki is one of these five. Each appends an entry to the curr
 
 (Re)structure wiki content from existing `raw/` material — including splitting oversized pages, merging near-duplicates, and rebuilding `index.md`.
 
+**When `raw/` does not cover what a page must say, ingest before you compile.** Restructuring cannot create facts. A split or a merge only moves what is there and needs no search; but when the job asks a page for something `raw/` is silent on — a care topic for each plant, a section the user wants filled — search the web for it first. That search *is* an `ingest`: the sources land verbatim in `raw/` (in a notebook: `raw/research/`, through a `researcher` subagent when you can spawn one), then the page is compiled from them. "Not documented" is the last resort, written only after the search came back empty, and it names the queries tried: `Not documented (searched: "acer palmatum repotting soil", "maple bonsai substrate mix").`
+
 **When to run**: after a big ingest batch, when an existing page has outgrown 1200 words, when `index.md` no longer reflects reality, or when the user says "clean up the wiki".
 
 **Steps**:
@@ -261,6 +263,7 @@ Every action on the wiki is one of these five. Each appends an entry to the curr
 - [ ] Every page appears exactly once in `wiki/index.md`.
 - [ ] No diagram left in ASCII — flows/hierarchies/state are mermaid (core principle 2).
 - [ ] A log line for this compile exists in `log/YYYYMMDD.md`.
+- [ ] No page says "not documented" without the queries that were tried.
 - [ ] **You actually ran `lint_wiki.lint('<workspace>/wikis/<name>')` and it exits clean** (or every issue is fixed / explicitly deferred to the user). This is a hard gate: run the script, read its real output, fix, re-run — then **paste the literal lint output into your reply**. Verification is by running the tool, not by remembering the rules; a summary of "looks satisfied" is not acceptable.
 
 #### `compile` in a **project** wiki (notebook layout)
@@ -283,6 +286,7 @@ And the map's **page list comes out of a compile whole**: every page it named be
 - [ ] Every page appears exactly once in `wiki/index.md`, and no entry was lost.
 - [ ] No page is over 6000 characters, and the map is inside its own ceiling (2000).
 - [ ] Every page written or moved carries `state:` and a single-valued `source:`.
+- [ ] Every gap the task needed filled was searched first: what the notebook lacked was ingested into `raw/research/` before the page was written, and any "not documented" left names the queries tried. If you have no network, the gap goes into your report as **to research** — what is missing, for which page — so the agent that spawned you can send a `researcher`.
 - [ ] A log line exists: `## [HH:MM] compile | <what moved where>` (`split` is also a valid op when the pass was only a split).
 - [ ] **You actually ran `lint_wiki.lint('<workspace>/wikis/<name>')` and it exits clean**, and pasted its literal output into your reply. Same hard gate as everywhere else in this skill.
 
@@ -292,7 +296,7 @@ Add a new source. **One source typically touches 5–15 wiki pages.**
 
 **Steps**:
 1. Save the source **verbatim** to the right subfolder — this happens FIRST, before any wiki page is written. A source you fetched from the web is a source like any other:
-   - web page / search result → `raw/articles/<slug>.md` (save the fetched text, **not your summary of it**)
+   - web page / search result → `raw/articles/<slug>.md` (save the fetched text, **not your summary of it**); in a notebook, `raw/research/<YYYY-MM-DD>-<slug>.md`, with the URL and the date you read it at the top
    - paper → `raw/papers/<slug>.md` (extracted text for big PDFs)
    - note → `raw/notes/<slug>.md`
    - large binary → `raw/refs/<slug>.md` pointer file (see raw file policy)
@@ -337,7 +341,7 @@ Answer a question **grounded in the wiki**, not general knowledge.
 **Steps**:
 1. Read `wiki/index.md`. Scan for relevant pages by category.
 2. Read the identified pages in full; follow one level of wikilinks.
-3. If the wiki doesn't have enough material, say so and suggest what to ingest next instead of making something up.
+3. If the wiki doesn't have enough material, ingest what is missing — a web search is an ingest — and answer from that; if the search finds nothing, say so and suggest what to ingest next. Never make something up.
 4. Synthesize the answer, citing pages inline with `[[Page Name]]`.
 5. Save to `outputs/queries/<YYYY-MM-DD>-<question-slug>.md`.
 6. If the answer is durable (a comparison, analysis, or new synthesis) → promote a cleaned-up version to `wiki/concepts/`, add to `index.md`.

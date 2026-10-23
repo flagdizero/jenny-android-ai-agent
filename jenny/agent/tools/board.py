@@ -37,7 +37,7 @@ from jenny.security.workspace_access import (
 
 _WRITES = (
     "add_card", "rename_card", "move_card", "remove_card", "restore_card", "move_pages",
-    "connect", "disconnect", "add_note", "add_reminder", "close_reminder", "remove_section",
+    "remove_pages", "connect", "disconnect", "add_note", "add_reminder", "close_reminder", "remove_section",
     "set_skeleton", "answer_proposal", "write_drawer",
 )
 _ACTIONS = ("show", *_WRITES)
@@ -62,6 +62,8 @@ _SECTION = ObjectSchema(
         "move to it. rename_card (card, title). move_card (card, near): put it next to another "
         "card. remove_card (card): into the trash, restorable. restore_card (card). "
         "move_pages (pages, card): onto that card, from another card or from off the board. "
+        "remove_pages (pages, card?): off that card, or off every card when card is empty; "
+        "also for pages that no longer exist. The files stay in the wiki. "
         "connect (card, other, label?) / disconnect (card, other): a thread. "
         "add_note (card, text). add_reminder (card?, text, date, precision?): tie it to the "
         "card it is about, or leave card empty for the whole notebook — you decide. "
@@ -77,7 +79,7 @@ _SECTION = ObjectSchema(
     title=StringSchema("add_card / rename_card: the card's name, in the user's words."),
     glyph=StringSchema("add_card: an icon name, e.g. leaf, tree, trees, flower, book, coin."),
     pages=ArraySchema(StringSchema("A page path relative to wiki/, as `show` lists it."),
-                      description="add_card / move_pages: the pages."),
+                      description="add_card / move_pages / remove_pages: the pages."),
     label=StringSchema("connect: why the two belong together, in a few words."),
     text=StringSchema("add_note / add_reminder: the text, in the user's language."),
     date=StringSchema("add_reminder: YYYY-MM-DD. For 'in March', the first of the month."),
@@ -181,6 +183,9 @@ class BoardTool(Tool):
         if action == "move_pages":
             redraw = edit.move_pages(root, _strings(kw.get("pages")), card)
             return f"Pages moved.{_redraw(root, redraw)}"
+        if action == "remove_pages":
+            taken, redraw = edit.remove_pages(root, _strings(kw.get("pages")), card or None)
+            return _removed(root, taken, redraw, one_card=bool(card))
         if action == "connect":
             edit.connect(root, card, str(kw.get("other") or ""), kw.get("label"))
             return "Tied."
@@ -273,6 +278,16 @@ def _workspace() -> Path | None:
         return None
 
 
+def _removed(root: Path, taken: dict[str, list[str]], redraw: list[str], *,
+             one_card: bool) -> str:
+    """La risposta di ``remove_pages``: da dove sono uscite, e i cassetti da riscrivere."""
+    if not taken:
+        where = "that card" if one_card else "any card"
+        return f"None of those pages was on {where}: nothing changed."
+    where = "; ".join(f"`{cid}`: {', '.join(pages)}" for cid, pages in taken.items())
+    return f"Taken off the board — {where}. The wiki is untouched.{_redraw(root, redraw)}"
+
+
 def _redraw(root: Path, cards: list[str]) -> str:
     """La coda della risposta: i cassetti da riscrivere, con le pagine di ognuno."""
     if not cards:
@@ -306,7 +321,7 @@ def _section_words(section: dict) -> str:
 
 def show(root: Path) -> str:
     """La bacheca in testo: quel che serve all'editore per decidere, e gli id per agire."""
-    from jenny.board.view import offboard_pages, wiki_titles
+    from jenny.board.view import missing_pages, offboard_pages, wiki_titles
 
     board = read_board(root)
     titles = wiki_titles(root)
@@ -315,6 +330,7 @@ def show(root: Path) -> str:
         return (f"This notebook has no board yet. Set the skeleton (set_skeleton), then add cards "
                 f"with their pages. Pages: {pages}")
     reminders = read_reminders(root)
+    gone = missing_pages(board, titles)
     lines = [
         f"Skeleton: {' · '.join(board['skeleton']) or '(none yet)'}",
         f"Items on the board: {model.items_on_board(board, reminders)} of {model.MAX_ITEMS}",
@@ -329,9 +345,12 @@ def show(root: Path) -> str:
         # volta sola, fra le automazioni qui sotto.
         sections = ", ".join(_section_words(s) for s in card["userSections"]
                              if s["kind"] != "cron")
+        dead = gone.get(card["id"]) or []
+        pages = [p for p in card["pages"] if p not in dead]
         lines.append(
-            f"- `{card['id']}` «{card['title']}» — pages: {', '.join(card['pages']) or 'none'}"
-            f"; drawer: {_drawer_state(root, card, titles)}"
+            f"- `{card['id']}` «{card['title']}» — pages: {', '.join(pages) or 'none'}"
+            + (f"; MISSING (no such file): {', '.join(dead)}" if dead else "")
+            + f"; drawer: {_drawer_state(root, card, titles)}"
             + (f"; sections: {sections}" if sections else "")
         )
     if board["connections"]:
@@ -351,6 +370,11 @@ def show(root: Path) -> str:
                   + (" (paused)" if j["paused"] else "") for j in jobs]
     off = offboard_pages(board, titles)
     lines += ["", f"Off the board ({len(off)}): {', '.join(off) or 'none'}"]
+    if gone:
+        # Nessuno li pota da solo (v. ``edit.remove_pages``): chi legge qui li toglie.
+        dead = sum(len(pages) for pages in gone.values())
+        lines += ["", f"{dead} page(s) on cards no longer exist under wiki/: take them off with "
+                      "remove_pages, or move_pages the page that replaced them."]
     if board["removedCards"]:
         lines += ["", "In the trash (restore_card):"]
         lines += [f"- `{r['card']['id']}` «{r['card']['title']}»" for r in board["removedCards"]]

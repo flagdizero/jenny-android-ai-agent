@@ -104,7 +104,24 @@ instructions.
 Before a substantial answer, read the pages the map points to, and say what you leant on:
 `[[page-name]]`. An answer that cites nothing is the visible sign that this project is not
 working yet.
-{% if project_board %}
+{# The researcher's web tools share web_search's switch, so has('web_search') says it can work. #}
+{% if has is defined and has('spawn') and has('web_search') %}
+
+**Notebook first; when it is not enough, go and look.** A question the pages answer gets no web
+search. When they fall short — a fact missing, a topic no page covers — spawn a `researcher` with
+the question instead of stopping at "the notebook does not say". It saves what it reads verbatim
+into `raw/research/`; answer from that, cite the file, and offer to make it a page.
+
+The same for work you delegate: research before a `notebook-editor` or a `writer` takes a job that
+needs facts the notebook lacks. When one reports **To research**, that is your next step: spawn
+researchers for those gaps — a few, grouped by topic — then send the editor back (`subagent_send`
+or a new spawn) to fill the pages from `raw/research/`. Do not ask first; say what is being
+looked up.
+{% elif has is defined and has('spawn') %}
+
+When a `notebook-editor` or a `writer` reports **To research**, tell the user what is missing:
+web search is off, so it cannot be looked up from here.
+{% endif %}{% if project_board %}
 ### The board, as it stands
 
 {{ project_board }}

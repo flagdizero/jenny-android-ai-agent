@@ -40,6 +40,7 @@ from jenny.board.store import (
     mutate_board,
     mutate_reminders,
     read_board,
+    read_card_summary,
     read_reminders,
 )
 
@@ -226,6 +227,89 @@ def move_pages(root: Path, pages: Iterable[str], to_card: str) -> list[str]:
     _drop_empty_drawers(root, board, sources)
     still = [cid for cid in sources if (model.card_by_id(board, cid) or {}).get("pages")]
     return [target["id"], *still]
+
+
+def remove_pages(root: Path, pages: Iterable[str], from_card: str | None = None
+                 ) -> tuple[dict[str, list[str]], list[str]]:
+    """Toglie pagine dalle schede — da *from_card*, o da tutte se manca — anche
+    quando il file non c'è più. Restituisce ``(tolte, cassetti da riscrivere)``:
+    ``tolte`` è ``{id scheda: [pagine]}``, vuoto se nessuna scheda le aveva.
+
+    **Niente controllo d'esistenza, al contrario di** :func:`move_pages`: il
+    caso per cui esiste è proprio il riferimento a una pagina cancellata. In una
+    prova dell'ottobre 2026 un riordino ha cancellato e rifatto le pagine di un
+    quaderno e ha lasciato 40 riferimenti morti in ``board.json``: l'editore non
+    aveva un modo per toglierli.
+
+    **Perché non si potano da soli alla scrittura della bacheca**, anche se un
+    riferimento a un file che non c'è è quasi sempre sbagliato:
+
+    - un riferimento morto non si vede (il cassetto mostra solo le pagine vere),
+      mentre una potatura non si disfa: se la pagina torna — un ritorno a prima
+      di un piano che rimette le pagine e tiene la bacheca, un file rinominato e
+      poi rimesso — la scheda la riprende solo se il riferimento c'è ancora;
+    - nell'imbuto di :mod:`jenny.board.store` toglierebbe pagine anche nelle
+      scritture del giardiniere, e :func:`model.ownership_violations` rifiuta
+      ogni sua scrittura che tolga pagine a una scheda: una bacheca con un
+      riferimento morto non accetterebbe più niente da lui;
+    - e vorrebbe una lettura di ``wiki/`` dentro il lock, dove l'imbuto non fa
+      I/O lento.
+
+    Quindi la bacheca li tiene finché qualcuno decide: ``show`` del tool li
+    elenca, e l'editore li toglie con questa funzione.
+    """
+    wanted = list(dict.fromkeys(p for p in pages if isinstance(p, str) and p))
+    if not wanted:
+        raise BoardEditError("bad_request", "pages required")
+    # Fuori dal lock: le pagine che esistono, per gli orfani e per i cassetti.
+    known = _wiki_pages(root)
+    taken: dict[str, list[str]] = {}
+
+    def apply(board: dict[str, Any]) -> bool | None:
+        cards = [need_card(board, from_card)] if from_card else board["cards"]
+        for card in cards:
+            gone = [p for p in card["pages"] if p in wanted]
+            if gone:
+                card["pages"] = [p for p in card["pages"] if p not in wanted]
+                taken[card["id"]] = gone
+        if not taken:
+            return False
+        # Una pagina vera tolta da ogni scheda diventa orfana, e il giardiniere
+        # assegna gli orfani nuovi alla scheda a cui «appartengono chiaramente»:
+        # cioè quella da cui l'utente l'ha appena tolta. Segnarla come già vista
+        # è quel che fa lui stesso con gli orfani che ha giudicato.
+        owners = model.page_owners(board)
+        dropped = {p for gone in taken.values() for p in gone
+                   if p in known and p not in owners}
+        if dropped:
+            board["orphansSeen"] = sorted({*board["orphansSeen"], *dropped})
+        return None
+
+    board = mutate_board(root, apply)
+    _drop_empty_drawers(root, board, taken)
+    return taken, _stale_drawers(root, board, taken, known)
+
+
+def _stale_drawers(root: Path, board: Mapping[str, Any], card_ids: Iterable[str],
+                   known: set[str]) -> list[str]:
+    """Fra *card_ids*, i cassetti che non dicono più le pagine della loro scheda.
+
+    Si misura con l'impronta salvata, la stessa che usa il giardiniere
+    (``BoardPass.stale_cards``): un riferimento morto tolto non la cambia, una
+    pagina vera tolta sì, e un cassetto mai scritto va scritto.
+    """
+    from jenny.board.drawers import page_text, pages_fingerprint
+
+    out = []
+    for cid in card_ids:
+        card = model.card_by_id(board, cid)
+        if card is None or not any(p in known for p in card["pages"]):
+            continue
+        summary = read_card_summary(root, cid)
+        now = pages_fingerprint(card["pages"], known, lambda p: page_text(root, p))
+        if summary is None or summary.get("fingerprint") != now:
+            out.append(cid)
+    return out
 
 
 async def remove_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, Any]:

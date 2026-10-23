@@ -109,6 +109,43 @@ async def test_one_card_per_plant_with_its_drawer(notebook_chat: Path, announced
     assert announced == ["piante"] * 3, "ogni scrittura ridisegna la bacheca aperta"
 
 
+async def test_show_names_the_pages_that_are_gone_and_remove_pages_takes_them_off(
+    notebook_chat: Path, announced,
+) -> None:
+    """Una pagina cancellata resta sulla scheda finché qualcuno la toglie: ``show``
+    la deve dire, e l'editore la deve poter togliere (il tool non sapeva farlo)."""
+    root = notebook_chat
+    (root / "wiki" / "entities" / "Fico.md").unlink()
+    shown = await BoardTool().execute(action="show")
+    assert "pages: entities/Ginkgo.md, entities/Prunus.md" in shown, shown
+    assert "MISSING (no such file): entities/Fico.md" in shown
+    assert "1 page(s) on cards no longer exist" in shown and "remove_pages" in shown
+
+    out = await BoardTool().execute(action="write_drawer", card="nuove", brief="Due piante.",
+                                    sections=[{"title": "Identità", "text": "Ginkgo e Prunus.",
+                                               "sources": ["entities/Ginkgo.md"]}])
+    assert "1 sections" in out, out
+    out = await BoardTool().execute(action="remove_pages", pages=["entities/Fico.md"])
+    assert "`nuove`: entities/Fico.md" in out and "Drawers to rewrite" not in out, out
+    assert model.card_by_id(read_board(root), "nuove")["pages"] == [
+        "entities/Ginkgo.md", "entities/Prunus.md"]
+    assert "MISSING" not in await BoardTool().execute(action="show")
+    assert announced == ["piante"] * 2
+
+    out = await BoardTool().execute(action="remove_pages", pages=["entities/Prunus.md"],
+                                    card="nuove")
+    assert "Drawers to rewrite" in out and "`nuove`" in out, "una pagina vera cambia il cassetto"
+    assert (root / "wiki" / "entities" / "Prunus.md").exists()
+    out = await BoardTool().execute(action="remove_pages", pages=["entities/Prunus.md"])
+    assert out.startswith("None of those pages was on any card"), out
+    out = await BoardTool().execute(action="remove_pages", pages=["entities/Ginkgo.md"],
+                                    card="Nuove piante del balcone")
+    assert "`nuove`: entities/Ginkgo.md" in out
+    out = await BoardTool().execute(action="remove_pages", pages=["entities/Ginkgo.md"],
+                                    card="nuove")
+    assert out.startswith("None of those pages was on that card"), out
+
+
 async def test_a_drawer_cites_only_its_own_pages(notebook_chat: Path) -> None:
     out = await BoardTool().execute(action="write_drawer", card="nuove", brief="x", sections=[
         {"title": "Identità", "text": "y", "sources": ["entities/Altro.md"]}])

@@ -15,5 +15,13 @@ what you found.
 - When the material is long, write it with `write_file` into the output directory named
   in the Workspace section below — never into the workspace root — and reference that
   path in your answer instead of pasting everything back.
+- **Inside a notebook** (the Workspace section says you are working inside one project),
+  there is no output directory: what you read is the notebook's material, and it goes where
+  that notebook keeps outside material — its `AGENTS.md` and folders say; in the usual layout,
+  `raw/research/<YYYY-MM-DD>-<slug>.md`. One file per source you rely on, long or short: the
+  URL and the date you read it at the top, then the passages you used copied **verbatim**,
+  never your summary. `list_dir` that folder once first, and add `-2`, `-3` to a name already
+  taken: a saved source is never overwritten. Your answer lists those files.
 - Report sources: for every claim that came from the web, name the URL.
-- Say plainly what you could not find. An honest gap is more useful than a guess.
+- Say plainly what you could not find, and the queries you tried. An honest gap is more
+  useful than a guess.

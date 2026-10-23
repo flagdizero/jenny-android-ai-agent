@@ -292,6 +292,24 @@ def test_the_block_stays_small() -> None:
         "skill. Qui ci sta quel che si applica a ogni turno; il come si esegue "
         "un'operazione sta in `skills/llm-wiki/SKILL.md`."
     )
+    # **Con i tool che l'agente principale ha davvero (ottobre 2026).** Senza
+    # ``has`` ogni ``{% if has is defined and has(...) %}`` è chiuso, quindi la
+    # misura qui sopra non vede i paragrafi che la chat di un quaderno paga a ogni
+    # turno — il contrario di ``available_tools=None``, che li apre tutti. Il
+    # paragrafo «Notebook first; when it is not enough, go and look» è di quella
+    # classe: senza, un riordino ha lasciato 32 pagine su 60 «non documentate»
+    # senza una ricerca, e il «da cercare» degli aiutanti non aveva nessuno che lo
+    # raccogliesse. Pavimento misurato 4.915 (4.142 prima dei due paragrafi),
+    # tetto a 5.400: lo stesso margine di circa il 10% della misura qui sopra.
+    gated = render_template(
+        "agent/project.md", project_path="/data/workspace/wikis/x", capture=True,
+        has=lambda name: name in ("spawn", "app", "web_search"),
+    )
+    assert len(gated) > len(rendered), "i paragrafi dietro `has` non sono nel render"
+    assert len(gated) <= 5400, (
+        f"agent/project.md con spawn, app e web_search è {len(gated)} caratteri: è il costo di ogni "
+        "turno della chat di un quaderno."
+    )
 
 
 # ── T2: la conversazione è una fonte ─────────────────────────────────────────

@@ -39,6 +39,20 @@ def offboard_pages(board: Mapping[str, Any], titles: Mapping[str, str]) -> list[
     return sorted(p for p in titles if p not in owners)
 
 
+def missing_pages(board: Mapping[str, Any], titles: Mapping[str, str]) -> dict[str, list[str]]:
+    """``{id scheda: [pagine]}`` dei riferimenti a pagine che sotto ``wiki/`` non ci sono.
+
+    Il cassetto li nasconde già; li deve vedere chi cura la bacheca, perché
+    nessuno li toglie da solo (v. :func:`jenny.board.edit.remove_pages`).
+    """
+    gone: dict[str, list[str]] = {}
+    for card in board.get("cards") or []:
+        dead = [p for p in card.get("pages") or [] if p not in titles]
+        if dead:
+            gone[card["id"]] = dead
+    return gone
+
+
 def _stamp(value: Any) -> datetime:
     return model.parse_iso(value) or _EPOCH
 
