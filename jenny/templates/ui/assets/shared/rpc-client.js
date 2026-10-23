@@ -88,6 +88,14 @@ export const rpc = {
     return send(`staged.${method}`, params);
   },
 
+  /** Il piano a lista di un quaderno (`plan.get`, `plan.list`, `plan.approve`,
+   *  `plan.stop`, `plan.rollback`, …): `jenny/webui/plan_commands.py`. Come le
+   *  bozze, nessun tool del modello le raggiunge: Approva, Ferma e Torna
+   *  indietro sono tocchi dell'utente per costruzione. */
+  plan(method, params = {}) {
+    return send(`plan.${method}`, params);
+  },
+
   /** Salva un file di testo del workspace (tetto 1 MB, lato server).
    *
    *  `base`, facoltativo, e' il testo da cui l'editor e' partito: se il file su

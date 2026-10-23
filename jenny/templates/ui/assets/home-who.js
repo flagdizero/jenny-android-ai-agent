@@ -86,9 +86,12 @@ export class WhoPanel {
    */
   constructor(container, {
     currentProject, onPick, onHold, onCreate,
-    search = null, searchClear = null, plate = null, active = null,
+    search = null, searchClear = null, plate = null, active = null, badge = null,
   } = {}) {
     this._currentProject = currentProject || (() => null);
+    /* Il bollino di una copertina (il piano aperto, «Piano 2/8»): un nodo, o
+       `null`. Lo disegna chi sa dei piani (`home-plan.js`). */
+    this._badge = badge;
     this._onPick = onPick || null;
     this._onHold = onHold || null;
     this._onCreate = onCreate || null;
@@ -446,6 +449,12 @@ export class WhoPanel {
       : (size === 'hero' ? pagesWord(pages) : i18n.t('home.who.pagesShort', { count: pages }));
     when.textContent = size ? [count, age].filter(Boolean).join(' · ') : (count || age);
     cover.appendChild(when);
+
+    const badge = this._badge?.(item.name);
+    if (badge) {
+      cover.appendChild(badge);
+      cover.setAttribute('aria-label', `${cover.getAttribute('aria-label')}, ${badge.textContent}`);
+    }
 
     return cover;
   }

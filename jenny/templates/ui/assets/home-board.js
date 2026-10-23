@@ -281,6 +281,11 @@ export class HomeBoard {
     this._itemDrag = null;
     /** La barra della scheda tenuta premuta, creata la prima volta che serve. */
     this._cardBar = null;
+    /** Un piano aperto tiene il quaderno (`home-plan.js`): la bacheca si
+     *  guarda, si aprono schede e cassetti, ma non si sposta, non si crea e
+     *  non si rinomina niente. Il server rifiuta comunque le scritture. */
+    this.locked = false;
+    this.lockEl = document.getElementById('home-board-lock');
 
     /* Le note e le foto di una scheda si aprono anche da qui, nello stesso
        foglio del cassetto: una scrittura rilegge la scheda e ridisegna il muro. */
@@ -886,7 +891,7 @@ export class HomeBoard {
       await api.runAppAction(slug, action, params || {});
     } catch (err) {
       console.warn('home.board: strip action failed', err);
-      showToast(i18n.t('board.slip.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.slip.failed'), 'error');
     }
     this.refreshApp(slug);
   }
@@ -1095,7 +1100,7 @@ export class HomeBoard {
       data = await api.getBoardCard(this.notebook, cardId);
     } catch (err) {
       console.warn('home.board: card failed', err);
-      showToast(i18n.t('board.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.failed'), 'error');
       return;
     }
     view.render(data);
@@ -1109,7 +1114,7 @@ export class HomeBoard {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.board: ${method} failed`, err);
-      showToast(i18n.t('board.section.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
       return false;
     }
     try {
@@ -1312,7 +1317,7 @@ export class HomeBoard {
       }
     });
     el.addEventListener('pointermove', (e) => {
-      if (!start || longFired) return;
+      if (!start || longFired || this.locked) return;
       const dx = e.clientX - start.px;
       const dy = e.clientY - start.py;
       if (!moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
@@ -1362,7 +1367,7 @@ export class HomeBoard {
         rpc.board('move', this.notebook, { kind, id: item.id, x: item.pos.x, y: item.pos.y })
           .catch((err) => {
             console.warn('home.board: move failed', err);
-            showToast(i18n.t('board.moveFailed'), 'error');
+            showToast(i18n.t(err?.code === 'plan_running' ? 'home.plan.lock' : 'board.moveFailed'), 'error');
             this.load(this.notebook);
           });
       }
@@ -1398,6 +1403,33 @@ export class HomeBoard {
     });
   }
 
+  /** Chiude o riapre la bacheca alla modifica, con la riga che lo dice. */
+  setLocked(locked) {
+    this.locked = Boolean(locked);
+    this.el?.classList.toggle('is-plan-locked', this.locked);
+    if (this.lockEl) {
+      this.lockEl.hidden = !this.locked;
+      this.lockEl.replaceChildren();
+      if (this.locked) {
+        const i = document.createElement('i');
+        i.className = 'ti ti-lock';
+        i.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.textContent = i18n.t('home.plan.lock');
+        this.lockEl.append(i, text);
+      }
+    }
+    if (this.locked) this.closeCardBar();
+  }
+
+  /* Il gesto che cambierebbe la bacheca, a quaderno chiuso: non parte, e la
+     riga in cima lo dice gia'. Vero se e' stato fermato. */
+  _refuseLocked() {
+    if (!this.locked) return false;
+    showToast(i18n.t('home.plan.lock'), 'info');
+    return true;
+  }
+
   /** Accende i fili di una scheda (o li spegne tutti, con `null`).
    *
    *  Con la barra della scheda (`quiet`, dalla pressione lunga) l'avviso «non
@@ -1416,7 +1448,7 @@ export class HomeBoard {
    *  ingrandisce, e non copre i fili, che stanno sopra. */
   _drawCardBar() {
     const card = this.focus && this.data?.cards.find((c) => c.id === this.focus);
-    if (!card) {
+    if (!card || this.locked) {
       if (this._cardBar) this._cardBar.hidden = true;
       return;
     }
@@ -1533,7 +1565,7 @@ export class HomeBoard {
   /** Il foglio «Nuova scheda»: un nome, e la scheda nasce in *at* (un punto del
    *  muro) o al centro di quel che guardi. */
   openNewCard(at = null) {
-    if (!this.notebook || !this.data) return;
+    if (!this.notebook || !this.data || this._refuseLocked()) return;
     const near = at || this.viewCenter();
     this._nameSheet({
       title: i18n.t('board.card.newTitle'),
@@ -1557,7 +1589,7 @@ export class HomeBoard {
   /** Il foglio «Rinomina». *after* si chiama a nome cambiato (il cassetto si
    *  ricarica). */
   openRename(cardId, current, after = null) {
-    if (!this.notebook) return;
+    if (!this.notebook || this._refuseLocked()) return;
     this._nameSheet({
       title: i18n.t('board.card.renameTitle'),
       value: current || '',
@@ -1662,7 +1694,7 @@ export class HomeBoard {
         this.sheet.close();
       } catch (err) {
         console.warn('home.board: card failed', err);
-        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.failed'), 'error');
+        showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.failed'), 'error');
         ok.disabled = false;
       }
     };
@@ -1685,12 +1717,12 @@ export class HomeBoard {
    *  di una domanda. L'Annulla rimette la scheda dov'era, coi suoi fili. */
   async removeCard(cardId, title) {
     const notebook = this.notebook;
-    if (!notebook) return;
+    if (!notebook || this._refuseLocked()) return;
     try {
       await rpc.board('card.remove', notebook, { id: cardId });
     } catch (err) {
       console.warn('home.board: remove failed', err);
-      showToast(i18n.t('board.card.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.card.failed'), 'error');
       return;
     }
     if (this.focus === cardId) this.focus = null;
@@ -1792,6 +1824,7 @@ export class HomeBoard {
   /** Il «+» in testa alla bacheca: una scheda, un promemoria di tutto il quaderno,
    *  o un'automazione — questa la chiede a Jenny, che decide dove appenderla. */
   openAddMenu(at = null) {
+    if (this._refuseLocked()) return;
     const menu = document.createElement('div');
     menu.className = 'home-board-menu home-board-add-menu';
     const items = [
@@ -1889,7 +1922,7 @@ export class HomeBoard {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.board: ${method} failed`, err);
-      showToast(i18n.t('board.section.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
       return;
     }
     this.sheet.close();
@@ -1947,7 +1980,7 @@ export class HomeBoard {
       await rpc.board('suggestion.respond', this.notebook, { id: s.id, answer, near: this.viewCenter() });
     } catch (err) {
       console.warn('home.board: respond failed', err);
-      showToast(i18n.t(err?.code === 'conflict' ? 'board.envelope.full' : 'board.envelope.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.envelope.full' : 'board.envelope.failed'), 'error');
       box.querySelectorAll('button').forEach((b) => { b.disabled = false; });
       return;
     }
@@ -2113,7 +2146,7 @@ export class HomeBoard {
       } catch (err) {
         console.warn('home.board: want failed', err);
         want.disabled = false;
-        showToast(i18n.t('board.envelope.failed'), 'error');
+        showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.envelope.failed'), 'error');
       }
     });
     actions.append(close, want);

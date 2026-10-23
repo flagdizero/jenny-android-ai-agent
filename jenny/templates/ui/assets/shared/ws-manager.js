@@ -237,7 +237,7 @@ class WebSocketManager extends EventTarget {
     }
   }
 
-  sendToChat(chatId, text, media = []) {
+  sendToChat(chatId, text, media = [], { plan = false, planRevise = null } = {}) {
     if (!this.chatWs || this.chatWs.readyState !== WebSocket.OPEN) return false;
     const clean = this._stripPrefix(chatId);
     const payload = { type: 'message', chat_id: clean, content: text, webui: true };
@@ -247,6 +247,16 @@ class WebSocketManager extends EventTarget {
     // un messaggio partito non si ritira. Si manda solo quando è accesa: il
     // gateway accende su `true` e ignora tutto il resto.
     if (AppState.readonlyTurn === true) payload.readonly = true;
+    // Il piano viaggia nel messaggio come la sola lettura, ma **solo se chi
+    // manda lo chiede** (`plan`, `planRevise`), mai da uno stato globale: il
+    // tasto Piano vale per il messaggio del composer, e `/stop`, i comandi
+    // delle bolle di lavoro o un altro mittente non devono diventare un turno
+    // di pianificazione (ne' consumare una revisione) solo perche' il tasto
+    // era acceso. Il gateway non se lo ricorda per il prossimo.
+    if (plan === true) {
+      payload.plan = true;
+      if (planRevise) payload.plan_revise = String(planRevise);
+    }
     if (media.length) payload.media = media;
     this.chatWs.send(JSON.stringify(payload));
     this.dispatchEvent(new CustomEvent('chat:sent', { detail: { chat_id: clean } }));

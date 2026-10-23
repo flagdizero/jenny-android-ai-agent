@@ -72,6 +72,7 @@ import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
 import { i18n } from './shared/i18n.js';
 import { HomeAppsTrash } from './home-apps-trash.js';
 import { HomeStaged } from './home-staged.js';
+import { HomePlan } from './home-plan.js';
 import { sessionManager } from './shared/session-manager.js';
 import { chatIdOf, wsManager } from './shared/ws-manager.js';
 import './shared/theme.js';
@@ -132,7 +133,8 @@ const BACK_TO = {
    quello di «Segnala». Scritti una volta: li leggono sia chi chiede se c'e'
    qualcosa sopra (`hasOverlayAbove`) sia chi li chiude (`_closeOverlays`), e
    due elenchi separati divergevano al primo foglio nuovo. */
-const LONG_PRESS_SHEETS = ['home-notebook-sheet', 'jenny-app-sheet', 'android-app-sheet', 'apps-trash-sheet'];
+/* Anche i fogli del piano a lista (`home-plan.js`), che si aprono dalla sua scheda. */
+const LONG_PRESS_SHEETS = ['home-notebook-sheet', 'jenny-app-sheet', 'android-app-sheet', 'apps-trash-sheet', 'home-plan-sheet'];
 /* Il foglio della bacheca: «dall'ultima volta», la busta, la ricerca,
    l'anteprima di una pagina, «aggiungi sezione». */
 const BOARD_SHEET = 'home-board-sheet';
@@ -245,6 +247,31 @@ class HomeApp {
        classe puo' rispondere con il composer di una foto (v. `_bindComposer`). */
     this.composer = this.input?.closest?.('.home-composer') || null;
     this.shell = document.querySelector('.home-shell');
+    /* Il piano a lista di un quaderno (`home-plan.js`): la scheda nel posto
+       vivo, la striscia, il tasto Piano nel composer, e chi e' chiuso mentre
+       un piano lavora (la bacheca, il lettore). */
+    this.plan = new HomePlan({
+      live: this.chat.live,
+      thread: document.getElementById('home-thread'),
+      chatEl: document.getElementById('home-chat'),
+      composer: {
+        root: this.composer,
+        field: this.input?.closest?.('.home-field') || null,
+        input: this.input,
+        attach: this.attach,
+        send: this.send,
+      },
+      currentNotebook: () => projectNameOf(sessionManager.currentKey),
+      onChange: () => this.chat.liveChanged(),
+      onLockChange: () => {
+        this._applyPlanLock();
+        this.who?.render();
+      },
+      onComposerChange: () => this._applyConversationTexts(),
+      sendText: (text, extra) => this._sendText(text, [], [], extra),
+      appendOwn: (text) => this.chat.appendOwn(text, []),
+      turnRunning: () => Boolean(this._running),
+    });
 
     this.backBtn = document.getElementById('home-back');
     /* Il percorso della riga: la radice (di che posto e' la stanza) e i
@@ -391,6 +418,7 @@ class HomeApp {
       /* Dal posto vuoto senza nome, da una ricerca a vuoto col nome cercato
          gia' scritto: e' il giro di sempre, solo con la prima risposta data. */
       onCreate: (name) => this.createNotebook(name),
+      badge: (name) => this.plan?.badgeFor(name) || null,
       search: document.getElementById('home-notebooks-search'),
       searchClear: document.getElementById('home-notebooks-search-clear'),
       plate: document.getElementById('home-notebooks-plate'),
@@ -547,6 +575,15 @@ class HomeApp {
       this.work.loadSubagents();
       this.work.loadWork();
     });
+    /* Il piano e' del quaderno: la scheda si rilegge per quello nuovo, il tasto
+       Piano torna spento, e la bacheca e il lettore si chiudono o si aprono. */
+    sessionManager.addEventListener('chat:switch', () => {
+      this.plan.onConversationChanged();
+      this._applyPlanLock();
+    });
+    /* Il tasto Piano si spegne dopo il messaggio del composer, e solo dopo
+       quello: lo fa `_send` (v. `HomePlan.onSent`). Non qui su `chat:sent`,
+       che parte anche per `/stop` e per i comandi delle bolle di lavoro. */
 
     wsManager.addEventListener('chat:open', () => this._onWireOpen());
     wsManager.addEventListener('chat:close', () => this._setWire(false));
@@ -557,6 +594,7 @@ class HomeApp {
       this._readWork(e.detail);
       this._readBoardChanged(e.detail);
       this.staged.handleFrame(e.detail);
+      this.plan.handleFrame(e.detail);
       this.chat.handleFrame(e.detail);
     });
 
@@ -914,6 +952,8 @@ class HomeApp {
         conflict: ['home.notebook.renameBusy', { name: name }],
         name_taken: ['home.notebook.renameTaken', { name: newName }],
         not_found: ['home.notebook.renameMissing', { name: name }],
+        /* Un piano aperto tiene il quaderno: non si rinomina finche' non e' chiuso. */
+        plan_running: ['home.plan.lockRename', { name: name }],
       };
       const [key, parameters] = expected[err?.code]
         || ['home.notebook.renameFailed', { name: name }];
@@ -1815,6 +1855,18 @@ class HomeApp {
     if (this.nameEl && title) this.nameEl.textContent = title;
   }
 
+  /* Un piano aperto chiude il quaderno a schermo all'utente: la bacheca e il
+     lettore lo dicono, e Modifica e il + spariscono. Il server rifiuta
+     comunque le scritture (`plan_running`); qui si evita di offrirle. */
+  _applyPlanLock() {
+    const notebook = projectNameOf(sessionManager.currentKey);
+    const locked = Boolean(this.plan?.isLocked(notebook));
+    this.board?.setLocked?.(locked);
+    this.drawer?.setLocked?.(locked);
+    this.reader?.setLocked?.(locked);
+    this._applyHead();
+  }
+
   /* Quali comandi dell'intestazione valgono in questa stanza. Nella
      conversazione l'intestazione non c'e' — c'e' la fila — quindi qui si
      decide solo per le stanze. */
@@ -1823,12 +1875,13 @@ class HomeApp {
     /* La lente e l'elenco, solo sulla bacheca. L'interruttore Chat | Bacheca
        che stava accanto non c'e' piu' dal 05/10/2026: la chat del quaderno la
        porta su Jenny, sopra la bacheca. */
-    if (this.boardAddBtn) this.boardAddBtn.hidden = this.view !== 'board';
+    const locked = Boolean(this.plan?.isLocked(notebook));
+    if (this.boardAddBtn) this.boardAddBtn.hidden = this.view !== 'board' || locked;
     if (this.boardSearchBtn) this.boardSearchBtn.hidden = this.view !== 'board';
     if (this.boardListBtn) this.boardListBtn.hidden = this.view !== 'board';
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
        li' i comandi sono Salva e Annulla, e stanno in basso. */
-    if (this.editBtn) this.editBtn.hidden = this.view !== 'reader' || this.reader.editing;
+    if (this.editBtn) this.editBtn.hidden = this.view !== 'reader' || this.reader.editing || locked;
     /* Uscendo dal lettore la selezione se ne va con la stanza, ma il
        `selectionchange` non e' garantito quando i nodi selezionati spariscono:
        la barra va chiusa qui, o resterebbe accesa sopra un'altra stanza. */
@@ -2516,7 +2569,11 @@ class HomeApp {
         measure();
         this.chat.keepBottom();
       });
-      for (const el of [this.composer, this.pending, this.wire]) {
+      /* Anche la riga del piano sopra il composer (`.home-plan-hint`): compare
+         col tasto Piano e mentre un piano corre, e senza osservarla l'ultimo
+         messaggio le scivolava sotto. Jenny no: il suo pavimento resta il
+         composer (v. il CSS), e la riga le lascia il posto a destra. */
+      for (const el of [this.composer, this.pending, this.wire, this.plan?.hint]) {
         if (el) observer.observe(el);
       }
     }
@@ -2602,9 +2659,16 @@ class HomeApp {
       this._autosize();
       return true;
     }
-    if (!this._sendText(text, this.files.getImages(), this.files.getAttachmentEntries())) {
+    /* Il tasto Piano (e una revisione) vale per questo messaggio, e lo si
+       dice qui, esplicito: `sendToChat` non legge piu' uno stato globale, che
+       avrebbe fatto di `/stop` o di un comando di una bolla un turno di
+       pianificazione. Partito il messaggio, il tasto si spegne: le domande
+       che seguono sono chiacchiera normale, non piani nuovi. */
+    const planExtra = this.plan?.composerExtra?.() || {};
+    if (!this._sendText(text, this.files.getImages(), this.files.getAttachmentEntries(), planExtra)) {
       return false;
     }
+    this.plan?.onSent?.();
     this.files.clear();
     /* Era una frase pronta: la bozza messa da parte torna nel campo. */
     const key = sessionManager.currentKey;
@@ -2620,8 +2684,8 @@ class HomeApp {
 
   /* Manda e disegna la bolla. Ci passano il composer, con i suoi allegati, e i
      comandi delle bolle di lavoro (`sendCommand`). */
-  _sendText(text, media = [], entries = []) {
-    if (!wsManager.sendToChat(sessionManager.currentChatId, text, media)) {
+  _sendText(text, media = [], entries = [], extra = {}) {
+    if (!wsManager.sendToChat(sessionManager.currentChatId, text, media, extra)) {
       /* Socket chiuso: il messaggio non e' partito e non va disegnato. Una
          bolla che compare e un messaggio che non arriva sono la stessa cosa
          vista da due parti, e la prima fa credere alla seconda. */
@@ -2745,6 +2809,8 @@ class HomeApp {
     if (this._running === running) return;
     this._running = running;
     this._paintSend();
+    /* Approva e Riprendi aspettano la fine del turno (v. `HomePlan`). */
+    this.plan?.onTurnRunning(running);
   }
 
   /* Il tasto tondo: Ferma mentre Jenny lavora **e** il campo e' vuoto, manda
@@ -2773,6 +2839,8 @@ class HomeApp {
     this.work.loadSubagents();
     this.work.loadWork();
     this.staged?.refresh();
+    this.plan?.refresh();
+    this.plan?.refreshList();
     /* Al boot le impostazioni non si leggevano, quindi non si sa se questo e'
        il primo avvio: il socket aperto dice che il gateway adesso c'e', e si
        richiede. Una volta sola — un secondo «non lo so» resta nella casa. */
@@ -2845,6 +2913,10 @@ class HomeApp {
       this.input.placeholder = i18n.t(inNotebook ? 'home.placeholderNotebook' : 'home.placeholder', {
         name: this._personalName || DEFAULT_BOT_NAME,
       });
+      /* Il piano ha i suoi: «Cosa vuoi pianificare?» col tasto acceso, e la
+         chat spenta mentre corre (v. `HomePlan.placeholder`). */
+      const planned = this.plan?.placeholder();
+      if (planned) this.input.placeholder = planned;
     }
     this._applyOverTitle();
   }
@@ -2936,6 +3008,8 @@ class HomeApp {
     this.backupRoom?.applyTranslations();
     this._appsTrash?.applyTranslations();
     this.staged?.applyTranslations();
+    this.plan?.applyTranslations();
+    this._applyPlanLock();
     this.jennyRoom?.applyTranslations();
     this.you?.sayJenny(this.jennyRoom?.value());
     this.newNotebook?.setAttribute('aria-label', i18n.t('home.who.newNotebook'));

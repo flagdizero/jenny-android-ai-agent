@@ -622,6 +622,509 @@ body.home {
   white-space: pre;
 }
 .home-staged-actions { display: flex; gap: 8px; }
+
+/* ── Il piano a lista (`home-plan.js`) ──
+   La stessa bolla di vetro del lavoro, larga come la chat: e' una lista da
+   leggere e da spuntare, non una riga di stato. Il bordo dice lo stato del
+   piano: il fiore mentre propone e corre, l'avviso quando aspetta te, l'ok
+   quando ha finito, il grigio quando e' fermo o tornato indietro. */
+.home-plan {
+  width: 100%;
+  max-width: 520px;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  user-select: text;
+  -webkit-user-select: text;
+  border-color: color-mix(in oklab, var(--flower) 45%, var(--border-strong));
+}
+.home-plan.is-done { border-color: color-mix(in oklab, var(--ok) 60%, var(--border-strong)); }
+.home-plan.is-blocked { border-color: color-mix(in oklab, var(--warning) 65%, var(--border-strong)); }
+.home-plan.is-stopped,
+.home-plan.is-rolled_back,
+.home-plan.is-paused { border-color: var(--border-strong); }
+.home-plan.is-rolled_back .home-plan-list { opacity: .6; }
+.home-plan.is-review {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--border-strong));
+}
+.home-plan .home-work-title { white-space: normal; }
+.home-plan.is-done .home-work-icon { color: var(--ok); filter: none; }
+.home-plan.is-blocked .home-work-icon { color: var(--warning); filter: none; }
+.home-plan.is-stopped .home-work-icon,
+.home-plan.is-rolled_back .home-work-icon,
+.home-plan.is-paused .home-work-icon { color: var(--text-muted); filter: none; }
+
+.home-plan-ver {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  letter-spacing: .02em;
+}
+.home-plan-ver.is-hot { color: var(--flower); border-color: color-mix(in oklab, var(--flower) 70%, transparent); }
+.home-plan-ver.is-ok { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 70%, transparent); }
+.home-plan-ver.is-warn { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 70%, transparent); }
+.home-plan-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px -6px 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.home-plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.home-plan-meta b { color: var(--text); font-weight: 600; }
+.home-plan-meta .ti { margin-right: 4px; }
+.home-plan-photo .ti { color: var(--ok); }
+.home-plan .home-work-seg.is-blocked { background: var(--warning); box-shadow: none; }
+
+.home-plan-note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.home-plan-note b { color: var(--text); }
+.home-plan-note.is-error { display: flex; gap: 6px; align-items: flex-start; color: var(--error); }
+.home-plan-photo-line { display: flex; gap: 8px; align-items: flex-start; }
+.home-plan-photo-line > .ti { flex: none; color: var(--ok); font-size: 16px; margin-top: 1px; }
+
+.home-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home-plan-item {
+  display: grid;
+  grid-template-columns: 26px 18px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 3px;
+  align-items: start;
+  padding: 10px 0 9px;
+  border-top: .5px solid var(--border);
+  font-size: 14.5px;
+  line-height: 1.35;
+}
+.home-plan-item.is-openable { cursor: pointer; }
+.home-plan-item.is-openable:active { background: var(--active); }
+.home-plan-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 8px; }
+.home-plan-box {
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: none;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  margin-top: -1px;
+}
+/* Proposto: caselle quadrate, da spuntare. In corsa: cerchi, che si spuntano da soli. */
+.home-plan.is-proposed .home-plan-box { border-radius: 6px; cursor: pointer; }
+.home-plan.is-proposed .home-plan-box:active { filter: brightness(0.85); }
+.home-plan-item.is-on .home-plan-box { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.home-plan-item.is-off .home-plan-text { color: var(--text-faint); text-decoration: line-through; }
+.home-plan-item.is-off .home-plan-kind { opacity: .4; }
+.home-plan-item.is-new { background: linear-gradient(90deg, color-mix(in oklab, var(--ok) 9%, transparent), transparent 70%); }
+.home-plan-kind { color: var(--text-muted); font-size: 18px; line-height: 20px; }
+.home-plan-text { color: var(--text); overflow-wrap: anywhere; }
+.home-plan-sub { grid-column: 3; font-size: 12.5px; line-height: 1.35; color: var(--text-muted); }
+.home-plan-time { font-size: 12px; color: var(--text-faint); margin-left: 6px; font-variant-numeric: tabular-nums; }
+.home-plan-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 1px;
+  white-space: nowrap;
+  letter-spacing: .02em;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.home-plan-tag.is-danger { color: var(--error); border-color: color-mix(in oklab, var(--error) 65%, transparent); }
+.home-plan-tag.is-new { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 65%, transparent); }
+.home-plan-tag.is-moved { color: var(--flower); border-color: color-mix(in oklab, var(--flower) 65%, transparent); }
+.home-plan-tag.is-changed { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 65%, transparent); }
+.home-plan-item.is-done .home-plan-box { background: var(--ok); border-color: var(--ok); color: var(--on-accent); }
+.home-plan-item.is-done .home-plan-text,
+.home-plan-item.is-todo .home-plan-text { color: var(--text-muted); }
+.home-plan-item.is-now .home-plan-box {
+  border: 2.5px solid color-mix(in oklab, var(--flower) 22%, transparent);
+  border-top-color: var(--flower);
+  box-shadow: 0 0 8px var(--glow);
+  animation: home-plan-spin 1.1s linear infinite;
+}
+@keyframes home-plan-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .home-plan-item.is-now .home-plan-box { animation: none; }
+}
+.home-plan-item.is-now .home-plan-text { color: var(--heading); font-weight: 650; }
+.home-plan-item.is-now .home-plan-kind { color: var(--flower); }
+.home-plan-item.is-blocked .home-plan-box { background: var(--warning); border-color: var(--warning); color: var(--bg); }
+.home-plan-item.is-blocked .home-plan-text { color: var(--heading); font-weight: 650; }
+.home-plan-item.is-blocked .home-plan-kind { color: var(--warning); }
+.home-plan-item.is-skipped .home-plan-box,
+.home-plan-item.is-interrupted .home-plan-box { border-style: dashed; color: var(--text-faint); }
+.home-plan-item.is-skipped .home-plan-text { color: var(--text-faint); text-decoration: line-through; }
+.home-plan-item.is-interrupted .home-plan-text { color: var(--text-muted); }
+.home-plan-item.is-undone .home-plan-box { border-color: var(--text-muted); color: var(--text-muted); font-size: 13px; }
+.home-plan-item.is-undone .home-plan-text { color: var(--text-muted); }
+
+/* La domanda di un passo fermo, con il campo della risposta. */
+.home-plan-ask {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--warning) 9%, transparent);
+  border: 1px solid color-mix(in oklab, var(--warning) 45%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text);
+}
+.home-plan-question { white-space: pre-wrap; }
+.home-plan-answer {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  resize: none;
+}
+.home-plan-answer:focus { outline: none; border-color: var(--focus-ring); box-shadow: 0 0 0 1px var(--focus-ring); }
+
+.home-plan-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.home-plan-btn {
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-plan-btn .ti { font-size: 18px; }
+.home-plan-btn:disabled { opacity: .5; }
+.home-plan-btn:active,
+.home-plan-strip-btn:active,
+.home-plan-close:active,
+.home-plan-toggle:active,
+.home-plan-sheet-row:active { background: var(--active); }
+.home-plan-btn.is-primary:active,
+.home-plan-btn.is-warn:active,
+.home-plan-btn.is-danger-fill:active { filter: brightness(0.9); }
+.home-plan-open:active,
+.home-plan-strip-text:active { opacity: .6; }
+.home-plan-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-plan-btn.is-small { min-height: 38px; padding: 0 13px; font-size: 13.5px; }
+.home-plan-btn.is-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.home-plan-btn.is-danger { color: var(--error); border-color: color-mix(in oklab, var(--error) 60%, transparent); }
+.home-plan-btn.is-danger-fill { background: var(--error); color: var(--bg); border-color: var(--error); }
+.home-plan-btn.is-quiet { border-color: transparent; color: var(--text-muted); padding: 0 8px; }
+.home-plan-btn.is-warn { background: var(--warning); border-color: var(--warning); color: var(--bg); }
+
+.home-plan-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: .5px solid var(--border);
+  background: none;
+  color: var(--flower);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.home-plan-open-label { flex: 1; min-width: 0; }
+.home-plan-open-sub { color: var(--text-muted); font-size: 12.5px; }
+
+/* I conti del piano finito, dal confronto delle due foto. */
+.home-plan-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.home-plan-sum div { border: 1px solid var(--border); border-radius: 10px; padding: 8px 6px; text-align: center; }
+.home-plan-sum b { display: block; font-size: 20px; color: var(--heading); font-variant-numeric: tabular-nums; }
+.home-plan-sum span { font-size: 11.5px; color: var(--text-muted); }
+
+/* La striscia: la scheda, piegata in cima alla chat quando esce dallo schermo. */
+.home-plan-strip {
+  flex: none;
+  margin: 0 14px 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--surface) 82%, transparent);
+  border: 1px solid color-mix(in oklab, var(--flower) 45%, var(--border-strong));
+  font-size: 13.5px;
+  color: var(--text);
+  box-shadow: var(--glass-shadow);
+}
+.home-plan-strip[hidden] { display: none; }
+.home-plan-strip.is-blocked { border-color: color-mix(in oklab, var(--warning) 70%, transparent); }
+.home-plan-strip.is-paused { border-color: var(--border-strong); }
+.home-plan-strip-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  line-height: 1.25;
+}
+.home-plan-strip-text b { font-weight: 700; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-plan-strip-text span { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-plan-strip-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+.home-plan-ring { flex: none; width: 30px; height: 30px; }
+.home-plan-ring-track { fill: none; stroke: var(--border-strong); stroke-width: 3; }
+.home-plan-ring-arc { fill: none; stroke: var(--flower); stroke-width: 3; stroke-linecap: round; }
+.home-plan-ring-text { font-size: 9px; font-weight: 700; fill: var(--text); }
+
+/* Il tasto Piano nel composer, e il composer acceso in modo Piano. */
+.home-plan-toggle {
+  flex: none;
+  height: 30px;
+  min-width: 30px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.home-plan-toggle[hidden] { display: none; }
+.home-plan-toggle .ti { font-size: 18px; }
+.home-plan-toggle-label:empty { display: none; }
+.home-plan-toggle:disabled { opacity: .5; }
+.home-field:has(.home-plan-toggle:not([hidden])) .home-input { padding-left: 8px; }
+.home-field.is-plan {
+  border-color: var(--flower);
+  box-shadow: 0 0 0 1px var(--flower), 0 0 14px color-mix(in oklab, var(--flower) 35%, transparent);
+}
+.home-field.is-plan .home-plan-toggle {
+  background: color-mix(in oklab, var(--flower) 18%, transparent);
+  border-color: color-mix(in oklab, var(--flower) 70%, transparent);
+  color: var(--flower);
+}
+.home-send.is-plan { background: var(--flower); box-shadow: 0 0 14px var(--glow); }
+.home-field.is-plan-off { opacity: .6; }
+.home-send:disabled { opacity: .5; }
+.home-plan-hint {
+  flex: none;
+  margin: 0 14px 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--flower);
+}
+.home-plan-hint.is-off { color: var(--text-muted); }
+.home-plan-hint[hidden] { display: none; }
+/* Jenny resta dov'e' (il suo pavimento e' il composer, v. `--jenny-floor`), e
+   i piedi le cadono sulla riga: il testo si ferma prima della sua figura, che
+   comincia a `1 - --jenny-dock - 0,275` lati dal bordo (lo stesso conto di
+   `--jenny-dodge`, qui contro i 14px di margine della riga). */
+.home-shell .home-plan-hint {
+  padding-right: max(0px, calc(var(--jenny-size, 120px) * (1 - var(--jenny-dock, 0.3) - 0.275) - 14px + 6px));
+}
+
+/* «In sola lettura durante il piano»: sul lettore e sulla bacheca. */
+.home-plan-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.home-plan-lock[hidden] { display: none; }
+.home-plan-lock .ti { color: var(--flower); }
+.home-reader > .home-plan-lock { margin: 8px 16px 0; }
+.home-drawer > .home-plan-lock { margin: 0 0 10px; }
+/* I comandi che scrivono, spenti mentre il piano tiene il quaderno: si vede
+   che ci sono e che adesso non si usano. */
+.is-plan-locked .home-drawer :is(.home-drawer-link, .home-drawer-cal-done, .home-drawer-cal-more):disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.home-board > .home-plan-lock {
+  flex: none;
+  align-self: center;
+  margin: 6px 16px 4px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--flower) 45%, var(--border-strong));
+  background: color-mix(in oklab, var(--surface) 88%, transparent);
+  white-space: nowrap;
+}
+
+/* Il bollino sulla copertina di un quaderno con un piano aperto. */
+.home-plan-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 5px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--flower);
+  background: var(--bg);
+  border: 1px solid color-mix(in oklab, var(--flower) 60%, transparent);
+}
+.home-plan-badge.is-blocked { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 60%, transparent); }
+.home-plan-badge.is-blocked .home-plan-ring-arc { stroke: var(--warning); }
+.home-plan-badge .home-plan-ring { width: 18px; height: 18px; }
+
+/* I fogli dal basso: cosa ha fatto un passo, le modifiche, Ferma, il ritorno,
+   il piano completo. `.oc-sheet` li veste; qui c'e' quel che ci sta dentro. */
+.home-plan-sheet .home-plan-sheet-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px 16px;
+  box-sizing: border-box;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+.home-plan-sheet-grab { flex: none; width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto 10px; }
+/* La X del foglio: in alto a destra, fuori dal flusso, col bersaglio da dito. */
+.home-plan-sheet-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+}
+.home-plan-sheet-close:active { background: var(--active); }
+.home-plan-sheet-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-plan-sheet .home-plan-sheet-title { padding-right: 40px; }
+.home-plan-sheet-title { margin: 2px 4px; font-size: 16px; font-weight: 700; color: var(--heading); }
+.home-plan-sheet-sub,
+.home-plan-sheet-note { margin: 0 4px 10px; font-size: 13px; line-height: 1.4; color: var(--text-muted); }
+.home-plan-sheet-list {
+  margin: 0 4px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.home-plan-sheet-list .ti { margin-right: 6px; }
+.home-plan-sheet-list .is-added,
+.home-plan-sheet-list .is-back { color: var(--ok); }
+.home-plan-sheet-list .is-changed { color: var(--flower); }
+.home-plan-sheet-list .is-removed,
+.home-plan-sheet-list .is-gone { color: var(--error); }
+.home-plan-sheet-list .is-keep,
+.home-plan-sheet-list .is-more { color: var(--text-muted); }
+.home-plan-keep { display: flex; align-items: center; gap: 10px; min-height: 40px; margin-top: 4px; color: var(--text); }
+.home-plan-keep input { width: 20px; height: 20px; accent-color: var(--accent); }
+.home-plan-sheet-row {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px;
+  border: 0;
+  border-top: .5px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+.home-plan-sheet-row > .ti { width: 24px; font-size: 21px; color: var(--text-muted); text-align: center; }
+.home-plan-row-text { display: flex; flex-direction: column; line-height: 1.3; }
+.home-plan-row-sub { font-size: 12.5px; color: var(--text-muted); }
+.home-plan-sheet-row.is-danger,
+.home-plan-sheet-row.is-danger > .ti { color: var(--error); }
+.home-plan-sheet-row.is-primary > .ti { color: var(--accent); }
+.home-plan-sheet-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.home-plan-full-step {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 4px 4px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--heading);
+}
+.home-plan-full-step > .ti { color: var(--flower); }
+.home-plan-full-detail { margin: 0 4px; font-size: 14px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
+.home-plan-full-dropped { margin: 14px 4px 4px; font-size: 13px; color: var(--text-muted); }
+.home-plan-full-dropped-list { margin: 0 4px; padding-left: 18px; color: var(--text-faint); text-decoration: line-through; }
 .home-work.is-done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border-strong)); }
 .home-work.is-failed { border-color: color-mix(in oklab, var(--error) 55%, var(--border-strong)); }
 
@@ -4283,6 +4786,8 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-drawer-dial { display: none; }
 .home-shell[data-view='drawer'] .home-drawer-fab { display: flex; }
 .home-shell[data-view='drawer'] .home-drawer-dial:not([hidden]) { display: flex; }
+/* Un piano tiene il quaderno: il + del cassetto non c'e' (v. `setLocked`). */
+.home-shell[data-view='drawer'] .home-drawer-fab[hidden] { display: none; }
 .home-drawer-fab {
   position: absolute;
   right: 18px;

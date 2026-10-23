@@ -169,6 +169,10 @@ export const rpcAnswers = {
   /* Le bozze da approvare si rileggono a ogni apertura del socket: stessa
      ragione, una casa senza bozze. */
   'staged.list': () => ({ ok: true, staged: [] }),
+  /* I piani a lista, idem: si rileggono a ogni apertura (il lucchetto e il
+     bollino dei quaderni) e a ogni cambio di conversazione. Una casa senza piani. */
+  'plan.list': () => ({ ok: true, plans: [] }),
+  'plan.get': () => ({ ok: true, plan: null }),
 };
 const RPC_FAILED = Symbol('rpcFailed');
 export const rpcFailed = (code = 'unavailable', message = 'failed') => ({ [RPC_FAILED]: { code, message } });

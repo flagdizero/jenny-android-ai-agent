@@ -342,6 +342,8 @@
        i post-it delle attese, i fili, la busta con le proposte di Jenny. La
        wiki sta dietro, e ci si arriva da un cassetto o dalla lente. -->
   <section class="home-board" id="home-board">
+    <!-- Un piano aperto chiude il quaderno all'utente (v. `home-plan.js`). -->
+    <div class="home-plan-lock" id="home-board-lock" hidden></div>
     <button class="home-board-since" id="home-board-since" type="button" hidden></button>
     <div class="home-board-canvas" id="home-board-canvas">
       <!-- Il muro: la tela e' la finestra (la busta resta ferma nel suo angolo),
@@ -364,6 +366,7 @@
        cablano i wikilink, che aprono un'altra pagina dello stesso quaderno.
        Audit, briciole di pane e LaTeX restano dell'officina. -->
   <section class="home-reader" id="home-reader">
+    <div class="home-plan-lock" id="home-reader-lock" hidden></div>
     <article class="home-reader-body" id="home-reader-body"></article>
     <!-- Modifica: una textarea, e niente CodeMirror. Sono 200+ kB per colorare
          del markdown su 590 px, e la casa e' rimasta magra apposta. Il contatore
@@ -686,6 +689,12 @@
     <div class="apps-trash-body" id="apps-trash-sheet-body"></div>
     <button class="oc-sheet-cancel" id="apps-trash-sheet-close" data-i18n="common.close">Chiudi</button>
   </div>
+</dialog>
+
+<!-- I fogli del piano a lista: cosa ha fatto un passo, le modifiche, Ferma, il
+     ritorno, il piano completo. Uno solo, riempito da `home-plan.js`. -->
+<dialog class="oc-sheet home-plan-sheet" id="home-plan-sheet">
+  <div class="oc-sheet-inner home-plan-sheet-inner" id="home-plan-sheet-body"></div>
 </dialog>
 
 <dialog class="oc-sheet" id="jenny-app-sheet">

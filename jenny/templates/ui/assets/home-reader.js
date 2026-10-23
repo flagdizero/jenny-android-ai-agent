@@ -154,6 +154,10 @@ export class HomeReader {
     this.onOpenDrawer = null;
     this.onPreview = null;
     this.editing = false;
+    /** Un piano aperto tiene il quaderno (`home-plan.js`): si legge e basta,
+     *  e «Modifica» non apre. Il server rifiuta comunque `page.write`. */
+    this.locked = false;
+    this.lockEl = document.getElementById('home-reader-lock');
     /** Chi disegna l'intestazione: entrare e uscire dall'editor cambia quali
      *  comandi valgono lassu'. */
     this.onEditing = null;
@@ -171,6 +175,25 @@ export class HomeReader {
     if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('home.reader.cancel');
   }
 
+  /** Chiude o riapre le pagine del quaderno alla modifica, con la riga che lo
+   *  dice. Un editor gia' aperto resta aperto: il suo testo non si butta, e il
+   *  salvataggio lo rifiutera' il server, dicendolo. */
+  setLocked(locked) {
+    this.locked = Boolean(locked);
+    if (this.lockEl) {
+      this.lockEl.hidden = !this.locked;
+      this.lockEl.replaceChildren();
+      if (this.locked) {
+        const i = document.createElement('i');
+        i.className = 'ti ti-lock';
+        i.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.textContent = i18n.t('home.plan.lock');
+        this.lockEl.append(i, text);
+      }
+    }
+  }
+
   /* ── Modifica ── */
 
   /** Vero se c'e' un testo aperto e cambiato. Lo chiede chi sta per uscire. */
@@ -180,7 +203,7 @@ export class HomeReader {
 
   /** Apre l'editor sul markdown gia' in mano. Falso se non c'e' niente da aprire. */
   startEdit() {
-    if (this.editing || !this.path || !this.editEl) return false;
+    if (this.editing || this.locked || !this.path || !this.editEl) return false;
     this.editing = true;
     this.editEl.value = this.raw;
     this.editEl.hidden = false;
@@ -263,7 +286,9 @@ export class HomeReader {
         await this._onConflict();
         return;
       }
-      showToast(i18n.t('home.reader.saveFailed'), 'error');
+      /* Un piano ha preso il quaderno mentre scrivevi: il testo resta
+         nell'editor, e la riga in cima dice perche' non si salva. */
+      showToast(i18n.t(err?.code === 'plan_running' ? 'home.plan.lock' : 'home.reader.saveFailed'), 'error');
       return;
     }
     this.editing = false;

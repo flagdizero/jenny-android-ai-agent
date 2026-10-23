@@ -135,7 +135,49 @@ export class BoardDrawer {
       sheet, write: (method, params) => this._write(method, params), notebook: () => this.notebook,
     });
     this.photos.onFailed = () => showToast(i18n.t('board.section.failed'), 'error');
+    /** Un piano aperto tiene il quaderno (`home-plan.js`): il cassetto si
+     *  legge, ma non si corregge, non si aggiunge e non si toglie niente. */
+    this.locked = false;
     this._buildFab();
+  }
+
+  /** Chiude o riapre il cassetto alla modifica. Il server rifiuterebbe
+   *  comunque (`plan_running`); qui non si offrono gesti che finirebbero in
+   *  un errore. */
+  setLocked(locked) {
+    const next = Boolean(locked);
+    if (next === this.locked) return;
+    this.locked = next;
+    this.el?.classList.toggle('is-plan-locked', next);
+    if (next) {
+      this.closeDial();
+      this.editing = null;
+    }
+    if (this.fab) this.fab.hidden = next;
+    if (this.data) this.render();
+  }
+
+  /* Il gesto che cambierebbe il quaderno, a quaderno chiuso: non parte, e lo
+     si dice. Vero se e' stato fermato. */
+  _refuseLocked() {
+    if (!this.locked) return false;
+    showToast(i18n.t('home.plan.lock'), 'info');
+    return true;
+  }
+
+  /* A quaderno chiuso, i comandi che scrivono si spengono: correggi, togli,
+     sposta, Fatto, ⋯, i fili, i controlli delle app, Rinomina e Togli. Restano
+     vivi quelli che leggono (le pagine, i fili verso un'altra scheda, apri
+     l'app, le sezioni che si aprono), marcati `data-drawer-read`. */
+  _disableEdits(root) {
+    const edits = root.querySelectorAll(['.home-drawer-link', '.home-drawer-cal-done',
+      '.home-drawer-cal-more', '.home-drawer-slip button', '.home-drawer-slip input',
+      '.home-drawer-slip select', '.home-drawer-slip textarea'].join(', '));
+    for (const node of edits) {
+      if (node.dataset.drawerRead) continue;
+      node.disabled = true;
+      node.setAttribute('aria-disabled', 'true');
+    }
   }
 
   /* ── Il «+» flottante e il suo ventaglio ── */
@@ -200,6 +242,7 @@ export class BoardDrawer {
   /** Apre il ventaglio: il cassetto si vela, le scelte salgono dal tondo. */
   openDial({ focus = true } = {}) {
     if (!this.dial || !this.data) return;
+    if (this._refuseLocked()) return;
     this.dialMenu.innerHTML = '';
     /* Dal basso: la prima scelta e' la piu' vicina al pollice. */
     for (const [kind, icon, run] of this._addChoices().reverse()) {
@@ -372,6 +415,15 @@ export class BoardDrawer {
     );
     root.appendChild(own);
     root.appendChild(el('p', 'home-drawer-foot', i18n.t('board.drawer.foot')));
+    if (this.locked) {
+      /* La stessa riga della bacheca e del lettore, in cima al cassetto. */
+      const lock = el('div', 'home-plan-lock');
+      const i = el('i', 'ti ti-lock');
+      i.setAttribute('aria-hidden', 'true');
+      lock.append(i, el('span', '', i18n.t('home.plan.lock')));
+      root.insertBefore(lock, root.firstChild);
+      this._disableEdits(root);
+    }
     this.el.innerHTML = '';
     this.el.appendChild(root);
     if (this.editing) {
@@ -588,6 +640,7 @@ export class BoardDrawer {
   }
 
   async _sendFix(section, text) {
+    if (this._refuseLocked()) return;
     if (!text.trim() || text.trim() === section.text.trim()) {
       this.editing = null;
       this.render();
@@ -597,7 +650,7 @@ export class BoardDrawer {
       await rpc.board('fix', this.notebook, { card: this.card, section: section.title, text });
     } catch (err) {
       console.warn('home.drawer: fix failed', err);
-      showToast(i18n.t('board.drawer.fixFailed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.drawer.fixFailed'), 'error');
       return;
     }
     this.editing = null;
@@ -647,10 +700,14 @@ export class BoardDrawer {
       if (v.state === 'trashed') {
         /* L'app e' nel cestino, non sparita: si rimette da qui, e la sezione
            torna viva con i suoi dati. */
-        tools.appendChild(button('home-drawer-link', i18n.t('board.app.restore'),
-          () => this._restoreApp(v)));
+        /* Il cestino e' delle app, non del quaderno: resta vivo anche col piano. */
+        const restore = button('home-drawer-link', i18n.t('board.app.restore'), () => this._restoreApp(v));
+        restore.dataset.drawerRead = '1';
+        tools.appendChild(restore);
       } else if (v.state !== 'missing' && v.hasScreen !== false) {
-        tools.appendChild(button('home-drawer-link', i18n.t('board.app.open'), () => this.onOpenApp?.(section.app)));
+        const openApp = button('home-drawer-link', i18n.t('board.app.open'), () => this.onOpenApp?.(section.app));
+        openApp.dataset.drawerRead = '1';
+        tools.appendChild(openApp);
       }
       /* L'app della scheda-app non si toglie dal suo cassetto: si toglie la scheda. */
       if (!section.own) tools.appendChild(remove);
@@ -861,16 +918,18 @@ export class BoardDrawer {
   /** Un controllo della striscia nel cassetto: l'azione dell'app, poi si rilegge. */
   async _act(section, { action, params } = {}) {
     if (!action) return;
+    if (this._refuseLocked()) return;
     try {
       await api.runAppAction(section.app, action, params || {});
     } catch (err) {
       console.warn('home.drawer: strip action failed', err);
-      showToast(i18n.t('board.slip.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.slip.failed'), 'error');
     }
     await this.reload();
   }
 
   async _verb(section, verb) {
+    if (this._refuseLocked()) return;
     try {
       await api.runAppAction(section.app, verb, section.params || {});
     } catch (err) {
@@ -942,11 +1001,12 @@ export class BoardDrawer {
   }
 
   async _write(method, params) {
+    if (this._refuseLocked()) return false;
     try {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.drawer: ${method} failed`, err);
-      showToast(i18n.t('board.section.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
       return false;
     }
     await this.reload();
@@ -1012,6 +1072,7 @@ export class BoardDrawer {
   /** Un'app accanto a questa scheda: una polaroid sua, legata da un filo —
    *  non una sezione del cassetto. Si torna alla bacheca a vederla nascere. */
   async _attachApp(app) {
+    if (this._refuseLocked()) return;
     const params = {};
     for (const name of Object.keys(app.section?.params || {})) {
       const value = await promptDialog(i18n.t('board.section.appParam', { name, app: app.name }));
@@ -1026,7 +1087,7 @@ export class BoardDrawer {
       });
     } catch (err) {
       console.warn('home.drawer: app card failed', err);
-      showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.section.failed'), 'error');
+      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.section.failed'), 'error');
       return;
     }
     showToast(i18n.t('board.card.appPlaced', { name: app.name, card: this.data.title }), 'success');

@@ -25,6 +25,14 @@ export const AppState = {
   // che lo mette nell'envelope di ogni invio.
   readonlyTurn: false,
 
+  // Il tasto Piano nel composer di un quaderno (`home-plan.js`): se il prossimo
+  // messaggio chiede un piano, e se rivede quello con questo id. A differenza
+  // di `readonlyTurn`, `ws-manager` non li legge: valgono solo per il messaggio
+  // del composer, che li passa esplicito (`HomePlan.composerExtra`), e il tasto
+  // si spegne appena quel messaggio parte.
+  planTurn: false,
+  planRevise: null,
+
   // Quale tendina della riga sopra il composer è aperta: `'scope'`,
   // `'commands'`, o `null`. Ce n'è **una sola**, e questo campo è il modo in cui
   // se ne accorgono a vicenda.

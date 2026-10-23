@@ -70,7 +70,9 @@ export async function deleteProjectFlow(name, words = NOTEBOOK_DELETE_WORDS) {
     // subagent, una passata): una condizione attesa, da dire com'e', non un
     // fallimento generico. Chi non ha la frase ricade su quella di sempre.
     const key = err?.code === 'conflict' && words.busy ? words.busy : words.failed;
-    showToast(i18n.t(key, { name }), 'error');
+    /* Un piano aperto tiene il quaderno (`plan_running`): si dice quello. */
+    showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lockDelete', { name })
+      : i18n.t(key, { name }), 'error');
     return false;
   }
   /* La bacheca sta dentro la cartella del quaderno, e se ne va con lui: non

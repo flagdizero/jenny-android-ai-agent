@@ -84,6 +84,9 @@ SHELL_WITHOUT_LISTENER = {
         # Le bozze da approvare hanno la loro scheda nella chat della casa
         # (``home-staged.js``); l'officina, per ora, non la mostra.
         "staged_changed": "la scheda delle bozze e' solo della casa",
+        # Il piano a lista ha la sua scheda nella chat del quaderno della casa
+        # (``home-plan.js``); l'officina non lo mostra.
+        "plan_changed": "la scheda del piano e' solo della casa",
     },
 }
 
