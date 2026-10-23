@@ -21,7 +21,11 @@ from jenny.snapshot.locations import plans_dir_for
 
 def _proposal(*titles: str):
     titles = titles or ("Uno", "Due", "Tre")
-    return validate_proposal("Rifare la wiki", [{"title": t, "detail": t} for t in titles])
+    return validate_proposal(
+        "Rifare la wiki",
+        [{"title": t, "detail": t, "done_when": t} for t in titles],
+        [{"item": "Acero", "have": "", "missing": "", "strategy": "notebook"}],
+    )
 
 
 def _store(tmp_path: Path) -> PlanStore:

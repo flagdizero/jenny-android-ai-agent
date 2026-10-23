@@ -25,7 +25,7 @@ from jenny.security.workspace_access import (
     set_held_notebook_probe,
     validate_workspace_scope_payload,
 )
-from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, write_file
+from tests.support.plan import STEPS, FakeBus, FakeHost, propose, write_file
 
 
 @pytest.fixture()
@@ -40,7 +40,7 @@ def workspace(tmp_path: Path) -> Path:
 async def held(workspace: Path):
     host = FakeHost(workspace)
     driver = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), host)
-    await driver.propose(KEY, "Rifare la wiki", STEPS)
+    await propose(driver, "Rifare la wiki", STEPS)
     plan = driver.store.open_plan_for("piante")
     assert plan is not None
     await driver.approve(plan.id, plan.version, [])

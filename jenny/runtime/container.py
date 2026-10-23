@@ -419,7 +419,7 @@ class GatewayContainer:
         """
         import asyncio
 
-        from jenny.agent.staged_writes import set_change_listener
+        from jenny.agent.staged_writes import StagedChange, add_change_listener
         from jenny.bus.events import OutboundMessage
 
         bus = self.bus
@@ -428,10 +428,10 @@ class GatewayContainer:
         except RuntimeError:  # ``build()`` chiamata fuori dal loop (i test)
             gateway_loop = None
 
-        def announce(count: int) -> None:
+        def announce(change: StagedChange) -> None:
             message = OutboundMessage(
                 channel="websocket", chat_id="webui", content="",
-                metadata={"_staged_changed": True, "count": count},
+                metadata={"_staged_changed": True, "count": change.count},
             )
             try:
                 asyncio.get_running_loop().create_task(bus.publish_outbound(message))
@@ -441,7 +441,7 @@ class GatewayContainer:
                         lambda: target.create_task(bus.publish_outbound(message))
                     )
 
-        set_change_listener(announce)
+        add_change_listener(announce)
 
     def _prepare_apps(self) -> None:
         """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
@@ -815,6 +815,9 @@ class GatewayContainer:
             driver.refresh_index()
         agent.attach_plan_driver(driver)
         set_plan_probe(driver)
+        # Le bozze di un passo fermo: decise sulla scheda, il passo si chiude da
+        # solo (``PlanDriver.watch_drafts``).
+        driver.watch_drafts()
         # Il cancello di scrittura dei tool: un quaderno tenuto da un piano si
         # scrive solo dalla sua conversazione (``workspace_access``).
         set_held_notebook_probe(driver.held_notebook_roots)

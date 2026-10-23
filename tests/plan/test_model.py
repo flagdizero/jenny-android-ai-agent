@@ -23,11 +23,14 @@ from jenny.plan.model import (
 
 
 def _steps(*titles: str) -> list[dict[str, str]]:
-    return [{"title": t, "detail": f"do {t}"} for t in titles]
+    return [{"title": t, "detail": f"do {t}", "done_when": f"{t} done"} for t in titles]
+
+
+COV = [{"item": "Acero", "have": "una pagina", "missing": "le cure", "strategy": "notebook"}]
 
 
 def _plan(status: str = "proposed") -> Plan:
-    proposal = validate_proposal("Rifare la wiki", _steps("Uno", "Due", "Tre"))
+    proposal = validate_proposal("Rifare la wiki", _steps("Uno", "Due", "Tre"), COV)
     return Plan(
         id="p_0123456789ab",
         notebook="piante",
@@ -116,9 +119,11 @@ def test_valid_proposal_is_cleaned_and_numbered() -> None:
     proposal = validate_proposal(
         "  Rifare la wiki  ",
         [
-            {"title": " Cerco Acero ", "detail": " cerca ", "kind": "research"},
-            {"title": "Scrivo", "detail": "scrivi", "same_as": "s3"},
+            {"title": " Cerco Acero ", "detail": " cerca ", "kind": "research",
+             "done_when": " una fonte "},
+            {"title": "Scrivo", "detail": "scrivi", "same_as": "s3", "done_when": "scritto"},
         ],
+        COV,
     )
     assert proposal.title == "Rifare la wiki"
     assert [s.id for s in proposal.steps] == ["s1", "s2"]
@@ -127,6 +132,7 @@ def test_valid_proposal_is_cleaned_and_numbered() -> None:
     assert proposal.steps[0].kind == "research"
     assert proposal.steps[1].kind == "other"
     assert proposal.steps[1].same_as == "s3"
+    assert proposal.steps[0].done_when == "una fonte"
     assert all(s.status == "pending" for s in proposal.steps)
 
 
@@ -155,13 +161,15 @@ def test_valid_proposal_is_cleaned_and_numbered() -> None:
 )
 def test_invalid_proposals_explain_the_fix(title: str, steps: object, fragment: str) -> None:
     with pytest.raises(PlanValidationError) as info:
-        validate_proposal(title, steps)
+        validate_proposal(title, steps, COV)
     assert fragment in str(info.value)
 
 
 def test_all_problems_are_reported_at_once() -> None:
     with pytest.raises(PlanValidationError) as info:
-        validate_proposal("", [{"title": "", "detail": ""}, {"title": "ok", "detail": "ok"}])
+        validate_proposal(
+            "", [{"title": "", "detail": ""}, {"title": "ok", "detail": "ok"}], COV
+        )
     message = str(info.value)
     assert "plan needs a non-empty title" in message
     assert "Step 1 needs a non-empty title" in message
@@ -283,3 +291,110 @@ def test_unreadable_plans_raise_format_error(mutate) -> None:
     mutate(data)
     with pytest.raises(PlanFormatError):
         Plan.from_dict(data)
+
+
+# ── Copertura, assunzioni, criteri di «fatto» ────────────────────────────────
+
+
+def _research_plan(detail: str) -> list[dict[str, str]]:
+    return [
+        {"title": "Cerco", "detail": detail, "kind": "research", "done_when": "fonti salvate"},
+        {"title": "Scrivo", "detail": "scrivo", "kind": "write", "done_when": "pagine scritte"},
+    ]
+
+
+def _cov(**entry: str) -> list[dict[str, str]]:
+    base = {"item": "Glicine: potatura", "have": "niente", "missing": "tutto"}
+    return [{**base, **entry}]
+
+
+@pytest.mark.parametrize(
+    ("coverage", "fragment"),
+    [
+        (None, "`coverage` is required"),
+        ([], "`coverage` is required"),
+        ("tutto", "`coverage` is required"),
+        (_cov(strategy="ask"), "is still `ask`"),
+        (_cov(strategy="maybe"), "`strategy` must be one of"),
+        (_cov(strategy="leave"), "say `why`"),
+        ([{"item": "", "strategy": "notebook"}], "non-empty `item`"),
+        (["x"], "must be an object"),
+    ],
+)
+def test_coverage_is_required_and_checked(coverage: object, fragment: str) -> None:
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", _research_plan("cerco il ficus"), coverage)
+    assert fragment in str(info.value)
+
+
+def test_a_web_item_needs_a_research_step_not_its_exact_words() -> None:
+    """Basta un passo ``research``: il modello parafrasa le voci, e un confronto di
+    stringhe lo farebbe riprovare all'infinito."""
+    no_research = [
+        {"title": "Scrivo", "detail": "scrivo", "kind": "write", "done_when": "scritte"},
+        {"title": "Controllo", "detail": "controllo", "kind": "check", "done_when": "ok"},
+    ]
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", no_research, _cov(strategy="web"))
+    assert "no `research` step" in str(info.value)
+    proposal = validate_proposal(
+        "T", _research_plan("Cerco come si pota il Wisteria."), _cov(strategy="web")
+    )
+    assert proposal.coverage[0]["strategy"] == "web"
+
+
+def test_a_web_item_named_by_a_research_step_is_accepted() -> None:
+    proposal = validate_proposal(
+        "T",
+        _research_plan("Cerco sul web: glicine: potatura, e salvo in raw/research/."),
+        _cov(strategy="web", why=" il quaderno non ne parla "),
+        [" Tengo la camelia. ", "Cancello le pagine vecchie."],
+    )
+    assert proposal.coverage == [{
+        "item": "Glicine: potatura", "have": "niente", "missing": "tutto",
+        "strategy": "web", "why": "il quaderno non ne parla",
+    }]
+    assert proposal.assumptions == ["Tengo la camelia.", "Cancello le pagine vecchie."]
+    assert [s.done_when for s in proposal.steps] == ["fonti salvate", "pagine scritte"]
+
+
+def test_every_step_needs_done_when() -> None:
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", [{"title": "a", "detail": "x"}, *_steps("b")], COV)
+    assert "Step 1 needs `done_when`" in str(info.value)
+    assert "Step 2" not in str(info.value)
+
+
+@pytest.mark.parametrize(
+    ("assumptions", "fragment"),
+    [("una frase", "must be a list"), ([""], "non-empty sentence"), (["a\nb"], "one line")],
+)
+def test_assumptions_are_short_sentences(assumptions: object, fragment: str) -> None:
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", _steps("a", "b"), COV, assumptions)
+    assert fragment in str(info.value)
+
+
+def test_a_new_done_when_tags_the_step_changed() -> None:
+    old = validate_proposal("T", _steps("Uno", "Due"), COV).steps
+    new = validate_proposal(
+        "T", [_steps("Uno")[0], {**_steps("Due")[0], "done_when": "più severo"}], COV
+    ).steps
+    tag_new_version(old, new)
+    assert [s.tag for s in new] == [None, "changed"]
+
+
+def test_drafting_expires_after_twelve_hours_of_silence() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from jenny.plan.model import drafting_expired, drafting_view
+
+    now = datetime(2026, 10, 23, 20, 0, tzinfo=timezone.utc)
+    fresh = (now - timedelta(hours=11)).isoformat()
+    stale = (now - timedelta(hours=13)).isoformat()
+    assert not drafting_expired({"since": stale, "touched": fresh}, now=now)
+    assert drafting_expired({"since": stale, "touched": stale}, now=now)
+    assert drafting_expired({}, now=now)
+    assert drafting_view({"since": fresh, "touched": fresh, "reads": 2, "revise": ""}) == {
+        "since": fresh, "revise": None, "reads": 2,
+    }

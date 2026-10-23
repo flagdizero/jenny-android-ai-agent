@@ -11,9 +11,16 @@ Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``)
 
 - ``plan.get {id} | {notebook}`` → ``{ok, plan}``. ``plan`` è ``plan.json`` più
   ``done`` (passi alle spalle: fatti e saltati), ``total`` (senza i tagliati),
-  ``current_step_id``, ``can_rollback``, ``can_undo_rollback``. Con
+  ``current_step_id``, ``can_rollback``, ``can_undo_rollback``. ``plan.json``
+  porta ``coverage: [{item, have, missing, strategy, why}]``,
+  ``assumptions: [str]``, ``steps[].done_when`` (vuoti per un piano di prima) e
+  ``blocked: {step, question, reason, at, kind: "question"|"drafts", drafts:
+  [{id, target}]}``: con ``kind: "drafts"`` il passo aspetta che l'utente
+  installi o scarti quelle bozze (``staged.*``), e si chiude da solo. Con
   ``{notebook}``: il piano aperto del quaderno, o il chiuso più recente, o
-  ``plan: null``. Se un ritorno (o il suo annullamento) è partito e si è
+  ``plan: null``; e accanto ``drafting: {since, revise, reads} | null``, la
+  pianificazione in corso (``reads``: le letture del quaderno dal suo inizio).
+  Se un ritorno (o il suo annullamento) è partito e si è
   fermato a metà, ``plan.rollback_failed`` è ``{at, kind: "rollback"|"undo",
   error, applied?, total?}``: il quaderno è in parte tornato, e riprovare è
   sicuro. Un ritorno riuscito lo toglie.
@@ -37,11 +44,15 @@ Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``)
   del piano, che dopo il Ferma non cambia più): il client lo rimanda tale e
   quale a ``plan.rollback``.
 - ``plan.rollback {id, keep: [group], expect_end}``, ``plan.undo_rollback {id}``
-  → ``{ok, report}``. ``plan.rollback`` rifà la foto del quaderno: se non è
+  → ``{ok, report}`` (``plan.rollback`` anche ``discarded_drafts: [{id,
+  target}]``: le bozze del piano ancora in attesa, buttate col ritorno). ``plan.rollback`` rifà la foto del quaderno: se non è
   ``expect_end``, il quaderno è cambiato dopo il conto e la risposta è
   ``conflict`` (si rilegge l'anteprima).
-- ``plan.full {id}`` → ``{ok, title, steps: [{id, title, detail, kind, status,
-  tag}]}``: il «piano completo», in sola lettura.
+- ``plan.full {id}`` → ``{ok, title, coverage, assumptions, steps: [{id, title,
+  detail, kind, status, tag, done_when}]}``: il «piano completo», in sola lettura.
+- ``plan.cancel_drafting {notebook}`` → ``{ok, cancelled}``: chiude la
+  pianificazione in corso (il tasto spento, «Annulla il piano»); ``cancelled``
+  è ``false`` se non ce n'era una. Emette ``plan_changed``.
 
 Errori (``CommandError``): ``not_found``, ``conflict`` (una versione più nuova;
 un quaderno cambiato dopo il conto del ritorno; Jenny al lavoro durante un
@@ -59,7 +70,13 @@ from collections.abc import Mapping
 from typing import Any
 
 from jenny.plan.driver import PlanCommandError, PlanDriver, plan_view
-from jenny.plan.model import CLOSED_STATUSES, PlanError, step_counts
+from jenny.plan.model import (
+    CLOSED_STATUSES,
+    PlanError,
+    drafting_expired,
+    drafting_view,
+    step_counts,
+)
 from jenny.plan.store import PlanNotFoundError, PlanStore, is_plan_id
 from jenny.webui.commands import CommandContext, CommandError
 
@@ -122,7 +139,7 @@ async def plan_get(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, 
     if params.get("id") is not None:
         plan_id = _plan_id(params)
         try:
-            plan = await asyncio.to_thread(store.load, plan_id)
+            plan = await _recheck(ctx, await asyncio.to_thread(store.load, plan_id))
         except PlanNotFoundError as exc:
             raise CommandError("not_found", "no such plan") from exc
         return {"ok": True, "plan": plan_view(plan)}
@@ -145,7 +162,42 @@ async def plan_get(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, 
         return closed[0] if closed else None
 
     plan = await asyncio.to_thread(_pick)
-    return {"ok": True, "plan": plan_view(plan) if plan is not None else None}
+    if plan is not None:
+        plan = await _recheck(ctx, plan)
+    return {
+        "ok": True,
+        "plan": plan_view(plan) if plan is not None else None,
+        "drafting": await asyncio.to_thread(_drafting, store, notebook.strip()),
+    }
+
+
+async def _recheck(ctx: CommandContext, plan: Any) -> Any:
+    """Un piano fermo sulle bozze del passo: le riguarda prima di mostrarlo.
+
+    La rete di sicurezza contro un avviso delle bozze perso: la scheda rilegge
+    ``plan.get`` a ogni ``plan_changed`` e a ogni apertura, e un passo che
+    aspetta bozze già decise ripartirebbe solo qui.
+    """
+    driver = _driver_or_none(ctx)
+    if driver is None or plan.status != "blocked" or (plan.blocked or {}).get("kind") != "drafts":
+        return plan
+    try:
+        await driver.recheck_drafts(plan.id)
+        return await asyncio.to_thread(driver.store.load, plan.id)
+    except (PlanError, OSError):
+        return plan
+
+
+def _drafting(store: PlanStore, notebook: str) -> dict[str, Any] | None:
+    """La pianificazione in corso dal file, come il piano: anche senza agente.
+
+    Una scaduta è finita anche se il file non lo sa ancora (la toglie il
+    driver al prossimo turno): la scheda la vede spenta subito.
+    """
+    entry = store.drafting_get(notebook)
+    if entry is None or drafting_expired(entry):
+        return None
+    return drafting_view(entry)
 
 
 async def plan_list(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -163,6 +215,8 @@ async def plan_full(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
     return {
         "ok": True,
         "title": plan.title,
+        "coverage": [dict(c) for c in plan.coverage],
+        "assumptions": list(plan.assumptions),
         "steps": [
             {
                 "id": s.id,
@@ -171,6 +225,7 @@ async def plan_full(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
                 "kind": s.kind,
                 "status": s.status,
                 "tag": s.tag,
+                "done_when": s.done_when,
             }
             for s in plan.steps
         ],
@@ -248,6 +303,14 @@ async def plan_answer(ctx: CommandContext, params: Mapping[str, Any]) -> dict[st
     return {"ok": True}
 
 
+async def plan_cancel_drafting(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    notebook = params.get("notebook")
+    if not isinstance(notebook, str) or not notebook.strip():
+        raise CommandError("bad_request", "notebook required")
+    cancelled = await _call(_driver(ctx).cancel_drafting(notebook.strip()))
+    return {"ok": True, "cancelled": bool(cancelled)}
+
+
 async def plan_rollback(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     keep = params.get("keep") or []
     if not isinstance(keep, list):
@@ -277,6 +340,7 @@ PLAN_COMMANDS = {
     "plan.resume": plan_resume,
     "plan.stop": plan_stop,
     "plan.answer": plan_answer,
+    "plan.cancel_drafting": plan_cancel_drafting,
     "plan.rollback": plan_rollback,
     "plan.undo_rollback": plan_undo_rollback,
 }

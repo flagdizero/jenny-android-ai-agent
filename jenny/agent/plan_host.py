@@ -98,6 +98,39 @@ class LoopPlanHost:
             return None
         return root if root is not None and root.is_dir() else None
 
+    def notebook_drafts(self, notebook: str) -> list[dict[str, Any]]:
+        """Le bozze in attesa che cambiano un file del quaderno *notebook*.
+
+        Le bozze stanno sotto la radice dell'installazione (la politica dei
+        subagent si misura da lì, anche per un aiutante di quaderno), con il
+        percorso relativo a quella radice: un file è del quaderno se il suo
+        percorso risolto sta nella cartella del quaderno.
+        """
+        from jenny.agent.staged_writes import list_staged
+
+        root = self.notebook_root(notebook)
+        if root is None:
+            return []
+        workspace = Path(self._loop.workspace)
+        base = root.resolve(strict=False)
+        drafts: list[dict[str, Any]] = []
+        for meta in list_staged(workspace):
+            target = str(meta.get("target") or "")
+            try:
+                inside = (workspace / target).resolve(strict=False).is_relative_to(base)
+            except (OSError, ValueError):
+                inside = False
+            if inside:
+                drafts.append(
+                    {"id": meta["id"], "target": target, "created_ms": meta.get("created_ms")}
+                )
+        return drafts
+
+    def discard_draft(self, draft_id: str) -> bool:
+        from jenny.agent.staged_writes import discard
+
+        return discard(Path(self._loop.workspace), draft_id)
+
     def append_note(self, session_key: str, text: str) -> None:
         sessions = self._loop.sessions
         session = sessions.get_or_create(session_key)

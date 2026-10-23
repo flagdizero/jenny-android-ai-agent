@@ -581,3 +581,38 @@ def test_take_waits_for_a_rollback_on_another_thread(
     worker.join(5)
     taker.join(5)
     assert order == ["rollback", "take"]
+
+
+# ── .jenny/ fuori dalle foto ─────────────────────────────────────────────────
+
+
+def test_the_notebooks_jenny_folder_is_not_in_a_photo(nb: Path, photos: PlanPhotos) -> None:
+    """Le uscite salvate dei tool sono cache, non lavoro del piano."""
+    a = photos.take("A")
+    _write(nb, ".jenny/tool-results/call_1.txt", "uscita di un tool", mtime_ns=None)
+    _write(nb, "wiki/quercia.md", "quercia", mtime_ns=None)
+    b = photos.take("B")
+    assert not any(p.startswith(".jenny/") for p in photos.files(b))
+    assert photos.diff(a, b) == {"added": ["wiki/quercia.md"], "changed": [], "removed": []}
+
+
+def test_an_old_photo_with_jenny_files_treats_them_as_excluded(
+    tmp_path: Path, nb: Path, photos: PlanPhotos, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Una foto fatta prima dell'esclusione ha ancora ``.jenny/``: il confronto e il
+    ritorno la leggono come se non li avesse, e i file lì non si toccano."""
+    _write(nb, ".jenny/tool-results/old.txt", "vecchia uscita")
+    with monkeypatch.context() as patch:
+        patch.setattr(photos_mod, "NOTEBOOK_EXCLUDE_GLOBS", ("**/__pycache__/**",))
+        old = PlanPhotos(photos.plan_dir, nb)
+        a = old.take("A")
+        assert ".jenny/tool-results/old.txt" in {e.path for e in old.engine.load_manifest(a).files}
+    (nb / ".jenny" / "tool-results" / "old.txt").unlink()
+    _write(nb, ".jenny/tool-results/new.txt", "nuova uscita", mtime_ns=None)
+    _write(nb, "wiki/acero.md", "acero v2", mtime_ns=None)
+    b = photos.take("B")
+    assert photos.diff(a, b) == {"added": [], "changed": ["wiki/acero.md"], "removed": []}
+    report = photos.rollback(a, b, journal_path=_journal(tmp_path))
+    assert report.restored == ["wiki/acero.md"] and report.removed == []
+    assert not (nb / ".jenny" / "tool-results" / "old.txt").exists()
+    assert _read(nb, ".jenny/tool-results/new.txt") == "nuova uscita"

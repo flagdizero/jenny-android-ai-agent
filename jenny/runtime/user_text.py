@@ -363,6 +363,16 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "plan.restarted": "I restarted during step {step}: tap Resume to do it again.",
         "plan.stopped": "I stopped the plan. The notebook stays as it is now.",
+        "plan.stopped_planning": "I stopped preparing the plan.",
+        # Le note di un passo chiuso dalle bozze decise dall'utente (``PlanDriver``).
+        "plan.drafts_installed": "change installed",
+        "plan.drafts_discarded": "change discarded",
+        "plan.drafts_resolved": "changes decided",
+        # La riga di sistema in coda al diario del quaderno dopo un ritorno.
+        "plan.journal_rolled_back": "[system] notebook restored to before the plan «{title}»",
+        "plan.journal_rollback_undone": (
+            "[system] notebook back as the plan «{title}» left it (rollback undone)"
+        ),
     },
     "it": {
         "stop.done": "Mi sono fermata.",
@@ -714,6 +724,15 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "plan.restarted": "Mi sono riavviata durante il passo {step}: tocca Riprendi per rifarlo.",
         "plan.stopped": "Ho fermato il piano. Il quaderno resta com'è adesso.",
+        "plan.stopped_planning": "Ho smesso di preparare il piano.",
+        "plan.drafts_installed": "modifica installata",
+        "plan.drafts_discarded": "modifica scartata",
+        "plan.drafts_resolved": "modifiche decise",
+        "plan.journal_rolled_back": "[system] quaderno riportato a prima del piano «{title}»",
+        "plan.journal_rollback_undone": (
+            "[system] quaderno di nuovo come l'ha lasciato il piano «{title}» "
+            "(ritorno annullato)"
+        ),
     },
 }
 

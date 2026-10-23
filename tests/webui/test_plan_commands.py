@@ -18,7 +18,7 @@ from jenny.plan.driver import PlanDriver
 from jenny.plan.store import PlanStore
 from jenny.runtime.context import get_runtime_context
 from jenny.webui.commands import CommandContext, CommandError, dispatch_command
-from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, write_file
+from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_file
 
 
 @pytest.fixture()
@@ -62,7 +62,7 @@ async def _rpc(ctx: CommandContext, method: str, **params: Any) -> dict[str, Any
 
 
 async def _proposed(driver: PlanDriver) -> Any:
-    await driver.propose(KEY, "Rifare la wiki", STEPS)
+    await propose(driver, "Rifare la wiki", STEPS)
     plan = driver.store.open_plan_for("piante")
     assert plan is not None
     return plan
@@ -70,7 +70,9 @@ async def _proposed(driver: PlanDriver) -> Any:
 
 async def test_get_and_list_read_the_store(workspace: Path, driver: PlanDriver) -> None:
     ctx = _ctx(workspace, driver)
-    assert await _rpc(ctx, "plan.get", notebook="piante") == {"ok": True, "plan": None}
+    assert await _rpc(ctx, "plan.get", notebook="piante") == {
+        "ok": True, "plan": None, "drafting": None,
+    }
     plan = await _proposed(driver)
     got = await _rpc(ctx, "plan.get", id=plan.id)
     assert got["plan"]["status"] == "proposed"
@@ -90,6 +92,7 @@ async def test_get_and_list_read_the_store(workspace: Path, driver: PlanDriver) 
     assert full["steps"][0] == {
         "id": "s1", "title": STEPS[0]["title"], "detail": STEPS[0]["detail"],
         "kind": "research", "status": "pending", "tag": None,
+        "done_when": STEPS[0]["done_when"],
     }
 
 

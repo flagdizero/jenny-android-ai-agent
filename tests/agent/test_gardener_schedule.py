@@ -678,8 +678,10 @@ def test_a_notebook_held_by_a_plan_is_not_gardened(tmp_path, status):
     _project(workspace, "viaggio")
     store = PlanStore.for_workspace(workspace)
     plan = store.create(
-        "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a"},
-                                               {"title": "b", "detail": "b"}])
+        "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a", "done_when": "a"},
+                                               {"title": "b", "detail": "b", "done_when": "b"}],
+                                     [{"item": "a", "have": "", "missing": "",
+                                       "strategy": "notebook"}])
     )
     path = {"running": ["running"], "pausing": ["running", "pausing"],
             "paused": ["running", "paused"], "blocked": ["running", "blocked"]}[status]
@@ -701,7 +703,9 @@ def test_a_proposal_does_not_hold_the_notebook(tmp_path):
     workspace = tmp_path / "workspace"
     _project(workspace, "viaggio")
     PlanStore.for_workspace(workspace).create(
-        "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a"},
-                                               {"title": "b", "detail": "b"}])
+        "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a", "done_when": "a"},
+                                               {"title": "b", "detail": "b", "done_when": "b"}],
+                                     [{"item": "a", "have": "", "missing": "",
+                                       "strategy": "notebook"}])
     )
     assert _pick(workspace) is not None

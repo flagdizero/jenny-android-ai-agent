@@ -29,7 +29,14 @@ from jenny.session.history_meta import (
     PLAN_REMINDER_EVENT,
     PLAN_STEP_EVENT,
 )
-from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, write_file
+from tests.support.plan import (
+    KEY,
+    STEPS,
+    FakeBus,
+    FakeHost,
+    propose,
+    write_file,
+)
 
 
 @pytest.fixture()
@@ -61,7 +68,7 @@ def driver(workspace: Path, host: FakeHost, bus: FakeBus) -> PlanDriver:
 
 
 async def _propose(driver: PlanDriver, steps: list[dict[str, Any]] | None = None) -> Any:
-    text = await driver.propose(KEY, "Rifare la wiki", steps or STEPS)
+    text = await propose(driver, "Rifare la wiki", steps or STEPS)
     assert "card" in text, text
     plan = driver.store.open_plan_for("piante")
     assert plan is not None
@@ -84,7 +91,7 @@ def _step_messages(bus: FakeBus, event: str = PLAN_STEP_EVENT) -> list[Any]:
 async def test_propose_writes_a_proposal_and_tells_the_model_to_wait(
     driver: PlanDriver, bus: FakeBus
 ) -> None:
-    text = await driver.propose(KEY, "Rifare la wiki", STEPS)
+    text = await propose(driver, "Rifare la wiki", STEPS)
     assert "do not start" in text
     plan = driver.store.open_plan_for("piante")
     assert plan is not None and plan.status == "proposed"
@@ -94,7 +101,9 @@ async def test_propose_writes_a_proposal_and_tells_the_model_to_wait(
 
 async def test_a_second_proposal_supersedes_the_first(driver: PlanDriver) -> None:
     first = await _propose(driver)
-    second = await _propose(driver, [*STEPS[:2], {"title": "Nuovo", "detail": "x"}])
+    second = await _propose(
+        driver, [*STEPS[:2], {"title": "Nuovo", "detail": "x", "done_when": "x"}]
+    )
     assert second.version == 2 and second.replaces == first.id
     assert driver.store.load(first.id).status == "superseded"
     assert [s.tag for s in second.steps] == [None, None, "new"]
@@ -105,12 +114,12 @@ async def test_propose_refuses_outside_a_notebook_and_next_to_a_goal(
 ) -> None:
     assert (await driver.propose("unified:default", "x", STEPS)).startswith("Error")
     host.goals.add(KEY)
-    assert "sustained goal" in await driver.propose(KEY, "x", STEPS)
+    assert "sustained goal" in await propose(driver, "x", STEPS)
     assert driver.store.open_plan_for("piante") is None
 
 
 async def test_a_malformed_proposal_returns_the_reason_to_the_model(driver: PlanDriver) -> None:
-    text = await driver.propose(KEY, "Rifare", [{"title": "solo uno", "detail": "x"}])
+    text = await propose(driver, "Rifare", [{"title": "solo uno", "detail": "x"}])
     assert text.startswith("Error:") and "between 2 and 12" in text
 
 
@@ -797,3 +806,80 @@ async def test_held_roots_are_computed_once_per_index_change(
     assert host.root_lookups == lookups + 1
     await driver.stop(plan.id, "keep")
     assert driver.held_notebook_roots() == {}
+
+
+async def test_rollback_and_undo_each_append_a_line_to_todays_journal(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """Il diario non torna indietro (append-only): dopo un ritorno, e dopo il suo
+    annullamento, il codice ci aggiunge una riga in coda che dice cos'è successo."""
+    from datetime import datetime
+
+    from jenny.utils.wiki_paths import journal_page_name
+
+    plan = await _finished(driver, workspace)
+    nb = workspace / "wikis" / "piante"
+    page = nb / "raw" / "journal" / journal_page_name(datetime.now().astimezone().date())
+    before = page.read_text(encoding="utf-8") if page.exists() else ""
+    preview = await driver.rollback_preview(plan.id)
+    await driver.rollback(plan.id, [], preview["expect_end"])
+    after_rollback = page.read_text(encoding="utf-8")
+    assert after_rollback.startswith(before)
+    [line] = after_rollback[len(before):].strip().splitlines()[-1:]
+    assert "[system]" in line and "Rifare la wiki" in line
+    await driver.undo_rollback(plan.id)
+    after_undo = page.read_text(encoding="utf-8")
+    assert after_undo.startswith(after_rollback)
+    last = after_undo.strip().splitlines()[-1]
+    assert "[system]" in last and "Rifare la wiki" in last and last != line
+    # Il diario resta fuori dal ritorno: l'annullamento non ha tolto la riga di prima.
+    assert line in after_undo
+
+
+async def test_the_step_turn_carries_done_when_and_the_stop_on_a_false_premise_rule(
+    driver: PlanDriver, bus: FakeBus
+) -> None:
+    await _approve(driver)
+    [msg] = _step_messages(bus)
+    assert f"Done when: {STEPS[0]['done_when']}" in msg.content
+    assert "premise of the plan proves false" in msg.content
+    assert "plan_blocked" in msg.content
+
+
+async def test_closing_replies_ask_for_a_short_end_of_turn(driver: PlanDriver) -> None:
+    """Fra la chiamata e la fine del turno la scheda è «in corso» senza un passo:
+    quel tempo è il modello che scrive, e il riepilogo lo fa già la scheda."""
+    await _approve(driver)
+    assert "at most one short sentence" in await driver.step_done(KEY, "uno")
+    await driver.on_turn_end(KEY, {})
+    await driver.step_done(KEY, "due")
+    await driver.on_turn_end(KEY, {})
+    last = await driver.step_done(KEY, "tre")
+    assert "one or two short sentences" in last and "summary" not in last
+
+
+async def test_the_journal_line_uses_the_configured_timezone(
+    driver: PlanDriver, workspace: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Il fuso di ``agents.defaults.timezone``, come ``journal_append``, non quello di
+    sistema: la riga finisce nella pagina del giorno giusto, con l'ora giusta."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from jenny.config.loader import save_config
+    from jenny.config.schema import Config
+    from jenny.runtime.context import get_runtime_context
+    from jenny.utils.wiki_paths import journal_page_name
+
+    config = Config()
+    config.agents.defaults.timezone = "Pacific/Kiritimati"
+    path = tmp_path / "config.json"
+    save_config(config, path)
+    monkeypatch.setattr(get_runtime_context(), "config_path", path)
+    plan = await _finished(driver, workspace)
+    preview = await driver.rollback_preview(plan.id)
+    now = datetime.now(ZoneInfo("Pacific/Kiritimati"))
+    await driver.rollback(plan.id, [], preview["expect_end"])
+    page = workspace / "wikis/piante/raw/journal" / journal_page_name(now.date())
+    last = page.read_text(encoding="utf-8").strip().splitlines()[-1]
+    assert last.startswith(f"- {now.strftime('%H:')}"), last

@@ -9,7 +9,11 @@ punti del turno, raccolti qui perché ``loop.py`` resti il cuore FSM/scheduling:
   quaderno (e una riga per piano nella chat personale), il blocco di
   pianificazione, le note di un ritorno indietro;
 - **prima di un turno dell'utente**: in pausa il turno è in sola lettura, da
-  bloccato il messaggio è la risposta;
+  bloccato il messaggio è la risposta, durante una pianificazione
+  (``drafting``) il turno è di pianificazione anche senza il tasto;
+- **cosa conta come «ha guardato»**: le letture del quaderno di un turno di
+  pianificazione (:class:`PlanReadHook`), senza le quali ``plan_propose``
+  rifiuta;
 - **a fine turno**: il driver decide se il passo è chiuso, da sollecitare o
   bloccato.
 
@@ -28,13 +32,16 @@ tutto questo tace: i tool del piano restano nascosti e nessun hook gira.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from jenny.agent.hook import AgentHook, ToolResultHookContext
 from jenny.cron.session_turns import is_cron_turn
 from jenny.plan.driver import (
+    PLAN_FOLLOWUP_META,
     PLAN_MODE_META,
     PLAN_NOTES_META,
     PLAN_PROPOSE_TOOL,
@@ -44,7 +51,13 @@ from jenny.plan.driver import (
     PlanDriver,
     notebook_of,
 )
-from jenny.session.history_meta import INJECTED_EVENT_META, PLAN_TURN_EVENTS
+from jenny.security.subagent_policy import UNTRUSTED_TOOLS
+from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
+from jenny.session.history_meta import (
+    INJECTED_EVENT_META,
+    PLAN_TURN_EVENTS,
+    SUBAGENT_RESULT_EVENT,
+)
 from jenny.session.keys import is_project_session_key, notebook_of_cron_session
 
 if TYPE_CHECKING:
@@ -69,13 +82,86 @@ def _notebook_of_turn(session_key: str) -> str | None:
     return notebook_of(session_key) or notebook_of_cron_session(session_key)
 
 
-def is_planning_turn(metadata: Mapping[str, Any] | None, session_key: str) -> bool:
-    """Il turno del tasto Piano, nella chat di un quaderno (fuori non vale)."""
+#: I tool del web, nascosti in un turno di pianificazione (servono solo
+#: all'agente in modalità ``core``: l'orchestratore non li ha comunque).
+#: **Niente web mentre si pianifica**: una pagina letta adesso contamina la
+#: sessione (il taint del turno, ``security.subagent_policy``), e ogni aiutante
+#: che i passi lanceranno dopo nascerebbe contaminato, con le scritture su
+#: ``AGENTS.md`` o sulle skill del quaderno messe in bozza — il passo che si
+#: ferma ad aspettare l'utente, nel mezzo di un lavoro che doveva andare da
+#: solo. La pianificazione stabilisce **cosa** va cercato (la copertura, le voci
+#: ``web``); la ricerca la fanno i passi ``research``.
+#: ``python_exec`` e le sessioni di esecuzione ci sono perché arrivano alla rete
+#: per un'altra strada (``http_get`` dentro il codice): stessa contaminazione.
+PLANNING_HIDDEN_TOOLS: frozenset[str] = frozenset(
+    {*UNTRUSTED_TOOLS, "download_file", "python_exec", "write_stdin", "list_exec_sessions"}
+)
+
+#: Le letture che contano come «ha guardato il quaderno» (``PlanDriver.propose``).
+#: ``board`` solo con ``show``: le altre azioni scrivono, e in sola lettura sono
+#: comunque rifiutate.
+PLANNING_READ_TOOLS: frozenset[str] = frozenset({"read_file", "list_dir", "grep", "find_files"})
+
+
+def is_planning_turn(
+    metadata: Mapping[str, Any] | None,
+    session_key: str,
+    driver: PlanDriver | None = None,
+) -> bool:
+    """Un turno di pianificazione, nella chat di un quaderno (fuori non vale).
+
+    Lo è il turno del tasto Piano (``plan_mode`` nei metadati) e, con il
+    *driver*, ogni turno di una sessione che ha una pianificazione in corso:
+    la risposta dell'utente a una domanda di Jenny non porta il tasto, ed è
+    pianificazione lo stesso. I turni di un passo e quelli di un cron no.
+    """
+    if not is_project_session_key(session_key):
+        return False
+    if isinstance(metadata, Mapping) and metadata.get(PLAN_MODE_META) is True:
+        return True
     return (
-        isinstance(metadata, Mapping)
-        and metadata.get(PLAN_MODE_META) is True
-        and is_project_session_key(session_key)
+        driver is not None
+        and not is_plan_turn(metadata)
+        and not is_cron_turn(metadata)
+        and driver.drafting_for(session_key) is not None
     )
+
+
+def _counts_as_read(context: ToolResultHookContext) -> bool:
+    if context.error is not None:
+        return False
+    if isinstance(context.result, str) and context.result.startswith("Error"):
+        return False
+    if context.name in PLANNING_READ_TOOLS:
+        return True
+    return context.name == "board" and context.arguments.get("action") == "show"
+
+
+_SPAWNED_ID = re.compile(r"\(id: ([\w.-]+)\)")
+
+
+class PlanReadHook(AgentHook):
+    """Conta le letture del quaderno di un turno di pianificazione (il pavimento di A2).
+
+    Un hook e non una lettura della storia a ``plan_propose``: le chiamate del
+    turno in corso non sono ancora nella sessione quando il modello propone,
+    e sono proprio quelle che contano. Annota anche gli aiutanti lanciati qui:
+    il loro risultato, quando torna, è una lettura (``note_helper_result``).
+    """
+
+    def __init__(self, driver: PlanDriver, session_key: str) -> None:
+        super().__init__()
+        self._driver = driver
+        self._session_key = session_key
+
+    async def after_execute_tool(self, context: ToolResultHookContext) -> None:
+        if _counts_as_read(context):
+            await self._driver.note_read(self._session_key)
+        elif context.name == "spawn" and context.error is None and isinstance(
+            context.result, str
+        ):
+            if (found := _SPAWNED_ID.search(context.result)) is not None:
+                await self._driver.note_helper(self._session_key, found.group(1))
 
 
 class LoopPlanMixin:
@@ -111,7 +197,7 @@ class LoopPlanMixin:
         fine del turno — sono loro stessi a rispondere che non c'è più niente.
         """
         driver = self.plan_driver
-        planning = driver is not None and is_planning_turn(msg.metadata, session_key)
+        planning = driver is not None and is_planning_turn(msg.metadata, session_key, driver)
         # Un cron non apre né chiude passi: i tool del passo non li vede.
         step_open = (
             driver is not None
@@ -124,6 +210,8 @@ class LoopPlanMixin:
                 return not planning
             if name in PLAN_STEP_TOOLS:
                 return not step_open
+            if planning and name in PLANNING_HIDDEN_TOOLS:
+                return True
             return None
 
         return plan_hidden
@@ -159,11 +247,14 @@ class LoopPlanMixin:
         lines: list[str] = []
         try:
             lines.extend(driver.runtime_lines(session_key))
-            if is_planning_turn(msg.metadata, session_key):
-                revise = msg.metadata.get(PLAN_REVISE_META)
+            if is_planning_turn(msg.metadata, session_key, driver):
+                meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+                revise = meta.get(PLAN_REVISE_META)
                 lines.append(
                     driver.planning_block(
-                        session_key, revise=revise if isinstance(revise, str) else None
+                        session_key,
+                        revise=revise if isinstance(revise, str) else None,
+                        followup=meta.get(PLAN_FOLLOWUP_META) is True,
                     )
                 )
         except Exception:  # noqa: BLE001 — il contesto del piano non deve far cadere il turno
@@ -175,7 +266,10 @@ class LoopPlanMixin:
         return lines
 
     def _plan_injection(
-        self, pending_msg: InboundMessage, turn_metadata: Mapping[str, Any] | None
+        self,
+        pending_msg: InboundMessage,
+        turn_metadata: Mapping[str, Any] | None,
+        session_key: str | None = None,
     ) -> str:
         """Cosa fare di un messaggio in coda che arriva a turno in volo.
 
@@ -188,8 +282,22 @@ class LoopPlanMixin:
         se il turno in volo è un cron: lì il passo non ha i suoi tool e la fine
         del turno non lo giudica, quindi il messaggio torna in coda e diventa
         un turno suo quando il cron finisce.
+
+        ``"defer"`` anche per un messaggio che è pianificazione mentre il turno
+        in volo non lo è, o viceversa: un ``plan: true`` iniettato in un turno
+        normale lo scriverebbe senza la sola lettura e senza ``plan_propose``,
+        e una risposta normale iniettata in una pianificazione resterebbe in
+        sola lettura. Diventa un turno suo, che passa dal gancio di inizio.
         """
         if not is_plan_turn(pending_msg.metadata):
+            driver = self.plan_driver
+            if driver is None or not session_key or not is_project_session_key(session_key):
+                return "inject"
+            running = isinstance(turn_metadata, Mapping) and (
+                turn_metadata.get(PLAN_MODE_META) is True
+            )
+            if is_planning_turn(pending_msg.metadata, session_key, driver) != running:
+                return "defer"
             return "inject"
         driver = self.plan_driver
         if driver is None or not driver.step_message_current(pending_msg.metadata):
@@ -216,6 +324,56 @@ class LoopPlanMixin:
 
     # ── hook del turno ──────────────────────────────────────────────────────
 
+    def _plan_read_hook(
+        self, metadata: Mapping[str, Any] | None, session_key: str | None
+    ) -> AgentHook | None:
+        """L'hook che conta le letture, per un turno di pianificazione; o ``None``."""
+        driver = self.plan_driver
+        if driver is None or not session_key:
+            return None
+        if not is_planning_turn(metadata, session_key, driver):
+            return None
+        return PlanReadHook(driver, session_key)
+
+    async def _plan_system_turn(self, msg: InboundMessage, session_key: str) -> None:
+        """Un turno di sistema durante una pianificazione: il rientro di un aiutante.
+
+        È pianificazione come il turno che l'ha lanciato — sola lettura, e
+        ``plan_propose`` visibile, perché è qui che il modello ha i risultati
+        per proporre. Anche il rientro di un aiutante lanciato prima: in sola
+        lettura, perché la pianificazione non scrive; ma come lettura conta
+        solo quello lanciato da lei (:meth:`_plan_count_helper_result`, che il
+        loop chiama dopo aver scartato i rientri già consegnati o vuoti).
+        """
+        driver = self.plan_driver
+        if driver is None or not isinstance(msg.metadata, dict):
+            return
+        if is_plan_turn(msg.metadata) or is_cron_turn(msg.metadata):
+            return
+        if not is_project_session_key(session_key) or driver.drafting_for(session_key) is None:
+            return
+        msg.metadata[PLAN_MODE_META] = True
+        msg.metadata[WORKSPACE_READONLY_METADATA_KEY] = True
+        msg.metadata[PLAN_FOLLOWUP_META] = True
+
+    async def _plan_count_helper_result(self, msg: InboundMessage, session_key: str) -> None:
+        """Il risultato di un aiutante della pianificazione è una lettura del quaderno.
+
+        È il modo di guardarlo quando è grande. Vale per un rientro che apre un
+        turno suo e per uno iniettato a metà turno; non per un aiutante nato
+        prima della pianificazione (``PlanDriver.note_helper_result``).
+        """
+        driver = self.plan_driver
+        meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+        if driver is None or meta.get(INJECTED_EVENT_META) != SUBAGENT_RESULT_EVENT:
+            return
+        if not is_project_session_key(session_key):
+            return
+        try:
+            await driver.note_helper_result(session_key, meta.get("subagent_task_id"))
+        except Exception:  # noqa: BLE001 — il conto perso non vale il turno
+            logger.opt(exception=True).warning("Plan read not counted for {}", session_key)
+
     async def _plan_before_turn(self, msg: InboundMessage, session_key: str) -> None:
         driver = self.plan_driver
         if driver is None or msg.channel == "system" or not isinstance(msg.metadata, dict):
@@ -225,8 +383,6 @@ class LoopPlanMixin:
             # piano tiene il quaderno (v. il docstring del modulo).
             notebook = _notebook_of_turn(session_key)
             if notebook is not None and driver.holds_notebook(notebook):
-                from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
-
                 msg.metadata[WORKSPACE_READONLY_METADATA_KEY] = True
                 logger.info("Cron turn in held notebook {} runs read-only", notebook)
             return

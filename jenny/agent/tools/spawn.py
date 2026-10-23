@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Any
 from jenny.agent.agent_types import (
     AGENT_TYPE_NAMES,
     DEFAULT_AGENT_TYPE,
+    PLANNING_HELPER_TYPES,
     UnknownAgentTypeError,
 )
 from jenny.agent.tools.base import Tool, tool_parameters
-from jenny.agent.tools.context import ContextAware, RequestContext
+from jenny.agent.tools.context import ContextAware, RequestContext, current_request_context
 from jenny.agent.tools.schema import (
     BooleanSchema,
     NumberSchema,
@@ -182,6 +183,21 @@ class SpawnTool(Tool, ContextAware):
             SubagentConcurrencyLimitError,
         )
 
+        # Mentre si prepara un piano si guarda il quaderno, non il web: solo
+        # l'editore, in sola lettura (``agent_types.PLANNING_HELPER_TYPES``).
+        request = current_request_context()
+        wanted = agent_type or DEFAULT_AGENT_TYPE
+        if (
+            request is not None
+            and request.metadata.get("plan_mode") is True
+            and wanted not in PLANNING_HELPER_TYPES
+        ):
+            return (
+                f"Cannot spawn a '{wanted}' while preparing a plan: now you only look at the "
+                "notebook. A notebook-editor can take stock of it for you (read-only). What "
+                "must be searched on the web goes into the plan as a `research` step, with "
+                "the item marked `web` in the coverage."
+            )
         # Le app si scrivono solo per una conversazione con l'utente: un
         # costruttore lanciato da un cron, dal giardiniere o da Dream non potrebbe
         # comunque scrivere (il tool ``app`` lo rifiuta), quindi lo si dice qui,

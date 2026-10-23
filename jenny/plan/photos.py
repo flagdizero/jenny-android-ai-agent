@@ -31,6 +31,7 @@ import stat
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -49,9 +50,42 @@ PHOTO_TRIGGER = "plan"
 # Le esclusioni di una foto. Non quelle del workspace (``DEFAULT_EXCLUDE_GLOBS``):
 # ``ui/**`` o ``logs/**`` lì sono cartelle di sistema, in un quaderno sarebbero
 # cartelle dell'utente che la foto non vedrebbe e il ritorno non rimetterebbe.
-# Restano fuori solo i temporanei (quelli di ``atomic_write`` compresi) e le
-# cache di Python.
-NOTEBOOK_EXCLUDE_GLOBS: tuple[str, ...] = ("**/__pycache__/**", "*.tmp", "*.tmp.*")
+# Restano fuori i temporanei (quelli di ``atomic_write`` compresi), le cache di
+# Python e ``.jenny/`` del quaderno: le uscite salvate dei tool
+# (``.jenny/tool-results/``) sono cache del lavoro, non lavoro, e contarle
+# riempiva il conto delle modifiche di nomi ``call_….txt`` che l'utente non ha
+# mai visto (la prova del 23/10: «9 nuovi in altri file»).
+NOTEBOOK_EXCLUDE_GLOBS: tuple[str, ...] = (
+    "**/__pycache__/**",
+    "*.tmp",
+    "*.tmp.*",
+    ".jenny/**",
+)
+
+
+def is_photo_excluded(path: str) -> bool:
+    """*path* (relativo al quaderno) è fuori dalle foto **adesso**.
+
+    Le stesse regole di ``SnapshotEngine`` su :data:`NOTEBOOK_EXCLUDE_GLOBS`,
+    applicate a un percorso scritto in una foto. Servono alle foto **vecchie**:
+    una foto fatta prima che un'esclusione esistesse ha ancora quei file, e
+    senza questo filtro il confronto con una foto nuova li vedrebbe «tolti» —
+    e il ritorno li cancellerebbe o li rimetterebbe. Un percorso escluso adesso
+    è escluso anche nel passato.
+    """
+    parts = path.split("/")
+    name = parts[-1]
+    for glob in NOTEBOOK_EXCLUDE_GLOBS:
+        if glob.endswith("/**"):
+            base = glob[:-3]
+            if base.startswith("**/"):
+                if base[3:] in parts[:-1]:
+                    return True
+            elif path == base or path.startswith(base + "/"):
+                return True
+        elif fnmatch(name, glob) or fnmatch(path, glob):
+            return True
+    return False
 
 # ── Gruppi ───────────────────────────────────────────────────────────────────
 #
@@ -296,8 +330,18 @@ class PlanPhotos:
         return head
 
     def files(self, photo_id: str) -> dict[str, str]:
-        """``{percorso: hash}`` di una foto."""
-        return {entry.path: entry.hash for entry in self.engine.load_manifest(photo_id).files}
+        """``{percorso: hash}`` di una foto, senza i percorsi esclusi adesso.
+
+        Il filtro è qui perché ogni lettura di una foto passa da qui — il
+        confronto, il conto delle modifiche, il ritorno — e una foto vecchia
+        con dentro ``.jenny/`` deve valere per tutti come se non li avesse
+        (:func:`is_photo_excluded`).
+        """
+        return {
+            entry.path: entry.hash
+            for entry in self.engine.load_manifest(photo_id).files
+            if not is_photo_excluded(entry.path)
+        }
 
     def diff(self, a: str, b: str) -> dict[str, list[str]]:
         """Cosa cambia dalla foto *a* alla foto *b*: percorsi ordinati."""
@@ -526,6 +570,10 @@ class PlanPhotos:
             if parsed is None:
                 return None
             header, ops = parsed
+            # Un journal scritto prima di un'esclusione nuova può nominare un
+            # percorso che adesso è fuori dalle foto: non è del piano, e il
+            # recupero non lo tocca.
+            ops = [op for op in ops if not is_photo_excluded(op.path)]
             self._check_ops(ops, current=None)
             result = RecoveryResult(header=header)
             try:

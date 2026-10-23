@@ -348,8 +348,9 @@ many are pending:
 ```
 
 **`plan_changed`** — a notebook's step-by-step plan changed (proposed, approved, a step opened or
-closed, paused, blocked, stopped, rolled back); the plan card reads it again with `plan.get`.
-Broadcast, with the notebook and the plan:
+closed, paused, blocked, stopped, rolled back), or a planning started or ended in that notebook;
+the plan card reads it again with `plan.get`. Broadcast, with the notebook and the plan
+(`plan_id` is `""` when a planning starts or ends and the notebook has no open plan yet):
 
 ```json
 {"event": "plan_changed", "notebook": "garden", "plan_id": "p_3f9a0c12bb47"}
@@ -419,9 +420,15 @@ WebP, GIF; 8 MB each), 1 video (MP4, WebM, QuickTime; 20 MB) and 4 other files (
 one item fails, nothing is kept and the answer is an `error` with `detail: "image_rejected"`.
 `webui: true` plus an optional `turn_id` mark the message as sent by the WebUI, and
 `readonly: true` runs that one turn with the workspace read-only (any other value is ignored).
-`plan: true`, only on a notebook's chat (`"project:<name>"`), makes it a planning turn: read-only
+`plan: true`, only on a notebook's chat (`"project:<name>"`), starts a planning: read-only
 whatever `readonly` says, and Jenny answers with a step-by-step plan for the user to approve
 instead of doing the job; `plan_revise: "<plan id>"` asks for a new version of a proposed plan.
+A planning can take several turns — Jenny looks at the notebook and may ask up to three questions
+first — and while it lasts **the server** treats every message on that chat as part of it,
+read-only, with or without `plan: true` (the WebUI keeps sending it while the Plan button is on:
+it continues the planning going on, and opens a new one only if there is none). It ends when Jenny proposes the plan, with
+`plan.cancel_drafting` (turning the Plan button off), with `/stop`, or after 12 hours without a
+turn; `plan.get {notebook}` says whether one is going on (`drafting`).
 
 ```json
 {"type": "message", "chat_id": "project:garden", "content": "What did we plant in May?", "webui": true}
@@ -496,20 +503,21 @@ correlate a reply to.
 | `staged.list` | — | The drafts waiting for your approval, oldest first: `{staged: [{id, target, sources, created_ms, new_file, target_sha256, diff, truncated}]}`. A draft is a change a subagent wanted to make to a file Jenny loads on her own (a skill, `HEARTBEAT.md`, `cron/`, `USER.md`, memory) after reading content from outside you; see [Security model](../internals/security-model.md). |
 | `staged.install` | `id`, `target_sha256` | Write a draft into place. `target_sha256` is the one `staged.list` returned (`null` for a new file): if the file changed since, the answer is `conflict` and nothing is written. No tool of the model can call this. |
 | `staged.discard` | `id` | Throw a draft away; the file stays as it was. |
-| `plan.get` | `id` or `notebook` | A step-by-step plan: `{plan}`, its `plan.json` plus `done` (steps behind it, done or skipped), `total` (cut steps excluded), `current_step_id`, `can_rollback`, `can_undo_rollback`, and `rollback_failed` (`{at, kind, error, applied?, total?}`) while a rollback that stopped halfway has not been retried. With `notebook`: that notebook's open plan, or its most recent closed one, or `plan: null`. |
+| `plan.get` | `id` or `notebook` | A step-by-step plan: `{plan}`, its `plan.json` plus `done` (steps behind it, done or skipped), `total` (cut steps excluded), `current_step_id`, `can_rollback`, `can_undo_rollback`, and `rollback_failed` (`{at, kind, error, applied?, total?}`) while a rollback that stopped halfway has not been retried. `plan.json` carries `coverage` (`[{item, have, missing, strategy, why}]`, `strategy` one of `notebook`, `web`, `ask`, `leave`: how each item the job needs is covered), `assumptions` (`[string]`: what Jenny decided on her own; approving approves them), `steps[].done_when` (each step's "done" criterion) — all empty for a plan written before them — and `blocked: {step, question, reason, at, kind, drafts}` while it waits: `kind: "question"` is a question for the user (`drafts: []`), `kind: "drafts"` means the step left changes as drafts (`drafts: [{id, target}]`, the ids of `staged.list`) that the user installs or discards with `staged.install` / `staged.discard`; when all are decided the step closes by itself and the plan goes on. With `notebook`: that notebook's open plan, or its most recent closed one, or `plan: null`, and next to it `drafting: {since, revise, reads} \| null` — the planning going on in that notebook (`revise`: the plan being reviewed, or `null`; `reads`: how many times Jenny has read the notebook since it started). |
 | `plan.list` | — | The open plans of every notebook, for the badge on its cover: `{plans: [{id, notebook, status, title, done, total, updated_at}]}`. |
-| `plan.full` | `id` | The full plan, read-only: `{title, steps: [{id, title, detail, kind, status, tag}]}`. `detail` is what Jenny reads when the step opens. |
+| `plan.full` | `id` | The full plan, read-only: `{title, coverage, assumptions, steps: [{id, title, detail, kind, status, tag, done_when}]}`. `detail` is what Jenny reads when the step opens. |
+| `plan.cancel_drafting` | `notebook` | End the planning going on in that notebook (the Plan button turned off, or "Cancel the plan"): the next message is an ordinary one. `{cancelled}` is `false` when there was none. Emits `plan_changed`. |
 | `plan.approve` | `id`, `version`, `cut` | Approve a proposed plan, without the steps listed in `cut`: photo of the notebook, then the first step opens. `conflict` when `version` is not the one shown (Jenny wrote a newer one), `busy` while a turn or a helper is running there. No tool of the model can call this. |
 | `plan.discard` | `id` | Throw a proposal away. |
 | `plan.pause` | `id` | Pause after the current step. While paused, the notebook's chat is read-only. |
 | `plan.resume` | `id` | Cancel a pause that has not arrived yet, or open the next step (`busy` while a turn runs there). |
 | `plan.stop` | `id`, `then` | Stop now: the turn and the helpers at work there are cancelled, the current step is `interrupted`, last photo. `then: "rollback"` goes on with `plan.rollback` and replies its `report` — or `rollback_error: {code, message}` when the plan stopped but the rollback was refused (ask again with `plan.rollback`). A `/stop` typed in that notebook's chat is a stop with `then: "keep"`. |
-| `plan.answer` | `id`, `text` | Answer the question of a blocked plan: it runs again, and `text` is posted in the chat as the user's message. A message typed in that chat while the plan is blocked counts as the answer too. |
+| `plan.answer` | `id`, `text` | Answer the question of a blocked plan: it runs again, and `text` is posted in the chat as the user's message. A message typed in that chat while the plan is blocked counts as the answer too. Not for a plan waiting on drafts (`bad_state`): those are decided with `staged.*`, and a message typed meanwhile is an ordinary read-only one. |
 | `plan.step_files` | `id`, `step` | What one step changed: `{added, changed, removed}` (paths in the notebook), from the photos before and after it. `bad_state` while the step has not finished. |
 | `plan.changes` | `id` | What the whole plan changed: `{added, changed, removed, groups: {path: group}}`, from its first photo to its last (to the last finished step while it runs). Groups: `pages`, `sources`, `board`, `other`, `journal`. |
 | `plan.rollback_preview` | `id` | What going back would do, without doing it: `{report, expect_end}`. `report` lists the paths `restored`, `removed`, `already` as they were, `left` (changed after the plan: not touched), `kept`, `excluded` (the journal never goes back), with `counts` and per-group counts in `groups`. `expect_end` is the id of the photo of the notebook this summary was computed on. Only for a plan `done` or `stopped`. |
-| `plan.rollback` | `id`, `keep`, `expect_end` | Put the notebook back as it was before the plan, except the groups in `keep`. `expect_end` is the one the preview returned: the rollback photographs the notebook again, and if that photo is another one (the notebook changed since the summary), or Jenny is working there, the answer is `conflict` and nothing is touched. Replies `{report}`; Jenny reads a line about it in her next turn. |
-| `plan.undo_rollback` | `id` | Undo the rollback: the notebook goes back as the plan had left it, where nothing changed since. Replies `{report}`. |
+| `plan.rollback` | `id`, `keep`, `expect_end` | Put the notebook back as it was before the plan, except the groups in `keep`. `expect_end` is the one the preview returned: the rollback photographs the notebook again, and if that photo is another one (the notebook changed since the summary), or Jenny is working there, the answer is `conflict` and nothing is touched. Replies `{report, discarded_drafts}`: the plan's drafts still waiting for approval are thrown away with the rollback (`[{id, target}]`), so they cannot bring back part of the work just undone. Jenny reads a line about it in her next turn, and a `[system]` line goes at the end of the notebook's journal. |
+| `plan.undo_rollback` | `id` | Undo the rollback: the notebook goes back as the plan had left it, where nothing changed since. Replies `{report}`; drafts discarded by the rollback do not come back. |
 | `board.seen` | `wiki`, `card` | Record that the user looked: the notebook's board (no `card`), or one card's drawer. Drives the "since you last looked" row and the blue dots. A notebook without a board is a no-op. |
 | `board.move` | `wiki`, `kind`, `id`, `x`, `y` | Move a card (`kind: card`), or something hanging from a card, `id` being the card's: its sticky note of reminders (`kind: postit`), its label of automations (`kind: auto`), its lilac note of the user's notes (`kind: notes`) or its gallery of photos (`kind: photos`). With `id: ""`, `postit` and `auto` move the free sticky note and the free label of the whole notebook. It goes to `x`,`y` percent of the board. The position becomes the user's, and the gardener never moves it again. |
 | `board.card.add` | `wiki`, `title`, `near`?, `glyph`?, `app`?, `link`? | Make a card yourself. With `app` (`{slug, params}`) the card **is** that app: its value takes the place of the photo, a tap opens the app, and the title defaults to the app's name; with `link` (a card id) it is tied to that card by a thread and lands next to it. It lands in the free spot nearest `near` (`{x, y}` in board coordinates: the point the user held on the empty wall, or the centre of the view), with no pages yet; its title and place are the user's. A full board refuses with `conflict`. Replies `{card: {id, title, pos}}`. |

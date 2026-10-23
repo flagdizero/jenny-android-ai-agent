@@ -27,7 +27,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from jenny.plan.model import MAX_STEPS, MIN_STEPS, STEP_KINDS
+from jenny.plan.model import COVERAGE_STRATEGIES, MAX_STEPS, MIN_STEPS, STEP_KINDS
 
 if TYPE_CHECKING:
     from jenny.plan.driver import PlanDriver
@@ -74,20 +74,48 @@ class PlanTool(Tool):
                     "and how you will know it is done. You read it again when the step "
                     "starts, maybe after a restart."
                 ),
+                done_when=StringSchema(
+                    "When this step is done, with the quality bar, e.g. \"every page has at "
+                    "least 3 concrete facts with their source; 'not documented' only after "
+                    "a search that found nothing, with the queries tried\"."
+                ),
                 kind=StringSchema("The kind of step.", enum=list(STEP_KINDS)),
                 same_as=StringSchema(
                     "When revising a proposal: the id of the previous version's step this "
                     "one comes from.",
                     nullable=True,
                 ),
-                required=["title", "detail"],
+                required=["title", "detail", "done_when"],
             ),
             description=f"The steps, in order: {MIN_STEPS} to {MAX_STEPS}.",
+        ),
+        coverage=ArraySchema(
+            ObjectSchema(
+                item=StringSchema("One thing the job needs, e.g. a page to write."),
+                have=StringSchema("What the notebook already has for it (you read it)."),
+                missing=StringSchema("What is missing."),
+                strategy=StringSchema(
+                    "How the plan fills it: notebook (the notebook is enough), web (a "
+                    "research step searches it and names it in its detail), leave (it stays "
+                    "uncovered: say why). Never ask: ask the user before proposing.",
+                    enum=[c for c in COVERAGE_STRATEGIES if c != "ask"],
+                ),
+                why=StringSchema("Why this strategy; required for leave."),
+                required=["item", "have", "missing", "strategy"],
+            ),
+            description="What the job needs, item by item, and how each is covered.",
+        ),
+        assumptions=ArraySchema(
+            StringSchema("One short sentence."),
+            description=(
+                "Optional: the decisions you took on your own (what is deleted, what is "
+                "kept, rules for numbers). Approving the plan approves them."
+            ),
         ),
         notes=StringSchema(
             "Optional: anything the user should know before approving.", nullable=True
         ),
-        required=["title", "steps"],
+        required=["title", "steps", "coverage"],
     )
 )
 class PlanProposeTool(PlanTool):
@@ -107,12 +135,23 @@ class PlanProposeTool(PlanTool):
         )
 
     async def execute(
-        self, title: Any = None, steps: Any = None, notes: Any = None, **kwargs: Any
+        self,
+        title: Any = None,
+        steps: Any = None,
+        notes: Any = None,
+        coverage: Any = None,
+        assumptions: Any = None,
+        **kwargs: Any,
     ) -> str:
         if self._driver is None:
             return _NO_DRIVER
         return await self._driver.propose(
-            self._session_key(), title, steps, notes if isinstance(notes, str) else None
+            self._session_key(),
+            title,
+            steps,
+            notes if isinstance(notes, str) else None,
+            coverage=coverage,
+            assumptions=assumptions,
         )
 
 

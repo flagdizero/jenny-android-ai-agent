@@ -1451,6 +1451,11 @@ class AgentLoop(
         # Chi vuole restare dichiara ``runs_when_ephemeral()``; il default e' ``False``,
         # quindi un hook che parla continua a non essere montato senza fare niente.
         extra = [h for h in self._extra_hooks if not ephemeral or h.runs_when_ephemeral()]
+        # Un turno di pianificazione conta le letture del quaderno: senza,
+        # ``plan_propose`` rifiuta (``loop_plan.PlanReadHook``).
+        plan_reads = self._plan_read_hook(metadata, session_key)
+        if plan_reads is not None:
+            extra.append(plan_reads)
         if extra:
             hook = CompositeHook([loop_hook] + extra)
 
@@ -1531,7 +1536,7 @@ class AgentLoop(
                     break
                 # Un turno del piano a meta' turno: vecchio si scarta, dentro un
                 # cron aspetta la fine del cron (``LoopPlanMixin._plan_injection``).
-                verdict = self._plan_injection(queued, metadata)
+                verdict = self._plan_injection(queued, metadata, session_key)
                 if verdict == "drop":
                     logger.info("Stale plan turn dropped mid-turn for session {}", session_key)
                     continue
@@ -1539,6 +1544,10 @@ class AgentLoop(
                     deferred.append(queued)
                     continue
                 items.append(_to_user_message(queued))
+                # Il rientro di un aiutante della pianificazione, anche a meta'
+                # turno, e' una lettura del quaderno (``loop_plan.py``).
+                if session_key:
+                    await self._plan_count_helper_result(queued, session_key)
             for queued in deferred:
                 # Rimesso in coda: a fine turno si ripubblica e diventa un turno suo.
                 try:
@@ -2164,6 +2173,9 @@ class AgentLoop(
             # Non e' un turno: il gancio di fine turno non deve giudicarlo.
             msg.metadata[PLAN_STALE_META] = True
             return TurnOutcome.silent()
+        # Il rientro di un aiutante durante una pianificazione e' ancora
+        # pianificazione: sola lettura e ``plan_propose`` (``loop_plan.py``).
+        await self._plan_system_turn(msg, key)
         session = self.sessions.get_or_create(key)
         if self._restore_runtime_checkpoint(session):
             self.sessions.save(session)
@@ -2192,6 +2204,10 @@ class AgentLoop(
                 "Subagent announce skipped for session {}: {}", key, followup_state.value,
             )
             return TurnOutcome.silent()
+        # Un rientro nuovo di un aiutante della pianificazione e' una lettura del
+        # quaderno; uno gia' consegnato o vuoto, scartato qui sopra, no.
+        if is_subagent:
+            await self._plan_count_helper_result(msg, key)
         # Prelude di tooling condiviso con lo stato BUILD della FSM: sincronizza i
         # tool delle app, imposta il contesto tool e azzera lo stato per-turno del
         # MessageTool. Prima veniva fatto solo _set_tool_context, divergendo dalla

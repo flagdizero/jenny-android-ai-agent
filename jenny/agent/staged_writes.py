@@ -27,6 +27,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,28 @@ STAGED_REL = (".jenny", "staged")
 MAX_PENDING = 50
 
 _LOCK = threading.Lock()
-_listener: Callable[[int], None] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StagedChange:
+    """Un cambio dell'elenco delle bozze, per chi ascolta.
+
+    ``action`` è ``staged`` (una bozza nuova o riscritta), ``installed`` o
+    ``discarded``; ``count`` quante ne restano in attesa. ``target`` è il
+    percorso relativo alla radice in cui la bozza vive.
+    """
+
+    action: str
+    id: str
+    target: str
+    count: int
+    root: Path
+
+
+# Chi ascolta: una lista e non un posto solo. Il container ci mette il frame
+# ``staged_changed`` per la WebUI, il driver dei piani il suo «le bozze del
+# passo sono decise?»; con un posto solo il secondo cancellava il primo.
+_listeners: list[Callable[[StagedChange], None]] = []
 
 
 class StagingFullError(PermissionError):
@@ -60,23 +82,42 @@ class StagedRef:
     target_rel: str
 
 
-def set_change_listener(listener: Callable[[int], None] | None) -> None:
-    """Chi avvisare (con il numero di bozze) quando l'elenco cambia.
+def add_change_listener(listener: Callable[[StagedChange], None]) -> Callable[[], None]:
+    """Aggiunge chi avvisare quando l'elenco cambia; ritorna come toglierlo.
 
-    Lo imposta il container all'avvio: pubblica il frame ``staged_changed``
-    sulla WebSocket, così la scheda in casa compare senza ricaricare.
+    Il container ci mette il frame ``staged_changed`` sulla WebSocket (la
+    scheda in casa compare senza ricaricare), il driver dei piani il suo
+    controllo delle bozze di un passo. Gli avvisi possono arrivare da un thread
+    (le RPC fanno il disco fuori dal loop): chi ascolta rientra nel suo loop da
+    solo.
     """
-    global _listener
-    _listener = listener
+    _listeners.append(listener)
+
+    def remove() -> None:
+        with suppress(ValueError):
+            _listeners.remove(listener)
+
+    return remove
 
 
-def _notify(root: Path) -> None:
-    if _listener is None:
+def clear_change_listeners() -> None:
+    """Toglie tutti gli ascoltatori (i test, fra un caso e l'altro)."""
+    _listeners.clear()
+
+
+def _notify(root: Path, action: str, staged_id: str, target: str) -> None:
+    if not _listeners:
         return
     try:
-        _listener(len(list_staged(root)))
+        change = StagedChange(action, staged_id, target, len(list_staged(root)), Path(root))
     except Exception as exc:  # noqa: BLE001 — l'avviso non deve fermare la scrittura
-        logger.warning("Staged-change listener failed: {}", exc)
+        logger.warning("Staged-change count failed: {}", exc)
+        return
+    for listener in list(_listeners):
+        try:
+            listener(change)
+        except Exception as exc:  # noqa: BLE001 — un ascoltatore rotto non zittisce gli altri
+            logger.warning("Staged-change listener failed: {}", exc)
 
 
 def _dir(root: Path) -> Path:
@@ -141,7 +182,7 @@ def stage(
             "created_ms": int(time.time() * 1000),
         }
         atomic_write(entry / "meta.json", json.dumps(meta, ensure_ascii=False), fsync_dir=False)
-    _notify(root)
+    _notify(root, "staged", staged_id, target_rel)
     return StagedRef(staged_id, target_rel)
 
 
@@ -214,7 +255,7 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
         ledger_for(root).clear(meta["target"])
         shutil.rmtree(_dir(root) / staged_id, ignore_errors=True)
     logger.info("Installed staged change {} into {}", staged_id, meta["target"])
-    _notify(root)
+    _notify(root, "installed", staged_id, meta["target"])
     return "installed"
 
 
@@ -225,6 +266,7 @@ def discard(root: Path, staged_id: str) -> bool:
         entry = _entry(root, staged_id)
         if entry is None:
             return False
+        meta = _read_meta(entry)
         shutil.rmtree(entry, ignore_errors=True)
-    _notify(root)
+    _notify(root, "discarded", staged_id, str((meta or {}).get("target") or ""))
     return True

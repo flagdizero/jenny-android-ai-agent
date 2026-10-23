@@ -32,11 +32,13 @@ import threading
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
 from jenny.plan.model import (
     CLOSED_STATUSES,
+    PLAN_FORMAT,
     RAN_STATUSES,
     Plan,
     PlanError,
@@ -53,6 +55,8 @@ from jenny.utils.path import atomic_write
 PLAN_FILE_NAME = "plan.json"
 PHOTOS_DIR_NAME = "photos"
 ROLLBACK_JOURNAL_NAME = "rollback.journal"
+# Le pianificazioni in corso, una per quaderno (v. :meth:`PlanStore.drafting_update`).
+DRAFTING_FILE_NAME = "drafting.json"
 
 _PLAN_ID_RE = re.compile(r"\Ap_[0-9a-f]{12}\Z")
 
@@ -132,6 +136,85 @@ class PlanStore:
 
     def _plan_file(self, plan_id: str) -> Path:
         return self.plan_dir(plan_id) / PLAN_FILE_NAME
+
+    @property
+    def drafting_path(self) -> Path:
+        return self.plans_dir / DRAFTING_FILE_NAME
+
+    # -- pianificazioni in corso (``drafting``) -----------------------------
+    #
+    # **Una fonte sola, qui accanto ai piani**, e non nei metadati della
+    # sessione ``project:<nome>``. Tre ragioni. Sopravvive a un riavvio come i
+    # piani, e con le stesse garanzie (lock, scrittura atomica). La legge
+    # ``plan.get`` anche senza agente, dallo store, come legge i piani: i
+    # metadati della sessione stanno nel ``SessionManager`` del loop, che le RPC
+    # non hanno. E segue il quaderno nei rinomini e nelle cancellazioni insieme
+    # ai suoi piani (:meth:`follow_rename`, :meth:`delete_for_notebook`),
+    # mentre i metadati di una sessione li riscrive il turno intero — un
+    # ripristino di checkpoint, un ``/new`` — senza sapere che c'è un piano in
+    # preparazione. Il driver ne tiene una copia in memoria come per l'indice
+    # dei piani, e la riscrive a ogni cambio.
+
+    def _read_drafting(self) -> dict[str, dict[str, Any]]:
+        try:
+            data = json.loads(self.drafting_path.read_text("utf-8"))
+        except FileNotFoundError:
+            return {}
+        except ValueError as exc:
+            # Un file rotto non ferma i piani: si riparte senza pianificazioni
+            # in corso, che è lo stato più innocuo (il prossimo messaggio è una
+            # chat normale).
+            logger.warning("Unreadable {}: {}", DRAFTING_FILE_NAME, exc)
+            return {}
+        entries = data.get("notebooks") if isinstance(data, dict) else None
+        if not isinstance(entries, dict):
+            return {}
+        return {
+            str(name): dict(entry)
+            for name, entry in entries.items()
+            if isinstance(entry, dict)
+        }
+
+    def _write_drafting(self, entries: dict[str, dict[str, Any]]) -> None:
+        self.plans_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write(
+            self.drafting_path,
+            json.dumps(
+                {"format": PLAN_FORMAT, "notebooks": entries}, ensure_ascii=False, indent=1
+            ),
+        )
+
+    def drafting_all(self) -> dict[str, dict[str, Any]]:
+        """``{quaderno: voce}`` delle pianificazioni in corso, scadute comprese."""
+        with _lock_for(self.drafting_path):
+            return self._read_drafting()
+
+    def drafting_get(self, notebook: str) -> dict[str, Any] | None:
+        return self.drafting_all().get(notebook)
+
+    def drafting_update(
+        self,
+        notebook: str,
+        fn: Callable[[dict[str, Any] | None], dict[str, Any] | None],
+    ) -> dict[str, Any] | None:
+        """Rilegge la voce di *notebook* dentro il lock, le applica *fn*, riscrive.
+
+        *fn* riceve la voce (o ``None``) e ritorna quella nuova, o ``None`` per
+        toglierla. Come :meth:`update`: si rilegge dentro il lock con cui si
+        scrive, così un conto delle letture non ne cancella un altro.
+        """
+        with _lock_for(self.drafting_path):
+            entries = self._read_drafting()
+            current = entries.get(notebook)
+            result = fn(dict(current) if current is not None else None)
+            if result is None:
+                if current is None:
+                    return None
+                entries.pop(notebook, None)
+            else:
+                entries[notebook] = dict(result)
+            self._write_drafting(entries)
+            return result
 
     # -- lettura/scrittura di un piano --------------------------------------
 
@@ -235,6 +318,8 @@ class PlanStore:
                 notes=notes,
                 created_at=stamp,
                 updated_at=stamp,
+                coverage=[dict(c) for c in proposal.coverage],
+                assumptions=list(proposal.assumptions),
             )
             if current is not None:
                 with _lock_for(self.plan_dir(current.id)):
@@ -279,6 +364,7 @@ class PlanStore:
 
                 self.update(plan.id, _rename)
                 moved.append(plan.id)
+            self._move_drafting(old, new)
         if moved:
             logger.info("Plans of notebook {!r} follow it to {!r}: {}", old, new, len(moved))
         return moved
@@ -290,9 +376,30 @@ class PlanStore:
             for plan in self.list_for_notebook(notebook):
                 self._remove(plan.id)
                 removed.append(plan.id)
+            self._move_drafting(notebook, None)
         if removed:
             logger.info("Deleted {} plan(s) of notebook {!r}", len(removed), notebook)
         return removed
+
+    def drafting_remove(self, notebook: str) -> dict[str, Any] | None:
+        """Toglie la pianificazione di *notebook*; ritorna la voce che c'era, o ``None``."""
+        with _lock_for(self.drafting_path):
+            entries = self._read_drafting()
+            entry = entries.pop(notebook, None)
+            if entry is not None:
+                self._write_drafting(entries)
+            return entry
+
+    def _move_drafting(self, old: str, new: str | None) -> None:
+        """La pianificazione in corso di *old* va su *new*, o via (``None``)."""
+        with _lock_for(self.drafting_path):
+            entries = self._read_drafting()
+            entry = entries.pop(old, None)
+            if entry is None:
+                return
+            if new is not None:
+                entries[new] = entry
+            self._write_drafting(entries)
 
     def _remove(self, plan_id: str) -> None:
         with _lock_for(self.plan_dir(plan_id)):

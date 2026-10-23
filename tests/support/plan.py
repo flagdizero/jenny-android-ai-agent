@@ -65,6 +65,42 @@ class FakeHost:
     def append_note(self, session_key: str, text: str) -> None:
         self.notes.append((session_key, text))
 
+    def notebook_drafts(self, notebook: str) -> list[dict[str, Any]]:
+        from jenny.agent.staged_writes import list_staged
+
+        prefix = f"wikis/{notebook}/"
+        return [
+            {"id": m["id"], "target": m["target"], "created_ms": m.get("created_ms")}
+            for m in list_staged(self.workspace)
+            if str(m.get("target", "")).startswith(prefix)
+        ]
+
+    def discard_draft(self, draft_id: str) -> bool:
+        from jenny.agent.staged_writes import discard
+
+        return discard(self.workspace, draft_id)
+
+
+# Una copertura minima e valida: ``plan_propose`` la vuole sempre.
+COVERAGE = [
+    {"item": "Acero e Ginkgo", "have": "una pagina vecchia", "missing": "le cure",
+     "strategy": "notebook", "why": ""},
+]
+
+
+async def start_drafting(driver: Any, key: str = KEY, *, reads: int = 1) -> None:
+    """Apre la pianificazione come il tasto Piano, con *reads* letture del quaderno."""
+    await driver.start_drafting(key)
+    for _ in range(reads):
+        await driver.note_read(key)
+
+
+async def propose(driver: Any, title: str, steps: Any, *, key: str = KEY, **kw: Any) -> str:
+    """Una proposta come la fa il modello: dentro una pianificazione che ha letto."""
+    await start_drafting(driver, key)
+    kw.setdefault("coverage", COVERAGE)
+    return await driver.propose(key, title, steps, **kw)
+
 
 def write_file(root: Path, rel: str, text: str) -> None:
     path = root / rel
@@ -73,8 +109,10 @@ def write_file(root: Path, rel: str, text: str) -> None:
 
 
 STEPS = [
-    {"title": "Cerco Acero e Ginkgo", "detail": "Due ricerche, una per pianta.", "kind": "research"},
-    {"title": "Scrivo le pagine", "detail": "Una pagina per pianta in wiki/.", "kind": "write"},
+    {"title": "Cerco Acero e Ginkgo", "detail": "Due ricerche, una per pianta.", "kind": "research",
+     "done_when": "Una fonte salvata per pianta."},
+    {"title": "Scrivo le pagine", "detail": "Una pagina per pianta in wiki/.", "kind": "write",
+     "done_when": "Due pagine, ognuna con una fonte."},
     {"title": "Controllo i link", "detail": "Ogni link della wiki porta a una pagina.",
-     "kind": "check"},
+     "kind": "check", "done_when": "Zero link morti."},
 ]

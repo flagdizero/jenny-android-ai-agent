@@ -78,6 +78,17 @@ async def _stop(ctx: CommandContext, *, spare_subagents: bool) -> OutboundMessag
                 channel=msg.channel, chat_id=msg.chat_id, content=say("plan.stopped"),
                 metadata=dict(msg.metadata or {}),
             )
+    # Un ``/stop`` mentre si prepara un piano chiude anche la pianificazione:
+    # senza, il messaggio dopo sarebbe ancora in sola lettura, con Jenny che
+    # riprende le domande del piano che l'utente ha appena fermato.
+    from jenny.plan.driver import PlanDriver
+
+    if isinstance(driver, PlanDriver) and driver.drafting_for(ctx.key) is not None:
+        if await driver.end_drafting(ctx.key, "stop") and not total:
+            return OutboundMessage(
+                channel=msg.channel, chat_id=msg.chat_id,
+                content=say("plan.stopped_planning"), metadata=dict(msg.metadata or {}),
+            )
     parts = [say("stop.done" if total else "stop.none")]
     if spare_subagents:
         helpers = 0
@@ -139,6 +150,14 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
 
     loop = ctx.loop
     cancelled = await loop._cancel_active_tasks(ctx.key)
+    # Una conversazione nuova non continua un piano in preparazione: senza, il
+    # primo messaggio dopo ``/new`` sarebbe ancora in sola lettura, con Jenny
+    # che riprende le domande di un piano che la conversazione non ricorda più.
+    from jenny.plan.driver import PlanDriver
+
+    driver = getattr(loop, "plan_driver", None)
+    if isinstance(driver, PlanDriver) and driver.drafting_for(ctx.key) is not None:
+        await driver.end_drafting(ctx.key, "new")
     if cancelled:
         # Materializza il lavoro parziale del turno fermato PRIMA dello
         # snapshot, così finisce nell'archivio invece di andare perso.

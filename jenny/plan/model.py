@@ -65,6 +65,17 @@ STEP_STATUSES: tuple[str, ...] = (
 
 STEP_KINDS: tuple[str, ...] = ("research", "write", "delete", "check", "other")
 
+# Come la proposta pensa di coprire ogni voce del lavoro (``coverage``):
+# ``notebook`` basta il quaderno, ``web`` si cerca in un passo ``research``,
+# ``ask`` è una scelta dell'utente (in una proposta non ne deve restare: si
+# chiede in chat *prima*), ``leave`` resta scoperta, con il perché.
+COVERAGE_STRATEGIES: tuple[str, ...] = ("notebook", "web", "ask", "leave")
+
+# I due motivi di un blocco: una domanda del modello, o le bozze di un passo che
+# aspettano l'utente (``staged_writes``). Un blocco scritto prima di ``kind`` è
+# una domanda.
+BLOCK_KINDS: tuple[str, ...] = ("question", "drafts")
+
 # Tag che il codice dà ai passi di una versione nuova rispetto alla precedente.
 STEP_TAGS: tuple[str, ...] = ("new", "moved", "changed")
 
@@ -108,6 +119,20 @@ MAX_PLAN_TITLE = 80
 # serve, ma con un tetto, perché la somma dei dettagli entra nel turno di ogni
 # passo (la lista intera, ripetuta) e un piano da 12 × 20 kB lo sfonderebbe.
 MAX_STEP_DETAIL = 4000
+# Il criterio di «fatto» di un passo: una soglia, non un secondo dettaglio.
+MAX_STEP_DONE_WHEN = 1000
+# La copertura conta le voci del lavoro (10 piante × 6 temi sono 60 voci): il
+# tetto è largo, ma c'è, perché la lista intera torna nel piano completo.
+MAX_COVERAGE = 80
+MAX_COVERAGE_FIELD = 500
+MAX_ASSUMPTIONS = 20
+MAX_ASSUMPTION = 300
+
+# Quanto dura una pianificazione senza turni (``drafting``): come
+# ``goal_inactivity_ttl_h``, mezza giornata. Oltre, il prossimo messaggio è una
+# chat normale: una domanda di ieri sera non tiene il quaderno in sola lettura
+# per sempre.
+DRAFTING_TTL_HOURS = 12
 
 
 class PlanError(Exception):
@@ -170,12 +195,14 @@ class Step:
     note: str | None = None
     photo_before: str | None = None
     photo_after: str | None = None
+    done_when: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
 
     _KEYS = (
         "id",
         "title",
         "detail",
+        "done_when",
         "kind",
         "status",
         "tag",
@@ -217,6 +244,8 @@ class Step:
             note=_opt_str(data.get("note")),
             photo_before=_opt_str(data.get("photo_before")),
             photo_after=_opt_str(data.get("photo_after")),
+            # Un passo di prima dei criteri di «fatto» non ne ha uno: vuoto.
+            done_when=str(data.get("done_when") or ""),
             extra={k: v for k, v in data.items() if k not in cls._KEYS},
         )
 
@@ -250,6 +279,8 @@ class Plan:
     history: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
+    coverage: list[dict[str, str]] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     _KEYS = (
@@ -262,6 +293,8 @@ class Plan:
         "title",
         "notes",
         "replaces",
+        "coverage",
+        "assumptions",
         "steps",
         "dropped",
         "photos",
@@ -288,6 +321,8 @@ class Plan:
                 "title": self.title,
                 "notes": self.notes,
                 "replaces": self.replaces,
+                "coverage": [dict(c) for c in self.coverage],
+                "assumptions": list(self.assumptions),
                 "steps": [s.to_dict() for s in self.steps],
                 "dropped": [dict(d) for d in self.dropped],
                 "photos": dict(self.photos),
@@ -340,16 +375,61 @@ class Plan:
                     if isinstance(d, dict)
                 ],
                 photos=photos,
-                blocked=dict(blocked) if isinstance(blocked, dict) else None,
+                blocked=_read_blocked(blocked),
                 history=[dict(h) for h in history if isinstance(h, dict)],
                 created_at=str(data.get("created_at", "")),
                 updated_at=str(data.get("updated_at", "")),
+                coverage=_read_coverage(data.get("coverage")),
+                assumptions=[
+                    str(a) for a in (data.get("assumptions") or [])
+                    if isinstance(a, (str, int, float)) and not isinstance(a, bool)
+                ] if isinstance(data.get("assumptions"), list) else [],
                 extra={k: v for k, v in data.items() if k not in cls._KEYS},
             )
         except (KeyError, TypeError, ValueError) as exc:
             if isinstance(exc, PlanFormatError):
                 raise
             raise PlanFormatError(f"malformed plan: {exc}") from exc
+
+
+def _read_blocked(raw: Any) -> dict[str, Any] | None:
+    """Il blocco letto da ``plan.json``, con ``kind`` e ``drafts`` sempre presenti.
+
+    Un blocco scritto prima delle bozze di un passo non ha né l'uno né l'altro:
+    è una domanda, senza bozze. Normalizzarlo qui, alla lettura, vuol dire che
+    la scheda e il driver vedono sempre la stessa forma, vecchio o nuovo.
+    """
+    if not isinstance(raw, dict):
+        return None
+    blocked = dict(raw)
+    kind = blocked.get("kind")
+    blocked["kind"] = kind if kind in BLOCK_KINDS else "question"
+    drafts = blocked.get("drafts")
+    blocked["drafts"] = [
+        {"id": str(d.get("id", "")), "target": str(d.get("target", ""))}
+        for d in drafts
+        if isinstance(d, dict)
+    ] if isinstance(drafts, list) else []
+    return blocked
+
+
+_COVERAGE_KEYS = ("item", "have", "missing", "strategy", "why")
+
+
+def _read_coverage(raw: Any) -> list[dict[str, str]]:
+    """La copertura letta da ``plan.json``: voci con le cinque chiavi, tutte testo.
+
+    Tollerante come il resto della lettura: un piano di prima della copertura
+    ne ha una vuota, e una voce malformata si salta invece di rendere
+    illeggibile il piano.
+    """
+    if not isinstance(raw, list):
+        return []
+    return [
+        {key: str(entry.get(key) or "") for key in _COVERAGE_KEYS}
+        for entry in raw
+        if isinstance(entry, dict)
+    ]
 
 
 # ── Transizioni ──────────────────────────────────────────────────────────────
@@ -431,13 +511,17 @@ class Proposal:
 
     title: str
     steps: list[Step]
+    coverage: list[dict[str, str]] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
 
 
 def _clean_text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def validate_proposal(title: Any, steps: Any) -> Proposal:
+def validate_proposal(
+    title: Any, steps: Any, coverage: Any = None, assumptions: Any = None
+) -> Proposal:
     """Controlla una proposta del modello e la ripulisce, o solleva con un messaggio per lui.
 
     I messaggi sono in inglese e dicono cosa correggere, perché li legge il
@@ -447,6 +531,15 @@ def validate_proposal(title: Any, steps: Any) -> Proposal:
 
     Due passi con lo stesso titolo si rifiutano: sulla scheda sarebbero due
     righe indistinguibili, e il confronto fra versioni abbina per titolo.
+
+    **La proposta è un contratto per l'autonomia**: dopo l'Approva Jenny lavora
+    da sola, quindi quel che si può decidere si decide qui. Per questo la
+    copertura (``coverage``) è obbligatoria — ogni voce del lavoro dice cosa il
+    quaderno ha già e come si colma il resto — e non può restarci una voce
+    ``ask``: una scelta dell'utente si chiede in chat prima di proporre. Una
+    voce ``web`` vuole almeno un passo ``research``, perché chi esegue il piano
+    non improvvisa ricerche che il piano non prevede. Ogni passo porta il
+    suo criterio di «fatto» (``done_when``), che la verifica finale controlla.
     """
     problems: list[str] = []
     clean_title = _clean_text(title)
@@ -505,6 +598,17 @@ def validate_proposal(title: Any, steps: Any) -> Proposal:
                 f"{where}: `detail` is {len(detail)} characters; keep it within "
                 f"{MAX_STEP_DETAIL} or split the step."
             )
+        done_when = _clean_text(raw.get("done_when"))
+        if not done_when:
+            problems.append(
+                f"{where} needs `done_when`: how you will know it is done, with the "
+                "quality bar (e.g. \"every page has at least 3 concrete facts with a source\")."
+            )
+        elif len(done_when) > MAX_STEP_DONE_WHEN:
+            problems.append(
+                f"{where}: `done_when` is {len(done_when)} characters; keep it within "
+                f"{MAX_STEP_DONE_WHEN}."
+            )
         kind = raw.get("kind")
         if kind is None or kind == "":
             kind = "other"
@@ -521,12 +625,152 @@ def validate_proposal(title: Any, steps: Any) -> Proposal:
                 detail=detail,
                 kind=str(kind),
                 same_as=(same_as.strip() or None) if isinstance(same_as, str) else None,
+                done_when=done_when,
             )
         )
 
+    clean_coverage = _validate_coverage(coverage, clean, problems)
+    clean_assumptions = _validate_assumptions(assumptions, problems)
     if problems:
         raise PlanValidationError(" ".join(problems))
-    return Proposal(title=clean_title, steps=clean)
+    return Proposal(
+        title=clean_title,
+        steps=clean,
+        coverage=clean_coverage,
+        assumptions=clean_assumptions,
+    )
+
+
+def _validate_coverage(
+    coverage: Any, steps: list[Step], problems: list[str]
+) -> list[dict[str, str]]:
+    """La copertura ripulita; i problemi si aggiungono a *problems*."""
+    if not isinstance(coverage, list) or not coverage:
+        problems.append(
+            "`coverage` is required: one entry per item the job needs (for example each "
+            "page to write), saying what the notebook already has (`have`), what is "
+            "missing (`missing`), and how the plan fills it (`strategy`: notebook, web or "
+            "leave, with `why`). Look at the notebook first if you do not know."
+        )
+        return []
+    if len(coverage) > MAX_COVERAGE:
+        problems.append(
+            f"`coverage` has {len(coverage)} entries; keep it within {MAX_COVERAGE} by "
+            "grouping items that share the same answer."
+        )
+    research = [s for s in steps if s.kind == "research"]
+    clean: list[dict[str, str]] = []
+    for index, raw in enumerate(coverage, start=1):
+        where = f"Coverage entry {index}"
+        if not isinstance(raw, dict):
+            problems.append(f"{where} must be an object with `item` and `strategy`.")
+            continue
+        entry = {key: _clean_text(raw.get(key)) for key in _COVERAGE_KEYS}
+        item = entry["item"]
+        if not item:
+            problems.append(f"{where} needs a non-empty `item`.")
+            continue
+        where = f"Coverage entry {index} ({item[:40]})"
+        long = [k for k, v in entry.items() if len(v) > MAX_COVERAGE_FIELD]
+        if long:
+            problems.append(
+                f"{where}: keep `{long[0]}` within {MAX_COVERAGE_FIELD} characters."
+            )
+        strategy = entry["strategy"]
+        if strategy not in COVERAGE_STRATEGIES:
+            problems.append(
+                f"{where}: `strategy` must be one of notebook, web or leave."
+            )
+        elif strategy == "ask":
+            problems.append(
+                f"{where} is still `ask`: a choice that is the user's goes to them in "
+                "chat before you propose. Ask, wait for the answer, then propose with "
+                "their answer (notebook, web or leave)."
+            )
+        elif strategy == "leave" and not entry["why"]:
+            problems.append(f"{where} is left uncovered: say `why`.")
+        clean.append(entry)
+    # Una voce ``web`` vuole un passo che cerchi: senza, chi esegue il piano
+    # improvviserebbe ricerche che il piano non prevede, o scriverebbe «non
+    # documentato». Basta un passo ``research`` qualsiasi, e non uno che nomini
+    # ogni voce parola per parola: il modello parafrasa, e un confronto di
+    # stringhe lo farebbe riprovare all'infinito. Cosa cerca ogni passo lo dice
+    # il suo ``detail`` (lo chiede ``plan_mode.md``).
+    if not research and any(e["strategy"] == "web" for e in clean):
+        problems.append(
+            "Some coverage entries are to be searched on the web, but the plan has no "
+            "`research` step: add one, and say in its `detail` what it looks up."
+        )
+    return clean
+
+
+def _validate_assumptions(assumptions: Any, problems: list[str]) -> list[str]:
+    """Le assunzioni ripulite: frasi brevi, una riga ciascuna; facoltative."""
+    if assumptions is None:
+        return []
+    if not isinstance(assumptions, list):
+        problems.append("`assumptions` must be a list of short sentences.")
+        return []
+    if len(assumptions) > MAX_ASSUMPTIONS:
+        problems.append(
+            f"`assumptions` has {len(assumptions)} entries; keep the {MAX_ASSUMPTIONS} "
+            "that matter."
+        )
+    clean: list[str] = []
+    for index, raw in enumerate(assumptions, start=1):
+        text = _clean_text(raw)
+        if not text:
+            problems.append(f"Assumption {index} must be a non-empty sentence.")
+        elif "\n" in text or len(text) > MAX_ASSUMPTION:
+            problems.append(
+                f"Assumption {index} must be one line within {MAX_ASSUMPTION} characters."
+            )
+        else:
+            clean.append(text)
+    return clean
+
+
+# ── Pianificazione in corso (``drafting``) ───────────────────────────────────
+
+
+def _parse_stamp(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def drafting_expired(entry: dict[str, Any], *, now: datetime | None = None) -> bool:
+    """La pianificazione è scaduta: nessun turno da :data:`DRAFTING_TTL_HOURS` ore.
+
+    Si conta dall'ultimo turno (``touched``), non dall'inizio: un giro di
+    domande e risposte lungo è ancora una pianificazione viva. Una voce senza
+    date leggibili è scaduta: non si sa da quando tiene il quaderno.
+    """
+    moment = now or datetime.now(timezone.utc)
+    last = _parse_stamp(entry.get("touched")) or _parse_stamp(entry.get("since"))
+    if last is None:
+        return True
+    return (moment - last).total_seconds() > DRAFTING_TTL_HOURS * 3600
+
+
+def drafting_view(entry: dict[str, Any] | None) -> dict[str, Any] | None:
+    """La forma del drafting per la WebUI: ``{since, revise, reads}``.
+
+    ``touched`` resta dentro: serve alla scadenza, e la scheda non ne fa niente.
+    """
+    if not isinstance(entry, dict):
+        return None
+    reads = entry.get("reads")
+    revise = entry.get("revise")
+    return {
+        "since": str(entry.get("since") or ""),
+        "revise": revise if isinstance(revise, str) and revise else None,
+        "reads": reads if isinstance(reads, int) and not isinstance(reads, bool) else 0,
+    }
 
 
 # ── Versione nuova ───────────────────────────────────────────────────────────
@@ -563,7 +807,7 @@ def tag_new_version(old_steps: Iterable[Step], new_steps: list[Step]) -> list[di
 
     - nessuna corrispondenza → ``new``;
     - fuori dall'ordine relativo dei passi abbinati → ``moved``;
-    - stesso posto ma titolo o ``detail`` diverso → ``changed``;
+    - stesso posto ma titolo, ``detail`` o ``done_when`` diverso → ``changed``;
     - altrimenti nessun tag.
 
     «Posizione» vuol dire **ordine relativo**, non indice: con un passo nuovo in
@@ -598,7 +842,11 @@ def tag_new_version(old_steps: Iterable[Step], new_steps: list[Step]) -> list[di
             step.tag = "new"
         elif position not in in_order:
             step.tag = "moved"
-        elif old[match].detail != step.detail or old[match].title != step.title:
+        elif (
+            old[match].detail != step.detail
+            or old[match].title != step.title
+            or old[match].done_when != step.done_when
+        ):
             step.tag = "changed"
         else:
             step.tag = None

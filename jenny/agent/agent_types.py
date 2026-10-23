@@ -226,6 +226,16 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
 AGENT_TYPES: dict[str, AgentType] = {t.name: t for t in _AGENT_TYPES}
 AGENT_TYPE_NAMES: tuple[str, ...] = tuple(AGENT_TYPES)
 
+# Gli aiutanti che un turno di pianificazione può lanciare: solo l'editore, che
+# legge pagine, bacheca e fonti — l'inventario di un quaderno grande — e in un
+# turno in sola lettura non scrive niente (eredita lo scope). Non ``researcher``
+# né i tipi con la rete (``operator``, e ``python_exec`` per ``coder`` e
+# ``analyst``): il loro risultato porterebbe contenuto del web nella sessione,
+# e ogni aiutante lanciato dopo dai passi del piano nascerebbe contaminato, con
+# le scritture su ``AGENTS.md`` in bozza a metà piano. Cosa cercare lo decide la
+# pianificazione; cercarlo è un passo ``research`` del piano.
+PLANNING_HELPER_TYPES: frozenset[str] = frozenset({"notebook-editor"})
+
 
 def get_agent_type(name: str | None) -> AgentType:
     """Risolve un tipo per nome. Solleva :class:`UnknownAgentTypeError`.

@@ -20,6 +20,14 @@ Plan: {{ title }}
 Step {{ step.n }}: {{ step.title }}
 
 {{ step.detail }}
+{% if step.done_when %}
+
+Done when: {{ step.done_when }}
+{% endif %}
+{% if waiting %}
+
+Already waiting for the user's approval, from an earlier run of this step: {{ waiting | join(", ") }}. Do not make these changes again: they count as done, and the code holds the step until the user decides.
+{% endif %}
 
 Rules:
 - Do this step only. Do not start the next one: the code opens it when you close this one.
@@ -28,5 +36,7 @@ Rules:
 - When it is finished, call `plan_step_done` with a one-line note of what changed (for example "3 pages written, 1 source discarded").
 - If there is nothing to do, call `plan_step_skip` with the honest reason.
 - If you need the user — a choice, a missing fact, a permission — call `plan_blocked` with one clear question, and stop there.
+- If a premise of the plan proves false (sources that are not there, an item that does not exist, a file different from what the plan says) and the later steps would come out poor, do not go on knowing it: stop with `plan_blocked`, saying what you found and what you propose.
+- Close the step only when its "done when" holds. If a change waits for the user's approval (a draft), still call `plan_step_done`: the code holds the step until they decide.
 - Keep your words to the user short: the plan card already shows the list and the progress.
 {% endif %}

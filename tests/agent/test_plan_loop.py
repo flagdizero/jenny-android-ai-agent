@@ -78,6 +78,8 @@ class Script:
         # Un passo che non muore al ``cancel``: il loop lo abbandona, e lui resta.
         self.hang_steps = False
         self.release = asyncio.Event()
+        # Il primo turno di pianificazione fa una domanda invece di proporre.
+        self.ask_first = False
 
     async def __call__(self, **kw: Any) -> LLMResponse:
         messages = kw.get("messages") or []
@@ -88,19 +90,14 @@ class Script:
             self.systems.append(_text(messages[0]))
         last = messages[-1]
         if last.get("role") == "tool":
-            return LLMResponse(content="Fatto.")
+            return self._after_tool(messages)
         text = _text(last)
         self.prompts.append(text)
         if "[Planning turn]" in text:
-            return _call(
-                "plan_propose",
-                title="Rifare la wiki",
-                steps=[
-                    {"title": "Scrivo acero", "detail": "wiki/acero.md", "kind": "write"},
-                    {"title": "Scrivo ginkgo", "detail": "wiki/ginkgo.md", "kind": "write"},
-                    {"title": "Scrivo indice", "detail": "wiki/index.md", "kind": "write"},
-                ],
-            )
+            if self.ask_first and "The user pressed Plan" in text:
+                return LLMResponse(content="La camelia la tengo? Se non mi dici niente: sì.")
+            # Prima si guarda il quaderno: ``plan_propose`` rifiuta senza.
+            return _call("read_file", path="wiki/index.md")
         found = re.search(r"\[Plan(?: reminder)? — step (\d+) of", text)
         if found and self.hang_steps:
             while not self.release.is_set():
@@ -115,6 +112,31 @@ class Script:
             page.write_text(f"passo {n}\n", encoding="utf-8")
             return _call("plan_step_done", note=f"passo {n} scritto")
         return LLMResponse(content="Va bene.")
+
+    @staticmethod
+    def _after_tool(messages: list[dict[str, Any]]) -> LLMResponse:
+        """Dopo un tool: se era la lettura del turno di pianificazione, la proposta."""
+        called = [
+            (c.get("function") or c).get("name")
+            for m in messages if m.get("role") == "assistant"
+            for c in (m.get("tool_calls") or [])
+        ]
+        if called and called[-1] == "read_file":
+            return _call(
+                "plan_propose",
+                title="Rifare la wiki",
+                coverage=[{"item": "acero, ginkgo, indice", "have": "l'indice",
+                           "missing": "due pagine", "strategy": "notebook"}],
+                steps=[
+                    {"title": "Scrivo acero", "detail": "wiki/acero.md", "kind": "write",
+                     "done_when": "la pagina c'è"},
+                    {"title": "Scrivo ginkgo", "detail": "wiki/ginkgo.md", "kind": "write",
+                     "done_when": "la pagina c'è"},
+                    {"title": "Scrivo indice", "detail": "wiki/index.md", "kind": "write",
+                     "done_when": "l'indice linka le pagine"},
+                ],
+            )
+        return LLMResponse(content="Fatto.")
 
 
 def _loop(workspace: Path, script: Script) -> tuple[AgentLoop, PlanDriver]:
@@ -136,6 +158,13 @@ def _user(content: str, **metadata: Any) -> InboundMessage:
     )
 
 
+async def _planning(loop: AgentLoop, content: str, **metadata: Any) -> Any:
+    """Un turno col tasto Piano, come lo fa ``_dispatch``: prima il gancio, poi il turno."""
+    msg = _user(content, plan_mode=True, readonly=True, **metadata)
+    await loop._plan_before_turn(msg, KEY)
+    return await loop._process_message(msg, session_key=KEY)
+
+
 # ── quali tool si vedono ─────────────────────────────────────────────────────
 
 
@@ -153,9 +182,7 @@ async def test_plan_tools_are_hidden_in_an_ordinary_turn(workspace: Path) -> Non
 async def test_the_planning_turn_offers_only_plan_propose(workspace: Path) -> None:
     script = Script(workspace)
     loop, driver = _loop(workspace, script)
-    await loop._process_message(
-        _user("Rifai la wiki", plan_mode=True, readonly=True), session_key=KEY
-    )
+    await _planning(loop, "Rifai la wiki")
     assert "plan_propose" in script.offered[0]
     assert not (script.offered[0] & PLAN_STEP_TOOLS)
     assert "[Planning turn]" in script.prompts[0]
@@ -179,7 +206,7 @@ async def test_a_step_turn_offers_the_step_tools_and_persists_no_user_bubble(
 ) -> None:
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
-    await loop._process_message(_user("piano", plan_mode=True, readonly=True), session_key=KEY)
+    await _planning(loop, "piano")
     plan = driver.store.open_plan_for("piante")
     await driver.approve(plan.id, plan.version, [])
     step_msg = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=2)
@@ -202,7 +229,7 @@ async def test_a_step_turn_offers_the_step_tools_and_persists_no_user_bubble(
 async def test_a_stale_step_message_does_not_run(workspace: Path) -> None:
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
-    await loop._process_message(_user("piano", plan_mode=True, readonly=True), session_key=KEY)
+    await _planning(loop, "piano")
     plan = driver.store.open_plan_for("piante")
     await driver.approve(plan.id, plan.version, [])
     step_msg = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=2)
@@ -309,7 +336,7 @@ async def test_stop_with_a_helper_running(workspace: Path) -> None:
 async def test_slash_stop_in_the_notebook_stops_the_plan(workspace: Path) -> None:
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
-    await loop._process_message(_user("piano", plan_mode=True, readonly=True), session_key=KEY)
+    await _planning(loop, "piano")
     plan = driver.store.open_plan_for("piante")
     await driver.approve(plan.id, plan.version, [])
     await loop.bus.consume_inbound()
@@ -326,7 +353,7 @@ async def test_a_paused_plan_runs_user_turns_read_only(workspace: Path) -> None:
 
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
-    await loop._process_message(_user("piano", plan_mode=True, readonly=True), session_key=KEY)
+    await _planning(loop, "piano")
     plan = driver.store.open_plan_for("piante")
     await driver.approve(plan.id, plan.version, [])
     await loop.bus.consume_inbound()
@@ -345,7 +372,7 @@ async def test_a_paused_plan_runs_user_turns_read_only(workspace: Path) -> None:
 async def test_the_personal_chat_sees_one_line_per_open_plan(workspace: Path) -> None:
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
-    await loop._process_message(_user("piano", plan_mode=True, readonly=True), session_key=KEY)
+    await _planning(loop, "piano")
     await loop._process_message(
         InboundMessage(channel="websocket", sender_id="u", chat_id="default", content="a che punto?"),
     )
@@ -369,7 +396,7 @@ async def test_a_stale_step_message_is_not_judged_as_a_stall(workspace: Path) ->
     scartarlo non deve far partire il promemoria del passo 2."""
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
-    await loop._process_message(_user("piano", plan_mode=True, readonly=True), session_key=KEY)
+    await _planning(loop, "piano")
     plan = driver.store.open_plan_for("piante")
     await driver.approve(plan.id, plan.version, [])
     stale = await loop.bus.consume_inbound()
@@ -391,7 +418,7 @@ async def test_a_stale_step_message_is_not_judged_as_a_stall(workspace: Path) ->
 
 
 async def _approved(loop: AgentLoop, driver: PlanDriver) -> tuple[Any, InboundMessage]:
-    await loop._process_message(_user("piano", plan_mode=True, readonly=True), session_key=KEY)
+    await _planning(loop, "piano")
     plan = driver.store.open_plan_for("piante")
     await driver.approve(plan.id, plan.version, [])
     step_msg = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=2)
@@ -570,4 +597,184 @@ async def test_stop_and_rollback_refuse_under_an_abandoned_turn(workspace: Path)
         assert page.read_text(encoding="utf-8") == "scritta dal passo\n"
     finally:
         script.release.set()
+        await _stop(loop, task)
+
+
+# ── la pianificazione dura più turni ────────────────────────────────────────
+
+
+async def test_the_answer_to_a_question_is_still_a_planning_turn(workspace: Path) -> None:
+    """Tre turni: domanda, risposta senza il tasto, proposta. La risposta è in sola
+    lettura e vede ``plan_propose``; dopo la proposta si torna alla chat normale."""
+    from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
+
+    script = Script(workspace)
+    script.ask_first = True
+    loop, driver = _loop(workspace, script)
+    await _planning(loop, "Rifai la wiki")
+    assert driver.store.open_plan_for("piante") is None
+    assert driver.drafting_for(KEY) is not None
+
+    answer = _user("Sì, tienila")
+    await loop._plan_before_turn(answer, KEY)
+    assert answer.metadata[WORKSPACE_READONLY_METADATA_KEY] is True
+    await loop._process_message(answer, session_key=KEY)
+    assert "plan_propose" in script.offered[-2]
+    assert "still preparing a plan" in script.prompts[-1]
+    plan = driver.store.open_plan_for("piante")
+    assert plan is not None and plan.status == "proposed"
+    assert driver.drafting_for(KEY) is None
+
+    after = _user("grazie")
+    await loop._plan_before_turn(after, KEY)
+    await loop._process_message(after, session_key=KEY)
+    assert "plan_propose" not in script.offered[-1]
+    assert "[Planning turn]" not in script.prompts[-1]
+
+
+async def test_the_planning_turn_counts_its_reads(workspace: Path) -> None:
+    script = Script(workspace)
+    script.ask_first = True
+    loop, driver = _loop(workspace, script)
+    await _planning(loop, "Rifai la wiki")
+    assert driver.drafting_info("piante")["reads"] == 0
+    # La risposta legge (``read_file``) e propone: la lettura conta, e basta.
+    msg = _user("ok")
+    await loop._plan_before_turn(msg, KEY)
+    await loop._process_message(msg, session_key=KEY)
+    assert driver.store.open_plan_for("piante") is not None
+
+
+async def test_no_web_while_planning(workspace: Path) -> None:
+    """In un turno di pianificazione il web non si vede (l'agente in modalità core
+    lo avrebbe): una pagina letta adesso contaminerebbe gli aiutanti dei passi."""
+    loop, driver = _loop(workspace, Script(workspace))
+    await driver.start_drafting(KEY)
+    planning = loop._plan_tool_filter(_user("x"), KEY)
+    plain = loop._plan_tool_filter(
+        InboundMessage(channel="websocket", sender_id="u", chat_id="default", content="x"),
+        "unified:default",
+    )
+    for name in ("web_search", "web_fetch", "browser_open", "download_file", "python_exec",
+                 "write_stdin"):
+        assert planning(name) is True
+        assert plain(name) is None
+    assert planning("read_file") is None and planning("plan_propose") is False
+
+
+async def test_spawn_while_planning_allows_only_the_notebook_editor(workspace: Path) -> None:
+    from unittest.mock import AsyncMock
+
+    from jenny.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
+    from jenny.agent.tools.spawn import SpawnTool
+
+    manager = MagicMock()
+    manager.spawn = AsyncMock(return_value="started")
+    tool = SpawnTool(manager)
+    tool.set_context(RequestContext(channel="websocket", chat_id=KEY, session_key=KEY))
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id=KEY, session_key=KEY,
+        metadata={"plan_mode": True, "readonly": True},
+    ))
+    try:
+        for agent_type in ("researcher", None, "coder"):
+            out = await tool.execute(task="cerca il glicine", agent_type=agent_type)
+            assert out.startswith("Cannot spawn") and "research" in out, out
+        manager.spawn.assert_not_called()
+        assert await tool.execute(task="inventario", agent_type="notebook-editor") == "started"
+    finally:
+        reset_request_context(token)
+    assert await tool.execute(task="cerca", agent_type="researcher") == "started"
+
+
+def _helper_result(task_id: str) -> InboundMessage:
+    return InboundMessage(
+        channel="system", sender_id="subagent", chat_id="websocket:project:piante",
+        content="Inventario: 10 piante.", session_key_override=KEY,
+        metadata={"injected_event": "subagent_result", "subagent_task_id": task_id},
+    )
+
+
+async def test_a_helper_result_while_planning_is_planning_and_counts_only_if_spawned_there(
+    workspace: Path,
+) -> None:
+    """Il rientro di un aiutante durante la pianificazione è pianificazione (sola
+    lettura); conta come lettura solo se l'ha lanciato lei — un ``researcher`` di
+    prima non ha guardato il quaderno per questo piano."""
+    from jenny.agent.hook import ToolResultHookContext
+    from jenny.agent.loop_plan import PlanReadHook
+    from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
+
+    loop, driver = _loop(workspace, Script(workspace))
+    await driver.start_drafting(KEY)
+    old = _helper_result("vecchio1")
+    await loop._plan_system_turn(old, KEY)
+    assert old.metadata["plan_mode"] is True
+    assert old.metadata[WORKSPACE_READONLY_METADATA_KEY] is True
+    await loop._plan_count_helper_result(old, KEY)
+    assert driver.drafting_info("piante")["reads"] == 0
+
+    hook = PlanReadHook(driver, KEY)
+    await hook.after_execute_tool(ToolResultHookContext(
+        name="spawn", call_id="c1", arguments={"agent_type": "notebook-editor"},
+        result="Subagent [inventario] started (id: ab12cd34). The result arrives on its own.",
+    ))
+    mine = _helper_result("ab12cd34")
+    await loop._plan_system_turn(mine, KEY)
+    await loop._plan_count_helper_result(mine, KEY)
+    assert driver.drafting_info("piante")["reads"] == 1
+
+    await driver.end_drafting(KEY, "test")
+    other = _helper_result("ab12cd34")
+    await loop._plan_system_turn(other, KEY)
+    assert "plan_mode" not in other.metadata
+
+
+async def test_a_message_whose_planning_differs_from_the_turn_waits_its_own_turn(
+    workspace: Path,
+) -> None:
+    """Un ``plan: true`` iniettato in un turno normale scriverebbe senza la sola
+    lettura; una risposta normale iniettata in una pianificazione resterebbe in
+    sola lettura. Diventa un turno suo."""
+    loop, driver = _loop(workspace, Script(workspace))
+    plain_turn: dict[str, Any] = {}
+    planning_turn = {"plan_mode": True, "readonly": True}
+    assert loop._plan_injection(_user("x", plan_mode=True), plain_turn, KEY) == "defer"
+    assert loop._plan_injection(_user("x"), plain_turn, KEY) == "inject"
+    await driver.start_drafting(KEY)
+    assert loop._plan_injection(_user("risposta"), planning_turn, KEY) == "inject"
+    assert loop._plan_injection(_user("risposta"), plain_turn, KEY) == "defer"
+    await driver.end_drafting(KEY, "proposed")
+    assert loop._plan_injection(_user("grazie"), planning_turn, KEY) == "defer"
+
+
+async def test_slash_new_ends_a_planning(workspace: Path) -> None:
+    script = Script(workspace)
+    script.ask_first = True
+    loop, driver = _loop(workspace, script)
+    await _planning(loop, "Rifai la wiki")
+    assert driver.drafting_for(KEY) is not None
+    task = await _run(loop)
+    try:
+        await loop.bus.publish_inbound(_user("/new"))
+        await wait_until(lambda: driver.drafting_for(KEY) is None, timeout=5)
+    finally:
+        await _stop(loop, task)
+
+
+async def test_slash_stop_ends_a_planning(workspace: Path) -> None:
+    script = Script(workspace)
+    script.ask_first = True
+    loop, driver = _loop(workspace, script)
+    await _planning(loop, "Rifai la wiki")
+    assert driver.drafting_for(KEY) is not None
+    task = await _run(loop)
+    try:
+        await loop.bus.publish_inbound(_user("/stop"))
+        await wait_until(lambda: driver.drafting_for(KEY) is None, timeout=5)
+    finally:
         await _stop(loop, task)

@@ -34,10 +34,10 @@ def ws(tmp_path: Path) -> Path:
     (root / "memory").mkdir()
     (root / "HEARTBEAT.md").write_text("# heartbeat\n- check mail\n", encoding="utf-8")
     taint_ledger._LEDGERS.clear()
-    staged_writes.set_change_listener(None)
+    staged_writes.clear_change_listeners()
     yield root
     taint_ledger._LEDGERS.clear()
-    staged_writes.set_change_listener(None)
+    staged_writes.clear_change_listeners()
 
 
 def _untrusted(ws: Path) -> SubagentRunPolicy:
@@ -145,7 +145,7 @@ async def test_python_exec_sends_control_writes_to_the_file_tools(ws: Path, code
 
 async def test_install_writes_clears_the_taint_and_notifies(ws: Path) -> None:
     counts: list[int] = []
-    staged_writes.set_change_listener(counts.append)
+    staged_writes.add_change_listener(lambda change: counts.append(change.count))
     with enter_subagent_policy(_untrusted(ws)):
         await _tool(WriteFileTool, ws).execute(path=str(ws / "HEARTBEAT.md"), content="nuovo\n")
     listed = (await staged_list(_ctx(ws), {}))["staged"]
@@ -256,3 +256,56 @@ async def test_the_announce_tells_jenny_there_is_something_to_approve(ws: Path) 
     msg = await sm.bus.consume_inbound()
     assert "wait for the user's approval on a card in the home chat" in msg.content
     assert len(msg.metadata["subagent_staged_ids"]) == 1
+
+
+async def test_every_listener_hears_every_change_with_its_action(ws: Path) -> None:
+    """Gli ascoltatori sono una lista: il frame della WebUI e il driver dei piani
+    sentono entrambi, e uno rotto non zittisce l'altro."""
+    first: list[tuple[str, str, int]] = []
+    second: list[str] = []
+
+    def broken(_change: staged_writes.StagedChange) -> None:
+        raise RuntimeError("boom")
+
+    staged_writes.add_change_listener(lambda c: first.append((c.action, c.target, c.count)))
+    staged_writes.add_change_listener(broken)
+    remove = staged_writes.add_change_listener(lambda c: second.append(c.action))
+    a = staged_writes.stage(ws, "HEARTBEAT.md", b"a\n", sources=("x",), task_id="t1")
+    b = staged_writes.stage(ws, "skills/x.md", b"b\n", sources=("x",), task_id="t1")
+    staged_writes.discard(ws, b.id)
+    remove()
+    staged_writes.install(ws, a.id, staged_writes.sha256_of(ws / "HEARTBEAT.md"))
+    assert first == [
+        ("staged", "HEARTBEAT.md", 1),
+        ("staged", "skills/x.md", 2),
+        ("discarded", "skills/x.md", 1),
+        ("installed", "HEARTBEAT.md", 0),
+    ]
+    assert second == ["staged", "staged", "discarded"]
+
+
+async def test_a_tainted_researcher_saves_sources_in_its_notebook_without_a_draft(
+    ws: Path,
+) -> None:
+    """Un ``researcher`` lanciato nella chat di un quaderno salva le fonti verbatim in
+    ``raw/research/`` del quaderno, senza bozza: ``raw/`` non è un file che Jenny
+    carica da sola, e la bozza lì fermerebbe un passo ``research`` del piano a ogni
+    fonte. Il file resta marcato come non fidato nel registro (chi lo legge dopo lo
+    sa); l'``AGENTS.md`` dello stesso quaderno, invece, va in bozza."""
+    from jenny.security.workspace_access import build_workspace_scope, enter_workspace_scope
+
+    notebook = ws / "wikis" / "piante"
+    (notebook / "raw" / "research").mkdir(parents=True)
+    (notebook / "AGENTS.md").write_text("id: piante\n", encoding="utf-8")
+    source = notebook / "raw" / "research" / "2026-10-23-acero.md"
+    with enter_workspace_scope(build_workspace_scope(notebook, "restricted")), \
+            enter_subagent_policy(_untrusted(ws)):
+        out = await _tool(WriteFileTool, ws).execute(
+            path=str(source), content="URL: https://example.org/acero\n\n> estratto\n")
+        staged = await _tool(WriteFileTool, ws).execute(
+            path=str(notebook / "AGENTS.md"), content="id: piante\nnuovo\n")
+    assert not out.startswith("Saved as a draft"), out
+    assert source.read_text(encoding="utf-8").startswith("URL: https://example.org/acero")
+    assert taint_ledger.ledger_for(ws).source_of("wikis/piante/raw/research/2026-10-23-acero.md")
+    assert staged.startswith("Saved as a draft"), staged
+    assert [i["target"] for i in staged_writes.list_staged(ws)] == ["wikis/piante/AGENTS.md"]
