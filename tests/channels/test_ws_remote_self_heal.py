@@ -275,14 +275,25 @@ async def _round(listener: RemoteListener) -> None:
         await task
 
 
-async def test_tailscale_down_is_revived_after_two_empty_rounds() -> None:
+def _age(listener: RemoteListener, seconds: float) -> None:
+    """Tailscale giù da *seconds* secondi in più."""
+    assert listener._down_since is not None
+    listener._down_since -= seconds
+
+
+async def test_tailscale_down_is_revived_after_twenty_seconds_not_after_rounds() -> None:
+    """Col tempo, non coi giri: sul Titan gli ``accept`` falliti svegliavano
+    più giri di fila, e contarli faceva partire il primo tentativo dopo 0 s."""
     revive = _Revive()
     rig = _Rig()
     rig.listener._revive = revive
     rig.addresses = ()
     await rig.listener.apply(enabled=True, key="k1")  # primo giro vuoto
     try:
-        assert revive.calls == []  # un off/on a mano non fa scattare niente
+        for _ in range(5):  # una raffica di giri svegliati
+            await _round(rig.listener)
+        assert revive.calls == []
+        _age(rig.listener, 21)
         await _round(rig.listener)
         assert revive.calls == [False]  # il solo messaggio, invisibile
 
@@ -302,6 +313,7 @@ async def test_the_app_opens_only_after_two_broadcasts_and_pauses_grow() -> None
     rig.addresses = ()
     await rig.listener.apply(enabled=True, key="k1")
     try:
+        _age(rig.listener, 21)
         pauses = []
         for _ in range(7):
             rig.listener._next_revive_at = 0.0  # il tempo della pausa è passato
@@ -321,6 +333,7 @@ async def test_tailscale_back_resets_the_count_and_listens() -> None:
     rig.addresses = ()
     await rig.listener.apply(enabled=True, key="k1")
     try:
+        _age(rig.listener, 21)
         await _round(rig.listener)
         assert revive.calls == [False]
 
@@ -330,9 +343,10 @@ async def test_tailscale_back_resets_the_count_and_listens() -> None:
         assert status["listening"] and status["tailscale"] == "up"
         assert status["revive_attempts"] == 0
 
-        rig.addresses = ()  # cade di nuovo: si ricomincia da due giri
+        rig.addresses = ()  # cade di nuovo: i 20 s ripartono da zero
         await _round(rig.listener)
         assert revive.calls == [False]
+        _age(rig.listener, 21)
         await _round(rig.listener)
         assert revive.calls == [False, False]
     finally:
@@ -358,6 +372,7 @@ async def test_a_failing_revive_does_not_break_the_round() -> None:
     rig.addresses = ()
     await rig.listener.apply(enabled=True, key="k1")
     try:
+        _age(rig.listener, 21)
         await _round(rig.listener)
         assert revive.calls == [False]
         rig.addresses = (TS4, TS6)

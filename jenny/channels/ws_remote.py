@@ -81,11 +81,13 @@ _DETECT_TIMEOUT_S = 5.0
 _CLOSE_TIMEOUT_S = 5.0
 
 # Tailscale giù con l'opzione accesa: Jenny lo riaccende (``runtime.tailscale``).
-# Dopo due giri vuoti di fila (~20 s: un off/on a mano non fa scattare niente),
-# poi a pause crescenti fino a dieci minuti, finché non torna. I primi due
+# Dopo 20 secondi di assenza — misurati col tempo, non coi giri: gli ``accept``
+# falliti svegliano più giri di fila, e contarli faceva partire il primo
+# tentativo dopo zero secondi (visto sul Titan il 24/10/2026) — poi a pause
+# crescenti fino a dieci minuti, finché non torna. I primi due
 # tentativi sono il solo messaggio, invisibile; dal terzo si apre anche l'app,
 # che si vede ma è l'unico gesto misurato che lo riporta su dopo un kill.
-_REVIVE_AFTER_ROUNDS = 2
+_REVIVE_AFTER_S = 20.0
 _REVIVE_BACKOFF_S = (30.0, 60.0, 120.0, 300.0, 600.0)
 _BROADCASTS_BEFORE_APP = 2
 # Dopo un tentativo i giri si fanno fitti per un po': il tunnel torna in pochi
@@ -273,7 +275,6 @@ class RemoteListener:
         # ``revive(open_app=...)``: riaccende Tailscale. ``None`` = non ci prova
         # (le prove, e chiunque usi l'ascoltatore fuori dal telefono).
         self._revive = revive
-        self._down_rounds = 0
         self._down_since: float | None = None
         self._revive_attempts = 0
         self._next_revive_at = 0.0
@@ -462,7 +463,7 @@ class RemoteListener:
         if revive is not None and not revive.done():
             revive.cancel()
             await asyncio.gather(revive, return_exceptions=True)
-        self._down_rounds = self._revive_attempts = 0
+        self._revive_attempts = 0
         self._down_since = None
         self._next_revive_at = self._fast_until = 0.0
         async with self._lock:
@@ -501,7 +502,15 @@ class RemoteListener:
 
     async def _watch_loop(self) -> None:
         while self._enabled:
-            fast = self._retry_soon or time.monotonic() < self._fast_until
+            now = time.monotonic()
+            # Fitti anche mentre si aspetta il primo tentativo: deve partire
+            # allo scadere dei 20 s, non al giro di dieci dopo.
+            waiting_revive = (
+                self._revive is not None
+                and self._down_since is not None
+                and not self._revive_attempts
+            )
+            fast = self._retry_soon or now < self._fast_until or waiting_revive
             wait = min(_RETRY_S, self._poll_s) if fast else self._poll_s
             try:
                 await asyncio.wait_for(self._kick.wait(), timeout=wait)
@@ -581,15 +590,13 @@ class RemoteListener:
                     now - self._down_since,
                     self._revive_attempts,
                 )
-            self._down_rounds = 0
             self._down_since = None
             self._revive_attempts = 0
             self._next_revive_at = 0.0
             return
         if self._down_since is None:
             self._down_since = now
-        self._down_rounds += 1
-        if self._revive is None or self._down_rounds < _REVIVE_AFTER_ROUNDS:
+        if self._revive is None or now - self._down_since < _REVIVE_AFTER_S:
             return
         if now < self._next_revive_at:
             return
