@@ -1724,6 +1724,31 @@ class SubagentManager:
             await self._announce_result(task_id, label, task, f"Error: {e}", origin, "error", origin_message_id)
         finally:
             self._run_policies.pop(task_id, None)
+            self._close_browser_session(status.lineage_id)
+
+    @staticmethod
+    def _close_browser_session(lineage_id: str) -> None:
+        """Chiude la sessione del browser dell'aiutante, se ne ha aperta una.
+
+        Senza, la sua WebView restava aperta fino al guardiano d'inattivita'
+        (``idleCloseS``), tenendo uno slot che un altro aiutante aspetta in
+        ``browser_open`` e ~100 MB del telefono. Il proprietario e' il lineage,
+        come in ``browser.owner_for``. La chiusura parte e **non si aspetta**:
+        ``close`` in Kotlin dura fino a 10 s, e finche' questo task non finisce
+        il piano conta l'aiutante fra quelli in corsa e non giudica il passo.
+        Import pigro, perche' questo modulo non dipenda dai tool al caricamento.
+        Un errore qui non deve cambiare l'esito del lavoro, gia' annunciato.
+        """
+        if not lineage_id:
+            return
+        try:
+            from jenny.agent.tools.browser import close_owner_sessions_later
+
+            close_owner_sessions_later(lineage_id)
+        except Exception:
+            logger.opt(exception=True).warning(
+                "Closing the browser session of lineage {} failed", lineage_id
+            )
 
     # ------------------------------------------------------------------
     # iniezione mid-run

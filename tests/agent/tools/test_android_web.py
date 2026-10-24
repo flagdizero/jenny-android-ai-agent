@@ -535,3 +535,204 @@ class TestToolGating:
         ctx = SimpleNamespace(android_context=Mock(), config=cfg)
         assert AndroidWebSearchTool.enabled(ctx) is True
         assert AndroidWebFetchTool.enabled(ctx) is True
+
+
+class TestSearchDefault:
+    """Otto risultati di partenza: con cinque le ricerche vere restavano povere."""
+
+    def test_config_default(self):
+        assert AndroidWebSearchConfig().max_results == 8
+        with pytest.raises(Exception):  # il tetto resta 10
+            AndroidWebSearchConfig(max_results=11)
+
+    def test_tool_default_and_description(self):
+        assert AndroidWebSearchTool(android_context=object()).max_results == 8
+        assert "count defaults to 8 (max 10)" in AndroidWebSearchTool.description
+
+    async def test_the_default_reaches_the_bridge(self):
+        bridge = Mock()
+        bridge.searchBing.return_value = json.dumps({"results": RESULTS, "pageText": ""})
+        with patch.object(android_web, "_get_bridge", return_value=bridge):
+            await AndroidWebSearchTool(android_context=object()).execute("python")
+        assert bridge.searchBing.call_args[0][1] == 8
+
+
+_ARTICLE = "<html><body><article>" + ("<p>Paragrafo di contenuto vero.</p>" * 60) + "</article></body></html>"
+_BROWSER_TEXT = "Il testo dell'articolo, letto dal browser. " * 40
+
+
+def _allow_public(monkeypatch):
+    """Validazione senza DNS: passa tutto tranne il loopback e la rete locale."""
+    import jenny.security.network as net
+
+    def fake(url, **kw):
+        blocked = "127.0.0.1" in url or "192.168." in url
+        return (not blocked, "private address" if blocked else "")
+
+    monkeypatch.setattr(net, "validate_url_target", fake)
+
+
+class TestFetchFallsBackToTheBrowser:
+    """``web_fetch`` riprova in una sessione del browser quando ``fetchUrl`` non basta."""
+
+    def _tool(self) -> AndroidWebFetchTool:
+        return AndroidWebFetchTool(android_context=object(), timeout=5, owner="ab12cd34")
+
+    def _browser(self, monkeypatch, result):
+        from jenny.agent.tools import browser
+
+        calls = []
+
+        async def fake(context, url, *, owner, cfg, max_chars, timeout):
+            calls.append({"url": url, "owner": owner, "max_chars": max_chars,
+                          "timeout": timeout, "max_sessions": cfg.max_sessions})
+            return result
+
+        monkeypatch.setattr(browser, "read_page_once", fake)
+        return calls
+
+    async def test_a_short_page_is_read_again_in_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        calls = self._browser(monkeypatch, {
+            "url": "https://example.com/a", "text": _BROWSER_TEXT, "chars": 1720,
+            "truncated": False,
+        })
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=("<html><body>Loading…</body></html>", "https://example.com/a")):
+            out = json.loads(await self._tool().execute("https://example.com/a", maxChars=9000))
+        assert out["extractor"] == "browser"
+        assert out["fallback_reason"] == "short_text"
+        assert "letto dal browser" in out["text"]
+        assert out["text"].startswith(android_web._UNTRUSTED_BANNER)
+        assert set(out) >= {"url", "finalUrl", "status", "truncated", "length", "untrusted"}
+        assert calls == [{"url": "https://example.com/a", "owner": "ab12cd34",
+                          "max_chars": 9000, "timeout": 5, "max_sessions": 3}]
+
+    async def test_a_cookie_wall_is_read_again_in_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        wall = ("<p>We use cookies to improve your experience. Accept all or manage "
+                "your consent preferences.</p>" * 12)
+        self._browser(monkeypatch, {
+            "url": "https://example.com/b", "text": "Articolo. " * 70, "chars": 700,
+            "truncated": False,
+        })
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(f"<html><body>{wall}</body></html>", "https://example.com/b")):
+            out = json.loads(await self._tool().execute("https://example.com/b"))
+        assert out["extractor"] == "browser"
+        assert out["fallback_reason"] == "cookie_wall"
+
+    async def test_a_full_page_does_not_open_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        calls = self._browser(monkeypatch, {"skipped": "should not be asked"})
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(_ARTICLE, "https://example.com/c")):
+            out = json.loads(await self._tool().execute("https://example.com/c"))
+        assert calls == []
+        assert out["extractor"] == "webview"
+        assert "fallback_reason" not in out
+
+    async def test_a_browser_that_finds_less_leaves_the_first_result(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "https://example.com/d", "text": "x",
+                                    "chars": 1, "truncated": False})
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=("<html><body>Breve ma vero.</body></html>",
+                                        "https://example.com/d")):
+            out = json.loads(await self._tool().execute("https://example.com/d"))
+        assert out["extractor"] == "webview"
+        assert "Breve ma vero." in out["text"]
+
+    async def test_a_bridge_error_is_rescued_by_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "https://example.com/e", "text": _BROWSER_TEXT,
+                                    "chars": 1720, "truncated": False})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/e"))
+        assert "error" not in out
+        assert out["extractor"] == "browser"
+        assert out["fallback_reason"] == "no_document"
+
+    async def test_a_timeout_is_rescued_by_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "https://example.com/f", "text": _BROWSER_TEXT,
+                                    "chars": 1720, "truncated": True})
+        with patch.object(android_web, "_bridge_fetch", side_effect=asyncio.TimeoutError):
+            with patch.object(android_web, "destroy_bridge"):
+                out = json.loads(await self._tool().execute("https://example.com/f"))
+        assert out["fallback_reason"] == "timeout"
+        assert out["truncated"] is True
+
+    async def test_when_the_browser_fails_too_the_error_says_so(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"error": "browser_open did not answer within 15s"})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/g"))
+        assert out["error"].startswith("WebView returned no HTML document")
+        assert "tried the browser too" in out["error"]
+        assert "did not answer" in out["error"]
+        assert "http_get" in out["hint"]
+
+    async def test_a_skipped_fallback_leaves_the_error_as_it_was(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"skipped": "no free browser session"})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/h"))
+        assert out["error"] == "WebView returned no HTML document"
+
+    async def test_the_browser_landing_on_a_private_address_is_withheld(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "http://192.168.1.1/admin", "text": "router admin " * 80,
+                                    "chars": 1040, "truncated": False})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/i"))
+        assert "text" not in out
+        assert "router admin" not in json.dumps(out)
+        assert "tried the browser too" in out["error"]
+        assert "blocked address" in out["error"]
+
+    async def test_a_blocked_redirect_does_not_try_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        calls = self._browser(monkeypatch, {"skipped": "should not be asked"})
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=("<html>admin</html>", "http://127.0.0.1:9111/admin")):
+            out = json.loads(await self._tool().execute("https://example.com/j"))
+        assert calls == []
+        assert "blocked" in out["error"].lower()
+
+    async def test_the_owner_comes_from_the_context(self):
+        ctx = SimpleNamespace(android_context=object(), config=ToolsConfig(),
+                              subagent_lineage_id="ab12cd34")
+        assert AndroidWebFetchTool.create(ctx).owner == "ab12cd34"
+        ctx.subagent_lineage_id = None
+        assert AndroidWebFetchTool.create(ctx).owner == "main"
+
+    async def test_without_android_the_fallback_is_silent(self, monkeypatch):
+        """Fuori da Chaquopy la classe Kotlin non c'e': il ripiego si salta e
+        l'errore resta quello di prima, senza «tried the browser too»."""
+        _allow_public(monkeypatch)
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/k"))
+        assert out["error"] == "WebView returned no HTML document"
+
+
+class TestLooksLikeCookieWall:
+    @pytest.mark.parametrize("text", [
+        "Questo sito usa i cookie. Accetta tutti / Rifiuta",
+        "We value your privacy. Cookie consent: Accept",
+    ])
+    def test_detects(self, text):
+        assert android_web._looks_like_cookie_wall(text)
+
+    @pytest.mark.parametrize("text", [
+        "Ricetta dei biscotti: farina, burro, zucchero.",
+        "Accept-Language header explained",
+        "cookie " + "testo lungo " * 400 + " accept",   # pagina lunga: non e' un muro
+    ])
+    def test_does_not_fire(self, text):
+        assert not android_web._looks_like_cookie_wall(text)

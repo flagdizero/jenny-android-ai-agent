@@ -36,9 +36,16 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * Perché non riusa quella di [AgenticSearchBridge]: `fetchUrl` fa `loadUrl` sulla
  * stessa istanza, quindi una `web_fetch` durante una sessione porterebbe via la
- * pagina sotto i piedi. Due WebView costano (~+100 MB misurati sul Titan 2 il
- * 29/08, interamente restituiti alla chiusura), e la seconda esiste solo finché
- * una sessione è aperta.
+ * pagina sotto i piedi. Ogni WebView in più costa (~+100 MB misurati sul Titan 2
+ * il 29/08, interamente restituiti alla chiusura), ed esiste solo finché la sua
+ * sessione è aperta.
+ *
+ * Un'istanza per sessione, e una sessione per agente (`browser.py`): Jenny e
+ * ogni aiutante hanno la loro pagina. [slot] sceglie il profilo — `0` è quello
+ * storico, `jenny-browser-session`, gli altri `jenny-browser-session-<slot>` —
+ * così la chiusura di una sessione svuota i cookie suoi e non quelli di
+ * un'altra aperta. Il costruttore a un argomento resta, e vale lo slot 0: un
+ * chiamante che non conosce gli slot continua a funzionare.
  *
  * **Invariante che regge tutto: ogni tocco della WebView passa dal main thread**
  * ([handler], o [MainHop] per i salti che aspettano l'esito).
@@ -52,7 +59,9 @@ import java.util.concurrent.atomic.AtomicReference
  * riassegnato a ogni chiamata come in `AgenticSearchBridge.evaluateOnPage`: qui
  * deve sopravvivere alle navigazioni, perché è lui che le vede.
  */
-class JennyBrowserBridge(context: Context) {
+class JennyBrowserBridge(context: Context, slot: Int) {
+
+    constructor(context: Context) : this(context, 0)
 
     companion object {
         private const val TAG = "JennyBrowser"
@@ -125,16 +134,17 @@ class JennyBrowserBridge(context: Context) {
         )
 
         /**
-         * Vero dopo il primo tentativo, in questo processo, di buttare il
-         * profilo lasciato su disco. Una volta sola perché dopo il primo
-         * `getOrCreateProfile` il profilo è «caricato in memoria» e
+         * I profili per cui questo processo ha già tentato di buttare la copia
+         * lasciata su disco, uno per slot. Una volta sola per nome perché dopo
+         * il primo `getOrCreateProfile` il profilo è «caricato in memoria» e
          * `deleteProfile` solleva sempre, fino alla morte del processo. Solo
-         * main thread.
+         * main thread, quindi senza sincronizzazione.
          */
-        private var leftoverProfileHandled = false
+        private val leftoverProfilesHandled = HashSet<String>()
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private val profileName = if (slot == 0) PROFILE_NAME else "$PROFILE_NAME-$slot"
     private val appContext = context.applicationContext
     private var webView: WebView? = null
 
@@ -335,7 +345,7 @@ class JennyBrowserBridge(context: Context) {
             try {
                 val store = ProfileStore.getInstance()
                 discardLeftoverProfileOnMain(store)
-                val p = store.getOrCreateProfile(PROFILE_NAME)
+                val p = store.getOrCreateProfile(profileName)
                 WebViewCompat.setProfile(wv, p.name)
                 profile = p
                 guardServiceWorkersOnMain(p)
@@ -464,10 +474,9 @@ class JennyBrowserBridge(context: Context) {
      * non riusciva mai) lascerebbe cookie e login alla sessione successiva.
      */
     private fun discardLeftoverProfileOnMain(store: ProfileStore) {
-        if (leftoverProfileHandled) return
-        leftoverProfileHandled = true
+        if (!leftoverProfilesHandled.add(profileName)) return
         try {
-            if (store.deleteProfile(PROFILE_NAME)) {
+            if (store.deleteProfile(profileName)) {
                 Log.i(TAG, "Discarded browser profile left by a previous process")
             }
         } catch (e: Exception) {
@@ -497,7 +506,7 @@ class JennyBrowserBridge(context: Context) {
             Log.e(TAG, "Browser profile wipe failed", e)
         }
         try {
-            ProfileStore.getInstance().deleteProfile(PROFILE_NAME)
+            ProfileStore.getInstance().deleteProfile(profileName)
         } catch (e: IllegalStateException) {
             // Il caso atteso nello stesso processo: il profilo resta caricato
             // (vuoto) e si butta dal disco all'avvio del prossimo processo.

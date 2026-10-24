@@ -35,7 +35,8 @@ def _clean_state():
 
 
 def _snapshot_index(index: dict[str, list[str]], version: int = 1) -> None:
-    browser._render_snapshot({"url": "https://x.test/", "version": version,
+    browser._render_snapshot(browser._state(browser.MAIN_OWNER),
+                             {"url": "https://x.test/", "version": version,
                               "index": index, "text": ""})
 
 

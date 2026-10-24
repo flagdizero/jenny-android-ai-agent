@@ -81,7 +81,7 @@ class AndroidWebSearchConfig(Base):
     """
 
     search_engine: str = "bing"
-    max_results: int = Field(default=5, ge=1, le=10)
+    max_results: int = Field(default=8, ge=1, le=10)
     timeout: int = Field(default=30, ge=1, le=120)
 
 
@@ -112,6 +112,12 @@ class AndroidWebBrowserConfig(Base):
     max_snapshot_chars: int = 2500
     max_read_chars: int = 4000
     idle_close_s: int = 300
+    # Quante sessioni (WebView, ciascuna nel suo profilo) possono stare aperte
+    # insieme: una per Jenny e una per aiutante, piu' i ripieghi brevi di
+    # ``web_fetch``. Ognuna costa ~100 MB sul telefono e divide il renderer
+    # con la WebView visibile, quindi il default e' prudente; su un emulatore
+    # si puo' alzare.
+    max_sessions: int = Field(default=3, ge=1, le=10)
 
 
 class AndroidWebToolsConfig(Base):

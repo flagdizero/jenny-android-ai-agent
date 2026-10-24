@@ -1375,7 +1375,7 @@ export class SettingsController {
     const engines = ws.engines || ['bing'];
     return `
       ${this._select(i18n.t('settings.searchEngine'), 'ws_engine', ws.search_engine || 'bing', engines)}
-      ${this._field(i18n.t('settings.maxResults'), 'number', 'ws_max', ws.max_results ?? 5, i18n.t('settings.maxResultsPlaceholder'))}
+      ${this._field(i18n.t('settings.maxResults'), 'number', 'ws_max', ws.max_results ?? 8, i18n.t('settings.maxResultsPlaceholder'))}
       ${this._field(i18n.t('settings.timeoutSec'), 'number', 'ws_timeout', ws.timeout ?? 30, i18n.t('settings.timeoutPlaceholder'))}
       ${this._field(i18n.t('settings.fetchMaxChars'), 'number', 'ws_fetch_max', ws.fetch_max_chars ?? 50000, i18n.t('settings.fetchMaxCharsPlaceholder'))}`;
   }
