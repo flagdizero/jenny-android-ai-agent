@@ -39,7 +39,7 @@ from loguru import logger
 
 from jenny.board.model import BOARD_DIR
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.store import get_blob, hash_content, object_path
+from jenny.snapshot.store import BlobCorruptError, get_blob, hash_content, object_path
 from jenny.snapshot.types import unsafe_entry_reason
 from jenny.utils.path import atomic_write
 from jenny.utils.wiki_paths import JOURNAL_DIRNAME
@@ -342,6 +342,26 @@ class PlanPhotos:
             for entry in self.engine.load_manifest(photo_id).files
             if not is_photo_excluded(entry.path)
         }
+
+    def texts(self, photo_id: str, prefix: str = "", suffix: str = ".md") -> dict[str, str]:
+        """``{percorso: testo}`` dei file di una foto sotto *prefix* che finiscono in *suffix*.
+
+        Dai blob dello store, non dal quaderno: vale per la foto di partenza come
+        per quella appena fatta. Un blob che manca o non torna si salta — serve
+        al controllo dei fatti persi (``plan/facts.py``), che è un aiuto e non
+        deve fermare un passo.
+        """
+        texts: dict[str, str] = {}
+        for path, hash_hex in self.files(photo_id).items():
+            if not path.startswith(prefix) or not path.endswith(suffix):
+                continue
+            try:
+                data = get_blob(self.engine.objects_dir, hash_hex)
+            except (OSError, BlobCorruptError):
+                logger.debug("Photo {}: blob of {} not readable", photo_id, path)
+                continue
+            texts[path] = data.decode("utf-8", errors="replace")
+        return texts
 
     def diff(self, a: str, b: str) -> dict[str, list[str]]:
         """Cosa cambia dalla foto *a* alla foto *b*: percorsi ordinati."""

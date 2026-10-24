@@ -1562,6 +1562,7 @@ class AgentLoop(
                 # turno, e' una lettura del quaderno (``loop_plan.py``).
                 if session_key:
                     await self._plan_count_helper_result(queued, session_key)
+                    await self._plan_note_step_report(queued, session_key)
             for queued in deferred:
                 # Rimesso in coda: a fine turno si ripubblica e diventa un turno suo.
                 try:
@@ -2231,6 +2232,9 @@ class AgentLoop(
         # quaderno; uno gia' consegnato o vuoto, scartato qui sopra, no.
         if is_subagent:
             await self._plan_count_helper_result(msg, key)
+            # I buchi «To research» di un aiutante del passo aperto, prima di
+            # decidere se tenerlo: anche un resoconto tenuto senza turno conta.
+            await self._plan_note_step_report(msg, key)
         if is_subagent and not silent and self._hold_subagent_result(
             msg, key, session, followup_state,
         ):

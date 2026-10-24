@@ -32,6 +32,13 @@ This step searches these coverage entries (each one needs its sources saved, or 
 
 {% endfor %}
 {% endif %}
+{% if lost_facts %}
+
+Facts that were in the notebook before this plan and are in no page now{% if lost_total > lost_facts | length %} ({{ lost_facts | length }} shown of {{ lost_total }}){% endif %}. The code compared numbers with units, so it can be wrong: check each one. If it is still true, put it back in the right page; if it went on purpose (wrong, superseded, removed at the user's request), say why in the step note.
+{% for f in lost_facts %}
+- {{ f.page }}: {{ f.fact }} — "{{ f.context }}"
+{% endfor %}
+{% endif %}
 {% if waiting %}
 
 Already waiting for the user's approval, from an earlier run of this step: {{ waiting | join(", ") }}. Do not make these changes again: they count as done, and the code holds the step until the user decides.

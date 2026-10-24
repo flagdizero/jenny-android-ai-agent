@@ -778,3 +778,28 @@ async def test_slash_stop_ends_a_planning(workspace: Path) -> None:
         await wait_until(lambda: driver.drafting_for(KEY) is None, timeout=5)
     finally:
         await _stop(loop, task)
+
+
+async def test_a_helper_report_of_the_open_step_records_its_gaps(workspace: Path) -> None:
+    """Il resoconto di un aiutante del passo, col suo turno o iniettato a metà
+    turno, porta i buchi **To research** sul passo aperto (``note_step_report``)."""
+    loop, driver = _loop(workspace, Script(workspace, close_steps=False))
+    plan, _ = await _approved(loop, driver)
+
+    def _report(task_id: str, content: str) -> InboundMessage:
+        return InboundMessage(
+            channel="system", sender_id="subagent", chat_id=f"websocket:{KEY}",
+            content=f"[Subagent 'editor' completed successfully]\n\nResult:\n{content}",
+            session_key_override=KEY,
+            metadata={
+                INJECTED_EVENT_META: "subagent_result", "subagent_status": "ok",
+                "subagent_task_id": task_id, "subagent_lineage_id": "ed1",
+                "plan_id": plan.id, "plan_step": "s1",
+            },
+        )
+
+    await loop._process_message(_report("t1", "Fatto.\n\n**To research**\n- felce: umidità"))
+    assert driver.store.load(plan.id).steps[0].extra["gaps"] == {"ed1": ["felce: umidità"]}
+    # Lo stesso aiutante, rimandato indietro, arriva a metà di un altro turno.
+    await _dispatch(loop, _user("come va?"), _report("t2", "Pagine riempite."))
+    assert "gaps" not in driver.store.load(plan.id).steps[0].extra

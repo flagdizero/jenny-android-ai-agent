@@ -14,6 +14,7 @@ una più nuova non deve cancellare quello che non capisce. È la stessa regola d
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -840,6 +841,34 @@ def _validate_assumptions(assumptions: Any, problems: list[str]) -> list[str]:
     return clean
 
 
+def order_warnings(steps: Iterable[Step]) -> list[str]:
+    """Gli avvisi d'ordine di una proposta valida: un ``delete`` prima di un ``write``/``research``.
+
+    Un avviso e non un rifiuto: togliere pagine che nessuno legge prima di
+    scriverne altre è legittimo, e un rifiuto bloccherebbe quei piani. Ma se il
+    passo dopo attinge a quel che il primo cancella, lavora sul vuoto — e lo
+    sa solo il modello, che rilegge la sua lista. Un avviso per ``delete``, sul
+    primo passo che scrive dopo di lui. I numeri sono le posizioni (da 1).
+    """
+    warnings: list[str] = []
+    ordered = list(steps)
+    for i, step in enumerate(ordered):
+        if step.kind != "delete":
+            continue
+        later = next(
+            (j for j in range(i + 1, len(ordered)) if ordered[j].kind in ("write", "research")),
+            None,
+        )
+        if later is None:
+            continue
+        verb = "writes" if ordered[later].kind == "write" else "researches"
+        warnings.append(
+            f"Step {i + 1} deletes before step {later + 1} {verb}: if step {later + 1} draws "
+            f"on what step {i + 1} deletes, propose again with the deletion after it."
+        )
+    return warnings
+
+
 # ── Pianificazione in corso (``drafting``) ───────────────────────────────────
 
 
@@ -965,3 +994,83 @@ def tag_new_version(old_steps: Iterable[Step], new_steps: list[Step]) -> list[di
         else:
             step.tag = None
     return [{"id": s.id, "title": s.title} for i, s in enumerate(old) if i not in used]
+
+
+# ── Resoconti degli aiutanti ─────────────────────────────────────────────────
+
+#: Le voci al massimo prese da una lista **To research**: oltre, è un resoconto
+#: che elenca tutto, e il cancello del passo le mostrerebbe tutte al modello.
+MAX_RESEARCH_ITEMS = 20
+_MAX_RESEARCH_ITEM = 300
+
+# L'etichetta, in testa alla riga: «## To research», «**To research:**»,
+# «To research (3):», «- **To research**: none». Mai a metà riga: l'annuncio
+# di un aiutante la nomina in una frase, e non è un elenco.
+_TO_RESEARCH = re.compile(
+    r"^\s*(?:#{1,6}\s*)?(?:[-*+]\s+)?(?:\*\*|__)?\s*to\s+research\s*(?:\([^)]*\))?\s*"
+    r"(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+_BULLET = re.compile(r"^(?P<indent>\s*)(?:[-*+•]|\d{1,2}[.)])\s+(?P<text>\S.*)$")
+_HEADING = re.compile(r"^\s*(?:#{1,6}\s|\*\*[^*]+\*\*\s*:?\s*$)")
+_NOTHING_WORDS = frozenset({"none", "nothing", "nessuno", "nessuna", "niente", "nulla"})
+
+
+def _research_item(text: str) -> str | None:
+    """Una voce ripulita, o ``None`` se dice «niente»."""
+    clean = " ".join(text.replace("**", "").replace("__", "").split()).strip()
+    if not clean or clean.strip(" .-–—") == "" or clean.lower() in ("n/a", "na"):
+        return None
+    first = re.match(r"[^\W\d_]+", clean)
+    if first is not None and first.group(0).lower() in _NOTHING_WORDS:
+        return None
+    return clean[:_MAX_RESEARCH_ITEM]
+
+
+def to_research_items(text: str) -> list[str]:
+    """Le voci della lista **To research** del resoconto di un aiutante.
+
+    Un ``writer`` o un ``notebook-editor`` che non ha trovato un dato lo
+    scrive lì (il suo template lo chiede): cosa manca, per quale pagina. Qui si
+    trova l'etichetta (titolo o grassetto, con o senza ``#``/``**``) e si
+    prendono i punti elenco che la seguono, numerati o no; i sottopunti più
+    rientrati sono dettagli della voce sopra e non contano a parte. La lista
+    finisce alla prima riga che non è un punto elenco. «None», «nothing», «—»
+    non sono buchi. Al massimo :data:`MAX_RESEARCH_ITEMS`, senza doppioni.
+    """
+    items: list[str] = []
+    lines = (text or "").splitlines()
+    i = 0
+    while i < len(lines) and len(items) < MAX_RESEARCH_ITEMS:
+        label = _TO_RESEARCH.match(lines[i])
+        i += 1
+        if label is None:
+            continue
+        found: list[str | None] = [_research_item(label.group("rest"))]
+        base: int | None = None
+        while i < len(lines):
+            line = lines[i]
+            if not line.strip():
+                i += 1
+                continue
+            if _TO_RESEARCH.match(line):
+                break
+            bullet = _BULLET.match(line)
+            if bullet is None:
+                if base is not None and line[: len(line) - len(line.lstrip())] and not (
+                    _HEADING.match(line)
+                ):
+                    # La continuazione rientrata di una voce: è sua, non una voce.
+                    i += 1
+                    continue
+                break
+            indent = len(bullet.group("indent").expandtabs(4))
+            if base is None:
+                base = indent
+            if indent <= base:
+                found.append(_research_item(bullet.group("text")))
+            i += 1
+        for item in found:
+            if item is not None and item not in items and len(items) < MAX_RESEARCH_ITEMS:
+                items.append(item)
+    return items

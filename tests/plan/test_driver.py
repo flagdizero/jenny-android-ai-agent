@@ -121,6 +121,18 @@ async def test_propose_refuses_outside_a_notebook_and_next_to_a_goal(
     assert driver.store.open_plan_for("piante") is None
 
 
+async def test_a_deletion_before_the_writing_is_created_with_a_note(driver: PlanDriver) -> None:
+    steps = [
+        {"title": "Tolgo le pagine vecchie", "detail": "x", "kind": "delete", "done_when": "x"},
+        *STEPS,
+    ]
+    text = await propose(driver, "Rifare la wiki", steps)
+    assert "card" in text
+    assert "Step 1 deletes before step 2 researches" in text
+    assert driver.store.open_plan_for("piante") is not None
+    assert "Note on the order" not in await propose(driver, "Rifare la wiki", STEPS)
+
+
 async def test_a_malformed_proposal_returns_the_reason_to_the_model(driver: PlanDriver) -> None:
     text = await propose(driver, "Rifare", [{"title": "solo uno", "detail": "x"}])
     assert text.startswith("Error:") and "between 2 and 12" in text

@@ -46,6 +46,7 @@ from typing import Any, Protocol
 from loguru import logger
 
 from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.plan.facts import LostFacts, lost_facts
 from jenny.plan.model import (
     HELD_STATUSES,
     OPEN_STATUSES,
@@ -60,7 +61,9 @@ from jenny.plan.model import (
     drafting_view,
     next_pending_step,
     now_iso,
+    order_warnings,
     step_counts,
+    to_research_items,
     validate_proposal,
 )
 from jenny.plan.photos import (
@@ -111,6 +114,16 @@ PLAN_NOTES_META = "plan_notes"
 _NUDGE = "nudge"
 _NUDGE_SENT = "sent"
 _NUDGE_USED = "used"
+
+# I buchi riportati dagli aiutanti del passo sotto **To research**, nell'``extra``
+# del passo: ``{lineage: [voci]}``, e vale l'ultimo resoconto di ogni lineage —
+# un editor rimandato indietro con ``subagent_send`` che non ne riporta più li
+# azzera. Il cancello di ``plan_step_done`` è uno solo per passo, come il
+# promemoria: rifiuta una volta con i buchi aperti, la seconda chiamata passa
+# (i buchi cercati e rimasti vuoti, o fuori dal piano, li spiega la nota).
+_GAPS = "gaps"
+_GAPS_GATE = "gaps_gate"
+_GAPS_GATE_USED = "used"
 
 _RUNNING = frozenset({"running", "pausing"})
 
@@ -880,12 +893,18 @@ class PlanDriver:
         await self._changed(plan)
         await self._prune()
         version = f" (version {plan.version})" if plan.version > 1 else ""
-        return (
+        text = (
             f"The plan{version} is now on a card in front of the user, with Approve and "
             "Review. Stop here: do not start any step and do not repeat the list in your "
             "reply. Say in one or two sentences what it does, and wait: the user approves "
             "it, or asks for changes."
         )
+        # Un avviso, non un rifiuto: il piano è sulla scheda comunque, e se
+        # l'ordine è sbagliato il modello lo ripropone (``order_warnings``).
+        warnings = order_warnings(proposal.steps)
+        if warnings:
+            text += "\n\nNote on the order: " + " ".join(warnings)
+        return text
 
     async def step_done(self, session_key: str | None, note: Any) -> str:
         """``plan_step_done``."""
@@ -951,6 +970,18 @@ class PlanDriver:
             if plan.status not in _RUNNING or step is None:
                 return "Error: there is no plan step open in this conversation."
             step_id = step.id
+            gaps = _open_gaps(step)
+            if outcome == "done" and gaps and step.extra.get(_GAPS_GATE) != _GAPS_GATE_USED:
+                # Un aiutante ha riportato buchi e il passo si chiude come se
+                # niente fosse: la prova 3 li ha lasciati «non documentati» nelle
+                # pagine. Una volta sola, come il promemoria: la seconda chiamata
+                # passa, perché un buco cercato e rimasto vuoto è un esito vero.
+                def _gate(p: Plan) -> None:
+                    _find(p, step_id).extra[_GAPS_GATE] = _GAPS_GATE_USED
+
+                await asyncio.to_thread(self.store.update, plan.id, _gate)
+                logger.info("Plan {}: step {} close refused once, gaps open", plan.id, step_id)
+                return _gaps_refusal(gaps)
             drafts = await asyncio.to_thread(self._plan_drafts, plan)
             if drafts:
                 # Un passo che lascia bozze non è fatto: il file non è scritto, e
@@ -1289,6 +1320,70 @@ class PlanDriver:
         )
 
     # ── hook del loop ──────────────────────────────────────────────────────
+
+    async def note_step_report(
+        self,
+        session_key: str,
+        task_id: Any,
+        lineage: Any,
+        content: Any,
+        *,
+        plan_id: Any = None,
+        plan_step: Any = None,
+    ) -> bool:
+        """Il resoconto di un aiutante del passo aperto: registra i suoi buchi **To research**.
+
+        Lo chiama il loop per ogni resoconto che arriva, tenuto o no, e anche a
+        metà turno. Conta solo con un piano in corsa e un resoconto del passo
+        aperto: il passo lo dicono i metadati del resoconto (``plan_id``,
+        ``plan_step``, gli stessi del lancio) o, se mancano, il registro degli
+        aiutanti. La chiave è il lineage, che resta lo stesso quando l'aiutante
+        è ripreso con ``subagent_send``; senza, il ``task_id``. L'ultimo
+        resoconto del lineage sostituisce quello prima: senza buchi, li toglie.
+        ``True`` se i buchi del passo sono cambiati.
+        """
+        if not isinstance(content, str) or not self.plan_running(session_key):
+            return False
+        key = next((v for v in (lineage, task_id) if isinstance(v, str) and v), None)
+        live = self._index.get(session_key)
+        if key is None or live is None:
+            return False
+        if plan_id is None and plan_step is None and isinstance(task_id, str) and task_id:
+            group = self._helper_group(task_id)
+            if group is not None:
+                plan_id, plan_step = group
+        if not plan_id or plan_id != live.plan_id or not plan_step:
+            return False
+        items = to_research_items(content)
+        async with self._lock(session_key):
+            try:
+                plan = await asyncio.to_thread(self.store.load, live.plan_id)
+            except PlanError:
+                return False
+            step = _step_now(plan)
+            if plan.status not in _RUNNING or step is None or step.id != plan_step:
+                return False
+            gaps = _open_gaps(step)
+            if items:
+                gaps[key] = items
+            elif key in gaps:
+                del gaps[key]
+            else:
+                return False
+            step_id = step.id
+
+            def _apply(p: Plan) -> None:
+                s = _find(p, step_id)
+                if gaps:
+                    s.extra[_GAPS] = gaps
+                else:
+                    s.extra.pop(_GAPS, None)
+
+            await asyncio.to_thread(self.store.update, plan.id, _apply)
+        logger.info(
+            "Plan {}: step {} has {} gap(s) from helper {}", live.plan_id, step_id, len(items), key
+        )
+        return True
 
     async def before_user_turn(self, session_key: str, metadata: dict[str, Any]) -> None:
         """Prima di un turno dell'utente nella chat di un quaderno.
@@ -2190,13 +2285,17 @@ class PlanDriver:
             s.photo_before = before
             s.photo_after = None
             for key in (_NUDGE, _PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION,
-                        _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO):
+                        _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE):
                 s.extra.pop(key, None)
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _open)
         self._remember(plan)
         step = _find(plan, step_id)
-        await self.bus.publish_inbound(self._step_message(plan, step))
+        lost: LostFacts | None = None
+        start = plan.photos.get("start")
+        if start and _checks_facts(plan, step):
+            lost = await asyncio.to_thread(self._lost_facts, plan, photos, start, before)
+        await self.bus.publish_inbound(self._step_message(plan, step, lost=lost))
         logger.info("Plan {}: step {} opened", plan.id, step_id)
         await self._changed(plan)
 
@@ -2214,7 +2313,29 @@ class PlanDriver:
         await self._changed(plan)
         await self._prune()
 
-    def _step_message(self, plan: Plan, step: Step, *, reminder: bool = False) -> InboundMessage:
+    def _lost_facts(
+        self, plan: Plan, photos: PlanPhotos, start: str, now: str
+    ) -> LostFacts | None:
+        """I fatti delle pagine ``wiki/`` della foto di partenza che adesso non ci sono.
+
+        In un thread, all'apertura del passo di verifica. *now* è la foto
+        «prima» appena fatta, cioè il quaderno com'è adesso. Un errore qui non
+        ferma il passo: si apre senza il blocco, e il log lo dice.
+        """
+        try:
+            return lost_facts(photos.texts(start, "wiki/"), photos.texts(now, "wiki/"))
+        except Exception:  # noqa: BLE001 — un aiuto al controllo, non una condizione del passo
+            logger.opt(exception=True).warning("Plan {}: lost facts not computed", plan.id)
+            return None
+
+    def _step_message(
+        self,
+        plan: Plan,
+        step: Step,
+        *,
+        reminder: bool = False,
+        lost: LostFacts | None = None,
+    ) -> InboundMessage:
         from jenny.utils.prompt_templates import render_template
 
         steps = [
@@ -2250,6 +2371,13 @@ class PlanDriver:
             # buttarle: sono lavoro fatto, e l'utente può ancora deciderle;
             # rifarle ne metterebbe una seconda copia davanti a lui.
             waiting=[d["target"] for d in self._plan_drafts(plan)] if not reminder else [],
+            # I numeri con unità che c'erano prima del piano e adesso non sono
+            # in nessuna pagina (``plan/facts.py``): solo nel passo di verifica.
+            # La prova 3 ne ha persi 119 su 384 senza che nessuno lo decidesse.
+            lost_facts=[
+                {"page": f.page, "fact": f.fact, "context": f.context} for f in lost.items
+            ] if lost is not None and not reminder else [],
+            lost_total=lost.total if lost is not None else 0,
         )
         return InboundMessage(
             channel="system",
@@ -2609,6 +2737,50 @@ def plan_view(plan: Plan) -> dict[str, Any]:
         }
     )
     return data
+
+
+def _checks_facts(plan: Plan, step: Step) -> bool:
+    """*step* è quello in cui si controllano i fatti persi.
+
+    Ogni passo ``check`` della lista; se non ce n'è nessuno, l'ultimo passo.
+    """
+    active = _active_steps(plan)
+    if any(s.kind == "check" for s in active):
+        return step.kind == "check"
+    return bool(active) and active[-1].id == step.id
+
+
+def _open_gaps(step: Step) -> dict[str, list[str]]:
+    """I buchi aperti del passo, ``{lineage: [voci]}``, senza le voci vuote."""
+    raw = step.extra.get(_GAPS)
+    if not isinstance(raw, dict):
+        return {}
+    gaps: dict[str, list[str]] = {}
+    for lineage, items in raw.items():
+        if isinstance(items, list):
+            clean = [str(item) for item in items if isinstance(item, str) and item]
+            if clean:
+                gaps[str(lineage)] = clean
+    return gaps
+
+
+def _gaps_refusal(gaps: Mapping[str, list[str]]) -> str:
+    """Il rifiuto di ``plan_step_done`` con i buchi aperti: quali, e cosa fare."""
+    lines = [
+        "Not closed yet: helpers of this step reported gaps under **To research** that "
+        "are still open. They are part of this step:",
+    ]
+    for lineage, items in gaps.items():
+        lines.append(f"- helper `{lineage}`:")
+        lines.extend(f"  - {item}" for item in items)
+    lines.append(
+        "Spawn researchers for them now in this step, a few, grouped by subject; when "
+        "they are done, send the same helper back with `subagent_send` to fill the pages "
+        "from what they saved. If they were already searched and stay empty, or they are "
+        "outside this plan, call `plan_step_done` again and say in the note why they stay "
+        "open. This check runs once per step."
+    )
+    return "\n".join(lines)
 
 
 def _find(plan: Plan, step_id: str) -> Step:

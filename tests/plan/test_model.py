@@ -16,6 +16,7 @@ from jenny.plan.model import (
     apply_transition,
     current_step,
     next_pending_step,
+    order_warnings,
     step_counts,
     tag_new_version,
     validate_proposal,
@@ -522,3 +523,20 @@ def test_drafting_expires_after_twelve_hours_of_silence() -> None:
     assert drafting_view({"since": fresh, "touched": fresh, "reads": 2, "revise": ""}) == {
         "since": fresh, "revise": None, "reads": 2,
     }
+
+
+def _kinds(*kinds: str) -> list[Step]:
+    return [Step(id=f"s{i}", title=f"T{i}", detail="d", kind=k) for i, k in enumerate(kinds, 1)]
+
+
+def test_a_delete_before_a_write_is_a_warning_with_both_numbers() -> None:
+    assert order_warnings(_kinds("research", "delete", "other", "write", "write")) == [
+        "Step 2 deletes before step 4 writes: if step 4 draws on what step 2 deletes, "
+        "propose again with the deletion after it."
+    ]
+    [warning] = order_warnings(_kinds("delete", "research"))
+    assert warning.startswith("Step 1 deletes before step 2 researches")
+
+
+def test_a_delete_after_the_writing_is_fine() -> None:
+    assert order_warnings(_kinds("research", "write", "delete", "check")) == []

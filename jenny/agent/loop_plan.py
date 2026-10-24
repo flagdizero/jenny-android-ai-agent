@@ -42,10 +42,12 @@ from jenny.agent.hook import AgentHook, ToolResultHookContext
 from jenny.cron.session_turns import is_cron_turn
 from jenny.plan.driver import (
     PLAN_FOLLOWUP_META,
+    PLAN_ID_META,
     PLAN_MODE_META,
     PLAN_NOTES_META,
     PLAN_PROPOSE_TOOL,
     PLAN_REVISE_META,
+    PLAN_STEP_META,
     PLAN_STEP_TOOLS,
     PLAN_TOOL_NAMES,
     PlanDriver,
@@ -378,6 +380,32 @@ class LoopPlanMixin:
             await driver.note_helper_result(session_key, meta.get("subagent_task_id"))
         except Exception:  # noqa: BLE001 — il conto perso non vale il turno
             logger.opt(exception=True).warning("Plan read not counted for {}", session_key)
+
+    async def _plan_note_step_report(self, msg: InboundMessage, session_key: str) -> None:
+        """Il resoconto di un aiutante durante un piano: i suoi buchi **To research**.
+
+        Il driver li tiene sul passo aperto e ne fa il cancello di
+        ``plan_step_done`` (``PlanDriver.note_step_report``). Vale per un
+        rientro che apre un turno, per uno tenuto senza turno e per uno
+        iniettato a metà turno: il loop lo chiama in tutti e tre i punti.
+        """
+        driver = self.plan_driver
+        meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+        if driver is None or meta.get(INJECTED_EVENT_META) != SUBAGENT_RESULT_EVENT:
+            return
+        if not is_project_session_key(session_key) or not driver.plan_running(session_key):
+            return
+        try:
+            await driver.note_step_report(
+                session_key,
+                meta.get("subagent_task_id"),
+                meta.get("subagent_lineage_id"),
+                msg.content,
+                plan_id=meta.get(PLAN_ID_META),
+                plan_step=meta.get(PLAN_STEP_META),
+            )
+        except Exception:  # noqa: BLE001 — un buco non registrato non vale il turno
+            logger.opt(exception=True).warning("Plan step report not noted for {}", session_key)
 
     async def _plan_before_turn(self, msg: InboundMessage, session_key: str) -> None:
         driver = self.plan_driver
