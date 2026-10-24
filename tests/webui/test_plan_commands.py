@@ -92,7 +92,7 @@ async def test_get_and_list_read_the_store(workspace: Path, driver: PlanDriver) 
     assert full["steps"][0] == {
         "id": "s1", "title": STEPS[0]["title"], "detail": STEPS[0]["detail"],
         "kind": "research", "status": "pending", "tag": None,
-        "done_when": STEPS[0]["done_when"],
+        "done_when": STEPS[0]["done_when"], "covers": ["c1"],
     }
 
 

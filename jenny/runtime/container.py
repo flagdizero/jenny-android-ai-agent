@@ -821,6 +821,14 @@ class GatewayContainer:
         # Il cancello di scrittura dei tool: un quaderno tenuto da un piano si
         # scrive solo dalla sua conversazione (``workspace_access``).
         set_held_notebook_probe(driver.held_notebook_roots)
+        # Gli aiutanti di un piano che gira: piu slot per la sua sessione
+        # (``PLAN_HELPER_SLOTS`` normali, piu uno breve). Il manager non sa cosa
+        # sia un piano: chiede al driver, attraverso questa funzione.
+        from jenny.agent.subagent import PLAN_HELPER_SLOTS
+
+        set_limit = getattr(getattr(agent, "subagents", None), "set_limit_provider", None)
+        if callable(set_limit):
+            set_limit(lambda key: PLAN_HELPER_SLOTS if key and driver.plan_running(key) else None)
 
     # -- onboarding: creazione differita dell'agent (DeferredAgentActivator) --
 

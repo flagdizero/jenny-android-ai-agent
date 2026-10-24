@@ -44,10 +44,11 @@ EXPECTED_TOOLS = {
     # Scrive e prova le app: il tool ``app`` (faccia del costruttore, scope
     # ``apps``) e la sola lettura. Niente web, niente esecuzione.
     "app-builder": {"app", "read_file", "list_dir", "grep"},
-    # Cambia un quaderno su richiesta: il tool ``board`` (scope ``notebook``) e i
-    # file. Niente web, niente esecuzione, come ``writer``.
+    # Cambia un quaderno su richiesta: i tool ``board`` e ``notebook`` (scope
+    # ``notebook``) e i file. Niente web, niente esecuzione, come ``writer``.
     "notebook-editor": {
-        "board", "read_file", "write_file", "edit_file", "list_dir", "apply_patch", "grep",
+        "board", "notebook", "read_file", "write_file", "edit_file", "list_dir",
+        "apply_patch", "grep",
     },
     "operator": None,  # tutto lo scope subagent
 }

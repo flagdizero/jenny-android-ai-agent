@@ -99,7 +99,8 @@ PLANNING_HIDDEN_TOOLS: frozenset[str] = frozenset(
 
 #: Le letture che contano come «ha guardato il quaderno» (``PlanDriver.propose``).
 #: ``board`` solo con ``show``: le altre azioni scrivono, e in sola lettura sono
-#: comunque rifiutate.
+#: comunque rifiutate. ``notebook`` con ogni azione tranne ``remove_pages``
+#: (v. ``_counts_as_read``).
 PLANNING_READ_TOOLS: frozenset[str] = frozenset({"read_file", "list_dir", "grep", "find_files"})
 
 
@@ -134,6 +135,10 @@ def _counts_as_read(context: ToolResultHookContext) -> bool:
         return False
     if context.name in PLANNING_READ_TOOLS:
         return True
+    # ``notebook``: ogni azione legge, tranne ``remove_pages`` (che in un turno
+    # di pianificazione è comunque rifiutata).
+    if context.name == "notebook":
+        return context.arguments.get("action") != "remove_pages"
     return context.name == "board" and context.arguments.get("action") == "show"
 
 

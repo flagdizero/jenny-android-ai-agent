@@ -24,7 +24,13 @@ from typing import Any
 
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import current_request_session_key
-from jenny.agent.tools.schema import ArraySchema, ObjectSchema, StringSchema, tool_parameters_schema
+from jenny.agent.tools.schema import (
+    ArraySchema,
+    BooleanSchema,
+    ObjectSchema,
+    StringSchema,
+    tool_parameters_schema,
+)
 from jenny.board import edit, model
 from jenny.board.cron_link import notebook_jobs_on_disk
 from jenny.board.drawers import DrawerError, as_list, page_text, pages_fingerprint, write_drawer
@@ -37,7 +43,8 @@ from jenny.security.workspace_access import (
 
 _WRITES = (
     "add_card", "rename_card", "move_card", "remove_card", "restore_card", "move_pages",
-    "remove_pages", "connect", "disconnect", "add_note", "add_reminder", "close_reminder", "remove_section",
+    "remove_pages", "connect", "disconnect", "add_note", "add_reminder", "update_reminder",
+    "close_reminder", "remove_section",
     "set_skeleton", "answer_proposal", "write_drawer",
 )
 _ACTIONS = ("show", *_WRITES)
@@ -63,10 +70,13 @@ _SECTION = ObjectSchema(
         "card. remove_card (card): into the trash, restorable. restore_card (card). "
         "move_pages (pages, card): onto that card, from another card or from off the board. "
         "remove_pages (pages, card?): off that card, or off every card when card is empty; "
-        "also for pages that no longer exist. The files stay in the wiki. "
+        "also for pages that no longer exist. The files stay in the wiki (to delete them, "
+        "`notebook action=remove_pages`). "
         "connect (card, other, label?) / disconnect (card, other): a thread. "
         "add_note (card, text). add_reminder (card?, text, date, precision?): tie it to the "
         "card it is about, or leave card empty for the whole notebook — you decide. "
+        "update_reminder (id, text?, date?, precision?, why?, clear_why?): correct an open "
+        "reminder; why is the wiki page that explains it, clear_why=true removes it. "
         "close_reminder (id): done. remove_section (card, id). "
         "set_skeleton (skeleton): the drawer sections, only while the board has no cards. "
         "answer_proposal (id, answer): yes / no / later to a proposal in the envelope. "
@@ -81,12 +91,17 @@ _SECTION = ObjectSchema(
     pages=ArraySchema(StringSchema("A page path relative to wiki/, as `show` lists it."),
                       description="add_card / move_pages / remove_pages: the pages."),
     label=StringSchema("connect: why the two belong together, in a few words."),
-    text=StringSchema("add_note / add_reminder: the text, in the user's language."),
-    date=StringSchema("add_reminder: YYYY-MM-DD. For 'in March', the first of the month."),
-    precision=StringSchema("add_reminder: `day`, or `month` for 'in March'.",
+    text=StringSchema("add_note / add_reminder / update_reminder: the text, in the user's "
+                      "language."),
+    date=StringSchema("add_reminder / update_reminder: YYYY-MM-DD. For 'in March', the first "
+                      "of the month."),
+    precision=StringSchema("add_reminder / update_reminder: `day`, or `month` for 'in March'.",
                            enum=["day", "month"]),
-    id=StringSchema("close_reminder: the reminder id. remove_section: the section id. "
-                    "answer_proposal: the proposal id."),
+    why=StringSchema("update_reminder: the page that explains the reminder, relative to wiki/ "
+                     "(it must exist). Omitted or empty: unchanged."),
+    clear_why=BooleanSchema(description="update_reminder: true removes the reminder's page."),
+    id=StringSchema("close_reminder / update_reminder: the reminder id. remove_section: the "
+                    "section id. answer_proposal: the proposal id."),
     answer=StringSchema("answer_proposal.", enum=list(edit.ANSWERS)),
     skeleton=ArraySchema(StringSchema("A section title."),
                          description="set_skeleton: the drawer sections, in order."),
@@ -205,6 +220,8 @@ class BoardTool(Tool):
                         "free sticky note.")
             return (f"Reminder `{rid}` added: a line on the card's sticky note and in its care "
                     "calendar.")
+        if action == "update_reminder":
+            return _update_reminder(root, str(kw.get("id") or ""), kw)
         if action == "close_reminder":
             text = edit.close_reminder(root, str(kw.get("id") or ""),
                                        timezone_name=self._timezone)
@@ -255,6 +272,28 @@ class BoardTool(Tool):
         )
         note = f" Skipped: {'; '.join(problems)}." if problems else ""
         return f"Drawer of «{card['title']}» written: {len(sections)} sections, {changed} changed.{note}"
+
+
+def _update_reminder(root: Path, rid: str, kw: dict[str, Any]) -> str:
+    """Testo, data e ``why`` di un'attesa aperta, in una scrittura sola.
+
+    ``why`` assente o vuoto lascia la pagina com'è: un campo vuoto non deve
+    staccarla in silenzio. Per toglierla c'è ``clear_why``.
+    """
+    text, date = kw.get("text"), kw.get("date")
+    why = str(kw.get("why") or "").strip()
+    clear = kw.get("clear_why") is True
+    if not (text or date or why or clear):
+        raise edit.BoardEditError("bad_request", "give text, date, why or clear_why to change")
+    when = ({"kind": "date", "date": date, "precision": kw.get("precision") or "day"}
+            if date else None)
+    rem = edit.update_reminder_fields(root, rid, text=text, when=when, why=why or None,
+                                      clear_why=clear and not why)
+    if why:
+        return f"Reminder `{rid}` updated; why: {rem['why']}."
+    if clear:
+        return f"Reminder `{rid}` updated; it no longer points to a page."
+    return f"Reminder `{rid}` updated."
 
 
 def _jobs_note(what: dict[str, Any], state: str) -> str:

@@ -275,20 +275,22 @@ class TestDegradeToRestart:
         assert "change the title" in relaunched[1]["content"]
         assert sm._lineages[lineage].attempt == 2
 
-    async def test_the_three_lineage_cap_degrades_the_oldest_to_restart(
+    async def test_the_lineage_cap_degrades_the_oldest_to_restart(
         self, tmp_path: Path
     ) -> None:
+        from jenny.agent.subagent_history import MAX_HISTORY_PER_ORIGIN
+
         sm = _manager(tmp_path, max_concurrent_subagents=8)
         _completing_runner(sm)
         lineages = [
             await _spawn_and_settle(sm, task=f"job {i}", label=f"job {i}")
-            for i in range(4)
+            for i in range(MAX_HISTORY_PER_ORIGIN + 1)
         ]
 
         assert sm._history.load(lineages[0]) is None
-        assert sm._history.load(lineages[3]) is not None
+        assert sm._history.load(lineages[-1]) is not None
         assert (await sm.send(lineages[0], "follow up")).mode == "restarted"
-        assert (await sm.send(lineages[3], "follow up")).mode == "resumed"
+        assert (await sm.send(lineages[-1], "follow up")).mode == "resumed"
         await asyncio.gather(*list(sm._running_tasks.values()), return_exceptions=True)
 
     async def test_a_failed_subagent_has_no_history_and_is_restarted(

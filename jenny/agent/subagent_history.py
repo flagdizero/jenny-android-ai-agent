@@ -12,7 +12,7 @@ Non c'e un layer di persistenza nuovo: la storia e una sessione sotto la chiave
 del gateway, cosi scritture atomiche, riparazione di un file troncato e
 ``enforce_file_cap`` arrivano gratis.
 
-**La retention e volutamente cortissima: 3 lineage terminati per session key di
+**La retention e volutamente corta: 6 lineage terminati per session key di
 origine, TTL 6 ore.** Non e un compromesso: un resume rimanda al provider TUTTA
 la storia del subagent, quindi un researcher con dodici web fetch rende caro ogni
 follow-up. Una finestra corta spinge verso il percorso economico (rilancio dalla
@@ -43,8 +43,19 @@ if TYPE_CHECKING:  # pragma: no cover - solo per i type checker
 # costo, non una limitazione tecnica.
 HISTORY_TTL_S = 6 * 60 * 60
 
-# Quante storie terminate restano per session key di origine.
-MAX_HISTORY_PER_ORIGIN = 3
+# Quante storie terminate restano per session key di origine. Erano 3, ma un
+# passo di piano fa girare fino a 5 aiutanti normali piu uno breve
+# (``subagent.PLAN_HELPER_SLOTS``) nella stessa sessione: con 3, i primi due
+# fermati al budget perdevano la storia prima che Jenny potesse farli
+# continuare. ``PLAN_HELPER_SLOTS + 1``, scritto qui come numero perche
+# ``subagent`` importa questo modulo; un test li tiene allineati.
+MAX_HISTORY_PER_ORIGIN = 6
+
+#: Il tipo di fine che ha prodotto una storia, per la potatura: oltre il tetto
+#: escono prima le storie di lavori finiti bene, poi quelle fermate al budget —
+#: un lavoro finito si ritocca di rado, uno fermato a meta aspetta di continuare.
+KIND_DONE = "done"
+KIND_BUDGET = "budget"
 
 # Guardia sul numero di messaggi salvati: oltre questo tetto la storia viene
 # potata dalla coda (``Session.enforce_file_cap``). Molto sopra a cio che un
@@ -53,6 +64,8 @@ _MAX_HISTORY_MESSAGES = 600
 
 __all__ = [
     "HISTORY_TTL_S",
+    "KIND_BUDGET",
+    "KIND_DONE",
     "MAX_HISTORY_PER_ORIGIN",
     "SubagentHistoryStore",
 ]
@@ -65,6 +78,7 @@ class _Entry:
     lineage_id: str
     origin_key: str
     saved_at: float
+    kind: str = KIND_DONE
 
 
 class SubagentHistoryStore:
@@ -107,6 +121,7 @@ class SubagentHistoryStore:
         *,
         now: float | None = None,
         taint: tuple[str, ...] = (),
+        kind: str = KIND_DONE,
     ) -> bool:
         """Salva la conversazione di un lineage. Ritorna ``True`` se persistita.
 
@@ -134,6 +149,8 @@ class SubagentHistoryStore:
                     # Fonti non fidate lette in questa conversazione: chi la
                     # riprende nasce contaminato (v. ``taint_of``).
                     "taint_sources": list(taint),
+                    # Per la potatura dopo un riavvio (v. ``_reconcile``).
+                    "stop_kind": kind,
                 },
             )
             session.enforce_file_cap(limit=_MAX_HISTORY_MESSAGES)
@@ -146,9 +163,26 @@ class SubagentHistoryStore:
         # mai una sessione di subagent viva nel cache del SessionManager.
         self._invalidate(key)
         self._reconcile()
-        self._index[lineage_id] = _Entry(lineage_id, origin_key, moment)
+        self._index[lineage_id] = _Entry(lineage_id, origin_key, moment, kind)
         self.prune(now=moment)
         return True
+
+    def has(self, lineage_id: str, *, now: float | None = None) -> bool:
+        """C'e una storia di *lineage_id* entro TTL, secondo l'indice in RAM.
+
+        Una domanda da snapshot, che si pubblica ogni pochi secondi: niente
+        letture di file. L'indice segue ogni ``save``/``drop``/potatura, e un
+        file rotto lo scopre solo :meth:`load` — che e cio che una ripresa fa
+        comunque prima di partire.
+        """
+        if self._sessions is None:
+            return False
+        self._reconcile()
+        entry = self._index.get(lineage_id)
+        if entry is None:
+            return False
+        moment = time.time() if now is None else now
+        return self.ttl_s <= 0 or moment - entry.saved_at <= self.ttl_s
 
     # ------------------------------------------------------------------
     # read
@@ -245,10 +279,13 @@ class SubagentHistoryStore:
                 continue
             by_origin.setdefault(entry.origin_key, []).append(entry)
         for entries in by_origin.values():
-            if len(entries) <= self.max_per_origin:
+            excess = len(entries) - self.max_per_origin
+            if excess <= 0:
                 continue
-            entries.sort(key=lambda e: e.saved_at, reverse=True)
-            dropped.extend(e.lineage_id for e in entries[self.max_per_origin:])
+            # Prima le storie di lavori finiti bene, poi quelle fermate al
+            # budget; dentro ciascun gruppo, la piu vecchia.
+            entries.sort(key=lambda e: (e.kind == KIND_BUDGET, e.saved_at))
+            dropped.extend(e.lineage_id for e in entries[:excess])
 
         for lineage_id in dropped:
             self.drop(lineage_id)
@@ -337,6 +374,7 @@ class SubagentHistoryStore:
             payload = meta.get("metadata") if isinstance(meta, dict) else None
             saved_at = payload.get("saved_at") if isinstance(payload, dict) else None
             origin = payload.get("origin_session_key") if isinstance(payload, dict) else None
+            kind = payload.get("stop_kind") if isinstance(payload, dict) else None
             if not isinstance(saved_at, (int, float)) or isinstance(saved_at, bool):
                 self.drop(lineage_id)
                 continue
@@ -344,4 +382,5 @@ class SubagentHistoryStore:
                 lineage_id,
                 origin if isinstance(origin, str) else "",
                 float(saved_at),
+                KIND_BUDGET if kind == KIND_BUDGET else KIND_DONE,
             )

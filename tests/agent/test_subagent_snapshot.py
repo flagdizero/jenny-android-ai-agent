@@ -34,6 +34,8 @@ from jenny.bus.queue import MessageBus
 RUNNING_KEYS = {
     "task_id", "lineage_id", "attempt", "label", "task", "agent_type", "state",
     "phase", "iteration", "elapsed_s", "idle_s", "last_tool", "tool_events",
+    # Il passo del piano per cui lavora (``None`` fuori da un piano).
+    "plan_id", "plan_step",
 }
 # ``cancel_reason`` solo sui terminati: e la provenienza di una cancellazione, e
 # un subagent vivo non ne ha una. ``state="cancelled"`` da solo non distingue
@@ -42,6 +44,10 @@ RUNNING_KEYS = {
 RECENT_KEYS = {
     "task_id", "lineage_id", "attempt", "label", "task", "agent_type", "state",
     "stop_reason", "cancel_reason", "result_summary", "ended_at", "can_restart",
+    # La scheda «si e fermato» della casa: «fai continuare» al posto del rilancio
+    # (``resumable``), via quando Jenny ha avuto il resoconto (``handled_at``),
+    # raggruppata per passo (``plan_id``/``plan_step``).
+    "resumable", "handled_at", "plan_id", "plan_step",
 }
 
 

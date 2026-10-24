@@ -242,7 +242,9 @@ class RequestExecutionMixin:
         messages: list[dict[str, Any]],
         usage: dict[str, int],
     ) -> str | None:
-        retry_messages = self._budget_exhausted_finalization_messages(messages)
+        retry_messages = self._budget_exhausted_finalization_messages(
+            messages, getattr(spec, "max_iterations_finalization_prompt", None),
+        )
         try:
             response = await self._request_no_tools(spec, retry_messages)
         except Exception:
@@ -288,9 +290,10 @@ class RequestExecutionMixin:
     @staticmethod
     def _budget_exhausted_finalization_messages(
         messages: list[dict[str, Any]],
+        prompt: str | None = None,
     ) -> list[dict[str, Any]]:
         retry_messages = list(messages)
-        retry_messages.append(build_budget_exhausted_finalization_message())
+        retry_messages.append(build_budget_exhausted_finalization_message(prompt))
         return retry_messages
 
     @staticmethod

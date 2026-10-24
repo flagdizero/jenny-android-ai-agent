@@ -206,10 +206,13 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
     #
     # Niente rete e niente ``python_exec``, come ``writer``: chi scrive il
     # quaderno non va a prendersi contenuto non fidato. Lo scope a parte tiene
-    # ``board`` fuori da ``operator``, come ``app`` e gli ``ssh_*``.
+    # ``board`` fuori da ``operator``, come ``app`` e gli ``ssh_*``. Il tool
+    # ``notebook`` (la faccia dello scope ``notebook``) gli dà le letture in
+    # blocco e ``remove_pages``: dal 24/10/2026, dopo una prova in cui l'editore
+    # ha fatto 39 ``read_file`` uno per iterazione e non poteva cancellare.
     AgentType(
         name="notebook-editor",
-        tools=frozenset(("board", *_FS_ALL, "apply_patch", "grep")),
+        tools=frozenset(("board", "notebook", *_FS_ALL, "apply_patch", "grep")),
         temperature=0.2,
         max_iterations=60,
         scopes=("subagent", "notebook"),

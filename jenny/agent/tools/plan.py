@@ -85,6 +85,13 @@ class PlanTool(Tool):
                     "one comes from.",
                     nullable=True,
                 ),
+                covers=ArraySchema(
+                    StringSchema("A coverage id: c1 is the first coverage entry, c2 the second."),
+                    description=(
+                        "Research steps only: the ids of the coverage entries this step "
+                        "searches. Every `web` entry must be in the covers of a research step."
+                    ),
+                ),
                 required=["title", "detail", "done_when"],
             ),
             description=f"The steps, in order: {MIN_STEPS} to {MAX_STEPS}.",
@@ -96,14 +103,17 @@ class PlanTool(Tool):
                 missing=StringSchema("What is missing."),
                 strategy=StringSchema(
                     "How the plan fills it: notebook (the notebook is enough), web (a "
-                    "research step searches it and names it in its detail), leave (it stays "
-                    "uncovered: say why). Never ask: ask the user before proposing.",
+                    "research step searches it and lists its id in `covers`), leave (it "
+                    "stays uncovered: say why). Never ask: ask the user before proposing.",
                     enum=[c for c in COVERAGE_STRATEGIES if c != "ask"],
                 ),
                 why=StringSchema("Why this strategy; required for leave."),
                 required=["item", "have", "missing", "strategy"],
             ),
-            description="What the job needs, item by item, and how each is covered.",
+            description=(
+                "What the job needs, item by item, and how each is covered. The entries "
+                "get the ids c1, c2, ... in this order."
+            ),
         ),
         assumptions=ArraySchema(
             StringSchema("One short sentence."),

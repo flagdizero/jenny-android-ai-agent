@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import functools
+import json
 import time
+from collections.abc import Mapping
 from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, NamedTuple
@@ -761,6 +763,12 @@ class AgentLoop(
             # chat personale, nell'app (non Telegram, non una notifica).
             if name == "suggest_notebook":
                 return in_project or silent or msg.channel != "websocket"
+            # ``notebook`` lavora solo nella chat di un quaderno (fuori risponde
+            # «not from here»): ~2,9k caratteri di schema in ogni turno della
+            # chat personale, per uno strumento che li' non puo' servire. La
+            # stessa radice che il tool risolve (``NotebookReadTool._root``).
+            if name == "notebook":
+                return root is None
             if not in_project:
                 return False
             if name == "recall_history":
@@ -1468,6 +1476,11 @@ class AgentLoop(
                 return
             self._set_runtime_checkpoint(session, payload)
 
+        # I resoconti di aiutanti consumati a meta turno: marcati ``handled`` a
+        # fine turno riuscito (``SubagentManager.mark_handled``), non quando
+        # entrano — Jenny li ha in mano solo quando il turno li ha visti tutti.
+        drained_subagent_ids: list[str] = []
+
         async def _drain_pending(*, limit: int = _MAX_INJECTIONS_PER_TURN) -> list[dict[str, Any]]:
             """Drain follow-up messages already waiting in the pending queue.
 
@@ -1519,6 +1532,7 @@ class AgentLoop(
                     task_id = pending_msg.metadata.get("subagent_task_id")
                     if task_id:
                         message["subagent_task_id"] = task_id
+                        drained_subagent_ids.append(task_id)
                     if taint := pending_msg.metadata.get(SUBAGENT_TAINT_META):
                         message[SUBAGENT_TAINT_META] = list(taint)
                         # Arrivato a metà turno: da qui il turno lo eredita.
@@ -1702,6 +1716,11 @@ class AgentLoop(
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)
             reset_file_states(file_state_token)
+        for drained_id in drained_subagent_ids:
+            self._mark_subagent_handled(drained_id)
+        # E i resoconti scritti in storia senza turno (risveglio unico per
+        # passo): questo turno li ha avuti davanti.
+        self._release_held_subagent_results(active_session_key, session)
         self._last_usage = result.usage
         if result.goal_stalled and session is not None:
             # Il runner ha rifiutato di spronare il goal: sta aspettando una
@@ -2203,11 +2222,20 @@ class AgentLoop(
             logger.debug(
                 "Subagent announce skipped for session {}: {}", key, followup_state.value,
             )
+            if followup_state is FollowupState.DELIVERED:
+                # Jenny l'ha gia avuto e ci ha risposto: la casa puo togliere
+                # la scheda anche se la prima consegna non l'aveva marcato.
+                self._mark_subagent_handled(msg.metadata.get("subagent_task_id"))
             return TurnOutcome.silent()
         # Un rientro nuovo di un aiutante della pianificazione e' una lettura del
         # quaderno; uno gia' consegnato o vuoto, scartato qui sopra, no.
         if is_subagent:
             await self._plan_count_helper_result(msg, key)
+        if is_subagent and not silent and self._hold_subagent_result(
+            msg, key, session, followup_state,
+        ):
+            # In storia senza turno: Jenny si sveglia con l'ultimo del passo.
+            return TurnOutcome.silent()
         # Prelude di tooling condiviso con lo stato BUILD della FSM: sincronizza i
         # tool delle app, imposta il contesto tool e azzera lo stato per-turno del
         # MessageTool. Prima veniva fatto solo _set_tool_context, divergendo dalla
@@ -2346,7 +2374,7 @@ class AgentLoop(
                 turn_token=turn_token,
                 # Il registro del loop meno i tool del piano che questo turno
                 # non puo' usare: un passo aperto li mostra, il resto no.
-                tools=self._plan_system_tools(msg, key),
+                tools=self._system_turn_tools(msg, key),
             )
         finally:
             if origin is not None:
@@ -2373,6 +2401,9 @@ class AgentLoop(
             ephemeral=False,
             clear_pending=False,
         )
+        if is_subagent:
+            # Il resoconto e in storia e il turno che lo presenta e finito.
+            self._mark_subagent_handled(msg.metadata.get("subagent_task_id"))
         spoke_via_tool = self._message_tool_spoke()
         if silent:
             # Un turno di sistema silenzioso non ha un outbound: ne il contenuto
@@ -2403,8 +2434,16 @@ class AgentLoop(
                 if spoke_via_tool
                 else TurnOutcome.silent(final_text=text)
             )
-        if (is_subagent and msg.metadata.get("subagent_status") not in (None, "ok")
-                and "subagent_restart" in tools_used):
+        subagent_status = msg.metadata.get("subagent_status")
+        if (is_subagent and subagent_status not in (None, "ok")
+                and ("subagent_restart" in tools_used
+                     # Un aiutante fermato al budget si fa continuare con
+                     # ``subagent_send`` (``subagent_announce.md``): come un
+                     # rilancio, in chat parla solo il lavoro ripreso. Solo se
+                     # l'invio a QUESTO aiutante e' andato: un invio rifiutato,
+                     # o a un altro aiutante, lascia l'utente senza notizie.
+                     or (subagent_status == "budget" and self._sent_to_announced_helper(
+                         all_msgs[save_skip:], msg.metadata)))):
             # Un subagent caduto e rilanciato: in chat parla solo l'esito del
             # rilancio. Il 07/10/2026 l'utente si e' visto arrivare «piccolo
             # intoppo, l'ho rilanciato» e poi il risultato vero, e ha chiesto che
@@ -2432,6 +2471,197 @@ class AgentLoop(
                 metadata=outbound_metadata,
             )
         )
+
+    async def shutdown(self, *, timeout_s: float = 10.0) -> None:
+        """Il drain di :class:`LoopTasksMixin`, preceduto dai timer del risveglio unico.
+
+        Prima di tutto il resto: un risveglio che scatta mentre i turni si
+        drenano pubblicherebbe un turno che nessuno prenderà più
+        (``PlanDriver.close_held_timers``).
+        """
+        close: Any = getattr(self.plan_driver, "close_held_timers", None)
+        if close is not None:
+            try:
+                await close()
+            except Exception:  # noqa: BLE001 — lo shutdown va avanti comunque
+                logger.opt(exception=True).warning("Plan wake-up timers not closed")
+        await super().shutdown(timeout_s=timeout_s)
+
+    def _system_turn_tools(self, msg: InboundMessage, key: str) -> ToolRegistry | None:
+        """Il registro di un turno di sistema: quello del piano, senza ``notebook`` fuori dai quaderni.
+
+        Il percorso di sistema non passa da :meth:`_turn_tool_view`: il rientro di
+        un aiutante nella chat personale si portava dietro lo schema di
+        ``notebook``, che li' risponde soltanto «not from here».
+        """
+        tools = self._plan_system_tools(msg, key)
+        if is_project_session_key(key) or "notebook" not in self.tools.tool_names:
+            return tools
+        from jenny.agent.tools.registry import ToolRegistryView
+
+        return ToolRegistryView(tools or self.tools, lambda name, _tool: name == "notebook")
+
+    def _hold_subagent_result(
+        self,
+        msg: InboundMessage,
+        key: str,
+        session: Session,
+        followup_state: FollowupState | None,
+    ) -> bool:
+        """Scrive in storia il resoconto di un aiutante **senza turno**, se va tenuto.
+
+        Il risveglio unico per passo (``PlanDriver.hold_helper_result``): con un
+        piano in corsa, il resoconto riuscito di un aiutante il cui fratello
+        dello stesso passo lavora ancora non apre un turno — niente chiamata al
+        modello, niente messaggio in uscita. La riga si scrive come per un turno
+        d'annuncio, così il turno dell'ultimo resoconto le vede tutte, e i
+        controlli che contano una riga per id (doppioni, letture del piano)
+        restano com'erano. ``handled`` arriva solo al risveglio
+        (:meth:`_release_held_subagent_results`).
+
+        Solo un esito ``ok``: un errore, un budget o uno stop svegliano subito,
+        perché Jenny deve poter far continuare o rilanciare l'aiutante. A metà
+        turno non si tiene niente: Jenny è sveglia comunque, e il resoconto
+        entra nel turno in volo (``_drain_pending``).
+        """
+        if followup_state not in (FollowupState.NEW, FollowupState.PENDING):
+            return False
+        meta = msg.metadata if isinstance(msg.metadata, dict) else {}
+        if meta.get("subagent_status") != "ok":
+            return False
+        driver = self.plan_driver
+        hold: Any = getattr(driver, "hold_helper_result", None)
+        if hold is None:
+            return False
+        try:
+            held = hold(key, meta.get("subagent_task_id")) is True
+        except Exception:  # noqa: BLE001 — nel dubbio il turno parte, come prima
+            logger.opt(exception=True).warning("Helper result hold failed for {}", key)
+            return False
+        if not held:
+            return False
+        if followup_state is FollowupState.NEW:
+            self._persist_subagent_followup(session, msg)
+        # PENDING: la riga c'e' gia' (``_subagent_followup_state`` l'ha riportata
+        # a ``user``), e si salva com'e'.
+        self.sessions.save(session)
+        # Non e' un turno: il gancio di fine turno del piano non lo giudica (lo
+        # stesso marcatore di un turno di passo vecchio, ``_plan_turn_ended``).
+        msg.metadata[PLAN_STALE_META] = True
+        logger.info(
+            "Subagent result {} recorded without a turn for session {}: {}",
+            meta.get("subagent_task_id"), key, FollowupState.HELD.value,
+        )
+        return True
+
+    def _release_held_subagent_results(
+        self, session_key: str | None, session: Session | None = None,
+    ) -> None:
+        """Marca ``handled`` i resoconti tenuti di *session_key*: un turno li ha visti.
+
+        Lo chiama :meth:`_run_agent_loop` alla fine di ogni turno riuscito: le
+        righe tenute stanno in storia, quindi qualunque turno della sessione —
+        quello dell'ultimo resoconto, il risveglio del driver, o un messaggio
+        dell'utente arrivato nel mezzo — le ha avute davanti. Il driver spegne
+        il suo timer nello stesso momento.
+
+        Solo quelli la cui riga c'e' ancora: un ``/new`` nel frattempo ha
+        buttato la conversazione, e Jenny quei resoconti non li ha mai visti —
+        si lasciano cadere, senza ``handled``.
+        """
+        driver = self.plan_driver
+        take: Any = getattr(driver, "take_held_results", None)
+        if not session_key or take is None:
+            return
+        try:
+            held = list(take(session_key) or ())
+        except Exception:  # noqa: BLE001 — contabilita della casa, come mark_handled
+            logger.opt(exception=True).debug("Held helper results not released for {}", session_key)
+            return
+        if not held:
+            return
+        if session is not None:
+            in_history = {
+                row.get("subagent_task_id")
+                for row in session.messages
+                if row.get(INJECTED_EVENT_META) == SUBAGENT_RESULT_EVENT
+            }
+            gone = [task_id for task_id in held if task_id not in in_history]
+            if gone:
+                logger.info("Held helper results dropped, no longer in history: {}", gone)
+            held = [task_id for task_id in held if task_id in in_history]
+        for task_id in held:
+            self._mark_subagent_handled(task_id)
+
+    #: L'inizio dei risultati di ``subagent_send`` che non hanno mandato niente
+    #: (``SubagentSendTool.execute``: target sconosciuto, doppione, pool pieno),
+    #: e quello di un'eccezione del tool (``ToolRegistry``).
+    _SEND_REFUSED_PREFIXES = ("Cannot send", "Refused", "Error")
+
+    def _sent_to_announced_helper(
+        self, turn_messages: list[dict[str, Any]], metadata: Mapping[str, Any] | None,
+    ) -> bool:
+        """Questo turno ha mandato davvero un ``subagent_send`` all'aiutante annunciato.
+
+        Il bersaglio e' il ``task_id`` dell'annuncio o il suo lineage (``send``
+        accetta entrambi); riuscito = il risultato del tool non e' un rifiuto.
+        Senza questo, un invio fallito o diretto a un altro aiutante zittiva il
+        turno d'annuncio, e l'utente non sapeva che l'aiutante si era fermato.
+        """
+        meta = metadata if isinstance(metadata, Mapping) else {}
+        targets = {
+            value for value in (meta.get("subagent_task_id"), meta.get("subagent_lineage_id"))
+            if isinstance(value, str) and value
+        }
+        if not targets:
+            return False
+        aimed: set[str] = set()
+        for message in turn_messages:
+            role = message.get("role")
+            if role == "assistant":
+                for call in message.get("tool_calls") or ():
+                    if not isinstance(call, Mapping):
+                        continue
+                    function = call.get("function")
+                    function = function if isinstance(function, Mapping) else call
+                    if function.get("name") != "subagent_send":
+                        continue
+                    arguments = function.get("arguments")
+                    if isinstance(arguments, str):
+                        try:
+                            arguments = json.loads(arguments)
+                        except ValueError:
+                            continue
+                    if (isinstance(arguments, Mapping)
+                            and arguments.get("task_id") in targets and call.get("id")):
+                        aimed.add(str(call["id"]))
+            elif role == "tool" and message.get("tool_call_id") in aimed:
+                content = message.get("content")
+                if isinstance(content, list):
+                    content = "".join(
+                        part.get("text", "") for part in content if isinstance(part, Mapping)
+                    )
+                if isinstance(content, str) and not content.lstrip().startswith(
+                    self._SEND_REFUSED_PREFIXES
+                ):
+                    return True
+        return False
+
+    def _mark_subagent_handled(self, task_id: Any) -> None:
+        """``SubagentManager.mark_handled`` per un resoconto che Jenny ha avuto.
+
+        Non solleva: e contabilita della casa, e un turno finito non deve
+        fallire per lei. ``getattr``: nei test il manager e spesso un finto.
+        """
+        if not isinstance(task_id, str) or not task_id:
+            return
+        mark = getattr(self.subagents, "mark_handled", None)
+        if not callable(mark):
+            return
+        try:
+            mark(task_id)
+        except Exception:  # noqa: BLE001 — vedi docstring
+            logger.opt(exception=True).debug("Subagent handled mark failed for {}", task_id)
 
     async def _process_message(
         self,

@@ -294,3 +294,56 @@ async def test_the_editor_can_add_a_reminder_for_the_whole_notebook(notebook_cha
     assert rem["card"] == "" and rem["by"] == "user"
     assert "on the whole notebook: Porta dentro le piante" in await BoardTool().execute(
         action="show")
+
+
+async def test_update_reminder_sets_text_date_and_why(notebook_chat: Path, announced) -> None:
+    """Il contratto del 24/10/2026: un'attesa corretta dall'editore porta anche la
+    pagina che la spiega, e un ``why`` vuoto la stacca."""
+    root = notebook_chat
+    tool = BoardTool()
+    added = await tool.execute(action="add_reminder", card="nuove", text="Rinvaso",
+                               date="2099-03-01")
+    rid = added.split("`")[1]
+    out = await tool.execute(action="update_reminder", id=rid, why="entities/Fico.md",
+                             date="2099-04-01")
+    assert out == f"Reminder `{rid}` updated; why: entities/Fico.md."
+    rem = read_reminders(root)["reminders"][0]
+    assert rem["why"] == "entities/Fico.md" and rem["when"]["date"] == "2099-04-01"
+    out = await tool.execute(action="update_reminder", id=rid, why="entities/Nessuno.md",
+                             text="Non deve cambiare")
+    assert out.startswith("Not done: no such page under wiki/"), out
+    assert read_reminders(root)["reminders"][0]["text"] == "Rinvaso"
+    # Un ``why`` vuoto non stacca niente: per togliere la pagina c'è clear_why.
+    out = await tool.execute(action="update_reminder", id=rid, why="", text="Rinvaso grande")
+    assert out == f"Reminder `{rid}` updated."
+    rem = read_reminders(root)["reminders"][0]
+    assert rem["why"] == "entities/Fico.md" and rem["text"] == "Rinvaso grande"
+    out = await tool.execute(action="update_reminder", id=rid, clear_why=True)
+    assert "no longer points to a page" in out
+    assert read_reminders(root)["reminders"][0]["why"] == ""
+    assert (await tool.execute(action="update_reminder", id=rid, why="")).startswith(
+        "Not done: give")
+
+
+async def test_update_reminder_writes_once(notebook_chat: Path, announced, monkeypatch) -> None:
+    """Testo, data e pagina in una scrittura sola: due scritture lasciavano
+    l'attesa a metà se la seconda falliva."""
+    import jenny.board.edit as edit_mod
+
+    tool = BoardTool()
+    rid = (await tool.execute(action="add_reminder", card="nuove", text="Rinvaso",
+                              date="2099-03-01")).split("`")[1]
+    calls: list[int] = []
+    real = edit_mod.mutate_reminders
+
+    def counting(root, apply, **kw):
+        calls.append(1)
+        return real(root, apply, **kw)
+
+    monkeypatch.setattr(edit_mod, "mutate_reminders", counting)
+    await tool.execute(action="update_reminder", id=rid, text="Nuovo", date="2099-05-01",
+                       why="entities/Fico.md")
+    assert calls == [1]
+    rem = read_reminders(notebook_chat)["reminders"][0]
+    assert (rem["text"], rem["when"]["date"], rem["why"]) == (
+        "Nuovo", "2099-05-01", "entities/Fico.md")

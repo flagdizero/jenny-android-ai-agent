@@ -42,7 +42,13 @@ from jenny.utils.path import atomic_write
 # Stati coarse-grained del ciclo di vita di un subagent. Restano distinti da
 # ``SubagentStatus.phase`` (fine-grained, già consumato altrove): il phase dice
 # *cosa sta facendo* il subagent, lo state dice *se e ancora in gioco*.
-SUBAGENT_STATES = ("running", "done", "failed", "cancelled", "stalled")
+#
+# ``budget`` e terminale come ``failed`` ma non e un fallimento: il subagent si e
+# fermato al tetto di iterazioni con la conversazione integra, e la sua storia
+# Tier-2 resta su disco perche ``subagent_send`` lo faccia continuare da dove era.
+# Fino al 24/10/2026 finiva in ``failed`` e ``_cleanup`` cancellava la storia,
+# quindi ogni ripresa ripartiva da zero e il lavoro fatto si perdeva.
+SUBAGENT_STATES = ("running", "done", "failed", "cancelled", "stalled", "budget")
 
 # Provenienza di una cancellazione. ``state="cancelled"`` da solo non dice CHI ha
 # fermato il subagent, e le tre risposte portano a decisioni opposte:
@@ -222,6 +228,12 @@ class SubagentSpec:
     # *untrusted* (v. ``security.subagent_policy``). Sta nella spec perche' un
     # rilancio rigioca lo stesso compito, e quindi lo stesso testo.
     taint_seed: tuple[str, ...] = ()
+    # Il piano e il passo del turno che ha lanciato il lavoro
+    # (``current_request_context().metadata``), ``None`` fuori da un piano. Nella
+    # spec, e non solo nello status, perche un rilancio o una ripresa restano
+    # lavoro dello stesso passo, e la casa raggruppa gli aiutanti per passo.
+    plan_id: str | None = None
+    plan_step: str | None = None
 
     def __post_init__(self) -> None:
         # Il tipo si valida qui, alla costruzione della spec, e non piu in la:
@@ -273,6 +285,8 @@ class SubagentSpec:
             "origin_message_id": self.origin_message_id,
             "quick": self.quick,
             "taint_seed": list(self.taint_seed),
+            "plan_id": self.plan_id,
+            "plan_step": self.plan_step,
         }
 
     @classmethod
@@ -308,6 +322,9 @@ class SubagentSpec:
                 x for x in (raw.get("taint_seed") if isinstance(raw.get("taint_seed"), list) else [])
                 if isinstance(x, str)
             )[:8],
+            # Chiavi aggiunte il 24/10/2026: un record precedente non le ha.
+            plan_id=raw.get("plan_id") if isinstance(raw.get("plan_id"), str) else None,
+            plan_step=raw.get("plan_step") if isinstance(raw.get("plan_step"), str) else None,
         )
 
 
@@ -369,6 +386,20 @@ class SubagentRecord:
     # aprire il file**.
     activity_events: int = 0
     activity_bytes: int = 0
+    # Quando il resoconto di questo tentativo e arrivato a Jenny e il suo turno
+    # e finito (``SubagentManager.mark_handled``), orologio di parete. La casa lo
+    # usa per togliere la scheda «si e fermato» quando Jenny ha gia deciso cosa
+    # farne: senza, la scheda restava li anche dopo che Jenny aveva ripreso il
+    # lavoro con un aiutante nuovo.
+    handled_at: float | None = None
+    # Fermato al budget con una storia ancora riprendibile (``budget`` e
+    # ``SubagentManager.continuable``), misurato una volta alla terminazione:
+    # lo snapshot si pubblica ogni pochi secondi e non deve rileggere la storia.
+    resumable: bool = False
+    # Riprese dopo un budget gia spese dal lineage fino a questo tentativo: dopo
+    # un riavvio e cio che fa rispettare a ``send`` il tetto delle riprese
+    # (``SubagentManager``, ``MAX_BUDGET_RESUMES``).
+    budget_resumes: int = 0
 
     @property
     def session_key(self) -> str:
@@ -396,6 +427,9 @@ class SubagentRecord:
             "ended_at": self.ended_at,
             "activity_events": self.activity_events,
             "activity_bytes": self.activity_bytes,
+            "handled_at": self.handled_at,
+            "resumable": self.resumable,
+            "budget_resumes": self.budget_resumes,
         }
 
     @classmethod
@@ -432,6 +466,9 @@ class SubagentRecord:
             # digest", che e proprio la verita per quei record.
             activity_events=max(0, _coerce_int(raw.get("activity_events"), 0)),
             activity_bytes=max(0, _coerce_int(raw.get("activity_bytes"), 0)),
+            handled_at=_coerce_float(raw.get("handled_at")) or None,
+            resumable=raw.get("resumable") is True,
+            budget_resumes=max(0, _coerce_int(raw.get("budget_resumes"), 0)),
         )
 
 
@@ -546,6 +583,47 @@ class SubagentRecordStore:
         return records
 
     # -- write ---------------------------------------------------------------
+
+    def mark_handled(
+        self, task_id: str, at: float, *, session_key: str | None = None,
+    ) -> SubagentRecord | None:
+        """Scrive ``handled_at`` sul record di *task_id*, se c'e e non l'ha gia.
+
+        Ritorna il record (aggiornato o gia marcato), o ``None`` se non esiste.
+        Con *session_key* legge solo il file di quella chiave; senza, li scorre
+        tutti (record di un processo precedente: il chiamante lo fa fuori dal
+        loop).
+        Il primo istante vince: un resoconto consegnato due volte non deve
+        spostare l'ora in cui Jenny l'ha avuto, e non riscrivere il file a ogni
+        doppione risparmia una scrittura con fsync su un telefono.
+        """
+        root = self.root
+        if root is None or not task_id:
+            return None
+        if session_key is not None:
+            # La chiave nota: un file solo, invece di tutti.
+            known = self._path_for(session_key)
+            paths = [known] if known is not None else []
+        else:
+            try:
+                paths = sorted(root.glob("*.jsonl"))
+            except OSError as e:
+                logger.warning("Subagent record dir unreadable {}: {}", root, e)
+                return None
+        for path in paths:
+            records = self._read_file(path)
+            found = next((r for r in records if r.task_id == task_id), None)
+            if found is None:
+                continue
+            if found.handled_at is not None:
+                return found
+            found.handled_at = at
+            payload = "".join(
+                json.dumps(r.to_dict(), ensure_ascii=False) + "\n" for r in records
+            )
+            atomic_write(path, payload)
+            return found
+        return None
 
     def append(self, record: SubagentRecord, *, now: float | None = None) -> None:
         """Aggiunge un record e riscrive il file potato (TTL + cap).

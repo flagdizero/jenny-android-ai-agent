@@ -617,6 +617,83 @@ def update_reminder_by_id(root: Path, rid: str, text: Any, when: Any = None) -> 
     mutate_reminders(root, apply_rem)
 
 
+def set_reminder_why(root: Path, rid: str, why: str | None) -> str:
+    """La pagina che spiega un'attesa aperta: una pagina vera di ``wiki/``, o niente.
+
+    ``why`` è il percorso relativo a ``wiki/`` che l'orologio legge quando
+    l'attesa scade (``board/clock.py``); ``None`` o vuoto lo toglie. Una pagina
+    che non c'è si rifiuta: un ``why`` morto è quel che un riordino del
+    23/10/2026 ha lasciato su tre promemoria, e l'avviso poi parla senza la sua
+    ragione. Vale come dell'utente, come :func:`update_reminder_by_id`.
+    Restituisce il valore scritto.
+    """
+    value = str(why or "").strip()
+    return update_reminder_fields(root, rid, why=value or None, clear_why=not value)["why"]
+
+
+def update_reminder_fields(root: Path, rid: str, *, text: Any = None, when: Any = None,
+                           why: str | None = None, clear_why: bool = False) -> dict[str, Any]:
+    """Testo, data e ``why`` di un'attesa aperta, **in una scrittura sola**.
+
+    Tutto quel che può essere rifiutato — la data, la pagina — si controlla
+    prima di prendere il lock: un rifiuto non lascia l'attesa cambiata a metà.
+    ``why`` assente non tocca la pagina; ``clear_why`` la stacca. Restituisce
+    l'attesa scritta.
+    """
+    body = model.clean_text(text, model.MAX_TITLE * 2) if text else ""
+    parsed = parse_when(when) if when is not None else None
+    page = str(why or "").strip().removeprefix("wiki/")
+    if page:
+        page = _check_pages(root, [page])[0]
+    if not (body or parsed or page or clear_why):
+        raise BoardEditError("bad_request", "nothing to change")
+    done: list[dict[str, Any]] = []
+
+    def apply_rem(rems: dict[str, Any]) -> None:
+        for rem in rems["reminders"]:
+            if rem["id"] == rid and rem["state"] == "open":
+                if body:
+                    rem["text"] = body
+                if parsed:
+                    rem["when"] = parsed
+                    rem.pop("notifiedAt", None)
+                if page:
+                    rem["why"] = page
+                elif clear_why:
+                    rem["why"] = ""
+                rem["by"] = model.USER
+                done.append(rem)
+                return
+        raise BoardEditError("not_found", "reminder not found")
+
+    mutate_reminders(root, apply_rem)
+    return dict(done[0])
+
+
+def clear_reminder_whys(root: Path, pages: Iterable[str]) -> list[dict[str, str]]:
+    """Toglie il ``why`` delle attese aperte che puntavano a *pages* (relative a
+    ``wiki/``); restituisce ``[{id, text, why}]`` di quelle toccate.
+
+    La chiama ``notebook remove_pages`` dopo aver cancellato le pagine. **Non**
+    cambia ``by``: togliere il rimando a una pagina che non c'è più non è una
+    decisione sull'attesa, e un'attesa del giardiniere resta sua.
+    """
+    gone = {p.removeprefix("wiki/") for p in pages if isinstance(p, str) and p}
+    touched: list[dict[str, str]] = []
+
+    def apply_rem(rems: dict[str, Any]) -> bool | None:
+        for rem in rems["reminders"]:
+            why = str(rem.get("why") or "").removeprefix("wiki/")
+            if rem["state"] == "open" and why in gone:
+                touched.append({"id": rem["id"], "text": rem["text"], "why": why})
+                rem["why"] = ""
+        return None if touched else False
+
+    if gone:
+        mutate_reminders(root, apply_rem)
+    return touched
+
+
 def drop_reminder(root: Path, rid: str) -> None:
     """Togli un'attesa: resta nel file come ``dropped`` (nessuna attesa sparisce).
 

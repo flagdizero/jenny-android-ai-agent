@@ -86,6 +86,7 @@ _HARDCODED_TOOL_MODULES = [
     "app_update",
     "board",
     "plan",
+    "notebook",
 ]
 
 

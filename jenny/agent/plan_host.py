@@ -63,6 +63,55 @@ class LoopPlanHost:
         except Exception:  # noqa: BLE001 — un manager finto nei test non deve rompere il piano
             return frozenset()
 
+    def helper_plan_step(self, task_id: str) -> tuple[str | None, str | None] | None:
+        """Piano e passo di un aiutante (anche appena finito), per il risveglio unico."""
+        lookup: Any = getattr(self._loop.subagents, "helper_plan_step", None)
+        if lookup is None:
+            return None
+        try:
+            return lookup(task_id)
+        except Exception:  # noqa: BLE001 — un manager finto nei test non deve rompere il piano
+            return None
+
+    def step_helpers(self, session_key: str) -> dict[str, tuple[str, str | None, str | None]]:
+        """``task_id -> (state, plan_id, plan_step)`` degli aiutanti vivi della sessione."""
+        lookup: Any = getattr(self._loop.subagents, "live_helper_states", None)
+        if lookup is None:
+            return {}
+        try:
+            return dict(lookup(session_key))
+        except Exception:  # noqa: BLE001 — come sopra
+            return {}
+
+    def has_helper_results(self, session_key: str, task_ids: Any) -> bool:
+        """Almeno uno dei resoconti *task_ids* è ancora nella storia della sessione.
+
+        Il risveglio di sicurezza lo chiede prima di partire: un ``/new`` nel
+        frattempo ha svuotato la conversazione, e un turno che annuncia
+        «resoconti in attesa qui sopra» parlerebbe di righe che non ci sono più.
+        """
+        from jenny.session.history_meta import INJECTED_EVENT_META, SUBAGENT_RESULT_EVENT
+
+        wanted = set(task_ids or ())
+        if not wanted:
+            return False
+        session = self._loop.sessions.get_or_create(session_key)
+        return any(
+            row.get(INJECTED_EVENT_META) == SUBAGENT_RESULT_EVENT
+            and row.get("subagent_task_id") in wanted
+            for row in session.messages
+        )
+
+    def watch_stalls(self, fn: Any) -> None:
+        """Lega *fn* alle marcature ``stalled`` del watchdog degli aiutanti.
+
+        Lo chiama il driver quando nasce: è il solo modo in cui un aiutante
+        fermo raggiunge il driver, che non conosce il manager.
+        """
+        register = getattr(self._loop.subagents, "set_stall_listener", None)
+        if callable(register):
+            register(fn)
+
     async def cancel(self, session_key: str) -> int:
         """Il percorso di ``/stop all``: il turno in volo e gli aiutanti della sessione.
 

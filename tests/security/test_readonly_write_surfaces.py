@@ -178,6 +178,10 @@ _ASKS_FOR_ITSELF = {
         "la bacheca di un quaderno passa dal suo imbuto (board/store.py), che i tool file "
         "non possono scrivere: ha il suo gate"
     ),
+    "agent/tools/notebook.py": (
+        "remove_pages cancella pagine e scrive la traccia in raw/removed/ senza passare dai tool "
+        "file: ha il suo gate, prima di ogni recinto"
+    ),
     "agent/tools/long_task.py": "registra un goal sostenuto via sessions.save, non un path",
     # Stava in ``_OUT_OF_SCOPE`` con «scrive su una
     # macchina remota», ma ``ssh_transfer direction=down`` scrive **sul
@@ -536,6 +540,28 @@ async def _probe_board(root: Path, readonly: bool) -> str:
     return out
 
 
+async def _probe_notebook(root: Path, readonly: bool) -> str:
+    from jenny.agent.tools.context import bind_request_context, reset_request_context
+    from jenny.agent.tools.notebook import NotebookEditTool
+
+    project = root / "wikis" / "orto"
+    (project / "wiki").mkdir(parents=True)
+    page = project / "wiki" / "acero.md"
+    page.write_text("---\nstate: open\n---\n# Acero\n", encoding="utf-8")
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:orto", session_key="project:orto"))
+    try:
+        with _turn(project, readonly):
+            out = await NotebookEditTool().execute(action="remove_pages",
+                                                   pages=["wiki/acero.md"], reason="prova")
+    finally:
+        reset_request_context(token)
+    if readonly:
+        assert page.exists(), "in sola lettura la pagina resta"
+        assert not (project / "raw" / "removed").exists(), "in sola lettura nessuna traccia"
+    return out
+
+
 async def _probe_long_task(root: Path, readonly: bool) -> str:
     from jenny.session.goal_state import GOAL_STATE_KEY
 
@@ -588,6 +614,7 @@ _PROBES: dict[str, Probe] = {
     "agent/tools/journal.py": _probe_journal,
     "agent/tools/app_tool.py": _probe_app_tool,
     "agent/tools/board.py": _probe_board,
+    "agent/tools/notebook.py": _probe_notebook,
     "agent/tools/long_task.py": _probe_long_task,
     "agent/tools/ssh.py": _probe_ssh,
 }

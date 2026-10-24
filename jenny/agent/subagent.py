@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import json
+import math
 import re
 import time
 import uuid
@@ -39,7 +40,7 @@ from jenny.agent.subagent_activity import (
     format_tool_end,
     format_tool_start,
 )
-from jenny.agent.subagent_history import SubagentHistoryStore
+from jenny.agent.subagent_history import HISTORY_TTL_S, KIND_BUDGET, SubagentHistoryStore
 from jenny.agent.subagent_records import (
     CANCEL_REASON_SHUTDOWN,
     CANCEL_REASON_SUPERSEDED,
@@ -53,7 +54,7 @@ from jenny.agent.subagent_records import (
     cancellation_summary,
     default_label,
 )
-from jenny.agent.tools.context import ToolContext
+from jenny.agent.tools.context import ToolContext, current_request_context
 from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader, ToolLoadError, declared_tool_name
 from jenny.agent.tools.registry import ToolRegistry
@@ -77,12 +78,46 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
     enter_workspace_scope,
 )
+from jenny.session.history_meta import INJECTED_EVENT_META
 from jenny.session.turn_visibility import resolve_turn_visibility
 from jenny.utils.helpers import truncate_text
 from jenny.utils.prompt_templates import render_template
+from jenny.utils.runtime import (
+    BUDGET_NOTICE_EVENT,
+    SUBAGENT_BUDGET_FINALIZATION_PROMPT,
+    SUBAGENT_BUDGET_NOTICE_TEMPLATE,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - solo per i type checker
     from jenny.session.manager import SessionManager
+
+# Slot normali per aiutanti di una sessione con un piano che gira (piu uno breve,
+# come sempre). Il limite di config (default 3, cioe 2 normali + 1 breve) e
+# pensato per la chat; un passo di piano che divide il lavoro per pianta ne
+# vuole di piu, e con 2 alla volta la prova del 24/10/2026 ha messo in fila i
+# suoi aiutanti per quasi due ore. Il conteggio resta globale: durante un piano
+# il quaderno e bloccato, e gli altri usi aspettano. Il testo dei prompt del
+# piano («up to 5 helpers at once») e legato a questa costante.
+PLAN_HELPER_SLOTS = 5
+
+# Quante volte un lineage fermato al budget si fa continuare (``send``) prima
+# che il manager rifiuti. Senza tetto, budget → ripresa → budget poteva girare
+# per sempre: ogni ripresa rimanda tutta la storia, che cresce, e un aiutante che
+# non ci sta in tre budget ha un compito troppo grande, non poco tempo. Dopo il
+# tetto la mossa giusta e dividere il lavoro, e il rifiuto lo dice.
+MAX_BUDGET_RESUMES = 2
+
+# A che frazione del budget di iterazioni un subagent riceve l'avviso «ti
+# restano N chiamate» (``AgentRunSpec.iteration_notice``). L'80% lascia un
+# quinto delle chiamate per salvare il lavoro e scrivere il resoconto: meno e
+# l'avviso arriva quando non c'e piu tempo di fare niente, prima lo distrae dal
+# lavoro quando di tempo ce n'e ancora.
+BUDGET_NOTICE_FRACTION = 0.8
+
+# Il testo di ripiego quando anche la chiamata di chiusura a budget esaurito non
+# produce niente. Costante perche il ramo budget di ``_run_subagent`` lo
+# riconosce per non annunciarlo come se fosse un resoconto.
+_NO_FINAL_RESPONSE = "Task completed but no final response was generated."
 
 # Tentativi massimi per lineage nei rilanci *automatici* (orchestratore/codice).
 # Il rilancio manuale non e mai capped: a un umano che premo "Relaunch" non si
@@ -140,6 +175,7 @@ _TRANSITION_HINTS = {
     "stalled": "subagent stalled (no progress)",
     "done": "subagent done",
     "failed": "subagent failed",
+    "budget": "subagent stopped at its budget",
 }
 
 # Al massimo uno snapshot di progresso ogni tanti secondi per task (v.
@@ -204,7 +240,8 @@ class SubagentStatus:
     lineage_id: str = ""
     attempt: int = 1
     agent_type: str = DEFAULT_AGENT_TYPE
-    # Stato coarse-grained: running | done | failed | cancelled | stalled.
+    # Stato coarse-grained: running | done | failed | cancelled | stalled |
+    # budget (fermato al tetto di iterazioni, riprendibile: v. ``SUBAGENT_STATES``).
     # Non sostituisce ``phase``, che risponde a un'altra domanda (cosa sta
     # facendo il subagent adesso) e ha gia consumatori.
     state: str = "running"
@@ -218,6 +255,13 @@ class SubagentStatus:
     last_progress_at: float = 0.0
     started_at_wall: float = field(default_factory=time.time)
     result_summary: str = ""
+    # Riprese dopo un budget gia spese dal lineage, fino a questo tentativo
+    # (v. ``MAX_BUDGET_RESUMES``): passa al record.
+    budget_resumes: int = 0
+    # Fermato al budget con una ripresa ancora possibile: misurato una volta, nel
+    # ramo budget di ``_run_subagent`` e fuori dal loop, e letto da annuncio e
+    # record.
+    resumable: bool = False
 
     def __post_init__(self) -> None:
         if not self.last_progress_at:
@@ -305,6 +349,71 @@ class SubagentSendResult:
 
     mode: str  # injected | resumed | restarted
     text: str
+    # Il tentativo che portera la risposta: quello vivo per un'iniezione, quello
+    # nuovo per una ripresa o un rilancio. La rotta «continua» della casa lo
+    # rimanda al client, che segue il lavoro su quell'id.
+    task_id: str | None = None
+
+
+def _budget_notice(max_iterations: int) -> Callable[[int], str | None]:
+    """L'``iteration_notice`` di un run da *max_iterations* chiamate.
+
+    Scatta **una volta**, quando le chiamate fatte arrivano a
+    ``floor(BUDGET_NOTICE_FRACTION * max)`` — con ``>=`` e non ``==``: il runner
+    lo chiama solo dopo un giro di tool, e un'iterazione chiusa in un altro modo
+    (un'iniezione dopo una risposta) non deve far saltare l'avviso. Tace se non
+    resta nessuna chiamata: a quel punto la chiusura a budget esaurito chiede gia
+    il resoconto, e un avviso in piu non avrebbe dove essere letto.
+    """
+    threshold = math.floor(BUDGET_NOTICE_FRACTION * max_iterations)
+    fired = False
+
+    def _notice(iteration: int) -> str | None:
+        nonlocal fired
+        done = iteration + 1
+        left = max_iterations - done
+        if fired or done < threshold or left <= 0:
+            return None
+        fired = True
+        return SUBAGENT_BUDGET_NOTICE_TEMPLATE.format(left=left)
+
+    return _notice
+
+
+def _without_budget_notice(messages: Any) -> Any:
+    """La conversazione da salvare senza l'avviso di budget del run.
+
+    L'avviso («ti restano N chiamate») vale per il run che lo riceve: tornato
+    nella storia di una ripresa, che ha un budget nuovo, direbbe una cosa falsa.
+    """
+    if not isinstance(messages, list):
+        return messages
+    return [
+        m for m in messages
+        if not (isinstance(m, dict) and m.get(INJECTED_EVENT_META) == BUDGET_NOTICE_EVENT)
+    ]
+
+
+def _plan_metadata() -> tuple[str | None, str | None]:
+    """Piano e passo del turno che sta lanciando un lavoro, dal suo contesto.
+
+    Il task di spawn gira dentro il turno, quindi eredita il
+    ``RequestContext`` legato da ``AgentLoop``: nei turni di passo i metadati
+    portano le chiavi del driver. Import locale: il driver si porta dietro le
+    foto e lo snapshot, che il manager non deve caricare per esistere.
+    """
+    ctx = current_request_context()
+    meta = ctx.metadata if ctx is not None and isinstance(ctx.metadata, dict) else {}
+    if not meta:
+        return None, None
+    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+
+    plan_id = meta.get(PLAN_ID_META)
+    plan_step = meta.get(PLAN_STEP_META)
+    return (
+        plan_id if isinstance(plan_id, str) and plan_id else None,
+        plan_step if isinstance(plan_step, str) and plan_step else None,
+    )
 
 
 def _append_activity(
@@ -745,6 +854,11 @@ class _Lineage:
     spec: SubagentSpec
     attempt: int
     task_id: str
+    # Riprese dopo un budget spese dal lineage (``MAX_BUDGET_RESUMES``), e lo
+    # stato terminale dell'ultimo tentativo (``None`` finche e vivo): bastano a
+    # ``send`` per decidere senza rileggere i record da disco.
+    budget_resumes: int = 0
+    last_state: str | None = None
 
 
 # Quanto del compito torna nell'annuncio. Il testo intero e' gia' nella
@@ -890,6 +1004,22 @@ class SubagentManager:
         self._history = history_store or SubagentHistoryStore(session_manager)
         self._stall_check_interval_s = max(0.01, stall_check_interval_s)
         self._watchdog_task: asyncio.Task[None] | None = None
+        # Limite di slot normali per sessione, iniettato dal container (il driver
+        # dei piani): ``None`` dal provider = il valore di config. V.
+        # :meth:`set_limit_provider`.
+        self._limit_provider: Callable[[str | None], int | None] | None = None
+        # ``mark_handled`` arrivato mentre il tentativo e ancora vivo (il
+        # resoconto parte prima che la done-callback scriva il record):
+        # applicato da :meth:`_retain`.
+        self._handled_pending: dict[str, float] = {}
+        # task id -> chiave del file dei record, per ``mark_handled``: senza,
+        # ogni fine turno leggeva tutti i file dei record per trovarne uno.
+        # Riempito da ``_retain`` e dalle letture dei record; potato al tetto.
+        self._record_keys: dict[str, str] = {}
+        # Chi vuole sapere quando il watchdog marca ``stalled`` degli aiutanti
+        # (il driver dei piani: un risveglio tenuto non deve aspettare chi non
+        # va piu avanti). V. :meth:`set_stall_listener`.
+        self._stall_listener: Callable[[str, list[str]], None] | None = None
         self.sweep_orphan_digests()
 
     def sweep_orphan_digests(self) -> int:
@@ -1055,6 +1185,62 @@ class SubagentManager:
                     agent_type.name, len(missing), scope, ", ".join(missing),
                 )
 
+    def set_limit_provider(self, fn: Callable[[str | None], int | None] | None) -> None:
+        """Inietta il limite di slot *normali* per sessione.
+
+        ``fn(session_key)`` ritorna quanti aiutanti normali quella sessione puo
+        avere insieme (piu uno breve), o ``None`` per il valore di config. Il
+        container ci passa il driver dei piani (:data:`PLAN_HELPER_SLOTS` per la
+        sessione con un piano che gira): il manager non sa cosa sia un piano, e
+        non deve saperlo.
+        """
+        self._limit_provider = fn
+
+    def set_stall_listener(self, fn: Callable[[str, list[str]], None] | None) -> None:
+        """Inietta chi ascolta le marcature ``stalled`` del watchdog.
+
+        ``fn(session_key, task_ids)`` riceve, per sessione d'origine, gli
+        aiutanti appena marcati. Lo cabla il driver dei piani attraverso il suo
+        ospite (``LoopPlanHost.watch_stalls``): i resoconti di un passo tenuti in
+        attesa dei fratelli si svegliano se i fratelli rimasti sono tutti fermi.
+        Come per :meth:`set_limit_provider`, il manager non sa cosa sia un piano.
+        """
+        self._stall_listener = fn
+
+    def helper_plan_step(self, task_id: str) -> tuple[str | None, str | None] | None:
+        """Piano e passo per cui lavora (o ha lavorato) *task_id*, se lo si sa ancora.
+
+        Dalla spec del lineage in RAM: vale anche per un tentativo appena finito
+        (il resoconto si legge quando la done-callback puo essere gia passata).
+        ``None`` se il task non e piu tracciato. Sola lettura.
+        """
+        spec = self._spec_for_task(task_id)
+        if spec is None:
+            return None
+        return spec.plan_id, spec.plan_step
+
+    def live_helper_states(
+        self, session_key: str,
+    ) -> dict[str, tuple[str, str | None, str | None]]:
+        """``task_id -> (state, plan_id, plan_step)`` dei tentativi vivi della sessione.
+
+        Solo RAM, nessun disco (a differenza di :meth:`status_snapshot`, che
+        legge i record): la chiede il risveglio unico dei piani a ogni resoconto
+        di un aiutante. ``state`` e ``running`` o ``stalled``.
+        """
+        out: dict[str, tuple[str, str | None, str | None]] = {}
+        for task_id in self.get_running_ids_by_session(session_key):
+            status = self._task_statuses.get(task_id)
+            if status is None:
+                continue
+            spec = self._spec_for_task(task_id)
+            out[task_id] = (
+                status.state,
+                spec.plan_id if spec is not None else None,
+                spec.plan_step if spec is not None else None,
+            )
+        return out
+
     def set_provider(self, provider: LLMProvider, model: str) -> None:
         self.provider = provider
         self.model = model
@@ -1099,9 +1285,25 @@ class SubagentManager:
             # contaminato (``security.subagent_policy``, taint del turno).
             taint_seed=current_turn_taint(),
         )
+        plan_id, plan_step = _plan_metadata()
+        if plan_id or plan_step:
+            spec = replace(spec, plan_id=plan_id, plan_step=plan_step)
         return await self._spawn_spec(spec)
 
-    def _check_capacity(self, *, quick: bool) -> None:
+    def _session_limit(self, session_key: str | None) -> int | None:
+        """Slot normali concessi a *session_key* dal provider iniettato, o ``None``."""
+        if self._limit_provider is None:
+            return None
+        try:
+            value = self._limit_provider(session_key)
+        except Exception:  # noqa: BLE001 — un provider rotto non blocca gli spawn
+            logger.exception("Subagent limit provider failed; using the config limit")
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            return None
+        return value
+
+    def _check_capacity(self, *, quick: bool, session_key: str | None = None) -> None:
         """Invariante di concorrenza, con uno slot sempre libero.
 
         Uno spawn normale puo occupare al massimo ``max_concurrent - 1`` slot:
@@ -1109,11 +1311,25 @@ class SubagentManager:
         l'orchestratore non ha piu modo di far partire un job breve per
         rispondere all'utente. Con limite 1 la riserva si annulla, altrimenti
         una configurazione a slot singolo non spawnerebbe piu nulla.
+
+        Con un limite per sessione (:meth:`set_limit_provider`) i numeri sono
+        quelli: ``n`` normali piu uno breve, contati sullo stesso totale globale.
         """
         # Conta solo i task ancora vivi: un rilancio arriva subito dopo aver
         # cancellato il tentativo precedente, che puo essere ancora nel dict in
         # attesa della propria done-callback.
         running = sum(1 for t in self._running_tasks.values() if not t.done())
+        normal = self._session_limit(session_key)
+        if normal is not None:
+            # Mai meno della chat: un utente che ha alzato il limite di config
+            # oltre i posti di un piano non li perde dentro un piano.
+            normal = max(normal, self.max_concurrent_subagents - 1)
+            limit = normal + 1
+            if running >= limit:
+                raise SubagentConcurrencyLimitError(running, limit)
+            if not quick and running >= normal:
+                raise SubagentConcurrencyLimitError(running, limit, reserved=True)
+            return
         limit = self.max_concurrent_subagents
         if running >= limit:
             raise SubagentConcurrencyLimitError(running, limit)
@@ -1181,6 +1397,7 @@ class SubagentManager:
         lineage_id: str | None = None,
         attempt: int = 1,
         resume_messages: list[dict[str, Any]] | None = None,
+        budget_resumes: int = 0,
     ) -> tuple[str, str]:
         """Avvia un tentativo per ``spec`` su un lineage nuovo o esistente.
 
@@ -1189,7 +1406,7 @@ class SubagentManager:
         LLM completo come uno spawn, quindi passa dallo stesso
         :meth:`_check_capacity` (slot riservato incluso).
         """
-        self._check_capacity(quick=spec.quick)
+        self._check_capacity(quick=spec.quick, session_key=spec.session_key)
         self._check_capabilities(spec)
 
         task_id = str(uuid.uuid4())[:8]
@@ -1203,9 +1420,12 @@ class SubagentManager:
             attempt=attempt,
             agent_type=spec.agent_type,
             state="running",
+            budget_resumes=budget_resumes,
         )
         self._task_statuses[task_id] = status
-        self._track_lineage(_Lineage(lineage, spec, attempt, task_id))
+        self._track_lineage(
+            _Lineage(lineage, spec, attempt, task_id, budget_resumes=budget_resumes)
+        )
         self._pending_injections[task_id] = asyncio.Queue(maxsize=_MAX_PENDING_INJECTIONS)
 
         bg_task = asyncio.create_task(
@@ -1231,14 +1451,20 @@ class SubagentManager:
                 if not ids:
                     del self._session_tasks[session_key]
             state = self._terminal_state(finished, final)
+            tracked = self._lineages.get(lineage)
+            if tracked is not None and tracked.task_id == task_id:
+                tracked.last_state = state
             self._retain(finished, final, spec, lineage, attempt)
-            if state != "done":
+            if state not in ("done", "budget"):
                 # Invariante: la storia Tier-2 riflette solo un lineage il cui
-                # ultimo tentativo e andato a buon fine. Un fallimento, uno stop
-                # o un tentativo superato la eliminano — riprendere da un
-                # transcript che il lineage ha poi abbandonato darebbe una
-                # continuazione incoerente. Il drop invalida anche il cache del
-                # SessionManager, quindi la RAM non cresce.
+                # ultimo tentativo e andato a buon fine, o si e fermato al budget
+                # con la conversazione integra. Un fallimento, uno stop o un
+                # tentativo superato la eliminano — riprendere da un transcript
+                # che il lineage ha poi abbandonato darebbe una continuazione
+                # incoerente. Il budget no: fino al 24/10/2026 cadeva qui come
+                # ``failed`` e ``subagent_send`` ripartiva sempre da zero. Il drop
+                # invalida anche il cache del SessionManager, quindi la RAM non
+                # cresce.
                 self._history.drop(lineage)
             # Snapshot pubblicato DOPO il retain e dopo il pop dello status: solo
             # qui il subagent e uscito da ``running`` ed e entrato in ``recent``,
@@ -1349,6 +1575,7 @@ class SubagentManager:
                 task_id, Path(self.workspace), seed=spec.taint_seed, task=spec.task,
             )
             self._run_policies[task_id] = policy
+            max_iterations = self._type_max_iterations(atype)
             with enter_workspace_scope(workspace_scope), enter_subagent_policy(policy):
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
@@ -1360,13 +1587,27 @@ class SubagentManager:
                         spec.temperature if spec.temperature is not None
                         else atype.temperature
                     ),
-                    max_iterations=self._type_max_iterations(atype),
+                    max_iterations=max_iterations,
                     max_tool_result_chars=self.max_tool_result_chars,
                     hook=(
                         CompositeHook([hook, *self.usage_hooks]) if self.usage_hooks else hook
                     ),
-                    max_iterations_message="Task completed but no final response was generated.",
-                    finalize_on_max_iterations=False,
+                    max_iterations_message=_NO_FINAL_RESPONSE,
+                    # A budget finito una chiamata in piu, senza tool, per il
+                    # resoconto all'orchestratore: fatto, file, cosa resta. Fino
+                    # al 24/10/2026 era spenta, e l'annuncio portava solo gli
+                    # ultimi tre tool — Jenny non sapeva cosa far continuare.
+                    finalize_on_max_iterations=True,
+                    max_iterations_finalization_prompt=SUBAGENT_BUDGET_FINALIZATION_PROMPT,
+                    # «Ti restano N chiamate» una volta, verso la fine: senza,
+                    # un aiutante non sapeva di avere un budget e si fermava a
+                    # meta di una lettura, senza aver scritto niente.
+                    iteration_notice=_budget_notice(max_iterations),
+                    # Le letture nella stessa risposta girano insieme (solo i
+                    # tool ``concurrency_safe``; le scritture restano in fila).
+                    # Fino al 24/10/2026 un aiutante le faceva una per
+                    # iterazione: 39 ``read_file`` in 39 chiamate al modello.
+                    concurrent_tools=True,
                     # Un errore tool resta fatale, ma non il primo: il budget
                     # lascia sbagliare qualche colpo (col retry hint, come
                     # l'agente principale) e chiude solo quando l'agente non sta
@@ -1423,26 +1664,38 @@ class SubagentManager:
                 # Il budget di iterazioni finito **non** e' un successo:
                 # cadeva nel ramo buono, e l'annuncio diceva
                 # «completed successfully» con il testo di ripiego del runner come
-                # risultato. Si annuncia per quel che e', con i passi fatti. La
-                # storia Tier-2 si salva come sull'esito buono: la conversazione
-                # e' integra, e continuarla con ``subagent_send`` e' il rimedio.
+                # risultato. Si annuncia per quel che e': il resoconto della
+                # chiamata di chiusura, se c'e', e i passi fatti. Stato
+                # ``budget``, non ``failed``: la conversazione e' integra, la
+                # storia Tier-2 si salva come sull'esito buono e la done-callback
+                # non la cancella — continuarla con ``subagent_send`` e' il rimedio.
                 hook.note_error("stopped: iteration budget exhausted")
-                status.state = "failed"
+                status.state = "budget"
                 status.tool_events = list(result.tool_events)
-                partial = self._format_partial_progress(result)
-                status.result_summary = truncate_text(partial, MAX_RESULT_SUMMARY_CHARS)
+                report = self._budget_report(result)
+                status.result_summary = truncate_text(report, MAX_RESULT_SUMMARY_CHARS)
                 logger.info("Subagent [{}] stopped at its iteration budget", task_id)
                 self._history.save(
                     status.lineage_id,
                     spec.records_key,
-                    getattr(result, "messages", None),
+                    _without_budget_notice(getattr(result, "messages", None)),
                     taint=policy.taint_sources(),
+                    kind=KIND_BUDGET,
+                )
+                # Una volta per stop e fuori dal loop: la misura rilegge e
+                # serializza la storia appena salvata. Oltre il tetto delle
+                # riprese non si offre piu di continuare.
+                status.resumable = (
+                    status.budget_resumes < MAX_BUDGET_RESUMES
+                    and await asyncio.to_thread(self._history_continuable, status.lineage_id)
                 )
                 await self._announce_result(
-                    task_id, label, task, partial, origin, "budget", origin_message_id,
+                    task_id, label, task, report, origin, "budget", origin_message_id,
+                    resumable=status.resumable,
+                    budget_stops=status.budget_resumes + 1,
                 )
             else:
-                final_result = result.final_content or "Task completed but no final response was generated."
+                final_result = result.final_content or _NO_FINAL_RESPONSE
                 hook.note_result(len(final_result))
                 status.state = "done"
                 status.result_summary = truncate_text(final_result, MAX_RESULT_SUMMARY_CHARS)
@@ -1454,7 +1707,7 @@ class SubagentManager:
                 self._history.save(
                     status.lineage_id,
                     spec.records_key,
-                    getattr(result, "messages", None),
+                    _without_budget_notice(getattr(result, "messages", None)),
                     taint=policy.taint_sources(),
                 )
                 await self._announce_result(task_id, label, task, final_result, origin, "ok", origin_message_id)
@@ -1585,6 +1838,8 @@ class SubagentManager:
         lineage_id: str | None = None,
         attempt: int | None = None,
         force: bool = False,
+        resumable: bool = False,
+        budget_stops: int = 1,
     ) -> None:
         """Announce the subagent result to the main agent via the message bus.
 
@@ -1637,6 +1892,17 @@ class SubagentManager:
         policy = self._run_policies.get(task_id)
         taint = policy.taint_sources() if policy is not None else ()
         staged_ids = list(policy.staged.values()) if policy is not None else []
+        live = self._task_statuses.get(task_id)
+        resolved_lineage = (
+            lineage_id
+            if lineage_id is not None
+            else (live.lineage_id if live is not None else task_id)
+        )
+        # Un aiutante fermato al budget si fa continuare, non si rilancia:
+        # ``resumable`` lo misura il ramo budget (storia salvata, abbastanza
+        # corta, tetto delle riprese non raggiunto). Se non lo e, ``send`` lo
+        # rifiuterebbe, e il template allora non lo promette: dice di dividere.
+        resumable = status == "budget" and resumable
         announce_content = render_template(
             "agent/subagent_announce.md",
             label=label,
@@ -1647,23 +1913,37 @@ class SubagentManager:
             untrusted=bool(taint),
             sources=", ".join(taint),
             staged_count=len(staged_ids),
+            budget=status == "budget",
+            resumable=resumable,
+            budget_capped=status == "budget" and budget_stops > MAX_BUDGET_RESUMES,
+            budget_stops=budget_stops,
+            task_id=task_id,
         )
-        live = self._task_statuses.get(task_id)
         metadata: dict[str, Any] = {
             "injected_event": "subagent_result",
             "subagent_status": status,
             "subagent_task_id": task_id,
-            "subagent_lineage_id": (
-                lineage_id
-                if lineage_id is not None
-                else (live.lineage_id if live is not None else task_id)
-            ),
+            "subagent_lineage_id": resolved_lineage,
             "subagent_attempt": (
                 attempt
                 if attempt is not None
                 else (live.attempt if live is not None else 1)
             ),
         }
+        if status == "budget":
+            metadata["subagent_resumable"] = resumable
+        # Il passo del piano per cui lavorava: il turno d'annuncio lega questi
+        # metadati come contesto della richiesta, e un aiutante che Jenny lancia
+        # da li eredita il passo (``_plan_metadata``). Sicuro: un turno di passo si
+        # riconosce da ``injected_event``, non da queste chiavi.
+        spec_for_plan = self._spec_for_task(task_id)
+        if spec_for_plan is not None and (spec_for_plan.plan_id or spec_for_plan.plan_step):
+            from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+
+            if spec_for_plan.plan_id:
+                metadata[PLAN_ID_META] = spec_for_plan.plan_id
+            if spec_for_plan.plan_step:
+                metadata[PLAN_STEP_META] = spec_for_plan.plan_step
         if origin_message_id:
             metadata["origin_message_id"] = origin_message_id
         if taint:
@@ -1682,6 +1962,22 @@ class SubagentManager:
 
         await self.bus.publish_inbound(msg)
         logger.debug("Subagent [{}] announced result to {}:{}", task_id, origin['channel'], origin['chat_id'])
+
+    @classmethod
+    def _budget_report(cls, result) -> str:
+        """Il resoconto di un subagent fermato al budget: riassunto + parziale.
+
+        Il riassunto e la risposta della chiamata di chiusura
+        (``SUBAGENT_BUDGET_FINALIZATION_PROMPT``); se quella non ha prodotto
+        niente il runner mette il ripiego, che qui si riconosce e si scarta —
+        annunciarlo come resoconto direbbe «completato» di un lavoro a meta. I
+        passi fatti restano sotto in ogni caso: sono misurati, il riassunto no.
+        """
+        partial = cls._format_partial_progress(result)
+        summary = (result.final_content or "").strip()
+        if not summary or summary == _NO_FINAL_RESPONSE:
+            return partial
+        return f"{summary}\n\nSteps before the stop:\n{partial}"
 
     @staticmethod
     def _format_partial_progress(result) -> str:
@@ -1816,6 +2112,12 @@ class SubagentManager:
             # a ``None`` quel ``with`` e' un no-op, quindi lo scope legato *e'*
             # l'ambiente — e allora e' l'ambiente a dover parlare.
             readonly=not (bound_scope is None or bound_scope.writable),
+            # Il budget di chiamate del tipo, quello che il run usera davvero: un
+            # aiutante che non sa di averne uno si ferma a meta di una lettura.
+            max_iterations=(
+                self._type_max_iterations(agent_type)
+                if agent_type is not None else self.max_iterations
+            ),
             skills_summary=skills_summary or "",
             role_section=self._render_role_section(agent_type, install_path=self.workspace),
         )
@@ -1870,12 +2172,13 @@ class SubagentManager:
         """
         task_id = status.task_id if status is not None else lineage_id
         digest = self._write_activity_digest(task_id)
+        state = self._terminal_state(finished, status)
         record = SubagentRecord(
             task_id=task_id,
             lineage_id=lineage_id,
             attempt=attempt,
             spec=spec,
-            state=self._terminal_state(finished, status),
+            state=state,
             phase=status.phase if status is not None else "done",
             stop_reason=status.stop_reason if status is not None else None,
             error=status.error if status is not None else None,
@@ -1886,7 +2189,14 @@ class SubagentManager:
             ended_at=time.time(),
             activity_events=digest.events,
             activity_bytes=digest.bytes,
+            # Un resoconto consegnato mentre il tentativo era ancora vivo.
+            handled_at=self._handled_pending.pop(task_id, None),
+            # Misurato nel ramo budget, fuori dal loop: qui siamo nella
+            # done-callback, che non deve rileggere la storia da disco.
+            resumable=state == "budget" and status is not None and status.resumable,
+            budget_resumes=status.budget_resumes if status is not None else 0,
         )
+        self._remember_record_key(record)
         try:
             self._records.append(record)
         except Exception as e:  # noqa: BLE001 — la retention non puo uccidere il subagent
@@ -1945,9 +2255,12 @@ class SubagentManager:
         # in ``running`` e solo i propri in ``recent``.
         ids = self._session_tasks.get(session_key, set()) if session_key else None
         running: list[dict[str, Any]] = []
+        live_lineages: set[str] = set()
         for task_id, st in list(self._task_statuses.items()):
+            live_lineages.add(st.lineage_id)
             if ids is not None and task_id not in ids:
                 continue
+            spec = self._spec_for_task(task_id)
             running.append({
                 "task_id": st.task_id,
                 "lineage_id": st.lineage_id,
@@ -1962,10 +2275,31 @@ class SubagentManager:
                 "idle_s": round(max(0.0, now - st.last_progress_at), 1),
                 "last_tool": self._last_tool_name(st.tool_events),
                 "tool_events": self._snapshot_tool_events(st.tool_events),
+                # Il passo del piano per cui lavora, se lavora per un piano: la
+                # casa raggruppa gli aiutanti per passo.
+                "plan_id": spec.plan_id if spec is not None else None,
+                "plan_step": spec.plan_step if spec is not None else None,
             })
 
         recent: list[dict[str, Any]] = []
+        # Lineage gia visti scendendo dal piu recente: un tentativo che ne ha uno
+        # piu nuovo (una ripresa, un rilancio) non e piu da riprendere — lo e, se
+        # mai, l'ultimo. Insieme a quelli vivi: un lineage che sta continuando
+        # adesso non offre un secondo «continua».
+        newer: set[str] = set(live_lineages)
+        wall = time.time()
         for record in reversed(self.list_records(session_key)):
+            resumable = (
+                record.state == "budget"
+                and record.resumable
+                and record.lineage_id not in newer
+                # La storia scade (``HISTORY_TTL_S``) e la potatura per origine
+                # la puo togliere prima: l'indice in RAM lo sa senza leggere file.
+                and wall - record.ended_at < HISTORY_TTL_S
+                and record.budget_resumes < MAX_BUDGET_RESUMES
+                and self._history.has(record.lineage_id)
+            )
+            newer.add(record.lineage_id)
             recent.append({
                 "task_id": record.task_id,
                 "lineage_id": record.lineage_id,
@@ -1985,6 +2319,15 @@ class SubagentManager:
                 # Riflette il tetto dei rilanci *automatici*: un rilancio
                 # manuale resta sempre possibile (vedi ``restart``).
                 "can_restart": record.attempt < MAX_AUTO_ATTEMPTS,
+                # Fermato al budget con una storia da riprendere: la casa offre
+                # «fai continuare» (``/api/subagents/{id}/continue``) invece del
+                # rilancio da zero.
+                "resumable": resumable,
+                # Quando Jenny ha avuto il resoconto e ha finito il turno; ``None``
+                # finche non e successo (v. ``mark_handled``).
+                "handled_at": record.handled_at,
+                "plan_id": record.spec.plan_id,
+                "plan_step": record.spec.plan_step,
             })
             if len(recent) >= _SNAPSHOT_RECENT_LIMIT:
                 break
@@ -2085,11 +2428,73 @@ class SubagentManager:
                 logger.exception("Failed to publish subagent transition hint")
         self._publish_status_snapshot(spec)
 
+    def mark_handled(self, task_id: str) -> bool:
+        """Il resoconto di *task_id* e arrivato a Jenny e il suo turno e finito.
+
+        Scrive ``handled_at`` nel record e ripubblica lo snapshot, cosi la casa
+        toglie la scheda di un aiutante fermato quando Jenny ha gia deciso cosa
+        farne. Lo chiama il loop (``AgentLoop``): a fine del turno che ha
+        presentato il resoconto, o di quello che l'ha ricevuto a meta, e quando
+        un resoconto doppio trova la risposta gia data. Se il tentativo e ancora
+        vivo (il resoconto parte prima che la done-callback scriva il record) la
+        marca resta in RAM e la scrive :meth:`_retain`. Ritorna ``True`` se ha
+        marcato qualcosa. Non solleva: e contabilita della UI.
+        """
+        if not isinstance(task_id, str) or not task_id:
+            return False
+        now = time.time()
+        if task_id in self._task_statuses:
+            self._handled_pending.setdefault(task_id, now)
+            return True
+        key = self._record_keys.get(task_id)
+        if key is None:
+            # Record di un processo precedente: la ricerca su tutti i file sta
+            # fuori dal loop, e lo snapshot parte quando ha finito.
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return self._mark_handled_on_disk(task_id, now, None)
+            loop.create_task(self._mark_handled_off_loop(task_id, now))
+            return True
+        return self._mark_handled_on_disk(task_id, now, key)
+
+    async def _mark_handled_off_loop(self, task_id: str, at: float) -> None:
+        try:
+            record = await asyncio.to_thread(self._records.mark_handled, task_id, at)
+        except Exception as e:  # noqa: BLE001 — contabilita della UI
+            logger.warning("Subagent handled mark failed for [{}]: {}", task_id, e)
+            return
+        if record is not None:
+            self._remember_record_key(record)
+            self._publish_status_snapshot(record.spec)
+
+    def _mark_handled_on_disk(self, task_id: str, at: float, key: str | None) -> bool:
+        """Scrive ``handled_at``: un solo file se la chiave e nota (pochi KB)."""
+        try:
+            record = self._records.mark_handled(task_id, at, session_key=key)
+        except Exception as e:  # noqa: BLE001 — vedi ``mark_handled``
+            logger.warning("Subagent handled mark failed for [{}]: {}", task_id, e)
+            return False
+        if record is None:
+            return False
+        self._publish_status_snapshot(record.spec)
+        return True
+
+    _MAX_RECORD_KEYS = 512
+
+    def _remember_record_key(self, record: SubagentRecord) -> None:
+        self._record_keys[record.task_id] = record.session_key
+        while len(self._record_keys) > self._MAX_RECORD_KEYS:
+            self._record_keys.pop(next(iter(self._record_keys)))
+
     def list_records(self, session_key: str | None = None) -> list[SubagentRecord]:
         """Record Tier-1 dei subagent terminati, dal piu vecchio al piu nuovo."""
-        if session_key is None:
-            return self._records.load_all()
-        return self._records.load(session_key)
+        records = (
+            self._records.load_all() if session_key is None else self._records.load(session_key)
+        )
+        for record in records[-_SNAPSHOT_RECENT_LIMIT:]:
+            self._remember_record_key(record)
+        return records
 
     # ------------------------------------------------------------------
     # restart
@@ -2152,6 +2557,7 @@ class SubagentManager:
         *,
         quick: bool | None = None,
         grace_s: float = 2.0,
+        allow_restart: bool = True,
     ) -> SubagentSendResult:
         """Parla a un subagent, qualunque sia il suo stato.
 
@@ -2159,7 +2565,8 @@ class SubagentManager:
         questo subagent" e la scelta la fa il manager, in quest'ordine:
 
         1. tentativo **vivo e in corso** -> iniezione mid-run, senza fermarlo;
-        2. **terminato bene** con storia entro la finestra di retention ->
+        2. **terminato bene**, o **fermato al budget**, con storia entro la
+           finestra di retention ->
            *resume*: un run nuovo seminato con i messaggi salvati piu il
            follow-up;
         3. tutto il resto (stallato, fallito, storia scaduta) -> *rilancio*
@@ -2169,12 +2576,24 @@ class SubagentManager:
         consuma il budget dei rilanci automatici: ``attempt`` non avanza, perche
         una continuazione diretta non e il ritentativo di un fallimento e
         ``MAX_AUTO_ATTEMPTS`` esiste per quello.
+
+        Un lineage il cui ultimo tentativo si e fermato al budget non cade mai
+        nel rilancio: si riprende, oppure ``SubagentSendError`` dice perche no
+        (tetto ``MAX_BUDGET_RESUMES``, storia non piu riprendibile).
+        ``allow_restart=False`` (il tasto «continua» della casa) rifiuta anche
+        il terzo ramo: chi ha chiesto di continuare non ha chiesto di rifare.
         """
         text = (message or "").strip()
         if not text:
             raise SubagentSendError("the message is empty: there is nothing to send")
 
-        live_id = self._live_task_for(target_id)
+        # Prima il lineage, poi il tentativo vivo **del lineage**: chiesto col
+        # task id di un tentativo finito, ``_live_task_for`` non vedeva la
+        # ripresa gia in volo (il suo id e un altro), e il tasto «continua» piu
+        # un ``subagent_send`` di Jenny facevano due tentativi vivi sullo stesso
+        # lavoro.
+        resolved = self._resolve_target(target_id)
+        live_id = self._live_task_for(resolved[0] if resolved is not None else target_id)
         if live_id is not None:
             live = self._task_statuses.get(live_id)
             # La casella deve esistere: un tentativo che ha appena perso la
@@ -2196,22 +2615,47 @@ class SubagentManager:
                     f"Delivered to running subagent [{live_id}] ({live.label}); it will "
                     "pick the message up at its next step and keep working. Its result "
                     "will be announced to you as usual — do not poll for it.",
+                    task_id=live_id,
                 )
 
-        resolved = self._resolve_target(target_id)
         if resolved is None:
             raise SubagentSendError(f"unknown subagent or lineage: {target_id}")
         lineage_id, spec, attempt = resolved
+        last_state, budget_resumes = self._lineage_tail(lineage_id)
+        if live_id is None and last_state == "budget":
+            # Un aiutante fermato al budget si continua o non si tocca: un
+            # rilancio da zero, in silenzio, butterebbe proprio il lavoro che la
+            # ripresa esiste per salvare.
+            if budget_resumes >= MAX_BUDGET_RESUMES:
+                raise SubagentSendError(
+                    f"this helper stopped at its budget {budget_resumes + 1} times: do not "
+                    "continue it again. Split the remaining work into smaller helpers, "
+                    "or ask the user how to proceed."
+                )
+            if not await asyncio.to_thread(self._history_continuable, lineage_id):
+                raise SubagentSendError(
+                    "this helper stopped at its budget, and its conversation can no longer "
+                    "be resumed (too long, or expired). Start new, smaller helpers for what "
+                    "remains, with a brief of what is already done."
+                )
 
         # La storia si consulta solo se non c'e un tentativo vivo: un lineage
         # stallato puo avere il transcript di un tentativo precedente, e
         # riprenderlo mentre un altro tentativo e in volo sarebbe incoerente.
-        history = self._history.load(lineage_id) if live_id is None else None
+        history = (
+            await asyncio.to_thread(self._history.load, lineage_id) if live_id is None else None
+        )
         if history:
             return await self._resume_lineage(
                 lineage_id, spec, attempt, history, text, quick=quick,
+                budget_resumes=budget_resumes + (1 if last_state == "budget" else 0),
             )
 
+        if not allow_restart:
+            raise SubagentSendError(
+                "no resumable conversation for this subagent, and continuing it would "
+                "mean relaunching it from scratch"
+            )
         detail = await self.restart(
             target_id,
             extra_instructions=text,
@@ -2219,11 +2663,13 @@ class SubagentManager:
             quick=quick,
             grace_s=grace_s,
         )
+        relaunched = self._lineages.get(lineage_id)
         return SubagentSendResult(
             "restarted",
             "No resumable conversation for this subagent (it failed, stalled, or its "
             f"history aged out), so the job was relaunched from scratch with your "
             f"message as a corrective note. {detail}",
+            task_id=relaunched.task_id if relaunched is not None else None,
         )
 
     async def _resume_lineage(
@@ -2235,6 +2681,7 @@ class SubagentManager:
         message: str,
         *,
         quick: bool | None,
+        budget_resumes: int = 0,
     ) -> SubagentSendResult:
         """Rilancia un lineage terminato seminandolo con la storia salvata."""
         resume_spec = spec if quick is None or quick == spec.quick else replace(spec, quick=quick)
@@ -2252,6 +2699,7 @@ class SubagentManager:
             lineage_id=lineage_id,
             attempt=attempt,
             resume_messages=messages,
+            budget_resumes=budget_resumes,
         )
         logger.info(
             "Resumed lineage {} as [{}] from {} stored message(s)",
@@ -2263,6 +2711,7 @@ class SubagentManager:
             f"(new id: {task_id}, lineage {lineage_id}, {len(history)} messages of "
             "context): it already knows what it did, you only sent the change. "
             "Its result will be announced to you as usual.",
+            task_id=task_id,
         )
 
     # Oltre questa conversazione un ritocco riparte da un costruttore nuovo:
@@ -2278,15 +2727,51 @@ class SubagentManager:
         dalla spec, col messaggio come nota — qui non conta: rifarebbe il lavoro
         vecchio, non quello nuovo.
         """
-        live_id = self._live_task_for(target_id)
+        resolved = self._resolve_target(target_id)
+        if resolved is None:
+            return False
+        # Il tentativo vivo si cerca sul lineage, come in ``send``.
+        live_id = self._live_task_for(resolved[0])
         if live_id is not None:
             live = self._task_statuses.get(live_id)
             return (live is not None and live.state == "running"
                     and live_id in self._pending_injections)
-        resolved = self._resolve_target(target_id)
-        if resolved is None:
+        last_state, budget_resumes = self._lineage_tail(resolved[0])
+        if last_state == "budget" and budget_resumes >= MAX_BUDGET_RESUMES:
             return False
-        history = self._history.load(resolved[0])
+        return self._history_continuable(resolved[0])
+
+    def _lineage_tail(self, lineage_id: str) -> tuple[str | None, int]:
+        """Stato terminale dell'ultimo tentativo e riprese dopo un budget del lineage.
+
+        Dalla RAM se il lineage e tracciato e il suo ultimo tentativo e finito;
+        altrimenti dal record piu recente su disco (dopo un riavvio).
+        """
+        tracked = self._lineages.get(lineage_id)
+        if tracked is not None and tracked.last_state is not None:
+            return tracked.last_state, tracked.budget_resumes
+        if tracked is not None and tracked.task_id in self._task_statuses:
+            return None, tracked.budget_resumes
+        try:
+            record = self._records.find(lineage_id)
+        except Exception:  # noqa: BLE001 — record illeggibili: nessuno stato noto
+            record = None
+        if record is None or record.lineage_id != lineage_id:
+            return None, tracked.budget_resumes if tracked is not None else 0
+        return record.state, record.budget_resumes
+
+    def _history_continuable(self, lineage_id: str) -> bool:
+        """La storia salvata di *lineage_id* c'e ed e abbastanza corta da riprendere.
+
+        La meta «storia» di :meth:`continuable`, senza la domanda sul tentativo
+        vivo: l'annuncio di un budget e il record si chiedono questo mentre il
+        tentativo sta ancora uscendo, e per loro vivo non vuol dire niente.
+        """
+        try:
+            history = self._history.load(lineage_id)
+        except Exception as e:  # noqa: BLE001 — una storia illeggibile non e riprendibile
+            logger.warning("Subagent history unreadable for lineage {}: {}", lineage_id, e)
+            return False
         if not history:
             return False
         size = sum(
@@ -2389,14 +2874,33 @@ class SubagentManager:
         while self._running_tasks:
             await asyncio.sleep(self._stall_check_interval_s)
             try:
+                by_session: dict[str, list[str]] = {}
                 for task_id in self.check_stalls():
                     if (spec := self._spec_for_task(task_id)) is not None:
                         status = self._task_statuses.get(task_id)
                         self._publish_transition(
                             spec, "stalled", status.label if status else spec.label
                         )
+                        if spec.session_key:
+                            by_session.setdefault(spec.session_key, []).append(task_id)
+                self._notify_stalls(by_session)
             except Exception:  # noqa: BLE001 — il watchdog non deve mai morire
                 logger.exception("Subagent stall check failed")
+
+    def _notify_stalls(self, by_session: dict[str, list[str]]) -> None:
+        """Passa le marcature di questo giro all'ascoltatore, se c'e.
+
+        Isolato per sessione: un ascoltatore che solleva non deve togliere la
+        notizia alle altre sessioni, ne fermare il watchdog.
+        """
+        listener = self._stall_listener
+        if listener is None:
+            return
+        for session_key, task_ids in by_session.items():
+            try:
+                listener(session_key, task_ids)
+            except Exception:  # noqa: BLE001 — vedi docstring
+                logger.exception("Subagent stall listener failed for {}", session_key)
 
     def _spec_for_task(self, task_id: str) -> SubagentSpec | None:
         """Spec del tentativo vivo ``task_id``, se ancora tracciato in RAM."""

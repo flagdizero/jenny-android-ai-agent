@@ -296,9 +296,14 @@ def test_unreadable_plans_raise_format_error(mutate) -> None:
 # ── Copertura, assunzioni, criteri di «fatto» ────────────────────────────────
 
 
-def _research_plan(detail: str) -> list[dict[str, str]]:
+def _research_plan(detail: str, covers: list[str] | None = None) -> list[dict[str, object]]:
+    research: dict[str, object] = {
+        "title": "Cerco", "detail": detail, "kind": "research", "done_when": "fonti salvate",
+    }
+    if covers is not None:
+        research["covers"] = covers
     return [
-        {"title": "Cerco", "detail": detail, "kind": "research", "done_when": "fonti salvate"},
+        research,
         {"title": "Scrivo", "detail": "scrivo", "kind": "write", "done_when": "pagine scritte"},
     ]
 
@@ -327,31 +332,150 @@ def test_coverage_is_required_and_checked(coverage: object, fragment: str) -> No
     assert fragment in str(info.value)
 
 
-def test_a_web_item_needs_a_research_step_not_its_exact_words() -> None:
-    """Basta un passo ``research``: il modello parafrasa le voci, e un confronto di
-    stringhe lo farebbe riprovare all'infinito."""
+def test_a_web_item_needs_a_research_step_that_covers_it_by_id() -> None:
+    """Non basta un passo ``research`` qualsiasi (prova 2: voci web che nessun passo
+    cercava), e non servono le parole esatte: il legame è l'id della voce."""
     no_research = [
         {"title": "Scrivo", "detail": "scrivo", "kind": "write", "done_when": "scritte"},
         {"title": "Controllo", "detail": "controllo", "kind": "check", "done_when": "ok"},
     ]
     with pytest.raises(PlanValidationError) as info:
         validate_proposal("T", no_research, _cov(strategy="web"))
-    assert "no `research` step" in str(info.value)
+    assert "c1 (Glicine: potatura) is in none" in str(info.value)
+    assert "Add a `research` step" in str(info.value)
+    # Un passo di ricerca c'è, ma non dice di coprire la voce: rifiutato lo stesso.
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", _research_plan("Cerco come si pota il Wisteria."),
+                          _cov(strategy="web"))
+    assert "c1 (Glicine: potatura) is in none" in str(info.value)
+    assert "Add the ids to the `covers`" in str(info.value)
     proposal = validate_proposal(
-        "T", _research_plan("Cerco come si pota il Wisteria."), _cov(strategy="web")
+        "T", _research_plan("Cerco come si pota il Wisteria.", ["c1"]), _cov(strategy="web")
     )
     assert proposal.coverage[0]["strategy"] == "web"
+    assert proposal.steps[0].covers == ["c1"]
+
+
+def test_the_error_names_only_the_uncovered_web_entries() -> None:
+    coverage = [
+        {"item": "Acero", "have": "una pagina", "missing": "niente", "strategy": "notebook"},
+        {"item": "Glicine", "have": "niente", "missing": "tutto", "strategy": "web"},
+        {"item": "Ficus", "have": "niente", "missing": "tutto", "strategy": "web"},
+        {"item": "Camelia " + "x" * 80, "have": "niente", "missing": "tutto", "strategy": "web"},
+    ]
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", _research_plan("cerco", ["c2"]), coverage)
+    text = str(info.value)
+    assert "c3 (Ficus), c4 (Camelia " in text and "are in none" in text
+    assert "c2 (" not in text and "c1 (" not in text
+    assert "x" * 50 not in text, "il nome della voce resta corto"
+
+
+@pytest.mark.parametrize(
+    ("steps", "fragment"),
+    [
+        (
+            [
+                {"title": "Cerco", "detail": "d", "kind": "research", "done_when": "x",
+                 "covers": ["c1"]},
+                {"title": "Scrivo", "detail": "d", "kind": "write", "done_when": "x",
+                 "covers": ["c1"]},
+            ],
+            "Step 2: only a `research` step has `covers`",
+        ),
+        (_research_plan("cerco", ["c1", "c9"]), "Step 1: `covers` names c9, which is not"),
+        (_research_plan("cerco", "c1"), "`covers` must be a list of coverage ids"),  # type: ignore[arg-type]
+        (_research_plan("cerco", [1]), "`covers` must be a list of coverage ids"),  # type: ignore[list-item]
+    ],
+)
+def test_covers_is_checked(steps: list[dict[str, object]], fragment: str) -> None:
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", steps, _cov(strategy="web"))
+    assert fragment in str(info.value)
+
+
+def test_coverage_ids_are_assigned_by_position_and_survive_a_round_trip() -> None:
+    coverage = [
+        {"id": "c7", "item": "Acero", "have": "h", "missing": "m", "strategy": "notebook"},
+        {"item": "Glicine", "have": "h", "missing": "m", "strategy": "web"},
+    ]
+    proposal = validate_proposal("T", _research_plan("cerco", [" c2 ", "c2"]), coverage)
+    assert [c["id"] for c in proposal.coverage] == ["c1", "c2"], "l'id del modello si ignora"
+    assert proposal.steps[0].covers == ["c2"] and proposal.steps[1].covers == []
+    plan = Plan(id="p_0123456789ab", notebook="piante", session_key="project:piante",
+                title="T", steps=proposal.steps, coverage=proposal.coverage)
+    again = Plan.from_dict(plan.to_dict())
+    assert again.coverage == proposal.coverage
+    assert again.steps[0].covers == ["c2"]
+    # Un piano di prima degli id e dei ``covers``: id per posizione, nessun covers.
+    data = plan.to_dict()
+    for entry in data["coverage"]:
+        entry.pop("id")
+    for step in data["steps"]:
+        step.pop("covers")
+    old = Plan.from_dict(data)
+    assert [c["id"] for c in old.coverage] == ["c1", "c2"]
+    assert all(s.covers == [] for s in old.steps)
+
+
+def test_the_models_own_coverage_ids_are_translated_when_they_are_unique() -> None:
+    coverage = [
+        {"id": "c1", "item": "Acero", "have": "h", "missing": "m", "strategy": "notebook"},
+        {"id": "c3", "item": "Glicine", "have": "h", "missing": "m", "strategy": "web"},
+    ]
+    proposal = validate_proposal("T", _research_plan("cerco", ["c1", "c3"]), coverage)
+    assert proposal.steps[0].covers == ["c1", "c2"], "c3 era il suo nome per la seconda voce"
+    assert [c["id"] for c in proposal.coverage] == ["c1", "c2"]
+    # Id doppi o mancanti: niente traduzione, i ``covers`` sono posizioni.
+    doubled = [{**coverage[0], "id": "x"}, {**coverage[1], "id": "x"}]
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", _research_plan("cerco", ["x"]), doubled)
+    assert "names x, which is not" in str(info.value)
+    missing = [coverage[0], {k: v for k, v in coverage[1].items() if k != "id"}]
+    assert validate_proposal("T", _research_plan("cerco", ["c2"]), missing).steps[0].covers == ["c2"]
+
+
+def test_a_kind_in_capitals_is_a_research_step() -> None:
+    steps = _research_plan("cerco", ["c1"])
+    steps[0]["kind"] = " Research "
+    proposal = validate_proposal("T", steps, _cov(strategy="web"))
+    assert proposal.steps[0].kind == "research" and proposal.steps[0].covers == ["c1"]
+    # Un tipo sconosciuto dice solo del tipo, non «solo un research ha covers».
+    steps[0]["kind"] = "lookup"
+    with pytest.raises(PlanValidationError) as info:
+        validate_proposal("T", steps, _cov(strategy="web"))
+    assert "`kind` must be one of" in str(info.value)
+    assert "only a `research` step has `covers`" not in str(info.value)
+
+
+def test_new_covers_tag_the_step_changed() -> None:
+    coverage = [
+        {"item": "Acero", "have": "h", "missing": "m", "strategy": "web"},
+        {"item": "Glicine", "have": "h", "missing": "m", "strategy": "web"},
+    ]
+    old = validate_proposal("T", _research_plan("cerco", ["c1", "c2"]), coverage).steps
+    new = validate_proposal(
+        "T", _research_plan("cerco", ["c1", "c2"]), coverage
+    ).steps
+    tag_new_version(old, new)
+    assert [s.tag for s in new] == [None, None]
+    two = [{**_research_plan("cerco", ["c1"])[0]},
+           {"title": "Cerco ancora", "detail": "d", "kind": "research", "done_when": "x",
+            "covers": ["c2"]}]
+    newer = validate_proposal("T", [two[0], two[1]], coverage).steps
+    tag_new_version(old, newer)
+    assert newer[0].tag == "changed"
 
 
 def test_a_web_item_named_by_a_research_step_is_accepted() -> None:
     proposal = validate_proposal(
         "T",
-        _research_plan("Cerco sul web: glicine: potatura, e salvo in raw/research/."),
+        _research_plan("Cerco sul web: glicine: potatura, e salvo in raw/research/.", ["c1"]),
         _cov(strategy="web", why=" il quaderno non ne parla "),
         [" Tengo la camelia. ", "Cancello le pagine vecchie."],
     )
     assert proposal.coverage == [{
-        "item": "Glicine: potatura", "have": "niente", "missing": "tutto",
+        "id": "c1", "item": "Glicine: potatura", "have": "niente", "missing": "tutto",
         "strategy": "web", "why": "il quaderno non ne parla",
     }]
     assert proposal.assumptions == ["Tengo la camelia.", "Cancello le pagine vecchie."]

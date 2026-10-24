@@ -55,6 +55,14 @@ _TOTAL_BUDGET_MULTIPLIER = 2
 # servita, e non c'e nessun "recupero" da comprare con altri tentativi.
 _SAFETY_BOUNDARY_ALLOWANCE = 1
 
+# Quanti tool di un gruppo concorrente girano insieme, al massimo. Fino al
+# 24/10/2026 ``asyncio.gather`` li lanciava tutti: con i subagent che leggono a
+# gruppi (prova 2: 39 ``read_file`` in fila) e cinque aiutanti per passo, una
+# risposta con trenta letture diventava trenta thread di I/O sul telefono. Otto
+# tiene le letture sovrapposte senza affogarlo; il resto aspetta il suo turno
+# dentro lo stesso gruppo, e l'ordine dei risultati resta quello delle chiamate.
+MAX_CONCURRENT_TOOLS = 8
+
 
 @dataclass(slots=True)
 class ToolErrorBudget:
@@ -143,6 +151,45 @@ class ToolErrorBudget:
         return None
 
 
+@dataclass(slots=True)
+class _BatchFailure:
+    """Un errore tool registrato dentro un gruppo concorrente, da saldare dopo."""
+
+    tool_name: str
+    detail: str
+    legacy_exc: BaseException | None
+    exc_type: type[BaseException]
+    boundary: bool
+
+
+class _BatchErrorLedger:
+    """Il registro degli errori di un gruppo concorrente: **un'unita** di budget.
+
+    Con le letture a gruppi (un subagent ne chiede trenta in una risposta) ogni
+    ``read_file`` mancato scalava il budget per conto suo, e l'ordine in cui le
+    chiamate finivano decideva se il run moriva: sette file inesistenti su trenta
+    chiudevano un lavoro che aveva letto gli altri ventitre. Un gruppo e **una**
+    decisione del modello, quindi conta come un errore — consecutivo e del run —
+    se almeno una chiamata e fallita, e come un successo se nessuna. La
+    fatalita si decide dopo il ``gather``, in modo deterministico
+    (:meth:`ToolExecutionMixin._settle_batch`).
+
+    Ha la superficie di :class:`ToolErrorBudget` che ``_run_tool`` usa
+    (``limit``, ``credit``); gli errori arrivano da
+    :meth:`ToolExecutionMixin._tool_error_outcome`, che qui registra invece di
+    spendere.
+    """
+
+    __slots__ = ("failures", "limit")
+
+    def __init__(self, budget: ToolErrorBudget) -> None:
+        self.limit = budget.limit
+        self.failures: list[_BatchFailure] = []
+
+    def credit(self) -> None:
+        """Una chiamata riuscita: il saldo del gruppo la conta da solo."""
+
+
 class ToolExecutionMixin:
     """Esecuzione tool-call del turno (mixin di AgentRunner)."""
 
@@ -165,13 +212,33 @@ class ToolExecutionMixin:
         tool_results: list[tuple[Any, dict[str, str], BaseException | None]] = []
         for batch in batches:
             if spec.concurrent_tools and len(batch) > 1:
-                batch_results = await asyncio.gather(*(
-                    self._run_tool(
-                        spec, tool_call, external_lookup_counts, workspace_violation_counts,
-                        tool_errors=budget,
-                    )
-                    for tool_call in batch
+                gate = asyncio.Semaphore(MAX_CONCURRENT_TOOLS)
+                # Un registro per chiamata, uniti dopo nell'ordine delle chiamate:
+                # l'ordine di arrivo dipende dai tempi, e l'esito non deve.
+                ledgers = [_BatchErrorLedger(budget) for _ in batch]
+
+                async def _gated(tool_call: ToolCallRequest, ledger: _BatchErrorLedger) -> tuple[
+                    Any, dict[str, str], BaseException | None
+                ]:
+                    async with gate:
+                        return await self._run_tool(
+                            spec, tool_call, external_lookup_counts,
+                            workspace_violation_counts,
+                            tool_errors=ledger,
+                        )
+
+                batch_results = list(await asyncio.gather(
+                    *(_gated(tc, ledger) for tc, ledger in zip(batch, ledgers))
                 ))
+                merged = _BatchErrorLedger(budget)
+                for ledger in ledgers:
+                    merged.failures.extend(ledger.failures)
+                fatal = self._settle_batch(spec, budget, merged)
+                if fatal is not None and batch_results:
+                    # La fatalita del gruppo sta sull'ultima chiamata: i risultati
+                    # restano tutti, e ``_execute_tools`` ne prende il primo errore.
+                    last_result, last_event, _ = batch_results[-1]
+                    batch_results[-1] = (last_result, last_event, fatal)
                 tool_results.extend(batch_results)
             else:
                 batch_results = []
@@ -196,7 +263,7 @@ class ToolExecutionMixin:
     def _tool_error_outcome(
         self,
         spec: AgentRunSpec,
-        budget: ToolErrorBudget,
+        budget: ToolErrorBudget | _BatchErrorLedger,
         *,
         tool_name: str,
         detail: str,
@@ -211,7 +278,67 @@ class ToolExecutionMixin:
         solo per i chiamanti che hanno chiesto ``fail_on_tool_error``: senza quel
         flag ogni errore torna al modello come feedback, come prima.
         """
+        if isinstance(budget, _BatchErrorLedger):
+            # Dentro un gruppo concorrente: si registra, e si salda dopo il
+            # ``gather`` come un'unita sola (``_settle_batch``).
+            budget.failures.append(_BatchFailure(
+                tool_name, detail, legacy_exc, exc_type, boundary,
+            ))
+            return None
         reason = budget.spend_boundary() if boundary else budget.spend_ordinary()
+        return self._fatal_for(
+            spec, budget, reason,
+            tool_name=tool_name, detail=detail, legacy_exc=legacy_exc, exc_type=exc_type,
+        )
+
+    def _settle_batch(
+        self,
+        spec: AgentRunSpec,
+        budget: ToolErrorBudget,
+        ledger: _BatchErrorLedger,
+    ) -> BaseException | None:
+        """Salda un gruppo concorrente sul budget del run: un'unita, non N.
+
+        Nessun errore: un successo (``credit``). Errori ordinari: **uno** scalato.
+        Violazioni di boundary: **una** scalata, a parte. Il dettaglio dell'abort
+        e quello dell'ultimo errore nell'ordine delle chiamate, non in quello di
+        arrivo: lo stesso gruppo da sempre lo stesso esito.
+        """
+        if not ledger.failures:
+            budget.credit()
+            return None
+        fatal: BaseException | None = None
+        for boundary in (False, True):
+            group = [f for f in ledger.failures if f.boundary is boundary]
+            if not group:
+                continue
+            reason = budget.spend_boundary() if boundary else budget.spend_ordinary()
+            last = group[-1]
+            outcome = self._fatal_for(
+                spec, budget, reason,
+                tool_name=last.tool_name,
+                detail=last.detail if len(group) == 1 else (
+                    f"{len(group)} failed calls in one batch; last: {last.detail}"
+                ),
+                legacy_exc=group[0].legacy_exc,
+                exc_type=last.exc_type,
+            )
+            if fatal is None:
+                fatal = outcome
+        return fatal
+
+    def _fatal_for(
+        self,
+        spec: AgentRunSpec,
+        budget: ToolErrorBudget,
+        reason: str | None,
+        *,
+        tool_name: str,
+        detail: str,
+        legacy_exc: BaseException | None,
+        exc_type: type[BaseException],
+    ) -> BaseException | None:
+        """L'eccezione di abort per un *reason* del budget, o ``None``."""
         if reason is None or not spec.fail_on_tool_error:
             return None
         if budget.limit is None:
@@ -229,7 +356,7 @@ class ToolExecutionMixin:
     def _with_boundary_outcome(
         self,
         spec: AgentRunSpec,
-        budget: ToolErrorBudget,
+        budget: ToolErrorBudget | _BatchErrorLedger,
         handled: tuple[Any, dict[str, str], BaseException | None],
         *,
         tool_name: str,
@@ -295,13 +422,15 @@ class ToolExecutionMixin:
         external_lookup_counts: dict[str, int],
         workspace_violation_counts: dict[str, int],
         *,
-        tool_errors: ToolErrorBudget | None = None,
+        tool_errors: ToolErrorBudget | _BatchErrorLedger | None = None,
     ) -> tuple[Any, dict[str, str], BaseException | None]:
         # ``started`` prima di qualunque controllo: la durata che l'hook riporta e
         # quella della *chiamata*, non del solo ``execute()``, perche e quella che
         # un utente vede passare guardando il pannello.
         started = time.monotonic()
-        budget = tool_errors if tool_errors is not None else ToolErrorBudget.from_spec(spec)
+        budget: ToolErrorBudget | _BatchErrorLedger = (
+            tool_errors if tool_errors is not None else ToolErrorBudget.from_spec(spec)
+        )
         hint = TOOL_ERROR_RETRY_HINT
         lookup_error = repeated_external_lookup_error(
             tool_call.name,

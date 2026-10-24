@@ -110,7 +110,7 @@ def write_file(root: Path, rel: str, text: str) -> None:
 
 STEPS = [
     {"title": "Cerco Acero e Ginkgo", "detail": "Due ricerche, una per pianta.", "kind": "research",
-     "done_when": "Una fonte salvata per pianta."},
+     "done_when": "Una fonte salvata per pianta.", "covers": ["c1"]},
     {"title": "Scrivo le pagine", "detail": "Una pagina per pianta in wiki/.", "kind": "write",
      "done_when": "Due pagine, ognuna con una fonte."},
     {"title": "Controllo i link", "detail": "Ogni link della wiki porta a una pagina.",

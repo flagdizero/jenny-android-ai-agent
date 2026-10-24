@@ -370,6 +370,26 @@ async def _root_board_tool(env: Env) -> Path:
     return hits[0]
 
 
+async def _root_notebook_tool(env: Env) -> Path:
+    """``notebook remove_pages``: la radice è quella da cui sparisce la pagina."""
+    from jenny.agent.tools.context import reset_request_context
+    from jenny.agent.tools.notebook import NotebookEditTool
+
+    for d in (env.project, env.other):
+        (d / "wiki" / "sonda.md").write_text("---\nstate: open\n---\n# Sonda\n",
+                                             encoding="utf-8")
+    token = _bind_project_chat(env)
+    try:
+        out = await NotebookEditTool().execute(action="remove_pages", pages=["wiki/sonda.md"],
+                                               reason="sonda")
+    finally:
+        reset_request_context(token)
+    assert "Removed 1 page" in out, out
+    hits = [d for d in (env.project, env.other) if not (d / "wiki" / "sonda.md").exists()]
+    assert len(hits) == 1, f"una sola pagina deve sparire, trovate {hits}"
+    return hits[0]
+
+
 # Nome della superficie → sonda. Il MODULO è la chiave del controllo
 # strutturale qui sotto: una superficie nuova senza sonda fa fallire quello.
 _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
@@ -386,6 +406,7 @@ _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
     "app (place)": ("app_tool.py", _root_app_tool),
     "cron del quaderno (add)": ("cron.py", _root_cron),
     "board (l'editore dei quaderni)": ("board.py", _root_board_tool),
+    "notebook (remove_pages)": ("notebook.py", _root_notebook_tool),
 }
 
 

@@ -59,6 +59,7 @@ from jenny.utils.helpers import (
 from jenny.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
     OUTPUT_TRUNCATED_MESSAGE,
+    build_budget_notice_message,
     build_goal_continue_message,
     build_length_recovery_message,
     ensure_nonempty_tool_result,
@@ -144,6 +145,17 @@ class AgentRunSpec:
     # non si sprona e non si parcheggia, perche' il rientro riapre il turno.
     delegated_work_pending: Callable[[], bool] | None = None
     finalize_on_max_iterations: bool = True
+    # Il prompt della chiamata senza tool che chiude un run a budget esaurito.
+    # ``None`` = quello di default, che parla all'utente; un subagent passa il
+    # suo (``SUBAGENT_BUDGET_FINALIZATION_PROMPT``), che parla all'orchestratore.
+    max_iterations_finalization_prompt: str | None = None
+    # Avviso di budget: chiamato con l'indice (da 0) dell'iterazione appena
+    # finita, SOLO dopo i tool (Checkpoint 1) — l'unico punto in cui un messaggio
+    # in piu entra prima della chiamata successiva senza trasformare una risposta
+    # finale in un'altra iterazione. Un testo diventa una riga ``user`` marcata
+    # ``budget_notice``; ``None`` non fa niente. Non passa dalla coda delle
+    # iniezioni: quella ha un tetto di cicli e la telemetria «dall'orchestratore».
+    iteration_notice: Callable[[int], str | None] | None = None
     # Il ragionamento dei turni chiusi si svuota solo dove la storia lo ha
     # marcato (``context_governor.settle_closed_reasoning``), non al confine
     # dell'ultima risposta: lo chiede il loop, che marca quando costruisce il
@@ -884,8 +896,37 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         )
         if _drained:
             state.had_injections = True
+        self._append_iteration_notice(spec, messages, iteration)
         await hook.after_iteration(context)
         return "continue"
+
+    @classmethod
+    def _append_iteration_notice(
+        cls,
+        spec: AgentRunSpec,
+        messages: list[dict[str, Any]],
+        iteration: int,
+    ) -> None:
+        """Aggiunge l'avviso di budget di ``spec.iteration_notice``, se ne ha uno.
+
+        Dopo le iniezioni dello stesso checkpoint, cosi l'avviso e l'ultima cosa
+        che il modello legge prima di rispondere. Non conta in
+        ``injection_cycles`` e non alza ``had_injections``: non e un messaggio
+        dell'orchestratore, e non deve consumare il tetto dei suoi cicli. Un
+        callback che solleva non ferma il run: un avviso perso costa meno di un
+        lavoro buttato.
+        """
+        notice_fn = spec.iteration_notice
+        if notice_fn is None:
+            return
+        try:
+            text = notice_fn(iteration)
+        except Exception:
+            logger.exception("iteration_notice callback failed")
+            return
+        if not isinstance(text, str) or not text.strip():
+            return
+        cls._append_injected_messages(messages, [build_budget_notice_message(text)])
 
     async def _recover_empty_content(
         self,

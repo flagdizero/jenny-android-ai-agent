@@ -81,6 +81,9 @@ async def _approve(driver: PlanDriver) -> Any:
     return driver.store.load(plan.id)
 
 
+_AGENT_TEMPLATES = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "agent"
+
+
 def _step_messages(bus: FakeBus, event: str = PLAN_STEP_EVENT) -> list[Any]:
     return [m for m in bus.inbound if m.metadata.get(INJECTED_EVENT_META) == event]
 
@@ -844,6 +847,108 @@ async def test_the_step_turn_carries_done_when_and_the_stop_on_a_false_premise_r
     assert f"Done when: {STEPS[0]['done_when']}" in msg.content
     assert "premise of the plan proves false" in msg.content
     assert "plan_blocked" in msg.content
+
+
+_WEB_COVERAGE = [
+    {"item": "Acero e Ginkgo", "have": "una pagina vecchia", "missing": "le cure",
+     "strategy": "notebook", "why": ""},
+    {"item": "Glicine", "have": "niente", "missing": "la potatura", "strategy": "web"},
+]
+_WEB_STEPS = [{**STEPS[0], "covers": ["c1", "c2"]}, *STEPS[1:]]
+
+
+async def test_a_research_step_turn_lists_the_web_entries_it_covers(
+    driver: PlanDriver, bus: FakeBus
+) -> None:
+    """Il passo di ricerca riceve la lista esatta delle voci ``web`` legate dai
+    ``covers``, con cosa manca: il ``detail`` le può parafrasare o dimenticarne una.
+    Una voce ``notebook`` nei ``covers`` (permessa) non diventa una ricerca."""
+    text = await propose(driver, "Rifare la wiki", _WEB_STEPS, coverage=_WEB_COVERAGE)
+    assert "card" in text, text
+    plan = driver.store.open_plan_for("piante")
+    await driver.approve(plan.id, plan.version, [])
+    [msg] = _step_messages(bus)
+    assert "This step searches these coverage entries" in msg.content
+    assert "- c2: Glicine — missing: la potatura" in msg.content
+    assert "Acero e Ginkgo — missing" not in msg.content
+    await driver.step_done(KEY, "cercato")
+    await driver.on_turn_end(KEY, {})
+    second = _step_messages(bus)[-1]
+    assert second.metadata[PLAN_STEP_META] == "s2" and plan.steps[1].kind == "write"
+    assert "coverage entries" not in second.content
+
+
+async def test_the_planning_turn_shows_the_proposed_coverage_and_covers(
+    driver: PlanDriver,
+) -> None:
+    """Rivedendo una proposta il modello vede gli id della copertura e i ``covers``
+    dei passi, e che gli id si riassegnano: senza, li ricopierebbe alla cieca."""
+    await propose(driver, "Rifare la wiki", _WEB_STEPS, coverage=_WEB_COVERAGE)
+    plan = driver.store.open_plan_for("piante")
+    block = driver.planning_block(KEY, revise=plan.id, followup=False)
+    assert "- c1: Acero e Ginkgo (notebook)" in block
+    assert "- c2: Glicine (web)" in block
+    assert "(covers: c1, c2)" in block
+    assert "reassigned by position in the new version: recheck every `covers`" in block
+
+
+async def test_the_step_turn_says_how_many_helpers_and_how_to_continue_one(
+    driver: PlanDriver, bus: FakeBus
+) -> None:
+    await _approve(driver)
+    [msg] = _step_messages(bus)
+    assert "up to 5 helpers at once" in msg.content
+    assert "continue the same helper with `subagent_send`" in msg.content
+    assert "Never create `outputs/` in a notebook" in msg.content
+    # Il resoconto di un aiutante sta nella sua risposta: un file libero in audit/
+    # lint_wiki lo segnala (ogni audit/*.md vuole il frontmatter di una voce).
+    assert "report goes in its final answer, not in a file" in msg.content
+    assert "audit entry in `audit/` with the audit frontmatter" in msg.content
+    assert "notebook-editor helper's job (`notebook` action `remove_pages`)" in msg.content
+
+
+def test_the_prompts_number_of_plan_helpers_matches_the_manager() -> None:
+    """«up to 5 helpers at once» è testo fisso nei prompt del piano: deve restare
+    il limite vero che il manager applica a una sessione con un piano in corso."""
+    from jenny.agent.subagent import PLAN_HELPER_SLOTS
+
+    for name in ("plan_step.md", "plan_mode.md"):
+        text = (_AGENT_TEMPLATES / name).read_text(encoding="utf-8")
+        assert f"up to {PLAN_HELPER_SLOTS} helpers at once" in text, name
+
+
+def test_the_planning_prompt_sizes_steps_with_numbers_and_the_notebook_tool() -> None:
+    text = (_AGENT_TEMPLATES / "plan_mode.md").read_text(encoding="utf-8")
+    assert "helper's budget" not in text
+    assert "about 10 pages" in text
+    assert "`notebook check`" in text and "`remove_pages`" in text
+    assert "`covers`" in text
+    assert "not a file" in text, "il resoconto del piano e' la nota e il messaggio finale"
+    assert "up to 5 when the items are many" in text
+    assert "notebook-editor helper with `remove_pages`" in text
+    assert "up to two researcher" not in text
+    assert "`notebook map`" in text and "`notebook read_many`" in text
+
+
+@pytest.mark.parametrize("name", ["coder.md", "analyst.md"])
+def test_helper_reports_go_in_the_answer_not_in_free_files(name: str) -> None:
+    """Un rapporto libero in ``audit/`` rompe il lint della wiki (passo 6 di
+    ``lint_wiki``); un file nel quaderno, se il compito lo chiede, e' una voce
+    di audit col suo frontmatter."""
+    text = " ".join((_AGENT_TEMPLATES / "types" / name).read_text(encoding="utf-8").split())
+    assert "report goes in your final answer, not in a file" in text
+    assert "audit entry in `audit/` with the audit frontmatter" in text
+    assert "Never create `outputs/` in a notebook" in text
+    assert "A report inside a notebook goes in its `audit/` folder" not in text
+    # La guida del formato per percorso, come nel notebook-editor: «la skill» da
+    # sola non dice quale file aprire.
+    from jenny.agent.agent_types import get_agent_type
+    from jenny.agent.subagent import SubagentManager
+
+    role = SubagentManager._render_role_section(
+        get_agent_type(name.removesuffix(".md")), install_path=Path("/inst")
+    )
+    assert "/inst/skills/llm-wiki/references/audit-guide.md" in role
 
 
 async def test_closing_replies_ask_for_a_short_end_of_turn(driver: PlanDriver) -> None:

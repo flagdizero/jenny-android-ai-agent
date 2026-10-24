@@ -237,6 +237,10 @@ class SubagentStatusTool(_SubagentControlTool):
         if entry.get("stop_reason"):
             parts.append(f"stop_reason={entry['stop_reason']}")
         parts.append(f"ended={ago / 60:.0f}m ago")
+        if entry.get("resumable"):
+            # Fermato al budget con la storia intatta: la mossa e continuare, non
+            # rilanciare da zero (``subagent_send``).
+            parts.append("resumable=yes (continue it with subagent_send)")
         parts.append(f"restartable={'yes' if entry.get('can_restart') else 'no (attempt cap)'}")
         line = "- " + ", ".join(parts)
         summary = (entry.get("result_summary") or "").strip()
@@ -340,7 +344,9 @@ class SubagentRestartTool(_SubagentControlTool):
         return (
             "Relaunch a failed or stalled subagent's work as a new attempt, "
             "optionally with a corrective note. Same job, same lineage — not a new "
-            "task. Automatic relaunches are capped per job: when the cap is "
+            "task, but it starts again from zero. For a subagent that stopped at "
+            "its budget use subagent_send instead: it continues from where it "
+            "stopped. Automatic relaunches are capped per job: when the cap is "
             "reached, report it to the user instead of retrying differently."
         )
 
@@ -425,10 +431,11 @@ class SubagentSendTool(_SubagentControlTool):
             "change of direction, extra context. Use this instead of spawning a "
             "fresh subagent for a follow-up on the same job — the subagent keeps "
             "what it already did. It works whether the subagent is still running "
-            "(the message reaches it without stopping it), just finished (it "
-            "resumes from its own conversation), or failed (the job is relaunched "
-            "with your message as a corrective note). The reply comes back on its "
-            "own: do not poll subagent_status after sending."
+            "(the message reaches it without stopping it), finished or stopped at "
+            "its budget (it resumes from its own conversation, with what it read "
+            "and wrote), or failed (the job is relaunched from zero with your "
+            "message as a corrective note). The reply comes back on its own: do "
+            "not poll subagent_status after sending."
         )
 
     def _duplicate_refusal(self, task_id: str, message: str) -> str | None:

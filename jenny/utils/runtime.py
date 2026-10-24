@@ -48,6 +48,36 @@ BUDGET_EXHAUSTED_FINALIZATION_PROMPT = (
     "done, what remains, and the best next step if anything is incomplete."
 )
 
+# Il prompt di sopra parla «all'utente», e un subagent un utente non ce l'ha:
+# risponde all'orchestratore, che deve decidere se farlo continuare. Quello che
+# gli serve e cio che il resoconto di un aiutante fermato non portava (prova del
+# 24/10/2026: solo gli ultimi tre tool): fatto, file scritti, cosa resta, come
+# riprendere. La ripresa e reale — ``subagent_send`` riparte dalla sua storia —
+# quindi il prompt lo dice, e il resoconto non deve ricominciare da capo.
+SUBAGENT_BUDGET_FINALIZATION_PROMPT = (
+    "Your model-call budget for this job is exhausted: no more tools can run. "
+    "Write your report to the orchestrator (the main agent that started you), "
+    "based only on the conversation and tool results above: what is done, "
+    "which files you wrote or changed (their paths), what remains, and how to "
+    "continue. The orchestrator can resume you with this conversation intact, "
+    "so name the next concrete step. Do not claim the job is complete unless "
+    "the evidence above shows it is. Do not call or request tools."
+)
+
+# Avviso che un subagent riceve verso la fine del budget
+# (``AgentRunSpec.iteration_notice``): una volta, dopo i tool, prima della
+# chiamata successiva. ``{left}`` e il numero di chiamate che restano.
+SUBAGENT_BUDGET_NOTICE_TEMPLATE = (
+    "You have {left} model calls left for this job. Write down what you have "
+    "now (save your work to its files), then finish with a report of what is "
+    "done, which files you wrote, and what remains."
+)
+
+#: Marcatore ``injected_event`` dell'avviso di budget: dice da dove arriva una
+#: riga ``user`` che nessuno ha scritto. Vive solo nella conversazione di un
+#: subagent, che non finisce mai nella storia di una sessione dell'utente.
+BUDGET_NOTICE_EVENT = "budget_notice"
+
 LENGTH_RECOVERY_PROMPT = (
     "Output limit reached. Continue exactly where you left off "
     "— no recap, no apology. Break remaining work into smaller steps if needed."
@@ -124,9 +154,18 @@ def build_finalization_retry_message() -> dict[str, str]:
     return {"role": "user", "content": FINALIZATION_RETRY_PROMPT}
 
 
-def build_budget_exhausted_finalization_message() -> dict[str, str]:
-    """Prompt the model for a no-tools final response after budget exhaustion."""
-    return {"role": "user", "content": BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
+def build_budget_exhausted_finalization_message(prompt: str | None = None) -> dict[str, str]:
+    """Prompt the model for a no-tools final response after budget exhaustion.
+
+    *prompt* sostituisce il testo di default: un subagent riferisce
+    all'orchestratore, non all'utente (``SUBAGENT_BUDGET_FINALIZATION_PROMPT``).
+    """
+    return {"role": "user", "content": prompt or BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
+
+
+def build_budget_notice_message(text: str) -> dict[str, str]:
+    """L'avviso di budget come riga ``user`` marcata (``BUDGET_NOTICE_EVENT``)."""
+    return {"role": "user", "content": text, INJECTED_EVENT_META: BUDGET_NOTICE_EVENT}
 
 
 def build_length_recovery_message() -> dict[str, str]:

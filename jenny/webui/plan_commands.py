@@ -12,8 +12,10 @@ Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``)
 - ``plan.get {id} | {notebook}`` → ``{ok, plan}``. ``plan`` è ``plan.json`` più
   ``done`` (passi alle spalle: fatti e saltati), ``total`` (senza i tagliati),
   ``current_step_id``, ``can_rollback``, ``can_undo_rollback``. ``plan.json``
-  porta ``coverage: [{item, have, missing, strategy, why}]``,
-  ``assumptions: [str]``, ``steps[].done_when`` (vuoti per un piano di prima) e
+  porta ``coverage: [{id, item, have, missing, strategy, why}]`` (``id``:
+  ``c1``…``cN`` per posizione), ``assumptions: [str]``, ``steps[].done_when``
+  (vuoti per un piano di prima), ``steps[].covers: [id]`` (le voci che un
+  passo ``research`` cerca; vuoto per gli altri) e
   ``blocked: {step, question, reason, at, kind: "question"|"drafts", drafts:
   [{id, target}]}``: con ``kind: "drafts"`` il passo aspetta che l'utente
   installi o scarti quelle bozze (``staged.*``), e si chiude da solo. Con
@@ -49,7 +51,8 @@ Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``)
   ``expect_end``, il quaderno è cambiato dopo il conto e la risposta è
   ``conflict`` (si rilegge l'anteprima).
 - ``plan.full {id}`` → ``{ok, title, coverage, assumptions, steps: [{id, title,
-  detail, kind, status, tag, done_when}]}``: il «piano completo», in sola lettura.
+  detail, kind, status, tag, done_when, covers}]}``: il «piano completo», in sola
+  lettura.
 - ``plan.cancel_drafting {notebook}`` → ``{ok, cancelled}``: chiude la
   pianificazione in corso (il tasto spento, «Annulla il piano»); ``cancelled``
   è ``false`` se non ce n'era una. Emette ``plan_changed``.
@@ -226,6 +229,7 @@ async def plan_full(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
                 "status": s.status,
                 "tag": s.tag,
                 "done_when": s.done_when,
+                "covers": list(s.covers),
             }
             for s in plan.steps
         ],

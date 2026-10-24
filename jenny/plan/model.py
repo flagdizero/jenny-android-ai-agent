@@ -196,6 +196,7 @@ class Step:
     photo_before: str | None = None
     photo_after: str | None = None
     done_when: str = ""
+    covers: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     _KEYS = (
@@ -203,6 +204,7 @@ class Step:
         "title",
         "detail",
         "done_when",
+        "covers",
         "kind",
         "status",
         "tag",
@@ -218,6 +220,7 @@ class Step:
         data: dict[str, Any] = dict(self.extra)
         for key in self._KEYS:
             data[key] = getattr(self, key)
+        data["covers"] = list(self.covers)
         return data
 
     @classmethod
@@ -246,8 +249,17 @@ class Step:
             photo_after=_opt_str(data.get("photo_after")),
             # Un passo di prima dei criteri di «fatto» non ne ha uno: vuoto.
             done_when=str(data.get("done_when") or ""),
+            # Un passo di prima del legame con la copertura non copre niente.
+            covers=_read_covers(data.get("covers")),
             extra={k: v for k, v in data.items() if k not in cls._KEYS},
         )
+
+
+def _read_covers(raw: Any) -> list[str]:
+    """I ``covers`` letti da ``plan.json``: solo testo, una lista malformata è vuota."""
+    if not isinstance(raw, list):
+        return []
+    return [str(c) for c in raw if isinstance(c, str) and c]
 
 
 def _empty_photos() -> dict[str, str | None]:
@@ -413,23 +425,34 @@ def _read_blocked(raw: Any) -> dict[str, Any] | None:
     return blocked
 
 
-_COVERAGE_KEYS = ("item", "have", "missing", "strategy", "why")
+_COVERAGE_KEYS = ("id", "item", "have", "missing", "strategy", "why")
+
+
+def coverage_id(position: int) -> str:
+    """L'id di una voce di copertura: ``c1``…``cN`` per posizione, come i passi."""
+    return f"c{position}"
 
 
 def _read_coverage(raw: Any) -> list[dict[str, str]]:
-    """La copertura letta da ``plan.json``: voci con le cinque chiavi, tutte testo.
+    """La copertura letta da ``plan.json``: voci con le sei chiavi, tutte testo.
 
     Tollerante come il resto della lettura: un piano di prima della copertura
     ne ha una vuota, e una voce malformata si salta invece di rendere
-    illeggibile il piano.
+    illeggibile il piano. Una voce di prima degli id prende quello della sua
+    posizione: è lo stesso che le avrebbe dato la validazione, perché una
+    proposta con una voce malformata non passa, e quindi le posizioni scritte
+    sono tutte quelle validate.
     """
     if not isinstance(raw, list):
         return []
-    return [
-        {key: str(entry.get(key) or "") for key in _COVERAGE_KEYS}
-        for entry in raw
-        if isinstance(entry, dict)
-    ]
+    clean: list[dict[str, str]] = []
+    for position, entry in enumerate(raw, start=1):
+        if not isinstance(entry, dict):
+            continue
+        item = {key: str(entry.get(key) or "") for key in _COVERAGE_KEYS}
+        item["id"] = item["id"] or coverage_id(position)
+        clean.append(item)
+    return clean
 
 
 # ── Transizioni ──────────────────────────────────────────────────────────────
@@ -537,9 +560,10 @@ def validate_proposal(
     copertura (``coverage``) è obbligatoria — ogni voce del lavoro dice cosa il
     quaderno ha già e come si colma il resto — e non può restarci una voce
     ``ask``: una scelta dell'utente si chiede in chat prima di proporre. Una
-    voce ``web`` vuole almeno un passo ``research``, perché chi esegue il piano
-    non improvvisa ricerche che il piano non prevede. Ogni passo porta il
-    suo criterio di «fatto» (``done_when``), che la verifica finale controlla.
+    voce ``web`` deve stare nei ``covers`` di un passo ``research``, perché chi
+    esegue il piano non improvvisa ricerche che il piano non prevede, e non ne
+    dimentica una che il piano prevede. Ogni passo porta il suo criterio di
+    «fatto» (``done_when``), che la verifica finale controlla.
     """
     problems: list[str] = []
     clean_title = _clean_text(title)
@@ -567,6 +591,7 @@ def validate_proposal(
 
     clean: list[Step] = []
     seen_titles: dict[str, int] = {}
+    remap = _given_coverage_ids(coverage)
     for index, raw in enumerate(steps, start=1):
         where = f"Step {index}"
         if not isinstance(raw, dict):
@@ -610,6 +635,10 @@ def validate_proposal(
                 f"{MAX_STEP_DONE_WHEN}."
             )
         kind = raw.get("kind")
+        # «Research» o « research »: lo stesso tipo, non un errore da far
+        # riprovare al modello.
+        if isinstance(kind, str):
+            kind = kind.strip().lower()
         if kind is None or kind == "":
             kind = "other"
         if kind not in STEP_KINDS:
@@ -618,6 +647,7 @@ def validate_proposal(
         if same_as is not None and not isinstance(same_as, str):
             problems.append(f"{where}: `same_as` must be the id of a step of the previous version.")
             same_as = None
+        covers = _validate_covers(raw.get("covers"), kind, where, problems, remap)
         clean.append(
             Step(
                 id=f"s{index}",
@@ -626,6 +656,7 @@ def validate_proposal(
                 kind=str(kind),
                 same_as=(same_as.strip() or None) if isinstance(same_as, str) else None,
                 done_when=done_when,
+                covers=covers,
             )
         )
 
@@ -639,6 +670,62 @@ def validate_proposal(
         coverage=clean_coverage,
         assumptions=clean_assumptions,
     )
+
+
+def _given_coverage_ids(coverage: Any) -> dict[str, str]:
+    """Gli id che il modello ha dato alle voci → quelli per posizione.
+
+    Il codice riassegna gli id per posizione, ma un modello che scrive le sue
+    voci con ``"id": "c3"`` e poi ``covers: ["c3"]`` parla dei suoi id: si
+    traducono, purché ci siano su ogni voce e senza doppioni. Altrimenti niente
+    traduzione, e i ``covers`` si leggono come posizioni.
+    """
+    if not isinstance(coverage, list) or not coverage:
+        return {}
+    given: list[str] = []
+    for raw in coverage:
+        cid = raw.get("id") if isinstance(raw, dict) else None
+        if not isinstance(cid, str) or not cid.strip():
+            return {}
+        given.append(cid.strip())
+    if len(set(given)) != len(given):
+        return {}
+    return {cid: coverage_id(position) for position, cid in enumerate(given, start=1)}
+
+
+def _validate_covers(
+    raw: Any, kind: Any, where: str, problems: list[str], remap: dict[str, str] | None = None
+) -> list[str]:
+    """I ``covers`` di un passo, ripuliti; se esistano le voci lo dice la copertura.
+
+    Solo un passo ``research`` copre voci: è lui che cerca sul web. Su un altro
+    passo i ``covers`` sarebbero una promessa che nessuno mantiene. Con un
+    ``kind`` sconosciuto l'errore è già quello del tipo: dirgli anche «solo un
+    research» lo manderebbe fuori strada. *remap* traduce gli id dati dal
+    modello in quelli per posizione (:func:`_given_coverage_ids`).
+    """
+    if raw is None or raw == []:
+        return []
+    if not isinstance(raw, list) or not all(isinstance(c, str) for c in raw):
+        problems.append(
+            f'{where}: `covers` must be a list of coverage ids, like ["c2", "c5"].'
+        )
+        return []
+    if kind not in STEP_KINDS:
+        return []
+    if kind != "research":
+        problems.append(
+            f"{where}: only a `research` step has `covers`; remove it here, and list "
+            "the entries in the research step that searches them."
+        )
+        return []
+    clean: list[str] = []
+    for value in raw:
+        cid = value.strip()
+        cid = (remap or {}).get(cid, cid)
+        if cid and cid not in clean:
+            clean.append(cid)
+    return clean
 
 
 def _validate_coverage(
@@ -666,6 +753,9 @@ def _validate_coverage(
             problems.append(f"{where} must be an object with `item` and `strategy`.")
             continue
         entry = {key: _clean_text(raw.get(key)) for key in _COVERAGE_KEYS}
+        # L'id lo assegna il codice, per posizione, come agli step: quello che
+        # il modello eventualmente manda si ignora (potrebbe ripetersi).
+        entry["id"] = coverage_id(index)
         item = entry["item"]
         if not item:
             problems.append(f"{where} needs a non-empty `item`.")
@@ -690,16 +780,36 @@ def _validate_coverage(
         elif strategy == "leave" and not entry["why"]:
             problems.append(f"{where} is left uncovered: say `why`.")
         clean.append(entry)
-    # Una voce ``web`` vuole un passo che cerchi: senza, chi esegue il piano
-    # improvviserebbe ricerche che il piano non prevede, o scriverebbe «non
-    # documentato». Basta un passo ``research`` qualsiasi, e non uno che nomini
-    # ogni voce parola per parola: il modello parafrasa, e un confronto di
-    # stringhe lo farebbe riprovare all'infinito. Cosa cerca ogni passo lo dice
-    # il suo ``detail`` (lo chiede ``plan_mode.md``).
-    if not research and any(e["strategy"] == "web" for e in clean):
+    # Ogni voce ``web`` sta nei ``covers`` di un passo ``research``: senza, chi
+    # esegue il piano improvviserebbe ricerche che il piano non prevede, o ne
+    # salterebbe una e scriverebbe «non documentato» (prova 2: cinque voci web
+    # senza passo che le cercasse). Il legame è per id e non per parole: il
+    # modello parafrasa, e un confronto di stringhe lo farebbe riprovare
+    # all'infinito; un id invece si controlla esatto.
+    known = {e["id"] for e in clean}
+    for number, step in enumerate(steps, start=1):
+        unknown = [c for c in step.covers if c not in known]
+        if unknown:
+            problems.append(
+                f"Step {number}: `covers` names {', '.join(unknown)}, which "
+                f"{'is not a coverage id' if len(unknown) == 1 else 'are not coverage ids'}; "
+                "coverage ids are c1, c2, ... in the order of `coverage`."
+            )
+    covered = {c for s in research for c in s.covers}
+    uncovered = [e for e in clean if e["strategy"] == "web" and e["id"] not in covered]
+    if uncovered:
+        names = ", ".join(f"{e['id']} ({e['item'][:40]})" for e in uncovered)
         problems.append(
-            "Some coverage entries are to be searched on the web, but the plan has no "
-            "`research` step: add one, and say in its `detail` what it looks up."
+            f"Coverage entries to search on the web need a `research` step that lists "
+            f"them in `covers`: {names} "
+            f"{'is' if len(uncovered) == 1 else 'are'} in none. "
+            + (
+                "Add the ids to the `covers` of the research step that searches them "
+                "(coverage ids are c1, c2, ... in the order of `coverage`)."
+                if research
+                else "Add a `research` step with `covers` listing them (coverage ids "
+                "are c1, c2, ... in the order of `coverage`)."
+            )
         )
     return clean
 
@@ -807,7 +917,8 @@ def tag_new_version(old_steps: Iterable[Step], new_steps: list[Step]) -> list[di
 
     - nessuna corrispondenza → ``new``;
     - fuori dall'ordine relativo dei passi abbinati → ``moved``;
-    - stesso posto ma titolo, ``detail`` o ``done_when`` diverso → ``changed``;
+    - stesso posto ma titolo, ``detail``, ``done_when`` o ``covers`` diverso →
+      ``changed``;
     - altrimenti nessun tag.
 
     «Posizione» vuol dire **ordine relativo**, non indice: con un passo nuovo in
@@ -846,6 +957,9 @@ def tag_new_version(old_steps: Iterable[Step], new_steps: list[Step]) -> list[di
             old[match].detail != step.detail
             or old[match].title != step.title
             or old[match].done_when != step.done_when
+            # Cosa cerca il passo fa parte di cosa fa: anche se gli id si
+            # riassegnano per posizione, un ``covers`` diverso va riguardato.
+            or old[match].covers != step.covers
         ):
             step.tag = "changed"
         else:

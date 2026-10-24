@@ -289,3 +289,44 @@ async def test_removing_a_cron_section_removes_its_job_on_the_loop(notebook: Pat
     assert await edit.remove_section(notebook, "acero", "s-cron", cron=cron) is True
     assert "j1" not in cron.paused
     assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
+
+
+# ── Il «perché» di un'attesa (contratto del 24/10/2026) ─────────────────────
+
+
+def _reminder(notebook: Path, why: str = "", by: str = "jenny") -> None:
+    from jenny.board.store import mutate_reminders
+
+    def apply(rems):
+        rems["reminders"].append({"id": "r-rinvaso", "card": "acero", "text": "Rinvaso",
+                                  "when": {"kind": "date", "date": "2099-03-01"},
+                                  "why": why, "by": by, "state": "open"})
+
+    mutate_reminders(notebook, apply)
+
+
+def test_set_reminder_why_points_to_a_real_page_or_to_nothing(notebook: Path) -> None:
+    _seed(notebook)
+    _reminder(notebook)
+    assert edit.set_reminder_why(notebook, "r-rinvaso", "wiki/travaso-acero.md") == \
+        "travaso-acero.md"
+    rem = read_reminders(notebook)["reminders"][0]
+    assert rem["why"] == "travaso-acero.md" and rem["by"] == "user"
+    with pytest.raises(edit.BoardEditError) as err:
+        edit.set_reminder_why(notebook, "r-rinvaso", "sparita.md")
+    assert err.value.code == "not_found"
+    assert read_reminders(notebook)["reminders"][0]["why"] == "travaso-acero.md"
+    assert edit.set_reminder_why(notebook, "r-rinvaso", None) == ""
+    assert read_reminders(notebook)["reminders"][0]["why"] == ""
+    with pytest.raises(edit.BoardEditError):
+        edit.set_reminder_why(notebook, "r-nessuno", "")
+
+
+def test_clear_reminder_whys_leaves_the_owner_alone(notebook: Path) -> None:
+    _seed(notebook)
+    _reminder(notebook, why="dormienza.md")
+    touched = edit.clear_reminder_whys(notebook, ["dormienza.md", "altra.md"])
+    assert touched == [{"id": "r-rinvaso", "text": "Rinvaso", "why": "dormienza.md"}]
+    rem = read_reminders(notebook)["reminders"][0]
+    assert rem["why"] == "" and rem["by"] == "jenny"
+    assert edit.clear_reminder_whys(notebook, ["dormienza.md"]) == []

@@ -24,6 +24,14 @@ Step {{ step.n }}: {{ step.title }}
 
 Done when: {{ step.done_when }}
 {% endif %}
+{% if covers %}
+
+This step searches these coverage entries (each one needs its sources saved, or the queries tried):
+{% for c in covers %}
+- {{ c.id }}: {{ c.item }}{% if c.missing %} — missing: {{ c.missing }}{% endif %}
+
+{% endfor %}
+{% endif %}
 {% if waiting %}
 
 Already waiting for the user's approval, from an earlier run of this step: {{ waiting | join(", ") }}. Do not make these changes again: they count as done, and the code holds the step until the user decides.
@@ -31,7 +39,11 @@ Already waiting for the user's approval, from an earlier run of this step: {{ wa
 
 Rules:
 - Do this step only. Do not start the next one: the code opens it when you close this one.
-- You may run several helpers in parallel for this step; wait for all their results before closing it.
+- You may run up to 5 helpers at once for this step; wait for all their results before closing it.
+- Helper results of this step arrive together, when the last one is done.
+- A helper that stopped at its budget: continue the same helper with `subagent_send`, it keeps what it read and wrote. Do not start a new one for the same work.
+- Scripts print only a compact result. A helper's report goes in its final answer, not in a file. A file in the notebook only if the step asks for one: then it is an audit entry in `audit/` with the audit frontmatter (`id`, `target`, `source`, `status`...; see the llm-wiki skill). Never create `outputs/` in a notebook.
+- Removing pages is a notebook-editor helper's job (`notebook` action `remove_pages`); your own `notebook` tool only checks, maps and reads.
 - This may be a second run of the step (after a restart): look at what is already there and do not duplicate it.
 - When it is finished, call `plan_step_done` with a one-line note of what changed (for example "3 pages written, 1 source discarded").
 - If there is nothing to do, call `plan_step_skip` with the honest reason.

@@ -149,8 +149,34 @@ def test_an_offline_helper_reports_a_gap_instead_of_writing_it(name: str) -> Non
 
 def test_the_editor_is_told_to_drop_missing_pages_with_an_action_that_exists() -> None:
     role = _role("notebook-editor")
-    assert "`remove_pages`" in role and "MISSING" in role
+    # Due ``remove_pages`` dal 24/10/2026: quella della bacheca toglie il
+    # riferimento, quella di ``notebook`` cancella il file. Il prompt dice quale.
+    assert "`board action=remove_pages`" in role and "MISSING" in role
+    assert "`notebook action=remove_pages`" in role
     # Non a ogni giro: un riferimento morto può tornare vivo (v. ``edit.remove_pages``).
     assert "when this job deleted or moved it" in role
     assert "otherwise name it in your report" in role
     assert "remove_pages" in board_tool._ACTIONS
+    from jenny.agent.tools import notebook as notebook_tool
+
+    assert "remove_pages" in notebook_tool._EDIT_ACTIONS
+
+
+def test_the_editor_writes_no_report_file_unless_asked_and_then_a_valid_audit() -> None:
+    """Prova 2 (23/10/2026): resoconti scritti nel quaderno senza che nessuno li
+    chiedesse. Un file chiesto è una voce di audit, coi campi che il passo 6 di
+    ``lint_wiki`` pretende: senza, è un 🔴 a ogni controllo."""
+    import importlib.util
+
+    role = _role("notebook-editor")
+    assert "Do not write report files in the notebook" in role
+    assert "final answer" in role
+    script = (Path(__file__).resolve().parents[2] / "jenny" / "skills" / "llm-wiki" / "scripts"
+              / "lint_wiki.py")
+    spec = importlib.util.spec_from_file_location("lint_wiki_fields", script)
+    assert spec is not None and spec.loader is not None
+    lint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lint)
+    for field in lint.AUDIT_REQUIRED_FIELDS:
+        assert f"`{field}`" in role, f"il prompt non nomina il campo obbligatorio {field}"
+    assert "audit-guide.md" in role and "YYYYMMDD-HHMMSS" in role

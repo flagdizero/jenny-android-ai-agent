@@ -16,7 +16,8 @@ la seconda è ciò che la chat espande sotto il messaggio di un subagent finito.
 
 Nota di trasporto: il layer HTTP del gateway (``websockets.http11``) rifiuta al
 parser ogni metodo diverso da GET *e* qualunque body, quindi anche le azioni
-passano da una GET su un path d'azione (``.../restart``, ``.../cancel``).
+passano da una GET su un path d'azione (``.../restart``, ``.../cancel``,
+``.../continue``).
 Identica scelta, già documentata, di ``apps_api.py`` e delle route skills: non è
 "sistemabile" a POST senza sostituire il layer HTTP.
 
@@ -52,7 +53,15 @@ from jenny.session.keys import UNIFIED_SESSION_KEY
 # separatori di path e caratteri non stampabili.
 _ID_RE = WIRE_ID_RE
 
-_ACTION_RE = re.compile(r"^/api/subagents/([^/]+)/(restart|cancel)$")
+_ACTION_RE = re.compile(r"^/api/subagents/([^/]+)/(restart|cancel|continue)$")
+
+# Il messaggio con cui il tasto «fai continuare» della casa riprende un aiutante
+# fermato al budget (``manager.send``: riparte dalla sua conversazione). Inglese,
+# perche lo legge il modello, e costante, perche e lo stesso per ogni aiutante:
+# il resto del contesto il subagent ce l'ha gia nella propria storia.
+CONTINUE_AFTER_BUDGET_TEXT = (
+    "Continue where you stopped: finish the job, then report what is done and what remains."
+)
 
 # Letture della telemetria fine. **Due route, non una con un parametro**, e per
 # una ragione di forma: ``activity`` è una finestra volatile del ring vivo, con
@@ -77,6 +86,7 @@ _SINCE_RE = re.compile(r"^\d{1,12}$")
 # si libera.
 _ACTION_ERROR_STATUS = {
     "SubagentRestartError": 409,
+    "SubagentSendError": 409,
     "SubagentConcurrencyLimitError": 429,
 }
 
@@ -84,7 +94,7 @@ _EMPTY_SNAPSHOT: dict[str, list] = {"running": [], "recent": []}
 
 
 class SubagentRoutes:
-    """Route ``/api/subagents``, ``/{id}/{restart,cancel}`` e ``/{id}/{activity,digest}``."""
+    """Route ``/api/subagents``, ``/{id}/{restart,cancel,continue}`` e ``/{id}/{activity,digest}``."""
 
     def __init__(
         self,
@@ -219,6 +229,8 @@ class SubagentRoutes:
             return foreign
         if action == "restart":
             return await self._restart(manager, target_id)
+        if action == "continue":
+            return await self._continue(manager, target_id)
         return await self._cancel(manager, target_id)
 
     async def _restart(self, manager: Any, target_id: str) -> Response:
@@ -237,6 +249,56 @@ class SubagentRoutes:
             self._log.exception("Subagent restart failed")
             return http_error(500, "subagent restart failed")
         return http_json_response({"restarted": True, "task_id": new_task_id})
+
+    @staticmethod
+    def _lineage_of(manager: Any, target_id: str) -> str:
+        """Il lineage di *target_id*, o l'id stesso se non lo si trova.
+
+        ``send`` cerca il tentativo vivo per task id *o* lineage, ma da un task
+        id vecchio non vede il tentativo nuovo dello stesso lavoro: rimandato
+        col lineage, una ripresa gia in corso riceve il messaggio invece di
+        partire una seconda volta. Le domande sono quelle di ``_foreign``.
+        """
+        try:
+            snapshot = manager.status_snapshot(None)
+            for entry in (snapshot.get("running") or []) if isinstance(snapshot, dict) else []:
+                if isinstance(entry, dict) and entry.get("task_id") == target_id:
+                    return str(entry.get("lineage_id") or target_id)
+            for record in manager.list_records(None) or []:
+                if getattr(record, "task_id", None) == target_id:
+                    return str(getattr(record, "lineage_id", None) or target_id)
+        except Exception:  # noqa: BLE001 — senza lineage resta l'id, che send capisce
+            pass
+        return target_id
+
+    async def _continue(self, manager: Any, target_id: str) -> Response:
+        """«Fai continuare»: riprende un aiutante dalla sua conversazione.
+
+        Il gemello di ``_restart`` per un aiutante fermato al budget: la stessa
+        forma di risposta, gli stessi errori. ``send`` decide come — iniezione
+        se e vivo, ripresa se la storia c'e; se non c'e piu, o il tetto delle
+        riprese e raggiunto, rifiuta e il messaggio torna come 409.
+        """
+        try:
+            # ``allow_restart=False``: senza una conversazione da riprendere il
+            # manager rifiuta (409 col suo messaggio) invece di rilanciare da
+            # zero in silenzio — chi preme «continua» non ha chiesto di rifare.
+            outcome = await manager.send(
+                self._lineage_of(manager, target_id), CONTINUE_AFTER_BUDGET_TEXT,
+                allow_restart=False,
+            )
+        except RuntimeError as e:
+            status = _ACTION_ERROR_STATUS.get(type(e).__name__)
+            if status is None:
+                self._log.exception("Subagent continue failed")
+                return http_error(500, "subagent continue failed")
+            return http_error(status, str(e))
+        except Exception:
+            self._log.exception("Subagent continue failed")
+            return http_error(500, "subagent continue failed")
+        return http_json_response(
+            {"continued": True, "task_id": getattr(outcome, "task_id", None)}
+        )
 
     async def _cancel(self, manager: Any, target_id: str) -> Response:
         try:

@@ -78,6 +78,12 @@ class FollowupState(Enum):
     DELIVERED = "delivered"
     #: Niente da dire: nessun turno.
     EMPTY = "empty"
+    #: Scritto in storia senza turno: un fratello dello stesso passo del piano
+    #: lavora ancora, e Jenny si sveglia una volta sola, con l'ultimo resoconto
+    #: (``AgentLoop._hold_subagent_result``, ``PlanDriver.hold_helper_result``).
+    #: Non lo restituisce :meth:`TurnPersistenceMixin._subagent_followup_state`,
+    #: che dice dove sta la riga: e' l'esito che il loop decide dopo.
+    HELD = "held"
 
 
 class TurnPersistenceMixin:

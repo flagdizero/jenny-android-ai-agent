@@ -247,15 +247,29 @@ async def test_plan_full_and_the_view_carry_coverage_assumptions_done_when(
     plan = driver.store.open_plan_for("piante")
     full = await dispatch_command(ctx, "plan.full", {"id": plan.id})
     assert full["coverage"] == [
-        {"item": "Acero e Ginkgo", "have": "una pagina vecchia", "missing": "le cure",
+        {"id": "c1", "item": "Acero e Ginkgo", "have": "una pagina vecchia", "missing": "le cure",
          "strategy": "notebook", "why": ""},
     ]
     assert full["assumptions"] == ["Tengo la camelia."]
     assert full["steps"][0]["done_when"] == STEPS[0]["done_when"]
+    assert [s["covers"] for s in full["steps"]] == [["c1"], [], []]
     view = (await dispatch_command(ctx, "plan.get", {"notebook": "piante"}))["plan"]
     assert view["coverage"] == full["coverage"]
     assert view["assumptions"] == ["Tengo la camelia."]
     assert [s["done_when"] for s in view["steps"]] == [s["done_when"] for s in STEPS]
+    assert [s["covers"] for s in view["steps"]] == [["c1"], [], []]
+
+
+def test_plan_propose_offers_covers_on_steps() -> None:
+    """Il modello vede ``covers`` nello schema: senza, la validazione gli chiederebbe un
+    campo che non sa di avere."""
+    from jenny.agent.tools.plan import PlanProposeTool
+
+    params = PlanProposeTool().parameters
+    step = params["properties"]["steps"]["items"]["properties"]
+    assert step["covers"]["type"] == "array"
+    assert "research" in step["covers"]["description"]
+    assert "c1, c2" in params["properties"]["coverage"]["description"]
 
 
 async def test_an_old_plan_reads_with_empty_new_fields(workspace: Path, driver: PlanDriver) -> None:
