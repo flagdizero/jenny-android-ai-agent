@@ -1345,10 +1345,25 @@ export class HomeChat {
     this._paintFab();
   }
 
+  /* Il «↓» si mostra solo da lontano: oltre un terzo di schermo dal fondo, e
+     mai sotto la soglia di `STICK_PX`. Appena sopra il fondo quel che c'e'
+     sotto si vede gia', e il tasto copriva la scheda del piano (prova 2,
+     24/10/2026). Il filo invece smette di seguire appena oltre `STICK_PX`:
+     le due soglie sono diverse di proposito. */
+  _farFromBottom() {
+    const height = this.el.clientHeight;
+    if (!height) return false;
+    const gap = this.el.scrollHeight - this.el.scrollTop - height;
+    return gap > Math.max(STICK_PX, height / 3);
+  }
+
   _paintFab() {
     if (!this.fab) return;
-    const away = Boolean(this.el.clientHeight) && !this._atBottom();
-    if (!away) this._newBelow = false;
+    const away = this._farFromBottom();
+    /* «Qualcosa di nuovo sotto» si spegne solo arrivando in fondo: nella fascia
+       fra `STICK_PX` e un terzo di schermo il tasto si nasconde, ma il nuovo
+       non l'hai ancora visto, e risalendo il tasto deve ancora dirlo. */
+    if (this._atBottom()) this._newBelow = false;
     this.fab.classList.toggle('visible', away);
     this.fab.classList.toggle('has-new', away && this._newBelow);
     this.fab.setAttribute('aria-label', i18n.t('chat.scrollToBottom'));

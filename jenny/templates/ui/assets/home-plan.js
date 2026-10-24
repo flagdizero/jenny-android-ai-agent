@@ -37,6 +37,7 @@ import { AppState } from './shared/state.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { stagedSources } from './home-staged.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
+import { physicalKeyboard } from './home-focus.js';
 
 /** Gli stati in cui il piano tiene il quaderno: l'utente non ci scrive, il
  *  composer della sua chat si spegne mentre corre, la copertina ha il bollino.
@@ -152,6 +153,14 @@ function withBold(template, bold) {
 
 const t = (key, params) => i18n.t(`home.plan.${key}`, params);
 
+/* Le voci `web` della copertura nei `covers` di un passo di ricerca. Una voce
+   `notebook` nei `covers` il gateway la lascia passare (rifiutarla farebbe
+   riprovare il modello), ma da cercare restano le `web`. */
+function webCovered(step, coverage) {
+  if (step?.kind !== 'research' || !Array.isArray(step.covers) || !Array.isArray(coverage)) return [];
+  return coverage.filter((c) => c && c.strategy === 'web' && step.covers.includes(c.id));
+}
+
 /* Un testo del modello reso come markdown (il dettaglio di un passo, il suo
    «fatto quando», la copertura): lo stesso renderer della chat, con lo
    stesso sanificatore del lettore (`sanitizeContent`). Senza le librerie esce
@@ -231,12 +240,14 @@ export class HomePlan {
    *                   `HomeStaged` (`staged.list`), per quelle di un passo fermo.
    * @param refreshStaged rilegge le bozze (una che il piano nomina e l'elenco no).
    * @param onDraftsChange chiamata quando cambiano le bozze che la scheda mostra.
+   * @param keyboard   `() => boolean`: c'e' una tastiera fisica (`home-focus.js`).
    */
   constructor({
     live, thread, chatEl, composer = {}, currentNotebook, onChange, onLockChange,
     onComposerChange, sendText, appendOwn, turnRunning, sheet,
-    stagedItems, stagedFailed, refreshStaged, onDraftsChange,
+    stagedItems, stagedFailed, refreshStaged, onDraftsChange, keyboard = physicalKeyboard,
   } = {}) {
+    this.keyboard = keyboard;
     this.live = live;
     this.thread = thread;
     this.chatEl = chatEl;
@@ -1026,7 +1037,12 @@ export class HomePlan {
         }
         li.appendChild(head);
         for (const [field, label] of [['have', 'haveLabel'], ['missing', 'missingLabel'], ['why', 'whyLabel']]) {
-          if (c[field]) li.appendChild(el('div', 'home-plan-cover-sub', `${t(`cover.${label}`)}: ${c[field]}`));
+          if (!c[field]) continue;
+          /* Markdown come nel foglio del piano completo: il modello ci scrive i
+             percorsi fra backtick, e crudi si leggevano come rumore. */
+          const sub = el('div', 'home-plan-cover-sub', `${t(`cover.${label}`)}: `);
+          sub.appendChild(md('', c[field]));
+          li.appendChild(sub);
         }
         list.appendChild(li);
       }
@@ -1086,19 +1102,23 @@ export class HomePlan {
     return list;
   }
 
-  _tags(step) {
+  _tags(step, coverage = []) {
     const tags = [];
     if (step.kind === 'delete') tags.push(['trash', 'is-danger']);
     if (step.tag === 'new') tags.push(['new', 'is-new']);
     if (step.tag === 'moved') tags.push(['moved', 'is-moved']);
     if (step.tag === 'changed') tags.push(['changed', 'is-changed']);
-    return tags.map(([key, cls]) => el('span', `home-plan-tag ${cls}`, t(`tag.${key}`)));
+    /* Un passo di ricerca dice quante voci della copertura va a cercare: sono
+       quelle che la validazione gli ha legato (`covers`), e solo le `web`. */
+    const covers = webCovered(step, coverage).length;
+    if (covers) tags.push(['covers', 'is-web is-covers', { count: covers }]);
+    return tags.map(([key, cls, params]) => el('span', `home-plan-tag ${cls}`, t(`tag.${key}`, params)));
   }
 
-  _text(step, { time = '' } = {}) {
+  _text(step, { time = '', coverage = [] } = {}) {
     const text = el('span', 'home-plan-text');
     text.append(step.title || '');
-    for (const tag of this._tags(step)) text.appendChild(tag);
+    for (const tag of this._tags(step, coverage)) text.appendChild(tag);
     if (time) text.appendChild(el('span', 'home-plan-time', time));
     return text;
   }
@@ -1118,7 +1138,8 @@ export class HomePlan {
       else this.cut.add(step.id);
       this._draw();
     });
-    item.append(box, icon(KIND_ICON[step.kind] || KIND_ICON.other, 'home-plan-kind'), this._text(step));
+    item.append(box, icon(KIND_ICON[step.kind] || KIND_ICON.other, 'home-plan-kind'),
+      this._text(step, { coverage: plan.coverage }));
     if (off) item.appendChild(el('span', 'home-plan-sub', t('cutSub')));
     /* Toccare la riga e' come toccare la casella: il bersaglio e' tutta la riga. */
     item.addEventListener('click', (e) => {
@@ -1143,7 +1164,7 @@ export class HomePlan {
     else if (mark) box.appendChild(icon(mark));
     const ended = step.status === 'done' || step.status === 'skipped' ? clockOf(step.ended_at) : '';
     item.append(box, icon(KIND_ICON[step.kind] || KIND_ICON.other, 'home-plan-kind'),
-      this._text(step, { time: reverted ? '' : ended }));
+      this._text(step, { time: reverted ? '' : ended, coverage: plan.coverage }));
     let sub = '';
     if (step.status === 'now') {
       const minutes = minutesBetween(step.started_at);
@@ -1786,6 +1807,16 @@ export class HomePlan {
     close.addEventListener('click', () => this.closeSheet());
     this.sheetBody.replaceChildren(grab, close, ...children.filter(Boolean));
     this._sheetOpenedAt = Date.now();
+    /* Chiudendo il foglio il browser rida' il fuoco a chi l'aveva prima: se era
+       il campo, senza tastiera fisica si alza la tastiera a schermo sopra la
+       scheda che stavi guardando (prova 2, 24/10/2026). Il fuoco si toglie
+       prima di aprire, cosi' non c'e' niente da ridare. Con la tastiera fisica
+       il campo lo tiene: li' il fuoco e' dove finiscono i tasti
+       (`home-focus.js`). */
+    const input = this.composer?.input;
+    if (!this.sheet.open && input && document.activeElement === input && !this.keyboard()) {
+      input.blur();
+    }
     if (!this.sheet.open) this.sheet.showModal();
     return this.sheet;
   }
@@ -2104,13 +2135,22 @@ export class HomePlan {
       const h = el('h3', 'home-plan-full-step');
       h.dataset.stepId = s.id || '';
       h.append(icon(KIND_ICON[s.kind] || KIND_ICON.other), el('span', null, `${i + 1}. ${s.title || ''}`));
-      for (const tag of this._tags(s)) h.appendChild(tag);
+      for (const tag of this._tags(s, coverage)) h.appendChild(tag);
       body.appendChild(h);
       if (s.detail) body.appendChild(md('home-plan-full-detail', s.detail));
       if (s.done_when) {
         const done = el('div', 'home-plan-full-labeled home-plan-full-done');
         done.append(el('span', 'home-plan-full-label', t('fullSheet.doneWhen')), md('home-plan-full-text', s.done_when));
         body.appendChild(done);
+      }
+      /* Le voci della copertura che il passo di ricerca cerca, per nome: gli
+         id (`c2`) sono per il modello, non per chi legge. */
+      const covered = webCovered(s, coverage).map((c) => String(c.item));
+      if (covered.length) {
+        const line = el('div', 'home-plan-full-labeled home-plan-full-done home-plan-full-covers');
+        line.append(el('span', 'home-plan-full-label', t('fullSheet.covers')),
+          el('span', 'home-plan-full-text', covered.join(', ')));
+        body.appendChild(line);
       }
     });
     const dropped = plan.dropped || [];

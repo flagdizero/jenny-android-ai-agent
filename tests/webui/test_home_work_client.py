@@ -14,6 +14,7 @@ difetto possibile sta proprio fra loro.
 
 from __future__ import annotations
 
+import pytest
 from support.home_dom import requires_jsdom, run_home
 
 pytestmark = requires_jsdom
@@ -30,6 +31,9 @@ hooks.fetch = (u) => {
   if (u.pathname === '/api/subagents') return ok(agents[key] || { running: [], recent: [] });
   if (u.pathname === '/api/work') return ok({ work: works[key] || [] });
   if (/^[/]api[/]subagents[/][^/]+[/]restart$/.test(u.pathname)) return ok({ task_id: 'new' });
+  if (/^[/]api[/]subagents[/][^/]+[/]continue$/.test(u.pathname)) {
+    return ok({ continued: true, task_id: 'new' });
+  }
   return undefined;
 };
 const worker = (over = {}) => ({ task_id: 't1', label: 'plant cards', state: 'running',
@@ -223,6 +227,19 @@ assert.equal(live().hidden, true);
 """)
 
 
+def test_a_helper_on_the_notebook_tool_reads() -> None:
+    """Lo strumento `notebook` (check, map, read_many) guarda il quaderno: «Legge»,
+    non il vocabolario generico."""
+    run_home(_HEAD + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto',
+        running: [worker({ last_tool: 'notebook' })], recent: [] });
+assert.match(text(bubbles()[0]), new RegExp(W.doing.read));
+""")
+
+
 def test_a_mini_me_that_comes_back_says_so_by_name() -> None:
     run_home(_HEAD + """
 const app = await boot();
@@ -375,6 +392,168 @@ await tick(10);
 assert.equal(button.hidden, false);
 assert.equal(button.disabled, false);
 assert.match(text(report.querySelector('.home-work-note')), /no free slots/);
+""")
+
+
+# ── Fermata dal budget (prova 2 del piano, 24/10/2026) ──────────────────────
+# Uno snapshot porta `state: "budget"`, `resumable`, `handled_at`, `lineage_id`,
+# `task_id`, `attempt`, `ended_at`. La ripresa con `subagent_send` tiene lo stesso
+# `attempt` e cambia `task_id`: fino a qui la bolla non se ne accorgeva.
+
+_BUDGET = """
+const budget = (over = {}) => worker({ lineage_id: 'L1', attempt: 1, state: 'budget',
+  stop_reason: 'max_iterations', resumable: true, can_restart: true, handled_at: null,
+  ended_at: now(), ...over });
+"""
+
+
+def test_a_helper_out_of_breath_can_continue_with_what_she_did() -> None:
+    run_home(_HEAD + _BUDGET + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [budget()] });
+assert.equal(settled().length, 1);
+const report = settled()[0];
+assert.match(text(report), new RegExp(W.why.helperBudget.slice(0, 15)));
+const button = report.querySelector('.home-work-action');
+assert.equal(button.textContent, W.helperContinue);
+button.click();
+await tick(10);
+assert.ok(calls.some((c) => c.startsWith('/api/subagents/t1/continue')), calls.join(' '));
+assert.ok(!calls.some((c) => c.includes('/restart')), 'ha rilanciato da zero invece di continuare');
+assert.ok(calls.some((c) => c.includes('/continue') && c.includes('session_key=project%3Aorto')),
+          calls.join(' '));
+assert.ok(!report.isConnected);
+""")
+
+
+def test_a_helper_out_of_breath_without_history_is_restarted() -> None:
+    run_home(_HEAD + _BUDGET + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [budget({ resumable: false })] });
+const button = settled()[0].querySelector('.home-work-action');
+assert.equal(button.textContent, W.helperRetry);
+""")
+
+
+def test_a_resume_with_the_same_attempt_closes_the_card() -> None:
+    run_home(_HEAD + _BUDGET + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+const stopped = budget();
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [stopped] });
+const report = settled()[0];
+assert.ok(report.isConnected);
+// Jenny l'ha fatta continuare: stesso lineage, stesso attempt, task_id nuovo.
+frame({ event: 'subagent_status', chat_id: 'project:orto',
+        running: [worker({ task_id: 't2', lineage_id: 'L1', attempt: 1 })], recent: [stopped] });
+assert.ok(!report.isConnected, 'la bolla resta accanto all\u2019aiutante ripreso');
+assert.equal(bubbles().length, 1, 'la ripresa ha la sua bolla «in corso»');
+
+// La ripresa si ferma di nuovo: la stessa bolla torna, col tasto per continuare.
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [budget({ task_id: 't2', ended_at: now() + 1 }), stopped] });
+assert.equal(settled().length, 1);
+assert.ok(report.isConnected);
+report.querySelector('.home-work-action').click();
+await tick(10);
+assert.ok(calls.some((c) => c.startsWith('/api/subagents/t2/continue')), calls.join(' '));
+""")
+
+
+@pytest.mark.parametrize("snapshot", [
+    # La ripresa e' ancora al lavoro.
+    "{ running: [resumed], recent: [stopped] }",
+    # La ripresa e' gia' finita, dopo la fermata.
+    "{ running: [], recent: [{ ...resumed, state: 'done', ended_at: now() }, stopped] }",
+])
+@pytest.mark.parametrize("state", ["budget", "failed"])
+def test_a_resume_already_running_or_finished_is_not_shown_on_opening(
+    snapshot: str, state: str
+) -> None:
+    run_home(_HEAD + _BUDGET + f"""
+const stopped = budget({{ ended_at: now() - 60, state: '{state}' }});
+const resumed = worker({{ task_id: 't2', lineage_id: 'L1', attempt: 1 }});
+agents['project:orto'] = {snapshot};
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+assert.equal(settled().length, 0);
+""")
+
+
+def test_a_plan_helper_jenny_already_handled_shows_no_card() -> None:
+    """Dentro un piano Jenny guida gli aiutanti da sola: dopo il suo turno sul
+    resoconto (`handled_at`) la bolla non serve piu'."""
+    run_home(_HEAD + _BUDGET + """
+agents['project:orto'] = { running: [], recent: [budget({ handled_at: now(), plan_id: 'p1' })] };
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+assert.equal(settled().length, 0, 'Jenny se n\u2019e\u2019 gia\u2019 occupata');
+
+// Una bolla gia' a schermo esce quando Jenny chiude il turno su quel resoconto.
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [budget({ task_id: 't3', lineage_id: 'L3', plan_id: 'p1' })] });
+const report = settled()[0];
+assert.ok(report && report.isConnected);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [budget({ task_id: 't3', lineage_id: 'L3', plan_id: 'p1', handled_at: now() })] });
+assert.ok(!report.isConnected);
+""")
+
+
+@pytest.mark.parametrize("state", ["budget", "failed"])
+def test_outside_a_plan_handled_does_not_take_your_retry_away(state: str) -> None:
+    """Fuori da un piano Jenny legge ogni resoconto: se `handled_at` nascondesse la
+    bolla, il «Riprova» non ci sarebbe mai."""
+    run_home(_HEAD + _BUDGET + f"""
+agents['project:orto'] = {{ running: [], recent: [budget({{ state: '{state}', handled_at: now() }})] }};
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+assert.equal(settled().length, 1, 'la bolla fuori da un piano e\u2019 sparita');
+const report = settled()[0];
+frame({{ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [budget({{ state: '{state}', handled_at: now() + 1 }})] }});
+assert.ok(report.isConnected);
+assert.equal(report.querySelector('.home-work-action').hidden, false);
+""")
+
+
+def test_a_refused_continue_says_why_and_can_be_tried_again() -> None:
+    run_home(_HEAD + _BUDGET + """
+const fetchBefore = hooks.fetch;
+hooks.fetch = (u) => /continue$/.test(u.pathname)
+  ? new Response('nothing to continue', { status: 409 })
+  : fetchBefore(u);
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [budget()] });
+const report = settled()[0];
+const button = report.querySelector('.home-work-action');
+button.click();
+await tick(10);
+assert.equal(button.disabled, false);
+assert.match(text(report.querySelector('.home-work-note')), /nothing to continue/);
+assert.ok(report.isConnected);
+""")
+
+
+def test_a_budget_stop_is_terminal_not_a_running_helper() -> None:
+    run_home(_HEAD + _BUDGET + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [budget({ task_id: 't9' })],
+        recent: [] });
+assert.equal(bubbles().length, 0, 'un aiutante fermato dal budget contato come al lavoro');
 """)
 
 

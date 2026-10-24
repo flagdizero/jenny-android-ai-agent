@@ -48,6 +48,8 @@ export const FAMILY_BY_TOOL = {
   recall_history: 'read', memory: 'read', ui_view: 'read', my: 'read',
   subagent_status: 'read', list_exec_sessions: 'read', update_status: 'read',
   ssh_hosts: 'read', get_recent_logs: 'read',
+  // Il quaderno a colpo d'occhio (check, map, read_many): quasi sempre letture.
+  notebook: 'read',
   // Cerca: non sa ancora dove sia.
   grep: 'search', find_files: 'search', web_search: 'search',
   // Scrive: lascia un segno.

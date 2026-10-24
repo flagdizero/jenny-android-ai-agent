@@ -135,6 +135,7 @@
       "stalled": "ferma",
       "done": "conclusa",
       "failed": "fallita",
+      "budget": "senza fiato",
       "cancelled": "annullata"
     },
     "phase": {
@@ -1052,7 +1053,8 @@
         "trash": "cestino",
         "new": "nuovo",
         "moved": "spostato",
-        "changed": "cambiato"
+        "changed": "cambiato",
+        "covers": "{count} da cercare"
       },
       "nowSince": "da {minutes} min",
       "nowJustStarted": "appena cominciato",
@@ -1174,7 +1176,8 @@
         "dropped": "Tolti da te",
         "coverage": "Cosa serve al lavoro",
         "assumptions": "Decido io",
-        "doneWhen": "Fatto quando"
+        "doneWhen": "Fatto quando",
+        "covers": "Cerca"
       },
       "error": {
         "conflict": "Il piano è cambiato nel frattempo: ecco l'ultima versione.",
@@ -1235,6 +1238,8 @@
       "helperSlow": "È piccola ma testarda: ci mette un po'",
       "helperRetry": "Rimettila in piedi",
       "helperRetryFailed": "Non sono riuscita a rimetterla in piedi.",
+      "helperContinue": "Falla continuare",
+      "helperContinueFailed": "Non sono riuscita a farla ripartire.",
       "result": {
         "pagesOne": "1 pagina aggiornata.",
         "pagesMany": "{count} pagine aggiornate.",

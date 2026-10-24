@@ -869,6 +869,18 @@ body.home {
 .home-plan-assume-list li { margin-bottom: 5px; }
 .home-plan-cover-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 0; color: var(--text); }
 .home-plan-cover-sub { font-size: 12.5px; color: var(--text-muted); }
+/* Il markdown di una voce sta sulla riga della sua etichetta («Manca: …»).
+   Anche quello a blocchi (un elenco, un titolo) che il modello ci mettesse:
+   scorre sulla riga invece di aprire un buco o un titolo grande nella voce. */
+.home-plan-cover-sub .home-plan-md,
+.home-plan-cover-sub .home-plan-md :is(p, ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote, pre) {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.home-plan-cover-sub .home-plan-md li + li::before { content: " · "; }
 .home-plan-assume-sub { font-size: 12.5px; }
 .home-plan-tag.is-notebook { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 65%, transparent); }
 .home-plan-tag.is-web { color: var(--flower); border-color: color-mix(in oklab, var(--flower) 65%, transparent); }

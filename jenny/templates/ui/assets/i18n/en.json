@@ -135,6 +135,7 @@
       "stalled": "stalled",
       "done": "done",
       "failed": "failed",
+      "budget": "out of budget",
       "cancelled": "cancelled"
     },
     "phase": {
@@ -1052,7 +1053,8 @@
         "trash": "trash",
         "new": "new",
         "moved": "moved",
-        "changed": "changed"
+        "changed": "changed",
+        "covers": "{count} to look up"
       },
       "nowSince": "for {minutes} min",
       "nowJustStarted": "just started",
@@ -1174,7 +1176,8 @@
         "dropped": "Taken out by you",
         "coverage": "What the work needs",
         "assumptions": "I decide",
-        "doneWhen": "Done when"
+        "doneWhen": "Done when",
+        "covers": "Looks up"
       },
       "error": {
         "conflict": "The plan changed in the meantime: here is the latest version.",
@@ -1235,6 +1238,8 @@
       "helperSlow": "She's small but stubborn: this takes a while",
       "helperRetry": "Get her back up",
       "helperRetryFailed": "I couldn't get her back up.",
+      "helperContinue": "Let her continue",
+      "helperContinueFailed": "I couldn't get her going again.",
       "result": {
         "pagesOne": "1 page updated.",
         "pagesMany": "{count} pages updated.",

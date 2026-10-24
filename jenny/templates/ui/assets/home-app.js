@@ -214,6 +214,7 @@ class HomeApp {
       fetchWork: (sessionKey) => api.getWork({ sessionKey }),
       fetchSubagents: (sessionKey) => api.getSubagents({ sessionKey }),
       restartSubagent: (taskId, sessionKey) => api.restartSubagent(taskId, { sessionKey }),
+      continueSubagent: (taskId, sessionKey) => api.continueSubagent(taskId, { sessionKey }),
       sendCommand: (text) => this._sendText(text),
       openBoard: () => {
         this.closeChatOver();

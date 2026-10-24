@@ -253,15 +253,17 @@ def test_the_footer_buttons_follow_the_state() -> None:
     """Un subagent può concludersi con la modale aperta: "Ferma" su un lavoro
     finito è una bugia, e su un job fallito nasconde l'unico bottone utile."""
     source = _chat()
-    sync = re.search(r"_saSyncActions\(state\)\s*\{(.*?)\n  \}", source, re.S)
+    # La voce viaggia con lo stato: una fermata al budget riprendibile non offre
+    # il rilancio da zero (``saActions(state, surface, entry)``).
+    sync = re.search(r"_saSyncActions\(state, entry = null\)\s*\{(.*?)\n  \}", source, re.S)
     assert sync, "_saSyncActions non trovato"
     body = sync.group(1)
-    assert "_saDialogActions(state)" in body, "i bottoni passano dalla matrice"
+    assert "_saDialogActions(state, entry)" in body, "i bottoni passano dalla matrice"
     # Il contratto di detailDialog è il data-action-id, e il click è delegato:
     # rimpiazzare i bottoni non stacca nessun handler.
     assert "data-action-id" in body
     refresh = re.search(r"_refreshSubagentDetailStatic\(\)\s*\{(.*?)\n  \}", source, re.S)
-    assert refresh and "_saSyncActions(state)" in refresh.group(1)
+    assert refresh and "_saSyncActions(state, entry)" in refresh.group(1)
     dialog = DIALOG_JS.read_text(encoding="utf-8")
     assert "actionsEl.addEventListener('click'" in dialog, "il click non è più delegato"
 

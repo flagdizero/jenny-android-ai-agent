@@ -54,6 +54,18 @@ const toNotebook = async () => {
 """
 
 
+_VENDOR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "vendor"
+# DOMPurify e marked veri: senza, `md()` esce col testo scappato e i backtick restano.
+_MARKDOWN_BOOT = f"""
+import {{ createRequire }} from 'node:module';
+const require = createRequire(import.meta.url);
+globalThis.DOMPurify = require({str(_VENDOR / "dompurify@3" / "purify.min.js")!r})(window);
+window.DOMPurify = globalThis.DOMPurify;
+globalThis.marked = require({str(_VENDOR / "marked@15.0.7" / "marked.min.js")!r});
+window.marked = globalThis.marked;
+"""
+
+
 def test_the_plan_toggle_travels_in_the_message() -> None:
     run_home(_HEAD + """
 await tick(30);
@@ -865,14 +877,17 @@ assert.equal(rpcs('plan.rollback').at(-1).params.expect_end, 'P2', 'si conferma 
 
 
 def test_a_proposal_shows_its_coverage_and_its_assumptions() -> None:
-    run_home(_HEAD + """
+    run_home(_MARKDOWN_BOOT + _HEAD + """
 current = plan({
+  steps: [step('s1', 'Search maple', { covers: ['c1', 'c5'] }), step('s2', 'Throw away old pages', { kind: 'delete' }),
+    step('s3', 'Check links', { kind: 'check', tag: 'new' })],
   coverage: [
-    { item: 'Acero', have: '3 notes', missing: '', strategy: 'notebook', why: '' },
+    { id: 'c1', item: 'Acero', have: '3 notes', missing: '', strategy: 'notebook', why: '' },
     { item: 'Ginkgo', have: 'a page', missing: '', strategy: 'notebook', why: '' },
     { item: 'Fico', have: 'raw notes', missing: '', strategy: 'notebook', why: '' },
     { item: 'Pino', have: 'a page', missing: '', strategy: 'notebook', why: '' },
-    { item: 'Glicine', have: '', missing: 'substrate mix', strategy: 'web', why: 'raw has nothing' },
+    { id: 'c5', item: 'Glicine', have: '', missing: 'the `substrate` mix', strategy: 'web',
+      why: 'raw has nothing' },
     { item: 'Camelia', have: '', missing: 'everything', strategy: 'leave', why: 'not your plant' },
   ],
   assumptions: ['Old concept pages go', 'Numbers only with a source'],
@@ -889,6 +904,15 @@ assert.equal(card().querySelector('.home-plan-cover-list'), null, 'le voci parto
 action('fold-cover-more').click();
 assert.match(text(card().querySelector('.home-plan-cover-list')), /substrate mix/);
 assert.match(text(card().querySelector('.home-plan-cover-list')), /not your plant/);
+// Il markdown della voce e' reso come nel foglio: niente backtick crudi.
+const sub = [...card().querySelectorAll('.home-plan-cover-sub')].find((n) => /substrate/.test(text(n)));
+assert.equal(sub.querySelector('code')?.textContent, 'substrate');
+assert.ok(!text(sub).includes('`'), 'backtick crudi nella copertura della scheda');
+assert.equal(text(sub), `${P.cover.missingLabel}: the substrate mix`);
+// Il passo di ricerca dice quante voci va a cercare: solo le `web` (c1 e' notebook).
+const searchRow = card().querySelector('[data-step-id="s1"]');
+assert.equal(text(searchRow.querySelector('.home-plan-tag.is-covers')), P.tag.covers.replace('{count}', '1'));
+assert.equal(card().querySelector('[data-step-id="s2"] .is-covers'), null);
 // «Decido io»: chiuso di default, e apribile.
 const fold = action('fold-assume-more');
 assert.equal(text(fold), P.assume.title.replace('{count}', '2'));
@@ -911,22 +935,15 @@ assert.equal(card().querySelector('.home-plan-assume'), null);
 
 
 def test_the_full_plan_renders_markdown_safely_with_coverage_and_done_when() -> None:
-    vendor = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "vendor"
-    boot = f"""
-import {{ createRequire }} from 'node:module';
-const require = createRequire(import.meta.url);
-globalThis.DOMPurify = require({str(vendor / "dompurify@3" / "purify.min.js")!r})(window);
-window.DOMPurify = globalThis.DOMPurify;
-globalThis.marked = require({str(vendor / "marked@15.0.7" / "marked.min.js")!r});
-window.marked = globalThis.marked;
-"""
-    run_home(boot + _HEAD + """
+    run_home(_MARKDOWN_BOOT + _HEAD + """
 current = plan();
 await toNotebook();
 rpcAnswers['plan.full'] = () => ({ ok: true, title: 'Rebuild the wiki',
-  coverage: [{ item: 'Glicine', have: '', missing: 'the `substrate` mix', strategy: 'web', why: 'raw is empty' }],
+  coverage: [{ id: 'c1', item: 'Glicine', have: '', missing: 'the `substrate` mix', strategy: 'web',
+                why: 'raw is empty' },
+             { id: 'c2', item: 'Acero', have: 'a page', missing: '', strategy: 'notebook', why: '' }],
   assumptions: ['Delete `concepts/` pages'],
-  steps: [step('s1', 'Search maple', {
+  steps: [step('s1', 'Search maple', { covers: ['c1', 'c2'],
     detail: 'Read `raw/acero.md` first.\\n\\n<img src=x onerror="globalThis.pwned=1"> and **bold**',
     done_when: 'every page has **3** sourced facts, see [the rules](workshop.html) and [here](#nowhere)' })] });
 card().querySelector('.home-plan-open').click();
@@ -949,6 +966,10 @@ assert.match(text(s), new RegExp(P.fullSheet.coverage));
 assert.equal(s.querySelector('.home-plan-full-cover code')?.textContent, 'substrate');
 assert.match(text(s), new RegExp(P.fullSheet.assumptions));
 assert.equal(s.querySelector('.home-plan-full-assume code')?.textContent, 'concepts/');
+// Il passo di ricerca nomina le voci che cerca (per nome, non per id).
+const covers = s.querySelector('.home-plan-full-covers');
+assert.equal(text(covers.querySelector('.home-plan-full-label')), P.fullSheet.covers);
+assert.equal(text(covers.querySelector('.home-plan-full-text')), 'Glicine');
 // Un link del modello non naviga la WebView: si instrada come in chat.
 const link = s.querySelector('.home-plan-full-done a[href="workshop.html"]');
 assert.ok(link, 'il link e\\' reso');
@@ -1213,3 +1234,40 @@ assert.equal(document.querySelectorAll('.home-plan-toggle').length, 1, 'un tasto
 assert.equal(document.querySelectorAll('.home-plan-hint').length, 1);
 assert.equal(document.querySelector('.home-snapshot .is-plan'), null, 'la foto non dice «Piano acceso»');
 """)
+
+
+def test_a_plan_sheet_takes_the_focus_off_the_field_without_a_keyboard() -> None:
+    """Chiudendo un foglio il browser rida' il fuoco al campo, e senza tastiera
+    fisica si alzava la tastiera a schermo sopra la scheda (prova 2)."""
+    run_home(_HEAD + """
+current = plan();
+await toNotebook();
+rpcAnswers['plan.full'] = () => ({ ok: true, title: 'Rebuild the wiki', steps: current.steps });
+const input = $('home-input');
+app.plan.keyboard = () => false;
+input.focus();
+assert.equal(document.activeElement, input);
+card().querySelector('.home-plan-open').click();
+await tick(40);
+assert.ok(sheet().open);
+assert.notEqual(document.activeElement, input, 'il campo tiene il fuoco sotto il foglio');
+app.plan.closeSheet();
+assert.notEqual(document.activeElement, input, 'chiuso il foglio, il fuoco torna al campo');
+// Con la tastiera fisica il campo lo tiene: li' il fuoco e' dove vanno i tasti.
+app.plan.keyboard = () => true;
+input.focus();
+card().querySelector('.home-plan-open').click();
+await tick(40);
+assert.ok(sheet().open);
+assert.equal(document.activeElement, input);
+""")
+
+
+def test_block_markdown_in_a_coverage_line_flows_inline() -> None:
+    """La riga «Manca: …» e' in linea: un elenco o un titolo del modello dentro la
+    voce non deve aprire blocchi (ne' un titolo grande) nella scheda."""
+    css = (_VENDOR.parent / "home-style.css").read_text(encoding="utf-8")
+    rule = css.split(".home-plan-cover-sub .home-plan-md,", 1)[1].split("}", 1)[0]
+    for tag in ("p", "ul", "ol", "li", "h1", "h3", "pre"):
+        assert tag in rule.split("{", 1)[0], tag
+    assert "display: inline" in rule and "font-size: inherit" in rule

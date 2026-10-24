@@ -836,6 +836,15 @@ class ApiClient {
     return res.json();
   }
 
+  // Fa continuare una mini-me fermata dal budget: riprende con la sua storia
+  // (`subagent_send` lato manager), invece di ripartire da zero come il
+  // rilancio. Stessa forma ed errori di `restartSubagent`.
+  async continueSubagent(taskId, { sessionKey } = {}) {
+    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/continue`, { sessionKey }));
+    if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Continue failed: ${res.status}`);
+    return res.json();
+  }
+
   async cancelSubagent(taskId, { sessionKey } = {}) {
     const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/cancel`, { sessionKey }));
     if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Cancel failed: ${res.status}`);

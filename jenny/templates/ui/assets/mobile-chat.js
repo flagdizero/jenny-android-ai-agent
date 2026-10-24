@@ -2608,7 +2608,7 @@ export class ChatController {
      di aver toccato la matrice, e serve un tap sulla card per il resto. */
   _saCard(entry, state, mainHtml) {
     const taskId = escapeHtml(String(entry.task_id || ''));
-    const buttons = saActions(state, 'card').map(action => (
+    const buttons = saActions(state, 'card', entry).map(action => (
       action === 'stop'
         ? this._saButton(taskId, 'stop', 'ti-player-stop', 'subagents.stop')
         : this._saButton(taskId, 'restart', 'ti-refresh', 'subagents.relaunch')
@@ -2670,7 +2670,7 @@ export class ChatController {
     const closed = detailDialog({
       title: String(entry.label || i18n.t('subagents.untitled')),
       bodyHtml: this._subagentDetailHtml(entry, state),
-      actions: this._saDialogActions(state),
+      actions: this._saDialogActions(state, entry),
     });
     // La modale si è aperta ⇒ il nostro guscio è nel DOM. È il solo modo di
     // saperlo senza che detailDialog cambi contratto.
@@ -2699,8 +2699,8 @@ export class ChatController {
     return all.find(e => String(e?.task_id || '') === String(taskId)) || null;
   }
 
-  _saDialogActions(state) {
-    return saActions(state, 'modal').map(action => (
+  _saDialogActions(state, entry = null) {
+    return saActions(state, 'modal', entry).map(action => (
       action === 'stop'
         ? { id: 'stop', label: i18n.t('subagents.stop') }
         : { id: 'restart', label: i18n.t('subagents.relaunch'), variant: 'primary' }
@@ -2857,7 +2857,7 @@ export class ChatController {
     const diag = document.getElementById('sa-diag');
     if (diag) diag.innerHTML = this._saDiagRowsHtml(entry);
     this._saApplyCapNote(entry);
-    this._saSyncActions(state);
+    this._saSyncActions(state, entry);
   }
 
   _saApplyCapNote(entry) {
@@ -2876,10 +2876,10 @@ export class ChatController {
      `detailDialog` delega il click sul contenitore, quindi rimpiazzare i bottoni
      non stacca nessun handler — l'unico accoppiamento è il `data-action-id`, che
      è già il suo contratto. */
-  _saSyncActions(state) {
+  _saSyncActions(state, entry = null) {
     const host = document.getElementById('oc-detail-actions');
     if (!host) return;
-    const actions = this._saDialogActions(state);
+    const actions = this._saDialogActions(state, entry);
     const sig = actions.map(a => a.id).join(',');
     if (host.dataset.saSig === sig) return;
     host.dataset.saSig = sig;

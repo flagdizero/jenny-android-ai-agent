@@ -88,6 +88,7 @@ export class WorkBubbles {
    *   fetchWork: (sessionKey: string) => Promise<any>,
    *   fetchSubagents: (sessionKey: string) => Promise<any>,
    *   restartSubagent?: (taskId: string, sessionKey: string) => Promise<any>,
+   *   continueSubagent?: (taskId: string, sessionKey: string) => Promise<any>,
    *   sendCommand?: (text: string) => void,
    *   openBoard?: () => void,
    *   onOpenInWorkshop?: () => void,
@@ -115,7 +116,8 @@ export class WorkBubbles {
     this._doneTimer = null;
     this._doneLabels = [];
     this.doneLingerMs = DONE_LINGER_MS;
-    /* lineage -> { node, attempt, open, stops } delle bolle «si e' fermato».
+    /* lineage -> { node, attempt, taskId, endedAt, open, stops } delle bolle
+       «si e' fermato».
        Una linea ha una bolla sola: quando riparte (dal tuo «Riprova», da Jenny,
        dall'officina) la bolla esce dal filo, perche' il tentativo nuovo ha gia'
        la sua bolla «in corso» (`open` falso); quando si ferma di nuovo, torna la
@@ -346,29 +348,64 @@ export class WorkBubbles {
     return i18n.t(`home.work.doing.${family}`);
   }
 
-  /* Un tentativo piu' nuovo della stessa linea, vivo o finito: il lavoro e'
-     gia' ripartito. Senza `lineage_id` (snapshot vecchi) non si sa, e vale no. */
-  static _newerAttempt(entry, all) {
+  /* La linea e' gia' andata avanti oltre questo task: un altro task della
+     stessa linea con un tentativo piu' nuovo (un rilancio), oppure con lo
+     stesso tentativo ma vivo o finito dopo (una ripresa con `subagent_send`,
+     che tiene l'`attempt` e cambia `task_id`). Fino al 24/10/2026 contava solo
+     l'`attempt`, e dopo una ripresa la bolla «le e' finito il fiato» restava
+     accanto all'aiutante ripartito. Un tentativo piu' vecchio non supera mai
+     uno piu' nuovo, anche se il suo `ended_at` e' di un soffio dopo. Senza
+     `lineage_id` (snapshot vecchi) non si sa, e vale no. */
+  static _superseded(entry, all) {
     const lineage = entry.lineage_id;
     if (!lineage) return false;
     const attempt = Number(entry.attempt) || 0;
-    return all.some((e) => e && e.lineage_id === lineage && (Number(e.attempt) || 0) > attempt);
+    const ended = Number(entry.ended_at) || 0;
+    return all.some((e) => {
+      if (!e || e.lineage_id !== lineage || e.task_id === entry.task_id) return false;
+      const other = Number(e.attempt) || 0;
+      if (other !== attempt) return other > attempt;
+      const otherEnded = Number(e.ended_at) || 0;
+      /* Senza `ended_at` il task e' vivo: i record finiti lo portano sempre. */
+      return !otherEnded || otherEnded > ended;
+    });
+  }
+
+  /* Dentro un piano Jenny guida gli aiutanti da sola: letto il resoconto e
+     chiuso il suo turno (`handled_at`), se ne e' occupata lei (l'ha fatta
+     continuare, o ha deciso altro), e un tasto qui farebbe il doppione del suo
+     lavoro. Fuori da un piano no: Jenny legge ogni resoconto, e nascondere la
+     bolla toglierebbe a te il «Riprova»; li' vale la regola di prima (finche'
+     la linea non riparte, o per `FAILED_FRESH_MS`). */
+  static _handledInPlan(entry) {
+    return Boolean(entry && entry.handled_at && entry.plan_id);
+  }
+
+  /* Fermato: per un errore (`failed`) o perche' ha finito le chiamate
+     (`budget`, da cui si riprende con la storia). */
+  static _stopped(entry) {
+    return entry.state === 'failed' || entry.state === 'budget';
   }
 
   _maybeFailedHelper(entry, all = []) {
-    if (!entry || entry.state !== 'failed' || !entry.task_id) return;
+    if (!entry || !WorkBubbles._stopped(entry) || !entry.task_id) return;
     if (this._failedShown.has(entry.task_id)) return;
+    if (WorkBubbles._handledInPlan(entry)) return;
     const ended = Number(entry.ended_at) * 1000;
     if (!ended || this._now() - ended > FAILED_FRESH_MS) return;
-    /* Gia' rilanciato prima che questa home lo vedesse (riapertura, o Jenny
-       piu' svelta): un «Riprova» qui rilancerebbe un lavoro che e' gia' in
-       corso, e cancellerebbe quello. */
-    if (WorkBubbles._newerAttempt(entry, all)) return;
+    /* Gia' rilanciato o ripreso prima che questa home lo vedesse (riapertura,
+       o Jenny piu' svelta): un «Riprova» qui rilancerebbe un lavoro che e'
+       gia' in corso, e cancellerebbe quello. */
+    if (WorkBubbles._superseded(entry, all)) return;
     this._failedShown.add(entry.task_id);
     const attempt = Number(entry.attempt) || 0;
     const card = entry.lineage_id ? this._lineageCards.get(entry.lineage_id) : null;
-    if (card && card.attempt < attempt) {
+    /* La stessa linea si e' fermata di nuovo con un task nuovo (un rilancio o
+       una ripresa): la stessa bolla, che torna in fondo. */
+    if (card && card.taskId !== entry.task_id) {
       card.attempt = attempt;
+      card.taskId = entry.task_id;
+      card.endedAt = Number(entry.ended_at) || 0;
       card.open = true;
       card.stops += 1;
       this._paintFailedHelper(card.node, entry);
@@ -380,7 +417,10 @@ export class WorkBubbles {
     const node = this._bubble('helpers');
     this._paintFailedHelper(node, entry);
     if (entry.lineage_id) {
-      this._lineageCards.set(entry.lineage_id, { node, attempt, open: true, stops: 1 });
+      this._lineageCards.set(entry.lineage_id, {
+        node, attempt, taskId: entry.task_id, endedAt: Number(entry.ended_at) || 0,
+        open: true, stops: 1,
+      });
     }
     this._mountLive(node);
     this.deps.chat.settle(node);
@@ -394,12 +434,22 @@ export class WorkBubbles {
       ? i18n.t('home.work.helperFailed', { label })
       : i18n.t('home.work.helperFailedUnnamed'), '');
     this._bar(node, null);
-    const why = entry.stop_reason === 'max_iterations' || entry.stop_reason === 'budget'
-      ? 'home.work.why.helperBudget' : 'home.work.why.helperError';
-    this._line(node, i18n.t(why), false);
+    const budget = entry.state === 'budget'
+      || entry.stop_reason === 'max_iterations' || entry.stop_reason === 'budget';
+    this._line(node, i18n.t(budget ? 'home.work.why.helperBudget' : 'home.work.why.helperError'), false);
     this._note(node, '');
     const button = node.querySelector('.home-work-action');
     button.disabled = false;
+    /* Fermata dal budget con la storia ancora intera: si fa continuare, e
+       riparte da dove era con quel che ha letto e scritto. «Rimettila in
+       piedi» invece rilancia da zero, e butterebbe quel lavoro. */
+    if (entry.state === 'budget' && entry.resumable && this.deps.continueSubagent) {
+      this._action(node, {
+        label: i18n.t('home.work.helperContinue'),
+        run: () => this._continueStopped(node, entry.task_id),
+      });
+      return;
+    }
     this._action(node, entry.can_restart && this.deps.restartSubagent
       ? { label: i18n.t('home.work.helperRetry'), run: () => this._restartFailed(node, entry.task_id) }
       : null);
@@ -479,6 +529,22 @@ export class WorkBubbles {
     this._markRestarted(node);
   }
 
+  /* Il tap su «Falla continuare»: come «Riprova», ma la mini-me riprende con
+     la sua storia invece di ripartire da zero. */
+  async _continueStopped(node, taskId) {
+    const button = node.querySelector('.home-work-action');
+    button.disabled = true;
+    this._note(node, '');
+    try {
+      await this.deps.continueSubagent(taskId, this.deps.currentKey());
+    } catch (err) {
+      button.disabled = false;
+      this._note(node, err?.message || i18n.t('home.work.helperContinueFailed'));
+      return;
+    }
+    this._markRestarted(node);
+  }
+
   /* Il lavoro e' ripartito: la bolla del fallimento esce dal filo, e resta
      quella del tentativo in corso. */
   _markRestarted(node) {
@@ -490,11 +556,15 @@ export class WorkBubbles {
     this._changed();
   }
 
-  /* Chiunque abbia rilanciato la linea, la bolla del fallimento esce. */
+  /* Chiunque abbia rilanciato o ripreso la linea, o se Jenny se ne e' gia'
+     occupata dentro un piano (`_handledInPlan`), la bolla del fallimento esce. */
   _resolveRestarted(all) {
     for (const [lineage, card] of this._lineageCards) {
       if (!card.open) continue;
-      if (!WorkBubbles._newerAttempt({ lineage_id: lineage, attempt: card.attempt }, all)) continue;
+      const self = { lineage_id: lineage, attempt: card.attempt, task_id: card.taskId,
+                     ended_at: card.endedAt };
+      const handled = all.some((e) => e && e.task_id === card.taskId && WorkBubbles._handledInPlan(e));
+      if (!handled && !WorkBubbles._superseded(self, all)) continue;
       this._markRestarted(card.node);
       card.open = false;
     }

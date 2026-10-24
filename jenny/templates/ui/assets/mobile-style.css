@@ -2723,6 +2723,8 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 .sa-row.state-failed, .sa-row.state-cancelled { border-left-color: var(--error); }
+/* Fermata al budget: non un errore, una pausa che si riprende. Ambra come lo stallo. */
+.sa-row.state-budget { border-left-color: var(--warning); }
 .sa-row.state-done { border-left-color: var(--text-faint); }
 
 .sa-main {
@@ -2769,6 +2771,7 @@ body {
 .state-stalled .sa-state { color: var(--warning); }
 .state-failed .sa-state,
 .state-cancelled .sa-state { color: var(--error); }
+.state-budget .sa-state { color: var(--warning); }
 
 /* Riga meta: i due orologi in testa e non comprimibili, il resto troncabile.
    Prima l'idle era un flex item a sé fuori dalla meta; adesso apre la riga
@@ -4128,6 +4131,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .sa-sum.is-failed .sa-sum-dot,
 .sa-sum.is-cancelled .sa-sum-dot { background: var(--error); }
 .sa-sum.is-failed .sa-sum-state { color: var(--error); }
+.sa-sum.is-budget .sa-sum-dot { background: var(--warning); }
+.sa-sum.is-budget .sa-sum-state { color: var(--warning); }
 /* Su base intera: la riga di stallo non è una voce del riepilogo, è la frase che
    spiega perché è ambra — e lo spiega senza far a capo in mezzo ai numeri. */
 .sa-sum-hint {
