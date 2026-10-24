@@ -148,7 +148,12 @@ export class RemoteAccessPanel {
         : this._status('off', t('tsUnknown')));
       parts.push(`<p class="remote-hint">${escapeHtml(t('offHint'))}</p>`);
     } else if (!s.listening) {
-      parts.push(this._status('warn', s.error ? t('error', { error: s.error }) : t('waiting')));
+      /* Tailscale giù con l'opzione accesa: Jenny lo sta riaccendendo da sé
+         (`ws_remote.RemoteListener._follow_tailscale`), e lo si dice. */
+      const waiting = s.tailscale === 'reviving'
+        ? t('reviving', { count: s.revive_attempts })
+        : t('waiting');
+      parts.push(this._status('warn', s.error ? t('error', { error: s.error }) : waiting));
       if (!s.error) {
         parts.push(`<div class="settings-notice settings-notice-strong remote-ts-down">
           <i class="ti ti-plug-off" aria-hidden="true"></i><div>${escapeHtml(t('tsDown'))}</div></div>`);

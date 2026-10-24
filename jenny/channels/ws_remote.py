@@ -79,6 +79,20 @@ _NAME_TIMEOUT_S = 2.0
 _DETECT_TIMEOUT_S = 5.0
 _CLOSE_TIMEOUT_S = 5.0
 
+# Tailscale giù con l'opzione accesa: Jenny lo riaccende (``runtime.tailscale``).
+# Dopo due giri vuoti di fila (~20 s: un off/on a mano non fa scattare niente),
+# poi a pause crescenti fino a dieci minuti, finché non torna. I primi due
+# tentativi sono il solo messaggio, invisibile; dal terzo si apre anche l'app,
+# che si vede ma è l'unico gesto misurato che lo riporta su dopo un kill.
+_REVIVE_AFTER_ROUNDS = 2
+_REVIVE_BACKOFF_S = (30.0, 60.0, 120.0, 300.0, 600.0)
+_BROADCASTS_BEFORE_APP = 2
+# Dopo un tentativo i giri si fanno fitti per un po': il tunnel torna in pochi
+# secondi, e ascoltare subito vale più di un giro risparmiato.
+_FAST_AFTER_REVIVE_S = 30.0
+
+ReviveFn = Callable[..., Awaitable[Any]]
+
 # Su questo ascoltatore: la chiave che vale (``None`` = ascoltatore della WebView).
 # Una ContextVar perché i controlli della chiave stanno in posti che la
 # connessione non la vedono (``GatewayHTTPHandler``), e il task di una
@@ -242,12 +256,22 @@ class RemoteListener:
         detect: Callable[[], tuple[str, ...]] = detect_tailscale,
         lookup_name: Callable[[str], str | None] = _lookup_name,
         poll_s: float = POLL_S,
+        revive: ReviveFn | None = None,
     ) -> None:
         self._serve = serve
         self.port = port
         self._detect = detect
         self._lookup_name = lookup_name
         self._poll_s = poll_s
+        # ``revive(open_app=...)``: riaccende Tailscale. ``None`` = non ci prova
+        # (le prove, e chiunque usi l'ascoltatore fuori dal telefono).
+        self._revive = revive
+        self._down_rounds = 0
+        self._down_since: float | None = None
+        self._revive_attempts = 0
+        self._next_revive_at = 0.0
+        self._fast_until = 0.0
+        self._revive_task: asyncio.Task[Any] | None = None
         self._enabled = False
         self._key = ""
         self._bound: tuple[str, ...] = ()
@@ -363,9 +387,17 @@ class RemoteListener:
                 "windows": 1,
             }
         peers = list(by_ip.values())
+        if found:
+            tailscale = "up"
+        elif self._enabled and self._revive_attempts:
+            tailscale = "reviving"
+        else:
+            tailscale = "down"
         return {
             "enabled": self._enabled,
             "listening": self._server is not None,
+            "tailscale": tailscale,
+            "revive_attempts": self._revive_attempts,
             "address": host,
             "name": name,
             "port": self.port,
@@ -419,6 +451,13 @@ class RemoteListener:
                 await watch
             except asyncio.CancelledError:
                 pass
+        revive, self._revive_task = self._revive_task, None
+        if revive is not None and not revive.done():
+            revive.cancel()
+            await asyncio.gather(revive, return_exceptions=True)
+        self._down_rounds = self._revive_attempts = 0
+        self._down_since = None
+        self._next_revive_at = self._fast_until = 0.0
         async with self._lock:
             await self._close()
         self._remove_guard()
@@ -455,7 +494,8 @@ class RemoteListener:
 
     async def _watch_loop(self) -> None:
         while self._enabled:
-            wait = _RETRY_S if self._retry_soon else self._poll_s
+            fast = self._retry_soon or time.monotonic() < self._fast_until
+            wait = min(_RETRY_S, self._poll_s) if fast else self._poll_s
             try:
                 await asyncio.wait_for(self._kick.wait(), timeout=wait)
             except asyncio.TimeoutError:
@@ -482,6 +522,8 @@ class RemoteListener:
             # Un giro saltato, non «Tailscale è giù»: chiudere un ascoltatore
             # sano perché la rilevazione ha tardato sarebbe il guasto, non la cura.
             return
+        if self._enabled:
+            self._follow_tailscale(found)
         async with self._lock:
             if not self._enabled:
                 return
@@ -515,6 +557,59 @@ class RemoteListener:
             logger.info(
                 "remote access: listening on {} port {} ({})", ", ".join(found), self.port, reason
             )
+
+    # -- Tailscale giù: riaccenderlo ----------------------------------------
+
+    def _follow_tailscale(self, found: tuple[str, ...]) -> None:
+        """Conta i giri senza Tailscale e, quando è ora, lo fa riaccendere.
+
+        Il gesto parte in un suo task: il giro non aspetta l'app di Tailscale
+        (fino a qualche secondo) e il lock resta libero.
+        """
+        now = time.monotonic()
+        if found:
+            if self._down_since is not None and self._revive_attempts:
+                logger.info(
+                    "remote access: Tailscale back after {:.0f}s ({} attempts)",
+                    now - self._down_since,
+                    self._revive_attempts,
+                )
+            self._down_rounds = 0
+            self._down_since = None
+            self._revive_attempts = 0
+            self._next_revive_at = 0.0
+            return
+        if self._down_since is None:
+            self._down_since = now
+        self._down_rounds += 1
+        if self._revive is None or self._down_rounds < _REVIVE_AFTER_ROUNDS:
+            return
+        if now < self._next_revive_at:
+            return
+        if self._revive_task is not None and not self._revive_task.done():
+            return
+        attempt = self._revive_attempts
+        self._revive_attempts += 1
+        self._next_revive_at = now + _REVIVE_BACKOFF_S[min(attempt, len(_REVIVE_BACKOFF_S) - 1)]
+        self._fast_until = now + _FAST_AFTER_REVIVE_S
+        open_app = attempt >= _BROADCASTS_BEFORE_APP
+        logger.warning(
+            "remote access: Tailscale down for {:.0f}s, asking it to reconnect (attempt {}{})",
+            now - self._down_since,
+            attempt + 1,
+            ", opening the app" if open_app else "",
+        )
+        self._revive_task = asyncio.get_running_loop().create_task(
+            self._run_revive(open_app), name="remote-access-revive"
+        )
+
+    async def _run_revive(self, open_app: bool) -> None:
+        assert self._revive is not None
+        try:
+            await self._revive(open_app=open_app)
+        except Exception:
+            logger.opt(exception=True).warning("remote access: reviving Tailscale failed")
+        self.kick()
 
     async def _close(self) -> None:
         server, self._server = self._server, None

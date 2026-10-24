@@ -198,6 +198,8 @@ The gateway listens on `127.0.0.1:18790` by default (WebSocket and HTTP share th
 - Every connection is checked before anything else: it must have arrived on one of the bound addresses **and** come from a tailnet address. Linux accepts a packet for any of its addresses on any interface, so a Wi-Fi neighbour sending to the phone's `100.x` would otherwise get as far as the handshake. Anything else gets a bare `403`.
 - It takes its own key, `gateway.remoteAccess.key`, and only that one; the WebView's secret is refused there, and the remote key is refused on `127.0.0.1`. Changing the remote key disconnects the other devices and leaves the phone's own WebView as it was. The network rules narrow who can try; the key is still what grants access.
 
+**It keeps itself up.** Whenever Tailscale re-establishes the VPN, Android destroys every socket bound to the tunnel's addresses, listening ones included, and the addresses come back the same. So the listener checks every 10 seconds that its sockets are still listening, not only that the addresses match, and the first failed `accept()` triggers the rebind at once. If Tailscale itself is down while remote access is on, Jenny asks it to reconnect (the `com.tailscale.ipn.CONNECT_VPN` broadcast). After two attempts that don't bring it back, she also opens the Tailscale app for a moment. That happens even when you turned Tailscale off yourself: to keep it off, turn remote access off.
+
 Two things don't work from another device: the Jenny Apps' external views, whose proxy is bound to `127.0.0.1`, and anything that needs the Android shell (the native bridge simply isn't there, and the UI already degrades for that).
 
 ## Smaller boundaries, and where they stop

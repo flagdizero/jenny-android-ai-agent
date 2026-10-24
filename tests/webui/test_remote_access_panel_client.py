@@ -144,6 +144,14 @@ def test_off_waiting_and_remote_states() -> None:
         ({ body } = await panelWith({ ...ON, listening: false, address: null, peers: [] }));
         assert.ok(body.innerHTML.includes('data-remote="open-ts"'));
         delete globalThis.JennyNative;
+        assert.ok(body.innerHTML.includes('settings.remote.waiting'));
+
+        // Jenny lo sta riaccendendo: lo si dice, col tentativo.
+        ({ body } = await panelWith({
+          ...ON, listening: false, address: null, peers: [], tailscale: 'reviving', revive_attempts: 2,
+        }));
+        assert.ok(body.innerHTML.includes('settings.remote.reviving{&quot;count&quot;:2}'));
+        assert.ok(body.innerHTML.includes('settings.remote.tsDown'));
 
         // Un errore di bind si dice, senza l'avviso di Tailscale.
         ({ body } = await panelWith({ ...ON, listening: false, error: 'Address already in use' }));

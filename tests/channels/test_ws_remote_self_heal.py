@@ -232,6 +232,121 @@ async def test_the_guard_passes_other_errors_on_and_is_removed_on_stop() -> None
         loop.set_exception_handler(None)
 
 
+# -- Tailscale giù: Jenny lo riaccende ----------------------------------------
+
+
+class _Revive:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.calls: list[bool] = []
+        self.fail = fail
+
+    async def __call__(self, *, open_app: bool) -> bool:
+        self.calls.append(open_app)
+        if self.fail:
+            raise RuntimeError("no Android here")
+        return True
+
+
+async def _round(listener: RemoteListener) -> None:
+    """Un giro, e il tentativo che ha fatto partire, se c'è, finito."""
+    await listener._sync()
+    task = listener._revive_task
+    if task is not None:
+        await task
+
+
+async def test_tailscale_down_is_revived_after_two_empty_rounds() -> None:
+    revive = _Revive()
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=True, key="k1")  # primo giro vuoto
+    try:
+        assert revive.calls == []  # un off/on a mano non fa scattare niente
+        await _round(rig.listener)
+        assert revive.calls == [False]  # il solo messaggio, invisibile
+
+        await _round(rig.listener)
+        assert revive.calls == [False]  # dentro la pausa: niente
+
+        status = await rig.listener.status()
+        assert status["tailscale"] == "reviving" and status["revive_attempts"] == 1
+    finally:
+        await rig.listener.stop()
+
+
+async def test_the_app_opens_only_after_two_broadcasts_and_pauses_grow() -> None:
+    revive = _Revive()
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=True, key="k1")
+    try:
+        pauses = []
+        for _ in range(7):
+            rig.listener._next_revive_at = 0.0  # il tempo della pausa è passato
+            before = time.monotonic()
+            await _round(rig.listener)
+            pauses.append(round(rig.listener._next_revive_at - before, -1))
+        assert revive.calls == [False, False, True, True, True, True, True]
+        assert pauses == [30.0, 60.0, 120.0, 300.0, 600.0, 600.0, 600.0]
+    finally:
+        await rig.listener.stop()
+
+
+async def test_tailscale_back_resets_the_count_and_listens() -> None:
+    revive = _Revive()
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=True, key="k1")
+    try:
+        await _round(rig.listener)
+        assert revive.calls == [False]
+
+        rig.addresses = (TS4, TS6)
+        await _round(rig.listener)
+        status = await rig.listener.status()
+        assert status["listening"] and status["tailscale"] == "up"
+        assert status["revive_attempts"] == 0
+
+        rig.addresses = ()  # cade di nuovo: si ricomincia da due giri
+        await _round(rig.listener)
+        assert revive.calls == [False]
+        await _round(rig.listener)
+        assert revive.calls == [False, False]
+    finally:
+        await rig.listener.stop()
+
+
+async def test_with_remote_access_off_tailscale_is_left_alone() -> None:
+    revive = _Revive()
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=False, key="k1")
+    for _ in range(4):
+        await _round(rig.listener)
+    assert revive.calls == []
+    assert (await rig.listener.status())["tailscale"] == "down"
+
+
+async def test_a_failing_revive_does_not_break_the_round() -> None:
+    revive = _Revive(fail=True)
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=True, key="k1")
+    try:
+        await _round(rig.listener)
+        assert revive.calls == [False]
+        rig.addresses = (TS4, TS6)
+        await _round(rig.listener)
+        assert len(rig.servers) == 1
+    finally:
+        await rig.listener.stop()
+
+
 # -- La prova vera: un socket in ascolto distrutto sotto i piedi ---------------
 
 

@@ -18,6 +18,7 @@ from jenny.bus.queue import MessageBus
 from jenny.config.paths import get_uploads_dir
 from jenny.config.schema import Base
 from jenny.pydantic_compat import Field, field_validator, model_validator
+from jenny.runtime.tailscale import revive as revive_tailscale
 from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
 from jenny.session.manager import scrub_lone_surrogates
 from jenny.session.webui_turns import websocket_turn_wall_started_at
@@ -178,7 +179,9 @@ class WebSocketChannel(OutboundSenderMixin):
         # Il secondo ascoltatore, sul tailnet (``gateway.remoteAccess``). Nasce
         # spento; lo accende ``start`` se la config lo vuole, e l'RPC
         # ``remote.set`` a caldo. V. ``channels.ws_remote``.
-        self._remote = RemoteListener(serve=self._serve_remote, port=self.config.port)
+        self._remote = RemoteListener(
+            serve=self._serve_remote, port=self.config.port, revive=revive_tailscale
+        )
         self._serve_kwargs: dict[str, Any] = {}
         # Attività fine dei subagent: chi guarda cosa, e l'unico task che la
         # spinge. Il registro nasce vuoto e il task non esiste finché nessuno
