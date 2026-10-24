@@ -62,7 +62,7 @@ from jenny.channels.ws_parsing import (
     _parse_inbound_payload,
     classify_media_item,
 )
-from jenny.channels.ws_remote import RemoteListener, auth_secret
+from jenny.channels.ws_remote import RemoteListener, auth_secret, server_listening
 from jenny.channels.ws_sender import OutboundSenderMixin
 from jenny.session.keys import (
     PROJECT_SESSION_PREFIX,
@@ -81,6 +81,14 @@ from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 # «Failed to fetch». L'export di un backup da 310 MB sul telefono ne dura di
 # più. Il server ascolta su localhost, quindi un tetto largo non apre niente.
 _HTTP_OPEN_TIMEOUT_S = 600.0
+
+# Ogni quanto il server della WebView guarda se i suoi socket sono ancora in
+# ascolto. Quelli su ``127.0.0.1`` Android non li distrugge (lo fa con gli
+# indirizzi di un'interfaccia che cade, v. ``channels.ws_remote``), ma senza
+# questo ascoltatore il telefono resta senza Jenny: un controllo ogni mezzo
+# minuto costa niente, e un ascoltatore morto per una causa mai vista si rifà.
+_LISTENER_CHECK_S = 30.0
+_LISTENER_CLOSE_TIMEOUT_S = 5.0
 
 
 class WebSocketConfig(Base):
@@ -416,18 +424,29 @@ class WebSocketChannel(OutboundSenderMixin):
             "logger": ws_logger,
         }
 
-        async def runner() -> None:
-            server = await serve(
+        async def open_server() -> Any:
+            return await serve(
                 handler,
                 self.config.host,
                 self.config.port,
                 process_request=process_request,
                 **self._serve_kwargs,
             )
+
+        async def runner() -> None:
+            server = await open_server()
             try:
                 await self.apply_remote_access()
                 assert self._stop_event is not None
-                await self._stop_event.wait()
+                while True:
+                    try:
+                        await asyncio.wait_for(self._stop_event.wait(), timeout=_LISTENER_CHECK_S)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                    if server_listening(server):
+                        continue
+                    server = await self._rebind_listener(server, open_server)
             finally:
                 await self._remote.stop()
                 server.close()
@@ -435,6 +454,28 @@ class WebSocketChannel(OutboundSenderMixin):
 
         self._server_task = asyncio.create_task(runner())
         await self._server_task
+
+    async def _rebind_listener(self, server: Any, open_server: Any) -> Any:
+        """Rifà il server della WebView quando i suoi socket non ascoltano più.
+
+        Se il bind fallisce resta quello chiuso, che al prossimo controllo
+        risulta ancora morto: si riprova lì, senza mai uscire dal giro.
+        """
+        self.logger.error(
+            "WebSocket listener on {}:{} stopped listening, rebinding",
+            self.config.host,
+            self.config.port,
+        )
+        server.close()
+        try:
+            await asyncio.wait_for(server.wait_closed(), timeout=_LISTENER_CLOSE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            self.logger.warning("WebSocket listener did not close in time, rebinding anyway")
+        try:
+            return await open_server()
+        except OSError as exc:
+            self.logger.error("WebSocket listener cannot rebind: {}", exc)
+            return server
 
     async def _echo_user_to_others(
         self, sender: Any, chat_id: str, event: dict[str, Any],

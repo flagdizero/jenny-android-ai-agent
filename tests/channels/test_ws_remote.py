@@ -18,6 +18,7 @@ import httpx
 import pytest
 import websockets
 from port_alloc import free_port
+from support.aio import wait_until
 
 from jenny.channels import ws_remote
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
@@ -469,6 +470,44 @@ async def test_ping_gets_a_pong(bus, config_file) -> None:
             while reply.get("event") != "pong":
                 reply = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
             assert reply == {"event": "pong"}
+    finally:
+        await ch.stop()
+        await task
+
+
+async def test_the_webview_listener_rebinds_when_its_sockets_stop_listening(
+    bus, config_file, monkeypatch,
+) -> None:
+    """Il server della WebView si guarda da sé: socket che non ascoltano più →
+    lo si chiude e lo si rifà sulla stessa porta, e il telefono rientra."""
+    from jenny.channels import websocket as ws_module
+
+    monkeypatch.setattr(ws_module, "_LISTENER_CHECK_S", 0.05)
+    real = ws_module.server_listening
+    verdicts = [False]  # il primo controllo lo trova morto, poi si guarda davvero
+
+    def listening(server: Any) -> bool:
+        return verdicts.pop() if verdicts else real(server)
+
+    monkeypatch.setattr(ws_module, "server_listening", listening)
+
+    port, remote_port = free_port(), free_port()
+    ch = _channel(bus, port)
+    rebinds: list[Any] = []
+    original = ch._rebind_listener
+
+    async def spy(server: Any, open_server: Any) -> Any:
+        new = await original(server, open_server)
+        rebinds.append((server, new))
+        return new
+
+    monkeypatch.setattr(ch, "_rebind_listener", spy)
+    task = await _start(ch, remote_port)
+    try:
+        await wait_until(lambda: rebinds, timeout=2)
+        [(old, new)] = rebinds
+        assert new is not old
+        assert await _bootstrap(port, "master-secret") == 200
     finally:
         await ch.stop()
         await task

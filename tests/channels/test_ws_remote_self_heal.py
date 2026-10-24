@@ -15,6 +15,7 @@ ascolto portato in ``TCP_CLOSE`` come fa ``SOCK_DESTROY`` di netd.
 from __future__ import annotations
 
 import asyncio
+import errno
 import socket
 import sys
 import time
@@ -89,6 +90,25 @@ def test_server_listening_reads_the_socket_state() -> None:
     server.sockets = []
     assert not server_listening(server)  # chiuso: zero socket
     assert server_listening(object())  # non dice i suoi socket: si crede vivo
+
+
+def test_a_system_that_cannot_answer_is_not_a_dead_socket() -> None:
+    """macOS non conosce ``SO_ACCEPTCONN``: «non so» non è «morto», o un server
+    sano si rifarebbe a ogni giro. Un altro errore invece lo è."""
+
+    class _Mute(_FakeSock):
+        def __init__(self, err: int) -> None:
+            super().__init__()
+            self.err = err
+
+        def getsockopt(self, level: int, option: int) -> int:
+            raise OSError(self.err, "nope")
+
+    server = _FakeServer((TS4,))
+    server.sockets = [_Mute(errno.ENOPROTOOPT)]
+    assert server_listening(server)
+    server.sockets = [_Mute(errno.EBADF)]
+    assert not server_listening(server)
 
 
 async def test_same_addresses_but_dead_sockets_means_rebind() -> None:

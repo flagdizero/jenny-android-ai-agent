@@ -38,6 +38,7 @@ sveglia subito il giro invece di aspettarlo (:meth:`RemoteListener.kick`).
 from __future__ import annotations
 
 import asyncio
+import errno
 import ipaddress
 import socket
 import time
@@ -189,13 +190,19 @@ def server_listening(server: Any) -> bool:
         return True
     if not sockets:
         return False
+    acceptconn = getattr(socket, "SO_ACCEPTCONN", None)
     for sock in sockets:
         try:
             if sock.fileno() == -1:
                 return False
-            if not sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN):
+            if acceptconn is not None and not sock.getsockopt(socket.SOL_SOCKET, acceptconn):
                 return False
-        except OSError:
+        except OSError as exc:
+            # macOS non risponde a ``SO_ACCEPTCONN`` (``ENOPROTOOPT``): lì non
+            # si sa, e un «non so» non deve far rifare un server sano a ogni
+            # giro. Linux e Android rispondono; ogni altro errore è un socket rotto.
+            if exc.errno == errno.ENOPROTOOPT:
+                continue
             return False
     return True
 
