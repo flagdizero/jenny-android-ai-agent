@@ -482,6 +482,27 @@
 
   // ---------------------------------------------------------------- lettura
 
+  // Il testo di una regione. ``innerText`` salta cio' che non si vede, e i
+  // siti da telefono chiudono le sezioni a fisarmonica: sulla Wikipedia mobile
+  // di un articolo restavano l'introduzione e i titoli (1.014 caratteri,
+  // misurato sul telefono). Quando il testo nascosto e' molto piu' del
+  // visibile si legge anche quello, da una copia senza script, stili, menu e
+  // moduli; altrimenti vale il visibile, che non porta con se' il testo dei
+  // banner chiusi.
+  var NOT_PROSE = 'script,style,noscript,template,svg,nav,aside,header,footer,form,button,' +
+    'select,[aria-hidden="true"],[role="navigation"],[role="dialog"]';
+
+  function readableText(el) {
+    var visible = clean(el.innerText || '');
+    var copy = el.cloneNode(true);
+    var junk = copy.querySelectorAll(NOT_PROSE);
+    for (var i = 0; i < junk.length; i++) {
+      if (junk[i].parentNode) junk[i].parentNode.removeChild(junk[i]);
+    }
+    var all = clean(copy.textContent || '');
+    return all.length > visible.length * 2 ? all : (visible || all);
+  }
+
   function read(args) {
     var maxChars = args.maxChars || 4000;
     var el = document.body;
@@ -493,7 +514,7 @@
       var main = document.querySelector('main, [role="main"], article');
       if (main) el = main;
     }
-    var txt = clean(el.innerText || el.textContent || '');
+    var txt = readableText(el);
     return {
       url: location.href,
       chars: txt.length,
