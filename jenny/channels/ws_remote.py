@@ -23,6 +23,16 @@ Tre scelte, ognuna contro un modo preciso di sbagliare:
   WebView: cambiarla scollega gli altri dispositivi e lascia il telefono com'è.
 
 La rete restringe chi può provarci; il permesso resta la chiave.
+
+**Si ripara da solo.** Misurato sul Titan il 24/10/2026: ogni volta che
+Tailscale ristabilisce la VPN (un off/on, una netmap nuova, un cambio di rete)
+Android distrugge i socket legati agli indirizzi di ``tun0``, anche quelli in
+ascolto. Gli indirizzi tornano identici, quindi rileggerli non basta: un
+confronto «stessi indirizzi, server c'è» lasciava un ascoltatore morto per
+sempre, con asyncio che girava a vuoto su ``accept()`` → ``EINVAL`` (74% di CPU,
+160 mila tracebacks nel log). Ora ogni giro controlla che i socket siano
+ancora in ascolto (:func:`server_listening`), e il primo ``accept`` fallito
+sveglia subito il giro invece di aspettarlo (:meth:`RemoteListener.kick`).
 """
 
 from __future__ import annotations
@@ -54,8 +64,20 @@ _PROBE_V6 = "fd7a:115c:a1e0::53"
 # dopo un riavvio dell'app è aperto da fuori entro un battito.
 POLL_S = 10.0
 
+# Dopo un bind fallito con Tailscale su, si riprova presto: succede quando i
+# socket sono appena stati distrutti e gli indirizzi non sono ancora tornati su
+# ``tun0`` (``EADDRNOTAVAIL``), e dieci secondi lì sono dieci secondi senza Jenny.
+_RETRY_S = 2.0
+
 # Quanto si aspetta un nome MagicDNS. È un di più: senza, si mostra l'indirizzo.
 _NAME_TIMEOUT_S = 2.0
+
+# Tetti ai due punti in cui il giro aspetta qualcun altro. Un giro bloccato
+# tiene il lock, e col lock preso nessuna riparazione successiva può partire:
+# meglio un giro saltato, o una chiusura lasciata a metà, che un ascoltatore
+# fermo per sempre.
+_DETECT_TIMEOUT_S = 5.0
+_CLOSE_TIMEOUT_S = 5.0
 
 # Su questo ascoltatore: la chiave che vale (``None`` = ascoltatore della WebView).
 # Una ContextVar perché i controlli della chiave stanno in posti che la
@@ -140,6 +162,30 @@ def detect_tailscale() -> tuple[str, ...]:
     return (v4, v6) if v4 is not None and is_tailnet_ip(v4) else (v6,)
 
 
+def server_listening(server: Any) -> bool:
+    """Vero se ogni socket del server è ancora in ascolto.
+
+    Un socket distrutto da Android resta un descrittore aperto e registrato nel
+    loop, ma non è più in ``LISTEN``: ``SO_ACCEPTCONN`` lo dice senza toccarlo.
+    Un server che non espone ``sockets`` (i finti delle prove) si crede vivo; uno
+    che ne espone zero è chiuso.
+    """
+    sockets = getattr(server, "sockets", None)
+    if sockets is None:
+        return True
+    if not sockets:
+        return False
+    for sock in sockets:
+        try:
+            if sock.fileno() == -1:
+                return False
+            if not sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN):
+                return False
+        except OSError:
+            return False
+    return True
+
+
 async def write_remote_access(*, enabled: bool | None = None, rotate: bool = False) -> None:
     """Scrive ``gateway.remoteAccess`` attraverso ``store.mutate``.
 
@@ -206,6 +252,7 @@ class RemoteListener:
         self._key = ""
         self._bound: tuple[str, ...] = ()
         self._server: Any | None = None
+        self._retiring: Any | None = None
         self._watch: asyncio.Task[None] | None = None
         self._error: str | None = None
         self._peers: dict[Any, _Peer] = {}
@@ -214,6 +261,18 @@ class RemoteListener:
         # Uno scambio alla volta: il giro e un `set` che arrivano insieme
         # chiuderebbero e riaprirebbero lo stesso server due volte.
         self._lock = asyncio.Lock()
+        # Sveglia il giro prima della scadenza: la tira il primo ``accept``
+        # fallito (v. ``_on_loop_exception``).
+        self._kick = asyncio.Event()
+        # Il prossimo giro arriva presto: un bind è appena fallito con Tailscale su.
+        self._retry_soon = False
+        # Un solo avviso per episodio di socket distrutti, non uno per giro a vuoto.
+        self._spin_reported = False
+        self._last_rebind: dict[str, Any] | None = None
+        # Il gestore delle eccezioni del loop, finché l'opzione è accesa.
+        self._guard: Callable[[asyncio.AbstractEventLoop, dict[str, Any]], None] | None = None
+        self._guard_loop: asyncio.AbstractEventLoop | None = None
+        self._guard_previous: Any = None
 
     # -- Stato --------------------------------------------------------------
 
@@ -284,7 +343,7 @@ class RemoteListener:
         """
         # A opzione spenta non c'è niente di legato, ma il pannello dice lo
         # stesso se Tailscale c'è: è la prima cosa che serve sapere per accenderla.
-        found = self._bound or await asyncio.to_thread(self._detect)
+        found = self._bound or await self._detect_now() or ()
         # L'IPv4 per primo: è quello che si legge e si detta.
         host = min(found, key=lambda a: ":" in a, default=None)
         name = await self._name_of(host) if host else None
@@ -312,6 +371,7 @@ class RemoteListener:
             "port": self.port,
             "error": self._error,
             "peers": peers,
+            "last_rebind": self._last_rebind,
         }
 
     async def _name_of(self, ip: str) -> str | None:
@@ -337,11 +397,18 @@ class RemoteListener:
         self._key = key
         if rotated:
             await self.disconnect_all()
-        if self._enabled and self._watch is None:
+        # ``done()``: un giro morto non va lasciato al suo posto. Senza, un
+        # ``apply`` successivo lo trovava «c'è» e non ne faceva partire un altro.
+        if self._enabled and (self._watch is None or self._watch.done()):
+            self._install_guard()
             await self._sync()
-            self._watch = asyncio.create_task(self._watch_loop(), name="remote-access-watch")
+            self._start_watch()
         elif not self._enabled:
             await self.stop()
+
+    def kick(self) -> None:
+        """Fa partire subito il prossimo giro, senza aspettare ``POLL_S``."""
+        self._kick.set()
 
     async def stop(self) -> None:
         self._enabled = False
@@ -354,6 +421,7 @@ class RemoteListener:
                 pass
         async with self._lock:
             await self._close()
+        self._remove_guard()
 
     async def disconnect_all(self) -> None:
         conns = list(self._peers)
@@ -364,37 +432,172 @@ class RemoteListener:
             except Exception:
                 logger.opt(exception=True).debug("remote access: close failed")
 
+    # -- Il giro ------------------------------------------------------------
+
+    def _start_watch(self) -> None:
+        task = asyncio.create_task(self._watch_loop(), name="remote-access-watch")
+        task.add_done_callback(self._on_watch_done)
+        self._watch = task
+
+    def _on_watch_done(self, task: asyncio.Task[None]) -> None:
+        """Un giro morto per un'eccezione, con l'opzione accesa, riparte.
+
+        Il corpo del giro le prende già tutte: questa è la rete sotto la rete,
+        perché un giro fermo è un ascoltatore che non si ripara più.
+        """
+        if task is not self._watch or task.cancelled() or not self._enabled:
+            return
+        exc = task.exception()
+        if not isinstance(exc, Exception):
+            return
+        logger.opt(exception=exc).error("remote access: watch died, restarting it")
+        self._start_watch()
+
     async def _watch_loop(self) -> None:
         while self._enabled:
-            await asyncio.sleep(self._poll_s)
+            wait = _RETRY_S if self._retry_soon else self._poll_s
+            try:
+                await asyncio.wait_for(self._kick.wait(), timeout=wait)
+            except asyncio.TimeoutError:
+                pass
+            self._kick.clear()
             try:
                 await self._sync()
             except Exception:
                 logger.opt(exception=True).warning("remote access: sync failed")
 
+    async def _detect_now(self) -> tuple[str, ...] | None:
+        """Gli indirizzi del tailnet, o ``None`` se la rilevazione non risponde."""
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self._detect), timeout=_DETECT_TIMEOUT_S
+            )
+        except asyncio.TimeoutError:
+            logger.warning("remote access: Tailscale detection timed out")
+            return None
+
     async def _sync(self) -> None:
-        found = await asyncio.to_thread(self._detect)
+        found = await self._detect_now()
+        if found is None:
+            # Un giro saltato, non «Tailscale è giù»: chiudere un ascoltatore
+            # sano perché la rilevazione ha tardato sarebbe il guasto, non la cura.
+            return
         async with self._lock:
-            if not self._enabled or found == self._bound and (self._server or not found):
+            if not self._enabled:
                 return
+            alive = self._server is not None and server_listening(self._server)
+            if found == self._bound and (alive or not found):
+                self._retry_soon = False
+                return
+            if self._server is not None and found == self._bound:
+                reason = "sockets destroyed"
+            elif self._server is not None:
+                reason = "addresses changed"
+            else:
+                reason = "Tailscale up"
             await self._close()
             if not found:
+                self._retry_soon = False
                 logger.info("remote access: Tailscale is down, not listening")
                 return
             try:
                 self._server = await self._serve(found)
             except OSError as exc:
                 self._error = exc.strerror or str(exc)
+                self._retry_soon = True
                 logger.warning("remote access: cannot listen on {}: {}", found, self._error)
                 return
             self._bound = found
             self._error = None
-            logger.info("remote access: listening on {} port {}", ", ".join(found), self.port)
+            self._retry_soon = False
+            self._spin_reported = False
+            self._last_rebind = {"at": time.time(), "reason": reason}
+            logger.info(
+                "remote access: listening on {} port {} ({})", ", ".join(found), self.port, reason
+            )
 
     async def _close(self) -> None:
         server, self._server = self._server, None
         self._bound = ()
         self._peers.clear()
         if server is not None:
+            # ``websockets`` chiude il server asyncio in un suo task: fino a lì
+            # i socket distrutti continuano a fallire, e restano nostri.
+            self._retiring = server
             server.close()
-            await server.wait_closed()
+            try:
+                await asyncio.wait_for(server.wait_closed(), timeout=_CLOSE_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.warning("remote access: server did not close in time, moving on")
+            finally:
+                self._retiring = None
+
+    # -- Socket distrutti: la sveglia ---------------------------------------
+
+    def _install_guard(self) -> None:
+        """Mette il gestore delle eccezioni del loop che riconosce ``accept`` fallito.
+
+        Quando Android distrugge un socket in ascolto, asyncio lo trova pronto,
+        ``accept()`` dà ``EINVAL`` e l'eccezione finisce qui a ogni giro del
+        loop. Il gestore sveglia il giro di riparazione e, se il socket è nostro,
+        tace le ripetizioni. Tutto il resto passa al gestore di prima.
+        """
+        loop = asyncio.get_running_loop()
+        if self._guard_loop is loop and loop.get_exception_handler() is self._guard:
+            return
+        previous = loop.get_exception_handler()
+
+        def guard(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+            self._on_loop_exception(loop, context, previous)
+
+        loop.set_exception_handler(guard)
+        self._guard, self._guard_loop, self._guard_previous = guard, loop, previous
+
+    def _remove_guard(self) -> None:
+        loop, guard, previous = self._guard_loop, self._guard, self._guard_previous
+        self._guard = self._guard_loop = self._guard_previous = None
+        # Solo se è ancora il nostro: chi ne ha messo uno dopo non va scavalcato.
+        if loop is None or loop.is_closed() or loop.get_exception_handler() is not guard:
+            return
+        loop.set_exception_handler(previous)
+
+    def _on_loop_exception(
+        self, loop: asyncio.AbstractEventLoop, context: dict[str, Any], previous: Any,
+    ) -> None:
+        exc = context.get("exception")
+        handle = context.get("handle")
+        # Il nome del callback si legge dal repr dell'handle: se una versione
+        # futura di asyncio lo cambia, la sveglia tace e ripara il giro ogni
+        # ``POLL_S`` (``server_listening``), solo più tardi.
+        if isinstance(exc, OSError) and handle is not None and "_accept_connection" in repr(handle):
+            self.kick()
+            if self._owns(handle):
+                if not self._spin_reported:
+                    self._spin_reported = True
+                    logger.warning("remote access: listening sockets failed ({}), rebinding", exc)
+                return
+        if previous is not None:
+            previous(loop, context)
+        else:
+            loop.default_exception_handler(context)
+
+    def _owns(self, handle: Any) -> bool:
+        """L'``accept`` fallito è su uno dei nostri socket (anche di quello che si sta chiudendo)?"""
+        servers = [s for s in (self._server, self._retiring) if s is not None]
+        ours: set[int] = set()
+        inners: list[Any] = []
+        for server in servers:
+            for sock in getattr(server, "sockets", None) or ():
+                try:
+                    ours.add(sock.fileno())
+                except OSError:
+                    pass
+            inner = getattr(server, "server", None)
+            if inner is not None:
+                inners.append(inner)
+        for arg in getattr(handle, "_args", None) or ():
+            if any(arg is inner for inner in inners):
+                return True
+            if isinstance(arg, socket.socket) and arg.fileno() in ours:
+                return True
+        return False
