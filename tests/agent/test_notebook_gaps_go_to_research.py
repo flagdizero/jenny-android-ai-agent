@@ -104,7 +104,9 @@ def compile_op() -> str:
 
 def test_compile_ingests_from_the_web_before_writing_a_gap(compile_op: str) -> None:
     assert "When `raw/` does not cover what a page must say, ingest before you compile." in compile_op
-    assert "That search *is* an `ingest`" in compile_op
+    # Cercare non è un ingest, ma ciò che la ricerca trova passa da ``raw/`` prima della
+    # pagina: è il pezzo dell'ingest che resta (principio 6 della skill).
+    assert "What the search finds is saved verbatim in `raw/` first" in compile_op
     # Un riordino che sposta soltanto non deve pagare una ricerca.
     assert "A split or a merge only moves what is there and needs no search" in compile_op
     assert "it names the queries tried" in compile_op
@@ -128,7 +130,7 @@ def test_a_notebook_source_lands_where_the_researcher_saves_it() -> None:
 def test_the_researcher_saves_a_notebooks_sources_verbatim_in_raw_research() -> None:
     role = _role("researcher")
     assert "`raw/research/<YYYY-MM-DD>-<slug>.md`" in role
-    assert "the URL and the date you read it at the top" in role
+    assert "at the top the URL, the date you read it and the kind of source" in role
     assert "copied **verbatim**, never your summary" in role
     assert "the queries you tried" in role
     # ``write_file`` sovrascrive, e ``raw/`` è immutabile: due fonti dello stesso

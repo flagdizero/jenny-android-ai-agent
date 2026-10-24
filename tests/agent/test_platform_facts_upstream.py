@@ -134,8 +134,11 @@ _PLATFORM_FACTS: list[tuple[str, str, str]] = [
     ),
     (
         "agent/tool_contract.md",
-        "tetto pratico sulle pagine da leggere in una ricerca",
-        r"four or five",
+        # Era «four or five» pagine: un tetto che i ricercatori trattavano come quota, e
+        # che nei piani lasciava pagine scritte dagli snippet. Una risposta rapida resta
+        # breve; un lavoro di ricerca legge quel che serve e cita le pagine lette.
+        "una ricerca legge quel che serve e cita le pagine, non gli snippet",
+        r"reads what the question needs, and cites the pages it read, not snippets",
     ),
     (
         "agent/tool_contract.md",
