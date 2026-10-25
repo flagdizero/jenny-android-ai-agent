@@ -67,7 +67,8 @@ _SECTION = ObjectSchema(
         "show: the board as the user sees it — read it first. "
         "add_card (title, pages?, glyph?, near?): a new card; pages already on another card "
         "move to it. rename_card (card, title). move_card (card, near): put it next to another "
-        "card. remove_card (card): into the trash, restorable. restore_card (card). "
+        "card. remove_card (card): into the trash, restorable; for a drawer with no card, "
+        "deletes it. restore_card (card). "
         "move_pages (pages, card): onto that card, from another card or from off the board. "
         "remove_pages (pages, card?): off that card, or off every card when card is empty; "
         "also for pages that no longer exist. The files stay in the wiki (to delete them, "
@@ -239,6 +240,10 @@ class BoardTool(Tool):
         card = str(kw.get("card") or "")
         if action == "remove_card":
             entry = await edit.remove_card(root, card, cron=self._cron)
+            if entry.get("orphan"):
+                cid = entry["card"]["id"]
+                return (f"No card `{cid}` on the board: its leftover drawer "
+                        f"board/cards/{cid}.json is deleted. Nothing to restore.")
             stopped = _jobs_note(entry["paused"], "paused until restore_card")
             return (f"«{entry['card']['title']}» is in the trash (restore_card brings it back). "
                     f"Its pages stay in the wiki, now off the board.{stopped}")
@@ -414,6 +419,12 @@ def show(root: Path) -> str:
         dead = sum(len(pages) for pages in gone.values())
         lines += ["", f"{dead} page(s) on cards no longer exist under wiki/: take them off with "
                       "remove_pages, or move_pages the page that replaced them."]
+    orphans = edit.orphan_drawers(root, board)
+    if orphans:
+        # Un cassetto senza la sua scheda: lo mostra solo questa vista, e lo
+        # toglie ``remove_card`` (v. ``edit.orphan_drawers``).
+        lines += ["", "Drawers with no card (remove_card deletes them): "
+                      + ", ".join(f"`{cid}`" for cid in orphans)]
     if board["removedCards"]:
         lines += ["", "In the trash (restore_card):"]
         lines += [f"- `{r['card']['id']}` «{r['card']['title']}»" for r in board["removedCards"]]

@@ -36,6 +36,7 @@ from loguru import logger
 from jenny.board import model, removed
 from jenny.board.place import app_size, app_title, find_card, tie
 from jenny.board.store import (
+    board_dir,
     delete_card_summary,
     mutate_board,
     mutate_reminders,
@@ -320,15 +321,72 @@ async def remove_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, An
     :data:`model.REMOVED_KEEP_DAYS` giorni. Quel che faceva da sé si ferma — i
     cron del suo cassetto in pausa, le attese non si annunciano — e riparte con :func:`restore_card`. La wiki non cambia: le
     pagine restano, e la ricerca le trova.
+
+    Una scheda senza pagine, senza cassetto o senza attese si toglie come le
+    altre. Un **cassetto orfano** — ``board/cards/<id>.json`` senza la scheda in
+    ``board.json`` — non ha niente da mettere nel cestino: si cancella il file, e
+    la voce ha ``orphan: True`` (v. :func:`orphan_drawers`).
     """
     def trash() -> dict[str, Any]:
         taken: list[dict[str, Any]] = []
-        mutate_board(root, lambda board: taken.append(_trash(board, need_card(board, ref))))
+        try:
+            mutate_board(root, lambda board: taken.append(_trash(board, need_card(board, ref))))
+        except BoardEditError as exc:
+            orphan = _drop_orphan_drawer(root, ref) if exc.code == "not_found" else None
+            if orphan is None:
+                raise
+            return orphan
         return taken[0]
 
     entry = await asyncio.to_thread(trash)
+    if entry.get("orphan"):
+        return entry
     entry["paused"] = await _pause_trashed(root, entry["card"], cron)
     return entry
+
+
+def orphan_drawers(root: Path, board: Mapping[str, Any] | None = None) -> list[str]:
+    """Gli id dei cassetti (``board/cards/<id>.json``) che nessuna scheda reclama.
+
+    Il caso delle prove del Piano a lista del 23 e 24/10/2026: il cassetto
+    ``acqua-e-ciclo-stagionale`` stava su disco senza la sua scheda dal 4/10,
+    nessuno strumento lo toglieva (``remove_card`` rispondeva «card not found», i tool
+    file non scrivono in ``board/``) e l'editore lo lasciava ogni volta fra i
+    «non risolti». Non sono orfani i cassetti di una scheda nel cestino (servono
+    al suo Annulla) né quelli di una prima bacheca ancora nella busta: la
+    passata che la propone li scrive prima che l'utente risponda.
+    """
+    folder = board_dir(root) / model.CARDS_DIR
+    if not folder.is_dir():
+        return []
+    if board is None:
+        board = read_board(root) or model.empty_board()
+    claimed = {c["id"] for c in board.get("cards") or []} | model.removed_card_ids(board)
+    for suggestion in board.get("suggestions") or []:
+        for spec in suggestion.get("cards") or []:
+            if isinstance(spec, Mapping) and isinstance(spec.get("id"), str):
+                claimed.add(spec["id"])
+    return sorted(p.stem for p in folder.glob("*.json")
+                  if p.is_file() and model.is_valid_id(p.stem) and p.stem not in claimed)
+
+
+def _drop_orphan_drawer(root: Path, ref: str) -> dict[str, Any] | None:
+    """Cancella il cassetto orfano *ref* (per id, o per il titolo fatto id); la
+    voce da restituire, o ``None`` se *ref* non ne nomina uno.
+
+    Niente cestino: un cassetto è derivato dalle pagine
+    (:func:`jenny.board.store.write_card_summary`), e senza la sua scheda non lo
+    mostra niente.
+    """
+    orphans = set(orphan_drawers(root))
+    card_id = next((c for c in (ref.strip(), model.slugify(ref, fallback="")) if c in orphans),
+                   None)
+    if card_id is None:
+        return None
+    delete_card_summary(root, card_id)
+    logger.info("board: orphan drawer {} removed from {}", card_id, root.name)
+    return {"card": {"id": card_id, "title": card_id, "pages": []}, "connections": [],
+            "orphan": True, "paused": {"jobs": []}}
 
 
 def _trash(board: dict[str, Any], card: dict[str, Any]) -> dict[str, Any]:
@@ -676,7 +734,9 @@ def clear_reminder_whys(root: Path, pages: Iterable[str]) -> list[dict[str, str]
 
     La chiama ``notebook remove_pages`` dopo aver cancellato le pagine. **Non**
     cambia ``by``: togliere il rimando a una pagina che non c'è più non è una
-    decisione sull'attesa, e un'attesa del giardiniere resta sua.
+    decisione sull'attesa, e un'attesa del giardiniere resta sua. Le chiuse
+    restano come sono: sono storia, e il check non le guarda
+    (``notebook_ops._check_board``).
     """
     gone = {p.removeprefix("wiki/") for p in pages if isinstance(p, str) and p}
     touched: list[dict[str, str]] = []

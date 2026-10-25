@@ -254,7 +254,7 @@ CATEGORIES: dict[str, str] = {
     "map_over": "map over its ceiling",
     "card_missing_page": "card pages that do not exist",
     "drawer_missing_source": "drawer sections citing missing pages",
-    "reminder_dead_why": "reminders whose why is missing",
+    "reminder_dead_why": "open reminders whose why is missing",
     "expect_missing": "expected files missing",
     "expect_extra": "files not in expect",
 }
@@ -423,7 +423,15 @@ def _check_summaries(root: Path, report: CheckReport) -> None:
 
 def _check_board(root: Path, report: CheckReport, pages: set[str]) -> None:
     """Schede con pagine che non ci sono, cassetti che citano pagine che non ci
-    sono, promemoria aperti il cui ``why`` non c'è più."""
+    sono, promemoria aperti il cui ``why`` non c'è più.
+
+    **Solo gli aperti**, come :func:`jenny.board.edit.clear_reminder_whys` e
+    ``update_reminder``: un promemoria chiuso (``done``/``dropped``) è storia,
+    nessuno lo legge più per agire, e nessuno strumento lo cambia. Nelle prove
+    del 24-25/10/2026 i ``why`` morti dei chiusi chiudevano ogni piano con «6
+    why che lo strumento non lascia toccare», e un aiutante ha scritto un file in
+    ``outputs/`` per aggirarlo: qui si contano in una nota, come non-difetto.
+    """
     from jenny.board import model
     from jenny.board.store import read_board, read_card_summary, read_reminders
     from jenny.board.view import missing_pages
@@ -453,13 +461,21 @@ def _check_board(root: Path, report: CheckReport, pages: set[str]) -> None:
                         f"missing {', '.join(gone)}"))
     open_rems = model.open_reminders(reminders)
     report.open_reminders = len(open_rems)
-    for rem in open_rems:
+    closed_dead = 0
+    for rem in reminders["reminders"]:
         # Il ``why`` si legge da ``wiki/`` (``board/clock.py``): conta il file.
         why = str(rem.get("why") or "").strip()
-        if why and not (root / "wiki" / why.removeprefix("wiki/")).is_file():
-            _shown(root / "board" / "reminders.json")
-            report.defects.append(Defect("reminder_dead_why", "board/reminders.json", 0,
-                                         f"reminder `{rem['id']}`: why {why} does not exist"))
+        if not why or (root / "wiki" / why.removeprefix("wiki/")).is_file():
+            continue
+        if rem["state"] != "open":
+            closed_dead += 1
+            continue
+        _shown(root / "board" / "reminders.json")
+        report.defects.append(Defect("reminder_dead_why", "board/reminders.json", 0,
+                                     f"open reminder `{rem['id']}`: why {why} does not exist"))
+    if closed_dead:
+        report.notes.append(f"{closed_dead} closed reminder(s) have a why that no longer exists: "
+                            "closed reminders are history, not a defect — leave them as they are.")
 
 
 def _safe_pattern(pattern: str) -> str | None:

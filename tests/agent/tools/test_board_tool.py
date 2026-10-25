@@ -347,3 +347,82 @@ async def test_update_reminder_writes_once(notebook_chat: Path, announced, monke
     rem = read_reminders(notebook_chat)["reminders"][0]
     assert (rem["text"], rem["when"]["date"], rem["why"]) == (
         "Nuovo", "2099-05-01", "entities/Fico.md")
+
+
+# ── Le schede orfane (25/10/2026) ────────────────────────────────────────────
+
+
+async def test_a_card_with_no_pages_no_drawer_and_no_reminders_goes(notebook_chat: Path,
+                                                                    announced) -> None:
+    """L'orfano «dentro board.json»: la scheda c'è, il suo file in ``board/cards/``
+    no, e non ha pagine né attese. Va nel cestino come le altre, e torna."""
+    root = notebook_chat
+
+    def apply(board):
+        board["cards"].append({"id": "vuota", "title": "Vuota", "pages": [],
+                               "pos": {"x": 300, "y": 6, "by": "jenny"}})
+
+    mutate_board(root, apply)
+    assert read_card_summary(root, "vuota") is None
+    tool = BoardTool()
+    out = await tool.execute(action="remove_card", card="vuota")
+    assert out.startswith("«Vuota» is in the trash"), out
+    board = read_board(root)
+    assert model.card_by_id(board, "vuota") is None
+    assert model.removed_card_ids(board) == {"vuota"}
+    assert announced == ["piante"]
+    assert "back on the board, with no pages" in await tool.execute(action="restore_card",
+                                                                    card="vuota")
+
+
+async def test_a_drawer_with_no_card_is_shown_and_removed(notebook_chat: Path,
+                                                          announced) -> None:
+    """L'orfano «su disco» della prova 1: ``board/cards/<id>.json`` senza la sua
+    scheda. ``remove_card`` rispondeva «card not found» e i tool file non
+    scrivono in ``board/``: non lo toglieva nessuno."""
+    from jenny.board.store import write_card_summary
+
+    root = notebook_chat
+    write_card_summary(root, "acqua-e-ciclo", {"card": "acqua-e-ciclo", "brief": "Acqua."})
+    tool = BoardTool()
+    shown = await tool.execute(action="show")
+    assert "Drawers with no card (remove_card deletes them): `acqua-e-ciclo`" in shown
+
+    out = await tool.execute(action="remove_card", card="Acqua e ciclo")  # anche per titolo
+    assert out == ("No card `acqua-e-ciclo` on the board: its leftover drawer "
+                   "board/cards/acqua-e-ciclo.json is deleted. Nothing to restore.")
+    assert not (root / "board" / "cards" / "acqua-e-ciclo.json").exists()
+    assert announced == ["piante"]
+    assert "Drawers with no card" not in await tool.execute(action="show")
+    # La bacheca non cambia: nessuna voce di cestino per un file derivato.
+    assert read_board(root)["removedCards"] == []
+    out = await tool.execute(action="remove_card", card="acqua-e-ciclo")
+    assert out.startswith("Not done: card not found: acqua-e-ciclo"), out
+
+
+async def test_drawers_that_are_not_orphans_stay(notebook_chat: Path) -> None:
+    """Non orfani: il cassetto di una scheda nel cestino (serve all'Annulla) e
+    quelli di una prima bacheca ancora nella busta (la passata li scrive prima
+    della risposta)."""
+    from jenny.board.store import write_card_summary
+
+    root = notebook_chat
+    write_card_summary(root, "nuove", {"card": "nuove", "brief": "Tre piante."})
+    write_card_summary(root, "proposta", {"card": "proposta", "brief": "Nella busta."})
+
+    def propose(board):
+        board["suggestions"].append({
+            "id": "sg-board", "kind": "initial_board", "subject": "", "text": "Una bacheca.",
+            "created": model.now_iso(), "skeleton": ["Identità"],
+            "cards": [{"id": "proposta", "title": "Proposta", "glyph": "", "pages": []}],
+        })
+
+    mutate_board(root, propose)
+    tool = BoardTool()
+    await tool.execute(action="remove_card", card="nuove")
+    assert "Drawers with no card" not in await tool.execute(action="show")
+    for ref in ("nuove", "proposta"):
+        out = await tool.execute(action="remove_card", card=ref)
+        assert out.startswith("Not done: card not found"), out
+    assert read_card_summary(root, "nuove") is not None
+    assert read_card_summary(root, "proposta") is not None

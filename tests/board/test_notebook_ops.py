@@ -153,7 +153,47 @@ def test_check_finds_what_lint_wiki_finds(lint_wiki, broken: Path) -> None:
     assert len(_kinds(report, "drawer_missing_source")) == 1
     # Il lint non guarda il ``why``: questo è in più, e serve a ``remove_pages``.
     assert [d.detail for d in _kinds(report, "reminder_dead_why")] == [
-        "reminder `r-rinvaso`: why sparita.md does not exist"]
+        "open reminder `r-rinvaso`: why sparita.md does not exist"]
+
+
+def test_a_closed_reminder_with_a_dead_why_is_not_a_defect(broken: Path) -> None:
+    """Un promemoria chiuso è storia: ``clear_reminder_whys`` e ``update_reminder``
+    non lo toccano, e il check non lo chiede. Una nota lo dice, perché chi rilegge
+    ``reminders.json`` non ci giri intorno (prove del 24-25/10/2026)."""
+    def rems(r):
+        for rid, state in (("r-fatto", "done"), ("r-lasciato", "dropped"), ("r-aperto", "open")):
+            r["reminders"].append({"id": rid, "card": "acero", "text": rid,
+                                   "when": {"kind": "date", "date": "2026-03-01"},
+                                   "why": "wiki/sparita.md", "by": "user", "state": state,
+                                   **({"closedAt": "2026-03-02T10:00:00+01:00"}
+                                      if state != "open" else {})})
+
+    mutate_reminders(broken, rems)
+    report = ops.check_notebook(broken)
+    assert sorted(d.detail for d in _kinds(report, "reminder_dead_why")) == [
+        "open reminder `r-aperto`: why wiki/sparita.md does not exist",
+        "open reminder `r-rinvaso`: why sparita.md does not exist"]
+    assert report.open_reminders == 2
+    out = ops.render_check(report, limit=40, max_chars=12000)
+    assert "open reminders whose why is missing 2" in out
+    assert "2 closed reminder(s) have a why that no longer exists" in out
+    assert "r-fatto" not in out and "r-lasciato" not in out
+
+
+def test_closed_reminders_alone_leave_the_check_clean(tmp_path: Path) -> None:
+    root = tmp_path / "wikis" / "orto"
+    _write(root / "wiki" / "index.md", "# Mappa\n")
+
+    def rems(r):
+        r["reminders"].append({"id": "r-fatto", "card": "", "text": "Fatto",
+                               "when": {"kind": "date", "date": "2026-03-01"},
+                               "why": "sparita.md", "by": "user", "state": "done"})
+
+    mutate_reminders(root, rems)
+    report = ops.check_notebook(root)
+    assert not _kinds(report, "reminder_dead_why")
+    out = ops.render_check(report, limit=40, max_chars=12000)
+    assert "No defects found." in out and "1 closed reminder(s)" in out
 
 
 def test_the_shared_constants_stay_equal(lint_wiki) -> None:
