@@ -124,6 +124,18 @@ _NUDGE_USED = "used"
 _GAPS = "gaps"
 _GAPS_GATE = "gaps_gate"
 _GAPS_GATE_USED = "used"
+# Un giro di ricerca c'è già stato nel passo: il resoconto di un ``researcher``
+# arrivato mentre il passo aveva buchi aperti. Allora il cancello non rifiuta:
+# nella prova A del 24/10 il cancello scattava sui buchi *nuovi* degli editor
+# rimandati, dopo il primo giro, e ogni passo pagava un secondo giro in fila
+# (12-13 minuti di ricercatore più una ripresa). Quei buchi non si perdono:
+# vanno al passo di controllo, sotto ``_CARRIED_GAPS``, e si cercano lì tutti
+# insieme.
+_GAPS_ROUND = "gaps_round"
+_CARRIED_GAPS = "carried_gaps"
+# Quante voci riportate al controllo, al massimo: un elenco più lungo non è
+# più un giro di ricerca ma un altro piano.
+_MAX_CARRIED_ITEMS = 40
 
 _RUNNING = frozenset({"running", "pausing"})
 
@@ -971,7 +983,13 @@ class PlanDriver:
                 return "Error: there is no plan step open in this conversation."
             step_id = step.id
             gaps = _open_gaps(step)
-            if outcome == "done" and gaps and step.extra.get(_GAPS_GATE) != _GAPS_GATE_USED:
+            gate_used = step.extra.get(_GAPS_GATE) == _GAPS_GATE_USED
+            if outcome == "done" and gaps and not gate_used and step.extra.get(_GAPS_ROUND):
+                # Il giro di ricerca del passo c'è stato: i buchi ancora aperti
+                # (riportati dopo, di solito dagli editor rimandati) passano al
+                # controllo invece di fermare il passo per un secondo giro.
+                await self._carry_gaps(plan, step, gaps)
+            elif outcome == "done" and gaps and not gate_used:
                 # Un aiutante ha riportato buchi e il passo si chiude come se
                 # niente fosse: la prova 3 li ha lasciati «non documentati» nelle
                 # pagine. Una volta sola, come il promemoria: la seconda chiamata
@@ -1321,6 +1339,32 @@ class PlanDriver:
 
     # ── hook del loop ──────────────────────────────────────────────────────
 
+    async def _carry_gaps(self, plan: Plan, step: Step, gaps: Mapping[str, list[str]]) -> None:
+        """I buchi rimasti di *step* nell'``extra`` del passo di controllo che viene dopo.
+
+        Senza un controllo dopo (il passo è lui, o il piano non ne ha) non si
+        riporta niente: il passo si chiude, e la sua nota dice cosa resta.
+        """
+        target = _carry_target(plan, step)
+        if target is None:
+            return
+        items = [item for lineage_items in gaps.values() for item in lineage_items]
+        target_id, origin = target.id, step.title
+
+        def _apply(p: Plan) -> None:
+            t = _find(p, target_id)
+            carried = [c for c in t.extra.get(_CARRIED_GAPS) or () if isinstance(c, dict)]
+            room = _MAX_CARRIED_ITEMS - sum(len(c.get("items") or ()) for c in carried)
+            if room > 0:
+                carried.append({"step": origin, "items": items[:room]})
+                t.extra[_CARRIED_GAPS] = carried
+
+        await asyncio.to_thread(self.store.update, plan.id, _apply)
+        logger.info(
+            "Plan {}: {} gap(s) of step {} carried to step {}",
+            plan.id, len(items), step.id, target_id,
+        )
+
     async def note_step_report(
         self,
         session_key: str,
@@ -1330,6 +1374,7 @@ class PlanDriver:
         *,
         plan_id: Any = None,
         plan_step: Any = None,
+        agent_type: Any = None,
     ) -> bool:
         """Il resoconto di un aiutante del passo aperto: registra i suoi buchi **To research**.
 
@@ -1341,6 +1386,9 @@ class PlanDriver:
         è ripreso con ``subagent_send``; senza, il ``task_id``. L'ultimo
         resoconto del lineage sostituisce quello prima: senza buchi, li toglie.
         ``True`` se i buchi del passo sono cambiati.
+
+        Il resoconto di un ``researcher`` (*agent_type*) arrivato con buchi
+        d'altri aperti segna il giro di ricerca del passo (``_GAPS_ROUND``).
         """
         if not isinstance(content, str) or not self.plan_running(session_key):
             return False
@@ -1364,11 +1412,16 @@ class PlanDriver:
             if plan.status not in _RUNNING or step is None or step.id != plan_step:
                 return False
             gaps = _open_gaps(step)
+            research_round = (
+                agent_type == "researcher"
+                and not step.extra.get(_GAPS_ROUND)
+                and any(lineage_key != key for lineage_key in gaps)
+            )
             if items:
                 gaps[key] = items
             elif key in gaps:
                 del gaps[key]
-            else:
+            elif not research_round:
                 return False
             step_id = step.id
 
@@ -1378,6 +1431,8 @@ class PlanDriver:
                     s.extra[_GAPS] = gaps
                 else:
                     s.extra.pop(_GAPS, None)
+                if research_round:
+                    s.extra[_GAPS_ROUND] = True
 
             await asyncio.to_thread(self.store.update, plan.id, _apply)
         logger.info(
@@ -2320,7 +2375,8 @@ class PlanDriver:
             s.photo_before = before
             s.photo_after = None
             for key in (_NUDGE, _PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION,
-                        _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE):
+                        _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE,
+                        _GAPS_ROUND):
                 s.extra.pop(key, None)
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _open)
@@ -2413,6 +2469,13 @@ class PlanDriver:
                 {"page": f.page, "fact": f.fact, "context": f.context} for f in lost.items
             ] if lost is not None and not reminder else [],
             lost_total=lost.total if lost is not None else 0,
+            # I buchi che i passi prima hanno lasciato dopo il loro giro di
+            # ricerca (``_carry_gaps``): solo nel passo di controllo.
+            carried_gaps=[
+                {"step": str(c.get("step") or ""), "lines": [str(i) for i in c.get("items") or ()]}
+                for c in step.extra.get(_CARRIED_GAPS) or ()
+                if isinstance(c, dict) and c.get("items")
+            ] if not reminder else [],
         )
         return InboundMessage(
             channel="system",
@@ -2772,6 +2835,18 @@ def plan_view(plan: Plan) -> dict[str, Any]:
         }
     )
     return data
+
+
+def _carry_target(plan: Plan, step: Step) -> Step | None:
+    """Il passo di controllo dopo *step* che riceve i suoi buchi rimasti, se c'è."""
+    active = _active_steps(plan)
+    ids = [s.id for s in active]
+    if step.id not in ids:
+        return None
+    for later in active[ids.index(step.id) + 1:]:
+        if later.status == "pending" and _checks_facts(plan, later):
+            return later
+    return None
 
 
 def _checks_facts(plan: Plan, step: Step) -> bool:

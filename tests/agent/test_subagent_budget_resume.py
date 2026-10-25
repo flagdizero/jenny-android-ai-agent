@@ -295,6 +295,8 @@ async def test_the_announce_carries_the_plan_step_without_being_a_plan_turn(tmp_
 
     assert announce.metadata[PLAN_ID_META] == "plan-1"
     assert announce.metadata[PLAN_STEP_META] == "s3"
+    # Il tipo dell'aiutante: il cancello dei buchi riconosce così un giro di ricerca.
+    assert announce.metadata["subagent_agent_type"]
     assert is_plan_turn(announce.metadata) is False
 
     # Un aiutante lanciato dal turno d'annuncio eredita il passo.

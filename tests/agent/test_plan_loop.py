@@ -829,3 +829,9 @@ async def test_a_helper_report_of_the_open_step_records_its_gaps(workspace: Path
     # Lo stesso aiutante, rimandato indietro, arriva a metà di un altro turno.
     await _dispatch(loop, _user("come va?"), _report("t2", "Pagine riempite."))
     assert "gaps" not in driver.store.load(plan.id).steps[0].extra
+    # Il resoconto di un ricercatore con buchi d'altri aperti segna il giro.
+    await loop._process_message(_report("t3", "Fatto.\n\n**To research**\n- felce: vaso"))
+    researcher = _report("t4", "Salvate due fonti.")
+    researcher.metadata.update({"subagent_lineage_id": "rs1", "subagent_agent_type": "researcher"})
+    await loop._process_message(researcher)
+    assert driver.store.load(plan.id).steps[0].extra["gaps_round"] is True

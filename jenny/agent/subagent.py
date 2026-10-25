@@ -1975,6 +1975,10 @@ class SubagentManager:
                 metadata[PLAN_ID_META] = spec_for_plan.plan_id
             if spec_for_plan.plan_step:
                 metadata[PLAN_STEP_META] = spec_for_plan.plan_step
+            # Il tipo serve al cancello dei buchi: il resoconto di un
+            # ``researcher`` nel passo vuol dire che un giro di ricerca c'è stato.
+            if spec_for_plan.agent_type:
+                metadata["subagent_agent_type"] = spec_for_plan.agent_type
         if origin_message_id:
             metadata["origin_message_id"] = origin_message_id
         if taint:

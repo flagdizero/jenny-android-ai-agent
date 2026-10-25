@@ -403,6 +403,7 @@ class LoopPlanMixin:
                 msg.content,
                 plan_id=meta.get(PLAN_ID_META),
                 plan_step=meta.get(PLAN_STEP_META),
+                agent_type=meta.get("subagent_agent_type"),
             )
         except Exception:  # noqa: BLE001 — un buco non registrato non vale il turno
             logger.opt(exception=True).warning("Plan step report not noted for {}", session_key)

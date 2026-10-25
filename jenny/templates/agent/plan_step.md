@@ -39,6 +39,16 @@ Facts that were in the notebook before this plan and are in no page now{% if los
 - {{ f.page }}: {{ f.fact }} — "{{ f.context }}"
 {% endfor %}
 {% endif %}
+{% if carried_gaps %}
+
+Gaps that earlier steps left open after their round of research. Search them now, all together: a few researchers grouped by subject, in one round. Then fill the pages from what they saved, or say in the step note why a gap stays open.
+{% for c in carried_gaps %}
+- from "{{ c.step }}":
+{% for item in c.lines %}
+  - {{ item }}
+{% endfor %}
+{% endfor %}
+{% endif %}
 {% if waiting %}
 
 Already waiting for the user's approval, from an earlier run of this step: {{ waiting | join(", ") }}. Do not make these changes again: they count as done, and the code holds the step until the user decides.
@@ -48,7 +58,7 @@ Rules:
 - Do this step only. Do not start the next one: the code opens it when you close this one.
 - You may run up to 5 helpers at once for this step; wait for all their results before closing it.
 - Helper results of this step arrive together, when the last one is done.
-- A writer or notebook-editor that reports **To research** has not finished the step: those gaps are part of it. Spawn researchers for them now, a few, grouped by subject; then send the same helper back with `subagent_send` to fill the pages from what they saved. Close the step when the pages are filled, or the gaps were searched and are still empty.
+- A writer or notebook-editor that reports **To research** has not finished the step: those gaps are part of it. Wait for all the step's results, then spawn researchers for every gap at once, a few, grouped by subject: one round per step. Then send the same helpers back with `subagent_send` to fill the pages from what they saved, and close the step. Gaps the helpers report after that round go to the plan's check step, which searches them together.
 - A helper that stopped at its budget: continue the same helper with `subagent_send`, it keeps what it read and wrote. Do not start a new one for the same work.
 - Scripts print only a compact result. A helper's report goes in its final answer, not in a file. A file in the notebook only if the step asks for one: then it is an audit entry in `audit/` with the audit frontmatter (`id`, `target`, `source`, `status`...; see the llm-wiki skill). Never create `outputs/` in a notebook.
 - Removing pages is a notebook-editor helper's job (`notebook` action `remove_pages`); your own `notebook` tool only checks, maps and reads.
