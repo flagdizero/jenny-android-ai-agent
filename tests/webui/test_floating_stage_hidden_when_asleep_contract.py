@@ -29,7 +29,7 @@ def test_asleep_the_stage_root_is_gone() -> None:
     assert "View.GONE" in body and "View.VISIBLE" in body
     # Prima dell'uscita anticipata sui flag: anche se non cambiano, la
     # visibilita' si allinea.
-    early = body.index("if (lp.flags == flags && lp.softInputMode == softInput) return")
+    early = body.index("if (lp.flags == wanted && lp.softInputMode == softInput) return")
     assert body.index("View.GONE") < early
 
 

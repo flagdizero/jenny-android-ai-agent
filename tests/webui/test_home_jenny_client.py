@@ -109,6 +109,7 @@ let error = null;
 let screenOpens = 0;
 let screenOpened = true;
 let screenBacks = 0;
+let permissionOpens = 0;
 const calls = [];
 /* E quel che c'e' su disco: `null` = il file non c'e' (404), una stringa = c'e'.
    `brokenRead` e' l'altra cosa: la risposta non e' arrivata affatto. */
@@ -128,6 +129,10 @@ const api = {
   },
   openScreenSettings() {
     screenOpens += 1;
+    return Promise.resolve({ opened: screenOpened });
+  },
+  openFloatingPermission() {
+    permissionOpens += 1;
     return Promise.resolve({ opened: screenOpened });
   },
   updateFloating(params) {
@@ -179,6 +184,8 @@ class HomeJenny {
   __SAY_FLOATING__
   __SAY_SCREEN__
   __OPEN_SCREEN__
+  __OPEN_PERMISSION__
+  __GO_TO__
   __LOAD_RULES__
   __MARK_RULES__
   __SAVE_RULES__
@@ -212,8 +219,9 @@ function room(floating, disk, broken) {
   screenOpens = 0;
   screenOpened = true;
   screenBacks = 0;
+  permissionOpens = 0;
   const she = new HomeJenny({
-    onScreenBack: () => { screenBacks += 1; },
+    onSettingsBack: () => { screenBacks += 1; },
     onChange: () => { changes += 1; },
     onFloating: (f) => { floatingCalls.push(f); },
     onName: (n) => { spokenNames.push(n); },
@@ -251,6 +259,8 @@ def _harness() -> str:
         .replace("__SAY_FLOATING__", member(src, "_sayFloating"))
         .replace("__SAY_SCREEN__", member(src, "_sayScreen"))
         .replace("__OPEN_SCREEN__", member(src, "openScreenSettings"))
+        .replace("__OPEN_PERMISSION__", member(src, "openFloatingPermission"))
+        .replace("__GO_TO__", member(src, "_goTo"))
         .replace("__LOAD_RULES__", member(src, "_loadRules"))
         .replace("__MARK_RULES__", member(src, "_markRules"))
         .replace("__SAVE_RULES__", member(src, "saveRules"))
@@ -672,6 +682,44 @@ def test_the_switch_leads_to_accessibility_and_rereads_on_the_way_back() -> None
 
       screenOpened = false;
       await she.openScreenSettings();
+      comeBack();
+      assert.equal(screenBacks, 1, 'la pagina non si e\u2019 aperta: non c\u2019e\u2019 un ritorno');
+    """)
+
+
+def test_a_refused_window_leads_to_the_permission_and_rereads_on_the_way_back() -> None:
+    """La riga rossa dice cosa fare, il bottone porta dove si fa: c'e' solo a
+    permesso negato, e al ritorno dalla pagina di sistema la casa rilegge — e'
+    cosi' che la riga se ne va dopo che l'utente ha concesso."""
+    _run_js("""
+      for (const [floating, shown] of [
+        [{ available: true, enabled: true, active: false }, true],
+        [{ available: true, enabled: true, active: true }, false],
+        [{ available: true, enabled: false, active: false }, false],
+        [{ available: false, enabled: true, active: false }, false],
+      ]) {
+        const she = room(floating);
+        assert.equal(she.floatingAllow.hidden, !shown, JSON.stringify(floating));
+      }
+
+      const she = room({ available: true, enabled: true, active: false });
+      she.applyTranslations();
+      assert.equal(she.floatingAllow.textContent, i18n.t('settings.floatingAllow'));
+      she.floatingAllow.listeners.click[0]();
+      await Promise.resolve();
+      assert.equal(permissionOpens, 1);
+      comeBack();
+      comeBack();
+      assert.equal(screenBacks, 1, 'il ritorno si rilegge una volta sola');
+
+      /* Il permesso e' arrivato: la rilettura lo porta, e il bottone se ne va
+         con la riga rossa. */
+      she.setFloating({ available: true, enabled: true, active: true });
+      assert.equal(she.floatingAllow.hidden, true);
+      assert.equal(she.floatingNote.classList.contains('is-warn'), false);
+
+      screenOpened = false;
+      await she.openFloatingPermission();
       comeBack();
       assert.equal(screenBacks, 1, 'la pagina non si e\u2019 aperta: non c\u2019e\u2019 un ritorno');
     """)

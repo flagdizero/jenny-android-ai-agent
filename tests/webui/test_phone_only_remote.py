@@ -154,6 +154,23 @@ async def test_accessibility_settings_are_refused_from_remote(rig, monkeypatch) 
     await _with(rig, body)
 
 
+async def test_the_overlay_permission_page_is_refused_from_remote(rig, monkeypatch) -> None:
+    from jenny.runtime import floating
+
+    calls = _spy(monkeypatch, floating, "open_permission_settings", True)
+
+    async def body() -> None:
+        path = "/api/settings/floating/permission-settings"
+        r = await rig.get(rig.remote, path, "remote-key")
+        assert r.status_code == 403 and r.json() == {"error": "phone_only"}
+        assert calls == []
+        r = await rig.get(rig.local, path, "master-secret")
+        assert r.status_code == 200 and r.json() == {"opened": True}
+        assert len(calls) == 1
+
+    await _with(rig, body)
+
+
 async def test_the_android_app_list_is_empty_from_remote(rig, monkeypatch) -> None:
     calls = _spy(monkeypatch, ws_http, "webui_android_apps_payload", {"apps": [{"packageName": "x"}]})
 
@@ -207,7 +224,8 @@ def test_every_route_that_reaches_a_phone_action_refuses_remote_callers() -> Non
     dimenticanza: ogni metodo che chiama una di queste funzioni controlla prima."""
     actions = (
         "launch_android_app", "uninstall_android_app", "open_android_app_info",
-        "update_floating_settings", "open_screen_settings", "start_update_install",
+        "update_floating_settings", "open_screen_settings", "open_permission_settings",
+        "start_update_install",
         "AppViewProxy(",
     )
     found = []
@@ -218,8 +236,8 @@ def test_every_route_that_reaches_a_phone_action_refuses_remote_callers() -> Non
             if any(a in body for a in actions):
                 found.append(m.group(1))
                 assert "refuse_if_remote()" in body, f"{module.__name__}.{m.group(1)} non rifiuta da fuori"
-    assert len(found) >= 7, found
-    assert len(PHONE_ONLY_ROUTES) == 7
+    assert len(found) >= 8, found
+    assert len(PHONE_ONLY_ROUTES) == 8
 
 
 # -- File statici: impronta, 304, compressione -----------------------------------------

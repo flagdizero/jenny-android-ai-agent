@@ -62,9 +62,10 @@ export class HomeJenny {
    *    casa ne tiene una copia (v. `HomeApp._keepFloating`).
    *  @param onName  il nome appena salvato: la casa lo scrive nella fila e nei
    *    Quaderni, e nella sua copia delle impostazioni (v. `HomeApp._keepName`).
-   *  @param onScreenBack  si torna dalla pagina di Accessibilita' aperta da qui:
-   *    la casa rilegge le impostazioni, perche' l'interruttore e' di Android. */
-  constructor({ onChange, onFloating, onName, onScreenBack } = {}) {
+   *  @param onSettingsBack  si torna da una pagina di sistema aperta da qui
+   *    (Accessibilita', o il permesso «sopra altre app»): la casa rilegge le
+   *    impostazioni, perche' l'interruttore e' di Android. */
+  constructor({ onChange, onFloating, onName, onSettingsBack } = {}) {
     this.el = document.getElementById('home-jenny-room');
     this.sizeEl = document.getElementById('home-jenny-size');
     this.sizeLabel = document.getElementById('home-jenny-size-label');
@@ -72,6 +73,7 @@ export class HomeJenny {
     this.floatingBtn = document.getElementById('home-jenny-floating');
     this.floatingLabel = document.getElementById('home-jenny-floating-label');
     this.floatingNote = document.getElementById('home-jenny-floating-note');
+    this.floatingAllow = document.getElementById('home-jenny-floating-allow');
     this.screenRow = document.getElementById('home-jenny-screen-row');
     this.screenBtn = document.getElementById('home-jenny-screen');
     this.screenLabel = document.getElementById('home-jenny-screen-label');
@@ -88,19 +90,20 @@ export class HomeJenny {
     this._onChange = onChange;
     this._onFloating = onFloating;
     this._onName = onName;
-    this._onScreenBack = onScreenBack;
-    /* Si e' andati in Accessibilita' da qui: al ritorno si rilegge. */
-    this._screenAway = false;
+    this._onSettingsBack = onSettingsBack;
+    /* Si e' andati in una pagina di sistema da qui: al ritorno si rilegge. */
+    this._away = false;
     /* Quel che il server dice della finestra: `null` finche' non l'ha detto. */
     this.floating = null;
     this._painted = false;
 
     this.floatingBtn?.addEventListener('click', () => this.toggleFloating());
     this.screenBtn?.addEventListener('click', () => this.openScreenSettings());
+    this.floatingAllow?.addEventListener('click', () => this.openFloatingPermission());
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' || !this._screenAway) return;
-      this._screenAway = false;
-      this._onScreenBack?.();
+      if (document.visibilityState === 'hidden' || !this._away) return;
+      this._away = false;
+      this._onSettingsBack?.();
     });
     this.sizeEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-size]');
@@ -184,6 +187,7 @@ export class HomeJenny {
     if (this.sizeLabel) this.sizeLabel.textContent = i18n.t('settings.mascotSize');
     if (this.floatingLabel) this.floatingLabel.textContent = i18n.t('settings.floatingEnabled');
     if (this.screenLabel) this.screenLabel.textContent = i18n.t('settings.screenEnabled');
+    if (this.floatingAllow) this.floatingAllow.textContent = i18n.t('settings.floatingAllow');
     if (this.nameLabel) this.nameLabel.textContent = i18n.t('home.jenny.name');
     if (this.nameNote) this.nameNote.textContent = i18n.t('home.jenny.nameHint');
     if (this.nameSave) this.nameSave.textContent = i18n.t('home.jenny.rulesSave');
@@ -237,15 +241,28 @@ export class HomeJenny {
   }
 
   /** Porta l'utente in Accessibilita': il servizio lo accende (o lo spegne)
-   *  solo lui, da li'. Lo stato si rilegge al ritorno (`onScreenBack`). */
+   *  solo lui, da li'. Lo stato si rilegge al ritorno (`onSettingsBack`). */
   async openScreenSettings() {
-    this._screenAway = true;
+    await this._goTo(() => api.openScreenSettings(), 'accessibility settings');
+  }
+
+  /** Porta l'utente sull'interruttore «Mostra sopra altre app» di Jenny: il
+   *  permesso lo concede solo lui. Al ritorno si rilegge, e la riga rossa se
+   *  ne va da se' se l'ha concesso. */
+  async openFloatingPermission() {
+    await this._goTo(() => api.openFloatingPermission(), 'overlay permission');
+  }
+
+  /* Apre una pagina di sistema e si ricorda di esserci andata: il ritorno
+     (`visibilitychange`) rilegge solo se la pagina si e' aperta davvero. */
+  async _goTo(open, what) {
+    this._away = true;
     try {
-      const reply = await api.openScreenSettings();
-      if (!reply?.opened) this._screenAway = false;
+      const reply = await open();
+      if (!reply?.opened) this._away = false;
     } catch (err) {
-      this._screenAway = false;
-      console.warn('home.jenny: accessibility settings not opened', err);
+      this._away = false;
+      console.warn(`home.jenny: ${what} not opened`, err);
     }
   }
 
@@ -358,6 +375,8 @@ export class HomeJenny {
     const blocked = !!this.floating?.enabled && this.floating?.active === false;
     this.floatingNote.hidden = !available;
     this.floatingNote.classList.toggle('is-warn', blocked);
+    /* La frase dice cosa fare; il bottone porta dove si fa. */
+    if (this.floatingAllow) this.floatingAllow.hidden = !(available && blocked);
     if (!available) return;
     this.floatingNote.textContent = i18n.t(
       blocked ? 'settings.floatingBlocked' : 'settings.floatingHint',

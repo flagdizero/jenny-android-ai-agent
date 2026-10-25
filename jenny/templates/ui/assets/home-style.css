@@ -5846,6 +5846,10 @@ dialog.home-photo-viewer[open] { display: flex; }
    fianco glielo da' gia' la scheda. */
 .home-rows .home-card-note { padding: 0 0 8px; }
 .home-card-note.is-warn { color: var(--error); }
+/* Il bottone che porta dove la nota dice di andare: sotto la frase, a sinistra
+   come lei, non in fondo alla riga dove l'occhio non la cerca. */
+.home-rows .home-note-action { display: block; margin: 0 0 12px; }
+.home-rows .home-note-action[hidden] { display: none; }
 
 
 /* ── Le regole che le hai dato tu ───────────────────────────────────────────

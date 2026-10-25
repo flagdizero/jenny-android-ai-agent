@@ -32,6 +32,7 @@ PHONE_ONLY_ROUTES = (
     "/api/webui/android-apps/<package>/app-info",
     "/api/settings/floating/update",
     "/api/settings/floating/screen-settings",
+    "/api/settings/floating/permission-settings",
     "/api/updates/install",
     "/api/webui/apps/<slug>/view",
 )

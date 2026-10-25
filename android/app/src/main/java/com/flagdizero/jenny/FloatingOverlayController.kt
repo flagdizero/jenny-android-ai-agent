@@ -348,6 +348,17 @@ object FloatingOverlayController {
     /** ...e in chat: tocchi e fuoco, per il campo di testo. */
     private const val STAGE_CHAT = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
+    /**
+     * Quanto è sfocata l'app sotto la chat, in dp.
+     *
+     * Sopra una pagina fitta la conversazione non si leggeva: le bolle sono
+     * quasi opache, ma tutto intorno — il chip, lo spazio fra una bolla e
+     * l'altra — era testo di qualcun altro (detto dall'utente il 25/10/2026).
+     * Abbastanza da spegnere le lettere, non abbastanza da far sparire la
+     * pagina: si capisce ancora dov'eri.
+     */
+    private const val CHAT_BLUR_DP = 24
+
     private const val PREFS = "jenny_floating"
 
     // Fra le preferenze non c'e' il bordo: e' sempre il destro (24/09/2026).
@@ -512,6 +523,11 @@ object FloatingOverlayController {
     /** Il **palco**: quello che si vede. Schermo intero, immobile. */
     private var root: FrameLayout? = null
     private var params: WindowManager.LayoutParams? = null
+
+    /** Android sfoca le finestre adesso? Lo dice il listener di [watchBlur]:
+     *  può cambiare a chat aperta (risparmio energetico, opzioni sviluppatore). */
+    private var blurOn = false
+    private var blurListener: java.util.function.Consumer<Boolean>? = null
 
     /**
      * La finestra **di lei**: grande quanto lo sprite, toccabile (quindi mai
@@ -993,6 +1009,7 @@ object FloatingOverlayController {
             windowManager = wm
             root = container
             params = lp
+            watchBlur(ctx, wm)
             // Ordine di inserimento = ordine di sovrapposizione: palco in
             // fondo, lei in mezzo, maniglia sopra. I tocchi li prende sempre
             // la maniglia, che è l'unica a poter crescere fino a coprire lo
@@ -1052,6 +1069,7 @@ object FloatingOverlayController {
         sendButton?.animate()?.cancel()
         val wm = windowManager
         if (wm != null) {
+            unwatchBlur(wm)
             for (v in listOfNotNull(grip, mascotWin, root)) {
                 try {
                     wm.removeView(v)
@@ -1128,6 +1146,11 @@ object FloatingOverlayController {
         lp.gravity = Gravity.TOP or Gravity.START
         lp.x = 0
         lp.y = 0
+        // Il raggio si scrive una volta: conta solo quando [applyStage] accende
+        // `FLAG_BLUR_BEHIND`, cioè in chat.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            lp.blurBehindRadius = appContext?.let { dp(it, CHAT_BLUR_DP) } ?: 0
+        }
         return lp
     }
 
@@ -1179,8 +1202,12 @@ object FloatingOverlayController {
         val asleep = flags == STAGE_ASLEEP
         val visibility = if (asleep) View.GONE else View.VISIBLE
         if (view.visibility != visibility) view.visibility = visibility
-        if (lp.flags == flags && lp.softInputMode == softInput) return
-        lp.flags = flags
+        // In chat il palco sfoca quel che ha sotto: v. [CHAT_BLUR_DP]. Il flag
+        // si mette anche a sfocatura spenta — Android allora non disegna
+        // niente, e il velo più scuro di [scrimFor] fa da solo.
+        val wanted = if (flags == STAGE_CHAT) flags or blurFlag() else flags
+        if (lp.flags == wanted && lp.softInputMode == softInput) return
+        lp.flags = wanted
         lp.softInputMode = softInput
         try {
             wm.updateViewLayout(view, lp)
@@ -1188,6 +1215,77 @@ object FloatingOverlayController {
             Log.i(TAG, "Could not change the stage: ${e.javaClass.simpleName}")
         }
     }
+
+    /** `FLAG_BLUR_BEHIND` dove la sfocatura fra finestre esiste (dal 12);
+     *  prima di allora il flag non sfocava niente, e non si chiede. */
+    private fun blurFlag(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+        } else {
+            0
+        }
+
+    /**
+     * Si mette in ascolto della sfocatura fra finestre, e veste il velo per
+     * com'è adesso.
+     *
+     * Android la può spegnere in qualunque momento — risparmio energetico,
+     * un video in tunneling, le opzioni sviluppatore, e su un emulatore senza
+     * GPU non c'è mai — e senza di lei l'unica cosa che separa la chat dalla
+     * pagina sotto è il velo: quindi il velo cambia con lei, anche a chat
+     * aperta.
+     */
+    private fun watchBlur(ctx: Context, wm: WindowManager) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            setBlurOn(false)
+            return
+        }
+        setBlurOn(wm.isCrossWindowBlurEnabled)
+        val listener = java.util.function.Consumer<Boolean> { on -> setBlurOn(on) }
+        try {
+            wm.addCrossWindowBlurEnabledListener(ctx.mainExecutor, listener)
+            blurListener = listener
+        } catch (e: Exception) {
+            Log.i(TAG, "Cannot watch window blur: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun unwatchBlur(wm: WindowManager) {
+        val listener = blurListener ?: return
+        blurListener = null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        try {
+            wm.removeCrossWindowBlurEnabledListener(listener)
+        } catch (e: Exception) {
+            Log.i(TAG, "Window blur listener already gone: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun setBlurOn(on: Boolean) {
+        val changed = on != blurOn
+        blurOn = on
+        scrim?.background = scrimFor(on)
+        if (changed) Log.i(TAG, "Cross-window blur ${if (on) "on" else "off"}")
+    }
+
+    /**
+     * Il velo dietro la chat: trasparente in alto e sempre più scuro verso il
+     * campo, che è dove deve andare l'occhio.
+     *
+     * **Con la sfocatura** basta un filo: la pagina sotto è già senza lettere,
+     * e il velo serve solo a dare profondità. **Senza**, il velo è quasi una
+     * superficie: misurato su jenny_s22 sopra una pagina di Wikipedia, al 55%
+     * in cima i titoli della pagina si leggevano ancora e uno finiva dentro il
+     * chip. All'85% resta l'ombra della pagina, non le sue lettere.
+     */
+    private fun scrimFor(blur: Boolean): Drawable = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        if (blur) {
+            intArrayOf(0x1A000000, 0x40000000, 0xB3000000.toInt())
+        } else {
+            intArrayOf(0xD9000000.toInt(), 0xE6000000.toInt(), 0xF2000000.toInt())
+        },
+    )
 
     /**
      * Esegue [action] dopo il prossimo fotogramma disegnato dal palco.
@@ -1411,15 +1509,10 @@ object FloatingOverlayController {
             }
         }
 
-        // Un velo, non un blackout: trasparente in alto — quello che stavi
-        // guardando resta leggibile — e sempre più scuro verso il campo, che è
-        // dove deve andare l'occhio. Il grigio uniforme al 40% del primo giro
-        // sembrava un difetto di rendering, non una scelta.
+        // Un velo, non un blackout: v. [scrimFor], che lo veste anche per la
+        // sfocatura che Android dà o non dà.
         val dim = View(ctx).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x00000000, 0x40000000, 0xCC000000.toInt())
-            )
+            background = scrimFor(blurOn)
             visibility = View.GONE
             setOnClickListener { collapse() }
         }

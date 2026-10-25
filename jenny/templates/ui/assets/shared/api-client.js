@@ -583,6 +583,12 @@ class ApiClient {
     return res.json();
   }
 
+  async openFloatingPermission() {
+    const res = await this._postWithQuery('/api/settings/floating/permission-settings', {});
+    if (!res.ok) throw new Error(`Overlay permission settings failed: ${res.status}`);
+    return res.json();
+  }
+
   async updatePower(params) {
     const res = await this._postWithQuery('/api/settings/power/update', params);
     if (!res.ok) throw new Error(`Power update failed: ${res.status}`);

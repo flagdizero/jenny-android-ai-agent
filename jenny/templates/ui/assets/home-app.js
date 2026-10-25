@@ -315,7 +315,7 @@ class HomeApp {
     this.jennyRoom = new HomeJenny({
       onChange: () => this.you.sayJenny(this.jennyRoom.value()),
       onFloating: (floating) => this._keepFloating(floating),
-      onScreenBack: () => this._refreshFloating(),
+      onSettingsBack: () => this._refreshFloating(),
       onName: (name) => this._keepName(name),
     });
     /* Chi risponde. Un salvataggio li' dentro torna col payload intero di
@@ -1371,8 +1371,8 @@ class HomeApp {
     });
   }
 
-  /* Di ritorno da Accessibilita': l'interruttore della lettura dello schermo
-     e' di Android, quindi lo stato vero si rilegge dal server. */
+  /* Di ritorno da Accessibilita' o dal permesso «sopra altre app»: i due
+     interruttori sono di Android, quindi lo stato vero si rilegge dal server. */
   async _refreshFloating() {
     const data = await this._askSettings({ fresh: true });
     if (!data?.floating) return;

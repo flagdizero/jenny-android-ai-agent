@@ -125,6 +125,8 @@ class WebUISettingsRouter:
             return await self._handle_settings_floating_update(request)
         if path == "/api/settings/floating/screen-settings":
             return await self._handle_screen_settings_open(request)
+        if path == "/api/settings/floating/permission-settings":
+            return await self._handle_overlay_permission_open(request)
         if path == "/api/settings/power/update":
             return await self._handle_settings_power_update(request)
         if path == "/api/settings/power/diagnostics":
@@ -306,6 +308,18 @@ class WebUISettingsRouter:
         from jenny.runtime.screen import open_screen_settings
 
         return self._json_response({"opened": await open_screen_settings()})
+
+    async def _handle_overlay_permission_open(self, request: WsRequest) -> Response:
+        """Apre la pagina di sistema del permesso «Mostra sopra altre app»: come
+        per l'Accessibilità, un'app non se lo concede da sé, e il massimo è
+        portare l'utente sull'interruttore giusto."""
+        if not self._authorized(request):
+            return self._unauthorized()
+        if (refused := refuse_if_remote()) is not None:
+            return refused
+        from jenny.runtime.floating import open_permission_settings
+
+        return self._json_response({"opened": await open_permission_settings()})
 
     async def _handle_settings_power_update(self, request: WsRequest) -> Response:
         if not self._authorized(request):

@@ -214,6 +214,7 @@
     "floatingEnabled": "Mascotte flottante",
     "floatingHint": "{name} resta sopra le altre app: toccala e le parli, la risposta compare in un fumetto. È la stessa conversazione dell'app.",
     "floatingBlocked": "Android non le lascia aprire la finestra: concedi «Sovrapponi ad altre app» dalle impostazioni di sistema.",
+    "floatingAllow": "Apri le impostazioni",
     "screenEnabled": "Legge lo schermo",
     "screenHint": "Quando tocchi la mascotte, {name} legge una volta l'app che sta sotto — il testo, l'indirizzo e uno screenshot di quella sola app — così puoi dirle «salvati questo». Non tocca niente e salta le app che vietano gli screenshot.",
     "screenOff": "Si accende da Accessibilità: tocca l'interruttore e attiva «Jenny — lettura dello schermo». Se Android la dice un'impostazione con restrizioni, sbloccala dalle info dell'app (⋮ → Consenti impostazioni con restrizioni).",
