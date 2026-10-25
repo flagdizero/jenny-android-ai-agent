@@ -436,6 +436,7 @@ export class HomeChat {
     } finally {
       this._anchor = null;
     }
+    this.onThreadChange?.();
     if (!this._reading) this._live = new WeakSet();
     this._empty = !this.el.querySelector(THREAD_NODES);
     this.syncEmpty();
@@ -465,6 +466,7 @@ export class HomeChat {
           turn.journal, turn.moves);
       }
     });
+    this.onThreadChange?.();
   }
 
   /** Molti messaggi in fila, e la sagoma di Jenny ricalcolata **una volta**,
@@ -902,6 +904,10 @@ export class HomeChat {
        quel che hai scritto ha la sua, come le risposte. */
     const time = this._timeEl(at);
     if (time) node.appendChild(time);
+    /* L'ora in millisecondi sul nodo: chi mette qualcosa al suo posto nel filo
+       (la scheda di un piano finito, `HomePlan.place`) la legge da qui, anche
+       dopo una rilettura della storia. */
+    if (Number(at) > 0 && node.dataset) node.dataset.at = String(Number(at));
     return this._append(node, toTop);
   }
 
@@ -922,6 +928,7 @@ export class HomeChat {
     this._tailOf(node, latencyMs, at);
     this._journalMarkOf(node, journal);
     this._moveOfferOf(node, moves);
+    if (Number(at) > 0 && node.dataset) node.dataset.at = String(Number(at));
     this._append(node, toTop);
     /* Dopo: `_append` toglie i «Riprova» di prima, e la storia piu' vecchia
        (`toTop`) non ne ha — il presente e' in fondo. */
@@ -1204,6 +1211,7 @@ export class HomeChat {
     if (!this.turnNode) {
       this.turnNode = document.createElement('div');
       this.turnNode.className = 'home-msg home-msg-jenny';
+      if (this.turnNode.dataset) this.turnNode.dataset.at = String(Date.now());
       this._append(this.turnNode);
     }
     return this.turnNode;

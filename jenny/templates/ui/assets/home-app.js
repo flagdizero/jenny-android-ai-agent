@@ -284,6 +284,9 @@ class HomeApp {
       refreshStaged: () => this.staged.refresh(),
       onDraftsChange: () => this.staged.redraw(),
     });
+    /* La storia riletta entra davanti al posto vivo: la scheda di un piano finito,
+       che sta nel filo al suo posto, va rimessa dove era (`HomePlan.place`). */
+    this.chat.onThreadChange = () => this.plan?.place();
 
     this.backBtn = document.getElementById('home-back');
     /* Il percorso della riga: la radice (di che posto e' la stanza) e i

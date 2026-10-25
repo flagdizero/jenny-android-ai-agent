@@ -39,7 +39,8 @@ const DRAFTING = { since: '2026-10-23T10:00:00Z', revise: null, reads: 0 };
 rpcAnswers['plan.get'] = () => ({ ok: true, plan: current, drafting });
 let open = [];
 rpcAnswers['plan.list'] = () => ({ ok: true, plans: open });
-const card = () => document.querySelector('#home-thread > .home-live > .home-plan');
+/* Nel posto vivo finche' il piano e' vivo; un piano finito sta nel filo, al suo posto. */
+const card = () => document.querySelector('#home-thread > .home-live > .home-plan, #home-thread > .home-plan');
 const rpcs = (m) => sent.filter((x) => x.type === 'rpc' && x.method === m);
 const messages = () => sent.filter((x) => x.type === 'message');
 const text = (node) => node.textContent.replace(/\\s+/g, ' ').trim();
@@ -348,6 +349,40 @@ frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
 await tick(40);
 assert.equal($('home-input').disabled, false);
 assert.ok(action('resume'));
+""")
+
+
+def test_a_finished_plan_stays_in_the_thread_where_it_happened() -> None:
+    """Un piano finito non resta nel posto vivo: quel che si scrive dopo («che bel
+    lavorone», la risposta di Jenny) va sotto la scheda, non sopra (25/10)."""
+    run_home(_HEAD + """
+current = plan({ status: 'running', done: 2, total: 3, current_step_id: 's3',
+  steps: [step('s1', 'A', { status: 'done' }), step('s2', 'B', { status: 'done' }),
+    step('s3', 'C', { status: 'now', started_at: new Date().toISOString() })] });
+open = [{ id: 'p1', notebook: 'orto', status: 'running', title: 'Rebuild the wiki', done: 2, total: 3 }];
+await toNotebook();
+const live = document.querySelector('#home-thread > .home-live');
+assert.equal(card().parentNode, live, 'in corsa: nel posto vivo');
+// Finisce: esce dal posto vivo e resta in fondo al filo.
+current = { ...current, status: 'done', done: 3, current_step_id: null,
+  updated_at: new Date(Date.now() - 1000).toISOString(),
+  steps: current.steps.map((s) => ({ ...s, status: 'done' })) };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(card().parentNode, document.getElementById('home-thread'), 'finito: nel filo');
+assert.equal(card().nextElementSibling, live, 'per ora in fondo');
+// Un messaggio dopo: gli va sotto.
+$('home-input').value = 'che bel lavorone';
+$('home-send').click();
+await tick(20);
+const mine = [...document.querySelectorAll('#home-thread > .home-msg-user')].at(-1);
+assert.match(text(mine), /che bel lavorone/);
+assert.ok(card().compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWING,
+  'il messaggio nuovo sta dopo la scheda');
+// Ridisegnata (un frame, una rilettura), la scheda non scavalca il messaggio.
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.ok(card().compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWING);
 """)
 
 

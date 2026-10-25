@@ -770,11 +770,8 @@ export class HomePlan {
     if (!this.card) {
       this.card = el('div', 'home-work home-plan');
       this._drawnKey = '';
-      const typing = this.live.querySelector(':scope > .home-typing');
-      /* Sopra chi lavora: la scheda e' il lavoro, la riga di Jenny ne e' il dettaglio. */
-      const first = this.live.querySelector(':scope > .home-work:not(.home-plan), :scope > .home-typing');
-      this.live.insertBefore(this.card, first || typing || null);
     }
+    this.place(plan);
     this.card.className = `home-work home-plan is-${plan.status}`;
     if (plan.status === 'proposed' && this._revising() === plan.id) {
       this.card.classList.add('is-review');
@@ -786,6 +783,33 @@ export class HomePlan {
     this._scheduleTick(plan);
     this._syncDrafts();
     this.onChange?.();
+  }
+
+  /* Dove sta la scheda. Un piano vivo (proposta, in corso, in pausa, fermo su
+     una domanda) sta nel posto vivo, in fondo, sopra la riga di chi lavora. Un
+     piano finito no: e' una cosa successa, e resta nel filo dove e' successa —
+     prima del primo messaggio arrivato dopo la sua fine, o in fondo se non ce
+     ne sono. Prima restava nel posto vivo per sempre, e tutto quel che si
+     scriveva dopo («che bel lavorone», la risposta di Jenny) gli finiva sopra
+     (25/10). La richiama anche il filo quando rilegge la storia
+     (`HomeChat.onThreadChange`): la storia entra davanti al posto vivo, cioe'
+     dopo una scheda gia' messa nel filo, e va rimessa al suo posto. */
+  place(plan = this._shown()) {
+    if (!this.card || !plan || !this.live) return;
+    const thread = this.live.parentNode;
+    if (!RAN_STATUSES.has(plan.status) || !thread) {
+      if (this.card.parentNode === this.live) return;
+      /* Sopra chi lavora: la scheda e' il lavoro, la riga di Jenny ne e' il dettaglio. */
+      const first = this.live.querySelector(':scope > .home-work:not(.home-plan), :scope > .home-typing');
+      this.live.insertBefore(this.card, first || null);
+      return;
+    }
+    const end = Date.parse(plan.updated_at || '') || 0;
+    const after = [...thread.querySelectorAll(':scope > .home-msg')]
+      .find((n) => Number(n.dataset.at) > end);
+    const target = after || this.live;
+    if (this.card.parentNode === thread && this.card.nextSibling === target) return;
+    thread.insertBefore(this.card, target);
   }
 
   /* Le bozze mostrate dalla scheda sono cambiate (un blocco nuovo, uno
