@@ -300,6 +300,9 @@ class _NotebookTool(Tool):
             _append(trace_path, f"\nNot removed (still in place): {'; '.join(failed)}\n")
         if not removed:
             return "Nothing was removed: " + "; ".join(failed)
+        emptied = _prune_empty_folders(root, [p for rel, p in targets if rel in removed])
+        if emptied:
+            _append(trace_path, f"\nEmpty folders removed: {', '.join(emptied)}\n")
         # Le pagine sono già sparite: un guasto della bacheca non deve far credere
         # il contrario, né lasciare il resto della risposta per strada.
         taken: dict[str, list[str]] = {}
@@ -317,6 +320,8 @@ class _NotebookTool(Tool):
 
         lines = [f"Removed {len(removed)} page(s): {', '.join(f'wiki/{r}' for r in removed)}. "
                  f"Trace (path, first lines, reason): {trace}."]
+        if emptied:
+            lines.append(f"Removed {len(emptied)} folder(s) left empty: {', '.join(emptied)}.")
         if board_error:
             lines.append(f"Board not updated: {board_error}; take the pages off with board "
                          f"action=remove_pages ({', '.join(removed)}).")
@@ -438,6 +443,32 @@ def _forget_taint(path: Path) -> None:
     parts = policy.relative(path) if policy is not None else None
     if policy is not None and parts:
         ledger_for(policy.install_root).clear("/".join(parts))
+
+
+def _prune_empty_folders(root: Path, pages: list[Path]) -> list[str]:
+    """Le cartelle che *pages* (già cancellate) lasciano vuote sotto ``wiki/``:
+    via, risalendo da quella di ogni pagina e fermandosi a ``wiki/``, che resta
+    sempre. Restituisce i percorsi tolti (``wiki/concepts/Acero/``).
+
+    Nella prova del 24/10/2026 un riordino ha tolto 56 pagine e lasciato sette
+    cartelle vuote in ``wiki/concepts/``: nessun tool poteva toglierle.
+    ``rmdir`` toglie solo una cartella vuota, quindi un file nascosto
+    (``.gitkeep``) la tiene, e così un file arrivato nel frattempo; ``raw/`` e la
+    radice del quaderno stanno fuori dalla salita. Le cartelle fra la pagina e
+    ``wiki/`` non sono link: lo ha già controllato :func:`_resolve_pages`.
+    """
+    wiki = (root / "wiki").resolve()
+    gone: list[str] = []
+    for page in pages:
+        folder = page.parent
+        while folder != wiki and is_path_within(folder, wiki):
+            try:
+                folder.rmdir()
+            except OSError:  # non vuota, o già tolta risalendo da un'altra pagina
+                break
+            gone.append(f"wiki/{folder.relative_to(wiki).as_posix()}/")
+            folder = folder.parent
+    return gone
 
 
 def _fenced(root: Path, target: Path) -> Path:

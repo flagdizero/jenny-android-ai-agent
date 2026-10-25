@@ -451,3 +451,49 @@ async def test_a_name_too_long_is_an_answer_not_a_crash(notebook_chat: Path) -> 
     assert out.startswith(("None of those pages exists", "Error: nothing was removed")), out
     read = await NotebookReadTool().execute(action="read_many", paths=[long])
     assert read.startswith("Error: nothing was read.")
+
+
+# ── Le cartelle rimaste vuote (25/10/2026) ───────────────────────────────────
+
+
+async def test_remove_pages_removes_the_folders_it_leaves_empty(notebook_chat: Path) -> None:
+    """Un riordino ne lasciava sette, vuote, in ``wiki/concepts/``: ora se ne
+    vanno risalendo fino a ``wiki/`` escluso, e la risposta le elenca come le pagine."""
+    root = notebook_chat
+    wiki = root / "wiki"
+    for rel in ("concepts/Acero/substrato.md", "concepts/Acero/potatura.md",
+                "concepts/Fico/sub/esposizione.md", "concepts/Pino/a.md", "concepts/Pino/b.md",
+                "concepts/Tenuta/c.md"):
+        _write(wiki / rel, "---\nstate: open\n---\n# X\n")
+    _write(wiki / "concepts" / "Tenuta" / ".gitkeep", "")
+    _write(root / "raw" / "vuota" / ".keep", "")
+    (root / "raw" / "vuota" / ".keep").unlink()  # una cartella vuota in raw/: resta
+
+    out = await NotebookEditTool(timezone="Europe/Rome").execute(
+        action="remove_pages", reason="riordino",
+        pages=["concepts/Acero/substrato.md", "concepts/Acero/potatura.md",
+               "wiki/concepts/Fico/sub/esposizione.md", "concepts/Pino/a.md",
+               "concepts/Tenuta/c.md"])
+
+    assert "Removed 5 page(s)" in out
+    gone = ["wiki/concepts/Acero/", "wiki/concepts/Fico/sub/", "wiki/concepts/Fico/"]
+    assert f"Removed 3 folder(s) left empty: {', '.join(gone)}." in out
+    assert not (wiki / "concepts" / "Acero").exists()
+    assert not (wiki / "concepts" / "Fico").exists()
+    # Non vuote: una pagina rimasta, un file nascosto.
+    assert (wiki / "concepts" / "Pino" / "b.md").is_file()
+    assert (wiki / "concepts" / "Tenuta" / ".gitkeep").is_file()
+    assert (wiki / "concepts").is_dir() and wiki.is_dir()
+    assert (root / "raw" / "vuota").is_dir()
+    trace = next((root / "raw" / "removed").glob("*.md")).read_text(encoding="utf-8")
+    assert f"Empty folders removed: {', '.join(gone)}" in trace
+
+
+async def test_wiki_itself_stays_when_its_last_page_goes(notebook_chat: Path) -> None:
+    """La salita si ferma a ``wiki/``: mai la cartella stessa, mai la radice."""
+    root = notebook_chat
+    (root / "wiki" / "index.md").unlink()  # solo per questa prova: wiki/ resta vuota
+    out = await NotebookEditTool().execute(action="remove_pages", reason="x",
+                                           pages=["acero.md", "fico.md", "pino.md"])
+    assert "Removed 3 page(s)" in out and "folder(s) left empty" not in out
+    assert (root / "wiki").is_dir() and not any((root / "wiki").iterdir())
