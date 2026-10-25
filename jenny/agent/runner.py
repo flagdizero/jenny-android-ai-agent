@@ -17,6 +17,8 @@ from jenny.agent.context_governor import (
     extract_context_limit,
     is_context_length_error,
     label_mid_turn_messages,
+    last_helper_result,
+    mask_refused_results,
     snip_history,
 )
 from jenny.agent.history_repair import (
@@ -59,6 +61,7 @@ from jenny.utils.helpers import (
 from jenny.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
     OUTPUT_TRUNCATED_MESSAGE,
+    PROVIDER_REFUSED_MESSAGE,
     build_budget_notice_message,
     build_goal_continue_message,
     build_length_recovery_message,
@@ -231,6 +234,11 @@ class _RunCounters:
     tools_at_last_goal_continue: int = 0
     goal_stalled: bool = False
     error_kind: str | None = None
+    # I risultati d'aiutante dopo i quali il provider ha rifiutato di rispondere
+    # (``_recover_provider_refusal``): la copia per il modello li porta come
+    # segnaposto per il resto del run. Mai azzerata: ogni voce è un tentativo
+    # già speso, e rimetterla in vista rifarebbe la richiesta rifiutata.
+    refused_results: list[Any] = field(default_factory=list)
 
 
 class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
@@ -560,6 +568,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
 
         for iteration in range(spec.max_iterations):
             messages_for_model = self._govern_context(spec, messages, iteration)
+            messages_for_model = mask_refused_results(messages_for_model, state.refused_results)
             context = AgentHookContext(
                 iteration=iteration,
                 messages=messages,
@@ -619,6 +628,13 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             if outcome is ResponseOutcome.TRUNCATED_BLANK:
                 if await self._recover_blank_truncation(
                     spec, hook, context, response, state, raw_usage, output_budget, iteration
+                ) == "continue":
+                    continue
+
+            # --- Rifiuto del provider: un tentativo col contesto cambiato ---
+            if outcome is ResponseOutcome.REFUSED:
+                if await self._recover_provider_refusal(
+                    spec, hook, context, response, messages, state, iteration
                 ) == "continue":
                     continue
 
@@ -684,6 +700,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                 if await self._finish_on_blank(
                     spec, hook, context, messages, state,
                     truncated=outcome is ResponseOutcome.TRUNCATED_BLANK,
+                    refused=outcome is ResponseOutcome.REFUSED,
                 ) == "continue":
                     continue
                 break
@@ -973,6 +990,53 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             context.tool_calls = list(response.tool_calls)
             clean = hook.finalize_content(context, response.content)
         return "proceed", response, clean
+
+    async def _recover_provider_refusal(
+        self,
+        spec: AgentRunSpec,
+        hook: AgentHook,
+        context: AgentHookContext,
+        response: LLMResponse,
+        messages: list[dict[str, Any]],
+        state: _RunCounters,
+        iteration: int,
+    ) -> Literal["continue", "proceed"]:
+        """Il provider ha rifiutato di rispondere: si ritenta solo cambiando il contesto.
+
+        Il rifiuto (``content_filter`` da DeepSeek, ``refusal`` da Anthropic)
+        dipende dal contesto: sul telefono, due volte dopo il rientro di un
+        aiutante, e i due retry identici del ramo vuoto e la finalizzazione
+        senza tool sono stati rifiutati tutti uguali. Qui un solo tentativo,
+        con l'ultimo risultato d'aiutante sostituito da un segnaposto nella
+        copia per il modello (``mask_refused_results``); se l'ultima riga
+        ``user`` non è un risultato d'aiutante, o è già stato tolto, niente
+        tentativo: il turno finisce in ``provider_refused`` (``_finish_on_blank``).
+
+        Il nome del metodo è il gancio del tracciamento di debug, come gli altri
+        recovery: il suo evento è ``kind="provider_refused"``.
+        """
+        target = last_helper_result(messages)
+        if target is None or target in state.refused_results:
+            logger.warning(
+                "Provider refused to answer on turn {} for {} (finish_reason='{}'); "
+                "nothing left to change, giving up",
+                iteration,
+                spec.session_key or "default",
+                response.finish_reason,
+            )
+            return "proceed"
+        state.refused_results.append(target)
+        logger.warning(
+            "Provider refused to answer on turn {} for {} (finish_reason='{}'); "
+            "retrying with the last helper result replaced by a placeholder",
+            iteration,
+            spec.session_key or "default",
+            response.finish_reason,
+        )
+        if hook.wants_streaming():
+            await hook.on_stream_end(context, resuming=False)
+        await hook.after_iteration(context)
+        return "continue"
 
     async def _recover_length(
         self,
@@ -1264,17 +1328,26 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         state: _RunCounters,
         *,
         truncated: bool = False,
+        refused: bool = False,
     ) -> Literal["continue", "break"]:
-        # Due esiti distinti sotto lo stesso sintomo (contenuto vuoto): dirlo
+        # Tre esiti distinti sotto lo stesso sintomo (contenuto vuoto): dirlo
         # all'utente, invece di collassarli sul messaggio generico, è ciò che
-        # rende il limite di token diagnosticabile senza leggere i log.
+        # rende il limite di token — o il no del provider — diagnosticabile
+        # senza leggere i log.
         #
         # Due testi: la cronologia del modello tiene la frase inglese di sempre
         # (``utils/runtime.py``), l'utente legge la sua nella sua lingua — senza
         # «alza i max output tokens», che a chi tiene un telefono non dice niente.
-        persisted = OUTPUT_TRUNCATED_MESSAGE if truncated else EMPTY_FINAL_RESPONSE_MESSAGE
-        state.final_content = say("turn.truncated" if truncated else "turn.empty")
-        state.stop_reason = "output_truncated" if truncated else "empty_final_response"
+        if refused:
+            persisted = PROVIDER_REFUSED_MESSAGE
+            state.final_content = say("turn.refused")
+            # Lo legge il driver del piano: un passo rifiutato non prende il
+            # promemoria, che rifarebbe la stessa richiesta (``PlanDriver``).
+            state.stop_reason = "provider_refused"
+        else:
+            persisted = OUTPUT_TRUNCATED_MESSAGE if truncated else EMPTY_FINAL_RESPONSE_MESSAGE
+            state.final_content = say("turn.truncated" if truncated else "turn.empty")
+            state.stop_reason = "output_truncated" if truncated else "empty_final_response"
         state.error = persisted
         self._append_final_message(messages, persisted)
         context.final_content = state.final_content

@@ -83,17 +83,30 @@ class TurnOutcome:
     da "non ho potuto controllare" (v. ``jenny/cron/bound_runner.py``).
     """
 
-    @classmethod
-    def delivered(cls, message: OutboundMessage, *, final_text: str = "") -> "TurnOutcome":
-        return cls(TurnDisposition.DELIVERED, message, final_text or message.content)
+    stop_reason: str = ""
+    """Come è finito il giro del modello (``AgentRunResult.stop_reason``), o vuoto.
+
+    Vuoto per un turno che il modello non l'ha visto (scartato, tenuto, già
+    consegnato). Lo legge il driver del piano a fine turno: un passo finito in
+    ``provider_refused`` si blocca subito, senza il promemoria che rifarebbe la
+    stessa richiesta. Qui e non nei metadata inbound, che finiscono nell'outbound.
+    """
 
     @classmethod
-    def spoke_via_tool(cls, *, final_text: str = "") -> "TurnOutcome":
-        return cls(TurnDisposition.SPOKE_VIA_TOOL, None, final_text)
+    def delivered(
+        cls, message: OutboundMessage, *, final_text: str = "", stop_reason: str = ""
+    ) -> "TurnOutcome":
+        return cls(
+            TurnDisposition.DELIVERED, message, final_text or message.content, stop_reason
+        )
 
     @classmethod
-    def silent(cls, *, final_text: str = "") -> "TurnOutcome":
-        return cls(TurnDisposition.SILENT, None, final_text)
+    def spoke_via_tool(cls, *, final_text: str = "", stop_reason: str = "") -> "TurnOutcome":
+        return cls(TurnDisposition.SPOKE_VIA_TOOL, None, final_text, stop_reason)
+
+    @classmethod
+    def silent(cls, *, final_text: str = "", stop_reason: str = "") -> "TurnOutcome":
+        return cls(TurnDisposition.SILENT, None, final_text, stop_reason)
 
     @classmethod
     def of(
@@ -102,13 +115,14 @@ class TurnOutcome:
         *,
         spoke_via_tool: bool,
         final_text: str = "",
+        stop_reason: str = "",
     ) -> "TurnOutcome":
         """Costruisce l'esito dai due soli fatti che il turno conosce."""
         if message is not None:
-            return cls.delivered(message, final_text=final_text)
+            return cls.delivered(message, final_text=final_text, stop_reason=stop_reason)
         if spoke_via_tool:
-            return cls.spoke_via_tool(final_text=final_text)
-        return cls.silent(final_text=final_text)
+            return cls.spoke_via_tool(final_text=final_text, stop_reason=stop_reason)
+        return cls.silent(final_text=final_text, stop_reason=stop_reason)
 
     @property
     def spoke(self) -> bool:

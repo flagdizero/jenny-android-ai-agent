@@ -255,6 +255,41 @@ async def test_a_stalled_step_gets_one_reminder_then_blocks(
     assert plan.steps[0].status == "blocked"
 
 
+async def test_a_refused_step_blocks_at_once_without_the_reminder(
+    driver: PlanDriver, bus: FakeBus
+) -> None:
+    """Il provider ha rifiutato di rispondere: il promemoria prenderebbe lo stesso no."""
+    from jenny.runtime.user_text import say
+
+    plan = await _approve(driver)
+    await driver.on_turn_end(
+        KEY, {INJECTED_EVENT_META: PLAN_STEP_EVENT}, stop_reason="provider_refused"
+    )
+    assert _step_messages(bus, PLAN_REMINDER_EVENT) == []
+    plan = driver.store.load(plan.id)
+    assert plan.status == "blocked"
+    assert plan.blocked["reason"] == "refused" and plan.blocked["kind"] == "question"
+    assert plan.blocked["question"] == say("plan.refused")
+    assert plan.steps[0].status == "blocked"
+    # La risposta fa ripartire il passo, come per ogni domanda.
+    await driver.answer(plan.id, "Riprova")
+    plan = driver.store.load(plan.id)
+    assert plan.status == "running" and plan.steps[0].status == "now"
+    answer = bus.inbound[-1]
+    assert answer.content == "Riprova" and answer.metadata[PLAN_ANSWER_META] == plan.id
+
+
+async def test_a_refused_turn_with_helpers_running_waits_for_them(
+    driver: PlanDriver, host: FakeHost, bus: FakeBus
+) -> None:
+    """Il rientro di un aiutante cambia il contesto: il suo turno giudicherà di nuovo."""
+    plan = await _approve(driver)
+    host.helpers[KEY] = {"t1"}
+    await driver.on_turn_end(KEY, {}, stop_reason="provider_refused")
+    assert driver.store.load(plan.id).status == "running"
+    assert _step_messages(bus, PLAN_REMINDER_EVENT) == []
+
+
 async def test_a_pending_message_defers_the_judgement(driver: PlanDriver, bus: FakeBus) -> None:
     await _approve(driver)
     await driver.on_turn_end(KEY, {}, pending=True)

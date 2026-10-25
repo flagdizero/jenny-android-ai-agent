@@ -157,3 +157,40 @@ async def test_an_interrupted_announce_is_answered_once_on_retry(tmp_path: Path)
     rows = loop.sessions.get_or_create(key).messages
     assert sum(1 for m in rows if m.get("injected_event") == "subagent_result") == 1
     assert rows[-1] == {**rows[-1], "role": "assistant", "content": "Done: six cards."}
+
+
+async def test_a_refusal_after_the_result_retries_without_it(tmp_path: Path) -> None:
+    """Il provider rifiuta di rispondere dopo il rientro: il runner lo riconosce
+    come risultato d'aiutante e ritenta col segnaposto, tenendo il Runtime
+    Context; la storia tiene il risultato com'era."""
+    from jenny.agent.context import ContextBuilder
+    from jenny.utils.runtime import PROVIDER_REFUSED_RESULT_PLACEHOLDER
+
+    loop = _loop(tmp_path)
+    key = "internal:plants"
+    session = loop.sessions.get_or_create(key)
+    session.add_message("user", "write the plant cards")
+    session.add_message("assistant", "I started a helper for the cards.")
+    loop.sessions.save(session)
+    requests: list[list[dict]] = []
+
+    async def chat(*, messages, **_kwargs):
+        requests.append([dict(m) for m in messages])
+        if len(requests) == 1:
+            return LLMResponse(content=None, finish_reason="content_filter")
+        return LLMResponse(content="Done: six cards.")
+
+    loop.provider.chat_with_retry = chat
+    loop.provider.chat_stream_with_retry = chat
+
+    await loop._process_message(_announce(key))
+
+    assert len(requests) == 2
+    assert "Six pages written." in _text(requests[0][-1])
+    retried = _text(requests[1][-1])
+    assert retried.startswith(PROVIDER_REFUSED_RESULT_PLACEHOLDER)
+    assert "Six pages written." not in retried
+    assert ContextBuilder._RUNTIME_CONTEXT_TAG in retried
+    rows = loop.sessions.get_or_create(key).messages
+    assert any(r.get("role") == "user" and r.get("content") == RESULT for r in rows)
+    assert rows[-1]["content"] == "Done: six cards."

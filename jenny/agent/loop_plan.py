@@ -426,7 +426,10 @@ class LoopPlanMixin:
         except Exception:  # noqa: BLE001
             logger.opt(exception=True).warning("Plan pre-turn hook failed for {}", session_key)
 
-    async def _plan_turn_ended(self, msg: InboundMessage, session_key: str) -> None:
+    async def _plan_turn_ended(
+        self, msg: InboundMessage, session_key: str, *, stop_reason: str = ""
+    ) -> None:
+        """*stop_reason*: come è finito il giro del modello (``TurnOutcome``), o vuoto."""
         driver = self.plan_driver
         if driver is None or not is_project_session_key(session_key):
             return
@@ -438,6 +441,8 @@ class LoopPlanMixin:
         queue = self._pending_queues.get(session_key)
         pending = queue is not None and not queue.empty()
         try:
-            await driver.on_turn_end(session_key, msg.metadata, pending=pending)
+            await driver.on_turn_end(
+                session_key, msg.metadata, pending=pending, stop_reason=stop_reason
+            )
         except Exception:  # noqa: BLE001 — il piano resta com'è, il turno è comunque finito
             logger.opt(exception=True).error("Plan end-of-turn hook failed for {}", session_key)

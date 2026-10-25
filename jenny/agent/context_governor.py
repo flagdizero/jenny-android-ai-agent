@@ -314,3 +314,72 @@ def label_mid_turn_messages(messages: list[dict[str, Any]]) -> list[dict[str, An
             continue
         out[i] = {**m, "content": labelled}
     return out
+
+
+def last_helper_result(messages: list[dict[str, Any]]) -> Any:
+    """Il contenuto dell'ultimo risultato d'aiutante, se è l'ultima riga ``user``.
+
+    È il candidato del recovery di un rifiuto del provider
+    (``AgentRunner._recover_provider_refusal``): misurato sul telefono, il
+    ``content_filter`` arrivava subito dopo il rientro di un aiutante. Si guarda
+    l'ultima riga ``user`` saltando assistant e tool; se è un messaggio vero
+    dell'utente (o un'altra riga sintetica) non c'è niente da togliere, e torna
+    ``None``. Il rientro si riconosce dal marcatore ``injected_event``, che il
+    loop mette sia sull'iniezione a metà turno (``AgentLoop._drain_pending``)
+    sia sul messaggio corrente di un turno d'annuncio.
+    """
+    from jenny.session.history_meta import INJECTED_EVENT_META, SUBAGENT_RESULT_EVENT
+
+    for m in reversed(messages):
+        if m.get("role") != "user":
+            continue
+        if m.get(INJECTED_EVENT_META) != SUBAGENT_RESULT_EVENT:
+            return None
+        content = m.get("content")
+        return content if content else None
+    return None
+
+
+def mask_refused_results(
+    messages: list[dict[str, Any]], refused: list[Any]
+) -> list[dict[str, Any]]:
+    """Mette il segnaposto al posto dei risultati rifiutati, solo nella richiesta.
+
+    *refused* sono i contenuti tolti da questo run (``last_helper_result``):
+    una riga ``user`` con lo stesso contenuto diventa
+    ``PROVIDER_REFUSED_RESULT_PLACEHOLDER``. Per contenuto e non per identità:
+    il governo del contesto copia i dict a ogni iterazione. Il blocco del
+    Runtime Context, se la riga lo porta (il messaggio corrente di un turno),
+    resta: è lì che il modello legge il piano e l'ora. La storia non cambia.
+    """
+    if not refused:
+        return messages
+    from jenny.agent.context import ContextBuilder
+    from jenny.utils.runtime import PROVIDER_REFUSED_RESULT_PLACEHOLDER
+
+    placeholder = PROVIDER_REFUSED_RESULT_PLACEHOLDER
+    tag = ContextBuilder._RUNTIME_CONTEXT_TAG
+    out = messages
+    for i, m in enumerate(messages):
+        if m.get("role") != "user":
+            continue
+        content = m.get("content")
+        if not content or content not in refused:
+            continue
+        if out is messages:
+            out = list(messages)
+        masked: Any
+        if isinstance(content, str):
+            pos = content.find(tag)
+            masked = placeholder if pos < 0 else f"{placeholder}\n\n{content[pos:]}"
+        elif isinstance(content, list):
+            masked = [{"type": "text", "text": placeholder}] + [
+                block for block in content
+                if isinstance(block, dict)
+                and isinstance(block.get("text"), str)
+                and block["text"].startswith(tag)
+            ]
+        else:
+            masked = placeholder
+        out[i] = {**m, "content": masked}
+    return out

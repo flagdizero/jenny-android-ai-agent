@@ -80,6 +80,8 @@ class Script:
         self.release = asyncio.Event()
         # Il primo turno di pianificazione fa una domanda invece di proporre.
         self.ask_first = False
+        # Il provider rifiuta di rispondere ai turni del passo (``content_filter``).
+        self.refuse_steps = False
 
     async def __call__(self, **kw: Any) -> LLMResponse:
         messages = kw.get("messages") or []
@@ -99,6 +101,8 @@ class Script:
             # Prima si guarda il quaderno: ``plan_propose`` rifiuta senza.
             return _call("read_file", path="wiki/index.md")
         found = re.search(r"\[Plan(?: reminder)? — step (\d+) of", text)
+        if found and self.refuse_steps:
+            return LLMResponse(content=None, finish_reason="content_filter")
         if found and self.hang_steps:
             while not self.release.is_set():
                 try:
@@ -294,6 +298,28 @@ async def test_a_stalled_step_is_reminded_once_then_blocked(workspace: Path) -> 
     plan = driver.store.load(plan.id)
     assert plan.blocked["reason"] == "stalled"
     assert sum("[Plan reminder" in p for p in script.prompts) == 1
+
+
+async def test_a_refused_step_blocks_without_a_reminder(workspace: Path) -> None:
+    """Lo ``stop_reason`` del turno arriva al driver: niente promemoria, blocco ``refused``."""
+    script = Script(workspace, close_steps=False)
+    script.refuse_steps = True
+    loop, driver = _loop(workspace, script)
+    task = await _run(loop)
+    try:
+        await loop.bus.publish_inbound(_user("Rifai la wiki", plan_mode=True, readonly=True))
+        await wait_until(lambda: driver.store.open_plan_for("piante") is not None, timeout=5)
+        await wait_until(lambda: KEY not in loop._pending_queues, timeout=5)
+        plan = driver.store.open_plan_for("piante")
+        await driver.approve(plan.id, plan.version, [])
+        await wait_until(lambda: driver.store.load(plan.id).status == "blocked", timeout=10)
+    finally:
+        await _stop(loop, task)
+    plan = driver.store.load(plan.id)
+    assert plan.blocked["reason"] == "refused"
+    assert sum("[Plan reminder" in p for p in script.prompts) == 0
+    # Il turno del passo è l'ultima riga ``user``: niente da togliere, una richiesta sola.
+    assert sum("[Plan — step" in p for p in script.prompts) == 1
 
 
 async def test_stop_with_a_helper_running(workspace: Path) -> None:

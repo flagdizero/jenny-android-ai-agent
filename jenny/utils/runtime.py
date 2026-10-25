@@ -36,6 +36,24 @@ OUTPUT_TRUNCATED_MESSAGE = (
     "a smaller piece of the task."
 )
 
+# Il provider ha rifiutato di rispondere (``content_filter``/``refusal``), anche
+# dopo il tentativo senza l'ultimo risultato d'aiutante. Distinto dalla risposta
+# vuota per la stessa ragione di OUTPUT_TRUNCATED_MESSAGE: «non ho prodotto una
+# risposta» manda a cercare un difetto di Jenny, e qui ha detto no il provider.
+PROVIDER_REFUSED_MESSAGE = (
+    "The model provider refused to answer this request (content filter), so I "
+    "could not reply. Please try again or rephrase the request."
+)
+
+# Prende il posto del risultato d'aiutante dopo il quale il provider ha
+# rifiutato di rispondere, nella sola copia mandata al modello: la storia tiene
+# il risultato com'era (``context_governor.mask_refused_results``).
+PROVIDER_REFUSED_RESULT_PLACEHOLDER = (
+    "[The provider refused to process this helper result, so it is not shown here. "
+    "The files the helper wrote are in the workspace or the notebook: read them if "
+    "you need them.]"
+)
+
 FINALIZATION_RETRY_PROMPT = (
     "Please provide your response to the user based on the conversation above."
 )

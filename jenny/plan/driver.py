@@ -1428,6 +1428,7 @@ class PlanDriver:
         metadata: Mapping[str, Any] | None,
         *,
         pending: bool = False,
+        stop_reason: str = "",
     ) -> None:
         """A fine turno nella chat di un quaderno: il passo è chiuso? va avanti.
 
@@ -1441,6 +1442,10 @@ class PlanDriver:
 
         *pending* dice che la sessione ha già un messaggio in coda (un risultato
         arrivato a fine turno): sarà un turno suo, e il giudizio aspetta quello.
+
+        *stop_reason* è come è finito il giro del modello: con
+        ``provider_refused`` il passo aperto si blocca subito, senza promemoria
+        (:meth:`_judge_open_step`).
         """
         live = self._index.get(session_key)
         if live is None or live.status not in _RUNNING:
@@ -1478,10 +1483,18 @@ class PlanDriver:
                 # In corsa senza un passo aperto: un'apertura caduta a metà.
                 await self._advance(plan)
                 return
-            await self._judge_open_step(plan, step, meta, pending=pending)
+            await self._judge_open_step(
+                plan, step, meta, pending=pending, refused=stop_reason == "provider_refused"
+            )
 
     async def _judge_open_step(
-        self, plan: Plan, step: Step, meta: Mapping[str, Any], *, pending: bool
+        self,
+        plan: Plan,
+        step: Step,
+        meta: Mapping[str, Any],
+        *,
+        pending: bool,
+        refused: bool = False,
     ) -> None:
         step_id = step.id
         nudge = step.extra.get(_NUDGE)
@@ -1512,30 +1525,52 @@ class PlanDriver:
             # non è più in corsa) e verrà scartato: un blocco un attimo in
             # anticipo, mai un piano incantato.
             nudge = _NUDGE_USED
+        if refused:
+            # Il provider ha rifiutato di rispondere (``content_filter``), e il
+            # runner ha già speso l'unico tentativo che cambiava il contesto
+            # (``_recover_provider_refusal``). Il promemoria rifarebbe la stessa
+            # richiesta e prenderebbe lo stesso no — sul
+            # telefono è andata così, e il blocco arrivava come «stallo», con
+            # una domanda che non diceva cosa era successo. Dopo i due controlli
+            # di sopra: un aiutante in volo o un messaggio in coda portano un
+            # contesto nuovo, e il loro turno giudicherà di nuovo.
+            await self._block_open_step(plan, step_id, "refused")
+            return
         if nudge == _NUDGE_USED:
-            from jenny.runtime.user_text import say
-
-            drafts = await asyncio.to_thread(self._plan_drafts, plan)
-            if drafts:
-                plan = await self._hold_on_drafts(
-                    plan, step_id, drafts, question=say("plan.stalled"), reason="stalled"
-                )
-                plan = (
-                    await self._settle_drafts_locked(plan.session_key, plan.id, None) or plan
-                )
-            else:
-                plan = await asyncio.to_thread(
-                    self.store.update,
-                    plan.id,
-                    lambda p: _block(p, step_id, say("plan.stalled"), "stalled"),
-                )
-                self._remember(plan)
-            logger.info("Plan {} blocked: step {} stalled after the reminder", plan.id, step_id)
-            await self._changed(plan)
+            await self._block_open_step(plan, step_id, "stalled")
             return
         await self._set_nudge(plan, step_id, _NUDGE_SENT)
         await self.bus.publish_inbound(self._step_message(plan, step, reminder=True))
         logger.info("Plan {}: one reminder for step {}", plan.id, step_id)
+
+    async def _block_open_step(self, plan: Plan, step_id: str, reason: str) -> None:
+        """Blocca il passo aperto con la domanda ``plan.<reason>`` (col lock preso).
+
+        *reason* è ``stalled`` (fermo dopo il promemoria) o ``refused`` (il
+        provider non ha risposto). Una domanda come quella di ``plan_blocked``:
+        la risposta dell'utente fa ripartire il passo (:meth:`answer`). Se il
+        passo ha lasciato bozze, la domanda aspetta dietro di loro.
+        """
+        from jenny.runtime.user_text import say
+
+        question = say(f"plan.{reason}")
+        drafts = await asyncio.to_thread(self._plan_drafts, plan)
+        if drafts:
+            plan = await self._hold_on_drafts(
+                plan, step_id, drafts, question=question, reason=reason
+            )
+            plan = await self._settle_drafts_locked(plan.session_key, plan.id, None) or plan
+        else:
+            plan = await asyncio.to_thread(
+                self.store.update,
+                plan.id,
+                lambda p: _block(p, step_id, question, reason),
+            )
+            self._remember(plan)
+        logger.info("Plan {} blocked: step {} {}", plan.id, step_id, (
+            "refused by the provider" if reason == "refused" else "stalled after the reminder"
+        ))
+        await self._changed(plan)
 
     async def _set_nudge(self, plan: Plan, step_id: str, value: str | None) -> None:
         def _apply(p: Plan) -> None:

@@ -2050,7 +2050,12 @@ class AgentLoop(
                             # chiuso → il seguente; aperto senza aiutanti → il
                             # promemoria, poi il blocco. Dopo la consegna, cosi'
                             # la risposta del passo arriva prima del passo dopo.
-                            await self._plan_turn_ended(msg, session_key)
+                            # ``getattr``: un ``_process_message`` finto nei test
+                            # torna esiti senza il campo.
+                            await self._plan_turn_ended(
+                                msg, session_key,
+                                stop_reason=getattr(outcome, "stop_reason", ""),
+                            )
                     self._cron_turns.complete(msg, outcome=outcome)
                 except asyncio.CancelledError:
                     self._cron_turns.complete(
@@ -2325,6 +2330,16 @@ class AgentLoop(
             record_sent_content(announce_row, messages)
         if plan_row is not None and not (history and history[-1].get("role") == "user"):
             record_sent_content(plan_row, messages)
+        if (
+            followup_state in (FollowupState.NEW, FollowupState.PENDING)
+            and messages[-1].get("role") == "user"
+        ):
+            # Il rientro arriva al runner riconoscibile come quello iniettato a
+            # meta' turno: se il provider rifiuta di rispondere, e' la riga che
+            # il recovery toglie dalla richiesta (``_recover_provider_refusal``).
+            # Un dict nuovo, e fuori dal salvataggio (``save_skip``): la storia
+            # non cambia, e il provider il marcatore non lo vede.
+            messages[-1] = {**messages[-1], INJECTED_EVENT_META: SUBAGENT_RESULT_EVENT}
         self._settle_closed_reasoning(session, messages)
         # Un controllo dell'heartbeat delegato con ``spawn`` non ha un esito nel
         # turno che lo delega: `spawn` ritorna subito. QUESTO turno è l'unico che
@@ -2434,9 +2449,9 @@ class AgentLoop(
                 except Exception:
                     logger.exception("Heartbeat follow-up: could not record the outcome")
             return (
-                TurnOutcome.spoke_via_tool(final_text=text)
+                TurnOutcome.spoke_via_tool(final_text=text, stop_reason=stop_reason)
                 if spoke_via_tool
-                else TurnOutcome.silent(final_text=text)
+                else TurnOutcome.silent(final_text=text, stop_reason=stop_reason)
             )
         subagent_status = msg.metadata.get("subagent_status")
         if (is_subagent and subagent_status not in (None, "ok")
@@ -2454,12 +2469,12 @@ class AgentLoop(
             # resti solo il secondo. La risposta resta nella storia, cosi' Jenny
             # sa di averlo rilanciato.
             logger.info("Subagent relaunched after a failure; no message to {}", key)
-            return TurnOutcome.silent(final_text=final_content or "")
+            return TurnOutcome.silent(final_text=final_content or "", stop_reason=stop_reason)
         if is_plan and not (final_content or "").strip():
             # Un passo chiuso coi soli tool non ha niente da dire: il riempitivo
             # «Background task completed.» sarebbe una bolla vuota di senso, e la
             # scheda del piano mostra gia' l'avanzamento.
-            return TurnOutcome.silent(final_text="")
+            return TurnOutcome.silent(final_text="", stop_reason=stop_reason)
         # Differenza deliberata dal path utente: nessuna soppressione MessageTool
         # (_assemble_outbound). Un turno di sistema VISIBILE ha un contratto di
         # outbound proprio e restituisce sempre una risposta (contenuto o fallback).
@@ -2473,7 +2488,8 @@ class AgentLoop(
                 chat_id=chat_id,
                 content=content,
                 metadata=outbound_metadata,
-            )
+            ),
+            stop_reason=stop_reason,
         )
 
     async def shutdown(self, *, timeout_s: float = 10.0) -> None:
@@ -2814,6 +2830,7 @@ class AgentLoop(
             # intatto — la history della sessione e' gia' stata scritta da SAVE.
             final_text=(ctx.final_content or "")
             + (self._nothing_to_report_lines(ctx.tools) if ctx.silent else ""),
+            stop_reason=ctx.stop_reason,
         )
 
     def _nothing_to_report_lines(self, tools: ToolRegistry | None = None) -> str:

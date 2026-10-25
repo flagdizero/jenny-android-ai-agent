@@ -70,6 +70,9 @@ _TEXT: dict[str, dict[str, str]] = {
             "I ran out of room for the answer before getting to the point. Ask me for "
             "a smaller piece at a time."
         ),
+        "turn.refused": (
+            "The provider refused to answer. Try again, or ask in a different way."
+        ),
         "turn.max_iterations": (
             "I took too many steps ({max_iterations}) without finishing. Try splitting "
             "the request into smaller pieces."
@@ -361,6 +364,10 @@ _TEXT: dict[str, dict[str, str]] = {
             "I stopped without saying whether this step is finished. Tell me how to go on, "
             "or stop the plan."
         ),
+        "plan.refused": (
+            "The provider refused to answer, and asking again the same way gets the same "
+            "refusal. Answer to try the step again, or stop the plan."
+        ),
         "plan.restarted": "I restarted during step {step}: tap Resume to do it again.",
         "plan.stopped": "I stopped the plan. The notebook stays as it is now.",
         "plan.stopped_planning": "I stopped preparing the plan.",
@@ -418,6 +425,9 @@ _TEXT: dict[str, dict[str, str]] = {
         "turn.truncated": (
             "Ho finito lo spazio per la risposta prima di arrivare al punto. Chiedimi un "
             "pezzo più piccolo alla volta."
+        ),
+        "turn.refused": (
+            "Il provider si è rifiutato di rispondere. Riprova, o chiedilo in un altro modo."
         ),
         "turn.max_iterations": (
             "Ho fatto troppi passaggi ({max_iterations}) senza finire. Prova a dividere "
@@ -721,6 +731,10 @@ _TEXT: dict[str, dict[str, str]] = {
         "plan.stalled": (
             "Mi sono fermata senza dire se questo passo è finito. Dimmi come andare avanti, "
             "o ferma il piano."
+        ),
+        "plan.refused": (
+            "Il provider si è rifiutato di rispondere, e chiedere di nuovo allo stesso modo "
+            "dà lo stesso rifiuto. Rispondi per riprovare il passo, o ferma il piano."
         ),
         "plan.restarted": "Mi sono riavviata durante il passo {step}: tocca Riprendi per rifarlo.",
         "plan.stopped": "Ho fermato il piano. Il quaderno resta com'è adesso.",
