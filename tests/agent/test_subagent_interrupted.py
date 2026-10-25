@@ -12,12 +12,16 @@ dopo il riavvio (``interrupted_helpers`` + ``send``).
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import threading
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
+
+from support.gateway_http import AUTH_SECRET, make_handler, make_request
 
 from jenny.agent.runner import AgentRunner, AgentRunResult, AgentRunSpec
 from jenny.agent.subagent import SubagentManager, _await_thread
@@ -35,6 +39,7 @@ from jenny.agent.subagent_records import (
 from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMProvider
 from jenny.session.manager import SessionManager
+from jenny.webui.subagent_routes import CONTINUE_AFTER_BUDGET_TEXT
 
 SESSION = "unified:default"
 BRIEF = "Write the care page of the maple in a pot."
@@ -448,6 +453,79 @@ async def test_a_user_stop_still_drops_the_checkpoint(tmp_path: Path) -> None:
     await asyncio.sleep(0)
     assert sm._history.entry_of(lineage) is None
     assert sm.interrupted_helpers(SESSION) == []
+
+
+# ---------------------------------------------------------------------------
+# il tasto «continua» della casa (``/api/subagents/{id}/continue``)
+# ---------------------------------------------------------------------------
+
+
+async def _continue_from_the_home(sm: SubagentManager, task_id: str) -> Any:
+    """Il tap sul tasto: la rotta vera, col manager vero dietro."""
+    handler = make_handler(Path("/nonexistent"), get_subagent_manager=lambda: sm)
+    path = f"/api/subagents/{task_id}/continue"
+    query = urllib.parse.urlencode({"session_key": SESSION})
+    request = make_request(f"{path}?{query}", AUTH_SECRET, always_append=True)
+    return await handler.subagent_routes.dispatch(request, path)
+
+
+async def test_the_home_button_resumes_a_helper_the_restart_interrupted(tmp_path: Path) -> None:
+    """Il tasto della casa riprende dalla storia, come ``subagent_send`` (``send``)."""
+    disk, task_id, lineage = await _helper_killed_mid_run(tmp_path, rounds_before_kill=2, plan=False)
+    sm = _manager(disk)
+    seen: list[AgentRunSpec] = []
+
+    async def _run(spec: AgentRunSpec) -> AgentRunResult:
+        seen.append(spec)
+        messages = list(spec.initial_messages) + [{"role": "assistant", "content": "done"}]
+        return AgentRunResult(final_content="done", messages=messages, stop_reason="completed")
+
+    sm.runner.run = _run  # type: ignore[method-assign]
+    # Il task id del tentativo morto, come lo manda la bolla.
+    response = await _continue_from_the_home(sm, task_id)
+    assert response.status_code == 200, response.body
+    body = json.loads(response.body)
+    assert body["continued"] is True and body["task_id"] not in (None, task_id)
+    await _settle(sm)
+
+    seed = seen[0].initial_messages
+    assert [m.get("tool_call_id") for m in seed if m.get("role") == "tool"] == ["c0", "c1"]
+    assert seed[-1] == {"role": "user", "content": CONTINUE_AFTER_BUDGET_TEXT}
+    # Stesso lavoro: la linea non cambia, e non e piu da riprendere.
+    assert next(r for r in sm.list_records(SESSION) if r.task_id == body["task_id"]).lineage_id \
+        == lineage
+    assert not [e for e in sm.status_snapshot(SESSION)["recent"] if e["resumable"]]
+
+
+async def test_the_home_button_does_not_restart_a_helper_the_user_stopped(tmp_path: Path) -> None:
+    """Fermato da te non ha storia: «continua» rifiuta invece di rifarlo da zero."""
+    sm = _manager(tmp_path)
+    clock = _Clock()
+    sm._clock = clock
+    paused = asyncio.Event()
+
+    async def _run(spec: AgentRunSpec) -> AgentRunResult:
+        messages = list(spec.initial_messages)
+        clock.now += 40
+        await _tool_round(spec, messages, 0)
+        paused.set()
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    sm.runner.run = _run  # type: ignore[method-assign]
+    await sm.spawn(task=BRIEF, session_key=SESSION)
+    task_id = next(iter(sm._task_statuses))
+    await asyncio.wait_for(paused.wait(), timeout=5)
+    await sm.cancel_by_session(SESSION)
+    await asyncio.sleep(0)
+    [recent] = sm.status_snapshot(SESSION)["recent"]
+    assert (recent["state"], recent["cancel_reason"], recent["resumable"]) == (
+        "cancelled", "user", False,
+    )
+
+    response = await _continue_from_the_home(sm, task_id)
+    assert response.status_code == 409
+    assert not sm._task_statuses
 
 
 # ---------------------------------------------------------------------------

@@ -1234,6 +1234,8 @@
       "failed": "Non ci sono riuscita",
       "helperFailed": "La mini-me si è inceppata: {label}",
       "helperFailedUnnamed": "La mini-me si è inceppata",
+      "helperInterrupted": "La mini-me è stata interrotta: {label}",
+      "helperInterruptedUnnamed": "La mini-me è stata interrotta",
       "helperStoppedAgain": "Di nuovo inciampata: è la {count}ª volta.",
       "helperDone": "La mini-me ha finito: {label}",
       "helperDoneUnnamed": "La mini-me ha finito",
@@ -1259,7 +1261,8 @@
         "notAProject": "Qui non c'è un quaderno da sistemare.",
         "error": "Qualcosa è andato storto.",
         "helperBudget": "Le è finito il fiato prima di arrivare in fondo.",
-        "helperError": "È inciampata in un errore."
+        "helperError": "È inciampata in un errore.",
+        "helperRestart": "L'ha fermata il riavvio dell'app: quel che ha fatto è salvato, e può ripartire da lì."
       },
       "openBoard": "Apri la bacheca",
       "retryAction": "Riprova",

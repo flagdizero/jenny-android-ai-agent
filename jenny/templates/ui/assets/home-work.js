@@ -381,10 +381,21 @@ export class WorkBubbles {
     return Boolean(entry && entry.handled_at && entry.plan_id);
   }
 
-  /* Fermato: per un errore (`failed`) o perche' ha finito le chiamate
-     (`budget`, da cui si riprende con la storia). */
+  /* Fermato: per un errore (`failed`), perche' ha finito le chiamate
+     (`budget`, da cui si riprende con la storia), o da un riavvio dell'app con
+     la conversazione salvata (`_interrupted`). */
   static _stopped(entry) {
-    return entry.state === 'failed' || entry.state === 'budget';
+    return entry.state === 'failed' || entry.state === 'budget'
+      || WorkBubbles._interrupted(entry);
+  }
+
+  /* Interrotto da un riavvio (Android ha chiuso l'app mentre lavorava) con una
+     fotografia della conversazione da cui ripartire. Un `cancelled` fermato da
+     te (`cancel_reason: 'user'`) no: un tasto che lo rimette al lavoro accanto
+     a un tuo Stop e' una trappola. */
+  static _interrupted(entry) {
+    return Boolean(entry && entry.state === 'cancelled'
+      && entry.cancel_reason === 'shutdown' && entry.resumable);
   }
 
   _maybeFailedHelper(entry, all = []) {
@@ -392,7 +403,12 @@ export class WorkBubbles {
     if (this._failedShown.has(entry.task_id)) return;
     if (WorkBubbles._handledInPlan(entry)) return;
     const ended = Number(entry.ended_at) * 1000;
-    if (!ended || this._now() - ended > FAILED_FRESH_MS) return;
+    /* Un interrotto dal riavvio porta come `ended_at` l'ultima fotografia, cioe'
+       prima del riavvio, e l'app si riapre anche ore dopo: la sua freschezza e'
+       `resumable`, che il server spegne quando la storia scade o la linea e'
+       ripartita. */
+    if (!ended) return;
+    if (!WorkBubbles._interrupted(entry) && this._now() - ended > FAILED_FRESH_MS) return;
     /* Gia' rilanciato o ripreso prima che questa home lo vedesse (riapertura,
        o Jenny piu' svelta): un «Riprova» qui rilancerebbe un lavoro che e'
        gia' in corso, e cancellerebbe quello. */
@@ -430,20 +446,25 @@ export class WorkBubbles {
     delete node.dataset.restarted;
     node.classList.add('is-failed');
     const label = String(entry.label || '').trim();
+    const interrupted = WorkBubbles._interrupted(entry);
+    const title = interrupted ? 'helperInterrupted' : 'helperFailed';
     this._head(node, ICON.failed, label
-      ? i18n.t('home.work.helperFailed', { label })
-      : i18n.t('home.work.helperFailedUnnamed'), '');
+      ? i18n.t(`home.work.${title}`, { label })
+      : i18n.t(`home.work.${title}Unnamed`), '');
     this._bar(node, null);
     const budget = entry.state === 'budget'
       || entry.stop_reason === 'max_iterations' || entry.stop_reason === 'budget';
-    this._line(node, i18n.t(budget ? 'home.work.why.helperBudget' : 'home.work.why.helperError'), false);
+    const why = interrupted ? 'helperRestart' : (budget ? 'helperBudget' : 'helperError');
+    this._line(node, i18n.t(`home.work.why.${why}`), false);
     this._note(node, '');
     const button = node.querySelector('.home-work-action');
     button.disabled = false;
-    /* Fermata dal budget con la storia ancora intera: si fa continuare, e
-       riparte da dove era con quel che ha letto e scritto. «Rimettila in
-       piedi» invece rilancia da zero, e butterebbe quel lavoro. */
-    if (entry.state === 'budget' && entry.resumable && this.deps.continueSubagent) {
+    /* Fermata dal budget, o interrotta da un riavvio, con la storia ancora
+       intera: si fa continuare, e riparte da dove era con quel che ha letto e
+       scritto. «Rimettila in piedi» invece rilancia da zero, e butterebbe quel
+       lavoro. */
+    if ((interrupted || (entry.state === 'budget' && entry.resumable))
+        && this.deps.continueSubagent) {
       this._action(node, {
         label: i18n.t('home.work.helperContinue'),
         run: () => this._continueStopped(node, entry.task_id),

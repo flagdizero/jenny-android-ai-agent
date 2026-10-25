@@ -1234,6 +1234,8 @@
       "failed": "I couldn't finish",
       "helperFailed": "My mini-me got stuck: {label}",
       "helperFailedUnnamed": "My mini-me got stuck",
+      "helperInterrupted": "My mini-me was interrupted: {label}",
+      "helperInterruptedUnnamed": "My mini-me was interrupted",
       "helperStoppedAgain": "Tripped again: that's {count} times.",
       "helperDone": "My mini-me is done: {label}",
       "helperDoneUnnamed": "My mini-me is done",
@@ -1259,7 +1261,8 @@
         "notAProject": "There's no notebook to tidy here.",
         "error": "Something went wrong.",
         "helperBudget": "She ran out of breath before the end.",
-        "helperError": "She tripped on an error."
+        "helperError": "She tripped on an error.",
+        "helperRestart": "The app restarted under her: what she did is saved, and she can pick up from there."
       },
       "openBoard": "Open the board",
       "retryAction": "Try again",

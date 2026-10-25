@@ -546,6 +546,61 @@ assert.ok(report.isConnected);
 """)
 
 
+# ── Interrotta da un riavvio (25/10/2026) ───────────────────────────────────
+# Android chiude l'app mentre un aiutante lavora: al boot il record diventa
+# `cancelled` con `cancel_reason: "shutdown"` e, se c'era una fotografia della
+# conversazione, `resumable`. `ended_at` e' l'ultima fotografia, cioe' di prima
+# del riavvio: l'app si riapre anche ore dopo.
+
+_INTERRUPTED = """
+const interrupted = (over = {}) => worker({ lineage_id: 'L1', attempt: 1, state: 'cancelled',
+  stop_reason: 'cancelled_at_shutdown', cancel_reason: 'shutdown', resumable: true,
+  can_restart: true, handled_at: null, ended_at: now() - 3 * 3600, ...over });
+"""
+
+
+def test_a_helper_the_restart_interrupted_can_continue_on_opening() -> None:
+    run_home(_HEAD + _INTERRUPTED + """
+agents['project:orto'] = { running: [], recent: [interrupted()] };
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+assert.equal(settled().length, 1, 'l\u2019aiutante interrotto dal riavvio non si vede');
+const report = settled()[0];
+assert.match(text(report), new RegExp(W.helperInterrupted.split(':')[0]));
+assert.match(text(report), new RegExp(W.why.helperRestart.slice(0, 15)));
+const button = report.querySelector('.home-work-action');
+assert.equal(button.hidden, false);
+assert.equal(button.textContent, W.helperContinue);
+button.click();
+await tick(10);
+assert.ok(calls.some((c) => c.startsWith('/api/subagents/t1/continue')), calls.join(' '));
+assert.ok(!calls.some((c) => c.includes('/restart')), 'ha rilanciato da zero invece di continuare');
+assert.ok(!report.isConnected);
+""")
+
+
+@pytest.mark.parametrize("over", [
+    # Fermata da te: nessun tasto che la rimette al lavoro.
+    "{ cancel_reason: 'user', stop_reason: 'cancelled_by_user', resumable: false }",
+    # Fermata da te, anche se lo snapshot dicesse il contrario.
+    "{ cancel_reason: 'user', stop_reason: 'cancelled_by_user' }",
+    # Interrotta prima della prima fotografia: non c'e' niente da continuare.
+    "{ resumable: false }",
+])
+def test_a_cancelled_helper_without_a_saved_conversation_shows_nothing(over: str) -> None:
+    run_home(_HEAD + _INTERRUPTED + f"""
+agents['project:orto'] = {{ running: [], recent: [interrupted({over})] }};
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({{ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [interrupted({{ ...{over}, ended_at: now() }})] }});
+assert.equal(settled().length, 0);
+assert.equal(bubbles().length, 0);
+""")
+
+
 def test_a_budget_stop_is_terminal_not_a_running_helper() -> None:
     run_home(_HEAD + _BUDGET + """
 const app = await boot();
