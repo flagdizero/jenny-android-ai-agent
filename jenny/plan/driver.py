@@ -940,7 +940,7 @@ class PlanDriver:
                 "Error: nobody is preparing a plan in this notebook now: the user starts it "
                 "with the Plan button. Do not propose a plan; answer the user."
             )
-        if not drafting.get("reads"):
+        if not drafting.get("reads") and not self._revises_a_plan_of(notebook, drafting):
             return (
                 "Not yet: look at the notebook first: read the pages and sources this job "
                 "depends on (list_dir, read_file, grep), so the plan says what is there and "
@@ -1429,6 +1429,22 @@ class PlanDriver:
             "Plan {}: {} gap(s) of step {} carried to step {}",
             plan.id, len(items), step.id, target_id,
         )
+
+    def _revises_a_plan_of(self, notebook: str, drafting: Mapping[str, Any]) -> bool:
+        """La pianificazione rivede un piano di questo quaderno, che ha già guardato.
+
+        Il cancello delle letture esiste perché una proposta nasca guardando il
+        quaderno; una revisione riparte da zero letture, ma la versione che rivede
+        quel quaderno l'ha già letto. Nella prova 3 il primo ``plan_propose`` di
+        ogni revisione veniva rifiutato per «non hai guardato».
+        """
+        revise = drafting.get("revise")
+        if not isinstance(revise, str) or not revise:
+            return False
+        try:
+            return self.store.load(revise).notebook == notebook
+        except PlanError:
+            return False
 
     async def note_step_report(
         self,

@@ -398,3 +398,24 @@ async def test_a_new_planning_forgets_the_cancel(driver: PlanDriver) -> None:
     await driver.cancel_drafting("piante")
     await start_drafting(driver)
     assert "card" in await driver.propose(KEY, "Rifare la wiki", STEPS, coverage=COVERAGE)
+
+
+# ── la revisione e il cancello delle letture ────────────────────────────────
+
+
+async def test_a_revision_of_a_plan_here_needs_no_new_reading(driver: PlanDriver) -> None:
+    """La versione che si rivede ha già guardato il quaderno: nella prova 3 il primo
+    ``plan_propose`` di ogni revisione era rifiutato per «non hai guardato»."""
+    await start_drafting(driver)
+    assert "card" in await driver.propose(KEY, "Rifare la wiki", STEPS, coverage=COVERAGE)
+    plan = driver.store.open_plan_for("piante")
+    await driver.start_drafting(KEY, revise=plan.id)
+    assert driver.drafting_info("piante")["reads"] == 0
+    text = await driver.propose(KEY, "Rifare la wiki, v2", STEPS, coverage=COVERAGE)
+    assert "card" in text, text
+
+
+async def test_a_revision_of_an_unknown_plan_still_has_to_look(driver: PlanDriver) -> None:
+    await driver.start_drafting(KEY, revise="p_000000000000")
+    text = await driver.propose(KEY, "Rifare la wiki", STEPS, coverage=COVERAGE)
+    assert text.startswith("Not yet: look at the notebook first")
