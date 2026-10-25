@@ -128,6 +128,10 @@ MAX_COVERAGE = 80
 MAX_COVERAGE_FIELD = 500
 MAX_ASSUMPTIONS = 20
 MAX_ASSUMPTION = 300
+# La forma attesa che un passo ``check`` dichiara (``expect``): pochi pattern e
+# un elenco di file per cartella, non un inventario del quaderno.
+MAX_EXPECT_FILES = 40
+MAX_EXPECT_PATTERN = 200
 
 # Quanto dura una pianificazione senza turni (``drafting``): come
 # ``goal_inactivity_ttl_h``, mezza giornata. Oltre, il prossimo messaggio è una
@@ -649,6 +653,7 @@ def validate_proposal(
             problems.append(f"{where}: `same_as` must be the id of a step of the previous version.")
             same_as = None
         covers = _validate_covers(raw.get("covers"), kind, where, problems, remap)
+        expect = _validate_expect(raw.get("expect"), kind, where, problems)
         clean.append(
             Step(
                 id=f"s{index}",
@@ -658,6 +663,7 @@ def validate_proposal(
                 same_as=(same_as.strip() or None) if isinstance(same_as, str) else None,
                 done_when=done_when,
                 covers=covers,
+                extra={"expect": expect} if expect else {},
             )
         )
 
@@ -727,6 +733,80 @@ def _validate_covers(
         if cid and cid not in clean:
             clean.append(cid)
     return clean
+
+
+def _expect_pattern(value: Any) -> str | None:
+    """Un percorso o un glob dentro il quaderno, o ``None`` se esce o non è testo."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip().strip("/")
+    if not text or len(text) > MAX_EXPECT_PATTERN or text.startswith("~") or "\\" in text:
+        return None
+    if any(part == ".." for part in text.split("/")):
+        return None
+    return text
+
+
+def _validate_expect(
+    raw: Any, kind: Any, where: str, problems: list[str]
+) -> dict[str, Any] | None:
+    """La forma attesa di un passo ``check``, nel formato di ``notebook check``.
+
+    ``{"folders": "wiki/piante/*", "files": ["index", "acqua"]}``: ogni cartella
+    del glob deve avere quei file. Senza ``folders``, ``files`` sono percorsi dalla
+    radice del quaderno. Il controllo a macchina di fine piano
+    (``jenny/plan/audit.py``) dice così «mancano pagine» senza rileggere niente.
+    Solo sul passo ``check``: è lui che la verifica.
+    """
+    if raw is None or raw == {}:
+        return None
+    shape = (
+        'like {"folders": "wiki/plants/*", "files": ["index", "water"]} '
+        '(folders: a glob inside the notebook; files: names each folder must have)'
+    )
+    if kind != "check":
+        if kind in STEP_KINDS:
+            problems.append(f"{where}: only the `check` step has `expect`; remove it here.")
+        return None
+    if not isinstance(raw, dict) or not set(raw) <= {"folders", "files"}:
+        problems.append(f"{where}: `expect` must be an object {shape}.")
+        return None
+    folders_raw = raw.get("folders")
+    folders_list = [folders_raw] if isinstance(folders_raw, str) else folders_raw or []
+    files_raw = raw.get("files") or []
+    if not isinstance(folders_list, list) or not isinstance(files_raw, list):
+        problems.append(f"{where}: `expect` must be an object {shape}.")
+        return None
+    folders = [_expect_pattern(f) for f in folders_list]
+    files = [_expect_pattern(f) for f in files_raw]
+    if None in folders or None in files:
+        problems.append(f"{where}: every path in `expect` must stay inside the notebook, {shape}.")
+        return None
+    if not files or len(files) > MAX_EXPECT_FILES or len(folders) > 5:
+        problems.append(
+            f"{where}: `expect` needs 1 to {MAX_EXPECT_FILES} `files` and at most 5 `folders`."
+        )
+        return None
+    out: dict[str, Any] = {"files": files}
+    if folders:
+        out["folders"] = folders
+    return out
+
+
+def check_warnings(steps: Iterable[Step]) -> list[str]:
+    """L'avviso di una proposta senza ``check`` in fondo: il controllo a macchina vive lì.
+
+    Un avviso e non un rifiuto, come :func:`order_warnings`: il piano è valido
+    lo stesso, ma senza un passo ``check`` alla fine nessuno ripara quel che il
+    controllo di fine piano trova.
+    """
+    ordered = list(steps)
+    if not ordered or ordered[-1].kind == "check":
+        return []
+    return [
+        "the last step is not a `check`. The code checks the notebook in that step and "
+        "gives you only what to repair: propose again with a final `check` step."
+    ]
 
 
 def _validate_coverage(

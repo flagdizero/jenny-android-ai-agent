@@ -18,11 +18,32 @@ Plan: {{ title }}
 {% endfor %}
 
 Step {{ step.n }}: {{ step.title }}
+{% if repair is not none %}
+
+The code has already checked the notebook: {{ machine_summary }}
+This step is only the repair. Fix exactly what is listed here, and nothing else; do not reread or verify the rest of the notebook. When you call `plan_step_done`, the code checks again.
+{% if repair %}
+
+To repair, by page:
+{% for group in repair %}
+- {{ group.path }}
+{% for item in group["items"] %}
+  - {{ item }}
+{% endfor %}
+{% endfor %}
+{% if repair_more %}
+(and {{ repair_more }} more: the code lists them again when it checks again)
+{% endif %}
+{% endif %}
+
+Give the pages to notebook-editor helpers, grouped by subject (a helper takes a group of pages). Lines left to search, and the gaps below, need researchers first: all of them in one round, then the editors fill the pages from what was saved.
+{% else %}
 
 {{ step.detail }}
 {% if step.done_when %}
 
 Done when: {{ step.done_when }}
+{% endif %}
 {% endif %}
 {% if covers %}
 

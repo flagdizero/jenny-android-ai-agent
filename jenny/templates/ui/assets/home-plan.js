@@ -153,6 +153,25 @@ function withBold(template, bold) {
 
 const t = (key, params) => i18n.t(`home.plan.${key}`, params);
 
+/**
+ * L'esito del controllo automatico di fine piano (``machine_check`` del passo
+ * ``check``, scritto dal codice in ``jenny/plan/driver.py``), in una riga: tutto a
+ * posto, o quante cose restano. Vuoto se il passo non ne ha uno finito.
+ */
+function machineLine(step) {
+  const machine = step?.machine_check;
+  if (!machine?.final) return '';
+  const left = Number(machine.left) || 0;
+  return left ? t('machineLeft', { n: left }) : t('machineClean', { pages: Number(machine.pages) || 0 });
+}
+
+/** Le pagine dove il controllo automatico ha lasciato qualcosa, senza doppioni. */
+function machineLeftPages(step) {
+  const items = step?.machine_check?.final ? step.machine_check.left_items || [] : [];
+  const pages = [...new Set(items.map((item) => String(item).split(': ')[0]).filter(Boolean))];
+  return pages.join(', ');
+}
+
 /* Le voci `web` della copertura nei `covers` di un passo di ricerca. Una voce
    `notebook` nei `covers` il gateway la lascia passare (rifiutarla farebbe
    riprovare il modello), ma da cercare restano le `web`. */
@@ -1204,8 +1223,8 @@ export class HomePlan {
       sub = step.note ? t('skippedBecause', { why: step.note }) : t('skipped');
     } else if (step.status === 'interrupted') {
       sub = t('interrupted');
-    } else if (step.note) {
-      sub = step.note;
+    } else {
+      sub = [step.note, machineLine(step)].filter(Boolean).join(' · ');
     }
     if (sub) item.appendChild(el('span', 'home-plan-sub', sub));
     if (step.status === 'blocked' && plan.status === 'blocked') {
@@ -1912,6 +1931,10 @@ export class HomePlan {
       : t('stepSheet.nothing'));
     const children = [...this._sheetHead(t('stepSheet.title', { n, title: step.title || '' }), parts.join(' '))];
     if (step.note) children.push(el('p', 'home-plan-sheet-note', step.note));
+    const machine = machineLine(step);
+    if (machine) children.push(el('p', 'home-plan-sheet-note', machine));
+    const leftPages = machineLeftPages(step);
+    if (leftPages) children.push(el('p', 'home-plan-sheet-note', t('machineLeftPages', { pages: leftPages })));
     if (added + changed + removed) children.push(this._pathList(out));
     return this._openSheet(children, 'is-step');
   }

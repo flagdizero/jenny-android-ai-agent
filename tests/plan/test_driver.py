@@ -190,8 +190,13 @@ async def test_cut_steps_are_skipped_and_not_counted(driver: PlanDriver, bus: Fa
 # ── il ciclo ────────────────────────────────────────────────────────────────
 
 
+def _real_page(rel: str) -> str:
+    """Una pagina che il controllo a macchina di fine piano non ha motivo di fermare."""
+    return f"---\nstate: open\n---\n# {rel}\n\n" + f"Scritto da {rel}, con testo vero. " * 10
+
+
 async def _close_step(driver: PlanDriver, workspace: Path, rel: str) -> None:
-    write_file(workspace / "wikis" / "piante", rel, f"scritto da {rel}")
+    write_file(workspace / "wikis" / "piante", rel, _real_page(rel))
     text = await driver.step_done(KEY, f"scritto {rel}")
     assert "closed" in text, text
     await driver.on_turn_end(KEY, {})
@@ -203,18 +208,20 @@ async def test_three_steps_run_to_done_with_a_photo_per_step(
     plan = await _approve(driver)
     await _close_step(driver, workspace, "raw/research/acero.md")
     await _close_step(driver, workspace, "wiki/ginkgo.md")
-    await _close_step(driver, workspace, "wiki/link.md")
+    # Il terzo è il ``check``: il controllo a macchina non trova niente da
+    # riparare, e il passo si chiude da solo, senza un turno del modello.
     plan = driver.store.load(plan.id)
     assert plan.status == "done"
     assert [s.status for s in plan.steps] == ["done", "done", "done"]
+    assert plan.steps[2].extra["machine_check"]["final"] is True
     assert plan.photos["end"]
-    assert len(_step_messages(bus)) == 3
+    assert len(_step_messages(bus)) == 2
     assert plan.steps[1].extra["files"] == {"added": 1, "changed": 0, "removed": 0}
     assert driver.step_files(plan.id, "s2") == {
         "added": ["wiki/ginkgo.md"], "changed": [], "removed": [],
     }
     changes = driver.changes(plan.id)
-    assert changes["added"] == ["raw/research/acero.md", "wiki/ginkgo.md", "wiki/link.md"]
+    assert changes["added"] == ["raw/research/acero.md", "wiki/ginkgo.md"]
     assert changes["groups"]["raw/research/acero.md"] == "sources"
     assert not driver.plan_open(KEY)
     assert plan_view(plan)["can_rollback"] is True
@@ -968,7 +975,8 @@ def test_the_planning_prompt_sizes_steps_with_numbers_and_the_notebook_tool() ->
     text = (_AGENT_TEMPLATES / "plan_mode.md").read_text(encoding="utf-8")
     assert "helper's budget" not in text
     assert "about 10 pages" in text
-    assert "`notebook check`" in text and "`remove_pages`" in text
+    assert "(`check`, `map`" in text and "`remove_pages`" in text
+    assert "the code runs it" in text and "`expect`" in text
     assert "`covers`" in text
     assert "not a file" in text, "il resoconto del piano e' la nota e il messaggio finale"
     assert "up to 5 when the items are many" in text
@@ -998,14 +1006,21 @@ def test_helper_reports_go_in_the_answer_not_in_free_files(name: str) -> None:
     assert "/inst/skills/llm-wiki/references/audit-guide.md" in role
 
 
-async def test_closing_replies_ask_for_a_short_end_of_turn(driver: PlanDriver) -> None:
+async def test_closing_replies_ask_for_a_short_end_of_turn(
+    driver: PlanDriver, workspace: Path
+) -> None:
     """Fra la chiamata e la fine del turno la scheda è «in corso» senza un passo:
     quel tempo è il modello che scrive, e il riepilogo lo fa già la scheda."""
     await _approve(driver)
     assert "at most one short sentence" in await driver.step_done(KEY, "uno")
     await driver.on_turn_end(KEY, {})
+    # Una riga da cercare, perché il controllo di fine piano abbia una riparazione
+    # da chiedere: senza, il passo si chiude da solo e il modello non lo chiude.
+    notebook = workspace / "wikis" / "piante"
+    write_file(notebook, "wiki/salvia.md", _real_page("salvia") + "\n- query da fare: «x»\n")
     await driver.step_done(KEY, "due")
     await driver.on_turn_end(KEY, {})
+    write_file(notebook, "wiki/salvia.md", _real_page("salvia"))
     last = await driver.step_done(KEY, "tre")
     assert "one or two short sentences" in last and "summary" not in last
 

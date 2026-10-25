@@ -92,6 +92,19 @@ class PlanTool(Tool):
                         "searches. Every `web` entry must be in the covers of a research step."
                     ),
                 ),
+                expect=ObjectSchema(
+                    folders=StringSchema(
+                        "A glob of folders inside the notebook, e.g. \"wiki/plants/*\"."
+                    ),
+                    files=ArraySchema(
+                        StringSchema("A file name each folder must have, e.g. \"index\"."),
+                    ),
+                    description=(
+                        "Check step only, optional: the shape the job must leave, when it "
+                        "has a fixed one. The code checks it at the end and lists what is "
+                        "missing. Without `folders`, `files` are paths from the notebook root."
+                    ),
+                ),
                 required=["title", "detail", "done_when"],
             ),
             description=f"The steps, in order: {MIN_STEPS} to {MAX_STEPS}.",

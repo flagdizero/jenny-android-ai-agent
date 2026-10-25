@@ -46,6 +46,15 @@ from typing import Any, Protocol
 from loguru import logger
 
 from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.plan.audit import (
+    Audit,
+    audit_notebook,
+    baseline_keys,
+    remove_empty_folders,
+    render_repair,
+    summary_line,
+    wiki_texts,
+)
 from jenny.plan.facts import LostFacts, lost_facts
 from jenny.plan.model import (
     HELD_STATUSES,
@@ -56,6 +65,7 @@ from jenny.plan.model import (
     PlanValidationError,
     Step,
     apply_transition,
+    check_warnings,
     current_step,
     drafting_expired,
     drafting_view,
@@ -139,6 +149,18 @@ _RESEARCH_LINEAGES = "research_lineages"
 # Quante voci riportate al controllo, al massimo: un elenco più lungo non è
 # più un giro di ricerca ma un altro piano.
 _MAX_CARRIED_ITEMS = 40
+
+# Il controllo a macchina del passo ``check`` (``jenny/plan/audit.py``),
+# nell'``extra`` del passo: il giro (1 all'apertura, 2 dopo il primo rifiuto),
+# cosa ha trovato, e alla chiusura cosa resta. Nell'``extra`` del piano, la base:
+# i difetti che il quaderno aveva all'Approva, che non sono lavoro del piano.
+_MACHINE = "machine_check"
+_AUDIT_BASELINE = "audit_baseline"
+# I giri di riparazione al massimo: il secondo controllo accetta comunque, e
+# quel che resta lo dice la nota.
+_MAX_REPAIR_ROUNDS = 2
+# Le voci rimaste che la scheda mostra, al massimo.
+_MAX_LEFT_ITEMS = 12
 
 _RUNNING = frozenset({"running", "pausing"})
 
@@ -979,6 +1001,9 @@ class PlanDriver:
         warnings = order_warnings(proposal.steps)
         if warnings:
             text += "\n\nNote on the order: " + " ".join(warnings)
+        checks = check_warnings(proposal.steps)
+        if checks:
+            text += "\n\nNote on the check: " + " ".join(checks)
         return text
 
     async def step_done(self, session_key: str | None, note: Any) -> str:
@@ -1065,6 +1090,10 @@ class PlanDriver:
                 await asyncio.to_thread(self.store.update, plan.id, _gate)
                 logger.info("Plan {}: step {} close refused once, gaps open", plan.id, step_id)
                 return _gaps_refusal(gaps)
+            refusal = await self._recheck(plan, step, outcome)
+            if refusal is not None:
+                return refusal
+            plan = await asyncio.to_thread(self.store.load, plan.id)
             drafts = await asyncio.to_thread(self._plan_drafts, plan)
             if drafts:
                 # Un passo che lascia bozze non è fatto: il file non è scritto, e
@@ -1103,9 +1132,12 @@ class PlanDriver:
         # scheda è «in corso» senza un passo, e il tempo è quello che il modello
         # passa a scrivere. Il riepilogo del piano è la scheda stessa.
         if last:
+            left = _left_after_check(plan, step_id)
             return (
                 f"Step {n} {verb}. It was the last step: end your turn now with one or two "
                 "short sentences for the user; the plan card already lists what was done."
+                + (f" The code's check still finds {left} thing(s) to fix: say so plainly."
+                   if left else "")
             )
         return (
             f"Step {n} {verb}. The code takes it from here: end your turn now, with at most "
@@ -1759,6 +1791,7 @@ class PlanDriver:
                 )
             photos = self._photos(plan)
             start = await asyncio.to_thread(photos.take, "start")
+            baseline = await asyncio.to_thread(self._audit_baseline, plan)
 
             def _approve(p: Plan) -> None:
                 if p.status != "proposed":
@@ -1772,6 +1805,7 @@ class PlanDriver:
                     if s.id in cut_ids:
                         s.status = "cut"
                 p.photos["start"] = start
+                p.extra[_AUDIT_BASELINE] = baseline
 
             plan = await asyncio.to_thread(self.store.update, plan_id, _approve)
             self._remember(plan)
@@ -2475,7 +2509,7 @@ class PlanDriver:
             s.photo_after = None
             for key in (_NUDGE, _PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION,
                         _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE,
-                        _GAPS_ROUND, _RESEARCH_LINEAGES):
+                        _GAPS_ROUND, _RESEARCH_LINEAGES, _MACHINE):
                 s.extra.pop(key, None)
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _open)
@@ -2485,9 +2519,128 @@ class PlanDriver:
         start = plan.photos.get("start")
         if start and _checks_facts(plan, step):
             lost = await asyncio.to_thread(self._lost_facts, plan, photos, start, before)
-        await self.bus.publish_inbound(self._step_message(plan, step, lost=lost))
+        audit: Audit | None = None
+        if step.kind == "check":
+            audit = await asyncio.to_thread(self._run_audit, plan, step)
+            if audit is not None:
+                if not audit.findings and not (lost and lost.total) and not _carried(step):
+                    await self._close_by_machine(plan, step_id, audit)
+                    return
+                plan = await self._note_machine(plan, step_id, _machine_view(audit, round_=1))
+                step = _find(plan, step_id)
+        await self.bus.publish_inbound(self._step_message(plan, step, lost=lost, audit=audit))
         logger.info("Plan {}: step {} opened", plan.id, step_id)
         await self._changed(plan)
+
+    def _audit_baseline(self, plan: Plan) -> list[str]:
+        """I difetti del quaderno all'Approva (:func:`baseline_keys`): non sono del piano.
+
+        Senza ``expect``: all'Approva le pagine attese non ci sono ancora, e
+        sono proprio il lavoro del piano. Un errore qui non ferma l'Approva: la
+        base è vuota, e il controllo chiederà anche i difetti di prima.
+        """
+        root = self.host.notebook_root(plan.notebook)
+        if root is None:
+            return []
+        try:
+            return baseline_keys(root)
+        except Exception:  # noqa: BLE001 — un aiuto al controllo, non una condizione dell'Approva
+            logger.opt(exception=True).warning("Plan {}: audit baseline not computed", plan.id)
+            return []
+
+    def _run_audit(self, plan: Plan, step: Step) -> Audit | None:
+        """Il controllo a macchina del quaderno, in un thread; ``None`` se non si può fare.
+
+        Prima toglie le cartelle vuote sotto ``wiki/``: è meccanico, e non c'è
+        motivo di chiederlo al modello. ``None`` (quaderno sparito, errore) fa
+        aprire il passo come prima, col controllo affidato al modello.
+        """
+        root = self.host.notebook_root(plan.notebook)
+        if root is None:
+            return None
+        try:
+            removed = remove_empty_folders(root)
+            audit = audit_notebook(
+                root,
+                expect=step.extra.get("expect") or None,
+                baseline=plan.extra.get(_AUDIT_BASELINE) or (),
+            )
+        except Exception:  # noqa: BLE001 — senza controllo il passo lo fa il modello
+            logger.opt(exception=True).warning("Plan {}: machine check failed", plan.id)
+            return None
+        audit.removed_dirs = len(removed)
+        logger.info(
+            "Plan {}: machine check of step {}: {} to repair, {} empty folder(s) removed",
+            plan.id, step.id, len(audit.findings), len(removed),
+        )
+        return audit
+
+    def _lost_now(self, plan: Plan) -> int:
+        """Quanti fatti della foto di partenza mancano adesso dalle pagine, o 0."""
+        start = plan.photos.get("start")
+        root = self.host.notebook_root(plan.notebook)
+        if not start or root is None:
+            return 0
+        try:
+            return lost_facts(self._photos(plan).texts(start, "wiki/"), wiki_texts(root)).total
+        except Exception:  # noqa: BLE001 — un conteggio per la nota
+            logger.opt(exception=True).warning("Plan {}: lost facts not counted", plan.id)
+            return 0
+
+    async def _note_machine(self, plan: Plan, step_id: str, view: dict[str, Any]) -> Plan:
+        def _apply(p: Plan) -> None:
+            _find(p, step_id).extra[_MACHINE] = view
+
+        plan = await asyncio.to_thread(self.store.update, plan.id, _apply)
+        self._remember(plan)
+        return plan
+
+    async def _close_by_machine(self, plan: Plan, step_id: str, audit: Audit) -> None:
+        """Il passo ``check`` senza niente da riparare: si chiude da solo, senza un turno."""
+        view = _machine_view(audit, round_=0, final=True)
+
+        def _close(p: Plan) -> None:
+            s = _find(p, step_id)
+            s.status = "done"
+            s.ended_at = now_iso()
+            s.note = None
+            s.extra[_MACHINE] = view
+
+        plan = await asyncio.to_thread(self.store.update, plan.id, _close)
+        self._remember(plan)
+        logger.info("Plan {}: step {} closed by the machine check", plan.id, step_id)
+        plan = await self._settle_closed(plan)
+        await self._changed(plan)
+        await self._advance(plan)
+
+    async def _recheck(self, plan: Plan, step: Step, outcome: str) -> str | None:
+        """Il ricontrollo a ``plan_step_done`` del passo ``check``: un rifiuto, o ``None``.
+
+        Al primo giro, con difetti ancora aperti, rifiuta una volta e dà la lista
+        nuova. Al secondo (o con ``plan_step_skip``) accetta, e scrive nel passo
+        quel che resta: la nota del codice, che la scheda mostra accanto a quella
+        del modello. I fatti persi non si richiedono: la macchina non sa se uno è
+        andato via apposta; se ne conta il numero.
+        """
+        machine = step.extra.get(_MACHINE)
+        if step.kind != "check" or not isinstance(machine, dict) or machine.get("final"):
+            return None
+        audit = await asyncio.to_thread(self._run_audit, plan, step)
+        if audit is None:
+            return None
+        round_ = int(machine.get("round") or 1)
+        if audit.findings and outcome == "done" and round_ < _MAX_REPAIR_ROUNDS:
+            await self._note_machine(plan, step.id, _machine_view(audit, round_=round_ + 1))
+            logger.info(
+                "Plan {}: step {} close refused, {} left after round {}",
+                plan.id, step.id, len(audit.findings), round_,
+            )
+            return _repair_refusal(audit)
+        view = _machine_view(audit, round_=round_, final=True)
+        view["lost_left"] = await asyncio.to_thread(self._lost_now, plan)
+        await self._note_machine(plan, step.id, view)
+        return None
+
 
     async def _finish(self, plan: Plan) -> None:
         photos = self._photos(plan)
@@ -2525,9 +2678,11 @@ class PlanDriver:
         *,
         reminder: bool = False,
         lost: LostFacts | None = None,
+        audit: Audit | None = None,
     ) -> InboundMessage:
         from jenny.utils.prompt_templates import render_template
 
+        repair = render_repair(audit) if audit is not None and not reminder else None
         steps = [
             {
                 "n": index,
@@ -2570,6 +2725,12 @@ class PlanDriver:
             lost_total=lost.total if lost is not None else 0,
             # I buchi che i passi prima hanno lasciato dopo il loro giro di
             # ricerca (``_carry_gaps``): solo nel passo di controllo.
+            # Il controllo a macchina del passo ``check`` (:meth:`_run_audit`):
+            # la lista da riparare al posto della verifica libera.
+            repair=repair,
+            repair_more=max(0, len(audit.findings) - sum(len(g["items"]) for g in repair))
+            if audit is not None and repair is not None else 0,
+            machine_summary=summary_line(audit) if audit is not None else "",
             carried_gaps=[
                 {"step": str(c.get("step") or ""), "lines": [str(i) for i in c.get("items") or ()]}
                 for c in step.extra.get(_CARRIED_GAPS) or ()
@@ -2957,6 +3118,56 @@ def _checks_facts(plan: Plan, step: Step) -> bool:
     if any(s.kind == "check" for s in active):
         return step.kind == "check"
     return bool(active) and active[-1].id == step.id
+
+
+def _left_after_check(plan: Plan, step_id: str) -> int:
+    """Quanti difetti il controllo a macchina ha lasciato al passo *step_id*, o 0."""
+    machine = _find(plan, step_id).extra.get(_MACHINE)
+    return int(machine.get("left") or 0) if isinstance(machine, dict) else 0
+
+
+def _carried(step: Step) -> bool:
+    """*step* ha buchi riportati dai passi prima da cercare."""
+    return any(
+        isinstance(c, dict) and c.get("items") for c in step.extra.get(_CARRIED_GAPS) or ()
+    )
+
+
+def _machine_view(audit: Audit, *, round_: int, final: bool = False) -> dict[str, Any]:
+    """Il controllo a macchina nell'``extra`` del passo: conteggi, e alla fine cosa resta."""
+    view: dict[str, Any] = {
+        "round": round_,
+        "pages": audit.pages,
+        "cards": audit.cards,
+        "open_reminders": audit.open_reminders,
+        "counts": audit.counts(),
+        "preexisting": audit.preexisting,
+        "not_documented": audit.not_documented,
+        "removed_dirs": audit.removed_dirs,
+    }
+    if final:
+        view["final"] = True
+        view["left"] = len(audit.findings)
+        view["left_items"] = [
+            f"{f.path}: {f.detail}" for f in audit.findings[:_MAX_LEFT_ITEMS]
+        ]
+    return view
+
+
+def _repair_refusal(audit: Audit) -> str:
+    """Il rifiuto del primo giro: cosa resta, raggruppato per pagina, e che è l'ultimo giro."""
+    lines = [
+        "Not closed yet: the code checked the notebook again, and these are still wrong "
+        f"(or new). {summary_line(audit)}",
+    ]
+    for group in render_repair(audit):
+        lines.append(f"- {group['path']}")
+        lines.extend(f"  - {item}" for item in group["items"])
+    lines.append(
+        "Repair only these, then call `plan_step_done` again. This is the last round: "
+        "after it the step closes, and what is still wrong goes in the plan's report."
+    )
+    return "\n".join(lines)
 
 
 def _open_gaps(step: Step) -> dict[str, list[str]]:

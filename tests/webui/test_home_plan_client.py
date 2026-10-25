@@ -406,6 +406,32 @@ assert.equal(card().querySelectorAll('.home-plan-tag.is-changed').length, 0, 'ne
 """)
 
 
+def test_the_check_step_shows_the_automatic_check() -> None:
+    """Il passo di controllo lo fa il codice: la scheda dice com'è andato, nella
+    lingua dell'utente, anche quando il passo si è chiuso senza una nota di Jenny."""
+    run_home(_HEAD + """
+const done = (over) => step('s3', 'Check', { kind: 'check', status: 'done',
+  ended_at: '2026-10-23T12:00:00Z', ...over });
+current = plan({ status: 'done', done: 3, steps: [
+  step('s1', 'Search maple', { status: 'done' }), step('s2', 'Write', { kind: 'write', status: 'done' }),
+  done({ machine_check: { final: true, left: 0, pages: 85 } })] });
+open = [];
+await toNotebook();
+const sub = () => text(card().querySelector('[data-step-id="s3"] .home-plan-sub'));
+assert.equal(sub(), P.machineClean.replace('{pages}', '85'));
+current = plan({ ...current, steps: [current.steps[0], current.steps[1],
+  done({ note: 'Repaired 8 pages', machine_check: { final: true, left: 2, pages: 85,
+    left_items: ['wiki/a.md: left to search', 'wiki/a.md: no links', 'wiki/b.md: empty'] } })] });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(sub(), 'Repaired 8 pages · ' + P.machineLeft.replace('{n}', '2'));
+rpcAnswers['plan.step_files'] = () => ({ ok: true, added: [], changed: ['wiki/a.md'], removed: [] });
+card().querySelector('[data-step-id="s3"]').click();
+await tick(30);
+assert.match(text(sheet()), new RegExp(P.machineLeftPages.replace('{pages}', 'wiki/a.md, wiki/b.md')));
+""")
+
+
 def test_a_done_step_shows_what_it_did() -> None:
     run_home(_HEAD + """
 current = plan({ status: 'running', done: 1, steps: [
