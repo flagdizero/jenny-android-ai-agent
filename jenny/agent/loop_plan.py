@@ -441,6 +441,15 @@ class LoopPlanMixin:
             return
         queue = self._pending_queues.get(session_key)
         pending = queue is not None and not queue.empty()
+        # Il rifiuto del provider blocca il passo solo se il turno era il lavoro
+        # del passo: il suo messaggio, il promemoria o il resoconto di un suo
+        # aiutante. Un turno di chat dell'utente rifiutato durante il piano non
+        # dice niente del passo, e il promemoria (una richiesta diversa) resta.
+        meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+        if stop_reason == "provider_refused" and not (
+            is_plan_turn(meta) or meta.get(INJECTED_EVENT_META) == SUBAGENT_RESULT_EVENT
+        ):
+            stop_reason = ""
         try:
             await driver.on_turn_end(
                 session_key, msg.metadata, pending=pending, stop_reason=stop_reason

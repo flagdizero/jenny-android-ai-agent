@@ -168,6 +168,27 @@ async def test_a_finished_helper_with_a_long_history_resumes_light(tmp_path: Pat
     assert history_chars(seed) < 3_000
 
 
+async def test_an_app_builder_resumes_whole_even_with_a_long_history(tmp_path: Path) -> None:
+    """L'app-builder scrive con ``app draft/edit/set`` e vive del codice letto:
+    la ripresa leggera gli toglierebbe proprio quello."""
+    from dataclasses import replace
+
+    sm = _manager(tmp_path)
+    seen = _completing_runner(sm)
+    history = _big_history()
+    lineage = await _finished_lineage(sm, history)
+    tracked = sm._lineages[lineage]
+    tracked.spec = replace(tracked.spec, agent_type="app-builder")
+    stored = sm._history.load(lineage)
+
+    outcome = await sm.send(lineage, "make the button blue")
+    await _settle(sm)
+
+    assert "light context" not in outcome.text
+    seed = seen[-1].initial_messages
+    assert stored is not None and seed[: len(stored)] == stored
+
+
 async def test_a_finished_helper_with_a_short_history_resumes_whole(tmp_path: Path) -> None:
     sm = _manager(tmp_path)
     seen = _completing_runner(sm)

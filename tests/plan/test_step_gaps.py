@@ -232,7 +232,7 @@ async def test_a_researcher_with_no_gaps_open_is_not_a_round(driver: PlanDriver)
     """Il ricercatore di un passo di ricerca previsto, prima di ogni buco: il
     cancello resta com'era."""
     plan = await _to_step_two(driver, await _approve(driver))
-    assert not await _researcher(driver, plan, step="s2")
+    await _researcher(driver, plan, step="s2")
     assert "gaps_round" not in driver.store.load(plan.id).steps[1].extra
     await _report(driver, plan, _GAPS, step="s2")
     assert (await driver.step_done(KEY, "x")).startswith("Not closed yet")
@@ -246,6 +246,52 @@ async def test_a_researchers_own_gaps_do_not_make_a_round(driver: PlanDriver) ->
     )
     assert "gaps_round" not in driver.store.load(plan.id).steps[1].extra
     assert (await driver.step_done(KEY, "x")).startswith("Not closed yet")
+
+
+async def test_after_a_gate_forced_round_new_gaps_are_still_carried(driver: PlanDriver) -> None:
+    """Il cancello rifiuta, il giro parte, gli editor rimandati trovano buchi
+    nuovi: alla chiusura non si perdono, vanno al controllo."""
+    plan = await _to_step_two(driver, await _approve(driver))
+    await _report(driver, plan, _GAPS, step="s2", lineage="ed1")
+    assert (await driver.step_done(KEY, "presto")).startswith("Not closed yet")
+    await _researcher(driver, plan, step="s2")
+    await _report(driver, plan, "To research:\n- glicine: muffa", step="s2",
+                  lineage="ed1", task_id="t2")
+    assert "closed" in await driver.step_done(KEY, "fatto")
+    assert driver.store.load(plan.id).steps[2].extra["carried_gaps"] == [
+        {"step": "Scrivo le pagine", "items": ["glicine: muffa"]}
+    ]
+
+
+async def test_two_researchers_of_one_launch_are_not_a_round(driver: PlanDriver) -> None:
+    """In un passo di ricerca il secondo ricercatore arriva con i buchi del primo
+    aperti: non è un giro, e il cancello resta."""
+    plan = await _approve(driver)
+    await driver.note_step_report(
+        KEY, "r1", "lin-r1", "To research:\n- felce: vaso", plan_id=plan.id, plan_step="s1",
+        agent_type="researcher",
+    )
+    await _researcher(driver, plan, step="s1", task_id="r2")
+    assert "gaps_round" not in driver.store.load(plan.id).steps[0].extra
+    assert (await driver.step_done(KEY, "x")).startswith("Not closed yet")
+
+
+async def test_researchers_for_carried_gaps_make_the_check_steps_round(
+    driver: PlanDriver,
+) -> None:
+    plan = await _to_step_two(driver, await _approve(driver))
+    await _report(driver, plan, _GAPS, step="s2")
+    await _researcher(driver, plan, step="s2")
+    await _report(driver, plan, "To research:\n- glicine: muffa", step="s2", task_id="t2")
+    await driver.step_done(KEY, "fatto")
+    await driver.on_turn_end(KEY, {})
+    plan = driver.store.load(plan.id)
+    assert plan.steps[2].status == "now" and plan.steps[2].extra["carried_gaps"]
+    # Il ricercatore dei buchi riportati segna il giro anche senza buchi del passo.
+    await _researcher(driver, plan, step="s3", task_id="r9")
+    assert driver.store.load(plan.id).steps[2].extra["gaps_round"] is True
+    await _report(driver, plan, "To research:\n- pothos: luce", step="s3", lineage="ed7")
+    assert "closed" in await driver.step_done(KEY, "controllato")
 
 
 async def test_the_round_does_not_carry_into_the_next_step(driver: PlanDriver) -> None:

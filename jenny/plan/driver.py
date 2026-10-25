@@ -133,6 +133,9 @@ _GAPS_GATE_USED = "used"
 # insieme.
 _GAPS_ROUND = "gaps_round"
 _CARRIED_GAPS = "carried_gaps"
+# I lineage dei ricercatori che hanno già riportato nel passo: i loro buchi non
+# fanno un giro per un altro ricercatore.
+_RESEARCH_LINEAGES = "research_lineages"
 # Quante voci riportate al controllo, al massimo: un elenco più lungo non è
 # più un giro di ricerca ma un altro piano.
 _MAX_CARRIED_ITEMS = 40
@@ -984,10 +987,12 @@ class PlanDriver:
             step_id = step.id
             gaps = _open_gaps(step)
             gate_used = step.extra.get(_GAPS_GATE) == _GAPS_GATE_USED
-            if outcome == "done" and gaps and not gate_used and step.extra.get(_GAPS_ROUND):
+            if outcome == "done" and gaps and step.extra.get(_GAPS_ROUND):
                 # Il giro di ricerca del passo c'è stato: i buchi ancora aperti
                 # (riportati dopo, di solito dagli editor rimandati) passano al
-                # controllo invece di fermare il passo per un secondo giro.
+                # controllo invece di fermare il passo per un secondo giro. Anche
+                # se il cancello aveva già rifiutato una volta: quel rifiuto ha
+                # forzato il giro, e i buchi di dopo restano da cercare.
                 await self._carry_gaps(plan, step, gaps)
             elif outcome == "done" and gaps and not gate_used:
                 # Un aiutante ha riportato buchi e il passo si chiude come se
@@ -1412,16 +1417,32 @@ class PlanDriver:
             if plan.status not in _RUNNING or step is None or step.id != plan_step:
                 return False
             gaps = _open_gaps(step)
+            is_researcher = agent_type == "researcher"
+            researchers = [
+                r for r in step.extra.get(_RESEARCH_LINEAGES) or () if isinstance(r, str)
+            ]
+            if is_researcher and key not in researchers:
+                researchers.append(key)
+            # Un giro è la ricerca dei buchi *di altri*: degli editor, o quelli
+            # che i passi prima hanno riportato a questo. I buchi di un altro
+            # ricercatore dello stesso lancio no: in un passo di ricerca previsto
+            # due ricercatori che arrivano uno dopo l'altro non sono un giro.
             research_round = (
-                agent_type == "researcher"
+                is_researcher
                 and not step.extra.get(_GAPS_ROUND)
-                and any(lineage_key != key for lineage_key in gaps)
+                and (
+                    any(k != key and k not in researchers for k in gaps)
+                    or bool(step.extra.get(_CARRIED_GAPS))
+                )
+            )
+            new_researcher = is_researcher and key not in (
+                step.extra.get(_RESEARCH_LINEAGES) or ()
             )
             if items:
                 gaps[key] = items
             elif key in gaps:
                 del gaps[key]
-            elif not research_round:
+            elif not research_round and not new_researcher:
                 return False
             step_id = step.id
 
@@ -1433,6 +1454,8 @@ class PlanDriver:
                     s.extra.pop(_GAPS, None)
                 if research_round:
                     s.extra[_GAPS_ROUND] = True
+                if is_researcher:
+                    s.extra[_RESEARCH_LINEAGES] = researchers
 
             await asyncio.to_thread(self.store.update, plan.id, _apply)
         logger.info(
@@ -2376,7 +2399,7 @@ class PlanDriver:
             s.photo_after = None
             for key in (_NUDGE, _PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION,
                         _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE,
-                        _GAPS_ROUND):
+                        _GAPS_ROUND, _RESEARCH_LINEAGES):
                 s.extra.pop(key, None)
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _open)

@@ -322,6 +322,26 @@ async def test_a_refused_step_blocks_without_a_reminder(workspace: Path) -> None
     assert sum("[Plan — step" in p for p in script.prompts) == 1
 
 
+async def test_a_refused_chat_turn_does_not_judge_the_step_as_refused(workspace: Path) -> None:
+    """Solo il lavoro del passo blocca per rifiuto: un turno di chat dell'utente
+    rifiutato durante il piano arriva al driver senza ``provider_refused``."""
+    loop, driver = _loop(workspace, Script(workspace, close_steps=False))
+    seen: list[str] = []
+
+    async def _on_turn_end(session_key, metadata, *, pending=False, stop_reason=""):
+        seen.append(stop_reason)
+
+    driver.on_turn_end = _on_turn_end
+    await loop._plan_turn_ended(_user("come va?"), KEY, stop_reason="provider_refused")
+    report = InboundMessage(
+        channel="system", sender_id="subagent", chat_id=f"websocket:{KEY}", content="x",
+        session_key_override=KEY,
+        metadata={INJECTED_EVENT_META: "subagent_result", "subagent_task_id": "t1"},
+    )
+    await loop._plan_turn_ended(report, KEY, stop_reason="provider_refused")
+    assert seen == ["", "provider_refused"]
+
+
 async def test_stop_with_a_helper_running(workspace: Path) -> None:
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)

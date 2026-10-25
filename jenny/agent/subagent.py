@@ -2738,7 +2738,12 @@ class SubagentManager:
         if taint:
             resume_spec = replace(resume_spec, taint_seed=taint)
         light: list[dict[str, Any]] | None = None
-        size = history_chars(history) if finished else 0
+        # L'app-builder no: scrive con ``app draft/edit/set``, che la nota dei
+        # file non vede, e il suo seguito vive del codice letto e dei risultati
+        # di ``app run`` (l'instradamento di ``spawn`` gli promette proprio
+        # questo: «conosce il codice e continua da lì»).
+        light_ok = finished and spec.agent_type != "app-builder"
+        size = history_chars(history) if light_ok else 0
         if size > self.LIGHT_RESUME_MIN_HISTORY_CHARS:
             light = light_resume_messages(history, message)
         if light is not None:
