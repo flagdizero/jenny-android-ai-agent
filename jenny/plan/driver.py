@@ -142,6 +142,10 @@ _MAX_CARRIED_ITEMS = 40
 
 _RUNNING = frozenset({"running", "pausing"})
 
+# Per quanto un ``plan_propose`` dopo un annullamento riceve «fermati»: il turno
+# che stava pianificando, non uno di domani.
+_CANCELLED_GRACE_S = 600.0
+
 # Un ritorno (o il suo annullamento) partito e non finito: nell'``extra`` del
 # piano, con l'errore. Il piano resta ``done``/``stopped`` (o ``rolled_back``),
 # perché il quaderno è a metà fra i due; la scheda lo legge da qui e Riprova è
@@ -387,6 +391,10 @@ class PlanDriver:
         # solo per riferimento debole e un task può sparire a metà.
         self._tasks: set[asyncio.Task[Any]] = set()
         self._drafting_lock = asyncio.Lock()
+        # notebook → quando l'utente ha annullato la sua pianificazione
+        # (``time.monotonic``): un ``plan_propose`` che arriva poco dopo, dal
+        # turno che stava pianificando, riceve «fermati», non «nessuno pianifica».
+        self._cancelled_drafting: dict[str, float] = {}
 
     # ── indice ─────────────────────────────────────────────────────────────
 
@@ -551,6 +559,9 @@ class PlanDriver:
         notebook = notebook_of(session_key)
         if notebook is None:
             return
+        if create:
+            # Una pianificazione nuova chiude il conto dell'annullamento di prima.
+            self._cancelled_drafting.pop(notebook, None)
         stamp = now_iso()
         created: list[bool] = []
 
@@ -644,8 +655,50 @@ class PlanDriver:
         return await self._drop_drafting(notebook, reason)
 
     async def cancel_drafting(self, notebook: str) -> bool:
-        """``plan.cancel_drafting``: l'utente ha spento il tasto o annullato."""
-        return await self._drop_drafting(notebook, "cancelled")
+        """``plan.cancel_drafting``: l'utente ha spento il tasto o annullato.
+
+        Ferma anche il lavoro della pianificazione: il turno in volo e gli
+        aiutanti che ha lanciato. Il 25/10 sul telefono l'annullamento chiudeva
+        solo lo stato: il turno andava avanti, ``plan_propose`` lo rifiutava, e
+        Jenny («non è partita la modalità piano, così sono andata diretta»)
+        lanciava un editor che riscriveva l'indice senza nessuna approvazione.
+        """
+        entry = self._drafting.get(notebook) or {}
+        helpers = [h for h in entry.get("helpers") or () if isinstance(h, str)]
+        dropped = await self._drop_drafting(notebook, "cancelled")
+        if dropped:
+            self._cancelled_drafting[notebook] = time.monotonic()
+            await self._stop_drafting_work(notebook, helpers)
+        return dropped
+
+    async def _stop_drafting_work(self, notebook: str, helpers: list[str]) -> None:
+        """Il turno di pianificazione in volo e gli aiutanti suoi, non gli altri.
+
+        Gli altri aiutanti della chat (una ricerca chiesta prima del tasto Piano)
+        non sono della pianificazione e restano al lavoro: per questo non è
+        ``host.cancel``, che è ``/stop all``. Metodi facoltativi dell'ospite: un
+        ospite che non li ha (i test vecchi) annulla solo lo stato, come prima.
+        """
+        from jenny.session.keys import project_session_key
+
+        session_key = project_session_key(notebook)
+        cancel_turn: Any = getattr(self.host, "cancel_turn", None)
+        cancel_helpers: Any = getattr(self.host, "cancel_helpers", None)
+        try:
+            if callable(cancel_turn) and self.host.turn_in_flight(session_key):
+                await cancel_turn(session_key)
+            running = self.host.running_helpers(session_key)
+            mine = [h for h in helpers if h in running]
+            if mine and callable(cancel_helpers):
+                await cancel_helpers(mine)
+        except Exception:  # noqa: BLE001 — lo stato è già annullato: il resto è un aiuto
+            logger.opt(exception=True).warning(
+                "Plan drafting in notebook {}: work not stopped", notebook
+            )
+        logger.info(
+            "Plan drafting in notebook {} cancelled: turn stopped, {} helper(s)",
+            notebook, len(helpers),
+        )
 
     async def _drop_drafting(
         self, notebook: str, reason: str, *, announce: bool = True
@@ -876,6 +929,13 @@ class PlanDriver:
             )
         drafting = self.drafting_for(session_key)
         if drafting is None:
+            cancelled_at = self._cancelled_drafting.get(notebook)
+            if cancelled_at is not None and time.monotonic() - cancelled_at < _CANCELLED_GRACE_S:
+                return (
+                    "Stop: the user cancelled this plan while you were preparing it. Do not "
+                    "do the work, do not start helpers and do not write anything: say in one "
+                    "short sentence that the plan is cancelled, and wait for the user."
+                )
             return (
                 "Error: nobody is preparing a plan in this notebook now: the user starts it "
                 "with the Plan button. Do not propose a plan; answer the user."

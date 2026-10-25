@@ -112,6 +112,38 @@ class LoopPlanHost:
         if callable(register):
             register(fn)
 
+    async def cancel_turn(self, session_key: str) -> bool:
+        """Solo il turno in volo della sessione (``/stop`` semplice), non gli aiutanti.
+
+        Per l'annullamento di una pianificazione: il turno che stava pianificando
+        si ferma, gli aiutanti della chat che non sono suoi restano al lavoro.
+        Come in :meth:`cancel`, il ``turn_end`` lo emette chi ferma.
+        """
+        loop = self._loop
+        if not self.turn_in_flight(session_key):
+            return False
+        await loop._cancel_active_tasks(session_key, spare_subagents=True)
+        loop._restore_cancelled_turn(session_key)
+        origin = InboundMessage(
+            channel="websocket", sender_id="plan", chat_id=session_key, content="",
+        )
+        try:
+            await loop._emit_stop_turn_end(origin, session_key)
+        except Exception:  # noqa: BLE001 — il turno è fermo comunque
+            logger.opt(exception=True).warning("Plan drafting cancel: turn end not emitted")
+        return True
+
+    async def cancel_helpers(self, task_ids: list[str]) -> int:
+        """Ferma questi aiutanti, uno per uno (``SubagentManager.cancel_task``)."""
+        stopped = 0
+        for task_id in task_ids:
+            try:
+                if await self._loop.subagents.cancel_task(task_id):
+                    stopped += 1
+            except Exception:  # noqa: BLE001 — uno che non si ferma non blocca gli altri
+                logger.opt(exception=True).warning("Helper {} not cancelled", task_id)
+        return stopped
+
     async def cancel(self, session_key: str) -> int:
         """Il percorso di ``/stop all``: il turno in volo e gli aiutanti della sessione.
 

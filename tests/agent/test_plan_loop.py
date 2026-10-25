@@ -82,6 +82,10 @@ class Script:
         self.ask_first = False
         # Il provider rifiuta di rispondere ai turni del passo (``content_filter``).
         self.refuse_steps = False
+        # Il turno di pianificazione resta a pensare finché non lo si ferma: è lì
+        # che l'utente annulla.
+        self.hang_planning = False
+        self.planning_started = asyncio.Event()
 
     async def __call__(self, **kw: Any) -> LLMResponse:
         messages = kw.get("messages") or []
@@ -96,6 +100,9 @@ class Script:
         text = _text(last)
         self.prompts.append(text)
         if "[Planning turn]" in text:
+            if self.hang_planning:
+                self.planning_started.set()
+                await asyncio.Event().wait()  # fino al cancel
             if self.ask_first and "The user pressed Plan" in text:
                 return LLMResponse(content="La camelia la tengo? Se non mi dici niente: sì.")
             # Prima si guarda il quaderno: ``plan_propose`` rifiuta senza.
@@ -320,6 +327,28 @@ async def test_a_refused_step_blocks_without_a_reminder(workspace: Path) -> None
     assert sum("[Plan reminder" in p for p in script.prompts) == 0
     # Il turno del passo è l'ultima riga ``user``: niente da togliere, una richiesta sola.
     assert sum("[Plan — step" in p for p in script.prompts) == 1
+
+
+async def test_cancelling_a_planning_stops_the_turn_in_flight(workspace: Path) -> None:
+    """L'annullamento ferma il turno che stava pianificando: il 25/10 andava
+    avanti, ``plan_propose`` lo rifiutava e Jenny faceva il lavoro «diretta»."""
+    script = Script(workspace)
+    script.hang_planning = True
+    loop, driver = _loop(workspace, script)
+    task = await _run(loop)
+    try:
+        await loop.bus.publish_inbound(_user("Sistema l'indice", plan_mode=True, readonly=True))
+        await asyncio.wait_for(script.planning_started.wait(), timeout=5)
+        assert driver.host.turn_in_flight(KEY)
+        assert await driver.cancel_drafting("piante") is True
+        await wait_until(lambda: not driver.host.turn_in_flight(KEY), timeout=5)
+    finally:
+        await _stop(loop, task)
+    assert driver.store.open_plan_for("piante") is None
+    # Una sola chiamata al modello, quella rimasta a pensare: dopo l'annullamento
+    # il turno non è andato avanti (né lettura, né proposta, né lavoro «diretto»).
+    assert len(script.offered) == 1
+    assert (workspace / "wikis" / "piante" / "wiki" / "index.md").read_text() == "# Piante\n"
 
 
 async def test_a_refused_chat_turn_does_not_judge_the_step_as_refused(workspace: Path) -> None:

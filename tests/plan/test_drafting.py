@@ -334,3 +334,67 @@ async def test_a_cancel_racing_a_follow_up_is_not_undone(driver: PlanDriver) -> 
         assert cancelled is True
         assert driver.store.drafting_get("piante") is None
         assert driver.drafting_for(KEY) is None
+
+
+# ── l'annullamento ferma il lavoro della pianificazione ─────────────────────
+
+
+class _CancellingHost(FakeHost):
+    """L'ospite finto con i due metodi dell'annullamento, che registrano le chiamate."""
+
+    def __init__(self, workspace: Path) -> None:
+        super().__init__(workspace)
+        self.turns_cancelled: list[str] = []
+        self.helpers_cancelled: list[list[str]] = []
+
+    async def cancel_turn(self, session_key: str) -> bool:
+        self.turns_cancelled.append(session_key)
+        self.busy.discard(session_key)
+        return True
+
+    async def cancel_helpers(self, task_ids: list[str]) -> int:
+        self.helpers_cancelled.append(list(task_ids))
+        return len(task_ids)
+
+
+async def test_cancel_stops_the_planning_turn_and_its_own_helpers(workspace: Path) -> None:
+    """Il 25/10 sul telefono l'annullamento chiudeva solo lo stato: il turno in volo
+    andava avanti e faceva il lavoro senza approvazione. Ora il turno si ferma, e
+    con lui gli aiutanti che la pianificazione aveva lanciato — non gli altri."""
+    host = _CancellingHost(workspace)
+    driver = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), host)
+    await start_drafting(driver)
+    await driver.note_helper(KEY, "plan-helper")
+    host.busy.add(KEY)
+    host.helpers[KEY] = {"plan-helper", "older-research"}
+
+    assert await driver.cancel_drafting("piante") is True
+
+    assert host.turns_cancelled == [KEY]
+    assert host.helpers_cancelled == [["plan-helper"]]
+
+
+async def test_cancel_without_a_turn_in_flight_cancels_no_turn(workspace: Path) -> None:
+    host = _CancellingHost(workspace)
+    driver = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), host)
+    await start_drafting(driver)
+    assert await driver.cancel_drafting("piante") is True
+    assert host.turns_cancelled == [] and host.helpers_cancelled == []
+
+
+async def test_a_propose_after_a_cancel_is_told_to_stop(driver: PlanDriver) -> None:
+    """Se il turno sopravvive all'annullamento, ``plan_propose`` non gli dice più
+    «nessuno pianifica» (che Jenny leggeva come «fallo e basta»): gli dice di fermarsi."""
+    await start_drafting(driver)
+    await driver.cancel_drafting("piante")
+    text = await driver.propose(KEY, "Rifare la wiki", STEPS, coverage=COVERAGE)
+    assert text.startswith("Stop: the user cancelled this plan")
+    assert "Do not" in text and "do not start helpers" in text
+    assert driver.store.open_plan_for("piante") is None
+
+
+async def test_a_new_planning_forgets_the_cancel(driver: PlanDriver) -> None:
+    await start_drafting(driver)
+    await driver.cancel_drafting("piante")
+    await start_drafting(driver)
+    assert "card" in await driver.propose(KEY, "Rifare la wiki", STEPS, coverage=COVERAGE)
