@@ -17,7 +17,9 @@ origine, TTL 6 ore.** Non e un compromesso: un resume rimanda al provider TUTTA
 la storia del subagent, quindi un researcher con dodici web fetch rende caro ogni
 follow-up. Una finestra corta spinge verso il percorso economico (rilancio dalla
 spec), e oltre la finestra il degrado costa quasi nulla — l'output vero e
-l'artefatto su disco, non il transcript.
+l'artefatto su disco, non il transcript. Dal 24/10/2026 un lavoro finito bene con
+una storia lunga riprende *leggero* (:func:`light_resume_messages`): brief,
+resoconto e file scritti, non tutto cio' che aveva letto.
 
 Il cache del SessionManager e per-istanza: ogni chiave scritta qui viene
 **invalidata subito** (vedi :meth:`SubagentHistoryStore.save`), altrimenti su un
@@ -27,6 +29,7 @@ del processo.
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,7 +37,9 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from jenny.session.history_meta import INJECTED_EVENT_META
 from jenny.session.keys import SUBAGENT_SESSION_PREFIX, subagent_session_key
+from jenny.utils.helpers import merge_message_content
 
 if TYPE_CHECKING:  # pragma: no cover - solo per i type checker
     from jenny.session.manager import SessionManager
@@ -68,6 +73,8 @@ __all__ = [
     "KIND_DONE",
     "MAX_HISTORY_PER_ORIGIN",
     "SubagentHistoryStore",
+    "history_chars",
+    "light_resume_messages",
 ]
 
 
@@ -384,3 +391,184 @@ class SubagentHistoryStore:
                 float(saved_at),
                 KIND_BUDGET if kind == KIND_BUDGET else KIND_DONE,
             )
+
+
+# ---------------------------------------------------------------------------
+# misura e ripresa leggera
+# ---------------------------------------------------------------------------
+
+
+def history_chars(history: list[dict[str, Any]]) -> int:
+    """Quanto pesa una storia salvata, in caratteri del suo JSON.
+
+    Il ragionamento non conta: ``reasoning_content`` non torna al provider in una
+    ripresa che lo ha gia' chiuso, e conterlo farebbe sembrare lunga una storia
+    che non lo e'. La stessa unita' per il tetto delle riprese
+    (``SubagentManager.CONTINUE_MAX_HISTORY_CHARS``) e per la soglia della
+    ripresa leggera, cosi' i due numeri si confrontano.
+    """
+    return sum(
+        len(json.dumps({k: v for k, v in m.items() if k != "reasoning_content"},
+                       ensure_ascii=False, default=str))
+        for m in history
+    )
+
+
+#: Gli strumenti con cui un aiutante scrive, per la nota «cosa hai scritto» della
+#: ripresa leggera. Nomi e argomenti veri, non indovinati: ``write_file`` ed
+#: ``edit_file`` (``tools/filesystem.py``, argomento ``path``), ``apply_patch``
+#: (``edits[].path``), ``notebook action=remove_pages`` (``pages``) e ``board
+#: action=write_drawer`` (``card``), gli ultimi due del ``notebook-editor``.
+_PATH_WRITE_TOOLS = frozenset({"write_file", "edit_file"})
+
+# Voci per riga della nota: un aiutante di quaderno ne tocca 5-15; oltre, la
+# nota diventerebbe lei il contesto che la ripresa leggera vuole togliere.
+_MAX_NOTE_ITEMS = 40
+
+_LIGHT_RESUME_NOTE = (
+    "[Context note: your earlier work was condensed to save tokens. You still have "
+    "your brief and your report; the files you read and the tool calls you made are "
+    "no longer here. {files}Before you change a file, read it again: what you remember "
+    "of it may be out of date.]"
+)
+
+
+def _text_of(content: Any) -> str:
+    """Il testo di un ``content``, stringa o lista di blocchi."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            str(block.get("text") or "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return ""
+
+
+def _call_arguments(call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Nome e argomenti di una tool call in forma OpenAI; ``("", {})`` se illeggibile."""
+    function = call.get("function")
+    if not isinstance(function, dict):
+        return "", {}
+    raw = function.get("arguments")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            raw = None
+    return str(function.get("name") or ""), raw if isinstance(raw, dict) else {}
+
+
+def _written_items(history: list[dict[str, Any]]) -> tuple[list[str], list[str], list[str]]:
+    """File scritti, pagine tolte e cassetti riscritti, dalle tool call riuscite.
+
+    Una chiamata il cui risultato comincia con «Error» non ha scritto niente e
+    non entra: la nota direbbe all'aiutante di aver cambiato un file che non ha
+    toccato. Una chiamata senza risultato (storia potata) conta, nel dubbio.
+    """
+    failed = {
+        str(m.get("tool_call_id"))
+        for m in history
+        if m.get("role") == "tool"
+        and isinstance(m.get("content"), str)
+        and m["content"].lstrip().startswith("Error")
+    }
+    files: list[str] = []
+    removed: list[str] = []
+    drawers: list[str] = []
+
+    def _add(bucket: list[str], value: Any) -> None:
+        if isinstance(value, str) and value.strip() and value.strip() not in bucket:
+            bucket.append(value.strip())
+
+    for m in history:
+        if m.get("role") != "assistant":
+            continue
+        for call in m.get("tool_calls") or []:
+            if not isinstance(call, dict) or str(call.get("id")) in failed:
+                continue
+            name, args = _call_arguments(call)
+            if name in _PATH_WRITE_TOOLS:
+                _add(files, args.get("path"))
+            elif name == "apply_patch" and not args.get("dry_run"):
+                for edit in args.get("edits") or []:
+                    if isinstance(edit, dict):
+                        _add(files, edit.get("path"))
+            elif name == "notebook" and args.get("action") == "remove_pages":
+                for page in args.get("pages") or []:
+                    _add(removed, page)
+            elif name == "board" and args.get("action") == "write_drawer":
+                _add(drawers, args.get("card"))
+    return files, removed, drawers
+
+
+def _note_line(label: str, items: list[str]) -> str:
+    shown = items[:_MAX_NOTE_ITEMS]
+    more = f" (and {len(items) - len(shown)} more)" if len(items) > len(shown) else ""
+    return f"{label}: {', '.join(shown)}{more}. "
+
+
+def light_resume_messages(
+    history: list[dict[str, Any]], message: str,
+) -> list[dict[str, Any]] | None:
+    """La semina di una ripresa leggera: la storia senza il lavoro di mezzo.
+
+    Resta lo scheletro del dialogo — il system prompt salvato, il brief, ogni
+    messaggio di Jenny e ogni resoconto con cui l'aiutante ha chiuso — e sparisce
+    cio' che sta fra l'uno e l'altro: le tool call, i loro risultati, i testi
+    intermedi e le righe sintetiche del runner (``INJECTED_EVENT_META``). In coda
+    una nota con i file che l'aiutante ha scritto, ricavata dalle sue tool call,
+    poi il messaggio nuovo. Lo scheletro, e non solo «brief + ultimo resoconto»:
+    alla seconda ripresa leggera dello stesso aiutante la prima nota, il primo
+    messaggio di Jenny e il primo resoconto sono righe di testo, e restano.
+
+    La forma e' sempre ``[system,] user, assistant, …, user``: nessuna tool call
+    senza risultato, nessun risultato senza la sua chiamata, ruoli consecutivi
+    uguali fusi in uno. ``None`` se la storia non ha un resoconto da cui
+    ripartire: il chiamante riprende allora con la storia intera, come prima.
+    """
+    seed: list[dict[str, Any]] = []
+    rest = history
+    if history and history[0].get("role") == "system":
+        seed.append(dict(history[0]))
+        rest = history[1:]
+    turns: list[dict[str, Any]] = []
+
+    def _push(role: str, content: Any) -> None:
+        if turns and turns[-1]["role"] == role:
+            turns[-1]["content"] = merge_message_content(turns[-1]["content"], content)
+        else:
+            turns.append({"role": role, "content": content})
+
+    for m in rest:
+        role = m.get("role")
+        if role == "user":
+            if m.get(INJECTED_EVENT_META):
+                continue
+            content = m.get("content")
+            if isinstance(content, list) or _text_of(content).strip():
+                _push("user", content)
+        elif role == "assistant" and not m.get("tool_calls"):
+            text = _text_of(m.get("content")).strip()
+            if text:
+                _push("assistant", text)
+    # Serve un brief in testa e almeno un resoconto: senza, non c'e' nulla da
+    # condensare e la storia intera e' l'unica continuazione onesta.
+    if not turns or turns[0]["role"] != "user" or not any(
+        t["role"] == "assistant" for t in turns
+    ):
+        return None
+
+    files, removed, drawers = _written_items(history)
+    listed = ""
+    if files:
+        listed += _note_line("Files you wrote or edited", files)
+    if removed:
+        listed += _note_line("Pages you removed", removed)
+    if drawers:
+        listed += _note_line("Drawers you rewrote", drawers)
+    if not listed:
+        listed = "No file writes were found in that work. "
+    _push("user", _LIGHT_RESUME_NOTE.format(files=listed) + "\n\n" + message)
+    return seed + turns

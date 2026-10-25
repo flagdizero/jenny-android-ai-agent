@@ -40,7 +40,13 @@ from jenny.agent.subagent_activity import (
     format_tool_end,
     format_tool_start,
 )
-from jenny.agent.subagent_history import HISTORY_TTL_S, KIND_BUDGET, SubagentHistoryStore
+from jenny.agent.subagent_history import (
+    HISTORY_TTL_S,
+    KIND_BUDGET,
+    SubagentHistoryStore,
+    history_chars,
+    light_resume_messages,
+)
 from jenny.agent.subagent_records import (
     CANCEL_REASON_SHUTDOWN,
     CANCEL_REASON_SUPERSEDED,
@@ -2593,7 +2599,9 @@ class SubagentManager:
         2. **terminato bene**, o **fermato al budget**, con storia entro la
            finestra di retention ->
            *resume*: un run nuovo seminato con i messaggi salvati piu il
-           follow-up;
+           follow-up — o, per un lavoro finito bene con una storia lunga, con
+           la sola ossatura (brief, resoconto, file scritti: vedi
+           ``_resume_lineage``);
         3. tutto il resto (stallato, fallito, storia scaduta) -> *rilancio*
            dalla spec, col messaggio come nota correttiva.
 
@@ -2674,6 +2682,7 @@ class SubagentManager:
             return await self._resume_lineage(
                 lineage_id, spec, attempt, history, text, quick=quick,
                 budget_resumes=budget_resumes + (1 if last_state == "budget" else 0),
+                finished=last_state == "done",
             )
 
         if not allow_restart:
@@ -2707,15 +2716,35 @@ class SubagentManager:
         *,
         quick: bool | None,
         budget_resumes: int = 0,
+        finished: bool = False,
     ) -> SubagentSendResult:
-        """Rilancia un lineage terminato seminandolo con la storia salvata."""
+        """Rilancia un lineage terminato seminandolo con la storia salvata.
+
+        ``finished`` dice che l'ultimo tentativo e' finito bene: solo allora, e
+        solo oltre ``LIGHT_RESUME_MIN_HISTORY_CHARS``, la ripresa e' *leggera*
+        (:func:`~jenny.agent.subagent_history.light_resume_messages`). Un aiutante
+        fermato al budget riprende sempre con la storia intera: e' a meta' di un
+        lavoro, e cio' che aveva letto gli serve per finirlo.
+        """
         resume_spec = spec if quick is None or quick == spec.quick else replace(spec, quick=quick)
         # La storia rimette in contesto ciò che il lavoro aveva letto: se era non
-        # fidato, lo è anche la ripresa.
+        # fidato, lo è anche la ripresa. Vale anche per quella leggera: il
+        # resoconto e la nota vengono dalle stesse letture non fidate.
         taint = _merge_taint(self._history.taint_of(lineage_id), current_turn_taint())
         if taint:
             resume_spec = replace(resume_spec, taint_seed=taint)
-        messages = list(history) + [{"role": "user", "content": message}]
+        light: list[dict[str, Any]] | None = None
+        size = history_chars(history) if finished else 0
+        if size > self.LIGHT_RESUME_MIN_HISTORY_CHARS:
+            light = light_resume_messages(history, message)
+        if light is not None:
+            messages = light
+            logger.info(
+                "Light resume of lineage {}: {} message(s), {} chars -> {} message(s), {} chars",
+                lineage_id, len(history), size, len(light), history_chars(light),
+            )
+        else:
+            messages = list(history) + [{"role": "user", "content": message}]
         # ``attempt`` invariato: vedi il contratto in ``send``. Il record del run
         # ripreso resta sullo stesso attempt, cosi ``can_restart`` nello snapshot
         # continua a significare "quanti rilanci automatici sono stati spesi".
@@ -2730,6 +2759,16 @@ class SubagentManager:
             "Resumed lineage {} as [{}] from {} stored message(s)",
             lineage_id, task_id, len(history),
         )
+        if light is not None:
+            return SubagentSendResult(
+                "resumed",
+                f"Resumed subagent [{spec.label}] with a light context (new id: {task_id}, "
+                f"lineage {lineage_id}): its saved conversation was long ({len(history)} "
+                "messages), so it continues from its brief, its report and the list of "
+                "files it wrote, not from everything it read. It will re-read the pages "
+                "it changes. Its result will be announced to you as usual.",
+                task_id=task_id,
+            )
         return SubagentSendResult(
             "resumed",
             f"Resumed subagent [{spec.label}] from its saved conversation "
@@ -2743,6 +2782,16 @@ class SubagentManager:
     # riprendere rimanda al provider tutta la storia del subagent, e a ogni
     # ritocco cresce.
     CONTINUE_MAX_HISTORY_CHARS = 160_000
+
+    # Oltre questa storia un aiutante finito bene riprende *leggero*: brief,
+    # resoconto, i file che ha scritto e il messaggio nuovo (vedi
+    # ``_resume_lineage``). Misurato sul piano del 24/10/2026: 19 notebook-editor
+    # ripresi per aggiungere due o tre fatti a pagine gia' loro partivano con 113-623
+    # mila caratteri di contesto (mediana ~190 mila) e sono costati 23,5 M token di
+    # prompt, un quinto del piano. Sotto, la storia intera costa poco e un
+    # aiutante breve resta fedele a se stesso: 60 mila caratteri sono ~15 mila
+    # token, un lavoro di poche letture.
+    LIGHT_RESUME_MIN_HISTORY_CHARS = 60_000
 
     def continuable(self, target_id: str) -> bool:
         """Vero se ``send`` a *target_id* continuerebbe il suo lavoro.
@@ -2799,12 +2848,7 @@ class SubagentManager:
             return False
         if not history:
             return False
-        size = sum(
-            len(json.dumps({k: v for k, v in m.items() if k != "reasoning_content"},
-                           ensure_ascii=False, default=str))
-            for m in history
-        )
-        return size <= self.CONTINUE_MAX_HISTORY_CHARS
+        return history_chars(history) <= self.CONTINUE_MAX_HISTORY_CHARS
 
     def _live_task_for(self, target_id: str) -> str | None:
         """Task id del tentativo VIVO che corrisponde a un task id o lineage id."""
