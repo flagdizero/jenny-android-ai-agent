@@ -709,11 +709,11 @@ class PlanDriver:
         cancel_turn: Any = getattr(self.host, "cancel_turn", None)
         cancel_helpers: Any = getattr(self.host, "cancel_helpers", None)
         try:
-            if callable(cancel_turn) and self.host.turn_in_flight(session_key):
+            if cancel_turn is not None and self.host.turn_in_flight(session_key):
                 await cancel_turn(session_key)
             running = self.host.running_helpers(session_key)
             mine = [h for h in helpers if h in running]
-            if mine and callable(cancel_helpers):
+            if mine and cancel_helpers is not None:
                 await cancel_helpers(mine)
         except Exception:  # noqa: BLE001 — lo stato è già annullato: il resto è un aiuto
             logger.opt(exception=True).warning(
