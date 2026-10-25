@@ -634,6 +634,16 @@ body.home {
    leggere e da spuntare, non una riga di stato. Il bordo dice lo stato del
    piano: il fiore mentre propone e corre, l'avviso quando aspetta te, l'ok
    quando ha finito, il grigio quando e' fermo o tornato indietro. */
+/* La scheda del piano non si stringe per la testa di Jenny: il posto vivo che
+   la tiene si scansa di `--jenny-dodge` (v. `.home-live:not([hidden])`), e lei
+   se lo riprende. Una scheda di piano è lunga e si legge scorrendo: stretta per
+   tutta l'altezza perdeva una colonna di testo per un'invadenza che c'è solo in
+   fondo. Quando il suo fondo arriva all'altezza di Jenny, lei le passa sopra,
+   come sopra a tutto (chiesto dall'utente il 25/10). */
+.home-live > .home-plan {
+  width: calc(100% + var(--jenny-dodge, 0px));
+  margin-right: calc(-1 * var(--jenny-dodge, 0px));
+}
 .home-plan {
   width: 100%;
   max-width: 520px;

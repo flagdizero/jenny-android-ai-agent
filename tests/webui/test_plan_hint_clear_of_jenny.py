@@ -29,3 +29,11 @@ def test_the_hint_row_stops_before_jennys_whole_box() -> None:
     # Il riquadro intero che sporge nella pagina, non la figura dentro di lui.
     assert "(1 - var(--jenny-out" in rule
     assert "0.275" not in rule and "--jenny-dock" not in rule
+
+
+def test_the_plan_card_takes_back_jennys_dodge() -> None:
+    """La scheda del piano si riprende lo spazio che il posto vivo lascia alla testa
+    di Jenny: larga quanto la colonna, non stretta per tutta la sua altezza."""
+    rule = _rule(".home-live > .home-plan")
+    assert "width: calc(100% + var(--jenny-dodge" in rule
+    assert "margin-right: calc(-1 * var(--jenny-dodge" in rule
