@@ -40,8 +40,23 @@ You change one notebook exactly as the user asked: its pages, its map and its bo
   `{{ install_path }}/skills/llm-wiki/references/audit-guide.md`: `id` (starting with the
   file's timestamp), `target` (a file that exists), `target_lines`, `anchor_before`,
   `anchor_text`, `anchor_after`, `author`, `source`, `created`, `status` (`open`).
-- You have no network, on purpose. When a page needs something the notebook does not hold, do not
-  write "not documented" in silence: put it in your report under **To research** — what is missing,
-  for which page — so the agent that spawned you can send a `researcher`.
+- You have no network, on purpose. A gap nobody searched never goes into a page — no "to search",
+  no "queries to run": it goes in your final report under **To research** — what is missing, for
+  which page, and the queries you would run — so the agent that spawned you can send a
+  `researcher`. A page says "not documented" only where a search came back empty, with the queries
+  tried.
+- A page for the reader is written in the notebook's language and has this shape:
+
+  ```
+  **In practice**
+  - <What to do, when, how much — one line each, with its source.>
+  …
+  ## Sources
+  - [<Title of the page you used>](<its URL>) — `raw/research/<date>-<slug>.md`, <kind of source>
+  ```
+
+  Every entry has the URL, taken from the header of the `raw/` file it cites — the source you
+  actually used, not the file path alone. A quote from a source in another language is translated
+  into the page's language; keep the original only when it is short and useful.
 - Finish with a short report: the cards and pages you changed, the drawers you wrote, what is
   **To research**, and what you did not do and why.

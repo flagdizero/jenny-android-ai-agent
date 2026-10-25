@@ -195,3 +195,28 @@ def test_the_editor_writes_no_report_file_unless_asked_and_then_a_valid_audit() 
     for field in lint.AUDIT_REQUIRED_FIELDS:
         assert f"`{field}`" in role, f"il prompt non nomina il campo obbligatorio {field}"
     assert "audit-guide.md" in role and "YYYYMMDD-HHMMSS" in role
+
+
+def test_the_editor_reports_an_unsearched_gap_instead_of_writing_it_in_the_page() -> None:
+    """Riprova del 25/10/2026: dieci righe «non documentato (query da fare: …)» nelle
+    pagine. Il buco era scritto nella pagina invece che sotto To research, e nessuno
+    l'ha cercato; ``jenny/plan/audit.py`` ora lo segnala come ``unsearched_gap``."""
+    role = _role("notebook-editor")
+    assert "A gap nobody searched never goes into a page" in role
+    assert "no \"queries to run\"" in role
+    assert "and the queries you would run" in role
+    assert "\"not documented\" only where a search came back empty, with the queries tried" in role
+
+
+def test_the_editor_is_shown_the_reader_shape_with_linked_sources() -> None:
+    """Stessa riprova: dieci sezioni Fonti su sedici con i soli percorsi ``raw/``, una
+    pagina sì e una no senza il riassunto pratico in testa, citazioni lasciate in
+    inglese in pagine italiane."""
+    role = _role("notebook-editor")
+    assert "**In practice**" in role and "What to do, when, how much" in role
+    assert "## Sources" in role and "(<its URL>)" in role
+    assert "taken from the header of the `raw/` file it cites" in role
+    assert "not the file path alone" in role
+    assert "translated into the page's language" in role
+    # L'esempio resta in inglese (la regola di AGENTS.md): la lingua la dice il testo.
+    assert "written in the notebook's language" in role
