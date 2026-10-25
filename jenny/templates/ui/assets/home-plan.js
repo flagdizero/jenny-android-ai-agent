@@ -1102,12 +1102,16 @@ export class HomePlan {
     return list;
   }
 
-  _tags(step, coverage = []) {
+  /* `revision`: le etichette new/moved/changed dicono cosa e' cambiato rispetto
+     alla versione di prima, e servono solo a decidere sulla proposta. Approvato il
+     piano restavano su ogni passo fino alla fine (prove del 24 e 25/10), come se
+     il passo fosse stato cambiato mentre correva. */
+  _tags(step, coverage = [], { revision = true } = {}) {
     const tags = [];
     if (step.kind === 'delete') tags.push(['trash', 'is-danger']);
-    if (step.tag === 'new') tags.push(['new', 'is-new']);
-    if (step.tag === 'moved') tags.push(['moved', 'is-moved']);
-    if (step.tag === 'changed') tags.push(['changed', 'is-changed']);
+    if (revision && step.tag === 'new') tags.push(['new', 'is-new']);
+    if (revision && step.tag === 'moved') tags.push(['moved', 'is-moved']);
+    if (revision && step.tag === 'changed') tags.push(['changed', 'is-changed']);
     /* Un passo di ricerca dice quante voci della copertura va a cercare: sono
        quelle che la validazione gli ha legato (`covers`), e solo le `web`. */
     const covers = webCovered(step, coverage).length;
@@ -1115,10 +1119,10 @@ export class HomePlan {
     return tags.map(([key, cls, params]) => el('span', `home-plan-tag ${cls}`, t(`tag.${key}`, params)));
   }
 
-  _text(step, { time = '', coverage = [] } = {}) {
+  _text(step, { time = '', coverage = [], revision = true } = {}) {
     const text = el('span', 'home-plan-text');
     text.append(step.title || '');
-    for (const tag of this._tags(step, coverage)) text.appendChild(tag);
+    for (const tag of this._tags(step, coverage, { revision })) text.appendChild(tag);
     if (time) text.appendChild(el('span', 'home-plan-time', time));
     return text;
   }
@@ -1164,7 +1168,7 @@ export class HomePlan {
     else if (mark) box.appendChild(icon(mark));
     const ended = step.status === 'done' || step.status === 'skipped' ? clockOf(step.ended_at) : '';
     item.append(box, icon(KIND_ICON[step.kind] || KIND_ICON.other, 'home-plan-kind'),
-      this._text(step, { time: reverted ? '' : ended, coverage: plan.coverage }));
+      this._text(step, { time: reverted ? '' : ended, coverage: plan.coverage, revision: false }));
     let sub = '';
     if (step.status === 'now') {
       const minutes = minutesBetween(step.started_at);
@@ -2135,7 +2139,9 @@ export class HomePlan {
       const h = el('h3', 'home-plan-full-step');
       h.dataset.stepId = s.id || '';
       h.append(icon(KIND_ICON[s.kind] || KIND_ICON.other), el('span', null, `${i + 1}. ${s.title || ''}`));
-      for (const tag of this._tags(s, coverage)) h.appendChild(tag);
+      for (const tag of this._tags(s, coverage, { revision: plan.status === 'proposed' })) {
+        h.appendChild(tag);
+      }
       body.appendChild(h);
       if (s.detail) body.appendChild(md('home-plan-full-detail', s.detail));
       if (s.done_when) {

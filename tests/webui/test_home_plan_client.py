@@ -351,6 +351,26 @@ assert.ok(action('resume'));
 """)
 
 
+def test_revision_tags_stay_on_the_proposal_only() -> None:
+    """«new / moved / changed» dicono cosa cambia dalla versione di prima: servono a
+    decidere sulla proposta, non mentre il piano corre o quando è finito."""
+    run_home(_HEAD + """
+current = plan({ status: 'running', version: 2, done: 1, total: 3, current_step_id: 's2',
+  steps: [step('s1', 'Search maple', { status: 'done', tag: 'changed' }),
+    step('s2', 'Throw away old pages', { kind: 'delete', status: 'now', tag: 'moved',
+      started_at: new Date().toISOString() }),
+    step('s3', 'Check links', { kind: 'check', tag: 'new' })] });
+open = [{ id: 'p1', notebook: 'orto', status: 'running', title: 'Rebuild the wiki', done: 1, total: 3 }];
+await toNotebook();
+assert.equal(card().querySelectorAll('.home-plan-tag.is-new, .home-plan-tag.is-moved, .home-plan-tag.is-changed').length, 0);
+assert.match(text(card()), new RegExp(P.tag.trash), 'il cestino resta: dice cosa fa il passo');
+current = { ...current, status: 'done', done: 3, current_step_id: null };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(card().querySelectorAll('.home-plan-tag.is-changed').length, 0, 'nemmeno a fine piano');
+""")
+
+
 def test_a_done_step_shows_what_it_did() -> None:
     run_home(_HEAD + """
 current = plan({ status: 'running', done: 1, steps: [
