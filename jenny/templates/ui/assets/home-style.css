@@ -1076,11 +1076,14 @@ body.home {
 .home-plan-hint-cancel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .home-plan-hint[hidden] { display: none; }
 /* Jenny resta dov'e' (il suo pavimento e' il composer, v. `--jenny-floor`), e
-   i piedi le cadono sulla riga: il testo si ferma prima della sua figura, che
-   comincia a `1 - --jenny-dock - 0,275` lati dal bordo (lo stesso conto di
-   `--jenny-dodge`, qui contro i 14px di margine della riga). */
+   i piedi le cadono sulla riga. La riga si ferma prima del suo **riquadro**, non
+   della figura: il tocco lo prende tutto il quadrato di `--jenny-size`, anche la
+   parte trasparente, e sopra la chat Jenny sta «fuori» (`--jenny-out`, un quarto
+   oltre il bordo). Contare dalla figura con l'ancoraggio «al bordo» lasciava
+   «Annulla il piano» sotto di lei: il 25/10 sul telefono il tocco sul link
+   chiudeva la chat invece di annullare. 14px sono il margine della riga. */
 .home-shell .home-plan-hint {
-  padding-right: max(0px, calc(var(--jenny-size, 120px) * (1 - var(--jenny-dock, 0.3) - 0.275) - 14px + 6px));
+  padding-right: max(0px, calc(var(--jenny-size, 120px) * (1 - var(--jenny-out, 0.25)) - 14px + 4px));
 }
 
 /* «In sola lettura durante il piano»: sul lettore e sulla bacheca. */
