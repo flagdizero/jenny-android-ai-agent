@@ -28,6 +28,7 @@ from websockets.asyncio.server import serve
 
 from jenny.channels import ws_remote
 from jenny.channels.ws_remote import RemoteListener, server_listening
+from jenny.runtime.tailscale import BROADCAST, OPENED_APP
 
 TS4 = "100.94.12.7"
 TS6 = "fd7a:115c:a1e0::1234"
@@ -256,15 +257,18 @@ async def test_the_guard_passes_other_errors_on_and_is_removed_on_stop() -> None
 
 
 class _Revive:
-    def __init__(self, *, fail: bool = False) -> None:
+    """Il gesto finto. ``in_front=False``: Jenny non è davanti, l'app non si apre."""
+
+    def __init__(self, *, fail: bool = False, in_front: bool = True) -> None:
         self.calls: list[bool] = []
         self.fail = fail
+        self.in_front = in_front
 
-    async def __call__(self, *, open_app: bool) -> bool:
+    async def __call__(self, *, open_app: bool) -> str:
         self.calls.append(open_app)
         if self.fail:
             raise RuntimeError("no Android here")
-        return True
+        return OPENED_APP if open_app and self.in_front else BROADCAST
 
 
 async def _round(listener: RemoteListener) -> None:
@@ -306,8 +310,15 @@ async def test_tailscale_down_is_revived_after_twenty_seconds_not_after_rounds()
         await rig.listener.stop()
 
 
+def _pause_over(listener: RemoteListener) -> None:
+    """Il tempo della pausa, e dei giri fitti dopo il tentativo, è passato."""
+    listener._next_revive_at = 0.0
+    listener._fast_until = 0.0
+
+
 async def test_the_app_opens_only_after_two_broadcasts_and_pauses_grow() -> None:
-    revive = _Revive()
+    """Con Jenny non davanti l'app non si apre davvero: i tentativi continuano."""
+    revive = _Revive(in_front=False)
     rig = _Rig()
     rig.listener._revive = revive
     rig.addresses = ()
@@ -322,6 +333,89 @@ async def test_the_app_opens_only_after_two_broadcasts_and_pauses_grow() -> None
             pauses.append(round(rig.listener._next_revive_at - before, -1))
         assert revive.calls == [False, False, True, True, True, True, True]
         assert pauses == [30.0, 60.0, 120.0, 300.0, 600.0, 600.0, 600.0]
+    finally:
+        await rig.listener.stop()
+
+
+async def test_the_app_opens_once_then_jenny_waits_for_the_user() -> None:
+    """Tailscale senza accesso (jenny_s22, 25/10/2026): ogni apertura metteva il
+    suo login sopra Jenny, ogni 2-10 minuti per sempre. Ora si apre una volta;
+    se non basta, Jenny smette del tutto e il pannello lo dice."""
+    revive = _Revive()
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=True, key="k1")
+    try:
+        _age(rig.listener, 21)
+        for _ in range(3):
+            _pause_over(rig.listener)
+            await _round(rig.listener)
+        assert revive.calls == [False, False, True]
+        assert (await rig.listener.status())["tailscale"] == "reviving"
+
+        for _ in range(5):
+            _pause_over(rig.listener)
+            await _round(rig.listener)
+        assert revive.calls == [False, False, True]  # niente più, nemmeno il messaggio
+        assert (await rig.listener.status())["tailscale"] == "needs_you"
+
+        # L'utente fa l'accesso: Tailscale torna, e l'episodio dopo riparte da capo.
+        rig.addresses = (TS4, TS6)
+        await _round(rig.listener)
+        assert (await rig.listener.status())["tailscale"] == "up"
+        rig.addresses = ()
+        await _round(rig.listener)
+        _age(rig.listener, 21)
+        await _round(rig.listener)
+        assert revive.calls == [False, False, True, False]
+    finally:
+        await rig.listener.stop()
+
+
+async def test_inside_the_fast_rounds_after_opening_the_app_it_still_waits() -> None:
+    """Il kill del Titan: il tunnel torna ~2 s dopo l'app. Fino alla fine dei
+    giri fitti non si conclude niente, e se torna è un episodio normale."""
+    revive = _Revive()
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=True, key="k1")
+    try:
+        _age(rig.listener, 21)
+        for _ in range(3):
+            _pause_over(rig.listener)
+            await _round(rig.listener)
+        assert revive.calls == [False, False, True]
+        await _round(rig.listener)  # dentro i 30 s fitti: si aspetta
+        assert (await rig.listener.status())["tailscale"] == "reviving"
+        rig.addresses = (TS4, TS6)
+        await _round(rig.listener)
+        assert (await rig.listener.status())["tailscale"] == "up"
+        assert not rig.listener._needs_user and not rig.listener._app_opened
+    finally:
+        await rig.listener.stop()
+
+
+async def test_turning_remote_access_off_and_on_tries_again() -> None:
+    revive = _Revive()
+    rig = _Rig()
+    rig.listener._revive = revive
+    rig.addresses = ()
+    await rig.listener.apply(enabled=True, key="k1")
+    _age(rig.listener, 21)
+    for _ in range(4):
+        _pause_over(rig.listener)
+        await _round(rig.listener)
+    assert (await rig.listener.status())["tailscale"] == "needs_you"
+
+    await rig.listener.apply(enabled=False, key="k1")
+    await rig.listener.apply(enabled=True, key="k1")
+    try:
+        _age(rig.listener, 21)
+        await _round(rig.listener)
+        assert revive.calls == [False, False, True, False]
+        assert (await rig.listener.status())["tailscale"] == "reviving"
     finally:
         await rig.listener.stop()
 

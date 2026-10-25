@@ -49,6 +49,8 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.runtime.tailscale import OPENED_APP
+
 # Gli indirizzi che Tailscale assegna ai nodi del tailnet. Il /10 è anche il
 # CGNAT degli operatori: da solo non basta a dire «Tailscale», e infatti la
 # rilevazione pretende l'indirizzo IPv6, che è solo suo (v. `detect_tailscale`).
@@ -87,6 +89,15 @@ _CLOSE_TIMEOUT_S = 5.0
 # crescenti fino a dieci minuti, finché non torna. I primi due
 # tentativi sono il solo messaggio, invisibile; dal terzo si apre anche l'app,
 # che si vede ma è l'unico gesto misurato che lo riporta su dopo un kill.
+#
+# L'app si apre **una volta sola** per episodio. Se 30 secondi dopo Tailscale
+# non è tornato, non è un kill: vuole l'utente (accesso non fatto, VPN non
+# autorizzata). Visto su jenny_s22 il 25/10/2026 con Tailscale senza accesso:
+# ogni apertura metteva la sua schermata di login sopra Jenny, ogni 2-10 minuti
+# per sempre, e ogni messaggio gli faceva postare una notifica. Da lì Jenny
+# smette del tutto e il pannello lo dice; riprova solo quando Tailscale torna
+# su da sé o l'opzione viene spenta e riaccesa. Quando aprirla, e quando no
+# perché Jenny non potrebbe tornare davanti, lo decide ``runtime.tailscale``.
 _REVIVE_AFTER_S = 20.0
 _REVIVE_BACKOFF_S = (30.0, 60.0, 120.0, 300.0, 600.0)
 _BROADCASTS_BEFORE_APP = 2
@@ -280,6 +291,10 @@ class RemoteListener:
         self._next_revive_at = 0.0
         self._fast_until = 0.0
         self._revive_task: asyncio.Task[Any] | None = None
+        # L'app di Tailscale si è vista in questo episodio; e, se non è
+        # bastata, Tailscale aspetta l'utente: niente più tentativi.
+        self._app_opened = False
+        self._needs_user = False
         self._enabled = False
         self._key = ""
         self._bound: tuple[str, ...] = ()
@@ -397,6 +412,8 @@ class RemoteListener:
         peers = list(by_ip.values())
         if found:
             tailscale = "up"
+        elif self._enabled and self._needs_user:
+            tailscale = "needs_you"
         elif self._enabled and self._revive_attempts:
             tailscale = "reviving"
         else:
@@ -466,6 +483,9 @@ class RemoteListener:
         self._revive_attempts = 0
         self._down_since = None
         self._next_revive_at = self._fast_until = 0.0
+        # Spegnere e riaccendere è il modo di dire «riprova»: anche dopo un
+        # Tailscale che aspettava l'utente.
+        self._app_opened = self._needs_user = False
         async with self._lock:
             await self._close()
         self._remove_guard()
@@ -593,9 +613,19 @@ class RemoteListener:
             self._down_since = None
             self._revive_attempts = 0
             self._next_revive_at = 0.0
+            self._app_opened = self._needs_user = False
             return
         if self._down_since is None:
             self._down_since = now
+        if self._needs_user:
+            return
+        if self._app_opened and now >= self._fast_until:
+            self._needs_user = True
+            logger.warning(
+                "remote access: Tailscale still down after opening its app, "
+                "it needs the user (logged out?); not asking again"
+            )
+            return
         if self._revive is None or now - self._down_since < _REVIVE_AFTER_S:
             return
         if now < self._next_revive_at:
@@ -620,7 +650,8 @@ class RemoteListener:
     async def _run_revive(self, open_app: bool) -> None:
         assert self._revive is not None
         try:
-            await self._revive(open_app=open_app)
+            if await self._revive(open_app=open_app) == OPENED_APP:
+                self._app_opened = True
         except Exception:
             logger.opt(exception=True).warning("remote access: reviving Tailscale failed")
         self.kick()

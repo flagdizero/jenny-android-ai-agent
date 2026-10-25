@@ -149,14 +149,16 @@ export class RemoteAccessPanel {
       parts.push(`<p class="remote-hint">${escapeHtml(t('offHint'))}</p>`);
     } else if (!s.listening) {
       /* Tailscale giù con l'opzione accesa: Jenny lo sta riaccendendo da sé
-         (`ws_remote.RemoteListener._follow_tailscale`), e lo si dice. */
-      const waiting = s.tailscale === 'reviving'
-        ? t('reviving', { count: s.revive_attempts })
+         (`ws_remote.RemoteListener._follow_tailscale`), e lo si dice. Con
+         `needs_you` ha smesso: aprire l'app non è bastato, tocca all'utente. */
+      const needsYou = s.tailscale === 'needs_you';
+      const waiting = needsYou ? t('needsYou')
+        : s.tailscale === 'reviving' ? t('reviving', { count: s.revive_attempts })
         : t('waiting');
       parts.push(this._status('warn', s.error ? t('error', { error: s.error }) : waiting));
       if (!s.error) {
         parts.push(`<div class="settings-notice settings-notice-strong remote-ts-down">
-          <i class="ti ti-plug-off" aria-hidden="true"></i><div>${escapeHtml(t('tsDown'))}</div></div>`);
+          <i class="ti ti-plug-off" aria-hidden="true"></i><div>${escapeHtml(t(needsYou ? 'tsNeedsYou' : 'tsDown'))}</div></div>`);
         if (native) {
           parts.push(`<div class="remote-actions"><button class="settings-btn-add" type="button" data-remote="open-ts">
             <i class="ti ti-external-link" aria-hidden="true"></i> ${escapeHtml(t('openTailscale'))}</button></div>`);

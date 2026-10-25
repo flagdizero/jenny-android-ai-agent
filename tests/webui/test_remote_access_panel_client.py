@@ -153,6 +153,17 @@ def test_off_waiting_and_remote_states() -> None:
         assert.ok(body.innerHTML.includes('settings.remote.reviving{&quot;count&quot;:2}'));
         assert.ok(body.innerHTML.includes('settings.remote.tsDown'));
 
+        // Aprire l'app non è bastato: Jenny ha smesso, tocca all'utente.
+        globalThis.JennyNative = {};
+        ({ body } = await panelWith({
+          ...ON, listening: false, address: null, peers: [], tailscale: 'needs_you', revive_attempts: 3,
+        }));
+        delete globalThis.JennyNative;
+        assert.ok(body.innerHTML.includes('settings.remote.needsYou'));
+        assert.ok(body.innerHTML.includes('settings.remote.tsNeedsYou'));
+        assert.ok(!body.innerHTML.includes('settings.remote.tsDown'));
+        assert.ok(body.innerHTML.includes('data-remote="open-ts"'));
+
         // Un errore di bind si dice, senza l'avviso di Tailscale.
         ({ body } = await panelWith({ ...ON, listening: false, error: 'Address already in use' }));
         assert.ok(body.innerHTML.includes('Address already in use'));

@@ -63,17 +63,18 @@ def _on_phone(monkeypatch, context: _Context) -> None:
     monkeypatch.setattr(get_runtime_context(), "android_context", context)
     monkeypatch.setattr(tailscale, "_intent_class", lambda: _Intent)
     monkeypatch.setattr(tailscale, "_BACK_AFTER_S", 0.0)
+    monkeypatch.setattr(tailscale, "_can_come_back", lambda: True)
 
 
 async def test_off_the_phone_it_does_nothing(monkeypatch) -> None:
     monkeypatch.setattr(get_runtime_context(), "android_context", None)
-    assert await tailscale.revive(open_app=True) is False
+    assert await tailscale.revive(open_app=True) is None
 
 
 async def test_the_broadcast_goes_to_tailscale_receiver(monkeypatch) -> None:
     ctx = _Context()
     _on_phone(monkeypatch, ctx)
-    assert await tailscale.revive(open_app=False) is True
+    assert await tailscale.revive(open_app=False) == tailscale.BROADCAST
     [intent] = ctx.broadcasts
     assert intent.action == "com.tailscale.ipn.CONNECT_VPN"
     assert intent.component == ("com.tailscale.ipn", "com.tailscale.ipn.IPNReceiver")
@@ -83,7 +84,7 @@ async def test_the_broadcast_goes_to_tailscale_receiver(monkeypatch) -> None:
 async def test_open_app_shows_tailscale_then_brings_jenny_back(monkeypatch) -> None:
     ctx = _Context()
     _on_phone(monkeypatch, ctx)
-    assert await tailscale.revive(open_app=True) is True
+    assert await tailscale.revive(open_app=True) == tailscale.OPENED_APP
     assert len(ctx.broadcasts) == 1
     first, back = ctx.started
     assert first.component == ("com.tailscale.ipn", "com.tailscale.ipn.MainActivity")
@@ -92,10 +93,26 @@ async def test_open_app_shows_tailscale_then_brings_jenny_back(monkeypatch) -> N
     assert back.flags & _Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
 
 
+async def test_if_jenny_could_not_come_back_the_app_is_not_opened(monkeypatch) -> None:
+    """Senza la mascotte a schermo Android blocca il ritorno (visto su
+    jenny_s22): il gesto si dice solo messaggio, e l'ascoltatore non lo conta
+    come app vista."""
+    ctx = _Context()
+    _on_phone(monkeypatch, ctx)
+    monkeypatch.setattr(tailscale, "_can_come_back", lambda: False)
+    assert await tailscale.revive(open_app=True) == tailscale.BROADCAST
+    assert len(ctx.broadcasts) == 1 and ctx.started == []
+
+
+def test_when_it_cannot_tell_jenny_does_not_open_tailscale() -> None:
+    """Senza Chaquopy (o con una classe sparita) non si sa: niente apertura."""
+    assert tailscale._can_come_back() is False
+
+
 async def test_not_installed_sends_nothing(monkeypatch) -> None:
     ctx = _Context(installed=False)
     _on_phone(monkeypatch, ctx)
-    assert await tailscale.revive(open_app=True) is False
+    assert await tailscale.revive(open_app=True) is None
     assert ctx.broadcasts == [] and ctx.started == []
 
 
@@ -107,4 +124,4 @@ async def test_a_java_error_is_swallowed(monkeypatch) -> None:
         raise RuntimeError("SecurityException")
 
     ctx.sendBroadcast = boom  # type: ignore[method-assign]
-    assert await tailscale.revive(open_app=False) is False
+    assert await tailscale.revive(open_app=False) is None
