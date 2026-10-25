@@ -43,8 +43,8 @@ from jenny.security.workspace_access import (
 
 _WRITES = (
     "add_card", "rename_card", "move_card", "remove_card", "restore_card", "move_pages",
-    "remove_pages", "connect", "disconnect", "add_note", "add_reminder", "update_reminder",
-    "close_reminder", "remove_section",
+    "remove_pages", "connect", "disconnect", "add_note", "add_reminder", "attach_reminder",
+    "update_reminder", "close_reminder", "remove_section",
     "set_skeleton", "answer_proposal", "write_drawer",
 )
 _ACTIONS = ("show", *_WRITES)
@@ -76,6 +76,8 @@ _SECTION = ObjectSchema(
         "connect (card, other, label?) / disconnect (card, other): a thread. "
         "add_note (card, text). add_reminder (card?, text, date, precision?): tie it to the "
         "card it is about, or leave card empty for the whole notebook — you decide. "
+        "attach_reminder (card?, id): put an existing open reminder on that card (empty: the "
+        "whole notebook); a reminder sits on one card only, so this moves it. "
         "update_reminder (id, text?, date?, precision?, why?, clear_why?): correct an open "
         "reminder; why is the wiki page that explains it, clear_why=true removes it. "
         "close_reminder (id): done. remove_section (card, id). "
@@ -101,8 +103,8 @@ _SECTION = ObjectSchema(
     why=StringSchema("update_reminder: the page that explains the reminder, relative to wiki/ "
                      "(it must exist). Omitted or empty: unchanged."),
     clear_why=BooleanSchema(description="update_reminder: true removes the reminder's page."),
-    id=StringSchema("close_reminder / update_reminder: the reminder id. remove_section: the "
-                    "section id. answer_proposal: the proposal id."),
+    id=StringSchema("attach_reminder / close_reminder / update_reminder: the reminder id. "
+                    "remove_section: the section id. answer_proposal: the proposal id."),
     answer=StringSchema("answer_proposal.", enum=list(edit.ANSWERS)),
     skeleton=ArraySchema(StringSchema("A section title."),
                          description="set_skeleton: the drawer sections, in order."),
@@ -221,6 +223,8 @@ class BoardTool(Tool):
                         "free sticky note.")
             return (f"Reminder `{rid}` added: a line on the card's sticky note and in its care "
                     "calendar.")
+        if action == "attach_reminder":
+            return _attach_reminder(root, card, str(kw.get("id") or ""))
         if action == "update_reminder":
             return _update_reminder(root, str(kw.get("id") or ""), kw)
         if action == "close_reminder":
@@ -299,6 +303,19 @@ def _update_reminder(root: Path, rid: str, kw: dict[str, Any]) -> str:
     if clear:
         return f"Reminder `{rid}` updated; it no longer points to a page."
     return f"Reminder `{rid}` updated."
+
+
+def _attach_reminder(root: Path, card: str, rid: str) -> str:
+    """La risposta di ``attach_reminder``: dove sta ora, e da dove è venuta."""
+    done = edit.attach_reminder(root, card, rid)
+    rem = done["reminder"]
+    where = _where(rem["card"])
+    if not done["changed"]:
+        return f"Reminder `{rem['id']}` is already {where}: nothing changed."
+    tail = ("a line on the board's free sticky note" if rem["card"] == model.NOTEBOOK
+            else "a line on the card's sticky note and in its care calendar")
+    return (f"Reminder `{rem['id']}` «{rem['text']}» is now {where} "
+            f"(it was {_where(done['from'])}): {tail}.")
 
 
 def _jobs_note(what: dict[str, Any], state: str) -> str:
@@ -405,7 +422,7 @@ def show(root: Path) -> str:
     if open_rems:
         lines += ["", "Open reminders:"]
         lines += [f"- `{r['id']}` {_where(r['card'])}: {r['text']} ({_when(r)})"
-                  for r in open_rems]
+                  + _off_board(board, r["card"]) for r in open_rems]
     # I cron li tiene lo scheduler: qui si vedono, li cambia il tool ``cron``.
     jobs = notebook_jobs_on_disk(root.name)
     if jobs:
@@ -433,6 +450,15 @@ def show(root: Path) -> str:
         lines += [f"- `{s['id']}` {s['kind']} «{s.get('subject') or ''}»: {s['text']}"
                   for s in board["suggestions"]]
     return "\n".join(lines)
+
+
+def _off_board(board: dict[str, Any], scope: str) -> str:
+    """Un'attesa la cui scheda non è sulla bacheca non ha post-it: lo si dice, e come rimediare."""
+    if model.scope_state(board, scope) != model.SCOPE_HIDDEN:
+        return ""
+    if any(r["card"]["id"] == scope for r in board["removedCards"]):
+        return " — NOT ON THE BOARD: its card is in the trash (restore_card, or attach_reminder)"
+    return " — NOT ON THE BOARD: no such card (attach_reminder puts it on one)"
 
 
 def _where(scope: str) -> str:

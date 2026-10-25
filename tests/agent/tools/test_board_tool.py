@@ -426,3 +426,102 @@ async def test_drawers_that_are_not_orphans_stay(notebook_chat: Path) -> None:
         assert out.startswith("Not done: card not found"), out
     assert read_card_summary(root, "nuove") is not None
     assert read_card_summary(root, "proposta") is not None
+
+
+# ── attach_reminder: un'attesa che c'è già, su una scheda ───────────────────
+
+
+def _orphan_reminder(root: Path, rid: str = "r-rinvaso", card: str = "sparita",
+                     state: str = "open") -> None:
+    """Un'attesa la cui scheda non c'è più: il caso del 25/10/2026 sul telefono."""
+    from jenny.board.store import mutate_reminders
+
+    def apply(rems):
+        rems["reminders"].append({"id": rid, "card": card, "text": "Rinvaso",
+                                  "when": {"kind": "date", "date": "2099-03-01"},
+                                  "by": "jenny", "state": state})
+
+    mutate_reminders(root, apply)
+
+
+async def test_attach_reminder_puts_an_orphan_on_a_card_like_add_reminder(
+    notebook_chat: Path, announced,
+) -> None:
+    root = notebook_chat
+    _orphan_reminder(root)
+    tool = BoardTool()
+    shown = await tool.execute(action="show")
+    assert "`r-rinvaso` on `sparita`: Rinvaso (2099-03-01) — NOT ON THE BOARD" in shown, shown
+
+    out = await tool.execute(action="attach_reminder", card="Nuove piante del balcone",
+                             id="r-rinvaso")
+    assert out.startswith("Reminder `r-rinvaso` «Rinvaso» is now on `nuove`"), out
+    rems = read_reminders(root)["reminders"]
+    assert len(rems) == 1, "attaccare non fa un doppione"
+    # Come ``add_reminder(card=…)``: l'ambito è la scheda, e l'attesa è dell'utente.
+    assert rems[0]["card"] == "nuove" and rems[0]["by"] == "user"
+    assert model.next_reminder(read_reminders(root), "nuove")["id"] == "r-rinvaso"
+    assert "NOT ON THE BOARD" not in await tool.execute(action="show")
+    assert announced == ["piante"]
+
+
+async def test_attach_reminder_twice_changes_nothing(notebook_chat: Path, announced) -> None:
+    root = notebook_chat
+    _orphan_reminder(root, card="nuove")
+    before = (root / "board" / "reminders.json").read_bytes()
+    out = await BoardTool().execute(action="attach_reminder", card="nuove", id="r-rinvaso")
+    assert out == "Reminder `r-rinvaso` is already on `nuove`: nothing changed.", out
+    assert (root / "board" / "reminders.json").read_bytes() == before
+    assert read_reminders(root)["reminders"][0]["by"] == "jenny", "nessuna scrittura"
+
+
+async def test_attach_reminder_to_another_card_moves_it(notebook_chat: Path) -> None:
+    """Un'attesa ha un ambito solo: su un'altra scheda si sposta. E la sezione di
+    prima del 20/10/2026 sulla scheda vecchia se ne va, o ``remove_section`` lì la
+    chiuderebbe dopo il trasloco."""
+    root = notebook_chat
+    tool = BoardTool()
+    await tool.execute(action="add_card", title="Ginkgo", pages=["entities/Ginkgo.md"])
+    _orphan_reminder(root, card="nuove")
+
+    def legacy(board):
+        model.card_by_id(board, "nuove")["userSections"].append(
+            {"id": "s-rem", "kind": "reminder", "reminder": "r-rinvaso"})
+
+    mutate_board(root, legacy)
+    out = await tool.execute(action="attach_reminder", card="ginkgo", id="r-rinvaso")
+    assert "is now on `ginkgo`" in out and "it was on `nuove`" in out, out
+    rems = read_reminders(root)["reminders"]
+    assert [r["card"] for r in rems] == ["ginkgo"]
+    assert model.card_by_id(read_board(root), "nuove")["userSections"] == []
+
+    out = await tool.execute(action="attach_reminder", id="r-rinvaso")
+    assert "is now on the whole notebook" in out and "free sticky note" in out, out
+    assert read_reminders(root)["reminders"][0]["card"] == ""
+
+
+@pytest.mark.parametrize(("card", "rid", "state", "said"), [
+    ("Fico", "r-rinvaso", "open", "Not done: card not found: Fico. On the board: «Nuove"),
+    ("nuove", "r-nessuno", "open", "Not done: no reminder `r-nessuno`"),
+    ("nuove", "r-rinvaso", "done", "Not done: reminder `r-rinvaso` is done: closed"),
+    ("nuove", "r-rinvaso", "dropped", "Not done: reminder `r-rinvaso` is dropped: closed"),
+])
+async def test_attach_reminder_refuses(notebook_chat: Path, card: str, rid: str, state: str,
+                                       said: str) -> None:
+    root = notebook_chat
+    _orphan_reminder(root, state=state)
+    before = (root / "board" / "reminders.json").read_bytes()
+    out = await BoardTool().execute(action="attach_reminder", card=card, id=rid)
+    assert out.startswith(said) and "\n" not in out, out
+    assert (root / "board" / "reminders.json").read_bytes() == before
+
+
+def test_the_tool_and_the_editor_know_attach_reminder() -> None:
+    tool = BoardTool()
+    params = tool.parameters["properties"]
+    assert "attach_reminder" in params["action"]["enum"]
+    assert "attach_reminder (card?, id)" in params["action"]["description"]
+    assert "attach_reminder" in params["id"]["description"]
+    template = (Path(__file__).parents[3] / "jenny" / "templates" / "agent" / "types"
+                / "notebook-editor.md").read_text()
+    assert "`attach_reminder` (card, id)" in template

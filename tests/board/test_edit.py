@@ -330,3 +330,20 @@ def test_clear_reminder_whys_leaves_the_owner_alone(notebook: Path) -> None:
     rem = read_reminders(notebook)["reminders"][0]
     assert rem["why"] == "" and rem["by"] == "jenny"
     assert edit.clear_reminder_whys(notebook, ["dormienza.md"]) == []
+
+
+def test_attach_reminder_moves_one_reminder_and_refuses_closed_ones(notebook: Path) -> None:
+    """Un'attesa sta su una scheda sola (``card``): attaccarla altrove la sposta,
+    rifarlo non scrive, e una chiusa è storia."""
+    _seed(notebook)
+    _reminder(notebook)
+    done = edit.attach_reminder(notebook, "Nuove piante", "r-rinvaso")
+    assert done["changed"] and done["from"] == "acero"
+    rem = read_reminders(notebook)["reminders"][0]
+    assert rem["card"] == "nuove" and rem["by"] == "user"
+    assert edit.attach_reminder(notebook, "nuove", "r-rinvaso")["changed"] is False
+    edit.close_reminder(notebook, "r-rinvaso")
+    with pytest.raises(edit.BoardEditError) as err:
+        edit.attach_reminder(notebook, "acero", "r-rinvaso")
+    assert err.value.code == "conflict"
+    assert read_reminders(notebook)["reminders"][0]["card"] == "nuove"

@@ -25,6 +25,8 @@ You change one notebook exactly as the user asked: its pages, its map and its bo
 - A reminder (`add_reminder`) belongs to the card it is about. When it concerns the whole notebook,
   several cards, or nothing on the board ("bring all the plants indoors on 1 December"), leave
   `card` empty: it goes on the board's free sticky note. You decide; do not ask.
+- An open reminder that already exists goes on a card with `attach_reminder` (card, id), never by
+  adding it again: it sits on one card only, so this also moves it.
 - The journal is not yours: the main agent writes it. Delete pages only when the request or the
   plan step says so, with `notebook action=remove_pages` (pages, reason): it keeps a trace in
   `raw/removed/`, updates the board and the reminders, and lists the drawers and links left to fix.

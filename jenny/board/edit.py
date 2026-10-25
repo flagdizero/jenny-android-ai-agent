@@ -580,6 +580,65 @@ def add_reminder(root: Path, ref: str, text: Any, when: Any) -> str:
     return rid_holder[0]
 
 
+def attach_reminder(root: Path, ref: str, rid: str) -> dict[str, Any]:
+    """Un'attesa aperta che c'è già, sulla scheda *ref* (o, *ref* vuoto, sul quaderno).
+
+    Un'attesa ha un ambito solo — il campo ``card`` di ``reminders.json``, lo
+    stesso che scrive :func:`add_reminder` — quindi sta su una scheda sola:
+    attaccarla altrove la **sposta**, e attaccarla dove sta già non scrive
+    niente. Serve a quella rimasta senza post-it perché la sua scheda è nel
+    cestino o non c'è più: il 25/10/2026, sul telefono, l'editore non poteva né
+    attaccarla né rifarla senza un doppione. Vale come dell'utente (``by``),
+    come :func:`update_reminder_fields`. Un'attesa chiusa (``done``/``dropped``)
+    è storia e si rifiuta, come lì.
+
+    Restituisce ``{"reminder", "from", "changed"}``: l'attesa scritta, l'ambito
+    di prima e se qualcosa è cambiato.
+    """
+    scope = card_id_of(root, ref) if str(ref or "").strip() else model.NOTEBOOK
+    rid = str(rid or "").strip()
+    if not rid:
+        raise BoardEditError("bad_request", "reminder id required")
+    out: dict[str, Any] = {}
+
+    def apply_rem(rems: dict[str, Any]) -> bool | None:
+        rem = next((r for r in rems["reminders"] if r["id"] == rid), None)
+        if rem is None:
+            raise BoardEditError("not_found", f"no reminder `{rid}`: show lists the open ones")
+        if rem["state"] != "open":
+            raise BoardEditError("conflict", f"reminder `{rid}` is {rem['state']}: closed "
+                                             "reminders are history and do not change")
+        out.update({"from": rem["card"], "changed": rem["card"] != scope})
+        if not out["changed"]:
+            out["reminder"] = dict(rem)
+            return False
+        rem["card"] = scope
+        rem["by"] = model.USER
+        out["reminder"] = dict(rem)
+        return None
+
+    mutate_reminders(root, apply_rem)
+
+    # Un'attesa di prima del 20/10/2026 può avere ancora la sua sezione nel cassetto
+    # della scheda vecchia (anche nel cestino): non si vede, ma ``remove_section`` lì
+    # la chiuderebbe dopo che è passata altrove. Se ne va, come in :func:`drop_reminder`.
+    def apply(board: dict[str, Any]) -> bool | None:
+        changed = False
+        for card in [*board["cards"], *(r["card"] for r in board["removedCards"])]:
+            if card["id"] == scope:
+                continue
+            keep = [s for s in card["userSections"]
+                    if not (s.get("kind") == "reminder" and s.get("reminder") == rid)]
+            if len(keep) != len(card["userSections"]):
+                card["userSections"] = keep
+                changed = True
+        return None if changed else False
+
+    if out["changed"]:
+        mutate_board(root, apply)
+    return out
+
+
 def _section(root: Path, ref: str, sid: str) -> tuple[str, dict[str, Any]]:
     board = read_board(root) or {"cards": []}
     card = need_card(board, ref)
