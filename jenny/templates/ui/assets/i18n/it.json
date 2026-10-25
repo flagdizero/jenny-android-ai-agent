@@ -1262,7 +1262,8 @@
         "error": "Qualcosa è andato storto.",
         "helperBudget": "Le è finito il fiato prima di arrivare in fondo.",
         "helperError": "È inciampata in un errore.",
-        "helperRestart": "L'ha fermata il riavvio dell'app: quel che ha fatto è salvato, e può ripartire da lì."
+        "helperRestart": "L'ha fermata il riavvio dell'app: quel che ha fatto è salvato, e può ripartire da lì.",
+        "helperProvider": "Il modello ha smesso di rispondere per un po'; quello che aveva fatto è salvo."
       },
       "openBoard": "Apri la bacheca",
       "retryAction": "Riprova",

@@ -440,6 +440,38 @@ assert.equal(button.textContent, W.helperRetry);
 """)
 
 
+def test_a_helper_stopped_by_the_provider_continues_instead_of_restarting() -> None:
+    # Un 429 che non passava: ``failed`` con la storia salvata (prova del 25/10/2026).
+    run_home(_HEAD + _BUDGET + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [budget({ state: 'failed', stop_reason: 'error' })] });
+const report = settled()[0];
+assert.match(text(report), new RegExp(W.why.helperProvider.slice(0, 15)));
+const button = report.querySelector('.home-work-action');
+assert.equal(button.textContent, W.helperContinue);
+button.click();
+await tick(10);
+assert.ok(calls.some((c) => c.startsWith('/api/subagents/t1/continue')), calls.join(' '));
+assert.ok(!calls.some((c) => c.includes('/restart')), 'ha rilanciato da zero invece di continuare');
+""")
+
+
+def test_a_failed_helper_without_history_is_still_restarted() -> None:
+    run_home(_HEAD + _BUDGET + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [],
+        recent: [budget({ state: 'failed', stop_reason: 'error', resumable: false })] });
+const report = settled()[0];
+assert.match(text(report), new RegExp(W.why.helperError.slice(0, 15)));
+assert.equal(report.querySelector('.home-work-action').textContent, W.helperRetry);
+""")
+
+
 def test_a_resume_with_the_same_attempt_closes_the_card() -> None:
     run_home(_HEAD + _BUDGET + """
 const app = await boot();

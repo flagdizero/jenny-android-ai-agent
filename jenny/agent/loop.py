@@ -2456,13 +2456,18 @@ class AgentLoop(
         subagent_status = msg.metadata.get("subagent_status")
         if (is_subagent and subagent_status not in (None, "ok")
                 and ("subagent_restart" in tools_used
-                     # Un aiutante fermato al budget si fa continuare con
-                     # ``subagent_send`` (``subagent_announce.md``): come un
-                     # rilancio, in chat parla solo il lavoro ripreso. Solo se
-                     # l'invio a QUESTO aiutante e' andato: un invio rifiutato,
-                     # o a un altro aiutante, lascia l'utente senza notizie.
-                     or (subagent_status == "budget" and self._sent_to_announced_helper(
-                         all_msgs[save_skip:], msg.metadata)))):
+                     # Un aiutante fermato al budget, o da un provider che non
+                     # rispondeva, si fa continuare con ``subagent_send``
+                     # (``subagent_announce.md``): come un rilancio, in chat parla
+                     # solo il lavoro ripreso. Solo se l'invio a QUESTO aiutante
+                     # e' andato: un invio rifiutato, o a un altro aiutante,
+                     # lascia l'utente senza notizie. Sul telefono, il 25/10/2026,
+                     # l'interrotto mancava: in chat era arrivato «si è arenato su
+                     # un errore di rete, l'ho ripreso».
+                     or ((subagent_status == "budget"
+                          or msg.metadata.get("subagent_interrupted") is True)
+                         and self._sent_to_announced_helper(
+                             all_msgs[save_skip:], msg.metadata)))):
             # Un subagent caduto e rilanciato: in chat parla solo l'esito del
             # rilancio. Il 07/10/2026 l'utente si e' visto arrivare «piccolo
             # intoppo, l'ho rilanciato» e poi il risultato vero, e ha chiesto che

@@ -211,7 +211,9 @@ def test_action_matrix_per_state_and_surface() -> None:
       assert.deepEqual(saActions('budget', 'modal', { resumable: true }), []);
       assert.deepEqual(saActions('budget', 'card', { resumable: true }), []);
       assert.deepEqual(saActions('budget', 'modal', { resumable: false }), ['restart']);
-      assert.deepEqual(saActions('failed', 'modal', { resumable: true }), ['restart']);
+      // Un failed riprendibile e' fermato dal provider con la storia salvata: idem.
+      assert.deepEqual(saActions('failed', 'modal', { resumable: true }), []);
+      assert.deepEqual(saActions('failed', 'modal', { resumable: false }), ['restart']);
 
       // done/cancelled: nessuna azione da nessuna parte.
       for (const state of ['done', 'cancelled']) {

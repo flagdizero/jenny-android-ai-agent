@@ -88,14 +88,15 @@ export const SA_ACTIONS = {
 /** Azioni ammesse per stato su una superficie ('card' | 'modal').
  *
  * `entry` (facoltativa) e' la voce dello snapshot. Serve a un caso solo: una
- * fermata al budget con la storia ancora intera (`resumable`) non offre il
- * rilancio da zero, che butterebbe quel che ha letto e scritto; si riprende
- * dalla casa («Falla continuare») o da Jenny con `subagent_send`. */
+ * fermata al budget, o dal provider (`failed`), con la storia ancora intera
+ * (`resumable`) non offre il rilancio da zero, che butterebbe quel che ha letto
+ * e scritto; si riprende dalla casa («Falla continuare») o da Jenny con
+ * `subagent_send`. */
 export function saActions(state, surface, entry = null) {
   const key = String(state || '');
   const row = SA_ACTIONS[key];
   if (!row) return [];
-  if (key === 'budget' && entry?.resumable) return [];
+  if ((key === 'budget' || key === 'failed') && entry?.resumable) return [];
   return row[surface] || [];
 }
 

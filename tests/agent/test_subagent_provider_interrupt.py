@@ -103,6 +103,31 @@ async def test_a_transient_provider_error_keeps_the_history_and_resumes(
     assert seed[-1] == {"role": "user", "content": "Go on from where you stopped."}
 
 
+async def test_the_interrupted_helper_is_resumable_in_its_record_and_snapshot(
+    tmp_path: Path,
+) -> None:
+    """Sul telefono il record diceva ``resumable: false``: la casa offriva solo il
+    rilancio da zero e ``subagent_status`` non diceva di continuare."""
+    sm = _manager(tmp_path)
+    _failing_runner(sm, "rate_limit")
+    await sm.spawn(task=BRIEF, session_key="unified:default")
+    await _settle(sm)
+
+    announce = await sm.bus.consume_inbound()
+    assert announce.metadata["subagent_status"] == "error"
+    assert announce.metadata["subagent_interrupted"] is True
+    record = sm.list_records("unified:default")[-1]
+    assert (record.state, record.resumable) == ("failed", True)
+    [entry] = sm.status_snapshot("unified:default")["recent"]
+    assert entry["resumable"] is True
+    # Ripreso, non lo e piu: lo e semmai il tentativo nuovo.
+    await sm.send(entry["lineage_id"], "Go on.")
+    await _settle(sm)
+    assert [e["resumable"] for e in sm.status_snapshot("unified:default")["recent"]] == [
+        False, False,
+    ]
+
+
 async def test_a_real_error_still_drops_the_history(tmp_path: Path) -> None:
     sm = _manager(tmp_path)
     _failing_runner(sm, "auth")
@@ -110,9 +135,12 @@ async def test_a_real_error_still_drops_the_history(tmp_path: Path) -> None:
     lineage = next(iter(sm._lineages))
     await _settle(sm)
 
-    announce = (await _announces(sm))[-1]
-    assert "provider kept failing" not in announce
+    announce = await sm.bus.consume_inbound()
+    assert "provider kept failing" not in announce.content
+    assert "subagent_interrupted" not in announce.metadata
     assert sm._history.load(lineage) is None
+    assert sm.list_records("unified:default")[-1].resumable is False
+    assert sm.status_snapshot("unified:default")["recent"][0]["resumable"] is False
 
 
 async def test_a_provider_wait_counts_as_progress(tmp_path: Path) -> None:

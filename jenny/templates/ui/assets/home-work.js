@@ -454,17 +454,21 @@ export class WorkBubbles {
     this._bar(node, null);
     const budget = entry.state === 'budget'
       || entry.stop_reason === 'max_iterations' || entry.stop_reason === 'budget';
-    const why = interrupted ? 'helperRestart' : (budget ? 'helperBudget' : 'helperError');
+    /* Un `failed` riprendibile e' solo quello fermato dal provider (429, server,
+       timeout) con la storia salvata: non e' inciampata nel lavoro. */
+    const why = interrupted ? 'helperRestart'
+      : (budget ? 'helperBudget' : (entry.resumable ? 'helperProvider' : 'helperError'));
     this._line(node, i18n.t(`home.work.why.${why}`), false);
     this._note(node, '');
     const button = node.querySelector('.home-work-action');
     button.disabled = false;
-    /* Fermata dal budget, o interrotta da un riavvio, con la storia ancora
-       intera: si fa continuare, e riparte da dove era con quel che ha letto e
-       scritto. «Rimettila in piedi» invece rilancia da zero, e butterebbe quel
-       lavoro. */
-    if ((interrupted || (entry.state === 'budget' && entry.resumable))
-        && this.deps.continueSubagent) {
+    /* Fermata dal budget o dal provider, o interrotta da un riavvio, con la
+       storia ancora intera: si fa continuare, e riparte da dove era con quel che
+       ha letto e scritto. «Rimettila in piedi» invece rilancia da zero, e
+       butterebbe quel lavoro. */
+    const resumable = interrupted
+      || ((entry.state === 'budget' || entry.state === 'failed') && entry.resumable);
+    if (resumable && this.deps.continueSubagent) {
       this._action(node, {
         label: i18n.t('home.work.helperContinue'),
         run: () => this._continueStopped(node, entry.task_id),

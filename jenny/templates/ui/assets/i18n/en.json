@@ -1262,7 +1262,8 @@
         "error": "Something went wrong.",
         "helperBudget": "She ran out of breath before the end.",
         "helperError": "She tripped on an error.",
-        "helperRestart": "The app restarted under her: what she did is saved, and she can pick up from there."
+        "helperRestart": "The app restarted under her: what she did is saved, and she can pick up from there.",
+        "helperProvider": "The model stopped answering for a while; what she had done is saved."
       },
       "openBoard": "Open the board",
       "retryAction": "Try again",

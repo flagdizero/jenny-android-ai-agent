@@ -15,6 +15,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_types import TurnDisposition
 from jenny.bus.events import InboundMessage
@@ -94,7 +96,15 @@ async def test_an_announce_already_answered_marks_too(tmp_path: Path) -> None:
     assert marked == ["sub-1", "sub-1"]
 
 
-async def test_a_continued_budget_stop_does_not_speak_in_chat(tmp_path: Path) -> None:
+@pytest.mark.parametrize("meta", [
+    {"subagent_status": "budget"},
+    # Fermato da un provider che non rispondeva: sul telefono, il 25/10/2026, in
+    # chat era arrivato «si è arenato su un errore di rete, l'ho ripreso».
+    {"subagent_status": "error", "subagent_interrupted": True},
+])
+async def test_a_continued_helper_does_not_speak_in_chat(
+    tmp_path: Path, meta: dict[str, object],
+) -> None:
     """Jenny fa continuare l'aiutante con ``subagent_send``: come per un rilancio,
     in chat parla solo il lavoro ripreso (``subagent_announce.md``)."""
     loop = _loop(tmp_path)
@@ -115,21 +125,23 @@ async def test_a_continued_budget_stop_does_not_speak_in_chat(tmp_path: Path) ->
 
     loop._run_agent_loop = fake_run_agent_loop  # type: ignore[method-assign]
 
-    outcome = await loop._process_message(
-        _announce("websocket:default", subagent_status="budget")
-    )
+    outcome = await loop._process_message(_announce("websocket:default", **meta))
 
     assert outcome.disposition is TurnDisposition.SILENT
     assert outcome.message is None
 
 
-async def test_a_budget_stop_answered_without_continuing_still_speaks(tmp_path: Path) -> None:
+@pytest.mark.parametrize("meta", [
+    {"subagent_status": "budget"},
+    {"subagent_status": "error", "subagent_interrupted": True},
+])
+async def test_a_stopped_helper_answered_without_continuing_still_speaks(
+    tmp_path: Path, meta: dict[str, object],
+) -> None:
     loop = _loop(tmp_path)
     _fake_turn(loop, reply="It stopped halfway; here is what it found.")
 
-    outcome = await loop._process_message(
-        _announce("websocket:default", subagent_status="budget")
-    )
+    outcome = await loop._process_message(_announce("websocket:default", **meta))
 
     assert outcome.disposition is TurnDisposition.DELIVERED
 

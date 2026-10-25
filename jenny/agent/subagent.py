@@ -2323,6 +2323,10 @@ class SubagentManager:
         }
         if status == "budget":
             metadata["subagent_resumable"] = resumable
+        if interrupted:
+            # Lo legge il loop: come al budget, un ``subagent_send`` riuscito a
+            # questo aiutante zittisce il turno d'annuncio (l'annuncio lo promette).
+            metadata["subagent_interrupted"] = True
         # Il passo del piano per cui lavorava: il turno d'annuncio lega questi
         # metadati come contesto della richiesta, e un aiutante che Jenny lancia
         # da li eredita il passo (``_plan_metadata``). Sicuro: un turno di passo si
@@ -2594,7 +2598,13 @@ class SubagentManager:
             # Uno shutdown con una fotografia su disco: riprendibile come dopo
             # un kill (v. ``_kept_at_shutdown``).
             resumable=(
-                (state == "budget" and status is not None and status.resumable) or kept
+                (state == "budget" and status is not None and status.resumable)
+                # Fermato dal provider con la storia salvata: senza, la casa e
+                # ``subagent_status`` lo davano per perso e offrivano solo il
+                # rilancio da zero.
+                or (state == "failed" and status is not None
+                    and status.provider_interrupted and status.resumable)
+                or kept
             ),
             budget_resumes=status.budget_resumes if status is not None else 0,
         )
@@ -2694,6 +2704,9 @@ class SubagentManager:
             resumable = (
                 (
                     (record.state == "budget" and record.budget_resumes < MAX_BUDGET_RESUMES)
+                    # Fermato da un errore passeggero del provider: un ``failed``
+                    # con ``resumable`` nel record e solo lui (``_retain``).
+                    or record.state == "failed"
                     # Interrotto da un riavvio con una fotografia della
                     # conversazione (``interrupted_helpers``).
                     or self._interrupted_resumable(record)
@@ -2725,9 +2738,9 @@ class SubagentManager:
                 # Riflette il tetto dei rilanci *automatici*: un rilancio
                 # manuale resta sempre possibile (vedi ``restart``).
                 "can_restart": record.attempt < MAX_AUTO_ATTEMPTS,
-                # Fermato al budget con una storia da riprendere: la casa offre
-                # «fai continuare» (``/api/subagents/{id}/continue``) invece del
-                # rilancio da zero.
+                # Fermato al budget, o dal provider, con una storia da riprendere:
+                # la casa offre «fai continuare» (``/api/subagents/{id}/continue``)
+                # invece del rilancio da zero.
                 "resumable": resumable,
                 # Quando Jenny ha avuto il resoconto e ha finito il turno; ``None``
                 # finche non e successo (v. ``mark_handled``).
