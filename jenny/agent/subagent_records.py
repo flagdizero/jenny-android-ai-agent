@@ -15,6 +15,15 @@ atomico a ogni transizione terminale (append + prune). Il JSONL e scelto
 proprio per la tolleranza: una riga troncata o corrotta viene saltata e il
 resto dello storico resta leggibile, perche il gateway deve poter bootare
 comunque.
+
+Un tentativo **in corso** lascia invece un *segnaposto* a parte, un file JSON
+per task sotto ``<workspace>/subagents/running/<task_id>.json``, scritto alla
+partenza e tolto quando il record terminale e su disco. Non sta nel JSONL dei
+record perche quello per contratto porta solo esiti: chi lo legge (snapshot,
+``find``, ``mark_handled``) non deve imparare a saltare i vivi. Un segnaposto
+che sopravvive al processo e la prova che l'aiutante e morto con lui: al boot
+``SubagentManager`` lo trasforma in un record terminale (v.
+:meth:`SubagentRecordStore.load_running`).
 """
 
 from __future__ import annotations
@@ -110,6 +119,18 @@ def cancellation_summary(reason: str) -> str:
     return entry[1] if entry is not None else "This subagent was cancelled."
 
 
+#: Il riassunto di un aiutante interrotto da un riavvio **con** una fotografia
+#: della conversazione da cui ripartire. La regola di ``cancelled_at_shutdown``
+#: («rilancialo») qui sarebbe sbagliata: rilanciarlo butterebbe il lavoro che
+#: la fotografia esiste per salvare.
+INTERRUPTED_RESUMABLE_SUMMARY = (
+    "The app was closed while this subagent was still working, so its work was "
+    "interrupted, not finished or refused. Its conversation up to that point was "
+    "saved: continue it with subagent_send (it picks up where it stopped) instead "
+    "of relaunching it from scratch."
+)
+
+
 # Il tipo di agente e definito in ``jenny/agent/agent_types.py``; qui viene
 # ri-esportato perche i consumatori storici della spec importano da questo
 # modulo.
@@ -119,6 +140,7 @@ __all__ = [
     "CANCEL_REASON_SUPERSEDED",
     "CANCEL_REASON_USER",
     "DEFAULT_AGENT_TYPE",
+    "INTERRUPTED_RESUMABLE_SUMMARY",
     "MAX_RECORDS_PER_SESSION",
     "MAX_RESULT_SUMMARY_CHARS",
     "RECORD_TTL_S",
@@ -155,6 +177,8 @@ MAX_RESULT_SUMMARY_CHARS = 800
 _MAX_RECORD_FILE_BYTES = 2_000_000
 
 _RECORDS_DIRNAME = "records"
+# Segnaposti dei tentativi in corso (v. docstring del modulo).
+_RUNNING_DIRNAME = "running"
 # Radice di tutto cio che i subagent lasciano su disco. Pubblica perche la
 # condivide ``jenny/agent/subagent_activity.py``, che ci mette la sua
 # sottodirectory ``activity/``: due letterali "subagents" separati sarebbero
@@ -395,6 +419,9 @@ class SubagentRecord:
     # Fermato al budget con una storia ancora riprendibile (``budget`` e
     # ``SubagentManager.continuable``), misurato una volta alla terminazione:
     # lo snapshot si pubblica ogni pochi secondi e non deve rileggere la storia.
+    # Vale anche per un tentativo ``cancelled`` per ``shutdown`` — morto col
+    # processo o fermato da uno shutdown ordinato — che ha lasciato una
+    # fotografia della conversazione (``SubagentManager.interrupted_helpers``).
     resumable: bool = False
     # Riprese dopo un budget gia spese dal lineage fino a questo tentativo: dopo
     # un riavvio e cio che fa rispettare a ``send`` il tetto delle riprese
@@ -514,6 +541,77 @@ class SubagentRecordStore:
             return None
         stem = safe_filename(session_key.replace(":", "_")) or "unknown"
         return root / f"{stem}.jsonl"
+
+    @property
+    def running_root(self) -> Path | None:
+        # Solo un percorso vero: il segnaposto si scrive alla *partenza* di ogni
+        # aiutante, e un workspace finto (un ``MagicMock`` nei test) diventava un
+        # percorso relativo, con cartelle ``MagicMock/mock/<id>/`` nella
+        # directory corrente.
+        if not isinstance(self._workspace, (str, Path)):
+            return None
+        return Path(self._workspace) / SUBAGENTS_DIRNAME / _RUNNING_DIRNAME
+
+    def _running_path(self, task_id: str) -> Path | None:
+        root = self.running_root
+        stem = safe_filename(task_id)
+        if root is None or not stem:
+            return None
+        return root / f"{stem}.json"
+
+    # -- tentativi in corso ---------------------------------------------------
+
+    def mark_running(self, record: SubagentRecord) -> None:
+        """Scrive il segnaposto di un tentativo che parte (``state="running"``).
+
+        Con fsync: serve proprio dopo un kill, quindi non puo restare in page
+        cache. ~1-2 KB, una volta per tentativo. Solleva sugli errori di I/O: il
+        chiamante decide (``SubagentManager`` logga e prosegue).
+        """
+        path = self._running_path(record.task_id)
+        if path is None:
+            return
+        atomic_write(path, json.dumps(record.to_dict(), ensure_ascii=False))
+
+    def clear_running(self, task_id: str) -> None:
+        """Toglie il segnaposto di *task_id*. Non solleva."""
+        path = self._running_path(task_id)
+        if path is None:
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:
+            logger.warning("Could not delete running marker {}: {}", path, e)
+
+    def load_running(self) -> list[SubagentRecord]:
+        """I segnaposti rimasti su disco, dal piu vecchio al piu nuovo.
+
+        Letto al boot, prima che parta qualunque aiutante: ogni voce e quindi un
+        tentativo morto col processo precedente. Un file illeggibile si cancella
+        (non dice piu niente di utile) e non ferma gli altri.
+        """
+        root = self.running_root
+        if root is None:
+            return []
+        try:
+            paths = sorted(root.glob("*.json"))
+        except OSError as e:
+            logger.warning("Subagent running dir unreadable {}: {}", root, e)
+            return []
+        out: list[SubagentRecord] = []
+        for path in paths:
+            try:
+                if path.stat().st_size > _MAX_RECORD_FILE_BYTES:
+                    raise ValueError("running marker too large")
+                out.append(SubagentRecord.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning("Dropping unreadable running marker {}: {}", path, e)
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        out.sort(key=lambda r: r.started_at)
+        return out
 
     # -- read ----------------------------------------------------------------
 

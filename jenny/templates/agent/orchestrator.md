@@ -33,7 +33,9 @@ done; call it when the user asks what is running, or before cancelling or relaun
 
 `state=cancelled` comes with a `stop_reason`: `cancelled_by_user` — leave it alone until the user
 asks for that work again; `superseded_by_new_attempt` — a newer attempt took its place;
-`cancelled_at_shutdown` — interrupted by a restart, relaunch it if the result is still wanted.
+`cancelled_at_shutdown` — interrupted by a restart: if its result says its conversation was
+saved, continue it with `subagent_send` (it keeps what it had read and written); otherwise
+relaunch it if the result is still wanted.
 
 ## Follow-ups: send, do not re-spawn
 

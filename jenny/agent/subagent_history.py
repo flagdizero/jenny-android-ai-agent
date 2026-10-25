@@ -61,6 +61,13 @@ MAX_HISTORY_PER_ORIGIN = 6
 #: un lavoro finito si ritocca di rado, uno fermato a meta aspetta di continuare.
 KIND_DONE = "done"
 KIND_BUDGET = "budget"
+#: Fotografia presa *mentre* l'aiutante lavora (``SubagentManager``, al piu una
+#: ogni ``HISTORY_CHECKPOINT_INTERVAL_S``): se Android uccide il processo a meta
+#: lavoro, e cio che permette di riprenderlo invece di rifarlo. La fine normale
+#: del run la sostituisce con la sua (stessa chiave). Per la potatura vale quanto
+#: una ``budget``: entrambe sono lavoro non finito.
+KIND_INTERRUPTED = "interrupted"
+_KINDS = (KIND_DONE, KIND_BUDGET, KIND_INTERRUPTED)
 
 # Guardia sul numero di messaggi salvati: oltre questo tetto la storia viene
 # potata dalla coda (``Session.enforce_file_cap``). Molto sopra a cio che un
@@ -71,6 +78,7 @@ __all__ = [
     "HISTORY_TTL_S",
     "KIND_BUDGET",
     "KIND_DONE",
+    "KIND_INTERRUPTED",
     "MAX_HISTORY_PER_ORIGIN",
     "SubagentHistoryStore",
     "history_chars",
@@ -135,13 +143,44 @@ class SubagentHistoryStore:
         Best-effort: un errore di serializzazione o di I/O viene loggato e non
         propaga — la storia e un'ottimizzazione del follow-up, non puo uccidere
         un subagent che ha appena finito il lavoro.
+
+        E :meth:`write` seguita da :meth:`register`: chi non vuole fermare il
+        loop sulla scrittura (il checkpoint durante il run) le chiama separate,
+        la prima in un thread e la seconda sul loop.
+        """
+        moment = time.time() if now is None else now
+        if not self.write(
+            lineage_id, origin_key, messages, saved_at=moment, taint=taint, kind=kind,
+        ):
+            return False
+        self.register(lineage_id, origin_key, saved_at=moment, kind=kind)
+        return True
+
+    def write(
+        self,
+        lineage_id: str,
+        origin_key: str,
+        messages: list[dict[str, Any]] | None,
+        *,
+        saved_at: float,
+        taint: tuple[str, ...] = (),
+        kind: str = KIND_DONE,
+    ) -> bool:
+        """La meta su disco di :meth:`save`: serializza e scrive il file, nient'altro.
+
+        Non tocca l'indice ne pota, quindi si puo chiamare da un thread
+        (``asyncio.to_thread``): del SessionManager usa solo ``save`` e
+        ``invalidate``, un inserimento e un pop sul suo dict di cache. Chi la
+        chiama a parte deve poi chiamare :meth:`register` sul loop, altrimenti
+        la storia esiste su disco ma la potatura e ``has`` non la vedono fino al
+        prossimo riavvio. Stesso contratto best-effort di :meth:`save`.
         """
         if self._sessions is None:
             return False
         clean = self._sanitize(messages)
         if not clean:
             return False
-        moment = time.time() if now is None else now
+        moment = saved_at
         key = subagent_session_key(lineage_id)
         try:
             from jenny.session.manager import Session
@@ -169,10 +208,17 @@ class SubagentHistoryStore:
         # Invalidazione immediata: lo store scrive e legge da disco, non tiene
         # mai una sessione di subagent viva nel cache del SessionManager.
         self._invalidate(key)
-        self._reconcile()
-        self._index[lineage_id] = _Entry(lineage_id, origin_key, moment, kind)
-        self.prune(now=moment)
         return True
+
+    def register(
+        self, lineage_id: str, origin_key: str, *, saved_at: float, kind: str = KIND_DONE,
+    ) -> None:
+        """Mette nell'indice una storia appena scritta da :meth:`write`, e pota."""
+        if self._sessions is None:
+            return
+        self._reconcile()
+        self._index[lineage_id] = _Entry(lineage_id, origin_key, saved_at, kind)
+        self.prune(now=saved_at)
 
     def has(self, lineage_id: str, *, now: float | None = None) -> bool:
         """C'e una storia di *lineage_id* entro TTL, secondo l'indice in RAM.
@@ -190,6 +236,31 @@ class SubagentHistoryStore:
             return False
         moment = time.time() if now is None else now
         return self.ttl_s <= 0 or moment - entry.saved_at <= self.ttl_s
+
+    def file_size(self, lineage_id: str) -> int | None:
+        """Byte del file della storia di *lineage_id*, o ``None`` se non c'e.
+
+        Un ``stat``, nessuna lettura: il checkpoint lo usa per allungare il
+        proprio intervallo quando la storia diventa grande.
+        """
+        path = self._path_for(subagent_session_key(lineage_id))
+        if path is None:
+            return None
+        try:
+            return path.stat().st_size
+        except OSError:
+            return None
+
+    def entry_of(self, lineage_id: str, *, now: float | None = None) -> tuple[str, float] | None:
+        """``(kind, saved_at)`` della storia di *lineage_id* entro TTL, o ``None``.
+
+        Dall'indice in RAM, come :meth:`has`: lo chiede il boot per sapere se un
+        aiutante morto col processo ha lasciato una fotografia da cui ripartire.
+        """
+        if not self.has(lineage_id, now=now):
+            return None
+        entry = self._index[lineage_id]
+        return entry.kind, entry.saved_at
 
     # ------------------------------------------------------------------
     # read
@@ -289,9 +360,10 @@ class SubagentHistoryStore:
             excess = len(entries) - self.max_per_origin
             if excess <= 0:
                 continue
-            # Prima le storie di lavori finiti bene, poi quelle fermate al
-            # budget; dentro ciascun gruppo, la piu vecchia.
-            entries.sort(key=lambda e: (e.kind == KIND_BUDGET, e.saved_at))
+            # Prima le storie di lavori finiti bene, poi quelle di lavori non
+            # finiti (fermate al budget, o fotografate a meta da un checkpoint:
+            # stesso rango); dentro ciascun gruppo, la piu vecchia.
+            entries.sort(key=lambda e: (e.kind != KIND_DONE, e.saved_at))
             dropped.extend(e.lineage_id for e in entries[:excess])
 
         for lineage_id in dropped:
@@ -389,7 +461,7 @@ class SubagentHistoryStore:
                 lineage_id,
                 origin if isinstance(origin, str) else "",
                 float(saved_at),
-                KIND_BUDGET if kind == KIND_BUDGET else KIND_DONE,
+                kind if kind in _KINDS else KIND_DONE,
             )
 
 

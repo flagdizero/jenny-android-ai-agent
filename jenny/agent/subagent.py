@@ -43,6 +43,7 @@ from jenny.agent.subagent_activity import (
 from jenny.agent.subagent_history import (
     HISTORY_TTL_S,
     KIND_BUDGET,
+    KIND_INTERRUPTED,
     SubagentHistoryStore,
     history_chars,
     light_resume_messages,
@@ -52,6 +53,7 @@ from jenny.agent.subagent_records import (
     CANCEL_REASON_SUPERSEDED,
     CANCEL_REASON_USER,
     DEFAULT_AGENT_TYPE,
+    INTERRUPTED_RESUMABLE_SUMMARY,
     MAX_RESULT_SUMMARY_CHARS,
     SubagentRecord,
     SubagentRecordStore,
@@ -120,6 +122,25 @@ def _retry_wait_touch(status: "SubagentStatus") -> Callable[[str], Awaitable[Non
         status.touch()
 
     return _touch
+
+
+async def _await_thread(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """``asyncio.to_thread`` che, se cancellato, aspetta comunque il thread.
+
+    Un thread non si interrompe: con un ``await asyncio.to_thread`` semplice, un
+    aiutante cancellato a meta scrittura usciva subito, la done-callback
+    cancellava la sua storia e il thread, finendo dopo, la riscriveva. Cosi la
+    cancellazione arriva quando la scrittura e finita (pochi ms), e cio che
+    segue la fine del run vede il disco gia fermo. Una seconda cancellazione
+    durante l'attesa passa.
+    """
+    future = asyncio.ensure_future(asyncio.to_thread(fn, *args, **kwargs))
+    try:
+        return await asyncio.shield(future)
+    except asyncio.CancelledError:
+        if not future.done():
+            await asyncio.wait([future])
+        raise
 
 
 # Errori del provider passeggeri (``retry_policy.classify_user_error``): un
@@ -285,6 +306,10 @@ class SubagentStatus:
     # connessione) dopo i tentativi: la storia resta salvata, come al budget, e
     # ``subagent_send`` lo riprende invece di rifarlo da zero.
     provider_interrupted: bool = False
+    # Questo tentativo ha una fotografia ``interrupted`` della propria
+    # conversazione su disco (``SubagentManager._checkpoint_history``): uno
+    # shutdown ordinato che lo ferma la tiene invece di cancellarla.
+    checkpointed: bool = False
 
     def __post_init__(self) -> None:
         if not self.last_progress_at:
@@ -914,6 +939,17 @@ def _merge_taint(*groups: tuple[str, ...]) -> tuple[str, ...]:
 class SubagentManager:
     """Manages background subagent execution."""
 
+    # Ogni quanto, al piu, la conversazione di un aiutante vivo si fotografa su
+    # disco (``KIND_INTERRUPTED``), per riprenderlo se Android uccide il
+    # processo: e il lavoro che un kill puo far perdere. Oltre
+    # ``HISTORY_CHECKPOINT_LARGE_BYTES`` di file l'intervallo raddoppia: misurato
+    # il 25/10/2026 sul Mac, una storia da 300 messaggi (risultati da 1-10 kB)
+    # pesa 0,6-1,3 MB e costa 2-4 ms; il tempo e trascurabile (e in un thread), i byte scritti no —
+    # cinque aiutanti grandi ogni 30 s sono ~10 MB al minuto sulla flash.
+    HISTORY_CHECKPOINT_INTERVAL_S = 30.0
+    HISTORY_CHECKPOINT_LARGE_INTERVAL_S = 60.0
+    HISTORY_CHECKPOINT_LARGE_BYTES = 512 * 1024
+
     def __init__(
         self,
         provider: LLMProvider,
@@ -1043,7 +1079,141 @@ class SubagentManager:
         # (il driver dei piani: un risveglio tenuto non deve aspettare chi non
         # va piu avanti). V. :meth:`set_stall_listener`.
         self._stall_listener: Callable[[str, list[str]], None] | None = None
+        # Orologio del freno dei checkpoint; iniettabile dai test.
+        self._clock: Callable[[], float] = time.monotonic
+        # Prima la ripresa dei tentativi morti col processo precedente, poi la
+        # pulizia dei digest: guarda i record, e quelli nuovi devono esserci.
+        self.recover_interrupted()
         self.sweep_orphan_digests()
+
+    def recover_interrupted(self) -> int:
+        """Chiude i tentativi morti col processo precedente. Ritorna quanti.
+
+        Ogni tentativo lascia un segnaposto su disco finche e vivo
+        (:meth:`SubagentRecordStore.mark_running`); al boot, prima che ne parta
+        uno nuovo, un segnaposto rimasto vuol dire che il processo e morto mentre
+        l'aiutante lavorava (Android lo uccide: force-stop, memoria, update).
+        Diventa un record terminale ``cancelled`` con provenienza ``shutdown`` —
+        la stessa di uno shutdown ordinato, e la casa e l'orchestratore la sanno
+        gia leggere — e, se l'aiutante aveva una storia da cui ripartire,
+        ``resumable``: :meth:`interrupted_helpers` lo offre al driver dei piani e
+        ``send`` lo riprende da li.
+
+        Riprendibile vuol dire una storia del lineage entro TTL che sia lavoro
+        non finito: la fotografia ``interrupted`` di un checkpoint, o una
+        ``budget`` (la ripresa dopo un budget morta prima del suo primo
+        checkpoint). Una ``done`` di un tentativo precedente no: riprenderla
+        ripartirebbe dal resoconto, non dal lavoro interrotto — resta su disco e
+        ``send`` la usa come per ogni lavoro finito.
+
+        Un segnaposto con gia il suo record terminale (kill fra la scrittura del
+        record e la cancellazione del segnaposto) si toglie e basta.
+        Best-effort: un boot non fallisce per questo.
+        """
+        try:
+            markers = self._records.load_running()
+        except Exception as e:  # noqa: BLE001 — vedi docstring
+            logger.warning("Subagent running markers unreadable: {}", e)
+            return 0
+        if not markers:
+            return 0
+        try:
+            closed = {r.task_id for r in self._records.load_all()}
+        except Exception:  # noqa: BLE001
+            closed = set()
+        recovered = 0
+        for marker in markers:
+            if marker.task_id in closed:
+                self._records.clear_running(marker.task_id)
+                continue
+            entry = self._history.entry_of(marker.lineage_id)
+            resumable = entry is not None and entry[0] in (KIND_INTERRUPTED, KIND_BUDGET)
+            # L'ultimo segno di vita noto: la fotografia da cui si riparte.
+            last_alive = marker.started_at
+            if resumable and entry is not None:
+                last_alive = max(last_alive, entry[1])
+            record = SubagentRecord(
+                task_id=marker.task_id,
+                lineage_id=marker.lineage_id,
+                attempt=marker.attempt,
+                spec=marker.spec,
+                state="cancelled",
+                phase=marker.phase,
+                stop_reason=cancellation_stop_reason(CANCEL_REASON_SHUTDOWN),
+                result_summary=(
+                    INTERRUPTED_RESUMABLE_SUMMARY if resumable
+                    else cancellation_summary(CANCEL_REASON_SHUTDOWN)
+                ),
+                iteration=marker.iteration,
+                cancel_reason=CANCEL_REASON_SHUTDOWN,
+                started_at=marker.started_at,
+                ended_at=last_alive,
+                resumable=resumable,
+                budget_resumes=marker.budget_resumes,
+            )
+            try:
+                self._records.append(record)
+            except Exception as e:  # noqa: BLE001 — il segnaposto resta: si riprova al boot dopo
+                logger.warning(
+                    "Could not close interrupted subagent [{}]: {}", marker.task_id, e,
+                )
+                continue
+            self._records.clear_running(marker.task_id)
+            recovered += 1
+            logger.info(
+                "Subagent [{}] lineage={} was running when the process died (resumable={})",
+                marker.task_id, marker.lineage_id, resumable,
+            )
+        return recovered
+
+    def interrupted_helpers(self, session_key: str) -> list[dict[str, Any]]:
+        """Gli aiutanti di *session_key* interrotti da un riavvio e riprendibili.
+
+        Per il driver dei piani, dopo un boot: invece di rifare un passo da zero,
+        riprende i suoi aiutanti con ``send(lineage_id, ...)``. Una voce per
+        lineage, dal tentativo piu vecchio al piu nuovo::
+
+            {"task_id": str, "lineage_id": str, "label": str, "agent_type": str,
+             "plan_id": str | None, "plan_step": str | None}
+
+        Entra l'ultimo tentativo di un lineage se e ``cancelled`` per
+        ``shutdown`` (morto col processo, o fermato da uno shutdown ordinato dopo
+        almeno un checkpoint), e ``resumable`` e la sua storia c'e ancora (TTL,
+        potatura). Esce appena il lineage ha un tentativo piu nuovo (vivo, o
+        finito: la ripresa e partita) o il record e marcato gestito
+        (:meth:`mark_handled`, il modo di scartarlo senza riprenderlo).
+        Legge il file dei record della sessione: da chiamare a un evento (il
+        boot, un risveglio), non in un ciclo stretto.
+        """
+        newer = {st.lineage_id for st in self._task_statuses.values()}
+        out: list[dict[str, Any]] = []
+        for record in reversed(self.list_records(session_key)):
+            if record.lineage_id in newer:
+                continue
+            newer.add(record.lineage_id)
+            if not self._interrupted_resumable(record):
+                continue
+            if record.handled_at is not None or not self._history.has(record.lineage_id):
+                continue
+            out.append({
+                "task_id": record.task_id,
+                "lineage_id": record.lineage_id,
+                "label": record.spec.label,
+                "agent_type": record.spec.agent_type,
+                "plan_id": record.spec.plan_id,
+                "plan_step": record.spec.plan_step,
+            })
+        out.reverse()
+        return out
+
+    @staticmethod
+    def _interrupted_resumable(record: SubagentRecord) -> bool:
+        """Il record e un tentativo interrotto da un riavvio con una storia da riprendere."""
+        return (
+            record.state == "cancelled"
+            and record.cancel_reason == CANCEL_REASON_SHUTDOWN
+            and record.resumable
+        )
 
     def sweep_orphan_digests(self) -> int:
         """Cancella i digest di attivita senza record. Chiamata una volta all'avvio.
@@ -1481,7 +1651,7 @@ class SubagentManager:
             interrupted = (
                 state == "failed" and final is not None
                 and getattr(final, "provider_interrupted", False)
-            )
+            ) or self._kept_at_shutdown(state, final)
             if state not in ("done", "budget") and not interrupted:
                 # Invariante: la storia Tier-2 riflette solo un lineage il cui
                 # ultimo tentativo e andato a buon fine, o si e fermato al budget
@@ -1493,6 +1663,9 @@ class SubagentManager:
                 # invalida anche il cache del SessionManager, quindi la RAM non
                 # cresce.
                 self._history.drop(lineage)
+            # Il segnaposto «in corso» si toglie solo ora, a record scritto: un
+            # kill fra i due lascia entrambi, e il boot sa riconoscerlo.
+            self._records.clear_running(task_id)
             # Snapshot pubblicato DOPO il retain e dopo il pop dello status: solo
             # qui il subagent e uscito da ``running`` ed e entrato in ``recent``,
             # quindi lo snapshot non mostra lo stesso task in entrambe le liste.
@@ -1507,6 +1680,20 @@ class SubagentManager:
             task_id, lineage, attempt, bool(resume_messages), spec.label,
         )
         return task_id, lineage
+
+    @staticmethod
+    def _kept_at_shutdown(state: str, status: SubagentStatus | None) -> bool:
+        """Fermato da uno shutdown ordinato con una fotografia della conversazione.
+
+        Lo stesso caso di un kill, solo con la done-callback che gira: la storia
+        ``interrupted`` resta e il record nasce riprendibile, come quello che
+        :meth:`recover_interrupted` scrive al boot dopo un kill.
+        """
+        return (
+            state == "cancelled" and status is not None
+            and status.cancel_reason == CANCEL_REASON_SHUTDOWN
+            and status.checkpointed
+        )
 
     def _track_lineage(self, lineage: _Lineage) -> None:
         """Registra il lineage in RAM, potando i piu vecchi non attivi."""
@@ -1547,6 +1734,19 @@ class SubagentManager:
         # un subagent appena nato deve mostrare qualcosa, non una lista vuota.
         hook.note_phase(status.phase)
 
+        # La fotografia della conversazione durante il run (``_checkpoint_history``):
+        # la prima non prima di un intervallo dalla partenza, poi al piu una per
+        # intervallo. Non l'app-builder: lo si esclude gia dalla ripresa leggera,
+        # perche il suo seguito vive del codice letto e dei risultati di ``app
+        # run``; un costruttore ripreso a meta da una fotografia ripartirebbe da
+        # un ``draft`` che nel frattempo puo essere cambiato.
+        checkpoints = self._history.enabled and spec.agent_type != "app-builder"
+        next_checkpoint = [self._clock() + self.HISTORY_CHECKPOINT_INTERVAL_S]
+        # I messaggi con cui il run parte, riempita sotto: il runner aggiunge in
+        # coda a una sua copia, e il checkpoint ne porta solo la parte nuova.
+        initial: list[dict[str, Any]] = []
+        run_policy: list[SubagentRunPolicy] = []
+
         async def _on_checkpoint(payload: dict) -> None:
             phase = payload.get("phase", status.phase)
             if phase != status.phase:
@@ -1556,7 +1756,29 @@ class SubagentManager:
             # Secondo punto di stamp del progresso: un subagent che fa un solo
             # tool call lunghissimo passa dai checkpoint, non dalle iterazioni.
             status.touch()
+            # Solo a giro di tool chiuso: ogni tool call ha il suo risultato, e
+            # la storia si riprende cosi com'e. Il freno si guarda prima di
+            # costruire qualunque lista.
+            if not checkpoints or phase != "tools_completed" or self._clock() < next_checkpoint[0]:
+                return
+            size = await self._checkpoint_history(
+                status, spec, initial, payload,
+                run_policy[0].taint_sources() if run_policy else (),
+            )
+            interval = (
+                self.HISTORY_CHECKPOINT_LARGE_INTERVAL_S
+                if size is not None and size >= self.HISTORY_CHECKPOINT_LARGE_BYTES
+                else self.HISTORY_CHECKPOINT_INTERVAL_S
+            )
+            next_checkpoint[0] = self._clock() + interval
 
+        # Il segnaposto «in corso» (``SubagentRecordStore.mark_running``): cio che,
+        # dopo un kill, dice al boot che questo lavoro c'era. Scritto in un thread
+        # mentre il run parte, e aspettato nel ``finally``: la done-callback che
+        # lo toglie non puo arrivare prima che sia scritto.
+        marker = asyncio.ensure_future(
+            asyncio.to_thread(self._mark_running, status, spec)
+        )
         try:
             root = workspace_scope.project_path if workspace_scope is not None else self.workspace
             cfg = None
@@ -1602,6 +1824,8 @@ class SubagentManager:
                 task_id, Path(self.workspace), seed=spec.taint_seed, task=spec.task,
             )
             self._run_policies[task_id] = policy
+            initial.extend(messages)
+            run_policy.append(policy)
             max_iterations = self._type_max_iterations(atype)
             with enter_workspace_scope(workspace_scope), enter_subagent_policy(policy):
                 result = await self.runner.run(AgentRunSpec(
@@ -1777,6 +2001,92 @@ class SubagentManager:
         finally:
             self._run_policies.pop(task_id, None)
             self._close_browser_session(status.lineage_id)
+            if not marker.done():
+                await asyncio.wait([marker])
+
+    def _mark_running(self, status: SubagentStatus, spec: SubagentSpec) -> None:
+        """Scrive il segnaposto del tentativo (gira in un thread). Non solleva."""
+        record = SubagentRecord(
+            task_id=status.task_id,
+            lineage_id=status.lineage_id,
+            attempt=status.attempt,
+            spec=spec,
+            state="running",
+            phase=status.phase,
+            started_at=status.started_at_wall,
+            ended_at=status.started_at_wall,
+            budget_resumes=status.budget_resumes,
+        )
+        try:
+            self._records.mark_running(record)
+        except Exception as e:  # noqa: BLE001 — senza segnaposto si perde solo la ripresa
+            logger.warning("Subagent [{}] running marker failed: {}", status.task_id, e)
+
+    async def _checkpoint_history(
+        self,
+        status: SubagentStatus,
+        spec: SubagentSpec,
+        initial: list[dict[str, Any]],
+        payload: dict[str, Any],
+        taint: tuple[str, ...],
+    ) -> int | None:
+        """Fotografa la conversazione del run come storia ``interrupted``.
+
+        Dal checkpoint ``tools_completed`` del runner, che porta tutto il turno:
+        ``prior_messages`` (le iterazioni gia chiuse e le iniezioni), il messaggio
+        dell'assistente con le tool call e i loro risultati. Uniti ai messaggi
+        iniziali sono la conversazione intera in un punto coerente — nessuna
+        tool call senza risultato — ed e cio che il runner stesso avrebbe in
+        ``result.messages`` se il run finisse qui. Nessun hook o campo nuovo nel
+        runner: il ``checkpoint_callback`` c'era gia, e porta proprio questo.
+
+        La scrittura gira in un thread (:func:`_await_thread`) mentre il run
+        aspetta: niente tocca i messaggi mentre si serializzano. L'indice dello
+        store si aggiorna dopo, sul loop. Ritorna i byte del file scritto, o
+        ``None`` se non e andata; non solleva mai: una fotografia persa costa
+        meno di un aiutante ucciso dal suo salvataggio.
+        """
+        try:
+            prior = payload.get("prior_messages")
+            assistant = payload.get("assistant_message")
+            results = payload.get("completed_tool_results")
+            if (
+                not isinstance(prior, list) or not isinstance(assistant, dict)
+                or not isinstance(results, list)
+            ):
+                return None
+            snapshot = _without_budget_notice([*initial, *prior, assistant, *results])
+            saved_at = time.time()
+            size = await _await_thread(
+                self._write_checkpoint, status.lineage_id, spec.records_key, snapshot,
+                saved_at, taint,
+            )
+            if size is None:
+                return None
+            self._history.register(
+                status.lineage_id, spec.records_key, saved_at=saved_at, kind=KIND_INTERRUPTED,
+            )
+            status.checkpointed = True
+            return size
+        except Exception as e:  # noqa: BLE001 — vedi docstring
+            logger.warning("Subagent [{}] history checkpoint failed: {}", status.task_id, e)
+            return None
+
+    def _write_checkpoint(
+        self,
+        lineage_id: str,
+        origin_key: str,
+        messages: list[dict[str, Any]],
+        saved_at: float,
+        taint: tuple[str, ...],
+    ) -> int | None:
+        """La parte in thread del checkpoint: scrive e misura il file."""
+        if not self._history.write(
+            lineage_id, origin_key, messages,
+            saved_at=saved_at, taint=taint, kind=KIND_INTERRUPTED,
+        ):
+            return None
+        return self._history.file_size(lineage_id) or 0
 
     @staticmethod
     def _close_browser_session(lineage_id: str) -> None:
@@ -2258,6 +2568,9 @@ class SubagentManager:
         task_id = status.task_id if status is not None else lineage_id
         digest = self._write_activity_digest(task_id)
         state = self._terminal_state(finished, status)
+        kept = self._kept_at_shutdown(state, status)
+        if kept and status is not None:
+            status.result_summary = INTERRUPTED_RESUMABLE_SUMMARY
         record = SubagentRecord(
             task_id=task_id,
             lineage_id=lineage_id,
@@ -2278,7 +2591,11 @@ class SubagentManager:
             handled_at=self._handled_pending.pop(task_id, None),
             # Misurato nel ramo budget, fuori dal loop: qui siamo nella
             # done-callback, che non deve rileggere la storia da disco.
-            resumable=state == "budget" and status is not None and status.resumable,
+            # Uno shutdown con una fotografia su disco: riprendibile come dopo
+            # un kill (v. ``_kept_at_shutdown``).
+            resumable=(
+                (state == "budget" and status is not None and status.resumable) or kept
+            ),
             budget_resumes=status.budget_resumes if status is not None else 0,
         )
         self._remember_record_key(record)
@@ -2375,13 +2692,17 @@ class SubagentManager:
         wall = time.time()
         for record in reversed(self.list_records(session_key)):
             resumable = (
-                record.state == "budget"
+                (
+                    (record.state == "budget" and record.budget_resumes < MAX_BUDGET_RESUMES)
+                    # Interrotto da un riavvio con una fotografia della
+                    # conversazione (``interrupted_helpers``).
+                    or self._interrupted_resumable(record)
+                )
                 and record.resumable
                 and record.lineage_id not in newer
                 # La storia scade (``HISTORY_TTL_S``) e la potatura per origine
                 # la puo togliere prima: l'indice in RAM lo sa senza leggere file.
                 and wall - record.ended_at < HISTORY_TTL_S
-                and record.budget_resumes < MAX_BUDGET_RESUMES
                 and self._history.has(record.lineage_id)
             )
             newer.add(record.lineage_id)
