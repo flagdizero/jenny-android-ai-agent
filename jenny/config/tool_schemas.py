@@ -86,9 +86,16 @@ class AndroidWebSearchConfig(Base):
 
 
 class AndroidWebFetchConfig(Base):
-    """Android WebView-backed fetch configuration."""
+    """Android WebView-backed fetch configuration.
+
+    ``timeout`` e' suo, non quello della ricerca: una pagina che in 15 s non
+    arriva passa al ripiego nel browser (``AndroidWebFetchTool._after_failure``)
+    invece di aspettarne 30. Nella prova A del 24/10 17 letture su 426 sono
+    andate in timeout, e ognuna costava il timeout pieno piu' il ripiego.
+    """
 
     max_chars: int = 50000
+    timeout: int = Field(default=15, ge=1, le=120)
 
 
 class AndroidWebBrowserConfig(Base):

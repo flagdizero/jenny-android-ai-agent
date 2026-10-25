@@ -514,7 +514,7 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
         return cls(
             android_context=ctx.android_context,
             max_chars=ctx.config.android_web.fetch.max_chars,
-            timeout=ctx.config.android_web.search.timeout,
+            timeout=ctx.config.android_web.fetch.timeout,
             browser_cfg=ctx.config.android_web.browser,
             owner=owner_for(ctx),
         )

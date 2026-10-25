@@ -711,6 +711,16 @@ class TestFetchFallsBackToTheBrowser:
         ctx.subagent_lineage_id = None
         assert AndroidWebFetchTool.create(ctx).owner == "main"
 
+    async def test_the_fetch_has_its_own_shorter_timeout(self):
+        """La lettura non aspetta il timeout della ricerca: oltre i 15 s passa
+        al ripiego nel browser."""
+        cfg = ToolsConfig()
+        cfg.android_web.search.timeout = 40
+        ctx = SimpleNamespace(android_context=object(), config=cfg, subagent_lineage_id=None)
+        assert AndroidWebFetchTool.create(ctx).timeout == 15
+        cfg.android_web.fetch.timeout = 25
+        assert AndroidWebFetchTool.create(ctx).timeout == 25
+
     async def test_without_android_the_fallback_is_silent(self, monkeypatch):
         """Fuori da Chaquopy la classe Kotlin non c'e': il ripiego si salta e
         l'errore resta quello di prima, senza «tried the browser too»."""
