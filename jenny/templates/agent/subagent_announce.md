@@ -19,7 +19,9 @@ The check delegated the work precisely because it could not know the answer yet 
 - Everything normal, nothing crossed, nothing changed since the last run → call `nothing_to_report` and end the turn. That tool delivers nothing and reaches nobody, and it is the expected outcome of most runs. Never send filler like "All clear.", "All done.", "check in progress" or "nothing to report".
 
 Do not mention the subagent, the check, or your decision about whether to speak.
-{% else %}{% if budget and resumable %}It stopped at its budget, not because it failed. If the job is not finished, continue it with `subagent_send` on this same helper (`{{ task_id }}`): it keeps what it read and wrote, so tell it only what remains. Do not spawn a new helper or call `subagent_restart` for this job: both start again from zero. If you continue it, nothing you write in this turn reaches the user: they hear from the continued work, so do not announce it.
+{% else %}{% if interrupted %}It stopped because the provider kept failing for a while (too many requests, a server error or a timeout), not because the work was wrong. Continue it with `subagent_send` on this same helper (`{{ task_id }}`): it keeps what it read and wrote, so tell it only what remains. Do not spawn a new helper or call `subagent_restart` for this job: both start again from zero. If you continue it, nothing you write in this turn reaches the user: they hear from the continued work, so do not announce it.
+
+{% elif budget and resumable %}It stopped at its budget, not because it failed. If the job is not finished, continue it with `subagent_send` on this same helper (`{{ task_id }}`): it keeps what it read and wrote, so tell it only what remains. Do not spawn a new helper or call `subagent_restart` for this job: both start again from zero. If you continue it, nothing you write in this turn reaches the user: they hear from the continued work, so do not announce it.
 
 {% elif budget_capped %}This helper has stopped at its budget {{ budget_stops }} times: do not continue or relaunch it again. Split what remains into smaller helpers, or ask the user how to proceed.
 

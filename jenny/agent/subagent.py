@@ -7,7 +7,7 @@ import math
 import re
 import time
 import uuid
-from collections.abc import Iterable
+from collections.abc import Awaitable, Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -112,6 +112,19 @@ PLAN_HELPER_SLOTS = 5
 # non ci sta in tre budget ha un compito troppo grande, non poco tempo. Dopo il
 # tetto la mossa giusta e dividere il lavoro, e il rifiuto lo dice.
 MAX_BUDGET_RESUMES = 2
+
+def _retry_wait_touch(status: "SubagentStatus") -> Callable[[str], Awaitable[None]]:
+    """Il callback delle attese del provider: tiene vivo l'aiutante per il watchdog."""
+
+    async def _touch(_notice: str) -> None:
+        status.touch()
+
+    return _touch
+
+
+# Errori del provider passeggeri (``retry_policy.classify_user_error``): un
+# aiutante fermato da uno di questi dopo i tentativi si riprende, non si rifà.
+_TRANSIENT_PROVIDER_ERRORS = frozenset({"rate_limit", "server", "timeout", "connection"})
 
 # A che frazione del budget di iterazioni un subagent riceve l'avviso «ti
 # restano N chiamate» (``AgentRunSpec.iteration_notice``). L'80% lascia un
@@ -268,6 +281,10 @@ class SubagentStatus:
     # ramo budget di ``_run_subagent`` e fuori dal loop, e letto da annuncio e
     # record.
     resumable: bool = False
+    # Fermato da un errore passeggero del provider (429, 5xx, timeout,
+    # connessione) dopo i tentativi: la storia resta salvata, come al budget, e
+    # ``subagent_send`` lo riprende invece di rifarlo da zero.
+    provider_interrupted: bool = False
 
     def __post_init__(self) -> None:
         if not self.last_progress_at:
@@ -1461,7 +1478,11 @@ class SubagentManager:
             if tracked is not None and tracked.task_id == task_id:
                 tracked.last_state = state
             self._retain(finished, final, spec, lineage, attempt)
-            if state not in ("done", "budget"):
+            interrupted = (
+                state == "failed" and final is not None
+                and getattr(final, "provider_interrupted", False)
+            )
+            if state not in ("done", "budget") and not interrupted:
                 # Invariante: la storia Tier-2 riflette solo un lineage il cui
                 # ultimo tentativo e andato a buon fine, o si e fermato al budget
                 # con la conversazione integra. Un fallimento, uno stop o un
@@ -1638,6 +1659,13 @@ class SubagentManager:
                     session_key=sess_key,
                     workspace=root,
                     llm_timeout_s=llm_timeout,
+                    # Nessuno aspetta la risposta di un aiutante: su un 429 o un
+                    # 5xx aspetta minuti, non secondi (``_BACKGROUND_RETRY_DELAYS``).
+                    provider_retry_mode="background",
+                    # Un'attesa del provider è un segno di vita: quasi tre minuti
+                    # di tentativi passerebbero la soglia del watchdog (180 s), e
+                    # il piano conterebbe fermo un aiutante che sta solo aspettando.
+                    retry_wait_callback=_retry_wait_touch(status),
                 ))
             status.phase = "done"
             status.stop_reason = result.stop_reason
@@ -1661,10 +1689,28 @@ class SubagentManager:
                 status.state = "failed"
                 error_text = result.error or "Error: subagent execution failed."
                 status.result_summary = truncate_text(error_text, MAX_RESULT_SUMMARY_CHARS)
+                if getattr(result, "error_kind", None) in _TRANSIENT_PROVIDER_ERRORS:
+                    # Il provider, non il lavoro: nella riprova del 25/10 otto
+                    # aiutanti chiusi da un 429 sono stati rifatti da zero. La
+                    # conversazione è integra fino all'errore: si salva come al
+                    # budget, e la done-callback non la cancella.
+                    status.provider_interrupted = True
+                    self._history.save(
+                        status.lineage_id,
+                        spec.records_key,
+                        _without_budget_notice(getattr(result, "messages", None)),
+                        taint=policy.taint_sources(),
+                        kind=KIND_BUDGET,
+                    )
+                    status.resumable = await asyncio.to_thread(
+                        self._history_continuable, status.lineage_id
+                    )
                 await self._announce_result(
                     task_id, label, task,
                     error_text,
                     origin, "error", origin_message_id,
+                    resumable=status.resumable,
+                    interrupted=status.provider_interrupted,
                 )
             elif result.stop_reason == "max_iterations":
                 # Il budget di iterazioni finito **non** e' un successo:
@@ -1871,6 +1917,7 @@ class SubagentManager:
         force: bool = False,
         resumable: bool = False,
         budget_stops: int = 1,
+        interrupted: bool = False,
     ) -> None:
         """Announce the subagent result to the main agent via the message bus.
 
@@ -1933,7 +1980,9 @@ class SubagentManager:
         # ``resumable`` lo misura il ramo budget (storia salvata, abbastanza
         # corta, tetto delle riprese non raggiunto). Se non lo e, ``send`` lo
         # rifiuterebbe, e il template allora non lo promette: dice di dividere.
-        resumable = status == "budget" and resumable
+        # Lo stesso per uno fermato da un errore passeggero del provider.
+        interrupted = interrupted and resumable
+        resumable = (status == "budget" or interrupted) and resumable
         announce_content = render_template(
             "agent/subagent_announce.md",
             label=label,
@@ -1946,6 +1995,7 @@ class SubagentManager:
             staged_count=len(staged_ids),
             budget=status == "budget",
             resumable=resumable,
+            interrupted=interrupted,
             budget_capped=status == "budget" and budget_stops > MAX_BUDGET_RESUMES,
             budget_stops=budget_stops,
             task_id=task_id,
