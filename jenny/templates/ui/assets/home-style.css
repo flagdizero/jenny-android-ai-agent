@@ -1835,12 +1835,16 @@ body.home {
 .home-scroll-fab {
   position: absolute;
   left: 50%;
-  /* Sopra il composer e sopra la riga del piano, quando c'e' (la misura
-     `_bindComposer`): col solo composer il tondo copriva la riga. */
-  bottom: calc(var(--home-composer-h, 66px) + var(--home-plan-hint-h, 0px) + 12px);
-  width: 44px;
-  height: 44px;
-  margin-left: -22px;
+  /* A cavallo del bordo alto del composer, o della riga del piano quando c'e'
+     (la misura `_bindComposer`), e non sopra: 12 px sopra, il tondo stava in
+     mezzo alla colonna del testo e copriva due righe (25/10/2026, provato sul
+     telefono contro il margine sinistro, dove copriva l'inizio delle righe di
+     Jenny). Cosi' copre al piu' meta' dell'ultima riga, che il bordo taglia
+     comunque. */
+  bottom: calc(var(--home-composer-h, 66px) + var(--home-plan-hint-h, 0px) - 18px);
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--surface);
@@ -1848,7 +1852,7 @@ body.home {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   cursor: pointer;
   opacity: 0;
