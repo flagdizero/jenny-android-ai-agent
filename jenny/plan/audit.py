@@ -60,9 +60,10 @@ _GAP = re.compile(
     r"|\bstill\s+to\s+(?:be\s+)?search",
     re.IGNORECASE,
 )
-_SOURCES_HEAD = re.compile(r"^#{1,4}\s*(?:fonti|sources|riferimenti|references)\b",
+_SOURCES_HEAD = re.compile(r"^(#{1,4})\s*(?:fonti|sources|riferimenti|references)\b",
                            re.IGNORECASE | re.MULTILINE)
-_ANY_HEAD = re.compile(r"^#{1,4}\s", re.MULTILINE)
+_ANY_HEAD = re.compile(r"^(#{1,6})\s", re.MULTILINE)
+_WIKILINK = re.compile(r"\[\[[^\]]+\]\]")
 _URL = re.compile(r"https?://", re.IGNORECASE)
 _HEADING_LINE = re.compile(r"^#.*$", re.MULTILINE)
 _DIGITS = re.compile(r"\d+")
@@ -190,13 +191,18 @@ def _page_findings(rel: str, text: str) -> list[Finding]:
                                  f"left to search: «{_short(line[start:], 200)}»"))
     head = _SOURCES_HEAD.search(text)
     if head is not None:
+        # La sezione finisce al titolo dello stesso livello o più alto: i suoi
+        # sotto-titoli («### Istituzionali») ne fanno parte.
         rest = text[head.end():]
-        nxt = _ANY_HEAD.search(rest)
+        level = len(head.group(1))
+        nxt = next((m for m in _ANY_HEAD.finditer(rest) if len(m.group(1)) <= level), None)
         section = rest[: nxt.start()] if nxt else rest
         if not _URL.search(section):
             found.append(Finding("sources_no_link", rel, text.count("\n", 0, head.start()) + 1,
                                  "the sources section has no links"))
-    if not rel.endswith("/index.md") and _body_chars(text) < EMPTY_BODY_CHARS:
+    # Una pagina corta fatta di link è un indice, anche se non si chiama index.md.
+    if (not rel.endswith("/index.md") and _body_chars(text) < EMPTY_BODY_CHARS
+            and not _WIKILINK.search(text)):
         found.append(Finding("empty_page", rel, 0,
                              f"almost empty ({_body_chars(text)} characters of text)"))
     return found
@@ -238,20 +244,42 @@ def audit_notebook(root: Path, *, expect: Mapping[str, Any] | None = None,
     return audit
 
 
-def remove_empty_folders(root: Path) -> list[str]:
-    """Toglie le cartelle vuote sotto ``wiki/`` (mai ``wiki/`` stessa), dalle più profonde.
+def empty_folders(root: Path) -> list[str]:
+    """Le cartelle vuote sotto ``wiki/`` adesso, come ``wiki/concepts/Acero/``.
 
-    ``rmdir`` toglie solo una cartella vuota: un file arrivato nel frattempo la
-    tiene. Restituisce i percorsi tolti, come ``wiki/concepts/Acero/``.
+    All'Approva: quelle che c'erano prima del piano sono dell'utente (un posto
+    tenuto per dopo), e :func:`remove_empty_folders` le lascia stare.
     """
     wiki = root / "wiki"
     if not wiki.is_dir():
         return []
+    return sorted(
+        f"wiki/{p.relative_to(wiki).as_posix()}/"
+        for p in wiki.rglob("*")
+        if p.is_dir() and not p.is_symlink() and not any(p.iterdir())
+    )
+
+
+def remove_empty_folders(root: Path, keep: Iterable[str] = ()) -> list[str]:
+    """Toglie le cartelle vuote sotto ``wiki/`` (mai ``wiki/`` stessa), dalle più profonde.
+
+    ``rmdir`` toglie solo una cartella vuota: un file arrivato nel frattempo la
+    tiene. *keep* sono quelle vuote già all'Approva (:func:`empty_folders`): non
+    sono lavoro del piano, e le foto del piano tengono i file, non le cartelle,
+    quindi un ritorno indietro non le rimetterebbe. Restituisce i percorsi tolti,
+    come ``wiki/concepts/Acero/``.
+    """
+    wiki = root / "wiki"
+    if not wiki.is_dir():
+        return []
+    kept = set(keep)
     gone: list[str] = []
     folders = sorted((p for p in wiki.rglob("*") if p.is_dir() and not p.is_symlink()),
                      key=lambda p: len(p.parts), reverse=True)
     for folder in folders:
         if not is_path_within(folder, wiki) or folder == wiki:
+            continue
+        if f"wiki/{folder.relative_to(wiki).as_posix()}/" in kept:
             continue
         try:
             folder.rmdir()

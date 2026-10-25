@@ -13,6 +13,7 @@ from jenny.plan.audit import (
     EMPTY_BODY_CHARS,
     audit_notebook,
     baseline_keys,
+    empty_folders,
     remove_empty_folders,
     render_repair,
     summary_line,
@@ -64,9 +65,16 @@ def test_a_sources_section_without_links_is_a_defect(tmp_path: Path) -> None:
     assert [f.path for f in found] == ["wiki/piante/salvia/luce.md"]
 
 
+def test_sub_headings_belong_to_the_sources_section(tmp_path: Path) -> None:
+    _page(tmp_path, "piante/salvia/luce.md", _BODY + "\n## Fonti\n\n### Istituzionali\n"
+          "- https://example.org/a\n\n### Blog\n- https://example.org/b\n")
+    assert [f for f in audit_notebook(tmp_path).findings if f.kind == "sources_no_link"] == []
+
+
 def test_an_empty_page_is_a_defect_but_an_index_is_not(tmp_path: Path) -> None:
     _page(tmp_path, "piante/salvia/potatura.md", "## Quando\n\n## Come\n")
     _page(tmp_path, "piante/salvia/index.md", "- [[potatura]]")
+    _page(tmp_path, "piante/indice-erbe.md", "- [[salvia/potatura]]\n- [[salvia/acqua]]")
     _page(tmp_path, "piante/salvia/acqua.md", "x" * EMPTY_BODY_CHARS)
     found = [f for f in audit_notebook(tmp_path).findings if f.kind == "empty_page"]
     assert [f.path for f in found] == ["wiki/piante/salvia/potatura.md"]
@@ -117,8 +125,14 @@ def test_empty_folders_under_wiki_go_and_nothing_else(tmp_path: Path) -> None:
     (tmp_path / "wiki" / "tenuta" / ".gitkeep").write_text("")
     (tmp_path / "raw" / "vuota").mkdir(parents=True)
     _page(tmp_path, "piante/salvia/acqua.md")
-    gone = remove_empty_folders(tmp_path)
+    (tmp_path / "wiki" / "per-dopo").mkdir()
+    keep = empty_folders(tmp_path)
+    assert "wiki/per-dopo/" in keep and "wiki/concepts/Vecchia/sotto/" in keep
+    (tmp_path / "wiki" / "per-dopo" / "nota.md").write_text("x")
+    (tmp_path / "wiki" / "per-dopo" / "nota.md").unlink()
+    gone = remove_empty_folders(tmp_path, keep=["wiki/per-dopo/"])
     assert gone == ["wiki/concepts/", "wiki/concepts/Vecchia/", "wiki/concepts/Vecchia/sotto/"]
+    assert (tmp_path / "wiki" / "per-dopo").is_dir()
     assert (tmp_path / "wiki").is_dir()
     assert (tmp_path / "wiki" / "tenuta").is_dir()
     assert (tmp_path / "raw" / "vuota").is_dir()

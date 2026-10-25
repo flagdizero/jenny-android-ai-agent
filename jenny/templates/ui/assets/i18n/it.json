@@ -1059,7 +1059,7 @@
       "nowSince": "da {minutes} min",
       "nowJustStarted": "appena cominciato",
       "machineClean": "controllo automatico: tutto a posto ({pages} pagine)",
-      "machineLeft": "controllo automatico: restano {n} cose da sistemare",
+      "machineLeft": "controllo automatico: da sistemare ancora {n}",
       "machineLeftPages": "Da sistemare ancora: {pages}",
       "blockedSince": "fermo da {time}",
       "blockedNoQuestion": "Jenny si è fermata e aspetta te.",

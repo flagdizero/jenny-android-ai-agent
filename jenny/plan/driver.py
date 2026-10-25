@@ -50,6 +50,7 @@ from jenny.plan.audit import (
     Audit,
     audit_notebook,
     baseline_keys,
+    empty_folders,
     remove_empty_folders,
     render_repair,
     summary_line,
@@ -156,6 +157,7 @@ _MAX_CARRIED_ITEMS = 40
 # i difetti che il quaderno aveva all'Approva, che non sono lavoro del piano.
 _MACHINE = "machine_check"
 _AUDIT_BASELINE = "audit_baseline"
+_EMPTY_AT_START = "empty_folders_at_start"
 # I giri di riparazione al massimo: il secondo controllo accetta comunque, e
 # quel che resta lo dice la nota.
 _MAX_REPAIR_ROUNDS = 2
@@ -1791,7 +1793,7 @@ class PlanDriver:
                 )
             photos = self._photos(plan)
             start = await asyncio.to_thread(photos.take, "start")
-            baseline = await asyncio.to_thread(self._audit_baseline, plan)
+            baseline, empty = await asyncio.to_thread(self._audit_baseline, plan)
 
             def _approve(p: Plan) -> None:
                 if p.status != "proposed":
@@ -1806,6 +1808,7 @@ class PlanDriver:
                         s.status = "cut"
                 p.photos["start"] = start
                 p.extra[_AUDIT_BASELINE] = baseline
+                p.extra[_EMPTY_AT_START] = empty
 
             plan = await asyncio.to_thread(self.store.update, plan_id, _approve)
             self._remember(plan)
@@ -2528,7 +2531,9 @@ class PlanDriver:
                     return
                 plan = await self._note_machine(plan, step_id, _machine_view(audit, round_=1))
                 step = _find(plan, step_id)
-        interrupted = await asyncio.to_thread(self._interrupted_of, plan, step_id)
+        # Sul loop e non in un thread: il manager degli aiutanti vive lì, e il suo
+        # elenco dei vivi cambia mentre lo si legge. Legge un file di record piccolo.
+        interrupted = self._interrupted_of(plan, step_id)
         await self.bus.publish_inbound(
             self._step_message(plan, step, lost=lost, audit=audit, interrupted=interrupted)
         )
@@ -2557,8 +2562,9 @@ class PlanDriver:
             if isinstance(h, dict) and h.get("plan_id") == plan.id and h.get("plan_step") == step_id
         ]
 
-    def _audit_baseline(self, plan: Plan) -> list[str]:
-        """I difetti del quaderno all'Approva (:func:`baseline_keys`): non sono del piano.
+    def _audit_baseline(self, plan: Plan) -> tuple[list[str], list[str]]:
+        """I difetti del quaderno all'Approva (:func:`baseline_keys`), che non sono del
+        piano, e le sue cartelle vuote (:func:`empty_folders`), che restano.
 
         Senza ``expect``: all'Approva le pagine attese non ci sono ancora, e
         sono proprio il lavoro del piano. Un errore qui non ferma l'Approva: la
@@ -2566,12 +2572,12 @@ class PlanDriver:
         """
         root = self.host.notebook_root(plan.notebook)
         if root is None:
-            return []
+            return [], []
         try:
-            return baseline_keys(root)
+            return baseline_keys(root), empty_folders(root)
         except Exception:  # noqa: BLE001 — un aiuto al controllo, non una condizione dell'Approva
             logger.opt(exception=True).warning("Plan {}: audit baseline not computed", plan.id)
-            return []
+            return [], []
 
     def _run_audit(self, plan: Plan, step: Step) -> Audit | None:
         """Il controllo a macchina del quaderno, in un thread; ``None`` se non si può fare.
@@ -2584,7 +2590,7 @@ class PlanDriver:
         if root is None:
             return None
         try:
-            removed = remove_empty_folders(root)
+            removed = remove_empty_folders(root, plan.extra.get(_EMPTY_AT_START) or ())
             audit = audit_notebook(
                 root,
                 expect=step.extra.get("expect") or None,

@@ -1059,7 +1059,7 @@
       "nowSince": "for {minutes} min",
       "nowJustStarted": "just started",
       "machineClean": "automatic check: all good ({pages} pages)",
-      "machineLeft": "automatic check: {n} things still to fix",
+      "machineLeft": "automatic check: left to fix {n}",
       "machineLeftPages": "Still to fix: {pages}",
       "blockedSince": "stuck since {time}",
       "blockedNoQuestion": "Jenny stopped and is waiting for you.",

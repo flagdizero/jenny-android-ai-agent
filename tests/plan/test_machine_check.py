@@ -82,8 +82,18 @@ def _messages(bus: FakeBus) -> list[str]:
 async def test_a_clean_notebook_closes_the_check_without_a_turn(
     driver: PlanDriver, bus: FakeBus, notebook: Path
 ) -> None:
+    # Una cartella vuota dell'utente, di prima del piano, resta; una lasciata vuota
+    # dal piano (qui creata dopo l'Approva) se ne va.
+    (notebook / "wiki" / "per-dopo").mkdir(parents=True)
+    text = await propose(driver, "Rifare la wiki", STEPS)
+    assert "card" in text, text
+    plan = driver.store.open_plan_for("piante")
+    await driver.approve(plan.id, plan.version, [])
     (notebook / "wiki" / "vecchia" / "vuota").mkdir(parents=True)
-    plan = await _run_to_check(driver)
+    for _ in range(len(STEPS) - 1):
+        assert "closed" in await driver.step_done(KEY, "fatto")
+        await driver.on_turn_end(KEY, {})
+    plan = driver.store.load(plan.id)
     assert plan.status == "done"
     check = plan.steps[-1]
     assert check.status == "done" and check.note is None
@@ -91,6 +101,7 @@ async def test_a_clean_notebook_closes_the_check_without_a_turn(
     assert check.extra["machine_check"]["left"] == 0
     assert check.extra["machine_check"]["removed_dirs"] == 2
     assert not (notebook / "wiki" / "vecchia").exists()
+    assert (notebook / "wiki" / "per-dopo").is_dir()
     assert len(_messages(bus)) == 2  # ricerca e scrittura: il controllo non ha turni
 
 
