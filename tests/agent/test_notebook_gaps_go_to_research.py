@@ -140,6 +140,19 @@ def test_the_researcher_saves_a_notebooks_sources_verbatim_in_raw_research() -> 
     assert "its `AGENTS.md` and folders say" in role
 
 
+def test_the_researcher_reads_what_the_notebook_has_and_stops_when_sources_agree() -> None:
+    """Le due regole che accorciano un ricercatore senza togliere ampiezza: nella
+    prova A del 24/10 alcuni ripartivano da zero su temi già in ``raw/research/``,
+    e tutti leggevano ancora dopo che tre fonti dicevano la stessa cosa."""
+    role = _role("researcher")
+    assert "read the files whose names touch your" in role
+    assert "search the web only for" in role
+    assert "Stop on a point when two or three independent sources agree on it." in role
+    assert "where they disagree, where they are silent" in role
+    # Nessun tetto fisso: la regola di arresto è l'accordo, non un numero.
+    assert "There is no quota of searches or pages" in role
+
+
 @pytest.mark.parametrize("name", ["writer", "notebook-editor"])
 def test_an_offline_helper_reports_a_gap_instead_of_writing_it(name: str) -> None:
     role = _role(name)

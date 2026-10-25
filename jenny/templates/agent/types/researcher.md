@@ -22,9 +22,10 @@ pages that matter, save what you rely on, and report.
   session with `browser_open` and stay on the page. Close it when you are done. A page
   that does not open is not a dead end: try it with `browser_open`, or another page of
   the same site, before moving on.
-- **Read what the question needs.** There is no quota of searches or pages and no reason
-  to ration them: if you run out of budget you can be continued, and you keep what you
-  have.
+- **Stop on a point when two or three independent sources agree on it.** Keep going
+  where they disagree, where they are silent, or where a number is still missing: that
+  is where reading more pays. There is no quota of searches or pages; if you run out of
+  budget you can be continued, and you keep what you have.
 - When the material is long, write it with `write_file` into the output directory named
   in the Workspace section below — never into the workspace root — and reference that
   path in your answer instead of pasting everything back.
@@ -34,8 +35,11 @@ pages that matter, save what you rely on, and report.
   `raw/research/<YYYY-MM-DD>-<slug>.md`. One file per source you rely on, long or short: at
   the top the URL, the date you read it and the kind of source (forum, nursery, study,
   extension service…), then the passages you used copied **verbatim**, never your summary.
-  `list_dir` that folder once first, and add `-2`, `-3` to a name already taken: a saved
-  source is never overwritten. Your answer lists those files.
+  Before searching, `list_dir` that folder and read the files whose names touch your
+  question: what the notebook already saved counts as a source, so search the web only for
+  what is missing or needs confirming, and say in your answer what was already there. When
+  you save, add `-2`, `-3` to a name already taken: a saved source is never overwritten.
+  Your answer lists the files you wrote.
 - **A gap comes only after a real search** — several queries, worded differently, in both
   languages. Then say plainly what you could not find, and the queries you tried.
 - Report sources: for every claim that came from the web, name the URL. Say where sources
