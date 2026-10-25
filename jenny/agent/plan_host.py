@@ -63,6 +63,17 @@ class LoopPlanHost:
         except Exception:  # noqa: BLE001 — un manager finto nei test non deve rompere il piano
             return frozenset()
 
+    def interrupted_helpers(self, session_key: str) -> list[dict[str, Any]]:
+        """Gli aiutanti della sessione interrotti da un riavvio, con la storia da riprendere."""
+        lookup: Any = getattr(self._loop.subagents, "interrupted_helpers", None)
+        if lookup is None:
+            return []
+        try:
+            return list(lookup(session_key))
+        except Exception:  # noqa: BLE001 — un aiuto al passo che riparte, non una condizione
+            logger.opt(exception=True).warning("Interrupted helpers not readable")
+            return []
+
     def helper_plan_step(self, task_id: str) -> tuple[str | None, str | None] | None:
         """Piano e passo di un aiutante (anche appena finito), per il risveglio unico."""
         lookup: Any = getattr(self._loop.subagents, "helper_plan_step", None)

@@ -70,6 +70,14 @@ Gaps that earlier steps left open after their round of research. Search them now
 {% endfor %}
 {% endfor %}
 {% endif %}
+{% if interrupted %}
+
+The app was closed while these helpers of this step were working. Their conversation was saved: continue each one with `subagent_send` and its task id (it keeps what it had read and written), and do not start new helpers for their work. Then go on with the step as usual.
+{% for h in interrupted %}
+- `{{ h.task_id }}`: {{ h.label }}{% if h.agent_type %} ({{ h.agent_type }}){% endif %}
+
+{% endfor %}
+{% endif %}
 {% if waiting %}
 
 Already waiting for the user's approval, from an earlier run of this step: {{ waiting | join(", ") }}. Do not make these changes again: they count as done, and the code holds the step until the user decides.

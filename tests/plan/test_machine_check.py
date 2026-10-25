@@ -203,3 +203,31 @@ def test_expect_is_only_for_the_check_step_and_stays_inside() -> None:
     assert _try({"files": ["/wiki/index"]}) == ""
     assert "1 to 40 `files`" in _try({"folders": "wiki/*"})
     assert "must be an object" in _try(["index"])
+
+
+async def test_a_step_resumed_after_a_restart_lists_its_interrupted_helpers(
+    workspace: Path, bus: FakeBus
+) -> None:
+    """Il passo riparte da capo dopo Riprendi, i suoi aiutanti no: il messaggio dice
+    di continuarli con ``subagent_send``. Solo quelli di questo piano e di questo passo."""
+    host = FakeHost(workspace)
+    driver = PlanDriver(PlanStore.for_workspace(workspace), bus, host)
+    await propose(driver, "Rifare la wiki", STEPS)
+    plan = driver.store.open_plan_for("piante")
+    await driver.approve(plan.id, plan.version, [])
+    host.interrupted = [
+        {"task_id": "t-acero", "lineage_id": "l1", "label": "Ricerca acero",
+         "agent_type": "researcher", "plan_id": plan.id, "plan_step": "s1"},
+        {"task_id": "t-altro", "lineage_id": "l2", "label": "Altro passo",
+         "agent_type": "researcher", "plan_id": plan.id, "plan_step": "s2"},
+        {"task_id": "t-vecchio", "lineage_id": "l3", "label": "Altro piano",
+         "agent_type": "researcher", "plan_id": "p_altro", "plan_step": "s1"},
+    ]
+    restarted = PlanDriver(PlanStore.for_workspace(workspace), bus, host)
+    assert restarted.recover() == [plan.id]
+    await restarted.resume(plan.id)
+    message = _messages(bus)[-1]
+    assert "`t-acero`: Ricerca acero (researcher)" in message
+    assert "subagent_send" in message
+    assert "t-altro" not in message and "t-vecchio" not in message
+    assert "app was closed" not in _messages(bus)[0]

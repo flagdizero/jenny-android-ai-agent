@@ -2528,9 +2528,34 @@ class PlanDriver:
                     return
                 plan = await self._note_machine(plan, step_id, _machine_view(audit, round_=1))
                 step = _find(plan, step_id)
-        await self.bus.publish_inbound(self._step_message(plan, step, lost=lost, audit=audit))
+        interrupted = await asyncio.to_thread(self._interrupted_of, plan, step_id)
+        await self.bus.publish_inbound(
+            self._step_message(plan, step, lost=lost, audit=audit, interrupted=interrupted)
+        )
         logger.info("Plan {}: step {} opened", plan.id, step_id)
         await self._changed(plan)
+
+    def _interrupted_of(self, plan: Plan, step_id: str) -> list[dict[str, Any]]:
+        """Gli aiutanti di questo passo che un riavvio ha interrotto, con la storia salvata.
+
+        Il passo riparte da capo dopo Riprendi (:meth:`recover`), ma i suoi
+        aiutanti non devono: ognuno ha la conversazione salvata fino al riavvio
+        (``SubagentManager.interrupted_helpers``) e ``subagent_send`` la
+        continua. Il messaggio del passo li elenca; senza, il modello ne
+        lanciava di nuovi e rifaceva da zero ricerche già a metà.
+        """
+        lookup: Any = getattr(self.host, "interrupted_helpers", None)
+        if lookup is None:
+            return []
+        try:
+            helpers = lookup(plan.session_key)
+        except Exception:  # noqa: BLE001 — un aiuto, non una condizione del passo
+            logger.opt(exception=True).warning("Plan {}: interrupted helpers unknown", plan.id)
+            return []
+        return [
+            h for h in helpers
+            if isinstance(h, dict) and h.get("plan_id") == plan.id and h.get("plan_step") == step_id
+        ]
 
     def _audit_baseline(self, plan: Plan) -> list[str]:
         """I difetti del quaderno all'Approva (:func:`baseline_keys`): non sono del piano.
@@ -2679,6 +2704,7 @@ class PlanDriver:
         reminder: bool = False,
         lost: LostFacts | None = None,
         audit: Audit | None = None,
+        interrupted: list[dict[str, Any]] | None = None,
     ) -> InboundMessage:
         from jenny.utils.prompt_templates import render_template
 
@@ -2731,6 +2757,12 @@ class PlanDriver:
             repair_more=max(0, len(audit.findings) - sum(len(g["items"]) for g in repair))
             if audit is not None and repair is not None else 0,
             machine_summary=summary_line(audit) if audit is not None else "",
+            # Gli aiutanti del passo interrotti da un riavvio (:meth:`_interrupted_of`).
+            interrupted=[
+                {"task_id": str(h.get("task_id") or ""), "label": str(h.get("label") or ""),
+                 "agent_type": str(h.get("agent_type") or "")}
+                for h in interrupted or ()
+            ] if not reminder else [],
             carried_gaps=[
                 {"step": str(c.get("step") or ""), "lines": [str(i) for i in c.get("items") or ()]}
                 for c in step.extra.get(_CARRIED_GAPS) or ()

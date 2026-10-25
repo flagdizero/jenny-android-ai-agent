@@ -39,9 +39,14 @@ class FakeHost:
         self.cancelled: list[str] = []
         self.notes: list[tuple[str, str]] = []
         self.root_lookups = 0
+        # Gli aiutanti interrotti da un riavvio, come ``SubagentManager.interrupted_helpers``.
+        self.interrupted: list[dict[str, Any]] = []
 
     def turn_in_flight(self, session_key: str) -> bool:
         return session_key in self.busy
+
+    def interrupted_helpers(self, session_key: str) -> list[dict[str, Any]]:
+        return list(self.interrupted)
 
     def running_helpers(self, session_key: str) -> frozenset[str]:
         return frozenset(self.helpers.get(session_key, ()))
