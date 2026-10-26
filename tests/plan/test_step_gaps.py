@@ -7,13 +7,15 @@ chiusura del passo con buchi aperti si rifiuta una volta sola.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 import pytest
+from loguru import logger as loguru_logger
 
 from jenny.plan.driver import OPEN_GAPS_PATH, PlanDriver, plan_view
-from jenny.plan.model import MAX_RESEARCH_ITEMS, to_research_items
+from jenny.plan.model import MAX_RESEARCH_ITEMS, names_research_gaps, to_research_items
 from jenny.plan.store import PlanStore
 from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_file
 
@@ -62,10 +64,67 @@ from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_fil
             "To research:\n- Fico — malattie:\n  - ruggine, `a`\n  - cocciniglia, `b`\n- Prunus: dosi",
             ["ruggine, `a`", "cocciniglia, `b`", "Prunus: dosi"],
         ),
+        # Le forme vere degli editor su s22 (26/10 sera, prova T2): una nota fra
+        # parentesi dopo il grassetto e le voci in prosa separate da `;`, con le
+        # query in coda; il trattino lungo al posto dei due punti (la forma che
+        # il template stesso mostrava); la nota e una voce sola. Il parser le
+        # leggeva tutte come zero voci, e le lacune sparivano senza log.
+        (
+            "**To research** (i quattro valori sono segnaposto, non conoscenza del quaderno — "
+            "la pagina `wiki/timo.md` andrebbe completata quando arrivano fonti): temperatura "
+            "minima sopportata dal timo; intervallo di irrigazione estivo (frequenza in giorni, "
+            "terreno/vaso); pH del terreno adatto; periodo di potatura. Query suggerite: "
+            "\"Thymus vulgaris minimum temperature hardiness °C\", \"quando potare il timo\".",
+            ["temperatura minima sopportata dal timo",
+             "intervallo di irrigazione estivo (frequenza in giorni, terreno/vaso)",
+             "pH del terreno adatto",
+             "periodo di potatura. Query suggerite: \"Thymus vulgaris minimum temperature "
+             "hardiness °C\", \"quando potare il timo\"."],
+        ),
+        (
+            "**To research** — i quattro campi restano lacune reali, riempite solo per "
+            "istruzione esplicita dell'utente: per `wiki/origano.md`, dati su *temperatura "
+            "minima*, *irrigazione estiva*, *pH*, *potatura*; query suggerite: `\"Origanum "
+            "vulgare\" minimum temperature hardiness`, `\"Origanum vulgare\" soil pH range`.",
+            ["i quattro campi restano lacune reali, riempite solo per istruzione esplicita "
+             "dell'utente: per `wiki/origano.md`, dati su *temperatura minima*, *irrigazione "
+             "estiva*, *pH*, *potatura*"],
+        ),
+        (
+            "**To research** (non fatto, per scelta del compito): le quattro voci di `menta.md` "
+            "portano `non documentato` senza ricerca né query citate.",
+            ["le quattro voci di `menta.md` portano `non documentato` senza ricerca né query "
+             "citate."],
+        ),
+        (
+            "- **To research** (nessuna ricerca fatta, come da istruzione; `raw/research/` "
+            "vuoto): temperatura minima, fabbisogno idrico estivo, pH del terreno e potatura "
+            "del timo. Query che manderei a un `researcher`: \"thyme pruning when how\".",
+            ["temperatura minima, fabbisogno idrico estivo, pH del terreno e potatura del "
+             "timo. Query che manderei a un `researcher`: \"thyme pruning when how\"."],
+        ),
+        ("**To research** - a\n- b", ["a", "b"]),
     ],
 )
 def test_to_research_items(text: str, items: list[str]) -> None:
     assert to_research_items(text) == items
+
+
+@pytest.mark.parametrize(
+    ("text", "names"),
+    [
+        ("**To research**: none", False),
+        ("ends with a **To research** list", False),
+        ("**To research**: a", True),
+        ("## To research\n\n- a", True),
+        ("**To research**\n(lacune):\n- a", True),
+        # Una tabella: il parser non la legge, ma la lista c'è — è la spia.
+        ("## To research\n| pagina | lacuna |\n|---|---|\n| fico | malattie |", True),
+        ("**To research**\n\n**Not done**\n- the board", False),
+    ],
+)
+def test_names_research_gaps(text: str, names: bool) -> None:
+    assert names_research_gaps(text) is names
 
 
 def test_a_long_item_is_cut_at_a_word_not_in_the_middle_of_a_query() -> None:
@@ -179,6 +238,24 @@ async def test_the_items_read_by_the_manager_win_over_the_announce_text(
         KEY, "t2", "ed2", "To research:\n- pothos: luce", plan_id=plan.id, plan_step="s2",
     )
     assert driver.store.load(plan.id).steps[1].extra["gaps"]["ed2"] == ["pothos: luce"]
+
+
+async def test_a_list_the_parser_cannot_read_is_logged(
+    driver: PlanDriver, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Su s22 (26/10 sera) quattro resoconti su cinque avevano la lista in una
+    forma che il parser non leggeva, e il driver usciva muto: le lacune sparivano
+    senza traccia. Ora la riga c'è, a WARNING; non per «To research: none»."""
+    plan = await _to_step_two(driver, await _approve(driver))
+    handler = loguru_logger.add(caplog.handler, format="{message}", level="WARNING")
+    try:
+        with caplog.at_level(logging.WARNING):
+            table = "## To research\n| pagina | lacuna |\n|---|---|\n| fico | malattie |"
+            assert await _report(driver, plan, table, step="s2") is False
+            assert await _report(driver, plan, "**To research**: none", step="s2") is False
+    finally:
+        loguru_logger.remove(handler)
+    assert caplog.text.count("names To research but no item was read") == 1
 
 
 async def test_the_same_helper_sent_back_without_gaps_clears_them(driver: PlanDriver) -> None:

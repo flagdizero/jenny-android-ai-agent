@@ -522,6 +522,23 @@ current = plan({ ...current, steps: [current.steps[0], current.steps[1],
 frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
 await tick(40);
 assert.equal(sub(), 'Repaired 8 pages · ' + P.machineLeft.replace('{n}', '2'));
+// I fatti persi contano: «tutto a posto» con due fatti persi era quel che si
+// leggeva su s22 (26/10, T3). Da soli, insieme a quel che resta, e al singolare.
+const check = (machine_check) => {
+  current = plan({ ...current, steps: [current.steps[0], current.steps[1], done({ machine_check })] });
+  frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+};
+check({ final: true, left: 0, pages: 1, lost_left: 2 });
+await tick(40);
+assert.equal(sub(), P.machineLost.replace('{n}', '2'));
+check({ final: true, left: 2, pages: 1, lost_left: 1, left_items: ['wiki/a.md: x', 'wiki/b.md: y'] });
+await tick(40);
+assert.equal(sub(), P.machineLeft.replace('{n}', '2') + ' · ' + P.lostFactOne);
+check({ final: true, left: 0, pages: 1, lost_left: 0 });
+await tick(40);
+assert.equal(sub(), P.machineCleanOne);
+check({ final: true, left: 2, pages: 85, left_items: ['wiki/a.md: left to search', 'wiki/a.md: no links', 'wiki/b.md: empty'] });
+await tick(40);
 rpcAnswers['plan.step_files'] = () => ({ ok: true, added: [], changed: ['wiki/a.md'], removed: [] });
 card().querySelector('[data-step-id="s3"]').click();
 await tick(30);
@@ -640,7 +657,7 @@ assert.deepEqual(boxes, ['pages', 'sources']);
 const sources = sheet().querySelector('.home-plan-keep input[data-group="sources"]');
 sources.checked = true;
 sources.dispatchEvent(new Event('change'));
-assert.match(text(sheet()), /1 new files go away/);
+assert.match(text(sheet()), /1 new file goes away/, 'al singolare (s22, 26/10: «1 new files»)');
 row('confirm').click();
 await tick(40);
 assert.deepEqual(rpcs('plan.rollback')[0].params, { id: 'p1', keep: ['sources'], expect_end: 'B1' });
@@ -823,6 +840,9 @@ current = plan({ ...current, steps: current.steps.map((s) => ({ ...s, gaps_liste
 frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
 await tick(40);
 assert.equal(text(note()), P.gapsNoteOne.replace('{bold}', 'raw/notes/open-gaps.md'));
+assert.equal(text(card().querySelector('[data-step-id="s3"] .home-plan-sub')), P.gapsListedOne);
+// Non la stessa parola del chip «N da cercare» di un passo di ricerca (s22, T1).
+assert.notEqual(P.gapsListed, P.tag.covers);
 current = plan({ ...current, steps: current.steps.map((s) => ({ ...s, gaps_listed: 0 })) });
 frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
 await tick(40);
@@ -1138,7 +1158,7 @@ await tick(60);
 assert.ok(toasts().includes(P.error.conflict), toasts());
 assert.equal(previews, 2, 'un conto nuovo');
 assert.ok(sheet().open, 'il foglio torna coi numeri nuovi');
-assert.match(text(sheet()), /1 files come back/);
+assert.match(text(sheet()), /1 file comes back/);
 row('confirm').click();
 await tick(40);
 assert.equal(rpcs('plan.rollback').at(-1).params.expect_end, 'P2', 'si conferma il conto nuovo');

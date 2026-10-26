@@ -185,7 +185,19 @@ function machineLine(step) {
   const machine = step?.machine_check;
   if (!machine?.final) return '';
   const left = Number(machine.left) || 0;
-  return left ? t('machineLeft', { n: left }) : t('machineClean', { pages: Number(machine.pages) || 0 });
+  /* I fatti che erano in una pagina all'inizio del piano e adesso in nessuna
+     (`lost_left`, contati dal codice): fino al 26/10 sera la riga diceva «tutto
+     a posto» con due fatti persi (s22, T3). */
+  const lost = Number(machine.lost_left) || 0;
+  if (!left && !lost) {
+    const pages = Number(machine.pages) || 0;
+    return pages === 1 ? t('machineCleanOne') : t('machineClean', { pages });
+  }
+  const parts = [];
+  if (left) parts.push(t('machineLeft', { n: left }));
+  if (lost) parts.push(left ? t(lost === 1 ? 'lostFactOne' : 'lostFacts', { n: lost })
+    : t(lost === 1 ? 'machineLostOne' : 'machineLost', { n: lost }));
+  return parts.join(' · ');
 }
 
 /** Le pagine dove il controllo automatico ha lasciato qualcosa, senza doppioni. */
@@ -1311,7 +1323,8 @@ export class HomePlan {
     } else {
       /* Un passo fatto che ha lasciato lacune nella lista del quaderno lo dice. */
       const listed = Number(step.gaps_listed) || 0;
-      sub = [step.note, machineLine(step), listed ? t('gapsListed', { count: listed }) : '']
+      sub = [step.note, machineLine(step),
+        listed ? t(listed === 1 ? 'gapsListedOne' : 'gapsListed', { count: listed }) : '']
         .filter(Boolean).join(' · ');
     }
     if (sub) item.appendChild(el('span', 'home-plan-sub', sub));
@@ -2207,12 +2220,14 @@ export class HomePlan {
       lines.replaceChildren();
       if (r) {
         const line = el('div', 'is-back');
-        line.append(icon('ti-arrow-back-up'), el('span', null, t('rollbackSheet.restored', { count: r })));
+        line.append(icon('ti-arrow-back-up'), el('span', null,
+          t(r === 1 ? 'rollbackSheet.restoredOne' : 'rollbackSheet.restored', { count: r })));
         lines.appendChild(line);
       }
       if (g) {
         const line = el('div', 'is-gone');
-        line.append(icon('ti-x'), el('span', null, t('rollbackSheet.removed', { count: g })));
+        line.append(icon('ti-x'), el('span', null,
+          t(g === 1 ? 'rollbackSheet.removedOne' : 'rollbackSheet.removed', { count: g })));
         lines.appendChild(line);
       }
       if (!r && !g) lines.appendChild(el('div', 'is-keep', t('rollbackSheet.nothing')));

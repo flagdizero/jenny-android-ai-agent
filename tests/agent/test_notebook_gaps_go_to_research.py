@@ -219,8 +219,14 @@ def test_the_editor_reports_an_unsearched_gap_instead_of_writing_it_in_the_page(
     role = _role("notebook-editor")
     assert "A gap nobody searched never goes into a page" in role
     assert "no \"queries to run\"" in role
-    assert "and the queries you would run" in role
     assert "\"not documented\" only where a search came back empty, with the queries tried" in role
+    # La forma della lista, mostrata e basta: su s22 (26/10 sera) il template diceva
+    # «under **To research** — what is missing» e gli editor copiavano il trattino,
+    # che il parser non leggeva. Ora la forma è una, e lo dice il perché.
+    assert "exactly `**To research:**`" in role
+    assert "- <page> — <what is missing> — queries: <the ones you would run>" in role
+    assert "a list in another shape is a gap lost" in role
+    assert "under **To research** —" not in role
 
 
 def test_the_editor_is_shown_the_reader_shape_with_linked_sources() -> None:

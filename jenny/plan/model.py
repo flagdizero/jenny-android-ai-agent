@@ -1085,17 +1085,32 @@ _MAX_RESEARCH_ITEM = 600
 # due punti («ends with a **To research** list»): è nominata, non è una lista.
 # Fino al 26/10 valeva solo la prima forma, e l'annuncio dell'aiutante la
 # cercava come sottostringa: la stessa riga valeva 0 voci per il driver e «vai
-# a cercare» per Jenny (Titan).
-_LABEL = r"(?:\*\*|__)?\s*to\s+research\s*(?:\([^)]*\))?\s*(?:\*\*|__)?"
+# a cercare» per Jenny (Titan). La prova del 26/10 sera su s22 ha trovato le
+# forme vere degli editor, 4 su 5 non lette: una nota fra parentesi **dopo** il
+# grassetto («**To research** (non fatto, per scelta): …»), il trattino lungo al
+# posto dei due punti («**To research** — i quattro campi …», che è la forma
+# che il template stesso mostrava) e le voci in prosa separate da punto e
+# virgola. Ora la nota sta dentro o fuori il grassetto, il separatore è `:`,
+# `—`, `–` o ` - `, e una riga senza marcatori si spezza ai `;`.
+_NOTE = r"(?:\([^)]*\))?"
+_LABEL = (
+    r"(?:\*\*|__)?\s*to\s+research\s*" + _NOTE + r"\s*(?:\*\*|__)?\s*" + _NOTE
+)
+_SEP = r"(?::|[—–]|\s-(?=\s))"
 _TO_RESEARCH = re.compile(
-    r"^\s*(?:#{1,6}\s*)?(?:[-*+]\s+)?" + _LABEL + r"\s*(?::\s*(?P<rest>.*)|(?P<rest_end>)$)",
+    r"^\s*(?:#{1,6}\s*)?(?:[-*+]\s+)?" + _LABEL
+    + r"\s*(?:" + _SEP + r"\s*(?P<rest>.*)|(?P<rest_end>)$)",
     re.IGNORECASE,
 )
 _TO_RESEARCH_INLINE = re.compile(
-    r"(?:^|\s)(?:\*\*|__)\s*to\s+research\s*(?:\([^)]*\))?\s*(?::\s*(?:\*\*|__)|(?:\*\*|__)\s*:)"
+    r"(?:^|\s)(?:\*\*|__)\s*to\s+research\s*" + _NOTE
+    + r"\s*(?::\s*(?:\*\*|__)|(?:\*\*|__)\s*" + _NOTE + r"\s*" + _SEP + r")"
     r"\s*(?P<rest>.*)$",
     re.IGNORECASE,
 )
+# Una voce che è solo le query da fare («query suggerite: …») non è una lacuna:
+# le query dentro una voce restano, servono al ricercatore.
+_QUERIES_ONLY = re.compile(r"^(?:query|queries)\b", re.IGNORECASE)
 _BULLET = re.compile(
     r"^(?P<indent>\s*)(?:[-*+•]|\d{1,2}[.)]|\(?(?:[ivx]{1,5}|[a-z]|\d{1,2})\))\s+(?P<text>\S.*)$"
 )
@@ -1117,6 +1132,8 @@ def _research_item(text: str) -> str | None:
         # «(lacune emerse leggendo, nessuna query ancora fatta):» introduce le
         # voci che seguono, non ne è una.
         return None
+    if _QUERIES_ONLY.match(clean):
+        return None
     if len(clean) > _MAX_RESEARCH_ITEM:
         # Al limite si taglia a una parola: le query in fondo alla voce («Query:
         # `acer palma») si perdevano a metà (Titan).
@@ -1126,9 +1143,12 @@ def _research_item(text: str) -> str | None:
 
 
 def _inline_items(rest: str) -> list[str | None]:
-    """Il resto della riga dell'etichetta: una voce, o più se numerate in linea."""
+    """Il resto della riga dell'etichetta: una voce, o più se numerate in linea
+    o separate da punto e virgola («temperatura minima; pH del terreno; …»)."""
     marks = list(_INLINE_MARKS.finditer(rest))
     if len(marks) < 2:
+        if ";" in rest:
+            return [_research_item(part) for part in rest.split(";")]
         return [_research_item(rest)]
     parts: list[str | None] = []
     for n, mark in enumerate(marks):
@@ -1144,6 +1164,25 @@ def _label(line: str) -> str | None:
         return head.group("rest") or ""
     inline = _TO_RESEARCH_INLINE.search(line)
     return inline.group("rest") if inline is not None else None
+
+
+def names_research_gaps(text: str) -> bool:
+    """Il resoconto ha una riga **To research** che dice qualcosa: una voce sulla
+    riga, o un punto elenco subito sotto. Falso per «To research: none» e per
+    l'etichetta solo nominata. Con :func:`to_research_items` vuoto, è la spia
+    di una forma che il parser non legge (26/10 sera: 4 resoconti su 5)."""
+    lines = (text or "").splitlines()
+    for n, line in enumerate(lines):
+        rest = _label(line)
+        if rest is None:
+            continue
+        if any(item is not None for item in _inline_items(rest)):
+            return True
+        following = next((ln for ln in lines[n + 1:] if ln.strip()), "").strip()
+        # Un punto elenco, una riga d'introduzione o una tabella: la lista c'è.
+        if _BULLET.match(following) or following.endswith(":") or following.startswith("|"):
+            return True
+    return False
 
 
 def to_research_items(text: str) -> list[str]:

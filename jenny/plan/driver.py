@@ -69,6 +69,7 @@ from jenny.plan.model import (
     current_step,
     drafting_expired,
     drafting_view,
+    names_research_gaps,
     next_pending_step,
     now_iso,
     order_warnings,
@@ -1738,6 +1739,15 @@ class PlanDriver:
             items = [i for i in items if isinstance(i, str) and i]
         else:
             items = to_research_items(content)
+        if not is_researcher and not items and names_research_gaps(content):
+            # La spia che mancava: un resoconto con una lista **To research**
+            # scritta e nessuna voce letta usciva di qui in silenzio, e le
+            # lacune sparivano senza traccia (s22, 26/10 sera: 4 su 5).
+            logger.warning(
+                "Plan {}: report of helper {} names To research but no item was read: "
+                "the list's shape is not one the parser knows",
+                live.plan_id, key,
+            )
         async with self._lock(session_key):
             try:
                 plan = await asyncio.to_thread(self.store.load, live.plan_id)
