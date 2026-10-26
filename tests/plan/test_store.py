@@ -23,7 +23,8 @@ def _proposal(*titles: str):
     titles = titles or ("Uno", "Due", "Tre")
     return validate_proposal(
         "Rifare la wiki",
-        [{"title": t, "detail": t, "done_when": t} for t in titles],
+        [{"title": t, "detail": t, "done_when": t, "kind": "check" if t == titles[-1] else "other"}
+         for t in titles],
         [{"item": "Acero", "have": "", "missing": "", "strategy": "notebook"}],
     )
 

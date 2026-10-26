@@ -92,9 +92,8 @@ REPAIR_HINTS: dict[str, str] = {
     "expect_missing": "write the missing page",
     "expect_extra": "move it into the expected pages, or remove it if its content is "
                     "already there",
-    "unsearched_gap": "search it now (researchers, one round for all of them) and write what "
-                      "you find; if the search finds nothing, write \"not documented\" with "
-                      "the queries tried — never leave \"to search\" in a page",
+    "unsearched_gap": "write \"not documented\" with the queries tried (the plan's research "
+                      "is spent: this step starts none) — never leave \"to search\" in a page",
     "sources_no_link": "add the URL of each source, from the header of the raw/ file it cites",
     "empty_page": "write the page, or remove it if it has no reason to exist",
 }

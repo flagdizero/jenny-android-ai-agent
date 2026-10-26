@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from jenny.plan.driver import PlanDriver
+from jenny.plan.driver import OPEN_GAPS_PATH, PlanDriver, plan_view
 from jenny.plan.model import MAX_RESEARCH_ITEMS, to_research_items
 from jenny.plan.store import PlanStore
 from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_file
@@ -124,6 +124,17 @@ async def _approve(driver: PlanDriver) -> Any:
 _GAPS = "Fatto.\n\n**To research**\n- felce: umidità ideale\n- cactus: vaso\n"
 
 
+async def _to_write_step(driver: PlanDriver) -> Any:
+    """Il piano approvato, col passo di scrittura (s2) aperto: il passo di ricerca
+    (s1) non apre giri, e il cancello si prova dove le pagine si scrivono."""
+    plan = await _approve(driver)
+    assert "closed" in await driver.step_done(KEY, "ricerca fatta")
+    await driver.on_turn_end(KEY, {})
+    plan = driver.store.load(plan.id)
+    assert plan.steps[1].status == "now"
+    return plan
+
+
 async def _report(
     driver: PlanDriver, plan: Any, content: str, *, lineage: str | None = "ed1",
     task_id: str = "t1", step: str = "s1",
@@ -134,19 +145,19 @@ async def _report(
 
 
 async def test_open_gaps_refuse_the_close_once_then_it_passes(driver: PlanDriver) -> None:
-    plan = await _approve(driver)
-    assert await _report(driver, plan, _GAPS)
-    assert driver.store.load(plan.id).steps[0].extra["gaps"] == {
+    plan = await _to_write_step(driver)
+    assert await _report(driver, plan, _GAPS, step="s2")
+    assert driver.store.load(plan.id).steps[1].extra["gaps"] == {
         "ed1": ["felce: umidità ideale", "cactus: vaso"]
     }
     refused = await driver.step_done(KEY, "pagine scritte")
     assert refused.startswith("Not closed yet")
     assert "helper `ed1`" in refused and "felce: umidità ideale" in refused
     assert "subagent_send" in refused and "researchers" in refused
-    assert driver.store.load(plan.id).steps[0].status == "now"
+    assert driver.store.load(plan.id).steps[1].status == "now"
     # La seconda chiamata passa: la nota spiega perché i buchi restano.
     assert "closed" in await driver.step_done(KEY, "cercati, nessuna fonte")
-    assert driver.store.load(plan.id).steps[0].status == "done"
+    assert driver.store.load(plan.id).steps[1].status == "done"
 
 
 async def test_the_same_helper_sent_back_without_gaps_clears_them(driver: PlanDriver) -> None:
@@ -159,11 +170,12 @@ async def test_the_same_helper_sent_back_without_gaps_clears_them(driver: PlanDr
 
 
 async def test_gaps_are_kept_per_helper(driver: PlanDriver) -> None:
-    plan = await _approve(driver)
-    await _report(driver, plan, _GAPS, lineage="ed1")
-    await _report(driver, plan, "To research:\n- pothos: luce", lineage="ed2", task_id="t2")
-    await _report(driver, plan, "Fatto, nessun buco.", lineage="ed1", task_id="t3")
-    assert driver.store.load(plan.id).steps[0].extra["gaps"] == {"ed2": ["pothos: luce"]}
+    plan = await _to_write_step(driver)
+    await _report(driver, plan, _GAPS, lineage="ed1", step="s2")
+    await _report(driver, plan, "To research:\n- pothos: luce", lineage="ed2", task_id="t2",
+                  step="s2")
+    await _report(driver, plan, "Fatto, nessun buco.", lineage="ed1", task_id="t3", step="s2")
+    assert driver.store.load(plan.id).steps[1].extra["gaps"] == {"ed2": ["pothos: luce"]}
     refused = await driver.step_done(KEY, "x")
     assert "helper `ed2`" in refused and "ed1" not in refused
 
@@ -219,7 +231,7 @@ async def test_the_next_step_starts_without_the_gaps_of_the_last(driver: PlanDri
     assert (await driver.step_done(KEY, "z")).startswith("Not closed yet")
 
 
-# ── un giro di ricerca per passo ────────────────────────────────────────────
+# ── il budget di ricerca del piano ──────────────────────────────────────────
 
 
 async def _researcher(driver: PlanDriver, plan: Any, *, step: str, task_id: str = "r1") -> bool:
@@ -237,36 +249,113 @@ async def _to_step_two(driver: PlanDriver, plan: Any) -> Any:
     return plan
 
 
-async def test_after_a_research_round_new_gaps_go_to_the_check_step(driver: PlanDriver) -> None:
-    """La prova A: primo giro sui buchi degli editor, poi gli editor rimandati
-    riportano buchi nuovi. Il passo si chiude, e i buchi nuovi vanno al controllo."""
+async def _next(driver: PlanDriver, plan: Any, note: str = "fatto") -> Any:
+    assert "closed" in await driver.step_done(KEY, note)
+    await driver.on_turn_end(KEY, {})
+    return driver.store.load(plan.id)
+
+
+_WRITE = {"detail": "Pagine.", "kind": "write", "done_when": "Scritte."}
+_THREE_WRITES = [
+    STEPS[0],
+    {"title": "Scrivo A", **_WRITE},
+    {"title": "Scrivo B", **_WRITE},
+    {"title": "Scrivo C", **_WRITE},
+    STEPS[2],
+]
+
+
+async def _approve_steps(driver: PlanDriver, steps: list[dict[str, Any]]) -> Any:
+    assert "card" in await propose(driver, "Rifare la wiki", steps)
+    plan = driver.store.open_plan_for("piante")
+    await driver.approve(plan.id, plan.version, [])
+    return driver.store.load(plan.id)
+
+
+def _open_gaps_file(workspace: Path) -> str:
+    path = workspace / "wikis" / "piante" / OPEN_GAPS_PATH
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
+async def test_the_gate_spends_one_of_the_plans_two_rounds(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """Sul Titan (26/10) i giri sono stati sei, uno per passo e oltre. Il budget è
+    del piano: due rifiuti che chiedono ricerca, poi il rifiuto chiede di scrivere
+    «non documentato», e quel che resta va nella lista del quaderno."""
+    plan = await _to_step_two(driver, await _approve_steps(driver, _THREE_WRITES))
+    await _report(driver, plan, _GAPS, step="s2")
+    refused = await driver.step_done(KEY, "A scritta")
+    assert "Research round 1 of 2" in refused and "researchers" in refused
+    assert driver.store.load(plan.id).extra["research_rounds"] == 1
+    plan = await _next(driver, plan)
+    assert plan.steps[2].status == "now"
+    # Il secondo passo di scrittura: l'ultimo giro.
+    await _report(driver, plan, _GAPS, step="s3", lineage="ed2")
+    assert "Research round 2 of 2" in await driver.step_done(KEY, "B scritta")
+    plan = await _next(driver, plan)
+    assert plan.extra["research_rounds"] == 2
+    # Il terzo: budget finito, niente ricerca, le pagine dicono «non documentato».
+    await _report(driver, plan, "To research:\n- pilea: pupazzi all'anno", step="s4", lineage="ed3")
+    refused = await driver.step_done(KEY, "C scritta")
+    assert "research budget" in refused and "not documented" in refused
+    assert "researchers" not in refused and OPEN_GAPS_PATH in refused
+    assert driver.store.load(plan.id).extra["research_rounds"] == 2
+    closed = await driver.step_done(KEY, "C scritta, un buco dichiarato")
+    assert "closed" in closed and OPEN_GAPS_PATH in closed and "1 gap(s)" in closed
+    text = _open_gaps_file(workspace)
+    assert text.startswith("# Open gaps") and "s4 «Scrivo C»" in text
+    assert "- pilea: pupazzi all'anno" in text
+    plan = driver.store.load(plan.id)
+    assert plan.steps[3].extra["gaps_listed"] == ["pilea: pupazzi all'anno"]
+    view = plan_view(plan)
+    assert view["research_rounds"] == 2 and view["rounds_left"] == 0
+    assert view["steps"][3]["gaps_listed"] == 1 and view["steps"][3]["gaps_open"] == 0
+
+
+async def test_a_research_step_does_not_spend_the_budget(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """Un passo di ricerca previsto è già la ricerca: un editor che vi riporta
+    buchi non ferma il passo, e il budget resta intero."""
+    plan = await _approve(driver)
+    assert plan.steps[0].kind == "research"
+    await _report(driver, plan, _GAPS, step="s1")
+    assert "closed" in await driver.step_done(KEY, "fonti salvate")
+    plan = driver.store.load(plan.id)
+    assert plan.extra.get("research_rounds", 0) == 0
+    assert "cactus: vaso" in _open_gaps_file(workspace)
+
+
+async def test_after_the_round_new_gaps_go_to_the_open_list_not_to_the_next_step(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """La prova A del 24/10: il giro c'è stato, gli editor rimandati riportano
+    buchi nuovi. Il passo si chiude e i buchi vanno nella lista: nessun passo
+    dopo li eredita, e il controllo non apre un giro per loro."""
     plan = await _to_step_two(driver, await _approve(driver))
     await _report(driver, plan, _GAPS, step="s2", lineage="ed1")
+    assert (await driver.step_done(KEY, "presto")).startswith("Not closed yet")
     assert await _researcher(driver, plan, step="s2")
-    assert driver.store.load(plan.id).steps[1].extra["gaps_round"] is True
-    # L'editor rimandato riempie e trova un buco nuovo.
     await _report(driver, plan, "To research:\n- glicine: muffa grigia", step="s2",
                   lineage="ed1", task_id="t2")
     assert "closed" in await driver.step_done(KEY, "pagine scritte")
     plan = driver.store.load(plan.id)
     assert plan.steps[1].status == "done"
-    assert plan.steps[2].extra["carried_gaps"] == [
-        {"step": "Scrivo le pagine", "items": ["glicine: muffa grigia"]}
-    ]
+    assert plan.steps[1].extra["gaps_listed"] == ["glicine: muffa grigia"]
+    assert "carried_gaps" not in plan.steps[2].extra
+    assert "- glicine: muffa grigia" in _open_gaps_file(workspace)
     await driver.on_turn_end(KEY, {})
     message = driver.bus.inbound[-1].content
-    assert "Gaps that earlier steps left open" in message
-    assert 'from "Scrivo le pagine"' in message and "glicine: muffa grigia" in message
+    assert "Gaps that earlier steps left open" not in message
+    assert "glicine" not in message
 
 
-async def test_a_researcher_with_no_gaps_open_is_not_a_round(driver: PlanDriver) -> None:
-    """Il ricercatore di un passo di ricerca previsto, prima di ogni buco: il
-    cancello resta com'era."""
+async def test_a_researcher_before_any_gap_leaves_the_gate_as_it_is(driver: PlanDriver) -> None:
     plan = await _to_step_two(driver, await _approve(driver))
     await _researcher(driver, plan, step="s2")
-    assert "gaps_round" not in driver.store.load(plan.id).steps[1].extra
     await _report(driver, plan, _GAPS, step="s2")
-    assert (await driver.step_done(KEY, "x")).startswith("Not closed yet")
+    assert "Research round 1 of 2" in await driver.step_done(KEY, "x")
 
 
 async def test_a_researchers_own_gaps_are_its_outcome_not_the_steps_gaps(
@@ -280,28 +369,11 @@ async def test_a_researchers_own_gaps_are_its_outcome_not_the_steps_gaps(
         agent_type="researcher",
     )
     extra = driver.store.load(plan.id).steps[1].extra
-    assert "gaps" not in extra and "gaps_round" not in extra
+    assert "gaps" not in extra and extra["research_lineages"] == ["lin-r1"]
     assert "closed" in await driver.step_done(KEY, "x")
 
 
-async def test_after_a_gate_forced_round_new_gaps_are_still_carried(driver: PlanDriver) -> None:
-    """Il cancello rifiuta, il giro parte, gli editor rimandati trovano buchi
-    nuovi: alla chiusura non si perdono, vanno al controllo."""
-    plan = await _to_step_two(driver, await _approve(driver))
-    await _report(driver, plan, _GAPS, step="s2", lineage="ed1")
-    assert (await driver.step_done(KEY, "presto")).startswith("Not closed yet")
-    await _researcher(driver, plan, step="s2")
-    await _report(driver, plan, "To research:\n- glicine: muffa", step="s2",
-                  lineage="ed1", task_id="t2")
-    assert "closed" in await driver.step_done(KEY, "fatto")
-    assert driver.store.load(plan.id).steps[2].extra["carried_gaps"] == [
-        {"step": "Scrivo le pagine", "items": ["glicine: muffa"]}
-    ]
-
-
-async def test_two_researchers_of_one_launch_are_not_a_round(driver: PlanDriver) -> None:
-    """In un passo di ricerca previsto due ricercatori che rientrano uno dopo
-    l'altro non sono un giro, e non lasciano buchi: il passo si chiude."""
+async def test_two_researchers_of_one_launch_leave_no_gaps(driver: PlanDriver) -> None:
     plan = await _approve(driver)
     await driver.note_step_report(
         KEY, "r1", "lin-r1", "To research:\n- felce: vaso", plan_id=plan.id, plan_step="s1",
@@ -309,9 +381,50 @@ async def test_two_researchers_of_one_launch_are_not_a_round(driver: PlanDriver)
     )
     await _researcher(driver, plan, step="s1", task_id="r2")
     extra = driver.store.load(plan.id).steps[0].extra
-    assert "gaps_round" not in extra and "gaps" not in extra
-    assert extra["research_lineages"] == ["lin-r1", "lin-r2"]
+    assert "gaps" not in extra and extra["research_lineages"] == ["lin-r1", "lin-r2"]
     assert "closed" in await driver.step_done(KEY, "x")
+
+
+async def test_listed_gaps_are_deduplicated_against_the_file_and_each_other(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    nb = workspace / "wikis" / "piante"
+    write_file(nb, OPEN_GAPS_PATH, "# Open gaps\n\n## ieri\n\n- Cactus:  vaso\n")
+    plan = await _to_step_two(driver, await _approve(driver))
+    await _report(driver, plan, _GAPS, step="s2", lineage="ed1")
+    await _report(driver, plan, "To research:\n- cactus: vaso\n- felce: luce", step="s2",
+                  lineage="ed2", task_id="t2")
+    await driver.step_done(KEY, "presto")  # il rifiuto del giro
+    assert "closed" in await driver.step_done(KEY, "fatto")
+    text = _open_gaps_file(workspace)
+    assert text.count("- cactus: vaso") == 0 and text.count("Cactus:  vaso") == 1
+    assert text.count("- felce: umidità ideale") == 1 and text.count("- felce: luce") == 1
+    assert driver.store.load(plan.id).steps[1].extra["gaps_listed"] == [
+        "felce: umidità ideale", "cactus: vaso", "felce: luce"
+    ]
+
+
+async def test_the_list_is_written_inside_the_step_before_its_photo(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """Il file è lavoro del passo: c'è prima della foto «dopo», così il ritorno
+    del piano lo toglie con il resto."""
+    plan = await _to_step_two(driver, await _approve(driver))
+    await _report(driver, plan, _GAPS, step="s2")
+    await driver.step_done(KEY, "presto")
+    assert "closed" in await driver.step_done(KEY, "fatto")
+    plan = driver.store.load(plan.id)
+    assert plan.steps[1].photo_after is None and _open_gaps_file(workspace)
+    await driver.on_turn_end(KEY, {})
+    assert driver.store.load(plan.id).steps[1].photo_after
+
+
+async def test_the_view_counts_the_open_gaps_of_the_step(driver: PlanDriver) -> None:
+    plan = await _to_step_two(driver, await _approve(driver))
+    assert plan_view(plan)["steps"][1]["gaps_open"] == 0
+    await _report(driver, plan, _GAPS, step="s2")
+    view = plan_view(driver.store.load(plan.id))
+    assert view["steps"][1]["gaps_open"] == 2 and view["rounds_left"] == 2
 
 
 # ── chi cancella non cerca, chi è fermo è fermo ─────────────────────────────
@@ -324,23 +437,21 @@ _DELETE_STEPS = [
 ]
 
 
-async def test_a_delete_step_does_not_open_a_research_round(driver: PlanDriver) -> None:
+async def test_a_delete_step_does_not_open_a_research_round(
+    driver: PlanDriver, workspace: Path
+) -> None:
     """Sul Titan (26/10) gli aiutanti che verificavano prima della cancellazione
     hanno scritto le loro condizioni sotto To research, e il cancello ha fatto
     partire tre ricercatori a pagine già cancellate. Chi cancella non ha pagine
-    da riempire: i buchi vanno al controllo senza fermare il passo."""
-    assert "card" in await propose(driver, "Pulizia", _DELETE_STEPS)
-    plan = driver.store.open_plan_for("piante")
-    await driver.approve(plan.id, plan.version, [])
-    plan = await _to_step_two(driver, driver.store.load(plan.id))
+    da riempire: i buchi vanno nella lista senza fermare il passo."""
+    plan = await _to_step_two(driver, await _approve_steps(driver, _DELETE_STEPS))
     assert plan.steps[1].kind == "delete"
     await _report(driver, plan, _GAPS, step="s2", lineage="ver1")
     assert "closed" in await driver.step_done(KEY, "70 pagine via")
     plan = driver.store.load(plan.id)
     assert plan.steps[1].status == "done" and "gaps_gate" not in plan.steps[1].extra
-    assert plan.steps[2].extra["carried_gaps"] == [
-        {"step": "Butto le pagine vecchie", "items": ["felce: umidità ideale", "cactus: vaso"]}
-    ]
+    assert plan.extra.get("research_rounds", 0) == 0
+    assert "s2 «Butto le pagine vecchie»" in _open_gaps_file(workspace)
 
 
 async def test_a_report_arriving_while_blocked_still_counts(driver: PlanDriver) -> None:
@@ -354,37 +465,5 @@ async def test_a_report_arriving_while_blocked_still_counts(driver: PlanDriver) 
         "ed1": ["felce: umidità ideale", "cactus: vaso"]
     }
     await driver.answer(plan.id, "sì")
-    assert (await driver.step_done(KEY, "fatto")).startswith("Not closed yet")
-
-
-async def test_researchers_for_carried_gaps_make_the_check_steps_round(
-    driver: PlanDriver,
-) -> None:
-    plan = await _to_step_two(driver, await _approve(driver))
-    await _report(driver, plan, _GAPS, step="s2")
-    await _researcher(driver, plan, step="s2")
-    await _report(driver, plan, "To research:\n- glicine: muffa", step="s2", task_id="t2")
-    await driver.step_done(KEY, "fatto")
-    await driver.on_turn_end(KEY, {})
-    plan = driver.store.load(plan.id)
-    assert plan.steps[2].status == "now" and plan.steps[2].extra["carried_gaps"]
-    # Il ricercatore dei buchi riportati segna il giro anche senza buchi del passo.
-    await _researcher(driver, plan, step="s3", task_id="r9")
-    assert driver.store.load(plan.id).steps[2].extra["gaps_round"] is True
-    await _report(driver, plan, "To research:\n- pothos: luce", step="s3", lineage="ed7")
-    assert "closed" in await driver.step_done(KEY, "controllato")
-
-
-async def test_the_round_does_not_carry_into_the_next_step(driver: PlanDriver) -> None:
-    plan = await _to_step_two(driver, await _approve(driver))
-    await _report(driver, plan, _GAPS, step="s2")
-    await _researcher(driver, plan, step="s2")
-    await driver.step_done(KEY, "fatto")
-    await driver.on_turn_end(KEY, {})
-    plan = driver.store.load(plan.id)
-    assert plan.steps[2].status == "now" and "gaps_round" not in plan.steps[2].extra
-    # Sul passo di controllo, l'ultimo: il giro c'è, il passo si chiude e non
-    # c'è nessun passo dopo a cui riportare.
-    await _report(driver, plan, _GAPS, step="s3", lineage="ed9")
-    await _researcher(driver, plan, step="s3", task_id="r2")
-    assert "closed" in await driver.step_done(KEY, "controllato")
+    # Il passo 1 è di ricerca: non apre giri, i buchi vanno in lista.
+    assert "closed" in await driver.step_done(KEY, "fatto")

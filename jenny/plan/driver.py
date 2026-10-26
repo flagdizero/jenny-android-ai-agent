@@ -66,7 +66,6 @@ from jenny.plan.model import (
     PlanValidationError,
     Step,
     apply_transition,
-    check_warnings,
     current_step,
     drafting_expired,
     drafting_view,
@@ -95,6 +94,7 @@ from jenny.session.history_meta import (
     PLAN_TURN_EVENTS,
 )
 from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+from jenny.utils.path import atomic_write
 
 #: I quattro tool del modello. Stanno qui perché a decidere quando si vedono è
 #: il driver (``AgentLoop`` chiede :meth:`PlanDriver.step_open`).
@@ -130,26 +130,31 @@ _NUDGE_USED = "used"
 # del passo: ``{lineage: [voci]}``, e vale l'ultimo resoconto di ogni lineage —
 # un editor rimandato indietro con ``subagent_send`` che non ne riporta più li
 # azzera. Il cancello di ``plan_step_done`` è uno solo per passo, come il
-# promemoria: rifiuta una volta con i buchi aperti, la seconda chiamata passa
-# (i buchi cercati e rimasti vuoti, o fuori dal piano, li spiega la nota).
+# promemoria: rifiuta una volta con i buchi aperti, la seconda chiamata passa.
 _GAPS = "gaps"
 _GAPS_GATE = "gaps_gate"
 _GAPS_GATE_USED = "used"
-# Un giro di ricerca c'è già stato nel passo: il resoconto di un ``researcher``
-# arrivato mentre il passo aveva buchi aperti. Allora il cancello non rifiuta:
-# nella prova A del 24/10 il cancello scattava sui buchi *nuovi* degli editor
-# rimandati, dopo il primo giro, e ogni passo pagava un secondo giro in fila
-# (12-13 minuti di ricercatore più una ripresa). Quei buchi non si perdono:
-# vanno al passo di controllo, sotto ``_CARRIED_GAPS``, e si cercano lì tutti
-# insieme.
-_GAPS_ROUND = "gaps_round"
-_CARRIED_GAPS = "carried_gaps"
-# I lineage dei ricercatori che hanno già riportato nel passo: i loro buchi non
-# fanno un giro per un altro ricercatore.
+# I lineage dei ricercatori che hanno riportato nel passo (per la scheda e i log).
 _RESEARCH_LINEAGES = "research_lineages"
-# Quante voci riportate al controllo, al massimo: un elenco più lungo non è
-# più un giro di ricerca ma un altro piano.
-_MAX_CARRIED_ITEMS = 40
+# **Il budget di ricerca del piano.** La ricerca dentro un piano è pianificata
+# (i passi ``research``); quella reattiva — il giro che il cancello chiede quando
+# gli aiutanti riportano buchi — ha un tetto per **piano**, non per passo. Sul
+# Titan (26/10) i giri sono stati sei, da 15-18 minuti l'uno (ricercatori più
+# pagine rimandate agli editor), su un piano di 8 passi: 70 dei 170 minuti. Due
+# è un giro e una riserva. L'unica porta che spende il budget è il rifiuto del
+# cancello in ``_close_step``; a budget finito il cancello rifiuta lo stesso una
+# volta, ma per far scrivere «non documentato» nelle pagine, non per cercare.
+# Il conto sta nell'``extra`` del piano.
+_RESEARCH_ROUNDS = "research_rounds"
+MAX_RESEARCH_ROUNDS = 2
+# I buchi che restano alla chiusura di un passo (budget finito, o un passo che
+# non apre giri) non si ereditano: fino al 26/10 andavano al passo di controllo
+# — o all'ultimo passo qualunque fosse, e sul Titan «Riscrivi i drawer» ha
+# ricevuto 7 temi di ricerca — e lì si pagava un altro giro. Ora vanno in un
+# file del quaderno, che la pianificazione successiva legge, e nelle pagine come
+# «non documentato». Scritto prima della foto di fine passo: il ritorno lo toglie.
+OPEN_GAPS_PATH = "raw/notes/open-gaps.md"
+_GAPS_LISTED = "gaps_listed"
 
 # Il controllo a macchina del passo ``check`` (``jenny/plan/audit.py``),
 # nell'``extra`` del passo: il giro (1 all'apertura, 2 dopo il primo rifiuto),
@@ -171,8 +176,9 @@ _RUNNING = frozenset({"running", "pausing"})
 _REPORTING = _RUNNING | frozenset({"blocked"})
 # I passi che non aprono mai un giro di ricerca: chi cancella o controlla non ha
 # pagine da riempire, e i «buchi» dei suoi aiutanti sono condizioni da sapere,
-# non lacune della wiki (Titan, 26/10: tre ricercatori dopo la cancellazione).
-_NO_ROUND_KINDS = frozenset({"delete", "check"})
+# non lacune della wiki (Titan, 26/10: tre ricercatori dopo la cancellazione);
+# un passo di ricerca previsto è già la ricerca, e non ne chiede un'altra.
+_NO_ROUND_KINDS = frozenset({"delete", "check", "research"})
 
 # Per quanto un ``plan_propose`` dopo un annullamento riceve «fermati»: il turno
 # che stava pianificando, non uno di domani.
@@ -1031,9 +1037,6 @@ class PlanDriver:
         warnings = order_warnings(proposal.steps)
         if warnings:
             text += "\n\nNote on the order: " + " ".join(warnings)
-        checks = check_warnings(proposal.steps)
-        if checks:
-            text += "\n\nNote on the check: " + " ".join(checks)
         return text
 
     async def step_done(self, session_key: str | None, note: Any) -> str:
@@ -1102,26 +1105,39 @@ class PlanDriver:
             step_id = step.id
             gaps = _open_gaps(step)
             gate_used = step.extra.get(_GAPS_GATE) == _GAPS_GATE_USED
-            if outcome == "done" and gaps and (
-                step.extra.get(_GAPS_ROUND) or step.kind in _NO_ROUND_KINDS
-            ):
-                # Il giro di ricerca del passo c'è stato (o il passo non ne apre,
-                # ``_NO_ROUND_KINDS``): i buchi ancora aperti passano al
-                # controllo invece di fermare il passo per un secondo giro. Anche
-                # se il cancello aveva già rifiutato una volta: quel rifiuto ha
-                # forzato il giro, e i buchi di dopo restano da cercare.
-                await self._carry_gaps(plan, step, gaps)
-            elif outcome == "done" and gaps and not gate_used:
-                # Un aiutante ha riportato buchi e il passo si chiude come se
-                # niente fosse: la prova 3 li ha lasciati «non documentati» nelle
-                # pagine. Una volta sola, come il promemoria: la seconda chiamata
-                # passa, perché un buco cercato e rimasto vuoto è un esito vero.
-                def _gate(p: Plan) -> None:
-                    _find(p, step_id).extra[_GAPS_GATE] = _GAPS_GATE_USED
+            listed = 0
+            if outcome == "done" and gaps:
+                if gate_used or step.kind in _NO_ROUND_KINDS:
+                    # Il cancello ha già rifiutato una volta (il giro c'è stato,
+                    # o il budget era finito), o il passo non apre giri: quel
+                    # che resta va nella lista del quaderno, non al passo dopo.
+                    listed = await self._list_gaps(plan, step, gaps)
+                else:
+                    # Un aiutante ha riportato buchi e il passo si chiude come se
+                    # niente fosse: la prova 3 li ha lasciati «non documentati»
+                    # nelle pagine. Una volta sola, come il promemoria: la
+                    # seconda chiamata passa. Cosa chiede il rifiuto lo dice il
+                    # budget del piano: un giro di ricerca finché ce n'è, poi
+                    # «scrivi non documentato».
+                    rounds = _research_rounds(plan)
+                    spend = rounds < MAX_RESEARCH_ROUNDS
 
-                await asyncio.to_thread(self.store.update, plan.id, _gate)
-                logger.info("Plan {}: step {} close refused once, gaps open", plan.id, step_id)
-                return _gaps_refusal(gaps)
+                    def _gate(p: Plan) -> None:
+                        _find(p, step_id).extra[_GAPS_GATE] = _GAPS_GATE_USED
+                        if spend:
+                            p.extra[_RESEARCH_ROUNDS] = rounds + 1
+
+                    await asyncio.to_thread(self.store.update, plan.id, _gate)
+                    logger.info(
+                        "Plan {}: step {} close refused once, gaps open ({})",
+                        plan.id, step_id,
+                        f"research round {rounds + 1} of {MAX_RESEARCH_ROUNDS}"
+                        if spend else "research budget used",
+                    )
+                    return (
+                        _gaps_refusal(gaps, round_=rounds + 1)
+                        if spend else _gaps_budget_used(gaps)
+                    )
             refusal = await self._recheck(plan, step, outcome)
             if refusal is not None:
                 return refusal
@@ -1160,6 +1176,10 @@ class PlanDriver:
         last = next_pending_step(plan) is None
         n = _position(plan, step_id)
         verb = "closed" if outcome == "done" else "skipped"
+        tail = (
+            f" {listed} gap(s) of this step went to `{OPEN_GAPS_PATH}`: tell the user in one "
+            "sentence what stays missing."
+        ) if listed else ""
         # Corto apposta, anche l'ultimo: fra la chiamata e la fine del turno la
         # scheda è «in corso» senza un passo, e il tempo è quello che il modello
         # passa a scrivere. Il riepilogo del piano è la scheda stessa.
@@ -1170,10 +1190,12 @@ class PlanDriver:
                 "short sentences for the user; the plan card already lists what was done."
                 + (f" The code's check still finds {left} thing(s) to fix: say so plainly."
                    if left else "")
+                + tail
             )
         return (
             f"Step {n} {verb}. The code takes it from here: end your turn now, with at most "
             "one short sentence for the user. Do not start the next step: it opens by itself."
+            + tail
         )
 
     async def blocked(self, session_key: str | None, question: Any) -> str:
@@ -1476,31 +1498,56 @@ class PlanDriver:
 
     # ── hook del loop ──────────────────────────────────────────────────────
 
-    async def _carry_gaps(self, plan: Plan, step: Step, gaps: Mapping[str, list[str]]) -> None:
-        """I buchi rimasti di *step* nell'``extra`` del passo di controllo che viene dopo.
+    async def _list_gaps(self, plan: Plan, step: Step, gaps: Mapping[str, list[str]]) -> int:
+        """I buchi rimasti di *step* in ``raw/notes/open-gaps.md`` del quaderno. Quanti nuovi.
 
-        Senza un controllo dopo (il passo è lui, o il piano non ne ha) non si
-        riporta niente: il passo si chiude, e la sua nota dice cosa resta.
+        Un file solo, una sezione per passo (data, piano, passo), una riga per
+        voce; una voce già nel file (stesso testo, spazi normalizzati) non si
+        riscrive. Scritto qui, sotto il lock e **prima** della foto di fine
+        passo (``_settle_closed``): è lavoro del passo, e il ritorno lo toglie.
+        Senza la radice del quaderno non si scrive niente, e lo si dice.
         """
-        target = _carry_target(plan, step)
-        if target is None:
-            return
-        items = [item for lineage_items in gaps.values() for item in lineage_items]
-        target_id, origin = target.id, step.title
+        items: list[str] = []
+        for lineage_items in gaps.values():
+            for item in lineage_items:
+                if item not in items:
+                    items.append(item)
+        root = self.host.notebook_root(plan.notebook)
+        if root is None:
+            logger.warning("Plan {}: notebook root missing, {} gap(s) not listed", plan.id, len(items))
+            return 0
+        title, step_id, step_title = plan.title, step.id, step.title
+
+        def _write() -> int:
+            path = root / OPEN_GAPS_PATH
+            existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+            known = {_norm(line[2:]) for line in existing.splitlines() if line.startswith("- ")}
+            fresh = [item for item in items if _norm(item) not in known]
+            if not fresh:
+                return 0
+            head = "" if existing else (
+                "# Open gaps\n\nFacts the plans could not find, step by step: searched and "
+                "not found, or left for later. The pages say \"not documented\" where they "
+                "belong; the next plan reads this list and plans research for what it needs.\n"
+            )
+            section = (
+                f"\n## {now_iso()[:10]} — {title} — {step_id} «{step_title}»\n\n"
+                + "".join(f"- {item}\n" for item in fresh)
+            )
+            atomic_write(path, existing + head + section)
+            return len(fresh)
+
+        count = await asyncio.to_thread(_write)
 
         def _apply(p: Plan) -> None:
-            t = _find(p, target_id)
-            carried = [c for c in t.extra.get(_CARRIED_GAPS) or () if isinstance(c, dict)]
-            room = _MAX_CARRIED_ITEMS - sum(len(c.get("items") or ()) for c in carried)
-            if room > 0:
-                carried.append({"step": origin, "items": items[:room]})
-                t.extra[_CARRIED_GAPS] = carried
+            _find(p, step_id).extra[_GAPS_LISTED] = items
 
         await asyncio.to_thread(self.store.update, plan.id, _apply)
         logger.info(
-            "Plan {}: {} gap(s) of step {} carried to step {}",
-            plan.id, len(items), step.id, target_id,
+            "Plan {}: {} gap(s) of step {} listed in {} ({} new)",
+            plan.id, len(items), step_id, OPEN_GAPS_PATH, count,
         )
+        return len(items)
 
     def _revises_a_plan_of(self, notebook: str, drafting: Mapping[str, Any]) -> bool:
         """La pianificazione rivede un piano di questo quaderno, che ha già guardato.
@@ -1540,8 +1587,9 @@ class PlanDriver:
         resoconto del lineage sostituisce quello prima: senza buchi, li toglie.
         ``True`` se i buchi del passo sono cambiati.
 
-        Il resoconto di un ``researcher`` (*agent_type*) arrivato con buchi
-        d'altri aperti segna il giro di ricerca del passo (``_GAPS_ROUND``).
+        Il resoconto di un ``researcher`` (*agent_type*) non porta buchi: i suoi
+        **To research** sono il suo esito. Il suo lineage si registra
+        (``_RESEARCH_LINEAGES``) per la scheda e i log.
         """
         live = self._index.get(session_key)
         if not isinstance(content, str) or live is None or live.status not in _REPORTING:
@@ -1588,18 +1636,6 @@ class PlanDriver:
             ]
             if is_researcher and key not in researchers:
                 researchers.append(key)
-            # Un giro è la ricerca dei buchi *di altri*: degli editor, o quelli
-            # che i passi prima hanno riportato a questo. I buchi di un altro
-            # ricercatore dello stesso lancio no: in un passo di ricerca previsto
-            # due ricercatori che arrivano uno dopo l'altro non sono un giro.
-            research_round = (
-                is_researcher
-                and not step.extra.get(_GAPS_ROUND)
-                and (
-                    any(k != key and k not in researchers for k in gaps)
-                    or bool(step.extra.get(_CARRIED_GAPS))
-                )
-            )
             new_researcher = is_researcher and key not in (
                 step.extra.get(_RESEARCH_LINEAGES) or ()
             )
@@ -1607,7 +1643,7 @@ class PlanDriver:
                 gaps[key] = items
             elif key in gaps:
                 del gaps[key]
-            elif not research_round and not new_researcher:
+            elif not new_researcher:
                 return False
             step_id = step.id
 
@@ -1617,8 +1653,6 @@ class PlanDriver:
                     s.extra[_GAPS] = gaps
                 else:
                     s.extra.pop(_GAPS, None)
-                if research_round:
-                    s.extra[_GAPS_ROUND] = True
                 if is_researcher:
                     s.extra[_RESEARCH_LINEAGES] = researchers
 
@@ -2588,7 +2622,7 @@ class PlanDriver:
             s.photo_after = None
             for key in (_NUDGE, _PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION,
                         _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE,
-                        _GAPS_ROUND, _RESEARCH_LINEAGES, _MACHINE):
+                        _GAPS_LISTED, _RESEARCH_LINEAGES, _MACHINE):
                 s.extra.pop(key, None)
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _open)
@@ -2602,7 +2636,7 @@ class PlanDriver:
         if step.kind == "check":
             audit = await asyncio.to_thread(self._run_audit, plan, step)
             if audit is not None:
-                if not audit.findings and not (lost and lost.total) and not _carried(step):
+                if not audit.findings and not (lost and lost.total):
                     await self._close_by_machine(plan, step_id, audit)
                     return
                 plan = await self._note_machine(plan, step_id, _machine_view(audit, round_=1))
@@ -2831,8 +2865,6 @@ class PlanDriver:
                 {"page": f.page, "fact": f.fact, "context": f.context} for f in lost.items
             ] if lost is not None and not reminder else [],
             lost_total=lost.total if lost is not None else 0,
-            # I buchi che i passi prima hanno lasciato dopo il loro giro di
-            # ricerca (``_carry_gaps``): solo nel passo di controllo.
             # Il controllo a macchina del passo ``check`` (:meth:`_run_audit`):
             # la lista da riparare al posto della verifica libera.
             repair=repair,
@@ -2844,11 +2876,6 @@ class PlanDriver:
                 {"task_id": str(h.get("task_id") or ""), "label": str(h.get("label") or ""),
                  "agent_type": str(h.get("agent_type") or "")}
                 for h in interrupted or ()
-            ] if not reminder else [],
-            carried_gaps=[
-                {"step": str(c.get("step") or ""), "lines": [str(i) for i in c.get("items") or ()]}
-                for c in step.extra.get(_CARRIED_GAPS) or ()
-                if isinstance(c, dict) and c.get("items")
             ] if not reminder else [],
         )
         return InboundMessage(
@@ -3195,8 +3222,21 @@ def plan_view(plan: Plan) -> dict[str, Any]:
     current = current_step(plan)
     photos = plan.photos
     data = plan.to_dict()
+    # Cosa fa il passo, per la scheda: i buchi aperti del passo in corso, quelli
+    # messi in lista, e quanto budget di ricerca resta al piano (26/10: «aperto
+    # da 47 minuti» senza dire che era un giro di ricerca).
+    for raw_step, step in zip(data["steps"], plan.steps):
+        raw_step["gaps_open"] = (
+            sum(len(v) for v in _open_gaps(step).values())
+            if step.status in ("now", "blocked") else 0
+        )
+        listed = step.extra.get(_GAPS_LISTED)
+        raw_step["gaps_listed"] = len(listed) if isinstance(listed, list) else 0
+    rounds = _research_rounds(plan)
     data.update(
         {
+            "research_rounds": rounds,
+            "rounds_left": max(0, MAX_RESEARCH_ROUNDS - rounds),
             "done": counts["finished"],
             "total": counts["total"],
             "current_step_id": current.id if current is not None else None,
@@ -3211,40 +3251,31 @@ def plan_view(plan: Plan) -> dict[str, Any]:
     return data
 
 
-def _carry_target(plan: Plan, step: Step) -> Step | None:
-    """Il passo di controllo dopo *step* che riceve i suoi buchi rimasti, se c'è."""
-    active = _active_steps(plan)
-    ids = [s.id for s in active]
-    if step.id not in ids:
-        return None
-    for later in active[ids.index(step.id) + 1:]:
-        if later.status == "pending" and _checks_facts(plan, later):
-            return later
-    return None
-
-
 def _checks_facts(plan: Plan, step: Step) -> bool:
-    """*step* è quello in cui si controllano i fatti persi.
+    """*step* è quello in cui si controllano i fatti persi: il passo ``check``.
 
-    Ogni passo ``check`` della lista; se non ce n'è nessuno, l'ultimo passo.
+    Fino al 26/10, senza un ``check``, era l'ultimo passo qualunque fosse: sul
+    Titan «Riscrivi i drawer» ha ricevuto i fatti persi e 7 temi di ricerca.
+    Ora una proposta senza ``check`` in fondo è rifiutata (``validate_proposal``).
     """
-    active = _active_steps(plan)
-    if any(s.kind == "check" for s in active):
-        return step.kind == "check"
-    return bool(active) and active[-1].id == step.id
+    return step.kind == "check"
+
+
+def _research_rounds(plan: Plan) -> int:
+    """Quanti giri di ricerca il piano ha già speso (``_RESEARCH_ROUNDS``)."""
+    raw = plan.extra.get(_RESEARCH_ROUNDS)
+    return raw if isinstance(raw, int) and raw >= 0 else 0
+
+
+def _norm(text: str) -> str:
+    """Una voce normalizzata per il confronto: spazi compressi, minuscole."""
+    return " ".join(text.replace("**", "").split()).strip().lower()
 
 
 def _left_after_check(plan: Plan, step_id: str) -> int:
     """Quanti difetti il controllo a macchina ha lasciato al passo *step_id*, o 0."""
     machine = _find(plan, step_id).extra.get(_MACHINE)
     return int(machine.get("left") or 0) if isinstance(machine, dict) else 0
-
-
-def _carried(step: Step) -> bool:
-    """*step* ha buchi riportati dai passi prima da cercare."""
-    return any(
-        isinstance(c, dict) and c.get("items") for c in step.extra.get(_CARRIED_GAPS) or ()
-    )
 
 
 def _machine_view(audit: Audit, *, round_: int, final: bool = False) -> dict[str, Any]:
@@ -3298,8 +3329,7 @@ def _open_gaps(step: Step) -> dict[str, list[str]]:
     return gaps
 
 
-def _gaps_refusal(gaps: Mapping[str, list[str]]) -> str:
-    """Il rifiuto di ``plan_step_done`` con i buchi aperti: quali, e cosa fare."""
+def _gaps_lines(gaps: Mapping[str, list[str]]) -> list[str]:
     lines = [
         "Not closed yet: helpers of this step reported gaps under **To research** that "
         "are still open. They are part of this step:",
@@ -3307,12 +3337,31 @@ def _gaps_refusal(gaps: Mapping[str, list[str]]) -> str:
     for lineage, items in gaps.items():
         lines.append(f"- helper `{lineage}`:")
         lines.extend(f"  - {item}" for item in items)
+    return lines
+
+
+def _gaps_refusal(gaps: Mapping[str, list[str]], *, round_: int) -> str:
+    """Il rifiuto di ``plan_step_done`` con i buchi aperti e un giro nel budget: cercali."""
+    lines = _gaps_lines(gaps)
     lines.append(
-        "Spawn researchers for them now in this step, a few, grouped by subject; when "
-        "they are done, send the same helper back with `subagent_send` to fill the pages "
-        "from what they saved. If they were already searched and stay empty, or they are "
-        "outside this plan, call `plan_step_done` again and say in the note why they stay "
-        "open. This check runs once per step."
+        f"Research round {round_} of {MAX_RESEARCH_ROUNDS} for this plan: spawn researchers "
+        "for them now in this step, a few, grouped by subject; when they are done, send the "
+        "same helper back with `subagent_send` to fill the pages from what they saved. If they "
+        "were already searched and stay empty, or they are outside this plan, call "
+        "`plan_step_done` again and say in the note why they stay open. This check runs once "
+        "per step; what stays open after it goes to the notebook's open list."
+    )
+    return "\n".join(lines)
+
+
+def _gaps_budget_used(gaps: Mapping[str, list[str]]) -> str:
+    """Il rifiuto a budget finito: niente ricerca, le pagine dicono «non documentato»."""
+    lines = _gaps_lines(gaps)
+    lines.append(
+        f"The plan's research budget ({MAX_RESEARCH_ROUNDS} rounds) is used: do not research "
+        "them. Make sure each page says \"not documented\" with the queries tried, then call "
+        f"`plan_step_done` again: the gaps go to the notebook's open list (`{OPEN_GAPS_PATH}`), "
+        "which the next plan reads."
     )
     return "\n".join(lines)
 

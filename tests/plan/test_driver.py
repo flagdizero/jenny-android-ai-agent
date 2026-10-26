@@ -105,7 +105,7 @@ async def test_propose_writes_a_proposal_and_tells_the_model_to_wait(
 async def test_a_second_proposal_supersedes_the_first(driver: PlanDriver) -> None:
     first = await _propose(driver)
     second = await _propose(
-        driver, [*STEPS[:2], {"title": "Nuovo", "detail": "x", "done_when": "x"}]
+        driver, [*STEPS[:2], {"title": "Nuovo", "detail": "x", "done_when": "x", "kind": "check"}]
     )
     assert second.version == 2 and second.replaces == first.id
     assert driver.store.load(first.id).status == "superseded"

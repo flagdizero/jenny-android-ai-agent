@@ -36,7 +36,7 @@ To repair, by page:
 {% endif %}
 {% endif %}
 
-Give the pages to notebook-editor helpers, grouped by subject (a helper takes a group of pages). Lines left to search, and the gaps below, need researchers first: all of them in one round, then the editors fill the pages from what was saved.
+Give the pages to notebook-editor helpers, grouped by subject (a helper takes a group of pages). Lines left to search are repaired by writing "not documented" with the queries tried: this step starts no research.
 {% else %}
 
 {{ step.detail }}
@@ -58,16 +58,6 @@ This step searches these coverage entries (each one needs its sources saved, or 
 Facts that were in the notebook before this plan and are in no page now{% if lost_total > lost_facts | length %} ({{ lost_facts | length }} shown of {{ lost_total }}){% endif %}. The code compared numbers with units, so it can be wrong: check each one. If it is still true, put it back in the right page; if it went on purpose (wrong, superseded, removed at the user's request), say why in the step note.
 {% for f in lost_facts %}
 - {{ f.page }}: {{ f.fact }} — "{{ f.context }}"
-{% endfor %}
-{% endif %}
-{% if carried_gaps %}
-
-Gaps that earlier steps left open after their round of research. Search them now, all together: a few researchers grouped by subject, in one round. Then fill the pages from what they saved, or say in the step note why a gap stays open.
-{% for c in carried_gaps %}
-- from "{{ c.step }}":
-{% for item in c.lines %}
-  - {{ item }}
-{% endfor %}
 {% endfor %}
 {% endif %}
 {% if interrupted %}

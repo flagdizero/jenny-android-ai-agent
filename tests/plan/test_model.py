@@ -24,7 +24,11 @@ from jenny.plan.model import (
 
 
 def _steps(*titles: str) -> list[dict[str, str]]:
-    return [{"title": t, "detail": f"do {t}", "done_when": f"{t} done"} for t in titles]
+    # L'ultimo passo e' sempre il controllo: dal 26/10 una proposta senza e' rifiutata.
+    steps = [{"title": t, "detail": f"do {t}", "done_when": f"{t} done"} for t in titles]
+    if steps:
+        steps[-1]["kind"] = "check"
+    return steps
 
 
 COV = [{"item": "Acero", "have": "una pagina", "missing": "le cure", "strategy": "notebook"}]
@@ -123,11 +127,12 @@ def test_valid_proposal_is_cleaned_and_numbered() -> None:
             {"title": " Cerco Acero ", "detail": " cerca ", "kind": "research",
              "done_when": " una fonte "},
             {"title": "Scrivo", "detail": "scrivi", "same_as": "s3", "done_when": "scritto"},
+            {"title": "Controllo", "detail": "controllo", "kind": "check", "done_when": "ok"},
         ],
         COV,
     )
     assert proposal.title == "Rifare la wiki"
-    assert [s.id for s in proposal.steps] == ["s1", "s2"]
+    assert [s.id for s in proposal.steps] == ["s1", "s2", "s3"]
     assert proposal.steps[0].title == "Cerco Acero"
     assert proposal.steps[0].detail == "cerca"
     assert proposal.steps[0].kind == "research"
@@ -306,7 +311,13 @@ def _research_plan(detail: str, covers: list[str] | None = None) -> list[dict[st
     return [
         research,
         {"title": "Scrivo", "detail": "scrivo", "kind": "write", "done_when": "pagine scritte"},
+        _CHECK,
     ]
+
+
+_CHECK: dict[str, object] = {
+    "title": "Controllo", "detail": "controllo", "kind": "check", "done_when": "ok",
+}
 
 
 def _cov(**entry: str) -> list[dict[str, str]]:
@@ -459,11 +470,11 @@ def test_new_covers_tag_the_step_changed() -> None:
         "T", _research_plan("cerco", ["c1", "c2"]), coverage
     ).steps
     tag_new_version(old, new)
-    assert [s.tag for s in new] == [None, None]
+    assert [s.tag for s in new] == [None, None, None]
     two = [{**_research_plan("cerco", ["c1"])[0]},
            {"title": "Cerco ancora", "detail": "d", "kind": "research", "done_when": "x",
             "covers": ["c2"]}]
-    newer = validate_proposal("T", [two[0], two[1]], coverage).steps
+    newer = validate_proposal("T", [two[0], two[1], _CHECK], coverage).steps
     tag_new_version(old, newer)
     assert newer[0].tag == "changed"
 
@@ -480,7 +491,7 @@ def test_a_web_item_named_by_a_research_step_is_accepted() -> None:
         "strategy": "web", "why": "il quaderno non ne parla",
     }]
     assert proposal.assumptions == ["Tengo la camelia.", "Cancello le pagine vecchie."]
-    assert [s.done_when for s in proposal.steps] == ["fonti salvate", "pagine scritte"]
+    assert [s.done_when for s in proposal.steps] == ["fonti salvate", "pagine scritte", "ok"]
 
 
 def test_every_step_needs_done_when() -> None:

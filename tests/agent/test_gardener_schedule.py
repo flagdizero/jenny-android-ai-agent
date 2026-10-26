@@ -679,7 +679,8 @@ def test_a_notebook_held_by_a_plan_is_not_gardened(tmp_path, status):
     store = PlanStore.for_workspace(workspace)
     plan = store.create(
         "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a", "done_when": "a"},
-                                               {"title": "b", "detail": "b", "done_when": "b"}],
+                                               {"title": "b", "detail": "b", "done_when": "b",
+                                                "kind": "check"}],
                                      [{"item": "a", "have": "", "missing": "",
                                        "strategy": "notebook"}])
     )
@@ -704,7 +705,8 @@ def test_a_proposal_does_not_hold_the_notebook(tmp_path):
     _project(workspace, "viaggio")
     PlanStore.for_workspace(workspace).create(
         "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a", "done_when": "a"},
-                                               {"title": "b", "detail": "b", "done_when": "b"}],
+                                               {"title": "b", "detail": "b", "done_when": "b",
+                                                "kind": "check"}],
                                      [{"item": "a", "have": "", "missing": "",
                                        "strategy": "notebook"}])
     )

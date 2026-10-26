@@ -164,16 +164,15 @@ async def test_the_check_step_lists_the_facts_the_plan_lost(
     assert "shown of" not in check.content
 
 
-async def test_without_a_check_step_the_last_step_gets_the_block(
-    driver: PlanDriver, workspace: Path, bus: FakeBus
-) -> None:
+async def test_a_plan_without_a_check_step_is_refused(driver: PlanDriver) -> None:
+    """Fino al 26/10 i fatti persi (e i buchi riportati) finivano sull'ultimo passo
+    qualunque fosse: sul Titan «Riscrivi i drawer». Il controllo e' obbligatorio."""
+    from tests.support.plan import propose
+
     steps = [dict(s, kind="write") if s["kind"] == "check" else s for s in STEPS]
-    await _approve(driver, steps)
-    write_file(workspace / "wikis" / "piante", "wiki/felce.md", "# Felce\n")
-    await _close(driver)
-    await _close(driver)
-    *_, last = _step_messages(bus)
-    assert _LOST_HEADER in last.content and "16-24°c" in last.content
+    text = await propose(driver, "Rifare la wiki", steps)
+    assert text.startswith("Error") and "The last step must be a `check`" in text
+    assert driver.store.open_plan_for("piante") is None
 
 
 async def test_nothing_lost_means_no_block(driver: PlanDriver, bus: FakeBus) -> None:

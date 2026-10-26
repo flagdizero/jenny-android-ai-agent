@@ -145,6 +145,11 @@ class Script:
                      "done_when": "la pagina c'è"},
                     {"title": "Scrivo indice", "detail": "wiki/index.md", "kind": "write",
                      "done_when": "l'indice linka le pagine"},
+                    # Dal 26/10 l'ultimo passo e' sempre un ``check``: qui lo chiude il
+                    # copione come gli altri, perche' ``_loop`` spegne il controllo a
+                    # macchina (il quaderno di prova non e' una wiki vera).
+                    {"title": "Controllo", "detail": "repair what the check lists",
+                     "kind": "check", "done_when": "zero link morti"},
                 ],
             )
         return LLMResponse(content="Fatto.")
@@ -158,6 +163,9 @@ def _loop(workspace: Path, script: Script) -> tuple[AgentLoop, PlanDriver]:
     provider.chat_stream_with_retry = script
     loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=workspace, model="test-model")
     driver = PlanDriver(PlanStore.for_workspace(workspace), loop.bus, LoopPlanHost(loop))
+    # Niente controllo a macchina: il quaderno di prova non e' una wiki vera e
+    # il passo ``check`` si comporta come gli altri (lo chiude il copione).
+    driver._run_audit = lambda plan, step: None  # type: ignore[method-assign]
     loop.attach_plan_driver(driver)
     set_plan_probe(driver)
     return loop, driver
@@ -278,15 +286,15 @@ async def test_propose_approve_and_three_steps_to_done(workspace: Path) -> None:
     finally:
         await _stop(loop, task)
     plan = driver.store.load(plan.id)
-    assert [s.status for s in plan.steps] == ["done", "done", "done"]
-    assert [s.note for s in plan.steps] == ["passo 1 scritto", "passo 2 scritto", "passo 3 scritto"]
+    assert [s.status for s in plan.steps] == ["done"] * 4
+    assert [s.note for s in plan.steps] == [f"passo {n} scritto" for n in range(1, 5)]
     assert plan.photos["start"] and plan.photos["end"]
     assert driver.step_files(plan.id, "s2")["added"] == ["wiki/passo2.md"]
     assert driver.changes(plan.id)["added"] == [
-        "wiki/passo1.md", "wiki/passo2.md", "wiki/passo3.md",
+        "wiki/passo1.md", "wiki/passo2.md", "wiki/passo3.md", "wiki/passo4.md",
     ]
     steps_seen = [p for p in script.prompts if "[Plan — step" in p]
-    assert len(steps_seen) == 3
+    assert len(steps_seen) == 4
 
 
 async def test_a_stalled_step_is_reminded_once_then_blocked(workspace: Path) -> None:
@@ -451,7 +459,7 @@ async def test_the_personal_chat_sees_one_line_per_open_plan(workspace: Path) ->
     await loop._process_message(
         InboundMessage(channel="websocket", sender_id="u", chat_id="default", content="a che punto?"),
     )
-    assert 'Notebook piante: plan "Rifare la wiki" 0/3, proposed.' in script.prompts[-1]
+    assert 'Notebook piante: plan "Rifare la wiki" 0/4, proposed.' in script.prompts[-1]
 
 
 def test_plan_tools_are_registered_in_both_scopes() -> None:
@@ -907,9 +915,12 @@ async def test_a_helper_report_of_the_open_step_records_its_gaps(workspace: Path
     # Lo stesso aiutante, rimandato indietro, arriva a metà di un altro turno.
     await _dispatch(loop, _user("come va?"), _report("t2", "Pagine riempite."))
     assert "gaps" not in driver.store.load(plan.id).steps[0].extra
-    # Il resoconto di un ricercatore con buchi d'altri aperti segna il giro.
+    # Il resoconto di un ricercatore registra il suo lineage, e i suoi
+    # «To research» non sono buchi del passo.
     await loop._process_message(_report("t3", "Fatto.\n\n**To research**\n- felce: vaso"))
-    researcher = _report("t4", "Salvate due fonti.")
+    researcher = _report("t4", "Salvate due fonti.\n\nTo research:\n- nulla di nuovo")
     researcher.metadata.update({"subagent_lineage_id": "rs1", "subagent_agent_type": "researcher"})
     await loop._process_message(researcher)
-    assert driver.store.load(plan.id).steps[0].extra["gaps_round"] is True
+    extra = driver.store.load(plan.id).steps[0].extra
+    assert extra["research_lineages"] == ["rs1"]
+    assert extra["gaps"] == {"ed1": ["felce: vaso"]}

@@ -667,6 +667,17 @@ def validate_proposal(
             )
         )
 
+    if clean and clean[-1].kind != "check":
+        # Il controllo a macchina di fine piano vive nel passo ``check``: dead
+        # link, fonti, bacheca, righe «da cercare», fatti persi, i buchi messi in
+        # lista. Era un avviso in coda al risultato (``check_warnings``), e il
+        # piano del Titan (26/10) è partito senza: nessun controllo, e i fatti
+        # persi finiti sull'ultimo passo qualunque fosse.
+        problems.append(
+            "The last step must be a `check`: the code checks the notebook there (dead "
+            "links, sources, the board, lines left to search, lost facts) and gives you only "
+            "what to repair. Add a final `check` step."
+        )
     clean_coverage = _validate_coverage(coverage, clean, problems)
     clean_assumptions = _validate_assumptions(assumptions, problems)
     if problems:
@@ -791,22 +802,6 @@ def _validate_expect(
     if folders:
         out["folders"] = folders
     return out
-
-
-def check_warnings(steps: Iterable[Step]) -> list[str]:
-    """L'avviso di una proposta senza ``check`` in fondo: il controllo a macchina vive lì.
-
-    Un avviso e non un rifiuto, come :func:`order_warnings`: il piano è valido
-    lo stesso, ma senza un passo ``check`` alla fine nessuno ripara quel che il
-    controllo di fine piano trova.
-    """
-    ordered = list(steps)
-    if not ordered or ordered[-1].kind == "check":
-        return []
-    return [
-        "the last step is not a `check`. The code checks the notebook in that step and "
-        "gives you only what to repair: propose again with a final `check` step."
-    ]
 
 
 def _validate_coverage(

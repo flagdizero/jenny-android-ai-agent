@@ -188,11 +188,11 @@ async def test_a_restart_on_the_check_step_checks_again_from_the_first_round(
     assert fresh.store.load(plan.id).steps[-1].extra["machine_check"]["round"] == 1
 
 
-async def test_a_plan_without_a_final_check_gets_a_note(driver: PlanDriver) -> None:
+async def test_a_plan_without_a_final_check_is_refused(driver: PlanDriver) -> None:
     steps = [dict(s) for s in STEPS[:2]]
     text = await propose(driver, "Rifare la wiki", steps)
-    assert "Note on the check" in text
-    assert "Note on the check" not in await propose(driver, "Rifare la wiki", STEPS)
+    assert text.startswith("Error") and "Add a final `check` step" in text
+    assert "card" in await propose(driver, "Rifare la wiki", STEPS)
 
 
 def test_expect_is_only_for_the_check_step_and_stays_inside() -> None:
