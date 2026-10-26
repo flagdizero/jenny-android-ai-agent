@@ -95,8 +95,8 @@ Rules:
 - This may be a second run of the step (after a restart): look at what is already there and do not duplicate it.
 - When it is finished, call `plan_step_done` with a one-line note of what changed (for example "3 pages written, 1 source discarded").
 - If there is nothing to do, call `plan_step_skip` with the honest reason.
-- If you need the user — a choice, a fact only they know, a permission — call `plan_blocked` with one clear question, and stop there. A fact the web can give is not a question for them: research it.
-- If a premise of the plan proves false (sources that are not there, an item that does not exist, a file different from what the plan says) and the later steps would come out poor, do not go on knowing it: stop with `plan_blocked`, saying what you found and what you propose.
+- If you need the user — a choice, a fact only they know, a permission — call `plan_blocked` with what they must decide (one clear question, or the decisions numbered), and stop there. What you did and found goes in your reply, not in the question. A fact the web can give is not a question for them: research it.
+- If a premise of the plan proves false (sources that are not there, an item that does not exist, a file different from what the plan says) and the later steps would come out poor, do not go on knowing it: stop with `plan_blocked`: say what you found in your reply, and ask in the question whether to go on as you propose.
 - Close the step only when its "done when" holds. If a change waits for the user's approval (a draft), still call `plan_step_done`: the code holds the step until they decide.
 - Keep your words to the user short: the plan card already shows the list and the progress.
 {% endif %}

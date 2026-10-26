@@ -212,7 +212,12 @@ HELD_WAKE_TEXT = (
 )
 
 _MAX_NOTE = 500
-_MAX_QUESTION = 1000
+# La domanda di `plan_blocked` va sulla scheda intera: oltre il tetto si
+# rifiuta, mai si taglia. Fino al 26/10 era `[:1000]` muto, e sul Titan una
+# seconda domanda era sparita dalla scheda senza che Jenny o l'utente lo
+# sapessero. Il tetto non e' una regola di stile (quella sta nel tool): e' la
+# guardia contro un testo anomalo, un file incollato nella domanda.
+_MAX_QUESTION = 4000
 _MAX_ANSWER = 8000
 
 # Nell'``extra`` di un passo fermo sulle sue bozze: come il modello l'ha chiuso
@@ -1152,7 +1157,14 @@ class PlanDriver:
             return "Error: `question` must say, in one clear sentence, what you need from the user."
         if not session_key or (live := self._index.get(session_key)) is None:
             return "Error: there is no plan step open in this conversation."
-        text = question.strip()[:_MAX_QUESTION]
+        text = question.strip()
+        if len(text) > _MAX_QUESTION:
+            return (
+                f"Error: the question is {len(text)} characters, the limit is {_MAX_QUESTION}. "
+                "Nothing was stored and the plan is still on this step. Put the report in your "
+                "reply to the user and keep in `question` only what they must decide, numbered "
+                "if more than one."
+            )
         async with self._lock(session_key):
             try:
                 plan = await asyncio.to_thread(self.store.load, live.plan_id)
@@ -1178,8 +1190,9 @@ class PlanDriver:
                 self._remember(plan)
         await self._changed(plan)
         return (
-            "The plan now waits for the user; your question is on the plan card. End your "
-            "turn: ask it in one sentence, and do nothing else on the plan until they answer."
+            "The plan now waits for the user; your question is on the plan card, whole. End "
+            "your turn with a short reply: what you found, and that the plan waits for their "
+            "answer. Do nothing else on the plan until they answer."
         )
 
     # ── risveglio unico per passo ──────────────────────────────────────────

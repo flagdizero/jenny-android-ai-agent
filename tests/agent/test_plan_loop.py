@@ -466,6 +466,17 @@ def test_plan_tools_are_registered_in_both_scopes() -> None:
     json.dumps([cls().parameters for cls in TOOLS])
 
 
+def test_plan_blocked_asks_for_decisions_not_a_report() -> None:
+    """Sul Titan la domanda era un resoconto di 1700 caratteri con due domande dentro:
+    il tool chiede le decisioni, numerate, e manda il resoconto nella risposta."""
+    from jenny.agent.tools.plan import PlanBlockedTool
+
+    tool = PlanBlockedTool()
+    question = tool.parameters["properties"]["question"]["description"]
+    assert "numbered" in question and "Not a report" in question
+    assert "in your reply" in tool.description
+
+
 async def test_a_stale_step_message_is_not_judged_as_a_stall(workspace: Path) -> None:
     """Il passo 1 è rimasto sul bus mentre l'utente metteva in pausa e riprendeva:
     scartarlo non deve far partire il promemoria del passo 2."""

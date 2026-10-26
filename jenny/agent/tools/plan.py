@@ -237,7 +237,10 @@ class PlanStepSkipTool(PlanTool):
 
 @tool_parameters(
     tool_parameters_schema(
-        question=StringSchema("The one clear question the user must answer to go on."),
+        question=StringSchema(
+            "What the user must decide to go on: one clear question, or the decisions "
+            "numbered if there are several. Not a report."
+        ),
         required=["question"],
     )
 )
@@ -252,8 +255,9 @@ class PlanBlockedTool(PlanTool):
     def description(self) -> str:
         return (
             "Stop the plan on the current step because you need the user: a choice, a "
-            "missing fact, a permission. The question goes on the plan card; their answer "
-            "restarts the step."
+            "missing fact, a permission. The question goes on the plan card, whole, and "
+            "their answer restarts the step. What you did and found goes in your reply to "
+            "the user, not in the question."
         )
 
     async def execute(self, question: Any = None, **kwargs: Any) -> str:

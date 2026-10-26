@@ -368,6 +368,26 @@ async def test_blocked_then_answer_restarts_the_step(driver: PlanDriver, bus: Fa
     assert answer.metadata[PLAN_ANSWER_META] == plan.id
 
 
+async def test_a_long_question_is_stored_whole(driver: PlanDriver) -> None:
+    """Fino al 26/10 la domanda si tagliava a 1000 caratteri in silenzio: sul Titan una
+    seconda domanda e' sparita dalla scheda. Fino al tetto entra intera."""
+    plan = await _approve(driver)
+    question = "1. Cancello la camelia?\n" + "x" * 3900 + "\n2. E la frase dei 2,8 m?"
+    assert len(question) <= 4000
+    await driver.blocked(KEY, question)
+    assert driver.store.load(plan.id).blocked["question"] == question
+
+
+async def test_a_question_over_the_cap_is_refused_not_cut(driver: PlanDriver) -> None:
+    """Oltre il tetto il piano non si ferma: Jenny riceve l'errore e accorcia."""
+    plan = await _approve(driver)
+    text = await driver.blocked(KEY, "y" * 4001)
+    assert text.startswith("Error:") and "4001" in text and "reply" in text
+    plan = driver.store.load(plan.id)
+    assert plan.status == "running" and plan.blocked is None
+    assert driver.step_open(KEY)
+
+
 async def test_a_message_typed_while_blocked_is_the_answer(driver: PlanDriver) -> None:
     plan = await _approve(driver)
     await driver.blocked(KEY, "Quale acero?")

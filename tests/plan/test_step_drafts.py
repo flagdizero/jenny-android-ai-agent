@@ -347,6 +347,19 @@ async def test_a_question_behind_drafts_comes_after_them(
     assert driver.store.load(plan.id).status == "running"
 
 
+async def test_a_question_over_the_cap_is_refused_even_behind_drafts(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """Il ramo delle bozze teneva la domanda in attesa gia' tagliata: ora il rifiuto
+    viene prima, e le bozze non fermano il passo per una domanda che non c'e'."""
+    plan = await _running(driver)
+    _stage(workspace)
+    text = await driver.blocked(KEY, "z" * 4001)
+    assert text.startswith("Error:")
+    plan = driver.store.load(plan.id)
+    assert plan.status == "running" and plan.blocked is None
+
+
 async def test_a_stalled_step_with_drafts_waits_on_them_first(
     driver: PlanDriver, workspace: Path
 ) -> None:
