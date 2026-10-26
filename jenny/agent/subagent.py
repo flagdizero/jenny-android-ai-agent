@@ -481,6 +481,22 @@ def _plan_metadata() -> tuple[str | None, str | None]:
     )
 
 
+def _restamped(spec: SubagentSpec) -> SubagentSpec:
+    """La spec di un rimando o di un rilancio con il passo del turno **corrente**.
+
+    Un ``subagent_send`` nel passo 7 a un editor nato nel passo 6 e' lavoro del
+    passo 7: col passo di nascita il driver scartava il suo resoconto
+    (``note_step_report``: «un altro passo»), e il resoconto apriva un turno suo
+    invece di aspettare i fratelli. Senza chiavi nel turno la spec resta com'e'.
+    """
+    plan_id, plan_step = _plan_metadata()
+    if not (plan_id or plan_step):
+        return spec
+    if (plan_id, plan_step) == (spec.plan_id, spec.plan_step):
+        return spec
+    return replace(spec, plan_id=plan_id, plan_step=plan_step)
+
+
 def _append_activity(
     log: SubagentActivityLog | None,
     task_id: str,
@@ -1577,6 +1593,21 @@ class SubagentManager:
         plan_id, plan_step = _plan_metadata()
         if plan_id or plan_step:
             spec = replace(spec, plan_id=plan_id, plan_step=plan_step)
+        else:
+            # La spia, non una regola: un aiutante nato in una sessione col
+            # piano in corsa da un turno senza il passo non contera' per il
+            # passo. Sul Titan (26/10) lo si e' letto solo nei record, a mano.
+            # Non si assegna il passo da qui: durante un piano girano anche
+            # turni che non sono suoi, e un aiutante attribuito per sbaglio
+            # terrebbe fermo ``plan_step_done`` e finirebbe nella sua foto.
+            from jenny.session.goal_state import plan_running_in_session
+
+            if plan_running_in_session(session_key):
+                logger.warning(
+                    "Subagent spawned in {} while its plan runs, from a turn without a plan "
+                    "step: its report will not count for the step ({})",
+                    session_key, _task_head(task)[:80],
+                )
         return await self._spawn_spec(spec)
 
     def _session_limit(self, session_key: str | None) -> int | None:
@@ -2400,6 +2431,13 @@ class SubagentManager:
         # Lo stesso per uno fermato da un errore passeggero del provider.
         interrupted = interrupted and resumable
         resumable = (status == "budget" or interrupted) and resumable
+        # Il passo del piano per cui lavorava, e la sua lista **To research**
+        # letta come la legge il driver (``plan.model.to_research_items``): il
+        # template la cercava come sottostringa, e su una lista in linea che il
+        # driver contava zero mandava Jenny a cercare lo stesso (Titan, 26/10).
+        spec_for_plan = self._spec_for_task(task_id)
+        from jenny.plan.model import to_research_items
+
         announce_content = render_template(
             "agent/subagent_announce.md",
             label=label,
@@ -2416,6 +2454,8 @@ class SubagentManager:
             budget_capped=status == "budget" and budget_stops > MAX_BUDGET_RESUMES,
             budget_stops=budget_stops,
             task_id=task_id,
+            research_items=len(to_research_items(result)) if isinstance(result, str) else 0,
+            in_plan=bool(spec_for_plan is not None and spec_for_plan.plan_step),
         )
         metadata: dict[str, Any] = {
             "injected_event": "subagent_result",
@@ -2438,7 +2478,6 @@ class SubagentManager:
         # metadati come contesto della richiesta, e un aiutante che Jenny lancia
         # da li eredita il passo (``_plan_metadata``). Sicuro: un turno di passo si
         # riconosce da ``injected_event``, non da queste chiavi.
-        spec_for_plan = self._spec_for_task(task_id)
         if spec_for_plan is not None and (spec_for_plan.plan_id or spec_for_plan.plan_step):
             from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
 
@@ -2583,6 +2622,11 @@ class SubagentManager:
             # cattura no: non ha un utente che gli dica fatti stabili, e quel che
             # scoprisse va in ``raw/research/`` e in una pagina, non nel diario.
             capture=False,
+            # Il paragrafo sulla ricerca durante un piano e' per chi lancia
+            # aiutanti: un subagent non ne lancia (``has('spawn')`` e' falso), e
+            # qui la chiave di sessione non arriva. Falso, e dichiarato: il
+            # test «ogni variabile e' alimentata» lo pretende.
+            plan_running=False,
             # **T3.9 — la mappa e le pagine, o niente sezione.** Fino a qui le
             # due sezioni di ``agent/project.md`` si rendevano vuote, e in
             # silenzio: Jinja valuta falso un ``{% if %}`` su una variabile
@@ -3069,7 +3113,7 @@ class SubagentManager:
 
         await self._supersede(lineage_id, grace_s=grace_s)
 
-        new_spec = spec.with_extra_instructions(extra_instructions)
+        new_spec = _restamped(spec.with_extra_instructions(extra_instructions))
         if extra_instructions and (turn := current_turn_taint()):
             # La nota correttiva l'ha scritta un turno con contenuto non fidato in
             # vista: il rilancio la porta, e con lei il taint.
@@ -3232,6 +3276,7 @@ class SubagentManager:
         lavoro, e cio' che aveva letto gli serve per finirlo.
         """
         resume_spec = spec if quick is None or quick == spec.quick else replace(spec, quick=quick)
+        resume_spec = _restamped(resume_spec)
         # La storia rimette in contesto ciò che il lavoro aveva letto: se era non
         # fidato, lo è anche la ripresa. Vale anche per quella leggera: il
         # resoconto e la nota vengono dalle stesse letture non fidate.

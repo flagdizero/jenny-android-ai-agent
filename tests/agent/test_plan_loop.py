@@ -866,6 +866,24 @@ async def test_slash_stop_ends_a_planning(workspace: Path) -> None:
         await _stop(loop, task)
 
 
+async def test_the_users_answer_mid_turn_is_deferred_not_injected(workspace: Path) -> None:
+    """Risposta a un piano fermo arrivata mentre gira il turno di un resoconto:
+    iniettata sarebbe chat e il piano resterebbe fermo. Diventa un turno suo."""
+    loop, driver = _loop(workspace, Script(workspace, close_steps=False))
+    plan, _ = await _approved(loop, driver)
+    await driver.blocked(KEY, "Quale acero?")
+    assert driver.awaits_answer(KEY)
+    assert loop._plan_injection(_user("quello rosso"), {}, KEY) == "defer"
+    report = InboundMessage(
+        channel="system", sender_id="subagent", chat_id=f"websocket:{KEY}", content="x",
+        session_key_override=KEY,
+        metadata={INJECTED_EVENT_META: "subagent_result", "subagent_task_id": "t1"},
+    )
+    assert loop._plan_injection(report, {}, KEY) == "inject", "un resoconto passa"
+    await driver.answer(plan.id, "quello rosso")
+    assert loop._plan_injection(_user("e poi?"), {}, KEY) == "inject"
+
+
 async def test_a_helper_report_of_the_open_step_records_its_gaps(workspace: Path) -> None:
     """Il resoconto di un aiutante del passo, col suo turno o iniettato a metà
     turno, porta i buchi **To research** sul passo aperto (``note_step_report``)."""

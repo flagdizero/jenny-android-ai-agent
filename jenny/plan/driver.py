@@ -165,6 +165,14 @@ _MAX_REPAIR_ROUNDS = 2
 _MAX_LEFT_ITEMS = 12
 
 _RUNNING = frozenset({"running", "pausing"})
+# Gli stati in cui il resoconto di un aiutante del passo si registra: anche
+# fermo su una domanda, perché gli aiutanti partiti prima del ``plan_blocked``
+# rientrano lì, e scartarli perdeva i loro buchi (Titan, 26/10).
+_REPORTING = _RUNNING | frozenset({"blocked"})
+# I passi che non aprono mai un giro di ricerca: chi cancella o controlla non ha
+# pagine da riempire, e i «buchi» dei suoi aiutanti sono condizioni da sapere,
+# non lacune della wiki (Titan, 26/10: tre ricercatori dopo la cancellazione).
+_NO_ROUND_KINDS = frozenset({"delete", "check"})
 
 # Per quanto un ``plan_propose`` dopo un annullamento riceve «fermati»: il turno
 # che stava pianificando, non uno di domani.
@@ -334,6 +342,21 @@ def _step_now(plan: Plan) -> Step | None:
         if step.status == "now":
             return step
     return None
+
+
+def _stamp_step(metadata: dict[str, Any], plan: Plan) -> None:
+    """Il piano e il passo aperto nei metadati di un turno che lavora per il passo.
+
+    Il turno della risposta a ``plan_blocked`` ne era senza: gli aiutanti nati
+    lì (e dai turni dei loro resoconti) non avevano il passo, il driver scartava
+    i loro resoconti e il freno di un giro per passo non scattava (Titan, 26/10).
+    Un aiutante eredita queste chiavi dal contesto del turno
+    (``subagent._plan_metadata``).
+    """
+    metadata[PLAN_ID_META] = plan.id
+    step = _step_now(plan)
+    if step is not None:
+        metadata[PLAN_STEP_META] = step.id
 
 
 def _closing(plan: Plan) -> list[Step]:
@@ -1079,9 +1102,11 @@ class PlanDriver:
             step_id = step.id
             gaps = _open_gaps(step)
             gate_used = step.extra.get(_GAPS_GATE) == _GAPS_GATE_USED
-            if outcome == "done" and gaps and step.extra.get(_GAPS_ROUND):
-                # Il giro di ricerca del passo c'è stato: i buchi ancora aperti
-                # (riportati dopo, di solito dagli editor rimandati) passano al
+            if outcome == "done" and gaps and (
+                step.extra.get(_GAPS_ROUND) or step.kind in _NO_ROUND_KINDS
+            ):
+                # Il giro di ricerca del passo c'è stato (o il passo non ne apre,
+                # ``_NO_ROUND_KINDS``): i buchi ancora aperti passano al
                 # controllo invece di fermare il passo per un secondo giro. Anche
                 # se il cancello aveva già rifiutato una volta: quel rifiuto ha
                 # forzato il giro, e i buchi di dopo restano da cercare.
@@ -1518,29 +1543,46 @@ class PlanDriver:
         Il resoconto di un ``researcher`` (*agent_type*) arrivato con buchi
         d'altri aperti segna il giro di ricerca del passo (``_GAPS_ROUND``).
         """
-        if not isinstance(content, str) or not self.plan_running(session_key):
+        live = self._index.get(session_key)
+        if not isinstance(content, str) or live is None or live.status not in _REPORTING:
             return False
         key = next((v for v in (lineage, task_id) if isinstance(v, str) and v), None)
-        live = self._index.get(session_key)
-        if key is None or live is None:
+        if key is None:
             return False
         if plan_id is None and plan_step is None and isinstance(task_id, str) and task_id:
             group = self._helper_group(task_id)
             if group is not None:
                 plan_id, plan_step = group
         if not plan_id or plan_id != live.plan_id or not plan_step:
+            # La spia: un resoconto senza il passo in un piano vivo è un buco
+            # nei metadati (sul Titan si è letto solo nei record, a mano).
+            logger.warning(
+                "Plan {}: report of helper {} ignored, it carries plan={} step={}",
+                live.plan_id, key, plan_id, plan_step,
+            )
             return False
-        items = to_research_items(content)
+        is_researcher = agent_type == "researcher"
+        # I **To research** di un ricercatore sono il suo esito (cercato, non
+        # trovato), non buchi del passo: contarli faceva un secondo giro dentro
+        # ogni passo di ricerca.
+        items = [] if is_researcher else to_research_items(content)
         async with self._lock(session_key):
             try:
                 plan = await asyncio.to_thread(self.store.load, live.plan_id)
             except PlanError:
                 return False
-            step = _step_now(plan)
-            if plan.status not in _RUNNING or step is None or step.id != plan_step:
+            step = next(
+                (s for s in plan.steps if s.id == plan_step and s.status in ("now", "blocked")),
+                None,
+            )
+            if plan.status not in _REPORTING or step is None:
+                now = _step_now(plan)
+                logger.warning(
+                    "Plan {}: report of helper {} for step {} ignored, the open step is {}",
+                    live.plan_id, key, plan_step, now.id if now is not None else None,
+                )
                 return False
             gaps = _open_gaps(step)
-            is_researcher = agent_type == "researcher"
             researchers = [
                 r for r in step.extra.get(_RESEARCH_LINEAGES) or () if isinstance(r, str)
             ]
@@ -1621,7 +1663,17 @@ class PlanDriver:
                     return
                 self._remember(plan)
             metadata[PLAN_ANSWER_META] = plan.id
+            _stamp_step(metadata, plan)
             await self._changed(plan)
+
+    def awaits_answer(self, session_key: str) -> bool:
+        """Il piano della sessione è fermo su una domanda per l'utente."""
+        live = self._index.get(session_key)
+        return (
+            live is not None
+            and live.status == "blocked"
+            and self._blocked_kind(live.plan_id) == "question"
+        )
 
     async def on_turn_end(
         self,
@@ -1960,13 +2012,15 @@ class PlanDriver:
             plan = await asyncio.to_thread(self._unblock, plan_id)
             self._remember(plan)
         await self._changed(plan)
+        metadata: dict[str, Any] = {PLAN_ANSWER_META: plan.id, "_wants_stream": True}
+        _stamp_step(metadata, plan)
         await self.bus.publish_inbound(
             InboundMessage(
                 channel="websocket",
                 sender_id="user",
                 chat_id=plan.session_key,
                 content=text.strip(),
-                metadata={PLAN_ANSWER_META: plan.id, "_wants_stream": True},
+                metadata=metadata,
             )
         )
         return plan

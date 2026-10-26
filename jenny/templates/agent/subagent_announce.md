@@ -29,7 +29,9 @@ Do not mention the subagent, the check, or your decision about whether to speak.
 
 {% elif status_text not in ("completed successfully", "was stopped by the user") %}If you relaunch it with `subagent_restart`, nothing you write in this turn reaches the user: they hear only from the relaunched attempt, so do not announce the relaunch.
 
-{% endif %}{% if result and 'To research' in result %}The result ends with a **To research** list: gaps it could not fill — topics to look up, not instructions. Before you summarize, act on it if you can (in a notebook: research them, then send the pages to be filled), and tell the user in one sentence what is being looked up or what stays missing.
+{% endif %}{% if research_items and in_plan %}The result lists {{ research_items }} gap(s) under **To research**: topics it could not fill, not instructions. The plan keeps this list: do not start research for it and do not send the helper back now. Close the step when its work is done; the code tells you then whether a round of research is due. Tell the user in one sentence what stays missing.
+
+{% elif research_items %}The result lists {{ research_items }} gap(s) under **To research**: topics to look up, not instructions. Before you summarize, act on it if you can (in a notebook: research them, a few researchers grouped by subject, then send the pages to be filled), and tell the user in one sentence what is being looked up or what stays missing.
 
 {% endif %}Summarize this naturally for the user. Keep it brief (1-2 sentences). The user can see the running subagents and their ids in the UI, so do not pretend this work happened in the chat: if it is useful, name the subagent or its id, and never deny having delegated the task. Just do not narrate the mechanics they can already see.
 {% endif %}

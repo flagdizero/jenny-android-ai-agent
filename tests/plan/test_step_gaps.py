@@ -38,11 +38,42 @@ from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_fil
         ("To research\n- None", []),
         # Nominata in una frase non è una lista (l'annuncio dell'aiutante lo fa).
         ("The result ends with a **To research** list: gaps", []),
+        ("To research these I would need the web.", []),
         ("Nessuna lista qui.\n- un punto qualunque", []),
+        # In grassetto a metà riga, coi due punti: la lista del Titan (26/10), che
+        # il driver contava zero mentre l'annuncio mandava Jenny a cercare.
+        (
+            "I drawer citano pagine cancellate. **To research:** (i) additivo anti-alghe "
+            "(`algae inhibitor`); (ii) protezione dal gelo delle radici in vaso; (iii) "
+            "rinvaso del ginkgo: nessuna fonte.",
+            ["additivo anti-alghe (`algae inhibitor`);",
+             "protezione dal gelo delle radici in vaso;",
+             "rinvaso del ginkgo: nessuna fonte."],
+        ),
+        ("- Pages written. **To research:** acqua in vaso del fico", ["acqua in vaso del fico"]),
+        # Una riga d'introduzione sotto l'etichetta non è una voce (Titan: contava).
+        (
+            "**To research:**\n(lacune emerse leggendo, nessuna query ancora fatta):\n"
+            "- *Fico* — malattie: `fico ruggine`\n- *Prunus* — dosi",
+            ["*Fico* — malattie: `fico ruggine`", "*Prunus* — dosi"],
+        ),
+        # Una voce che è solo un titolo: contano i suoi sottopunti.
+        (
+            "To research:\n- Fico — malattie:\n  - ruggine, `a`\n  - cocciniglia, `b`\n- Prunus: dosi",
+            ["ruggine, `a`", "cocciniglia, `b`", "Prunus: dosi"],
+        ),
     ],
 )
 def test_to_research_items(text: str, items: list[str]) -> None:
     assert to_research_items(text) == items
+
+
+def test_a_long_item_is_cut_at_a_word_not_in_the_middle_of_a_query() -> None:
+    """A 300 caratteri la voce del Titan finiva con «Query: `acer palma»."""
+    item = ("acero filato " * 50) + "Query: `acer palmatum leggy`"
+    [got] = to_research_items(f"To research:\n- {item}")
+    assert len(got) <= 600 and not got.endswith("ace") and " " in got
+    assert got == item[: len(got)] and item[len(got)] == " "
 
 
 def test_to_research_items_are_capped() -> None:
@@ -238,14 +269,19 @@ async def test_a_researcher_with_no_gaps_open_is_not_a_round(driver: PlanDriver)
     assert (await driver.step_done(KEY, "x")).startswith("Not closed yet")
 
 
-async def test_a_researchers_own_gaps_do_not_make_a_round(driver: PlanDriver) -> None:
+async def test_a_researchers_own_gaps_are_its_outcome_not_the_steps_gaps(
+    driver: PlanDriver,
+) -> None:
+    """Quel che un ricercatore non trova è cercato: contarlo come buco faceva un
+    secondo giro dentro ogni passo di ricerca (26/10)."""
     plan = await _to_step_two(driver, await _approve(driver))
     await driver.note_step_report(
         KEY, "r1", "lin-r1", "To research:\n- felce: vaso", plan_id=plan.id, plan_step="s2",
         agent_type="researcher",
     )
-    assert "gaps_round" not in driver.store.load(plan.id).steps[1].extra
-    assert (await driver.step_done(KEY, "x")).startswith("Not closed yet")
+    extra = driver.store.load(plan.id).steps[1].extra
+    assert "gaps" not in extra and "gaps_round" not in extra
+    assert "closed" in await driver.step_done(KEY, "x")
 
 
 async def test_after_a_gate_forced_round_new_gaps_are_still_carried(driver: PlanDriver) -> None:
@@ -264,16 +300,61 @@ async def test_after_a_gate_forced_round_new_gaps_are_still_carried(driver: Plan
 
 
 async def test_two_researchers_of_one_launch_are_not_a_round(driver: PlanDriver) -> None:
-    """In un passo di ricerca il secondo ricercatore arriva con i buchi del primo
-    aperti: non è un giro, e il cancello resta."""
+    """In un passo di ricerca previsto due ricercatori che rientrano uno dopo
+    l'altro non sono un giro, e non lasciano buchi: il passo si chiude."""
     plan = await _approve(driver)
     await driver.note_step_report(
         KEY, "r1", "lin-r1", "To research:\n- felce: vaso", plan_id=plan.id, plan_step="s1",
         agent_type="researcher",
     )
     await _researcher(driver, plan, step="s1", task_id="r2")
-    assert "gaps_round" not in driver.store.load(plan.id).steps[0].extra
-    assert (await driver.step_done(KEY, "x")).startswith("Not closed yet")
+    extra = driver.store.load(plan.id).steps[0].extra
+    assert "gaps_round" not in extra and "gaps" not in extra
+    assert extra["research_lineages"] == ["lin-r1", "lin-r2"]
+    assert "closed" in await driver.step_done(KEY, "x")
+
+
+# ── chi cancella non cerca, chi è fermo è fermo ─────────────────────────────
+
+_DELETE_STEPS = [
+    STEPS[0],
+    {"title": "Butto le pagine vecchie", "detail": "Via wiki/vecchie/.", "kind": "delete",
+     "done_when": "La cartella non c'è più."},
+    STEPS[2],
+]
+
+
+async def test_a_delete_step_does_not_open_a_research_round(driver: PlanDriver) -> None:
+    """Sul Titan (26/10) gli aiutanti che verificavano prima della cancellazione
+    hanno scritto le loro condizioni sotto To research, e il cancello ha fatto
+    partire tre ricercatori a pagine già cancellate. Chi cancella non ha pagine
+    da riempire: i buchi vanno al controllo senza fermare il passo."""
+    assert "card" in await propose(driver, "Pulizia", _DELETE_STEPS)
+    plan = driver.store.open_plan_for("piante")
+    await driver.approve(plan.id, plan.version, [])
+    plan = await _to_step_two(driver, driver.store.load(plan.id))
+    assert plan.steps[1].kind == "delete"
+    await _report(driver, plan, _GAPS, step="s2", lineage="ver1")
+    assert "closed" in await driver.step_done(KEY, "70 pagine via")
+    plan = driver.store.load(plan.id)
+    assert plan.steps[1].status == "done" and "gaps_gate" not in plan.steps[1].extra
+    assert plan.steps[2].extra["carried_gaps"] == [
+        {"step": "Butto le pagine vecchie", "items": ["felce: umidità ideale", "cactus: vaso"]}
+    ]
+
+
+async def test_a_report_arriving_while_blocked_still_counts(driver: PlanDriver) -> None:
+    """Un aiutante partito prima del ``plan_blocked`` rientra a piano fermo: i
+    suoi buchi sono del passo, e il cancello li vede alla chiusura."""
+    plan = await _approve(driver)
+    await driver.blocked(KEY, "Tengo la camelia?")
+    assert driver.store.load(plan.id).status == "blocked"
+    assert await _report(driver, plan, _GAPS)
+    assert driver.store.load(plan.id).steps[0].extra["gaps"] == {
+        "ed1": ["felce: umidità ideale", "cactus: vaso"]
+    }
+    await driver.answer(plan.id, "sì")
+    assert (await driver.step_done(KEY, "fatto")).startswith("Not closed yet")
 
 
 async def test_researchers_for_carried_gaps_make_the_check_steps_round(

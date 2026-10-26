@@ -163,6 +163,97 @@ async def test_outside_a_plan_the_step_is_none(tmp_path) -> None:
     await _drain(sm)
 
 
+async def test_a_resend_carries_the_step_of_the_turn_that_sends_it(tmp_path) -> None:
+    """Un editor nato nel passo 3 e rimandato nel passo 4 lavora per il passo 4:
+    col passo di nascita il driver scartava il suo resoconto (Titan, 26/10)."""
+    sm = _manager(tmp_path)
+    block = _blocking(sm)
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:piante", session_key=PLAN_KEY,
+        metadata={PLAN_ID_META: "plan-1", PLAN_STEP_META: "s3"},
+    ))
+    try:
+        await sm.spawn("write the Prunus page", session_key=PLAN_KEY)
+    finally:
+        reset_request_context(token)
+    block.set()
+    await _drain(sm)
+    done = sm.list_records(PLAN_KEY)[-1]
+    assert done.spec.plan_step == "s3"
+
+    block.clear()
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:piante", session_key=PLAN_KEY,
+        metadata={PLAN_ID_META: "plan-1", PLAN_STEP_META: "s4"},
+    ))
+    try:
+        outcome = await sm.send(done.task_id, "fill the page from raw/research/")
+    finally:
+        reset_request_context(token)
+    assert outcome.mode in ("resumed", "restarted")
+    running = sm.status_snapshot(PLAN_KEY)["running"][0]
+    assert (running["plan_id"], running["plan_step"]) == ("plan-1", "s4")
+    block.set()
+    await _drain(sm)
+
+
+async def test_a_resend_from_a_turn_without_a_step_keeps_the_birth_step(tmp_path) -> None:
+    sm = _manager(tmp_path)
+    block = _blocking(sm)
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:piante", session_key=PLAN_KEY,
+        metadata={PLAN_ID_META: "plan-1", PLAN_STEP_META: "s3"},
+    ))
+    try:
+        await sm.spawn("write the Prunus page", session_key=PLAN_KEY)
+    finally:
+        reset_request_context(token)
+    block.set()
+    await _drain(sm)
+    done = sm.list_records(PLAN_KEY)[-1]
+    block.clear()
+    await sm.send(done.task_id, "go on")
+    running = sm.status_snapshot(PLAN_KEY)["running"][0]
+    assert (running["plan_id"], running["plan_step"]) == ("plan-1", "s3")
+    block.set()
+    await _drain(sm)
+
+
+async def test_a_spawn_without_the_step_while_the_plan_runs_is_logged(tmp_path, caplog) -> None:
+    """La spia, non una regola: il passo non si assegna da qui, ma il log lo
+    dice. Sul Titan (26/10) si è letto solo nei record, a mano."""
+    import logging
+
+    from loguru import logger as loguru_logger
+
+    from jenny.session.goal_state import set_plan_probe
+
+    class _Probe:
+        def plan_running(self, session_key: str) -> bool:
+            return session_key == PLAN_KEY
+
+        def plan_open(self, session_key: str) -> bool:
+            return session_key == PLAN_KEY
+
+    sm = _manager(tmp_path)
+    block = _blocking(sm)
+    set_plan_probe(_Probe())
+    handler = loguru_logger.add(caplog.handler, format="{message}", level="WARNING")
+    try:
+        with caplog.at_level(logging.WARNING):
+            await sm.spawn("look the algae inhibitor up", session_key=PLAN_KEY)
+            await sm.spawn("something personal", session_key="unified:default")
+    finally:
+        loguru_logger.remove(handler)
+        set_plan_probe(None)
+    assert caplog.text.count("without a plan step") == 1
+    assert "algae inhibitor" in caplog.text
+    running = sm.status_snapshot(PLAN_KEY)["running"][0]
+    assert running["plan_step"] is None, "la spia non assegna il passo"
+    block.set()
+    await _drain(sm)
+
+
 # -- handled_at ---------------------------------------------------------------
 
 

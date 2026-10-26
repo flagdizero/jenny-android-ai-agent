@@ -1081,30 +1081,74 @@ def tag_new_version(old_steps: Iterable[Step], new_steps: list[Step]) -> list[di
 #: Le voci al massimo prese da una lista **To research**: oltre, è un resoconto
 #: che elenca tutto, e il cancello del passo le mostrerebbe tutte al modello.
 MAX_RESEARCH_ITEMS = 20
-_MAX_RESEARCH_ITEM = 300
+_MAX_RESEARCH_ITEM = 600
 
-# L'etichetta, in testa alla riga: «## To research», «**To research:**»,
-# «To research (3):», «- **To research**: none». Mai a metà riga: l'annuncio
-# di un aiutante la nomina in una frase, e non è un elenco.
+# L'etichetta: a inizio riga («## To research», «To research (3):», «- **To
+# research**: none»), oppure in grassetto in mezzo a una riga e seguita dai due
+# punti («… nuovi pages. **To research:** (i) … (ii) …»). Nuda a metà frase no
+# («To research these I would need the web»), e nemmeno in grassetto senza i
+# due punti («ends with a **To research** list»): è nominata, non è una lista.
+# Fino al 26/10 valeva solo la prima forma, e l'annuncio dell'aiutante la
+# cercava come sottostringa: la stessa riga valeva 0 voci per il driver e «vai
+# a cercare» per Jenny (Titan).
+_LABEL = r"(?:\*\*|__)?\s*to\s+research\s*(?:\([^)]*\))?\s*(?:\*\*|__)?"
 _TO_RESEARCH = re.compile(
-    r"^\s*(?:#{1,6}\s*)?(?:[-*+]\s+)?(?:\*\*|__)?\s*to\s+research\s*(?:\([^)]*\))?\s*"
-    r"(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*(?P<rest>.*)$",
+    r"^\s*(?:#{1,6}\s*)?(?:[-*+]\s+)?" + _LABEL + r"\s*(?::\s*(?P<rest>.*)|(?P<rest_end>)$)",
     re.IGNORECASE,
 )
-_BULLET = re.compile(r"^(?P<indent>\s*)(?:[-*+•]|\d{1,2}[.)])\s+(?P<text>\S.*)$")
+_TO_RESEARCH_INLINE = re.compile(
+    r"(?:^|\s)(?:\*\*|__)\s*to\s+research\s*(?:\([^)]*\))?\s*(?::\s*(?:\*\*|__)|(?:\*\*|__)\s*:)"
+    r"\s*(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+_BULLET = re.compile(
+    r"^(?P<indent>\s*)(?:[-*+•]|\d{1,2}[.)]|\(?(?:[ivx]{1,5}|[a-z]|\d{1,2})\))\s+(?P<text>\S.*)$"
+)
+# Una riga «(i) … (ii) … (iii) …»: i marcatori che la spezzano in voci.
+_INLINE_MARKS = re.compile(r"(?:(?<=^)|(?<=[\s;.]))\(?(?:[ivx]{1,5}|[a-z]|\d{1,2})\)\s+")
 _HEADING = re.compile(r"^\s*(?:#{1,6}\s|\*\*[^*]+\*\*\s*:?\s*$)")
 _NOTHING_WORDS = frozenset({"none", "nothing", "nessuno", "nessuna", "niente", "nulla"})
 
 
 def _research_item(text: str) -> str | None:
-    """Una voce ripulita, o ``None`` se dice «niente»."""
+    """Una voce ripulita, o ``None`` se dice «niente» o è solo un'intestazione."""
     clean = " ".join(text.replace("**", "").replace("__", "").split()).strip()
     if not clean or clean.strip(" .-–—") == "" or clean.lower() in ("n/a", "na"):
         return None
     first = re.match(r"[^\W\d_]+", clean)
     if first is not None and first.group(0).lower() in _NOTHING_WORDS:
         return None
-    return clean[:_MAX_RESEARCH_ITEM]
+    if clean.endswith(":"):
+        # «(lacune emerse leggendo, nessuna query ancora fatta):» introduce le
+        # voci che seguono, non ne è una.
+        return None
+    if len(clean) > _MAX_RESEARCH_ITEM:
+        # Al limite si taglia a una parola: le query in fondo alla voce («Query:
+        # `acer palma») si perdevano a metà (Titan).
+        cut = clean[:_MAX_RESEARCH_ITEM]
+        clean = cut[: cut.rfind(" ")] if " " in cut else cut
+    return clean
+
+
+def _inline_items(rest: str) -> list[str | None]:
+    """Il resto della riga dell'etichetta: una voce, o più se numerate in linea."""
+    marks = list(_INLINE_MARKS.finditer(rest))
+    if len(marks) < 2:
+        return [_research_item(rest)]
+    parts: list[str | None] = []
+    for n, mark in enumerate(marks):
+        end = marks[n + 1].start() if n + 1 < len(marks) else len(rest)
+        parts.append(_research_item(rest[mark.end():end]))
+    return parts
+
+
+def _label(line: str) -> str | None:
+    """Il resto della riga dopo l'etichetta **To research**, o ``None`` se non c'è."""
+    head = _TO_RESEARCH.match(line)
+    if head is not None:
+        return head.group("rest") or ""
+    inline = _TO_RESEARCH_INLINE.search(line)
+    return inline.group("rest") if inline is not None else None
 
 
 def to_research_items(text: str) -> list[str]:
@@ -1112,28 +1156,32 @@ def to_research_items(text: str) -> list[str]:
 
     Un ``writer`` o un ``notebook-editor`` che non ha trovato un dato lo
     scrive lì (il suo template lo chiede): cosa manca, per quale pagina. Qui si
-    trova l'etichetta (titolo o grassetto, con o senza ``#``/``**``) e si
-    prendono i punti elenco che la seguono, numerati o no; i sottopunti più
-    rientrati sono dettagli della voce sopra e non contano a parte. La lista
-    finisce alla prima riga che non è un punto elenco. «None», «nothing», «—»
-    non sono buchi. Al massimo :data:`MAX_RESEARCH_ITEMS`, senza doppioni.
+    trova l'etichetta (:data:`_TO_RESEARCH`, :data:`_TO_RESEARCH_INLINE`) e si
+    prendono le voci sulla sua riga («(i) … (ii) …») e i punti elenco che la
+    seguono, numerati o no; i sottopunti più rientrati sono dettagli della voce
+    sopra e non contano a parte, salvo quando la voce sopra è solo
+    un'intestazione («Fico — malattie:»): allora contano loro. La lista finisce
+    alla prima riga che non è un punto elenco. «None», «nothing», «—» non sono
+    buchi. Al massimo :data:`MAX_RESEARCH_ITEMS`, senza doppioni. È l'unica
+    lettura: la usano il driver e l'annuncio dell'aiutante.
     """
     items: list[str] = []
     lines = (text or "").splitlines()
     i = 0
     while i < len(lines) and len(items) < MAX_RESEARCH_ITEMS:
-        label = _TO_RESEARCH.match(lines[i])
+        rest = _label(lines[i])
         i += 1
-        if label is None:
+        if rest is None:
             continue
-        found: list[str | None] = [_research_item(label.group("rest"))]
+        found: list[str | None] = _inline_items(rest)
         base: int | None = None
+        heading_indent: int | None = None
         while i < len(lines):
             line = lines[i]
             if not line.strip():
                 i += 1
                 continue
-            if _TO_RESEARCH.match(line):
+            if _label(line) is not None and _TO_RESEARCH.match(line):
                 break
             bullet = _BULLET.match(line)
             if bullet is None:
@@ -1143,12 +1191,22 @@ def to_research_items(text: str) -> list[str]:
                     # La continuazione rientrata di una voce: è sua, non una voce.
                     i += 1
                     continue
+                if base is None and line.rstrip().endswith(":") and not _HEADING.match(line):
+                    # Una riga d'introduzione sotto l'etichetta («(lacune emerse
+                    # leggendo, nessuna query ancora fatta):»): le voci seguono.
+                    i += 1
+                    continue
                 break
             indent = len(bullet.group("indent").expandtabs(4))
             if base is None:
                 base = indent
+            raw = bullet.group("text").strip()
             if indent <= base:
-                found.append(_research_item(bullet.group("text")))
+                heading_indent = indent if raw.rstrip("* ").endswith(":") else None
+                found.append(_research_item(raw))
+            elif heading_indent is not None and indent > heading_indent:
+                # I sottopunti di un'intestazione sono le voci vere.
+                found.append(_research_item(raw))
             i += 1
         for item in found:
             if item is not None and item not in items and len(items) < MAX_RESEARCH_ITEMS:

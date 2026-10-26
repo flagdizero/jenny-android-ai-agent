@@ -21,7 +21,7 @@ from jenny.agent.memory import (
 from jenny.agent.skills import SkillsLoader
 from jenny.config.paths import get_output_path
 from jenny.runtime.user_text import current_bot_name
-from jenny.session.goal_state import goal_state_runtime_lines
+from jenny.session.goal_state import goal_state_runtime_lines, plan_running_in_session
 from jenny.session.keys import is_personal_session_key, is_project_session_key
 from jenny.utils.android_assets import (
     _RETIRED_TEMPLATE_DIGESTS,
@@ -740,6 +740,10 @@ class ContextBuilder:
                     "agent/project.md",
                     has=has,
                     project_path=str(_absolute_workspace(root)),
+                    # Con un piano in corsa la ricerca e' del piano: il paragrafo
+                    # «quando un aiutante riporta To research, cerca» si spegne
+                    # (sul Titan, 26/10, scavalcava il cancello del driver).
+                    plan_running=plan_running_in_session(session_key),
                     # La politica di cattura vale per **questo** turno, quello in
                     # cui c'e' un utente che dice qualcosa. Un subagent riceve lo
                     # stesso file con ``capture=False`` (v. ``agent/subagent.py``):

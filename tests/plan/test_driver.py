@@ -366,6 +366,10 @@ async def test_blocked_then_answer_restarts_the_step(driver: PlanDriver, bus: Fa
     assert answer.channel == "websocket" and answer.chat_id == KEY
     assert answer.content == "Quello giapponese"
     assert answer.metadata[PLAN_ANSWER_META] == plan.id
+    # Il turno della risposta lavora per il passo: gli aiutanti nati lì lo
+    # ereditano (sul Titan, 26/10, nascevano senza, e il driver li scartava).
+    assert answer.metadata[PLAN_ID_META] == plan.id
+    assert answer.metadata[PLAN_STEP_META] == "s1"
 
 
 async def test_a_long_question_is_stored_whole(driver: PlanDriver) -> None:
@@ -394,6 +398,7 @@ async def test_a_message_typed_while_blocked_is_the_answer(driver: PlanDriver) -
     metadata: dict[str, Any] = {}
     await driver.before_user_turn(KEY, metadata)
     assert metadata[PLAN_ANSWER_META] == plan.id
+    assert (metadata[PLAN_ID_META], metadata[PLAN_STEP_META]) == (plan.id, "s1")
     assert driver.store.load(plan.id).status == "running"
 
 

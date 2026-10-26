@@ -257,7 +257,7 @@ class PlanBlockedTool(PlanTool):
             "Stop the plan on the current step because you need the user: a choice, a "
             "missing fact, a permission. The question goes on the plan card, whole, and "
             "their answer restarts the step. What you did and found goes in your reply to "
-            "the user, not in the question."
+            "the user, not in the question. A fact the web can give is never a reason to block."
         )
 
     async def execute(self, question: Any = None, **kwargs: Any) -> str:

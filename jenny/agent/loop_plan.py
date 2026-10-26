@@ -300,6 +300,17 @@ class LoopPlanMixin:
             driver = self.plan_driver
             if driver is None or not session_key or not is_project_session_key(session_key):
                 return "inject"
+            meta = pending_msg.metadata if isinstance(pending_msg.metadata, Mapping) else {}
+            if (
+                pending_msg.channel != "system"
+                and not meta.get(INJECTED_EVENT_META)
+                and driver.awaits_answer(session_key)
+            ):
+                # La risposta dell'utente a un piano fermo, arrivata mentre gira
+                # il turno di un resoconto: iniettata sarebbe chat, e il piano
+                # resterebbe fermo. Diventa un turno suo, che passa dal gancio
+                # di inizio (``before_user_turn``) e riapre il passo.
+                return "defer"
             running = isinstance(turn_metadata, Mapping) and (
                 turn_metadata.get(PLAN_MODE_META) is True
             )

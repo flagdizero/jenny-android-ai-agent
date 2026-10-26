@@ -32,10 +32,10 @@ def _flat(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
-def _project(**has: bool) -> str:
+def _project(plan_running: bool = False, **has: bool) -> str:
     return _flat(render_template(
         "agent/project.md", project_path="/data/workspace/wikis/x", capture=True,
-        has=lambda name: has.get(name, False),
+        has=lambda name: has.get(name, False), plan_running=plan_running,
     ))
 
 
@@ -66,6 +66,17 @@ def test_a_to_research_report_is_the_next_step_not_the_end() -> None:
     assert "Do not ask first" in prompt
 
 
+def test_while_a_plan_runs_research_is_the_plans() -> None:
+    """Sul Titan (26/10) questo paragrafo, letto a ogni turno di passo, mandava
+    Jenny a cercare a ogni resoconto e scavalcava il cancello del driver."""
+    prompt = _project(plan_running=True, spawn=True, web_search=True)
+    assert "that is your next step" not in prompt and "Do not ask first" not in prompt
+    assert "While a plan runs, research is the plan's" in prompt
+    assert "Do not spawn researchers on your own" in prompt
+    # L'invito a cercare per una domanda in chat resta: è un altro paragrafo.
+    assert "Notebook first; when it is not enough, go and look." in prompt
+
+
 def test_without_spawn_the_invitation_names_nobody_it_cannot_reach() -> None:
     """Un subagent dentro un quaderno legge lo stesso file e non può lanciare nessuno."""
     prompt = _project(web_search=True)
@@ -81,10 +92,14 @@ def test_without_the_web_the_gap_is_told_not_researched() -> None:
 
 
 def test_the_announcement_of_a_to_research_report_does_not_say_only_be_brief() -> None:
+    from jenny.plan.model import to_research_items
+
     def announce(result: str) -> str:
+        # Il renderer passa le voci contate dal parser del driver (una lettura sola).
         return _flat(render_template(
             "agent/subagent_announce.md", label="editor", status_text="completed successfully",
             task="fill the pages", result=result, untrusted=False, silent=False,
+            research_items=len(to_research_items(result)), in_plan=False,
         ))
 
     with_gaps = announce("Pages written.\n\n**To research**\n- Acero: soil mix")

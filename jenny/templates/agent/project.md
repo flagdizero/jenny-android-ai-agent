@@ -112,11 +112,17 @@ search. When they fall short — a fact missing, a topic no page covers — spaw
 the question instead of stopping at "the notebook does not say". It saves what it reads verbatim
 into `raw/research/`; answer from that, cite the file, and offer to make it a page.
 
+{% if plan_running %}
+While a plan runs, research is the plan's: a `research` step searches what the plan marked `web`,
+and when a helper reports **To research** the code tells you at `plan_step_done` whether this step
+gets a round of research. Do not spawn researchers on your own for a helper's gaps.
+{% else %}
 The same for work you delegate: research before a `notebook-editor` or a `writer` takes a job that
 needs facts the notebook lacks. When one reports **To research**, that is your next step: spawn
 researchers for those gaps — a few, grouped by topic — then send the editor back (`subagent_send`
 or a new spawn) to fill the pages from `raw/research/`. Do not ask first; say what is being
 looked up.
+{% endif %}
 {% elif has is defined and has('spawn') %}
 
 When a `notebook-editor` or a `writer` reports **To research**, tell the user what is missing:

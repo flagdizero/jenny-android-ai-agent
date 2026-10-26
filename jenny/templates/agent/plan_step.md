@@ -85,9 +85,10 @@ Already waiting for the user's approval, from an earlier run of this step: {{ wa
 
 Rules:
 - Do this step only. Do not start the next one: the code opens it when you close this one.
-- You may run up to 5 helpers at once for this step; wait for all their results before closing it.
+- You may run up to 5 helpers at once for this step (the slots are Jenny's, shared with every chat: a sixth is refused, not queued); wait for all their results before closing it.
 - Helper results of this step arrive together, when the last one is done.
-- A writer or notebook-editor that reports **To research** has not finished the step: those gaps are part of it. Wait for all the step's results, then spawn researchers for every gap at once, a few, grouped by subject: one round per step. Then send the same helpers back with `subagent_send` to fill the pages from what they saved, and close the step. Gaps the helpers report after that round go to the plan's check step, which searches them together.
+- A writer or notebook-editor that reports **To research** leaves gaps that belong to this step, but you do not research them on your own: call `plan_step_done` when the step's work is done, and the code tells you whether this step gets one round of research (then: a few researchers for all the gaps at once, grouped by subject, and the same helpers sent back with `subagent_send` to fill the pages from what they saved) or whether the gaps stay written in the pages as "not documented", with the queries tried. Never a second round in a step.
+- In a `delete` step, helpers that check before the deletion report what must be known first under **Before deleting**, never under **To research**: nothing is researched in a step that deletes.
 - A helper that stopped at its budget: continue the same helper with `subagent_send`, it keeps what it read and wrote. Do not start a new one for the same work.
 - A helper that went off track (wrong pages, wrong notebook, a task it misread): stop it and undo its changes with `subagent_cancel` and `undo=true`, then start one helper with clearer instructions. Do not close the step on work you undid without redoing it.
 - Scripts print only a compact result. A helper's report goes in its final answer, not in a file. A file in the notebook only if the step asks for one: then it is an audit entry in `audit/` with the audit frontmatter (`id`, `target`, `source`, `status`...; see the llm-wiki skill). Never create `outputs/` in a notebook.
@@ -95,7 +96,7 @@ Rules:
 - This may be a second run of the step (after a restart): look at what is already there and do not duplicate it.
 - When it is finished, call `plan_step_done` with a one-line note of what changed (for example "3 pages written, 1 source discarded").
 - If there is nothing to do, call `plan_step_skip` with the honest reason.
-- If you need the user — a choice, a fact only they know, a permission — call `plan_blocked` with what they must decide (one clear question, or the decisions numbered), and stop there. What you did and found goes in your reply, not in the question. A fact the web can give is not a question for them: research it.
+- If you need the user — a choice, a fact only they know, a permission — call `plan_blocked` with what they must decide (one clear question, or the decisions numbered), and stop there. What you did and found goes in your reply, not in the question. A fact the web can give is not a question for them, and not a reason to block: note it under **To research** in the step and let the code decide.
 - If a premise of the plan proves false (sources that are not there, an item that does not exist, a file different from what the plan says) and the later steps would come out poor, do not go on knowing it: stop with `plan_blocked`: say what you found in your reply, and ask in the question whether to go on as you propose.
 - Close the step only when its "done when" holds. If a change waits for the user's approval (a draft), still call `plan_step_done`: the code holds the step until they decide.
 - Keep your words to the user short: the plan card already shows the list and the progress.
