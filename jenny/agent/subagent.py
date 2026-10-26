@@ -2438,6 +2438,7 @@ class SubagentManager:
         spec_for_plan = self._spec_for_task(task_id)
         from jenny.plan.model import to_research_items
 
+        research_items = to_research_items(result) if isinstance(result, str) else []
         announce_content = render_template(
             "agent/subagent_announce.md",
             label=label,
@@ -2454,11 +2455,16 @@ class SubagentManager:
             budget_capped=status == "budget" and budget_stops > MAX_BUDGET_RESUMES,
             budget_stops=budget_stops,
             task_id=task_id,
-            research_items=len(to_research_items(result)) if isinstance(result, str) else 0,
+            research_items=len(research_items),
             in_plan=bool(spec_for_plan is not None and spec_for_plan.plan_step),
         )
         metadata: dict[str, Any] = {
             "injected_event": "subagent_result",
+            # Le voci **To research** del resoconto, lette qui una volta sola: il
+            # driver le prende da qui invece di rileggere l'annuncio intero, in
+            # cui il testo del template nomina la lista e si faceva contare
+            # (prova su s22, 26/10: una riga del template in open-gaps.md).
+            "subagent_to_research": research_items,
             "subagent_status": status,
             "subagent_task_id": task_id,
             "subagent_lineage_id": resolved_lineage,

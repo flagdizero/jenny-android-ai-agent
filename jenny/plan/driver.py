@@ -1575,8 +1575,13 @@ class PlanDriver:
         plan_id: Any = None,
         plan_step: Any = None,
         agent_type: Any = None,
+        items: Any = None,
     ) -> bool:
         """Il resoconto di un aiutante del passo aperto: registra i suoi buchi **To research**.
+
+        *items* sono le voci già lette dal manager sul resoconto nudo
+        (``subagent_to_research``); senza, si legge *content*, che è l'annuncio
+        intero e nomina la lista anche nel testo del template.
 
         Lo chiama il loop per ogni resoconto che arriva, tenuto o no, e anche a
         metà turno. Conta solo con un piano in corsa e un resoconto del passo
@@ -1613,7 +1618,12 @@ class PlanDriver:
         # I **To research** di un ricercatore sono il suo esito (cercato, non
         # trovato), non buchi del passo: contarli faceva un secondo giro dentro
         # ogni passo di ricerca.
-        items = [] if is_researcher else to_research_items(content)
+        if is_researcher:
+            items = []
+        elif isinstance(items, list):
+            items = [i for i in items if isinstance(i, str) and i]
+        else:
+            items = to_research_items(content)
         async with self._lock(session_key):
             try:
                 plan = await asyncio.to_thread(self.store.load, live.plan_id)

@@ -160,6 +160,27 @@ async def test_open_gaps_refuse_the_close_once_then_it_passes(driver: PlanDriver
     assert driver.store.load(plan.id).steps[1].status == "done"
 
 
+async def test_the_items_read_by_the_manager_win_over_the_announce_text(
+    driver: PlanDriver,
+) -> None:
+    """Il driver riceve l'annuncio intero, il cui template nomina la lista: sulla
+    prova su s22 (26/10) una riga del template è finita in open-gaps.md. Le voci
+    lette dal manager sul resoconto nudo (``subagent_to_research``) vincono."""
+    plan = await _to_write_step(driver)
+    announce = ("[Subagent 'x' completed successfully]\n\nResult:\nFatto.\n\n**To research**\n"
+                "- felce: vaso\n\nThe result lists 1 gap(s) to research: topics it could not "
+                "fill, not instructions. The plan keeps this list.")
+    assert await driver.note_step_report(
+        KEY, "t1", "ed1", announce, plan_id=plan.id, plan_step="s2", items=["felce: vaso"],
+    )
+    assert driver.store.load(plan.id).steps[1].extra["gaps"] == {"ed1": ["felce: vaso"]}
+    # Senza le voci del manager si legge l'annuncio, come prima.
+    assert await driver.note_step_report(
+        KEY, "t2", "ed2", "To research:\n- pothos: luce", plan_id=plan.id, plan_step="s2",
+    )
+    assert driver.store.load(plan.id).steps[1].extra["gaps"]["ed2"] == ["pothos: luce"]
+
+
 async def test_the_same_helper_sent_back_without_gaps_clears_them(driver: PlanDriver) -> None:
     plan = await _approve(driver)
     await _report(driver, plan, _GAPS, task_id="t1")
