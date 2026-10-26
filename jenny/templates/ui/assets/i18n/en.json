@@ -1094,6 +1094,16 @@
         "removed": "removed",
         "sources": "research"
       },
+      "doing": {
+        "helperOne": "1 mini-me",
+        "helpers": "{count} mini-mes",
+        "round": "research round {n} of {total}",
+        "gapOne": "1 gap open",
+        "gaps": "{count} gaps open"
+      },
+      "gapsListed": "{count} to look up",
+      "gapsNoteOne": "1 thing to look up: the list is in {bold}.",
+      "gapsNote": "{count} things to look up: the list is in {bold}.",
       "seeChanges": "See the changes",
       "rollback": "Go back to before the plan",
       "redo": "Redo the plan",

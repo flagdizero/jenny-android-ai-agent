@@ -739,6 +739,97 @@ assert.equal(rpcs('plan.pause').length, 1);
 """)
 
 
+def test_the_card_and_the_strip_say_what_the_step_is_doing() -> None:
+    """Sul Titan (26/10) un passo in corso diceva «da 47 min» e basta, e un giro
+    di ricerca sembrava un guasto. Ora la sotto-riga dice le mini-me al lavoro
+    per il passo (dallo snapshot `subagent_status`, per `plan_step`), il giro di
+    ricerca aperto e le lacune ancora aperte; la striscia ripete la stessa riga."""
+    run_home(_HEAD + """
+const helper = (id, plan_step, over = {}) => ({ task_id: id, lineage_id: `L${id}`, label: `editor ${id}`,
+  state: 'running', elapsed_s: 30, idle_s: 1, plan_id: 'p1', plan_step, ...over });
+current = plan({ status: 'running', done: 1, total: 3, current_step_id: 's2', rounds_max: 2,
+  research_rounds: 1, rounds_left: 1,
+  steps: [step('s1', 'A', { status: 'done' }),
+    step('s2', 'Write oregano', { kind: 'write', status: 'now', started_at: new Date().toISOString(),
+      research_round: 1, gaps_open: 2 }),
+    step('s3', 'Check', { kind: 'check' })] });
+await toNotebook();
+const sub = () => text(card().querySelector('[data-step-id="s2"] .home-plan-sub'));
+// Senza mini-me: il giro e le lacune, dal piano.
+assert.equal(sub(), [P.nowJustStarted, P.doing.round.replace('{n}', '1').replace('{total}', '2'),
+  P.doing.gaps.replace('{count}', '2')].join(' · '));
+// Lo snapshot: tre per questo passo, una di un altro passo, una senza passo.
+frame({ event: 'subagent_status', chat_id: 'project:orto', recent: [],
+  running: [helper('t1', 's2'), helper('t2', 's2'), helper('t3', 's2'), helper('t4', 's1'),
+    helper('t5', null, { plan_id: null })] });
+await tick(20);
+assert.equal(sub(), [P.nowJustStarted, P.doing.helpers.replace('{count}', '3'),
+  P.doing.round.replace('{n}', '1').replace('{total}', '2'), P.doing.gaps.replace('{count}', '2')].join(' · '));
+// La striscia, quando la scheda e' fuori vista, dice la stessa riga.
+const thread = $('home-thread');
+thread.getBoundingClientRect = () => ({ top: 0, bottom: 500, height: 500, left: 0, right: 400, width: 400 });
+card().getBoundingClientRect = () => ({ top: -400, bottom: -20, height: 380, left: 0, right: 400, width: 400 });
+thread.dispatchEvent(new Event('scroll'));
+const strip = document.querySelector('#home-chat > .home-plan-strip');
+assert.equal(strip.hidden, false);
+assert.match(text(strip), /Step 2 · Write oregano · 3 mini-mes · research round 1 of 2 · 2 gaps open/);
+// Una mini-me sola, una lacuna sola: al singolare. Il piano cambia con un frame suo.
+current = { ...current, steps: [current.steps[0], { ...current.steps[1], gaps_open: 1 }, current.steps[2]] };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+frame({ event: 'subagent_status', chat_id: 'project:orto', recent: [], running: [helper('t1', 's2')] });
+await tick(20);
+assert.equal(sub(), [P.nowJustStarted, P.doing.helperOne,
+  P.doing.round.replace('{n}', '1').replace('{total}', '2'), P.doing.gapOne].join(' · '));
+// Finite le mini-me e colmate le lacune: resta il giro, che il passo ha aperto.
+current = { ...current, steps: [current.steps[0], { ...current.steps[1], gaps_open: 0 }, current.steps[2]] };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+frame({ event: 'subagent_status', chat_id: 'project:orto', recent: [], running: [] });
+await tick(20);
+assert.equal(sub(), [P.nowJustStarted, P.doing.round.replace('{n}', '1').replace('{total}', '2')].join(' · '));
+// Un passo senza niente da dire: solo il tempo, come prima.
+current = { ...current, done: 2, current_step_id: 's3', steps: [current.steps[0],
+  { ...current.steps[1], status: 'done', ended_at: new Date().toISOString() },
+  { ...current.steps[2], status: 'now', started_at: new Date().toISOString(), research_round: null, gaps_open: 0 }] };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(text(card().querySelector('[data-step-id="s3"] .home-plan-sub')), P.nowJustStarted);
+""")
+
+
+def test_a_closed_plan_counts_what_is_left_to_look_up() -> None:
+    """A piano chiuso la scheda dice quante cose sono rimaste da cercare (la somma
+    dei `gaps_listed` dei passi) e dove sta la lista; il passo che le ha lasciate
+    lo dice nella sua riga. Sulla prova del 26/10 Jenny non l'ha nominata in chat."""
+    run_home(_HEAD + """
+const ended = '2026-10-23T12:00:00Z';
+current = plan({ status: 'done', done: 3, total: 3, updated_at: ended, steps: [
+  step('s1', 'Write oregano', { kind: 'write', status: 'done', ended_at: ended, note: 'written',
+    gaps_listed: 3 }),
+  step('s2', 'Write parsley', { kind: 'write', status: 'done', ended_at: ended, gaps_listed: 0 }),
+  step('s3', 'Check', { kind: 'check', status: 'done', ended_at: ended, gaps_listed: 1 })] });
+open = [];
+await toNotebook();
+const note = () => card().querySelector('.home-plan-gaps');
+assert.ok(note(), 'la riga delle lacune c\\'e\\'');
+assert.equal(text(note()), P.gapsNote.replace('{count}', '4').replace('{bold}', 'raw/notes/open-gaps.md'));
+assert.equal(note().querySelector('b').textContent, 'raw/notes/open-gaps.md');
+assert.equal(text(card().querySelector('[data-step-id="s1"] .home-plan-sub')),
+  'written · ' + P.gapsListed.replace('{count}', '3'));
+assert.equal(card().querySelector('[data-step-id="s2"] .home-plan-sub'), null, 'niente da dire: niente riga');
+// Una sola: al singolare. Nessuna: niente riga.
+current = plan({ ...current, steps: current.steps.map((s) => ({ ...s, gaps_listed: s.id === 's3' ? 1 : 0 })) });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(text(note()), P.gapsNoteOne.replace('{bold}', 'raw/notes/open-gaps.md'));
+current = plan({ ...current, steps: current.steps.map((s) => ({ ...s, gaps_listed: 0 })) });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(note(), null);
+""")
+
+
 def test_the_full_plan_is_a_read_only_sheet() -> None:
     run_home(_HEAD + """
 current = plan();

@@ -48,6 +48,13 @@ const RAN_STATUSES = new Set(['done', 'stopped', 'rolled_back']);
 /* Il composer e' spento solo mentre un passo gira: in pausa e in blocco si parla. */
 const COMPOSER_OFF = new Set(['running', 'pausing']);
 
+/** Dove il piano scrive le lacune che non ha colmato: la stessa di
+ *  `jenny/plan/driver.py::OPEN_GAPS_PATH`, relativa al quaderno. */
+export const OPEN_GAPS_PATH = 'raw/notes/open-gaps.md';
+/** I giri di ricerca di un piano, se il gateway non lo dice (`rounds_max`):
+ *  `jenny/plan/driver.py::MAX_RESEARCH_ROUNDS`. */
+const ROUNDS_MAX = 2;
+
 const KIND_ICON = {
   research: 'ti-world-search',
   write: 'ti-pencil',
@@ -276,13 +283,18 @@ export class HomePlan {
    * @param refreshStaged rilegge le bozze (una che il piano nomina e l'elenco no).
    * @param onDraftsChange chiamata quando cambiano le bozze che la scheda mostra.
    * @param keyboard   `() => boolean`: c'e' una tastiera fisica (`home-focus.js`).
+   * @param helpers    `() => [...]`: le mini-me al lavoro nella chat a schermo,
+   *                   come le tiene `WorkBubbles` (lo snapshot `subagent_status`),
+   *                   per contare quelle del passo in corso (`plan_step`).
    */
   constructor({
     live, thread, chatEl, composer = {}, currentNotebook, onChange, onLockChange,
     onComposerChange, sendText, appendOwn, turnRunning, sheet,
     stagedItems, stagedFailed, refreshStaged, onDraftsChange, keyboard = physicalKeyboard,
+    helpers,
   } = {}) {
     this.keyboard = keyboard;
+    this.helpers = helpers || (() => []);
     this.live = live;
     this.thread = thread;
     this.chatEl = chatEl;
@@ -849,6 +861,14 @@ export class HomePlan {
     thread.insertBefore(this.card, target);
   }
 
+  /** Le mini-me della chat sono cambiate (`WorkBubbles` ha letto uno snapshot):
+   *  la sotto-riga del passo in corso le conta, e si ridisegna. Solo con un
+   *  piano vivo a schermo: una scheda finita non ne parla. */
+  helpersChanged() {
+    const plan = this._shown();
+    if (plan && this.card && LIVE_STATUSES.has(plan.status)) this._draw();
+  }
+
   /* Le bozze mostrate dalla scheda sono cambiate (un blocco nuovo, uno
      risolto, un'altra chat): la scheda delle bozze ridisegna senza quelle. */
   _syncDrafts() {
@@ -922,6 +942,8 @@ export class HomePlan {
     if (plan.status === 'done' || plan.status === 'stopped') {
       const sum = this._summary(plan);
       if (sum) parts.push(sum);
+      const gaps = this._gapsNote(plan);
+      if (gaps) parts.push(gaps);
     }
     if (plan.status === 'rolled_back') parts.push(this._rolledBackNote(plan));
     if (plan.rollback_failed) parts.push(this._rollbackFailedNote(plan));
@@ -945,6 +967,48 @@ export class HomePlan {
       : steps.filter((s) => s.status === 'done' || s.status === 'skipped').length;
     const total = Number.isFinite(plan.total) ? plan.total : steps.length;
     return { done, total, steps };
+  }
+
+  /** Cosa sta facendo il passo in corso, oltre al tempo: le mini-me al lavoro
+   *  per lui (dallo snapshot `subagent_status`, per `plan_step`), il giro di
+   *  ricerca che ha aperto («ricerca 1 di 2», `research_round` del passo e
+   *  `rounds_max` del piano) e le lacune che i suoi aiutanti hanno riportato e
+   *  sono ancora aperte (`gaps_open`). Sul Titan (26/10) la scheda diceva «da
+   *  47 min» e basta, e un giro di ricerca sembrava un guasto. Vuoto se non
+   *  c'e' niente da dire: il tempo basta. */
+  _doing(plan, step) {
+    const parts = [];
+    const helpers = this._helpersOf(plan, step);
+    if (helpers === 1) parts.push(t('doing.helperOne'));
+    else if (helpers > 1) parts.push(t('doing.helpers', { count: helpers }));
+    const round = Number(step.research_round) || 0;
+    if (round > 0) parts.push(t('doing.round', { n: round, total: Number(plan.rounds_max) || ROUNDS_MAX }));
+    const gaps = Number(step.gaps_open) || 0;
+    if (gaps === 1) parts.push(t('doing.gapOne'));
+    else if (gaps > 1) parts.push(t('doing.gaps', { count: gaps }));
+    return parts;
+  }
+
+  /** Quante mini-me lavorano per *step*: quelle dello snapshot col suo
+   *  `plan_step` (e il suo piano, se lo dicono). Senza snapshot, zero. */
+  _helpersOf(plan, step) {
+    let list = [];
+    try {
+      list = this.helpers() || [];
+    } catch { /* senza le bolle di lavoro la scheda conta zero */ }
+    if (!Array.isArray(list)) return 0;
+    return list.filter((e) => e && e.plan_step === step.id && (!e.plan_id || e.plan_id === plan.id)).length;
+  }
+
+  /** A piano chiuso, quante cose sono rimaste da cercare (la somma dei
+   *  `gaps_listed` dei passi) e dove sta la lista. Niente se zero. */
+  _gapsNote(plan) {
+    const count = countedSteps(plan).reduce((sum, s) => sum + (Number(s.gaps_listed) || 0), 0);
+    if (!count) return null;
+    const note = el('div', 'home-plan-note home-plan-gaps');
+    note.append(icon('ti-list-search'),
+      withBold(t(count === 1 ? 'gapsNoteOne' : 'gapsNote', { count }), OPEN_GAPS_PATH));
+    return note;
   }
 
   /* Il numero del passo corrente, contato fra quelli del piano (1-based). */
@@ -1234,16 +1298,21 @@ export class HomePlan {
     let sub = '';
     if (step.status === 'now') {
       const minutes = minutesBetween(step.started_at);
-      sub = minutes ? t('nowSince', { minutes }) : t('nowJustStarted');
+      sub = [minutes ? t('nowSince', { minutes }) : t('nowJustStarted'), ...this._doing(plan, step)]
+        .join(' · ');
     } else if (step.status === 'blocked') {
       const at = clockOf(plan.blocked?.at || step.started_at);
-      sub = at ? t('blockedSince', { time: at }) : '';
+      sub = [at ? t('blockedSince', { time: at }) : '', ...this._doing(plan, step)]
+        .filter(Boolean).join(' · ');
     } else if (step.status === 'skipped') {
       sub = step.note ? t('skippedBecause', { why: step.note }) : t('skipped');
     } else if (step.status === 'interrupted') {
       sub = t('interrupted');
     } else {
-      sub = [step.note, machineLine(step)].filter(Boolean).join(' · ');
+      /* Un passo fatto che ha lasciato lacune nella lista del quaderno lo dice. */
+      const listed = Number(step.gaps_listed) || 0;
+      sub = [step.note, machineLine(step), listed ? t('gapsListed', { count: listed }) : '']
+        .filter(Boolean).join(' · ');
     }
     if (sub) item.appendChild(el('span', 'home-plan-sub', sub));
     if (step.status === 'blocked' && plan.status === 'blocked') {
@@ -1764,7 +1833,10 @@ export class HomePlan {
     /* La scheda sta nel filo dove il piano e' nato: di solito sopra. */
     const toward = this._cardAbove() ? 'ti-arrow-up' : 'ti-arrow-down';
     let title = t('strip.title', { title: plan.title || '' });
-    let sub = current ? t('strip.step', { n: index, title: current.title }) : '';
+    /* La stessa sotto-riga della scheda: mini-me, giro di ricerca, lacune. */
+    let sub = current
+      ? [t('strip.step', { n: index, title: current.title }), ...this._doing(plan, current)].join(' · ')
+      : '';
     let btnIcon = 'ti-player-pause';
     let btnLabel = t('pause');
     let run = () => this._call('pause', { id: plan.id });

@@ -103,6 +103,7 @@ export class WorkBubbles {
    *   sendCommand?: (text: string) => void,
    *   openBoard?: () => void,
    *   onOpenInWorkshop?: () => void,
+   *   onHelpers?: (running: any[]) => void,  // le mini-me al lavoro sono cambiate
    *   now?: () => number,
    * }} deps
    */
@@ -326,6 +327,8 @@ export class WorkBubbles {
     this._maybeDoneHelpers(running, recent);
     this._resolveRestarted(all);
     this._changed();
+    /* La scheda del piano conta le mini-me del passo in corso da qui. */
+    this.deps.onHelpers?.(running);
   }
 
   _paintHelpers() {
@@ -856,6 +859,7 @@ export class WorkBubbles {
     this._seenRunning.clear();
     this._hideDone();
     this._changed();
+    this.deps.onHelpers?.([]);
   }
 
   applyTranslations() {

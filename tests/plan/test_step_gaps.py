@@ -330,8 +330,10 @@ async def test_the_gate_spends_one_of_the_plans_two_rounds(
     plan = driver.store.load(plan.id)
     assert plan.steps[3].extra["gaps_listed"] == ["pilea: pupazzi all'anno"]
     view = plan_view(plan)
-    assert view["research_rounds"] == 2 and view["rounds_left"] == 0
+    assert view["research_rounds"] == 2 and view["rounds_left"] == 0 and view["rounds_max"] == 2
     assert view["steps"][3]["gaps_listed"] == 1 and view["steps"][3]["gaps_open"] == 0
+    # La scheda dice quale passo ha aperto quale giro: il terzo nessuno.
+    assert [s["research_round"] for s in view["steps"]] == [None, 1, 2, None, None]
 
 
 async def test_a_research_step_does_not_spend_the_budget(
@@ -446,6 +448,11 @@ async def test_the_view_counts_the_open_gaps_of_the_step(driver: PlanDriver) -> 
     await _report(driver, plan, _GAPS, step="s2")
     view = plan_view(driver.store.load(plan.id))
     assert view["steps"][1]["gaps_open"] == 2 and view["rounds_left"] == 2
+    # Il giro si apre col rifiuto del cancello, non col resoconto.
+    assert view["steps"][1]["research_round"] is None
+    await driver.step_done(KEY, "fatto")
+    view = plan_view(driver.store.load(plan.id))
+    assert view["steps"][1]["research_round"] == 1 and view["rounds_left"] == 1
 
 
 # ── chi cancella non cerca, chi è fermo è fermo ─────────────────────────────

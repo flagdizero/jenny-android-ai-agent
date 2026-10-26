@@ -134,6 +134,9 @@ _NUDGE_USED = "used"
 _GAPS = "gaps"
 _GAPS_GATE = "gaps_gate"
 _GAPS_GATE_USED = "used"
+# Il giro di ricerca che il cancello ha aperto in questo passo (1 o 2), per la
+# scheda: «ricerca 1 di 2» sotto il passo in corso, invece di «da 47 min».
+_RESEARCH_ROUND = "research_round"
 # I lineage dei ricercatori che hanno riportato nel passo (per la scheda e i log).
 _RESEARCH_LINEAGES = "research_lineages"
 # **Il budget di ricerca del piano.** La ricerca dentro un piano è pianificata
@@ -1169,9 +1172,11 @@ class PlanDriver:
                     spend = rounds < MAX_RESEARCH_ROUNDS
 
                     def _gate(p: Plan) -> None:
-                        _find(p, step_id).extra[_GAPS_GATE] = _GAPS_GATE_USED
+                        s = _find(p, step_id)
+                        s.extra[_GAPS_GATE] = _GAPS_GATE_USED
                         if spend:
                             p.extra[_RESEARCH_ROUNDS] = rounds + 1
+                            s.extra[_RESEARCH_ROUND] = rounds + 1
 
                     await asyncio.to_thread(self.store.update, plan.id, _gate)
                     logger.info(
@@ -2783,7 +2788,7 @@ class PlanDriver:
             s.photo_after = None
             for key in (_NUDGE, _PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION,
                         _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE,
-                        _GAPS_LISTED, _RESEARCH_LINEAGES, _MACHINE):
+                        _GAPS_LISTED, _RESEARCH_ROUND, _RESEARCH_LINEAGES, _MACHINE):
                 s.extra.pop(key, None)
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _open)
@@ -3399,8 +3404,10 @@ def plan_view(plan: Plan) -> dict[str, Any]:
     photos = plan.photos
     data = plan.to_dict()
     # Cosa fa il passo, per la scheda: i buchi aperti del passo in corso, quelli
-    # messi in lista, e quanto budget di ricerca resta al piano (26/10: «aperto
-    # da 47 minuti» senza dire che era un giro di ricerca).
+    # messi in lista, il giro di ricerca che il passo ha aperto, e quanto budget
+    # di ricerca resta al piano (26/10: «aperto da 47 minuti» senza dire che
+    # era un giro di ricerca). Gli aiutanti al lavoro per il passo la scheda li
+    # conta da sola, dallo snapshot ``subagent_status`` che riceve comunque.
     for raw_step, step in zip(data["steps"], plan.steps):
         raw_step["gaps_open"] = (
             sum(len(v) for v in _open_gaps(step).values())
@@ -3408,10 +3415,13 @@ def plan_view(plan: Plan) -> dict[str, Any]:
         )
         listed = step.extra.get(_GAPS_LISTED)
         raw_step["gaps_listed"] = len(listed) if isinstance(listed, list) else 0
+        round_ = step.extra.get(_RESEARCH_ROUND)
+        raw_step["research_round"] = round_ if isinstance(round_, int) and round_ > 0 else None
     rounds = _research_rounds(plan)
     data.update(
         {
             "research_rounds": rounds,
+            "rounds_max": MAX_RESEARCH_ROUNDS,
             "rounds_left": max(0, MAX_RESEARCH_ROUNDS - rounds),
             "done": counts["finished"],
             "total": counts["total"],

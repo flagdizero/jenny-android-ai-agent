@@ -1094,6 +1094,16 @@
         "removed": "tolti",
         "sources": "ricerche"
       },
+      "doing": {
+        "helperOne": "1 mini-me",
+        "helpers": "{count} mini-me",
+        "round": "ricerca {n} di {total}",
+        "gapOne": "1 lacuna aperta",
+        "gaps": "{count} lacune aperte"
+      },
+      "gapsListed": "{count} da cercare",
+      "gapsNoteOne": "1 cosa da cercare: la lista è in {bold}.",
+      "gapsNote": "{count} cose da cercare: la lista è in {bold}.",
       "seeChanges": "Vedi le modifiche",
       "rollback": "Torna a prima del piano",
       "redo": "Rifai il piano",

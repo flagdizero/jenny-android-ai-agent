@@ -919,6 +919,10 @@ body.home {
 .home-plan-tag.is-ask { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 65%, transparent); }
 .home-plan-closing { display: flex; gap: 6px; align-items: center; }
 .home-plan-closing > .ti { color: var(--flower); }
+/* A piano chiuso: quante cose restano da cercare, e il file della lista. */
+.home-plan-gaps { display: flex; gap: 6px; align-items: flex-start; }
+.home-plan-gaps > .ti { color: var(--warning); flex: none; margin-top: 1px; }
+.home-plan-gaps b { font-weight: 600; overflow-wrap: anywhere; }
 .home-plan-answer {
   width: 100%;
   box-sizing: border-box;

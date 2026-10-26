@@ -224,6 +224,8 @@ class HomeApp {
         this.openBoard();
       },
       onOpenInWorkshop: () => this._openInWorkshop(null, sessionManager.currentKey),
+      /* La scheda del piano dice quante mini-me lavorano al passo in corso. */
+      onHelpers: () => this.plan?.helpersChanged(),
     });
     /* Le bozze di un subagent che ha letto qualcosa da fuori: una scheda nel
        posto live, con Installa / Scarta (v. `home-staged.js`). */
@@ -286,6 +288,7 @@ class HomeApp {
       stagedFailed: () => this.staged.failed,
       refreshStaged: () => this.staged.refresh(),
       onDraftsChange: () => this.staged.redraw(),
+      helpers: () => this.work?.helpers || [],
     });
     /* La storia riletta entra davanti al posto vivo: la scheda di un piano finito,
        che sta nel filo al suo posto, va rimessa dove era (`HomePlan.place`). */
