@@ -1186,6 +1186,8 @@ class PlanDriver:
                         f"research round {rounds + 1} of {MAX_RESEARCH_ROUNDS}"
                         if spend else "research budget used",
                     )
+                    # «ricerca 1 di 2» sulla scheda: il giro è appena aperto.
+                    await self._changed(plan)
                     return (
                         _gaps_refusal(gaps, round_=rounds + 1)
                         if spend else _gaps_budget_used(gaps)
@@ -1794,6 +1796,10 @@ class PlanDriver:
         logger.info(
             "Plan {}: step {} has {} gap(s) from helper {}", live.plan_id, step_id, len(items), key
         )
+        # La scheda legge `gaps_open` da `plan.get`, e rilegge solo a un
+        # `plan_changed`: senza questo, «4 lacune aperte» non si è mai visto
+        # (s22, 26/10 sera: la riga diceva «appena cominciato» per tutto il passo).
+        await self._changed(plan)
         return True
 
     async def before_user_turn(self, session_key: str, metadata: dict[str, Any]) -> None:

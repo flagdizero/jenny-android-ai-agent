@@ -240,6 +240,24 @@ async def test_the_items_read_by_the_manager_win_over_the_announce_text(
     assert driver.store.load(plan.id).steps[1].extra["gaps"]["ed2"] == ["pothos: luce"]
 
 
+async def test_gaps_and_the_round_tell_the_card_to_reread(driver: PlanDriver) -> None:
+    """La scheda legge `gaps_open` e `research_round` da `plan.get`, e rilegge solo a
+    un `plan_changed`: su s22 (26/10 sera) la riga del passo diceva «appena
+    cominciato» per tutto il passo con quattro lacune aperte e il giro aperto."""
+    plan = await _to_step_two(driver, await _approve(driver))
+
+    def changed() -> int:
+        return sum(1 for m in driver.bus.outbound if m.metadata.get("_plan_changed"))
+
+    before = changed()
+    assert await _report(driver, plan, _GAPS, step="s2") is True
+    assert changed() == before + 1, "le lacune nuove avvisano la scheda"
+    assert await _report(driver, plan, "fatto, niente da cercare", step="s2", lineage="ed2") is False
+    assert changed() == before + 1, "un resoconto senza lacune e senza cambiamenti no"
+    assert "Research round 1 of 2" in await driver.step_done(KEY, "fatto")
+    assert changed() == before + 2, "il giro aperto avvisa la scheda"
+
+
 async def test_a_list_the_parser_cannot_read_is_logged(
     driver: PlanDriver, caplog: pytest.LogCaptureFixture
 ) -> None:
