@@ -644,9 +644,11 @@ body.home {
   width: calc(100% + var(--jenny-dodge, 0px));
   margin-right: calc(-1 * var(--jenny-dodge, 0px));
 }
+/* Larga quanto la chat, senza tetto: fino al 26/10 si fermava a 520 px, e in
+   una finestra piu' larga del telefono (il Mac con l'accesso remoto) lasciava
+   vuota tutta la fascia a destra. */
 .home-plan {
   width: 100%;
-  max-width: 520px;
   gap: 10px;
   padding: 14px 14px 12px;
   user-select: text;

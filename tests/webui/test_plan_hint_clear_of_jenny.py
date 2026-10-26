@@ -37,3 +37,11 @@ def test_the_plan_card_takes_back_jennys_dodge() -> None:
     rule = _rule(".home-live > .home-plan")
     assert "width: calc(100% + var(--jenny-dodge" in rule
     assert "margin-right: calc(-1 * var(--jenny-dodge" in rule
+
+
+def test_the_plan_card_has_no_width_cap() -> None:
+    """Larga quanto la chat: fino al 26/10 un ``max-width: 520px`` la fermava a metà
+    in una finestra più larga del telefono (il Mac con l'accesso remoto)."""
+    text = _CSS.read_text(encoding="utf-8")
+    for found in re.finditer(r"(^|\n)([^{}\n]*\.home-plan)\s*\{([^}]*)\}", text):
+        assert "max-width" not in found.group(3), found.group(2)
