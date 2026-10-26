@@ -112,7 +112,12 @@ def test_the_known_failures_are_still_failing() -> None:
     che impedisce a un nome di restare nell'elenco dopo essere stato corretto —
     cioè a un'esenzione di sopravvivere alla propria ragione. Il giorno in cui
     qualcuno ne aggiunge uno, torna a servire.
+
+    Con l'insieme vuoto non rifà nemmeno il giro: 233 import a freddo, quasi
+    cinque secondi, per confrontarli con niente.
     """
+    if not _KNOWN_COLD_IMPORT_FAILURES:
+        return
     failures = _sweep()
     fixed = sorted(_KNOWN_COLD_IMPORT_FAILURES - set(failures))
 

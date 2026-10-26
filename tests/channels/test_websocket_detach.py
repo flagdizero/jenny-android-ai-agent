@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import websockets
-from port_alloc import free_port
+from port_alloc import free_port, wait_listening
 
 from jenny.bus.events import OutboundMessage
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
@@ -118,7 +118,7 @@ async def test_a_left_notebook_sends_no_more_frames_over_the_wire() -> None:
     port = free_port()
     channel = _channel(port)
     server = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         async with websockets.connect(f"ws://127.0.0.1:{port}/ws?client_id=x") as client:
             assert json.loads(await client.recv())["event"] == "ready"

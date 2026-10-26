@@ -27,7 +27,7 @@ from jenny.plan.store import PlanStore
 from jenny.providers.base import LLMResponse, ToolCallRequest
 from jenny.session.goal_state import set_plan_probe
 from jenny.session.history_meta import INJECTED_EVENT_META, PLAN_STEP_EVENT
-from tests.support.aio import wait_until
+from tests.support.aio import stop_agent_loop, wait_until
 
 KEY = "project:piante"
 PLAN_TOOLS = {"plan_propose", *PLAN_STEP_TOOLS}
@@ -268,8 +268,7 @@ async def _run(loop: AgentLoop) -> asyncio.Task:
 
 
 async def _stop(loop: AgentLoop, task: asyncio.Task) -> None:
-    loop.stop()
-    await asyncio.wait_for(task, timeout=5)
+    await stop_agent_loop(loop, task)
 
 
 async def test_propose_approve_and_three_steps_to_done(workspace: Path) -> None:

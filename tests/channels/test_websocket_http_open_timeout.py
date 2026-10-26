@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from port_alloc import free_port
+from port_alloc import free_port, wait_listening
 
 import jenny.channels.websocket as websocket_module
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
@@ -60,7 +60,7 @@ async def _get(port: int) -> httpx.Response:
 async def _serve_and_get(port: int) -> httpx.Response:
     channel = _channel(port)
     task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         return await _get(port)
     finally:

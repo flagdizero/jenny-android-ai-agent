@@ -900,6 +900,11 @@ class TestStopAbandonsStuckTasks:
         task, release = self._stubborn_task()
         await asyncio.sleep(0)
         loop._active_tasks[UNIFIED_SESSION_KEY] = [task]
+        # Il task testardo non cede: ``cmd_stop`` aspetterebbe tutta la grace
+        # vera (2 s). Qui conta cosa succede dopo l'abbandono, non quanto dura
+        # l'attesa, che i test sopra provano già con ``grace_s=0.05``.
+        cancel = loop._cancel_active_tasks
+        loop._cancel_active_tasks = lambda key, **kw: cancel(key, **{**kw, "grace_s": 0.05})
 
         msg = InboundMessage(channel="test", sender_id="u1", chat_id="c1", content="/stop")
         ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw="/stop", loop=loop)

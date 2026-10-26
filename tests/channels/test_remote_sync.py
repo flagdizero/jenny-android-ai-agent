@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import websockets
-from port_alloc import free_port
+from port_alloc import free_port, wait_listening
 
 from jenny.bus.events import OutboundMessage
 from jenny.channels import ws_remote
@@ -81,7 +81,7 @@ async def _start(ch: WebSocketChannel, remote_port: int) -> asyncio.Task[None]:
         poll_s=3600,
     )
     task = asyncio.create_task(ch.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(ch)
     await ch._remote.apply(enabled=True, key="remote-key")
     return task
 
@@ -208,7 +208,7 @@ async def test_the_thread_route_returns_the_revision(bus, data_dir) -> None:
     append_transcript_object("websocket:default", {"event": "message", "chat_id": "default",
                                                    "text": "ciao"})
     task = asyncio.create_task(ch.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(ch)
     try:
         import httpx
 
