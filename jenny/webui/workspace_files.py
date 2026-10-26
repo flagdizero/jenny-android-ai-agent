@@ -218,10 +218,18 @@ def read_download(path: Path) -> bytes:
 
 def write_file(path: Path, content: str) -> None:
     """Write content to file."""
+    from jenny.utils.wiki_paths import keep_wiki_id
+
     # Salvataggio dall'editor della WebUI: riscrive il file intero, quindi un
     # processo ucciso a metà lo troncherebbe. Il contenuto vecchio resta valido
     # fino al rename finale.
-    atomic_write(path, content)
+    #
+    # L'``AGENTS.md`` di un quaderno si salva sempre con il suo ``id:``: e' la riga
+    # che lega il quaderno alla sua chat, e chi la toglie dall'editor non sa di
+    # farlo. Rimessa in silenzio e non rifiutata — il file e' dell'utente, e un
+    # rifiuto sarebbe un cancello che non protegge niente che non si possa
+    # rimettere.
+    atomic_write(path, keep_wiki_id(path, content))
 
 
 def create_directory(path: Path) -> None:

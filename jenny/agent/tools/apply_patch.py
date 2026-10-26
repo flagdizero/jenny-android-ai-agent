@@ -8,7 +8,7 @@ from typing import Any
 
 from jenny.agent import staged_writes
 from jenny.agent.tools.base import tool_parameters
-from jenny.agent.tools.filesystem import _FsTool, staged_reply
+from jenny.agent.tools.filesystem import _FsTool, _wiki_id_guard, staged_reply
 from jenny.agent.tools.schema import (
     ArraySchema,
     BooleanSchema,
@@ -240,6 +240,15 @@ class ApplyPatchTool(_FsTool):
                 # Il dry-run non passa dal gancio: non scrive niente, quindi non
                 # c'è niente da rifiutare, e rifiutarlo nasconderebbe proprio il
                 # riepilogo che serve a capire di quanto si sta sforando.
+                #
+                # **Tranne l'id di un quaderno**, che non e' una misura: nessun
+                # taglio fa passare una patch che lo toglie, e un dry-run che
+                # dice «succeeded» per una patch che la scrittura vera rifiutera'
+                # e' una verifica che mente. L'ha notato l'aiutante stesso, al
+                # collaudo su jenny_s22 (26/10).
+                for target, pending_text in writes.items():
+                    if (refusal := _wiki_id_guard(target, pending_text)) is not None:
+                        return refusal
                 return "Patch dry-run succeeded:\n" + "\n".join(
                     _format_summary(summary) for summary in summaries
                 )

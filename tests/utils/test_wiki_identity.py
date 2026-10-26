@@ -18,6 +18,7 @@ La lezione del passo 6: si rifiuta invece di scegliere.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -28,7 +29,9 @@ from jenny.utils.wiki_paths import (
     find_wiki_by_id,
     is_valid_wiki_id,
     new_wiki_id,
+    settle_wiki_id_lines,
     wiki_id,
+    wiki_id_in_text,
 )
 
 
@@ -405,16 +408,15 @@ def test_four_boots_over_an_unparsable_frontmatter_write_one_id(wikis: Path) -> 
     assert "summary: Prova del passo 7: la chat segue" in text
 
 
-def test_a_hand_written_non_hex_id_gets_a_real_one_above_it(wikis: Path) -> None:
-    """Scelta deliberata: la riga dell'utente **resta**, la nostra le va sopra.
+def test_a_hand_written_non_hex_id_becomes_previous_id_under_a_real_one(wikis: Path) -> None:
+    """La riga dell'utente **resta**, col suo valore; cambia solo la chiave.
 
-    Le altre due strade erano peggiori. Riscrivere ``id: tesi-2024`` in loco
-    cancella testo che l'utente ha scritto a mano, che è l'unica cosa che questa
-    migrazione promette di non fare. Lasciar perdere la wiki (trattare *qualsiasi*
-    riga ``id:`` come "ce l'ha") le toglie in silenzio e per sempre la sola cosa
-    per cui l'id esiste: ritrovare la propria chat dopo un rinomino. Il lettore
-    prende il primo match, cioè il nostro, quindi dal secondo avvio non si muove
-    più niente.
+    Fino al 26/10 restava ``id: tesi-2024`` sotto il nostro: due ``id:`` nella
+    stessa frontmatter, che a un modello sembrano un doppione da pulire — e su
+    Piante (Titan) un aiutante ha pulito via quello giusto, chiudendo fuori la
+    chat del quaderno. Riscrivere il valore cancellerebbe testo dell'utente;
+    lasciar perdere la wiki le toglierebbe l'id. ``previous_id:`` tiene
+    entrambe le promesse.
     """
     project = _wiki(wikis, "tesi", "AGENTS.md", "---\nid: tesi-2024\nsummary: la mia tesi\n---\n")
 
@@ -423,9 +425,127 @@ def test_a_hand_written_non_hex_id_gets_a_real_one_above_it(wikis: Path) -> None
     assert migrate_wikis(wikis)["identified"] == []
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == after_first
 
-    assert "id: tesi-2024" in after_first, "la riga scritta a mano non si tocca"
+    assert "previous_id: tesi-2024" in after_first.splitlines(), after_first
+    assert len(_id_lines(after_first)) == 1, after_first
     assert is_valid_wiki_id(wiki_id(project))
-    assert _id_lines(after_first)[0] != "id: tesi-2024", "il nostro id va letto per primo"
+    assert "summary: la mia tesi" in after_first
+
+
+def test_a_wiki_left_with_two_ids_keeps_the_real_one_and_renames_the_other(
+    wikis: Path,
+) -> None:
+    """Lo stato in cui la migrazione di prima ha lasciato Piante: si sistema da se'.
+
+    Non e' un id scritto (``identified`` resta vuoto): l'id c'era e non cambia.
+    """
+    body = "---\nid: 097d8ba49406\nid: piante\nscope: x\n---\n\n# Piante\n"
+    project = _wiki(wikis, "piante", "AGENTS.md", body)
+
+    assert migrate_wikis(wikis)["identified"] == []
+    text = (project / "AGENTS.md").read_text(encoding="utf-8")
+    assert text == "---\nid: 097d8ba49406\nprevious_id: piante\nscope: x\n---\n\n# Piante\n"
+    migrate_wikis(wikis)
+    assert (project / "AGENTS.md").read_text(encoding="utf-8") == text
+
+
+def test_a_valid_id_under_a_hand_written_one_is_found_not_replaced(wikis: Path) -> None:
+    """``wiki_id`` legge il primo ``id:``: uno valido **sotto** uno storto non lo
+    vedeva, e la migrazione ne coniava un terzo. Ora lo storto passa a
+    ``previous_id:`` e quello valido torna a essere l'id."""
+    body = "---\nid: piante\nid: 097d8ba49406\n---\n\n# Piante\n"
+    project = _wiki(wikis, "piante", "AGENTS.md", body)
+    assert wiki_id(project) is None
+
+    assert migrate_wikis(wikis)["identified"] == []
+    assert wiki_id(project) == "097d8ba49406"
+
+
+# ── Un id perso si rimette, non si conia ─────────────────────────────────
+
+
+def _chat_remembers(workspace: Path, name: str, ident: str) -> None:
+    """La sessione di progetto come la lascia ``AgentLoop._remember_project_id``."""
+    from jenny.session.project_traces import PROJECT_WIKI_ID_KEY, project_session_file
+
+    path = project_session_file(workspace, f"project:{name}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    meta = {"_type": "metadata", "key": f"project:{name}",
+            "metadata": {PROJECT_WIKI_ID_KEY: ident}}
+    path.write_text(json.dumps(meta) + "\n", encoding="utf-8")
+
+
+def test_a_lost_id_comes_back_from_the_chat_that_remembers_it(tmp_path: Path) -> None:
+    """Piante sul Titan, il 26/10: l'id tolto da un aiutante, e al riavvio la
+    migrazione ne coniava uno nuovo — da li' ogni turno della chat rifiutato."""
+    wikis = tmp_path / "wikis"
+    project = _wiki(wikis, "piante", "AGENTS.md", "---\nid: piante\nscope: x\n---\n\n# P\n")
+    _chat_remembers(tmp_path, "piante", "097d8ba49406")
+
+    assert migrate_wikis(wikis, tmp_path)["identified"] == ["piante"]
+    assert wiki_id(project) == "097d8ba49406"
+    text = (project / "AGENTS.md").read_text(encoding="utf-8")
+    assert _id_lines(text) == ["id: 097d8ba49406"]
+    assert "previous_id: piante" in text
+
+
+def test_a_lost_instructions_file_comes_back_with_the_remembered_id(tmp_path: Path) -> None:
+    wikis = tmp_path / "wikis"
+    project = _wiki(wikis, "piante")
+    _chat_remembers(tmp_path, "piante", "097d8ba49406")
+
+    migrate_wikis(wikis, tmp_path)
+    assert wiki_id(project) == "097d8ba49406"
+
+
+def test_an_id_another_folder_declares_is_not_taken(tmp_path: Path) -> None:
+    """L'id e' altrove: la chat e' di quella cartella (rinominata o copiata), e
+    questa e' un'altra. Si conia, e il rifiuto del turno dira' cos'e' successo."""
+    wikis = tmp_path / "wikis"
+    _wiki(wikis, "piante-vecchie", "AGENTS.md", "---\nid: 097d8ba49406\n---\n")
+    project = _wiki(wikis, "piante", "AGENTS.md", "---\nscope: x\n---\n")
+    _chat_remembers(tmp_path, "piante", "097d8ba49406")
+
+    migrate_wikis(wikis, tmp_path)
+    assert is_valid_wiki_id(wiki_id(project))
+    assert wiki_id(project) != "097d8ba49406"
+
+
+def test_without_a_chat_or_a_workspace_a_new_id_is_minted(tmp_path: Path) -> None:
+    wikis = tmp_path / "wikis"
+    alone = _wiki(wikis, "sola", "AGENTS.md", "---\nscope: x\n---\n")
+    blind = _wiki(wikis, "cieca", "AGENTS.md", "---\nscope: x\n---\n")
+    _chat_remembers(tmp_path, "cieca", "097d8ba49406")
+
+    migrate_wikis(wikis)  # nessun workspace: non si sa dove guardare
+    assert is_valid_wiki_id(wiki_id(alone))
+    assert wiki_id(blind) != "097d8ba49406"
+
+
+# ── settle_wiki_id_lines, da sola ───────────────────────────────────────
+
+
+@pytest.mark.parametrize("text", [
+    "---\nid: 3f9a2c1b7e04\nsummary: x\n---\n\n# P\n",
+    "# niente frontmatter\n",
+    "---\nsummary: x\n---\n",
+])
+def test_a_settled_text_comes_back_identical(text: str) -> None:
+    assert settle_wiki_id_lines(text) == text
+
+
+def test_the_wanted_id_goes_first_and_any_other_moves_aside() -> None:
+    text = "---\nsummary: x\nid: \"bbbbbbbbbbbb\"\n---\n\nid: nel corpo\n"
+    out = settle_wiki_id_lines(text, "aaaaaaaaaaaa")
+    assert out == (
+        "---\nid: aaaaaaaaaaaa\nsummary: x\nprevious_id: \"bbbbbbbbbbbb\"\n---\n\n"
+        "id: nel corpo\n"
+    ), "il corpo non e' frontmatter: non si tocca"
+
+
+def test_a_text_without_frontmatter_gets_one() -> None:
+    out = settle_wiki_id_lines("# P\n", "aaaaaaaaaaaa")
+    assert out == "---\nid: aaaaaaaaaaaa\n---\n\n# P\n"
+    assert wiki_id_in_text(out) == "aaaaaaaaaaaa"
 
 
 def test_a_well_formed_frontmatter_with_an_id_is_not_touched(wikis: Path) -> None:

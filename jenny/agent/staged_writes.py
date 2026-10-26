@@ -249,7 +249,7 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
             return "missing"
         if sha256_of(target) != expected_sha:
             return "conflict"
-        atomic_write(target, content)
+        atomic_write(target, _keep_wiki_id(target, content))
         # L'utente l'ha guardata e confermata: da qui in poi non è più contenuto
         # non fidato per chi la legge.
         ledger_for(root).clear(meta["target"])
@@ -257,6 +257,25 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
     logger.info("Installed staged change {} into {}", staged_id, meta["target"])
     _notify(root, "installed", staged_id, meta["target"])
     return "installed"
+
+
+def _keep_wiki_id(target: Path, content: bytes) -> bytes:
+    """*content* con l'id del quaderno rimesso, se la bozza e' il suo ``AGENTS.md``.
+
+    Gli strumenti dell'aiutante rifiutano gia' una scrittura che toglie l'id,
+    bozza compresa: qui arriva una bozza nata **prima** che quel recinto ci
+    fosse, o prima che la wiki avesse l'id che ha adesso. L'utente l'ha
+    approvata, quindi si installa — con l'id. Una bozza di Piante, il 26/10,
+    l'ha tolto senza che la scheda lo dicesse.
+    """
+    from jenny.utils.wiki_paths import keep_wiki_id
+
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content
+    kept = keep_wiki_id(target, text)
+    return content if kept == text else kept.encode("utf-8")
 
 
 def discard(root: Path, staged_id: str) -> bool:

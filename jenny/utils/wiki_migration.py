@@ -42,11 +42,14 @@ from loguru import logger
 from jenny.utils.path import atomic_write
 from jenny.utils.wiki_paths import (
     LEGACY_WIKI_SCHEMA_FILENAME,
+    PREVIOUS_ID_KEY,
     WIKI_ID_KEY,
     WIKI_SCHEMA_FILENAME,
     discover_wikis,
+    find_wiki_by_id,
+    is_valid_wiki_id,
     new_wiki_id,
-    strip_frontmatter,
+    settle_wiki_id_lines,
     wiki_id,
     wiki_journal_dir,
     wiki_schema_file,
@@ -82,15 +85,46 @@ def _rename_legacy(root: Path) -> bool:
     return True
 
 
-def _ensure_id(root: Path) -> str | None:
-    """Scrive un id nella frontmatter del file di istruzioni, se non c'e' già.
+def recover_wiki_id(root: Path, workspace: Path | None) -> str | None:
+    """L'id che la chat di *root* si era annotata, se lo si puo' rimettere.
 
-    Ritorna l'id **nuovo** quando l'ha scritto, ``None`` quando non c'era niente
-    da fare — così il chiamante può dire quante wiki ha davvero toccato.
+    Una wiki che ha **perso** l'id — un aiutante che riscrive la frontmatter, un
+    ``python_exec``, adb — non e' una wiki nuova, e dargliene uno nuovo la
+    separa dalla sua chat per sempre: e' quel che e' successo a Piante sul Titan
+    il 26/10 (la migrazione ha coniato ``80bf…``, la sessione ricordava
+    ``097d…``, e ``_refuse_reincarnated_project`` ha chiuso fuori ogni turno).
+    La sessione ``project:<nome>`` sa qual era: si rimette quello.
+
+    **Solo se nessun'altra cartella lo dichiara.** Se l'id e' altrove, la
+    conversazione e' di quella cartella (rinominata, o copiata) e questa e'
+    un'altra: si conia, come prima, e il rifiuto dice cos'e' successo.
+
+    Il caso che resta scoperto, e si sa: una cartella tolta da fuori Jenny e
+    una nuova fatta a mano, **senza** id, con lo stesso nome — qui eredita la
+    chat della vecchia. Per arrivarci bisogna passare da adb o da ``su``: la
+    cancellazione dalla UI porta via anche la sessione, e lo scaffolder scrive
+    l'id alla nascita.
     """
+    if workspace is None:
+        return None
+    # Import locali: ``session/`` sta sopra ``utils/``, e ``project_traces``
+    # tira dentro ``SessionManager`` (v. ``tests/session/test_cold_imports.py``).
+    from jenny.session.keys import project_session_key
+    from jenny.session.project_traces import recorded_wiki_id
+
+    recorded = recorded_wiki_id(workspace, project_session_key(root.name))
+    if not is_valid_wiki_id(recorded):
+        return None
+    claimed = find_wiki_by_id(root.parent, str(recorded))
+    if claimed is not None and claimed.resolve() != root.resolve():
+        return None
+    return recorded
+
+
+def _write_id(root: Path, value: str) -> None:
+    """Scrive *value* come ``id:`` del file di istruzioni di *root*, creandolo se manca."""
     schema = wiki_schema_file(root)
     if schema is None:
-        wiki_id_value = new_wiki_id()
         # ``summary`` resta il **segnaposto**, non il nome della cartella. Con il
         # nome, ``wikis/_index.md`` mostrerebbe «ricette — ricette», che sembra una
         # descrizione e non lo è: la voce di prima diceva «(no AGENTS.md)», cioè
@@ -99,12 +133,50 @@ def _ensure_id(root: Path) -> str | None:
         # una descrizione finta.
         atomic_write(
             root / _AGENTS,
-            f"---\n{WIKI_ID_KEY}: {wiki_id_value}\nsummary: {_SUMMARY_PLACEHOLDER}\n---\n\n"
+            f"---\n{WIKI_ID_KEY}: {value}\nsummary: {_SUMMARY_PLACEHOLDER}\n---\n\n"
             f"# {_title_of(root.name)}\n",
         )
         logger.info("wiki {}: created a minimal {} carrying the id", root.name, _AGENTS)
-        return wiki_id_value
+        return
+    # Un id scritto a mano e non conforme (``id: tesi-2024``) **non si cancella**,
+    # e fino al 26/10 restava anche al suo posto, sotto il nostro: due ``id:``
+    # nella stessa frontmatter, che a un modello sembrano un doppione da pulire —
+    # e su Piante l'aiutante ha pulito via quello giusto. Ora passa a
+    # ``previous_id:`` col suo valore (``settle_wiki_id_lines``), e l'``id:`` resta
+    # uno. Senza riserializzare il blocco: ``yaml.dump`` avrebbe riordinato le
+    # chiavi, normalizzato le virgolette e perso i commenti di un file scritto a
+    # mano.
+    text = schema.read_text(encoding="utf-8")
+    atomic_write(schema, settle_wiki_id_lines(text, value))
 
+
+def restore_wiki_id(root: Path, workspace: Path | None) -> str | None:
+    """Rimette a *root* l'id che la sua chat ricorda. Ritorna l'id, o ``None``.
+
+    ``None`` = niente da fare: la wiki un id ce l'ha, o non ce n'e' uno da
+    rimettere (:func:`recover_wiki_id`). Lo chiama la migrazione all'avvio e
+    ``AgentLoop._refuse_reincarnated_project`` a meta' giornata, quando l'id
+    sparisce mentre Jenny gira: senza, il turno passerebbe e il prossimo avvio
+    conierebbe un id nuovo — il guasto rimandato, non evitato.
+    """
+    if wiki_id(root) is not None:
+        return None
+    recovered = recover_wiki_id(root, workspace)
+    if recovered is None:
+        return None
+    _write_id(root, recovered)
+    logger.info("wiki {}: id {} restored from its chat", root.name, recovered)
+    return recovered
+
+
+def _ensure_id(root: Path, workspace: Path | None = None) -> str | None:
+    """Scrive un id nella frontmatter del file di istruzioni, se non c'e' già.
+
+    Ritorna l'id **scritto** quando l'ha scritto, ``None`` quando non c'era niente
+    da fare — così il chiamante può dire quante wiki ha davvero toccato. L'id e'
+    quello che la chat della wiki ricorda (:func:`restore_wiki_id`), se c'e';
+    altrimenti uno nuovo.
+    """
     # «Ce l'ha già, un id?» si chiede **al lettore che lo legge**. ``wiki_id`` usa
     # una regex di proposito: una riga di scope con un due punti dentro rende il
     # blocco non parsabile e ``yaml.safe_load`` non perde quella riga, perde
@@ -116,37 +188,35 @@ def _ensure_id(root: Path) -> str | None:
     # costruzione.
     if wiki_id(root) is not None:
         return None
+    restored = restore_wiki_id(root, workspace)
+    if restored is not None:
+        return restored
+    value = new_wiki_id()
+    had_schema = wiki_schema_file(root) is not None
+    _write_id(root, value)
+    if had_schema:
+        logger.info("wiki {}: id written to {}", root.name, _AGENTS)
+    return value
 
+
+def _settle_id_lines(root: Path) -> bool:
+    """Un solo ``id:`` nella frontmatter di una wiki che l'id ce l'ha. True se ha scritto.
+
+    Per le wiki che la migrazione di prima ha lasciato con due ``id:`` — il
+    nostro sopra, quello scritto a mano sotto: Piante sul Titan ce l'ha — e per
+    un id valido finito **sotto** una riga non conforme, che ``wiki_id`` non
+    vedeva (legge il primo). A regime non scrive niente.
+    """
+    schema = wiki_schema_file(root)
+    if schema is None:
+        return False
     text = schema.read_text(encoding="utf-8")
-    # Di ``strip_frontmatter`` qui serve **solo** la domanda strutturale «c'è un
-    # blocco?», che e' una regex e sopravvive allo YAML rotto: quando il parse
-    # fallisce ritorna ``{}``, non ``None``.
-    frontmatter, _, _ = strip_frontmatter(text)
-
-    # Un id scritto a mano e non conforme (``id: tesi-2024``) **non si tocca**:
-    # la riga resta dov'e' e quella nuova le va sopra. Riscriverla in loco
-    # cancellerebbe testo dell'utente, che e' l'unica cosa che questa migrazione
-    # promette di non fare mai; lasciar perdere la wiki cancellerebbe invece la
-    # sola cosa per cui l'id esiste — ritrovare la chat dopo un rinomino — e in
-    # silenzio, per sempre. Il lettore prende il **primo** match, cioe' il
-    # nostro, quindi l'esito e' stabile dal secondo avvio in poi.
-    wiki_id_value = new_wiki_id()
-    line = f"{WIKI_ID_KEY}: {wiki_id_value}\n"
-    if frontmatter is None:
-        # Nessuna frontmatter: se ne apre una sopra il contenuto, che resta
-        # intatto sotto.
-        updated = f"---\n{line}---\n\n{text.lstrip()}"
-    else:
-        # C'e' una frontmatter: l'id entra come **prima** riga dentro di essa,
-        # senza riserializzare il resto. Riscrivere il blocco con ``yaml.dump``
-        # avrebbe riordinato le chiavi, normalizzato le virgolette e perso i
-        # commenti di un file che l'utente ha scritto a mano.
-        head, rest = text.split("---", 2)[0], text.split("---", 2)[1:]
-        body_fm, body = rest[0], rest[1] if len(rest) > 1 else ""
-        updated = f"{head}---\n{line}{body_fm.lstrip(chr(10))}---{body}"
-    atomic_write(schema, updated)
-    logger.info("wiki {}: id written to {}", root.name, schema.name)
-    return wiki_id_value
+    settled = settle_wiki_id_lines(text)
+    if settled == text:
+        return False
+    atomic_write(schema, settled)
+    logger.info("wiki {}: hand-written id kept as {}", root.name, PREVIOUS_ID_KEY)
+    return True
 
 
 def _ensure_journal(root: Path) -> bool:
@@ -164,8 +234,12 @@ def _ensure_journal(root: Path) -> bool:
     return True
 
 
-def migrate_wikis(wikis_dir: Path) -> dict[str, list[str]]:
+def migrate_wikis(wikis_dir: Path, workspace: Path | None = None) -> dict[str, list[str]]:
     """Porta tutte le wiki sotto *wikis_dir* alla forma del passo 7.
+
+    *workspace* e' dove stanno le sessioni: serve a rimettere a una wiki l'id
+    che ha perso invece di coniarne uno nuovo (:func:`recover_wiki_id`). Senza,
+    si conia come prima.
 
     Ritorna ``{"renamed": [...], "identified": [...], "journals": [...]}`` — i
     nomi delle wiki toccate da ciascuno dei tre punti, così l'avvio può dire cosa
@@ -184,7 +258,8 @@ def migrate_wikis(wikis_dir: Path) -> dict[str, list[str]]:
         try:
             if _rename_legacy(root):
                 renamed.append(root.name)
-            if _ensure_id(root) is not None:
+            _settle_id_lines(root)
+            if _ensure_id(root, workspace) is not None:
                 identified.append(root.name)
             if _ensure_journal(root):
                 journals.append(root.name)

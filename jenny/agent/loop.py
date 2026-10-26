@@ -123,6 +123,7 @@ from jenny.session.turn_visibility import (
 from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, reserved_output_tokens
 from jenny.utils.llm_runtime import LLMRuntime
 from jenny.utils.prompt_templates import render_template
+from jenny.utils.wiki_migration import restore_wiki_id
 from jenny.utils.wiki_paths import find_wiki_by_id, wiki_id, wiki_schema_file
 
 if TYPE_CHECKING:
@@ -885,7 +886,8 @@ class AgentLoop(
         Costa la lettura di una frontmatter, e solo per le chat di progetto la
         cui sessione ha gia' un id annotato. Una wiki **senza** id non fa
         scattare niente: un id assente non e' un errore (v. ``wiki_paths.wiki_id``),
-        e trattarlo come discordanza rifiuterebbe ogni wiki fatta a mano.
+        e trattarlo come discordanza rifiuterebbe ogni wiki fatta a mano. Una wiki
+        che l'id l'aveva e l'ha **perso** se lo vede rimettere qui (v. sotto).
         """
         if not is_project_session_key(key):
             return False
@@ -900,7 +902,16 @@ class AgentLoop(
                 # rifiuto, ed e' quello che sa anche inseguire un rinomino.
                 return False
             current = wiki_id(root)
-            if current is None or current == str(recorded):
+            if current is None:
+                # L'id e' **sparito**, non cambiato: un aiutante, un
+                # ``python_exec``, adb. Non e' un'altra cartella, e il turno
+                # passa — ma prima l'id si rimette, o il prossimo avvio ne
+                # conierebbe uno nuovo e chiuderebbe fuori questa chat (Piante,
+                # Titan, 26/10). ``restore_wiki_id`` non lo rimette se un'altra
+                # cartella lo dichiara: quella conversazione e' sua.
+                restore_wiki_id(root, Path(self.workspace))
+                return False
+            if current == str(recorded):
                 return False
         except Exception:
             # Un controllo che non si puo' fare non deve fermare una chat: il

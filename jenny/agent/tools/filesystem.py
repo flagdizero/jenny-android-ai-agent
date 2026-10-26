@@ -43,13 +43,26 @@ from jenny.security.workspace_policy import (
 )
 from jenny.utils.helpers import build_image_content_blocks, detect_image_mime
 from jenny.utils.path import atomic_write
-from jenny.utils.wiki_paths import page_chars, wiki_page_rel
+from jenny.utils.wiki_paths import page_chars, wiki_id_at_risk, wiki_id_refusal, wiki_page_rel
 
 # Costruito una volta all'import: il gancio non ha stato e ricava tutto dal
 # percorso che riceve, quindi una istanza per tool sarebbe una istanza per niente.
 # ``wiki_provenance`` è una foglia — stdlib e ``wiki_paths``, che questo modulo
 # importa già — proprio perché è qui che va montata (v. la sua docstring).
 _WIKI_PROVENANCE_GUARD = wiki_page_provenance_guard()
+
+
+def _wiki_id_guard(path: Path, text: str) -> str | None:
+    """Rifiuta la scrittura che toglierebbe o cambierebbe l'id di un quaderno.
+
+    L'id in ``AGENTS.md`` e' cio' che lega il quaderno alla sua chat. Il 26/10
+    sul Titan un aiutante, riscrivendo il layout di Piante, ha «pulito» i due
+    ``id:`` tenendo quello sbagliato: la bozza e' arrivata all'utente, che l'ha
+    installata, e al riavvio la chat era chiusa fuori. Qui si ferma
+    all'aiutante, prima della bozza, e il rifiuto gli dice cosa rifare.
+    """
+    current = wiki_id_at_risk(path, text)
+    return None if current is None else wiki_id_refusal(path, current)
 
 # Gancio pre-scrittura: riceve il path risolto e il testo esatto che finirebbe su
 # disco, ritorna ``None`` per lasciar passare o un messaggio di rifiuto da
@@ -432,7 +445,7 @@ class _FsTool(Tool):
         rientra nel tetto sia una che rimpicciolisce (v.
         ``FileStates.record_write_refused``).
 
-        **Due ganci, e il secondo non lo monta nessuno.** Il primo è quello
+        **Tre ganci, e gli ultimi due non li monta nessuno.** Il primo è quello
         iniettato dal chiamante (il tetto dei file di memoria, la cessione del
         passo del giardiniere, la sua guardia di provenienza): chi non ne passa
         nessuno non ne ha. Il secondo è
@@ -440,7 +453,10 @@ class _FsTool(Tool):
         **sempre** e ricava il progetto dal percorso — perché il difetto del 26/08
         era esattamente che un gancio andava montato e la conversazione non lo
         montava: la passata con meno contesto era l'unica trattenuta. Fuori da una
-        ``wiki/`` di progetto quel gancio torna ``None`` e non costa niente.
+        ``wiki/`` di progetto quel gancio torna ``None`` e non costa niente. Il
+        terzo, :func:`_wiki_id_guard`, vale sempre anche lui, per la stessa
+        ragione: guarda solo l'``AGENTS.md`` di un quaderno, e altrove costa il
+        confronto di un nome di file.
 
         Il gancio iniettato resta **primo**: quando è la cessione del passo, quel
         rifiuto è l'unica cosa vera da dire alla passata (v.
@@ -456,6 +472,8 @@ class _FsTool(Tool):
             refusal = guard(path, text)
         if refusal is None:
             refusal = _WIKI_PROVENANCE_GUARD(path, text)
+        if refusal is None:
+            refusal = _wiki_id_guard(path, text)
         if refusal is None:
             return None
         self._file_states.record_write_refused(path, text)

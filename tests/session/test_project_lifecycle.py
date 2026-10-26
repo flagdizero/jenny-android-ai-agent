@@ -34,6 +34,7 @@ from jenny.session.project_traces import (
     describe_project_traces,
     project_trace_paths,
 )
+from jenny.utils.wiki_paths import wiki_id
 from jenny.webui.commands import _project_delete_refusal
 from jenny.webui.project_create import create_project
 from jenny.webui.project_delete import ProjectDeleteError, delete_project
@@ -336,11 +337,41 @@ async def test_a_wiki_without_an_id_never_refuses(
     loop: AgentLoop, workspace: Path, published: list[str]
 ) -> None:
     """Un id assente non e' un errore: le wiki fatte a mano non ce l'hanno."""
+    _wiki_with_id(workspace, NAME, None)
+    loop._remember_project_id(KEY)
+    assert await loop._refuse_reincarnated_project(_msg(), KEY) is False
+    assert published == []
+    assert wiki_id(workspace / "wikis" / NAME) is None, "nessun id da rimettere"
+
+
+async def test_an_id_that_vanished_is_put_back_and_the_turn_goes_on(
+    loop: AgentLoop, workspace: Path, published: list[str]
+) -> None:
+    """L'id sparito mentre Jenny gira (un aiutante, adb) non e' un'altra cartella.
+
+    Il turno passa, come prima — ma l'id si rimette subito: lasciarlo mancare
+    voleva dire che il prossimo avvio ne coniava uno nuovo e chiudeva fuori la
+    chat, che e' quel che e' successo a Piante sul Titan il 26/10.
+    """
     _wiki_with_id(workspace, NAME, "aaaaaaaaaaaa")
     loop._remember_project_id(KEY)
     _wiki_with_id(workspace, NAME, None)
+
     assert await loop._refuse_reincarnated_project(_msg(), KEY) is False
     assert published == []
+    assert wiki_id(workspace / "wikis" / NAME) == "aaaaaaaaaaaa"
+
+
+async def test_a_vanished_id_another_folder_declares_is_left_to_it(
+    loop: AgentLoop, workspace: Path, published: list[str]
+) -> None:
+    _wiki_with_id(workspace, NAME, "aaaaaaaaaaaa")
+    loop._remember_project_id(KEY)
+    _wiki_with_id(workspace, "viaggio-copia", "aaaaaaaaaaaa")
+    _wiki_with_id(workspace, NAME, None)
+
+    assert await loop._refuse_reincarnated_project(_msg(), KEY) is False
+    assert wiki_id(workspace / "wikis" / NAME) is None
 
 
 async def test_a_missing_folder_is_not_this_guard_s_business(

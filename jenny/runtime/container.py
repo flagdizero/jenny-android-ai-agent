@@ -336,7 +336,7 @@ class GatewayContainer:
 
         wiki_cfg = getattr(self.config, "wiki", None)
         wikis_dir = getattr(wiki_cfg, "wikis_dir", "wikis") or "wikis"
-        migrate_wikis(self.config.workspace_path / wikis_dir)
+        migrate_wikis(self.config.workspace_path / wikis_dir, self.config.workspace_path)
 
     def _repair_pending_renames(self) -> None:
         """Finisce i rinomini di progetto interrotti a metà.

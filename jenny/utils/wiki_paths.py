@@ -507,12 +507,127 @@ def wiki_id(wiki_root: Path) -> str | None:
     if schema is None:
         return None
     try:
-        raw, _ = split_frontmatter(schema.read_text(encoding="utf-8"))
+        return wiki_id_in_text(schema.read_text(encoding="utf-8"))
     except OSError:
         return None
+
+
+def wiki_id_in_text(text: str) -> str | None:
+    """L'id che :func:`wiki_id` leggerebbe da un file di istruzioni con questo testo.
+
+    Separato da :func:`wiki_id` perche' la stessa domanda se la fa anche chi sta
+    per **scrivere** quel file (:func:`wiki_id_at_risk`): lettore e recinto
+    devono rispondere con la stessa regex, o il recinto lascerebbe passare un
+    testo da cui il lettore non ritrova l'id.
+    """
+    raw, _ = split_frontmatter(text)
     match = re.search(rf"^{WIKI_ID_KEY}:\s*(\S+)\s*$", raw, re.M)
     value = match.group(1).strip("\"'") if match else None
     return value if is_valid_wiki_id(value) else None
+
+
+# La chiave a cui passa un ``id:`` che non e' l'id della wiki — uno scritto a mano
+# (``id: piante``), o il secondo di due. **Non si cancella**: e' testo
+# dell'utente, e il valore resta dov'era; cambia solo la chiave, cosi' nella
+# frontmatter c'e' **un** ``id:`` e nessuno lo scambia per un doppione da
+# pulire. Il 26/10 sul Titan un aiutante ha «sistemato» i due ``id:`` di Piante
+# tenendo quello sbagliato, e la chat del quaderno e' rimasta chiusa fuori.
+PREVIOUS_ID_KEY = "previous_id"
+
+
+def _id_line_value(line: str) -> str | None:
+    match = re.match(rf"{WIKI_ID_KEY}:\s*(\S+)\s*$", line)
+    return match.group(1).strip("\"'") if match else None
+
+
+def settle_wiki_id_lines(text: str, value: str | None = None) -> str:
+    """*text* con un solo ``id:`` nella frontmatter: *value*, o il primo valido.
+
+    Ogni altra riga ``id:`` diventa ``previous_id:`` col suo valore intatto. Se
+    *value* e' dato e nessuna riga lo porta, entra come **prima** riga della
+    frontmatter (aprendone una se manca); senza *value* e senza un id valido le
+    righe ``id:`` passano tutte a ``previous_id:`` e non si aggiunge niente —
+    l'id nuovo, se serve, lo sceglie il chiamante.
+
+    Testo, non file, e senza riserializzare lo YAML: chiavi, virgolette e
+    commenti di un file scritto a mano restano come sono. Un testo gia' a posto
+    torna identico, byte per byte — e' cosi' che la migrazione sa di non dover
+    scrivere.
+    """
+    match = _FRONTMATTER_RE.match(text)
+    if match is None:
+        if value is None:
+            return text
+        return f"---\n{WIKI_ID_KEY}: {value}\n---\n\n{text.lstrip()}"
+    lines = match.group(1).split("\n")
+    if value is None:
+        for line in lines:
+            found = _id_line_value(line)
+            if is_valid_wiki_id(found):
+                value = found
+                break
+    kept = False
+    out: list[str] = []
+    for line in lines:
+        found = _id_line_value(line)
+        if found is None:
+            out.append(line)
+        elif found == value and not kept:
+            kept = True
+            out.append(line)
+        else:
+            out.append(PREVIOUS_ID_KEY + line[len(WIKI_ID_KEY):])
+    if value is not None and not kept:
+        out.insert(0, f"{WIKI_ID_KEY}: {value}")
+    raw = "\n".join(out)
+    if raw == match.group(1):
+        return text
+    return text[: match.start(1)] + raw + text[match.end(1) :]
+
+
+def wiki_id_at_risk(path: Path, new_text: str) -> str | None:
+    """L'id che scrivere *new_text* in *path* toglierebbe alla sua wiki, o ``None``.
+
+    Riguarda solo il file da cui :func:`wiki_id` legge: ``AGENTS.md`` (anche
+    quando lo si crea accanto a un ``CLAUDE.md`` che porta l'id, perche' da quel
+    momento e' lui che si legge), o ``CLAUDE.md`` su una wiki che non ha ancora
+    ``AGENTS.md``. Una wiki **senza** id non ha niente da perdere: nessun
+    recinto, come nessun rifiuto in ``AgentLoop._refuse_reincarnated_project``.
+    """
+    if path.name == LEGACY_WIKI_SCHEMA_FILENAME:
+        if (path.parent / WIKI_SCHEMA_FILENAME).is_file():
+            return None
+    elif path.name != WIKI_SCHEMA_FILENAME:
+        return None
+    current = wiki_id(path.parent)
+    if current is None or wiki_id_in_text(new_text) == current:
+        return None
+    return current
+
+
+def wiki_id_refusal(path: Path, current: str) -> str:
+    """Il rifiuto per una scrittura che toglierebbe l'id: dice cosa rifare."""
+    return (
+        f"Error: not written. {path.name} must keep the line `{WIKI_ID_KEY}: {current}` "
+        "in its frontmatter: it is how this notebook finds its own chat again, and "
+        "without it the chat is shut out. Write your change again leaving that line "
+        "exactly as it is; any other change to the file is fine."
+    )
+
+
+def keep_wiki_id(path: Path, new_text: str) -> str:
+    """*new_text* con l'id della wiki rimesso, se scriverlo in *path* lo toglierebbe.
+
+    Per le scritture dell'utente — l'editor della WebUI, l'installazione di una
+    bozza — dove un rifiuto sarebbe un cancello sul suo stesso file: l'id e' di
+    Jenny, e lo si rimette in silenzio. Gli strumenti dell'agente invece
+    **rifiutano** (:func:`wiki_id_refusal`): al modello il rifiuto insegna.
+    """
+    current = wiki_id_at_risk(path, new_text)
+    if current is None:
+        return new_text
+    logger.info("wiki {}: id {} kept in {} on save", path.parent.name, current, path.name)
+    return settle_wiki_id_lines(new_text, current)
 
 
 def find_wiki_by_id(wikis_dir: Path, target: str) -> Path | None:
