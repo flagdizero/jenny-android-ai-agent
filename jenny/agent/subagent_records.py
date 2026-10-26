@@ -107,6 +107,12 @@ _CANCEL_PROVENANCE: dict[str, tuple[str, str]] = {
 }
 
 
+#: Chi può fermare (e annullare) un aiutante: l'utente, o Jenny principale.
+#: Un aiutante non ferma un altro aiutante (``subagent_control`` non è nel suo
+#: scope).
+STOPPED_BY = ("user", "jenny")
+
+
 def cancellation_stop_reason(reason: str) -> str | None:
     """``stop_reason`` che porta la provenienza, o ``None`` se sconosciuta."""
     entry = _CANCEL_PROVENANCE.get(reason)
@@ -144,6 +150,7 @@ __all__ = [
     "MAX_RECORDS_PER_SESSION",
     "MAX_RESULT_SUMMARY_CHARS",
     "RECORD_TTL_S",
+    "STOPPED_BY",
     "SUBAGENT_CANCEL_REASONS",
     "SUBAGENTS_DIRNAME",
     "SUBAGENT_STATES",
@@ -427,6 +434,10 @@ class SubagentRecord:
     # un riavvio e cio che fa rispettare a ``send`` il tetto delle riprese
     # (``SubagentManager``, ``MAX_BUDGET_RESUMES``).
     budget_resumes: int = 0
+    # Chi l'ha fermato, per un ``cancelled`` per ``user``: ``"user"`` (il tasto
+    # della casa, l'officina, ``/stop``) o ``"jenny"`` (``subagent_cancel``). La
+    # casa lo dice sulla scheda: «fermata da te», «fermata da Jenny».
+    stopped_by: str | None = None
 
     @property
     def session_key(self) -> str:
@@ -457,6 +468,7 @@ class SubagentRecord:
             "handled_at": self.handled_at,
             "resumable": self.resumable,
             "budget_resumes": self.budget_resumes,
+            "stopped_by": self.stopped_by,
         }
 
     @classmethod
@@ -496,6 +508,9 @@ class SubagentRecord:
             handled_at=_coerce_float(raw.get("handled_at")) or None,
             resumable=raw.get("resumable") is True,
             budget_resumes=max(0, _coerce_int(raw.get("budget_resumes"), 0)),
+            stopped_by=(
+                raw.get("stopped_by") if raw.get("stopped_by") in STOPPED_BY else None
+            ),
         )
 
 

@@ -191,7 +191,8 @@ class _FakeManager(_OwnsTheTestIds):
     def status_snapshot(self, session_key: str | None = None) -> dict[str, Any]:
         return self.snapshot
 
-    async def cancel_task(self, task_id: str) -> bool:
+    async def cancel_task(self, task_id: str, *, by: str = "user") -> bool:
+        assert by == "jenny", "fermato dal suo strumento: la casa dice «fermata da Jenny»"
         self.cancelled.append(task_id)
         return self.cancel_result
 
@@ -549,7 +550,7 @@ class _TwoSessionsManager:
     def list_records(self, session_key: str | None = None) -> list[Any]:
         return self.records.get(session_key, [])
 
-    async def cancel_task(self, task_id: str) -> bool:
+    async def cancel_task(self, task_id: str, *, by: str = "user") -> bool:
         self.calls.append(("cancel", task_id))
         return True
 

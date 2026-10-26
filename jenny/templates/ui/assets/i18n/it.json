@@ -1248,6 +1248,43 @@
       "helperRetryFailed": "Non sono riuscita a rimetterla in piedi.",
       "helperContinue": "Falla continuare",
       "helperContinueFailed": "Non sono riuscita a farla ripartire.",
+      "helperStop": "Fermala",
+      "helperStopNamed": "Ferma la mini-me: {label}",
+      "helperStoppedByYou": "Hai fermato la mini-me: {label}",
+      "helperStoppedByYouUnnamed": "Hai fermato la mini-me",
+      "helperStoppedByJenny": "Ho fermato la mini-me: {label}",
+      "helperStoppedByJennyUnnamed": "Ho fermato la mini-me",
+      "stopSheet": {
+        "title": "Fermo la mini-me «{label}»?",
+        "titleUnnamed": "Fermo la mini-me?",
+        "continue": "Lasciala lavorare",
+        "continueSub": "non è successo niente",
+        "keep": "Ferma e tieni quello che ha fatto",
+        "keepSub": "si ferma subito, i file che ha cambiato restano",
+        "keepSubNothing": "si ferma subito; non ha ancora cambiato niente",
+        "undo": "Ferma e annulla le sue modifiche"
+      },
+      "undoSheet": {
+        "title": "Annullo le sue modifiche?",
+        "keep": "Lascia com'è",
+        "keepSub": "i file restano come sono adesso",
+        "undo": "Annulla le sue modifiche"
+      },
+      "undoSubOne": "rimetto com'era 1 file; se l'ha cambiato anche qualcun altro, resta",
+      "undoSubMany": "rimetto com'erano {count} file; quelli cambiati anche da altri restano",
+      "undoLimit": "Messaggi mandati, ricerche fatte e promemoria già suonati non si annullano.",
+      "undoActionOne": "Annulla la sua modifica (1 file)",
+      "undoActionMany": "Annulla le sue modifiche ({count} file)",
+      "stopFailed": "Non sono riuscita a fermarla.",
+      "undoFailed": "Non sono riuscita ad annullare.",
+      "sheetClose": "Chiudi",
+      "undone": {
+        "you": "Annullato: {count} file rimessi com'erano prima di lei.",
+        "jenny": "Ho annullato le sue modifiche: {count} file rimessi com'erano.",
+        "nothing": "Annullato: non aveva cambiato niente.",
+        "keptOthers": "{count} lasciati come sono, perché li ha cambiati anche qualcun altro: {files}",
+        "keptOther": "{count} lasciati come sono: {files}"
+      },
       "result": {
         "pagesOne": "1 pagina aggiornata.",
         "pagesMany": "{count} pagine aggiornate.",
@@ -1260,6 +1297,7 @@
         "dreamHeld": "Non ho trovato niente da aggiungere."
       },
       "why": {
+        "helperStoppedKept": "Quello che ha fatto è rimasto: {count} file cambiati.",
         "model": "Il modello non ha risposto. Quello che avevo già scritto resta.",
         "notAProject": "Qui non c'è un quaderno da sistemare.",
         "error": "Qualcosa è andato storto.",

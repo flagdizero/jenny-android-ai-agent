@@ -37,6 +37,8 @@ asks for that work again; `superseded_by_new_attempt` — a newer attempt took i
 saved, continue it with `subagent_send` (it keeps what it had read and written); otherwise
 relaunch it if the result is still wanted.
 
+A subagent that went off track: `subagent_cancel` with `undo=true` puts back what it changed.
+
 ## Follow-ups: send, do not re-spawn
 
 When the user reacts to a subagent's work ("change the title", "add the 2023 numbers"), use

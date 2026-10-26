@@ -49,6 +49,7 @@ from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in conf
 from jenny.security.subagent_policy import StagedWriteRequiredError
 from jenny.security.subagent_policy import check_read as _check_subagent_read
 from jenny.security.subagent_policy import check_write as _check_subagent_write
+from jenny.security.subagent_policy import current_subagent_policy as _current_subagent_policy
 from jenny.security.subagent_policy import must_stage as _must_stage_subagent_write
 from jenny.security.subagent_policy import note_move as _note_subagent_move
 from jenny.security.subagent_policy import note_write as _note_subagent_write
@@ -1170,7 +1171,7 @@ def _refuse_write_if_readonly(op: str) -> None:
         raise ReadOnlyTurnError(f"refused {op}")
 
 
-def _refuse_guarded_write(path: Any) -> None:
+def _refuse_guarded_write(path: Any, *, tree: bool = False) -> None:
     """I recinti di scrittura che non dipendono dal confine di workspace.
 
     La bacheca di un quaderno e il codice di un'app (``refuse_board_write``), e
@@ -1180,7 +1181,9 @@ def _refuse_guarded_write(path: Any) -> None:
     dimenticare.
     """
     refuse_board_write(path)
-    _check_subagent_write(path)
+    # *tree*: la scrittura toglie o sposta una cartella intera (``rmtree``, una
+    # rinomina), e il registro dell'annulla ne annota il contenuto.
+    _check_subagent_write(path, tree=tree)
     # Un file che Jenny carica da sola, in un lavoro non fidato: da qui non si
     # può mettere in bozza (un ``open`` può appendere, rinominare, troncare),
     # quindi si rimanda ai tool dei file, che la bozza la fanno.
@@ -2416,8 +2419,8 @@ class PythonNamespace:
                 dst = self._guarded_os_path(raw_dst, op=_op, boundary=boundary)
                 if _is_mutating(_op):
                     with _path_guard_bypass():
-                        _refuse_guarded_write(src)
-                        _refuse_guarded_write(dst)
+                        _refuse_guarded_write(src, tree=True)
+                        _refuse_guarded_write(dst, tree=True)
                         # Il taint della sorgente segue il file (``taint_ledger``).
                         _note_subagent_move(src, dst)
                 return _real(src, dst, *rest, **kwargs)
@@ -2532,7 +2535,7 @@ class PythonNamespace:
             self._reject_rmtree_callbacks(args, kwargs)
             target = self._guarded_os_path(path, op="shutil.rmtree", boundary=boundary)
             with _path_guard_bypass():
-                _refuse_guarded_write(target)
+                _refuse_guarded_write(target, tree=True)
                 return real(target, *args, **kwargs)
 
         _guarded_rmtree._jenny_real_fn = real  # type: ignore[attr-defined]
@@ -3323,8 +3326,15 @@ async def run_python_async(
     ident_cell: list[int | None] = [None]
     done_cell = [False]
 
+    # Dentro un aiutante il registro dell'annulla conta questo thread: dopo una
+    # cancellazione può continuare a scrivere, e l'annulla lo aspetta.
+    _policy = _current_subagent_policy()
+    journal = _policy.journal if _policy is not None else None
+
     def _run():
         ident_cell[0] = threading.get_ident()
+        if journal is not None:
+            journal.enter_thread()
         try:
             if function:
                 return namespace.call_function(
@@ -3348,6 +3358,8 @@ async def run_python_async(
             return "", traceback.format_exc(), None
         finally:
             done_cell[0] = True
+            if journal is not None:
+                journal.exit_thread()
 
     # Costruito QUI, sul thread dell'event loop, dove le due metà del turno
     # esistono ancora. Il contesto è copiato per questa singola esecuzione, e

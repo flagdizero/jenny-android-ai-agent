@@ -254,6 +254,12 @@ class AppTool(Tool):
         if action in ("draft", "edit", "set"):
             if refusal := self._throttled(slug):
                 return refusal
+            # Dentro un aiutante (l'app-builder): il «prima» della bozza per
+            # l'annulla (``agent.subagent_journal``). Fuori è una no-op.
+            from jenny.apps import drafts as _drafts
+            from jenny.security.subagent_policy import journal_touch
+
+            journal_touch(_drafts.draft_dir(workspace, slug), tree=True)
             if self._lineage:
                 _BUILDERS[(session, slug)] = self._lineage
             if self._reseeds_abandoned and slug not in self._touched:
@@ -268,7 +274,7 @@ class AppTool(Tool):
         if action == "set":
             return await self._set(workspace, slug, kw)
         if action == "publish":
-            return await self._publish(workspace, slug)
+            return await self._publish(workspace, slug, session)
         if action == "draft":
             return await self._draft(workspace, slug, kw.get("files") or {})
         if action == "edit":
@@ -551,7 +557,7 @@ class AppTool(Tool):
         except OSError:
             return False
 
-    async def _publish(self, workspace: Path, slug: str) -> str:
+    async def _publish(self, workspace: Path, slug: str, session: str = "") -> str:
         """Pubblica la bozza che un ``app-builder`` ha scritto e provato."""
         from jenny.apps import drafts
         from jenny.apps.reader import read_state
@@ -571,7 +577,22 @@ class AppTool(Tool):
                 return (f"The new version of `{slug}` has not passed its test run ({why}): send "
                         "it back to its app-builder with subagent_send.")
         existed = (drafts.app_dir(workspace, slug) / "app.json").is_file()
-        return await self._promote(workspace, slug, m, existed)
+        # La bozza è dell'app-builder: la sua pubblicazione si annota nel suo
+        # registro (``agent.subagent_journal``), così annullare quell'aiutante
+        # rimette anche l'app viva, se nessuno l'ha toccata dopo. Senza, l'annulla
+        # diceva «rimesso» (la bozza non c'era più) e l'app restava cambiata.
+        journal = None
+        if lineage := builder_for(session, slug):
+            from jenny.agent.subagent_journal import journal_for
+
+            journal = journal_for(workspace, lineage)
+            journal.touch(drafts.app_dir(workspace, slug), tree=True)
+            journal.touch(drafts.draft_dir(workspace, slug), tree=True)
+        try:
+            return await self._promote(workspace, slug, m, existed)
+        finally:
+            if journal is not None:
+                journal.settle("app publish")
 
     async def _set(self, workspace: Path, slug: str, kw: dict[str, Any]) -> str:
         """Un valore di ``app.json`` per percorso, senza riscrivere il file a memoria.

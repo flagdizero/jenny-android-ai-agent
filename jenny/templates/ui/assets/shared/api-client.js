@@ -851,9 +851,21 @@ class ApiClient {
     return res.json();
   }
 
-  async cancelSubagent(taskId, { sessionKey } = {}) {
-    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/cancel`, { sessionKey }));
+  // Ferma una mini-me. Con `undo` la ferma e toglie il suo lavoro: rimette i
+  // file che ha cambiato, solo quelli ancora come li ha lasciati lei. La
+  // risposta porta allora il resoconto (`report`: rimessi, lasciati col motivo).
+  async cancelSubagent(taskId, { sessionKey, undo = false } = {}) {
+    const query = undo ? { sessionKey, undo: '1' } : { sessionKey };
+    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/cancel`, query));
     if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Cancel failed: ${res.status}`);
+    return res.json();
+  }
+
+  // «Annulla le sue modifiche» su una mini-me gia' ferma o finita. Stessa
+  // risposta di `cancelSubagent` con `undo`.
+  async undoSubagent(taskId, { sessionKey } = {}) {
+    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/undo`, { sessionKey }));
+    if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Undo failed: ${res.status}`);
     return res.json();
   }
 

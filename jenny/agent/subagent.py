@@ -48,6 +48,15 @@ from jenny.agent.subagent_history import (
     history_chars,
     light_resume_messages,
 )
+from jenny.agent.subagent_journal import (
+    UndoReport,
+    WriteJournal,
+    finish_interrupted_undos,
+    journal_for,
+    journal_stats,
+    live_journal,
+    sweep_orphan_journals,
+)
 from jenny.agent.subagent_records import (
     CANCEL_REASON_SHUTDOWN,
     CANCEL_REASON_SUPERSEDED,
@@ -55,6 +64,7 @@ from jenny.agent.subagent_records import (
     DEFAULT_AGENT_TYPE,
     INTERRUPTED_RESUMABLE_SUMMARY,
     MAX_RESULT_SUMMARY_CHARS,
+    STOPPED_BY,
     SubagentRecord,
     SubagentRecordStore,
     SubagentSpec,
@@ -310,6 +320,8 @@ class SubagentStatus:
     # conversazione su disco (``SubagentManager._checkpoint_history``): uno
     # shutdown ordinato che lo ferma la tiene invece di cancellarla.
     checkpointed: bool = False
+    # Chi l'ha fermato (``subagent_records.STOPPED_BY``): passa al record.
+    stopped_by: str | None = None
 
     def __post_init__(self) -> None:
         if not self.last_progress_at:
@@ -378,6 +390,11 @@ class SubagentRestartError(RuntimeError):
     """Sollevata da ``SubagentManager.restart`` quando il rilancio non e
     possibile (target sconosciuto, o tetto dei tentativi automatici raggiunto).
     Il messaggio e pensato per essere mostrato al chiamante."""
+
+
+class SubagentUndoError(RuntimeError):
+    """Sollevata da ``SubagentManager.undo`` quando l'annulla non si può fare
+    adesso (aiutante sconosciuto, o ancora al lavoro). Il testo è user-facing."""
 
 
 class SubagentSendError(RuntimeError):
@@ -949,6 +966,9 @@ class SubagentManager:
     HISTORY_CHECKPOINT_INTERVAL_S = 30.0
     HISTORY_CHECKPOINT_LARGE_INTERVAL_S = 60.0
     HISTORY_CHECKPOINT_LARGE_BYTES = 512 * 1024
+    # Quanto l'annulla aspetta che il ``python_exec`` di un aiutante fermato
+    # esca dal suo thread, prima di rifiutare.
+    UNDO_WAIT_FOR_THREADS_S = 10.0
 
     def __init__(
         self,
@@ -1081,10 +1101,17 @@ class SubagentManager:
         self._stall_listener: Callable[[str, list[str]], None] | None = None
         # Orologio del freno dei checkpoint; iniettabile dai test.
         self._clock: Callable[[], float] = time.monotonic
+        # I registri delle scritture per l'annulla (``agent.subagent_journal``),
+        # uno per lineage, condivisi fra i tentativi di questo processo.
+        self._journals: dict[str, WriteJournal] = {}
+        # File cambiati e ultimo annulla dei lineage dei processi precedenti,
+        # letti dal disco una volta: lo snapshot si pubblica ogni pochi secondi.
+        self._journal_cache: dict[str, tuple[int, UndoReport | None]] = {}
         # Prima la ripresa dei tentativi morti col processo precedente, poi la
         # pulizia dei digest: guarda i record, e quelli nuovi devono esserci.
         self.recover_interrupted()
         self.sweep_orphan_digests()
+        self.recover_journals()
 
     def recover_interrupted(self) -> int:
         """Chiude i tentativi morti col processo precedente. Ritorna quanti.
@@ -1214,6 +1241,75 @@ class SubagentManager:
             and record.cancel_reason == CANCEL_REASON_SHUTDOWN
             and record.resumable
         )
+
+    def _journal_root(self) -> Path | None:
+        """La radice dell'installazione, se il workspace è un path vero.
+
+        Come ``SubagentRecordStore.running_root``: i test costruiscono il manager
+        con doppi del workspace, e un registro non deve creare cartelle a caso.
+        """
+        return Path(self.workspace) if isinstance(self.workspace, (str, Path)) else None
+
+    def recover_journals(self) -> None:
+        """Al boot: finisce gli annulla interrotti, poi toglie i registri orfani.
+
+        Prima gli annulla: un kill a metà annulla ha lasciato file mezzi rimessi,
+        e finirli viene prima di qualunque lavoro nuovo. Poi i registri dei
+        lineage senza più record (TTL e potatura): nessuno può più chiederne
+        l'annulla. Best-effort: un boot non fallisce per questo.
+        """
+        root = self._journal_root()
+        if root is None:
+            return
+        try:
+            finished = finish_interrupted_undos(root)
+            if finished:
+                logger.info("Finished {} interrupted subagent undo(s)", finished)
+            keep = {r.lineage_id for r in self._records.load_all()}
+            keep |= {m.lineage_id for m in self._records.load_running()}
+            removed = sweep_orphan_journals(root, keep)
+            if removed:
+                logger.info("Swept {} orphan subagent journal(s)", removed)
+        except Exception as e:  # noqa: BLE001 — vedi docstring
+            logger.warning("Subagent journal recovery failed: {}", e)
+
+    def _journal_for(self, lineage_id: str) -> WriteJournal | None:
+        """Il registro del lineage, creato alla prima richiesta."""
+        root = self._journal_root()
+        if root is None or not lineage_id:
+            return None
+        journal = self._journals.get(lineage_id)
+        if journal is None:
+            try:
+                journal = journal_for(root, lineage_id)
+            except Exception as e:  # noqa: BLE001 — senza registro si lavora lo stesso
+                logger.warning("Subagent journal unavailable for {}: {}", lineage_id, e)
+                return None
+            self._journals[lineage_id] = journal
+            self._journal_cache.pop(lineage_id, None)
+        return journal
+
+    def _journal_view(self, lineage_id: str) -> tuple[int, UndoReport | None]:
+        """File cambiati dal lineage e il suo ultimo annulla, per lo snapshot."""
+        journal = self._journals.get(lineage_id)
+        if journal is None and (root := self._journal_root()) is not None:
+            # Un registro vivo che il manager non ha aperto: la pubblicazione di
+            # un'app annota nel registro del suo app-builder (``app_tool``).
+            journal = live_journal(root, lineage_id)
+        cached = self._journal_cache.get(lineage_id)
+        if cached is None:
+            # Dal disco una volta per lineage: l'ultimo annulla sta in ``undo.json``.
+            root = self._journal_root()
+            try:
+                cached = journal_stats(root, lineage_id) if root is not None else (0, None)
+            except Exception:  # noqa: BLE001 — uno snapshot non fallisce per il registro
+                cached = (0, None)
+            if len(self._journal_cache) > 256:
+                self._journal_cache.clear()
+            self._journal_cache[lineage_id] = cached
+        if journal is not None:
+            return journal.changed_files, cached[1]
+        return cached
 
     def sweep_orphan_digests(self) -> int:
         """Cancella i digest di attivita senza record. Chiamata una volta all'avvio.
@@ -1823,6 +1919,13 @@ class SubagentManager:
             policy = SubagentRunPolicy.for_run(
                 task_id, Path(self.workspace), seed=spec.taint_seed, task=spec.task,
             )
+            # Il registro delle scritture del lineage, per l'annulla: i recinti
+            # di scrittura ci annotano il «prima», il runner il «dopo».
+            policy.journal = self._journal_for(status.lineage_id or task_id)
+            if policy.journal is not None:
+                policy.journal.begin(task_id, status.attempt)
+                # Un lineage che riparte dopo un annulla non è più «annullato».
+                self._journal_cache.pop(status.lineage_id, None)
             self._run_policies[task_id] = policy
             initial.extend(messages)
             run_policy.append(policy)
@@ -1999,6 +2102,10 @@ class SubagentManager:
             logger.exception("Subagent [{}] failed", task_id)
             await self._announce_result(task_id, label, task, f"Error: {e}", origin, "error", origin_message_id)
         finally:
+            # Le scritture dello strumento interrotto (una cancellazione arriva
+            # a metà di un tool): il runner non è arrivato al suo «dopo».
+            if run_policy and run_policy[0].journal is not None:
+                run_policy[0].journal.settle()
             self._run_policies.pop(task_id, None)
             self._close_browser_session(status.lineage_id)
             if not marker.done():
@@ -2607,6 +2714,7 @@ class SubagentManager:
                 or kept
             ),
             budget_resumes=status.budget_resumes if status is not None else 0,
+            stopped_by=status.stopped_by if status is not None else None,
         )
         self._remember_record_key(record)
         try:
@@ -2691,6 +2799,9 @@ class SubagentManager:
                 # casa raggruppa gli aiutanti per passo.
                 "plan_id": spec.plan_id if spec is not None else None,
                 "plan_step": spec.plan_step if spec is not None else None,
+                # Quanti file ha cambiato finora: la casa offre «Ferma e annulla
+                # le sue modifiche (N file)» solo se ce n'è almeno uno.
+                "changes": self._journal_view(st.lineage_id)[0],
             })
 
         recent: list[dict[str, Any]] = []
@@ -2719,6 +2830,7 @@ class SubagentManager:
                 and self._history.has(record.lineage_id)
             )
             newer.add(record.lineage_id)
+            changes, undone = self._journal_view(record.lineage_id)
             recent.append({
                 "task_id": record.task_id,
                 "lineage_id": record.lineage_id,
@@ -2747,6 +2859,11 @@ class SubagentManager:
                 "handled_at": record.handled_at,
                 "plan_id": record.spec.plan_id,
                 "plan_step": record.spec.plan_step,
+                "stopped_by": record.stopped_by,
+                # File cambiati dal lineage e ancora da annullare, e l'ultimo
+                # annulla (``agent.subagent_journal.UndoReport.summary``).
+                "changes": changes,
+                "undo": undone.summary() if undone is not None else None,
             })
             if len(recent) >= _SNAPSHOT_RECENT_LIMIT:
                 break
@@ -3434,7 +3551,8 @@ class SubagentManager:
             # done-callback puo girare in qualunque momento e il record verrebbe
             # persistito senza. Questo path e /stop, quindi la provenienza e
             # l'utente (vedi ``AgentLoop`` in loop_tasks.py).
-            self._mark_cancelled(by_task[t], CANCEL_REASON_USER)
+            if (st := self._mark_cancelled(by_task[t], CANCEL_REASON_USER)) is not None:
+                st.stopped_by = "user"
             t.cancel()
         if tasks:
             _, pending = await asyncio.wait(tasks, timeout=grace_s)
@@ -3447,7 +3565,9 @@ class SubagentManager:
                 )
         return len(tasks)
 
-    async def cancel_task(self, task_id: str, *, grace_s: float = 2.0) -> bool:
+    async def cancel_task(
+        self, task_id: str, *, grace_s: float = 2.0, by: str = "user",
+    ) -> bool:
         """Cancella un singolo tentativo vivo. Ritorna ``True`` se c'era da fermare.
 
         Pensata per lo stop puntuale (bottone in UI, orchestratore): a differenza
@@ -3468,6 +3588,7 @@ class SubagentManager:
         if (status := self._mark_cancelled(task_id, CANCEL_REASON_USER)) is not None:
             lineage_id = status.lineage_id or None
             attempt = status.attempt
+            status.stopped_by = by if by in STOPPED_BY else "user"
         self._repudiated_task_ids.add(task_id)
         # Snapshot pubblicato subito, non solo dalla done-callback: un task che
         # non muore entro il grace verrebbe abbandonato e il pannello lo
@@ -3502,6 +3623,68 @@ class SubagentManager:
                 force=True,
             )
         return True
+
+    async def undo(self, target_id: str, *, by: str = "user") -> UndoReport:
+        """Toglie il lavoro di un aiutante: rimette i file che ha cambiato.
+
+        *target_id* è un task id o un lineage id; si annulla tutto il lineage,
+        cioè anche i tentativi fatti continuare dopo un budget o un riavvio. Solo
+        i file ancora come li ha lasciati lui (``agent.subagent_journal``): gli
+        altri restano, e il resoconto dice quali e perché.
+
+        Rifiuta un aiutante ancora al lavoro: prima si ferma (``cancel_task``),
+        o due mani scriverebbero sugli stessi file. Dopo l'annulla la sua
+        conversazione non si riprende più (la storia si toglie): continuarla
+        ripartirebbe da file che non ci sono.
+        """
+        resolved = self._resolve_target(target_id)
+        lineage_id = resolved[0] if resolved is not None else None
+        if lineage_id is None:
+            raise SubagentUndoError(f"No helper '{target_id}' to undo.")
+        if self._live_task_for(lineage_id) is not None:
+            raise SubagentUndoError(
+                "This helper is still working: stop it first, then undo its changes."
+            )
+        journal = self._journal_for(lineage_id)
+        if journal is None:
+            raise SubagentUndoError("This helper's changes were not recorded: nothing to undo.")
+        # Un ``python_exec`` cancellato può girare ancora nel suo thread (i thread
+        # non si interrompono in mezzo a codice C): annullare adesso rimetterebbe
+        # file che sta ancora scrivendo.
+        deadline = time.monotonic() + self.UNDO_WAIT_FOR_THREADS_S
+        while journal.busy and time.monotonic() < deadline:
+            await asyncio.sleep(0.1)
+        if journal.busy:
+            raise SubagentUndoError(
+                "This helper is still finishing a piece of code: try again in a moment."
+            )
+        report = await asyncio.to_thread(journal.undo, by=by if by in STOPPED_BY else "user")
+        self._journal_cache[lineage_id] = (0, report)
+        self._history.drop(lineage_id)
+        logger.info(
+            "Subagent lineage {} undone by {}: {} restored, {} kept",
+            lineage_id, report.by, len(report.restored), len(report.kept),
+        )
+        spec = resolved[1] if resolved is not None else None
+        if spec is not None:
+            self._publish_status_snapshot(spec)
+        return report
+
+    async def cancel_and_undo(
+        self, task_id: str, *, by: str = "user", grace_s: float = 5.0,
+    ) -> UndoReport:
+        """«Ferma e annulla»: ferma il tentativo vivo (se c'è), poi annulla.
+
+        L'attesa è più lunga di quella di un semplice stop: l'annulla non può
+        partire finché lo strumento in corso non è uscito, o rimetterebbe un file
+        che l'aiutante sta ancora scrivendo. Il task asyncio muore subito, ma un
+        ``python_exec`` può continuare nel suo thread: quello lo aspetta
+        :meth:`undo` (``UNDO_WAIT_FOR_THREADS_S``), e se non esce rifiuta.
+        """
+        live = self._live_task_for(task_id)
+        if live is not None:
+            await self.cancel_task(live, grace_s=grace_s, by=by)
+        return await self.undo(task_id, by=by)
 
     async def drain(self, *, timeout_s: float = 10.0) -> int:
         """Attende la fine di TUTTI i subagent in volo; cancella quelli che

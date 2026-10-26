@@ -29,7 +29,11 @@ from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
 from jenny.agent.tools.result import ToolResult
 from jenny.config.runtime_env import tool_timeout_s
 from jenny.providers.base import ToolCallRequest
-from jenny.security.subagent_policy import policy_after_tool, policy_before_tool
+from jenny.security.subagent_policy import (
+    policy_after_tool,
+    policy_before_tool,
+    settle_writes,
+)
 from jenny.utils.file_edit_events import (
     build_file_edit_end_event,
     build_file_edit_error_event,
@@ -221,11 +225,17 @@ class ToolExecutionMixin:
                     Any, dict[str, str], BaseException | None
                 ]:
                     async with gate:
-                        return await self._run_tool(
-                            spec, tool_call, external_lookup_counts,
-                            workspace_violation_counts,
-                            tool_errors=ledger,
-                        )
+                        try:
+                            return await self._run_tool(
+                                spec, tool_call, external_lookup_counts,
+                                workspace_violation_counts,
+                                tool_errors=ledger,
+                            )
+                        finally:
+                            # Dentro un aiutante: il «dopo» delle scritture di
+                            # questo strumento, per l'annulla
+                            # (``agent.subagent_journal``). Altrove è una no-op.
+                            settle_writes(tool_call.name)
 
                 batch_results = list(await asyncio.gather(
                     *(_gated(tc, ledger) for tc, ledger in zip(batch, ledgers))
@@ -243,10 +253,14 @@ class ToolExecutionMixin:
             else:
                 batch_results = []
                 for tool_call in batch:
-                    result = await self._run_tool(
-                        spec, tool_call, external_lookup_counts, workspace_violation_counts,
-                        tool_errors=budget,
-                    )
+                    try:
+                        result = await self._run_tool(
+                            spec, tool_call, external_lookup_counts,
+                            workspace_violation_counts,
+                            tool_errors=budget,
+                        )
+                    finally:
+                        settle_writes(tool_call.name)
                     tool_results.append(result)
                     batch_results.append(result)
 

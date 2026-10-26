@@ -45,9 +45,13 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from jenny.security.taint_ledger import ledger_for
+
+if TYPE_CHECKING:
+    from jenny.agent.subagent_journal import WriteJournal
 
 # I file di configurazione nella radice del workspace: ``config.json``, il suo
 # ``.bak``, i temporanei dello store e le copie in quarantena. Sono gli stessi
@@ -66,6 +70,9 @@ _SECRET_DIRS = (
     # Le bozze in attesa della conferma dell'utente (``agent.staged_writes``):
     # un lavoro non fidato non riscrive una bozza già mostrata.
     (".jenny", "staged"),
+    # Il registro delle scritture degli aiutanti (``agent.subagent_journal``):
+    # un aiutante non legge i «prima» di un altro, e non riscrive il proprio.
+    ("subagents", "journal"),
 )
 
 _SYSTEM_CODE_DIRS = ("agent", "ui")
@@ -181,6 +188,10 @@ class SubagentRunPolicy:
     # Bozze messe in attesa da questo lavoro (``agent.staged_writes``): path
     # relativo → id. L'annuncio dice a Jenny quante ce ne sono.
     staged: dict[str, str] = field(default_factory=dict)
+    # Il registro delle scritture del lineage (``agent.subagent_journal``), per
+    # l'annulla: ``check_write`` e ``journal_touch`` ci annotano il «prima»,
+    # ``settle_writes`` il «dopo». ``None`` nei test che non lo legano.
+    journal: WriteJournal | None = field(default=None, repr=False)
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @classmethod
@@ -544,8 +555,16 @@ def note_move(src: str | Path, dst: str | Path) -> None:
         ledger_for(policy.install_root).move("/".join(src_parts), "/".join(dst_parts))
 
 
-def check_write(path: str | Path) -> None:
-    """Controlla una scrittura di un subagent; no-op fuori da un subagent."""
+def check_write(path: str | Path, *, tree: bool = False) -> None:
+    """Controlla una scrittura di un subagent; no-op fuori da un subagent.
+
+    È anche il punto in cui il registro dell'annulla annota il «prima»: ogni
+    via di scrittura di un aiutante — i tool dei file, ``python_exec``, le
+    cancellazioni del quaderno — passa da qui subito prima di scrivere. Una
+    scrittura poi non fatta (un rifiuto, un'anteprima) non lascia righe:
+    ``settle_writes`` annota solo i file cambiati davvero. *tree*: chi toglie o
+    sposta una cartella intera (v. ``WriteJournal.touch``).
+    """
     policy = current_subagent_policy()
     if policy is None:
         return
@@ -556,6 +575,32 @@ def check_write(path: str | Path) -> None:
         raise SubagentSecretError("/".join(parts))
     if _is_system_code(parts):
         raise SubagentSystemCodeError("/".join(parts))
+    if policy.journal is not None:
+        policy.journal.touch(path, tree=tree)
+
+
+def journal_touch(path: str | Path, *, tree: bool = False) -> None:
+    """Annota il «prima» di una scrittura che non passa da :func:`check_write`.
+
+    Per gli imbuti che hanno recinti propri — la bacheca di un quaderno, le
+    bozze delle app — e che un aiutante raggiunge con i suoi strumenti. No-op
+    fuori da un subagent.
+    """
+    policy = current_subagent_policy()
+    if policy is not None and policy.journal is not None:
+        policy.journal.touch(path, tree=tree)
+
+
+def settle_writes(tool: str = "") -> None:
+    """Annota il «dopo» delle scritture dello strumento appena finito.
+
+    La chiama il runner dopo ogni strumento, riuscito o no: anche un
+    ``python_exec`` che solleva a metà può aver scritto. No-op fuori da un
+    subagent.
+    """
+    policy = current_subagent_policy()
+    if policy is not None and policy.journal is not None:
+        policy.journal.settle(tool)
 
 
 # ---------------------------------------------------------------------------

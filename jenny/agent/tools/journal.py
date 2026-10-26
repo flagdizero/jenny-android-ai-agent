@@ -42,7 +42,11 @@ from loguru import logger
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import current_request_context
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
-from jenny.security.subagent_policy import current_subagent_policy, current_turn_taint
+from jenny.security.subagent_policy import (
+    current_subagent_policy,
+    current_turn_taint,
+    journal_touch,
+)
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
@@ -377,6 +381,9 @@ class JournalAppendTool(Tool):
         day = self._today() if self._today is not None else stamp.date()
         page = wiki_journal_dir(root) / journal_page_name(day)
         entry = f"- {stamp.strftime('%H:%M')} — {line}\n"
+        # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
+        # La copia nel diario personale (``_mirror``) resta: è la memoria.
+        journal_touch(page)
         try:
             lineno = append_journal_entry(page, day, entry)
         except OSError as exc:

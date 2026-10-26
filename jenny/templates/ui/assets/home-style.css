@@ -1214,7 +1214,9 @@ body.home {
   font-size: 15px;
   text-align: left;
 }
-.home-plan-sheet-row > .ti { width: 24px; font-size: 21px; color: var(--text-muted); text-align: center; }
+/* `flex: none`: con un sottotitolo su due righe il testo schiacciava l'icona, e
+   la riga partiva piu' a sinistra delle altre. */
+.home-plan-sheet-row > .ti { flex: none; width: 24px; font-size: 21px; color: var(--text-muted); text-align: center; }
 .home-plan-row-text { display: flex; flex-direction: column; line-height: 1.3; }
 .home-plan-row-sub { font-size: 12.5px; color: var(--text-muted); }
 .home-plan-sheet-row.is-danger,
@@ -1408,6 +1410,47 @@ body.home {
 }
 .home-work-action[hidden] { display: none; }
 .home-work-action:disabled { opacity: 0.5; }
+
+/* I tasti della bolla, uno accanto all'altro: l'azione piena e quella quieta
+   («Fermala», «Annulla le sue modifiche»), che va a capo se non ci sta. */
+.home-work-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.home-work-actions[hidden] { display: none; }
+.home-work-action2 {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.home-work-action2[hidden] { display: none; }
+.home-work-action2:active { background: var(--active); }
+
+/* Con piu' mini-me, il «ferma» di ciascuna in fondo alla sua riga: un tondo
+   piccolo da vedere, col bersaglio da dito. */
+.home-work-row { align-items: center; }
+.home-work-row-stop {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin: -6px -6px -6px 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 17px;
+}
+.home-work-row-stop:active { background: var(--active); }
 
 /* Jenny al lavoro (`home-activity.js`): un divisore, non una bolla
    (13/10/2026). Come bolla, con la pelle delle bolle di lavoro, si leggeva come

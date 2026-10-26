@@ -571,3 +571,45 @@ async def test_publish_says_when_the_screen_changed(personal: Path) -> None:
                     old="uno", new="due")
     out = await publisher.execute(action="publish", slug="portafoglio")
     assert "Its screen changed, and nobody has run it" in out, out
+
+
+async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -> None:
+    """La bozza è dell'app-builder, la pubblica Jenny: annullare l'aiutante rimette
+    anche l'app viva (``agent.subagent_journal``). Prima l'annulla diceva «rimesso»
+    — la bozza non c'era più — e l'app restava cambiata."""
+    from jenny.agent.subagent_journal import journal_for
+    from jenny.agent.tools.app_tool import AppBuildTool, AppPublishTool
+    from jenny.security.subagent_policy import (
+        SubagentRunPolicy,
+        enter_subagent_policy,
+        settle_writes,
+    )
+
+    ws = personal
+    await _builder("unified:default").execute(
+        action="draft", slug="portafoglio",
+        files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
+    await AppPublishTool().execute(action="publish", slug="portafoglio")
+    live = ws / "apps" / "portafoglio"
+    before = {p.relative_to(live).as_posix(): p.read_bytes()
+              for p in live.rglob("*") if p.is_file()}
+
+    policy = SubagentRunPolicy.for_run("t9", ws)
+    policy.journal = journal_for(ws, "lin-b")
+    policy.journal.begin("t9", 1)
+    builder = AppBuildTool(origin_session_key="unified:default", lineage_id="lin-b")
+    with enter_subagent_policy(policy):
+        out = await builder.execute(action="set", slug="portafoglio", key="reader.every",
+                                    value="1440")
+        settle_writes("app")
+    assert "passed its checks" in out, out
+    out = await AppPublishTool().execute(action="publish", slug="portafoglio")
+    assert "`portafoglio` is updated" in out, out
+    assert json.loads((live / "app.json").read_text())["reader"]["every"] == 1440
+
+    report = policy.journal.undo(by="jenny")
+    assert report.kept == [], report.kept
+    after = {p.relative_to(live).as_posix(): p.read_bytes()
+             for p in live.rglob("*") if p.is_file()}
+    assert after == before
+    assert not (ws / "apps" / ".drafts" / "portafoglio").exists()

@@ -224,6 +224,8 @@ class SubagentStatusTool(_SubagentControlTool):
             parts.append(f"last_tool={entry['last_tool']}")
         if entry.get("attempt", 1) > 1:
             parts.append(f"attempt={entry['attempt']}")
+        if entry.get("changes"):
+            parts.append(f"files_changed={entry['changes']}")
         return "- " + ", ".join(parts)
 
     @staticmethod
@@ -242,6 +244,16 @@ class SubagentStatusTool(_SubagentControlTool):
             # rilanciare da zero (``subagent_send``).
             parts.append("resumable=yes (continue it with subagent_send)")
         parts.append(f"restartable={'yes' if entry.get('can_restart') else 'no (attempt cap)'}")
+        if entry.get("stopped_by"):
+            parts.append(f"stopped_by={entry['stopped_by']}")
+        if entry.get("changes"):
+            # Ancora annullabili con ``subagent_cancel undo=true``.
+            parts.append(f"files_changed={entry['changes']}")
+        if (undone := entry.get("undo")) and isinstance(undone, dict):
+            parts.append(
+                f"undone_by={undone.get('by')} (put back {undone.get('restored', 0)}, "
+                f"left {undone.get('kept_count', 0)})"
+            )
         line = "- " + ", ".join(parts)
         summary = (entry.get("result_summary") or "").strip()
         if summary:
@@ -288,12 +300,23 @@ class SubagentStatusTool(_SubagentControlTool):
 
 @tool_parameters(
     tool_parameters_schema(
-        task_id=StringSchema("Task id of the running subagent to cancel"),
+        task_id=StringSchema("Task id (or lineage id) of the subagent"),
+        undo=BooleanSchema(
+            description="Also put back the files it changed, as they were before it. "
+            "Works on a finished or stopped subagent too.",
+            default=False,
+        ),
         required=["task_id"],
     )
 )
 class SubagentCancelTool(_SubagentControlTool):
-    """Ferma un singolo subagent vivo."""
+    """Ferma un singolo subagent vivo, e con ``undo`` toglie il suo lavoro.
+
+    L'annulla è un'opzione di questo strumento e non uno strumento a parte: è
+    la stessa decisione («questo aiutante è andato fuori strada»), e la casa la
+    offre con lo stesso tasto («Ferma e annulla»). Su un aiutante già finito
+    ``undo=true`` annulla e basta.
+    """
 
     @property
     def name(self) -> str:
@@ -304,16 +327,29 @@ class SubagentCancelTool(_SubagentControlTool):
         return (
             "Cancel one running subagent by task id. The other subagents keep "
             "running. A cancelled subagent reports nothing back, so tell the user "
-            "what you cancelled and why."
+            "what you cancelled and why. With undo=true it also puts back every file "
+            "the subagent changed (all its attempts), also after it finished: only files "
+            "still as it left them — what someone else changed after it stays, and the "
+            "reply lists it. Messages sent, searches and reminders that already fired are "
+            "not undone."
         )
 
-    async def execute(self, task_id: str, **kwargs: Any) -> str:
+    async def execute(self, task_id: str, undo: bool = False, **kwargs: Any) -> str:
         if not self._belongs_here(task_id):
             return (
                 f"Nothing to cancel: no subagent [{task_id}] was started from this "
                 "conversation (check subagent_status)."
             )
-        stopped = await self._manager.cancel_task(task_id)
+        if undo:
+            try:
+                report = await self._manager.cancel_and_undo(task_id, by="jenny")
+            except RuntimeError as e:
+                return f"Not undone: {e}"
+            return (
+                f"Subagent [{task_id}] is stopped and its changes are undone.\n"
+                f"{report.text()}\nTell the user what you undid and why."
+            )
+        stopped = await self._manager.cancel_task(task_id, by="jenny")
         if stopped:
             return f"Cancelled subagent [{task_id}]."
         return (

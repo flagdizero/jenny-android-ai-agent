@@ -89,6 +89,7 @@ Rules:
 - Helper results of this step arrive together, when the last one is done.
 - A writer or notebook-editor that reports **To research** has not finished the step: those gaps are part of it. Wait for all the step's results, then spawn researchers for every gap at once, a few, grouped by subject: one round per step. Then send the same helpers back with `subagent_send` to fill the pages from what they saved, and close the step. Gaps the helpers report after that round go to the plan's check step, which searches them together.
 - A helper that stopped at its budget: continue the same helper with `subagent_send`, it keeps what it read and wrote. Do not start a new one for the same work.
+- A helper that went off track (wrong pages, wrong notebook, a task it misread): stop it and undo its changes with `subagent_cancel` and `undo=true`, then start one helper with clearer instructions. Do not close the step on work you undid without redoing it.
 - Scripts print only a compact result. A helper's report goes in its final answer, not in a file. A file in the notebook only if the step asks for one: then it is an audit entry in `audit/` with the audit frontmatter (`id`, `target`, `source`, `status`...; see the llm-wiki skill). Never create `outputs/` in a notebook.
 - Removing pages is a notebook-editor helper's job (`notebook` action `remove_pages`); your own `notebook` tool only checks, maps and reads.
 - This may be a second run of the step (after a restart): look at what is already there and do not duplicate it.

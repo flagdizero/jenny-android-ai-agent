@@ -17,7 +17,7 @@ la seconda è ciò che la chat espande sotto il messaggio di un subagent finito.
 Nota di trasporto: il layer HTTP del gateway (``websockets.http11``) rifiuta al
 parser ogni metodo diverso da GET *e* qualunque body, quindi anche le azioni
 passano da una GET su un path d'azione (``.../restart``, ``.../cancel``,
-``.../continue``).
+``.../continue``, ``.../undo``). «Ferma e annulla» è ``.../cancel?undo=1``.
 Identica scelta, già documentata, di ``apps_api.py`` e delle route skills: non è
 "sistemabile" a POST senza sostituire il layer HTTP.
 
@@ -53,7 +53,7 @@ from jenny.session.keys import UNIFIED_SESSION_KEY
 # separatori di path e caratteri non stampabili.
 _ID_RE = WIRE_ID_RE
 
-_ACTION_RE = re.compile(r"^/api/subagents/([^/]+)/(restart|cancel|continue)$")
+_ACTION_RE = re.compile(r"^/api/subagents/([^/]+)/(restart|cancel|continue|undo)$")
 
 # Il messaggio con cui il tasto «fai continuare» della casa riprende un aiutante
 # fermato al budget (``manager.send``: riparte dalla sua conversazione). Inglese,
@@ -87,6 +87,7 @@ _SINCE_RE = re.compile(r"^\d{1,12}$")
 _ACTION_ERROR_STATUS = {
     "SubagentRestartError": 409,
     "SubagentSendError": 409,
+    "SubagentUndoError": 409,
     "SubagentConcurrencyLimitError": 429,
 }
 
@@ -94,7 +95,8 @@ _EMPTY_SNAPSHOT: dict[str, list] = {"running": [], "recent": []}
 
 
 class SubagentRoutes:
-    """Route ``/api/subagents``, ``/{id}/{restart,cancel,continue}`` e ``/{id}/{activity,digest}``."""
+    """Route ``/api/subagents``, ``/{id}/{restart,cancel,continue,undo}`` e
+    ``/{id}/{activity,digest}``."""
 
     def __init__(
         self,
@@ -231,6 +233,10 @@ class SubagentRoutes:
             return await self._restart(manager, target_id)
         if action == "continue":
             return await self._continue(manager, target_id)
+        if action == "undo":
+            return await self._undo(manager, target_id, stop=False)
+        if query_first(parse_query(request.path), "undo") in ("1", "true"):
+            return await self._undo(manager, target_id, stop=True)
         return await self._cancel(manager, target_id)
 
     async def _restart(self, manager: Any, target_id: str) -> Response:
@@ -313,6 +319,28 @@ class SubagentRoutes:
             self._log.exception("Subagent cancel failed")
             return http_error(500, "subagent cancel failed")
         return http_json_response({"cancelled": bool(cancelled)})
+
+    async def _undo(self, manager: Any, target_id: str, *, stop: bool) -> Response:
+        """«Annulla le sue modifiche», o «Ferma e annulla» con *stop*.
+
+        Risponde col resoconto dell'annulla (``UndoReport.to_dict``): i file
+        rimessi, e quelli lasciati col motivo, che la casa dice sulla scheda.
+        """
+        try:
+            if stop:
+                report = await manager.cancel_and_undo(target_id, by="user")
+            else:
+                report = await manager.undo(target_id, by="user")
+        except RuntimeError as e:
+            status = _ACTION_ERROR_STATUS.get(type(e).__name__)
+            if status is None:
+                self._log.exception("Subagent undo failed")
+                return http_error(500, "subagent undo failed")
+            return http_error(status, str(e))
+        except Exception:
+            self._log.exception("Subagent undo failed")
+            return http_error(500, "subagent undo failed")
+        return http_json_response({"undone": True, "report": report.to_dict()})
 
     # -- GET /api/subagents/{id}/{activity,digest} ---------------------------
 

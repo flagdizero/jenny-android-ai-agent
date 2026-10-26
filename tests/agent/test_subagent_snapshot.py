@@ -36,6 +36,8 @@ RUNNING_KEYS = {
     "phase", "iteration", "elapsed_s", "idle_s", "last_tool", "tool_events",
     # Il passo del piano per cui lavora (``None`` fuori da un piano).
     "plan_id", "plan_step",
+    # Quanti file ha cambiato: «Ferma e annulla le sue modifiche (N file)».
+    "changes",
 }
 # ``cancel_reason`` solo sui terminati: e la provenienza di una cancellazione, e
 # un subagent vivo non ne ha una. ``state="cancelled"`` da solo non distingue
@@ -48,6 +50,9 @@ RECENT_KEYS = {
     # (``resumable``), via quando Jenny ha avuto il resoconto (``handled_at``),
     # raggruppata per passo (``plan_id``/``plan_step``).
     "resumable", "handled_at", "plan_id", "plan_step",
+    # Chi l'ha fermata, i file ancora da annullare e l'ultimo annulla
+    # (``agent.subagent_journal``).
+    "stopped_by", "changes", "undo",
 }
 
 

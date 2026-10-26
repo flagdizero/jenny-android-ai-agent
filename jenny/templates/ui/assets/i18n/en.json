@@ -1248,6 +1248,43 @@
       "helperRetryFailed": "I couldn't get her back up.",
       "helperContinue": "Let her continue",
       "helperContinueFailed": "I couldn't get her going again.",
+      "helperStop": "Stop her",
+      "helperStopNamed": "Stop the mini-me: {label}",
+      "helperStoppedByYou": "You stopped the mini-me: {label}",
+      "helperStoppedByYouUnnamed": "You stopped the mini-me",
+      "helperStoppedByJenny": "I stopped the mini-me: {label}",
+      "helperStoppedByJennyUnnamed": "I stopped the mini-me",
+      "stopSheet": {
+        "title": "Stop the mini-me “{label}”?",
+        "titleUnnamed": "Stop the mini-me?",
+        "continue": "Let her work",
+        "continueSub": "nothing happened",
+        "keep": "Stop and keep what she did",
+        "keepSub": "she stops now, the files she changed stay",
+        "keepSubNothing": "she stops now; she hasn't changed anything yet",
+        "undo": "Stop and undo her changes"
+      },
+      "undoSheet": {
+        "title": "Undo her changes?",
+        "keep": "Leave it as it is",
+        "keepSub": "the files stay as they are now",
+        "undo": "Undo her changes"
+      },
+      "undoSubOne": "I put 1 file back as it was; if someone else changed it too, it stays",
+      "undoSubMany": "I put {count} files back as they were; the ones others changed too stay",
+      "undoLimit": "Messages sent, searches made and reminders that already went off can't be undone.",
+      "undoActionOne": "Undo her change (1 file)",
+      "undoActionMany": "Undo her changes ({count} files)",
+      "stopFailed": "I couldn't stop her.",
+      "undoFailed": "I couldn't undo it.",
+      "sheetClose": "Close",
+      "undone": {
+        "you": "Undone: {count} files put back as they were before her.",
+        "jenny": "I undid her changes: {count} files put back as they were.",
+        "nothing": "Undone: she hadn't changed anything.",
+        "keptOthers": "{count} left as they are, because someone else changed them too: {files}",
+        "keptOther": "{count} left as they are: {files}"
+      },
       "result": {
         "pagesOne": "1 page updated.",
         "pagesMany": "{count} pages updated.",
@@ -1260,6 +1297,7 @@
         "dreamHeld": "I found nothing to add."
       },
       "why": {
+        "helperStoppedKept": "What she did is still there: {count} files changed.",
         "model": "The model didn't answer. What I had already written stays.",
         "notAProject": "There's no notebook to tidy here.",
         "error": "Something went wrong.",

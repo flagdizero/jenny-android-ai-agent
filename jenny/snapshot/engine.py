@@ -50,6 +50,14 @@ DEFAULT_EXCLUDE_GLOBS: tuple[str, ...] = (
     "*.tmp.*",
 )
 
+# Escluse sempre, anche quando ``exclude_globs`` viene da una config salvata
+# prima che esistessero (la config porta la lista intera, e una voce nuova di
+# ``DEFAULT_EXCLUDE_GLOBS`` non ci arriverebbe). ``subagents/journal`` è il
+# registro dell'annulla degli aiutanti (``agent.subagent_journal``): copie
+# temporanee dei file che un aiutante ha cambiato, che in una foto o in un
+# backup peserebbero per niente, e che un ripristino non deve riportare.
+ALWAYS_EXCLUDED_DIRS: tuple[str, ...] = ("subagents/journal",)
+
 # ``output/`` NON è in quella lista, ed è una scelta, non una dimenticanza.
 #
 # È la cartella dove il system prompt manda ogni file che l'agente produce, e
@@ -109,7 +117,7 @@ class SnapshotEngine:
         self._globs = tuple(exclude_globs)
         # Prefissi esclusi derivati dai path reali: proteggono lo store dallo
         # auto-includersi qualunque sia il nome del runtime dir.
-        self._exclude_prefixes: set[str] = set()
+        self._exclude_prefixes: set[str] = set(ALWAYS_EXCLUDED_DIRS)
         for extra in (self.snapshots_dir, *exclude_dirs):
             rel = self._rel_or_none(Path(extra))
             if rel is not None:
