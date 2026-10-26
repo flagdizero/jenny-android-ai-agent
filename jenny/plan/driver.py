@@ -155,6 +155,12 @@ MAX_RESEARCH_ROUNDS = 2
 # «non documentato». Scritto prima della foto di fine passo: il ritorno lo toglie.
 OPEN_GAPS_PATH = "raw/notes/open-gaps.md"
 _GAPS_LISTED = "gaps_listed"
+# Il cancello dei fatti persi di un passo ``delete``: uno per passo, come quello dei buchi.
+_LOST_GATE = "lost_gate"
+
+
+class _DraftsUnreadableError(Exception):
+    """Le bozze del quaderno non si leggono: chi decide una chiusura rifiuta e riprova."""
 
 # Il controllo a macchina del passo ``check`` (``jenny/plan/audit.py``),
 # nell'``extra`` del passo: il giro (1 all'apertura, 2 dopo il primo rifiuto),
@@ -271,7 +277,7 @@ class PlanHost(Protocol):
 
     def turn_in_flight(self, session_key: str) -> bool: ...
 
-    def running_helpers(self, session_key: str) -> frozenset[str]: ...
+    def running_helpers(self, session_key: str) -> frozenset[str] | None: ...
 
     async def cancel(self, session_key: str) -> int: ...
 
@@ -745,7 +751,7 @@ class PlanDriver:
         try:
             if cancel_turn is not None and self.host.turn_in_flight(session_key):
                 await cancel_turn(session_key)
-            running = self.host.running_helpers(session_key)
+            running = self.host.running_helpers(session_key) or frozenset()
             mine = [h for h in helpers if h in running]
             if mine and cancel_helpers is not None:
                 await cancel_helpers(mine)
@@ -1008,7 +1014,10 @@ class PlanDriver:
             proposal = validate_proposal(title, steps, coverage, assumptions)
         except PlanValidationError as exc:
             return f"Error: {exc} Fix the plan and call plan_propose again."
-        clean_notes = notes.strip()[:2000] if isinstance(notes, str) and notes.strip() else None
+        clean_notes = (
+            _cut(notes.strip(), 2000, "plan notes")
+            if isinstance(notes, str) and notes.strip() else None
+        )
         async with self._lock(session_key):
             try:
                 plan = await asyncio.to_thread(
@@ -1062,15 +1071,25 @@ class PlanDriver:
         drafts: list[dict[str, str]] = []
         try:
             pending = self.host.notebook_drafts(plan.notebook)
-        except Exception:  # noqa: BLE001 — una lettura rotta non deve chiudere un passo a metà
+        except Exception as exc:  # noqa: BLE001 — chi chiude un passo deve saperlo
+            # Fino al 26/10 tornava ``[]``: il passo si chiudeva con le bozze in
+            # attesa, cioè il difetto del 23/10 che questo metodo esiste per
+            # evitare. Ora chi decide una chiusura rifiuta e riprova.
             logger.opt(exception=True).warning("Plan {}: drafts not readable", plan.id)
-            return drafts
+            raise _DraftsUnreadableError(str(exc)) from exc
         for draft in pending:
             created = draft.get("created_ms")
             if isinstance(created, int) and since_ms is not None and created < since_ms:
                 continue
             drafts.append({"id": str(draft.get("id")), "target": str(draft.get("target"))})
         return drafts
+
+    def _drafts_or_empty(self, plan: Plan) -> list[dict[str, str]]:
+        """Le bozze del passo, o ``[]`` se non si leggono: per chi non decide una chiusura."""
+        try:
+            return self._plan_drafts(plan)
+        except _DraftsUnreadableError:
+            return []
 
     async def step_skip(self, session_key: str | None, reason: Any) -> str:
         """``plan_step_skip``."""
@@ -1084,7 +1103,14 @@ class PlanDriver:
         live = self._index.get(session_key)
         if live is None:
             return "Error: there is no plan step open in this conversation."
-        helpers = self.host.running_helpers(session_key)
+        helpers = self._helpers_of_step(session_key, live.plan_id, live_step=None)
+        if helpers is None:
+            # Il registro degli aiutanti non ha risposto: chiudere «al buio»
+            # lascerebbe le loro scritture al passo dopo, e la foto mentirebbe.
+            return (
+                "Not yet: I cannot tell whether helpers of this step are still working (the "
+                "helper registry did not answer). Wait a moment, then call `plan_step_done` again."
+            )
         if helpers:
             # Un passo chiuso con gli aiutanti ancora al lavoro: le loro
             # scritture finirebbero nel passo dopo, e la foto «dopo» di questo
@@ -1093,7 +1119,7 @@ class PlanDriver:
                 f"Not yet: {len(helpers)} helper(s) you started for this step are still "
                 "working. Wait for their results, then close the step."
             )
-        text = note.strip()[:_MAX_NOTE] if isinstance(note, str) else ""
+        text = _cut(note.strip(), _MAX_NOTE, "step note") if isinstance(note, str) else ""
         async with self._lock(session_key):
             try:
                 plan = await asyncio.to_thread(self.store.load, live.plan_id)
@@ -1103,6 +1129,26 @@ class PlanDriver:
             if plan.status not in _RUNNING or step is None:
                 return "Error: there is no plan step open in this conversation."
             step_id = step.id
+            if (
+                outcome == "done" and step.kind == "delete"
+                and step.extra.get(_LOST_GATE) != _GAPS_GATE_USED and step.photo_before
+            ):
+                # Chi cancella risponde dei fatti: quelli che erano in una pagina
+                # all'apertura del passo e adesso in nessuna. Una volta sola,
+                # come il cancello dei buchi: sul Titan (26/10) questo controllo
+                # l'hanno fatto quattro aiutanti in 17 minuti.
+                lost = await asyncio.to_thread(self._lost_since, plan, step.photo_before)
+                if lost is not None and lost.total:
+
+                    def _lost_gate(p: Plan) -> None:
+                        _find(p, step_id).extra[_LOST_GATE] = _GAPS_GATE_USED
+
+                    await asyncio.to_thread(self.store.update, plan.id, _lost_gate)
+                    logger.info(
+                        "Plan {}: step {} close refused once, {} fact(s) lost",
+                        plan.id, step_id, lost.total,
+                    )
+                    return _lost_refusal(lost)
             gaps = _open_gaps(step)
             gate_used = step.extra.get(_GAPS_GATE) == _GAPS_GATE_USED
             listed = 0
@@ -1142,7 +1188,13 @@ class PlanDriver:
             if refusal is not None:
                 return refusal
             plan = await asyncio.to_thread(self.store.load, plan.id)
-            drafts = await asyncio.to_thread(self._plan_drafts, plan)
+            try:
+                drafts = await asyncio.to_thread(self._plan_drafts, plan)
+            except _DraftsUnreadableError as exc:
+                return (
+                    f"Not yet: the notebook's drafts could not be read ({exc}), and a step does "
+                    "not close with drafts waiting. Try `plan_step_done` again in a moment."
+                )
             if drafts:
                 # Un passo che lascia bozze non è fatto: il file non è scritto, e
                 # i passi dopo lavorerebbero sul vecchio (la prova del 23/10:
@@ -1221,7 +1273,13 @@ class PlanDriver:
             if plan.status not in _RUNNING or step is None:
                 return "Error: there is no plan step open in this conversation."
             step_id = step.id
-            drafts = await asyncio.to_thread(self._plan_drafts, plan)
+            try:
+                drafts = await asyncio.to_thread(self._plan_drafts, plan)
+            except _DraftsUnreadableError as exc:
+                return (
+                    f"Not yet: the notebook's drafts could not be read ({exc}). Try "
+                    "`plan_blocked` again in a moment."
+                )
             if drafts:
                 # Prima le bozze del passo, poi la domanda: una domanda sulla
                 # scheda con le bozze fuori dal piano è il difetto di partenza.
@@ -1264,7 +1322,11 @@ class PlanDriver:
         non conta come fratello — senza passo non c'è un «ultimo del passo» da
         aspettare, e due aiutanti estranei si terrebbero a vicenda.
         """
-        if not isinstance(task_id, str) or not task_id or not self.plan_running(session_key):
+        live = self._index.get(session_key)
+        if (
+            not isinstance(task_id, str) or not task_id
+            or live is None or live.status not in _REPORTING
+        ):
             return False
         group = self._helper_group(task_id)
         if group is None or group[0] is None or group[1] is None:
@@ -1283,7 +1345,10 @@ class PlanDriver:
             self._held[session_key] = held
         if task_id not in held.task_ids:
             held.task_ids.append(task_id)
-        if held.timer is None and not held.woken:
+        # A piano fermo su una domanda si tiene senza timer: la risposta lo
+        # riarma (``_rearm_held``). Fino al 26/10 un resoconto arrivato lì non
+        # si teneva e apriva un turno senza i tool del passo.
+        if held.timer is None and not held.woken and live.status in _RUNNING:
             held.timer = self._arm_held_timer(session_key, held)
         logger.info(
             "Helper result {} held for session {} ({} held, {} sibling(s) running)",
@@ -1344,6 +1409,50 @@ class PlanDriver:
         if not isinstance(group, tuple) or len(group) != 2:
             return None
         return group[0], group[1]
+
+    def _helpers_of_step(
+        self, session_key: str, plan_id: str, *, live_step: str | None
+    ) -> frozenset[str] | None:
+        """Gli aiutanti vivi che contano per il passo aperto, o ``None`` se non si sa.
+
+        Con il registro per passo (``step_helpers``) contano quelli del passo
+        aperto e quelli **senza** passo (un turno dell'utente durante il piano:
+        la loro scrittura finirebbe comunque nella foto, e si segnala). Un
+        aiutante di un altro passo o di un altro piano non tiene fermo questo.
+        Senza registro per passo, tutti i vivi della sessione, come prima.
+        """
+        lookup: Any = getattr(self.host, "step_helpers", None)
+        if lookup is None:
+            return self.host.running_helpers(session_key)
+        try:
+            states = dict(lookup(session_key))
+        except Exception:  # noqa: BLE001 — il registro non ha risposto: non si sa
+            logger.opt(exception=True).warning("Plan {}: helper registry unreadable", plan_id)
+            return None
+        if not states:
+            # Il registro finto dei test (e un manager senza ``live_helper_states``)
+            # danno ``{}``: vale la lista dei vivi della sessione.
+            return self.host.running_helpers(session_key)
+        step_id = live_step
+        if step_id is None:
+            try:
+                now = _step_now(self.store.load(plan_id))
+                step_id = now.id if now is not None else None
+            except PlanError:
+                step_id = None
+        mine: set[str] = set()
+        for task_id, (state, helper_plan, helper_step) in states.items():
+            if state not in ("running", "stalled"):
+                continue
+            if helper_plan == plan_id and helper_step == step_id:
+                mine.add(task_id)
+            elif helper_plan is None and helper_step is None:
+                logger.warning(
+                    "Plan {}: helper {} runs without a plan step, counted for step {}",
+                    plan_id, task_id, step_id,
+                )
+                mine.add(task_id)
+        return frozenset(mine)
 
     def _step_siblings(
         self,
@@ -1801,7 +1910,13 @@ class PlanDriver:
         )
         if reminder_turn:
             nudge = _NUDGE_USED
-        if self.host.running_helpers(plan.session_key):
+        helpers = self._helpers_of_step(plan.session_key, plan.id, live_step=step_id)
+        if helpers is None:
+            # Il registro non ha risposto: né promemoria né blocco al buio. Il
+            # prossimo turno giudicherà di nuovo.
+            logger.warning("Plan {}: helpers of step {} unknown, not judged", plan.id, step_id)
+            return
+        if helpers:
             # Lavoro delegato in corso: è progresso, e il promemoria speso torna
             # disponibile per il prossimo tratto senza aiutanti.
             new = _NUDGE_SENT if nudge == _NUDGE_SENT else None
@@ -1851,7 +1966,7 @@ class PlanDriver:
         from jenny.runtime.user_text import say
 
         question = say(f"plan.{reason}")
-        drafts = await asyncio.to_thread(self._plan_drafts, plan)
+        drafts = await asyncio.to_thread(self._drafts_or_empty, plan)
         if drafts:
             plan = await self._hold_on_drafts(
                 plan, step_id, drafts, question=question, reason=reason
@@ -1864,10 +1979,46 @@ class PlanDriver:
                 lambda p: _block(p, step_id, question, reason),
             )
             self._remember(plan)
-        logger.info("Plan {} blocked: step {} {}", plan.id, step_id, (
-            "refused by the provider" if reason == "refused" else "stalled after the reminder"
-        ))
+        logger.info("Plan {} blocked: step {} {}", plan.id, step_id, {
+            "refused": "refused by the provider",
+            "advance_failed": "the code could not move the plan on",
+        }.get(reason, "stalled after the reminder"))
         await self._changed(plan)
+
+    async def block_after_failure(self, session_key: str, error: str) -> bool:
+        """Il gancio di fine turno è saltato: il passo aperto si ferma con una domanda.
+
+        Fino al 26/10 l'eccezione finiva nel log e basta: piano «in corsa»,
+        passo chiuso o senza turno che lo riprenda, composer spento — l'utente
+        poteva solo fermare. Ora la scheda dice che il codice non è riuscito ad
+        andare avanti, e la risposta dell'utente rifà il passo (idempotente).
+        ``True`` se c'era un passo da fermare.
+        """
+        live = self._index.get(session_key)
+        if live is None or live.status not in _RUNNING:
+            return False
+        async with self._lock(session_key):
+            try:
+                plan = await asyncio.to_thread(self.store.load, live.plan_id)
+            except PlanError:
+                return False
+            step = _step_now(plan) or next(iter(_closing(plan)), None)
+            if plan.status not in _RUNNING or step is None:
+                return False
+            if step.status != "now":
+                # Il passo era già chiuso dal modello: lo si riapre perché la
+                # domanda stia su un passo vivo, e la risposta lo rifaccia.
+                reopen_id = step.id
+
+                def _reopen(p: Plan) -> None:
+                    s = _find(p, reopen_id)
+                    s.status = "now"
+                    s.ended_at = None
+
+                plan = await asyncio.to_thread(self.store.update, plan.id, _reopen)
+            logger.error("Plan {}: could not move on after step {}: {}", plan.id, step.id, error)
+            await self._block_open_step(plan, step.id, "advance_failed")
+        return True
 
     async def _set_nudge(self, plan: Plan, step_id: str, value: str | None) -> None:
         def _apply(p: Plan) -> None:
@@ -2221,7 +2372,7 @@ class PlanDriver:
         ritorno non le rimette: non erano mai state installate.
         """
         discarded: list[dict[str, str]] = []
-        for draft in self._plan_drafts(plan):
+        for draft in self._drafts_or_empty(plan):
             try:
                 if self.host.discard_draft(draft["id"]):
                     discarded.append(draft)
@@ -2311,7 +2462,7 @@ class PlanDriver:
     ) -> Plan:
         """Scrive nel piano che un ritorno non è finito (sincrono)."""
         stamp = now_iso()
-        failure: dict[str, Any] = {"at": stamp, "kind": kind, "error": error[:500]}
+        failure: dict[str, Any] = {"at": stamp, "kind": kind, "error": _cut(error, 500, "error")}
         if applied is not None:
             failure["applied"] = applied
         if total is not None:
@@ -2726,17 +2877,32 @@ class PlanDriver:
         )
         return audit
 
-    def _lost_now(self, plan: Plan) -> int:
-        """Quanti fatti della foto di partenza mancano adesso dalle pagine, o 0."""
+    def _lost_now(self, plan: Plan) -> int | None:
+        """Quanti fatti della foto di partenza mancano adesso dalle pagine; ``None`` se non si sa.
+
+        ``None`` e non 0: un conteggio saltato non è «niente perso», e la nota lo
+        dice («not counted»).
+        """
         start = plan.photos.get("start")
         root = self.host.notebook_root(plan.notebook)
         if not start or root is None:
-            return 0
+            return None
         try:
             return lost_facts(self._photos(plan).texts(start, "wiki/"), wiki_texts(root)).total
         except Exception:  # noqa: BLE001 — un conteggio per la nota
             logger.opt(exception=True).warning("Plan {}: lost facts not counted", plan.id)
-            return 0
+            return None
+
+    def _lost_since(self, plan: Plan, photo: str) -> LostFacts | None:
+        """I fatti delle pagine della foto *photo* che adesso non sono in nessuna pagina."""
+        root = self.host.notebook_root(plan.notebook)
+        if root is None:
+            return None
+        try:
+            return lost_facts(self._photos(plan).texts(photo, "wiki/"), wiki_texts(root))
+        except Exception:  # noqa: BLE001 — un controllo che non si è potuto fare non ferma il passo
+            logger.opt(exception=True).warning("Plan {}: lost facts not computed", plan.id)
+            return None
 
     async def _note_machine(self, plan: Plan, step_id: str, view: dict[str, Any]) -> Plan:
         def _apply(p: Plan) -> None:
@@ -2867,7 +3033,7 @@ class PlanDriver:
             # con le sue bozze aperte). Le si dice al modello invece di
             # buttarle: sono lavoro fatto, e l'utente può ancora deciderle;
             # rifarle ne metterebbe una seconda copia davanti a lui.
-            waiting=[d["target"] for d in self._plan_drafts(plan)] if not reminder else [],
+            waiting=[d["target"] for d in self._drafts_or_empty(plan)] if not reminder else [],
             # I numeri con unità che c'erano prima del piano e adesso non sono
             # in nessuna pagina (``plan/facts.py``): solo nel passo di verifica.
             # La prova 3 ne ha persi 119 su 384 senza che nessuno lo decidesse.
@@ -3093,7 +3259,7 @@ class PlanDriver:
             resume_to = s.extra.pop(_RESUME_TO, None)
             s.status = outcome if outcome in ("done", "skipped") else "done"
             s.ended_at = stamp
-            s.note = (f"{note} — {suffix}" if note else suffix)[:_MAX_NOTE]
+            s.note = _cut(f"{note} — {suffix}" if note else suffix, _MAX_NOTE, "step note")
             s.extra.pop(_NUDGE, None)
             apply_transition(p, "running", at=stamp, event="drafts_decided", step=step_id)
             if resume_to == "pausing":
@@ -3275,6 +3441,29 @@ def _research_rounds(plan: Plan) -> int:
     """Quanti giri di ricerca il piano ha già speso (``_RESEARCH_ROUNDS``)."""
     raw = plan.extra.get(_RESEARCH_ROUNDS)
     return raw if isinstance(raw, int) and raw >= 0 else 0
+
+
+def _cut(text: str, limit: int, what: str) -> str:
+    """*text* entro *limit*, e il taglio nel log: fino al 26/10 era muto."""
+    if len(text) <= limit:
+        return text
+    logger.info("Plan: {} cut from {} to {} characters", what, len(text), limit)
+    return text[:limit]
+
+
+def _lost_refusal(lost: LostFacts) -> str:
+    """Il rifiuto di un passo ``delete`` con fatti persi: quali, e cosa fare."""
+    lines = [
+        f"Not closed yet: {lost.total} fact(s) that were in a page when this step opened are "
+        "in no page now. The code compared numbers with units, so it can be wrong: check each "
+        "one. Put back what is still true in the right page; what went on purpose (wrong, "
+        "superseded, removed at the user's request) you say in the step note. Then call "
+        "`plan_step_done` again: this check runs once per step.",
+    ]
+    lines.extend(f'- {f.page}: {f.fact} — "{f.context}"' for f in lost.items)
+    if lost.total > len(lost.items):
+        lines.append(f"(and {lost.total - len(lost.items)} more)")
+    return "\n".join(lines)
 
 
 def _norm(text: str) -> str:

@@ -559,6 +559,31 @@ async def test_a_budget_announce_is_silent_only_after_a_real_send_to_it(
     assert outcome.disposition is TurnDisposition.SILENT
 
 
+async def test_a_result_arriving_while_blocked_is_held_until_the_answer(workspace: Path) -> None:
+    """Fino al 26/10 un resoconto arrivato a piano fermo apriva un turno senza i
+    tool del passo: ora si tiene, senza timer, e la risposta lo sveglia."""
+    from jenny.agent.turn_types import TurnDisposition
+
+    rig = Rig(workspace, wake_after=0.1)
+    await rig.start()
+    rig.helper("h1")
+    rig.helper("h2")
+    assert "Error" not in await rig.driver.blocked(KEY, "Quale vaso?")
+    outcome = await rig.loop._process_message(_result("h1"))
+    assert outcome.disposition is TurnDisposition.SILENT, "tenuto: nessun turno a piano fermo"
+    assert rig.driver.held_results(KEY) == ("h1",)
+    await asyncio.sleep(0.25)
+    assert not any(m.metadata.get(PLAN_WAKE_META) for m in _drain_inbound(rig.loop)), "niente timer"
+    await rig.driver.answer(rig.plan_id, "Quello rosso")
+    seen: list[InboundMessage] = []
+
+    def woke() -> bool:
+        seen.extend(_drain_inbound(rig.loop))
+        return any(m.metadata.get(PLAN_WAKE_META) for m in seen)
+
+    await wait_until(woke, timeout=2)
+
+
 async def test_a_block_disarms_and_the_answer_rearms_the_timer(workspace: Path) -> None:
     rig = Rig(workspace, wake_after=0.1)
     await rig.start()

@@ -57,11 +57,17 @@ class LoopPlanHost:
             for task, token in list(loop._turn_tokens_by_task.items())
         )
 
-    def running_helpers(self, session_key: str) -> frozenset[str]:
+    def running_helpers(self, session_key: str) -> frozenset[str] | None:
+        """Gli aiutanti vivi della sessione, o ``None`` se il manager non risponde.
+
+        ``None`` e non l'insieme vuoto: «non lo so» non è «nessuno», e un passo
+        chiuso su un «nessuno» finto lascerebbe le loro scritture al passo dopo.
+        """
         try:
             return frozenset(self._loop.subagents.get_running_ids_by_session(session_key))
-        except Exception:  # noqa: BLE001 — un manager finto nei test non deve rompere il piano
-            return frozenset()
+        except Exception:  # noqa: BLE001 — il driver rifiuta la chiusura e riprova
+            logger.opt(exception=True).warning("Running helpers of {} unknown", session_key)
+            return None
 
     def interrupted_helpers(self, session_key: str) -> list[dict[str, Any]]:
         """Gli aiutanti della sessione interrotti da un riavvio, con la storia da riprendere."""

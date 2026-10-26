@@ -466,5 +466,11 @@ class LoopPlanMixin:
             await driver.on_turn_end(
                 session_key, msg.metadata, pending=pending, stop_reason=stop_reason
             )
-        except Exception:  # noqa: BLE001 — il piano resta com'è, il turno è comunque finito
+        except Exception as exc:  # noqa: BLE001 — il turno è comunque finito
             logger.opt(exception=True).error("Plan end-of-turn hook failed for {}", session_key)
+            # Il piano non resta «in corsa» senza niente che lo muova: il passo
+            # aperto si ferma con una domanda, e la risposta dell'utente lo rifà.
+            try:
+                await driver.block_after_failure(session_key, repr(exc))
+            except Exception:  # noqa: BLE001 — l'ultima rete: nel log
+                logger.opt(exception=True).error("Plan {} could not be blocked", session_key)

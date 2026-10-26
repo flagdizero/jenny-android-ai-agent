@@ -38,9 +38,9 @@ _UNITS: tuple[tuple[str, str], ...] = (
     (r"[°º]\s?F", "°f"),
     (r"[°º]", "°"),
     (r"millilitri|millilitro|milliliters?|millilitres?|ml", "ml"),
+    (r"millimetri|millimetro|millimet(?:er|re)s?|mm", "mm"),
+    (r"centimetri|centimetro|centimet(?:er|re)s?|cm", "cm"),
     (r"litri|litro|liters?|litres?|l", "l"),
-    (r"mm", "mm"),
-    (r"cm", "cm"),
     (r"metri|metro|meters?|metres?|m", "m"),
     (r"kg", "kg"),
     (r"grammi|grammo|grams?|g", "g"),
@@ -55,10 +55,10 @@ _UNITS: tuple[tuple[str, str], ...] = (
     (r"pollici|pollice|inches|inch", "in"),
     (r"ft|feet|foot|piedi", "ft"),
 )
-# Un'unità non è seguita da una lettera («m» di «mesi» no, «g» di «gelo» no);
-# il «%» e il «°» possono esserlo.
+# Un'unità non è seguita da una lettera («m» di «mesi» no, «g» di «gelo» no) né
+# da un apostrofo («il 2 l'ho fatto» non è un litro); il «%» e il «°» possono.
 _UNIT_RX = "|".join(f"(?:{rx})" for rx, _ in _UNITS)
-_UNIT = rf"(?:{_UNIT_RX})(?![^\W\d_²³'’])"
+_UNIT = rf"(?:{_UNIT_RX})(?![^\W\d_²³'’]|['’])"
 _CANON = [(re.compile(rf"^(?:{rx})$", re.IGNORECASE), canon) for rx, canon in _UNITS]
 
 # Un numero, con il segno solo se attaccato («-5 °C», non il trattino di un
@@ -68,8 +68,8 @@ _NUM_BARE = r"-?\d+(?:[.,]\d+)?"
 
 # Gli intervalli scritti a parole diventano «X-Y» prima della ricerca.
 _WORD_RANGE = re.compile(
-    rf"\b(?:da|tra|fra|from|between)\s+({_NUM_BARE})\s*(?:{_UNIT}\s*)?"
-    rf"(?:a|e|to|and)\s+({_NUM_BARE})(?=\s*{_UNIT})",
+    rf"\b(?:da|dal|dall'|dai|tra|fra|from|between)\s+({_NUM_BARE})\s*(?:{_UNIT}\s*)?"
+    rf"(?:a|al|all'|ai|e|to|and)\s+({_NUM_BARE})(?=\s*{_UNIT})",
     re.IGNORECASE,
 )
 _TO_RANGE = re.compile(rf"({_NUM})\s*(?:{_UNIT}\s*)?\bto\s+({_NUM_BARE})(?=\s*{_UNIT})", re.IGNORECASE)

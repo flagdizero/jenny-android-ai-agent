@@ -358,7 +358,9 @@ class PlanPhotos:
             try:
                 data = get_blob(self.engine.objects_dir, hash_hex)
             except (OSError, BlobCorruptError):
-                logger.debug("Photo {}: blob of {} not readable", photo_id, path)
+                # A voce alta: una pagina che manca dal confronto fa sembrare
+                # «niente perso» ciò che non si è potuto contare.
+                logger.warning("Photo {}: blob of {} not readable", photo_id, path)
                 continue
             texts[path] = data.decode("utf-8", errors="replace")
         return texts

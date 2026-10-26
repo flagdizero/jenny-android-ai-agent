@@ -256,26 +256,25 @@ class TestResume:
 
 
 class TestDegradeToRestart:
-    async def test_expired_history_degrades_to_restart(self, tmp_path: Path) -> None:
+    async def test_expired_history_of_a_finished_job_refuses_the_relaunch(
+        self, tmp_path: Path
+    ) -> None:
+        """Fino al 26/10 degradava al rilancio: tutto il brief rifatto da zero sopra
+        pagine che esistono gia' (Titan: due editor «relaunched from scratch»). Chi
+        chiama sa cosa fare: un aiutante nuovo con il brief di cio' che c'e'."""
         sm = _manager(tmp_path)
-        seen = _completing_runner(sm)
+        _completing_runner(sm)
         lineage = await _spawn_and_settle(sm, task="write the report")
         # Invecchia la storia oltre la TTL.
         sm._history.ttl_s = 0.001
         await asyncio.sleep(0.002)
 
-        outcome = await sm.send(lineage, "change the title")
-        assert outcome.mode == "restarted"
-        await asyncio.gather(*list(sm._running_tasks.values()), return_exceptions=True)
+        with pytest.raises(SubagentSendError, match="no longer saved"):
+            await sm.send(lineage, "change the title")
+        assert not sm._running_tasks
+        assert sm._lineages[lineage].attempt == 1
 
-        relaunched = seen[-1].initial_messages
-        assert relaunched[0]["role"] == "system"
-        assert relaunched[1]["role"] == "user"
-        assert "write the report" in relaunched[1]["content"]
-        assert "change the title" in relaunched[1]["content"]
-        assert sm._lineages[lineage].attempt == 2
-
-    async def test_the_lineage_cap_degrades_the_oldest_to_restart(
+    async def test_the_lineage_cap_leaves_the_oldest_without_a_resume(
         self, tmp_path: Path
     ) -> None:
         from jenny.agent.subagent_history import MAX_HISTORY_PER_ORIGIN
@@ -289,7 +288,8 @@ class TestDegradeToRestart:
 
         assert sm._history.load(lineages[0]) is None
         assert sm._history.load(lineages[-1]) is not None
-        assert (await sm.send(lineages[0], "follow up")).mode == "restarted"
+        with pytest.raises(SubagentSendError, match="no longer saved"):
+            await sm.send(lineages[0], "follow up")
         assert (await sm.send(lineages[-1], "follow up")).mode == "resumed"
         await asyncio.gather(*list(sm._running_tasks.values()), return_exceptions=True)
 
@@ -319,18 +319,20 @@ class TestDegradeToRestart:
         await asyncio.sleep(0)
         assert sm._history.load(lineage) is None
 
-    async def test_corrupt_history_degrades_to_restart(self, tmp_path: Path) -> None:
+    async def test_corrupt_history_of_a_finished_job_refuses_the_relaunch(
+        self, tmp_path: Path
+    ) -> None:
         sm = _manager(tmp_path)
-        seen = _completing_runner(sm)
+        _completing_runner(sm)
         lineage = await _spawn_and_settle(sm, task="write the report")
 
         path = tmp_path / "sessions" / f"subagent_{lineage}.jsonl"
         assert path.is_file()
         path.write_text("{ truncated", encoding="utf-8")
 
-        assert (await sm.send(lineage, "change the title")).mode == "restarted"
-        await asyncio.gather(*list(sm._running_tasks.values()), return_exceptions=True)
-        assert "change the title" in seen[-1].initial_messages[1]["content"]
+        with pytest.raises(SubagentSendError, match="no longer saved"):
+            await sm.send(lineage, "change the title")
+        assert not sm._running_tasks
 
     async def test_send_without_a_session_manager_still_works(
         self, tmp_path: Path

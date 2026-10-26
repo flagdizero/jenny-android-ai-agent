@@ -32,6 +32,11 @@ from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_fil
         ("pH 4,5–5,5", ["ph4.5-5.5"]),
         ("pH ottimale 6", ["ph6"]),
         ("terriccio e perlite 1:1, diluire 1:10", ["1:1", "1:10"]),
+        # Le forme lunghe e gli articoli: «18 cm» e «18 centimetri» sono lo
+        # stesso fatto, «50-55%» e «dal 50 al 55%» pure (26/10).
+        ("vaso di 18 centimetri, buchi da 6 millimetri", ["18cm", "6mm"]),
+        ("umidità dal 50 al 55%", ["50-55%"]),
+        ("dai 2 ai 3 giorni", ["2-3d"]),
         ("vaso da 1,50 m", ["1.5m"]),
         ("mai sotto −5 °C", ["-5°c"]),
         ("2 years", ["2y"]),
@@ -47,6 +52,7 @@ def test_facts_are_numbers_with_units_normalised(text: str, facts: list[str]) ->
 @pytest.mark.parametrize(
     "text",
     [
+        "il 2 l'ho fatto, il 3 l’ho rifatto",
         "Anni 4-5: due rami",  # un numero senza unità
         "USDA 5-8, H5",
         "aggiornato alle 15:40",  # un orario, non un rapporto
@@ -173,6 +179,46 @@ async def test_a_plan_without_a_check_step_is_refused(driver: PlanDriver) -> Non
     text = await propose(driver, "Rifare la wiki", steps)
     assert text.startswith("Error") and "The last step must be a `check`" in text
     assert driver.store.open_plan_for("piante") is None
+
+
+_DELETE = [
+    STEPS[0],
+    {"title": "Tolgo la felce", "detail": "Via wiki/felce.md.", "kind": "delete",
+     "done_when": "La pagina non c'è più."},
+    STEPS[2],
+]
+
+
+async def test_a_delete_step_that_loses_a_fact_is_refused_once(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """Chi cancella risponde dei fatti: sul Titan (26/10) il controllo l'hanno
+    fatto quattro aiutanti in 17 minuti. Il codice lo fa alla chiusura, una volta."""
+    plan = await _approve(driver, _DELETE)
+    await _close(driver)
+    nb = workspace / "wikis" / "piante"
+    (nb / "wiki" / "felce.md").unlink()
+    text = await driver.step_done(KEY, "felce via")
+    assert text.startswith("Not closed yet") and "2 fact(s)" in text
+    assert "16-24°c" in text and "60-80%" in text
+    plan = driver.store.load(plan.id)
+    assert plan.steps[1].status == "now" and plan.steps[1].extra["lost_gate"] == "used"
+    # Rimesso un fatto in un'altra pagina, l'altro è andato apposta: la seconda chiamata passa.
+    write_file(nb, "wiki/altre.md", "# Altre\n\n- Temperatura felce: 16-24 °C\n")
+    assert "closed" in await driver.step_done(KEY, "felce via, umidità superata")
+    assert driver.store.load(plan.id).steps[1].status == "done"
+
+
+async def test_a_delete_step_that_loses_nothing_closes_at_once(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    plan = await _approve(driver, _DELETE)
+    await _close(driver)
+    nb = workspace / "wikis" / "piante"
+    write_file(nb, "wiki/felce2.md", (nb / "wiki" / "felce.md").read_text(encoding="utf-8"))
+    (nb / "wiki" / "felce.md").unlink()
+    assert "closed" in await driver.step_done(KEY, "spostata")
+    assert "lost_gate" not in driver.store.load(plan.id).steps[1].extra
 
 
 async def test_nothing_lost_means_no_block(driver: PlanDriver, bus: FakeBus) -> None:

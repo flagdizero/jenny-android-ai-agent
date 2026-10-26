@@ -368,6 +368,10 @@ _TEXT: dict[str, dict[str, str]] = {
             "The provider refused to answer, and asking again the same way gets the same "
             "refusal. Answer to try the step again, or stop the plan."
         ),
+        "plan.advance_failed": (
+            "Something went wrong on my side while moving the plan on. Answer to try this "
+            "step again, or stop the plan."
+        ),
         "plan.restarted": "I restarted during step {step}: tap Resume to do it again.",
         "plan.stopped": "I stopped the plan. The notebook stays as it is now.",
         "plan.stopped_planning": "I stopped preparing the plan.",

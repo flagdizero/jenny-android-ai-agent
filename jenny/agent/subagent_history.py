@@ -33,7 +33,7 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
@@ -115,6 +115,10 @@ class SubagentHistoryStore:
         self._sessions = sessions
         self.ttl_s = float(ttl_s)
         self.max_per_origin = max(1, int(max_per_origin))
+        # Un tetto diverso per origine, iniettato (``set_limit_provider``): la
+        # sessione col piano in corsa ne ha uno piu' alto, perche' un passo fa
+        # girare piu' aiutanti di quanti il tetto fisso ne tenga (v. ``prune``).
+        self._limit_provider: Callable[[str], int | None] | None = None
         # Indice in RAM lineage -> origine/istante: serve solo alla potatura per
         # origine. Piccolo per costruzione (max_per_origin voci per sessione).
         self._index: dict[str, _Entry] = {}
@@ -123,6 +127,23 @@ class SubagentHistoryStore:
     @property
     def enabled(self) -> bool:
         return self._sessions is not None
+
+    def set_limit_provider(self, fn: Callable[[str], int | None] | None) -> None:
+        """``fn(origin_key)`` -> il tetto di storie per quell'origine, o ``None`` per il fisso."""
+        self._limit_provider = fn
+
+    def max_for(self, origin_key: str) -> int:
+        """Il tetto di storie per *origin_key*: quello iniettato, o ``max_per_origin``."""
+        if self._limit_provider is None:
+            return self.max_per_origin
+        try:
+            value = self._limit_provider(origin_key)
+        except Exception:  # noqa: BLE001 — un provider rotto: il tetto fisso
+            logger.exception("Subagent history limit provider failed; using the fixed cap")
+            return self.max_per_origin
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            return self.max_per_origin
+        return max(self.max_per_origin, value)
 
     # ------------------------------------------------------------------
     # write
@@ -356,8 +377,12 @@ class SubagentHistoryStore:
             if entry.lineage_id in dropped:
                 continue
             by_origin.setdefault(entry.origin_key, []).append(entry)
-        for entries in by_origin.values():
-            excess = len(entries) - self.max_per_origin
+        for origin_key, entries in by_origin.items():
+            # Il 26/10 un passo di piano ha fatto girare 8 aiutanti nella stessa
+            # sessione: le storie dei 5 editor finiti sono cadute proprio quando
+            # il giro di ricerca li rimandava alle pagine, e due su tre sono
+            # ripartiti da zero. Con il piano in corsa il tetto e' piu' alto.
+            excess = len(entries) - self.max_for(origin_key)
             if excess <= 0:
                 continue
             # Prima le storie di lavori finiti bene, poi quelle di lavori non

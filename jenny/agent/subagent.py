@@ -1500,6 +1500,14 @@ class SubagentManager:
         non deve saperlo.
         """
         self._limit_provider = fn
+        # Le storie seguono gli slot: con N aiutanti alla volta un passo ne fa
+        # girare 2N fra editor e ricercatori prima di rimandare i primi, e ogni
+        # storia caduta e' una ripartenza da zero (~5 min sul Titan, 26/10).
+        self._history.set_limit_provider(
+            None if fn is None else (lambda key: (
+                (lim * 2 + 2) if isinstance(lim := self._session_limit(key), int) else None
+            ))
+        )
 
     def set_stall_listener(self, fn: Callable[[str, list[str]], None] | None) -> None:
         """Inietta chi ascolta le marcature ``stalled`` del watchdog.
@@ -3244,6 +3252,18 @@ class SubagentManager:
             raise SubagentSendError(
                 "no resumable conversation for this subagent, and continuing it would "
                 "mean relaunching it from scratch"
+            )
+        if last_state == "done" and self._history.enabled:
+            # Un lavoro finito bene la cui storia e' andata (scaduta, potata,
+            # corrotta): rilanciarlo rifa' tutto il brief da zero sopra pagine
+            # che esistono gia' (Titan, 26/10: due editor «relaunched from
+            # scratch», ~5 minuti l'uno). Il rilancio resta per chi e' fallito o
+            # si e' fermato, e per le costruzioni senza storia (``sessions=None``),
+            # dove non c'era niente da perdere.
+            raise SubagentSendError(
+                "this helper finished its job and its conversation is no longer saved: "
+                "relaunching it would redo the whole brief from scratch. Start a new helper "
+                "with a brief of what is already written and what to change."
             )
         detail = await self.restart(
             target_id,

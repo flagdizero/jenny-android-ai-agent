@@ -28,6 +28,7 @@ from jenny.agent.tools.context import RequestContext, bind_request_context, rese
 from jenny.bus.events import OUTBOUND_META_SUBAGENT_STATUS
 from jenny.bus.queue import MessageBus
 from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+from jenny.session.manager import SessionManager
 
 PLAN_KEY = "project:piante"
 
@@ -38,6 +39,8 @@ def _manager(tmp_path: Path, **kw) -> SubagentManager:
     defaults = dict(
         provider=provider, workspace=tmp_path, bus=MessageBus(), model="test-model",
         max_tool_result_chars=16_000, stall_threshold_s=0.0, max_concurrent_subagents=3,
+        # Con la storia: un aiutante finito si riprende, non si rilancia da zero.
+        session_manager=SessionManager(tmp_path),
     )
     defaults.update(kw)
     return SubagentManager(**defaults)
@@ -48,7 +51,12 @@ def _blocking(sm: SubagentManager) -> asyncio.Event:
 
     async def _slow_run(spec):
         await block.wait()
-        return AgentRunResult(final_content="done", messages=[], stop_reason="completed")
+        # Una conversazione minima: con la storia salvata un aiutante finito si
+        # riprende (``subagent_send``) invece di essere rilanciato da zero.
+        return AgentRunResult(
+            final_content="done", stop_reason="completed",
+            messages=[{"role": "user", "content": "task"}, {"role": "assistant", "content": "done"}],
+        )
 
     sm.runner.run = _slow_run  # type: ignore[method-assign]
     return block
@@ -153,6 +161,19 @@ async def test_a_helper_carries_the_plan_step_of_the_turn_that_started_it(tmp_pa
     assert reloaded.spec.plan_step == "s3"
 
 
+async def test_the_history_cap_follows_the_plan_slots(tmp_path) -> None:
+    """Un passo fa girare fino a 2N aiutanti prima di rimandare i primi: le loro
+    storie devono esserci ancora (``2N + 2``), e fuori dal piano vale il fisso."""
+    from jenny.agent.subagent_history import MAX_HISTORY_PER_ORIGIN
+
+    sm = _manager(tmp_path)
+    sm.set_limit_provider(lambda key: PLAN_HELPER_SLOTS if key == PLAN_KEY else None)
+    assert sm._history.max_for(PLAN_KEY) == PLAN_HELPER_SLOTS * 2 + 2
+    assert sm._history.max_for("unified:default") == MAX_HISTORY_PER_ORIGIN
+    sm.set_limit_provider(None)
+    assert sm._history.max_for(PLAN_KEY) == MAX_HISTORY_PER_ORIGIN
+
+
 async def test_outside_a_plan_the_step_is_none(tmp_path) -> None:
     sm = _manager(tmp_path)
     block = _blocking(sm)
@@ -190,7 +211,7 @@ async def test_a_resend_carries_the_step_of_the_turn_that_sends_it(tmp_path) -> 
         outcome = await sm.send(done.task_id, "fill the page from raw/research/")
     finally:
         reset_request_context(token)
-    assert outcome.mode in ("resumed", "restarted")
+    assert outcome.mode == "resumed"
     running = sm.status_snapshot(PLAN_KEY)["running"][0]
     assert (running["plan_id"], running["plan_step"]) == ("plan-1", "s4")
     block.set()

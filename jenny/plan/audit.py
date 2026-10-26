@@ -53,9 +53,13 @@ MAX_LISTED = 60
 _NOT_REPAIRED = frozenset({"no_summary"})
 
 _GAP = re.compile(
-    r"\bquer(?:y|ies)\s+(?:da\s+fare|to\s+run|to\s+try|still\s+to)"
+    r"\bquer(?:y|ies)\s+(?:da\s+fare|to\s+run|to\s+try|still\s+to|ancora)"
     r"|\b(?:resta|restano)\s+da\s+cercare"
-    r"|\bda\s+cercare\s*[:(]"
+    r"|\b(?:ancora\s+)?da\s+cercare\s*[:(]"
+    r"|\bancora\s+da\s+cercare\b"
+    r"|\bnessuna\s+query\b"
+    r"|\bda\s+ricercare\b"
+    r"|\bto\s+research\b"
     r"|\bto\s+be\s+searched\b"
     r"|\bstill\s+to\s+(?:be\s+)?search",
     re.IGNORECASE,

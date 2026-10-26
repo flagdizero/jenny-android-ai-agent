@@ -256,6 +256,42 @@ async def test_continue_without_restart_refuses_a_failed_helper(tmp_path):
     assert not manager._running_tasks
 
 
+async def test_a_finished_helper_without_a_history_is_not_relaunched(tmp_path):
+    """Rilanciarlo rifarebbe tutto il brief sopra pagine che esistono gia' (Titan,
+    26/10: «relaunched from scratch», ~5 minuti l'uno). Chi e' fallito si rilancia ancora."""
+    import pytest
+
+    from jenny.agent.runner import AgentRunResult
+    from jenny.agent.subagent import SubagentSendError
+
+    manager = _manager(tmp_path, fake_provider(_scripted([])))
+
+    async def _done(spec):
+        return AgentRunResult(final_content="Pages written.", messages=[], stop_reason="completed")
+
+    manager.runner.run = _done  # type: ignore[method-assign]
+    await manager.spawn("write the pages", session_key="unified:default")
+    await wait_until(lambda: not manager._running_tasks, timeout=5.0)
+    record = manager.list_records("unified:default")[-1]
+    assert record.state == "done"
+    manager._history.drop(record.lineage_id)
+    with pytest.raises(SubagentSendError, match="no longer saved"):
+        await manager.send(record.task_id, "fill the gaps")
+    assert not manager._running_tasks
+
+    async def _fail(spec):
+        return AgentRunResult(final_content=None, messages=[], stop_reason="error", error="x")
+
+    manager.runner.run = _fail  # type: ignore[method-assign]
+    await manager.spawn("y", session_key="unified:default")
+    await wait_until(lambda: not manager._running_tasks, timeout=5.0)
+    failed = manager.list_records("unified:default")[-1]
+    manager.runner.run = _done  # type: ignore[method-assign]
+    outcome = await manager.send(failed.task_id, "try again")
+    assert outcome.mode == "restarted"
+    await wait_until(lambda: not manager._running_tasks, timeout=5.0)
+
+
 async def test_the_budget_notice_is_not_saved_in_the_history(tmp_path):
     from jenny.session.history_meta import INJECTED_EVENT_META
     from jenny.utils.runtime import BUDGET_NOTICE_EVENT

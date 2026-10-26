@@ -127,6 +127,30 @@ class TestRetentionCap:
         assert store.load("L0") is None
         assert store.load(f"L{total - 1}") == _MESSAGES
 
+    def test_the_injected_cap_raises_the_fixed_one_for_an_origin(self, tmp_path: Path) -> None:
+        """Il 26/10 un passo di piano ha fatto girare 8 aiutanti: le storie dei 5
+        editor finiti sono cadute proprio quando il giro li rimandava alle pagine,
+        e due su tre sono ripartiti da zero. Con il piano in corsa il tetto sale."""
+        store, _sessions = _store(tmp_path)
+        store.set_limit_provider(lambda origin: 12 if origin == "project:piante" else None)
+        assert store.max_for("project:piante") == 12
+        assert store.max_for("unified:default") == MAX_HISTORY_PER_ORIGIN
+        base = time.time()
+        for i in range(10):
+            store.save(f"P{i}", "project:piante", _MESSAGES, now=base + i)
+            store.save(f"U{i}", "unified:default", _MESSAGES, now=base + i)
+        assert all(store.load(f"P{i}") == _MESSAGES for i in range(10))
+        assert store.load("U0") is None
+        # Un provider che da' meno del tetto fisso non lo abbassa, e uno rotto non conta.
+        store.set_limit_provider(lambda origin: 1)
+        assert store.max_for("project:piante") == MAX_HISTORY_PER_ORIGIN
+
+        def _broken(origin: str) -> int:
+            raise RuntimeError("boom")
+
+        store.set_limit_provider(_broken)
+        assert store.max_for("project:piante") == MAX_HISTORY_PER_ORIGIN
+
     def test_the_cap_covers_every_slot_of_a_plan_step(self) -> None:
         """Un passo di piano fa girare ``PLAN_HELPER_SLOTS`` normali piu uno breve
         nella stessa sessione: col tetto a 3 i primi fermati al budget perdevano

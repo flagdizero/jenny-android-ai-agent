@@ -392,6 +392,63 @@ async def test_a_question_over_the_cap_is_refused_not_cut(driver: PlanDriver) ->
     assert driver.step_open(KEY)
 
 
+async def test_unreadable_drafts_refuse_the_close_instead_of_closing(
+    driver: PlanDriver, host: FakeHost
+) -> None:
+    """Fino al 26/10 una lettura rotta valeva «nessuna bozza» e il passo si
+    chiudeva con le bozze in attesa: il difetto del 23/10 che il controllo esiste
+    per evitare."""
+    plan = await _approve(driver)
+
+    def _broken(notebook: str) -> list[dict[str, Any]]:
+        raise OSError("staged index unreadable")
+
+    host.notebook_drafts = _broken  # type: ignore[method-assign]
+    text = await driver.step_done(KEY, "fatto")
+    assert text.startswith("Not yet") and "drafts could not be read" in text
+    assert driver.store.load(plan.id).steps[0].status == "now"
+    assert (await driver.blocked(KEY, "Quale?")).startswith("Not yet")
+    del host.notebook_drafts  # type: ignore[attr-defined]
+    assert "closed" in await driver.step_done(KEY, "fatto")
+
+
+async def test_unknown_helpers_refuse_the_close_and_skip_the_judgement(
+    driver: PlanDriver, host: FakeHost
+) -> None:
+    """«Non lo so» non è «nessuno»: con il registro muto il passo non si chiude
+    e il giudizio di fine turno non manda promemoria né blocca."""
+    plan = await _approve(driver)
+    host.running_helpers = lambda key: None  # type: ignore[method-assign]
+    text = await driver.step_done(KEY, "fatto")
+    assert text.startswith("Not yet") and "registry did not answer" in text
+    await driver.on_turn_end(KEY, {})
+    plan = driver.store.load(plan.id)
+    assert plan.status == "running" and plan.steps[0].status == "now"
+    assert "nudge" not in plan.steps[0].extra
+
+
+async def test_a_failed_end_of_turn_hook_blocks_the_step_with_its_own_question(
+    driver: PlanDriver,
+) -> None:
+    """Il gancio di fine turno saltava e il piano restava «in corsa» con niente
+    che lo muovesse e il composer spento: ora il passo si ferma con una domanda,
+    e la risposta lo rifà."""
+    plan = await _approve(driver)
+    assert await driver.block_after_failure(KEY, "OSError: photo")
+    plan = driver.store.load(plan.id)
+    assert plan.status == "blocked" and plan.blocked["reason"] == "advance_failed"
+    assert "went wrong on my side" in plan.blocked["question"]
+    await driver.answer(plan.id, "riprova")
+    plan = driver.store.load(plan.id)
+    assert plan.status == "running" and plan.steps[0].status == "now"
+    # Il passo era già chiuso dal modello (la foto «dopo» è saltata): si riapre.
+    assert "closed" in await driver.step_done(KEY, "fatto")
+    assert await driver.block_after_failure(KEY, "OSError: photo")
+    plan = driver.store.load(plan.id)
+    assert plan.status == "blocked" and plan.steps[0].status == "blocked"
+    assert not await driver.block_after_failure(KEY, "again"), "già fermo: niente da fare"
+
+
 async def test_a_message_typed_while_blocked_is_the_answer(driver: PlanDriver) -> None:
     plan = await _approve(driver)
     await driver.blocked(KEY, "Quale acero?")

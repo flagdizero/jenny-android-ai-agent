@@ -49,10 +49,15 @@ def test_lines_left_to_search_are_found_and_ordinary_words_are_not(tmp_path: Pat
         "- È il parassita da cercare per primo sulle foglie.\n"
         "- Identità, origine, stato, todo.\n"
         "- **Talee**: non documentato (query fatte: «salvia talee»).\n"
+        # Le forme che il 26/10 passavano inosservate.
+        "- Concime: ancora da cercare.\n"
+        "- Luce: nessuna query ancora fatta.\n"
+        "- Acqua: da ricercare.\n"
+        "- To research: quanto dura un vaso.\n"
     ))
     audit = audit_notebook(tmp_path)
     gaps = [f for f in audit.findings if f.kind == "unsearched_gap"]
-    assert [f.line for f in gaps] == [7, 8, 9]
+    assert [f.line for f in gaps] == [7, 8, 9, 13, 14, 15, 16]
     assert audit.not_documented == 2
 
 
