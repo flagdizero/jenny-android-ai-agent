@@ -446,15 +446,47 @@ async def test_restart_after_a_close_photographs_the_step(
     assert plan.steps[1].status == "pending"
 
 
-async def test_a_blocked_plan_is_paused_at_boot_too(
+async def test_a_blocked_plan_keeps_its_question_across_a_restart(
+    workspace: Path, host: FakeHost, bus: FakeBus
+) -> None:
+    """Fino al 26/10 un riavvio metteva in pausa anche un piano fermo su una domanda:
+    la domanda spariva e Riprendi rifaceva il passo da capo. Aspettava gia' l'utente:
+    resta fermo, e la risposta lo fa ripartire come prima del riavvio."""
+    store = PlanStore.for_workspace(workspace)
+    first = PlanDriver(store, bus, host)
+    plan = await _approve(first)
+    await first.blocked(KEY, "1. Cancello?\n2. E la frase dei 2,8 m?")
+    before = store.load(plan.id)
+    fresh_bus = FakeBus()
+    fresh = PlanDriver(store, fresh_bus, host)
+    assert fresh.recover() == []
+    plan = store.load(plan.id)
+    assert plan.status == "blocked"
+    assert plan.blocked == before.blocked
+    assert plan.steps[0].status == "blocked"
+    assert plan.steps[0].photo_before == before.steps[0].photo_before
+    assert plan.history == before.history, "nessuna riga di pausa nella storia"
+    # Un messaggio scritto in chat e' ancora la risposta, e la risposta riparte.
+    metadata: dict[str, Any] = {}
+    await fresh.before_user_turn(KEY, metadata)
+    assert metadata[PLAN_ANSWER_META] == plan.id
+    plan = store.load(plan.id)
+    assert plan.status == "running" and plan.steps[0].status == "now"
+
+
+async def test_a_blocked_plan_answered_from_the_card_after_a_restart(
     workspace: Path, host: FakeHost, bus: FakeBus
 ) -> None:
     store = PlanStore.for_workspace(workspace)
     first = PlanDriver(store, bus, host)
     plan = await _approve(first)
-    await first.blocked(KEY, "?")
-    PlanDriver(store, FakeBus(), host).recover()
-    assert store.load(plan.id).status == "paused"
+    await first.blocked(KEY, "Quale acero?")
+    fresh_bus = FakeBus()
+    fresh = PlanDriver(store, fresh_bus, host)
+    fresh.recover()
+    await fresh.answer(plan.id, "Quello giapponese")
+    assert store.load(plan.id).status == "running"
+    assert fresh_bus.inbound[-1].content == "Quello giapponese"
 
 
 # ── ritorno indietro ────────────────────────────────────────────────────────

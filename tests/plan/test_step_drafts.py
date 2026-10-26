@@ -390,15 +390,33 @@ async def test_rollback_throws_away_the_plans_pending_drafts(
     assert [d["id"] for d in staged_writes.list_staged(workspace)] == [unrelated]
 
 
-async def test_after_a_restart_the_step_is_told_its_drafts_already_wait(
+async def test_after_a_restart_a_plan_on_its_drafts_still_waits_on_them(
     driver: PlanDriver, workspace: Path, bus: FakeBus
 ) -> None:
-    """Riavvio con il passo fermo sulle bozze: il piano va in pausa e Riprendi rifà
-    il passo. Le bozze restano (sono lavoro fatto, l'utente può deciderle), e il
-    turno del passo le nomina perché non le rifaccia."""
+    """Riavvio con il passo fermo sulle bozze: il piano resta fermo (aspettava gia'
+    l'utente), e deciderle lo fa andare avanti — la rilettura di ``plan.get``."""
+    plan = await _running(driver)
+    draft = _stage(workspace)
+    await driver.step_done(KEY, "fatto")
+    assert driver.store.load(plan.id).blocked["kind"] == "drafts"
+    reborn = PlanDriver(driver.store, bus, driver.host)
+    assert reborn.recover() == []
+    plan = reborn.store.load(plan.id)
+    assert plan.status == "blocked" and plan.blocked["kind"] == "drafts"
+    staged_writes.discard(workspace, draft)
+    await reborn.recheck_drafts(plan.id)
+    await wait_until(lambda: reborn.store.load(plan.id).steps[1].status == "now")
+    assert reborn.store.load(plan.id).steps[0].status == "done"
+
+
+async def test_after_a_restart_mid_step_the_step_is_told_its_drafts_already_wait(
+    driver: PlanDriver, workspace: Path, bus: FakeBus
+) -> None:
+    """Riavvio a passo aperto, con una bozza gia' lasciata: il piano va in pausa e
+    Riprendi rifa' il passo. La bozza resta (e' lavoro fatto, l'utente puo'
+    deciderla), e il turno del passo la nomina perche' non la rifaccia."""
     plan = await _running(driver)
     _stage(workspace)
-    await driver.step_done(KEY, "fatto")
     reborn = PlanDriver(driver.store, bus, driver.host)
     reborn.recover()
     assert reborn.store.load(plan.id).status == "paused"

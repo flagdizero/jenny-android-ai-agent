@@ -2268,6 +2268,13 @@ class PlanDriver:
         piano aspetta Riprendi (deciso il 23/10), con una riga nella storia. Il
         passo interrotto torna ``pending`` e Riprendi lo riapre da capo, con
         una foto «prima» nuova. Sincrono: gira prima del loop.
+
+        Un piano fermo (``blocked``, su una domanda o sulle bozze) resta fermo:
+        aspettava già l'utente, e non c'è lavoro a metà da proteggere. Fino al
+        26/10 andava in pausa anche lui, e la domanda spariva: Riprendi rifaceva
+        il passo da capo, aiutanti compresi, per richiedere la stessa cosa — e
+        un aggiornamento dell'app basta a riavviare il gateway. Le bozze le
+        rilegge ``recheck_drafts`` alla prima lettura della scheda.
         """
         from jenny.runtime.user_text import say
 
@@ -2275,7 +2282,9 @@ class PlanDriver:
         for plan in self.store.list_all():
             if self.store.journal_path(plan.id).exists():
                 plan = self._recover_journal(plan)
-            if plan.status not in ("running", "pausing", "blocked"):
+            if plan.status not in ("running", "pausing"):
+                if plan.status == "blocked":
+                    logger.info("Plan {} was blocked at boot: still waits for the user", plan.id)
                 continue
             closing = _closing(plan)
             after: dict[str, str] = {}
