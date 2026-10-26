@@ -206,7 +206,7 @@ class TestMicrocompact:
         return f"[{tool_name} result omitted from context; call the tool again if you need it]"
 
     def test_below_first_batch_is_noop(self):
-        tool_name = next(iter(COMPACTABLE_TOOLS))
+        tool_name = "read_file"
         messages = [
             _tool(str(i), content=self._long_content(), name=tool_name)
             for i in range(self.FIRST_BATCH - 1)
@@ -214,7 +214,7 @@ class TestMicrocompact:
         assert microcompact(messages) is messages
 
     def test_first_batch_is_summarized_at_once(self):
-        tool_name = next(iter(COMPACTABLE_TOOLS))
+        tool_name = "read_file"
         messages = [
             _tool(str(i), content=self._long_content(), name=tool_name)
             for i in range(self.FIRST_BATCH)
@@ -230,7 +230,7 @@ class TestMicrocompact:
     def test_compacted_set_changes_only_at_batch_boundaries(self):
         """La proprieta' che tiene la cache: aggiungere un risultato non cambia i
         messaggi gia' inviati, se non quando si chiude un blocco."""
-        tool_name = next(iter(COMPACTABLE_TOOLS))
+        tool_name = "read_file"
         messages = [
             _tool(str(i), content=self._long_content(), name=tool_name)
             for i in range(4 * MICROCOMPACT_BATCH)
@@ -247,7 +247,7 @@ class TestMicrocompact:
         }
 
     def test_persisted_result_keeps_its_path(self, tmp_path):
-        tool_name = next(iter(COMPACTABLE_TOOLS))
+        tool_name = "read_file"
         # Il riferimento vero, non una sua copia: se il formato cambia, il
         # segnaposto deve continuare a trovarci il path.
         reference = maybe_persist_tool_result(
@@ -265,7 +265,7 @@ class TestMicrocompact:
         )
 
     def test_stale_short_content_is_not_compacted(self):
-        tool_name = next(iter(COMPACTABLE_TOOLS))
+        tool_name = "read_file"
         messages = [
             _tool(str(i), content=self._short_content(), name=tool_name)
             for i in range(self.FIRST_BATCH)
@@ -275,7 +275,7 @@ class TestMicrocompact:
         assert result is messages
 
     def test_stale_non_string_content_is_left_untouched(self):
-        tool_name = next(iter(COMPACTABLE_TOOLS))
+        tool_name = "read_file"
         messages = [
             {"role": "tool", "tool_call_id": "0", "name": tool_name, "content": ["not", "a", "str"]}
         ] + [
@@ -284,6 +284,23 @@ class TestMicrocompact:
         ]
         result = microcompact(messages)
         assert result[0]["content"] == ["not", "a", "str"]
+
+    def test_the_heavy_readers_are_compactable(self):
+        """Fuori, un compito lungo col browser o con SSH cresceva fino all'errore."""
+        assert {
+            "browser_read", "browser_snapshot", "ssh_exec", "get_recent_logs", "get_source",
+        } <= COMPACTABLE_TOOLS
+
+    def test_a_command_is_not_offered_again_to_see_its_output(self):
+        messages = [
+            _tool(str(i), content=self._long_content(), name="ssh_exec")
+            for i in range(self.FIRST_BATCH)
+        ]
+        result = microcompact(messages)
+        assert result[0]["content"] == (
+            "[ssh_exec result omitted from context; the call above shows what ran — "
+            "do not run it again only to see its output]"
+        )
 
     def test_non_compactable_tool_name_never_counted_or_touched(self):
         messages = [
@@ -294,7 +311,7 @@ class TestMicrocompact:
         assert result is messages
 
     def test_mixed_compactable_and_non_tool_messages(self):
-        tool_name = next(iter(COMPACTABLE_TOOLS))
+        tool_name = "read_file"
         messages = (
             [{"role": "user", "content": "start"}]
             + [

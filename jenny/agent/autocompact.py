@@ -6,7 +6,7 @@ import time
 from collections.abc import Collection
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Coroutine
+from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
 from loguru import logger
 
@@ -142,8 +142,29 @@ class AutoCompact:
         return ((now or datetime.now()) - ts).total_seconds() >= self._ttl * 60
 
     @staticmethod
-    def _format_summary(text: str, last_active: datetime) -> str:
-        return f"Previous conversation summary (last active {last_active.isoformat()}):\n{text}"
+    def _format_summary(
+        text: str,
+        last_active: datetime,
+        *,
+        working_state: str | None = None,
+        working_state_at: Any = None,
+    ) -> str:
+        """Il riassunto archiviato per il prompt: i fatti, poi dove si era rimasti.
+
+        Lo stato del lavoro viene dopo i fatti e dice quando e' stato scritto: i
+        messaggi che seguono nel prompt sono piu' recenti, e dove non concordano
+        vincono loro.
+        """
+        parts: list[str] = []
+        if text.strip():
+            parts.append(
+                f"Previous conversation summary (last active {last_active.isoformat()}):\n{text}")
+        if working_state and working_state.strip():
+            at = f" ({working_state_at})" if working_state_at else ""
+            parts.append(
+                f"Where the conversation stood when it was compacted{at}; the messages after "
+                f"this point are newer and win where they disagree:\n{working_state.strip()}")
+        return "\n\n".join(parts)
 
     @classmethod
     def _is_internal_session(cls, key: str) -> bool:
@@ -544,10 +565,17 @@ class AutoCompact:
         if self._is_internal_session(key):
             return None
         meta = session.metadata.get("_last_summary")
-        if not isinstance(meta, dict) or not meta.get("text"):
+        if not isinstance(meta, dict):
+            return None
+        state = meta.get("working_state")
+        if not meta.get("text") and not state:
             return None
         try:
             last_active = datetime.fromisoformat(meta["last_active"])
         except (KeyError, TypeError, ValueError):
             return None
-        return self._format_summary(meta["text"], last_active)
+        return self._format_summary(
+            str(meta.get("text") or ""), last_active,
+            working_state=state if isinstance(state, str) else None,
+            working_state_at=meta.get("working_state_at"),
+        )

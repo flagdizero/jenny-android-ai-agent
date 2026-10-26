@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -30,6 +31,7 @@ from jenny.agent.memory import (
 )
 from jenny.providers.opencode import conversation_scope
 from jenny.security.workspace_access import WorkspaceScopeResolver
+from jenny.session.history_meta import COMPACTED_META
 from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
 from jenny.session.manager import DIARY_HARVEST_METADATA_KEY, Session
 from jenny.utils.helpers import (
@@ -102,6 +104,55 @@ SUMMARY_MAX_CHARS = 6_000
 # Le righe che un riassunto oltre il tetto perde per prime, in quest'ordine
 # (v. :func:`accumulate_summary`).
 _PRUNED_FIRST = ("[skip]", "[ephemeral]")
+
+
+# Il confine fra i fatti (per Dream) e lo stato del lavoro (per il prompt) nella
+# risposta di un archivio con passaggio di consegne (``consolidator_handoff.md``).
+_WORKING_STATE_MARKER = re.compile(
+    r"^\s*#{1,4}\s*working state\s*:?\s*$", re.IGNORECASE | re.MULTILINE,
+)
+WORKING_STATE_MAX_CHARS = 2_000
+
+
+def split_working_state(text: str) -> tuple[str, str | None]:
+    """I fatti e lo stato del lavoro di una risposta, separati.
+
+    Senza il confine la risposta e' tutta fatti, come prima che esistesse: un
+    modello che non lo scrive non porta niente di temporaneo nella memoria, perde
+    solo lo stato. Quel che sta dopo il confine non va mai a ``history.jsonl``:
+    Dream lo prenderebbe per un fatto.
+    """
+    match = _WORKING_STATE_MARKER.search(text)
+    if match is None:
+        return text, None
+    facts = text[: match.start()].strip() or "(nothing)"
+    state = text[match.end():].strip()[:WORKING_STATE_MAX_CHARS]
+    return facts, state or None
+
+
+def with_working_state(meta: dict[str, Any], state: str | None, when: datetime) -> dict[str, Any]:
+    """*meta* (un ``_last_summary``) con lo stato del lavoro di questa compattazione.
+
+    Uno solo, il piu' recente: a differenza dei fatti non si accumula, perche'
+    ogni stato riscrive il precedente (``consolidator_handoff.md`` glielo passa).
+    Una compattazione che non ne ha scritto toglie quello vecchio, che descrive
+    un punto della conversazione ormai archiviato anche lui.
+    """
+    meta = dict(meta)
+    if state:
+        meta["working_state"] = state
+        meta["working_state_at"] = when.isoformat(timespec="minutes")
+    else:
+        meta.pop("working_state", None)
+        meta.pop("working_state_at", None)
+    return meta
+
+
+def last_working_state(session: Session) -> str | None:
+    """Lo stato del lavoro dell'ultima compattazione di *session*, da aggiornare."""
+    meta = session.metadata.get("_last_summary")
+    state = meta.get("working_state") if isinstance(meta, dict) else None
+    return state if isinstance(state, str) and state.strip() else None
 
 
 def accumulate_summary(previous: Any, texts: list[str], when: datetime) -> dict[str, Any]:
@@ -255,6 +306,10 @@ class Consolidator:
                 last_boundary = (idx, removed_tokens)
                 if removed_tokens >= tokens_to_remove:
                     return last_boundary
+            # Una riga sostituita dal checkpoint di un turno lungo non e' nel
+            # prompt (``Session.get_history`` la salta): toglierla non libera niente.
+            if message.get(COMPACTED_META):
+                continue
             if blank and message.get("role") == "assistant" and message.get("reasoning_content"):
                 message = {**message, "reasoning_content": ""}
             removed_tokens += estimate_message_tokens(message)
@@ -279,7 +334,14 @@ class Consolidator:
     ) -> int | None:
         if not replay_max_messages or replay_max_messages <= 0:
             return None
-        tail = list(enumerate(session.messages[session.last_consolidated:], session.last_consolidated))
+        # Come ``Session.get_history``, di cui rifa' il taglio: le righe sostituite
+        # dal checkpoint di un turno lungo non contano nella finestra.
+        tail = [
+            (idx, message)
+            for idx, message in enumerate(
+                session.messages[session.last_consolidated:], session.last_consolidated)
+            if not message.get(COMPACTED_META)
+        ]
         if len(tail) <= replay_max_messages:
             return None
 
@@ -311,6 +373,7 @@ class Consolidator:
         self,
         session: Session,
         replay_max_messages: int | None,
+        working_state_out: list[str] | None = None,
     ) -> str | None:
         """Archive messages that would be hidden by the replay message window."""
         end_idx = self._replay_overflow_boundary(session, replay_max_messages)
@@ -325,12 +388,23 @@ class Consolidator:
             len(chunk),
             replay_max_messages,
         )
-        summary = await self.archive(chunk, session_key=session.key)
+        summary = await self.archive(
+            chunk,
+            session_key=session.key,
+            handoff=True,
+            previous_working_state=last_working_state(session),
+            working_state_out=working_state_out,
+        )
         session.last_consolidated = end_idx
         self.sessions.save(session)
         return summary
 
-    def _persist_summaries(self, session: Session, summaries: list[str]) -> None:
+    def _persist_summaries(
+        self,
+        session: Session,
+        summaries: list[str],
+        working_state: str | None = None,
+    ) -> None:
         """I riassunti di questa compattazione, nel riassunto che torna nel prompt.
 
         In un quaderno **si accumulano**: e' l'unico posto da cui la parte
@@ -341,16 +415,19 @@ class Consolidator:
         come prima: la' l'archivio torna gia' come ``# Recent History``.
         """
         texts = [t for t in summaries if t and t != "(nothing)"]
-        if not texts:
+        if not texts and not working_state:
             return
+        previous = session.metadata.get("_last_summary")
         if is_project_session_key(session.key):
-            session.metadata["_last_summary"] = accumulate_summary(
-                session.metadata.get("_last_summary"), texts, session.updated_at)
+            meta = accumulate_summary(previous, texts, session.updated_at)
+        elif texts:
+            meta = {"text": texts[-1], "last_active": session.updated_at.isoformat()}
+        elif isinstance(previous, dict) and previous.get("text"):
+            meta = dict(previous)
         else:
-            session.metadata["_last_summary"] = {
-                "text": texts[-1],
-                "last_active": session.updated_at.isoformat(),
-            }
+            meta = {"text": "", "last_active": session.updated_at.isoformat()}
+        session.metadata["_last_summary"] = with_working_state(
+            meta, working_state, session.updated_at)
         self.sessions.save(session)
 
     def estimate_session_prompt_tokens(
@@ -545,6 +622,9 @@ class Consolidator:
         summary_messages: list[dict] | None = None,
         prompt_visible: bool = True,
         raw_dump_on_failure: bool = True,
+        handoff: bool = False,
+        previous_working_state: str | None = None,
+        working_state_out: list[str] | None = None,
     ) -> str | None:
         """Summarize messages via LLM and append to history.jsonl.
 
@@ -566,6 +646,15 @@ class Consolidator:
         ``_RAW_ARCHIVE_MAX_CHARS`` e ogni riprova ne scriverebbe un altro. Chi lo
         passa non deve dare per consolidati i messaggi quando torna ``None``.
 
+        ``handoff=True`` chiede, oltre ai fatti, lo **stato del lavoro**: dove
+        era arrivata la conversazione, per i turni che la continuano
+        (``consolidator_handoff.md``). E' per le compattazioni di una
+        conversazione che va avanti — per lunghezza e per inattivita' — non per
+        ``/new`` ne' per la raccolta del diario. Lo stato non va in
+        ``history.jsonl``: finisce in *working_state_out*, e il chiamante lo mette
+        nel riassunto che torna nel prompt. *previous_working_state* e' quello
+        della compattazione prima, da aggiornare.
+
         Returns the summary text on success, None if nothing to archive.
         """
         if not messages:
@@ -578,16 +667,36 @@ class Consolidator:
             # utente si leggerebbe come l'ultima cosa detta nella chat.
             known = self.store.get_known_facts_context(session_key=session_key)
             system = render_template("agent/consolidator_archive.md", strip=True)
+            # Si riserva quel che si aggiunge al prompt fisso, come per il blocco
+            # «già registrato»: il prompt fisso resta fuori dal conto, come in
+            # ``messages_fitting_budget``.
+            extra = known
+            if handoff:
+                addendum = render_template(
+                    "agent/consolidator_handoff.md",
+                    strip=True,
+                    previous=(previous_working_state or "").strip(),
+                )
+                system = f"{system}\n\n{addendum}"
+                extra = f"{addendum}\n\n{known}"
             if known:
                 system = f"{system}\n\n{known}"
             formatted = self._truncate_to_token_budget(
-                formatted, reserved_tokens=_estimate_tokens(known),
+                formatted, reserved_tokens=_estimate_tokens(extra),
             )
             # Chiamata ausiliaria, fuori dal turno: senza questo scope
             # partirebbe senza dire a quale conversazione appartiene, ed è
             # proprio la compattazione a riassumere *quella* conversazione.
+            # Con un tetto: senza, una chiamata rimasta appesa teneva la sessione
+            # in ``AutoCompact._archiving`` fino al riavvio, cioe' senza piu'
+            # compattazione per inattivita' (visto su jenny_s22 il 26/10/2026: la
+            # chiamata delle 00:53 ancora senza risposta alle 01:12). Allo scadere
+            # e' un fallimento come gli altri, e chi riprova riprova.
+            from jenny.config.runtime_env import llm_timeout_s
+
+            timeout_s = llm_timeout_s()
             with conversation_scope(session_key):
-                response = await self.provider.chat_with_retry(
+                call = self.provider.chat_with_retry(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": system},
@@ -596,10 +705,17 @@ class Consolidator:
                     tools=None,
                     tool_choice=None,
                 )
+                response = await (
+                    asyncio.wait_for(call, timeout=timeout_s) if timeout_s > 0 else call
+                )
             await self._record_usage(response, session_key)
             if response.finish_reason == "error":
                 raise RuntimeError(f"LLM returned error: {response.content}")
             summary = response.content or "[no summary]"
+            if handoff:
+                summary, state = split_working_state(summary)
+                if state and working_state_out is not None:
+                    working_state_out.append(state)
             self._log_extraction(summary, known, session_key)
             # L'I/O di MemoryStore è bloccante-by-design (open+write+fsync sotto
             # threading.Lock): girando qui in un metodo async, lo spostiamo fuori
@@ -686,9 +802,11 @@ class Consolidator:
 
             budget = self._input_token_budget
             target = int(budget * self.consolidation_ratio)
+            working: list[str] = []
             overflow_summary = await self._consolidate_replay_overflow(
                 session,
                 replay_max_messages,
+                working_state_out=working,
             )
             summaries = [overflow_summary] if overflow_summary else []
             try:
@@ -699,7 +817,7 @@ class Consolidator:
                 logger.exception("Token estimation failed for {}", session.key)
                 estimated, source = 0, "error"
             if estimated <= 0:
-                self._persist_summaries(session, summaries)
+                self._persist_summaries(session, summaries, working[-1] if working else None)
                 return
             if estimated < budget:
                 unconsolidated_count = len(session.messages) - session.last_consolidated
@@ -711,7 +829,7 @@ class Consolidator:
                     source,
                     unconsolidated_count,
                 )
-                self._persist_summaries(session, summaries)
+                self._persist_summaries(session, summaries, working[-1] if working else None)
                 return
 
             rounds = self._MAX_CONSOLIDATION_ROUNDS if max_rounds is None else max(
@@ -766,7 +884,13 @@ class Consolidator:
                 counted = failures if same_turn else failures + 1
                 give_up = counted >= self._TOKEN_FAILURES_BEFORE_RAW_DUMP
                 summary = await self.archive(
-                    chunk, session_key=session.key, raw_dump_on_failure=give_up,
+                    chunk,
+                    session_key=session.key,
+                    raw_dump_on_failure=give_up,
+                    handoff=True,
+                    previous_working_state=working[-1] if working
+                    else last_working_state(session),
+                    working_state_out=working,
                 )
                 if not summary and not give_up:
                     self._token_failures[session.key] = counted
@@ -802,7 +926,7 @@ class Consolidator:
             # Persist the last summary to session metadata so it can be injected
             # into the runtime context on the next prepare_session() call, aligning
             # the summary injection strategy with AutoCompact._archive().
-            self._persist_summaries(session, summaries)
+            self._persist_summaries(session, summaries, working[-1] if working else None)
 
     async def compact_idle_session(
         self,
@@ -855,6 +979,7 @@ class Consolidator:
 
             last_active = session.updated_at
             summary: str | None = ""
+            working: list[str] = []
             is_project = is_project_session_key(session_key)
             if messages_to_remove:
                 # Summarize the retained suffix too, but only remove/raw-dump
@@ -864,6 +989,9 @@ class Consolidator:
                     session_key=session_key,
                     summary_messages=messages_to_summarize,
                     raw_dump_on_failure=is_project,
+                    handoff=True,
+                    previous_working_state=last_working_state(session),
+                    working_state_out=working,
                 )
 
             if messages_to_remove and summary is None and not is_project:
@@ -915,15 +1043,19 @@ class Consolidator:
                     copy,
                 )
 
-            if summary and summary != "(nothing)":
+            state = working[-1] if working else None
+            if (summary and summary != "(nothing)") or state:
+                facts = [summary] if summary and summary != "(nothing)" else []
+                previous = session.metadata.get("_last_summary")
                 if is_project_session_key(session_key):
-                    session.metadata["_last_summary"] = accumulate_summary(
-                        session.metadata.get("_last_summary"), [summary], last_active)
+                    meta = accumulate_summary(previous, facts, last_active)
+                elif facts:
+                    meta = {"text": facts[0], "last_active": last_active.isoformat()}
+                elif isinstance(previous, dict) and previous.get("text"):
+                    meta = dict(previous)
                 else:
-                    session.metadata["_last_summary"] = {
-                        "text": summary,
-                        "last_active": last_active.isoformat(),
-                    }
+                    meta = {"text": "", "last_active": last_active.isoformat()}
+                session.metadata["_last_summary"] = with_working_state(meta, state, last_active)
 
             # L'indice della raccolta del diario di un progetto conta i messaggi
             # della sessione: dopo la troncatura va riportato sui messaggi

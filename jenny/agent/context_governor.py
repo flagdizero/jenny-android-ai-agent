@@ -71,6 +71,21 @@ def extract_context_limit(response: "LLMResponse") -> int | None:
     return None
 
 
+def input_budget(provider: "LLMProvider", spec: "AgentRunSpec") -> int:
+    """I token di input che una richiesta puo' usare: la finestra meno l'output riservato.
+
+    Lo stesso conto per lo snip e per la compattazione a meta' turno
+    (``agent/inflight_compaction.py``), che devono misurare contro lo stesso tetto.
+    ``0`` quando la finestra non e' dichiarata.
+    """
+    if not spec.context_window_tokens:
+        return 0
+    max_output = reserved_output_tokens(provider, spec.max_tokens)
+    return spec.context_block_limit or (
+        spec.context_window_tokens - max_output - CONTEXT_BUDGET_SAFETY_BUFFER
+    )
+
+
 def snip_history(
     provider: "LLMProvider",
     spec: "AgentRunSpec",
@@ -86,10 +101,7 @@ def snip_history(
     if not messages or not spec.context_window_tokens:
         return messages
 
-    max_output = reserved_output_tokens(provider, spec.max_tokens)
-    budget = spec.context_block_limit or (
-        spec.context_window_tokens - max_output - CONTEXT_BUDGET_SAFETY_BUFFER
-    )
+    budget = input_budget(provider, spec)
     if budget <= 0:
         return messages
 

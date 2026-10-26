@@ -15,6 +15,7 @@ from jenny.agent.context_governor import (
     blank_closed_reasoning,
     closed_reasoning_can_be_blank,
     extract_context_limit,
+    input_budget,
     is_context_length_error,
     label_mid_turn_messages,
     last_helper_result,
@@ -29,6 +30,24 @@ from jenny.agent.history_repair import (
     microcompact,
 )
 from jenny.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext
+from jenny.agent.inflight_compaction import (
+    LLM_FAILURES_BEFORE_DETERMINISTIC,
+    MAX_SUMMARY_WORDS,
+    MIN_CHAIN_RATIO,
+    SUMMARY_MAX_CHARS,
+    TAIL_RATIO,
+    TRIGGER_RATIO,
+    InFlightCheckpoint,
+    apply_checkpoint,
+    chain_start,
+    chain_tokens,
+    collect_user_messages,
+    deterministic_summary,
+    find_request_index,
+    format_range,
+    mark_compacted,
+    plan_cut,
+)
 from jenny.agent.request_execution import RequestExecutionMixin, RequestOverrides
 from jenny.agent.response_outcome import (
     ResponseOutcome,
@@ -43,6 +62,7 @@ from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.usage_accounting import (
     accumulate_usage,
     merge_usage,
+    usage_dict,
     usage_or_estimate,
 )
 from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
@@ -52,12 +72,15 @@ from jenny.runtime.user_text import say
 from jenny.security.subagent_policy import current_turn_taint
 from jenny.session.history_meta import TOOL_TAINT_META
 from jenny.utils.helpers import (
+    CHARS_PER_TOKEN,
     build_assistant_message,
+    estimate_prompt_tokens_chain,
     extract_reasoning,
     maybe_persist_tool_result,
     merge_message_content,
     truncate_text,
 )
+from jenny.utils.prompt_templates import render_template
 from jenny.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
     OUTPUT_TRUNCATED_MESSAGE,
@@ -239,6 +262,15 @@ class _RunCounters:
     # segnaposto per il resto del run. Mai azzerata: ogni voce è un tentativo
     # già speso, e rimetterla in vista rifarebbe la richiesta rifiutata.
     refused_results: list[Any] = field(default_factory=list)
+    # Compattazione a meta' turno (``agent/inflight_compaction.py``): dove sta la
+    # richiesta del turno, il checkpoint in vigore, i riassunti falliti (oltre
+    # ``LLM_FAILURES_BEFORE_DETERMINISTIC`` si fa senza modello) e l'usage della
+    # chiamata di riassunto, che si somma alla richiesta successiva perche' gli
+    # hook di misura la contino.
+    request_index: int | None = None
+    checkpoint: InFlightCheckpoint | None = None
+    compaction_llm_failures: int = 0
+    pending_usage: dict[str, int] = field(default_factory=dict)
 
 
 class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
@@ -565,9 +597,10 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         # helper lo mutano per riferimento (stessa istanza), così i reset e le
         # accumulazioni restano visibili all'iterazione successiva.
         state = _RunCounters(tool_errors=ToolErrorBudget.from_spec(spec))
+        state.request_index = find_request_index(spec.initial_messages)
 
         for iteration in range(spec.max_iterations):
-            messages_for_model = self._govern_context(spec, messages, iteration)
+            messages_for_model = await self._context_for_model(spec, messages, iteration, state)
             messages_for_model = mask_refused_results(messages_for_model, state.refused_results)
             context = AgentHookContext(
                 iteration=iteration,
@@ -595,6 +628,9 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             )
             response.content = cleaned_content
             raw_usage = self._usage_or_estimate(spec, messages_for_model, response)
+            if state.pending_usage:
+                raw_usage = self._merge_usage(raw_usage, state.pending_usage)
+                state.pending_usage = {}
             context.usage = dict(raw_usage)
             self._accumulate_usage(state.usage, raw_usage)
             if reasoning_text and not context.streamed_reasoning:
@@ -756,11 +792,223 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
     # proposito (vedi il drain "after final response" nel driver, che precede
     # ``on_stream_end`` per tenere viva la card in streaming).
 
+    async def _context_for_model(
+        self,
+        spec: AgentRunSpec,
+        messages: list[dict[str, Any]],
+        iteration: int,
+        state: _RunCounters,
+    ) -> list[dict[str, Any]]:
+        """La richiesta per il modello: governance, compattazione a meta' turno, snip.
+
+        La compattazione guarda la richiesta gia' governata (microcompact e tetto
+        per risultato applicati) ma non ancora tagliata: lo snip resta l'ultima
+        rete, e se scatta dopo una compattazione vuol dire che la coda da sola non
+        sta nella finestra.
+        """
+        view = apply_checkpoint(messages, state.checkpoint)
+        if state.request_index is None or not spec.context_window_tokens:
+            return self._govern_context(spec, view, iteration)
+        governed = self._govern_context(spec, view, iteration, snip=False)
+        try:
+            compacted = await self._maybe_compact_in_flight(spec, messages, governed, state, iteration)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "In-flight compaction failed on turn {} for {}; the snip stays the safety net",
+                iteration, spec.session_key or "default",
+            )
+            compacted = False
+        if compacted:
+            return self._govern_context(spec, apply_checkpoint(messages, state.checkpoint), iteration)
+        return self._finish_governance(spec, view, governed, iteration)
+
+    async def _maybe_compact_in_flight(
+        self,
+        spec: AgentRunSpec,
+        messages: list[dict[str, Any]],
+        governed: list[dict[str, Any]],
+        state: _RunCounters,
+        iteration: int,
+    ) -> bool:
+        """Sostituisce i primi passi del turno con un checkpoint, se la richiesta sta per riempirsi."""
+        anchor = state.request_index
+        if anchor is None or anchor >= len(messages) or messages[anchor].get("role") != "user":
+            return False
+        budget = input_budget(self.provider, spec)
+        if budget <= 0:
+            return False
+        tools = spec.tools.get_definitions()
+        estimate, _ = estimate_prompt_tokens_chain(self.provider, spec.model, governed, tools)
+        if estimate <= budget * TRIGGER_RATIO:
+            return False
+
+        from jenny.utils.token_calibration import factor
+
+        scale = factor(spec.model)
+        start = chain_start(anchor, state.checkpoint)
+        cap = spec.max_tool_result_chars
+        chain = chain_tokens(messages, start, scale=scale, max_tool_chars=cap)
+        if chain < budget * MIN_CHAIN_RATIO:
+            return False
+        tail_budget = int(min(budget * TAIL_RATIO, chain * 0.5))
+        cut = plan_cut(messages, start, tail_budget, scale=scale, max_tool_chars=cap)
+        if cut is None:
+            return False
+
+        compacted = messages[start:cut]
+        previous = state.checkpoint
+        summary, strategy = await self._write_checkpoint_summary(
+            spec, governed, messages[anchor], compacted, previous, estimate, budget, tools, state,
+        )
+        state.checkpoint = InFlightCheckpoint(
+            anchor=anchor,
+            cut=cut,
+            summary=summary[:SUMMARY_MAX_CHARS],
+            user_messages=collect_user_messages(previous.user_messages if previous else [], compacted),
+            compactions=previous.compactions + 1 if previous else 1,
+            deterministic=strategy == "deterministic",
+        )
+        mark_compacted(messages, state.checkpoint)
+        # ``pending_usage`` qui e' solo quel che e' costato il checkpoint: si somma
+        # alla richiesta dopo, e da li' in poi non si distingue piu'.
+        spent = state.pending_usage
+        logger.info(
+            "In-flight compaction #{} for {} on turn {}: {} messages into a checkpoint of {} chars "
+            "via {} (prompt ~{} of {} tokens, kept {} recent messages; checkpoint calls: "
+            "prompt {} cached {} completion {})",
+            state.checkpoint.compactions, spec.session_key or "default", iteration, len(compacted),
+            len(state.checkpoint.summary), strategy, estimate, budget, len(messages) - cut,
+            spent.get("prompt_tokens", 0), spent.get("cached_tokens", 0),
+            spent.get("completion_tokens", 0),
+        )
+        return True
+
+    async def _write_checkpoint_summary(
+        self,
+        spec: AgentRunSpec,
+        governed: list[dict[str, Any]],
+        request: dict[str, Any],
+        compacted: list[dict[str, Any]],
+        previous: InFlightCheckpoint | None,
+        estimate: int,
+        budget: int,
+        tools: list[dict[str, Any]],
+        state: _RunCounters,
+    ) -> tuple[str, str]:
+        """Il testo del checkpoint e come e' stato scritto.
+
+        Prima con la stessa richiesta che stava per partire, istruzione in coda:
+        il prefisso e' identico, quindi il provider lo trova in cache e il
+        riassunto costa poco piu' dell'output (il ``self_compact`` di Letta, il
+        riassunto di Cline). Se non c'e' posto, o il modello chiama un tool invece
+        di scrivere, col trascritto dei passi e senza tool. Se fallisce anche
+        quello, il checkpoint senza modello.
+        """
+        previous_summary = previous.summary if previous else None
+        if state.compaction_llm_failures < LLM_FAILURES_BEFORE_DETERMINISTIC:
+            instruction = render_template(
+                "agent/inflight_checkpoint.md", strip=True, max_words=MAX_SUMMARY_WORDS,
+            )
+            attempts: list[tuple[str, list[dict[str, Any]], list[dict[str, Any]] | None]] = []
+            if estimate + len(instruction) // CHARS_PER_TOKEN + 64 <= budget:
+                cached = list(governed)
+                self._append_injected_messages(cached, [{"role": "user", "content": instruction}])
+                attempts.append(("cached-prefix", cached, tools))
+            transcript = format_range(
+                compacted,
+                request=request,
+                previous_summary=previous_summary,
+                max_chars=max(4_000, int(budget * 0.6) * CHARS_PER_TOKEN),
+            )
+            attempts.append(("transcript", [
+                {"role": "system", "content": "You write context checkpoints for an AI agent "
+                                              "that is in the middle of a long task."},
+                {"role": "user", "content": f"{transcript}\n\n{instruction}"},
+            ], None))
+            for strategy, request_messages, request_tools in attempts:
+                text, why = await self._request_checkpoint(
+                    spec, request_messages, request_tools, state,
+                )
+                if text:
+                    return text, strategy
+                logger.warning(
+                    "In-flight compaction for {}: no checkpoint from the {} request ({})",
+                    spec.session_key or "default", strategy, why,
+                )
+            state.compaction_llm_failures += 1
+        return deterministic_summary(compacted, previous_summary=previous_summary), "deterministic"
+
+    async def _request_checkpoint(
+        self,
+        spec: AgentRunSpec,
+        request_messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        state: _RunCounters,
+    ) -> tuple[str | None, str]:
+        """Il checkpoint, o ``None`` e il perche' (per il log: si e' visto fallire
+        sul telefono senza sapere se il modello avesse chiamato un tool)."""
+        kwargs = self._build_request_kwargs(spec, request_messages, tools=tools)
+        if tools is None:
+            kwargs.pop("tool_choice", None)
+        timeout_s = spec.llm_timeout_s
+        if timeout_s is None:
+            from jenny.config.runtime_env import llm_timeout_s
+
+            timeout_s = llm_timeout_s()
+        coro = self.provider.chat_with_retry(**kwargs)
+        try:
+            response = await (
+                asyncio.wait_for(coro, timeout=timeout_s) if timeout_s and timeout_s > 0 else coro
+            )
+        except asyncio.TimeoutError:
+            return None, f"timed out after {timeout_s:g}s"
+        accumulate_usage(state.pending_usage, usage_dict(response.usage))
+        if response.finish_reason == "error":
+            return None, f"provider error: {(response.content or '')[:200]}"
+        if response.has_tool_calls:
+            names = ", ".join(call.name for call in response.tool_calls)
+            return None, f"the model called {names} instead of writing"
+        _, text = extract_reasoning(
+            response.reasoning_content, response.thinking_blocks, response.content,
+        )
+        text = (text or "").strip()
+        if len(text) < 40:
+            return None, f"reply too short ({len(text)} chars, finish {response.finish_reason})"
+        return text, "ok"
+
+    def _finish_governance(
+        self,
+        spec: AgentRunSpec,
+        view: list[dict[str, Any]],
+        governed: list[dict[str, Any]],
+        iteration: int,
+    ) -> list[dict[str, Any]]:
+        """Lo snip e la riparazione che lo segue, su una richiesta gia' governata."""
+        try:
+            governed = self._snip_history(spec, governed)
+            governed = self._drop_orphan_tool_results(governed)
+            return self._backfill_missing_tool_results(governed)
+        except Exception:
+            logger.exception(
+                "Context governance failed on turn {} for {}; applying minimal repair",
+                iteration,
+                spec.session_key or "default",
+            )
+            try:
+                repaired = self._drop_orphan_tool_results(view)
+                return self._backfill_missing_tool_results(repaired)
+            except Exception:
+                return view
+
     def _govern_context(
         self,
         spec: AgentRunSpec,
         messages: list[dict[str, Any]],
         iteration: int,
+        *,
+        snip: bool = True,
     ) -> list[dict[str, Any]]:
         try:
             # Keep the persisted conversation untouched. Context governance
@@ -777,10 +1025,11 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             messages_for_model = label_mid_turn_messages(messages_for_model)
             messages_for_model = self._microcompact(messages_for_model)
             messages_for_model = self._apply_tool_result_budget(spec, messages_for_model)
-            messages_for_model = self._snip_history(spec, messages_for_model)
-            # Snipping may have created new orphans; clean them up.
-            messages_for_model = self._drop_orphan_tool_results(messages_for_model)
-            messages_for_model = self._backfill_missing_tool_results(messages_for_model)
+            if snip:
+                messages_for_model = self._snip_history(spec, messages_for_model)
+                # Snipping may have created new orphans; clean them up.
+                messages_for_model = self._drop_orphan_tool_results(messages_for_model)
+                messages_for_model = self._backfill_missing_tool_results(messages_for_model)
         except Exception:
             logger.exception(
                 "Context governance failed on turn {} for {}; applying minimal repair",

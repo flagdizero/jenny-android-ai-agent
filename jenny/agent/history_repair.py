@@ -25,6 +25,7 @@ __all__ = [
     "microcompact",
     "BACKFILL_CONTENT",
     "COMPACTABLE_TOOLS",
+    "SIDE_EFFECT_TOOLS",
     "MICROCOMPACT_BATCH",
     "MICROCOMPACT_KEEP_RECENT",
     "MICROCOMPACT_MIN_CHARS",
@@ -38,6 +39,12 @@ __all__ = [
 MICROCOMPACT_KEEP_RECENT = 5
 MICROCOMPACT_BATCH = 10
 MICROCOMPACT_MIN_CHARS = 500
+# Dal 25/10/2026 anche i lettori pesanti che restavano fuori — browser, SSH,
+# log, sorgenti, cronologia: un compito lungo con questi cresceva fino all'errore
+# di contesto (v. ``agent/inflight_compaction.py``), perche' il microcompact non
+# li svuotava. Il mascheramento delle osservazioni vecchie e' la compattazione
+# piu' economica che ci sia (la «Complexity Trap», 2025: meta' del costo a parita'
+# di risultati) e qui non costa niente aggiungerli.
 COMPACTABLE_TOOLS = frozenset(
     {
         "read_file",
@@ -48,8 +55,17 @@ COMPACTABLE_TOOLS = frozenset(
         "web_fetch",
         "list_dir",
         "list_exec_sessions",
+        "browser_read",
+        "browser_snapshot",
+        "ssh_exec",
+        "get_recent_logs",
+        "get_source",
+        "recall_history",
     }
 )
+# Quelli che fanno qualcosa oltre a leggere: il segnaposto non invita a
+# rilanciarli, perche' rifare un comando per rivederne l'output lo rifa' davvero.
+SIDE_EFFECT_TOOLS = frozenset({"python_exec", "ssh_exec"})
 BACKFILL_CONTENT = "[Tool result unavailable — call was interrupted or lost]"
 
 
@@ -156,4 +172,7 @@ def _omitted_placeholder(name: str, content: str) -> str:
     path = persisted_tool_result_path(content)
     if path:
         return f"[{name} result omitted from context; full output still at {path}]"
+    if name in SIDE_EFFECT_TOOLS:
+        return (f"[{name} result omitted from context; the call above shows what ran — "
+                "do not run it again only to see its output]")
     return f"[{name} result omitted from context; call the tool again if you need it]"

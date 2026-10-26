@@ -83,6 +83,21 @@ SENT_CONTENT_META = "sent_content"
 #: tool del turno prima (9,8k token fuori cache su DeepSeek, 11/10/2026).
 REASONING_DROPPED_META = "reasoning_dropped"
 
+#: Su una riga di un turno lungo: e' stata sostituita dal checkpoint della
+#: compattazione a meta' turno (``agent/inflight_compaction.py``). Resta nella
+#: sessione — il consolidatore e Dream la leggono — ma non torna piu' al modello:
+#: ``Session.get_history`` la salta.
+COMPACTED_META = "compacted"
+
+#: Sulla prima riga tenuta alla lettera dopo una compattazione a meta' turno: il
+#: testo del checkpoint. ``Session.get_history`` lo rimette in coda alla
+#: richiesta del turno, come stava nell'ultima richiesta del turno: cosi' il turno
+#: dopo riparte dalla vista compattata, e col prefisso che il provider ha in
+#: cache. Senza, il turno dopo rileggeva la catena intera e lo snip la buttava
+#: quasi tutta (misurato il 25/10/2026: 26 messaggi su 27, e il modello non
+#: sapeva piu' cosa aveva letto).
+CHECKPOINT_META = "turn_checkpoint"
+
 #: Il turno con cui il driver di un piano a lista apre un passo
 #: (``jenny/plan/driver.py``): la lista, il passo e le regole, scritti dal
 #: codice. Come il rientro di un subagent, porta il ruolo ``user`` per il modello

@@ -11,6 +11,8 @@ from typing import Any
 from loguru import logger
 
 from jenny.session.history_meta import (
+    CHECKPOINT_META,
+    COMPACTED_META,
     REASONING_DROPPED_META,
     SENT_CONTENT_META,
     is_synthetic_history_row,
@@ -21,6 +23,7 @@ from jenny.utils.helpers import (
     estimate_message_tokens,
     find_legal_message_start,
     image_placeholder_text,
+    merge_message_content,
     recent_message_start_index,
     safe_filename,
 )
@@ -153,7 +156,11 @@ class Session:
         costruttori del turno; il consolidatore e ``/history`` leggono
         ``content``.
         """
-        unconsolidated = self.messages[self.last_consolidated:]
+        # Le righe sostituite dal checkpoint di un turno lungo non tornano: al
+        # loro posto, in coda alla richiesta, il checkpoint (``CHECKPOINT_META``).
+        unconsolidated = [
+            m for m in self.messages[self.last_consolidated:] if not m.get(COMPACTED_META)
+        ]
         max_messages = max_messages if max_messages > 0 else 120
         start_idx = recent_message_start_index(
             unconsolidated,
@@ -177,6 +184,15 @@ class Session:
         for message in sliced:
             if message.get("_command"):
                 continue
+            checkpoint = message.get(CHECKPOINT_META)
+            if isinstance(checkpoint, str) and checkpoint:
+                if out and out[-1].get("role") == "user":
+                    out[-1] = {
+                        **out[-1],
+                        "content": merge_message_content(out[-1].get("content"), checkpoint),
+                    }
+                else:
+                    out.append({"role": "user", "content": checkpoint})
             content = message.get("content", "")
             role = message.get("role")
             sent = message.get(SENT_CONTENT_META) if replay_sent else None
