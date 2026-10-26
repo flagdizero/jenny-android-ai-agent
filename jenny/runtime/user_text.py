@@ -740,6 +740,10 @@ _TEXT: dict[str, dict[str, str]] = {
             "Il provider si è rifiutato di rispondere, e chiedere di nuovo allo stesso modo "
             "dà lo stesso rifiuto. Rispondi per riprovare il passo, o ferma il piano."
         ),
+        "plan.advance_failed": (
+            "Qualcosa è andato storto da parte mia mentre portavo avanti il piano. Rispondi "
+            "per riprovare questo passo, o ferma il piano."
+        ),
         "plan.restarted": "Mi sono riavviata durante il passo {step}: tocca Riprendi per rifarlo.",
         "plan.stopped": "Ho fermato il piano. Il quaderno resta com'è adesso.",
         "plan.stopped_planning": "Ho smesso di preparare il piano.",
