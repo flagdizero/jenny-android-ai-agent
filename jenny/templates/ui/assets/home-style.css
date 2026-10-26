@@ -826,7 +826,26 @@ body.home {
   line-height: 1.4;
   color: var(--text);
 }
-.home-plan-question { white-space: pre-wrap; }
+/* Markdown reso (`md`): niente `pre-wrap`, gli a capo li fa il renderer. Lunga,
+   si chiude su dieci righe; sfumata solo se davvero non ci sta. */
+.home-plan-question.is-clamped { max-height: calc(1.4em * 10); overflow: hidden; }
+.home-plan-question.is-cut {
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+.home-plan-question-more {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--warning);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-plan-question-more:active { opacity: .6; }
+.home-plan-question-more:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Le bozze di un passo fermo: la stessa riga della scheda delle bozze,
    dentro la domanda del passo. */

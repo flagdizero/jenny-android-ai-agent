@@ -129,6 +129,22 @@ function historyAt(plan, events) {
   return hit?.at || null;
 }
 
+/* Un testo del modello in una riga, per la striscia: la prima riga che dice
+   qualcosa, senza i segni del markdown («**», «`», un «1.» o «-» in testa). */
+function plainLine(text) {
+  const line = String(text ?? '').split('\n').map((l) => l.trim()).find(Boolean) || '';
+  return line.replace(/^(#+|[-*+]|\d+[.)])\s+/, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*|__|~~|`/g, '')
+    .trim();
+}
+
+/* L'ultima volta che e' successo: una proposta rivista ha piu' `proposed`. */
+function lastHistoryAt(plan, events) {
+  const hit = [...(plan?.history || [])].reverse().find((h) => events.includes(h?.event));
+  return hit?.at || null;
+}
+
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -804,28 +820,30 @@ export class HomePlan {
     this.onChange?.();
   }
 
-  /* Dove sta la scheda. Un piano vivo (proposta, in corso, in pausa, fermo su
-     una domanda) sta nel posto vivo, in fondo, sopra la riga di chi lavora. Un
-     piano finito no: e' una cosa successa, e resta nel filo dove e' successa —
-     prima del primo messaggio arrivato dopo la sua fine, o in fondo se non ce
-     ne sono. Prima restava nel posto vivo per sempre, e tutto quel che si
-     scriveva dopo («che bel lavorone», la risposta di Jenny) gli finiva sopra
-     (25/10). La richiama anche il filo quando rilegge la storia
-     (`HomeChat.onThreadChange`): la storia entra davanti al posto vivo, cioe'
-     dopo una scheda gia' messa nel filo, e va rimessa al suo posto. */
+  /* Dove sta la scheda: nel filo, prima del primo messaggio arrivato dopo la
+     sua ancora, o in fondo se non ce ne sono. Un piano finito si ancora alla
+     sua fine. Uno vivo (proposto, in corso, in pausa, fermo su una domanda)
+     all'ultima proposta o all'Approva: dopo l'Approva scende in fondo, dove lo
+     stai guardando, e poi resta li' mentre i resoconti di Jenny gli scorrono
+     sotto. Fino al 26/10 un piano vivo stava nel posto vivo in fondo, e tutto
+     quel che arrivava gli finiva sopra: sul Titan la scheda di un piano fermo
+     e' piu' alta dello schermo, e venti resoconti di Jenny non si sono visti.
+     Fuori vista la richiama la striscia (`_syncStrip`). La richiama anche il
+     filo quando rilegge la storia (`HomeChat.onThreadChange`): la storia entra
+     davanti al posto vivo, cioe' dopo una scheda gia' messa nel filo, e va
+     rimessa al suo posto. */
   place(plan = this._shown()) {
     if (!this.card || !plan || !this.live) return;
     const thread = this.live.parentNode;
-    if (!RAN_STATUSES.has(plan.status) || !thread) {
-      if (this.card.parentNode === this.live) return;
-      /* Sopra chi lavora: la scheda e' il lavoro, la riga di Jenny ne e' il dettaglio. */
-      const first = this.live.querySelector(':scope > .home-work:not(.home-plan), :scope > .home-typing');
-      this.live.insertBefore(this.card, first || null);
-      return;
-    }
-    const end = Date.parse(plan.updated_at || '') || 0;
-    const after = [...thread.querySelectorAll(':scope > .home-msg')]
-      .find((n) => Number(n.dataset.at) > end);
+    if (!thread) return;
+    const anchor = RAN_STATUSES.has(plan.status)
+      ? plan.updated_at
+      : lastHistoryAt(plan, ['proposed', 'approved']) || plan.created_at;
+    const end = Date.parse(anchor || '') || 0;
+    /* Senza un'ora non si sa dove: in fondo, mai in cima al filo. */
+    const after = end
+      ? [...thread.querySelectorAll(':scope > .home-msg')].find((n) => Number(n.dataset.at) > end)
+      : null;
     const target = after || this.live;
     if (this.card.parentNode === thread && this.card.nextSibling === target) return;
     thread.insertBefore(this.card, target);
@@ -860,6 +878,7 @@ export class HomePlan {
     if (this._drawnKey === key) patchChildren(card, fresh);
     else card.replaceChildren(...fresh);
     this._drawnKey = key;
+    this._watchQuestion();
     /* Se il nodo col fuoco e' stato sostituito, il fuoco va al suo erede. */
     if (!had || card.contains(had)) return;
     let heir = null;
@@ -1250,7 +1269,7 @@ export class HomePlan {
 
   _askBox(plan) {
     const ask = shell(el('div', 'home-plan-ask'));
-    ask.appendChild(el('div', 'home-plan-question', plan.blocked?.question || t('blockedNoQuestion')));
+    ask.append(...this._questionParts(plan));
     const field = el('textarea', 'home-plan-answer');
     field.rows = 2;
     field.placeholder = t('answerPlaceholder');
@@ -1279,6 +1298,67 @@ export class HomePlan {
     actions.appendChild(send);
     ask.append(field, actions);
     return ask;
+  }
+
+  /* La domanda di Jenny, intera e col markdown reso: fino al 26/10 era testo
+     crudo (gli asterischi di `**` in vista) e il server la tagliava a 1000
+     caratteri. Lunga, si chiude su una decina di righe con «Mostra tutto»:
+     se ci sta lo dice la misura (`_fitQuestion`), non il conto dei caratteri.
+     Aperta e misura restano qui, fuori dal nodo, perche' il ridisegno rifa i
+     nodi a ogni frame e `patchChildren` tiene quelli rimasti uguali. */
+  _questionParts(plan) {
+    const text = plan.blocked?.question || '';
+    const key = `${plan.id}\u0000${text}`;
+    this._questionKey = key;
+    const box = text ? md('home-plan-question', text) : el('div', 'home-plan-question', t('blockedNoQuestion'));
+    const more = el('button', 'home-plan-question-more');
+    more.type = 'button';
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._questionOpen = this._questionOpen === key ? null : key;
+      this._fitQuestion();
+    });
+    this._paintQuestion(box, more);
+    return [box, more];
+  }
+
+  _paintQuestion(box, more) {
+    const key = this._questionKey;
+    const open = this._questionOpen === key;
+    const cut = this._questionCut === key;
+    box.classList.toggle('is-clamped', !open);
+    box.classList.toggle('is-cut', !open && cut);
+    more.hidden = !open && !cut;
+    more.textContent = t(open ? 'questionLess' : 'questionMore');
+    more.setAttribute('aria-expanded', String(open));
+  }
+
+  /* Misura la domanda chiusa: se non ci sta nel riquadro, c'e' il tasto. Senza
+     misure (la scheda non si vede) non cambia niente: rimisura il
+     `ResizeObserver` quando il riquadro prende una misura. */
+  _fitQuestion() {
+    const box = this.card?.querySelector('.home-plan-question');
+    const more = this.card?.querySelector('.home-plan-question-more');
+    if (!box || !more) return;
+    const key = this._questionKey;
+    if (this._questionOpen !== key && box.clientHeight > 0) {
+      if (box.scrollHeight > box.clientHeight + 4) this._questionCut = key;
+      else if (this._questionCut === key) this._questionCut = null;
+    }
+    this._paintQuestion(box, more);
+  }
+
+  _watchQuestion() {
+    const box = this.card?.querySelector('.home-plan-question');
+    if (box === this._watchedQuestion) return;
+    this._questionObserver?.disconnect();
+    this._watchedQuestion = box || null;
+    if (!box) return;
+    if (!this._questionObserver && typeof ResizeObserver === 'function') {
+      this._questionObserver = new ResizeObserver(() => this._fitQuestion());
+    }
+    this._questionObserver?.observe(box);
+    this._fitQuestion();
   }
 
   /* ── Le bozze di un passo fermo ── */
@@ -1651,6 +1731,14 @@ export class HomePlan {
     return box.bottom <= view.top + 8 || box.top >= view.bottom - 8;
   }
 
+  /** Vero se la scheda e' sopra lo scroller del filo (la si e' lasciata indietro). */
+  _cardAbove() {
+    if (!this.card || !this.thread) return false;
+    const view = this.thread.getBoundingClientRect();
+    if (!view.height) return false;
+    return this.card.getBoundingClientRect().bottom <= view.top + 8;
+  }
+
   _syncStrip() {
     const plan = this._shown();
     const want = plan && LIVE_STATUSES.has(plan.status) && this.cardOutOfView();
@@ -1673,6 +1761,8 @@ export class HomePlan {
     strip.className = `home-plan-strip is-${plan.status}`;
     const current = steps.find((s) => s.status === 'now' || s.status === 'blocked');
     const index = this._currentIndex(plan);
+    /* La scheda sta nel filo dove il piano e' nato: di solito sopra. */
+    const toward = this._cardAbove() ? 'ti-arrow-up' : 'ti-arrow-down';
     let title = t('strip.title', { title: plan.title || '' });
     let sub = current ? t('strip.step', { n: index, title: current.title }) : '';
     let btnIcon = 'ti-player-pause';
@@ -1685,13 +1775,13 @@ export class HomePlan {
       title = t('strip.drafts');
       const files = this._blockedDrafts(plan).map((d) => inNotebook(d.target, plan.notebook) || d.id);
       sub = t('strip.step', { n: index, title: files.join(', ') || current?.title || '' });
-      btnIcon = 'ti-arrow-down';
+      btnIcon = toward;
       btnLabel = t('strip.show');
       run = () => this.revealCard();
     } else if (plan.status === 'blocked') {
       title = t('strip.blocked');
-      sub = t('strip.step', { n: index, title: plan.blocked?.question || current?.title || '' });
-      btnIcon = 'ti-arrow-down';
+      sub = t('strip.step', { n: index, title: plainLine(plan.blocked?.question) || current?.title || '' });
+      btnIcon = toward;
       btnLabel = t('strip.show');
       run = () => this.revealCard();
     } else if (plan.status === 'paused') {
@@ -1706,7 +1796,7 @@ export class HomePlan {
       waits = this.turnRunning();
     } else if (plan.status === 'pausing') {
       sub = t('pausingNote');
-      btnIcon = 'ti-arrow-down';
+      btnIcon = toward;
       btnLabel = t('strip.show');
       run = () => this.revealCard();
     } else if (!current) {

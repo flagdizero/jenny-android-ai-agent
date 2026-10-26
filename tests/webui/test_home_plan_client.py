@@ -39,7 +39,7 @@ const DRAFTING = { since: '2026-10-23T10:00:00Z', revise: null, reads: 0 };
 rpcAnswers['plan.get'] = () => ({ ok: true, plan: current, drafting });
 let open = [];
 rpcAnswers['plan.list'] = () => ({ ok: true, plans: open });
-/* Nel posto vivo finche' il piano e' vivo; un piano finito sta nel filo, al suo posto. */
+/* Nel filo, al suo posto (il posto vivo e' quello di prima del 26/10). */
 const card = () => document.querySelector('#home-thread > .home-live > .home-plan, #home-thread > .home-plan');
 const rpcs = (m) => sent.filter((x) => x.type === 'rpc' && x.method === m);
 const messages = () => sent.filter((x) => x.type === 'message');
@@ -352,37 +352,134 @@ assert.ok(action('resume'));
 """)
 
 
-def test_a_finished_plan_stays_in_the_thread_where_it_happened() -> None:
-    """Un piano finito non resta nel posto vivo: quel che si scrive dopo («che bel
-    lavorone», la risposta di Jenny) va sotto la scheda, non sopra (25/10)."""
+def test_a_running_plan_stays_in_the_thread_and_jenny_writes_below() -> None:
+    """Fino al 26/10 un piano vivo stava nel posto vivo in fondo, e i resoconti di
+    Jenny gli finivano sopra: sul Titan la scheda di un piano fermo e' piu' alta
+    dello schermo, e venti messaggi non si sono visti. Ora resta nel filo, dove e'
+    stato approvato, e quel che arriva dopo gli va sotto — anche finito."""
     run_home(_HEAD + """
-current = plan({ status: 'running', done: 2, total: 3, current_step_id: 's3',
-  steps: [step('s1', 'A', { status: 'done' }), step('s2', 'B', { status: 'done' }),
-    step('s3', 'C', { status: 'now', started_at: new Date().toISOString() })] });
-open = [{ id: 'p1', notebook: 'orto', status: 'running', title: 'Rebuild the wiki', done: 2, total: 3 }];
+const approved = new Date(Date.now() - 60000).toISOString();
+current = plan({ status: 'running', done: 1, total: 3, current_step_id: 's2',
+  history: [{ at: '2026-10-23T10:00:00Z', event: 'proposed', version: 1 },
+            { at: approved, event: 'approved', from: 'proposed', version: 1 }],
+  steps: [step('s1', 'A', { status: 'done' }),
+    step('s2', 'B', { status: 'now', started_at: new Date().toISOString() }), step('s3', 'C')] });
+open = [{ id: 'p1', notebook: 'orto', status: 'running', title: 'Rebuild the wiki', done: 1, total: 3 }];
 await toNotebook();
-const live = document.querySelector('#home-thread > .home-live');
-assert.equal(card().parentNode, live, 'in corsa: nel posto vivo');
-// Finisce: esce dal posto vivo e resta in fondo al filo.
+const thread = document.getElementById('home-thread');
+const live = thread.querySelector(':scope > .home-live');
+assert.equal(card().parentNode, thread, 'in corsa: nel filo, non nel posto vivo');
+assert.equal(card().nextElementSibling, live, 'appena approvato: in fondo');
+// Jenny scrive il resoconto del passo: va sotto la scheda.
+frame({ event: 'delta', chat_id: 'project:orto', turn_id: 't9', text: 'Step 2 closed: three pages' });
+await tick(20);
+const jenny = [...thread.querySelectorAll(':scope > .home-msg-jenny')].at(-1);
+assert.match(text(jenny), /Step 2 closed/);
+assert.ok(card().compareDocumentPosition(jenny) & Node.DOCUMENT_POSITION_FOLLOWING,
+  'il resoconto sta dopo la scheda');
+// Il piano si muove (un frame, una rilettura): la scheda non scavalca il messaggio.
+current = { ...current, done: 2, current_step_id: 's3' };
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.ok(card().compareDocumentPosition(jenny) & Node.DOCUMENT_POSITION_FOLLOWING);
+// Finisce: resta dov'e', e un messaggio dopo gli va sotto.
 current = { ...current, status: 'done', done: 3, current_step_id: null,
   updated_at: new Date(Date.now() - 1000).toISOString(),
   steps: current.steps.map((s) => ({ ...s, status: 'done' })) };
 frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
 await tick(40);
-assert.equal(card().parentNode, document.getElementById('home-thread'), 'finito: nel filo');
-assert.equal(card().nextElementSibling, live, 'per ora in fondo');
-// Un messaggio dopo: gli va sotto.
+assert.equal(card().parentNode, thread, 'finito: nel filo');
 $('home-input').value = 'che bel lavorone';
 $('home-send').click();
 await tick(20);
-const mine = [...document.querySelectorAll('#home-thread > .home-msg-user')].at(-1);
+const mine = [...thread.querySelectorAll(':scope > .home-msg-user')].at(-1);
 assert.match(text(mine), /che bel lavorone/);
 assert.ok(card().compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWING,
   'il messaggio nuovo sta dopo la scheda');
-// Ridisegnata (un frame, una rilettura), la scheda non scavalca il messaggio.
+""")
+
+
+def test_a_plan_without_a_time_goes_to_the_bottom_not_the_top() -> None:
+    """Senza un'ora nella storia non si sa dove ancorarla: in fondo, mai in cima."""
+    run_home(_HEAD + """
+current = plan({ status: 'proposed', history: [], created_at: '' });
+await toNotebook();
+frame({ event: 'delta', chat_id: 'project:orto', turn_id: 't9', text: 'Here is the plan' });
+await tick(20);
+current = { ...current, version: 2 };
 frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
 await tick(40);
-assert.ok(card().compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWING);
+const thread = document.getElementById('home-thread');
+assert.equal(card().nextElementSibling, thread.querySelector(':scope > .home-live'));
+""")
+
+
+def test_the_question_is_markdown_whole_and_the_strip_says_it_plain() -> None:
+    """La domanda era testo crudo: gli asterischi di `**` si vedevano. E' markdown,
+    come il resto della scheda; la striscia ne dice la prima riga, pulita."""
+    run_home(_MARKDOWN_BOOT + _HEAD + """
+const question = '**Delete the 69 old pages**, camellia included?\\n\\n'
+  + '1. Keep `raw/notes` as it is\\n2. And the phrase about 2.8 m: drop it or keep it?';
+current = plan({ status: 'blocked', done: 6, total: 8, current_step_id: 's2',
+  steps: [step('s1', 'A', { status: 'done' }), step('s2', 'B', { status: 'blocked' }), step('s3', 'C')],
+  blocked: { step: 's2', question, reason: 'question', kind: 'question', drafts: [] } });
+open = [{ id: 'p1', notebook: 'orto', status: 'blocked', title: 'Rebuild the wiki', done: 1, total: 3 }];
+await toNotebook();
+const box = card().querySelector('.home-plan-question');
+assert.equal(box.querySelector('strong').textContent, 'Delete the 69 old pages');
+assert.ok(!text(box).includes('**'), text(box));
+assert.equal(box.querySelectorAll('li').length, 2, 'la seconda domanda c\\'e\\'');
+assert.match(text(box), /2\\.8 m/);
+// La striscia: fuori vista, la prima riga senza markdown.
+{
+  const p = app.plan;
+  p.cardOutOfView = () => true;
+  p._cardAbove = () => true;
+  p._syncStrip();
+  const strip = document.querySelector('.home-plan-strip');
+  assert.equal(strip.hidden, false);
+  assert.match(text(strip), /Delete the 69 old pages, camellia included\\?/);
+  assert.ok(!text(strip).includes('**'));
+  assert.ok(strip.querySelector('.home-plan-strip-btn .ti-arrow-up'), 'la scheda e\\' sopra');
+}
+""")
+
+
+def test_a_long_question_opens_with_show_all() -> None:
+    """Una domanda lunga si chiude su dieci righe con «Mostra tutto»: se ci sta lo
+    dice la misura, e l'apertura sopravvive ai ridisegni."""
+    run_home(_HEAD + """
+// jsdom non misura: la domanda «non ci sta» finche' e' chiusa.
+Object.defineProperty(window.HTMLElement.prototype, 'clientHeight', { configurable: true,
+  get() { return this.classList?.contains('home-plan-question') ? 200 : 0; } });
+Object.defineProperty(window.HTMLElement.prototype, 'scrollHeight', { configurable: true,
+  get() { return this.classList?.contains('home-plan-question') ? 900 : 0; } });
+const blocked = (question) => ({ status: 'blocked', current_step_id: 's1',
+  steps: [step('s1', 'A', { status: 'blocked' }), step('s2', 'B'), step('s3', 'C')],
+  blocked: { step: 's1', question, reason: 'question', kind: 'question', drafts: [] } });
+current = plan(blocked('a long question '.repeat(120)));
+await toNotebook();
+const more = () => card().querySelector('.home-plan-question-more');
+const box = () => card().querySelector('.home-plan-question');
+assert.equal(more().hidden, false);
+assert.equal(more().textContent, P.questionMore);
+assert.ok(box().classList.contains('is-clamped') && box().classList.contains('is-cut'));
+more().click();
+assert.equal(box().classList.contains('is-clamped'), false, 'aperta: intera');
+assert.equal(more().textContent, P.questionLess);
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(box().classList.contains('is-clamped'), false, 'il ridisegno la lascia aperta');
+more().click();
+assert.ok(box().classList.contains('is-clamped'));
+// Una domanda che ci sta non ha il tasto.
+Object.defineProperty(window.HTMLElement.prototype, 'scrollHeight', { configurable: true,
+  get() { return this.classList?.contains('home-plan-question') ? 120 : 0; } });
+current = plan({ ...blocked('Which maple?'), version: 2 });
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(more().hidden, true);
+assert.equal(box().classList.contains('is-cut'), false);
 """)
 
 

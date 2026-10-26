@@ -1084,6 +1084,8 @@
       "blockedNote": "The rest waits for your answer: {bold}.",
       "blockedNoteBold": "I won't go on alone",
       "answerPlaceholder": "Your answer",
+      "questionMore": "Show all",
+      "questionLess": "Show less",
       "answer": "Answer",
       "answered": "Answer sent: the plan picks up again.",
       "summary": {

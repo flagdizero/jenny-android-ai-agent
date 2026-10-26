@@ -1084,6 +1084,8 @@
       "blockedNote": "Il resto aspetta la tua risposta: {bold}.",
       "blockedNoteBold": "non vado avanti da sola",
       "answerPlaceholder": "La tua risposta",
+      "questionMore": "Mostra tutto",
+      "questionLess": "Mostra meno",
       "answer": "Rispondi",
       "answered": "Risposta mandata: il piano riparte.",
       "summary": {
