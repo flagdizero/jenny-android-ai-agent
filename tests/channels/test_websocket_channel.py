@@ -33,7 +33,6 @@ from jenny.channels.websocket import (
     WebSocketChannel,
     WebSocketConfig,
     _parse_envelope,
-    _parse_inbound_payload,
 )
 from jenny.config.loader import load_config, save_config
 from jenny.config.schema import Config
@@ -129,40 +128,6 @@ def test_parse_query_extracts_token_and_client_id() -> None:
     query = _parse_query("/?token=secret&client_id=u1")
     assert query.get("token") == ["secret"]
     assert query.get("client_id") == ["u1"]
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("plain", "plain"),
-        ('{"content": "hi"}', "hi"),
-        ('{"text": "there"}', "there"),
-        ('{"message": "x"}', "x"),
-        ("  ", None),
-        ("{}", None),
-    ],
-)
-def test_parse_inbound_payload(raw: str, expected: str | None) -> None:
-    assert _parse_inbound_payload(raw) == expected
-
-
-def test_parse_inbound_invalid_json_falls_back_to_raw_string() -> None:
-    assert _parse_inbound_payload("{not json") == "{not json"
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ('{"content": ""}', None),           # empty string content
-        ('{"content": 123}', None),          # non-string content
-        ('{"content": "  "}', None),         # whitespace-only content
-        ('["hello"]', '["hello"]'),           # JSON array: not a dict, treated as plain text
-        ('{"unknown_key": "val"}', None),    # unrecognized key
-        ('{"content": null}', None),         # null content
-    ],
-)
-def test_parse_inbound_payload_edge_cases(raw: str, expected: str | None) -> None:
-    assert _parse_inbound_payload(raw) == expected
 
 
 def test_web_socket_config_path_must_start_with_slash() -> None:
@@ -1175,7 +1140,7 @@ async def test_end_to_end_client_receives_ready_and_agent_sees_inbound(bus: Magi
             assert ready["client_id"] == "tester"
             chat_id = ready["chat_id"]
 
-            await client.send(json.dumps({"content": "ping from client"}))
+            await client.send(json.dumps({"type": "message", "content": "ping from client"}))
             await asyncio.sleep(0.08)
 
             bus.publish_inbound.assert_awaited()
@@ -1185,11 +1150,6 @@ async def test_end_to_end_client_receives_ready_and_agent_sees_inbound(bus: Magi
             assert inbound.chat_id == chat_id
             assert inbound.content == "ping from client"
 
-            await client.send("plain text frame")
-            await asyncio.sleep(0.08)
-            assert bus.publish_inbound.await_count >= 2
-            second = [c[0][0] for c in bus.publish_inbound.call_args_list][-1]
-            assert second.content == "plain text frame"
     finally:
         await channel.stop()
         await server_task
@@ -1443,31 +1403,26 @@ async def test_websocket_requires_token_without_issue_path(bus: MagicMock) -> No
 
 
 @pytest.mark.asyncio
-async def test_multiplex_legacy_still_works(bus: MagicMock) -> None:
+async def test_a_message_without_chat_id_goes_to_the_personal_chat(bus: MagicMock) -> None:
+    """Fino al 27/10/2026 lo provava il protocollo senza buste; ora una busta
+    ``message`` senza ``chat_id`` fa la stessa strada."""
     port = free_port()
     channel = _ch(bus, port=port)
     server_task = asyncio.create_task(channel.start())
     await wait_listening(channel)
 
     try:
-        async with websockets.connect(f"ws://127.0.0.1:{port}/ws?client_id=legacy") as client:
+        async with websockets.connect(f"ws://127.0.0.1:{port}/ws?client_id=plain") as client:
             ready = json.loads(await client.recv())
             default_chat = ready["chat_id"]
 
-            # Plain text frame routes to default chat_id
-            await client.send("hello from legacy")
+            await client.send(json.dumps({"type": "message", "content": "no chat id"}))
             await asyncio.sleep(0.1)
             inbound = bus.publish_inbound.call_args[0][0]
             assert inbound.chat_id == default_chat
-            assert inbound.content == "hello from legacy"
+            assert inbound.content == "no chat id"
 
-            # {"content": ...} frame routes to default chat_id
-            await client.send(json.dumps({"content": "structured legacy"}))
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].chat_id == default_chat
-            assert bus.publish_inbound.call_args[0][0].content == "structured legacy"
-
-            # Outbound still reaches the legacy client, with chat_id annotated
+            # Outbound reaches the client, with chat_id annotated
             await channel.send(
                 OutboundMessage(channel="websocket", chat_id=default_chat, content="reply")
             )
@@ -1549,8 +1504,8 @@ async def test_multiplex_invalid_frames_return_error(bus: MagicMock) -> None:
             err3 = json.loads(await client.recv())
             assert err3["event"] == "error"
 
-            # Connection survives: legacy frame still works.
-            await client.send("still-alive")
+            # Connection survives: a valid message still works.
+            await client.send(json.dumps({"type": "message", "content": "still-alive"}))
             await asyncio.sleep(0.1)
             bus.publish_inbound.assert_awaited()
             assert bus.publish_inbound.call_args[0][0].content == "still-alive"
@@ -1587,7 +1542,7 @@ def test_parse_envelope_detects_typed_frames() -> None:
 
 
 def test_parse_envelope_rejects_legacy_and_garbage() -> None:
-    # No `type` field → legacy, caller falls back to _parse_inbound_payload.
+    # No `type` field → not an envelope; the channel answers untyped_frame.
     assert _parse_envelope('{"content":"hi"}') is None
     assert _parse_envelope("plain text") is None
     assert _parse_envelope("{broken") is None

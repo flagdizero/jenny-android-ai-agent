@@ -85,7 +85,7 @@ ws://{host}:{port}{path}?client_id={id}&token={secret}
 
 ## Wire Protocol
 
-All frames are JSON text. A server frame names itself with an `event` field; a client envelope with a `type` field (plain-text legacy frames aside, see below).
+All frames are JSON text. A server frame names itself with an `event` field; a client envelope with a `type` field.
 
 ### Server → Client
 
@@ -382,19 +382,7 @@ JavaScript) cannot prove to the browser:
 
 ### Client → Server
 
-**Legacy (default chat):** send a plain string, or a JSON object with a recognized text field:
-
-```json
-"Hello Jenny!"
-```
-
-```json
-{"content": "Hello Jenny!"}
-```
-
-Recognized fields: `content`, `text`, `message` (checked in that order). Invalid JSON is treated as plain text. These frames route to the personal chat (`default`, announced in `ready`).
-
-**Typed envelopes:** any JSON object with a string `type` field is a typed envelope:
+Every client frame is a **typed envelope**: a JSON object with a string `type` field. A frame without one (plain text, or `{"content": ...}`) gets `{"event":"error","reason":"untyped_frame"}` and reaches nothing; a blank frame is ignored.
 
 | `type` | Fields | Effect |
 |--------|--------|--------|
@@ -675,7 +663,7 @@ After a reconnect the connection is back on the personal chat only, so a client 
 
 ### Backward compatibility
 
-Legacy clients that only send plain text or `{"content": ...}` keep working unchanged: those frames route to the personal chat. No config flag is needed.
+Until October 2026 the channel also accepted untyped frames (plain text, or `{"content"|"text"|"message": ...}`) and routed them to the personal chat. Nothing in Jenny sent them any more, and they were removed: such a frame now gets an `untyped_frame` error. A client that sent them sends `{"type": "message", "content": ...}` instead, which without a `chat_id` goes to the same personal chat.
 
 ### Security boundary
 

@@ -105,7 +105,7 @@ async def test_each_connection_shares_unified_chat_id(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_plain_text(bus: MagicMock) -> None:
+async def test_a_message_reaches_the_bus(bus: MagicMock) -> None:
     port = free_port()
     ch = _ch(bus, port)
     t = asyncio.create_task(ch.start())
@@ -113,7 +113,7 @@ async def test_plain_text(bus: MagicMock) -> None:
     try:
         async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="p") as c:
             await c.recv_ready()
-            await c.send_text("hello world")
+            await c.send_content("hello world")
             await asyncio.sleep(0.1)
             inbound = bus.publish_inbound.call_args[0][0]
             assert inbound.content == "hello world"
@@ -124,24 +124,10 @@ async def test_plain_text(bus: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_json_content_field(bus: MagicMock) -> None:
-    port = free_port()
-    ch = _ch(bus, port)
-    t = asyncio.create_task(ch.start())
-    await wait_listening(ch)
-    try:
-        async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="j") as c:
-            await c.recv_ready()
-            await c.send_json({"content": "structured"})
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "structured"
-    finally:
-        await ch.stop()
-        await t
-
-
-@pytest.mark.asyncio
-async def test_json_text_and_message_fields(bus: MagicMock) -> None:
+async def test_a_frame_without_a_type_is_refused_and_reaches_nothing(bus: MagicMock) -> None:
+    """Il protocollo di prima delle buste (testo nudo, ``{"content": ...}``,
+    ``{"text": ...}``) e' stato tolto il 27/10/2026: nessun client lo mandava
+    piu'. Un frame cosi' riceve un errore morbido, e la connessione resta aperta."""
     port = free_port()
     ch = _ch(bus, port)
     t = asyncio.create_task(ch.start())
@@ -149,30 +135,18 @@ async def test_json_text_and_message_fields(bus: MagicMock) -> None:
     try:
         async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="x") as c:
             await c.recv_ready()
-            await c.send_json({"text": "via text"})
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "via text"
-            await c.send_json({"message": "via message"})
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "via message"
-    finally:
-        await ch.stop()
-        await t
-
-
-@pytest.mark.asyncio
-async def test_empty_payload_ignored(bus: MagicMock) -> None:
-    port = free_port()
-    ch = _ch(bus, port)
-    t = asyncio.create_task(ch.start())
-    await wait_listening(ch)
-    try:
-        async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="e") as c:
-            await c.recv_ready()
+            for frame in ("hello world", '{"content": "structured"}', '{"text": "via text"}',
+                          "{broken json", "{}"):
+                await c.send_text(frame)
+                reply = await c.recv()
+                assert reply.event == "error", frame
+                assert reply.raw.get("reason") == "untyped_frame", frame
             await c.send_text("   ")
-            await c.send_json({})
+            await c.send_content("still here")
             await asyncio.sleep(0.1)
-            bus.publish_inbound.assert_not_awaited()
+            assert [call[0][0].content for call in bus.publish_inbound.call_args_list] == [
+                "still here"
+            ]
     finally:
         await ch.stop()
         await t
@@ -188,7 +162,7 @@ async def test_messages_preserve_order(bus: MagicMock) -> None:
         async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="o") as c:
             await c.recv_ready()
             for i in range(5):
-                await c.send_text(f"msg-{i}")
+                await c.send_content(f"msg-{i}")
             await asyncio.sleep(0.2)
             contents = [call[0][0].content for call in bus.publish_inbound.call_args_list]
             assert contents == [f"msg-{i}" for i in range(5)]
@@ -520,7 +494,7 @@ async def test_large_message(bus: MagicMock) -> None:
         async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="big") as c:
             await c.recv_ready()
             big = "x" * 100_000
-            await c.send_text(big)
+            await c.send_content(big)
             await asyncio.sleep(0.2)
             assert bus.publish_inbound.call_args[0][0].content == big
     finally:
@@ -538,7 +512,7 @@ async def test_unicode_roundtrip(bus: MagicMock) -> None:
         async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="u") as c:
             ready = await c.recv_ready()
             text = "你好世界 🌍 日本語テスト"
-            await c.send_text(text)
+            await c.send_content(text)
             await asyncio.sleep(0.1)
             assert bus.publish_inbound.call_args[0][0].content == text
             await ch.send(OutboundMessage(
@@ -560,7 +534,7 @@ async def test_rapid_fire(bus: MagicMock) -> None:
         async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="r") as c:
             ready = await c.recv_ready()
             for i in range(50):
-                await c.send_text(f"in-{i}")
+                await c.send_content(f"in-{i}")
             await asyncio.sleep(0.5)
             assert bus.publish_inbound.await_count == 50
             for i in range(50):
@@ -569,23 +543,6 @@ async def test_rapid_fire(bus: MagicMock) -> None:
                 ))
             received = [(await c.recv_message()).text for _ in range(50)]
             assert received == [f"out-{i}" for i in range(50)]
-    finally:
-        await ch.stop()
-        await t
-
-
-@pytest.mark.asyncio
-async def test_invalid_json_as_plain_text(bus: MagicMock) -> None:
-    port = free_port()
-    ch = _ch(bus, port)
-    t = asyncio.create_task(ch.start())
-    await wait_listening(ch)
-    try:
-        async with WsTestClient(f"ws://127.0.0.1:{port}/", client_id="j") as c:
-            await c.recv_ready()
-            await c.send_text("{broken json")
-            await asyncio.sleep(0.1)
-            assert bus.publish_inbound.call_args[0][0].content == "{broken json"
     finally:
         await ch.stop()
         await t

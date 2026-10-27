@@ -59,7 +59,6 @@ from jenny.channels.ws_parsing import (
     _extract_data_url_mime,
     _is_websocket_upgrade,
     _parse_envelope,
-    _parse_inbound_payload,
     classify_media_item,
 )
 from jenny.channels.ws_remote import RemoteListener, auth_secret, server_listening
@@ -589,19 +588,15 @@ class WebSocketChannel(OutboundSenderMixin):
                 if envelope is not None:
                     await self._dispatch_envelope(connection, client_id, envelope)
                     continue
-
-                content = _parse_inbound_payload(raw)
-                if content is None:
-                    continue
-                await self._handle_message(
-                    sender_id=client_id,
-                    chat_id=default_chat_id,
-                    content=content,
-                    metadata={
-                        "remote": getattr(connection, "remote_address", None),
-                        "conn_id": conn_id,
-                    },
-                )
+                # Un frame senza ``type`` (testo nudo, ``{"content": ...}``) era il
+                # protocollo di prima delle buste: dal 27/10/2026 non lo manda più
+                # nessuno, né la WebUI né gli script, ed è stato tolto. Si risponde
+                # come a una busta sbagliata: errore morbido, connessione aperta.
+                if raw.strip():
+                    await self._send_event(
+                        connection, "error",
+                        detail="frame without a type", reason="untyped_frame",
+                    )
         except Exception as e:
             self.logger.warning("connection loop error (client={}): {}", client_id, e, exc_info=True)
         finally:

@@ -568,7 +568,8 @@
       "too_many_images": "Too many images in one message",
       "too_many_videos": "Too many videos in one message",
       "unknown": "Something went wrong",
-      "unknown_type": "I didn't understand the request"
+      "unknown_type": "I didn't understand the request",
+      "untyped_frame": "I didn't understand the request"
     }
   },
   "dialog": {
