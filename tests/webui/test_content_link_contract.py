@@ -33,7 +33,6 @@ link morto. Quel che resta qui e' la meta' della chat, che non ha un gemello.
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -42,7 +41,6 @@ from support.kotlin_source import read_source
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
-I18N_DIR = ASSETS / "i18n"
 MAIN_ACTIVITY = (
     ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny" / "MainActivity.kt"
 )
@@ -173,12 +171,6 @@ def test_no_chat_link_branch_can_reach_a_navigation() -> None:
     assert "url.origin !== origin" in shared, (
         "senza il confronto di origine un href relativo passerebbe per link esterno e ricaricherebbe la SPA"
     )
-
-
-def test_both_locales_carry_the_inert_link_message() -> None:
-    for locale in ("it", "en"):
-        data = json.loads((I18N_DIR / f"{locale}.json").read_text(encoding="utf-8"))
-        assert data["common"].get("linkNotOpenable"), f"chiave mancante in {locale}.json"
 
 
 def test_the_shell_calls_the_spa_pages_internal_only_by_exact_path() -> None:

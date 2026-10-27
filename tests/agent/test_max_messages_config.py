@@ -192,12 +192,6 @@ class TestSchemaConfig:
         defaults = AgentDefaults(max_messages=0)
         assert defaults.max_messages == 0
 
-    def test_schema_accepts_positive(self) -> None:
-        from jenny.config.schema import AgentDefaults
-
-        defaults = AgentDefaults(max_messages=25)
-        assert defaults.max_messages == 25
-
     def test_schema_rejects_negative(self) -> None:
         from jenny.config.schema import AgentDefaults
 

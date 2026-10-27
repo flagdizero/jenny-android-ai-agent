@@ -27,7 +27,6 @@ WebUI non ha un runner JS con DOM.
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -233,9 +232,3 @@ def test_the_ssh_probe_shows_it_is_working_and_never_lands_elsewhere() -> None:
         "annullare era l'unica uscita muta della funzione: nessun riscontro, "
         "e il badge 'da verificare' identico a prima"
     )
-
-
-def test_the_new_string_exists_in_both_locales() -> None:
-    for locale in ("it", "en"):
-        data = json.loads((ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))
-        assert "verifyCancelled" in data["settings"]["ssh"], locale

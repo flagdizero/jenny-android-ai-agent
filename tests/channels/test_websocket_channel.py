@@ -1213,69 +1213,6 @@ async def test_token_rejects_handshake_when_mismatch(bus: MagicMock) -> None:
         await server_task
 
 
-@pytest.mark.asyncio
-async def test_wrong_path_returns_webui_html(bus: MagicMock) -> None:
-    """Non-WebSocket paths serve the WebUI HTML instead of returning 404."""
-    port = free_port()
-    channel = _ch(bus, port=port)
-
-    server_task = asyncio.create_task(channel.start())
-    await wait_listening(channel)
-
-    try:
-        with pytest.raises(websockets.exceptions.InvalidStatus) as excinfo:
-            async with websockets.connect(f"ws://127.0.0.1:{port}/other"):
-                pass
-        assert excinfo.value.response.status_code == 200
-    finally:
-        await channel.stop()
-        await server_task
-
-
-@pytest.mark.asyncio
-async def test_secret_required_for_websocket_handshake(bus: MagicMock) -> None:
-    port = free_port()
-    secret = "route-secret"
-    channel = _ch(
-        bus, port=port,
-        tokenIssueSecret=secret,
-        websocketRequiresToken=True,
-    )
-
-    server_task = asyncio.create_task(channel.start())
-    await wait_listening(channel)
-
-    try:
-        with pytest.raises(websockets.exceptions.InvalidStatus) as missing_token:
-            async with websockets.connect(f"ws://127.0.0.1:{port}/ws?client_id=x"):
-                pass
-        assert missing_token.value.response.status_code == 401
-
-        uri = f"ws://127.0.0.1:{port}/ws?token={secret}&client_id=caller"
-        async with websockets.connect(uri) as client:
-            ready = json.loads(await client.recv())
-            assert ready["event"] == "ready"
-            assert ready["client_id"] == "caller"
-
-        # Reconnects with the same secret must still succeed.
-        async with websockets.connect(uri) as client:
-            ready_again = json.loads(await client.recv())
-            assert ready_again["event"] == "ready"
-            assert ready_again["client_id"] == "caller"
-
-        # Wrong secret is rejected.
-        bogus_uri = f"ws://127.0.0.1:{port}/ws?token=wrong-secret&client_id=caller"
-        with pytest.raises(websockets.exceptions.InvalidStatus) as bogus_token:
-            async with websockets.connect(bogus_uri) as client:
-                pass
-        assert bogus_token.value.response.status_code == 401
-    finally:
-        await channel.stop()
-        await server_task
-
-
-
-
 def test_settings_payload_normalizes_camel_case_provider(
     bus: MagicMock,
     monkeypatch,

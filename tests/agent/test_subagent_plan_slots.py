@@ -70,9 +70,17 @@ async def _drain(sm: SubagentManager) -> None:
 # -- slot -------------------------------------------------------------------
 
 
-def test_the_plan_constant_is_five() -> None:
-    # I prompt del piano dicono «up to 5 helpers at once»: il numero e questo.
-    assert PLAN_HELPER_SLOTS == 5
+def test_the_plan_prompts_say_the_real_number_of_slots() -> None:
+    """I prompt del piano dicono al modello quanti aiutanti può avere insieme:
+    il numero scritto lì deve essere quello del codice. Fissare la costante a 5
+    non lo garantiva: cambiata la costante, i prompt avrebbero mentito."""
+    from pathlib import Path
+
+    agent = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "agent"
+    step = (agent / "plan_step.md").read_text(encoding="utf-8")
+    mode = (agent / "plan_mode.md").read_text(encoding="utf-8")
+    assert f"run up to {PLAN_HELPER_SLOTS} helpers at once" in step
+    assert f"run up to {PLAN_HELPER_SLOTS} helpers at once" in mode
 
 
 async def test_a_running_plan_gets_five_normal_slots_and_one_quick(tmp_path) -> None:

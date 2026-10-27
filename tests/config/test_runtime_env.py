@@ -200,21 +200,29 @@ def test_invalid_float_env_logs_warning(monkeypatch):
     assert any("JENNY_LLM_TIMEOUT_S" in r and "nope" in r for r in records)
 
 
-@pytest.mark.parametrize(
-    "func_name,env_name,default",
-    [
-        ("max_concurrent_requests", "JENNY_MAX_CONCURRENT_REQUESTS", 3),
-        ("llm_timeout_s", "JENNY_LLM_TIMEOUT_S", 300.0),
-        ("ws_send_timeout_s", "JENNY_WS_SEND_TIMEOUT_S", 12.0),
-        ("goal_inactivity_ttl_h", "JENNY_GOAL_INACTIVITY_TTL_H", 12.0),
-        ("tool_timeout_s", "JENNY_TOOL_TIMEOUT_S", 300.0),
-    ],
-)
+_KNOBS = [
+    ("max_concurrent_requests", "JENNY_MAX_CONCURRENT_REQUESTS", 3),
+    ("llm_timeout_s", "JENNY_LLM_TIMEOUT_S", 300.0),
+    ("ws_send_timeout_s", "JENNY_WS_SEND_TIMEOUT_S", 12.0),
+    ("goal_inactivity_ttl_h", "JENNY_GOAL_INACTIVITY_TTL_H", 12.0),
+    ("tool_timeout_s", "JENNY_TOOL_TIMEOUT_S", 300.0),
+]
+
+
+@pytest.mark.parametrize("func_name,env_name,default", _KNOBS)
 def test_each_knob_documents_its_own_env_var_name(monkeypatch, func_name, env_name, default):
-    """Guard di coerenza: ogni knob risponde solo al proprio env var, non ad altri."""
+    """Guard di coerenza: ogni knob risponde solo al proprio env var, non ad altri.
+
+    Con tutte le altre variabili impostate resta al default; con la sua cambia.
+    """
+    for _, other, _ in _KNOBS:
+        if other != env_name:
+            monkeypatch.setenv(other, "7")
     monkeypatch.delenv(env_name, raising=False)
     func = getattr(runtime_env, func_name)
     assert func() == default
+    monkeypatch.setenv(env_name, "7")
+    assert func() == 7
 
 
 # ---------------------------------------------------------------------------

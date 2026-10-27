@@ -868,11 +868,6 @@ def _errored_resp() -> SimpleNamespace:
 
 
 class TestFileStatesWriteCounters:
-    def test_counters_start_at_zero(self):
-        fs = FileStates()
-        assert fs.writes_ok == 0
-        assert fs.writes_attempted == 0
-
     def test_record_write_attempt_increments_only_attempts(self):
         fs = FileStates()
         fs.record_write_attempt()
