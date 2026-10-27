@@ -146,10 +146,13 @@ def test_rows_are_cached_by_key_and_reused() -> None:
 
 def test_the_list_is_written_once_per_keystroke() -> None:
     render = _method(_src("mobile-launcher.js"), "_renderList")
-    assert render.count("this.list.replaceChildren") == 3, (
-        "una sola scrittura per ramo (caricamento, nessun risultato, risultati)"
+    # La lista si scrive in un colpo (``replaceChildren``), mai riga per riga.
+    # Quante volte compaia non conta: era ``== 3``, una per ramo, e si rompeva
+    # aggiungendo un ramo giusto.
+    assert "this.list.replaceChildren" in render
+    assert "appendChild" not in render and ".append(" not in render, (
+        "appendere una riga per volta è N reflow"
     )
-    assert "appendChild" not in render, "appendere una riga per volta è N reflow"
 
 
 # ── il tocco ────────────────────────────────────────────────────────────────

@@ -287,11 +287,15 @@ _POSTLUDE = r"""
 """
 
 
-def run_home(script: str, *, timeout: float = 60) -> str:
+def run_home(script: str, *, timeout: float = 20) -> str:
     """Esegue *script* (un modulo ES che importa da ``./boot.mjs``) e ne
     ritorna lo stdout. ``assert`` di node che fallisce fa fallire il test, e
     cosi' un rifiuto di promessa non gestito o un timer della prova rimasto in
-    sospeso (v. ``_POSTLUDE``)."""
+    sospeso (v. ``_POSTLUDE``).
+
+    *timeout* e' un tetto, non una stima: la prova piu' lenta oggi dura meno di
+    quattro secondi. Era 60, e una richiesta senza risposta che aspettava i suoi
+    venti secondi ci stava dentro senza che nessuno se ne accorgesse."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "boot.mjs").write_text(

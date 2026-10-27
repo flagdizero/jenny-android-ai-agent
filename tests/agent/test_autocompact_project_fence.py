@@ -339,19 +339,26 @@ async def test_internal_work_stays_out_even_with_the_switch_on(
     switched_on.consolidator.compact_idle_session.assert_not_awaited()
 
 
-def test_the_knob_reaches_autocompact_from_the_config() -> None:
+@pytest.mark.parametrize("on", [False, True])
+def test_the_knob_reaches_autocompact_from_the_config(tmp_path, on: bool) -> None:
     """Il knob è inutile se non arriva: ``AgentDefaults`` →
-    ``AgentLoop`` → ``AutoCompact``. Senza questo test la manopola si potrebbe
-    accendere in ``config.json`` senza che cambi niente."""
-    import inspect
+    ``AgentLoop.from_config`` → ``AutoCompact``. Senza questo test la manopola si
+    potrebbe accendere in ``config.json`` senza che cambi niente. Si costruisce la
+    catena vera e si guarda cosa riceve ``AutoCompact``, non il sorgente."""
+    from unittest.mock import MagicMock
 
     from jenny.agent.loop import AgentLoop
-    from jenny.config.schema import AgentDefaults
+    from jenny.config.schema import AgentDefaults, Config
 
     assert AgentDefaults().compact_projects_when_idle is False
-    source = inspect.getsource(AgentLoop)
-    assert "compact_projects=compact_projects_when_idle" in source
-    assert "compact_projects_when_idle=defaults.compact_projects_when_idle" in source
+    config = Config.model_validate({
+        "agents": {"defaults": {"compactProjectsWhenIdle": on}},
+        "workspace": {"path": str(tmp_path)},
+    })
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    loop = AgentLoop.from_config(config, bus=MagicMock(), provider=provider)
+    assert loop.auto_compact._compact_projects is on
 
 
 # ── T2.6: le pagine prima della compattazione ────────────────────────────

@@ -34,12 +34,13 @@ def _chat_over_rules() -> list[tuple[str, str]]:
 def test_the_overlay_keeps_the_document_as_the_chat_scroller() -> None:
     body = _method(APP, "openChatOver")
     assert "root.classList.add('mode-chat', 'chat-over')" in body
-    # Classe e `display` nello stesso blocco, prima che la chat si attivi:
-    # una misura presa in mezzo vedrebbe una pagina che non scorre.
+    # Prima il `display`, poi le classi, e solo dopo la chat si attiva: una
+    # misura presa in mezzo vedrebbe una pagina che non scorre. (Si fissa
+    # l'ordine; la distanza in caratteri fra le due righe, che c'era, si rompeva
+    # a ogni commento aggiunto in mezzo.)
     shown = body.index("viewElement('chat').style.display = 'flex'")
     classes = body.index("root.classList.add('mode-chat', 'chat-over')")
-    assert 0 < classes - shown < 200
-    assert classes < body.index("chat.activate()")
+    assert shown < classes < body.index("chat.activate()")
 
 
 def test_closing_takes_display_and_classes_away_together() -> None:

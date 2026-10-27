@@ -151,11 +151,11 @@ npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny
 # Full-perimeter visibility (non-blocking; shows residual errors to tighten over time):
 npx pyright || true
 
-# Tests
-pytest -q
+# Tests (one worker per core; serial `pytest -q` works too, ~7 min)
+pytest -q -n auto --dist worksteal
 
 # Full CI-equivalent check (lint + type check + tests)
-ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
+ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q -n auto --dist worksteal
 ```
 
 ## Common File Locations
