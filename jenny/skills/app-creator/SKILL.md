@@ -98,7 +98,9 @@ there changes page — a button never keeps it, a sideways-dragged component alw
   the swipe.
 - A component dragged sideways by your own code (carousel, swipe-to-delete row, map,
   drawing area) declares it with CSS `touch-action: pan-y` (`none` if it also takes
-  vertical drags). `<input type="range">` and `overflow-x: auto` rows need nothing.
+  vertical drags). `<input type="range">` and `overflow-x: auto` rows need nothing — and a
+  carousel built on native scrolling (`overflow-x: auto` + `scroll-snap-type`) is such a row:
+  `touch-action: pan-y` on it, or on its slides, stops the finger from swiping it at all.
 - `touch-action: none` on `body` takes the swipe from the whole app: only for a full-screen
   game.
 </rule>

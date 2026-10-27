@@ -478,7 +478,10 @@ class MicroHttp:
     def _send(self, method: str, url: str, **kwargs: Any) -> Any:
         import httpx
 
+        from jenny.security.fetch import JENNY_USER_AGENT
+
         self._check(url)
+        kwargs["headers"] = {"User-Agent": JENNY_USER_AGENT, **(kwargs.get("headers") or {})}
         try:
             resp = httpx.request(method, url, timeout=HTTP_TIMEOUT_S,
                                  follow_redirects=False, **kwargs)
@@ -487,7 +490,10 @@ class MicroHttp:
         if len(resp.content) > MAX_HTTP_BYTES:
             raise ValueError(f"response over {MAX_HTTP_BYTES // 1024} KB")
         if resp.status_code >= 400:
-            raise RuntimeError(f"HTTP {resp.status_code} from {url}")
+            # L'inizio del corpo dice spesso cosa correggere («respect our robot
+            # policy», un parametro mancante): senza, il modello tira a indovinare.
+            body = " ".join(resp.text[:200].split())
+            raise RuntimeError(f"HTTP {resp.status_code} from {url}" + (f": {body}" if body else ""))
         return resp
 
     def get_json(self, url: str, headers: dict[str, str] | None = None) -> Any:

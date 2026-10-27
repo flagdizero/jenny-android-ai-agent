@@ -101,8 +101,9 @@ class _FakeClient:
     async def __aexit__(self, *exc):
         return False
 
-    def stream(self, method, url, params=None, json=None):
+    def stream(self, method, url, params=None, json=None, headers=None):
         self.calls.append((method, url, params, json))
+        self.headers = headers
         return _FakeStream(self.response)
 
 
@@ -127,6 +128,8 @@ class TestExecuteHttpAction:
         result = await execute_http_action("piante", _manifest(), _http_action(), {})
         assert result == {"ok": True, "status": 200, "data": {"plants": []}}
         assert _FakeClient.last.kwargs["follow_redirects"] is False
+        # Un nome con recapito: Wikimedia risponde 403 a ``python-httpx``.
+        assert _FakeClient.last.headers["User-Agent"].startswith("Jenny/")
 
     async def test_response_size_cap(self, monkeypatch):
         monkeypatch.setattr(apps_http, "validate_app_server_target", lambda url: (True, ""))

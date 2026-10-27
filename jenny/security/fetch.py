@@ -30,6 +30,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 
+from jenny import __version__
 from jenny.security import network
 
 # Salti oltre il primo. Cinque bastano per GitHub (release → CDN) con margine.
@@ -39,6 +40,14 @@ MAX_REDIRECTS = 5
 BROWSER_USER_AGENT = (
     "Mozilla/5.0 (Android 14; Mobile) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+)
+
+# Le richieste che l'agente fa da sé (le azioni http delle app, la rete dei lettori)
+# si presentano con un nome e un recapito, come chiede la policy di Wikimedia: dal
+# telefono un browser finto riceve 403 «robot policy», e ``python-httpx`` pure. Il
+# modello, rifiutato, riprovava e poi ripiegava su fonti peggiori.
+JENNY_USER_AGENT = (
+    f"Jenny/{__version__} (Android; +https://github.com/flagdizero/jenny-android-ai-agent)"
 )
 
 Validator = Callable[[str], tuple[bool, str | None]]

@@ -253,3 +253,31 @@ def test_a_run_may_make_eight_requests(monkeypatch) -> None:
     assert mc.MAX_HTTP_REQUESTS == 8
     with pytest.raises(PermissionError, match="at most 8 requests per run"):
         http._check("https://api.example.com/q")
+
+
+def test_http_says_who_it_is_and_why_it_was_refused(monkeypatch) -> None:
+    """Un 403 col suo motivo, e la richiesta col nome di Jenny.
+
+    Wikimedia rifiuta ``python-httpx`` con «robot policy»: con solo «HTTP 403» il
+    modello riprovava alla cieca.
+    """
+    import httpx
+
+    import jenny.security.network as net
+
+    sent = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent["ua"] = request.headers["user-agent"]
+        return httpx.Response(403, text="Please respect our\n robot policy")
+
+    def request(method, url, *, timeout, follow_redirects, **kw):
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            return client.request(method, url, **kw)
+
+    monkeypatch.setattr(net, "validate_app_server_target", lambda url: (True, ""))
+    monkeypatch.setattr(httpx, "request", request)
+    with pytest.raises(RuntimeError) as e:
+        mc.MicroHttp(["api.example.com"]).get_text("https://api.example.com/q")
+    assert str(e.value) == "HTTP 403 from https://api.example.com/q: Please respect our robot policy"
+    assert sent["ua"].startswith("Jenny/")
