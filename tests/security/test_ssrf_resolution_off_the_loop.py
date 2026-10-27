@@ -95,7 +95,11 @@ async def test_web_fetch(slow_dns, monkeypatch) -> None:
     async def _fetch(ctx, url, timeout=None):
         return "<html><body><h1>ciao</h1></body></html>", "https://box.example/"
 
+    async def _no_direct(url):
+        return None
+
     monkeypatch.setattr(android_web, "_bridge_fetch", _fetch)
+    monkeypatch.setattr(android_web, "_direct_fetch", _no_direct)
     tool = android_web.AndroidWebFetchTool(android_context=object(), timeout=5)
     ticks, out = await _ticks_during(tool.execute("https://box.example/"))
     assert "ciao" in json.loads(out)["text"]
