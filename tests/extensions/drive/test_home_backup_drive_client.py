@@ -107,6 +107,11 @@ __DRIVE_CLASS__
 
 const H = 3600 * 1000;
 const NOW = Date.now();
+/* «d giorni fa» come lo conta la scheda: giorni di calendario del telefono,
+   alla stessa ora. Non `NOW - d * 24 * H`: nella settimana dopo un cambio
+   d'ora, per un'ora al giorno, due di quei salti cadono nello stesso giorno
+   (quello di 25 ore) e uno ne manca. Le prove fallivano lì. */
+const daysAgo = (d) => { const t = new Date(NOW); t.setDate(t.getDate() - d); return t.getTime(); };
 const notices = [];
 async function room(status, backup = null) {
   for (const k of Object.keys(nodi)) delete nodi[k];
@@ -123,7 +128,7 @@ const card = () => nodi['home-backup-ext'].innerHTML;
 const rows = () => nodi['home-backup-ext-rows'].innerHTML;
 const act = (drive, action) => drive._onAction({ target: { closest: () => ({ dataset: { action }, disabled: false }) } });
 const T = (k, p) => i18n.t(k, p);
-const on = (extra = {}) => ({ available: true, provider: 'drive', enabled_at_ms: NOW - 30 * 24 * H, password_set_ms: 1, ...extra });
+const on = (extra = {}) => ({ available: true, provider: 'drive', enabled_at_ms: daysAgo(30), password_set_ms: 1, ...extra });
 """
         .replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
@@ -146,9 +151,9 @@ def _run(script: str) -> None:
 
 def test_safe_says_it_and_answers_the_three_questions() -> None:
     _run("""
-      const copies = [0, 1, 2, 3, 4, 5, 6].map((d) => NOW - d * 24 * H);
+      const copies = [0, 1, 2, 3, 4, 5, 6].map(daysAgo);
       const { page } = await room(on({ last_success_ms: NOW - H, recent_copies_ms: copies,
-                                       stored_bytes: 8_400_000, last_verified_ms: NOW - 2 * 24 * H }));
+                                       stored_bytes: 8_400_000, last_verified_ms: daysAgo(2) }));
       const html = card();
       assert.equal(nodi['home-backup-ext'].hidden, false);
       assert.ok(html.includes(T('cloudBackup.safe.title')), 'manca «Sei al sicuro»');
@@ -169,8 +174,8 @@ def test_safe_says_it_and_answers_the_three_questions() -> None:
 
 def test_late_says_how_long_why_and_what_to_do() -> None:
     _run("""
-      const copies = [4, 5, 6].map((d) => NOW - d * 24 * H);
-      const { page } = await room(on({ last_success_ms: NOW - 4 * 24 * H, recent_copies_ms: copies }));
+      const copies = [4, 5, 6].map(daysAgo);
+      const { page } = await room(on({ last_success_ms: daysAgo(4), recent_copies_ms: copies }));
       const html = card();
       assert.ok(html.includes(T('cloudBackup.late.title', { days: 4 })), html.slice(0, 300));
       assert.ok(html.includes(T('cloudBackup.reasons.waiting.todo')), 'manca cosa fare');
@@ -184,7 +189,7 @@ def test_late_says_how_long_why_and_what_to_do() -> None:
 
 def test_late_mentions_the_chat_only_when_it_was_sent() -> None:
     _run("""
-      await room(on({ last_success_ms: NOW - 4 * 24 * H, alerted_ms: NOW - H }));
+      await room(on({ last_success_ms: daysAgo(4), alerted_ms: NOW - H }));
       assert.ok(card().includes(T('cloudBackup.late.calmAlerted')));
     """)
 
