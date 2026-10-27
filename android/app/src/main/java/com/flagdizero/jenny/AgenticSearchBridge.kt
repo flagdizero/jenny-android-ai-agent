@@ -30,6 +30,16 @@ class AgenticSearchBridge(context: Context) {
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
         private const val MAX_RESULTS_DEFAULT = 10
 
+        // Il segno sul documento che c'era prima di un caricamento (v. evaluateOnPage).
+        private const val MARK_STALE_JS = "window.__jennyStale = true"
+        private const val STALE_RESULT = "\"__jenny_stale__\""
+        private const val MARK_STALE_FALLBACK_MS = 500L
+
+        /** [js] letto solo se il documento non è quello di prima del caricamento. */
+        private fun readUnlessStale(js: String): String =
+            "(function() { if (window.__jennyStale === true) return '__jenny_stale__';\n" +
+                "return (\n$js\n); })()"
+
         @Volatile
         private var debuggingConfigured = false
 
@@ -238,15 +248,40 @@ class AgenticSearchBridge(context: Context) {
                             return
                         }
                         Log.d(TAG, "evaluateOnPage: running evaluateJavascript")
-                        view?.evaluateJavascript(js) { value ->
+                        view?.evaluateJavascript(readUnlessStale(js)) { value ->
+                            if (value == STALE_RESULT) {
+                                Log.d(TAG, "onPageFinished ignored: $finishedUrl is the previous page")
+                                return@evaluateJavascript
+                            }
                             Log.d(TAG, "evaluateJavascript callback: value length=${value?.length ?: 0} null=${value == null}")
                             ref.set(value ?: "")
                             latch.countDown()
                         }
                     }
                 }
-                Log.d(TAG, "evaluateOnPage: calling loadUrl($url)")
-                wv.loadUrl(url)
+                // Il documento che c'è ora viene segnato come vecchio prima del
+                // caricamento: un suo onPageFinished arrivato tardi (dopo lo
+                // `stopLoading` di una lettura finita in errore o in timeout) va
+                // a questo client, e senza il segno se ne leggeva l'HTML come
+                // fosse la pagina chiesta. Su s22, in una ricerca, sei query di
+                // fila hanno avuto i risultati della precedente. Il ripiego a
+                // 500 ms copre una pagina che non risponde al JavaScript.
+                if (wv.url == null) {
+                    Log.d(TAG, "evaluateOnPage: calling loadUrl($url)")
+                    wv.loadUrl(url)
+                } else {
+                    var loading = false
+                    val load = Runnable {
+                        if (!loading) {
+                            loading = true
+                            Log.d(TAG, "evaluateOnPage: calling loadUrl($url)")
+                            wv.loadUrl(url)
+                        }
+                    }
+                    wv.stopLoading()
+                    wv.evaluateJavascript(MARK_STALE_JS) { load.run() }
+                    handler.postDelayed(load, MARK_STALE_FALLBACK_MS)
+                }
                 Log.d(TAG, "evaluateOnPage: loadUrl returned (post)")
             } catch (e: Exception) {
                 Log.e(TAG, "evaluateOnPage failed on the main thread", e)
