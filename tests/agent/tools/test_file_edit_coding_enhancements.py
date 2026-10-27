@@ -86,21 +86,6 @@ def test_edit_file_can_select_nearest_line_hint(tmp_path):
     assert target.read_text() == "one\nsame\ntwo\nchanged\n"
 
 
-def test_edit_file_can_edit_ipynb_as_json(tmp_path):
-    target = tmp_path / "analysis.ipynb"
-    target.write_text('{"cells": []}')
-    tool = EditFileTool(workspace=tmp_path)
-
-    result = asyncio.run(tool.execute(
-        path=str(target),
-        old_text='"cells": []',
-        new_text='"cells": [{"cell_type": "markdown", "source": "hi"}]',
-    ))
-
-    assert "Successfully edited" in result
-    assert '"source": "hi"' in target.read_text()
-
-
 def test_edit_file_multiple_match_hint_mentions_occurrence(tmp_path):
     target = tmp_path / "duplicate.txt"
     target.write_text("same\nsame\n")

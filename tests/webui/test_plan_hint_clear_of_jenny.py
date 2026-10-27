@@ -31,14 +31,6 @@ def test_the_hint_row_stops_before_jennys_whole_box() -> None:
     assert "0.275" not in rule and "--jenny-dock" not in rule
 
 
-def test_the_plan_card_takes_back_jennys_dodge() -> None:
-    """La scheda del piano si riprende lo spazio che il posto vivo lascia alla testa
-    di Jenny: larga quanto la colonna, non stretta per tutta la sua altezza."""
-    rule = _rule(".home-live > .home-plan")
-    assert "width: calc(100% + var(--jenny-dodge" in rule
-    assert "margin-right: calc(-1 * var(--jenny-dodge" in rule
-
-
 def test_the_plan_card_has_no_width_cap() -> None:
     """Larga quanto la chat: fino al 26/10 un ``max-width: 520px`` la fermava a metà
     in una finestra più larga del telefono (il Mac con l'accesso remoto)."""

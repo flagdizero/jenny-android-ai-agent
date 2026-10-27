@@ -159,15 +159,6 @@ const rpc = {
   renameProject: () => Promise.resolve(),
   greetProject: (name) => { greetings.push(name); return Promise.resolve({ greeted: true }); },
 };
-/* La disposizione della mappa (`shared/map-layout.js`): il finto segna chi
-   sposta cosa, e sa anche fallire — un rinomino riuscito resta riuscito. */
-const layoutMoves = [];
-let layoutFails = false;
-const moveLayoutKey = async (from, to) => {
-  layoutMoves.push([from, to]);
-  if (layoutFails) { console.warn('map layout: rename failed'); return false; }
-  return true;
-};
 const showToast = () => {};
 /* `goHome` chiude la selezione prima di cambiare vista (shared/selection.js). */
 let selectionsCleared = 0;
@@ -1841,18 +1832,6 @@ def test_renaming_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> N
       assert.equal(app.input.value, 'mezza frase', 'la bozza si e\\u2019 persa col nome vecchio');
       assert.ok(!app._drafts.has('project:piante'), 'resta una bozza sotto il nome vecchio');
       assert.equal(app.homePages.homeConversation, 'project:orto');
-    """)
-
-
-def test_a_rename_moves_nothing_but_the_notebook() -> None:
-    """La bacheca sta dentro la cartella del quaderno: il rinomino la porta con
-    se', e il guscio non ha piu' una disposizione da spostare a mano (la mappa
-    teneva i suoi spilli in un file del workspace, per nome)."""
-    _run_js(_NOTEBOOKS + """
-      writtenName = 'orto';
-      assert.equal(await app.renameNotebook('piante'), true);
-      assert.equal(sessionManager.currentKey, 'project:orto');
-      assert.deepEqual(layoutMoves, []);
     """)
 
 

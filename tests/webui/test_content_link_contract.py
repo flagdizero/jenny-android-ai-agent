@@ -42,7 +42,6 @@ from support.kotlin_source import read_source
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
-WIKI_JS = ASSETS / "mobile-wiki.js"
 I18N_DIR = ASSETS / "i18n"
 MAIN_ACTIVITY = (
     ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny" / "MainActivity.kt"
@@ -67,9 +66,6 @@ def _method(source: str, name: str) -> str:
 def _chat() -> str:
     return CHAT_JS.read_text(encoding="utf-8")
 
-
-def _wiki() -> str:
-    return WIKI_JS.read_text(encoding="utf-8")
 
 
 def _assert_prevented_first(code: str, what: str) -> None:

@@ -34,7 +34,6 @@ from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
-JENNY_JS = ASSETS / "shared" / "jenny-minichat.js"
 MASCOT_JS = ASSETS / "shared" / "jenny-mascot.js"
 
 

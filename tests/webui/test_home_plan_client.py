@@ -39,8 +39,8 @@ const DRAFTING = { since: '2026-10-23T10:00:00Z', revise: null, reads: 0 };
 rpcAnswers['plan.get'] = () => ({ ok: true, plan: current, drafting });
 let open = [];
 rpcAnswers['plan.list'] = () => ({ ok: true, plans: open });
-/* Nel filo, al suo posto (il posto vivo e' quello di prima del 26/10). */
-const card = () => document.querySelector('#home-thread > .home-live > .home-plan, #home-thread > .home-plan');
+/* Nel filo, al suo posto: non piu' nel posto vivo, dove stava fino al 26/10. */
+const card = () => document.querySelector('#home-thread > .home-plan');
 const rpcs = (m) => sent.filter((x) => x.type === 'rpc' && x.method === m);
 const messages = () => sent.filter((x) => x.type === 'message');
 const text = (node) => node.textContent.replace(/\\s+/g, ' ').trim();

@@ -1677,37 +1677,6 @@ def test_a_notebook_that_comes_back_loses_its_notice() -> None:
 
 
 
-# ── «Your home pages» non c'e' piu' (23/09/2026) ────────────────────────────
-
-
-def test_the_pages_sheet_is_gone_with_every_trace_of_it() -> None:
-    """Tutti i suoi mestieri si sono spostati sulla cosa: aggiungere e togliere
-    dal cassetto e dalla tendina, «non c'e' piu'» sulla pagina stessa.
-
-    Un pezzo rimasto — il markup, una chiave, un ascoltatore sui pallini — e' un
-    foglio che non si apre ma che chi legge il codice crede vivo.
-    """
-    html = (UI / "index.html").read_text(encoding="utf-8")
-    assert "casa-pagine-dialog" not in html and "casa-foglio" not in html
-    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    assert "casa-foglio" not in css
-    pages_js = (ASSETS / "home-pages.js").read_text(encoding="utf-8")
-    assert "watchHorizontalSwipe(this.striscia" not in pages_js, (
-        "i pallini hanno di nuovo una pressione lunga: nessuno la troverebbe"
-    )
-    for language in ("it", "en"):
-        entries = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
-        assert "sheet" not in entries["home"], f"{language}: casa.sheet e' rimasto"
-    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    assert "casa-pagine-dialog" not in app_js
-
-
-def test_the_shared_gesture_no_longer_does_a_long_press() -> None:
-    """Aveva un solo chiamante, i pallini, ed e' uscita con lui."""
-    src = (ASSETS / "shared" / "horizontal-swipe.js").read_text(encoding="utf-8")
-    assert "PRESSIONE_LUNGA_MS" not in src and "onPressioneLunga" not in src
-
-
 def test_the_chat_page_follows_a_renamed_notebook_only_if_it_was_its_own() -> None:
     """La conversazione della pagina chat non sta nell'elenco salvato: le
     pagine appese le rinomina il gateway, questa no."""

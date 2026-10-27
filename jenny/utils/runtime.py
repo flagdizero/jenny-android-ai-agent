@@ -261,9 +261,9 @@ def workspace_violation_signature(
             return _normalize_violation_target(val.strip())
 
     if tool_name == "python_exec":
-        cmd = str(arguments.get("command") or arguments.get("code") or "").strip()
-        if cmd:
-            match = _OUTSIDE_PATH_PATTERN.search(cmd)
+        code = str(arguments.get("code") or "").strip()
+        if code:
+            match = _OUTSIDE_PATH_PATTERN.search(code)
             if match:
                 return _normalize_violation_target(match.group(1))
         cwd = str(arguments.get("working_dir") or "").strip()

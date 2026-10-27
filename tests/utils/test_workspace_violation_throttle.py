@@ -27,31 +27,31 @@ def test_signature_for_filesystem_tools_uses_path_argument():
     assert "/users/x/downloads/01.md" in sig_a
 
 
-def test_signature_for_exec_extracts_first_absolute_path_in_command():
+def test_signature_for_python_exec_extracts_first_absolute_path_in_code():
     sig = workspace_violation_signature(
         "python_exec",
-        {"command": "cat /Users/x/Downloads/01.md && echo done"},
+        {"code": "print(open('/Users/x/Downloads/01.md').read())\nprint('done')"},
     )
     assert sig is not None
     assert "/users/x/downloads/01.md" in sig
 
 
 def test_signature_collides_across_filesystem_and_exec_for_same_target():
-    """LLM bypass loops jump tools (read_file -> exec cat). Throttle must
-    treat both attempts as targeting the same outside resource."""
+    """LLM bypass loops jump tools (read_file -> python_exec open). Throttle
+    must treat both attempts as targeting the same outside resource."""
     fs_sig = workspace_violation_signature(
         "read_file", {"path": "/Users/x/Downloads/01.md"}
     )
     exec_sig = workspace_violation_signature(
-        "python_exec", {"command": "cat /Users/x/Downloads/01.md"}
+        "python_exec", {"code": "open('/Users/x/Downloads/01.md').read()"}
     )
     assert fs_sig == exec_sig
 
 
-def test_signature_falls_back_to_working_dir_when_no_absolute_in_command():
+def test_signature_falls_back_to_working_dir_when_no_absolute_in_code():
     sig = workspace_violation_signature(
         "python_exec",
-        {"command": "ls -la", "working_dir": "/etc"},
+        {"code": "import os\nprint(os.listdir('.'))", "working_dir": "/etc"},
     )
     assert sig is not None
     assert "/etc" in sig
@@ -59,7 +59,7 @@ def test_signature_falls_back_to_working_dir_when_no_absolute_in_command():
 
 def test_signature_is_none_for_unknown_tool_with_no_path():
     assert workspace_violation_signature("web_search", {"query": "anything"}) is None
-    assert workspace_violation_signature("python_exec", {"command": "echo hello"}) is None
+    assert workspace_violation_signature("python_exec", {"code": "print('hello')"}) is None
 
 
 def test_repeated_workspace_violation_returns_none_within_budget():
@@ -101,7 +101,7 @@ def test_repeated_workspace_violation_independent_per_target():
 
 
 def test_repeated_workspace_violation_collapses_tool_switching():
-    """LLM switches from read_file to exec cat then to python -c open(...)
+    """LLM switches from read_file to python_exec, then rewrites the code,
     against the same path; the throttle must escalate on the third attempt."""
     counts: dict[str, int] = {}
 
@@ -109,11 +109,11 @@ def test_repeated_workspace_violation_collapses_tool_switching():
         "read_file", {"path": "/Users/x/Downloads/01.md"}, counts,
     )
     repeated_workspace_violation_error(
-        "python_exec", {"command": "cat /Users/x/Downloads/01.md"}, counts,
+        "python_exec", {"code": "open('/Users/x/Downloads/01.md').read()"}, counts,
     )
     third = repeated_workspace_violation_error(
         "python_exec",
-        {"command": "python3 -c \"open('/Users/x/Downloads/01.md').read()\""},
+        {"code": "from pathlib import Path\nPath('/Users/x/Downloads/01.md').read_text()"},
         counts,
     )
     assert third is not None
