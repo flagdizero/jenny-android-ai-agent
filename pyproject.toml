@@ -44,9 +44,11 @@ dependencies = [
 # `asyncssh` alza il server SSH in-process dei test (su Android c'e' jsch),
 # `cryptography` fa da backend ai test del backup cifrato (su Android
 # javax.crypto), `pillow` serve a tests/webui/test_mascot_layer_sources.py.
+# `pytest-xdist` fa girare la suite su più processi (`pytest -n auto`).
 dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
+    "pytest-xdist==3.8.0",
     "ruff==0.15.18",
     "asyncssh==2.24.0",
     "cryptography==50.0.1",
@@ -110,6 +112,13 @@ testpaths = ["tests"]
 # e copre gli avvisi che *vengono* emessi — non perché sia stato dimostrato su
 # questo albero.
 addopts = ["--strict-markers", "--strict-config"]
+# Le cartelle ``tmp_path`` dei test passati si cancellano a fine corsa, ognuna
+# nel processo che l'ha creata. Una corsa intera ne lascia circa 4 GB in
+# 155.000 file (molti test estraggono il workspace vero, WebUI compresa), e con
+# il default pytest le cancellava all'avvio della corsa dopo, tutte nel processo
+# principale: decine di secondi prima del primo test. Restano quelle dei
+# test falliti, che sono le uniche che si guardano.
+tmp_path_retention_policy = "failed"
 
 [tool.coverage.run]
 source = ["jenny"]

@@ -984,13 +984,15 @@ async def test_rollback_and_undo_each_append_a_line_to_todays_journal(
 ) -> None:
     """Il diario non torna indietro (append-only): dopo un ritorno, e dopo il suo
     annullamento, il codice ci aggiunge una riga in coda che dice cos'è successo."""
-    from datetime import datetime
-
+    from jenny.plan.driver import _journal_now
     from jenny.utils.wiki_paths import journal_page_name
 
     plan = await _finished(driver, workspace)
     nb = workspace / "wikis" / "piante"
-    page = nb / "raw" / "journal" / journal_page_name(datetime.now().astimezone().date())
+    # Il giorno dell'orologio del diario (il fuso configurato, UTC fuori da
+    # Android), non quello del Mac: con l'ora locale il test cercava la pagina
+    # di domani tra mezzanotte e l'una, e falliva ogni notte.
+    page = nb / "raw" / "journal" / journal_page_name(_journal_now().date())
     before = page.read_text(encoding="utf-8") if page.exists() else ""
     preview = await driver.rollback_preview(plan.id)
     await driver.rollback(plan.id, [], preview["expect_end"])
