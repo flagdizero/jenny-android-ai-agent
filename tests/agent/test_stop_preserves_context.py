@@ -29,18 +29,15 @@ def _make_loop(tmp_path: Path) -> AgentLoop:
 class TestStopPreservesContext:
     """Verify that /stop restores partial context via checkpoint."""
 
-    def test_restore_checkpoint_method_exists(self, tmp_path):
-        """AgentLoop should have _restore_runtime_checkpoint."""
-        loop = _make_loop(tmp_path)
-        assert hasattr(loop, "_restore_runtime_checkpoint")
-
     def test_checkpoint_key_constant(self, tmp_path):
-        """The runtime checkpoint key should be defined."""
+        """The runtime checkpoint key is persisted in session metadata on the
+        phone: renaming it would silently drop every saved checkpoint."""
         loop = _make_loop(tmp_path)
         assert loop._RUNTIME_CHECKPOINT_KEY == "runtime_checkpoint"
 
-    def test_cancel_dispatch_restores_checkpoint(self, tmp_path):
-        """When a task is cancelled, the checkpoint should be restored."""
+    def test_restore_turns_the_checkpoint_into_history(self, tmp_path):
+        """_restore_runtime_checkpoint (what a cancelled turn calls) writes the
+        checkpoint's assistant message and tool results into the session."""
         loop = _make_loop(tmp_path)
         session = MagicMock()
         session.metadata = {

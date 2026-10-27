@@ -396,7 +396,7 @@ def test_the_workshop_no_longer_carries_a_wiki_of_its_own() -> None:
     html = WORKSHOP.read_text(encoding="utf-8")
     for node in ('id="view-wiki"', 'id="view-graph"', 'id="drawer-audit"',
                  'id="drawer-files"', 'id="wiki-feedback-dialog"'):
-        assert node not in html, f"{node} e' tornato in officina.html"
+        assert node not in html, f"{node} e' tornato in workshop.html"
 
     from jenny.utils.android_assets import _UI_MANIFEST
 
@@ -426,7 +426,7 @@ def test_the_shell_no_longer_loads_a_library_at_every_boot() -> None:
     html = WORKSHOP.read_text(encoding="utf-8")
     for heavy in ("katex", "mermaid", "d3.min.js"):
         assert heavy not in html, (
-            f"officina.html carica {heavy} all'avvio: si carica quando serve, "
+            f"workshop.html carica {heavy} all'avvio: si carica quando serve, "
             f"non a ogni partenza"
         )
     home = (ASSETS.parent / "index.html").read_text(encoding="utf-8")

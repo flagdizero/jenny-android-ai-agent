@@ -23,8 +23,17 @@ def _make_loop(tmp_path: Path, extract_document_text: bool = True) -> AgentLoop:
     )
 
 
-def test_should_extract_document_text_defaults_true(tmp_path: Path) -> None:
-    loop = _make_loop(tmp_path)
+def test_should_extract_document_text_is_off_by_default(tmp_path: Path) -> None:
+    """Il default vero, quello di ``AgentLoop`` e della config: spento. Il
+    ``_make_loop`` di questo file lo accende, per le prove che seguono."""
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
+    assert loop._should_extract_document_text() is False
+
+
+def test_should_extract_document_text_respects_config_true(tmp_path: Path) -> None:
+    loop = _make_loop(tmp_path, extract_document_text=True)
     assert loop._should_extract_document_text() is True
 
 
@@ -74,7 +83,7 @@ def test_prepare_message_media_hybrid_references_oversized_doc(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_state_restore_extracts_documents_by_default(
+async def test_state_restore_extracts_documents_when_enabled(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

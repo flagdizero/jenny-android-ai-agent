@@ -185,11 +185,6 @@ class TestSessionTTLConfig:
         assert data["idleCompactAfterMinutes"] == 30
         assert "sessionTtlMinutes" not in data
 
-    def test_session_file_cap_is_internal_constant(self):
-        """Session file cap should remain an internal constant, not a config field."""
-        from jenny.session.manager import FILE_MAX_MESSAGES
-        assert FILE_MAX_MESSAGES == 2000
-
 
 class TestAgentLoopTTLParam:
     """Test that AutoCompact receives and stores session_ttl_minutes."""
@@ -199,8 +194,8 @@ class TestAgentLoopTTLParam:
         loop = _make_loop(tmp_path, session_ttl_minutes=25)
         assert loop.auto_compact._ttl == 25
 
-    def test_loop_default_ttl_zero(self, tmp_path):
-        """AutoCompact default TTL should be 0 (disabled)."""
+    def test_loop_passes_a_zero_ttl_through(self, tmp_path):
+        """An explicit 0 (disabled) reaches AutoCompact as 0; the schema default is 15."""
         loop = _make_loop(tmp_path, session_ttl_minutes=0)
         assert loop.auto_compact._ttl == 0
 

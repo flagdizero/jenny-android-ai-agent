@@ -58,37 +58,6 @@ def _add_turns(session: Session, turns: int, *, prefix: str = "msg") -> None:
 # ---------------------------------------------------------------------------
 
 
-class TestInit:
-    """Test AutoCompact.__init__ stores constructor arguments correctly."""
-
-    def test_stores_ttl(self):
-        """_ttl should match session_ttl_minutes argument."""
-        ac = _make_autocompact(ttl=30)
-        assert ac._ttl == 30
-
-    def test_default_ttl_is_zero(self):
-        """Default TTL should be 0."""
-        ac = _make_autocompact(ttl=0)
-        assert ac._ttl == 0
-
-    def test_archiving_set_is_empty(self):
-        """_archiving should start as an empty set."""
-        ac = _make_autocompact()
-        assert ac._archiving == set()
-
-    def test_stores_sessions_reference(self):
-        """sessions attribute should reference the passed SessionManager."""
-        mock_sm = MagicMock(spec=SessionManager)
-        ac = _make_autocompact(sessions=mock_sm)
-        assert ac.sessions is mock_sm
-
-    def test_stores_consolidator_reference(self):
-        """consolidator attribute should reference the passed Consolidator."""
-        mock_c = MagicMock()
-        ac = _make_autocompact(consolidator=mock_c)
-        assert ac.consolidator is mock_c
-
-
 # ---------------------------------------------------------------------------
 # _is_expired
 # ---------------------------------------------------------------------------

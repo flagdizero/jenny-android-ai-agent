@@ -424,7 +424,7 @@ def test_the_sheet_is_actually_in_the_page() -> None:
     for node in ('id="launcher-sheet"', 'id="launcher-scrim"', 'id="launcher-list"',
                  'id="launcher-search"', 'id="launcher-title"', 'id="launcher-close"',
                  'id="launcher-handle-row"'):
-        assert node in html, f"{node} manca da officina.html: il foglio non esiste più"
+        assert node in html, f"{node} manca da workshop.html: il foglio non esiste più"
     # L'unico ingresso. Era lo slot Apps del dock, poi una porta dentro Mani;
     # dal 21/09/2026 è il pulsante accanto alla graffetta del composer, e la
     # Console è a un tocco da ogni cassetto (v. il banco dell'invariante).
@@ -684,8 +684,8 @@ def test_the_sheet_itself_shows_no_focus_ring() -> None:
 def test_no_skills_in_the_drawer() -> None:
     """Il cassetto è un lanciatore, e le skill non si lanciano: toccarne una
     apre una scheda o un file. Mescolarle alle app rifaceva, un livello più in
-    là, il difetto 01 del rilievo — un solo elenco per nature diverse. Restano
-    nella scheda Apps; dove vadano davvero è ancora da decidere.
+    là, il difetto 01 del rilievo — un solo elenco per nature diverse. (La
+    scheda Apps dove stavano è uscita il 21/09.)
     """
     body = _method(_src("shared/apps-source.js"), "launcherEntries")
     assert "for (const skill of this.skills)" not in body
