@@ -139,11 +139,10 @@ def _retire(session: _Session) -> None:
             pass
 
 
-def _free_slot(max_sessions: int) -> int | None:
-    for slot in range(max(1, max_sessions)):
-        if slot not in _BUSY_SLOTS:
-            return slot
-    return None
+def _free_slot(max_sessions: int, keep_free: int = 0) -> int | None:
+    """Uno slot libero, purché ne restino liberi altri ``keep_free``."""
+    free = [slot for slot in range(max(1, max_sessions)) if slot not in _BUSY_SLOTS]
+    return free[0] if len(free) > keep_free else None
 
 
 def _release_slot(slot: int | None, epoch: int) -> None:
@@ -155,7 +154,7 @@ def _release_slot(slot: int | None, epoch: int) -> None:
             fut.set_result(None)
 
 
-async def _take_slot(max_sessions: int, wait_s: float) -> int | None:
+async def _take_slot(max_sessions: int, wait_s: float, keep_free: int = 0) -> int | None:
     """Prende uno slot libero, aspettando fino a ``wait_s``; ``None`` se non arriva.
 
     Tutto sul thread del loop: fra il controllo e la presa non c'e' un
@@ -163,7 +162,7 @@ async def _take_slot(max_sessions: int, wait_s: float) -> int | None:
     """
     deadline = time.monotonic() + max(0.0, wait_s)
     while True:
-        slot = _free_slot(max_sessions)
+        slot = _free_slot(max_sessions, keep_free)
         if slot is not None:
             _BUSY_SLOTS.add(slot)
             return slot
@@ -307,6 +306,7 @@ async def _get_browser(
     idle_s: int = 0,
     max_sessions: int = 3,
     slot_wait_s: float = 0.0,
+    keep_free: int = 0,
 ) -> Any:
     """Costruisce o restituisce la WebView della sessione. Chiamato **dentro** il suo lucchetto.
 
@@ -315,7 +315,7 @@ async def _get_browser(
     if session.instance is not None:
         return session.instance
     bridge_cls = _resolve_bridge_class()
-    slot = await _take_slot(max_sessions, slot_wait_s)
+    slot = await _take_slot(max_sessions, slot_wait_s, keep_free)
     if slot is None:
         return None
     try:
@@ -466,6 +466,7 @@ async def _call_locked(
     idle_s: int = 0,
     max_sessions: int = 3,
     slot_wait_s: float = 0.0,
+    keep_free: int = 0,
 ) -> dict[str, Any]:
     """Chiama il bridge fuori dal loop, con un fermo indipendente. Lucchetto gia' preso.
 
@@ -477,7 +478,7 @@ async def _call_locked(
     Senza slot libero torna un errore con ``no_slot``: il ripiego di
     ``web_fetch`` lo legge per saltare, il modello lo legge come frase.
     """
-    bridge = await _get_browser(session, context, idle_s, max_sessions, slot_wait_s)
+    bridge = await _get_browser(session, context, idle_s, max_sessions, slot_wait_s, keep_free)
     if bridge is None:
         return {"error": _no_slot_error(max_sessions, slot_wait_s), "no_slot": True}
     session.last_use = time.monotonic()
@@ -609,12 +610,18 @@ async def read_page_once(
     except Exception:
         return {"skipped": "browser bridge unavailable"}
     max_sessions = cfg.max_sessions
-    if _free_slot(max_sessions) is None:
+    # L'ultimo slot libero resta a ``browser_open``: i ripieghi lo prendevano
+    # senza aspettare, e un aiutante che apriva una pagina aspettava 60 s
+    # (``_SLOT_WAIT_S``) e poi rinunciava (4 volte in 18 prove su s22).
+    keep_free = 1 if max_sessions > 1 else 0
+    if _free_slot(max_sessions, keep_free) is None:
         return {"skipped": "no free browser session"}
     session = _state(f"{owner}#fetch-{next(_FETCH_SEQ)}")
     try:
         async with session.lock:
-            kw: dict[str, Any] = {"timeout": timeout, "max_sessions": max_sessions}
+            kw: dict[str, Any] = {
+                "timeout": timeout, "max_sessions": max_sessions, "keep_free": keep_free,
+            }
             opened = await _call_locked(session, context, "open", url, timeout, **kw)
             if opened.get("no_slot"):
                 return {"skipped": "no free browser session"}

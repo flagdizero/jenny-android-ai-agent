@@ -459,6 +459,39 @@ class TestReadPageOnce:
         assert holder["bridge"].closed == 1
         assert browser._BUSY_SLOTS == set()
 
+    async def test_fetches_leave_the_last_slot_to_browser_open(self, monkeypatch):
+        """I ripieghi prendevano anche l'ultimo slot, e un aiutante che apriva una
+        pagina aspettava 60 s e rinunciava (4 volte in 18 prove su s22)."""
+        _allow_url(monkeypatch)
+        monkeypatch.setattr(browser, "_SLOT_WAIT_S", 5)
+        release = threading.Event()
+
+        class Slow(FakeBridge):
+            def read(self, ref, max_chars, timeout):
+                release.wait(2)
+                return super().read(ref, max_chars, timeout)
+
+        holder = _install(monkeypatch, Slow)
+        cfg = AndroidWebBrowserConfig(max_sessions=3)
+        fetches = [
+            asyncio.create_task(browser.read_page_once(
+                object(), f"https://esempio.test/{i}", owner="main", cfg=cfg,
+                max_chars=100, timeout=7,
+            ))
+            for i in range(3)
+        ]
+        await asyncio.sleep(0.1)
+        assert len(holder["all"]) == 2
+        started = time.monotonic()
+        out = await _tool(BrowserOpenTool, owner="aaa", max_sessions=3).execute(
+            url="https://uno.test/"
+        )
+        assert time.monotonic() - started < 0.5
+        assert "ref=1:e0" in out
+        release.set()
+        pages = await asyncio.gather(*fetches)
+        assert sum("skipped" in page for page in pages) == 1
+
     async def test_two_fetches_of_one_agent_do_not_share_a_page(self, monkeypatch):
         holder = _install(monkeypatch)
         cfg = AndroidWebBrowserConfig()
