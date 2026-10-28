@@ -195,9 +195,16 @@ def test_the_body_is_a_frame_with_one_zone_per_question() -> None:
     assert positions == sorted(positions), f"le zone del telaio sono fuori ordine: {order}"
 
     css = CSS.read_text(encoding="utf-8")
-    frame = re.search(r"\.oc-detail-body \{(.*?)\n\}", css, re.S)
-    assert frame, "la regola .oc-detail-body non è stata trovata"
+    # Col genitore nel selettore: la modale è anche un `.oc-sheet-inner`, e
+    # `.oc-sheet-inner > * { flex: none }` viene dopo nel file. A pari peso vinceva
+    # lei, il corpo cresceva quanto il contenuto e la lista non scorreva più.
+    assert re.search(r"\.oc-sheet-inner > \* \{ flex: none; \}", css), (
+        "la regola dei fogli è cambiata: rivedi se il corpo della modale la batte ancora"
+    )
+    frame = re.search(r"\n\.oc-detail-inner > \.oc-detail-body \{(.*?)\n\}", css, re.S)
+    assert frame, "la regola del corpo deve pesare più di .oc-sheet-inner > *"
     assert "flex-direction: column" in frame.group(1), "il corpo non è un telaio"
+    assert "min-height: 0" in frame.group(1), "senza min-height: 0 la lista non scorre"
     # L'unica zona elastica è lo stream: le altre tre non si allungano, quindi la
     # lista è in vista per costruzione e non serve nessuna ginnastica di scroll.
     for zone, rule in (("sa-sum", "flex-shrink: 0"), ("sa-focus", "flex-shrink: 0"),

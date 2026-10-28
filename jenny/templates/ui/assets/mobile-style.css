@@ -4076,8 +4076,12 @@ dialog.image-lightbox::backdrop { background: transparent; }
    sola di esse (la lista di attività) è elastica e scorre. `overflow-y: auto`
    resta come rete — una piega aperta su un incarico lungo può sfondare il tetto
    della modale — ma nel caso normale qui non si scorre affatto, ed è ciò che
-   toglie il ballo fra tre scroll annidati della prima versione. */
-.oc-detail-body {
+   toglie il ballo fra tre scroll annidati della prima versione.
+   Il selettore porta il genitore perché la modale è anche un `.oc-sheet-inner`,
+   e `.oc-sheet-inner > * { flex: none }`, più in basso nel file, a pari peso
+   vinceva: il corpo cresceva quanto il contenuto, il foglio lo tagliava, e la
+   lista non scorreva più (dal 10/10/2026 al 28/10/2026). */
+.oc-detail-inner > .oc-detail-body {
   flex: 1;
   min-height: 0;
   display: flex;
