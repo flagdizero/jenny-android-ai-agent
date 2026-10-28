@@ -42,6 +42,8 @@ _METHODS = (
     "_textOf",
     "_appendAssistant",
     "_resetTurn",
+    "_markPassing",
+    "_dropPassing",
     "_turnEnd",
     "_ensureTurn",
 )
@@ -97,6 +99,7 @@ function makeChat() {
     el: makeNode(),
     _empty: false,
     _source: new WeakMap(),
+    _passing: [], _lastSegment: null, _blockSource: new WeakMap(),
     _userSent: new WeakMap(),
     _seconds: null,
     turnNode: null,

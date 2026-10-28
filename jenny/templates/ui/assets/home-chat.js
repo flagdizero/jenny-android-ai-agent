@@ -185,6 +185,20 @@ export class HomeChat {
        serve quando una risposta si incolla altrove. `WeakMap` perche' la
        chiave e' il nodo, e una ricarica del filo li butta tutti. */
     this._source = new WeakMap();
+    /* Lo stesso markdown, per blocco: togliere un blocco di passaggio deve
+       toglierlo anche da cio' che Copia copia. */
+    this._blockSource = new WeakMap();
+    /* **La frase fra un passo e l'altro.** Il testo che Jenny scrive prima di
+       uno strumento («ok, la cerco e te la metto in un file») resta a schermo
+       mentre lo strumento gira, e se ne va quando arriva il testo dopo — o a
+       fine turno. E' la regola della rilettura: `transcript_replay.py`
+       (`demote_interrupted_assistant`) fa di quel testo un pensiero, e la casa
+       non lo mostra. Dal vivo restavano tutte, una sotto l'altra: sul s22 il
+       28/10/2026 una ricerca ne lasciava quattro che dicevano la stessa cosa,
+       e riaprendo l'app ne restava una. `_lastSegment` e' l'ultimo blocco
+       chiuso da `_streamEnd`, che diventa di passaggio se lo segue un passo. */
+    this._lastSegment = null;
+    this._passing = [];
     /* L'allegato dietro ogni pastiglia di file: il percorso che il ponte
        nativo sa aprire non sta nell'URL firmato (v. `_openMediaFile`). */
     this._files = new WeakMap();
@@ -662,7 +676,8 @@ export class HomeChat {
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
       renderRich(this.blockNode);
-      this._register(this.turnNode, finalText);
+      this._register(this.turnNode, finalText, this.blockNode);
+      this._lastSegment = this.blockNode;
       this.band?.refresh();
     }
     this.blockNode = null;
@@ -690,19 +705,31 @@ export class HomeChat {
     if (notes.length) this._pendingJournal.push(...notes);
     const moves = moveOffers(msg.tool_events);
     if (moves.length) this._pendingMoves.push(...moves);
+    /* Un passo: il testo scritto subito prima diventa di passaggio. Il testo
+       di un frame `progress` lo e' da se' (la rilettura ne fa una riga di
+       strumento, che la casa butta): si vede finche' non arriva il seguito. */
+    const step = msg.kind === 'progress' || msg.kind === 'tool_hint';
+    if (step && (msg.tool_events?.length || msg.text)) {
+      if (this.buffer) this._streamEnd();
+      this._markPassing(this._lastSegment);
+    }
     // Un suggerimento di strumento e' esattamente cio' che la casa non mostra.
     if (msg.kind === 'tool_hint') return;
     // L'annuncio o il resoconto di un lavoro che e' gia' una bolla: la bolla
     // dice la stessa cosa, e meglio.
     if (msg.work_id && this.claimsWork?.(msg.work_id)) return;
-    if (msg.text) {
+    if (msg.text || msg.media_urls?.length) {
       if (this.buffer) this._streamEnd();
+      this._dropPassing();
+    }
+    if (msg.text) {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
       renderRich(block);
       this._ensureTurn().appendChild(block);
-      this._register(this.turnNode, msg.text);
+      this._register(this.turnNode, msg.text, block);
+      if (step) this._markPassing(block);
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
     if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
@@ -821,6 +848,14 @@ export class HomeChat {
     if (this._frame !== null) {
       this._cancelRender();
       this._flushDelta();
+    }
+    const dropped = this._dropPassing();
+    this._lastSegment = null;
+    /* Un turno di soli passi, senza niente dopo: come nella rilettura, non e'
+       una bolla vuota con l'ora sotto. E' niente. */
+    if (dropped && this.turnNode && !this.turnNode.children.length) {
+      this.turnNode.remove();
+      this.turnNode = null;
     }
     if (this.turnNode) {
       const closed = this.turnNode;
@@ -1095,11 +1130,39 @@ export class HomeChat {
 
   /* Il markdown di una bolla si accumula: un turno testo → strumento → testo
      apre piu' blocchi, e copiarne uno solo sarebbe copiare meta' risposta. */
-  _register(node, text) {
+  _register(node, text, block = null) {
     const clean = String(text || '').trim();
     if (!node || !clean) return;
     const before = this._source.get(node);
     this._source.set(node, before ? `${before}\n\n${clean}` : clean);
+    if (block) this._blockSource.set(block, clean);
+  }
+
+  /** Il blocco resta a schermo finche' non arriva qualcosa dopo (v. `_passing`). */
+  _markPassing(block) {
+    if (block && block.isConnected && !this._passing.includes(block)) this._passing.push(block);
+    if (block === this._lastSegment) this._lastSegment = null;
+  }
+
+  /** Se ne vanno le frasi di passaggio, e con loro il loro pezzo di Copia.
+   *  Dice se ce n'erano. */
+  _dropPassing() {
+    if (!this._passing.length) return false;
+    const turns = new Set();
+    for (const block of this._passing) {
+      if (block.parentNode) turns.add(block.parentNode);
+      block.remove();
+    }
+    this._passing = [];
+    for (const turn of turns) {
+      const kept = [...turn.querySelectorAll('.home-block')]
+        .map((b) => this._blockSource.get(b))
+        .filter(Boolean);
+      if (kept.length) this._source.set(turn, kept.join('\n\n'));
+      else this._source.delete(turn);
+    }
+    this.band?.refresh();
+    return true;
   }
 
   /* Il sorgente se c'e', altrimenti la rete di `innerText`: perde le
@@ -1220,6 +1283,8 @@ export class HomeChat {
   /** Il blocco di testo del segmento di stream in corso. */
   _ensureBlock() {
     if (!this.blockNode) {
+      // Il seguito e' arrivato: la frase di passaggio lascia il posto.
+      this._dropPassing();
       this.blockNode = document.createElement('div');
       this.blockNode.className = 'home-block';
       this._ensureTurn().appendChild(this.blockNode);

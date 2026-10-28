@@ -44,6 +44,8 @@ _METHODS = (
     "_ensureBlock",
     "_ensureTurn",
     "_resetTurn",
+    "_markPassing",
+    "_dropPassing",
 )
 
 _HARNESS = """
@@ -91,6 +93,7 @@ function makeChat() {
     pager: { adopt() {}, ensureReach() {} },
     turnNode: null, blockNode: null, buffer: '', turnId: null,
     _empty: false, _seconds: null, _frame: null, _batching: false,
+    _passing: [], _lastSegment: null, _blockSource: new WeakMap(),
     _shownKey: null, _reading: 0, _readGen: 0, _live: new WeakSet(), _anchor: null,
     syncEmpty() {}, scrollToBottom() {}, _follow() {}, _tailOf() {}, _register() {},
     _appendUser(text, origin, media, toTop = false) {
