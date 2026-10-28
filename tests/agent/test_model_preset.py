@@ -80,3 +80,45 @@ def test_initial_model_preset_unknown_falls_back(tmp_path):
     )
     assert loop.model_preset is None
     assert loop.model == "test-model"
+
+
+async def _effort_sent(loop) -> object:
+    """Il ``reasoning_effort`` che un turno di Jenny manda al provider (assente: ``"-"``)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jenny.providers.base import LLMResponse
+
+    loop.provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok"))
+    loop.tools.get_definitions = MagicMock(return_value=[])
+    await loop._run_agent_loop([])
+    return loop.provider.chat_with_retry.call_args.kwargs.get("reasoning_effort", "-")
+
+
+async def test_jenny_reasoning_reaches_her_turn(tmp_path):
+    """Il suo ragionamento va nella richiesta; senza, decide il provider (per tutti)."""
+    low = make_loop(tmp_path, bare=True, patch_deps=True, main_reasoning_effort="low")
+    assert await _effort_sent(low) == "low"
+    same = make_loop(tmp_path, bare=True, patch_deps=True, main_reasoning_effort=None)
+    assert await _effort_sent(same) == "-"
+
+
+async def test_a_preset_with_its_own_reasoning_wins_over_jennys(tmp_path):
+    """«deep» chiede ``high`` a tutti: Jenny non lo smentisce col suo ``low``."""
+    loop = make_loop(
+        tmp_path, bare=True, model_presets=PRESETS, patch_deps=True, main_reasoning_effort="low",
+    )
+    await loop.set_model_preset("deep")
+    assert await _effort_sent(loop) == "-"
+    assert loop.provider.generation.reasoning_effort == "high"
+    # «fast» non sceglie il ragionamento: torna quello di Jenny.
+    await loop.set_model_preset("fast")
+    assert await _effort_sent(loop) == "low"
+
+
+def test_jennys_reasoning_is_low_by_default_and_null_means_same_as_helpers():
+    from jenny.config.schema import Config
+
+    assert Config().agents.defaults.main_reasoning_effort == "low"
+    config = Config.model_validate({"agents": {"defaults": {"mainReasoningEffort": None}}})
+    assert config.agents.defaults.main_reasoning_effort is None
+    assert config.agents.defaults.reasoning_effort == "medium"

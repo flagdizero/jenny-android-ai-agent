@@ -119,6 +119,19 @@ def test_identical_settings_still_short_circuit(container_with_agent, monkeypatc
     agent._apply_provider_switch.assert_not_called()
 
 
+def test_jennys_reasoning_reaches_the_live_agent(container_with_agent, monkeypatch) -> None:
+    """Il ragionamento della sola Jenny vive sull'agente, non sul provider: arriva a caldo."""
+    container, agent = container_with_agent
+    config = _config()
+    config.agents.defaults.main_reasoning_effort = "medium"
+    _patch_reload(monkeypatch, config=config)
+
+    container._on_settings_changed()
+
+    assert agent.main_reasoning_effort == "medium"
+    assert agent._apply_provider_switch.call_args.kwargs["publish_update"] is False
+
+
 def test_model_change_still_publishes_the_switch(container_with_agent, monkeypatch) -> None:
     """Un cambio di modello va annunciato; uno dei soli parametri no."""
     container, agent = container_with_agent

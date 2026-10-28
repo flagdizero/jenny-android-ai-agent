@@ -156,5 +156,9 @@ def provider_fingerprint(config: Config) -> str:
         "temperature": defaults.temperature,
         "max_tokens": defaults.max_tokens,
         "reasoning_effort": defaults.reasoning_effort,
+        # Quello della sola Jenny non tocca il provider, ma passa dallo stesso
+        # gancio: e' il modo in cui arriva a caldo all'agente vivo
+        # (``GatewayContainer._on_settings_changed``).
+        "main_reasoning_effort": defaults.main_reasoning_effort,
     }
     return json.dumps(payload, sort_keys=True, default=str)

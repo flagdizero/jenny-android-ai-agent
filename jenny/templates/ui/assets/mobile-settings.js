@@ -953,7 +953,10 @@ export class SettingsController {
       ${this._field(i18n.t('settings.maxTokens'), 'number', 'max_tokens', a.max_tokens || '', i18n.t('settings.maxTokensPlaceholder'))}
       ${this._field(i18n.t('settings.temperature'), 'number', 'temperature', a.temperature ?? '', i18n.t('settings.temperaturePlaceholder'))}
       ${this._select(i18n.t('settings.reasoningEffort'), 'reasoning_effort', a.reasoning_effort || '',
-        ['', 'low', 'medium', 'high'])}`;
+        ['', 'low', 'medium', 'high'])}
+      ${this._select(i18n.t('settings.mainReasoningEffort'), 'main_reasoning_effort',
+        a.main_reasoning_effort || '',
+        [{ v: '', t: i18n.t('settings.mainReasoningEffortSame') }, 'low', 'medium', 'high'])}`;
   }
 
   /** Le marche, un gruppo ciascuna: un'intestazione da 52 px (pallino, nome,
@@ -3125,7 +3128,8 @@ export class SettingsController {
 
   _wireSections() {
     // Active config fields → auto-save on change
-    for (const key of ['max_tokens', 'temperature', 'reasoning_effort', 'context_window_tokens']) {
+    for (const key of ['max_tokens', 'temperature', 'reasoning_effort', 'main_reasoning_effort',
+      'context_window_tokens']) {
       const el = this.contentEl.querySelector(`[data-key="${key}"]`);
       if (!el) continue;
       el.addEventListener('change', () => this._debouncedSave(key, el.value));

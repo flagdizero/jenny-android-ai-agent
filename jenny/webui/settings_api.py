@@ -927,6 +927,7 @@ def settings_payload(
             "context_window_options": list(_CONTEXT_WINDOW_TOKEN_OPTIONS),
             "temperature": effective_preset.temperature,
             "reasoning_effort": effective_preset.reasoning_effort,
+            "main_reasoning_effort": defaults.main_reasoning_effort,
             "timezone": defaults.timezone,
             "bot_name": defaults.bot_name,
             "bot_icon": defaults.bot_icon,
@@ -1103,15 +1104,16 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         defaults.temperature = temperature
         changed = True
 
-    reasoning_effort = _parse_reasoning_effort(
-        _query_first_alias(query, "reasoning_effort", "reasoningEffort")
-    )
-    if (
-        not isinstance(reasoning_effort, _Unset)
-        and defaults.reasoning_effort != reasoning_effort
+    # Il ragionamento di tutti e quello della sola Jenny. Per il secondo la
+    # stringa vuota non vuol dire «decide il provider» ma «come il primo».
+    for field, aliases in (
+        ("reasoning_effort", ("reasoning_effort", "reasoningEffort")),
+        ("main_reasoning_effort", ("main_reasoning_effort", "mainReasoningEffort")),
     ):
-        defaults.reasoning_effort = reasoning_effort
-        changed = True
+        effort = _parse_reasoning_effort(_query_first_alias(query, *aliases))
+        if not isinstance(effort, _Unset) and getattr(defaults, field) != effort:
+            setattr(defaults, field, effort)
+            changed = True
 
     # ``validate_timezone_name`` rifiuta i nomi IANA sconosciuti, e degrada ad
     # accettare se ``tzdata`` manca.

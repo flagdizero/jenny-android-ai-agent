@@ -289,6 +289,7 @@ class AgentLoop(
         initial_model_preset: str | None = None,
         ui_query: Any | None = None,
         orchestrator_mode: bool | None = None,
+        main_reasoning_effort: str | None = None,
     ):
         from jenny.config.schema import ToolsConfig
 
@@ -334,6 +335,10 @@ class AgentLoop(
             orchestrator_mode if orchestrator_mode is not None
             else defaults.orchestrator_mode
         )
+        # Il ragionamento dei turni di Jenny (``AgentDefaults.main_reasoning_effort``);
+        # ``None`` lascia quello del provider, che vale per tutti. Il gateway lo
+        # aggiorna a caldo (``GatewayContainer._on_settings_changed``).
+        self.main_reasoning_effort = main_reasoning_effort
         self.cron_service = cron_service
         # Checkpoint del workspace da prendere prima di un run di Dream, iniettato
         # dal ``GatewayContainer`` (che possiede il ``SnapshotService``) accanto al
@@ -530,6 +535,7 @@ class AgentLoop(
             model_presets_config=config.model_presets,
             initial_model_preset=initial_model_preset,
             orchestrator_mode=defaults.orchestrator_mode,
+            main_reasoning_effort=defaults.main_reasoning_effort,
             **extra,
         )
 
@@ -1679,6 +1685,7 @@ class AgentLoop(
                 # senza passare dalla FSM.
                 tools=tools or self.tools,
                 model=self.model,
+                reasoning_effort=self._turn_reasoning_effort(),
                 max_iterations=self.max_iterations,
                 max_tool_result_chars=self.max_tool_result_chars,
                 hook=hook,

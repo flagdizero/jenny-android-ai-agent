@@ -29,6 +29,7 @@ class ProviderPresetMixin:
         _active_preset: str | None
         consolidator: Consolidator
         context_window_tokens: int
+        main_reasoning_effort: str | None
         max_iterations: int
         model: str
         model_presets: dict[str, Any]
@@ -82,6 +83,18 @@ class ProviderPresetMixin:
     async def set_model_preset(self, name: str) -> None:
         """Switch model settings to a named preset for future turns."""
         self._apply_model_preset(name)
+
+    def _turn_reasoning_effort(self) -> str | None:
+        """Il ragionamento di un turno di Jenny; ``None`` lascia quello del provider.
+
+        Un preset attivo che sceglie il suo ``reasoning_effort`` vince: e' una
+        scelta del momento, fatta per tutti (``_apply_model_preset`` lo scrive
+        sul provider), e un'impostazione di fondo non deve smentirla.
+        """
+        preset = self.model_presets.get(self._active_preset) if self._active_preset else None
+        if preset is not None and self._preset_field(preset, "reasoning_effort") is not None:
+            return None
+        return self.main_reasoning_effort
 
     @staticmethod
     def _preset_field(preset: Any, key: str) -> Any:

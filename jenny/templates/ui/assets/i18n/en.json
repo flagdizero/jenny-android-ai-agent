@@ -225,6 +225,8 @@
     "temperature": "Temperature",
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Reasoning Effort",
+    "mainReasoningEffort": "Jenny's reasoning",
+    "mainReasoningEffortSame": "Same as helpers",
     "addProvider": "Add provider",
     "noProviders": "No providers configured.",
     "edit": "Edit",

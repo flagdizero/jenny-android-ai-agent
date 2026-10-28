@@ -148,6 +148,7 @@ class GatewayContainer:
             new_model = new_config.agents.defaults.model
             new_ctx = new_config.agents.defaults.context_window_tokens
             old_model = getattr(self._agent, "model", None)
+            self._agent.main_reasoning_effort = new_config.agents.defaults.main_reasoning_effort
             self._agent._apply_provider_switch(
                 new_provider, new_model, new_ctx,
                 # Un cambio dei soli parametri di generazione non è un cambio di

@@ -225,6 +225,8 @@
     "temperature": "Temperatura",
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Sforzo di ragionamento",
+    "mainReasoningEffort": "Ragionamento di Jenny",
+    "mainReasoningEffortSame": "Come gli aiutanti",
     "addProvider": "Aggiungi provider",
     "noProviders": "Nessun provider configurato.",
     "edit": "Modifica",
