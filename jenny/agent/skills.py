@@ -5,6 +5,8 @@ import os
 import re
 from pathlib import Path
 
+from loguru import logger
+
 from jenny.utils.path import atomic_write
 
 # Neutra sugli strumenti: le skill sempre attive arrivano anche
@@ -370,12 +372,25 @@ class SkillsLoader:
         elenco la legge, progetta l'app nel brief e segue le fasi con l'utente.
         Il 28/10/2026 sul s22 costava 30-40 s prima di ogni ``spawn``, piu' una
         domanda di conferma in piu'; e l'``app-builder`` la rilegge comunque.
+
+        Conta solo un tipo che esiste (``AGENT_TYPE_NAMES``): una skill che nomina
+        un aiutante che non c'e' resta a chi delega, che altrimenti non la
+        vedrebbe nessuno.
         """
-        return {
-            entry["name"]
-            for entry in self.list_skills(filter_unavailable=False)
-            if (self.get_skill_metadata(entry["name"]) or {}).get("helper")
-        }
+        from jenny.agent.agent_types import AGENT_TYPE_NAMES
+
+        hidden: set[str] = set()
+        for entry in self.list_skills(filter_unavailable=False):
+            helper = (self.get_skill_metadata(entry["name"]) or {}).get("helper")
+            if not helper:
+                continue
+            if helper in AGENT_TYPE_NAMES:
+                hidden.add(entry["name"])
+            else:
+                logger.warning(
+                    "Skill {} names an unknown helper {!r}; it stays visible", entry["name"], helper,
+                )
+        return hidden
 
     def get_always_skills(self) -> list[str]:
         """Get skills marked as always=true that meet requirements."""

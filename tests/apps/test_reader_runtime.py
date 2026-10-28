@@ -281,3 +281,27 @@ def test_http_says_who_it_is_and_why_it_was_refused(monkeypatch) -> None:
         mc.MicroHttp(["api.example.com"]).get_text("https://api.example.com/q")
     assert str(e.value) == "HTTP 403 from https://api.example.com/q: Please respect our robot policy"
     assert sent["ua"].startswith("Jenny/")
+
+
+def test_a_user_agent_from_the_reader_replaces_jennys(monkeypatch) -> None:
+    """Le maiuscole non contano: ``user-agent`` del lettore sostituisce, non affianca."""
+    import httpx
+
+    import jenny.security.network as net
+
+    sent = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent["ua"] = request.headers.get_list("user-agent")
+        return httpx.Response(200, text="ok")
+
+    def request(method, url, *, timeout, follow_redirects, **kw):
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            return client.request(method, url, **kw)
+
+    monkeypatch.setattr(net, "validate_app_server_target", lambda url: (True, ""))
+    monkeypatch.setattr(httpx, "request", request)
+    mc.MicroHttp(["api.example.com"]).get_text(
+        "https://api.example.com/q", headers={"user-agent": "MyReader/1"},
+    )
+    assert sent["ua"] == ["MyReader/1"]

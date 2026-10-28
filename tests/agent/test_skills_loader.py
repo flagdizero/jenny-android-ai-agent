@@ -475,3 +475,16 @@ def test_a_helper_skill_is_named_by_its_frontmatter(tmp_path: Path) -> None:
     assert "builder" in helpers
     assert "plain" not in helpers
 
+
+
+def test_a_helper_skill_naming_an_unknown_type_stays_visible(tmp_path: Path) -> None:
+    """Un tipo che non esiste: nessuno la leggerebbe, quindi resta a chi delega."""
+    workspace = tmp_path / "ws"
+    ws_skills = workspace / "skills"
+    ws_skills.mkdir(parents=True)
+    (ws_skills / "orphan").mkdir()
+    (ws_skills / "orphan" / "SKILL.md").write_text(
+        "---\nname: orphan\ndescription: Build it.\nhelper: app-bulder\n---\n\n# Orphan\n",
+        encoding="utf-8",
+    )
+    assert "orphan" not in SkillsLoader(workspace).get_helper_skills()

@@ -481,7 +481,11 @@ class MicroHttp:
         from jenny.security.fetch import JENNY_USER_AGENT
 
         self._check(url)
-        kwargs["headers"] = {"User-Agent": JENNY_USER_AGENT, **(kwargs.get("headers") or {})}
+        # ``httpx.Headers`` non guarda le maiuscole: un ``user-agent`` del
+        # chiamante sostituisce quello di Jenny invece di affiancarlo.
+        headers = httpx.Headers({"User-Agent": JENNY_USER_AGENT})
+        headers.update(kwargs.get("headers") or {})
+        kwargs["headers"] = headers
         try:
             resp = httpx.request(method, url, timeout=HTTP_TIMEOUT_S,
                                  follow_redirects=False, **kwargs)
