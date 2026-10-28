@@ -2317,7 +2317,12 @@ class AgentLoop(
         # (``enforce_role_alternation``) e il modello rispondeva alla domanda
         # precedente con i dati vecchi — il 02/10/2026 «ancora in corso» due
         # volte, e la sintesi mai consegnata.
+        # Un registro solo per la richiesta e per l'inventario del prompt, come
+        # nel turno dell'utente (``_build_initial_messages``): dicono la stessa
+        # cosa due volte, e devono venire dalla stessa fonte.
+        turn_tools = self._system_turn_tools(msg, key, silent=silent)
         messages = self.context.build_messages(
+            available_tools=(turn_tools or self.tools).tool_names,
             history=history,
             current_message=(
                 msg.content if followup_state in (None, FollowupState.NEW) else ""
@@ -2411,7 +2416,7 @@ class AgentLoop(
                 turn_token=turn_token,
                 # Il registro del loop meno i tool del piano che questo turno
                 # non puo' usare: un passo aperto li mostra, il resto no.
-                tools=self._system_turn_tools(msg, key),
+                tools=turn_tools,
             )
             final_content, tools_used, all_msgs, stop_reason, had_injections = run
         finally:
@@ -2540,19 +2545,34 @@ class AgentLoop(
                 logger.opt(exception=True).warning("Plan wake-up timers not closed")
         await super().shutdown(timeout_s=timeout_s)
 
-    def _system_turn_tools(self, msg: InboundMessage, key: str) -> ToolRegistry | None:
-        """Il registro di un turno di sistema: quello del piano, senza ``notebook`` fuori dai quaderni.
+    def _system_turn_tools(
+        self, msg: InboundMessage, key: str, *, silent: bool,
+    ) -> ToolRegistry | None:
+        """Il registro di un turno di sistema: quello del piano, meno cio' che il turno non usa.
 
-        Il percorso di sistema non passa da :meth:`_turn_tool_view`: il rientro di
-        un aiutante nella chat personale si portava dietro lo schema di
-        ``notebook``, che li' risponde soltanto «not from here».
+        Il percorso di sistema non passa da :meth:`_turn_tool_view`, ma ne toglie
+        gli stessi tool: ``notebook`` fuori dai quaderni (li' risponde soltanto
+        «not from here»), ``nothing_to_report`` in un turno visibile e ``screen``
+        fuori dal turno di un tocco sulla mascotte. Non e' solo pulizia: il
+        rientro di un aiutante che portava due tool in piu' del turno prima non
+        ritrovava niente nella cache del provider (0 token su ~21,7k sul s22 il
+        28/10/2026, 20,8k con lo stesso registro).
         """
-        tools = self._plan_system_tools(msg, key)
-        if is_project_session_key(key) or "notebook" not in self.tools.tool_names:
-            return tools
         from jenny.agent.tools.registry import ToolRegistryView
+        from jenny.runtime.screen import has_screen
 
-        return ToolRegistryView(tools or self.tools, lambda name, _tool: name == "notebook")
+        tools = self._plan_system_tools(msg, key)
+        hide = set()
+        if not silent:
+            hide.add("nothing_to_report")
+        if not has_screen(msg.metadata):
+            hide.add("screen")
+        if not is_project_session_key(key):
+            hide.add("notebook")
+        hide &= set(self.tools.tool_names)
+        if not hide:
+            return tools
+        return ToolRegistryView(tools or self.tools, lambda name, _tool: name in hide)
 
     def _hold_subagent_result(
         self,
