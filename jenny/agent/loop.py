@@ -1685,7 +1685,7 @@ class AgentLoop(
                 # senza passare dalla FSM.
                 tools=tools or self.tools,
                 model=self.model,
-                reasoning_effort=self._turn_reasoning_effort(),
+                reasoning_effort=self._turn_reasoning_effort((tools or self.tools).tool_names),
                 max_iterations=self.max_iterations,
                 max_tool_result_chars=self.max_tool_result_chars,
                 hook=hook,

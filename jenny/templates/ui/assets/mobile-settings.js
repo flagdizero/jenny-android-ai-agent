@@ -956,7 +956,10 @@ export class SettingsController {
         ['', 'low', 'medium', 'high'])}
       ${this._select(i18n.t('settings.mainReasoningEffort'), 'main_reasoning_effort',
         a.main_reasoning_effort || '',
-        [{ v: '', t: i18n.t('settings.mainReasoningEffortSame') }, 'low', 'medium', 'high'])}`;
+        [{ v: '', t: i18n.t('settings.mainReasoningEffortSame') }, 'low', 'medium', 'high'],
+        /* Col ragionamento di tutti spento, quello di Jenny non si applica
+           (`_turn_reasoning_effort`): la select lo dice restando ferma. */
+        { disabled: !a.reasoning_effort })}`;
   }
 
   /** Le marche, un gruppo ciascuna: un'intestazione da 52 px (pallino, nome,
@@ -2662,7 +2665,7 @@ export class SettingsController {
    *  salva e quel che si legge non sono la stessa cosa — un numero di token si
    *  salva «65536» e si legge «65 536», e senza i separatori nessuno conta le
    *  cifre. */
-  _select(label, key, value, options) {
+  _select(label, key, value, options, { disabled = false } = {}) {
     const opts = options.map(o => {
       const v = typeof o === 'object' ? o.v : o;
       const t = typeof o === 'object' ? o.t : o;
@@ -2670,7 +2673,7 @@ export class SettingsController {
     }).join('');
     return `<div class="settings-row">
       <label class="settings-label" for="settings-${key}">${label}</label>
-      <select class="settings-select" id="settings-${key}" data-key="${key}">${opts}</select>
+      <select class="settings-select" id="settings-${key}" data-key="${key}"${disabled ? ' disabled' : ''}>${opts}</select>
     </div>`;
   }
 
@@ -3132,7 +3135,12 @@ export class SettingsController {
       'context_window_tokens']) {
       const el = this.contentEl.querySelector(`[data-key="${key}"]`);
       if (!el) continue;
-      el.addEventListener('change', () => this._debouncedSave(key, el.value));
+      el.addEventListener('change', () => {
+        this._debouncedSave(key, el.value);
+        if (key !== 'reasoning_effort') return;
+        const main = this.contentEl.querySelector('[data-key="main_reasoning_effort"]');
+        if (main) main.disabled = !el.value;
+      });
     }
 
     this._wireWorkerSettings();

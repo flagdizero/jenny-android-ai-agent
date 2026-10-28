@@ -346,9 +346,11 @@ class AgentDefaults(Base):
     # su quello. Basso perche' delega: il lavoro che vuole pensiero lo fa
     # l'aiutante, e lei sceglie a chi darlo e riassume. Misurato il 28/10/2026
     # sul s22 (stesse tre richieste di app): da 16/10/12 s a 9/8/6 s prima che
-    # l'aiutante parta. Un preset che sceglie il suo ``reasoning_effort`` vale
-    # anche per lei (``AgentLoop._turn_reasoning_effort``). Campo nuovo: chi
-    # aggiorna lo riceve dal default, senza migrazione.
+    # l'aiutante parta. Vale solo nei turni in cui puo' delegare e non scrive un
+    # piano, e mai col ragionamento di tutti spento; un preset che sceglie il
+    # suo ``reasoning_effort`` vale anche per lei (tutto in
+    # ``AgentLoop._turn_reasoning_effort``). Campo nuovo: chi aggiorna lo
+    # riceve dal default, senza migrazione.
     main_reasoning_effort: str | None = "low"
     max_tool_iterations: int = 200
     # L'agente principale delega: tre slot reggono due lavori lunghi piu il

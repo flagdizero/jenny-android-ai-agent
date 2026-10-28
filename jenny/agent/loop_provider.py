@@ -8,6 +8,7 @@ non vengono scambiati a runtime (richiede riavvio gateway).
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -84,13 +85,26 @@ class ProviderPresetMixin:
         """Switch model settings to a named preset for future turns."""
         self._apply_model_preset(name)
 
-    def _turn_reasoning_effort(self) -> str | None:
+    def _turn_reasoning_effort(self, tool_names: Collection[str]) -> str | None:
         """Il ragionamento di un turno di Jenny; ``None`` lascia quello del provider.
+
+        Il suo vale solo dove delega: e' basso perche' il lavoro che vuole
+        pensiero lo fa un aiutante. Senza ``spawn`` (core mode) il lavoro e' suo,
+        e con ``plan_propose`` sta scrivendo un piano: in entrambi i casi decide
+        il ragionamento di tutti. Lo stesso se quello di tutti e' spento
+        («decide il provider»): ``low`` accenderebbe il thinking a chi l'aveva
+        tolto (su Anthropic un budget e la temperatura a 1), e il default non si
+        distingue da una scelta perche' e' gia' scritto nei ``config.json``.
 
         Un preset attivo che sceglie il suo ``reasoning_effort`` vince: e' una
         scelta del momento, fatta per tutti (``_apply_model_preset`` lo scrive
         sul provider), e un'impostazione di fondo non deve smentirla.
         """
+        if "spawn" not in tool_names or "plan_propose" in tool_names:
+            return None
+        generation = getattr(self.provider, "generation", None)
+        if getattr(generation, "reasoning_effort", None) is None:
+            return None
         preset = self.model_presets.get(self._active_preset) if self._active_preset else None
         if preset is not None and self._preset_field(preset, "reasoning_effort") is not None:
             return None
