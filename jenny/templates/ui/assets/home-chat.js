@@ -720,7 +720,13 @@ export class HomeChat {
     if (msg.work_id && this.claimsWork?.(msg.work_id)) return;
     if (msg.text || msg.media_urls?.length) {
       if (this.buffer) this._streamEnd();
-      this._dropPassing();
+      /* Solo un testo che risponde prende il posto della frase di passaggio.
+         Un file da solo (`message` col solo allegato) o un avviso d'errore (il
+         turno finito vuoto) no: quella frase era il riassunto del file, o la
+         risposta prima che il turno si perdesse, e resta. La rilettura fa lo
+         stesso (`transcript_replay.py`, `restore_demoted`). */
+      if (step || (msg.text && !msg.error)) this._dropPassing();
+      else this._keepPassing();
     }
     if (msg.text) {
       const block = document.createElement('div');
@@ -1142,6 +1148,11 @@ export class HomeChat {
   _markPassing(block) {
     if (block && block.isConnected && !this._passing.includes(block)) this._passing.push(block);
     if (block === this._lastSegment) this._lastSegment = null;
+  }
+
+  /** Le frasi di passaggio restano: non sono piu' di passaggio. */
+  _keepPassing() {
+    this._passing = [];
   }
 
   /** Se ne vanno le frasi di passaggio, e con loro il loro pezzo di Copia.

@@ -196,6 +196,15 @@ def _new_turn_id(session_key: str) -> str:
 # un wakelock eterno scarica la batteria senza dare spiegazioni.
 _TURN_WAKELOCK_TIMEOUT_S = 1800.0
 
+# I turni che il runner chiude con un avviso invece di una risposta
+# (``AgentRunner._finish_on_blank``), e il ``kind`` d'errore che quell'avviso
+# porta alla WebUI.
+_BLANK_TURN_ERROR_KINDS = {
+    "empty_final_response": "empty",
+    "output_truncated": "truncated",
+    "provider_refused": "refused",
+}
+
 # ``/init`` non e' nel router (v. ``_expand_project_init``): il letterale sta
 # qui, e la voce che lo fa comparire in ``/help`` sta in
 # ``command/specs.py::BUILTIN_COMMAND_SPECS``. Sono due posti, ma il secondo
@@ -2525,6 +2534,9 @@ class AgentLoop(
         # (contenuto o fallback).
         content = final_content or "Background task completed."
         outbound_metadata: dict[str, Any] = {}
+        if blank_kind := _BLANK_TURN_ERROR_KINDS.get(stop_reason):
+            # Come nel turno dell'utente (``_assemble_outbound``).
+            outbound_metadata["error"] = {"kind": blank_kind}
         if origin_message_id := msg.metadata.get("origin_message_id"):
             outbound_metadata["origin_message_id"] = origin_message_id
         return TurnOutcome.delivered(
@@ -2956,12 +2968,23 @@ class AgentLoop(
         # scartato i delta, e siamo qui solo nell'unico caso in cui la soppressione
         # non scatta — tool + injection utente a metà turno. Segnarlo streammato
         # farebbe scartare al dispatcher un testo che nessuno ha mai visto.
-        if on_stream is not None and not tool_spoke and stop_reason not in {"error", "tool_error"}:
+        # Un turno finito vuoto, troncato o rifiutato ha come risposta l'avviso
+        # del runner (``_finish_on_blank``), che nessuno ha streammato: segnato
+        # ``_streamed``, il dispatcher lo scartava e dal vivo non si vedeva
+        # niente. Porta invece il suo ``error``: la casa ne fa una bolla con
+        # «Riprova» e lascia a schermo il testo scritto prima dello strumento.
+        blank_kind = _BLANK_TURN_ERROR_KINDS.get(stop_reason)
+        if (
+            on_stream is not None and not tool_spoke
+            and stop_reason not in {"error", "tool_error"} and blank_kind is None
+        ):
             meta["_streamed"] = True
         if turn_latency_ms is not None:
             meta["latency_ms"] = int(turn_latency_ms)
         if stop_reason == "error" and error_kind:
             meta["error"] = {"kind": error_kind}
+        elif blank_kind is not None:
+            meta["error"] = {"kind": blank_kind}
 
         return OutboundMessage(
             channel=msg.channel,

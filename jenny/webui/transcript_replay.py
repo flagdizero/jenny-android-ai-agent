@@ -44,6 +44,9 @@ def replay_transcript_to_ui_messages(
     buffer_message_id: str | None = None
     buffer_parts: list[str] = []
     suppress_until_turn_end = False
+    # L'ultimo testo retrocesso a pensiero in questo turno, com'era: torna una
+    # risposta se dopo arriva solo un file o un errore (``restore_demoted``).
+    demoted: dict[str, Any] | None = None
     active_activity_segment_id: str | None = None
     active_file_edit_segment_id: str | None = None
     activity_segment_counter = 0
@@ -206,7 +209,7 @@ def replay_transcript_to_ui_messages(
         return str(last.get("id"))
 
     def demote_interrupted_assistant(segment: str) -> None:
-        nonlocal buffer_message_id, buffer_parts
+        nonlocal buffer_message_id, buffer_parts, demoted
         for i in range(len(messages) - 1, -1, -1):
             candidate = messages[i]
             if candidate.get("role") == "user":
@@ -226,6 +229,7 @@ def replay_transcript_to_ui_messages(
                 for part in (candidate.get("reasoning"), content)
                 if isinstance(part, str) and part.strip()
             ]
+            demoted = candidate
             messages[i] = {
                 **candidate,
                 "content": "",
@@ -237,6 +241,32 @@ def replay_transcript_to_ui_messages(
             if buffer_message_id == candidate.get("id"):
                 buffer_message_id = None
                 buffer_parts = []
+            return
+
+    def restore_demoted() -> None:
+        """Rimette come risposta l'ultimo testo retrocesso, se niente gli ha risposto dopo.
+
+        Il testo prima di uno strumento diventa pensiero perche' lo sostituisce
+        la risposta che segue. Un file da solo (``message`` col solo allegato) o
+        un avviso d'errore non lo sostituiscono: quel testo era il riassunto del
+        file, o la risposta prima che il turno finisse vuoto. Come dal vivo
+        (``home-chat.js``, ``_keepPassing``).
+        """
+        nonlocal demoted
+        original, demoted = demoted, None
+        if original is None:
+            return
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("id") != original.get("id"):
+                continue
+            answered = any(
+                m.get("role") == "assistant"
+                and m.get("kind") != "trace"
+                and str(m.get("content") or "").strip()
+                for m in messages[i + 1:]
+            )
+            if not answered:
+                messages[i] = {**original, "isStreaming": False}
             return
 
     def close_reasoning(prev: list[dict[str, Any]]) -> None:
@@ -407,8 +437,9 @@ def replay_transcript_to_ui_messages(
         }
 
     def _on_user(rec: dict[str, Any], idx: int) -> None:
-        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts
+        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts, demoted
         demote_interrupted_assistant(_ensure_activity_segment())
+        demoted = None
         buffer_message_id = None
         buffer_parts = []
         active_activity_segment_id = None
@@ -649,14 +680,17 @@ def replay_transcript_to_ui_messages(
             # chiave e stessa forma del payload dal vivo (``ws_sender``).
             extra["error"] = {"kind": error["kind"]}
         extra.update(_turn_fields(rec, "answer"))
+        if "error" in extra or (media and not content_s.strip()):
+            restore_demoted()
         absorb_complete(extra, idx)
         if media:
             suppress_until_turn_end = True
         return
 
     def _on_turn_end(rec: dict[str, Any], idx: int) -> None:
-        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts, suppress_until_turn_end
+        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts, suppress_until_turn_end, demoted
         suppress_until_turn_end = False
+        demoted = None
         active_activity_segment_id = None
         active_file_edit_segment_id = None
         turn_id = rec.get("turn_id")

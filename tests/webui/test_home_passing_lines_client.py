@@ -88,3 +88,33 @@ await tick(10);
 const bubble = [...document.querySelectorAll('.home-msg-jenny')].pop();
 assert.equal(app.chat._textOf(bubble), 'fatto');
 """)
+
+
+def test_a_file_on_its_own_keeps_the_line_before_it() -> None:
+    """Il riassunto scritto prima di ``message`` col solo file e' la didascalia del file."""
+    run_home(_HEAD + """
+say('t1', 'ecco la ricerca: tre fonti, tutte concordi');
+step('t1', 'message');
+frame({ event: 'message', chat_id: 'default', turn_id: 't1',
+  media_urls: [{ url: '/api/media/x/ricerca.md', name: 'ricerca.md' }] });
+frame({ event: 'turn_end', chat_id: 'default', turn_id: 't1' });
+await tick(10);
+assert.deepEqual(thread(), ['jenny: ecco la ricerca: tre fonti, tutte concordi']);
+assert.equal(document.querySelectorAll('.home-msg-jenny').length, 1);
+""")
+
+
+def test_an_error_notice_keeps_the_answer_before_it() -> None:
+    """Risposta, strumento, poi niente: l'avviso del turno vuoto non prende il suo posto."""
+    run_home(_HEAD + """
+say('t1', 'si annaffia una volta a settimana');
+step('t1', 'journal_append');
+frame({ event: 'message', chat_id: 'default', turn_id: 't1',
+  text: 'Ho finito i passaggi ma non sono riuscita a scrivere una risposta.',
+  error: { kind: 'empty' } });
+frame({ event: 'turn_end', chat_id: 'default', turn_id: 't1' });
+await tick(10);
+assert.deepEqual(thread(), [
+  'jenny: si annaffia una volta a settimana Ho finito i passaggi ma non sono riuscita a scrivere una risposta.',
+]);
+""")

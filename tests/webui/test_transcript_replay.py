@@ -302,3 +302,63 @@ def test_a_turn_that_ended_in_an_error_stays_an_error_bubble() -> None:
     assert "error" not in ok
     assert "error" not in bad_shape
     assert "error" not in empty_kind
+
+
+def _answers(messages: list[dict]) -> list[str]:
+    """I testi che la casa mostra: le risposte, non i pensieri ne' le righe degli strumenti."""
+    return [
+        m["content"] for m in messages
+        if m.get("role") == "assistant" and m.get("kind") != "trace" and m.get("content")
+    ]
+
+
+def _before_a_tool(text: str) -> list[dict]:
+    return [
+        {"event": "user", "chat_id": "c1", "text": "dimmi"},
+        {"event": "delta", "text": text},
+        {"event": "stream_end", "text": text},
+        {"event": "message", "kind": "progress", "text": "",
+         "tool_events": [{"phase": "start", "name": "message"}]},
+    ]
+
+
+def test_text_before_a_tool_gives_way_to_the_answer() -> None:
+    lines = [
+        *_before_a_tool("ok, la cerco"),
+        {"event": "delta", "text": "fatto"},
+        {"event": "stream_end", "text": "fatto"},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["fatto"]
+
+
+def test_a_file_on_its_own_keeps_the_text_before_it() -> None:
+    """Come dal vivo: il riassunto prima di ``message`` col solo file resta."""
+    lines = [
+        *_before_a_tool("ecco la ricerca: tre fonti"),
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["ecco la ricerca: tre fonti"]
+
+
+def test_an_error_notice_keeps_the_answer_before_it() -> None:
+    lines = [
+        *_before_a_tool("si annaffia una volta a settimana"),
+        {"event": "message", "text": "Ho finito i passaggi ma non…", "error": {"kind": "empty"}},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == [
+        "si annaffia una volta a settimana", "Ho finito i passaggi ma non…",
+    ]
+
+
+def test_a_file_after_the_answer_does_not_bring_the_old_line_back() -> None:
+    lines = [
+        *_before_a_tool("ok, la cerco"),
+        {"event": "delta", "text": "ecco il file"},
+        {"event": "stream_end", "text": "ecco il file"},
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["ecco il file"]
