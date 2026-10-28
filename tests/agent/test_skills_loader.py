@@ -456,3 +456,22 @@ def test_a_removed_skill_is_forgotten(tmp_path: Path) -> None:
     path.unlink()
     assert loader.load_skill("alfa") is None
     assert loader.get_skill_metadata("alfa") is None
+
+
+# -- skill di un subagent (helper: <tipo>) -------------------------------------
+
+
+def test_a_helper_skill_is_named_by_its_frontmatter(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    ws_skills = workspace / "skills"
+    ws_skills.mkdir(parents=True)
+    _write_skill(ws_skills, "plain")
+    (ws_skills / "builder").mkdir()
+    (ws_skills / "builder" / "SKILL.md").write_text(
+        "---\nname: builder\ndescription: Build it.\nhelper: app-builder\n---\n\n# Builder\n",
+        encoding="utf-8",
+    )
+    helpers = SkillsLoader(workspace).get_helper_skills()
+    assert "builder" in helpers
+    assert "plain" not in helpers
+

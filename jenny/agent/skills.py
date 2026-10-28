@@ -362,6 +362,21 @@ class SkillsLoader:
         raw_meta = self.get_skill_metadata(name) or {}
         return self._parse_jenny_metadata(raw_meta.get("metadata"))
 
+    def get_helper_skills(self) -> set[str]:
+        """Le skill che dichiarano ``helper: <tipo>``: le legge quel subagent, non chi delega.
+
+        ``app-creator`` e' scritta per chi costruisce l'app (fasi a domande,
+        «proponi e conferma», manifest): un orchestratore che la trova nel proprio
+        elenco la legge, progetta l'app nel brief e segue le fasi con l'utente.
+        Il 28/10/2026 sul s22 costava 30-40 s prima di ogni ``spawn``, piu' una
+        domanda di conferma in piu'; e l'``app-builder`` la rilegge comunque.
+        """
+        return {
+            entry["name"]
+            for entry in self.list_skills(filter_unavailable=False)
+            if (self.get_skill_metadata(entry["name"]) or {}).get("helper")
+        }
+
     def get_always_skills(self) -> list[str]:
         """Get skills marked as always=true that meet requirements."""
         return [

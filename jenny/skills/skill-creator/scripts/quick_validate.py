@@ -20,6 +20,7 @@ ALLOWED_FRONTMATTER_KEYS = {
     "always",
     "internal",
     "locked",
+    "helper",
     "user_summary",
     "disabled",
     "license",

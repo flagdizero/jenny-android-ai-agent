@@ -951,7 +951,12 @@ class ContextBuilder:
             if always_content:
                 parts.append(f"# Active Skills\n\n{always_content}")
 
-        skills_summary = self.skills.build_skills_summary(exclude=set(always_skills))
+        hidden_skills = set(always_skills)
+        if orchestrating and has("spawn"):
+            # Chi delega non legge la guida del subagent che fa il lavoro: la
+            # seguirebbe al suo posto (v. ``SkillsLoader.get_helper_skills``).
+            hidden_skills |= self.skills.get_helper_skills()
+        skills_summary = self.skills.build_skills_summary(exclude=hidden_skills)
         if skills_summary:
             parts.append(render_template("agent/skills_section.md", skills_summary=skills_summary))
 

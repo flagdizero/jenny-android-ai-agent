@@ -8,6 +8,7 @@ description: >
   - User wants to connect an external server (REST API) as an app with UI
   Do NOT use for skills (chat-only capabilities, no screen) — use skill-creator for those.
 locked: true
+helper: app-builder
 ---
 
 # App Creator
