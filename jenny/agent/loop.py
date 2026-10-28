@@ -2336,7 +2336,7 @@ class AgentLoop(
         # Un registro solo per la richiesta e per l'inventario del prompt, come
         # nel turno dell'utente (``_build_initial_messages``): dicono la stessa
         # cosa due volte, e devono venire dalla stessa fonte.
-        turn_tools = self._system_turn_tools(msg, key, silent=silent)
+        turn_tools = self._system_turn_tools(msg, key, session, silent=silent)
         messages = self.context.build_messages(
             available_tools=(turn_tools or self.tools).tool_names,
             history=history,
@@ -2565,33 +2565,24 @@ class AgentLoop(
         await super().shutdown(timeout_s=timeout_s)
 
     def _system_turn_tools(
-        self, msg: InboundMessage, key: str, *, silent: bool,
+        self, msg: InboundMessage, key: str, session: Session, *, silent: bool,
     ) -> ToolRegistry | None:
-        """Il registro di un turno di sistema: quello del piano, meno cio' che il turno non usa.
+        """Il registro di un turno di sistema: lo stesso del turno dell'utente in quella chat.
 
-        Il percorso di sistema non passa da :meth:`_turn_tool_view`, ma ne toglie
-        gli stessi tool: ``notebook`` fuori dai quaderni (li' risponde soltanto
-        «not from here»), ``nothing_to_report`` in un turno visibile e ``screen``
-        fuori dal turno di un tocco sulla mascotte. Non e' solo pulizia: il
-        rientro di un aiutante che portava due tool in piu' del turno prima non
-        ritrovava niente nella cache del provider (0 token su ~21,7k sul s22 il
-        28/10/2026, 20,8k con lo stesso registro).
+        Lo calcola :meth:`_turn_tool_view` col canale e la chat d'origine (un
+        turno di sistema arriva su ``system``, con l'origine nel ``chat_id``).
+        Non e' solo pulizia: il rientro di un aiutante che portava tool diversi
+        dal turno prima non ritrovava niente nella cache del provider (0 token
+        su ~21,7k sul s22 il 28/10/2026). Una copia delle sue regole ne
+        perdeva alcune (``suggest_notebook``, ``recall_history`` e le azioni
+        delle app non posate nei quaderni, ``notebook`` in un progetto che non
+        e' un quaderno): un filtro solo, e le due liste non possono divergere.
         """
-        from jenny.agent.tools.registry import ToolRegistryView
-        from jenny.runtime.screen import has_screen
-
-        tools = self._plan_system_tools(msg, key)
-        hide = set()
-        if not silent:
-            hide.add("nothing_to_report")
-        if not has_screen(msg.metadata):
-            hide.add("screen")
-        if not is_project_session_key(key):
-            hide.add("notebook")
-        hide &= set(self.tools.tool_names)
-        if not hide:
-            return tools
-        return ToolRegistryView(tools or self.tools, lambda name, _tool: name in hide)
+        channel, chat_id = (
+            msg.chat_id.split(":", 1) if ":" in msg.chat_id else (INTERNAL_CHANNEL, msg.chat_id)
+        )
+        origin = dataclasses.replace(msg, channel=channel, chat_id=chat_id)
+        return self._turn_tool_view(origin, session, key, silent=silent)
 
     def _hold_subagent_result(
         self,

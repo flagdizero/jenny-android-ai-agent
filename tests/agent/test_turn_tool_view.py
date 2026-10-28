@@ -17,6 +17,7 @@ import pytest
 
 from jenny.agent.tools.registry import ToolRegistry, ToolRegistryView
 from jenny.bus.events import InboundMessage
+from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
 from tests.agent.test_prompt_matches_offered_tools import (  # noqa: F401
     _loop_with_capture,
     _NamedTool,
@@ -124,3 +125,39 @@ async def test_the_move_offer_is_only_for_the_personal_chat_in_the_app(notebook:
     await loop._process_message(InboundMessage(
         channel="telegram", sender_id="u", chat_id="42", content="ciao"))
     assert "suggest_notebook" not in _offered_names(captured)
+
+
+@pytest.mark.parametrize(
+    ("channel", "chat_id", "key", "silent"),
+    [
+        ("websocket", "project:soldi", "project:soldi", False),   # quaderno, app non posata
+        ("websocket", "project:codice", "project:codice", False),  # progetto, non quaderno
+        ("websocket", "default", UNIFIED_SESSION_KEY, False),
+        ("telegram", "42", UNIFIED_SESSION_KEY, False),
+        ("websocket", "default", HEARTBEAT_SESSION_KEY, True),
+    ],
+)
+def test_a_system_turn_offers_the_tools_of_a_user_turn_in_that_chat(
+    notebook: Path, channel: str, chat_id: str, key: str, silent: bool,
+) -> None:
+    """Il rientro di un aiutante vede gli strumenti del turno dell'utente in quella chat.
+
+    Uno stesso filtro: con una sua copia delle regole, gli strumenti cambiavano
+    fra un turno e il rientro dopo, e il provider non ritrovava niente in cache.
+    """
+    (notebook / "wikis" / "codice").mkdir(parents=True)
+    loop, _captured = _loop_with_capture(notebook)
+    loop.orchestrator_mode = True
+    session = loop.sessions.get_or_create(key)
+    user = loop._turn_tool_view(
+        InboundMessage(channel=channel, sender_id="u", chat_id=chat_id, content="ciao",
+                       session_key_override=key),
+        session, key, silent=silent,
+    )
+    system = loop._system_turn_tools(
+        InboundMessage(channel="system", sender_id="subagent", chat_id=f"{channel}:{chat_id}",
+                       content="fatto", metadata={"subagent_task_id": "sub-1"},
+                       session_key_override=key),
+        key, session, silent=silent,
+    )
+    assert sorted((system or loop.tools).tool_names) == sorted((user or loop.tools).tool_names)

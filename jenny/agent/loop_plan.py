@@ -223,20 +223,6 @@ class LoopPlanMixin:
 
         return plan_hidden
 
-    def _plan_system_tools(self, msg: InboundMessage, session_key: str) -> ToolRegistry | None:
-        """Il registro di un turno di sistema (passo, rientro di un aiutante).
-
-        Il percorso di sistema usa il registro del loop intero: qui si tolgono
-        solo i tool del piano che il turno non può usare, e nient'altro, così i
-        turni d'annuncio che non c'entrano col piano restano come erano.
-        """
-        from jenny.agent.tools.registry import ToolRegistryView
-
-        plan_hidden = self._plan_tool_filter(msg, session_key)
-        if not any(plan_hidden(n) for n in self.tools.tool_names):
-            return None
-        return ToolRegistryView(self.tools, lambda name, _tool: bool(plan_hidden(name)))
-
     # ── contesto ────────────────────────────────────────────────────────────
 
     def _plan_runtime_lines(
