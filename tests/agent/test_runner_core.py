@@ -551,3 +551,49 @@ async def test_runner_passes_reasoning_effort_to_provider():
     ))
 
     assert captured["reasoning_effort"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_a_max_iterations_answer_reaches_the_stream():
+    """Il tetto di iterazioni chiude con una richiesta senza streaming.
+
+    Il turno della WebUI e' segnato ``_streamed``: una risposta mai passata dallo
+    stream il dispatcher la scarta, e l'utente non vedeva niente.
+    """
+    from jenny.agent.hook import AgentHook, AgentHookContext
+    from jenny.agent.runner import AgentRunner
+
+    provider = MagicMock(spec=LLMProvider)
+
+    async def chat_stream_with_retry(*, on_content_delta=None, **kwargs):
+        return LLMResponse(
+            content="", tool_calls=[ToolCallRequest(id="c1", name="list_dir", arguments={})],
+        )
+
+    provider.chat_stream_with_retry = chat_stream_with_retry
+    provider.chat_with_retry = AsyncMock(return_value=LLMResponse(
+        content="Ho letto la cartella; resta da guardare il resto.", tool_calls=[],
+    ))
+    streamed: list[str] = []
+    ended: list[bool] = []
+
+    class StreamingHook(AgentHook):
+        def wants_streaming(self) -> bool:
+            return True
+
+        async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+            streamed.append(delta)
+
+        async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
+            ended.append(resuming)
+
+    result = await AgentRunner(provider).run(make_spec(
+        initial_messages=[{"role": "user", "content": "guarda la cartella"}],
+        tools=empty_tools(),
+        max_iterations=1,
+        hook=StreamingHook(),
+    ))
+
+    assert result.stop_reason == "max_iterations"
+    assert "".join(streamed) == "Ho letto la cartella; resta da guardare il resto."
+    assert ended[-1] is False

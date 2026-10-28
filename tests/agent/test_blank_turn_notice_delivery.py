@@ -18,7 +18,9 @@ from jenny.bus.events import InboundMessage
 from jenny.providers.base import LLMResponse, ToolCallRequest
 
 
-async def _turn(tmp_path: Path, final: str) -> dict:
+async def _turn(
+    tmp_path: Path, final: str, finalization: str | None = None, streamed: list | None = None,
+) -> dict:
     loop = make_loop(tmp_path, bare=True)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(  # type: ignore[method-assign]
         return_value=False
@@ -27,7 +29,8 @@ async def _turn(tmp_path: Path, final: str) -> dict:
         LLMResponse(content="si annaffia una volta a settimana", tool_calls=[
             ToolCallRequest(id="c1", name="list_dir", arguments={"path": "."}),
         ]),
-        *[LLMResponse(content=final, tool_calls=[]) for _ in range(6)],
+        *[LLMResponse(content=final, tool_calls=[]) for _ in range(2 if finalization else 6)],
+        *([LLMResponse(content=finalization, tool_calls=[])] if finalization else []),
     ])
 
     async def chat(*_args, **_kwargs):
@@ -36,8 +39,9 @@ async def _turn(tmp_path: Path, final: str) -> dict:
     loop.provider.chat_with_retry = AsyncMock(side_effect=chat)
     loop.provider.chat_stream_with_retry = AsyncMock(side_effect=chat)
 
-    async def on_stream(_delta: str) -> None:
-        pass
+    async def on_stream(delta: str) -> None:
+        if streamed is not None:
+            streamed.append(delta)
 
     async def on_stream_end(**_kwargs) -> None:
         pass
@@ -63,3 +67,16 @@ async def test_a_streamed_answer_stays_streamed(tmp_path: Path) -> None:
 
     assert meta.get("_streamed") is True
     assert "error" not in meta
+
+
+async def test_a_finalization_answer_reaches_the_stream(tmp_path: Path) -> None:
+    """Due risposte vuote, poi la finalizzazione (senza streaming) risponde.
+
+    Il turno era segnato ``_streamed`` e quella risposta non era mai passata
+    dallo stream: il dispatcher la scartava, e non finiva nemmeno nel transcript.
+    """
+    streamed: list[str] = []
+    meta = await _turn(tmp_path, final="", finalization="una volta a settimana", streamed=streamed)
+
+    assert "".join(streamed).endswith("una volta a settimana")
+    assert meta.get("_streamed") is True

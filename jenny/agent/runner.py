@@ -1238,6 +1238,12 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             context.usage = dict(raw_usage)
             context.tool_calls = list(response.tool_calls)
             clean = hook.finalize_content(context, response.content)
+            if hook.wants_streaming() and not is_blank_text(clean):
+                # La finalizzazione e' una richiesta senza streaming, ma il turno
+                # si' (``_assemble_outbound`` lo segna ``_streamed``): senza
+                # passare di qui la risposta non arrivava ai client, e non finiva
+                # nemmeno nel transcript.
+                await hook.on_stream(context, clean)
         return "proceed", response, clean
 
     async def _recover_provider_refusal(
@@ -1650,8 +1656,16 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                 fallback if spec.max_iterations_message
                 else say("turn.max_iterations", max_iterations=spec.max_iterations)
             )
-            return
-        self._append_final_message(messages, state.final_content)
+        else:
+            self._append_final_message(messages, state.final_content)
+        if hook.wants_streaming() and state.final_content:
+            # Come la finalizzazione dopo le risposte vuote: una richiesta senza
+            # streaming in un turno che i client seguono a pezzi.
+            context = AgentHookContext(
+                iteration=spec.max_iterations, messages=messages, session_key=spec.session_key,
+            )
+            await hook.on_stream(context, state.final_content)
+            await hook.on_stream_end(context, resuming=False)
 
     # Contabilità usage estratta in ``agent/usage_accounting.py``. Delegatori
     # sottili: le funzioni di stima ricevono ``self.provider`` esplicitamente.
