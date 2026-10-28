@@ -57,7 +57,12 @@ assert.deepEqual(
 
 
 def test_back_from_the_notebook_board_draws_the_strip_at_most_once() -> None:
+    # Dai Quaderni, come chi tocca il quaderno: Indietro ci torna senza cambiare
+    # conversazione. Aperta dalla pagina chat, la bacheca riporta la chat alla
+    # personale, e quello e' un cambio vero (``test_home_chat_photo_client``).
     run_home(_HEAD + """
+app.homePages.goToId('notebooks');
+await tick(30);
 await app.switchConversation('project:orto');
 await tick(30);
 await app.openBoard();

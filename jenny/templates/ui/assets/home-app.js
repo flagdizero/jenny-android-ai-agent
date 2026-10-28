@@ -720,7 +720,9 @@ class HomeApp {
     /* Un foglio o una domanda che si chiude sopra la chat la rimette a
        schermo: `close` non risale, ma passa dalla cattura del documento. */
     document.addEventListener('close', () => this._reportChatOnScreen(), true);
-    await this._readThread({ fresh: false });
+    /* Seguita dal trasloco: un quaderno ripreso all'avvio (`_restorePlace`)
+       fotograferebbe la personale ancora da leggere. */
+    await this.chatMove.follow(this._readThread({ fresh: false }));
   }
 
   /** Legge il filo — all'avvio, a un cambio di conversazione, dopo una
@@ -1623,6 +1625,17 @@ class HomeApp {
       this.openBoard().then(() => {
         if (query != null && this.view === 'board') this.board.openSearch(query);
       });
+      return true;
+    }
+    if (target === 'chat') {
+      /* Dalla bacheca alla pagina chat: la chat vera, che dietro la bacheca
+         era del quaderno, torna alla conversazione della pagina. Cambiare
+         vista non basta: aperta dalla pagina chat («Ci spostiamo?», un posto
+         ripreso all'avvio), la bacheca lasciava li' la chat del quaderno sotto
+         la foto della personale, i due fili uno sull'altro e la scheda JENNY
+         accesa su una chat che scriveva nel quaderno (s22, 28/10/2026). */
+      if (!this._setView('chat', () => this.goBackOneRoom())) return true;
+      this.homePages?.settleChat?.();
       return true;
     }
     if (target === 'settings') {

@@ -115,8 +115,13 @@ assert.equal(app.view, 'board', 'Indietro ha chiuso anche la bacheca');
 
 def test_after_a_board_the_app_page_brings_up_the_personal_chat() -> None:
     """La chat resta sulla chiave del quaderno quando lasci la bacheca: sopra le
-    App deve tornare la personale, o si scriverebbe nel quaderno."""
+    App deve tornare la personale, o si scriverebbe nel quaderno.
+
+    Dai Quaderni: lasciata la bacheca dalla pagina chat, la chat torna alla
+    personale gia' con Indietro (``test_home_chat_photo_client``)."""
     run_home(_HEAD + """
+app.homePages.goToId('notebooks', { animated: false });
+await tick(10);
 await app.switchConversation('project:orto');
 await tick(30);
 app.handleHardwareBack();

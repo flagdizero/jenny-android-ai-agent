@@ -590,3 +590,25 @@ def test_retune_to_the_conversation_it_has_does_nothing() -> None:
         "assert.deepEqual(changes, []);\n"
         "assert.equal(snapshotOf(p0), null);\n"
     )
+
+
+def test_the_startup_read_is_followed_so_an_unread_chat_is_not_photographed() -> None:
+    """All'avvio la casa legge il filo da se', non dal trasloco.
+
+    Un quaderno ripreso all'avvio (``_restorePlace``) apre la bacheca mentre
+    quella lettura e' ancora in corso: senza ``follow`` la personale si
+    fotografava vuota, e il suo «non c'e' niente qui» restava in trasparenza
+    sotto la chat (s22, 28/10/2026). Finita una lettura, si fotografa di nuovo.
+    """
+    _run(
+        "write();\n"                                   # il filo dell'avvio, non ancora letto
+        "let boot; t.follow(new Promise((r) => { boot = r; }));\n"
+        "t.retune(p0, 'B');\n"
+        "const f = snapshotOf(p0);\n"
+        "assert.deepEqual(messagesOf(f), [], 'fotografata a meta lettura');\n"
+        "assert.ok(f.querySelector('.home-empty').hasAttribute('hidden'),\n"
+        "  'la foto dice «non c e niente qui» di una chat non ancora letta');\n"
+        "reads[0].finish(); await tick();\n"
+        "assert.equal(t._reliable, true, 'letta B, la chat si fotografa di nuovo');\n"
+        "boot();\n"
+    )

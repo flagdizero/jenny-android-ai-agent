@@ -119,6 +119,22 @@ export class ChatMove {
     return this._changeUnder(panel, key, mine);
   }
 
+  /** Una lettura del filo in corso: finche' non finisce la chat non si
+   *  fotografa. La segue `_changeUnder` per le sue, e la casa per quella
+   *  dell'avvio, che non passa di qui: senza, un quaderno ripreso all'avvio
+   *  fotografava la personale ancora vuota, e il suo «non c'e' niente qui»
+   *  restava in trasparenza sotto la chat. Vale l'ultima lettura seguita. */
+  follow(read) {
+    const p = Promise.resolve(read);
+    this.read = p;
+    this._reliable = false;
+    const finished = () => {
+      if (this.read === p) this._reliable = true;
+    };
+    p.then(finished, finished);
+    return p;
+  }
+
   /** Il cambio di conversazione, con la foto che copre la lettura: passi 3 e
    *  4 di `arrives`, in comune con `lift` e `retune`. *panel* e' dove sta la
    *  foto da togliere a lettura finita (`null`: nessuna). Cambia **subito**:
@@ -132,12 +148,7 @@ export class ChatMove {
     } catch (err) {
       read = Promise.reject(err);
     }
-    this.read = read;
-    this._reliable = false;
-    const finished = () => {
-      if (this.read === read) this._reliable = true;
-    };
-    read.then(finished, finished);
+    this.follow(read);
 
     /* 4. Via la foto quando la lettura e' finita, o al tetto. Solo se questo
           e' ancora l'ultimo arrivo: un dito veloce fa A → B → A, e il «finito»

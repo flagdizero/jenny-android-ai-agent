@@ -304,9 +304,23 @@ export class HomePages {
     const notebook = projectNameOf(key);
     if (notebook) return this.app?.openNotebook?.(notebook);
     this.homeConversation = key;
-    if (this.entry(this.index)?.kind === 'chat') return this.app?.showConversation?.(key);
+    if (this.entry(this.index)?.kind === 'chat') return this.settleChat();
     this.goTo(this.chatIndex);
     return this.app?.chatMove?.read;
+  }
+
+  /** La chat, se la pista e' sulla pagina chat, torna alla conversazione della
+   *  pagina: la promessa del cambio, come `openConversation`.
+   *
+   *  Dal trasloco (`arrives`) e non da `showConversation`: solo lui toglie la
+   *  foto che la pagina chat tiene mentre la chat e' altrove. Cambiata da qui
+   *  sotto, la foto restava per sempre sopra la chat vera — `goHome`, l'avviso
+   *  della personale, Indietro dalla bacheca (s22, 28/10/2026). */
+  settleChat() {
+    const move = this.app?.chatMove;
+    if (!move || this.entry(this.index)?.kind !== 'chat') return Promise.resolve();
+    move.arrives(this.panelOf(this.index), this.homeConversation || this.app?.currentKey?.());
+    return move.read;
   }
 
   /* ── Appendere e staccare ───────────────────────────────────────────── */
