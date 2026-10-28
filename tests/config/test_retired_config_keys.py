@@ -96,7 +96,7 @@ async def test_the_first_boot_rewrites_the_file_without_them(tmp_path, retired) 
     assert await persist_schema_migrations(config_path=path) is True
 
     written = json.loads(path.read_text(encoding="utf-8"))
-    assert written["configVersion"] == CURRENT_CONFIG_VERSION == 5
+    assert written["configVersion"] == CURRENT_CONFIG_VERSION == 6
     assert "gone" not in written["agents"]["defaults"]
     assert "old_name" not in written["wiki"]
     # Quel che era vicino resta: i valori dell'utente e la chiave del futuro.

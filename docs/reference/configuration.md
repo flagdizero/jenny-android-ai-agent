@@ -216,8 +216,9 @@ Defaults — allowed: `os`, `sys`, `pathlib`, `json`, `re`, `math`, `datetime`, 
 |---|---|---|---|
 | `tools.androidWeb.enable` | bool | `true` | Registers `web_search`, `web_fetch` **and the five `browser_*` tools**. It is the only switch: there is no per-half toggle — `search.enable` / `fetch.enable` do not exist in the schema, so writing them changes nothing. |
 | `tools.androidWeb.search.searchEngine` | string | `"bing"` | The only supported value; the settings endpoint rejects anything else. |
-| `tools.androidWeb.search.maxResults` | int | `5` | Results per search. The UI validates 1–10. |
-| `tools.androidWeb.search.timeout` | int | `30` | Seconds per search. The UI validates 1–120. Also used as the fetch timeout. |
+| `tools.androidWeb.search.maxResults` | int | `8` | Results per search. The UI validates 1–10. |
+| `tools.androidWeb.search.timeout` | int | `15` | Seconds per search. The UI validates 1–120. After a search runs out of time, every search gives up at once for the next minute. |
+| `tools.androidWeb.fetch.timeout` | int | `15` | Seconds per page read; a page that does not arrive in time is retried in the browser. |
 | `tools.androidWeb.fetch.maxChars` | int | `50000` | Max characters extracted per page. The UI validates 1000–200000. |
 | `tools.androidWeb.browser.timeout` | int | `30` | Seconds per browser action. |
 | `tools.androidWeb.browser.maxSnapshotChars` | int | `2500` | Cap on a `browser_snapshot` payload. |

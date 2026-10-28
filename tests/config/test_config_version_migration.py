@@ -270,3 +270,29 @@ def test_the_provider_gets_the_clamped_output_budget() -> None:
         "agents": {"defaults": {"model": "m", "contextWindowTokens": 32768}},
     })
     assert _make_provider_core(config).generation.max_tokens == 8192
+
+
+# ── v6: il tetto di web_search da 30 a 15 s ──────────────────────────────────
+
+
+@pytest.mark.parametrize("web_key", ["androidWeb", "android_web"])
+def test_v6_moves_the_old_search_cap_and_nothing_else(web_key) -> None:
+    """Il 28/10/2026 sul s22 le ricerche riuscite rispondevano entro 2,2 s, e un
+    motore muto costava i 30 s pieni: il default scende a 15."""
+    moved = Config.model_validate({"configVersion": 5, "tools": {web_key: {
+        "search": {"timeout": 30, "maxResults": 6}, "fetch": {"timeout": 30}}}})
+    assert moved.tools.android_web.search.timeout == 15
+    assert moved.tools.android_web.search.max_results == 6
+    assert moved.tools.android_web.fetch.timeout == 30
+    chosen = Config.model_validate({"configVersion": 5,
+                                    "tools": {web_key: {"search": {"timeout": 45}}}})
+    assert chosen.tools.android_web.search.timeout == 45
+    stamped = Config.model_validate({"configVersion": CURRENT_CONFIG_VERSION,
+                                     "tools": {web_key: {"search": {"timeout": 30}}}})
+    assert stamped.tools.android_web.search.timeout == 30
+
+
+def test_v6_leaves_a_tools_block_of_the_wrong_shape_to_the_validator() -> None:
+    for tools in ({"androidWeb": None}, {"androidWeb": {"search": "x"}}, []):
+        data = {"configVersion": 5, "tools": tools}
+        assert Config._migrate_by_version(data) == data

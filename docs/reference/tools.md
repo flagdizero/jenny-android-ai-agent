@@ -205,7 +205,7 @@ Searches the web through the hidden WebView. **Bing is the only supported engine
 - Kotlin-side timeout is 30s by default, with a 10-second asyncio backstop on top (so a stuck WebView never blocks the gateway indefinitely).
 - Bing occasionally serves a CAPTCHA/verification page instead of results. The tool detects this and returns a clear "Bing returned a verification/CAPTCHA page" error rather than garbage output — there's no automatic bypass; retrying later is the only real remedy.
 
-Config toggle: `tools.androidWeb.enable` (default `true`, config-only — there is no switch for it in the app). The other fields are also editable in the workshop's Hands drawer → Web Search: `tools.androidWeb.search.searchEngine` (default `"bing"`, no alternative), `tools.androidWeb.search.maxResults` (default 5), `tools.androidWeb.search.timeout` (default 30s).
+Config toggle: `tools.androidWeb.enable` (default `true`, config-only — there is no switch for it in the app). The other fields are also editable in the workshop's Hands drawer → Web Search: `tools.androidWeb.search.searchEngine` (default `"bing"`, no alternative), `tools.androidWeb.search.maxResults` (default 8), `tools.androidWeb.search.timeout` (default 15s).
 
 ### web_fetch
 

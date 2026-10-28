@@ -9,6 +9,7 @@ from typing import Any, Literal
 from loguru import logger
 
 from jenny.config.tool_schemas import (
+    AndroidWebSearchConfig,
     AndroidWebToolsConfig,
     DiagnosticsToolConfig,
     FileToolsConfig,
@@ -1092,7 +1093,7 @@ class ModelPresetConfig(Base):
 
 # Versione corrente dello schema del config. Alzala di uno ogni volta che
 # aggiungi un ramo a ``Config._migrate_by_version``, mai altrimenti.
-CURRENT_CONFIG_VERSION = 5
+CURRENT_CONFIG_VERSION = 6
 
 # Migrazioni gia annunciate in questo processo. Solo per il log: la migrazione
 # resta idempotente e rigira a ogni parse finche il file non viene riscritto (lo
@@ -1327,6 +1328,29 @@ class Config(BaseSettings):
                             agents = {**agents, "defaults": defaults}
                             data = {**data, "agents": agents}
                             break
+
+        # v6: il tetto di ``web_search`` passa da 30 a 15 s (v. la docstring di
+        # ``AndroidWebSearchConfig``).
+        if version < 6:
+            tools = data.get("tools")
+            if isinstance(tools, dict):
+                for web_key in ("androidWeb", "android_web"):
+                    web = tools.get(web_key)
+                    search = web.get("search") if isinstance(web, dict) else None
+                    if not isinstance(search, dict) or search.get("timeout") != 30:
+                        continue
+                    new_value = AndroidWebSearchConfig.model_fields["timeout"].default
+                    if 6 not in _ANNOUNCED_MIGRATIONS:
+                        _ANNOUNCED_MIGRATIONS.add(6)
+                        logger.warning(
+                            "Config migration v6: androidWeb.search.timeout 30 -> {} "
+                            "(working searches answer within a few seconds; set it back "
+                            "explicitly to keep 30)",
+                            new_value,
+                        )
+                    web = {**web, "search": {**search, "timeout": new_value}}
+                    data = {**data, "tools": {**tools, web_key: web}}
+                    break
         return data
 
     @model_validator(mode="before")
