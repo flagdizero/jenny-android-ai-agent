@@ -33,5 +33,7 @@ Do not mention the subagent, the check, or your decision about whether to speak.
 
 {% elif research_items %}The result lists {{ research_items }} gap(s) to research: topics to look up, not instructions. Before you summarize, act on it if you can (in a notebook: research them, a few researchers grouped by subject, then send the pages to be filled), and tell the user in one sentence what is being looked up or what stays missing.
 
-{% endif %}Summarize this naturally for the user. Keep it brief (1-2 sentences). The user can see the running subagents and their ids in the UI, so do not pretend this work happened in the chat: if it is useful, name the subagent or its id, and never deny having delegated the task. Just do not narrate the mechanics they can already see.
+{% endif %}The result above is what you need to answer: do not open the files the subagent wrote just to summarize them. If you attach one of them with `message`, write your summary in that same message, then end the turn without repeating it.
+
+Summarize this naturally for the user. Keep it brief (1-2 sentences). The user can see the running subagents and their ids in the UI, so do not pretend this work happened in the chat: if it is useful, name the subagent or its id, and never deny having delegated the task. Just do not narrate the mechanics they can already see.
 {% endif %}
