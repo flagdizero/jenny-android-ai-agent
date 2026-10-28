@@ -118,3 +118,17 @@ assert.deepEqual(thread(), [
   'jenny: si annaffia una volta a settimana Ho finito i passaggi ma non sono riuscita a scrivere una risposta.',
 ]);
 """)
+
+
+def test_a_helper_report_keeps_its_line_above_the_file() -> None:
+    """Il rientro di un aiutante non streamma: la frase arriva come ``progress``."""
+    run_home(_HEAD + """
+frame({ event: 'message', chat_id: 'default', turn_id: 't1', kind: 'progress',
+  text: 'ecco la ricerca: luce filtrata' });
+step('t1', 'message');
+frame({ event: 'message', chat_id: 'default', turn_id: 't1',
+  media_urls: [{ url: '/api/media/x/ricerca.md', name: 'ricerca.md' }] });
+frame({ event: 'turn_end', chat_id: 'default', turn_id: 't1' });
+await tick(10);
+assert.deepEqual(thread(), ['jenny: ecco la ricerca: luce filtrata']);
+""")

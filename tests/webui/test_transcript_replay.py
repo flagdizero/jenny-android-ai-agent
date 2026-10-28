@@ -362,3 +362,29 @@ def test_a_file_after_the_answer_does_not_bring_the_old_line_back() -> None:
         {"event": "turn_end"},
     ]
     assert _answers(replay_transcript_to_ui_messages(lines)) == ["ecco il file"]
+
+
+def test_a_progress_line_before_a_file_on_its_own_comes_back() -> None:
+    """Il rientro di un aiutante: in un turno di sistema la frase arriva come ``progress``.
+
+    Dal vivo resta sopra il file (``_keepPassing``); riaprendo la chat era sparita,
+    perche' la rilettura ne fa una riga di strumento.
+    """
+    lines = [
+        {"event": "message", "kind": "progress", "text": "ecco la ricerca: luce filtrata"},
+        {"event": "message", "kind": "progress", "text": "",
+         "tool_events": [{"phase": "start", "name": "message"}]},
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["ecco la ricerca: luce filtrata"]
+
+
+def test_a_progress_line_followed_by_the_answer_stays_a_tool_line() -> None:
+    lines = [
+        {"event": "message", "kind": "progress", "text": "l'aiutante ha finito"},
+        {"event": "message", "text": "acqua una volta al mese"},
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["acqua una volta al mese"]

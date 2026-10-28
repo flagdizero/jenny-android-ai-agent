@@ -44,8 +44,10 @@ def replay_transcript_to_ui_messages(
     buffer_message_id: str | None = None
     buffer_parts: list[str] = []
     suppress_until_turn_end = False
-    # L'ultimo testo retrocesso a pensiero in questo turno, com'era: torna una
-    # risposta se dopo arriva solo un file o un errore (``restore_demoted``).
+    # L'ultima frase di passaggio di questo turno: un testo retrocesso a pensiero
+    # (``{"original": ...}``, il messaggio com'era) o il testo di un frame
+    # ``progress`` (``{"text": ...}``, che diventa una riga di strumento). Torna
+    # una risposta se dopo arriva solo un file o un errore (``restore_demoted``).
     demoted: dict[str, Any] | None = None
     active_activity_segment_id: str | None = None
     active_file_edit_segment_id: str | None = None
@@ -229,7 +231,7 @@ def replay_transcript_to_ui_messages(
                 for part in (candidate.get("reasoning"), content)
                 if isinstance(part, str) and part.strip()
             ]
-            demoted = candidate
+            demoted = {"original": candidate}
             messages[i] = {
                 **candidate,
                 "content": "",
@@ -244,28 +246,43 @@ def replay_transcript_to_ui_messages(
             return
 
     def restore_demoted() -> None:
-        """Rimette come risposta l'ultimo testo retrocesso, se niente gli ha risposto dopo.
+        """Rimette come risposta l'ultima frase di passaggio, se niente le ha risposto dopo.
 
-        Il testo prima di uno strumento diventa pensiero perche' lo sostituisce
-        la risposta che segue. Un file da solo (``message`` col solo allegato) o
-        un avviso d'errore non lo sostituiscono: quel testo era il riassunto del
-        file, o la risposta prima che il turno finisse vuoto. Come dal vivo
-        (``home-chat.js``, ``_keepPassing``).
+        Il testo prima di uno strumento diventa pensiero (o, se arriva come
+        frame ``progress`` in un turno di sistema, una riga di strumento) perche'
+        lo sostituisce la risposta che segue. Un file da solo (``message`` col
+        solo allegato) o un avviso d'errore non lo sostituiscono: quel testo era
+        il riassunto del file, o la risposta prima che il turno finisse vuoto.
+        Come dal vivo (``home-chat.js``, ``_keepPassing``).
         """
         nonlocal demoted
-        original, demoted = demoted, None
-        if original is None:
+        passing, demoted = demoted, None
+        if passing is None:
             return
-        for i in range(len(messages) - 1, -1, -1):
-            if messages[i].get("id") != original.get("id"):
-                continue
-            answered = any(
+
+        def answered_from(pos: int) -> bool:
+            return any(
                 m.get("role") == "assistant"
                 and m.get("kind") != "trace"
                 and str(m.get("content") or "").strip()
-                for m in messages[i + 1:]
+                for m in messages[pos:]
             )
-            if not answered:
+
+        if "text" in passing:
+            if not answered_from(passing["pos"]):
+                messages.append({
+                    "id": _new_id("pl", passing["idx"]),
+                    "role": "assistant",
+                    "content": passing["text"],
+                    **passing["turn"],
+                    "createdAt": _ts_base + passing["idx"],
+                })
+            return
+        original = passing["original"]
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("id") != original.get("id"):
+                continue
+            if not answered_from(i + 1):
                 messages[i] = {**original, "isStreaming": False}
             return
 
@@ -572,7 +589,7 @@ def replay_transcript_to_ui_messages(
         return
 
     def _on_message(rec: dict[str, Any], idx: int) -> None:
-        nonlocal buffer_message_id, buffer_parts, suppress_until_turn_end
+        nonlocal buffer_message_id, buffer_parts, suppress_until_turn_end, demoted
         if suppress_until_turn_end and rec.get("kind") in (
             "tool_hint",
             "progress",
@@ -605,6 +622,14 @@ def replay_transcript_to_ui_messages(
                 return
             segment = _ensure_activity_segment()
             demote_interrupted_assistant(segment)
+            if not structured_events and isinstance(text, str) and text.strip():
+                # Il testo di un frame ``progress`` (in un turno di sistema, la
+                # frase prima di uno strumento): resta una riga di strumento, ma
+                # e' la frase di passaggio piu' recente.
+                demoted = {
+                    "text": text, "pos": len(messages), "idx": idx,
+                    "turn": _turn_fields(rec, "answer"),
+                }
             last = messages[-1] if messages else None
             if (
                 last
