@@ -7,6 +7,7 @@ import dataclasses
 import functools
 import json
 import time
+import uuid
 from collections.abc import Mapping
 from contextlib import nullcontext
 from pathlib import Path
@@ -125,6 +126,7 @@ from jenny.utils.llm_runtime import LLMRuntime
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_migration import restore_wiki_id
 from jenny.utils.wiki_paths import find_wiki_by_id, wiki_id, wiki_schema_file
+from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
 if TYPE_CHECKING:
     from jenny.config.schema import (
@@ -2221,6 +2223,14 @@ class AgentLoop(
         silent = self._is_silent_turn(msg, key)
         if silent:
             mark_silent_turn(msg.metadata)
+        elif channel == "websocket":
+            # Un turno della WebUI ha l'id che il client manda col messaggio; un
+            # turno di sistema non ha un messaggio del client, e senza id la
+            # rilettura non accorpa (``home-chat.js``): la frase e il file del
+            # rientro di un aiutante, una bolla dal vivo, ricaricando erano due.
+            # Nei metadata del messaggio lo ereditano i passi, il tool
+            # ``message`` e il ``turn_end``; la risposta finale lo prende qui sotto.
+            msg.metadata.setdefault(WEBUI_TURN_METADATA_KEY, f"system:{uuid.uuid4().hex}")
         # Un turno di passo del piano parla del passo aperto *adesso*: uno
         # rimasto sul bus dopo un Ferma o una Pausa non deve fare un passo che
         # l'utente ha fermato (``PlanDriver.step_message_current``).
@@ -2539,6 +2549,8 @@ class AgentLoop(
             outbound_metadata["error"] = {"kind": blank_kind}
         if origin_message_id := msg.metadata.get("origin_message_id"):
             outbound_metadata["origin_message_id"] = origin_message_id
+        if turn_id := msg.metadata.get(WEBUI_TURN_METADATA_KEY):
+            outbound_metadata[WEBUI_TURN_METADATA_KEY] = turn_id
         return TurnOutcome.delivered(
             OutboundMessage(
                 channel=channel,

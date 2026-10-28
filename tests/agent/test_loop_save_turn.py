@@ -1447,8 +1447,11 @@ async def test_system_subagent_followup_uses_thread_session_and_metadata(tmp_pat
     assert outbound.message is not None
     assert outbound.message.channel == "websocket"
     assert outbound.message.chat_id == "C123"
+    turn_id = outbound.message.metadata.get("webui_turn_id", "")
+    assert turn_id.startswith("system:")
     assert outbound.message.metadata == {
         "origin_message_id": "msg-123",
+        "webui_turn_id": turn_id,
     }
     assert "thread question" in seen["initial_messages"][1]["content"]
 

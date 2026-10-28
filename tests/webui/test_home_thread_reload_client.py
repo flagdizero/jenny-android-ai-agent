@@ -316,3 +316,36 @@ await tick(30);
 assert.equal(app._threadFailed, false, 'una lettura scavalcata segna il filo come fallito');
 assert.deepEqual(thread(), ['you: hello', 'jenny: hello to you']);
 """)
+
+
+def test_a_helper_report_reads_back_as_one_bubble() -> None:
+    """La frase e il file del rientro di un aiutante, dal transcript alla casa.
+
+    Il rientro e' un turno di sistema: dal 28/10/2026 ha un id (``system:…``),
+    e la rilettura accorpa per id (`_buildTurns`, regola 4). Prima ricaricando
+    stavano in due bolle, dal vivo in una.
+    """
+    import json
+
+    from jenny.webui.transcript_replay import replay_transcript_to_ui_messages
+
+    turn = {"turn_id": "system:r1"}
+    messages = replay_transcript_to_ui_messages([
+        {"event": "user", "chat_id": "default", "text": "cerca la calathea"},
+        {"event": "message", "text": "Ci lavora un aiutante.", "turn_id": "u1"},
+        {"event": "turn_end", "turn_id": "u1"},
+        {"event": "message", "kind": "progress", "text": "ecco la ricerca", **turn},
+        {"event": "message", "kind": "progress", "text": "",
+         "tool_events": [{"phase": "start", "name": "message"}], **turn},
+        {"event": "message", "text": "", **turn,
+         "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end", **turn},
+    ])
+    _run(f"""
+threads['websocket:default'] = {{ messages: {json.dumps(messages)} }};
+await boot();
+await tick(80);
+assert.deepEqual(thread().slice(-2), ['jenny: Ci lavora un aiutante.', 'jenny: ecco la ricerca']);
+const last = [...$('home-thread').querySelectorAll('.home-msg')].at(-1);
+assert.match(last.textContent, /r\\.md/);
+""")

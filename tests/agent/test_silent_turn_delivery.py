@@ -539,3 +539,86 @@ class TestAnAnnounceThatSpokeClosesItsTurnInTheOriginChat:
 
         assert len(completed) == 1
         assert webui_view_target(completed[0].context) == expected
+
+
+class TestAVisibleAnnounceHasATurnId:
+    """Il rientro visibile ha un id di turno, come un turno dell'utente.
+
+    Senza, la rilettura della WebUI non accorpa: la frase e il file del rientro
+    di un aiutante, una bolla sola dal vivo, ricaricando stavano in due (s22,
+    28/10/2026).
+    """
+
+    def _speaks(self, loop: AgentLoop, *, final: str, by_tool: str | None) -> None:
+        tool = loop.tools.get("message")
+        loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(  # type: ignore[method-assign]
+            return_value=False
+        )
+
+        async def run(initial_messages, **kwargs):
+            await kwargs["on_progress"]("Ecco la ricerca.")
+            if by_tool is not None:
+                await tool.execute(content=by_tool)
+            return (final, ["message"] if by_tool else [], [*initial_messages], "stop", False)
+
+        loop._run_agent_loop = run  # type: ignore[method-assign]
+
+    async def _turn_ids(self, loop: AgentLoop, msg: InboundMessage) -> tuple[list, list]:
+        from jenny.bus.runtime_events import TurnCompleted
+        from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+
+        completed: list[TurnCompleted] = []
+
+        async def on_completed(event: TurnCompleted) -> None:
+            completed.append(event)
+
+        loop.runtime_events.subscribe(on_completed, TurnCompleted)
+        await loop._dispatch(msg)
+        sent = [m for m in await _drain(loop) if m.channel == "websocket"]
+        return (
+            [m.metadata.get(WEBUI_TURN_METADATA_KEY) for m in sent],
+            [e.context.metadata.get(WEBUI_TURN_METADATA_KEY) for e in completed],
+        )
+
+    @pytest.mark.parametrize("session_key", ["project:demo", UNIFIED_SESSION_KEY])
+    async def test_step_message_and_turn_end_share_one_id(
+        self, tmp_path: Path, session_key: str,
+    ) -> None:
+        loop = _make_loop(tmp_path)
+        self._speaks(loop, final="", by_tool="Ecco il file.")
+
+        frames, ends = await self._turn_ids(loop, _announce(session_key))
+
+        assert len(frames) == 2 and len(ends) == 1
+        assert len({*frames, *ends}) == 1
+        assert frames[0].startswith("system:")
+
+    async def test_the_final_reply_carries_it_too(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._speaks(loop, final="Fatto.", by_tool=None)
+
+        frames, ends = await self._turn_ids(loop, _announce(UNIFIED_SESSION_KEY))
+
+        assert len(frames) == 2 and len({*frames, *ends}) == 1 and frames[0]
+
+    async def test_two_announces_are_two_turns(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._speaks(loop, final="Fatto.", by_tool=None)
+
+        first, _ = await self._turn_ids(loop, _announce(UNIFIED_SESSION_KEY))
+        second = _announce(UNIFIED_SESSION_KEY)
+        second.metadata["subagent_task_id"] = "sub-2"
+        again, _ = await self._turn_ids(loop, second)
+
+        assert first[0] != again[0]
+
+    async def test_a_silent_announce_gets_none(self, tmp_path: Path) -> None:
+        from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        msg = _announce(HEARTBEAT_SESSION_KEY)
+
+        await loop._process_message(msg)
+
+        assert WEBUI_TURN_METADATA_KEY not in msg.metadata
