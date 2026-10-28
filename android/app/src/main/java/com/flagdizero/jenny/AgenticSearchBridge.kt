@@ -266,7 +266,14 @@ class AgenticSearchBridge(context: Context) {
                 // fosse la pagina chiesta. Su s22, in una ricerca, sei query di
                 // fila hanno avuto i risultati della precedente. Il ripiego a
                 // 500 ms copre una pagina che non risponde al JavaScript.
-                if (wv.url == null) {
+                // Niente segno se cambia solo il `#frammento`: e' una navigazione
+                // nello stesso documento, il segno restava, ogni lettura veniva
+                // saltata e la chiamata aspettava il timeout pieno. E il
+                // documento e' gia' quello chiesto.
+                val current = wv.url
+                val sameDocument = current != null && url.contains('#') &&
+                    current.substringBefore('#') == url.substringBefore('#')
+                if (current == null || sameDocument) {
                     Log.d(TAG, "evaluateOnPage: calling loadUrl($url)")
                     wv.loadUrl(url)
                 } else {
