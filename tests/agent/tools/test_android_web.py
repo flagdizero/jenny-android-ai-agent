@@ -829,6 +829,53 @@ class TestFetchReadsDirectlyFirst:
         bridge.assert_called_once()
         assert out["extractor"] == "webview"
 
+    async def test_a_charset_declared_only_in_the_page_is_honoured(self, monkeypatch):
+        """Una pagina ISO-8859-1 che lo dice solo nel ``<meta>`` non perde le accentate."""
+        import httpx
+
+        page = ('<html><head><meta charset="iso-8859-1"></head><body>'
+                + "<p>Perché la calathea è così delicata? Più luce, però filtrata.</p>" * 60
+                + "</body></html>")
+        self._serve(monkeypatch, lambda req: httpx.Response(
+            200, headers={"content-type": "text/html"}, content=page.encode("latin-1")))
+        out = json.loads(await self._tool().execute("https://example.com/vecchia"))
+        assert out["extractor"] == "direct"
+        assert "Perché la calathea è così delicata" in out["text"]
+
+    async def test_indentation_is_not_text(self, monkeypatch):
+        """Lo scheletro di una pagina JavaScript, molto indentato, va alla WebView."""
+        import httpx
+
+        skeleton = "<html><body>" + ("<li>\n" + " " * 60 + "Menu</li>\n") * 80 + "</body></html>"
+        self._serve(monkeypatch, lambda req: httpx.Response(
+            200, headers={"content-type": "text/html"}, text=skeleton))
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(_LONG_ARTICLE, "https://example.com/app")) as bridge:
+            out = json.loads(await self._tool().execute("https://example.com/app"))
+        bridge.assert_called_once()
+        assert out["extractor"] == "webview"
+
+    async def test_a_site_refusing_the_browser_is_asked_again_as_jenny(self, monkeypatch):
+        """Wikimedia rifiuta col 403 un browser finto dal telefono, e accetta un nome con recapito."""
+        import httpx
+
+        from jenny.security.fetch import JENNY_USER_AGENT
+
+        agents = []
+
+        def handler(req):
+            agents.append(req.headers["user-agent"])
+            if req.headers["user-agent"] != JENNY_USER_AGENT:
+                return httpx.Response(403, text="Please respect our robot policy")
+            return httpx.Response(200, headers={"content-type": "text/html"}, text=_LONG_ARTICLE)
+
+        self._serve(monkeypatch, handler)
+        bridge = Mock(side_effect=AssertionError("the WebView should not be asked"))
+        with patch.object(android_web, "_bridge_fetch", bridge):
+            out = json.loads(await self._tool().execute("https://it.wikipedia.org/wiki/Calathea"))
+        assert out["extractor"] == "direct"
+        assert agents == [android_web.BROWSER_USER_AGENT, JENNY_USER_AGENT]
+
     async def test_a_redirect_to_the_local_network_is_not_followed(self, monkeypatch):
         import httpx
 
