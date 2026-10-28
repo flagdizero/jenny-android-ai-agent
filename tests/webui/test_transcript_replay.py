@@ -388,3 +388,19 @@ def test_a_progress_line_followed_by_the_answer_stays_a_tool_line() -> None:
         {"event": "turn_end"},
     ]
     assert _answers(replay_transcript_to_ui_messages(lines)) == ["acqua una volta al mese"]
+
+
+def test_a_line_before_a_file_that_was_deleted_stays() -> None:
+    """Il file allegato non c'e' piu': la frase scritta sopra resta.
+
+    Rileggendo, il file mancante non torna da ``augment_assistant_media``; prima
+    la frase restava pensiero e la casa la buttava con lui (s22, 28/10/2026).
+    """
+    lines = [
+        {"event": "message", "kind": "progress", "text": "ecco la ricerca: luce filtrata"},
+        {"event": "message", "text": "", "media": ["/ws/output/r.md"],
+         "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    messages = replay_transcript_to_ui_messages(lines, augment_assistant_media=lambda _p: [])
+    assert _answers(messages) == ["ecco la ricerca: luce filtrata"]

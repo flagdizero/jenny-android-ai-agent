@@ -705,7 +705,11 @@ def replay_transcript_to_ui_messages(
             # chiave e stessa forma del payload dal vivo (``ws_sender``).
             extra["error"] = {"kind": error["kind"]}
         extra.update(_turn_fields(rec, "answer"))
-        if "error" in extra or (media and not content_s.strip()):
+        # Conta il file che la riga *portava*, non quello che si trova ancora:
+        # un allegato cancellato non torna da ``augment_assistant_media``, e la
+        # frase scritta sopra restava pensiero — sparita dalla casa insieme a lui.
+        carried_media = bool(media or media_paths or rec.get("media_urls"))
+        if "error" in extra or (carried_media and not content_s.strip()):
             restore_demoted()
         absorb_complete(extra, idx)
         if media:
