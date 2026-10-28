@@ -459,3 +459,42 @@ class TestAVisibleAnnounceShowsItIsWorking:
         await loop._process_message(_announce(HEARTBEAT_SESSION_KEY))
 
         assert statuses == [] and seen["on_progress"] is None
+
+
+class TestAVisibleAnnounceDoesNotRepeatItsMessage:
+    """Il rientro di un aiutante che ha gia' parlato con ``message`` non lo ripete.
+
+    Sul s22, il 28/10/2026: «pronto, te l'ho messo in un file…» col file, e
+    subito sotto la stessa frase come risposta finale.
+    """
+
+    def _spoke_and_said(self, loop: AgentLoop, final: str, *, injected: bool) -> None:
+        tool = loop.tools.get("message")
+        loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(  # type: ignore[method-assign]
+            return_value=False
+        )
+
+        async def fake_run_agent_loop(initial_messages, **_kwargs):
+            tool._sent_in_turn = True
+            return (final, ["message"], [*initial_messages], "stop", injected)
+
+        loop._run_agent_loop = fake_run_agent_loop  # type: ignore[method-assign]
+
+    async def test_the_final_reply_after_message_is_not_delivered(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._spoke_and_said(loop, "pronto, te l'ho messo in un file", injected=False)
+
+        outcome = await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert outcome.disposition is TurnDisposition.SPOKE_VIA_TOOL
+        assert outcome.message is None
+        assert outcome.final_text == "pronto, te l'ho messo in un file"
+
+    async def test_a_user_who_wrote_meanwhile_still_gets_the_answer(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._spoke_and_said(loop, "si', la cambio subito", injected=True)
+
+        outcome = await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert outcome.message is not None
+        assert outcome.message.content == "si', la cambio subito"

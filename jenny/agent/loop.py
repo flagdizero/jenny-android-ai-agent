@@ -2401,7 +2401,7 @@ class AgentLoop(
                 origin, key, "running", started_at=t_wall,
             )
         try:
-            final_content, tools_used, all_msgs, stop_reason, _ = await self._run_agent_loop(
+            run = await self._run_agent_loop(
                 messages, on_progress=on_progress,
                 session=session, channel=channel, chat_id=chat_id,
                 message_id=msg.metadata.get("message_id"),
@@ -2413,6 +2413,7 @@ class AgentLoop(
                 # non puo' usare: un passo aperto li mostra, il resto no.
                 tools=self._system_turn_tools(msg, key),
             )
+            final_content, tools_used, all_msgs, stop_reason, had_injections = run
         finally:
             if origin is not None:
                 await self._runtime_events().run_status_changed(origin, key, "idle")
@@ -2498,9 +2499,18 @@ class AgentLoop(
             # «Background task completed.» sarebbe una bolla vuota di senso, e la
             # scheda del piano mostra gia' l'avanzamento.
             return TurnOutcome.silent(final_text="", stop_reason=stop_reason)
-        # Differenza deliberata dal path utente: nessuna soppressione MessageTool
-        # (_assemble_outbound). Un turno di sistema VISIBILE ha un contratto di
-        # outbound proprio e restituisce sempre una risposta (contenuto o fallback).
+        if spoke_via_tool and not had_injections:
+            # Come nel path utente (``_assemble_outbound``): se ``message`` ha gia'
+            # parlato nella chat d'origine, la risposta finale e' un doppione.
+            # L'annuncio di un aiutante le chiede di mettere il riassunto nel
+            # messaggio col file (``subagent_announce.md``); e il 28/10/2026 sul
+            # s22 la chat mostrava due volte la stessa frase. Un utente che ha
+            # scritto a meta' turno aspetta invece la risposta: quella resta.
+            return TurnOutcome.spoke_via_tool(
+                final_text=final_content or "", stop_reason=stop_reason,
+            )
+        # Altrimenti un turno di sistema VISIBILE restituisce sempre una risposta
+        # (contenuto o fallback).
         content = final_content or "Background task completed."
         outbound_metadata: dict[str, Any] = {}
         if origin_message_id := msg.metadata.get("origin_message_id"):
