@@ -2056,6 +2056,13 @@ class AgentLoop(
                                 channel=msg.channel, chat_id=msg.chat_id,
                                 content="", metadata=msg.metadata or {},
                             ))
+                        elif msg.channel == "system" and ":" in msg.chat_id:
+                            # Un turno di sistema che ha parlato solo con ``message``
+                            # (il rientro di un aiutante) chiude nella chat d'origine,
+                            # come quando consegna. Con ``system`` la WebUI proietta
+                            # solo la chat personale: in un quaderno il ``turn_end``
+                            # non arrivava e la mascotte restava a pensare.
+                            completed_channel, completed_chat_id = msg.chat_id.split(":", 1)
                         continuing = turn_continuation.internal_continuation_pending(msg.metadata)
                         if not continuing:
                             await self._runtime_events().turn_completed(

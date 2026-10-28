@@ -498,3 +498,44 @@ class TestAVisibleAnnounceDoesNotRepeatItsMessage:
 
         assert outcome.message is not None
         assert outcome.message.content == "si', la cambio subito"
+
+
+class TestAnAnnounceThatSpokeClosesItsTurnInTheOriginChat:
+    """Il rientro che ha parlato solo con ``message`` chiude la bolla nella chat d'origine.
+
+    Senza un messaggio da consegnare, ``turn_completed`` partiva col canale
+    ``system``: la WebUI lo proietta sulla chat personale, ma in un quaderno
+    (``project:<nome>``) il ``turn_end`` non arrivava e la mascotte restava a
+    pensare.
+    """
+
+    @pytest.mark.parametrize(
+        ("session_key", "chat_id", "expected"),
+        [
+            ("project:demo", "websocket:p1", ("websocket", "p1")),
+            (UNIFIED_SESSION_KEY, "websocket:default", ("websocket", "default")),
+        ],
+    )
+    async def test_turn_end_reaches_the_origin_chat(
+        self, tmp_path: Path, session_key: str, chat_id: str, expected: tuple[str, str],
+    ) -> None:
+        from jenny.bus.runtime_events import TurnCompleted
+        from jenny.session.webui_turns import webui_view_target
+
+        loop = _make_loop(tmp_path)
+        TestAVisibleAnnounceDoesNotRepeatItsMessage()._spoke_and_said(
+            loop, "pronto, te l'ho messo in un file", injected=False,
+        )
+        completed: list[TurnCompleted] = []
+
+        async def on_completed(event: TurnCompleted) -> None:
+            completed.append(event)
+
+        loop.runtime_events.subscribe(on_completed, TurnCompleted)
+        msg = _announce(session_key)
+        msg.chat_id = chat_id
+
+        await loop._dispatch(msg)
+
+        assert len(completed) == 1
+        assert webui_view_target(completed[0].context) == expected
