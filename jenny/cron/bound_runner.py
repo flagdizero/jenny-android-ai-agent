@@ -133,6 +133,14 @@ def _bound_session_delivery_context(
     monitor: bool = False,
 ) -> tuple[str, str, dict[str, Any]]:
     channel, chat_id, metadata = origin_delivery_context(job)
+    # ``webui`` dice che l'utente ha scritto *questo* messaggio nella WebUI, e
+    # la sua risposta tace con l'app davanti (``runtime.notifier.is_app_reply``).
+    # Un job lo eredita dal turno che l'ha creato (``origin_metadata``), e fino
+    # al 28/10/2026 lo si rimetteva anche qui, per il titolo della sessione che
+    # non c'e' piu': con Jenny launcher, sempre davanti, un promemoria creato
+    # dalla chat non suonava mai a schermo acceso. Tolto alla consegna, non alla
+    # creazione: i job gia' nello store ce l'hanno.
+    metadata.pop("webui", None)
 
     if monitor:
         # Un monitor è lavoro interno: dichiararlo esplicitamente qui è ciò che
@@ -148,7 +156,6 @@ def _bound_session_delivery_context(
         metadata.pop("_wants_stream", None)
 
     if channel == "websocket":
-        metadata["webui"] = True
         metadata.update(
             cron_proactive_delivery_metadata(
                 "websocket",

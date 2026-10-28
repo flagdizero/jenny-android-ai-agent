@@ -288,7 +288,6 @@ class TestRunBoundCronJobSuccess:
         await run_bound_cron_job(job, agent=agent, cron=cron)
 
         metadata = agent.received[0].metadata
-        assert metadata["webui"] is True
         assert metadata[WEBUI_TURN_METADATA_KEY].startswith(f"cron:{job.id}:")
         assert metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {
             "kind": "cron",
@@ -321,6 +320,31 @@ class TestRunBoundCronJobSuccess:
         metadata = agent.received[0].metadata
         assert metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {"kind": "cron"}
         assert metadata[CRON_TRIGGER_META]["job_name"] == message[:30].strip()
+
+    @pytest.mark.parametrize("mode", ["reminder", "monitor"])
+    async def test_a_job_made_in_the_webui_is_an_alert_not_a_reply(self, mode: str) -> None:
+        """Il job eredita ``webui`` dal turno che l'ha creato, e la consegna lo toglie.
+
+        Con ``webui`` l'alert passa da ``postReply``, che tace con l'app davanti:
+        con Jenny launcher, sempre davanti, un promemoria creato dalla chat non
+        suonava mai a schermo acceso (s22, 28/10/2026). Un promemoria e' un
+        avviso: tace solo con la sua chat a schermo.
+        """
+        from jenny.runtime.notifier import is_app_reply
+
+        job = _bound_job(
+            origin_channel="websocket",
+            origin_metadata={"webui": True, "webui_turn_id": "u-1"},
+            mode=mode,
+        )
+        agent = _FakeAgent()
+
+        await run_bound_cron_job(job, agent=agent, cron=_FakeCronRecorder())
+
+        metadata = agent.received[0].metadata
+        assert "webui" not in metadata
+        assert is_app_reply(metadata) is False
+        assert job.payload.origin_metadata["webui"] is True, "lo store non si tocca"
 
     async def test_non_websocket_channel_has_no_webui_metadata(self) -> None:
         job = _bound_job(origin_channel="other-channel")
