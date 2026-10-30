@@ -49,7 +49,7 @@ work and proactive messages possible at all.
 If you have ever self-hosted an AI agent on a server, this is that: except the host is a
 phone you already own, it has a screen, and its battery is the UPS.
 
-**It is a 1.0, built by one person, not a polished consumer product.** Sideloaded, no store and no silent auto-updates (Jenny tells you when a release exists and installs it only when you confirm), and the
+**It is built by one person, not a polished consumer product.** Sideloaded, no store and no silent auto-updates (Jenny tells you when a release exists and installs it only when you confirm), and the
 [known limitations](#known-limitations) are listed in full rather than discovered later.
 
 ## Is it actually free software?
@@ -121,7 +121,7 @@ most of which is the embedded CPython runtime. Verify it against the hash publis
 release page:
 
 ```bash
-shasum -a 256 jenny-1.0.0.apk
+shasum -a 256 jenny-2.0.0.apk
 ```
 
 Android will ask you to allow installing from outside the Play Store. The APK is signed with
@@ -200,8 +200,8 @@ Collected in one place rather than scattered, so you can judge before installing
 
 ## Status and roadmap
 
-**1.0, the first stable release.** It has been my daily driver for months, and from here on a
-change that breaks something you rely on gets a new major number — see the
+**2.0.** It has been my daily driver for months, and since 1.0 a change that breaks
+something you rely on gets a new major number — see the
 [changelog](CHANGELOG.md). It is still one person's project with rough edges, onboarding most of
 all, which is exactly where feedback is worth most.
 
@@ -226,7 +226,7 @@ would want it — GitHub's search ranks on them, and this project has no marketi
 A native Android app with an embedded CPython 3.11 (Chaquopy 17), `minSdk 26` /
 `targetSdk 34`. The agent runs as a persistent foreground service and serves a mobile-first
 SPA over loopback. Messages flow through an async bus that decouples the channel from the
-core. Over 12,000 tests; CI runs `ruff`, `pytest` on 3.11 and 3.12, and `pyright` — blocking on the
+core. Over 15,000 tests; CI runs `ruff`, `pytest` on 3.11 and 3.12, and `pyright` — blocking on the
 subsystems that are already type-clean, advisory on the rest, which is the honest state of a
 codebase being tightened rather than one pretending to be finished.
 

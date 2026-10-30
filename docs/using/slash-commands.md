@@ -76,7 +76,7 @@ While a turn runs, the home's send button turns into **Stop** and sends this com
 No arguments. Output is a fixed-format block (rendered as plain text, not markdown), for example:
 
 ```text
-🐈 jenny v1.0.0
+🐈 jenny v2.0.0
 🧠 Model: gpt-4o
 📊 Tokens: 1234 in / 567 out (40% cached)
 📚 Context: 12k/65k (22% of input budget)
