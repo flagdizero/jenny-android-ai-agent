@@ -7,6 +7,13 @@ breaks something you rely on gets a new major number.
 Releases before 1.0 are described only on their
 [GitHub release pages](https://github.com/flagdizero/jenny-android-ai-agent/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- After undoing a helper with one file, the chat says "1 file put back as it was", not
+  "1 files put back as they were"; the same for the file it left alone.
+
 ## [2.0.0] — 2026-10-30
 
 Four weeks and about 300 changes since 1.0. A notebook becomes a board you arrange, a big job

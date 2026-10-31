@@ -1303,10 +1303,14 @@
       "sheetClose": "Close",
       "undone": {
         "you": "Undone: {count} files put back as they were before her.",
+        "youOne": "Undone: 1 file put back as it was before her.",
         "jenny": "I undid her changes: {count} files put back as they were.",
+        "jennyOne": "I undid her change: 1 file put back as it was.",
         "nothing": "Undone: she hadn't changed anything.",
         "keptOthers": "{count} left as they are, because someone else changed them too: {files}",
-        "keptOther": "{count} left as they are: {files}"
+        "keptOthersOne": "1 left as it is, because someone else changed it too: {files}",
+        "keptOther": "{count} left as they are: {files}",
+        "keptOtherOne": "1 left as it is: {files}"
       },
       "result": {
         "pagesOne": "1 page updated.",
