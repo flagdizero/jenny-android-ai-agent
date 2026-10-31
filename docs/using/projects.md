@@ -174,6 +174,7 @@ Two folders swapping names is refused rather than guessed at, and a notebook who
 
 - [The gardener](./gardener.md) — the background pass that turns journal lines into pages, when it runs, and how to turn it off.
 - [Notebook board](./board.md) — the cards, drawers, reminders and proposals a notebook opens on.
+- [Plans](./plans.md) — a big job in a notebook, proposed as steps you approve and run one at a time.
 - [Wiki](./wiki.md) — reading, searching, editing a page and reporting one, which work on notebooks too.
 - [Memory and Dream](./memory.md) — the personal side of remembering, and the budgets.
 - [Slash commands](./slash-commands.md) — `/gardener`, `/init` and the rest.

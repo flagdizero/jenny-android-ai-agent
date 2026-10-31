@@ -69,7 +69,9 @@ While a turn runs, the home's send button turns into **Stop** and sends this com
 
 `/stop` also cancels an active `/goal`. It does **not** stop the helpers (subagents) already working in the background for this chat: each one has its own bubble, and you stop it from there. When some are still running, the reply says how many keep going.
 
-`/stop all` stops everything: the turn, the goal, and every mini-me (subagent) of this chat — one that finishes after being stopped has its result silently thrown away.
+`/stop all` stops everything: the turn, the goal, and every mini-me (subagent) of this chat — one that finishes after being stopped has its result silently thrown away. It undoes nothing: a mini-me that had changed files offers to undo them from its bubble ([Helpers](helpers.md)).
+
+In a notebook, `/stop` also ends a [plan](plans.md): during the planning it drops the planning (*I stopped preparing the plan.*), and while a plan runs it is the same as **Stop and keep what it did** (*I stopped the plan. The notebook stays as it is now.*). `/new` ends a planning too.
 
 ### `/status` — runtime snapshot
 
@@ -79,7 +81,7 @@ No arguments. Output is a fixed-format block (rendered as plain text, not markdo
 🐈 jenny v2.0.0
 🧠 Model: gpt-4o
 📊 Tokens: 1234 in / 567 out (40% cached)
-📚 Context: 12k/65k (22% of input budget)
+📚 Context: 12k/131k (12% of input budget)
 💬 Session: 48 messages
 ⏱ Uptime: 2h 14m
 ⚡ Tasks: 0 active

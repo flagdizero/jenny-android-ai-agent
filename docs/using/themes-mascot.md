@@ -91,5 +91,7 @@ None of this affects what language Jenny actually *replies* to you in during a n
 
 - [Settings](../reference/settings.md): where this page's controls live.
 - [Chat basics](chat.md) — how the main conversation renders.
+- [Tool reference → screen](../reference/tools.md#screen) — exactly what a screen reading contains, what it leaves out and how long it lasts.
+- [Jenny from your other devices](remote-access.md) — what the floating mascot and screen reading can't do from a browser.
 - [Backup and restore](backup.md) — what does and doesn't travel in a `.jbk` file.
 - [Configuration](../reference/configuration.md) — `config.json` reference, including `agents.defaults.language`.

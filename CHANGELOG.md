@@ -22,10 +22,10 @@ listed at the end, and they are why this is 2.0.
   polaroids that Jenny can see. Reminders for the whole notebook are a free yellow sticky
   note, automations a mint label. The board is yours: Jenny proposes, you move.
 - **Plans.** The Plan button in a notebook's chat starts a planning: Jenny reads the
-  notebook, asks what she needs, searches the web where it falls short, and proposes a list
-  of steps. Nothing moves until you approve it. Then the steps run one at a time, the
-  notebook is photographed before each one, and you can pause, stop or go back to any photo.
-  A plan ends with a check and a list of what it could not find.
+  notebook, asks what she needs, and proposes a list of steps, with what the web will have
+  to fill in. Nothing moves until you approve it. Then the steps run one at a time, the
+  notebook is photographed before it starts, and you can pause, stop, or put it back as it
+  was before the plan. A plan ends with a check and a list of what it could not find.
 - **Helpers you can stop and undo.** Jenny's helpers show up in the chat as her mini-mes.
   From a helper's card you can stop it, and put back every file it changed that nobody has
   touched since. A helper interrupted by a restart, by the app being closed or by the
@@ -35,20 +35,18 @@ listed at the end, and they are why this is 2.0.
   drawer. The phone keeps up with what you write there, and does not ring for it.
 - **Jenny reads the screen.** With her accessibility service on (Android 14+), a tap on the
   floating mascot gives her one read-only look at the app underneath, text and picture.
-  Banking apps, password managers and incognito windows are left out entirely, and the
-  reading stays in memory only.
+  Apps that block screenshots (banking, password managers, incognito windows) are left out
+  entirely. The reading stays in memory for ten minutes, and only a picture she asks for
+  is saved among your files.
 
 ### Home and chat
 
 - **Jenny is the door to the chat.** Wherever the chat is not on screen, tapping the mascot
   brings the real chat up full screen over what you are looking at, with the page still
-  visible beneath, blurred; tap her again or press Back to close it. She can see that page, so she can
-  explain a menu, a setting or a mini-app you have in front of you. On the chat page and the
-  Console a tap makes her wave. This replaces the one-turn minichat in both shells. Wherever the chat is not on screen, tapping the mascot
-  brings the real chat up full screen over what you are looking at, with the page still
-  visible beneath, blurred; tap her again or press Back to close it. She can see that page, so she can
-  explain a menu, a setting or a mini-app you have in front of you. On the chat page and the
-  Console a tap makes her wave. This replaces the one-turn minichat in both shells.
+  visible beneath, blurred; tap her again or press Back to close it. She can see that page,
+  so she can explain a menu, a setting or a mini-app you have in front of you. On the chat
+  page and the Console a tap makes her wave. This replaces the one-turn minichat in both
+  shells.
 - **The field you write in is made of glass**, in every theme and each in its theme's style:
   over a page you see its colours through it. Only your own messages have bubbles; Jenny's
   replies run on the page, with the room they need. In Kyoto your messages now have rounded

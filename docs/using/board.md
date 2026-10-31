@@ -275,6 +275,7 @@ The files under `board/cards/` are summaries of the wiki, and the next board pas
 
 - [Notebooks](./projects.md) — what a notebook is, capture, and what Jenny sees on every turn.
 - [The gardener](./gardener.md) — the background pass that keeps the wiki and the board current.
+- [Plans](./plans.md) — reorganising a whole notebook, step by step, with a way back.
 - [Wiki](./wiki.md) — reading, editing and reporting a page.
 - [Mini-apps](./mini-apps.md) — the apps whose data can sit in a drawer.
 - [Scheduling and proactivity](./scheduling.md) — the system jobs, the notebook clock among them.

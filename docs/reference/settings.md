@@ -105,10 +105,15 @@ The UI refuses to delete the last remaining provider ("Cannot delete the last pr
 
 | Field | Range | Default |
 |---|---|---|
-| Context window | 65,536 or 262,144 tokens (the list comes from the server) | 65,536 |
+| Context window | 65,536, 131,072 or 262,144 tokens (the list comes from the server) | 131,072 |
 | Max Tokens | integer ≥ 1 | 32000 |
 | Temperature | 0.0 – 2.0 | 0.1 |
 | Reasoning Effort | empty / low / medium / high | medium |
+| Jenny's reasoning | Same as helpers / low / medium / high | low |
+
+The context window was 65,536 until 2.0. An install still at that value moves to 131,072 once, at the first start after the update, and the log says so; any other value you chose is left alone.
+
+**Reasoning Effort** applies to the helpers, Dream and the gardener. **Jenny's reasoning** is hers alone, in the chats you talk to her in: she hands the long thinking to helpers, so a low setting lets her answer sooner. *Same as helpers* makes her follow Reasoning Effort. When Reasoning Effort is empty, nobody's reasoning is set, and the second select is greyed out.
 
 Max Tokens is the ceiling for a single reply. On a reasoning model the thinking counts against that same budget, which is why the default is 32000 (as in OpenCode) rather than the 8192 and then 16384 of earlier versions: a turn that planned at length could spend the whole allowance before saying anything. What is sent is never more than a quarter of the context window, so a model with a small window keeps room for the prompt. Reasoning Effort defaults to `medium` instead of leaving the provider to decide, for the same reason: an unbridled reasoning model will happily spend the entire output budget thinking about an open-ended task.
 
@@ -162,7 +167,7 @@ If no usage has been recorded yet, the block shows "No usage data yet" instead o
 |---|---|---|
 | Search engine | dropdown | bing |
 | Max results | 1 – 10 | 5 |
-| Timeout (sec) | 1 – 120 | 30 |
+| Timeout (sec) | 1 – 120 | 15 |
 | Fetch max chars | 1000 – 200000 | 50000 |
 
 The Search engine dropdown looks like a choice but has exactly one working option: the on-device web search tool only supports Bing, and the backend rejects any other value. All four fields save together.
@@ -212,6 +217,20 @@ The private key and the `known_hosts` file live **outside** the workspace, so th
 ### Telegram
 
 One row shows the state (for example "paired with …", "on, not paired" or "off"). Tapping it opens the pairing panel, the same widget used during onboarding: paste a BotFather token, get a 6-digit pairing code, send it to the bot from Telegram. The panel also has the **Channel active** switch, **Change token** and **Unpair**, which asks first. Changes apply immediately, with no app restart. Full walkthrough: [Telegram bridge](../using/telegram.md).
+
+### From other devices
+
+One row, **Tailscale**, sums up the state: *off*, *on · waiting for Tailscale*, *on*, or who is connected. Tapping it opens the panel. How to use it: [Jenny from your other devices](../using/remote-access.md).
+
+| Control | Effect | Default |
+|---|---|---|
+| **Reachable over Tailscale** | Opens a second listener on the phone's Tailscale addresses, port 18790, so your other Tailscale devices can open Jenny in a browser. The home Wi-Fi stays out. While it is on, Jenny also keeps Tailscale itself on. The first time you turn it on, it creates the link's key. Turning it off keeps the key. | Off |
+| **Open from** | The address to open from the other device, without the key. | — |
+| **Copy link** / **Show QR** | The full link, key included, copied or shown as a QR code to scan from another phone. | — |
+| **Connected now** | Who is connected, since when, and how many windows each has open. | — |
+| **Disconnect everyone and change the key** | After a confirmation, closes every remote connection and replaces the key: old links stop working. The phone itself is not touched. | — |
+
+When Tailscale is down, the panel says so (*Waiting for Tailscale*, *Tailscale needs you*), and on the phone it offers **Open Tailscale**. Seen from another device, the panel warns that turning the switch off disconnects that window, and that only the phone can turn it back on.
 
 ### Skills
 
