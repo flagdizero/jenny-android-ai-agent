@@ -42,6 +42,10 @@ const i18n = {
 };
 const { describeWireError } = await import('__WIRE_ERROR_URL__');
 const sessionManager = { currentChatId: 'default' };
+/* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
+   suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
+const chatTime = (ms) => (ms ? '11:26' : '');
+const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
 
 let allNodes = [];
 function makeNode() {
@@ -50,6 +54,8 @@ function makeNode() {
     appendChild(child) { child.isConnected = true; node.children.push(child); return child; },
     insertBefore(child) { child.isConnected = true; node.children.unshift(child); return child; },
     get firstChild() { return node.children[0] || null; },
+    /* Il «Riprova» si cerca nel filo (`_append` toglie quello di prima). */
+    querySelectorAll() { return []; },
     remove() {
       node.isConnected = false;
       for (const parent of allNodes) {
@@ -67,6 +73,7 @@ function makeChat() {
   allNodes = [];
   const chat = {
     el: makeNode(),
+    _userSent: new WeakMap(),
     turnId: null,
     _empty: true,
     _pendingSend: null,
@@ -78,11 +85,14 @@ function makeChat() {
     _originBadge() { return null; },
     _appendMedia() {},
     _delta() {}, _streamEnd() {}, _message() {}, _externalUser() {}, _turnEnd() {},
+    // Una riga segue il fondo come il resto del filo (v. `_follow`, banco suo).
+    _follow() { this.scrollToBottom(); },
     __APPEND_OWN__,
     __ERROR__,
     __TAKE_BACK__,
     __NOTE__,
     __APPEND_USER__,
+    __TIME_EL__,
     __APPEND__,
     __BELONGS__,
     __CROSSES__,
@@ -112,6 +122,7 @@ def _harness_src() -> str:
         .replace("__TAKE_BACK__", member(src, "_takeBackPendingSend"))
         .replace("__NOTE__", member(src, "_appendNote"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
+        .replace("__TIME_EL__", member(src, "_timeEl"))
         .replace("__APPEND__", member(src, "_append"))
         .replace("__BELONGS__", member(src, "_belongsHere"))
         .replace("__CROSSES__", member(src, "_crossesTurn"))
@@ -217,7 +228,9 @@ def test_the_thread_keeps_its_bottom_when_the_rows_below_it_grow() -> None:
     body = block.group(1)
     # Per riferimento e non per classe (25/09/2026): le foto del trasloco
     # copiano la chat, e una ricerca per classe puo' trovare una copia.
-    for ref in ("this.composer", "this.pending", "this.activityEl", "this.wire"):
+    # La riga di lavoro non c'e' piu' (05/10/2026): chi lavora e' una bolla
+    # dentro il filo, e il fondo lo riaggancia ``HomeChat.liveChanged``.
+    for ref in ("this.composer", "this.pending", "this.wire"):
         assert ref in body, f"{ref} non è osservato: il filo perderà il fondo"
     assert "keepBottom()" in body, "l'osservatore misura e basta, non riaggancia il fondo"
 

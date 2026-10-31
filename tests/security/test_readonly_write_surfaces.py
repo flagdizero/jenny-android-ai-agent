@@ -165,11 +165,23 @@ _ASKS_FOR_ITSELF = {
     "agent/tools/journal.py": (
         "appende al diario del progetto: non passa dai tool file, ha il suo gate"
     ),
+    "agent/tools/app_tool.py": (
+        "scrive il codice delle app in apps/.drafts, che i tool file non possono "
+        "scrivere, e le pose sulla bacheca: ha il suo gate"
+    ),
     # T4.6/T4.7: nessuna primitiva di scrittura, e per questo è stato invisibile
     # a questo file. Scrive ``metadata[goal_state]`` e chiama ``sessions.save``:
     # stato che sopravvive al turno, alla conversazione e al riavvio, e che cambia
     # il comportamento futuro (wall timeout, chip del goal, iniezione «keep
     # working»). Stessa famiglia di un job cron, stesso rifiuto.
+    "agent/tools/board.py": (
+        "la bacheca di un quaderno passa dal suo imbuto (board/store.py), che i tool file "
+        "non possono scrivere: ha il suo gate"
+    ),
+    "agent/tools/notebook.py": (
+        "remove_pages cancella pagine e scrive la traccia in raw/removed/ senza passare dai tool "
+        "file: ha il suo gate, prima di ogni recinto"
+    ),
     "agent/tools/long_task.py": "registra un goal sostenuto via sessions.save, non un path",
     # Stava in ``_OUT_OF_SCOPE`` con «scrive su una
     # macchina remota», ma ``ssh_transfer direction=down`` scrive **sul
@@ -487,6 +499,69 @@ async def _probe_journal(root: Path, readonly: bool) -> str:
     return out
 
 
+async def _probe_app_tool(root: Path, readonly: bool) -> str:
+    import json
+    from unittest.mock import patch
+
+    from jenny.agent.tools.app_tool import AppTool
+    from jenny.agent.tools.context import bind_request_context, reset_request_context
+
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="unified:default", session_key="unified:default"))
+    try:
+        with _turn(root, readonly), patch("jenny.config.paths.get_workspace_path",
+                                          lambda: root):
+            out = await AppTool().execute(action="draft", slug="conta", files={
+                "app.json": json.dumps({"name": "Conta", "description": "x"})})
+    finally:
+        reset_request_context(token)
+    if readonly:
+        assert not (root / "apps").exists(), "in sola lettura niente codice di app"
+    return out
+
+async def _probe_board(root: Path, readonly: bool) -> str:
+    from jenny.agent.tools.board import BoardTool
+    from jenny.agent.tools.context import bind_request_context, reset_request_context
+    from jenny.board.store import mutate_board, read_board
+
+    project = root / "wikis" / "orto"
+    (project / "wiki").mkdir(parents=True)
+    mutate_board(project, lambda b: b["cards"].append(
+        {"id": "acero", "title": "Acero", "pages": [], "pos": {"x": 1, "y": 1}}))
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:orto", session_key="project:orto"))
+    try:
+        with _turn(project, readonly):
+            out = await BoardTool().execute(action="remove_card", card="acero")
+    finally:
+        reset_request_context(token)
+    if readonly:
+        assert read_board(project)["cards"], "in sola lettura la scheda resta dov'era"
+    return out
+
+
+async def _probe_notebook(root: Path, readonly: bool) -> str:
+    from jenny.agent.tools.context import bind_request_context, reset_request_context
+    from jenny.agent.tools.notebook import NotebookEditTool
+
+    project = root / "wikis" / "orto"
+    (project / "wiki").mkdir(parents=True)
+    page = project / "wiki" / "acero.md"
+    page.write_text("---\nstate: open\n---\n# Acero\n", encoding="utf-8")
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:orto", session_key="project:orto"))
+    try:
+        with _turn(project, readonly):
+            out = await NotebookEditTool().execute(action="remove_pages",
+                                                   pages=["wiki/acero.md"], reason="prova")
+    finally:
+        reset_request_context(token)
+    if readonly:
+        assert page.exists(), "in sola lettura la pagina resta"
+        assert not (project / "raw" / "removed").exists(), "in sola lettura nessuna traccia"
+    return out
+
+
 async def _probe_long_task(root: Path, readonly: bool) -> str:
     from jenny.session.goal_state import GOAL_STATE_KEY
 
@@ -537,6 +612,9 @@ _PROBES: dict[str, Probe] = {
     "agent/tools/cron.py": _probe_cron,
     "agent/tools/app_update.py": _probe_app_update,
     "agent/tools/journal.py": _probe_journal,
+    "agent/tools/app_tool.py": _probe_app_tool,
+    "agent/tools/board.py": _probe_board,
+    "agent/tools/notebook.py": _probe_notebook,
     "agent/tools/long_task.py": _probe_long_task,
     "agent/tools/ssh.py": _probe_ssh,
 }

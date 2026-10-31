@@ -18,7 +18,7 @@
    una volta. Resta per il turno corrente e sparisce a `turn_end`, o comunque
    scade da sé dopo `SA_LINGER_MS` se quel frame non arriva mai; lo storico vero
    è nella chat (l'orchestratore riassume ogni esito) e nei record su disco. */
-export const SA_TERMINAL_STATES = ['done', 'failed', 'cancelled'];
+export const SA_TERMINAL_STATES = ['done', 'failed', 'budget', 'cancelled'];
 
 /* Quanto vive una card terminale se `turn_end` non arriva mai. `turn_end` resta
    il modo normale in cui una card sparisce, ma è un frame **live**: nessuno lo
@@ -78,14 +78,25 @@ export const SA_ACTIONS = {
   running: { card: ['stop'], modal: ['stop'] },
   stalled: { card: ['stop', 'restart'], modal: ['stop', 'restart'] },
   failed: { card: [], modal: ['restart'] },
+  /* budget: fermata perché ha finito le chiamate. Come `failed` qui; il modo
+     giusto di riprenderla (continuare con la storia) sta nella casa. */
+  budget: { card: [], modal: ['restart'] },
   done: { card: [], modal: [] },
   cancelled: { card: [], modal: [] },
 };
 
-/** Azioni ammesse per stato su una superficie ('card' | 'modal'). */
-export function saActions(state, surface) {
-  const row = SA_ACTIONS[String(state || '')];
+/** Azioni ammesse per stato su una superficie ('card' | 'modal').
+ *
+ * `entry` (facoltativa) e' la voce dello snapshot. Serve a un caso solo: una
+ * fermata al budget, o dal provider (`failed`), con la storia ancora intera
+ * (`resumable`) non offre il rilancio da zero, che butterebbe quel che ha letto
+ * e scritto; si riprende dalla casa («Falla continuare») o da Jenny con
+ * `subagent_send`. */
+export function saActions(state, surface, entry = null) {
+  const key = String(state || '');
+  const row = SA_ACTIONS[key];
   if (!row) return [];
+  if ((key === 'budget' || key === 'failed') && entry?.resumable) return [];
   return row[surface] || [];
 }
 

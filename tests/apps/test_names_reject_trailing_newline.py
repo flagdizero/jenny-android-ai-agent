@@ -10,17 +10,12 @@ difetto corretto sugli id del filo in ``security/wire_ids.py``.
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
 
 from jenny.apps import manifest
 from jenny.apps.storage import StorageError, _collection_path
-
-VALIDATOR = (
-    Path(__file__).resolve().parents[2] / "jenny/skills/app-creator/scripts/validate_app.py"
-)
 
 
 @pytest.mark.parametrize("regex", ["SLUG_RE", "ACTION_NAME_RE", "COLLECTION_RE"])
@@ -35,13 +30,3 @@ def test_a_collection_with_a_newline_never_becomes_a_path(tmp_path: Path) -> Non
     assert _collection_path(tmp_path, "notes").name == "notes.jsonl"
     with pytest.raises(StorageError):
         _collection_path(tmp_path, "notes\n")
-
-
-def test_the_skill_validator_uses_the_same_patterns() -> None:
-    """Il commento in ``manifest.py`` le vuole identiche a quelle dello script
-    della skill che crea le app: chi ne cambia una deve cambiare l'altra."""
-    spec = importlib.util.spec_from_file_location("validate_app", VALIDATOR)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    for name in ("SLUG_RE", "ACTION_NAME_RE", "COLLECTION_RE"):
-        assert getattr(module, name).pattern == getattr(manifest, name).pattern, name

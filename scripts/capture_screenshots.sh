@@ -23,14 +23,27 @@ SHOTS=(
 "hero-chat|Home, Jenny page: a real exchange where she uses a tool on a mini-app she wrote (e.g. log a meal, read the day back), plus one more short turn. This is the shot people judge the project by."
 "apps|A Jenny App open from the Apps page, with some data in it."
 "themes|Home -> Settings, the theme card at the top."
-"wiki-graph|Notebooks -> a notebook with ~10+ linked pages -> Pages -> Map tab."
+"notebook-board|Notebooks -> a notebook with a few cards on its board, a thread or two between them."
+"notebook-drawer|The same board -> a card held open in its drawer."
 "wiki-reader|The same notebook -> a page open in the reader, a passage selected so the Report bar shows."
-"notebook-open|The same notebook's Chat, with a short question and her answer under the header."
 "onboarding-format|First run (fresh install), step 1: the two format cards."
 "onboarding-model|First run, step 3: the model list with one selected. Never capture step 2 once the key is typed."
 "app-card|Apps page, long press on a Jenny App: the card with Open / Add as a page / Edit / Delete."
 "workshop-console|Settings -> Workshop, Console: a reply with its tool pills and Show thinking, keyboard closed."
+"notebooks|Home -> Notebooks: the bento of covers, several notebooks with different ages."
+"chat-over-board|The notebook's board -> tap Jenny: the notebook chat over the blurred board, one exchange."
+"plan-proposed|A notebook chat -> Plan button, ask for a job: the proposed plan card, scrolled to its top."
+"plan-running|The same plan approved and at a middle step with a helper at work, Pause and Stop in view."
+"helper-stop|A notebook chat with a helper that already changed a file -> Stop her: the three-choice sheet."
 )
+
+# The 2.0 set (31/10/2026) was shot on jenny_s22 in English, with invented data only
+# (the repo is public): a "garden" notebook with six plants, a soil-sensor app and a
+# cat's meal log, answered by a scripted fake provider. The plant photos on the board
+# are public domain or CC0, from Wikimedia Commons: "Citrus x limon flowers" (Ben Cody,
+# PD), "Ficus carica bonsai A D150625 fig" and "... D150915 fig" (Tangopaso, PD),
+# "Cherry tomatoes plant" (Leon Brooks, PD), "Orange cherry tomatoes" (Punker1999, CC0),
+# "Salvia rosmarinus 168046536" (Quentin Groom, CC0).
 
 # Physical id of the display to capture, resolved at runtime rather than hardcoded:
 # it differs per device, and the Titan 2 exposes two (a 1436x1440 main panel and a

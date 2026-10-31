@@ -28,8 +28,8 @@ SHOP = ASSETS / "mobile-style.css"
 
 # I campi che dicevano il fuoco col solo colore del bordo, o non lo dicevano.
 _FIELDS = {
-    HOME: (".home-field:has(:focus-visible)", ".home-search:focus-within", ".home-rules:focus",
-           ".home-key-input:focus", ".home-audit-comment:focus"),
+    HOME: (".home-field:has(:focus-visible)", ".home-board-search-input:focus", ".home-rules:focus",
+           ".home-key-input:focus", ".home-audit-comment:focus", ".home-drawer-fix-area:focus"),
     SHOP: (".compose-pill:has(:focus-visible)", ".oc-dialog-input:focus", ".settings-input:focus",
            ".launcher-search:focus", ".onboarding-input:focus"),
 }
@@ -90,12 +90,12 @@ def test_every_control_has_a_ring_by_default() -> None:
     assert "outline: 2px solid var(--focus-ring)" in m.group(2)
 
 
-def test_the_page_search_says_where_the_focus_is() -> None:
-    field = _bodies(HOME, ".home-search-input")
+def test_the_board_search_says_where_the_focus_is() -> None:
+    """La lente della bacheca toglie l'anello del browser: lo deve rimettere
+    il bordo, o il fuoco e' invisibile."""
+    field = _bodies(HOME, ".home-board-search-input:focus")
     assert "outline: none" in field
-    assert _bodies(HOME, ".home-search:focus-within"), (
-        "il campo toglie l'anello e la pastiglia non lo rimette: fuoco invisibile"
-    )
+    assert "var(--focus-ring)" in field
 
 
 def test_a_finger_on_a_composer_button_does_not_light_the_composer() -> None:

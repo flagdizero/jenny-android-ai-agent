@@ -279,20 +279,16 @@ def _script(body: str, pages: list[dict], view: str = "chat") -> str:
                 },
               }),
             };
-            /* Il trasloco finto: registra, e dice se il pannello era ancora
-               attaccato quando gli si chiedeva di riprendere la chat — e'
-               l'unica domanda che conta per `bringBackHome`. Il trasloco vero
-               ha il suo banco (`test_home_move_client.py`). */
+            /* Il trasloco finto: registra. Il trasloco vero ha il suo banco
+               (`test_home_move_client.py`). */
             const moves = [];
             app.chatMove = {
               read: Promise.resolve('letto'),
               arrives(p, k) { moves.push({ fa: 'arriva', p, k }); },
-              snapshotIfNeeded(p, k) { moves.push({ fa: 'foto', p, k }); },
-              bringBackHome(v, c) {
-                moves.push({ fa: 'home', v, c, attached: track.children.includes(v) });
-              },
-              leaves(p, h, k) { moves.push({ fa: 'lascia', p, h, k }); return Promise.resolve(); },
             };
+            /* Un quaderno si apre sulla sua bacheca: lo fa il guscio. */
+            const opened = [];
+            app.openNotebook = (name) => { opened.push(name); return Promise.resolve('bacheca'); };
             const arrivals = () => moves.filter((x) => x.fa === 'arriva');
             const PERSONAL = 'websocket:default';
             app.currentKey = () => PERSONAL;
@@ -333,6 +329,8 @@ def _run(
             ASSETS / "shared" / "horizontal-swipe.js",
             root / "shared" / "horizontal-swipe.js",
         )
+        # Il colore dei quaderni (la copertina della porta): modulo foglia.
+        shutil.copy(ASSETS / "shared" / "spines.js", root / "shared" / "spines.js")
         # Il client API finto: risponde quel che il caso vuole, e ricorda le
         # scritture. Non si tocca la rete e non si tocca `config.json`.
         # La cornice di una Jenny App: qui basta sapere **che** viene
@@ -646,7 +644,7 @@ def test_a_read_that_fails_leaves_the_chat_standing() -> None:
 def test_the_chat_lives_inside_a_page_panel() -> None:
     html = (UI / "index.html").read_text(encoding="utf-8")
     track = html.split('class="home-track"', 1)[1].split("</div>\n\n  <!--", 1)[0]
-    for piece in ("home-thread", "home-empty", "home-activity", "home-composer"):
+    for piece in ("home-thread", "home-empty", "home-composer"):
         assert piece in track, f"{piece} e' rimasto fuori dalla pista"
 
 
@@ -659,7 +657,7 @@ def test_one_rule_hides_the_track_not_six_pieces() -> None:
     """
     css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     assert ".home-shell:not([data-view='chat']) .home-showcase { display: none; }" in css
-    for piece in ("home-thread", "home-composer", "home-activity"):
+    for piece in ("home-thread", "home-composer", "home-live"):
         assert f":not([data-view='chat']) .{piece}" not in css
 
 
@@ -851,7 +849,8 @@ def test_the_shell_says_which_page_is_on_from_the_first_frame() -> None:
         "  _placeJenny() {}\n"
         "  _syncJennyPlace() {}\n"
         "  _applyHead() {}\n"
-        "  _reportChatOnScreen() {}\n  "
+        "  _reportChatOnScreen() {}\n"
+        "  _savePlace() {}\n  "
         + member(app_js, "onPageChanged")
         + "\n}\n"
         "const g = new FakeShell();\n"
@@ -1156,13 +1155,13 @@ def test_a_finger_that_only_the_window_saw_moves_nothing() -> None:
     )
 
 
-# ── Le pagine conversazione (23/09/2026) ────────────────────────────────────
+# ── Le pagine dei quaderni appesi: porte (05/10/2026) ─────────────────────
 #
-# Una scorciatoia che cambia la conversazione dell'unica chat, travestita da
-# pagina. Qui si prova l'aggancio: che le pagine chiamino il trasloco nei
-# momenti giusti, con i pannelli giusti, e la regola che le tiene insieme —
-# **una pagina quaderno mostra solo il suo quaderno**. Il trasloco vero, con
-# la foto e i suoi tranelli, ha il banco suo.
+# Fino al 05/10/2026 una pagina quaderno era una scorciatoia che cambiava la
+# conversazione dell'unica chat, travestita da pagina. Ora un quaderno si apre
+# sempre sulla sua bacheca, e la sua pagina e' una **porta**: arrivandoci il
+# guscio apre la bacheca (v. `HomeApp._openDoor`). Qui si prova che la chat
+# non ci arriva piu', e che la pagina ha la sua copertina.
 
 MIXED = [
     {"id": "a1", "kind": "app", "ref": "orto"},
@@ -1171,16 +1170,27 @@ MIXED = [
 ]
 
 
-def test_arriving_on_a_notebook_page_brings_the_chat_there() -> None:
-    """Col pannello che la pista mostra davvero, e con la chiave del quaderno."""
+def test_arriving_on_a_notebook_page_does_not_bring_the_chat() -> None:
     _run(
         "moves.length = 0;\n"
         "homePages.goToId('q1');\n"
-        "const a = arrivals();\n"
-        "assert.equal(a.length, 1);\n"
-        "assert.equal(a[0].k, 'project:piante');\n"
-        "assert.equal(a[0].p, homePages.panelOf(I('q1')));\n"
-        "assert.equal(a[0].p.dataset.id, 'q1');\n",
+        "assert.equal(arrivals().length, 0, 'la chat e’ andata nella porta');\n",
+        MIXED,
+    )
+
+
+def test_a_notebook_page_is_a_door_with_its_cover() -> None:
+    """Il pallino, il nome, e un bottone che apre la bacheca."""
+    _run(
+        "homePages.goToId('q1');\n"
+        "await new Promise((r) => setTimeout(r, 5));\n"
+        "const q = homePages.panelOf(I('q1'));\n"
+        "const door = q.querySelector('.home-door');\n"
+        "assert.ok(door, 'la porta non ha la copertina');\n"
+        "assert.equal(door.querySelector('.home-door-name').textContent, 'piante');\n"
+        "const open = door.querySelector('.home-door-open');\n"
+        "open.listeners.click[0]();\n"
+        "assert.deepEqual(opened, ['piante']);\n",
         MIXED,
     )
 
@@ -1209,41 +1219,14 @@ def test_passing_through_apps_does_not_touch_the_chat() -> None:
     )
 
 
-def test_a_notebook_page_off_screen_keeps_its_photo_and_is_never_emptied() -> None:
-    """Spenta, ma non vuota: la foto e' quel che si vede entrare scorrendo.
-
-    E soprattutto non si svuota col `textContent = ''` delle altre: se la
-    chat e' parcheggiata li' mentre guardi un'app, porterebbe via la chat.
-    """
+def test_a_door_off_screen_keeps_its_cover() -> None:
+    """Spenta, ma non vuota: la copertina e' quel che si vede entrare scorrendo."""
     _run(
+        "homePages.goToId('q1');\n"
+        "await new Promise((r) => setTimeout(r, 5));\n"
         "const q = homePages.panelOf(I('q1'));\n"
-        "const parcheggiata = createEl(null, 'home-chat');\n"
-        "q.appendChild(parcheggiata);\n"
-        "moves.length = 0;\n"
         "homePages.goToId('a1');\n"
-        "const f = moves.filter((x) => x.fa === 'foto');\n"
-        "assert.equal(f.length, 1);\n"
-        "assert.equal(f[0].p, q);\n"
-        "assert.equal(f[0].k, 'project:piante');\n"
-        "assert.ok(q.children.includes(parcheggiata), 'la pagina quaderno e stata svuotata');\n",
-        MIXED,
-    )
-
-
-def test_redrawing_the_pages_takes_the_chat_back_before_throwing_a_panel() -> None:
-    """Salvare l'elenco ridisegna i pannelli: la chat torna a casa **prima**.
-
-    Il finto registra se il pannello era ancora attaccato al momento della
-    domanda: dopo, sarebbe troppo tardi — la chat sarebbe gia' andata via con
-    lui.
-    """
-    _run(
-        "moves.length = 0;\n"
-        "await homePages.save(PAGES);\n"
-        "const c = moves.filter((x) => x.fa === 'home');\n"
-        "assert.equal(c.length, 3, 'non ha chiesto per ogni pannello');\n"
-        "assert.ok(c.every((x) => x.attached), 'ha chiesto dopo aver buttato il pannello');\n"
-        "assert.ok(c.every((x) => x.c === chatPanel), 'la casa e il pannello della chat');\n",
+        "assert.ok(q.querySelector('.home-door'), 'la porta e’ stata svuotata');\n",
         MIXED,
     )
 
@@ -1259,41 +1242,33 @@ def test_a_notebook_page_is_named_after_its_notebook() -> None:
 # ── Da fuori: i Quaderni, Home, un avviso ────────────────────────────────────
 
 
-def test_a_notebook_opens_inside_the_notebooks_page() -> None:
-    """Dove l'hai toccato, anche se ha una pagina sua, e anche dalla pagina chat.
+def test_a_notebook_always_opens_on_its_board() -> None:
+    """Dal 05/10/2026, da dovunque lo si chieda: la pista non si muove, la chat
+    non cambia posto, e chi chiama riceve la promessa del guscio.
 
-    Fino al 26/09/2026 si apriva nella pagina chat («fai come ora, non
-    scorrere», 23/09), e la pagina chat prendeva il suo nome nella fila: una
-    pagina che si rinomina a seconda di cosa ci guardi dentro. Ora la pagina
-    chat resta la conversazione personale, e il quaderno ci arriva col
-    trasloco, nel pannello dei Quaderni.
+    Fino ad allora si apriva nella pagina Quaderni, con la sua chat; e prima
+    del 26/09/2026 nella pagina chat, che prendeva il suo nome nella fila.
     """
     _run(
         "moves.length = 0;\n"
+        "const where = homePages.index;\n"
         "const r = await homePages.openConversation('project:piante');\n"
-        "assert.equal(homePages.index, I('notebooks'), 'il quaderno non e\u2019 nei Quaderni');\n"
-        "assert.equal(homePages.notebooksConversation, 'project:piante');\n"
+        "assert.deepEqual(opened, ['piante']);\n"
+        "assert.equal(homePages.index, where, 'la pista si e’ mossa');\n"
         "assert.equal(homePages.homeConversation, PERSONAL, 'la pagina chat ha preso il quaderno');\n"
-        "assert.deepEqual(shown, [], 'la chat e\u2019 cambiata dove non c\u2019era');\n"
-        "const a = arrivals();\n"
-        "assert.equal(a.length, 1);\n"
-        "assert.equal(a[0].p, notebooksPanel);\n"
-        "assert.equal(a[0].k, 'project:piante');\n"
-        "assert.ok(notebooksPanel.flags.has('data-open'), 'l\u2019elenco resta sopra la chat');\n"
-        "assert.equal(r, 'letto', 'chi chiama non aspetta la lettura');\n",
+        "assert.equal(arrivals().length, 0);\n"
+        "assert.deepEqual(shown, []);\n"
+        "assert.equal(r, 'bacheca');\n",
         MIXED,
     )
 
 
 def test_the_personal_conversation_opens_on_the_chat_page() -> None:
-    """Dai Quaderni, con un quaderno aperto: la personale ha il suo posto, e il
-    quaderno resta aperto dov'era."""
     _run(
-        "await homePages.openConversation('project:piante');\n"
+        "homePages.goTo(I('notebooks'));\n"
         "moves.length = 0;\n"
         "await homePages.openConversation(PERSONAL);\n"
         "assert.equal(homePages.index, CHAT());\n"
-        "assert.equal(homePages.notebooksConversation, 'project:piante', 'aprire la personale ha chiuso il quaderno');\n"
         "const a = arrivals();\n"
         "assert.equal(a.length, 1);\n"
         "assert.equal(a[0].p, chatPanel);\n"
@@ -1302,85 +1277,20 @@ def test_the_personal_conversation_opens_on_the_chat_page() -> None:
     )
 
 
-def test_coming_back_to_the_notebooks_brings_the_open_notebook() -> None:
-    """Il quaderno aperto resta aperto quando scorri via: tornando, la chat
-    torna nel pannello con la sua conversazione. Senza un quaderno aperto i
-    Quaderni sono l'elenco, e il trasloco non si chiama."""
-    _run(
-        "moves.length = 0;\n"
-        "homePages.goTo(I('notebooks'));\n"
-        "assert.equal(arrivals().length, 0, 'l\u2019elenco ha chiamato il trasloco');\n"
-        "await homePages.openConversation('project:piante');\n"
-        "homePages.goTo(CHAT());\n"
-        "moves.length = 0;\n"
-        "homePages.goTo(I('notebooks'));\n"
-        "const a = arrivals();\n"
-        "assert.equal(a.length, 1);\n"
-        "assert.equal(a[0].p, notebooksPanel);\n"
-        "assert.equal(a[0].k, 'project:piante');\n",
-        MIXED,
-    )
-
-
-def test_closing_a_notebook_brings_back_the_list() -> None:
-    """La chat torna a casa con la conversazione di casa, senza foto sopra
-    l'elenco (lo fa `leaves`, che ha il suo banco nel trasloco)."""
-    _run(
-        "await homePages.openConversation('project:piante');\n"
-        "moves.length = 0;\n"
-        "assert.equal(homePages.closeNotebook(), true);\n"
-        "assert.equal(homePages.notebooksConversation, null);\n"
-        "assert.ok(!notebooksPanel.flags.has('data-open'), 'l\u2019elenco resta nascosto');\n"
-        "const l = moves.filter((x) => x.fa === 'lascia');\n"
-        "assert.equal(l.length, 1);\n"
-        "assert.equal(l[0].p, notebooksPanel);\n"
-        "assert.equal(l[0].h, chatPanel);\n"
-        "assert.equal(l[0].k, PERSONAL);\n"
-        "assert.equal(homePages.closeNotebook(), false, 'un elenco si e\u2019 chiuso due volte');\n",
-        MIXED,
-    )
-
-
-def test_a_renamed_notebook_stays_open_in_the_notebooks() -> None:
-    _run(
-        "await homePages.openConversation('project:piante');\n"
-        "homePages.renameConversation('project:piante', 'project:erbe');\n"
-        "assert.equal(homePages.notebooksConversation, 'project:erbe');\n",
-        MIXED,
-    )
-
-
-def test_a_notebook_page_only_ever_shows_its_notebook() -> None:
-    """**L'invariante.** Da una pagina quaderno un'altra conversazione si apre
-    nella pagina chat, e ci si va.
-
-    E chi chiama riceve la lettura del trasloco, non un «fatto» anticipato: ci
-    manda subito dopo un messaggio, e deve finire nella conversazione giusta.
-    """
+def test_from_a_door_the_personal_conversation_opens_on_the_chat_page() -> None:
+    """Chi chiama riceve la lettura del trasloco, non un «fatto» anticipato: ci
+    manda subito dopo un messaggio, e deve finire nella conversazione giusta."""
     _run(
         "homePages.goToId('q1');\n"
         "moves.length = 0;\n"
         "const r = await homePages.openConversation(PERSONAL);\n"
         "assert.equal(homePages.index, CHAT());\n"
         "assert.equal(homePages.homeConversation, PERSONAL);\n"
-        "assert.deepEqual(shown, [], 'ha cambiato la chat dentro la pagina del quaderno');\n"
+        "assert.deepEqual(shown, []);\n"
         "const a = arrivals();\n"
         "assert.equal(a.length, 1);\n"
         "assert.equal(a[0].p, chatPanel);\n"
-        "assert.equal(a[0].k, PERSONAL);\n"
         "assert.equal(r, 'letto', 'chi chiama non aspetta la lettura');\n",
-        MIXED,
-    )
-
-
-def test_asking_a_notebook_page_for_its_own_notebook_stays_there() -> None:
-    """«Parlane» e «Segnala» dalle pagine del quaderno chiedono proprio quello."""
-    _run(
-        "homePages.goToId('q1');\n"
-        "await homePages.openConversation('project:piante');\n"
-        "assert.equal(homePages.index, I('q1'));\n"
-        "assert.deepEqual(shown, ['project:piante']);\n"
-        "assert.equal(homePages.homeConversation, PERSONAL, 'la pagina chat ha preso il quaderno');\n",
         MIXED,
     )
 
@@ -1765,37 +1675,6 @@ def test_a_notebook_that_comes_back_loses_its_notice() -> None:
         NOTEBOOK,
     )
 
-
-
-# ── «Your home pages» non c'e' piu' (23/09/2026) ────────────────────────────
-
-
-def test_the_pages_sheet_is_gone_with_every_trace_of_it() -> None:
-    """Tutti i suoi mestieri si sono spostati sulla cosa: aggiungere e togliere
-    dal cassetto e dalla tendina, «non c'e' piu'» sulla pagina stessa.
-
-    Un pezzo rimasto — il markup, una chiave, un ascoltatore sui pallini — e' un
-    foglio che non si apre ma che chi legge il codice crede vivo.
-    """
-    html = (UI / "index.html").read_text(encoding="utf-8")
-    assert "casa-pagine-dialog" not in html and "casa-foglio" not in html
-    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    assert "casa-foglio" not in css
-    pages_js = (ASSETS / "home-pages.js").read_text(encoding="utf-8")
-    assert "watchHorizontalSwipe(this.striscia" not in pages_js, (
-        "i pallini hanno di nuovo una pressione lunga: nessuno la troverebbe"
-    )
-    for language in ("it", "en"):
-        entries = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
-        assert "sheet" not in entries["home"], f"{language}: casa.sheet e' rimasto"
-    app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    assert "casa-pagine-dialog" not in app_js
-
-
-def test_the_shared_gesture_no_longer_does_a_long_press() -> None:
-    """Aveva un solo chiamante, i pallini, ed e' uscita con lui."""
-    src = (ASSETS / "shared" / "horizontal-swipe.js").read_text(encoding="utf-8")
-    assert "PRESSIONE_LUNGA_MS" not in src and "onPressioneLunga" not in src
 
 
 def test_the_chat_page_follows_a_renamed_notebook_only_if_it_was_its_own() -> None:

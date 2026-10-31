@@ -165,7 +165,12 @@ const rpc = {
       ? Promise.reject(createOutcome)
       : Promise.resolve(createOutcome);
   },
+  greetProject(name, lang) {
+    greeted.push([name, lang]);
+    return Promise.resolve({ greeted: true });
+  },
 };
+const greeted = [];
 
 class ScopeChip {
   constructor() {
@@ -368,6 +373,8 @@ def test_creating_a_project_opens_it() -> None:
       assert.equal(chip.opened, 0, 'la tendina si riapre sopra il toast invece di lasciar lavorare');
       assert.equal(chip._projects, null, "l'elenco va riletto: il progetto nuovo non c'è");
       assert.deepEqual(toasts, [['i18n:scope.created:bordi', 'success']]);
+      assert.deepEqual(greeted.map(([name]) => name), ['bordi'],
+                       'Jenny non saluta nel progetto appena nato');
     """)
 
 

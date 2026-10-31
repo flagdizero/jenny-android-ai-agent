@@ -27,7 +27,7 @@ from support.js_harness import function, member, requires_node, run_js
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "home-app.js"
-WHO_JS = ASSETS / "home-who.js"
+SPINES_JS = ASSETS / "shared" / "spines.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -102,15 +102,31 @@ const document = {
 
 /* Il guscio nativo, finto: conta le volte che la casa gli dice «la chat e' a
    schermo» — e' quel che cancella gli avvisi letti. */
-globalThis.window = { JennyNative: { opened: 0, chatOpened() { this.opened += 1; } } };
+globalThis.window = { JennyNative: {
+  opened: 0, closed: 0, openedWith: [],
+  chatOpened(key) { this.opened += 1; this.openedWith.push(key ?? null); },
+  chatClosed() { this.closed += 1; },
+} };
 
 /* `/api/settings`: un payload solo, che il guscio chiede una volta e divide
    fra le due stanze. Qui interessa **quante volte** viene chiesto, e cosa
    succede quando non arriva. */
 let settingsPayload = { version: { current: '0.11.0' }, floating: { available: true } };
 let settingsCalls = 0;
+/* Il posto salvato (`_restorePlace`): nessuno, a meno che il test lo metta. */
+const PLACE_KEY = 'home-place';
+const PLACE_MAX_AGE_MS = 60 * 60 * 1000;
+let savedPlace = null;
+const readStorage = () => savedPlace;
+
+/* I quaderni che `/api/projects` elenca; `null` = la lettura non riesce. */
+let notebooksOnDisk = null;
 const api = {
   clientLog() {},
+  listProjects() {
+    if (!notebooksOnDisk) return Promise.reject(new Error('elenco non letto'));
+    return Promise.resolve({ projects: notebooksOnDisk.map((name) => ({ name })) });
+  },
   getSettings() {
     settingsCalls += 1;
     if (!settingsPayload) return Promise.reject(new Error('impostazioni non lette'));
@@ -136,15 +152,12 @@ let writtenName = null;
 let confirmDelete = true;
 const promptDialog = () => Promise.resolve(writtenName);
 const deleteProjectFlow = () => Promise.resolve(confirmDelete);
-const rpc = { renameProject: () => Promise.resolve() };
-/* La disposizione della mappa (`shared/map-layout.js`): il finto segna chi
-   sposta cosa, e sa anche fallire — un rinomino riuscito resta riuscito. */
-const layoutMoves = [];
-let layoutFails = false;
-const moveLayoutKey = async (from, to) => {
-  layoutMoves.push([from, to]);
-  if (layoutFails) { console.warn('map layout: rename failed'); return false; }
-  return true;
+/* Il saluto di un quaderno nuovo: chi l'ha chiesto, e in che ordine rispetto
+   alla bolla «sta scrivendo». */
+const greetings = [];
+const rpc = {
+  renameProject: () => Promise.resolve(),
+  greetProject: (name) => { greetings.push(name); return Promise.resolve({ greeted: true }); },
 };
 const showToast = () => {};
 /* `goHome` chiude la selezione prima di cambiare vista (shared/selection.js). */
@@ -159,9 +172,13 @@ const wsManager = { posted: [], sendToChat(...a) { this.posted.push(a); return t
 
 __DOT_COLOR__
 __FLOOR__
+/* Lo scorrimento della pista (`SLIDE_MS` in home-pages.js): la porta di un
+   quaderno appeso aspetta che finisca. */
+const SLIDE_MS = 220;
 __SHEETS__
 __DEFAULT_BOT_NAME__
 __BACK_TO__
+__NOTEBOOK_ROOMS__
 
 /* Il giro di creazione è esercitato dal suo banco; qui si misura l'aggancio —
    con quali parole viene chiamato, e cosa succede dopo. */
@@ -183,16 +200,6 @@ class App {
     /* L'intestazione che cambia stanza, e le stanze stesse. */
     this.shell = makeEl('main');
     this.shell.setAttribute = (k, v) => { this.shell.attrs[k] = v; };
-    this.pagesBtn = makeEl('button');
-    /* La pastiglia del quaderno: nome, pallino, la × dei Quaderni. */
-    this.pagesPill = makeEl('div');
-    this.pagesName = makeEl('span');
-    this.pagesDot = makeEl('span');
-    /* L'interruttore Chat | Pagine dell'intestazione delle pagine. */
-    this.viewSwitch = makeEl('div');
-    this.viewChat = makeEl('button');
-    this.viewPagesCount = makeEl('span');
-    this.pagesCount = makeEl('span');
     this.backBtn = makeEl('button');
     /* Il percorso della riga: la radice, i pallini, la riga d'accento. */
     this.headEl = makeEl('header');
@@ -248,16 +255,30 @@ class App {
     this.view = 'chat';
     this._jennyWasOut = true;
     this._jennyInChat = true;
-    this.map = null;
     this._measureFloor = () => this.actions.push('pavimento rimisurato');
-    this.pages = {
+    /* La bacheca, il cassetto e il loro foglio: moduli loro, coi loro banchi.
+       Qui interessa che il guscio li apra e li chiuda. */
+    this.board = {
       applyTranslations: () => {},
-      load: (name) => { this.actions.push('pagine:' + name); return Promise.resolve(); },
+      load: (name) => { this.actions.push('bacheca:' + name); return Promise.resolve(); },
     };
+    this.drawer = {
+      card: null,
+      title: '',
+      applyTranslations: () => {},
+      load: (name, card) => {
+        this.drawer.card = card;
+        this.actions.push('cassetto:' + name + '/' + card);
+        return Promise.resolve(card);
+      },
+    };
+    this.boardSheet = { close: () => {} };
+    this._readerCard = null;
     this.files = { count: 0 };
     this._personalName = 'Jenny';
     this._settingsGen = 0;
     this._drafts = new Map();
+    this._draftsAside = new Map();
     this._threadFailed = false;
     this._threadReads = 0;
     this._running = false;
@@ -272,18 +293,44 @@ class App {
       scrollToBottom: () => this.actions.push('in fondo'),
       keepBottom: () => {},
     };
-    this.activity = { stop: () => this.actions.push('riga ferma') };
+    this.activity = {
+      start: () => this.actions.push('sta scrivendo'),
+      stop: () => this.actions.push('riga ferma'),
+    };
     this.jenny = {
       el: { classList: { contains: () => this._jennyOut } },
       setOut: (v) => { this._jennyOut = v; this.actions.push('fuori:' + v); },
       setChatOnScreen: (v) => { this.jennyChat = v; },
-      handleBack: () => false,
-      minichatOpen: false,
+      setExpanded: (v) => { this.jennyExpanded = v; },
+      nudge: () => this.actions.push('sobbalzo'),
+    };
+    /* Il velo (`home-over.js`, banco suo): qui si misura chi lo apre e lo
+       chiude, e cosa succede intorno. */
+    this.over = {
+      isOpen: false,
+      host: makeEl('div'),
+      show: () => { this.over.isOpen = true; this.actions.push('velo su'); },
+      hide: () => { this.over.isOpen = false; this.actions.push('velo giu'); },
+    };
+    /* Il trasloco (banco suo): sollevare e riabbassare si segnano, e un
+       cambio di conversazione passa dal corpo vero, come in quello vero. */
+    this.chatMove = {
+      read: Promise.resolve(),
+      lift: (host, key) => {
+        this.actions.push('sale:' + key);
+        if (sessionManager.currentKey !== key) return this.showConversation(key);
+        return Promise.resolve();
+      },
+      lower: () => this.actions.push('scende'),
+      retune: (home, key) => {
+        if (sessionManager.currentKey === key) return Promise.resolve();
+        this.actions.push('risintonizza:' + key);
+        return this.showConversation(key);
+      },
     };
     this._jennyOut = true;
     this.who = {
       known: [{ name: 'piante', modified: 1 }],
-      pagesOf: (name) => Promise.resolve(this.pageCounts?.[name] ?? null),
       invalidate: () => this.actions.push('elenco da rileggere'),
       render: () => {},
     };
@@ -314,20 +361,17 @@ class App {
         if (this.order[i] === 'settings') app.powerOn = app._openSettings();
       },
       goToId(id) { this.goTo(this.indexOf(id)); },
-      openConversation: (k) => this.showConversation(k),
-      /* Il quaderno aperto nei Quaderni: la regola che ce lo mette ha il suo
-         banco (`test_home_track_client.py`); qui interessa chi lo chiude. */
-      notebooksConversation: null,
-      closeNotebook() {
-        if (!this.notebooksConversation) return false;
-        this.notebooksConversation = null;
-        app.actions.push('quaderno chiuso');
-        return true;
-      },
+      _panelFor: (id) => (id === 'chat' ? 'pannello-chat' : null),
+      /* Un quaderno si apre sulla sua bacheca (05/10/2026); la regola ha il
+         suo banco (`test_home_track_client.py`). */
+      openConversation: (k) => (projectNameOf(k) ? this.openNotebook(projectNameOf(k)) : this.showConversation(k)),
     };
   }
   _autosize() {}
   _renderPending() {}
+  /* Il posto per un riavvio (`localStorage`) ha il suo banco
+     (`test_home_place_restore_client.py`). */
+  _savePlace() {}
   /* Gli allegati per conversazione hanno il loro banco
      (`test_home_attachments_per_conversation_client.py`). */
   _filesFor() { return this.files; }
@@ -345,10 +389,20 @@ class App {
   __BACK__
   __GO_HOME__
   __OPEN_CHAT__
+  __RESTORE_PLACE__
+  __OPEN_NOTEBOOK_CHAT__
+  __ENTER_NOTEBOOK_CHAT__
+  __NOTEBOOK_EXISTS__
+  __CLOSE_SHEETS__
   __APPLY_TRANSLATIONS__
   __APPLY_CONVERSATION_TEXTS__
+  __APPLY_OVER_TITLE__
   __CREATE_NOTEBOOK__
-  __OPEN_PAGES__
+  __GREET_NOTEBOOK__
+  __OPEN_BOARD__
+  __OPEN_CARD__
+  __BACK_TARGET__
+  __ASK_IN_NOTEBOOK__
   __GO_BACK_ONE_ROOM__
   __OPEN_SETTINGS__
   __PAINT_SETTINGS__
@@ -364,16 +418,12 @@ class App {
   __APPLY_HEAD__
   __APPLY_BACK_LABEL__
   __APPLY_PATH__
-  __APPLY_PILL__
-  __PAINT_PAGE_COUNT__
-  __LABEL_PAGES_BUTTON__
-  __PAGE_COUNT_OF__
   __PAINT_DOT__
   __GO_TO_PATH_ROOT__
-  __UPDATE_PAGES_COUNT__
   __SET_HEAD_TITLE__
   __ON_PAGE__
   __IS_CHAT_ON_SCREEN__
+  __CHAT_ON_SCREEN_KEY__
   __REPORT_CHAT__
   __ON_GONE__
   __ACTIVE_COMPOSER__
@@ -389,6 +439,15 @@ class App {
   __OPEN_PAGE__
   __READER_TITLE__
   __BIND_COMPOSER__
+  __OPEN_NOTEBOOK__
+  __CHAT_OVER__
+  __SUMMON_KEY__
+  __OPEN_CHAT_OVER__
+  __CLOSE_CHAT_OVER__
+  __SHEET_OPEN__
+  __BACK_LABEL_KEY__
+  __FOLLOW_PAGE__
+  __BACK_ONE_PAGE__
 }
 
 function home() {
@@ -402,9 +461,18 @@ function home() {
   app._applyConversation();
   app.actions.length = 0;
   window.JennyNative.opened = 0;
+  window.JennyNative.closed = 0;
   return app;
 }
 """
+
+
+def _spines() -> str:
+    """Il colore dei quaderni com'e' nel modulo foglia: `dotColor` e i due
+    conti da cui dipende, senza `export`, da incollare nello script."""
+    src = SPINES_JS.read_text(encoding="utf-8")
+    spines = re.search(r"(?m)^export const SPINES = \d+;$", src).group(0).removeprefix("export ")
+    return "\n".join([spines] + [function(src, n) for n in ("hashOf", "spineOf", "dotColor")])
 
 
 def _harness() -> str:
@@ -414,7 +482,7 @@ def _harness() -> str:
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__DOT_COLOR__", function(WHO_JS.read_text(encoding="utf-8"), "dotColor"))
+        .replace("__DOT_COLOR__", _spines())
         .replace("__SWITCH__", member(src, "switchConversation"))
         # Il corpo del cambio vive in `showConversation` dal 23/09/2026:
         # `switchConversation` decide solo **dove** (v. le pagine conversazione),
@@ -431,10 +499,20 @@ def _harness() -> str:
         .replace("__BACK__", member(src, "handleHardwareBack"))
         .replace("__GO_HOME__", member(src, "goHome"))
         .replace("__OPEN_CHAT__", member(src, "openChat"))
+        .replace("__RESTORE_PLACE__", member(src, "_restorePlace", prefixes=("async ",)))
+        .replace("__OPEN_NOTEBOOK_CHAT__", member(src, "_openNotebookChat"))
+        .replace("__ENTER_NOTEBOOK_CHAT__", member(src, "_enterNotebookChat"))
+        .replace("__NOTEBOOK_EXISTS__", member(src, "_notebookExists"))
+        .replace("__CLOSE_SHEETS__", member(src, "_closeSheets"))
         .replace("__APPLY_TRANSLATIONS__", member(src, "_applyTranslations"))
         .replace("__APPLY_CONVERSATION_TEXTS__", member(src, "_applyConversationTexts"))
+        .replace("__APPLY_OVER_TITLE__", member(src, "_applyOverTitle"))
         .replace("__CREATE_NOTEBOOK__", member(src, "createNotebook"))
-        .replace("__OPEN_PAGES__", member(src, "openPages"))
+        .replace("__GREET_NOTEBOOK__", member(src, "_greetNotebook"))
+        .replace("__OPEN_BOARD__", member(src, "openBoard", prefixes=("async ",)))
+        .replace("__OPEN_CARD__", member(src, "openCard", prefixes=("async ",)))
+        .replace("__BACK_TARGET__", member(src, "_backTarget"))
+        .replace("__ASK_IN_NOTEBOOK__", member(src, "_askInNotebook"))
         .replace("__GO_BACK_ONE_ROOM__", member(src, "goBackOneRoom"))
         .replace("__OPEN_SETTINGS__", member(src, "_openSettings"))
         .replace("__PAINT_SETTINGS__", member(src, "_paintSettings"))
@@ -448,18 +526,14 @@ def _harness() -> str:
         .replace("__ASK_SETTINGS__", member(src, "_askSettings"))
         .replace("__APPLY_BACK_LABEL__", member(src, "_applyBackLabel"))
         .replace("__APPLY_PATH__", member(src, "_applyPath"))
-        .replace("__APPLY_PILL__", member(src, "_applyPill"))
-        .replace("__PAINT_PAGE_COUNT__", member(src, "_paintPageCount"))
-        .replace("__LABEL_PAGES_BUTTON__", member(src, "_labelPagesButton"))
-        .replace("__PAGE_COUNT_OF__", member(src, "pageCountOf"))
         .replace("__PAINT_DOT__", member(src, "_paintDot"))
         .replace("__GO_TO_PATH_ROOT__", member(src, "goToPathRoot"))
         .replace("__SET_VIEW__", member(src, "_setView"))
         .replace("__APPLY_HEAD__", member(src, "_applyHead"))
-        .replace("__UPDATE_PAGES_COUNT__", member(src, "_updatePagesCount"))
         .replace("__SET_HEAD_TITLE__", member(src, "_setHeadTitle"))
         .replace("__ON_PAGE__", member(src, "onPageChanged"))
         .replace("__IS_CHAT_ON_SCREEN__", member(src, "isChatOnScreen"))
+        .replace("__CHAT_ON_SCREEN_KEY__", member(src, "chatOnScreenKey"))
         .replace("__REPORT_CHAT__", member(src, "_reportChatOnScreen"))
         .replace("__ON_GONE__", member(src, "onGoneChanged"))
         .replace("__ACTIVE_COMPOSER__", member(src, "_composerActive"))
@@ -475,9 +549,20 @@ def _harness() -> str:
         .replace("__OPEN_PAGE__", member(src, "openPage"))
         .replace("__READER_TITLE__", member(src, "_readerTitle"))
         .replace("__BIND_COMPOSER__", member(src, "_bindComposer"))
+        .replace("__OPEN_NOTEBOOK__", member(src, "openNotebook"))
+        .replace("__CHAT_OVER__", member(src, "chatOver"))
+        .replace("__SUMMON_KEY__", member(src, "_summonKey"))
+        .replace("__OPEN_CHAT_OVER__", member(src, "openChatOver"))
+        .replace("__CLOSE_CHAT_OVER__", member(src, "closeChatOver"))
+        .replace("__SHEET_OPEN__", member(src, "_sheetOpen"))
+        .replace("__BACK_LABEL_KEY__", member(src, "_backLabelKey"))
+        .replace("__FOLLOW_PAGE__", member(src, "_followPage", prefixes=("async ",)))
+        .replace("__BACK_ONE_PAGE__", member(src, "_backOnePage", prefixes=("async ",)))
+        .replace("__NOTEBOOK_ROOMS__", _const_block_scalar(src, "NOTEBOOK_ROOMS"))
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
         .replace("__SHEETS__", _const_block_scalar(src, "LONG_PRESS_SHEETS") + "\n"
                  + _const_block_scalar(src, "REPORT_SHEET") + "\n"
+                 + _const_block_scalar(src, "BOARD_SHEET") + "\n"
                  + _const_block_scalar(src, "SHARED_DIALOGS"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
@@ -499,12 +584,17 @@ def _run_js(script: str) -> None:
 
 def test_opening_a_notebook_rereads_the_thread_of_that_notebook() -> None:
     """E lo rilegge **dopo** aver cambiato chiave: nell'ordine opposto
-    rileggerebbe la conversazione che stai lasciando."""
+    rileggerebbe la conversazione che stai lasciando. Dal 05/10/2026 un
+    quaderno si apre sulla sua bacheca, con la chat gia' sulla sua chiave."""
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('piante'));
       assert.equal(sessionManager.currentKey, 'project:piante');
-      assert.deepEqual(app.actions, ['riletto:project:piante']);
+      const at = (a) => app.actions.indexOf(a);
+      assert.ok(at('risintonizza:project:piante') >= 0);
+      assert.ok(at('riletto:project:piante') > at('risintonizza:project:piante'));
+      assert.ok(at('bacheca:piante') > at('riletto:project:piante'), 'la bacheca non si e\u2019 aperta');
+      assert.equal(app.view, 'board');
     """)
 
 
@@ -606,25 +696,24 @@ def test_leaving_closes_the_turn_that_was_running() -> None:
 # ── Le vie di ritorno ───────────────────────────────────────────────────────
 
 
-# Un quaderno aperto, come lo lascia la regola delle pagine: nei Quaderni, con
-# la chat li'.
-_IN_NOTEBOOKS = """
-      await app.switchConversation(projectKey('orto'));
-      app.homePages.notebooksConversation = projectKey('orto');
+# Un quaderno aperto dai Quaderni: la sua bacheca, sopra la pagina Quaderni.
+_FROM_NOTEBOOKS = """
       app.homePages.index = app.homePages.indexOf('notebooks');
       app._entry = { id: 'notebooks', kind: 'notebooks', fixed: true };
+      await app.switchConversation(projectKey('orto'));
 """
 
 
 def test_back_from_a_notebook_goes_back_to_the_list() -> None:
-    """Il quaderno aperto nei Quaderni e' un gradino: Indietro torna
-    all'elenco, e solo la pressione dopo lascia la pagina."""
+    """Dalla bacheca Indietro torna all'elenco dei Quaderni, da cui l'hai
+    aperta; solo la pressione dopo lascia la pagina."""
     _run_js("""
       const app = home();
-    """ + _IN_NOTEBOOKS + """
-      app.actions.length = 0;
+    """ + _FROM_NOTEBOOKS + """
+      assert.equal(app.view, 'board');
       app.handleHardwareBack();
-      assert.deepEqual(app.actions, ['quaderno chiuso']);
+      assert.equal(app.view, 'chat');
+      assert.equal(app.homePages.current, 'notebooks', 'dalla bacheca non si torna all\u2019elenco');
       app.actions.length = 0;
       app.handleHardwareBack();
       assert.deepEqual(app.actions, ['pagina:chat'], 'dall\u2019elenco non si torna alla chat');
@@ -767,6 +856,26 @@ def test_a_notebook_created_is_a_notebook_you_are_in() -> None:
                        'i nomi già noti non vengono dal pannello');
       assert.ok(app.actions.includes('elenco da rileggere'), 'la cache è rimasta vecchia');
       assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.ok(app.actions.includes('bacheca:orto'), 'sotto la chat manca la bacheca del quaderno');
+    """)
+
+
+def test_a_new_notebook_opens_on_its_chat_where_jenny_speaks_first() -> None:
+    """La bacheca di un quaderno appena nato e' vuota per forza: si va nella
+    sua chat, e Jenny saluta. Nessun'altra domanda dopo nome e scope — le
+    sezioni dei cassetti e «cosa ricordare» sono state tolte il 10/10/2026."""
+    _run_js("""
+      const app = home();
+      createOutcome = 'orto';
+      writtenName = 'una risposta che nessuno deve chiedere';
+      await app.createNotebook();
+      assert.ok(app.chatOver, 'il quaderno nuovo si ferma sulla bacheca vuota');
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.deepEqual(greetings, ['orto'], 'Jenny non saluta nel quaderno appena nato');
+      const typing = app.actions.indexOf('sta scrivendo');
+      assert.ok(typing !== -1, 'mentre aspetta il saluto la chat non dice niente');
+      assert.ok(app.actions.indexOf('riga ferma', typing) > typing,
+                'la bolla «sta scrivendo» resta accesa dopo il saluto');
     """)
 
 
@@ -787,26 +896,24 @@ def test_a_creation_that_did_not_happen_opens_nothing() -> None:
 
 
 def test_back_peels_one_room_at_a_time() -> None:
-    """Lettore, pagine, chat del quaderno, e solo allora si chiude il quaderno.
+    """Lettore, bacheca, elenco dei Quaderni, chat: una cosa per pressione.
 
-    Quattro pressioni per quattro cose. Se `goBackOneRoom` sparisse, dalle
-    pagine un tocco solo farebbe sparire la stanza **e** il quaderno che la
-    conteneva — due cose per un gesto, che e' esattamente quel che la stessa
-    regola vieta alla tendina.
+    Se `goBackOneRoom` sparisse, dal lettore un tocco solo farebbe sparire la
+    stanza **e** il quaderno che la conteneva — due cose per un gesto.
     """
     _run_js("""
       const app = home();
-    """ + _IN_NOTEBOOKS + """
+    """ + _FROM_NOTEBOOKS + """
       app.view = 'reader';
       app.shell.attrs['data-view'] = 'reader';
 
       app.handleHardwareBack();
-      assert.equal(app.view, 'pages', 'dal lettore non si torna alle pagine');
+      assert.equal(app.view, 'board', 'dal lettore non si torna alla bacheca');
       app.handleHardwareBack();
-      assert.equal(app.view, 'chat', 'dalle pagine non si torna alla chat');
-      assert.equal(app.homePages.notebooksConversation, 'project:orto', 'e non si chiude il quaderno');
+      assert.equal(app.view, 'chat', 'dalla bacheca non si torna ai Quaderni');
+      assert.equal(app.homePages.current, 'notebooks');
       app.handleHardwareBack();
-      assert.equal(app.homePages.notebooksConversation, null, 'e adesso si chiude');
+      assert.equal(app.homePages.current, 'chat');
     """)
 
 
@@ -816,11 +923,11 @@ def test_a_panel_over_the_pages_still_closes_first() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
+      app._setView('board');
     """ + _SHEET + """
       app.handleHardwareBack();
       assert.equal(sheet.open, false, 'il foglio non si e\\u2019 chiuso');
-      assert.equal(app.view, 'pages', 'la stanza se n\\u2019e\\u2019 andata insieme a lui');
+      assert.equal(app.view, 'board', 'la stanza se n\\u2019e\\u2019 andata insieme a lui');
     """)
 
 
@@ -834,14 +941,14 @@ def test_leaving_the_chat_puts_jenny_away_and_coming_back_restores_her() -> None
       const app = home();
       await app.switchConversation(projectKey('orto'));
 
-      app._setView('pages');
+      app._setView('board');
       assert.equal(app._jennyOut, false, 'nelle pagine non si e\\u2019 messa via');
       app._setView('chat');
       assert.equal(app._jennyOut, true, 'tornando non e\\u2019 uscita');
 
       // Ora messa via a mano, dentro la chat.
       app._jennyOut = false;
-      app._setView('pages');
+      app._setView('board');
       app._setView('chat');
       assert.equal(app._jennyOut, false, 'la stanza ha disfatto una scelta dell\\u2019utente');
     """)
@@ -856,7 +963,7 @@ def test_a_room_without_a_composer_declares_its_own_floor() -> None:
       await app.switchConversation(projectKey('orto'));
       app.actions.length = 0;
 
-      app._setView('pages');
+      app._setView('board');
       assert.equal(
         document.documentElement.style.props['--home-composer-h'],
         FLOOR_NO_COMPOSER + 'px',
@@ -871,108 +978,123 @@ def test_a_room_without_a_composer_declares_its_own_floor() -> None:
     """)
 
 
-def test_the_pages_pill_only_exists_inside_a_notebook() -> None:
-    """Nella conversazione personale non c'e' nessun quaderno da aprire, e una
-    porta che non porta da nessuna parte e' peggio di nessuna porta."""
+
+
+
+
+
+
+
+
+
+
+def test_the_shell_hears_when_the_chat_leaves_the_screen() -> None:
+    """Un avviso con Jenny davanti si sopprime solo se la chat e' a schermo:
+    il guscio nativo deve sentirsi dire anche quando la chat se ne va, una
+    volta per uscita e non a ogni ricalcolo."""
     _run_js("""
       const app = home();
-      assert.equal(app.pagesPill.hidden, true, 'la pastiglia c\\u2019e\\u2019 anche a casa');
-      await app.switchConversation(projectKey('orto'));
-      assert.equal(app.pagesPill.hidden, false, 'dentro un quaderno la pastiglia manca');
-      assert.equal(app.pagesName.textContent, 'orto', 'la pastiglia non dice in che quaderno sei');
-      assert.equal(app.pagesDot.style.background, dotColor('orto'));
-      await app.switchConversation(null);
-      assert.equal(app.pagesPill.hidden, true, 'tornando a casa la pastiglia resta');
-    """)
-
-
-def test_the_pill_lives_only_on_a_pinned_notebook_page() -> None:
-    """Nei Quaderni la strada per le pagine sta in alto (l'interruttore Chat |
-    Pagine della fila), e il nome lo dice il percorso: la pastiglia in basso li'
-    sarebbe una seconda porta per la stessa stanza. Resta in una pagina fissata,
-    che in alto ha la fila. E la barra dove scrivi, nei Quaderni, c'e' solo con
-    un quaderno aperto."""
-    _run_js("""
-      const app = home();
-    """ + _IN_NOTEBOOKS + """
-      app._applyHead();
-      assert.equal(app.pagesPill.hidden, true, 'nei Quaderni la pastiglia e\\u2019 ancora in basso');
-      assert.equal(app._hasComposer(app._entry), true, 'col quaderno aperto la barra non c\\u2019e\\u2019');
-      app.homePages.notebooksConversation = null;
-      assert.equal(app._hasComposer(app._entry), false, 'l\\u2019elenco ha una barra dove scrivere');
-
-      app._entry = { id: 'q1', kind: 'conversation', ref: projectKey('orto') };
-      app._applyHead();
-      assert.equal(app.pagesPill.hidden, false, 'una pagina fissata ha perso la strada per le pagine');
-    """)
-
-
-def test_the_count_reaches_the_switch_too() -> None:
-    """Lo stesso numero nei tre posti che lo mostrano: la pastiglia, l'interruttore
-    delle pagine, e la fila, che lo chiede con `pageCountOf`."""
-    _run_js("""
-      const app = home();
-      app.pageCounts = { orto: 34 };
-      await app.switchConversation(projectKey('orto'));
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.viewPagesCount.textContent, '34');
-      assert.equal(app.pageCountOf('orto'), 34);
-      assert.equal(app.pageCountOf('erbe'), null, 'il numero di un altro quaderno');
-    """)
-
-
-def test_the_count_belongs_to_the_notebook_that_asked_for_it() -> None:
-    """Fra la domanda e la risposta si puo' essere passati in un altro
-    quaderno: scrivere li' il conteggio di quello di prima sarebbe un numero
-    sbagliato su una stanza giusta."""
-    _run_js("""
-      const app = home();
-      app.pageCounts = { orto: 34, erbe: 1 };
-      await app.switchConversation(projectKey('orto'));
-      await new Promise((r) => setTimeout(r, 0));
-      // A schermo il numero dopo il nome; la parola la dice l'etichetta.
-      assert.equal(app.pagesCount.textContent, '\u00b7 34');
-      assert.ok(app.pagesBtn.attrs['aria-label'].endsWith('orto, 34 pagine'), app.pagesBtn.attrs['aria-label']);
-
-      // Una pagina sola non e' «1 pagine».
-      await app.switchConversation(projectKey('erbe'));
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.pagesCount.textContent, '\u00b7 1');
-      assert.ok(app.pagesBtn.attrs['aria-label'].endsWith('erbe, 1 pagina'), app.pagesBtn.attrs['aria-label']);
-
-      // Chiesto per «orto», risposto mentre siamo in «erbe»: non si scrive.
-      app.pagesCount.textContent = '';
-      app._updatePagesCount('orto');
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.pagesCount.textContent, '', 'il conteggio di un\\u2019altra stanza');
-    """)
-
-
-def test_a_notebook_whose_count_is_unknown_still_has_its_door() -> None:
-    """`null` e' «non lo so», e non si scrive. Ma la porta resta: un quaderno
-    le pagine ce le ha comunque, e aspettare la cifra per mostrarla vorrebbe
-    dire nascondere la porta a chi ha la rete lenta."""
-    _run_js("""
-      const app = home();
-      app.pageCounts = {};
-      await app.switchConversation(projectKey('orto'));
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.pagesCount.textContent, '');
-      assert.equal(app.pagesBtn.hidden, false);
-    """)
-
-
-def test_switching_conversation_from_the_pages_comes_back_to_the_chat() -> None:
-    """Le pagine parlano di *un* quaderno. Un avviso toccato porta nella
-    conversazione personale: restare sull'elenco vorrebbe dire leggere le
-    pagine di una stanza in cui non sei piu'."""
-    _run_js("""
-      const app = home();
-      await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
+      app.onPageChanged(1, { id: 'chat', kind: 'chat', fixed: true });
+      assert.equal(window.JennyNative.opened, 1);
+      app._setView('board');
+      assert.equal(window.JennyNative.closed, 1, 'la bacheca non ha detto che la chat se n\u2019e\u2019 andata');
       app.openChat();
-      assert.equal(app.view, 'chat');
-      assert.equal(app.shell.attrs['data-view'], 'chat');
+      await new Promise((r) => setTimeout(r, 0));
+      assert.ok(window.JennyNative.opened >= 1, 'il velo su non l\u2019ha detto');
+      app.closeChatOver();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(window.JennyNative.closed, 2, 'il velo giu\u2019 non l\u2019ha detto');
+      app._reportChatOnScreen();
+      assert.equal(window.JennyNative.closed, 2, 'ripetuto a vuoto');
+    """)
+
+
+def test_a_tapped_alert_raises_the_personal_chat_over_the_board() -> None:
+    """Un avviso toccato dentro un quaderno porta la conversazione personale —
+    e' li' che l'avviso sta — **sopra** la bacheca, non al suo posto (dal
+    10/10/2026): chiusa la chat, sei di nuovo dov'eri, e la chat dietro la
+    bacheca e' tornata quella del quaderno. Prima l'avviso ti portava fuori dal
+    quaderno, e il posto era perso."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('board');
+      app.actions.length = 0;
+      assert.equal(app.openChat(), true);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'board', 'l\u2019avviso ha portato via la bacheca');
+      assert.equal(app.chatOver, true, 'la chat non e\u2019 salita');
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      assert.ok(app.actions.includes('sale:websocket:default'));
+      assert.equal(app.isChatOnScreen(), true, 'gli avvisi non si cancellerebbero');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.chatOver, false);
+      assert.equal(app.view, 'board');
+      assert.equal(sessionManager.currentKey, 'project:orto', 'la bacheca e\u2019 rimasta senza la sua chat');
+      assert.ok(app.actions.includes('risintonizza:project:orto'));
+    """)
+
+
+def test_a_tapped_alert_swaps_a_notebook_chat_already_open_over_the_board() -> None:
+    """Con la chat del quaderno gia' aperta sopra la bacheca, l'avviso la
+    sostituisce con la personale; richiusa, il quaderno ritrova la sua."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('orto'));
+      app._setView('board');
+      app.openChatOver();
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      app.openChat();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.chatOver, true);
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      app.closeChatOver();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'project:orto');
+    """)
+
+
+def test_a_tapped_alert_on_the_chat_page_just_shows_the_bottom() -> None:
+    """Sulla pagina chat, con la personale a schermo, il velo non serve:
+    l'avviso porta in fondo al filo e basta."""
+    _run_js("""
+      const app = home();
+      app.onPageChanged(1, { id: 'chat', kind: 'chat', fixed: true });
+      app.actions.length = 0;
+      assert.equal(app.openChat(), true);
+      assert.equal(app.chatOver, false, 'un velo sopra la chat stessa');
+      assert.ok(app.actions.includes('in fondo'));
+    """)
+
+
+def test_a_tapped_alert_leaves_the_pages_where_they_were() -> None:
+    """Dai Quaderni, dalle App, dalle Impostazioni: la chat sale sopra la
+    pagina e la pista non si muove."""
+    _run_js("""
+      const app = home();
+      app.homePages.goToId('notebooks');
+      app.onPageChanged(2, { id: 'notebooks', kind: 'notebooks', fixed: true });
+      app.actions.length = 0;
+      assert.equal(app.openChat(), true);
+      assert.equal(app.homePages.current, 'notebooks');
+      assert.equal(app.chatOver, true);
+      assert.ok(!app.actions.some((a) => a.startsWith('pagina:')), 'la pista si e\u2019 mossa');
+    """)
+
+
+def test_a_tapped_alert_does_not_climb_over_an_open_question() -> None:
+    """Una domanda aperta aspetta una risposta: il velo non sale, e il guscio
+    nativo, sentendosi dire di no, lascia l'avviso in tendina."""
+    _run_js("""
+      const app = home();
+      app._setView('board');
+      document.getElementById('oc-confirm-dialog').open = true;
+      const realQuery = document.querySelector;
+      document.querySelector = (sel) => (sel === 'dialog[open]' ? {} : realQuery(sel));
+      assert.equal(app.openChat(), false);
+      assert.equal(app.chatOver, false);
+      assert.equal(document.getElementById('oc-confirm-dialog').open, true, 'la domanda e\u2019 stata chiusa');
     """)
 
 
@@ -987,6 +1109,7 @@ def test_settings_is_a_page_and_back_from_it_is_the_chat() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
+      app._setView('chat');  // dalla bacheca alla pista
       app.homePages.goToId('settings');
       assert.equal(app.view, 'chat', 'le impostazioni sono ancora una stanza');
       assert.equal(app.homePages.current, 'settings');
@@ -1011,10 +1134,10 @@ def test_the_back_arrow_names_where_you_land() -> None:
       const app = home();
       await app.switchConversation(projectKey('orto'));
       const dice = (room) => { app._setView(room); return app.backBtn.attrs['aria-label']; };
-      assert.equal(dice('pages'), i18n.t('home.back.chat'));
-      assert.equal(dice('reader'), i18n.t('home.back.pages'), 'dal lettore si torna alle pagine');
+      assert.equal(dice('board'), i18n.t('home.back.chat'));
+      assert.equal(dice('reader'), i18n.t('home.back.board'), 'dal lettore si torna alle pagine');
       assert.equal(dice('jenny'), i18n.t('home.back.settings'), 'da lei si torna alle impostazioni');
-      assert.notEqual(i18n.t('home.back.pages'), i18n.t('home.back.chat'),
+      assert.notEqual(i18n.t('home.back.board'), i18n.t('home.back.chat'),
                       'le due frasi sono diventate la stessa, e il banco non misura piu\u2019 niente');
     """)
 
@@ -1029,7 +1152,7 @@ def test_the_path_says_whose_place_each_room_is() -> None:
       await app.switchConversation(projectKey('orto'));
       const color = dotColor('orto');
 
-      app._setView('pages');
+      app._setView('board');
       assert.equal(app.pathRootName.textContent, i18n.t('home.strip.notebooks'));
       assert.equal(app.nameEl.textContent, 'orto');
       assert.equal(app.pathRootDot.hidden, true, 'la radice «Quaderni» non e\u2019 un quaderno');
@@ -1056,53 +1179,25 @@ def test_the_path_says_whose_place_each_room_is() -> None:
 
 def test_the_path_root_leads_to_its_place() -> None:
     """Un tocco sulla radice porta al posto di cui la stanza e'. Dal lettore e
-    dalle stanze delle impostazioni e' dove porta anche la freccia; dalle
-    pagine no: la freccia torna alla chat del quaderno, la radice ai
-    Quaderni."""
+    dalle stanze delle impostazioni e' dove porta anche la freccia; dalla
+    bacheca la radice porta ai Quaderni."""
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
       app._setView('reader');
       app.goToPathRoot();
-      assert.equal(app.view, 'pages', 'dal lettore la radice non riporta alle pagine');
+      assert.equal(app.view, 'board', 'dal lettore la radice non riporta alla bacheca');
 
-      app.homePages.notebooksConversation = projectKey('orto');
-      app.actions.length = 0;
       app.goToPathRoot();
       assert.equal(app.view, 'chat');
       assert.equal(app.homePages.index, app.homePages.indexOf('notebooks'),
-                   'dalle pagine la radice non porta alla pagina Quaderni');
-      assert.ok(app.actions.includes('quaderno chiuso'),
-                'la radice «Quaderni» porta al quaderno, non all\\u2019elenco');
+                   'dalla bacheca la radice non porta alla pagina Quaderni');
       assert.equal(sessionManager.currentKey, 'project:orto', 'la radice ha cambiato conversazione');
 
       app._setView('updates');
       app.goToPathRoot();
       assert.equal(app.view, 'chat');
       assert.equal(app.homePages.index, app.homePages.indexOf('settings'));
-    """)
-
-
-def test_the_way_back_to_the_chat_belongs_to_a_notebook() -> None:
-    """«Parlane» riporta a parlare *di questo quaderno*: nelle stanze delle
-    impostazioni non c'e' niente di cui parlare, e il bottone non ci va.
-
-    Era `hidden = inChat`, che con tre stanze diceva la stessa cosa. Dal
-    26/09/2026 «Parlane» non c'e' piu': la strada per la chat e' l'interruttore
-    Chat | Pagine, nelle pagine e nel lettore, nello stesso punto in cui dalla
-    chat si va alle pagine.
-    """
-    _run_js("""
-      const app = home();
-      await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
-      assert.equal(app.viewSwitch.hidden, false, 'dalle pagine non si torna alla chat');
-      app._setView('reader');
-      assert.equal(app.viewSwitch.hidden, true, 'nel lettore c\\u2019e\\u2019 l\\u2019interruttore: li\\u2019 il comando e\\u2019 «Modifica»');
-      app._setView('jenny');
-      assert.equal(app.viewSwitch.hidden, true, 'l\\u2019interruttore in mezzo alle impostazioni');
-      assert.equal(app.nameEl.textContent, i18n.t('home.jenny.title', { name: 'Jenny' }), 'la testa non dice dove sei');
     """)
 
 
@@ -1203,7 +1298,8 @@ def test_leaving_the_updates_room_stops_its_polling() -> None:
 def test_a_page_without_a_composer_puts_jenny_on_the_floor() -> None:
     """Il cassetto e le impostazioni non hanno un composer: misurarlo lo
     stesso — sta nella pagina accanto, alto quanto era — la terrebbe sospesa
-    a mezz'aria sopra le righe. Una pagina quaderno il composer ce l'ha."""
+    a mezz'aria sopra le righe. Dal 05/10/2026 nemmeno la pagina di un
+    quaderno appeso: e' una porta alla sua bacheca."""
     _run_js("""
       const app = home();
       app.actions.length = 0;
@@ -1213,7 +1309,10 @@ def test_a_page_without_a_composer_puts_jenny_on_the_floor() -> None:
       assert.ok(!app.actions.includes('pavimento rimisurato'));
       app._entry = { id: 'q1', kind: 'conversation', ref: 'project:piante' };
       app._placeJenny();
-      assert.ok(app.actions.includes('pavimento rimisurato'), 'una pagina quaderno ha il suo composer');
+      assert.ok(!app.actions.includes('pavimento rimisurato'), 'la porta di un quaderno ha un composer');
+      app._entry = { id: 'chat', kind: 'chat' };
+      app._placeJenny();
+      assert.ok(app.actions.includes('pavimento rimisurato'), 'la pagina chat ha perso il suo composer');
     """)
 
 
@@ -1248,6 +1347,9 @@ def test_every_switch_from_outside_asks_the_pages_where() -> None:
       /* Le pagine finte non cambiano conversazione: si resta in «piante», e
          ognuna delle due strade deve chiedere la personale alle pagine. */
       sessionManager.currentKey = projectKey('piante');
+      /* Sulla pagina chat: e' li' che l'avviso cambia conversazione invece di
+         salire nel velo (v. `openChat`). */
+      app._entry = { id: 'chat', kind: 'chat' };
       for (const [route, perform] of [
         ['Home', () => app.goHome()],
         ['un avviso', () => app.openChat()],
@@ -1295,12 +1397,21 @@ def test_home_closes_an_app_with_inner_screens_for_good() -> None:
     """)
 
 
-def test_a_tapped_alert_closes_an_app_with_inner_screens_for_good() -> None:
+def test_a_tapped_alert_keeps_an_open_app_under_the_chat() -> None:
+    """L'app aperta resta li', sotto il velo, alla sua schermata interna:
+    chiusa la chat la si ritrova com'era. Fino al 10/10/2026 l'avviso la
+    chiudeva, e con lei quel che ci stavi facendo."""
     _run_js(_DEEP_APP + """
-      app.openChat();
+      assert.equal(app.openChat(), true);
       await new Promise((r) => setTimeout(r, 0));
-      assert.equal(mini.open, false, 'l\\u2019avviso ha lasciato l\\u2019app aperta sopra la chat');
-      assert.equal(mini.back, 0);
+      assert.equal(app.chatOver, true);
+      assert.equal(mini.open, true, 'l\\u2019avviso ha chiuso l\\u2019app');
+      assert.equal(mini.depth, 2);
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      app.handleHardwareBack();
+      assert.equal(app.chatOver, false, 'Indietro chiude prima la chat');
+      assert.equal(mini.open, true);
+      assert.equal(mini.back, 0, 'Indietro ha toccato anche l\\u2019app');
     """)
 
 
@@ -1362,13 +1473,19 @@ def test_back_peels_the_layers_of_the_app_page_one_at_a_time() -> None:
     """)
 
 
-def test_back_leaves_the_moving_mode_without_saving() -> None:
-    """Salvare e' «Fatto». Indietro e' «lascia com'era»."""
+def test_back_and_home_leave_the_moving_mode_saving() -> None:
+    """Ogni uscita dalla modalita' ordina salva, come nei launcher (scelta
+    dell'utente, 10/10/2026): prima Indietro e Home buttavano il nuovo ordine
+    senza dirlo."""
     _run_js("""
       const app = home();
+      const saves = [];
+      app.strip.closeSort = (opts) => { saves.push(opts); app.strip.sorting = false; };
       app.strip.sorting = true;
       assert.equal(app._closeOverlays(), true);
-      assert.deepEqual(app.actions, ['ordina chiusa']);
+      app.strip.sorting = true;
+      app.goHome();
+      assert.deepEqual(saves, [{ save: true }, { save: true }], 'un\u2019uscita non ha salvato');
     """)
 
 
@@ -1439,17 +1556,133 @@ def test_another_page_is_not_the_chat() -> None:
 
 def test_the_chat_page_on_a_notebook_is_not_where_alerts_are() -> None:
     """Gli avvisi proattivi arrivano nella conversazione personale: la pagina
-    chat su un quaderno non li mostra. Tornando alla personale, si'."""
+    chat su un quaderno non li mostra. Il guscio sente comunque quale chat e'
+    a schermo — quella del quaderno, col suo nome, che cancella solo gli
+    avvisi di quel quaderno (dal 10/10/2026). Tornando alla personale, la
+    personale, senza nome."""
     _run_js(f"""
       const app = home();
       app.onPageChanged(1, {CHAT});
       window.JennyNative.opened = 0;
+      window.JennyNative.openedWith.length = 0;
       await app.showConversation(projectKey('piante'));
       assert.equal(app.isChatOnScreen(), false);
-      assert.equal(window.JennyNative.opened, 0);
+      assert.equal(app.chatOnScreenKey(), 'project:piante');
+      assert.deepEqual(window.JennyNative.openedWith, ['project:piante']);
       await app.showConversation(null);
       assert.equal(app.isChatOnScreen(), true);
-      assert.equal(window.JennyNative.opened, 1);
+      assert.equal(app.chatOnScreenKey(), 'personal');
+      assert.deepEqual(window.JennyNative.openedWith, ['project:piante', null]);
+    """)
+
+
+# ── L'avviso di un quaderno porta nel quaderno (10/10/2026) ──────────────────
+# Il tag della notifica nomina il quaderno, il guscio nativo lo passa a
+# `openChat(key)`. Prima ogni avviso apriva la chat personale, dove la risposta
+# del quaderno non c'e'.
+
+def test_a_notebook_alert_from_the_chat_page_enters_the_notebook() -> None:
+    _run_js(f"""
+      const app = home();
+      app.onPageChanged(1, {CHAT});
+      notebooksOnDisk = ['orto'];
+      assert.equal(app.openChat('project:orto'), true, 'risponde subito: evaluateJavascript non aspetta');
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'board', 'sotto non c\u2019e\u2019 la bacheca del quaderno');
+      assert.equal(app.chatOver, true, 'la chat del quaderno non e\u2019 salita');
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.equal(app.chatOnScreenKey(), 'project:orto');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.chatOver, false);
+      assert.equal(app.view, 'board', 'Indietro non riporta alla bacheca');
+    """)
+
+
+def test_a_notebook_alert_inside_that_notebook_only_raises_its_chat() -> None:
+    _run_js("""
+      const app = home();
+      notebooksOnDisk = ['orto'];
+      await app.openNotebook('orto');
+      app.actions.length = 0;
+      assert.equal(app.openChat('project:orto'), true);
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'board');
+      assert.equal(app.chatOver, true);
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.ok(!app.actions.includes('bacheca:orto'), 'ha riaperto il quaderno in cui eri gia\u2019');
+    """)
+
+
+def test_a_notebook_alert_from_another_notebook_moves_there() -> None:
+    _run_js("""
+      const app = home();
+      notebooksOnDisk = ['orto', 'piante'];
+      await app.openNotebook('piante');
+      app.openChatOver();
+      assert.equal(sessionManager.currentKey, 'project:piante');
+      assert.equal(app.openChat('project:orto'), true);
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.equal(app.view, 'board');
+      assert.equal(app.chatOver, true);
+    """)
+
+
+def test_a_notebook_alert_with_its_chat_already_up_changes_nothing() -> None:
+    _run_js("""
+      const app = home();
+      notebooksOnDisk = ['orto'];
+      await app.openNotebook('orto');
+      app.openChatOver();
+      app.actions.length = 0;
+      assert.equal(app.openChat('project:orto'), true);
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.chatOver, true);
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.ok(!app.actions.includes('bacheca:orto'));
+    """)
+
+
+def test_the_alert_of_a_deleted_notebook_falls_back_to_the_personal_chat() -> None:
+    _run_js(f"""
+      const app = home();
+      app.onPageChanged(1, {CHAT});
+      notebooksOnDisk = ['piante'];
+      assert.equal(app.openChat('project:orto'), true);
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      assert.equal(app.isChatOnScreen(), true);
+      assert.notEqual(app.view, 'board');
+    """)
+
+
+def test_a_notebook_list_that_cannot_be_read_still_opens_the_notebook() -> None:
+    """Nel dubbio si prova: mandare nella personale chi ha un quaderno vero e'
+    l'errore da evitare."""
+    _run_js("""
+      const app = home();
+      notebooksOnDisk = null;
+      assert.equal(app.openChat('project:orto'), true);
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.equal(app.chatOver, true);
+    """)
+
+
+def test_a_key_that_is_not_a_notebook_opens_the_personal_chat() -> None:
+    _run_js(f"""
+      const app = home();
+      app.onPageChanged(1, {CHAT});
+      for (const key of ['project:../fuori', 'project:', 'websocket:default', 'cron:x']) {{
+        assert.equal(app.openChat(key), true, key);
+        assert.equal(sessionManager.currentKey, 'websocket:default', key);
+      }}
     """)
 
 
@@ -1481,34 +1714,73 @@ _GONE = """
 """
 
 
-def test_the_keyboard_leaves_the_field_under_a_gone_notebook() -> None:
-    """Il controllo del quaderno e' una lettura di rete: finisce **dopo**
-    l'arrivo sulla pagina, quando il fuoco e' gia' stato rimesso sul campo. Con
-    la tastiera fisica i tasti scrivevano al quaderno cancellato."""
-    _run_js(_GONE + """
-      app.onPageChanged(1, NOTEBOOK);
-      assert.deepEqual(focus, ['rimesso']);
-      gone = true;
-      app.onGoneChanged(panel);
-      assert.equal(focus.at(-1), 'tolto', 'il campo sotto l\\u2019avviso ha tenuto il fuoco');
-      assert.equal(app._composerActive(), false, 'i tasti vanno ancora al campo coperto');
-      focus.length = 0;
-      app.onPageChanged(1, NOTEBOOK);
-      assert.deepEqual(focus, ['tolto'], 'tornando sulla pagina il fuoco e\\u2019 tornato sul campo');
-      /* Il quaderno e' tornato: il campo si riprende. */
-      gone = false;
-      app.onGoneChanged(panel);
-      assert.equal(focus.at(-1), 'rimesso');
+def test_a_link_between_pages_leaves_a_trail_for_back() -> None:
+    """Un link dal lettore a un'altra pagina dello stesso cassetto: Indietro
+    torna alla pagina di prima, dov'eri, e solo dopo al cassetto. Prima il
+    link non lasciava traccia e Indietro saltava la pagina A."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('piante'));
+      app.reader = {
+        path: null, editing: false, bodyEl: { scrollTop: 0 },
+        isDirty: () => false, cancelEdit() {}, applyTranslations() {},
+        load: async (nb, path) => { app.reader.path = path; return path.toUpperCase(); },
+      };
+      await app.openPage('a.md', 'A', 'c1');
+      app.reader.bodyEl.scrollTop = 120;
+      await app._followPage('b.md');
+      assert.equal(app.reader.path, 'b.md');
+      assert.equal(app.backBtn.attrs['aria-label'], 'torna alla pagina di prima');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'reader', 'Indietro e\u2019 uscito dal lettore');
+      assert.equal(app.reader.path, 'a.md', 'Indietro ha saltato la pagina A');
+      assert.equal(app.reader.bodyEl.scrollTop, 120, 'la pagina A e\u2019 ripartita dall\u2019alto');
+      assert.equal(app.backBtn.attrs['aria-label'], 'torna al cassetto');
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'drawer');
     """)
 
 
-def test_another_page_going_gone_does_not_touch_the_field() -> None:
+def test_the_back_arrow_says_the_page_it_returns_to() -> None:
+    """Dalla bacheca aperta dai Quaderni la freccia porta ai Quaderni, e ora
+    lo dice: prima si annunciava «torna alla chat»."""
+    _run_js("""
+      const app = home();
+      await app.switchConversation(projectKey('piante'));
+      app.onPageChanged(2, { id: 'notebooks', kind: 'notebooks', fixed: true });
+      await app.openBoard();
+      assert.equal(app.backBtn.attrs['aria-label'], 'torna ai Quaderni');
+    """)
+
+
+def test_scrolling_onto_a_notebook_door_opens_nothing() -> None:
+    """La porta di un quaderno appeso si apre **al tocco** (dal 10/10/2026).
+    Prima si apriva a scorrimento finito, e chi scorreva verso le pagine dopo
+    restava chiuso nella sua bacheca, dove la pista non scorre."""
     _run_js(_GONE + """
+      app.homePages.index = 1;
+      app.onPageChanged(1, NOTEBOOK, { animated: true });
+      await new Promise((r) => setTimeout(r, 400));
+      assert.ok(!app.actions.includes('bacheca:piante'), 'la porta si e\u2019 aperta da sola');
+      assert.equal(app.view, 'chat');
+    """)
+
+
+def test_back_from_a_board_opened_at_its_door_returns_to_the_door() -> None:
+    """Aperta dalla porta, la bacheca torna alla porta — la pagina in alto da
+    cui sei entrato — e non salta alla chat."""
+    _run_js(_GONE + """
+      app.homePages.index = 1;
       app.onPageChanged(1, NOTEBOOK);
-      focus.length = 0;
-      gone = true;
-      app.onGoneChanged({ dataset: {} });
-      assert.deepEqual(focus, []);
+      await app.openNotebook('piante');
+      assert.equal(app.view, 'board');
+      app.actions.length = 0;
+      app.handleHardwareBack();
+      assert.equal(app.view, 'chat');
+      assert.ok(!app.actions.some((a) => a.startsWith('pagina:')), 'la pista e\u2019 saltata altrove');
+      assert.equal(app.homePages.index, 1);
     """)
 
 
@@ -1563,51 +1835,6 @@ def test_renaming_the_notebook_you_are_in_keeps_you_on_the_notebooks_page() -> N
     """)
 
 
-def test_a_renamed_notebook_takes_its_map_layout_along() -> None:
-    """Gli spilli della mappa hanno per chiave il nome del quaderno: rinominato,
-    il quaderno perdeva la sua disposizione. La chiave si sposta, e la mappa
-    dimentica la copia letta — o il primo trascinamento riscriverebbe il file
-    con la chiave vecchia."""
-    _run_js(_NOTEBOOKS + """
-      let forgot = 0;
-      app.map = { forgetPins: () => { forgot += 1; } };
-      writtenName = 'orto';
-      assert.equal(await app.renameNotebook('piante'), true);
-      assert.deepEqual(layoutMoves, [['piante', 'orto']]);
-      assert.equal(forgot, 1, 'la mappa riscriverebbe la chiave vecchia dalla sua cache');
-    """)
-
-
-def test_a_layout_that_cannot_move_does_not_fail_the_rename() -> None:
-    _run_js(_NOTEBOOKS + """
-      console.warn = () => {};
-      layoutFails = true;
-      writtenName = 'orto';
-      assert.equal(await app.renameNotebook('piante'), true);
-      assert.equal(sessionManager.currentKey, 'project:orto');
-    """)
-
-
-def test_a_refused_rename_moves_no_layout() -> None:
-    _run_js(_NOTEBOOKS + """
-      rpc.renameProject = () => Promise.reject(Object.assign(new Error('x'), { code: 'name_taken' }));
-      writtenName = 'orto';
-      assert.equal(await app.renameNotebook('piante'), false);
-      assert.deepEqual(layoutMoves, []);
-    """)
-
-
-def test_a_deleted_notebook_makes_the_map_forget_its_copy() -> None:
-    """La chiave nel file la toglie `deleteProjectFlow`; la mappa, se c'e',
-    butta la copia letta, o la rimetterebbe al primo trascinamento."""
-    _run_js(_NOTEBOOKS + """
-      let forgot = 0;
-      app.map = { forgetPins: () => { forgot += 1; } };
-      assert.equal(await app.deleteNotebook('piante'), true);
-      assert.equal(forgot, 1);
-    """)
-
-
 def test_the_draft_of_a_renamed_notebook_follows_the_new_name() -> None:
     _run_js(_NOTEBOOKS + """
       app.input.value = 'da finire';
@@ -1656,8 +1883,10 @@ def test_a_deletion_that_did_not_happen_moves_nothing() -> None:
 
 def test_the_personal_conversation_is_named_after_her() -> None:
     """La fila e i Quaderni dicevano «Jenny» comunque si chiamasse: il nome
-    era il testo fisso dell'intestazione. Ora e' `bot_name`, e i due che lo
-    scrivono si ridisegnano quando arriva."""
+    era il testo fisso dell'intestazione. Ora e' `bot_name`, e la fila che lo
+    scrive si ridisegna quando arriva. Dal 05/10/2026 i Quaderni non lo
+    scrivono piu' (la conversazione personale e' uscita dalla pagina): un nome
+    nuovo non li ridisegna per niente."""
     _run_js("""
       const app = home();
       let draws = 0, rows = 0;
@@ -1667,7 +1896,7 @@ def test_the_personal_conversation_is_named_after_her() -> None:
       await app._readName();
       assert.deepEqual(app._chatName(), { name: 'Ada', color: null });
       assert.equal(draws, 1, 'la fila dice ancora il nome di prima');
-      assert.equal(rows, 1, 'i Quaderni dicono ancora il nome di prima');
+      assert.equal(rows, 0, 'i Quaderni si ridisegnano per un nome che non portano');
     """)
 
 
@@ -1741,10 +1970,11 @@ _DIRTY_READER = """
         isDirty: () => dirty,
         blurEditor() {},
         cancelEdit() { dirty = false; app.actions.push('modifiche buttate'); },
+        askCancel() { app.actions.push('annulla chiesto'); },
         applyTranslations() {},
         editing: true,
       };
-      app._setView('pages');
+      app._setView('board');
       app._setView('reader');
       app.actions.length = 0;
 """
@@ -1767,9 +1997,32 @@ def test_home_waits_for_the_reader_confirm_before_switching() -> None:
     """)
 
 
+def test_back_in_the_editor_closes_only_the_editor() -> None:
+    """Indietro con l'editor aperto chiude l'editor (chiedendo, se c'e' del
+    lavoro) e resta sulla pagina. Prima usciva dal lettore: con un si' alla
+    conferma buttava le modifiche *e* usciva, due cose per una pressione."""
+    _run_js(_DIRTY_READER + """
+      app.handleHardwareBack();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'reader', 'Indietro e\u2019 uscito dalla pagina');
+      assert.ok(app.actions.includes('annulla chiesto'), 'non ha chiesto all\u2019editor');
+      assert.equal(reply, null, 'ha chiesto di uscire dal lettore');
+    """)
+
+
+def test_home_asks_about_the_edit_once() -> None:
+    """Home chiude tutto in un giro: la domanda sul lavoro non salvato la fa
+    il cambio di stanza, una volta sola, non l'editor a ogni giro."""
+    _run_js(_DIRTY_READER + """
+      app.goHome();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.ok(!app.actions.includes('annulla chiesto'), 'Home ha chiesto all\u2019editor');
+    """)
+
+
 def test_saying_no_to_the_reader_confirm_keeps_everything() -> None:
     _run_js(_DIRTY_READER + """
-      app.openChat();
+      app.goHome();
       reply(false);
       await new Promise((r) => setTimeout(r, 0));
       assert.equal(app.view, 'reader');
@@ -1778,15 +2031,21 @@ def test_saying_no_to_the_reader_confirm_keeps_everything() -> None:
     """)
 
 
-def test_a_tapped_alert_waits_for_the_reader_confirm_too() -> None:
+def test_a_tapped_alert_keeps_the_reader_edit_under_the_chat() -> None:
+    """L'avviso non esce dal lettore, quindi non chiede di buttare le
+    modifiche: la chat sale sopra l'editor, e richiusa lo ritrovi a meta'."""
     _run_js(_DIRTY_READER + """
+      reply = null;
       assert.equal(app.openChat(), true);
       await new Promise((r) => setTimeout(r, 0));
-      assert.equal(sessionManager.currentKey, 'project:piante');
-      reply(true);
-      await new Promise((r) => setTimeout(r, 0));
-      assert.equal(app.view, 'chat');
+      assert.equal(reply, null, 'ha chiesto di buttare le modifiche');
+      assert.equal(app.view, 'reader');
       assert.equal(sessionManager.currentKey, 'websocket:default');
+      app.closeChatOver();
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(app.view, 'reader');
+      assert.equal(sessionManager.currentKey, 'project:piante');
+      assert.ok(!app.actions.includes('modifiche buttate'));
     """)
 
 
@@ -1801,11 +2060,11 @@ def test_a_page_title_that_arrives_after_back_does_not_take_the_head() -> None:
         load: () => new Promise((r) => { arrives = r; }),
         isDirty: () => false, cancelEdit() {}, applyTranslations() {}, editing: false,
       };
-      app._setView('pages');
+      app._setView('board');
       const open = app.openPage('semina.md', 'Semina');
       assert.equal(app.nameEl.textContent, 'Semina');
       app.handleHardwareBack();
-      assert.equal(app.view, 'pages');
+      assert.equal(app.view, 'board');
       assert.equal(app.nameEl.textContent, 'orto');
       arrives('Semina di marzo');
       await open;
@@ -1821,7 +2080,7 @@ def test_a_page_title_that_arrives_in_the_reader_is_written() -> None:
         load: async () => 'Semina di marzo',
         isDirty: () => false, cancelEdit() {}, applyTranslations() {}, editing: false,
       };
-      app._setView('pages');
+      app._setView('board');
       await app.openPage('semina.md', 'Semina');
       assert.equal(app.nameEl.textContent, 'Semina di marzo');
     """)
@@ -1835,7 +2094,7 @@ def test_a_title_from_a_save_after_leaving_the_reader_is_dropped() -> None:
     _run_js("""
       const app = home();
       await app.switchConversation(projectKey('orto'));
-      app._setView('pages');
+      app._setView('board');
       app._readerTitle('Semina di marzo');
       assert.equal(app.nameEl.textContent, 'orto');
     """)
@@ -1882,18 +2141,18 @@ def test_every_sheet_that_back_closes_counts_as_something_above() -> None:
     """)
 
 
-# ── Jenny e la sua minichat, fra pagine e stanze ────────────────────────────
+# ── Jenny fra pagine e stanze ────────────────────────────
 
 
-def test_a_page_without_composer_sends_her_to_the_edge_with_the_minichat() -> None:
+def test_a_page_without_composer_sends_her_to_the_edge() -> None:
     """Fino al 28/09/2026 nelle pagine App e Impostazioni lei restava fuori, e
-    il tocco non apriva niente. Adesso la chat e' a schermo solo in una pagina
-    col composer: fuori sta al bordo, e ha la minichat."""
+    il tocco non apriva niente. Adesso la chat e' a schermo solo nella pagina
+    chat: fuori sta al bordo, e un tocco porta su la chat."""
     _run_js("""
       const app = home();
       app._entry = { id: 'app', kind: 'app' };
       app._syncJennyPlace();
-      assert.equal(app.jennyChat, false, 'fuori dalla chat la minichat non si accende');
+      assert.equal(app.jennyChat, false, 'fuori dalla chat lei crede di averla a schermo');
       assert.deepEqual(app.actions, ['fuori:false']);
       app._entry = { id: 'settings', kind: 'settings' };
       app.actions.length = 0;
@@ -1931,15 +2190,70 @@ def test_a_room_counts_as_away_even_on_the_chat_page() -> None:
     """)
 
 
-def test_back_closes_the_minichat_before_an_app_under_it() -> None:
+def test_back_closes_the_chat_over_the_page_before_an_app_under_it() -> None:
+    """La chat sopra la pagina sta sopra la mini-app (112 contro 110): Indietro
+    chiude prima lei, e l'app alla pressione dopo."""
     _run_js("""
       const app = home();
       let closedApp = false;
       app._appActions = { handleBack: () => { closedApp = true; return true; }, isAppOpen: () => true };
-      let open = true;
-      app.jenny.handleBack = () => { const was = open; open = false; return was; };
+      app.openChatOver();
+      assert.equal(app.chatOver, true);
       assert.equal(app._closeOverlays(), true);
-      assert.equal(closedApp, false, 'Indietro ha chiuso l\\'app sotto la minichat');
+      assert.equal(app.chatOver, false);
+      assert.equal(closedApp, false, 'Indietro ha chiuso l\\'app sotto la chat');
       assert.equal(app._closeOverlays(), true);
       assert.equal(closedApp, true, 'alla pressione dopo, l\\'app');
+    """)
+
+
+def test_entering_a_notebook_does_not_tell_the_shell_the_personal_chat_passed_by() -> None:
+    """`openNotebook` passa dalla pagina chat, ancora sulla personale: detto al
+    guscio, cancellava gli avvisi personali non letti. Misurato sull'emulatore
+    il 10/10/2026 toccando l'avviso di un quaderno con un avviso personale in
+    tendina."""
+    _run_js(f"""
+      const app = home();
+      app.onPageChanged(1, {CHAT});
+      app._setView('jenny');
+      window.JennyNative.openedWith.length = 0;
+      await app.openNotebook('orto');
+      assert.ok(!window.JennyNative.openedWith.includes(null), 'la personale e\\u2019 stata detta a schermo');
+      app.openChatOver();
+      assert.deepEqual(window.JennyNative.openedWith, ['project:orto']);
+    """)
+
+
+def test_a_cold_start_from_a_notebook_alert_lands_in_that_notebook() -> None:
+    """Il tocco sull'avviso di un quaderno con l'activity morta arriva come
+    `?mode=chat&chat=project:<nome>` (`MainActivity.buildGatewayUrl`). Mentre il
+    posto si riprende la casa passa dalla pagina chat personale, e il guscio non
+    lo deve sentire: cancellerebbe gli avvisi personali non letti."""
+    _run_js(f"""
+      globalThis.location = {{ search: '?mode=chat&chat=project%3Aorto' }};
+      const app = home();
+      app.onPageChanged(1, {CHAT});
+      notebooksOnDisk = ['orto'];
+      window.JennyNative.openedWith.length = 0;
+      app._placeHeld = true;
+      await app._restorePlace();
+      assert.equal(sessionManager.currentKey, 'project:orto');
+      assert.equal(app.view, 'board');
+      assert.equal(app.chatOver, true);
+      assert.deepEqual(window.JennyNative.openedWith, [], 'il guscio ha sentito il passaggio');
+      app._placeHeld = false;
+      app._reportChatOnScreen();
+      assert.deepEqual(window.JennyNative.openedWith, ['project:orto']);
+    """)
+
+
+def test_a_cold_start_for_the_personal_chat_does_not_restore_the_old_place() -> None:
+    _run_js(f"""
+      globalThis.location = {{ search: '?mode=chat' }};
+      savedPlace = JSON.stringify({{ at: Date.now(), page: 'chat', view: 'board', notebook: 'orto' }});
+      const app = home();
+      app.onPageChanged(1, {CHAT});
+      await app._restorePlace();
+      assert.equal(sessionManager.currentKey, 'websocket:default');
+      assert.equal(app.view, 'chat');
     """)

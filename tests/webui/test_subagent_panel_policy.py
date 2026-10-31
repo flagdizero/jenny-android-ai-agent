@@ -204,6 +204,17 @@ def test_action_matrix_per_state_and_surface() -> None:
       assert.deepEqual(saActions('failed', 'card'), []);
       assert.deepEqual(saActions('failed', 'modal'), ['restart']);
 
+      // budget: come failed (riprenderla con la storia e' un tasto della casa).
+      assert.deepEqual(saActions('budget', 'card'), []);
+      assert.deepEqual(saActions('budget', 'modal'), ['restart']);
+      // ...ma con la storia ancora intera niente rilancio da zero: butterebbe il lavoro.
+      assert.deepEqual(saActions('budget', 'modal', { resumable: true }), []);
+      assert.deepEqual(saActions('budget', 'card', { resumable: true }), []);
+      assert.deepEqual(saActions('budget', 'modal', { resumable: false }), ['restart']);
+      // Un failed riprendibile e' fermato dal provider con la storia salvata: idem.
+      assert.deepEqual(saActions('failed', 'modal', { resumable: true }), []);
+      assert.deepEqual(saActions('failed', 'modal', { resumable: false }), ['restart']);
+
       // done/cancelled: nessuna azione da nessuna parte.
       for (const state of ['done', 'cancelled']) {
         assert.deepEqual(saActions(state, 'card'), [], state);
@@ -228,7 +239,7 @@ def test_relaunch_is_never_offered_on_a_successful_job() -> None:
 
 def test_terminal_states_match_the_backend_lifecycle() -> None:
     _run_js("""
-      assert.deepEqual([...SA_TERMINAL_STATES].sort(), ['cancelled', 'done', 'failed']);
+      assert.deepEqual([...SA_TERMINAL_STATES].sort(), ['budget', 'cancelled', 'done', 'failed']);
       for (const state of SA_TERMINAL_STATES) assert.ok(saIsTerminal(state), state);
       for (const state of ['running', 'stalled']) assert.ok(!saIsTerminal(state), state);
     """)
@@ -244,3 +255,16 @@ def test_a_malformed_snapshot_never_throws() -> None:
         assert.ok(Array.isArray(view.lingering));
       }
     """)
+
+
+def test_the_workshop_passes_the_entry_and_styles_a_budget_stop() -> None:
+    """La regola di `resumable` vale solo se l'officina passa la voce a `saActions`
+    su card e modale; e una fermata al budget ha il suo colore, non quello neutro."""
+    assets = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+    chat = (assets / "mobile-chat.js").read_bytes().decode("utf-8", "replace")
+    assert "saActions(state, 'card', entry)" in chat
+    assert "saActions(state, 'modal', entry)" in chat
+    assert "this._saSyncActions(state, entry)" in chat
+    css = (assets / "mobile-style.css").read_text(encoding="utf-8")
+    assert ".sa-row.state-budget" in css and ".state-budget .sa-state" in css
+    assert ".sa-sum.is-budget .sa-sum-dot" in css

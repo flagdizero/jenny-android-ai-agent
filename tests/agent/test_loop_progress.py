@@ -15,6 +15,7 @@ from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import TurnCompleted
 from jenny.providers.base import LLMResponse, ToolCallRequest
+from jenny.runtime.user_text import say
 from jenny.session.webui_turns import WebuiTurnCoordinator
 from jenny.utils.llm_runtime import LLMRuntime
 
@@ -666,7 +667,7 @@ class TestToolEventProgress:
         while bus.outbound_size > 0:
             outbound.append(await bus.consume_outbound())
 
-        error_msgs = [m for m in outbound if m.content == "Sorry, I encountered an error."]
+        error_msgs = [m for m in outbound if m.content == say("error.internal")]
         turn_end_msgs = [m for m in outbound if m.metadata.get("_turn_end")]
         statuses = [m for m in outbound if m.metadata.get("_goal_status")]
 

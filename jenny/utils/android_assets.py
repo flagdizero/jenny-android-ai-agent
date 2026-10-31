@@ -36,17 +36,23 @@ _USER_OWNED_TEMPLATES = [
 _SYSTEM_PROMPT_TEMPLATES = [
     "agent/identity.md", "agent/tool_contract.md", "agent/subagent_system.md",
     "agent/subagent_announce.md", "agent/skills_section.md", "agent/apps_section.md",
+    "agent/diary_section.md",
     "agent/platform_policy.md", "agent/cron_reminder.md", "agent/cron_monitor.md",
     "agent/max_iterations_message.md", "agent/consolidator_archive.md",
+    "agent/inflight_checkpoint.md", "agent/consolidator_handoff.md",
     "agent/dream.md", "agent/dream_project.md", "agent/dream_review.md",
     "agent/gardener.md",
+    "agent/board_pass.md",
+    "agent/notebook_greeting.md",
     "agent/scheduling.md",
     "agent/project.md",
     "agent/readonly.md", "agent/project_init.md", "agent/tidy.md",
     "agent/orchestrator.md", "agent/tool_inventory.md",
+    "agent/plan_mode.md", "agent/plan_step.md",
     "agent/_snippets/untrusted_content.md",
     "agent/types/researcher.md", "agent/types/writer.md", "agent/types/coder.md",
     "agent/types/analyst.md", "agent/types/sysadmin.md", "agent/types/operator.md",
+    "agent/types/app-builder.md", "agent/types/notebook-editor.md",
 ]
 
 _TEMPLATES_MANIFEST = [*_USER_OWNED_TEMPLATES, *_SYSTEM_PROMPT_TEMPLATES]
@@ -215,15 +221,26 @@ _UI_MANIFEST = [
     "assets/home-activity.js",
     "assets/home-app.js",
     "assets/home-audit.js",
+    "assets/home-band.js",
     "assets/home-backup.js",
     "assets/home-chat.js",
     "assets/home-jenny.js",
-    "assets/home-map.js",
+    "assets/home-board.js",
+    "assets/home-board-drawer.js",
+    "assets/home-board-automation.js",
+    "assets/home-board-agenda.js",
+    "assets/home-board-deck.js",
+    "assets/home-board-notes.js",
+    "assets/home-board-photos.js",
+    "assets/home-photo-viewer.js",
+    "assets/home-board-blocks.js",
+    "assets/home-apps-trash.js",
+    "assets/home-staged.js",
+    "assets/home-plan.js",
     "assets/home-model.js",
-    "assets/home-notebook-pages.js",
     "assets/home-pages.js",
     "assets/home-strip.js",
-    "assets/home-subagents.js",
+    "assets/home-work.js",
     "assets/home-ui-query.js",
     "assets/home-focus.js",
     "assets/home-flower.js",
@@ -231,6 +248,7 @@ _UI_MANIFEST = [
     "assets/home-reader.js",
     "assets/home-style.css",
     "assets/home-move.js",
+    "assets/home-over.js",
     "assets/home-you.js",
     "assets/home-updates.js",
     "assets/home-who.js",
@@ -265,6 +283,7 @@ _UI_MANIFEST = [
     "assets/mobile-header.js",
     "assets/mobile-jenny.js",
     "assets/mobile-launcher.js",
+    "assets/mobile-remote-access.js",
     "assets/mobile-settings.js",
     "assets/mobile-style.css",
     "assets/mobile-ui-query.js",
@@ -284,23 +303,25 @@ _UI_MANIFEST = [
     "assets/shared/conversation-list.js",
     "assets/shared/cron-view.js",
     "assets/shared/dialog.js",
+    "assets/shared/editable-focus.js",
+    "assets/shared/extensions.js",
     "assets/shared/first-run.js",
     "assets/shared/history-pager.js",
     "assets/shared/horizontal-swipe.js",
     "assets/shared/i18n.js",
     "assets/shared/image-handler.js",
     "assets/shared/image-lightbox.js",
-    "assets/shared/jenny-gap.js",
     "assets/shared/jenny-mascot.js",
-    "assets/shared/jenny-minichat.js",
+    "assets/shared/unseen-replies.js",
     "assets/shared/keyboard.js",
     "assets/shared/launcher-rank.js",
     "assets/shared/launcher-usage-store.js",
     "assets/shared/longpress.js",
-    "assets/shared/map-layout.js",
     "assets/shared/markdown.js",
     "assets/shared/native-bridge.js",
     "assets/shared/mascot-drag.js",
+    "assets/shared/mascot-motion.js",
+    "assets/shared/mascot-squash.js",
     "assets/shared/mascot.js",
     "assets/shared/pinch-zoom.js",
     "assets/shared/project-create.js",
@@ -311,6 +332,7 @@ _UI_MANIFEST = [
     "assets/shared/scope-chip.js",
     "assets/shared/selection.js",
     "assets/shared/skills-view.js",
+    "assets/shared/spines.js",
     "assets/shared/wire-error.js",
     "assets/shared/write-switch.js",
     "assets/shared/session-manager.js",
@@ -319,15 +341,18 @@ _UI_MANIFEST = [
     "assets/shared/telegram-pairing.js",
     "assets/shared/theme.js",
     "assets/shared/update-flow.js",
+    "assets/shared/update-watch.js",
     "assets/shared/when.js",
+    "assets/shared/chat-time.js",
     "assets/shared/type-ahead.js",
     "assets/shared/ui-query.js",
     "assets/shared/utils.js",
     "assets/shared/wiki-search.js",
     "assets/shared/ws-manager.js",
     "assets/vendor/@tabler/icons-webfont@3.19.0/LICENSE",
-    "assets/vendor/@tabler/icons-webfont@3.19.0/dist/fonts/tabler-icons.ttf",
-    "assets/vendor/@tabler/icons-webfont@3.19.0/dist/fonts/tabler-icons.woff",
+    # Solo woff2: la WebView (minSdk 26) lo legge sempre, e ttf e woff (3,7 MB)
+    # non venivano mai scaricati. Il loro ``url()`` e' stato tolto anche dal CSS
+    # vendor: chi lo riscarica deve rifare le due cose insieme.
     "assets/vendor/@tabler/icons-webfont@3.19.0/dist/fonts/tabler-icons.woff2",
     "assets/vendor/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css",
     "assets/vendor/codemirror@5.65.16/LICENSE",
@@ -409,6 +434,8 @@ _UI_MANIFEST = [
     "assets/vendor/highlight.js@11.11.1/styles/github.min.css",
     "assets/vendor/marked@15.0.7/LICENSE",
     "assets/vendor/marked@15.0.7/marked.min.js",
+    "assets/vendor/qrcode-generator@1.4.4/LICENSE",
+    "assets/vendor/qrcode-generator@1.4.4/qrcode.min.js",
     # I documenti della WebUI (v. _SHELL_DOCUMENTS in jenny/webui/ws_http.py).
     # Chi ne aggiunge uno e si dimentica questa riga non ottiene un 404:
     # `_serve_static` ricade su index.html e serve un'altra interfaccia.
@@ -422,6 +449,44 @@ _UI_MANIFEST = [
 ]
 
 _extracted_registry: dict[str, Path] = {}
+
+
+def ui_sources() -> dict[str, tuple[str, str]]:
+    """Ogni file della WebUI: ``percorso sotto ui/`` → ``(pacchetto, file)``.
+
+    Il core da ``_UI_MANIFEST``, più i file delle estensioni impacchettate in
+    questa build sotto ``assets/ext/<nome>/`` (``jenny/extensions.py``). È
+    l'elenco di cosa si estrae, di cosa si serve dai byte del pacchetto e di
+    cosa ``retire_withdrawn_ui_files`` lascia stare.
+    """
+    from jenny import extensions
+
+    sources = {rel: ("jenny.templates.ui", rel) for rel in _UI_MANIFEST}
+    sources.update(extensions.ui_sources())
+    return sources
+
+
+def extract_extension_ui(ui_dir: Path) -> int:
+    """Estrae i file WebUI delle estensioni in ``ui_dir/assets/ext/<nome>/``.
+
+    Come ``extract_package_dir`` per il core: dal manifest dichiarato
+    dall'estensione, riscrivendo solo i file cambiati.
+    """
+    from jenny import extensions
+
+    count = 0
+    for rel, (package, path) in extensions.ui_sources().items():
+        data = read_asset(package, path)
+        if data is None:
+            logger.warning("Extension UI file missing from its package: {}/{}", package, path)
+            continue
+        target = ui_dir / rel
+        if _already_identical(target, data):
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _write_bytes_force(target, data)
+        count += 1
+    return count
 
 
 def read_asset(module: str, path: str) -> bytes | None:
@@ -724,6 +789,38 @@ def retire_withdrawn_templates(dest: Path) -> list[str]:
     return rewritten
 
 
+def _retire_absent_extensions(ui_dir: Path) -> list[str]:
+    """Toglie per intero ``assets/ext/<nome>/`` delle estensioni che questa build non ha.
+
+    Per intero, traduzioni comprese: una cartella d'estensione è tutta nostra, e
+    un'estensione assente non deve lasciare niente di servibile. Ci arriva per
+    esempio da una build che l'aveva, sostituita da una che non ce l'ha.
+    """
+    import shutil
+
+    from jenny import extensions
+
+    root = ui_dir / extensions.EXT_UI_DIR
+    if not root.is_dir() or root.is_symlink():
+        return []
+    present = {ext.name for ext in extensions.load()}
+    removed: list[str] = []
+    for child in sorted(root.iterdir()):
+        if child.name in present:
+            continue
+        rel = child.relative_to(ui_dir).as_posix()
+        try:
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        except OSError:
+            logger.opt(exception=True).warning("Withdrawn extension UI not removed: {}", rel)
+            continue
+        removed.append(rel + "/")
+    return removed
+
+
 #: I suffissi del codice della WebUI: gli stessi che ``ws_http`` serve dai byte
 #: canonici del package. Solo questi si ritirano da ``ui/``.
 _UI_CODE_SUFFIXES = (".html", ".js", ".css")
@@ -748,8 +845,8 @@ def retire_withdrawn_ui_files(ui_dir: Path) -> list[str]:
     """
     if not ui_dir.is_dir():
         return []
-    shipped = set(_UI_MANIFEST)
-    removed: list[str] = []
+    shipped = set(ui_sources())
+    removed = _retire_absent_extensions(ui_dir)
     for path in sorted(ui_dir.rglob("*")):
         if path.suffix not in _UI_CODE_SUFFIXES or path.is_symlink() or not path.is_file():
             continue

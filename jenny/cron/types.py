@@ -96,6 +96,11 @@ class CronPayload:
     origin_channel: str | None = None
     origin_chat_id: str | None = None
     origin_metadata: dict[str, Any] = field(default_factory=dict)
+    # Un cron del quaderno: ``{notebook, card, section}``. Il job sta nel cassetto
+    # di quella scheda, gira col recinto del quaderno e vi lascia il suo esito
+    # (v. ``jenny/agent/tools/cron.py`` e ``bound_runner``). ``None`` per i cron
+    # della chat personale.
+    board: dict[str, Any] | None = None
 
 
 @dataclass
@@ -233,3 +238,40 @@ class CronStore:
     """Persistent store for cron jobs."""
     version: int = 1
     jobs: list[CronJob] = field(default_factory=list)
+
+
+# Fino al 10/10/2026 un job senza nome prendeva come nome i primi 30 caratteri
+# del suo ``message``, cioe' l'istruzione inglese per l'agente: e quel nome
+# finiva nel titolo della notifica («Remind the user to water the p»). Ora un
+# job senza nome resta senza; per quelli gia' nello store si riconosce il
+# ripiego vecchio confrontandolo col messaggio.
+_LEGACY_NAME_CHARS = 30
+
+
+def job_user_label(job: CronJob) -> str | None:
+    """Il nome del job da mostrare all'utente, o ``None`` se non ne ha uno vero.
+
+    ``None`` per un nome vuoto e per il ripiego di una volta (``message[:30]``):
+    e' quel che va nel titolo di una notifica, dove un'istruzione per l'agente
+    non deve mai arrivare.
+    """
+    name = (job.name or "").strip()
+    if not name:
+        return None
+    message = job.payload.message or ""
+    if message and name == message[:_LEGACY_NAME_CHARS].strip():
+        return None
+    return name
+
+
+def job_display_name(job: CronJob) -> str:
+    """Un nome sempre non vuoto per elenchi e log: il nome, o l'inizio del messaggio.
+
+    Per le superfici che hanno bisogno di *qualcosa* da scrivere (l'elenco del
+    tool ``cron``, il pannello dei job) — mai per il titolo di una notifica, che
+    usa :func:`job_user_label`.
+    """
+    name = (job.name or "").strip()
+    if name:
+        return name
+    return (job.payload.message or "")[:_LEGACY_NAME_CHARS].strip() or job.id

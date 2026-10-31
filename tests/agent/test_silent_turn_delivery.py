@@ -28,6 +28,7 @@ from jenny.agent.turn_types import TurnDisposition
 from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse
+from jenny.runtime.user_text import say
 from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import silent_turn_metadata
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
@@ -161,7 +162,7 @@ class TestTheErrorBranchRespectsTheContract:
         await self._dispatch_failing(loop, msg)
 
         contents = [m.content for m in await _drain(loop)]
-        assert "Sorry, I encountered an error." not in contents
+        assert say("error.internal") not in contents
 
     async def test_a_user_turn_still_gets_told_something_broke(
         self, tmp_path: Path
@@ -178,7 +179,7 @@ class TestTheErrorBranchRespectsTheContract:
         await self._dispatch_failing(loop, msg)
 
         contents = [m.content for m in await _drain(loop)]
-        assert "Sorry, I encountered an error." in contents
+        assert say("error.internal") in contents
 
 
 class TestSilentTurnsDoNotStream:
@@ -386,3 +387,238 @@ async def test_a_silent_turn_is_silent_on_every_user_channel(
 
     assert outcome.message is None
     assert await asyncio.wait_for(_drain(loop), timeout=1.0) == []
+
+
+class TestAVisibleAnnounceShowsItIsWorking:
+    """Sul Titan, 07/10/2026: l'annuncio di un aiutante apriva un turno che non
+    accendeva la bolla di lavoro; l'utente ci scriveva dentro, il suo messaggio
+    veniva iniettato, e per 453 s la chat non mostrava niente."""
+
+    def _spy(self, loop: AgentLoop) -> tuple[list, dict]:
+        statuses: list[tuple[str, str, str]] = []
+        seen: dict = {}
+
+        async def run_status_changed(msg, session_key, status, **_kw):
+            statuses.append((msg.channel, msg.chat_id, status))
+
+        loop.runtime_event_publisher.run_status_changed = run_status_changed  # type: ignore[method-assign]
+        stub = loop._run_agent_loop
+
+        async def run(initial_messages, **kwargs):
+            seen["on_progress"] = kwargs.get("on_progress")
+            seen["status_before_run"] = list(statuses)
+            return await stub(initial_messages, **kwargs)
+
+        loop._run_agent_loop = run  # type: ignore[method-assign]
+        return statuses, seen
+
+    async def test_it_runs_on_the_origin_chat_with_its_steps(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop, final_content="ecco")
+        statuses, seen = self._spy(loop)
+
+        outcome = await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert outcome.disposition is TurnDisposition.DELIVERED
+        assert seen["status_before_run"] == [("websocket", "default", "running")]
+        assert statuses == [("websocket", "default", "running"),
+                            ("websocket", "default", "idle")]
+        assert seen["on_progress"] is not None
+
+    async def test_its_steps_reach_the_origin_chat(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        _statuses, seen = self._spy(loop)
+
+        await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+        await seen["on_progress"]("", tool_events=[{"name": "app", "phase": "start"}])
+
+        sent = await _drain(loop)
+        assert [(m.channel, m.chat_id) for m in sent] == [("websocket", "default")]
+        assert sent[0].metadata["_tool_events"] == [{"name": "app", "phase": "start"}]
+
+    async def test_it_goes_idle_even_when_the_run_fails(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        statuses, _seen = self._spy(loop)
+
+        async def boom(initial_messages, **_kwargs):
+            raise RuntimeError("provider down")
+
+        loop._run_agent_loop = boom  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError):
+            await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert statuses[-1] == ("websocket", "default", "idle")
+
+    async def test_a_silent_announce_still_shows_nothing(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        statuses, seen = self._spy(loop)
+
+        await loop._process_message(_announce(HEARTBEAT_SESSION_KEY))
+
+        assert statuses == [] and seen["on_progress"] is None
+
+
+class TestAVisibleAnnounceDoesNotRepeatItsMessage:
+    """Il rientro di un aiutante che ha gia' parlato con ``message`` non lo ripete.
+
+    Sul s22, il 28/10/2026: «pronto, te l'ho messo in un file…» col file, e
+    subito sotto la stessa frase come risposta finale.
+    """
+
+    def _spoke_and_said(self, loop: AgentLoop, final: str, *, injected: bool) -> None:
+        tool = loop.tools.get("message")
+        loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(  # type: ignore[method-assign]
+            return_value=False
+        )
+
+        async def fake_run_agent_loop(initial_messages, **_kwargs):
+            tool._sent_in_turn = True
+            return (final, ["message"], [*initial_messages], "stop", injected)
+
+        loop._run_agent_loop = fake_run_agent_loop  # type: ignore[method-assign]
+
+    async def test_the_final_reply_after_message_is_not_delivered(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._spoke_and_said(loop, "pronto, te l'ho messo in un file", injected=False)
+
+        outcome = await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert outcome.disposition is TurnDisposition.SPOKE_VIA_TOOL
+        assert outcome.message is None
+        assert outcome.final_text == "pronto, te l'ho messo in un file"
+
+    async def test_a_user_who_wrote_meanwhile_still_gets_the_answer(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._spoke_and_said(loop, "si', la cambio subito", injected=True)
+
+        outcome = await loop._process_message(_announce(UNIFIED_SESSION_KEY))
+
+        assert outcome.message is not None
+        assert outcome.message.content == "si', la cambio subito"
+
+
+class TestAnAnnounceThatSpokeClosesItsTurnInTheOriginChat:
+    """Il rientro che ha parlato solo con ``message`` chiude la bolla nella chat d'origine.
+
+    Senza un messaggio da consegnare, ``turn_completed`` partiva col canale
+    ``system``: la WebUI lo proietta sulla chat personale, ma in un quaderno
+    (``project:<nome>``) il ``turn_end`` non arrivava e la mascotte restava a
+    pensare.
+    """
+
+    @pytest.mark.parametrize(
+        ("session_key", "chat_id", "expected"),
+        [
+            ("project:demo", "websocket:p1", ("websocket", "p1")),
+            (UNIFIED_SESSION_KEY, "websocket:default", ("websocket", "default")),
+        ],
+    )
+    async def test_turn_end_reaches_the_origin_chat(
+        self, tmp_path: Path, session_key: str, chat_id: str, expected: tuple[str, str],
+    ) -> None:
+        from jenny.bus.runtime_events import TurnCompleted
+        from jenny.session.webui_turns import webui_view_target
+
+        loop = _make_loop(tmp_path)
+        TestAVisibleAnnounceDoesNotRepeatItsMessage()._spoke_and_said(
+            loop, "pronto, te l'ho messo in un file", injected=False,
+        )
+        completed: list[TurnCompleted] = []
+
+        async def on_completed(event: TurnCompleted) -> None:
+            completed.append(event)
+
+        loop.runtime_events.subscribe(on_completed, TurnCompleted)
+        msg = _announce(session_key)
+        msg.chat_id = chat_id
+
+        await loop._dispatch(msg)
+
+        assert len(completed) == 1
+        assert webui_view_target(completed[0].context) == expected
+
+
+class TestAVisibleAnnounceHasATurnId:
+    """Il rientro visibile ha un id di turno, come un turno dell'utente.
+
+    Senza, la rilettura della WebUI non accorpa: la frase e il file del rientro
+    di un aiutante, una bolla sola dal vivo, ricaricando stavano in due (s22,
+    28/10/2026).
+    """
+
+    def _speaks(self, loop: AgentLoop, *, final: str, by_tool: str | None) -> None:
+        tool = loop.tools.get("message")
+        loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(  # type: ignore[method-assign]
+            return_value=False
+        )
+
+        async def run(initial_messages, **kwargs):
+            await kwargs["on_progress"]("Ecco la ricerca.")
+            if by_tool is not None:
+                await tool.execute(content=by_tool)
+            return (final, ["message"] if by_tool else [], [*initial_messages], "stop", False)
+
+        loop._run_agent_loop = run  # type: ignore[method-assign]
+
+    async def _turn_ids(self, loop: AgentLoop, msg: InboundMessage) -> tuple[list, list]:
+        from jenny.bus.runtime_events import TurnCompleted
+        from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+
+        completed: list[TurnCompleted] = []
+
+        async def on_completed(event: TurnCompleted) -> None:
+            completed.append(event)
+
+        loop.runtime_events.subscribe(on_completed, TurnCompleted)
+        await loop._dispatch(msg)
+        sent = [m for m in await _drain(loop) if m.channel == "websocket"]
+        return (
+            [m.metadata.get(WEBUI_TURN_METADATA_KEY) for m in sent],
+            [e.context.metadata.get(WEBUI_TURN_METADATA_KEY) for e in completed],
+        )
+
+    @pytest.mark.parametrize("session_key", ["project:demo", UNIFIED_SESSION_KEY])
+    async def test_step_message_and_turn_end_share_one_id(
+        self, tmp_path: Path, session_key: str,
+    ) -> None:
+        loop = _make_loop(tmp_path)
+        self._speaks(loop, final="", by_tool="Ecco il file.")
+
+        frames, ends = await self._turn_ids(loop, _announce(session_key))
+
+        assert len(frames) == 2 and len(ends) == 1
+        assert len({*frames, *ends}) == 1
+        assert frames[0].startswith("system:")
+
+    async def test_the_final_reply_carries_it_too(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._speaks(loop, final="Fatto.", by_tool=None)
+
+        frames, ends = await self._turn_ids(loop, _announce(UNIFIED_SESSION_KEY))
+
+        assert len(frames) == 2 and len({*frames, *ends}) == 1 and frames[0]
+
+    async def test_two_announces_are_two_turns(self, tmp_path: Path) -> None:
+        loop = _make_loop(tmp_path)
+        self._speaks(loop, final="Fatto.", by_tool=None)
+
+        first, _ = await self._turn_ids(loop, _announce(UNIFIED_SESSION_KEY))
+        second = _announce(UNIFIED_SESSION_KEY)
+        second.metadata["subagent_task_id"] = "sub-2"
+        again, _ = await self._turn_ids(loop, second)
+
+        assert first[0] != again[0]
+
+    async def test_a_silent_announce_gets_none(self, tmp_path: Path) -> None:
+        from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+
+        loop = _make_loop(tmp_path)
+        _stub_run(loop)
+        msg = _announce(HEARTBEAT_SESSION_KEY)
+
+        await loop._process_message(msg)
+
+        assert WEBUI_TURN_METADATA_KEY not in msg.metadata

@@ -22,6 +22,9 @@
  */
 
 import { OUT_SHIFT_RATIO } from './mascot.js';
+import {
+  FEET, LOAD_MS, airStretch, aroundFeet, heldStretch, impactSquash, loadLegs, walkStart,
+} from './mascot-squash.js';
 
 /* Tutta l'arte (riposo + pose di volo) vive sullo stesso canvas QUADRATO
    3000x3000, esportato cosi' com'e' da gen_pose_webp.py: scala e posizioni
@@ -83,10 +86,12 @@ export function buildFlyLayer(parent) {
  *   el                 lo sprite (prende le classi `dragging` e `flying`)
  *   fly, flyPose       il livello del volo e le sue pose
  *   isOut()            e' fuori adesso?
- *   setOut(v)          applica lo stato voluto dal gesto (a fine volo)
+ *   setOut(v)          applica lo stato voluto dal gesto (a fine volo); un volo
+ *                      la fa solo uscire, quindi `v` e' sempre `true`
  *   onDragCommit()     il trascinamento e' cominciato davvero
  *   onTap()            tocco secco, senza trascinamento
  *   onFlightEnd()      il volo e' finito: rimetti l'arte a posto
+ *   squash()           si deforma? (no con movimento ridotto; v. mascot-squash.js)
  */
 export function bindMascotDrag(host) {
   const isOut = host.isOut || (() => false);
@@ -94,6 +99,7 @@ export function bindMascotDrag(host) {
   const onDragCommit = host.onDragCommit || (() => {});
   const onTap = host.onTap || (() => {});
   const onFlightEnd = host.onFlightEnd || (() => {});
+  const squash = host.squash || (() => false);
 
   let startX = 0;
   let startY = 0;
@@ -119,6 +125,9 @@ export function bindMascotDrag(host) {
     px: 0, py: 0,
     w: 0, h: 0,
     onEl: null, // posa del layer di volo attualmente visibile (.on)
+    // Per lo schiaccia e allunga (v. mascot-squash.js): quando e a che
+    // velocita' ha toccato terra l'ultima volta, e quando si e' rialzata.
+    impactAt: -Infinity, impactV: 0, getupAt: -Infinity,
     raf: 0, last: 0, deadline: 0, after: null, snapT: 0,
   };
 
@@ -174,6 +183,8 @@ export function bindMascotDrag(host) {
     fs.grounded = false;
     fs.dir = 1;
     fs.onEl = null;
+    fs.impactAt = -Infinity;
+    fs.getupAt = -Infinity;
     Object.values(host.flyPose).forEach((im) => im.classList.remove('on', 'flip'));
     showEl(host.flyPose.hang);
     host.fly.style.transformOrigin = `${fs.w * PIVOT_X}px ${fs.h * PIVOT_Y}px`;
@@ -190,23 +201,22 @@ export function bindMascotDrag(host) {
   const settle = () => {
     if (fs.settled) return;
     fs.settled = true;
-    // Lasciata nella metà sinistra, attraversare lo schermo è già il gesto:
-    // la si ritrova a riposo al bordo, non aperta.
-    if (fs.x < vw() / 2) fs.targetOut = false;
+    // Presa dal bordo e lasciata nella metà sinistra, attraversare lo schermo
+    // è già il gesto: la si ritrova a riposo al bordo, non aperta. Se era
+    // fuori resta fuori (v. finish()).
+    if (!isOut() && fs.x < vw() / 2) fs.targetOut = false;
     const r = host.el.getBoundingClientRect();
     fs.bx = r.left + fs.w * PIVOT_X;
     fs.by = r.top + fs.h * PIVOT_Y;
-    const wasOut = isOut();
-    if (fs.targetOut === wasOut) {
+    if (fs.targetOut === isOut()) {
       fs.xT = fs.bx;
       fs.after = null;
     } else {
-      // Il cambio di stato out avviene solo a fine volo (fs.after): la x di
-      // arrivo la anticipa di uno scarto d'ancoraggio, verso l'interno se si
-      // apre e verso il bordo se si chiude.
-      const shift = fs.w * OUT_SHIFT_RATIO;
-      fs.xT = fs.bx + (fs.targetOut ? -shift : shift);
-      fs.after = () => setOut(fs.targetOut);
+      // Esce (l'unico cambio che un volo fa). Il cambio di stato avviene solo
+      // a fine volo (fs.after): la x di arrivo lo anticipa di uno scarto
+      // d'ancoraggio verso l'interno.
+      fs.xT = fs.bx - fs.w * OUT_SHIFT_RATIO;
+      fs.after = () => setOut(true);
     }
     /* La scadenza fissa del rilascio bastava quando il bordo era quello più
        vicino. Adesso la camminata può essere lo schermo intero — ~3,5 s sul
@@ -318,6 +328,9 @@ export function bindMascotDrag(host) {
     if (fs.phase === 'fall') {
       if (fs.y >= fs.y0) fs.grounded = true; // toccato terra: passa alla posa ground
       if (fs.vy > 0 && fs.y >= fs.y0) {
+        // Il tonfo: quanto si schiaccia lo decide la velocita' d'arrivo.
+        fs.impactAt = fs.last;
+        fs.impactV = fs.vy;
         fs.y = fs.y0;
         // tonfo quasi secco: al massimo un rimbalzino molto smorzato,
         // poi resta un attimo a terra prima di rialzarsi
@@ -354,7 +367,10 @@ export function bindMascotDrag(host) {
     if (!fs.active) return;
     const dt = Math.min(0.033, Math.max(0.001, (now - fs.last) / 1000));
     fs.last = now;
-    if (fs.phase === 'down' && now >= fs.downUntil) fs.phase = 'slide';
+    if (fs.phase === 'down' && now >= fs.downUntil) {
+      fs.phase = 'slide';
+      fs.getupAt = now;
+    }
     step(dt);
     // Toccato terra (fall -> down): da qui in poi si sa dov'è caduta, quindi
     // quanta strada ha davanti. Prima del disegno, perché settle() sposta la
@@ -368,8 +384,14 @@ export function bindMascotDrag(host) {
       // flip in mano: l'arte resta nel suo verso, solo la caduta si specchia)
       const deg = (fs.th * 180) / Math.PI;
       showEl(host.flyPose.hang);
-      host.fly.style.transform =
-        `translate(${tx}px, ${ty}px) rotate(${(-deg).toFixed(2)}deg)`;
+      // La scala viene dopo la rotazione: lungo il braccio, cioe' l'asse del
+      // disegno appeso, e attorno alla mano (l'origine del layer).
+      let t = `translate(${tx}px, ${ty}px) rotate(${(-deg).toFixed(2)}deg)`;
+      if (squash()) {
+        const { sx, sy } = heldStretch(Math.hypot(fs.vx, fs.vy));
+        t += ` scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
+      }
+      host.fly.style.transform = t;
     } else {
       // posa di fase, dritta (niente swing): fall in caduta (flip in place
       // col verso del moto), ground a terra + rimbalzi, walk1/2 in cammino.
@@ -384,7 +406,7 @@ export function bindMascotDrag(host) {
       host.flyPose.walk1.classList.toggle('flip', fs.phase === 'slide' && fs.dir < 0);
       host.flyPose.walk2.classList.toggle('flip', fs.phase === 'slide' && fs.dir < 0);
       showEl(host.flyPose[key]);
-      host.fly.style.transform = `translate(${tx}px, ${ty}px)`;
+      host.fly.style.transform = `translate(${tx}px, ${ty}px)${squash() ? shape(key, now) : ''}`;
     }
 
     if (fs.phase === 'slide') {
@@ -399,6 +421,24 @@ export function bindMascotDrag(host) {
       return;
     }
     fs.raf = requestAnimationFrame(loop);
+  };
+
+  /* La deformazione della posa *key* al tempo *now*, sempre sugli assi del
+     disegno (v. mascot-squash.js). In aria attorno all'origine del layer, a
+     terra attorno ai piedi, cosi' i piedi restano dove sono. */
+  const shape = (key, now) => {
+    if (key === 'fall') {
+      const { sx, sy } = airStretch(fs.vy);
+      return ` scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
+    }
+    if (key === 'ground') {
+      // Gli ultimi LOAD_MS a terra carica le gambe, ferma, prima di ripartire.
+      const s = fs.phase === 'down' && now >= fs.downUntil - LOAD_MS
+        ? loadLegs(now - (fs.downUntil - LOAD_MS))
+        : impactSquash(fs.impactV, now - fs.impactAt);
+      return aroundFeet(s, (FEET.ground - PIVOT_Y) * fs.h);
+    }
+    return aroundFeet(walkStart(now - fs.getupAt, now), (FEET.walk - PIVOT_Y) * fs.h);
   };
 
   /* Il volo non inizia subito al pointerdown: il tap secco fa solo toggle
@@ -466,10 +506,12 @@ export function bindMascotDrag(host) {
 
     const dx = clientX - startX;
     const out = isOut();
-    // Verso l'interno (sinistra) apre, verso il bordo chiude.
-    fs.targetOut = out;
-    if (!out && dx < -DRAG_THRESHOLD) fs.targetOut = true;
-    else if (out && dx > DRAG_THRESHOLD) fs.targetOut = false;
+    // Verso l'interno (sinistra) apre. Il contrario non c'e' piu' (06/10/2026):
+    // fuori, tirarla la rimetteva al bordo, e con la chat aperta sopra una
+    // pagina il bordo vuol dire chiuderla — bastava giocarci per perderla.
+    // Adesso un volo che parte fuori torna a piedi dove stava; al bordo la
+    // rimanda solo il tocco.
+    fs.targetOut = out || dx < -DRAG_THRESHOLD;
     fs.xT = fs.bx; // provvisorio: la x di arrivo vera la fissa settle()
     fs.after = null;
     fs.settled = false;

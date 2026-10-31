@@ -120,7 +120,7 @@ class TestOpeningEntries:
 
 
 class TestTruncationIsNeverSilent:
-    async def test_a_cut_list_says_how_many_it_did_not_show(self, tmp_path, monkeypatch):
+    async def test_a_long_list_comes_in_pages_and_says_so(self, tmp_path, monkeypatch):
         import jenny.agent.tools.memory_recall as mod
 
         monkeypatch.setattr(mod, "_INDEX_MAX_CHARS", 120)
@@ -130,31 +130,128 @@ class TestTruncationIsNeverSilent:
                 store, f"fatto numero {i} con abbastanza testo da occupare spazio",
                 when=date(2026, 4, 1 + i), ident=f"id{i:06d}",
             )
-        out = await MemoryRecallTool(tmp_path).execute()
-        # Il totale vero è sempre nell'intestazione, anche quando l'elenco è corto.
-        assert "12 facts" in out
-        assert "not listed" in out
+        tool = MemoryRecallTool(tmp_path)
+        first = await tool.execute()
+        # Il totale vero è sempre nell'intestazione, anche quando la pagina è corta.
+        assert "12 facts" in first
+        assert "Page 1 of 12" in first
+        assert "id000011" in first  # la più recente in prima pagina
+        last = await tool.execute(page=12)
+        assert "id000000" in last
+        assert "Page 12 of 12" in last
+        # Una pagina oltre la fine dà l'ultima, non un elenco vuoto.
+        assert "id000000" in await tool.execute(page=99)
 
-    async def test_the_index_logs_when_it_starts_to_crowd_its_cap(self, tmp_path, monkeypatch):
-        """Il momento di costruire la 7.2 va misurato, non indovinato."""
+    async def test_a_page_fits_in_a_tool_result(self):
+        """Oltre ``max_tool_result_chars`` (16.000) il risultato finisce in un file e
+        il modello ne vede l'anteprima: successo sull'emulatore il 12/10/2026."""
         import jenny.agent.tools.memory_recall as mod
 
-        lines: list[str] = []
-        from loguru import logger
+        assert mod._INDEX_MAX_CHARS < 16_000
 
-        monkeypatch.setattr(mod, "_INDEX_MAX_CHARS", 400)
-        sink = logger.add(lines.append, level="INFO")
-        try:
-            store = _store(tmp_path)
-            for i in range(6):
-                _archive(
-                    store, f"un fatto sufficientemente lungo da contare, numero {i}",
-                    when=date(2026, 4, 1 + i), ident=f"cr{i:06d}",
-                )
-            await MemoryRecallTool(tmp_path).execute()
-        finally:
-            logger.remove(sink)
-        assert any("phase 7.2" in line for line in lines)
+
+class TestSearch:
+    """Con ``query``: le parole del modello, in tutte e due le lingue."""
+
+    async def test_it_finds_a_fact_past_the_first_page(self, tmp_path, monkeypatch):
+        import jenny.agent.tools.memory_recall as mod
+
+        monkeypatch.setattr(mod, "_INDEX_MAX_CHARS", 200)
+        store = _store(tmp_path)
+        _archive(store, "Il nonno aveva una barca a vela chiamata Brezza",
+                 when=date(2026, 1, 1), ident="0a0a0a0a")
+        for i in range(30):
+            _archive(store, f"Un altro fatto qualunque, numero {i}",
+                     when=date(2026, 5, 1 + i % 28), ident=f"ff{i:06d}")
+        tool = MemoryRecallTool(tmp_path)
+        assert "Brezza" not in await tool.execute()
+        out = await tool.execute(query=["grandfather", "boat", "nonno", "barca"])
+        assert "Brezza" in out
+        assert "0a0a0a0a" in out
+        assert out.index("0a0a0a0a") < out.index("\n\n") + 40  # in testa
+
+    async def test_words_are_matched_inside_longer_words(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Il veterinario del gatto è il dottor Rossi",
+                 when=date(2026, 1, 1), ident="0b0b0b0b")
+        out = await MemoryRecallTool(tmp_path).execute(query=["vet"])
+        assert "Rossi" in out
+
+    async def test_accents_and_case_do_not_matter(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Città preferita: Kyōto", when=date(2026, 1, 1), ident="0c0c0c0c")
+        assert "0c0c0c0c" in await MemoryRecallTool(tmp_path).execute(query=["CITTA kyoto"])
+
+    async def test_no_match_never_reads_as_never_said(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Un fatto", when=date(2026, 1, 1), ident="0d0d0d0d")
+        out = await MemoryRecallTool(tmp_path).execute(query=["dentista", "dentist"])
+        assert "Nothing matched" in out
+        assert "does not mean it was never said" in out
+
+    async def test_a_query_of_short_words_says_so(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Un fatto", when=date(2026, 1, 1), ident="0e0e0e0e")
+        out = await MemoryRecallTool(tmp_path).execute(query=["di", "a"])
+        assert "three letters" in out
+
+
+class TestChains:
+    """Una riga per fatto, non per formulazione."""
+
+    async def test_versions_collapse_to_the_newest(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Lavora al bar Aurora", when=date(2026, 8, 1),
+                 ident="aaaa0001", superseded_by="aaaa0002")
+        _archive(store, "Lavora al bar Aurora, di mattina", when=date(2026, 8, 5),
+                 ident="aaaa0002", superseded_by="bbbb0000")
+        out = await MemoryRecallTool(tmp_path).execute()
+        assert "1 facts" in out
+        assert "aaaa0002" in out and "aaaa0001" not in out
+        assert "(+1 earlier wording)" in out
+        assert "replaced by a newer wording" in out
+
+    async def test_opening_shows_every_wording_and_the_live_one(self, tmp_path):
+        from jenny.agent.tools.memory_entries import entry_id
+
+        (tmp_path / "USER.md").write_text("- Lavora al forno Stella\n", encoding="utf-8")
+        live = entry_id("- Lavora al forno Stella")
+        store = _store(tmp_path)
+        _archive(store, "Lavora al bar Aurora", when=date(2026, 8, 1),
+                 ident="aaaa0001", superseded_by="aaaa0002")
+        _archive(store, "Lavora al bar Aurora, di mattina", when=date(2026, 8, 5),
+                 ident="aaaa0002", superseded_by=live)
+        out = await MemoryRecallTool(tmp_path).execute(ids=["aaaa0001"])
+        assert "Current wording, in USER.md: Lavora al forno Stella" in out
+        assert out.index("di mattina") < out.index("Earlier wordings")
+        assert "aaaa0001" in out and "aaaa0002" in out
+
+    async def test_a_search_finds_a_word_only_an_old_wording_had(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Suona il basso nei Lupi", when=date(2026, 8, 1),
+                 ident="aaaa0001", superseded_by="aaaa0002")
+        _archive(store, "Suona in una band il giovedì", when=date(2026, 8, 5),
+                 ident="aaaa0002")
+        out = await MemoryRecallTool(tmp_path).execute(query=["Lupi"])
+        assert "aaaa0002" in out
+
+    async def test_a_cycle_does_not_loop(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Versione A", when=date(2026, 8, 1), ident="aaaa0001",
+                 superseded_by="aaaa0002")
+        _archive(store, "Versione B", when=date(2026, 8, 2), ident="aaaa0002",
+                 superseded_by="aaaa0001")
+        out = await MemoryRecallTool(tmp_path).execute()
+        assert "Versione" in out
+
+    async def test_a_retracted_fact_says_it_was_never_true(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Suona il contrabbasso il giovedì", when=date(2026, 9, 17),
+                 ident="cccc0001", retracted=True)
+        tool = MemoryRecallTool(tmp_path)
+        assert "RETRACTED" in await tool.execute()
+        assert "RETRACTED" in await tool.execute(query=["contrabbasso"])
+        assert "RETRACTED" in await tool.execute(ids=["cccc0001"])
 
 
 class TestWhereItIsMounted:

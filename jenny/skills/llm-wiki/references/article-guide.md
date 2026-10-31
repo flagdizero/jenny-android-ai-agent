@@ -14,6 +14,8 @@ Guidelines for writing high-quality wiki articles. Read before compiling a new c
 
 Avoid padding. A 400-word article that's dense beats an 800-word article with filler.
 
+In a notebook, pages are measured in characters, not words: the ceiling is 6000 (see `compile` in a project wiki, in `SKILL.md`). Their shape is under [Notebook page structure](#notebook-page-structure).
+
 ## Divide and conquer — when to split
 
 If a concept page **would** exceed ~1200 words, do not write it as a single file. Split it:
@@ -77,7 +79,7 @@ tags: [tag1, tag2]
 
 ## What it is
 
-<Explain the concept clearly. Assume the reader is technically literate but unfamiliar with this specific topic.>
+<Explain the concept clearly, for the person who will use the page: they know the field, not this topic (core principle 6 in `SKILL.md`).>
 
 ## How it works
 
@@ -99,7 +101,7 @@ flowchart LR
 
 ## Open questions
 
-<What this wiki doesn't yet know about this concept. Drives future ingest.>
+<Only when there is something worth chasing: what this wiki doesn't yet know about this concept. Drives future ingest. Leave the section out otherwise.>
 
 ## Sources
 
@@ -178,6 +180,41 @@ tags: [tag1]
 - [[Entity B]]
 ```
 
+## Notebook page structure
+
+A notebook page is flat under `wiki/` and written for the person who will act on it: a care guide, a how-to, the answer to a question that is worth keeping. The rules are core principle 6 and point 6 of `compile` in a project wiki, in `SKILL.md`; this is their shape. Write it in the reader's language.
+
+```markdown
+---
+state: open
+source: raw/research/<YYYY-MM-DD>-<slug>.md
+---
+
+# <Subject>: <topic>
+
+**In practice**
+- <What to do, and when, for the reader's case — one line each.>
+- <A source's number with its unit, cited (<source>).>
+- <Common practice, said as such.>
+- <A reasoned guess for this case, said as such: "probably…, because…".>
+
+## <A question the reader has>
+
+<The details: each fact with its source, quotes translated. Where sources disagree, the one
+you go with for this case and why, then the other in one line with its source.
+A gap sits here, where it is: "Not documented (searched: "…", "…").">
+
+## <Another question>
+
+<…>
+
+## Sources
+
+- [<Title>](<URL>) — `raw/research/<YYYY-MM-DD>-<slug>.md`, <kind of source: forum, nursery, study…>
+```
+
+What it does not have: an introduction to its subject, which belongs on the subject's own page (link it once); a section that only lists gaps; quotes left in a language the reader did not use.
+
 ## Diagrams — always mermaid
 
 ASCII art is banned. Any flow, sequence, hierarchy, or state diagram is mermaid. Examples:
@@ -238,15 +275,23 @@ Obsidian and most Markdown viewers render KaTeX natively.
 
 ## Handling contradictions between sources
 
-When two sources contradict each other:
+When two sources contradict each other, what you do depends on the page (core principle 6 in `SKILL.md`).
+
+**In a summary** you keep the source, so you do not choose:
 
 1. State both claims explicitly.
 2. Note which source supports each claim.
-3. Add to the article's "Open questions" section **and** the wiki's `AGENTS.md` research questions.
+3. In a research wiki, add it to the wiki's `AGENTS.md` research questions.
 4. Do NOT silently pick one — contradictions are valuable signal.
 
+**In a page written for the reader** you are the author, so you choose — openly:
+
+1. Say which claim you go with for this case, and why: the reader's situation, several independent sources agreeing, the more specific or more recent source.
+2. Give the other claim in one line, with its source.
+3. Leave it open (the article's "Open questions", and `AGENTS.md` in a research wiki) only when the choice cannot be made from what is known — and say what it depends on.
+
 Example:
-> Source A (2024) claims X. Source B (2026) claims Y, which contradicts A. It's unclear whether this reflects a methodological difference or an error in one source. See [[summaries/source-a]] and [[summaries/source-b]].
+> Water when the top 3 cm are dry, as three of the four sources say (A, B, C). Source D (2026) says weekly whatever the soil; it describes greenhouse conditions, not a pot indoors. See [[summaries/source-a]] and [[summaries/source-d]].
 
 If a human later files an `audit` comment resolving the contradiction, update the article and move the audit to `audit/resolved/` with a resolution note.
 

@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.bus.events import FLOATING_CHANNEL, NOTIFICATION_CHANNEL, InboundMessage
+from jenny.runtime.screen import SCREEN_META_KEY, parse_summary
 
 if TYPE_CHECKING:
     from jenny.bus.queue import MessageBus
@@ -156,7 +157,10 @@ def _accept(text: str) -> bool:
     return bool(text) and len(text) <= MAX_TEXT_CHARS
 
 
-def _schedule(bus: Any, channel: str, text: str, source: str, thread: str | None) -> None:
+def _schedule(
+    bus: Any, channel: str, text: str, source: str, thread: str | None,
+    screen: dict[str, Any] | None = None,
+) -> None:
     """Crea il task di pubblicazione. Gira **sul** loop, non sul thread JNI.
 
     Il task si crea qui e non nel chiamante per una ragione precisa: costruire
@@ -165,13 +169,16 @@ def _schedule(bus: Any, channel: str, text: str, source: str, thread: str | None
     e nel percorso d'errore, cioè quello che si legge peggio.
     """
     task = asyncio.get_running_loop().create_task(
-        _publish(bus, channel, text, source, thread)
+        _publish(bus, channel, text, source, thread, screen)
     )
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
 
 
-async def _publish(bus: Any, channel: str, text: str, source: str, thread: str | None) -> None:
+async def _publish(
+    bus: Any, channel: str, text: str, source: str, thread: str | None,
+    screen: dict[str, Any] | None = None,
+) -> None:
     """Costruisce l'``InboundMessage`` e lo mette sul bus.
 
     ``publish_inbound`` fa backpressure da solo (coda limitata): se il gateway è
@@ -182,6 +189,8 @@ async def _publish(bus: Any, channel: str, text: str, source: str, thread: str |
         # Solo se c'è: una chiave a ``None`` nei metadata è una chiave che ogni
         # lettore a valle deve imparare a ignorare.
         metadata[NATIVE_THREAD_KEY] = thread
+    if screen:
+        metadata[SCREEN_META_KEY] = screen
     msg = InboundMessage(
         channel=channel,
         sender_id="user",
@@ -191,7 +200,8 @@ async def _publish(bus: Any, channel: str, text: str, source: str, thread: str |
     )
     await bus.publish_inbound(msg)
     logger.info(
-        "Native text published (source={}, thread={}, chars={})", source, thread, len(text)
+        "Native text published (source={}, thread={}, chars={}, screen={})",
+        source, thread, len(text), screen.get("package") if screen else None,
     )
 
 
@@ -199,6 +209,7 @@ def on_native_text(
     text: str,
     source: str = SOURCE_NOTIFICATION,
     thread: str | None = None,
+    screen: str | None = None,
 ) -> bool:
     """Riceve il testo da una superficie nativa. Chiamata da Kotlin (thread JNI).
 
@@ -218,6 +229,13 @@ def on_native_text(
     e a valle si ricade sul filo di default. La mascotte non lo usa — la sua
     finestra è una sola e non ha fili da tenere distinti — e lo lascia a
     ``None``.
+
+    *screen* è il riassunto JSON della lettura dello schermo presa al tocco
+    sulla mascotte (``ScreenSnapshots.Snapshot.summaryJson``), o ``None``. Vale
+    **solo per il fumetto**: da qualunque altra sorgente si ignora, perché lo
+    schermo si legge soltanto quando l'utente chiama Jenny dalla mascotte
+    (v. ``jenny/runtime/screen.py``). Un riassunto illeggibile si scarta e il
+    testo passa lo stesso.
 
     A differenza di un tick di sveglia, un ``False`` qui **non** è un esito
     innocuo: il tick perso lo recupera il giro successivo del cron, le parole
@@ -244,8 +262,11 @@ def on_native_text(
     # "nessun filo", e normalizzarle qui evita che ogni lettore a valle debba
     # distinguerle.
     thread_tag = thread.strip() if isinstance(thread, str) else None
+    summary = parse_summary(screen) if source == SOURCE_FLOATING else None
     try:
-        loop.call_soon_threadsafe(_schedule, bus, channel, clean, source, thread_tag or None)
+        loop.call_soon_threadsafe(
+            _schedule, bus, channel, clean, source, thread_tag or None, summary,
+        )
     except RuntimeError:
         # Loop chiuso fra il controllo e la chiamata: nessun destinatario.
         logger.opt(exception=True).warning("Native text could not reach the event loop")

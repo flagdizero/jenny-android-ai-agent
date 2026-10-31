@@ -30,7 +30,11 @@ import pytest
 
 from jenny.config.schema import Config, ProviderConfig, ProvidersConfig
 from jenny.providers.factory import provider_fingerprint
-from jenny.webui.settings_api import WebUISettingsError, _apply_agent_settings
+from jenny.webui.settings_api import (
+    LIVE_FROM_DISK_ALIASES,
+    WebUISettingsError,
+    _apply_agent_settings,
+)
 
 # Un valore plausibile per ogni forma di campo che la funzione accetta: nome
 # IANA, finestra di contesto ammessa, temperatura, sforzo di ragionamento, un
@@ -117,7 +121,39 @@ def test_every_accepted_alias_is_live_or_declares_a_restart(alias: str) -> None:
 
     assert changed, f"{alias}: scoperto come accettato ma non applica niente"
     moves_the_provider = provider_fingerprint(config) != before
-    assert moves_the_provider or restart_required, (
+    # La terza via: un valore che chi lo usa rilegge dal disco a ogni uso. Che
+    # la rilettura ci sia davvero lo prova il test sotto, alias per alias.
+    reread_at_use = alias in LIVE_FROM_DISK_ALIASES
+    assert moves_the_provider or restart_required or reread_at_use, (
         f"{alias}: si salva su disco ma non cambia niente in memoria e non "
         "dichiara requires_restart — l'utente vede «Saved!» e nessun effetto"
     )
+
+
+@pytest.mark.parametrize("alias", sorted(LIVE_FROM_DISK_ALIASES))
+def test_every_reread_alias_is_really_reread_from_disk(alias: str, tmp_path, monkeypatch) -> None:
+    """Chi dichiara di non chiedere il riavvio deve essere riletto davvero.
+
+    Senza questo, ``LIVE_FROM_DISK_ALIASES`` sarebbe l'esenzione scritta a mano
+    che questo file esiste per impedire. Oggi c'e' solo il nome dell'agente, e
+    il suo lettore e' ``user_text.current_bot_name``: si scrive la config con
+    l'alias, e il lettore deve vedere il valore nuovo senza ricostruire niente.
+    """
+    import json
+
+    from jenny.config.loader import save_config
+    from jenny.runtime.context import get_runtime_context
+    from jenny.runtime.user_text import current_bot_name
+
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(get_runtime_context(), "config_path", path)
+    config = _baseline()
+    save_config(config, path)
+    assert current_bot_name() == "Jenny"
+
+    changed, restart_required = _apply_agent_settings(config, {alias: ["Ada"]})
+    assert changed and not restart_required
+    save_config(config, path)
+
+    assert json.loads(path.read_text())["agents"]["defaults"]["botName"] == "Ada"
+    assert current_bot_name() == "Ada"

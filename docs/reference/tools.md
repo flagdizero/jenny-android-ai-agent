@@ -12,7 +12,7 @@ There is no fixed tool count. What Jenny actually has available in a given conve
 
 - **The agent's scope** — the main agent loads either the `orchestrator` scope (default, see `agents.defaults.orchestratorMode`) or the historical `core` scope; a subagent loads the `subagent` scope, narrowed further by its agent type. The four SSH tools sit in a scope of their own, `remote`, which **no** agent loads by default — only the `sysadmin` subagent type asks for it. The same install therefore exposes different tools to the orchestrator, to a `sysadmin` subagent, and to every other subagent.
 
-A conversation agent can draw on **42** named built-in tools: 41 registered through the standard loader (`jenny/agent/tools/loader.py`, which imports 23 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `AppActionTool` (`app_actions.py`), instantiated once per declared app action and re-synced every turn. No single agent sees all 42 at once — see the scope note above. Add to that N dynamic app tools. If you ask Jenny to list its tools, expect the number to vary between installs.
+A conversation agent can draw on **51** named built-in tools: 50 registered through the standard loader (53 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps), and [`notebook`](#notebook) two) (`jenny/agent/tools/loader.py`, which imports 28 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `AppActionTool` (`app_actions.py`), instantiated once per declared app action and re-synced every turn. No single agent sees all 51 at once — see the scope note above. Add to that N dynamic app tools. If you ask Jenny to list its tools, expect the number to vary between installs.
 
 Below, tools are grouped into ten categories. Each entry gives the exact tool name the model calls, what it does for you in practice, the parameters worth knowing, hard numeric limits, the config toggle that controls it, and any gotcha worth knowing before you rely on it.
 
@@ -205,7 +205,7 @@ Searches the web through the hidden WebView. **Bing is the only supported engine
 - Kotlin-side timeout is 30s by default, with a 10-second asyncio backstop on top (so a stuck WebView never blocks the gateway indefinitely).
 - Bing occasionally serves a CAPTCHA/verification page instead of results. The tool detects this and returns a clear "Bing returned a verification/CAPTCHA page" error rather than garbage output — there's no automatic bypass; retrying later is the only real remedy.
 
-Config toggle: `tools.androidWeb.enable` (default `true`, config-only — there is no switch for it in the app). The other fields are also editable in the workshop's Hands drawer → Web Search: `tools.androidWeb.search.searchEngine` (default `"bing"`, no alternative), `tools.androidWeb.search.maxResults` (default 5), `tools.androidWeb.search.timeout` (default 30s).
+Config toggle: `tools.androidWeb.enable` (default `true`, config-only — there is no switch for it in the app). The other fields are also editable in the workshop's Hands drawer → Web Search: `tools.androidWeb.search.searchEngine` (default `"bing"`, no alternative), `tools.androidWeb.search.maxResults` (default 8), `tools.androidWeb.search.timeout` (default 15s).
 
 ### web_fetch
 
@@ -239,7 +239,7 @@ Config: no dedicated toggle (always registered) — but **subagent-only** in the
 
 ## 4. Device
 
-`get_location` is Android-only — it needs the platform location bridge. `ui_view` is not gated on Android as such: it registers whenever a WebUI query service exists, which in the normal Android runtime is always, but the condition is the service, not the platform. Both are available to the orchestrator.
+`get_location` and `screen` are Android-only — they need the platform location bridge and the accessibility service. `ui_view` is not gated on Android as such: it registers whenever a WebUI query service exists, which in the normal Android runtime is always, but the condition is the service, not the platform. All three are available to the orchestrator; `screen` is available to nobody else.
 
 ### get_location
 
@@ -260,6 +260,26 @@ A **pull** model for letting Jenny see the screen: there is no ambient screen ac
 - HTML returned is capped at 48 KB per block (view HTML and app HTML each capped separately).
 
 Config: no dedicated toggle — it registers whenever the underlying query service exists (the normal runtime always has it).
+
+### screen
+
+What was on the phone's screen when you wrote to Jenny from the **floating mascot**. Not a live view: tapping the mascot takes one reading of the app underneath (its text, the page address if it is a browser, and a screenshot of that app's window alone, without the mascot, the status bar or the keyboard), and the tool reads that reading.
+
+| Parameter | Behavior |
+|---|---|
+| `action` | `read` — the app's text, with its title, address and numbered `[image N: …]` markers. For a web page this is the page from its top, including the parts scrolled off screen — the whole of an ordinary article. `screenshot` — the picture, saved under `uploads/screen/` and shown to the model. `image` — one of the numbered images, cut out of the screenshot and saved there too; if the page exposes the original's address it comes along, so `download_file` can fetch it at full size. An image that was off screen has no picture, only that address |
+| `image` | With `action=image`, the number `read` gave it |
+
+- **It exists only in the turn that came from the mascot.** From the app's chat, from Telegram, from a reminder, the tool is not offered at all, and there is no screen to read: the reading happens at the tap and nowhere else.
+- A reading lives in memory, one at a time, for ten minutes or until the next tap; after that the tool says it is gone. Nothing is written to disk until the tool is asked for a picture.
+- **Apps that block screenshots are not read at all**, text included. Android withholds a secure window's pixels (banking apps, password managers, incognito tabs) but not its accessibility text; Jenny drops both.
+- Password fields never come through.
+- Everything it returns is untrusted, like a web page: the turn is marked as such (see [Security model](../internals/security-model.md#subagents-and-untrusted-content)).
+- **The reading is timed.** It runs before the bubble opens — the open chat covers the app, and Android then hides it from the accessibility service — so it stops after about half a second and marks itself truncated. A long article arrives whole (about 0.15 s for 20,000 characters); a very long page arrives from the top, and the result says so and points to its address for the rest. Scrolling does not change what is read.
+- Text is capped at 30,000 characters per reading.
+- With the accessibility service off, Jenny is told so in the bubble's turn, and can say where to turn it on.
+
+Config: the **Reads the screen** switch under **Floating mascot** (home **Settings → Jenny**), which leads to Android's Accessibility settings — Android lets only you turn an accessibility service on. Requires Android 14 or newer.
 
 ---
 
@@ -342,7 +362,7 @@ Schedules reminders and recurring work. Actions: `add`, `list`, `remove`.
   - `every_seconds` — recurring interval.
   - `cron_expr` — a cron expression (`"0 9 * * *"`), optionally with an explicit `tz` (IANA name). `tz` is **only** accepted alongside `cron_expr` — passing it with `every_seconds` or `at` is an error.
   - `at` — a one-shot ISO datetime; the job auto-deletes itself after it fires.
-- `add` also takes an optional `name`, a short label for the job (it defaults to the first 30 characters of the `message`).
+- `add` also takes an optional `name`, a short human label for the job in the user's language: it is what the notification title shows. Without one the job has no name (lists fall back to the start of the `message`, the notification title never does).
 - Naive (timezone-less) `cron_expr`/`at` values fall back to the device's configured timezone.
 - `add` also takes an optional `mode`, which decides whether the job is allowed to stay quiet:
   - `reminder` (default) — the job **always** messages you when it fires. This is every job created before this option existed, and every job that omits `mode`.
@@ -372,17 +392,19 @@ Starts a subagent to work a task in the background and reports the result back i
 | `agent_type` | Tools | Temp. | Max iterations | Notes |
 |---|---|---|---|---|
 | `researcher` | `web_search`, `web_fetch`, `browser_open`, `browser_snapshot`, `browser_do`, `browser_read`, `browser_close`, `read_file`, `list_dir`, `write_file` | 0.2 | 60 | Gathers material online, including pages that need clicks or a cookie banner dismissed (the browser tools exist only on Android). **No code execution** — it is the type most exposed to untrusted pages. |
-| `writer` | `read_file`, `list_dir`, `write_file`, `apply_patch` | 0.5 | 40 | Docs, wiki pages, synthesis. **No network at all.** The highest temperature of the six, because prose is the one output where variety helps. |
-| `coder` | filesystem, `find_files`, `grep`, `apply_patch`, `python_exec`, `write_stdin`, `list_exec_sessions`, `get_recent_logs` | 0.1 | 120 | Writes and changes code. No network. The longest leash, because a build/test loop legitimately takes many steps. |
-| `analyst` | `python_exec`, `read_file`, `list_dir`, `write_file` | 0.1 | 60 | Computation, data, charts. No network. |
+| `writer` | `read_file`, `list_dir`, `write_file`, `apply_patch` | 0.5 | 40 | Docs and synthesis outside a notebook. **No network at all.** The highest temperature of all, because prose is the one output where variety helps. Refused in a notebook's chat, where the `notebook-editor` writes. |
+| `coder` | filesystem, `find_files`, `grep`, `apply_patch`, `python_exec`, `write_stdin`, `list_exec_sessions`, `get_recent_logs` | 0.1 | 120 | Writes and changes code. No web tools: `python_exec` reaches public sites only through its `http_get`/`http_post`. The longest leash, because a build/test loop legitimately takes many steps. |
+| `analyst` | `python_exec`, `read_file`, `list_dir`, `write_file` | 0.1 | 60 | Computation, data, charts. No web tools; the same `python_exec` network as `coder`. |
 | `sysadmin` | `ssh_hosts`, `ssh_exec`, `ssh_job`, `ssh_transfer`, `read_file`, `list_dir`, `write_file` | 0.0 | 60 | The only type that can touch a remote machine — and in exchange the only one with **neither web access nor `python_exec`**. |
+| `app-builder` | `app` (its builder face: `draft`, `edit`, `set`, `show`, `run`), `read_file`, `list_dir`, `grep` | 0.1 | 40 | Writes and tests a new version of one of your apps; the main agent publishes it. No web, no `python_exec`: its code runs only as the app's reader, tested on the app's real data. Spawned only from a conversation with you. |
+| `notebook-editor` | `board`, `notebook`, `read_file`, `write_file`, `edit_file`, `list_dir`, `apply_patch`, `grep` | 0.2 | 60 | Changes a notebook as you asked — its pages, the map and the board, drawers included. Its board writes count as yours, so the gardener cannot undo them. Reads and checks the notebook in bulk with `notebook`, and deletes pages with it only when asked. No web, no `python_exec`. Spawned only from a notebook's chat. |
 | `operator` | the whole `subagent` scope | manager default | manager default | Default, and the fallback for what fits none of the above. It declares no sampling defaults of its own. |
 
 Both columns are *defaults*, not ceilings you can't move: a `temperature` passed to `spawn` overrides the type's. The iteration count is different — the effective cap is `min(type cap, agents.defaults.maxToolIterations)`, where that setting defaults to **200**. So the type's number is what you normally get, and lowering `maxToolIterations` lowers every type at once (setting it to 30 caps even `coder` at 30); raising it above 200 never lifts a type past its own number.
 
-`sysadmin` is also the only type that loads a second scope (`subagent` + `remote`). The SSH tools are kept out of the `subagent` scope precisely so that `operator` — which means "everything in that scope" — cannot inherit a remote shell by accident; granting them takes naming their scope explicitly.
+`sysadmin`, `app-builder` and `notebook-editor` load a second scope (`subagent` + `remote`, `subagent` + `apps`, `subagent` + `notebook`). The SSH tools, the app builder's `app` and the editor's `board` and `notebook` (its face with `remove_pages`) are kept out of the `subagent` scope precisely so that `operator` — which means "everything in that scope" — cannot inherit a remote shell, a way to write apps or a way to reshape a board by accident; granting them takes naming their scope explicitly.
 
-**A type can also declare tools it cannot work without.** Five of the six do:
+**A type can also declare tools it cannot work without.** Seven of the eight do:
 
 | Type | Requires | What has to be off for the spawn to be refused |
 |---|---|---|
@@ -391,12 +413,14 @@ Both columns are *defaults*, not ceilings you can't move: a `temperature` passed
 | `coder` | `read_file`, `write_file` | `tools.file.enable` |
 | `analyst` | `python_exec`, `read_file` | `tools.pythonExec.enable` **and** `tools.file.enable` — either one alone is partial loss, not a refusal |
 | `sysadmin` | `ssh_hosts`, `ssh_exec`, `ssh_job`, `ssh_transfer` | `tools.ssh.enable`, or an empty host list |
+| `app-builder` | `app` | never (the tool is always there) |
+| `notebook-editor` | `board` | never (the tool is always there) |
 
 The practical consequence: turn `tools.file.enable` off and asking for a `writer` or a `coder` is refused outright, with a message naming that setting, rather than starting an agent that would try to write a document with no write tool. `operator` requires nothing and always spawns.
 
 If *every* required tool is unavailable **and** something can say why in terms you can act on — SSH switched off, no host registered, web access off — the spawn is refused with that sentence instead of starting an agent that would improvise. When the cause is the runtime rather than a setting (the web tools off Android, where no switch would help), the spawn proceeds and the loss is only logged. Partial loss is never a refusal.
 
-The researcher/writer and researcher/coder splits are a security boundary, not a preference: whoever read untrusted web content is not the one who then runs code. An unknown `agent_type` is rejected with the list of valid ones; a persisted record carrying a type that no longer exists degrades to `operator` so its work stays relaunchable.
+The researcher/writer and researcher/coder splits narrow what each type can reach, but they are not the security boundary: `operator` holds the whole toolset, and `python_exec`'s `http_get`/`http_post` reach public sites. The boundary is a per-job policy that removes no tool — once a job has read outside content it can no longer write the files Jenny loads on her own (those become drafts you approve in the app), and once it has also read your personal data it can send data only to the sites its task names. See [Subagents and untrusted content](../internals/security-model.md#subagents-and-untrusted-content). An unknown `agent_type` is rejected with the list of valid ones; a persisted record carrying a type that no longer exists degrades to `operator` so its work stays relaunchable.
 
 Config: `agents.defaults.maxConcurrentSubagents` (default 3), `agents.defaults.subagentStallThresholdSeconds` (default 180), `agents.defaults.subagentToolErrorBudget` (default 3).
 
@@ -406,7 +430,7 @@ Available to the main agent only in orchestrator mode (`agents.defaults.orchestr
 
 - `subagent_status(task_id?)` lists running and recently finished subagents (id, type, state, phase, elapsed and idle time, last tool, result summary, whether an automatic relaunch is still allowed).
 - `subagent_cancel(task_id)` stops one running subagent; the others keep going, and a cancelled subagent reports nothing back.
-- `subagent_restart(task_id, extra_instructions?)` relaunches a failed or stalled job as the next attempt of the same lineage, optionally with a corrective note. Automatic relaunches stop after 3 attempts per job; a manual relaunch is never capped.
+- `subagent_restart(task_id, extra_instructions?)` relaunches a failed or stalled job as the next attempt of the same lineage, optionally with a corrective note. Automatic relaunches stop after 3 attempts per job; a manual relaunch is never capped. When Jenny relaunches a job that failed, that turn writes nothing to the chat: you hear only from the relaunched attempt.
 - `subagent_send(task_id, message, quick?)` talks to a subagent that already exists, so a follow-up ("no, change the title") does not mean re-specifying the whole job. One tool, three behaviours picked by the manager: the subagent is **still running** → the message is injected mid-run and reaches it at its next step without stopping it; it **finished** and its conversation is still within the retention window → it **resumes** from that conversation plus your message; anything else (failed, stalled, history aged out) → the job is **relaunched** with the message as a corrective note. The result text says which one happened.
 
 Subagent conversations are kept as sessions under the key `subagent:<lineage_id>` — internal keys, never listed as user conversations. Retention is deliberately short: the **3 most recent finished jobs per conversation, for 6 hours**. Resuming re-sends the subagent's whole conversation to the model, so a long window would make every follow-up expensive; past the window the loss is small, because the real output is the artifact on disk, not the transcript. A resume occupies a concurrency slot like a spawn (`quick=true` may use the reserved one) but does **not** consume the 3-attempt automatic-relaunch budget — a directed continuation is not a retry of a failure.
@@ -418,7 +442,7 @@ Gotcha: `subagent_status` **refuses a second consecutive call in the same turn**
 A pair of tools for tracking a sustained objective across many turns of the same chat thread, without a separate orchestrator — the work still happens in ordinary turns.
 
 - `long_task(goal, ui_summary?)` registers the objective (`goal` up to 12,000 chars; optional `ui_summary` up to 120 chars for display). Only **one goal can be active at a time** — a second call while one is active is rejected.
-- The active goal is mirrored into the Runtime Context every turn, so context compaction can't make it disappear.
+- The active goal is mirrored into the Runtime Context every turn, so context compaction can't make it disappear. The full objective is written once; while the message that carried it is still in the history being sent, later turns get a one-line `Goal (active): unchanged, as stated earlier in this conversation.` instead, so a long objective does not pile up in the conversation. When that message leaves the window, the full text comes back.
 - `complete_goal(recap?)` closes it out (recap up to 8,000 chars) — call it whether the goal succeeded, was cancelled, or was redirected; the recap should say what actually happened, not just claim success.
 
 Config: none — always registered whenever session management is available (i.e., always in the normal runtime).
@@ -520,6 +544,23 @@ Every action declared in an installed Jenny App's `<workspace>/apps/<slug>/app.j
 - A broken app (invalid manifest) contributes zero tools — it doesn't crash tool loading, it's just silently absent (with a warning in the logs).
 - If an app declares an action name that collides with a built-in tool name, that action is skipped with a warning rather than overriding the built-in.
 - Jenny can act on an app's data through these tools even while the app's own screen is closed — the app UI and the tool layer are independent.
+- In a notebook's chat, the actions that **write** to an app not placed on that notebook's board are not offered at all (reads are): they would be refused anyway (`jenny/apps/permissions.py`).
+
+### The `app` tool and who writes apps
+
+An app's code (`app.json`, `run.py`, `app/`) changes only through the `app` tool, which comes in three faces of the same tool:
+
+| Who | Actions | What happens |
+|---|---|---|
+| The main agent, orchestrator mode (default) | `publish`, `show`, `run`, `place`, `trash` | It never writes code: it spawns an `app-builder`, checks the values the builder reports, and `publish` makes the tested version live. |
+| An `app-builder` subagent | `draft`, `edit`, `set`, `show`, `run` | Writes a new version as a draft; every write is validated and the reader runs once on the app's **real data** (read-only); the reply shows the values it read. It never publishes. |
+| The main agent with `orchestratorMode` off | all of the above | Writes, tests and publishes in one step, as before. |
+
+`set` changes one value of `app.json` by its dotted path (`reader.net`, `reader.every`), and drafts store `app.json` indented, so a fix never means rewriting the whole manifest. A draft's manifest is checked strictly: what an installed app gets silently corrected (a `net` host written as a URL, an unknown field type, `every` outside 15–1440) is an error that says how to write it.
+
+A follow-up on an app goes back to the builder that knows it: when `spawn` gets `agent_type=app-builder` with `app=<slug>` (or a brief that names exactly one app a builder touched in this conversation), and that builder's conversation can still be resumed (running, or finished within six hours and not too long), the task is sent to it with `subagent_send` instead of starting a new builder from scratch. `show path=app/index.html` returns one file of the version in progress, and publishing a version whose screen changed says that nobody has run it.
+
+A draft in progress is shared: `show` displays it (with the outcome of its test run) rather than the live app, and the next `app-builder` continues from it; only a draft untouched for six hours is dropped and restarted from the live code. Six **failed** tries on the same app within ten minutes stop further writes, and the refusal says when the next one is accepted; a passing test or a publish clears the count. When the main agent publishes an app, its actions are among its tools in the same turn.
 
 See the Mini-apps page for how apps and actions are authored. Config: `apps.enabled` (default `true`, turning it off removes all app tools at once), `apps.httpTimeoutS` (default 20.0, range 1–120 — timeout for an app action's outbound proxy calls), `apps.maxCollectionBytes` (default 5,000,000 — per-collection storage cap).
 
@@ -527,29 +568,62 @@ Gotcha: because the tool count depends on what's installed, don't expect a stabl
 
 ---
 
-## 9. Memory recall and journal
+## 9. Memory recall, journal and board
 
 ### recall
 
 Searches long-term memory for facts that were **removed from the active files and moved to the archive** — what Dream distilled away rather than what it kept.
 
-- Called with no arguments it returns the whole archive, one line per fact; call it again with the ids you want in full.
+- `query`: words to search for, matched inside words regardless of accents and case, and weighted so that a rare word counts more than a common one. Jenny passes them in both Italian and English, because the archive is written in both. No match is reported as "nothing matched these words", never as "never said".
+- Without `query` it lists the archive, one line per fact, newest first, in pages of about 12,000 characters (`page`, from 1). A fact rewritten several times is one line, its newest archived wording with the number of earlier ones; a fact marked `RETRACTED` was removed because you said it was never true.
+- `ids` opens facts in full, with every earlier wording and, when it still exists, the current wording in `USER.md` or `MEMORY.md`.
 - Scope `core` + `orchestrator`: it is the agent you talk to that has it, not a subagent.
 
 ### recall_history
 
-Searches the verbatim turn-by-turn log of the personal conversation — what was actually said, before Dream distilled it.
+Searches the notes taken on the personal conversation: one entry per stretch that was compacted, written before Dream chose what to keep. They are summaries, not the exact words said.
 
-- Same two-step shape: no arguments gives the index, one line per turn; then call it again with the cursors you want expanded.
+- Reads `memory/history.jsonl` and the older entries moved to `memory/history-archive/`.
+- `query` searches every note and returns only the notes that match, grouped by entry; without it, the index comes one line per entry, newest first, in pages (`page`). Then call it again with the cursors you want expanded.
+- A [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks) line is tagged with where it comes from and who said it (`(notebook film, the user said)`); opened, it also shows the journal lines around the one it copies.
 - Scope `core` + `orchestrator`.
 
 ### journal_append
 
-Appends one line to the current project's working journal (`raw/journal/<today>.md`).
+Appends one line to a notebook's working journal (`raw/journal/<today>.md`) — the notebook of the conversation, or, from the personal chat, the one named in `notebook` — and leaves a short copy of it in the [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks).
 
-- Meant for the moment something is said that will still be true next week — a constraint, a decision, a preference, a name, a date.
+- Meant for the moment something is said that will still be true next week — a constraint, a decision, a preference, a name, a date, something done.
+- `notebook` (personal chat only) files the fact into that notebook without you opening it: the notebooks are Jenny's drawers. A name that is not an existing notebook is refused with the list of the ones that exist — the tool never creates a notebook. Without `notebook`, from the personal chat the line goes to Jenny's own diary only. Inside a notebook, only that notebook's journal can be written, and a subagent cannot fill the drawers from outside them.
 - Parameters: `text` (required, one short line, at most 500 characters — a longer one is refused as page material; the timestamp and the leading dash are added for you) and `attribution`, `said` when you stated the fact yourself or `inferred` when Jenny concluded it (default `inferred`). Only a `said` line can later become a decided page.
 - The only tool in this group a subagent also gets (`core`, `orchestrator`, `subagent`), and it has no config toggle: it is always registered.
+
+### suggest_notebook
+
+Offers to continue the conversation in one of your notebooks: a button «Open the notebook …» appears under the reply, and you decide with a tap.
+
+- Meant for the moment a personal-chat conversation has become work on one notebook's subject — several exchanges, a plan to lay out — and never for a passing fact (that is `journal_append` with `notebook`). Offered once: if you stay, Jenny goes on where you are.
+- Parameters: `notebook` (an existing notebook; any other name is refused with the list) and `context`, one line on what you were working on. That line is written to the [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks) as being about the notebook, so in the notebook's chat Jenny knows where you came from.
+- Only in the personal chat in the app: hidden in a notebook, on Telegram, in a notification reply and in silent turns. Scope `core` + `orchestrator`; not for subagents.
+
+### board
+
+Changes a notebook's board as you asked: cards (add, rename, move next to another, put away, restore), which pages each card holds, threads, notes, reminders, the skeleton of a board that has no cards yet, answers to the envelope's proposals, and the drawers. `show` gives the board as you see it, with the ids to act on.
+
+- Scope `notebook` only: the [`notebook-editor`](#spawn) has it, and nobody else — not the agent you talk to, not `operator`.
+- `update_reminder` corrects an open reminder's text and date, and `why`: the wiki page that explains it, which must exist (`clear_why: true` removes it; an empty `why` changes nothing). `remove_pages` takes pages off cards and leaves the files; deleting them is [`notebook`](#notebook)'s `remove_pages`.
+- Every write goes through the same code as the board's own buttons and counts as yours, so the gardener cannot undo it. Giving a card a page that another card holds moves the page; the reply then lists the drawers to rewrite, and `write_drawer` rewrites one with the gardener's rules (skeleton sections only, citing the card's own pages).
+- Works only for the notebook's chat it was spawned from, and never in a read-only turn. Each write redraws the board if it is open.
+
+### notebook
+
+Reads and checks a notebook in bulk, from its chat, so that verifying fifty pages is one call instead of fifty.
+
+- `check` lists the notebook's defects, counted, each with `path:line`: dead `[[links]]`, `sources:`/`source:` that point at no file, pages without frontmatter or a valid `state:`, pages over the injection ceiling (and, with `min_chars`, under a threshold), the map over its ceiling, cards listing pages that do not exist, drawer sections citing missing pages, and open reminders whose `why` page is gone. `expect` (`{"folders": "wiki/concepts/*", "files": ["index", "soil"]}`) also lists the files missing or extra in each folder. In a research notebook it also lists concept/entity pages without `sources:` and raw sources without a summary. It writes nothing, and on the checks they share it finds what the wiki skill's `lint_wiki.py` finds (a test keeps the two together); it is not the full lint, and each answer ends naming the checks it leaves out (orphans, pages missing from the map, duplicates, log/ and audit/ shape, the journal…).
+- `map` takes `subjects` (`{name, aliases}`) and `topics` (`{name, keywords}`) and answers with a table — how many files mention each subject together with each topic — and, per cell, up to three `file:line` with a snippet. It searches `wiki/` and `raw/` unless given `paths`, ignoring accents and case, and never reads `.jenny/`.
+- `read_many` reads up to 30 files in one call (`mode`: `frontmatter`, `head` with `lines`, or `full`), splits the answer's budget among them, and says which were cut and where to resume. The files count as read, so editing them right after does not warn.
+- `remove_pages` (only the `notebook-editor`, never in a read-only turn) deletes pages under `wiki/` — never `wiki/index.md` — after the same checks a file write passes. It first appends each page's path, first lines and the `reason` to `raw/removed/<date>.md`, then deletes the files, takes them off the board, clears the `why` of the reminders that pointed at them, and answers with the cards touched, the drawers to rewrite, the reminders cleared and the links left pointing nowhere.
+- Two faces with one name: the agent you talk to (scopes `core` and `orchestrator`) has the three reads; the `notebook-editor` (scope `notebook`) has the reads and `remove_pages`. An answer stays under 12,000 characters for the first and 14,000 for the second, below the size at which a tool result is moved to a file.
+- In a planning turn its reads count as having looked at the notebook. Outside a notebook's chat it is not offered to the agent you talk to at all (if called anyway, it answers with an error and reads nothing).
 
 ---
 

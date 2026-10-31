@@ -1,18 +1,15 @@
-"""Fase 0.5 — Caratterizzazione: knob runtime via env-var + risoluzione schema.
-
-Baseline (pre Fase 3): diversi knob runtime sono letti DIRETTAMENTE da
-`os.environ`, bypassando `Config` come fonte di verità. Fase 3.2 li sposterà su
-campi tipizzati di `Config`; questi test fissano l'effetto attuale.
+"""Knob runtime via env-var e risoluzione dello schema.
 
 Coperti qui (pure/schema):
-- `JENNY_STREAM_IDLE_TIMEOUT_S` via `resolve_stream_idle_timeout_s`
-  (providers/base.py).
-- Lo schema `Config` si istanzia coi sub-config dei tool risolti (la dance
-  `_lazy_default`/`model_rebuild` che Fase 3.4 semplifica).
+- `JENNY_STREAM_IDLE_TIMEOUT_S` via `resolve_stream_idle_timeout_s`, che sta
+  nel layer unico dei knob (`config/runtime_env.py`).
+- Lo schema `Config` si istanzia coi sub-config dei tool gia' risolti, senza
+  `model_rebuild`.
 
 Il knob `JENNY_MAX_CONCURRENT_REQUESTS` (che richiede un AgentLoop, e quindi
-la fixture `loop_factory` disponibile solo in tests/agent/) è caratterizzato in
-`tests/agent/test_env_knobs.py`.
+la fixture `loop_factory` disponibile solo in tests/agent/) e' provato in
+`tests/agent/test_env_knobs.py`. Il file nacque come «caratterizzazione» prima
+della Fase 3, quando questi knob si leggevano direttamente da `os.environ`.
 """
 
 from __future__ import annotations

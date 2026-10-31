@@ -87,7 +87,7 @@ for (const gone of ['poseUrl', 'mascotColor', 'setMascotColor']) {{
   assert.ok(!(gone in mod), `{{gone}} è again exported`.replace('{{gone}}', gone));
 }}
 // Quello che resta, resta.
-for (const kept of ['mascotVisible', 'mascotSize', 'applyMascotSize']) {{
+for (const kept of ['mascotSize', 'applyMascotSize']) {{
   assert.ok(kept in mod, kept + ' non è più esportato');
 }}
 """)
@@ -108,7 +108,6 @@ const mod = await import({json.dumps(MASCOT_JS.as_uri())});
 assert.equal(store.has({json.dumps(DEAD_KEY)}), false, 'la chiave morta è ancora lì');
 // Le altre preferenze non le tocca.
 assert.equal(mod.mascotSize(), 'lg');
-assert.equal(mod.mascotVisible(), true);
 """)
 
 

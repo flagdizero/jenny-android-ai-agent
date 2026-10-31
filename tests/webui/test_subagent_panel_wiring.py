@@ -195,9 +195,16 @@ def test_the_body_is_a_frame_with_one_zone_per_question() -> None:
     assert positions == sorted(positions), f"le zone del telaio sono fuori ordine: {order}"
 
     css = CSS.read_text(encoding="utf-8")
-    frame = re.search(r"\.oc-detail-body \{(.*?)\n\}", css, re.S)
-    assert frame, "la regola .oc-detail-body non è stata trovata"
+    # Col genitore nel selettore: la modale è anche un `.oc-sheet-inner`, e
+    # `.oc-sheet-inner > * { flex: none }` viene dopo nel file. A pari peso vinceva
+    # lei, il corpo cresceva quanto il contenuto e la lista non scorreva più.
+    assert re.search(r"\.oc-sheet-inner > \* \{ flex: none; \}", css), (
+        "la regola dei fogli è cambiata: rivedi se il corpo della modale la batte ancora"
+    )
+    frame = re.search(r"\n\.oc-detail-inner > \.oc-detail-body \{(.*?)\n\}", css, re.S)
+    assert frame, "la regola del corpo deve pesare più di .oc-sheet-inner > *"
     assert "flex-direction: column" in frame.group(1), "il corpo non è un telaio"
+    assert "min-height: 0" in frame.group(1), "senza min-height: 0 la lista non scorre"
     # L'unica zona elastica è lo stream: le altre tre non si allungano, quindi la
     # lista è in vista per costruzione e non serve nessuna ginnastica di scroll.
     for zone, rule in (("sa-sum", "flex-shrink: 0"), ("sa-focus", "flex-shrink: 0"),
@@ -253,15 +260,17 @@ def test_the_footer_buttons_follow_the_state() -> None:
     """Un subagent può concludersi con la modale aperta: "Ferma" su un lavoro
     finito è una bugia, e su un job fallito nasconde l'unico bottone utile."""
     source = _chat()
-    sync = re.search(r"_saSyncActions\(state\)\s*\{(.*?)\n  \}", source, re.S)
+    # La voce viaggia con lo stato: una fermata al budget riprendibile non offre
+    # il rilancio da zero (``saActions(state, surface, entry)``).
+    sync = re.search(r"_saSyncActions\(state, entry = null\)\s*\{(.*?)\n  \}", source, re.S)
     assert sync, "_saSyncActions non trovato"
     body = sync.group(1)
-    assert "_saDialogActions(state)" in body, "i bottoni passano dalla matrice"
+    assert "_saDialogActions(state, entry)" in body, "i bottoni passano dalla matrice"
     # Il contratto di detailDialog è il data-action-id, e il click è delegato:
     # rimpiazzare i bottoni non stacca nessun handler.
     assert "data-action-id" in body
     refresh = re.search(r"_refreshSubagentDetailStatic\(\)\s*\{(.*?)\n  \}", source, re.S)
-    assert refresh and "_saSyncActions(state)" in refresh.group(1)
+    assert refresh and "_saSyncActions(state, entry)" in refresh.group(1)
     dialog = DIALOG_JS.read_text(encoding="utf-8")
     assert "actionsEl.addEventListener('click'" in dialog, "il click non è più delegato"
 

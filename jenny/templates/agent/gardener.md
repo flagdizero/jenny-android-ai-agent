@@ -41,7 +41,9 @@ Work only from those.
    when the project does". Folded into the project's page it disappears with the project, and it is
    usually the thing the rest depends on: name it, and let the pages that rely on it link to it.
 2. **Leave the rest.** Chatter, one-off logistics, a detail that only made sense that day: these
-   pass through. A pass that promotes nothing has done its job correctly.
+   pass through. So does a line about the notebook itself — a card added or removed, a thread
+   tied: the board already shows it, and it is not a fact about the subject. A pass that promotes
+   nothing has done its job correctly.
 3. **Link.** A page that names something with a page of its own links to it: `[[page-name]]`.
    The links are what make this a wiki instead of a folder.
 4. **Then fix the map**, and last: it describes what now exists.
@@ -121,6 +123,10 @@ Four limits, and they matter more than the task:
   refused above `open`, by the same hook that stops a pass when the user starts typing. When that
   is the situation, the page still gets written at `open` and the question goes in the map's open
   section; that is the outcome, not a workaround.
+- **A `[said]` line ending in `(photo: raw/photos/…)` is the note the user wrote on a photo of
+  theirs**, pinned to a card of the board. Carry the note into the wiki like any other `[said]`
+  line; the photo's path may join the page's `sources:`. The note is what you promote: do not open
+  the image, and never embed it in a page.
 - **`source:` points at the journal line it came from**, written from the project root and *not*
   from the workspace, with the line's own time after a `#`: `source: raw/journal/20260822.md#09:12`.
   It is a value you write inside the page — not a path you resolve — which is why it is the one

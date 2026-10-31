@@ -108,6 +108,32 @@ export function linkTarget({ href, wikilink, notebook, currentPath, here = globa
   return rel ? { kind: 'page', path: rel } : null;
 }
 
+/** Un link di pagina visto attraverso la bacheca: i tre tipi del lettore.
+ *
+ *  I file non cambiano — i `[[link]]` restano come Jenny li ha scritti — ma
+ *  chi legge non deve impantanarsi nella wiki: da un cassetto si apre una
+ *  pagina, e da li'
+ *  - una pagina **dello stesso cassetto** si apre al posto di quella corrente
+ *    (profondita' massima uno: «indietro» porta sempre al cassetto);
+ *  - una pagina **di un altro cassetto** apre quel cassetto, non la pagina;
+ *  - una pagina **fuori bacheca** si guarda in anteprima, e basta.
+ *
+ *  *board* e' l'appartenenza che `/api/page` manda con la pagina; senza (un
+ *  quaderno che non ha una bacheca) il link resta un link.
+ *
+ *  @returns `{kind:'page', path}` | `{kind:'drawer', card, title}` |
+ *           `{kind:'offboard', path}`
+ */
+export function classifyBoardLink(target, board) {
+  if (!target || target.kind !== 'page' || !board) return target;
+  const links = board.links || {};
+  if (!Object.hasOwn(links, target.path)) return target;
+  const owner = links[target.path];
+  if (!owner) return { kind: 'offboard', path: target.path };
+  if (owner.card === board.card) return target;
+  return { kind: 'drawer', card: owner.card, title: owner.title };
+}
+
 export class HomeReader {
   constructor() {
     this.el = document.getElementById('home-reader');
@@ -122,7 +148,16 @@ export class HomeReader {
     /** Il markdown sorgente della pagina a schermo: e' quel che l'editor apre,
      *  ed e' il `base` che il salvataggio manda al server. */
     this.raw = '';
+    /** L'appartenenza alla bacheca della pagina a schermo e dei suoi link. */
+    this.board = null;
+    /** Chi apre un cassetto o un'anteprima quando un link lo chiede. */
+    this.onOpenDrawer = null;
+    this.onPreview = null;
     this.editing = false;
+    /** Un piano aperto tiene il quaderno (`home-plan.js`): si legge e basta,
+     *  e «Modifica» non apre. Il server rifiuta comunque `page.write`. */
+    this.locked = false;
+    this.lockEl = document.getElementById('home-reader-lock');
     /** Chi disegna l'intestazione: entrare e uscire dall'editor cambia quali
      *  comandi valgono lassu'. */
     this.onEditing = null;
@@ -140,6 +175,25 @@ export class HomeReader {
     if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('home.reader.cancel');
   }
 
+  /** Chiude o riapre le pagine del quaderno alla modifica, con la riga che lo
+   *  dice. Un editor gia' aperto resta aperto: il suo testo non si butta, e il
+   *  salvataggio lo rifiutera' il server, dicendolo. */
+  setLocked(locked) {
+    this.locked = Boolean(locked);
+    if (this.lockEl) {
+      this.lockEl.hidden = !this.locked;
+      this.lockEl.replaceChildren();
+      if (this.locked) {
+        const i = document.createElement('i');
+        i.className = 'ti ti-lock';
+        i.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.textContent = i18n.t('home.plan.lock');
+        this.lockEl.append(i, text);
+      }
+    }
+  }
+
   /* ── Modifica ── */
 
   /** Vero se c'e' un testo aperto e cambiato. Lo chiede chi sta per uscire. */
@@ -149,7 +203,7 @@ export class HomeReader {
 
   /** Apre l'editor sul markdown gia' in mano. Falso se non c'e' niente da aprire. */
   startEdit() {
-    if (this.editing || !this.path || !this.editEl) return false;
+    if (this.editing || this.locked || !this.path || !this.editEl) return false;
     this.editing = true;
     this.editEl.value = this.raw;
     this.editEl.hidden = false;
@@ -232,7 +286,9 @@ export class HomeReader {
         await this._onConflict();
         return;
       }
-      showToast(i18n.t('home.reader.saveFailed'), 'error');
+      /* Un piano ha preso il quaderno mentre scrivevi: il testo resta
+         nell'editor, e la riga in cima dice perche' non si salva. */
+      showToast(i18n.t(err?.code === 'plan_running' ? 'home.plan.lock' : 'home.reader.saveFailed'), 'error');
       return;
     }
     this.editing = false;
@@ -268,8 +324,9 @@ export class HomeReader {
        pagina precedente non deve restare qui — «Modifica» aprirebbe un testo
        che non e' quello a schermo, e lo salverebbe sopra un'altra pagina. */
     this.raw = '';
+    this.board = null;
     this.bodyEl.innerHTML = '';
-    this._say('home.notebookPages.loading');
+    this._say('board.drawer.loading');
 
     let page;
     try {
@@ -287,7 +344,9 @@ export class HomeReader {
        salvataggio confronta. `/api/page` lo manda gia', quindi «Modifica» non
        costa una seconda richiesta. */
     this.raw = page.raw || '';
+    this.board = page.board || null;
     this.bodyEl.innerHTML = this._safeHtml(page.html, page.raw);
+    this._markBoardLinks();
     /* Diagrammi e formule, che il server lascia da rendere: marca i blocchi
        mermaid (`webui/wiki.py`) e il LaTeX lo lascia nel testo.
        **Non si aspetta**: la pagina e' gia' leggibile, e mermaid sono 3,3 MB —
@@ -314,6 +373,30 @@ export class HomeReader {
     return `<pre class="home-reader-raw">${escapeHtml(raw || '')}</pre>`;
   }
 
+  /* I link si vestono per quel che fanno: normale lo stesso cassetto, con
+     l'etichetta del cassetto se porta altrove, a puntini se porta fuori dalla
+     bacheca. La differenza si vede prima di toccare. */
+  _markBoardLinks() {
+    if (!this.board) return;
+    this.bodyEl.querySelectorAll('a').forEach((a) => {
+      const target = classifyBoardLink(linkTarget({
+        href: contentLinkHref(a),
+        wikilink: a.classList.contains('wikilink'),
+        notebook: this.notebook,
+        currentPath: this.path,
+      }), this.board);
+      if (target?.kind === 'drawer') {
+        a.classList.add('home-link-drawer');
+        const chip = document.createElement('span');
+        chip.className = 'home-link-chip';
+        chip.textContent = `▸ ${target.title}`;
+        a.appendChild(chip);
+      } else if (target?.kind === 'offboard') {
+        a.classList.add('home-link-offboard');
+      }
+    });
+  }
+
   _say(key) {
     this.bodyEl.innerHTML = '';
     const note = document.createElement('p');
@@ -328,12 +411,12 @@ export class HomeReader {
     const a = contentLinkOf(e.target);
     if (!a) return;
     e.preventDefault();
-    const target = linkTarget({
+    const target = classifyBoardLink(linkTarget({
       href: contentLinkHref(a),
       wikilink: a.classList.contains('wikilink'),
       notebook: this.notebook,
       currentPath: this.path,
-    });
+    }), this.board);
     if (!target) {
       showToast(i18n.t('common.linkNotOpenable'), 'info');
       return;
@@ -350,6 +433,17 @@ export class HomeReader {
       if (!openOutsideWebView(target.href)) showToast(i18n.t('common.linkNotOpenable'), 'error');
       return;
     }
-    this.load(this.notebook, target.path).then((title) => this.onTitle?.(title));
+    if (target.kind === 'drawer') {
+      this.onOpenDrawer?.(target.card, target.title);
+      return;
+    }
+    if (target.kind === 'offboard') {
+      this.onPreview?.(target.path, this.board?.card || null);
+      return;
+    }
+    /* Una pagina dello stesso cassetto: la apre il guscio, che se ne ricorda
+       per Indietro (v. `HomeApp._followPage`). Senza guscio, qui sul posto. */
+    if (this.onFollow) this.onFollow(target.path);
+    else this.load(this.notebook, target.path).then((title) => this.onTitle?.(title));
   }
 }

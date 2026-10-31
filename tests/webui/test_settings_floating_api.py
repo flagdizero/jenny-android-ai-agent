@@ -168,6 +168,28 @@ async def test_the_settings_page_reports_the_live_permission_state(monkeypatch) 
     assert "active" not in off_device["floating"]
 
 
+async def test_the_settings_page_reports_the_screen_reading_state(monkeypatch) -> None:
+    """Il servizio di accessibilità si accende e si spegne da Android, fuori da
+    Jenny: come il permesso della finestra, lo stato si chiede a ogni apertura."""
+    from jenny.webui import settings_routes as sr
+
+    async def active() -> bool:
+        return True
+
+    async def state() -> str:
+        return "off"
+
+    monkeypatch.setattr("jenny.runtime.floating.floating_active", active)
+    monkeypatch.setattr("jenny.runtime.screen.screen_state", state)
+    payload = {"floating": {"enabled": True, "available": True}}
+    await sr._enrich_floating(payload)
+    assert payload["floating"]["screen"] == "off"
+
+    off_device = {"floating": {"enabled": True, "available": False}}
+    await sr._enrich_floating(off_device)
+    assert "screen" not in off_device["floating"]
+
+
 # -- rifiuto -----------------------------------------------------------------
 
 
@@ -235,3 +257,18 @@ def test_the_bridge_push_is_not_inside_the_mutate_callback() -> None:
 
     assert "apply_floating_config" not in apply_callback
     assert "apply_floating_config" in body
+
+
+async def test_turning_the_mascot_on_also_says_whether_the_screen_is_read(
+    config_path, applied, monkeypatch,
+) -> None:
+    """La riga «Legge lo schermo» vive sotto la mascotte: accesa la mascotte,
+    deve comparire subito, non alla prossima apertura delle Impostazioni."""
+    async def state() -> str:
+        return "off"
+
+    monkeypatch.setattr("jenny.runtime.screen.screen_state", state)
+    monkeypatch.setattr(settings_api, "settings_payload", lambda: {
+        "floating": {"enabled": True, "available": True}})
+    payload = await update_floating_settings({"enabled": ["true"]})
+    assert payload["floating"]["screen"] == "off"

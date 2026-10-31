@@ -36,7 +36,7 @@ Two cards:
 | **OpenAI Compatible** | OpenAI, Groq, DeepSeek, Ollama, vLLM, OpenRouter, Together, Fireworks... |
 | **Anthropic Compatible** | Claude models via Anthropic Messages API |
 
-Pick whichever matches the service you have an API key for, then tap **Next**. Below the Next button there's also a **Restore from backup** button — see [Restoring from a backup instead](#restoring-from-a-backup-instead) below.
+Pick whichever matches the service you have an API key for, then tap **Next**. Below the Next button there's a **Restore from backup** button (a `.jbk` file); in the Play Store build Jenny asks **"Have we met before?"** there, with **Yes, find my copy** (her copy on Google Drive, when the phone has Google services) above it — see [Restoring from a backup instead](#restoring-from-a-backup-instead) below.
 
 <p align="center"><img src="../img/onboarding-format.png" alt="The first-run wizard, step 1: choosing between the OpenAI-compatible and the Anthropic-compatible format" width="300"></p>
 
@@ -86,7 +86,9 @@ Pressing **Launch** does the following, in order:
 
 ## Restoring from a backup instead
 
-If you've used Jenny before and have an encrypted `.jbk` backup file, tap **Restore from backup** on step 1 instead of going through the wizard. This opens the same import flow used from the home's **Settings → Backup → Restore from a file**: pick the file via the Android system picker, enter the backup passphrase, and confirm. The restore is staged, not applied immediately — the app then prompts you to restart, and the actual restore happens at that restart, before anything else touches the workspace. Once restored, the app boots straight into the home, on Jenny's page, with your old provider, history, and memory already in place — the wizard is skipped because a provider is already configured. See [Backup and restore](../using/backup.md) for the full mechanics.
+If you had the Play Store build of Jenny on another phone with the **copy on Google Drive** turned on, tap **Yes, find my copy**: allow Google Drive, type the copy's password — the one you chose when you turned the copy on — pick the copy — the latest is first — and tap **Restart now**. The wizard is skipped after the restart, as below. The details are in [Backup and restore](../using/backup.md#getting-jenny-back-on-a-new-phone).
+
+If you have an encrypted `.jbk` backup file instead, tap **Restore from backup** on step 1 instead of going through the wizard. This opens the same import flow used from the home's **Settings → Backup → Restore from a file**: pick the file via the Android system picker, enter the backup passphrase, and confirm. The restore is staged, not applied immediately — the app then prompts you to restart, and the actual restore happens at that restart, before anything else touches the workspace. Once restored, the app boots straight into the home, on Jenny's page, with your old provider, history, and memory already in place — the wizard is skipped because a provider is already configured. See [Backup and restore](../using/backup.md) for the full mechanics.
 
 ## Things to know that aren't obvious
 

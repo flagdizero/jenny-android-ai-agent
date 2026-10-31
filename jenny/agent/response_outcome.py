@@ -35,6 +35,11 @@ if TYPE_CHECKING:
 # positivo è un tentativo in più, non un errore.
 _NEAR_CAP_SLACK = 16
 
+#: I ``finish_reason`` con cui il provider dice «non rispondo»: ``content_filter``
+#: dagli endpoint OpenAI-compatibili, ``refusal`` da Anthropic (``stop_map`` di
+#: ``anthropic_provider.py``).
+REFUSAL_FINISH_REASONS = frozenset({"content_filter", "refusal"})
+
 
 class ResponseOutcome(str, Enum):
     """Esito di una risposta del modello, dopo la fase tool."""
@@ -56,6 +61,15 @@ class ResponseOutcome(str, Enum):
 
     EMPTY = "empty"
     """Risposta genuinamente vuota, senza troncamento: il retry è legittimo."""
+
+    REFUSED = "refused"
+    """Il provider ha rifiutato di rispondere (``content_filter``/``refusal``), a vuoto.
+
+    Non è una risposta vuota: dipende dal contesto, e una richiesta identica
+    riceve lo stesso rifiuto (misurato sul telefono: DeepSeek, 0 token di
+    completion in meno di un secondo, due volte di fila). Il recovery è un solo
+    tentativo col contesto cambiato, non i retry ciechi di ``EMPTY``.
+    """
 
     CONTEXT_OVERFLOW = "context_overflow"
     """Errore di context length: la finestra va ridotta."""
@@ -136,6 +150,10 @@ def classify_response(
             else ResponseOutcome.ERROR
         )
     blank = is_blank_text(clean_content)
+    if blank and response.finish_reason in REFUSAL_FINISH_REASONS:
+        # Prima del troncamento: un rifiuto non consuma il budget, e un usage
+        # strano non deve mandarlo nel recovery che alza i token.
+        return ResponseOutcome.REFUSED
     if output_budget_exhausted(response, max_tokens):
         return (
             ResponseOutcome.TRUNCATED_BLANK if blank

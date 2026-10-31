@@ -4,12 +4,15 @@ import base64
 import mimetypes
 import platform
 import re
+from collections.abc import MutableMapping
 from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
 from loguru import logger
 
+from jenny.agent.diary import DiaryTurn, diary_turn, waiting_threads
 from jenny.agent.memory import (
     HISTORY_FLOOR_METADATA_KEY,
     MemoryStore,
@@ -17,8 +20,9 @@ from jenny.agent.memory import (
 )
 from jenny.agent.skills import SkillsLoader
 from jenny.config.paths import get_output_path
-from jenny.session.goal_state import goal_state_runtime_lines
-from jenny.session.keys import is_project_session_key
+from jenny.runtime.user_text import current_bot_name
+from jenny.session.goal_state import goal_state_runtime_lines, plan_running_in_session
+from jenny.session.keys import is_personal_session_key, is_project_session_key
 from jenny.utils.android_assets import (
     _RETIRED_TEMPLATE_DIGESTS,
     normalized_template_text,
@@ -92,12 +96,125 @@ _WIKIS_BLOCK_LEAD = (
     "recorded anywhere, grep `{wikis_dir}/`."
 )
 
+# I cassetti: cosa fare con l'elenco quando si ha ``journal_append``. Prosa che
+# decide un comportamento, come la frase sopra: si tara con gli scenari di
+# ``scripts/behaviour`` (stadio 4), non a occhio.
+_WIKIS_BLOCK_DRAWERS = (
+    "These notebooks are your drawers. When the user tells you something that will still be "
+    "true next week and belongs to one of them — a fact, a decision, a date, something done — "
+    "file it with `journal_append` and `notebook=<name>` before answering, one line per fact; "
+    "the user does not have to open the notebook. When they ask you to find something out "
+    "about one of these subjects (\"informati su…\", \"look into…\"), what you answer goes "
+    "into that notebook too, in a line or two with where it comes from — also when you answer "
+    "from what you already know, and when a subagent brings it back. Whenever you file, the "
+    "user sees a small notebook mark under your reply: never say that you noted, saved or "
+    "filed something — just answer. Something about the user themselves (their "
+    "health, their feelings, their life) stays out of the notebooks, even when it comes up "
+    "while talking about one. Only if two notebooks could fit, use the likelier and say which "
+    "in half a sentence. Never create a notebook: when a subject with no notebook keeps coming "
+    "back on different days, ask whether to open one; until then, an event worth dating can "
+    "go to your own diary (`journal_append` without `notebook`)."
+)
+
+# «Ci spostiamo?»: quando proporre di passare in un quaderno. Solo con il tool.
+_WIKIS_BLOCK_MOVE = (
+    "When the conversation has become work on one notebook's subject — several exchanges, "
+    "things to write down, a plan to lay out — offer once to continue there with "
+    "`suggest_notebook`; the user decides with a tap. Never for a passing fact, and never "
+    "again in this conversation if they stay here."
+)
+
 # Il nome del tool che fa da interruttore ad ``agent/scheduling.md``. Costante e
 # non ``CronTool.name``: importare il tool qui tirerebbe dentro tutto il package
 # cron, e ``context.py`` lo importa mezzo repo. L'accoppiamento lo tiene fermo un
 # test (``test_cron_tool_name_constant_matches``), che ``CronTool`` lo importa
 # davvero perché lì costa solo tempo di test.
 _CRON_TOOL_NAME = "cron"
+
+
+def _read_project_board(root: Path) -> str:
+    """Il blocco della bacheca del quaderno *root*, o ``""``. Mai un'eccezione.
+
+    Una bacheca illeggibile non deve togliere il prompt a un turno: si torna
+    alla mappa, che e' quel che c'era prima della bacheca.
+    """
+    try:
+        from jenny.board.context_block import board_block
+        from jenny.board.sections import alert_probe
+        from jenny.config.paths import get_workspace_path
+
+        return board_block(root, alert=alert_probe(get_workspace_path()))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project block: the board of {} is unreadable: {}", root, exc)
+        return ""
+
+
+def _read_project_notebook_line(root: Path) -> str:
+    """Le cose di tutto il quaderno per il prompt, o ``""``. Mai un'eccezione."""
+    try:
+        from jenny.board.context_block import notebook_line
+
+        return notebook_line(root)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project block: the notebook items of {} are unreadable: {}", root, exc)
+        return ""
+
+
+def _read_project_board_absence(root: Path) -> str:
+    """Perche' il quaderno *root* non ha bacheca, o ``""``. Mai un'eccezione.
+
+    V. ``jenny/board/context_block.py::board_absence``. Su un guasto si tace,
+    come prima che la sezione esistesse: meglio nessuna ragione che una falsa.
+    """
+    try:
+        from jenny.board.context_block import board_absence
+
+        return board_absence(root)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("project block: cannot tell why {} has no board: {}", root, exc)
+        return ""
+
+
+GOAL_UNCHANGED_LINE = "Goal (active): unchanged, as stated earlier in this conversation."
+
+
+def _goal_lines_once(lines: list[str], history: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Il blocco del goal, pieno solo se la storia non lo porta gia' identico.
+
+    Il Runtime Context resta in storia con il messaggio che l'ha portato
+    (``SENT_CONTENT_META``, per la cache del turno dopo), e un obiettivo arriva a
+    4.000 caratteri: ripeterlo a ogni turno di un goal gonfierebbe la cronologia
+    di tanto a turno. *history* e' quella che si sta per mandare, quindi il
+    controllo dice il vero; quando la riga col testo pieno esce dalla finestra,
+    il testo pieno torna da se'. Si confronta solo la parte stabile (obiettivo e
+    riassunto): la riga ``Status:`` porta l'ora dell'attesa e cambia a ogni
+    turno, quindi va sempre, e un riassunto nuovo fa ripetere tutto.
+    """
+    if not lines:
+        return []
+    cut = next((i for i, line in enumerate(lines) if line.startswith("Status:")), len(lines))
+    stable, status = lines[:cut], lines[cut:]
+    # Fra due a-capo: un obiettivo allungato non deve passare per quello vecchio.
+    block = "\n" + "\n".join(stable) + "\n"
+    for message in history:
+        content = message.get("content")
+        if isinstance(content, str) and block in content:
+            return [GOAL_UNCHANGED_LINE, *status]
+    return list(lines)
+
+
+def _board_turn_lines(root: Path, message: Any, since: Any = None) -> list[str]:
+    """I cassetti delle schede che il messaggio nomina, e quel che l'utente ha
+    appuntato sulla bacheca dopo *since*, per il contesto del turno."""
+    if not isinstance(message, str) or not message.strip() or not is_wiki_root(root):
+        return []
+    try:
+        from jenny.board.context_block import turn_lines
+
+        return turn_lines(root, message, since=since)
+    except Exception as exc:  # noqa: BLE001 — un cassetto in meno, non un turno in meno
+        logger.warning("turn context: drawers of {} not read: {}", root, exc)
+        return []
 
 
 class _ProjectPages(NamedTuple):
@@ -552,6 +669,7 @@ class ContextBuilder:
         available_tools: list[str] | None = None,
         orchestrator: bool | None = None,
         history_floor: int = 0,
+        diary_section: str = "",
     ) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills.
 
@@ -568,12 +686,17 @@ class ContextBuilder:
         """
         orchestrating = self.orchestrator if orchestrator is None else orchestrator
         root = workspace or self.workspace
+        # Lo stesso predicato del contratto dei tool, anche per l'identita' e la
+        # policy di piattaforma: «usa `web_search`», «tutto il codice passa da
+        # `python_exec`» arrivavano a un orchestratore che non li ha.
+        has = self._tool_predicate(self._resolve_tool_names(available_tools))
         parts = [
             self._get_identity(
                 channel=channel,
                 workspace=root,
                 orchestrating=orchestrating,
                 session_key=session_key,
+                has=has,
             )
         ]
 
@@ -615,7 +738,12 @@ class ContextBuilder:
             with suppress(Exception):  # workspace sincronizzato da una versione precedente
                 parts.append(render_template(
                     "agent/project.md",
+                    has=has,
                     project_path=str(_absolute_workspace(root)),
+                    # Con un piano in corsa la ricerca e' del piano: il paragrafo
+                    # «quando un aiutante riporta To research, cerca» si spegne
+                    # (sul Titan, 26/10, scavalcava il cancello del driver).
+                    plan_running=plan_running_in_session(session_key),
                     # La politica di cattura vale per **questo** turno, quello in
                     # cui c'e' un utente che dice qualcosa. Un subagent riceve lo
                     # stesso file con ``capture=False`` (v. ``agent/subagent.py``):
@@ -803,7 +931,8 @@ class ContextBuilder:
         # invito a sbagliare. Il template non nomina l'elenco in nessun punto,
         # quindi togliergliela non lascia una promessa scoperta (T6.12).
         if not (is_project or is_gardener):
-            wikis_block = self._get_wikis_context()
+            wikis_block = self._get_wikis_context(drawers=has("journal_append"),
+                                                  move=has("suggest_notebook"))
             if wikis_block:
                 memory_sections.append(wikis_block)
         # Terza sottosezione, e la piu' economica: una riga che dice che il tier
@@ -822,15 +951,30 @@ class ContextBuilder:
             if always_content:
                 parts.append(f"# Active Skills\n\n{always_content}")
 
-        skills_summary = self.skills.build_skills_summary(exclude=set(always_skills))
+        hidden_skills = set(always_skills)
+        if orchestrating and has("spawn"):
+            # Chi delega non legge la guida del subagent che fa il lavoro: la
+            # seguirebbe al suo posto (v. ``SkillsLoader.get_helper_skills``).
+            hidden_skills |= self.skills.get_helper_skills()
+        skills_summary = self.skills.build_skills_summary(exclude=hidden_skills)
         if skills_summary:
             parts.append(render_template("agent/skills_section.md", skills_summary=skills_summary))
 
         from jenny.apps.summary import build_apps_summary
 
-        apps_summary = build_apps_summary(root)
+        # Le app stanno nell'installazione, non nella cartella del turno: in un
+        # quaderno si elencano quelle posate sulla sua bacheca (che la chat puo'
+        # usare) e, per nome, le altre.
+        notebook = root if root != self.workspace and is_wiki_root(root) else None
+        apps_summary = build_apps_summary(self.workspace, notebook_root=notebook)
         if apps_summary:
-            parts.append(render_template("agent/apps_section.md", apps_summary=apps_summary))
+            parts.append(render_template("agent/apps_section.md", apps_summary=apps_summary,
+                                         has=has))
+
+        if diary_section:
+            # La vista congelata del diario (``jenny/agent/diary.py``): la costruisce
+            # ``build_messages``, che ha la sessione, e qui entra com'e'.
+            parts.append(diary_section)
 
         if include_memory_recent_history:
             # Due pavimenti, e vince il più alto. Quello di Dream dice «queste
@@ -944,7 +1088,7 @@ class ContextBuilder:
             # ancora stato estratto: si perde l'inventario, non il prompt.
             return None
 
-    def _get_wikis_context(self) -> str:
+    def _get_wikis_context(self, drawers: bool = False, move: bool = False) -> str:
         """Il blocco ``## Wikis``: nome e scope di ogni wiki, letti dal disco.
 
         **Il prompt conosce le wiki per nome e scope; il contenuto si legge.** E'
@@ -987,7 +1131,12 @@ class ContextBuilder:
             for name, root in roots.items()
         ]
         body = _WIKIS_BLOCK_LEAD.format(wikis_dir=self.wikis_dir_name) + "\n" + "\n".join(lines)
-        return "## Wikis\n" + truncate_text_to_tokens(body, _WIKIS_BLOCK_MAX_TOKENS)
+        block = "## Wikis\n" + truncate_text_to_tokens(body, _WIKIS_BLOCK_MAX_TOKENS)
+        if drawers:
+            block += "\n\n" + _WIKIS_BLOCK_DRAWERS
+        if move:
+            block += " " + _WIKIS_BLOCK_MOVE if drawers else "\n\n" + _WIKIS_BLOCK_MOVE
+        return block
 
     def _get_identity(
         self,
@@ -995,6 +1144,7 @@ class ContextBuilder:
         workspace: Path | None = None,
         orchestrating: bool | None = None,
         session_key: str | None = None,
+        has: Callable[[str], bool] | None = None,
     ) -> str:
         """Get the core identity section.
 
@@ -1038,16 +1188,23 @@ class ContextBuilder:
         root = workspace or self.workspace
         workspace_path = str(_absolute_workspace(root))
         runtime = f"Android, Python {platform.python_version()}"
+        # Il nome che l'utente le ha dato (``agents.defaults.bot_name``), riletto
+        # a ogni prompt: lo si cambia da Impostazioni e vale dal turno dopo, senza
+        # riavvio. Col nome di default il template non aggiunge niente, e il
+        # prompt resta byte-identico a prima.
 
+        has = has or (lambda _name: True)
         return render_template(
             "agent/identity.md",
             workspace_path=workspace_path,
             install_path=str(_absolute_workspace(self.workspace)),
             runtime=runtime,
-            platform_policy=render_template("agent/platform_policy.md"),
+            platform_policy=render_template("agent/platform_policy.md", has=has),
+            has=has,
             channel=channel or "",
             orchestrator=self.orchestrator if orchestrating is None else orchestrating,
             installation_files=not is_gardener_session_key(session_key),
+            bot_name=current_bot_name(),
         )
 
     @staticmethod
@@ -1101,9 +1258,25 @@ class ContextBuilder:
         template *dichiarano* (dall'AST) con quelli che i due chiamanti passano, e
         cade se uno resta senza cibo — su entrambi i prompt.
         """
-        project_map = self._read_project_map(root)
+        project_board = _read_project_board(root)
+        # **La bacheca prende il posto della mappa** nel blocco: e' piccola,
+        # curata, e dice cosa conta adesso. La mappa si legge comunque (le
+        # pagine entrano nel suo ordine, v. ``_read_project_pages``), ma non si
+        # inietta piu' quando c'e' una bacheca con delle schede.
+        project_map = "" if project_board else self._read_project_map(root)
         project_pages = self._read_project_pages(root)
         return {
+            # La bacheca del quaderno: una riga per scheda, il suo «in breve»,
+            # l'attesa piu' vicina, il segnale (``jenny/board/context_block.py``).
+            "project_board": project_board,
+            # E quando non c'e', il perche': senza, il prompt taceva proprio nel
+            # caso in cui l'utente chiede «perche' la bacheca e' vuota?».
+            "project_board_absence": (
+                "" if project_board else _read_project_board_absence(root)
+            ),
+            # I promemoria e i cron di tutto il quaderno, non legati a una scheda: ci
+            # sono anche su una bacheca senza schede, quindi in tutti e due i rami.
+            "project_board_notebook": _read_project_notebook_line(root),
             # T3, il gradino 1 di P4: la mappa del progetto entra **d'ufficio**,
             # non su richiesta. Il giro di wiki parte pagato, e la differenza si
             # vede alla prima domanda di una sessione nuova: senza, l'agente
@@ -1483,14 +1656,27 @@ class ContextBuilder:
         session_key: str | None = None,
         available_tools: list[str] | None = None,
         orchestrator: bool | None = None,
+        board_since: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Build the complete message list for an LLM call."""
+        """Build the complete message list for an LLM call.
+
+        ``board_since`` is when the conversation last moved (its last persisted
+        message): in a notebook, what the user pinned on the board after that is
+        said in this turn.
+        """
         root = workspace or self.workspace
-        extra = [
-            *goal_state_runtime_lines(session_metadata),
-        ]
+        extra = _goal_lines_once(goal_state_runtime_lines(session_metadata), history)
         if current_runtime_lines:
             extra.extend(line for line in current_runtime_lines if line)
+        diary = self._diary_turn(session_key, session_metadata, history) \
+            if include_memory_recent_history else None
+        if diary is not None:
+            extra.extend(diary.new_lines)
+        # In un quaderno, il cassetto della scheda di cui si parla: qui e non nel
+        # prompt di sistema, che e' il prefisso in cache e non deve dipendere
+        # dal messaggio.
+        if current_role == "user":
+            extra.extend(_board_turn_lines(root, current_message, board_since))
         runtime_ctx = self._build_runtime_context(
             channel,
             chat_id,
@@ -1504,6 +1690,9 @@ class ContextBuilder:
         # to avoid consecutive same-role messages that some providers reject.
         # Runtime context is appended to keep the user-content prefix stable
         # for prompt-cache hits (the context changes every turn due to time).
+        # Il blocco non si toglie piu' dopo: la riga di storia ricorda il testo
+        # com'e' partito (``SENT_CONTENT_META``) e il turno dopo lo rimanda
+        # uguale, cosi' la cache arriva fino in fondo al turno prima.
         if isinstance(user_content, str):
             merged = f"{user_content}\n\n{runtime_ctx}"
         else:
@@ -1520,6 +1709,7 @@ class ContextBuilder:
                     available_tools=available_tools,
                     orchestrator=orchestrator,
                     history_floor=_history_floor(session_metadata),
+                    diary_section=diary.section if diary is not None else "",
                 ),
             },
             *history,
@@ -1531,6 +1721,29 @@ class ContextBuilder:
             return messages
         messages.append({"role": current_role, "content": merged})
         return messages
+
+    def _diary_turn(self, session_key: str | None, session_metadata: Mapping[str, Any] | None,
+                    history: Sequence[Mapping[str, Any]]) -> DiaryTurn | None:
+        """Il diario del turno (``jenny/agent/diary.py``), o ``None``.
+
+        Lo stato della vista congelata si scrive nei metadata della sessione —
+        l'unico effetto di ``build_messages`` fuori dai messaggi che restituisce,
+        e per questo solo quando sono il dizionario vero della sessione. Un
+        diario illeggibile non fa fallire il turno: e' un di piu'.
+        """
+        if not session_key:
+            return None
+        holder = session_metadata if isinstance(session_metadata, MutableMapping) else None
+        try:
+            now = datetime.now()
+            entries = self.memory.read_unprocessed_history(since_cursor=0)
+            threads = waiting_threads(
+                discover_wiki_roots(self.workspace / self.wikis_dir_name), now=now,
+            ) if is_personal_session_key(session_key) else []
+            return diary_turn(entries, session_key, holder, history, now=now, threads=threads)
+        except Exception as exc:  # noqa: BLE001 — v. la docstring
+            logger.warning("diary: cannot build the view for {}: {}", session_key, exc)
+            return None
 
     def _build_user_content(self, text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
         """Build user message content with optional base64-encoded images."""

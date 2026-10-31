@@ -171,15 +171,6 @@ def release_dream_cycle() -> None:
     _CYCLE_IN_FLIGHT.clear()
 
 
-# La frase che legge chi ha battuto ``/dream`` mentre un ciclo era già in volo.
-# Dice il costo vero — token spesi due volte — e non quello di prima di T2.4b:
-# l'archivio al confine del file rende la seconda passata di review costosa, non
-# distruttiva, e un rifiuto che spaventa più del dovuto è un rifiuto che mente.
-DREAM_ALREADY_RUNNING = (
-    "A Dream cycle is already running, so this one did not start — Dream runs one cycle "
-    "at a time, or both take the same batch off the same cursor and each pays for its own "
-    "review pass. Nothing would be lost, only spent twice. Try again once it has finished."
-)
 
 
 # I tag con cui il Consolidator marca un fatto destinato a **restare**. Sono la
@@ -197,7 +188,7 @@ _RETAINED_TAGS = ("[durable]", "[permanent]", "[correction]")
 class _NoEntries:
     """Esito in voci di un run che non aveva il tool per voci.
 
-    Zero su tutti e tre, che è la lettura giusta: nessuna voce è entrata,
+    Zero su tutti, che è la lettura giusta: nessuna voce è entrata,
     nessuna sostituita, nessuna trovata già presente. Esiste perche i doppi di
     ``build_dream_tools`` nei test non espongono ``memory_entries``, e un
     ``getattr`` che tornasse ``None`` costringerebbe ogni chiamante a un ramo.
@@ -205,6 +196,7 @@ class _NoEntries:
 
     entries_added = 0
     entries_replaced = 0
+    entries_removed = 0
     entries_already_present = 0
 
 
@@ -251,6 +243,7 @@ def batch_was_not_consolidated(
     replaced: int = 0,
     already_present: int = 0,
     attempted: int = 0,
+    removed: int = 0,
 ) -> bool:
     """True quando il cursore **non** va avanzato pur avendo il run scritto qualcosa.
 
@@ -292,6 +285,12 @@ def batch_was_not_consolidated(
     ciò che questa funzione esiste per prendere. Ma quando il batch *chiede* una
     correzione, sostituire in place è la mossa giusta e il prompt la chiede
     esplicitamente, quindi lì la ``replace`` è il consolidamento.
+
+    ``removed`` vale lo stesso, alla stessa condizione: una correzione che dice
+    «non era mai vero, niente lo sostituisce» si applica con una ``remove``, e
+    il prompt chiede proprio quella. Senza contarla il batch restava trattenuto,
+    e il run dopo rigiocava una correzione già applicata (emulatore, 12/10/2026:
+    6 run su 6, il cursore fermo fino al timeout della sonda).
 
     ``batch_carries_retained_facts`` resta: un batch che non chiede niente non è
     stato mancato.
@@ -340,45 +339,9 @@ def batch_was_not_consolidated(
         return False
     if added or already_present:
         return False
-    if replaced and "[correction]" in history_text:
+    if (replaced or removed) and "[correction]" in history_text:
         return False
     return not consolidation_landed(before)
-
-
-def format_stuck_alarm(stuck: int) -> str:
-    """La frase che descrive il livelock, condivisa dalle superfici che lo dicono.
-
-    Una stesura sola perché sono due: l'alert di sistema che parte da
-    :func:`finish_dream_cycle` e la vista di ``/dream budget``, che è dove si va
-    a guardare dopo averlo letto. Se divergessero, la seconda smentirebbe la
-    prima nel momento peggiore.
-
-    Nessuna cifra dei file qui dentro: da ``finish_dream_cycle`` le misure non
-    sono a portata — il report è del prologo, un turno LLM fa — e rifarle
-    vorrebbe dire rileggere tre file per comporre una frase. Chi ha bisogno dei
-    numeri li trova nella vista che questa frase gli dice di aprire.
-    """
-    # Nessuna causa nominata, e non è vaghezza. ``stuck`` conta i run in cui il
-    # consolidamento non è arrivato su disco, e i modi sono **tre**: il tetto in
-    # caratteri; il rifiuto di *path* — un file fuori dalla allowlist del registry
-    # di Dream, visto sul Titan 2 con tutti i file all'81% o meno; e un run che
-    # scrive soltanto potature senza aggiungere il fatto nuovo
-    # (``batch_was_not_consolidated``, misurato il 2026-08-18 alle 12:01).
-    #
-    # La stesura precedente diceva "keep being refused"; poi, con il terzo caso,
-    # è diventata il "non stanno atterrando" che copriva tutti e tre senza dirne
-    # nessuno — una frase vera e inutile, che è il modo in cui una diagnosi muore.
-    #
-    # Con la fase 5 la copertura non serve più: questo allarme parte **solo** dal
-    # contatore dei rifiuti di budget (``finish_dream_cycle`` manda le altre
-    # cause su ``nothing_new_runs``, che logga e non allarma). Quindi la frase
-    # può tornare a nominare la causa, e indicare il rimedio che esiste davvero:
-    # c'è spazio da liberare, e chi legge può alzare un tetto.
-    return (
-        f"Dream has not consolidated anything for {stuck} runs in a row: the size cap "
-        "is refusing its writes to long-term memory and the review pass is not "
-        "freeing enough room."
-    )
 
 
 def _alert_stuck(stuck: int) -> None:
@@ -410,14 +373,18 @@ def _alert_stuck(stuck: int) -> None:
     è una buona ragione per cominciare.
     """
     from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.user_text import say
     from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
-    # «Workshop → Memory» e non «Settings → Workshop → Memory»: i numeri stanno
-    # nel cassetto Memoria dell'officina, e il notifier tronca a 200 caratteri —
-    # il percorso intero farebbe cadere proprio la coda azionabile.
+    # «Officina → Memoria» e non «Impostazioni → Officina → Memoria»: i numeri
+    # stanno nel cassetto Memoria dell'officina, e il notifier tronca a 200
+    # caratteri — il percorso intero farebbe cadere proprio la coda azionabile.
+    # La frase è quella per l'utente, nella sua lingua. Il tag deriva
+    # dall'etichetta (``cron:Memoria``/``cron:Memory``): basta che sia sempre lo
+    # stesso per questo allarme, e a lingua fissata lo è.
     notify_delivery(
-        f"{format_stuck_alarm(stuck)} Workshop \u2192 Memory shows the sizes.",
-        {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": "Dream"}},
+        say("alarm.dream_stuck", stuck=stuck),
+        {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": say("alarm.dream_label")}},
     )
 
 
@@ -512,6 +479,7 @@ async def begin_dream_cycle(
     store: "MemoryStore",
     cfg: "DreamConfig",
     take_snapshot: Callable[[], Awaitable[bool]] | None = None,
+    reporter: Any = None,
 ) -> DreamPrologue:
     """Tutto ciò che precede il turno incrementale di Dream, per entrambi i percorsi.
 
@@ -581,6 +549,9 @@ async def begin_dream_cycle(
     forced_at = store.get_review_forced_at_stuck()
     livelock_due = stuck > 0 and stuck % STUCK_FORCES_REVIEW == 0 and stuck != forced_at
     review_due = runs_since_review >= cfg.review_every_runs or livelock_due
+    if reporter is not None:
+        # La bolla di lavoro di ``/dream``: adesso si sa se c'e' la revisione.
+        reporter.set_phases(("review", "memory") if review_due else ("memory",))
     if not review_due:
         return DreamPrologue(
             report=report,
@@ -592,12 +563,19 @@ async def begin_dream_cycle(
         )
 
     snapshotted = await take_dream_snapshot(take_snapshot)
+    # Il reporter solo quando c'e': la revisione la sostituiscono dei doppi nei
+    # test, e un argomento in piu' che nessuno usa non deve romperli.
+    review_kwargs: dict[str, Any] = {}
+    if reporter is not None:
+        reporter.enter("review")
+        review_kwargs["reporter"] = reporter
     outcome = await dream_review.run_dream_review(
         agent,
         store=store,
         report=report,
         snapshotted=snapshotted,
         write_size_guard=guard,
+        **review_kwargs,
     )
     # Si azzera solo ``runs_since_review``: il review è avvenuto, la cadenza
     # periodica riparte. ``stuck`` resta dov'è, perché dice un'altra cosa — da
@@ -703,6 +681,7 @@ async def run_dream_turn(
     prologue: "DreamPrologue",
     *,
     take_snapshot: Callable[[], Awaitable[Any]] | None,
+    reporter: Any = None,
 ) -> DreamTurnResult:
     """Il turno incrementale di Dream, lo stesso per il cron e per ``/dream``.
 
@@ -732,7 +711,11 @@ async def run_dream_turn(
         # "pre_dream", cioè un secondo checkpoint che non è pre-niente. Copre
         # anche il secondo batch, che è lo stesso ciclo.
         await take_dream_snapshot(take_snapshot)
-    first = await _run_dream_batch(agent, store, prologue, result, before=prologue.report)
+    if reporter is not None:
+        reporter.enter("memory")
+    first = await _run_dream_batch(
+        agent, store, prologue, result, before=prologue.report, reporter=reporter
+    )
     # ``getattr`` con un default: i doppi dei test ritornano coppie nude, e un
     # batch che non dichiara un resto è un batch che basta da solo.
     rest_scope = getattr(result, "rest_scope", None)
@@ -758,7 +741,7 @@ async def run_dream_turn(
     if first.last_cursor is not None:
         store.set_last_dream_cursor(first.last_cursor)
     second = (
-        await _run_dream_batch(agent, store, prologue, rest, before=report)
+        await _run_dream_batch(agent, store, prologue, rest, before=report, reporter=reporter)
         if rest is not None else None
     )
     if second is not None and second.outcome is DreamOutcome.ADVANCED:
@@ -780,6 +763,7 @@ async def _run_dream_batch(
     batch: Any,
     *,
     before: Sequence["FileBudget"],
+    reporter: Any = None,
 ) -> DreamTurnResult:
     """Un batch: il turno LLM e il suo esito. **Non** scrive il cursore.
 
@@ -803,7 +787,8 @@ async def _run_dream_batch(
         session_key=MemoryStore.dream_session_key(),
         ephemeral=True,
         tools=dream_tools,
-        on_progress=silent_progress,
+        on_progress=reporter.on_progress if reporter is not None else silent_progress,
+        on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
     )
     advanced = MemoryStore.dream_should_advance_cursor(resp, dream_file_states)
     # Il run ha scritto, ma il batch è atterrato? Sono due domande diverse e fino
@@ -819,6 +804,7 @@ async def _run_dream_batch(
         added=entries.entries_added,
         replaced=entries.entries_replaced,
         already_present=entries.entries_already_present,
+        removed=getattr(entries, "entries_removed", 0),
         # Se non ha tentato nessuna scrittura non ha mancato niente: ha deciso
         # che non c'era da scrivere.
         attempted=getattr(dream_file_states, "writes_attempted", 0),

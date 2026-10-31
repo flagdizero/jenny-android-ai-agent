@@ -79,6 +79,7 @@ class AppActionTool(Tool):
                 kwargs,
                 http_timeout_s=http_timeout_s,
                 max_collection_bytes=max_collection_bytes,
+                announce=False,
             )
         except AppActionError as exc:
             return ToolResult.failure(str(exc), code="app_action")
@@ -119,11 +120,12 @@ class AppToolsSyncer:
         self._workspace = Path(workspace)
         self._bus = bus
         # slug -> (app.json mtime_ns, [registered tool names])
-        self._state: dict[str, tuple[int, list[str]]] = {}
+        self._state: dict[str, tuple[object, list[str]]] = {}
 
-    def _manifest_mtimes(self) -> dict[str, int]:
+    def _manifest_mtimes(self) -> dict[str, object]:
+        """Una firma per app: la data del suo manifest."""
         apps_root = self._workspace / "apps"
-        mtimes: dict[str, int] = {}
+        mtimes: dict[str, object] = {}
         if not apps_root.is_dir():
             return mtimes
         for entry in apps_root.iterdir():
@@ -131,9 +133,10 @@ class AppToolsSyncer:
                 continue
             manifest = entry / "app.json"
             try:
-                mtimes[entry.name] = manifest.stat().st_mtime_ns
+                mtime = manifest.stat().st_mtime_ns
             except OSError:
-                mtimes[entry.name] = -1  # folder without readable manifest
+                mtime = -1  # folder without readable manifest
+            mtimes[entry.name] = mtime
         return mtimes
 
     def sync(self, registry: Any) -> tuple[list[str], bool]:

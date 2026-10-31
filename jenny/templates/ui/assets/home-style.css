@@ -77,6 +77,33 @@ body.home {
 .home-shell:not([data-view='chat']) .home-strip,
 .home-shell[data-view='chat'] .home-head { display: none; }
 
+.home-strip:not(.is-sort) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.home-strip:not(.is-sort) .home-strip-names { flex: 1; min-width: 0; }
+
+/* Il ⋯ in fondo alla fila: la modalita' ordina, che prima si apriva solo
+   tenendo premuto un nome (10/10/2026). Alto quanto un dito. */
+.home-strip-more {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-right: -10px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.home-strip-more:active { background: var(--overlay); }
+
 .home-strip-names {
   display: flex;
   align-items: baseline;
@@ -86,18 +113,6 @@ body.home {
   scrollbar-width: none;
 }
 .home-strip-names::-webkit-scrollbar { display: none; }
-
-/* La fila con un quaderno aperto nei Quaderni: il percorso, come nelle stanze
-   (v. `.home-head` e `.home-path` qui sotto). Stessi margini della riga delle
-   stanze — la freccia sta a 4 px dal bordo, non a 18 — cosi' passando dal
-   quaderno alle sue pagine non si sposta niente. */
-.home-strip:has(.home-strip-path) { padding: 10px 12px 6px 4px; }
-.home-strip-path {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
 
 /* Dal lato in cui qualcosa non ci sta, la fila sfuma: un nome tagliato di
    netto sul bordo sembra un difetto, uno che svanisce dice «di qua ce n'e'
@@ -134,9 +149,9 @@ body.home {
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
 }
+.home-strip-entry:active { opacity: .6; }
 
 .home-strip-entry.is-on {
   /* Il nome dove sei: tronca prima di spingere fuori le altre. Un quaderno
@@ -159,7 +174,7 @@ body.home {
 .home-strip-entry.is-on .home-strip-name {
   /* I Quaderni, con un quaderno aperto, prendono il suo colore: e' la sola
      cosa della fila che dice in quale sei (la scrive `home-strip.js`). */
-  box-shadow: inset 0 -2px 0 var(--strip-line, var(--accent));
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .home-strip-dot {
@@ -216,6 +231,7 @@ body.home {
   font-weight: 600;
   cursor: pointer;
 }
+.home-sort-done:active { filter: brightness(0.92); }
 
 .home-sort-pills {
   display: flex;
@@ -274,6 +290,16 @@ body.home {
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
+  position: relative;
+}
+.home-sort-remove:active { box-shadow: inset 0 0 0 999px var(--active); }
+/* Il bersaglio del dito, piu' grande del segno: 24 px dentro una pastiglia
+   che si trascina, e mancarla di poco faceva partire un trascinamento (giro
+   UX del 10/10/2026). Lo stesso anello di `.home-pending-x`. */
+.home-sort-remove::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
 }
 
 .home-shell[data-sort] .home-showcase {
@@ -351,7 +377,6 @@ body.home {
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .home-path-root:active { color: var(--text); }
 
@@ -398,80 +423,6 @@ body.home {
    `[hidden]` del browser, e il pallino resterebbe fuori dai quaderni. */
 .home-path-dot[hidden] { display: none; }
 
-/* ── L'interruttore Chat | Pagine ──
-   Chat e pagine di un quaderno sono due viste dello stesso posto: stessa
-   intestazione, e un interruttore a destra che dice quale guardi e porta
-   all'altra con un tocco. E' nello stesso punto nelle due viste — nella fila
-   della chat del quaderno (lo disegna `home-strip.js`) e nell'intestazione
-   delle pagine — cosi' la strada si trova dove l'hai lasciata. Prima si andava
-   alle pagine da una pastiglia in basso e si tornava da «Parlane» in alto. */
-.home-view-switch {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--overlay);
-}
-.home-view-switch[hidden] { display: none; }
-
-/* Su uno schermo stretto l'interruttore tiene le icone e il numero, e le
-   parole le dice solo a chi non vede: «Chat | Pagine 3» sono 172 px, che a
-   360 lasciavano al nome del quaderno una lettera. Nascoste alla
-   vista e non tolte — sono il nome dei due bottoni per TalkBack. Il Titan 2
-   (590 px) le vede ancora tutte. */
-@media (max-width: 480px) {
-  .home-view-seg { padding: 0 9px; }
-  .home-view-seg > span:not(.home-view-count) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-}
-
-.home-view-seg {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 11px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-/* La vista in cui sei, accesa col colore del tema: e' la stessa pastiglia
-   piena di «Manda» e di «Parlane», cioe' la cosa accesa della riga. Con il
-   fondo della superficie si distingueva appena dall'altra. */
-.home-view-seg.is-on {
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 600;
-}
-.home-view-count {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-/* Sul fondo acceso il grigio del numero non si legge: prende il colore della
-   parola. Non piu' «un po' piu' tenue» con l'opacita': a 0,75 il numero
-   scendeva sotto 4,5:1 nei temi in cui `--on-accent` ci sta appena sopra.
-   Lo distingue dalla parola il peso, 500 contro 600. */
-.home-view-seg.is-on .home-view-count {
-  color: var(--on-accent);
-}
-.home-view-count:empty { display: none; }
-
 /* ── Il filo ── */
 
 .home-thread {
@@ -480,10 +431,20 @@ body.home {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 4px 18px 8px;
+  /* In fondo niente padding: l'ultimo figlio e' la fascia (v. `.home-band`). */
+  padding: 4px 18px 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--home-thread-gap);
+  --home-thread-gap: 10px;
+  /* La fascia e' alta meta' di lei: la sua altezza e' il 73% del quadrato
+     (`--jenny-art-h`, misurato sull'arte). */
+  --home-band-h: calc(var(--jenny-size) * var(--jenny-art-h) / 2);
+  /* Quanto lei entra nella colonna del testo quando e' fuori, piu' 6 px
+     d'aria: la figura comincia a `1 - --jenny-out - 0,275` lati dal bordo
+     (0,275 e' il margine trasparente del quadrato per lato), e i primi 18 sono
+     gia' il padding del filo. Lo stesso conto di `shapeOf` in `home-band.js`. */
+  --jenny-dodge: calc(var(--jenny-size) * (1 - var(--jenny-out) - 0.275) - 18px + 6px);
 }
 
 /* Una conversazione corta si appoggia al fondo, vicino al composer, invece di
@@ -520,31 +481,1063 @@ body.home {
   white-space: pre-line;
 }
 
-/* ── La riga di lavoro ── */
+/* ── Chi lavora: le bolle in fondo al filo ── */
 
-/* Piccola, nel colore del fiore del tema: e' Jenny che lavora, e porta il suo
-   segno. Sta sotto la conversazione, sopra il composer, dove l'occhio va gia'
-   fra una domanda e la sua risposta.
-   Ogni movimento qui resta nel piano — lettere che salgono, puntini che
-   saltano, un luccichio di colore — niente sfocature ne' scale che la facciano
-   sembrare arrivare da lontano. */
-.home-activity {
-  flex: none;
+/* Il posto vivo (`HomeChat.live`): sotto i messaggi e sopra la fascia, e dentro le
+   bolle di chi sta lavorando adesso — il giardiniere, Dream, gli aiutanti — e,
+   per ultima, quella di Jenny che scrive. Vuoto non c'e': un figlio vuoto del
+   filo prenderebbe comunque il suo `gap`. */
+.home-live {
   display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 18px 6px;
-  color: var(--flower);
-  font-size: 12.5px;
-  font-style: italic;
-  /* Il tocco lungo apre il turno in officina: qui il testo non si seleziona, o
-     la pressione lunga la intercetta la selezione del sistema. */
+  flex-direction: column;
+  gap: 10px;
+}
+.home-live[hidden] { display: none; }
+
+/* ── La fascia: lo spazio per Jenny in fondo al filo ──
+   Dal 06/10/2026 (`home-band.js`). Prima i messaggi che le finivano dietro si
+   prendevano un margine a scorrimento fermo, e il testo tornava a capo sotto
+   il dito. Adesso lo spazio sta tutto in fondo e dipende solo da cosa c'e':
+   scorrendo, quel che le passa dietro le passa dietro, e lei sta sopra.
+
+   La fascia e' l'ultimo figlio del filo, alta meta' di lei, e non e' vuota: ci
+   scende la coda dell'ultima risposta (qui sotto), che una riga la occupava
+   comunque. E' anche il posto per una striscia di chi lavora. */
+.home-band {
+  flex: none;
+  height: var(--home-band-h);
+}
+
+/* L'ultima risposta, quando subito sotto c'e' la fascia (il posto vivo spento
+   in mezzo non conta): la sua coda esce dal flusso e si mette nella fascia, a
+   sinistra di lei. Quando arriva un messaggio dopo, la coda torna sotto il suo
+   testo.
+
+   Chi e' «subito sopra la fascia» lo dice la classe `home-at-band`, che mette
+   e sposta `home-band.js`. Era un `:has(+ .home-live[hidden] + .home-band)`,
+   ma WebKit non lo ricalcola quando un messaggio nuovo entra in mezzo: dal Mac
+   (16/10/2026) la coda della risposta di prima restava nella posizione
+   assoluta e finiva sopra il testo di quella dopo. La WebView del telefono
+   (Chromium) lo ricalcolava. */
+.home-msg-jenny.home-at-band { position: relative; }
+.home-msg-jenny.home-at-band > .home-tail {
+  position: absolute;
+  left: 0;
+  top: calc(100% + var(--home-thread-gap));
+  height: var(--home-band-h);
+  margin: 0;
+}
+
+/* Sopra la fascia c'e' la sua testa. Il testo dell'ultima risposta le gira
+   attorno (la sagoma, qui sotto); le scatole no — una bolla tua, una bolla di
+   lavoro, un'immagine — e allora si scansano di lato. Solo l'ultima cosa del
+   filo, e solo finche' lo e': cambia quando arriva qualcosa, mai scorrendo. */
+.home-msg-user.home-at-band,
+.home-msg-work.home-at-band,
+.home-msg-jenny.home-at-band > .home-media,
+.home-live:not([hidden]) {
+  margin-right: var(--jenny-dodge);
+}
+
+/* La sagoma: due float in testa all'ultimo blocco (`HomeBand.refresh`). Il
+   primo, largo zero, spinge il secondo in fondo; il secondo ha la spalla
+   tonda, cosi' le righe accanto alla sua testa si accorciano a poco a poco
+   invece che di colpo. */
+.home-block.has-jenny-shape { display: flow-root; }
+.home-block.has-jenny-shape > .home-shape + * { margin-top: 0; }
+.home-shape-push {
+  float: right;
+  width: 0;
+}
+.home-shape {
+  float: right;
+  clear: right;
+  shape-outside: inset(0 round calc(var(--jenny-size) * 0.28) 0 0 0);
+}
+
+/* La bolla di lavoro (`home-work.js`). E' l'unica cosa del filo dalla parte di
+   Jenny che ha una scatola: un messaggio in arrivo, non ancora un messaggio. Si
+   apre a sinistra, come le sue risposte, con l'angolo basso schiacciato verso di
+   lei. Il tocco lungo apre l'officina, quindi il testo non si seleziona. */
+.home-work {
+  align-self: flex-start;
+  width: min(400px, 100%);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 14px;
+  /* Di vetro come la risposta che diventera' (06/10/2026). Il bordo e' quello
+     del vetro; i suoi stati (`is-done`, `is-failed`) ne cambiano il colore. */
+  border: var(--glass-border);
+  border-radius: 18px 18px 18px 4px;
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+  color: var(--text);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+.home-work[hidden] { display: none; }
 
-.home-activity[hidden] { display: none; }
+/* Le bozze in attesa (v. `home-staged.js`): la stessa bolla di vetro del
+   lavoro, ma si seleziona il testo (si legge una diff) e il bordo e' quello
+   dell'attenzione, non dell'esito. */
+.home-staged {
+  user-select: text;
+  -webkit-user-select: text;
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border-strong));
+}
+.home-staged-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Un percorso lungo e senza spazi (una fonte, un file in fondo a tre
+     cartelle) andava oltre il bordo della scheda: va a capo dove serve.
+     `min-width: 0` perche' una riga flessibile non si stringe sotto il suo
+     contenuto da sola. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--border);
+}
+.home-staged-file { font-size: 14px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.home-staged-why { font-size: 12.5px; color: var(--text-muted); }
+.home-staged-toggle {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-staged-toggle:active { opacity: .6; }
+.home-staged-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-staged-diff {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.06));
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre;
+}
+.home-staged-actions { display: flex; gap: 8px; }
+
+/* ── Il piano a lista (`home-plan.js`) ──
+   La stessa bolla di vetro del lavoro, larga come la chat: e' una lista da
+   leggere e da spuntare, non una riga di stato. Il bordo dice lo stato del
+   piano: il fiore mentre propone e corre, l'avviso quando aspetta te, l'ok
+   quando ha finito, il grigio quando e' fermo o tornato indietro. */
+/* Larga quanto la chat, senza tetto: fino al 26/10 si fermava a 520 px, e in
+   una finestra piu' larga del telefono (il Mac con l'accesso remoto) lasciava
+   vuota tutta la fascia a destra. */
+.home-plan {
+  width: 100%;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  user-select: text;
+  -webkit-user-select: text;
+  border-color: color-mix(in oklab, var(--flower) 45%, var(--border-strong));
+}
+.home-plan.is-done { border-color: color-mix(in oklab, var(--ok) 60%, var(--border-strong)); }
+.home-plan.is-blocked { border-color: color-mix(in oklab, var(--warning) 65%, var(--border-strong)); }
+.home-plan.is-stopped,
+.home-plan.is-rolled_back,
+.home-plan.is-paused { border-color: var(--border-strong); }
+.home-plan.is-rolled_back .home-plan-list { opacity: .6; }
+.home-plan.is-review {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--border-strong));
+}
+.home-plan .home-work-title { white-space: normal; }
+.home-plan.is-done .home-work-icon { color: var(--ok); filter: none; }
+.home-plan.is-blocked .home-work-icon { color: var(--warning); filter: none; }
+.home-plan.is-stopped .home-work-icon,
+.home-plan.is-rolled_back .home-work-icon,
+.home-plan.is-paused .home-work-icon { color: var(--text-muted); filter: none; }
+
+.home-plan-ver {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  letter-spacing: .02em;
+}
+.home-plan-ver.is-hot { color: var(--flower); border-color: color-mix(in oklab, var(--flower) 70%, transparent); }
+.home-plan-ver.is-ok { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 70%, transparent); }
+.home-plan-ver.is-warn { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 70%, transparent); }
+.home-plan-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px -6px 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.home-plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.home-plan-meta b { color: var(--text); font-weight: 600; }
+.home-plan-meta .ti { margin-right: 4px; }
+.home-plan-photo .ti { color: var(--ok); }
+.home-plan .home-work-seg.is-blocked { background: var(--warning); box-shadow: none; }
+
+.home-plan-note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.home-plan-note b { color: var(--text); }
+.home-plan-note.is-error { display: flex; gap: 6px; align-items: flex-start; color: var(--error); }
+.home-plan-photo-line { display: flex; gap: 8px; align-items: flex-start; }
+.home-plan-photo-line > .ti { flex: none; color: var(--ok); font-size: 16px; margin-top: 1px; }
+
+.home-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home-plan-item {
+  display: grid;
+  grid-template-columns: 26px 18px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 3px;
+  align-items: start;
+  padding: 10px 0 9px;
+  border-top: .5px solid var(--border);
+  font-size: 14.5px;
+  line-height: 1.35;
+}
+.home-plan-item.is-openable { cursor: pointer; }
+.home-plan-item.is-openable:active { background: var(--active); }
+.home-plan-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 8px; }
+.home-plan-box {
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: none;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  margin-top: -1px;
+}
+/* Proposto: caselle quadrate, da spuntare. In corsa: cerchi, che si spuntano da soli. */
+.home-plan.is-proposed .home-plan-box { border-radius: 6px; cursor: pointer; }
+.home-plan.is-proposed .home-plan-box:active { filter: brightness(0.85); }
+.home-plan-item.is-on .home-plan-box { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.home-plan-item.is-off .home-plan-text { color: var(--text-faint); text-decoration: line-through; }
+.home-plan-item.is-off .home-plan-kind { opacity: .4; }
+.home-plan-item.is-new { background: linear-gradient(90deg, color-mix(in oklab, var(--ok) 9%, transparent), transparent 70%); }
+.home-plan-kind { color: var(--text-muted); font-size: 18px; line-height: 20px; }
+.home-plan-text { color: var(--text); overflow-wrap: anywhere; }
+.home-plan-sub { grid-column: 3; font-size: 12.5px; line-height: 1.35; color: var(--text-muted); }
+.home-plan-time { font-size: 12px; color: var(--text-faint); margin-left: 6px; font-variant-numeric: tabular-nums; }
+.home-plan-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 1px;
+  white-space: nowrap;
+  letter-spacing: .02em;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.home-plan-tag.is-danger { color: var(--error); border-color: color-mix(in oklab, var(--error) 65%, transparent); }
+.home-plan-tag.is-new { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 65%, transparent); }
+.home-plan-tag.is-moved { color: var(--flower); border-color: color-mix(in oklab, var(--flower) 65%, transparent); }
+.home-plan-tag.is-changed { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 65%, transparent); }
+.home-plan-item.is-done .home-plan-box { background: var(--ok); border-color: var(--ok); color: var(--on-accent); }
+.home-plan-item.is-done .home-plan-text,
+.home-plan-item.is-todo .home-plan-text { color: var(--text-muted); }
+.home-plan-item.is-now .home-plan-box {
+  border: 2.5px solid color-mix(in oklab, var(--flower) 22%, transparent);
+  border-top-color: var(--flower);
+  box-shadow: 0 0 8px var(--glow);
+  animation: home-plan-spin 1.1s linear infinite;
+}
+@keyframes home-plan-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .home-plan-item.is-now .home-plan-box { animation: none; }
+}
+.home-plan-item.is-now .home-plan-text { color: var(--heading); font-weight: 650; }
+.home-plan-item.is-now .home-plan-kind { color: var(--flower); }
+.home-plan-item.is-blocked .home-plan-box { background: var(--warning); border-color: var(--warning); color: var(--bg); }
+.home-plan-item.is-blocked .home-plan-text { color: var(--heading); font-weight: 650; }
+.home-plan-item.is-blocked .home-plan-kind { color: var(--warning); }
+.home-plan-item.is-skipped .home-plan-box,
+.home-plan-item.is-interrupted .home-plan-box { border-style: dashed; color: var(--text-faint); }
+.home-plan-item.is-skipped .home-plan-text { color: var(--text-faint); text-decoration: line-through; }
+.home-plan-item.is-interrupted .home-plan-text { color: var(--text-muted); }
+.home-plan-item.is-undone .home-plan-box { border-color: var(--text-muted); color: var(--text-muted); font-size: 13px; }
+.home-plan-item.is-undone .home-plan-text { color: var(--text-muted); }
+
+/* La domanda di un passo fermo, con il campo della risposta. */
+.home-plan-ask {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--warning) 9%, transparent);
+  border: 1px solid color-mix(in oklab, var(--warning) 45%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text);
+}
+/* Markdown reso (`md`): niente `pre-wrap`, gli a capo li fa il renderer. Lunga,
+   si chiude su dieci righe; sfumata solo se davvero non ci sta. */
+.home-plan-question.is-clamped { max-height: calc(1.4em * 10); overflow: hidden; }
+.home-plan-question.is-cut {
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+.home-plan-question-more {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--warning);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-plan-question-more:active { opacity: .6; }
+.home-plan-question-more:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Le bozze di un passo fermo: la stessa riga della scheda delle bozze,
+   dentro la domanda del passo. */
+.home-plan-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-top: 8px;
+  border-top: .5px solid color-mix(in oklab, var(--warning) 35%, transparent);
+}
+.home-plan-draft-file { font-weight: 650; color: var(--heading); }
+.home-plan-draft-why { font-size: 12.5px; color: var(--text-muted); }
+
+/* La copertura e «Decido io» della proposta. */
+.home-plan-cover,
+.home-plan-assume {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.home-plan-cover-line { display: flex; gap: 7px; align-items: flex-start; }
+.home-plan-cover-line > .ti { flex: none; font-size: 16px; margin-top: 1px; }
+.home-plan-cover-line b { color: var(--text); font-weight: 600; }
+.home-plan-cover-line.is-notebook > .ti { color: var(--ok); }
+.home-plan-cover-line.is-web > .ti { color: var(--flower); }
+.home-plan-cover-line.is-leave > .ti,
+.home-plan-cover-line.is-ask > .ti { color: var(--warning); }
+.home-plan-fold {
+  align-self: flex-start;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.home-plan-fold:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-plan-cover-list,
+.home-plan-assume-list { margin: 0; padding-left: 18px; color: var(--text); }
+.home-plan-cover-list li,
+.home-plan-assume-list li { margin-bottom: 5px; }
+.home-plan-cover-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 0; color: var(--text); }
+.home-plan-cover-sub { font-size: 12.5px; color: var(--text-muted); }
+/* Il markdown di una voce sta sulla riga della sua etichetta («Manca: …»).
+   Anche quello a blocchi (un elenco, un titolo) che il modello ci mettesse:
+   scorre sulla riga invece di aprire un buco o un titolo grande nella voce. */
+.home-plan-cover-sub .home-plan-md,
+.home-plan-cover-sub .home-plan-md :is(p, ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote, pre) {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.home-plan-cover-sub .home-plan-md li + li::before { content: " · "; }
+.home-plan-assume-sub { font-size: 12.5px; }
+.home-plan-tag.is-notebook { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 65%, transparent); }
+.home-plan-tag.is-web { color: var(--flower); border-color: color-mix(in oklab, var(--flower) 65%, transparent); }
+.home-plan-tag.is-leave,
+.home-plan-tag.is-ask { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 65%, transparent); }
+.home-plan-closing { display: flex; gap: 6px; align-items: center; }
+.home-plan-closing > .ti { color: var(--flower); }
+/* A piano chiuso: quante cose restano da cercare, e il file della lista. */
+.home-plan-gaps { display: flex; gap: 6px; align-items: flex-start; }
+.home-plan-gaps > .ti { color: var(--warning); flex: none; margin-top: 1px; }
+.home-plan-gaps b { font-weight: 600; overflow-wrap: anywhere; }
+.home-plan-answer {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  resize: none;
+}
+.home-plan-answer:focus { outline: none; border-color: var(--focus-ring); box-shadow: 0 0 0 1px var(--focus-ring); }
+
+.home-plan-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.home-plan-btn {
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-plan-btn .ti { font-size: 18px; }
+.home-plan-btn:disabled { opacity: .5; }
+.home-plan-btn:active,
+.home-plan-strip-btn:active,
+.home-plan-close:active,
+.home-plan-toggle:active,
+.home-plan-sheet-row:active { background: var(--active); }
+.home-plan-btn.is-primary:active,
+.home-plan-btn.is-warn:active,
+.home-plan-btn.is-danger-fill:active { filter: brightness(0.9); }
+.home-plan-open:active,
+.home-plan-strip-text:active { opacity: .6; }
+.home-plan-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-plan-btn.is-small { min-height: 38px; padding: 0 13px; font-size: 13.5px; }
+.home-plan-btn.is-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.home-plan-btn.is-danger { color: var(--error); border-color: color-mix(in oklab, var(--error) 60%, transparent); }
+.home-plan-btn.is-danger-fill { background: var(--error); color: var(--bg); border-color: var(--error); }
+.home-plan-btn.is-quiet { border-color: transparent; color: var(--text-muted); padding: 0 8px; }
+.home-plan-btn.is-warn { background: var(--warning); border-color: var(--warning); color: var(--bg); }
+
+.home-plan-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: .5px solid var(--border);
+  background: none;
+  color: var(--flower);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.home-plan-open-label { flex: 1; min-width: 0; }
+.home-plan-open-sub { color: var(--text-muted); font-size: 12.5px; }
+
+/* I conti del piano finito, dal confronto delle due foto. */
+.home-plan-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.home-plan-sum div { border: 1px solid var(--border); border-radius: 10px; padding: 8px 6px; text-align: center; }
+.home-plan-sum b { display: block; font-size: 20px; color: var(--heading); font-variant-numeric: tabular-nums; }
+.home-plan-sum span { font-size: 11.5px; color: var(--text-muted); }
+
+/* La striscia: la scheda, piegata in cima alla chat quando esce dallo schermo. */
+.home-plan-strip {
+  flex: none;
+  margin: 0 14px 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--surface) 82%, transparent);
+  border: 1px solid color-mix(in oklab, var(--flower) 45%, var(--border-strong));
+  font-size: 13.5px;
+  color: var(--text);
+  box-shadow: var(--glass-shadow);
+}
+.home-plan-strip[hidden] { display: none; }
+.home-plan-strip.is-blocked { border-color: color-mix(in oklab, var(--warning) 70%, transparent); }
+.home-plan-strip.is-paused { border-color: var(--border-strong); }
+.home-plan-strip-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  line-height: 1.25;
+}
+.home-plan-strip-text b { font-weight: 700; color: var(--heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-plan-strip-text span { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-plan-strip-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+.home-plan-ring { flex: none; width: 30px; height: 30px; }
+.home-plan-ring-track { fill: none; stroke: var(--border-strong); stroke-width: 3; }
+.home-plan-ring-arc { fill: none; stroke: var(--flower); stroke-width: 3; stroke-linecap: round; }
+.home-plan-ring-text { font-size: 9px; font-weight: 700; fill: var(--text); }
+
+/* Il tasto Piano nel composer, e il composer acceso in modo Piano. */
+.home-plan-toggle {
+  flex: none;
+  height: 30px;
+  min-width: 30px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.home-plan-toggle[hidden] { display: none; }
+.home-plan-toggle .ti { font-size: 18px; }
+.home-plan-toggle-label:empty { display: none; }
+.home-plan-toggle:disabled { opacity: .5; }
+.home-field:has(.home-plan-toggle:not([hidden])) .home-input { padding-left: 8px; }
+.home-field.is-plan {
+  border-color: var(--flower);
+  box-shadow: 0 0 0 1px var(--flower), 0 0 14px color-mix(in oklab, var(--flower) 35%, transparent);
+}
+.home-field.is-plan .home-plan-toggle {
+  background: color-mix(in oklab, var(--flower) 18%, transparent);
+  border-color: color-mix(in oklab, var(--flower) 70%, transparent);
+  color: var(--flower);
+}
+.home-send.is-plan { background: var(--flower); box-shadow: 0 0 14px var(--glow); }
+.home-field.is-plan-off { opacity: .6; }
+.home-send:disabled { opacity: .5; }
+.home-plan-hint {
+  flex: none;
+  margin: 0 14px 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--flower);
+}
+.home-plan-hint.is-off { color: var(--text-muted); }
+.home-plan-hint-text { min-width: 0; }
+/* «Annulla il piano», mentre Jenny pianifica: un link, non un bottone pieno —
+   la riga dice cosa succede, e l'uscita le sta accanto. */
+.home-plan-hint-cancel {
+  flex: none;
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.home-plan-hint-cancel:disabled { opacity: .5; }
+.home-plan-hint-cancel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-plan-hint[hidden] { display: none; }
+/* Jenny resta dov'e' (il suo pavimento e' il composer, v. `--jenny-floor`), e
+   i piedi le cadono sulla riga. La riga si ferma prima del suo **riquadro**, non
+   della figura: il tocco lo prende tutto il quadrato di `--jenny-size`, anche la
+   parte trasparente, e sopra la chat Jenny sta «fuori» (`--jenny-out`, un quarto
+   oltre il bordo). Contare dalla figura con l'ancoraggio «al bordo» lasciava
+   «Annulla il piano» sotto di lei: il 25/10 sul telefono il tocco sul link
+   chiudeva la chat invece di annullare. 14px sono il margine della riga. */
+.home-shell .home-plan-hint {
+  padding-right: max(0px, calc(var(--jenny-size, 120px) * (1 - var(--jenny-out, 0.25)) - 14px + 4px));
+}
+
+/* «In sola lettura durante il piano»: sul lettore e sulla bacheca. */
+.home-plan-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.home-plan-lock[hidden] { display: none; }
+.home-plan-lock .ti { color: var(--flower); }
+.home-reader > .home-plan-lock { margin: 8px 16px 0; }
+.home-drawer > .home-plan-lock { margin: 0 0 10px; }
+/* I comandi che scrivono, spenti mentre il piano tiene il quaderno: si vede
+   che ci sono e che adesso non si usano. */
+.is-plan-locked .home-drawer :is(.home-drawer-link, .home-drawer-cal-done, .home-drawer-cal-more):disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.home-board > .home-plan-lock {
+  flex: none;
+  align-self: center;
+  margin: 6px 16px 4px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--flower) 45%, var(--border-strong));
+  background: color-mix(in oklab, var(--surface) 88%, transparent);
+  white-space: nowrap;
+}
+
+/* Il bollino sulla copertina di un quaderno con un piano aperto. */
+.home-plan-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 5px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--flower);
+  background: var(--bg);
+  border: 1px solid color-mix(in oklab, var(--flower) 60%, transparent);
+}
+.home-plan-badge.is-blocked { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 60%, transparent); }
+.home-plan-badge.is-blocked .home-plan-ring-arc { stroke: var(--warning); }
+.home-plan-badge .home-plan-ring { width: 18px; height: 18px; }
+
+/* I fogli dal basso: cosa ha fatto un passo, le modifiche, Ferma, il ritorno,
+   il piano completo. `.oc-sheet` li veste; qui c'e' quel che ci sta dentro. */
+.home-plan-sheet .home-plan-sheet-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px 16px;
+  box-sizing: border-box;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+.home-plan-sheet-grab { flex: none; width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto 10px; }
+/* La X del foglio: in alto a destra, fuori dal flusso, col bersaglio da dito. */
+.home-plan-sheet-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+}
+.home-plan-sheet-close:active { background: var(--active); }
+.home-plan-sheet-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-plan-sheet .home-plan-sheet-title { padding-right: 40px; }
+.home-plan-sheet-title { margin: 2px 4px; font-size: 16px; font-weight: 700; color: var(--heading); }
+.home-plan-sheet-sub,
+.home-plan-sheet-note { margin: 0 4px 10px; font-size: 13px; line-height: 1.4; color: var(--text-muted); }
+.home-plan-sheet-list {
+  margin: 0 4px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.home-plan-sheet-list .ti { margin-right: 6px; }
+.home-plan-sheet-list .is-added,
+.home-plan-sheet-list .is-back { color: var(--ok); }
+.home-plan-sheet-list .is-changed { color: var(--flower); }
+.home-plan-sheet-list .is-removed,
+.home-plan-sheet-list .is-gone { color: var(--error); }
+.home-plan-sheet-list .is-keep,
+.home-plan-sheet-list .is-more { color: var(--text-muted); }
+.home-plan-keep { display: flex; align-items: center; gap: 10px; min-height: 40px; margin-top: 4px; color: var(--text); }
+.home-plan-keep input { width: 20px; height: 20px; accent-color: var(--accent); }
+.home-plan-sheet-row {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px;
+  border: 0;
+  border-top: .5px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+/* `flex: none`: con un sottotitolo su due righe il testo schiacciava l'icona, e
+   la riga partiva piu' a sinistra delle altre. */
+.home-plan-sheet-row > .ti { flex: none; width: 24px; font-size: 21px; color: var(--text-muted); text-align: center; }
+.home-plan-row-text { display: flex; flex-direction: column; line-height: 1.3; }
+.home-plan-row-sub { font-size: 12.5px; color: var(--text-muted); }
+.home-plan-sheet-row.is-danger,
+.home-plan-sheet-row.is-danger > .ti { color: var(--error); }
+.home-plan-sheet-row.is-primary > .ti { color: var(--accent); }
+.home-plan-sheet-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.home-plan-full-step {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 4px 4px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--heading);
+}
+.home-plan-full-step > .ti { color: var(--flower); }
+.home-plan-full-detail { margin: 0 4px; font-size: 14px; line-height: 1.5; color: var(--text); }
+/* Il markdown del modello reso (v. `md` in `home-plan.js`): paragrafi stretti,
+   codice in linea leggibile, niente che esca dal foglio. */
+.home-plan-md { overflow-wrap: anywhere; }
+.home-plan-md > :first-child { margin-top: 0; }
+.home-plan-md > :last-child { margin-bottom: 0; }
+.home-plan-md p,
+.home-plan-md ul,
+.home-plan-md ol { margin: 0 0 6px; }
+.home-plan-md ul,
+.home-plan-md ol { padding-left: 18px; }
+.home-plan-md code {
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.06));
+  font-size: .92em;
+}
+.home-plan-md pre { overflow-x: auto; white-space: pre; }
+.home-plan-full-section { margin: 14px 4px 6px; font-size: 13px; font-weight: 700; letter-spacing: .02em; color: var(--text-muted); }
+.home-plan-full-cover {
+  margin: 0 4px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.home-plan-full-labeled { display: flex; flex-direction: column; gap: 1px; margin-top: 4px; }
+.home-plan-full-done { margin: 6px 4px 0; font-size: 13.5px; line-height: 1.45; color: var(--text); }
+.home-plan-full-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.home-plan-full-assume { margin: 0 4px; padding-left: 18px; font-size: 14px; line-height: 1.45; color: var(--text); }
+.home-plan-full-assume li { margin-bottom: 4px; }
+.home-plan-full-dropped { margin: 14px 4px 4px; font-size: 13px; color: var(--text-muted); }
+.home-plan-full-dropped-list { margin: 0 4px; padding-left: 18px; color: var(--text-faint); text-decoration: line-through; }
+.home-work.is-done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border-strong)); }
+.home-work.is-failed { border-color: color-mix(in oklab, var(--error) 55%, var(--border-strong)); }
+
+.home-work-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.home-work-icon {
+  flex: none;
+  font-size: 20px;
+  color: var(--flower);
+  filter: drop-shadow(0 0 3px var(--glow));
+}
+.home-work.is-done .home-work-icon { color: var(--ok); filter: none; }
+.home-work.is-failed .home-work-icon { color: var(--error); filter: none; }
+.home-work-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--heading);
+}
+.home-work-time {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+/* Il titolo di una mini-me porta il suo label («Ho mandato una mini-me:
+   prezzi dei voli per Lisbona»): su una riga sola il label, che e' la parte
+   che dice qualcosa, era proprio quella tagliata. Va a capo, fino a due righe. */
+.home-work-helpers .home-work-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+/* La barra: un tratto per fase, o una barra che scorre quando le fasi non si
+   sanno. */
+.home-work-bar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.home-work-bar[hidden] { display: none; }
+.home-work-seg {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+}
+.home-work-seg.is-past { background: var(--ok); }
+.home-work-seg.is-now { background: var(--flower); box-shadow: 0 0 6px var(--glow); }
+.home-work-bar.is-sweep {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+/* Dopo `.is-sweep`, che ha la stessa specificita' e altrimenti la riaccenderebbe. */
+.home-work-bar.is-sweep[hidden] { display: none; }
+.home-work-sweep {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--flower);
+  animation: home-work-sweep 1.6s linear infinite;
+}
+@keyframes home-work-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(265%); }
+}
+
+.home-work-line {
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.home-work-line[hidden] { display: none; }
+
+/* Piu' aiutanti: una riga per ciascuno, il nome e cosa fa. */
+.home-work-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.home-work-rows[hidden] { display: none; }
+.home-work-row {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+.home-work-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-work-row-doing { flex: none; color: var(--text-muted); }
+
+/* «Ci metto piu' del solito»: una riga, nel colore dell'avviso, mai un allarme. */
+.home-work-slow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--warning);
+}
+.home-work-slow[hidden] { display: none; }
+
+.home-work-note {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.home-work-note[hidden] { display: none; }
+
+/* L'azione sola della bolla finita: Apri la bacheca, Riprova. */
+.home-work-action {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+.home-work-action[hidden] { display: none; }
+.home-work-action:disabled { opacity: 0.5; }
+
+/* I tasti della bolla, uno accanto all'altro: l'azione piena e quella quieta
+   («Fermala», «Annulla le sue modifiche»), che va a capo se non ci sta. */
+.home-work-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.home-work-actions[hidden] { display: none; }
+.home-work-action2 {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.home-work-action2[hidden] { display: none; }
+.home-work-action2:active { background: var(--active); }
+
+/* Con piu' mini-me, il «ferma» di ciascuna in fondo alla sua riga: un tondo
+   piccolo da vedere, col bersaglio da dito. */
+.home-work-row { align-items: center; }
+.home-work-row-stop {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin: -6px -6px -6px 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 17px;
+}
+.home-work-row-stop:active { background: var(--active); }
+
+/* Jenny al lavoro (`home-activity.js`): un divisore, non una bolla
+   (13/10/2026). Come bolla, con la pelle delle bolle di lavoro, si leggeva come
+   un messaggio. Adesso e' della famiglia di `.home-boundary` — una riga sottile
+   da un bordo all'altro, il segno del filo per le cose che non dice nessuno —
+   interrotta al centro dal fiore, dalla parola in maiuscoletto e dai secondi.
+   Niente fondo, niente bordo, niente corsivo: tutto quello che faceva
+   «messaggio» e' tolto.
+
+   Ogni movimento qui resta nel piano — lettere che salgono, un luccichio di
+   colore, i tratti che respirano — niente sfocature ne' scale che la facciano
+   sembrare arrivare da lontano. */
+.home-typing {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  color: var(--flower);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.home-typing[hidden] { display: none; }
+
+/* Da bordo a bordo dello schermo, non della colonna: un separatore taglia il
+   filo, non una scatola che si scansa. Il posto vivo si stringe per lasciare
+   spazio alla testa di Jenny (`--jenny-dodge`) e il filo ha 18px di margine; la
+   riga si riprende tutti e due, e il tratto destro le passa sotto — lei sta
+   sopra a tutto. (Detto dall'utente il 13/10/2026, alla prima prova.) */
+.home-live > .home-typing {
+  margin-left: -18px;
+  margin-right: calc(-18px - var(--jenny-dodge));
+}
+
+/* I due tratti: sfumano verso i bordi, e respirano verso il centro. Cedono
+   per primi: su un telefono stretto la frase piu' lunga del vocabolario
+   («snooping through your stuff», 13/10/2026 su jenny_s22) li mangia fino a
+   zero prima di essere tagliata lei. A frase corta si dividono il posto a
+   meta', e la riga resta centrata. */
+.home-typing-rule {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--flower) 45%, transparent));
+  transform-origin: 100% 50%;
+  animation: home-typing-breathe 2.4s ease-in-out infinite;
+}
+.home-typing-clock + .home-typing-rule {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--flower) 45%, transparent), transparent);
+  transform-origin: 0 50%;
+}
+@keyframes home-typing-breathe {
+  0%, 100% { opacity: 0.5; transform: scaleX(0.85); }
+  50%      { opacity: 1;   transform: scaleX(1); }
+}
+
+/* Una parola lunga si taglia, non spinge via i tratti; e niente puntini: il
+   segno di vita qui sono i secondi. */
+.home-typing .home-activity-words { min-width: 0; overflow: hidden; }
+.home-typing .home-ellipsis { display: none; }
+
+.home-typing-clock {
+  flex: none;
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
 
 .home-activity-flower {
   flex: none;
@@ -611,44 +1604,8 @@ body.home {
   .home-letter,
   .home-ellipsis-dot,
   .home-word.exits { animation: none; }
-  .home-activity { transition: none; }
-}
-
-/* ── Gli agenti al lavoro ── */
-
-/* Una pastiglia piccola sopra il composer, a sinistra come la riga di lavoro:
-   l'angolo di destra e' di Jenny. Nel colore del fiore, perche' e' lavoro suo
-   affidato ad altri; fermo, nel colore dell'avviso. Il tocco lungo apre
-   l'officina, quindi il testo non si seleziona. */
-.home-subagents {
-  flex: none;
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 32px - var(--jenny-gap, 39px));
-  margin: 0 16px 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  background: var(--overlay);
-  color: var(--flower);
-  font-size: 12px;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-
-.home-subagents[hidden] { display: none; }
-
-.home-subagents.is-stalled { color: var(--warning); }
-
-.home-subagents .ti { flex: none; font-size: 14px; }
-
-.home-subagents-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  .home-work-sweep { animation: none; }
+  .home-typing-rule { animation: none; }
 }
 
 /* ── Lo stato del filo ── */
@@ -677,8 +1634,11 @@ body.home {
   align-items: flex-end;
   gap: 8px;
   padding: 8px 12px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
+  /* Nessun fondo suo e nessuna riga sopra (06/10/2026): la pastiglia di vetro
+     galleggia. Il filo scorre in uno scroller suo, sopra il composer e non
+     sotto, quindi un fondo pieno non coprirebbe niente; sopra il velo era una
+     lastra grigia in fondo allo schermo. */
+  background: transparent;
 }
 
 /* Il campo e la graffetta stanno nella stessa pastiglia: allegare e' una cosa
@@ -697,7 +1657,6 @@ body.home {
      pastiglia e' un `<div>` e non piu' una `<label>`, e un tocco sul
      margine deve cadere ancora nel campo. */
   padding: 0 4px 0 0;
-  border: 1px solid var(--border);
   /* **Raggio fisso, non `--radius-pill`.** A una riga (40px) 20px e' esattamente
      meta' dell'altezza, quindi la forma e' la stessa capsula di prima; a tre
      righe il raggio non cresce e gli angoli restano 20px — un rettangolo
@@ -706,7 +1665,11 @@ body.home {
      sul telefono appena il messaggio va a capo. Stessa scelta, stesso motivo e
      stesso conto di `.compose-pill` (meta' del `min-height`). */
   border-radius: 20px;
-  background: var(--surface);
+  /* Di vetro (v. `--glass-field-bg` in mobile-style.css): sopra il velo lascia
+     passare la pagina sfocata, sulla pagina chat e' una pastiglia leggera. */
+  border: var(--glass-field-border);
+  background: var(--glass-field-bg);
+  box-shadow: var(--glass-shadow);
 }
 
 /* Il fuoco del campo: bordo del colore dell'anello **e** piu' spesso (1px di
@@ -751,69 +1714,9 @@ body.home {
   font-size: 18px;
   cursor: pointer;
 }
+.home-attach:active { background: var(--active); }
 
 .home-input::placeholder { color: var(--text-faint); }
-
-/* La pastiglia delle pagine del quaderno, a sinistra del composer: il posto
-   che era del bottone del cassetto, oggi pagina App. Spenta come era lui — in
-   questa riga la cosa accesa resta una sola, quella che manda — e alta quanto
-   il campo, cosi' la riga resta allineata.
-   Tutta qui. Stava a meta' con «Parlane», di quando le due pastiglie
-   abitavano la stessa barra in testa; scesa nel composer, altezza, bordo e
-   fondo di la' li riscriveva questa regola, e restavano solo da leggere. */
-/* Dal 26/09/2026 porta anche il nome del quaderno, col pallino, e c'e' solo
-   nelle pagine fissate (nei Quaderni la strada per le pagine sta in alto). Il
-   nome cede per primo — fino a meta' riga, poi «…» — perche' il campo dove
-   scrivi resti largo. */
-.home-composer .home-notebook-pill {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 46%;
-  display: inline-flex;
-  align-items: center;
-  height: 40px;
-  border-radius: var(--radius-pill);
-  background: var(--overlay);
-}
-.home-composer .home-notebook-pill[hidden] { display: none; }
-
-.home-composer .home-notebook-pages-open {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 40px;
-  padding: 0 12px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.home-composer .home-notebook-pages-open:active { filter: brightness(0.94); }
-
-.home-notebook-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-}
-
-.home-notebook-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.home-notebook-count {
-  flex: none;
-  color: var(--text-muted);
-}
-.home-notebook-count:empty { display: none; }
 
 .home-send {
   flex: none;
@@ -865,8 +1768,7 @@ body.home {
    fondo a destra, misurati — e il tetto lo pagavano *tutti* i messaggi, anche
    quelli in cima dove non c'e' nessuno: 82,6 px CSS su ogni riga, il 14% dello
    schermo (Titan 2, 20/09/2026).
-   Adesso il margine ce l'ha solo chi le finisce davvero addosso, e a dirlo e'
-   `shared/jenny-gap.js`, che misura i due rettangoli invece di indovinare. */
+   Lo spazio per lei adesso sta tutto in fondo al filo (v. `.home-band`). */
 /* `max-width` non e' il tetto di prima: e' la colonna, e serve lo stesso.
    Con `flex-start` il messaggio si fa largo quanto il suo contenuto, e un
    `<pre>` non va a capo — la sua riga piu' lunga allargava tutta la risposta
@@ -876,24 +1778,6 @@ body.home {
 .home-msg-jenny {
   align-self: flex-start;
   max-width: 100%;
-}
-
-/* Il messaggio e' nell'angolo di Jenny. Il valore non e' scritto qui: lo
-   calcola il modulo dalla taglia vera della mascotte e dal suo ancoraggio, e lo
-   mette sul filo come `--jenny-gap`. Il ripiego serve al primo disegno e a chi
-   apre la pagina fuori dall'APK. */
-.home-msg-jenny.is-under-jenny {
-  padding-right: var(--jenny-gap, 39px);
-}
-
-/* La stessa distanza, ma la bolla si **sposta** invece di stringersi.
-   Padding qui vorrebbe dire allungare la bolla fin sotto di lei e lasciarci
-   dentro solo il vuoto: il testo si scanserebbe, la pelle della bolla no. E
-   siccome la bolla e' ancorata a destra (`flex-end`), toglierle margine da
-   quel lato la porta via tutta intera. Il numero e' lo stesso e viene dallo
-   stesso conto: chi scrive sta nella colonna di destra, che e' la sua. */
-.home-msg-user.is-under-jenny {
-  margin-right: var(--jenny-gap, 39px);
 }
 
 .home-block {
@@ -914,6 +1798,50 @@ body.home {
   margin-top: -2px;
 }
 
+/* Il segno dei cassetti: un'icona nella coda, come il Copia; toccata, apre le
+   righe annotate sotto la risposta. */
+.home-journal-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.home-journal-mark:active { background: var(--active); }
+.home-journal-mark i { font-size: 14px; }
+.home-journal-mark[aria-expanded="true"] { color: var(--text); }
+.home-journal-detail {
+  margin: 2px 0 4px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--text-faint);
+  font-size: 13px;
+  color: var(--text-faint);
+}
+.home-journal-where { font-weight: 600; }
+/* «Ci spostiamo?»: una proposta, non un comando — un tasto leggero sotto la
+   risposta, che l'utente puo' ignorare. */
+.home-move-offer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 2px;
+  padding: 6px 12px;
+  border: 1px solid var(--text-faint);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-move-offer:active { background: var(--active); }
+
 .home-copy {
   display: inline-flex;
   align-items: center;
@@ -926,7 +1854,6 @@ body.home {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   transition: color .12s, background .12s;
 }
 .home-copy i { font-size: 14px; }
@@ -937,11 +1864,127 @@ body.home {
 }
 .home-copy:active { opacity: .7; }
 
+/* Il ⋯ di una tessera (10/10/2026): la stessa scheda della pressione lunga,
+   per chi non sa che si puo' tenere premuto. In alto a destra, alto quanto un
+   dito; e' un segno dentro la tessera, non un bottone a parte. */
+.home-more {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: .7;
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-more:active { opacity: 1; }
+
+/* «↓» sopra il composer (10/10/2026): compare quando sei risalito a
+   rileggere, col pallino se intanto sotto e' arrivato qualcosa. Al centro, non
+   all'angolo: a destra c'e' Jenny, che si prenderebbe il tocco (lo stesso
+   motivo per cui il FAB dell'officina sta a sinistra della mascotte). Niente
+   z-index — in casa l'unico e' di Jenny: sta sopra il filo perche' e'
+   l'ultimo figlio di `#home-chat`. Nascosto davvero quando non serve, o
+   resterebbe nell'ordine del Tab. */
+.home-scroll-fab {
+  position: absolute;
+  left: 50%;
+  /* A cavallo del bordo alto del composer, o della riga del piano quando c'e'
+     (la misura `_bindComposer`), e non sopra: 12 px sopra, il tondo stava in
+     mezzo alla colonna del testo e copriva due righe (25/10/2026, provato sul
+     telefono contro il margine sinistro, dove copriva l'inizio delle righe di
+     Jenny). Cosi' copre al piu' meta' dell'ultima riga, che il bordo taglia
+     comunque. */
+  bottom: calc(var(--home-composer-h, 66px) + var(--home-plan-hint-h, 0px) - 18px);
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity .15s ease, transform .15s ease, visibility 0s linear .15s;
+}
+.home-scroll-fab:active { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 0 0 999px var(--active); }
+.home-scroll-fab.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity .15s ease, transform .15s ease, visibility 0s;
+}
+.home-scroll-fab-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: none;
+}
+.home-scroll-fab.has-new .home-scroll-fab-dot { display: block; }
+
+/* «Riprova» sotto una risposta finita in un errore del modello (10/10/2026):
+   un'azione vera, quindi un bottone col suo nome e non un'icona muta, alto
+   quanto un dito. */
+.home-retry {
+  display: inline-flex;
+  /* La bolla e' una colonna flex: senza, il bottone si allargava a tutta
+     la riga (visto sull'emulatore). */
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  margin-top: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.home-retry i { font-size: 16px; }
+.home-retry:active { opacity: .7; }
+
 .home-seconds {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
 }
+
+/* L'ora di un messaggio (06/10/2026): nella coda di una risposta, fra il
+   Copia e i secondi, e sotto la bolla di chi scrive. Della famiglia dei
+   secondi — stesso carattere, stessa misura, stesso grigio — perche' e' la
+   stessa riga di servizio: si legge se la cerchi, non si fa guardare. */
+.home-time,
+.home-tail-sep {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.home-tail-sep { color: var(--text-faint); }
+/* Sotto la bolla, allineata al suo bordo destro (`align-items: flex-end` del
+   messaggio), e piu' vicina a lei che al messaggio dopo. */
+.home-msg-user > .home-time { margin-top: -2px; padding-right: 4px; }
 
 .home-msg-user .home-block {
   padding: 9px 13px;
@@ -1137,6 +2180,7 @@ body.home {
   cursor: pointer;
   padding: 0;
 }
+.home-pending-x:active { box-shadow: 0 0 0 1px var(--border-strong), inset 0 0 0 999px var(--active); }
 /* L'area di tocco e' piu' grande del disegno: la crocetta resta da 20 px, ma
    un anello invisibile di 6 px tutt'attorno porta il bersaglio a 32 px —
    sopra i 24 di WCAG 2.5.8, che 20 px da soli non facevano. */
@@ -1186,10 +2230,6 @@ body.home {
   --jenny-floor: calc(var(--home-composer-h, 64px) - var(--jenny-size) * 0.1224);
 }
 
-/* Il campo della minichat, dove il composer non c'e': in basso a 12 px, sotto
-   i piedi di lei (`--jenny-away-floor`). */
-.home-shell .jenny-mc-ask { bottom: 12px; }
-
 /* Una cosa che non è andata, detta nel filo. Sobria come il separatore: in casa
    un guasto si dice come si direbbe a voce, non con un pannello rosso. Sta nel
    filo e non nella striscia dello stato perché la striscia racconta com'è il
@@ -1205,11 +2245,14 @@ body.home {
   text-align: center;
 }
 
-/* ── «Con chi parli» ── */
-
+/* ── «Con chi parli»: la vetrina dei quaderni ──
+   Dal 05/10/2026 i quaderni sono copertine, non righe; dal 06/10/2026 sono le
+   tessere di un bento. Tutto qui legge i token del tema: le tele (`--spine-N`)
+   e la loro finitura stanno in mobile-style.css, accanto agli altri colori, e
+   qui c'e' solo la forma. */
 
 .home-who-label {
-  padding: 4px 4px 2px;
+  padding: 0;
   color: var(--text-muted);
   font-size: 10.5px;
   font-weight: 600;
@@ -1219,8 +2262,373 @@ body.home {
 
 .home-who-label.is-divided {
   margin-top: 6px;
-  padding-top: 8px;
+  padding: 10px 4px 4px;
   border-top: 1px solid var(--border);
+}
+
+/* La ricerca: fuori dall'elenco, ferma in cima. */
+.home-who-search {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  margin: 4px 18px 4px;
+  padding: 0 6px 0 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.home-who-search:focus-within {
+  border-color: var(--focus-ring, var(--text-accent));
+  box-shadow: 0 0 0 1px var(--focus-ring, var(--text-accent));
+}
+/* La lente sopra il campo, trasparente al tocco: il campo prende tutta la
+   striscia, e un tocco sulla lente scrive come uno sul testo. */
+.home-who-search > .ti {
+  position: absolute;
+  left: 14px;
+  font-size: 17px;
+  pointer-events: none;
+}
+.home-who-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px 0 41px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  outline: none;
+}
+/* Il segnaposto su `--text-muted` e non `--text-faint`: quello sta sotto i
+   3:1 sul fondo in quasi tutti i temi. */
+.home-who-search-input::placeholder { color: var(--text-muted); }
+/* La ✕ del browser no: c'e' la nostra, che si vede solo quando serve. */
+.home-who-search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.home-who-search-clear {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-who-search-clear:active { box-shadow: inset 0 0 0 999px var(--active); }
+.home-who-search-clear[hidden] { display: none; }
+
+/* L'intestazione di una mensola: il nome, quanti, e l'ordine. */
+.home-who-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 4px 4px;
+}
+.home-who-count {
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.home-who-sub {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.home-who-sort {
+  margin-left: auto;
+  min-height: 40px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.home-who-sort:active { opacity: .6; }
+.home-who-sort::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+/* Il bento. Le colonne le decide la larghezza (`auto-fill`, mai sotto i 112
+   px: quattro sul Titan, tre su uno schermo da 480), le file sono alte 104, e
+   le tessere grandi ne prendono due (`is-hero`, `is-tall`, `is-wide`, decise
+   da `bentoSizes` in home-who.js). `dense` riempie i buchi che una tessera
+   grande lascia, quindi a schermo l'ordine e' quasi quello per data: le frecce
+   della tastiera guardano dove stanno le tessere, non l'ordine del DOM. Non
+   c'e' piu' un ripiano: le tessere stanno da sole. */
+.home-who-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-auto-rows: 104px;
+  grid-auto-flow: dense;
+  gap: 10px;
+  padding: 2px 0 8px;
+  margin-bottom: 8px;
+}
+.home-who-shelf.is-stale { opacity: 0.6; }
+.home-who-shelf.is-archive .home-who-cover,
+.home-who-cover.is-archived { opacity: 0.75; }
+
+/* La tessera. Tela e inchiostro arrivano dal nome (`paintSpine`), la finitura
+   dal tema: il filo, l'ombra, gli angoli, il bagliore, il lucido, la storta.
+   Il nome in alto, la riga in basso, e dietro l'iniziale grande che esce dal
+   bordo. Una tessera e' un comando, e si spoglia del vestito da bottone. */
+.home-who-cover {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 13px;
+  border: var(--spine-edge);
+  border-radius: var(--tile-radius);
+  background-color: var(--cover, var(--surface));
+  background-image: var(--spine-gloss);
+  color: var(--cover-ink, var(--text));
+  box-shadow: var(--spine-shadow),
+    0 0 var(--spine-glow) color-mix(in srgb, var(--cover, transparent) 55%, transparent);
+  transform: rotate(calc(var(--tilt, 0) * var(--spine-jitter)));
+  overflow: hidden;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  /* Tenere premuto un quaderno apre la sua scheda, e il testo non deve
+     selezionarsi: la selezione di Chromium scatta a ~500 ms, **prima** dei
+     600 della pressione lunga, e il suo `pointercancel` la spegne. Visto sul
+     telefono il 23/09/2026: «Copy, Share, Select all» sopra il nome, e nessuna
+     scheda. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.home-who-cover.is-tall { grid-row: span 2; }
+.home-who-cover.is-wide { grid-column: span 2; }
+/* La tessera grande: il quaderno con piu' pagine, due per due. Si stacca
+   dalle altre come dice il tema (`--hero-lift`), e in Synthwave col doppio
+   del bagliore. */
+.home-who-cover.is-hero {
+  grid-column: span 2;
+  grid-row: span 2;
+  padding: 18px;
+  box-shadow: var(--hero-lift),
+    0 0 calc(var(--spine-glow) * 2) color-mix(in srgb, var(--cover, transparent) 45%, transparent);
+}
+/* Il solo segnale di pressione: senza, su un telefono un tocco sembra non
+   registrato finche' la chat non si e' gia' ricaricata. */
+.home-who-cover:active { filter: brightness(0.92); }
+/* Il fuoco da tastiera: la tessera si alza e prende l'anello. */
+.home-who-cover:focus-visible {
+  outline: none;
+  transform: translateY(-4px);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-ring, var(--text-accent));
+}
+/* Le parole si leggono sempre, anche sopra l'iniziale: un nome lungo o una
+   riga di ricerca possono arrivarle addosso, ed e' inchiostro su inchiostro.
+   L'alone del colore della tela le stacca (visto sull'emulatore il
+   06/10/2026: «13 p · 2 days ago» sparito dentro la P). */
+.home-who-cover-name,
+.home-who-cover-meta {
+  text-shadow: 0 0 2px var(--cover, var(--surface)), 0 0 4px var(--cover, var(--surface)),
+    0 0 8px var(--cover, var(--surface));
+}
+/* L'iniziale: un segno, sotto le parole, che esce in basso a destra. Sta
+   sotto senza `z-index`: e' il primo figlio, e le parole, posizionate anche
+   loro, vengono dopo. */
+.home-who-cover-glyph {
+  position: absolute;
+  right: -8px;
+  bottom: -26px;
+  font-family: var(--font-display);
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.92;
+  pointer-events: none;
+}
+.home-who-cover.is-tall .home-who-cover-glyph { font-size: 150px; bottom: -40px; }
+.home-who-cover.is-hero .home-who-cover-glyph {
+  right: -18px;
+  bottom: -64px;
+  font-size: 230px;
+  opacity: 0.3;
+}
+/* Il nome, su due righe al massimo: un nome di quaderno arriva a 64
+   caratteri, e intero lo dicono l'etichetta, la targhetta e la scheda. Sulla
+   tessera grande e' il titolo. */
+.home-who-cover-name {
+  position: relative;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.home-who-cover.is-hero .home-who-cover-name { font-size: 24px; line-height: 1.1; }
+.home-who-cover-name mark {
+  border-radius: 2px;
+  background: color-mix(in srgb, currentColor 24%, transparent);
+  color: inherit;
+}
+/* La riga in basso. Sulla tessera semplice si ferma prima dell'iniziale. */
+.home-who-cover-meta {
+  position: relative;
+  max-width: 62%;
+  margin-top: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Sulla tessera alta l'iniziale occupa tutta la meta' di sotto: la riga
+   sale sotto il nome. Su quella larga resta in basso, fino all'iniziale. */
+.home-who-cover.is-tall .home-who-cover-meta { max-width: 100%; margin-top: 6px; }
+.home-who-cover.is-wide .home-who-cover-meta { max-width: calc(100% - 84px); }
+.home-who-cover.is-hero .home-who-cover-meta {
+  max-width: none;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Le forme degli stati: il posto vuoto quando non c'e' nessun quaderno, le
+   tessere fantasma mentre si legge, il «crea» di una ricerca a vuoto. L'altezza
+   la da' la fila del bento. */
+.home-who-slot {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--tile-radius);
+  background: transparent;
+  color: var(--text-accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.home-who-slot:active { background: var(--active); }
+.home-who-slot .ti { font-size: 22px; }
+.home-who-ghost {
+  border-radius: var(--tile-radius);
+  background: var(--surface);
+}
+.home-who-ghost:first-child { grid-column: span 2; grid-row: span 2; }
+.home-who-create {
+  align-self: flex-start;
+  min-height: 44px;
+  margin: 2px 4px 8px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-who-create:active { filter: brightness(0.92); }
+
+/* La targhetta: il nome intero della copertina che ha il fuoco da tastiera.
+   Ferma in fondo, a sinistra del +, e non prende tocchi. */
+.home-who-plate {
+  position: absolute;
+  left: 18px;
+  right: 88px;
+  bottom: 16px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px 8px 10px;
+  border: var(--spine-edge);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.home-who-plate[hidden] { display: none; }
+.home-who-plate-chip {
+  flex: none;
+  width: 10px;
+  height: 36px;
+  border-radius: 3px;
+  background: var(--cover);
+}
+.home-who-plate-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-who-plate-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.home-who-plate-keys {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+/* La copertina in piccolo, in testa alla scheda di un quaderno. */
+.app-sheet-icon.home-who-mini {
+  position: relative;
+  width: 40px;
+  height: 52px;
+  padding-left: 6px;
+  border: var(--spine-edge);
+  border-radius: var(--spine-radius);
+  background: var(--cover);
+  color: var(--cover-ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+.app-sheet-icon.home-who-mini::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  background: color-mix(in srgb, var(--cover-ink) 18%, transparent);
+}
+/* Il nome intero, che sulla copertina puo' essere tagliato. */
+#home-notebook-sheet .app-sheet-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 /* La pagina Quaderni: scorre tutta, e in fondo lascia il posto a Jenny come
@@ -1229,6 +2637,11 @@ body.home {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Il posto della barra di scorrimento e' sempre tenuto: senza, la larghezza
+     cala di qualche pixel quando i quaderni riempiono la pagina, e sul Titan
+     — che sta proprio sul confine fra quattro e cinque colonne — la griglia
+     cambiava numero di colonne a meta' disegno (06/10/2026). */
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
@@ -1257,124 +2670,49 @@ body.home {
   font-size: 26px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 .home-notebooks-new:active { filter: brightness(0.92); }
 
-/* Un quaderno aperto dentro i Quaderni: l'elenco e il + si fanno da parte, e
-   il pannello e' della chat che ci ha portato il trasloco. `display:none` e non
-   `hidden` sugli elementi: l'elenco lo ridisegna `home-who.js`, e un
-   attributo messo da qui gli sfuggirebbe al primo giro. */
-.home-page[data-page='notebooks'][data-open] .home-notebooks,
-.home-page[data-page='notebooks'][data-open] .home-notebooks-new { display: none; }
-
-/* Una riga e' un comando, e per un giro non lo e' stata. Qui si spoglia del
-   vestito da bottone — il pannello e' una lista, non una pulsantiera — e tiene
-   solo cio' che un comando deve avere: tutta la larghezza, il testo a sinistra,
-   e qualcosa che risponde al dito. */
+/* Le cartelle che non si aprono, in fondo: righe, non copertine. Una
+   cartella che non si apre e' una cosa da sistemare, non una scelta — niente
+   tela, la riga si smorza, e resta un `<div>`: il gateway rifiuterebbe quella
+   chiave, quindi un bottone qui sarebbe una promessa gia' smentita. */
 .home-who-row {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 42px;
+  min-height: 40px;
   padding: 2px 4px;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  /* Tenere premuto un quaderno apre la sua scheda, e il testo della riga non
-     deve selezionarsi: la selezione di Chromium scatta a ~500 ms, **prima** dei
-     600 della pressione lunga, e il suo `pointercancel` la spegne. Visto sul
-     telefono il 23/09/2026: «Copy, Share, Select all» sopra il nome, e nessuna
-     scheda. E' la stessa lezione della riga di attivita' qui sopra. */
+  color: var(--text-muted);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-}
-
-/* Il solo segnale di pressione: senza, su un telefono un tocco su una riga
-   sembra non essere stato registrato fino a quando la chat non si e' gia'
-   ricaricata. */
-.home-who-row:not(.is-blocked):active {
-  background: var(--surface-2);
 }
 
 .home-who-row + .home-who-row {
   border-top: 1px solid var(--border);
 }
 
-.home-who-row.is-personal {
-  min-height: 44px;
-}
-
 .home-who-row-name {
   flex: 1;
   min-width: 0;
-  font-size: 14.5px;
-  /* Un nome di quaderno arriva a 64 caratteri: tronca, non va a capo e non
-     spinge fuori la data. */
+  font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.home-who-row.is-personal .home-who-row-name {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--heading);
-}
-
 .home-who-row-meta {
   flex: none;
-  color: var(--text-muted);
   font-size: 11.5px;
-}
-
-.home-who-check {
-  flex: none;
-  font-size: 18px;
-  color: var(--accent);
-}
-
-/* Il fiore di Jenny, nello spazio in cui gli altri hanno il pallino. Non e' un
-   colore assegnato a un nome: e' il segno che ha nel dock e nella riga
-   d'identita' dell'officina, sulla stessa variabile di tema. */
-.home-who-flower {
-  flex: none;
-  width: 10px;
-  font-size: 13px;
-  line-height: 1;
-  text-align: center;
-  color: var(--flower);
-}
-
-.home-who-dot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--text-faint);
-}
-
-
-/* Una cartella che non si apre e' una cosa da sistemare, non una scelta: il
-   pallino perde il colore, la riga si smorza, e resta un `<div>` — il gateway
-   rifiuterebbe quella chiave, quindi un bottone qui sarebbe una promessa gia'
-   smentita dall'altra parte. */
-.home-who-row.is-blocked {
-  color: var(--text-muted);
-  cursor: default;
 }
 
 .home-who-note {
   margin: 4px 4px 6px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.45;
 }
 
@@ -1393,7 +2731,6 @@ body.home {
    L'attributo e' scritto anche nell'HTML, non solo dal JS: senza, il primo
    frame mostrerebbe tutte e tre le stanze impilate. */
 
-.home-notebook-pages,
 .home-reader,
 .home-jenny-room,
 .home-model-room,
@@ -1405,7 +2742,6 @@ body.home {
   flex-direction: column;
 }
 
-.home-shell[data-view='pages'] .home-notebook-pages,
 .home-shell[data-view='reader'] .home-reader,
 .home-shell[data-view='jenny'] .home-jenny-room,
 .home-shell[data-view='model'] .home-model-room,
@@ -1497,6 +2833,118 @@ body.home {
   position: relative;
 }
 
+/* Il velo: la chat sopra la pagina (dal 05/10/2026, v. `HomeApp.openChatOver`).
+   A tutto schermo, e la chat dentro e' quella vera, identica alla pagina chat.
+   Il fondo e' trasparente quanto basta perche' sotto si legga ancora la
+   pagina di cui stai parlando: scuro nei temi scuri, del colore del tema in
+   quelli chiari (il token `--chat-veil` sta in mobile-style.css, coi
+   temi). Il livello lo dichiara l'altro foglio: questo non ne dichiara. */
+.home-over {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--chat-veil, rgba(8, 7, 10, 0.6));
+  animation: home-over-in 0.14s ease-out;
+}
+.home-over[hidden] { display: none; }
+/* La coda di una risposta (Copia, secondi) sopra il velo sta fuori dalla
+   scheda, direttamente sulla pagina sfocata: nei suoi grigi discreti li'
+   non si legge (il conto e' in `test_chat_veil_contrast.py`), quindi prende il
+   colore del testo. Sulla pagina chat resta discreta. */
+.home-over .home-copy,
+.home-over .home-seconds,
+.home-over .home-time,
+.home-over .home-tail-sep { color: var(--text); }
+@keyframes home-over-in { from { opacity: 0; } to { opacity: 1; } }
+/* La testa del velo: dove scrivi (v. `HomeApp._applyOverTitle`). Le voci
+   sono quelle del percorso delle stanze (`.home-path-*`), e l'altezza quella
+   della fila e dell'intestazione, 10 + 40 + 6: aprendo il velo la chat
+   comincia dove cominciava la pagina.
+
+   Due geometrie. Nella chat di un quaderno (`.is-path`) i margini sono quelli
+   di `.home-head`, cosi' QUADERNI e il quaderno stanno al pixel dove stavano
+   sulla bacheca e la riga si allunga solo di «› JENNY». Nella chat di sempre
+   c'e' solo il nome di lei, e sta dove sta il suo nome nella fila: 18 px. */
+.home-over-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 10px 18px 6px;
+  box-sizing: content-box;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.home-over-head.is-path { padding: 10px 12px 6px 4px; }
+/* `.home-path-root` e' un `inline-flex` dell'autore, che scavalca `[hidden]`
+   del browser (la trappola di `.home-back[hidden]`, sopra). */
+.home-over-head [hidden] { display: none; }
+
+/* Chi cede quando il nome del quaderno e' lungo: **il quaderno**, coi
+   puntini. QUADERNI resta intera, come sulla bacheca, e lei pure: e' la
+   risposta a «con chi sto parlando», e un «JE…» non la da'. Nelle stanze il
+   quaderno e' l'ultima voce e ha un minimo di 5 em (v. `.home-path-here`);
+   qui sta in mezzo e un minimo lasciava un buco dopo un nome corto. */
+.home-over-head .home-over-notebook {
+  flex: 0 1 auto;
+  max-width: none;
+}
+.home-over-head .home-over-title {
+  flex: none;
+  min-width: 0;
+}
+/* Quel che sta sotto il velo, sfocato (v. `ChatOver.show`; il raggio e il
+   perche' stanno con `--chat-veil-blur` in mobile-style.css). **Il filtro non
+   si anima**: a 18 px una transizione vorrebbe dire ricalcolare la sfocatura a
+   ogni fotogramma dell'entrata, ed e' la parte piu' cara di tutto il velo. Lo
+   scatto non si vede: lo copre il velo, che entra sfumando (06/10/2026). */
+.home-beneath {
+  filter: blur(var(--chat-veil-blur, 18px)) saturate(1.4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-over { animation: none; }
+}
+
+/* La porta di un quaderno appeso alla fila: arrivandoci si apre la bacheca, e
+   la copertina e' quel che si vede scorrendo — il pallino, il nome, e un
+   bottone per chi la bacheca l'ha appena chiusa. */
+.home-door {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+.home-door-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+}
+.home-door-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--heading);
+}
+.home-door-open {
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--overlay);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.home-door-open:active { filter: brightness(0.94); }
+
 /* La foto della chat: da sola in una pagina che la chat non abita, o **sopra**
    la chat vera finche' questa non ha finito di leggere la conversazione nuova.
    Niente `z-index` — questo foglio non ne dichiara: la foto e'
@@ -1580,7 +3028,6 @@ body.home {
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .home-edit .ti { font-size: 15px; }
 
@@ -1604,7 +3051,6 @@ body.home {
   font-family: inherit;
   font-size: 18px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 /* Serve, e non e' ridondante: `[hidden]` e' una regola del foglio del
@@ -1621,11 +3067,9 @@ body.home {
 .home-back:active { color: var(--text); }
 
 
-/* ── Le pagine di un quaderno ── */
-
-/* Le linguette delle pagine e le taglie della mascotte: la stessa fila di
-   pulsanti, perché è il modo in cui la casa dice «una fra queste». */
-.home-tabs, .home-seg {
+/* Le taglie della mascotte: una fila di pulsanti, il modo in cui la casa dice
+   «una fra queste». */
+.home-seg {
   display: flex;
   gap: 3px;
   padding: 3px;
@@ -1633,12 +3077,7 @@ body.home {
   background: var(--overlay);
 }
 
-.home-tabs {
-  flex: none;
-  margin: 2px 18px 8px;
-}
-
-.home-tab, .home-seg-btn {
+.home-seg-btn {
   flex: 1;
   height: 30px;
   border: none;
@@ -1650,190 +3089,2068 @@ body.home {
   cursor: pointer;
 }
 
-.home-tab.is-on, .home-seg-btn.is-on {
+.home-seg-btn.is-on {
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
 }
 
-/* La pastiglia e' un `<div>`: il campo la copre tutta, lente
-   compresa, cosi' un tocco ovunque ci scrive — che era l'unica cosa per cui
-   c'era la `<label>`, e la `<label>` vuota toglieva al campo il nome. */
-.home-search {
-  flex: none;
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  height: 38px;
-  margin: 0 18px 6px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--text-muted);
-}
+/* ── La bacheca di un quaderno ──
+   **Niente `z-index`, come in tutta la casa**: il solo livello e' quello di
+   Jenny. Chi sta sopra a chi lo decide l'ordine nel DOM, e lo tiene il JS
+   (`home-board.js`): le schede, poi la busta, poi i fili, poi le etichette; la
+   scheda trascinata o sollevata si sposta in fondo al suo gruppo.
+   Il muro si sposta e si ingrandisce (d3-zoom, in `home-board.js`); le misure
+   degli oggetti sono in `cqw` della tela, cosi' sul quadrato del Titan 2 e su
+   un telefono alto la bacheca ha la stessa forma.
+   I colori del materiale (carta, post-it, filo, sughero) sono token per tema
+   in mobile-style.css: qui c'e' solo la forma. */
 
-.home-search > .ti {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.home-search[hidden] { display: none; }
-
-/* Il campo toglie il suo anello (`outline: none` qui sotto): il fuoco lo dice
-   la pastiglia, come il composer. Prima non lo diceva nessuno. */
-.home-search:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 1px var(--focus-ring); }
-
-.home-search-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0 12px 0 34px;
-  border: none;
-  background: none;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
-}
-
-.home-search-input::placeholder { color: var(--text-faint); }
-
-.home-notebook-page-list {
+.home-board,
+.home-board-drawer {
+  display: none;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 0 18px 8px;
+  flex-direction: column;
 }
 
-.home-notebook-page-list[hidden] { display: none; }
+.home-shell[data-view='board'] .home-board,
+.home-shell[data-view='drawer'] .home-board-drawer { display: flex; }
 
-/* Una riga e' un comando, come nel pannello: stesso azzeramento del vestito di
-   serie, stesso bersaglio alto abbastanza per un pollice. */
-.home-notebook-page {
+.home-board-tool {
+  /* 40 px: il bersaglio del dito della casa (erano 34). */
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-board-tool:active { background: var(--active); }
+.home-board-tool[hidden] { display: none; }
+.home-board-tool[aria-pressed='true'] { color: var(--text); background: var(--overlay); }
+
+.home-board-since {
+  flex: none;
+  height: 32px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  min-height: 42px;
-  padding: 0;
+  padding: 0 14px;
   border: none;
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   background: none;
-  color: var(--text);
-  font-family: inherit;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
   text-align: left;
   cursor: pointer;
 }
-
-.home-notebook-page[hidden] { display: none; }
-.home-notebook-page:active { background: var(--overlay); }
-
-.home-notebook-page-dot {
+.home-board-since:active { background: var(--active); }
+.home-board-since[hidden] { display: none; }
+.home-board-since b { color: var(--text); font-weight: 500; }
+.home-board-since-dot {
+  width: 7px;
+  height: 7px;
   flex: none;
-  width: 8px;
-  height: 8px;
   border-radius: 50%;
+  background: var(--board-new);
+}
+.home-board-since-chev { margin-left: auto; opacity: 0.6; }
+
+.home-board-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  container-type: size;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background-color: var(--board-bg);
+  background-image: radial-gradient(var(--board-grain) 1px, transparent 1.3px);
+  background-size: 9px 9px;
+}
+.home-board-canvas[hidden] { display: none; }
+/* Il muro: un punto d'origine che si sposta e si ingrandisce (lo trasforma
+   `HomeBoard._applyView`). Gli oggetti dentro sono in percento dello schermo,
+   anche negativo. I gesti li prende d3-zoom, quindi niente gesti del browser. */
+.home-board-canvas { touch-action: none; }
+.home-board-wall {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
-.home-notebook-page-name {
-  flex: 1;
+.home-board-threads {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+.home-board-threads line { stroke: var(--board-thread); stroke-linecap: round; transition: opacity 0.18s; }
+.home-board-threads line.is-rest { stroke-width: 1.7; opacity: 0.7; }
+.home-board-threads line.is-on { stroke-width: 2.4; opacity: 1; }
+.home-board-threads line.is-off { stroke-width: 1.5; opacity: 0.12; }
+/* Il filo di un post-it: del colore del foglietto, per non confondersi coi fili
+   fra le schede. */
+.home-board-threads line.is-postit { stroke: var(--board-postit-thread, var(--board-postit)); }
+
+.home-board-thread-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border: 1px solid var(--board-thread);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.home-board-item {
+  position: absolute;
+  transform: rotate(var(--tilt, 0deg));
+  transition: opacity 0.18s, transform 0.18s, box-shadow 0.18s;
+  touch-action: none;
+  cursor: grab;
+}
+.home-board-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.home-board-item.is-dragging {
+  transition: none;
+  cursor: grabbing;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.55);
+}
+.home-board-item.is-lifted { transform: rotate(var(--tilt, 0deg)) scale(1.05); }
+.home-board-canvas.is-focus .home-board-item:not(.is-lifted):not(.is-linked) { opacity: 0.32; }
+.home-board-item.is-appearing { animation: home-board-appear 0.5s ease-out; }
+@keyframes home-board-appear {
+  from { transform: rotate(var(--tilt, 0deg)) scale(0.6); opacity: 0; }
+}
+
+.home-board-pin {
+  position: absolute;
+  top: -1.1cqw;
+  left: 50%;
+  width: 2.5cqw;
+  height: 2.5cqw;
+  margin-left: -1.25cqw;
+  border-radius: 50%;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5), inset -2px -2px 0 rgba(0, 0, 0, 0.18);
+}
+.home-board-pin.is-jenny { background: var(--board-pin-jenny); }
+.home-board-pin.is-user { background: var(--board-pin-user); }
+
+.home-board-polaroid {
+  width: 19cqw;
+  padding: 1.1cqw 1.1cqw 0;
+  background: var(--board-paper);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.home-board-photo {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 9cqw;
+}
+.home-board-initial { font-family: var(--font-display); font-size: 8cqw; }
+/* ── La striscia: la forma compatta di un'app (home-board-blocks.js) ──
+   Larga due polaroid, alta una di quattro taglie contate in righe (SLIP_ROWS in
+   jenny/board/model.py: S 2, M 4, L 6, XL 9). Tutto in cqw come la polaroid. Una
+   riga e' il 28 px del mockup sulla polaroid da 150: 3,55cqw. */
+.home-board-slip {
+  --slip-row: 3.55cqw;
+  --slip-pad-y: 1.52cqw;
+  --slip-pad-x: 1.77cqw;
+  --slip-head: 3.3cqw;
+  --slip-gap: 1cqw;
+  --slip-muted: color-mix(in srgb, var(--board-ink) 62%, var(--board-paper));
+  --slip-line: color-mix(in srgb, var(--board-ink) 16%, transparent);
+  --slip-up: color-mix(in srgb, var(--board-done) 55%, var(--board-ink));
+  width: 38cqw;
+  box-sizing: border-box;
+  padding: var(--slip-pad-y) var(--slip-pad-x);
+  background: var(--board-paper);
+  color: var(--board-ink);
+  box-shadow: 0 0.9cqw 1.8cqw rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--slip-gap);
+  /* Niente `overflow: hidden` qui: la puntina sporge sopra il foglio, e verrebbe
+     tagliata a meta'. Il taglio sta sul corpo (i blocchi non escono mai). */
+  font-size: 1.65cqw;
+  line-height: 1.25;
+}
+.home-board-slip.is-S { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 2); }
+.home-board-slip.is-M { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 4); }
+.home-board-slip.is-L { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 6); }
+.home-board-slip.is-XL { height: calc(var(--slip-pad-y) * 2 + var(--slip-head) + var(--slip-gap) * 2 + var(--slip-row) * 9); }
+.home-board-slip-head {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  height: var(--slip-head);
+  flex: none;
+}
+.home-board-slip-icon {
+  width: 3cqw;
+  height: 3cqw;
+  border-radius: 0.8cqw;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 1.9cqw;
+  flex: none;
+}
+.home-board-slip-name {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 2.28cqw;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   min-width: 0;
+}
+.home-board-slip-meta {
+  margin-left: auto;
+  font-size: 1.52cqw;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-board-slip-body { display: flex; flex-direction: column; gap: var(--slip-gap); min-height: 0; overflow: hidden; }
+.home-board-slip .home-board-sig-corner { top: 0; right: 0; }
+.home-board-slip .home-board-sig-dot { top: 1cqw; right: 1cqw; }
+
+/* Gli stati: ferma (grigia, con l'eta' in alto), allarme (angolo e numero rossi). */
+.home-board-slip.is-stale .home-board-slip-body { filter: grayscale(1); opacity: 0.72; }
+.home-board-slip.is-stale .home-board-slip-meta { color: var(--slip-muted); }
+.home-board-slip.is-alarm .home-board-slip-meta,
+.home-board-slip.is-alarm .is-value .home-board-block-big { color: var(--board-alert); }
+.home-board-slip.is-broken .home-board-slip-body { opacity: 0.6; }
+
+/* I blocchi: righe intere. */
+.home-board-block {
+  height: calc(var(--slip-row) * var(--slip-rows, 1));
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+}
+.home-board-block-label { font-size: 1.4cqw; color: var(--slip-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-board-block-strong { font-weight: 700; white-space: nowrap; }
+.home-board-block-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.home-board-block-big { font-family: var(--font-display); font-size: 4.8cqw; line-height: 1; white-space: nowrap; }
+.home-board-block-big small { font-size: 0.42em; margin-left: 0.5cqw; }
+.home-board-block-row {
+  height: var(--slip-row);
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  min-width: 0;
+}
+.home-board-block-row.is-more { color: var(--slip-muted); font-size: 1.4cqw; }
+.home-board-block .is-end { margin-left: auto; text-align: right; flex: none; }
+.home-board-block .is-key { min-width: 5.5cqw; }
+.home-board-block .is-alarm { color: var(--board-alert); }
+
+.home-board-block.is-value { display: flex; align-items: center; gap: 1.2cqw; }
+.home-board-block-delta { font-weight: 700; font-size: 1.65cqw; white-space: nowrap; }
+.home-board-block-delta.is-up { color: var(--slip-up); }
+.home-board-block-delta.is-down { color: var(--board-alert); }
+.home-board-block-spark { margin-left: auto; width: 9cqw; height: 3.8cqw; flex: none; overflow: visible; }
+.home-board-block-spark polyline,
+.home-board-block-chart polyline { fill: none; stroke: currentColor; stroke-width: 2; }
+.home-board-block-chart { width: 100%; height: 100%; overflow: visible; color: color-mix(in srgb, var(--board-new) 70%, var(--board-ink)); }
+.home-board-block-chart .is-band { fill: color-mix(in srgb, var(--board-alert) 18%, transparent); }
+.home-board-block-flat { height: 50%; border-bottom: 0.25cqw dashed var(--slip-line); }
+.home-board-block.is-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8cqw; position: relative; }
+.home-board-block-photo { border-radius: 0.8cqw; overflow: hidden; background: var(--slip-line); }
+.home-board-block-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-board-block-label.is-more-photos { position: absolute; right: 0.6cqw; bottom: 0.4cqw; background: var(--board-paper); border-radius: 999px; padding: 0 0.8cqw; }
+
+.home-board-block.is-numbers { display: grid; grid-template-columns: repeat(var(--slip-cols, 3), minmax(0, 1fr)); gap: 1cqw; align-content: center; }
+.home-board-block-number { display: flex; flex-direction: column; gap: 0.2cqw; min-width: 0; }
+
+.home-board-block.is-status { display: flex; align-items: center; gap: 1cqw; }
+.home-board-block-pill {
+  font-size: 1.4cqw;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.35cqw 1.1cqw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-board-block-pill.is-ok { color: var(--slip-up); background: color-mix(in srgb, var(--board-done) 22%, transparent); }
+.home-board-block-pill.is-warn { color: color-mix(in srgb, var(--board-soon) 45%, var(--board-ink)); background: color-mix(in srgb, var(--board-soon) 28%, transparent); }
+.home-board-block-pill.is-alarm { color: var(--board-alert); background: color-mix(in srgb, var(--board-alert) 16%, transparent); }
+
+.home-board-block.is-progress { display: flex; flex-direction: column; justify-content: center; gap: 0.5cqw; }
+.home-board-block-line { display: flex; align-items: baseline; gap: 0.6cqw; font-size: 1.4cqw; }
+.home-board-block-bar {
+  position: relative;
+  flex: 1;
+  height: 0.9cqw;
+  border-radius: 0.45cqw;
+  background: var(--slip-line);
+}
+.home-board-block-fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--board-ink); }
+.home-board-block-target {
+  position: absolute;
+  top: -0.4cqw;
+  width: 0.25cqw;
+  height: 1.7cqw;
+  background: var(--board-new);
+}
+
+.home-board-block-row.is-check { cursor: pointer; }
+.home-board-block-row.is-check input,
+.home-board-block-row.is-switch input { margin: 0; width: 2.1cqw; height: 2.1cqw; accent-color: var(--board-ink); flex: none; }
+.home-board-block-row.is-done .home-board-block-cell { text-decoration: line-through; color: var(--slip-muted); }
+.home-board-block-row.is-switch input { margin-left: auto; }
+
+.home-board-block.is-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: var(--slip-row);
+  gap: 0 0.8cqw;
+  align-items: center;
+}
+.home-board-block-btn,
+.home-board-block-round {
+  font: inherit;
+  font-size: 1.5cqw;
+  font-weight: 700;
+  color: var(--board-ink);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--board-ink) 30%, transparent);
+  border-radius: 999px;
+  height: calc(var(--slip-row) - 0.5cqw);
+  padding: 0 1cqw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.home-board-block-btn:active, .home-board-block-round:active { background: color-mix(in srgb, var(--board-ink) 12%, transparent); }
+.home-board-block-btn.is-primary { background: var(--board-ink); color: var(--board-paper); border-color: var(--board-ink); }
+.home-board-block-btn.is-primary:active { opacity: .8; }
+.home-board-block-round { width: calc(var(--slip-row) - 0.3cqw); padding: 0; flex: none; }
+
+.home-board-block.is-counter { display: flex; gap: 1.5cqw; align-items: center; }
+.home-board-block-counter { display: flex; align-items: center; gap: 1cqw; flex: 1; min-width: 0; }
+.home-board-block-counter-mid { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+.home-board-block-counter .home-board-block-big { font-size: 3.6cqw; }
+
+.home-board-block.is-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: center; }
+.home-board-block-day { display: flex; flex-direction: column; align-items: center; gap: 0.3cqw; }
+.home-board-block-dot {
+  width: 3.4cqw;
+  height: 3.4cqw;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.5cqw;
+  font-weight: 700;
+  box-sizing: border-box;
+  border: 0.25cqw solid transparent;
+}
+.home-board-block-day.is-done .home-board-block-dot { background: var(--board-new); color: #fff; }
+.home-board-block-day.is-today .home-board-block-dot { border-color: var(--board-ink); }
+
+.home-board-block.is-month { display: flex; flex-direction: column; gap: 0.3cqw; }
+.home-board-block-label.is-title { text-transform: capitalize; }
+.home-board-block-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.25cqw 0.4cqw; }
+.home-board-block-label.is-head { text-align: center; }
+.home-board-block-mday {
+  height: 2.55cqw;
+  display: grid;
+  place-items: center;
+  font-size: 1.35cqw;
+  border-radius: 0.6cqw;
+}
+.home-board-block-mday.is-marked { background: color-mix(in srgb, var(--board-soon) 55%, transparent); font-weight: 700; }
+.home-board-block-mday.is-alarm { background: var(--board-alert); color: #fff; font-weight: 700; }
+.home-board-block-mday.is-today { box-shadow: inset 0 0 0 0.25cqw var(--board-ink); }
+
+.home-board-block-note {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--slip-lines, 2);
+  overflow: hidden;
+  line-height: calc(var(--slip-row) * 0.75);
+}
+
+/* Nel cassetto la striscia e' a grandezza di lettura: le stesse righe, in px. */
+.home-drawer-slip {
+  --slip-row: 28px;
+  --slip-gap: 8px;
+  --slip-muted: color-mix(in srgb, var(--board-ink) 62%, var(--board-paper));
+  --slip-line: color-mix(in srgb, var(--board-ink) 16%, transparent);
+  --slip-up: color-mix(in srgb, var(--board-done) 55%, var(--board-ink));
+  display: flex;
+  flex-direction: column;
+  gap: var(--slip-gap);
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.home-drawer-slip .home-board-block-label { font-size: 11px; }
+.home-drawer-slip .home-board-block-big { font-size: 38px; }
+.home-drawer-slip .home-board-block-delta { font-size: 13px; }
+.home-drawer-slip .home-board-block-spark { width: 72px; height: 30px; }
+.home-drawer-slip .home-board-block-pill { font-size: 11px; padding: 3px 9px; }
+.home-drawer-slip .home-board-block-line { font-size: 11px; gap: 5px; }
+.home-drawer-slip .home-board-block-bar { height: 7px; border-radius: 4px; }
+.home-drawer-slip .home-board-block-target { top: -3px; width: 2px; height: 13px; }
+.home-drawer-slip .home-board-block .is-key { min-width: 44px; }
+.home-drawer-slip .home-board-block-row.is-check input,
+.home-drawer-slip .home-board-block-row.is-switch input { width: 18px; height: 18px; }
+.home-drawer-slip .home-board-block-btn,
+.home-drawer-slip .home-board-block-round { font-size: 12px; height: 26px; padding: 0 10px; }
+.home-drawer-slip .home-board-block-round { width: 30px; padding: 0; }
+.home-drawer-slip .home-board-block-counter .home-board-block-big { font-size: 28px; }
+.home-drawer-slip .home-board-block-dot { width: 26px; height: 26px; font-size: 12px; border-width: 2px; }
+.home-drawer-slip .home-board-block-mday { height: 20px; font-size: 11px; border-radius: 5px; }
+.home-drawer-slip .home-board-block-day.is-today .home-board-block-dot { border-color: var(--board-ink); }
+
+/* Da lontano i controlli dormono: il tocco va alla striscia, che apre l'app. */
+.home-board-wall:not(.is-near) .home-board-control { pointer-events: none; }
+
+.home-board-label {
+  padding: 0.9cqw 0.2cqw 1.3cqw;
+  color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 3cqw;
+  line-height: 1.05;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.home-board-auto {
+  position: absolute;
+  left: 1.2cqw;
+  bottom: 1.2cqw;
+  font-size: 2.6cqw;
+  color: rgba(255, 255, 255, 0.9);
+}
+.home-board-sig-dot {
+  position: absolute;
+  top: 1.2cqw;
+  right: 1.2cqw;
+  width: 2.1cqw;
+  height: 2.1cqw;
+  border-radius: 50%;
+  background: var(--board-new);
+  box-shadow: 0 0 0 0.5cqw rgba(255, 255, 255, 0.85);
+}
+/* Il ⋯ di una scheda (10/10/2026): in basso a destra, perche' in alto c'e' il
+   segnale (il puntino, l'angolo). Misurato in `cqw` come tutto quel che sta
+   sulla tela, cosi' cresce e cala con lo zoom. */
+.home-more.home-board-more {
+  top: auto;
+  bottom: 0;
+  width: 5.4cqw;
+  height: 5.4cqw;
+  font-size: 2.8cqw;
+}
+.home-board-sig-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5.2cqw;
+  height: 5.2cqw;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.home-board-sig-corner.is-soon { background: var(--board-soon); }
+.home-board-sig-corner.is-alert { background: var(--board-alert); }
+
+/* Il post-it delle attese di una scheda: largo 24 (`model.POSTIT_BOX`), in
+   `cqw` come il resto del muro, che si ingrandisce con lui. Tre righe al
+   massimo, ognuna la data e il testo su due righe, poi «+N». */
+.home-board-postit {
+  width: 24cqw;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1cqw;
+  padding: 2.4cqw 1.6cqw 1.4cqw;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+  font-family: var(--font-hand);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
+}
+.home-board-postit-row { display: flex; flex-direction: column; gap: 0.2cqw; }
+.home-board-postit-row + .home-board-postit-row {
+  padding-top: 1cqw;
+  border-top: 1px dashed color-mix(in srgb, var(--board-postit-ink) 30%, transparent);
+}
+.home-board-postit-when { font-size: 2.3cqw; font-weight: 700; line-height: 1.1; }
+.home-board-postit-row.is-late .home-board-postit-when { color: var(--board-alert); }
+/* Il testo su due righe al massimo: su una sola si leggeva «Rinvaso e inci…». */
+.home-board-postit-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 2.1cqw;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+}
+.home-board-postit-more { font-size: 2cqw; font-weight: 700; opacity: 0.75; }
+/* Il foglio dei promemoria di tutto il quaderno: quando, cosa, «Fatto» e «Togli». */
+.home-board-agenda { display: flex; flex-direction: column; margin-bottom: 12px; }
+.home-board-agenda-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.home-board-agenda-when { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+.home-board-agenda-text { color: var(--text); font-size: 15px; }
+.home-board-agenda-tools { grid-column: 2; display: flex; gap: 14px; margin-top: 4px; }
+
+/* L'etichetta menta delle automazioni (i cron) di una scheda o di tutto il
+   quaderno: un nastro pieno con l'icona tonda scura, e per ogni cron il ritmo in
+   grande, il suo nome e l'ultimo giro. I capi dentellati la dicono nastro, non
+   carta; il resto dei bordi resta dritto perché si legga. */
+.home-board-autolabel {
+  width: 30cqw;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 5cqw 1fr;
+  column-gap: 1.5cqw;
+  align-items: start;
+  padding: 1.6cqw 2.2cqw 1.6cqw 2cqw;
+  background: var(--board-auto);
+  color: var(--board-auto-ink);
+  font-family: var(--font-hand);
+  clip-path: polygon(0 0, 100% 0, 98.6% 12%, 100% 25%, 98.6% 38%, 100% 50%, 98.6% 62%,
+    100% 75%, 98.6% 88%, 100% 100%, 0 100%, 1.4% 88%, 0 75%, 1.4% 62%, 0 50%, 1.4% 38%,
+    0 25%, 1.4% 12%);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+}
+.home-board-autolabel-icon {
+  width: 5cqw;
+  height: 5cqw;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--board-auto-icon);
+  color: var(--board-auto);
+  font-size: 3cqw;
+}
+.home-board-autolabel-rows { display: flex; flex-direction: column; gap: 1cqw; min-width: 0; }
+.home-board-autolabel-row + .home-board-autolabel-row {
+  padding-top: 1cqw;
+  border-top: 1px dashed color-mix(in srgb, var(--board-auto-ink) 30%, transparent);
+}
+.home-board-autolabel-rhythm { display: block; font-size: 2.6cqw; font-weight: 700; line-height: 1.05; }
+.home-board-autolabel-rhythm::first-letter { text-transform: uppercase; }
+.home-board-autolabel-what {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 2.1cqw;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.home-board-autolabel-last { display: block; font-size: 1.75cqw; font-weight: 700; opacity: 0.7; }
+.home-board-autolabel-row.is-paused { opacity: 0.55; }
+.home-board-autolabel-row.is-trouble .home-board-autolabel-last,
+.home-board-autolabel-row.is-alert .home-board-autolabel-last { color: var(--board-alert); opacity: 1; }
+.home-board-autolabel-more { font-size: 1.9cqw; font-weight: 700; opacity: 0.75; }
+/* Il filo di un'etichetta: menta, come lei. */
+.home-board-threads line.is-auto { stroke: var(--board-auto-thread); }
+
+/* Il post-it lilla: le note di una scheda, accorpate (il giallo e' delle
+   attese). Con piu' di una nota, sotto spunta il bordo di un secondo foglio:
+   un'ombra piena spostata, non un elemento — niente `z-index` in questo foglio. */
+.home-board-postit.is-notes {
+  background: var(--board-note);
+  color: var(--board-note-ink);
+}
+.home-board-postit.is-notes .home-board-postit-row + .home-board-postit-row {
+  border-top-color: color-mix(in srgb, var(--board-note-ink) 30%, transparent);
+}
+.home-board-postit.is-notes.is-many {
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4),
+    1cqw 1cqw 0 0 color-mix(in srgb, var(--board-note) 80%, #000),
+    1cqw 1cqw 6px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* La galleria di una scheda: fino a tre polaroid da 16 a ventaglio, in `cqw`
+   come il resto del muro, e quante foto ha in un bollino. La prima nel DOM e'
+   quella in fondo.
+
+   La scatola e' grande quanto le polaroid che porta (`is-n1/2/3`): una
+   polaroid e' 16 x ~19 (0,9 di bordo, 14,2 di foto, 3,9 di didascalia), il
+   ventaglio aggiunge 2,6 / 4,6 in larghezza e 1 / 1,8 in altezza. Fino al
+   14/10/2026 era sempre quella di tre, e sul Titan una galleria con una foto
+   sola, trascinata, si portava dietro un'ombra piu' grande della foto.
+   L'ingombro sul muro e' `GALLERY_BOX` in jenny/board/model.py. */
+.home-board-gallery { width: 21cqw; height: 21cqw; }
+.home-board-gallery.is-n2 { width: 19cqw; height: 20.5cqw; }
+.home-board-gallery.is-n1 { width: 16cqw; height: 19.5cqw; }
+/* Trascinata, l'ombra sollevata e' della polaroid davanti, non della scatola. */
+.home-board-gallery.is-dragging { box-shadow: none; }
+.home-board-gallery.is-dragging .home-board-gallery-photo.is-0 { box-shadow: 0 14px 26px rgba(0, 0, 0, 0.55); }
+.home-board-gallery-photo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 16cqw;
+  box-sizing: border-box;
+  padding: 0.9cqw 0.9cqw 0;
+  background: var(--board-paper);
+  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.45);
+}
+.home-board-gallery-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
+}
+.home-board-gallery-cap {
+  display: block;
+  min-height: 2.4cqw;
+  padding: 0.6cqw 0.2cqw 0.9cqw;
+  color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-size: 2cqw;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-board-gallery-photo.is-0 { transform: rotate(-4deg); }
+.home-board-gallery-photo.is-1 { transform: translate(2.6cqw, 1cqw) rotate(5deg); filter: brightness(0.85); }
+.home-board-gallery-photo.is-2 { transform: translate(4.6cqw, 1.8cqw) rotate(11deg); filter: brightness(0.72); }
+.home-board-gallery-count {
+  position: absolute;
+  right: 1.2cqw;
+  top: -1.2cqw;
+  min-width: 4.6cqw;
+  height: 4.6cqw;
+  padding: 0 1cqw;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--board-ink);
+  color: var(--board-paper);
+  font-size: 2.4cqw;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+.home-board-gallery > .home-board-pin { left: 8cqw; }
+
+/* La busta sta in basso a **sinistra**: a destra c'e' Jenny, che sporge dal
+   bordo e si prende i tocchi di quell'angolo. Il posto e' suo, e la busta lo
+   lascia libero (v. anche `_SLOTS` in `jenny/board/model.py`, che non mette
+   schede in quell'angolo). */
+.home-board-envelope {
+  position: absolute;
+  left: 3%;
+  bottom: 4%;
+  width: 13cqw;
+  aspect-ratio: 1.45;
+  padding: 0;
+  border: none;
+  background: var(--board-envelope);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.45);
+  transform: rotate(4deg);
+  cursor: pointer;
+}
+.home-board-envelope:active { filter: brightness(0.92); }
+.home-board-envelope::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 62%;
+  background: var(--board-envelope-flap);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.home-board-envelope-count {
+  position: absolute;
+  top: -1.4cqw;
+  right: -1.4cqw;
+  min-width: 4cqw;
+  height: 4cqw;
+  display: grid;
+  place-items: center;
+  padding: 0 1cqw;
+  border-radius: 999px;
+  background: var(--board-pin-user);
+  color: #fff;
+  font-size: 2.3cqw;
+  font-weight: 600;
+}
+.home-board-envelope.is-empty { opacity: 0.45; }
+.home-board-envelope.is-empty .home-board-envelope-count { display: none; }
+
+.home-board-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0 var(--jenny-away-floor);
+}
+.home-board-list[hidden] { display: none; }
+.home-board-list-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 18px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-list-row:active { background: var(--active); }
+.home-board-list-name { font-weight: 500; }
+.home-board-list-next { color: var(--text-muted); font-size: 13px; }
+.home-board-list-kept { color: var(--text-muted); font-size: 12px; }
+.home-board-list-sig { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.home-board-list-sig.is-alert { color: var(--board-alert); }
+.home-board-list-envelope { color: var(--text-muted); }
+
+.home-board-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 32px var(--jenny-away-floor);
+}
+.home-board-empty[hidden] { display: none; }
+.home-board-empty p { margin: 0; }
+.home-board-empty-title { font-family: var(--font-display); font-size: 19px; }
+.home-board-empty-hint { color: var(--text-muted); }
+.home-board-empty-example {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-style: italic;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-empty-example:active { background: var(--active); }
+
+/* ── Il foglio della bacheca ── */
+
+.home-board-sheet-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 78dvh;
+  overflow-y: auto;
+  padding: 10px 20px 20px;
+}
+.home-board-grip {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.home-board-sheet-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 19px;
+}
+.home-board-sheet-body { display: flex; flex-direction: column; gap: 12px; }
+.home-board-sheet-body p { margin: 0; line-height: 1.5; }
+.home-board-muted { color: var(--text-muted); font-size: 13px; }
+
+.home-board-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.home-board-btn {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-board-btn:active { background: var(--active); }
+.home-board-btn.is-primary {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 500;
+}
+.home-board-btn:disabled { opacity: 0.5; }
+
+.home-board-proposals { display: flex; flex-direction: column; gap: 12px; }
+.home-board-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.home-board-proposal-who {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home-board-since-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.home-board-since-list li { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.home-board-since-list li::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--board-new);
+}
+
+.home-board-search-input,
+.home-board-input {
+  width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
   font-size: 14px;
+}
+/* Il fuoco cambia spessore, non solo colore: in Fumetto il bordo e' gia'
+   quello dell'anello. */
+.home-board-search-input:focus,
+.home-board-input:focus,
+.home-drawer-fix-area:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
+}
+.home-board-results { display: flex; flex-direction: column; }
+.home-board-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-result:active { background: var(--active); }
+.home-board-result-badge { margin-left: auto; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.home-board-result-badge.is-in { color: var(--text); font-family: var(--font-hand); font-weight: 700; font-size: 13px; }
+
+.home-board-menu { display: flex; flex-direction: column; }
+.home-board-menu-row {
+  display: grid;
+  grid-template-columns: 22px auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 2px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-board-menu-row:active { background: var(--active); }
+.home-board-menu-row.is-new { display: block; color: var(--text-muted); }
+.home-board-menu-name { font-weight: 500; }
+.home-board-menu-hint { color: var(--text-muted); font-size: 13px; }
+.home-board-form { display: flex; flex-direction: column; gap: 10px; }
+.home-board-form-label { display: flex; flex-direction: column; gap: 6px; color: var(--text-muted); font-size: 13px; }
+
+/* La barra della scheda tenuta premuta: sulla tela (non sul muro), in basso al
+   centro, fra la busta a sinistra e Jenny a destra. Niente z-index: sta sopra
+   le schede perche' viene dopo nel DOM, come la busta. */
+.home-board-cardbar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 32px);
+  padding: 4px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: home-board-bar-in 0.18s ease-out;
+}
+.home-board-cardbar[hidden] { display: none; }
+.home-board-cardbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.home-board-cardbar-btn:active { background: var(--active); }
+.home-board-cardbar-btn:hover { background: var(--hover); }
+.home-board-cardbar-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-board-cardbar-btn.is-close { padding: 0 10px; color: var(--text-muted); }
+@keyframes home-board-bar-in {
+  from { transform: translate(-50%, 8px); opacity: 0; }
+}
+.home-board-check { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; }
+
+/* ── Il cassetto ── */
+
+.home-board-drawer {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.home-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  container-type: inline-size;
+  padding: 14px 20px var(--jenny-away-floor);
+}
+/* In fondo al cassetto l'aria per il «+» flottante, che non deve coprire
+   l'ultima riga. */
+.home-board-drawer > .home-drawer { padding-bottom: calc(var(--jenny-away-floor) + 72px); }
+.home-drawer-note { margin: 0; padding: 24px 20px; color: var(--text-muted); }
+.home-drawer-own { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-top: 4px; border-top: 0.5px solid var(--border); }
+.home-drawer-title { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; letter-spacing: 0.01em; }
+.home-drawer-meta { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+.home-drawer-brief { margin: 0; max-width: 60ch; font-size: 15px; line-height: 1.5; }
+/* La testa del cassetto: titolo e «in breve» a tutta larghezza. Fino al
+   14/10/2026 le note stavano a destra del brief; ora scendono nella fila dei
+   mazzetti, accanto alle foto, e il brief prende tutta la riga. */
+.home-drawer-top { display: block; }
+.home-drawer-lead { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* La fila dei mazzetti appuntati: le foto a sinistra, le note a destra. Se ce
+   n'e' uno solo sta a sinistra; in un cassetto stretto vanno uno sotto l'altro
+   (`wrap`: due mazzetti da 210 piu' lo spazio fra loro non ci stanno). */
+.home-drawer-pins {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px 18px;
+}
+
+/* ── Le note dell'utente (`home-board-notes.js`) ──
+   Post-it lilla: il giallo e' delle attese. */
+.home-notes { display: flex; flex-direction: column; gap: 6px; width: 210px; }
+.home-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding-right: 22px;
+}
+.home-notes-title {
+  margin: 0;
+  color: var(--board-note-label, var(--board-note));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.home-notes-all {
+  min-height: 32px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-notes-all:active { opacity: .6; }
+/* Il mazzetto: `isolation` tiene l'ordine delle carte (lo scrive il JS, in
+   linea) dentro di lui, sotto Jenny e sotto il foglio. */
+.home-notes-deck {
+  position: relative;
+  isolation: isolate;
+  width: 210px;
+  height: 140px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.home-notes-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 188px;
+  height: 122px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 13px 9px;
+  color: var(--board-note-ink);
+  font-family: var(--font-hand);
+  transition: transform 0.3s cubic-bezier(0.33, 0, 0.2, 1), opacity 0.25s ease,
+    background-color 0.3s ease, box-shadow 0.3s ease;
+}
+.home-notes-card.is-slot-0 {
+  transform: rotate(2deg);
+  background: var(--board-note);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+.home-notes-card.is-slot-1 {
+  transform: translate(8px, 7px) rotate(5deg);
+  background: color-mix(in srgb, var(--board-note) 90%, #000);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
+}
+.home-notes-card.is-slot-2,
+.home-notes-card.is-hidden {
+  transform: translate(15px, 12px) rotate(-3deg);
+  background: color-mix(in srgb, var(--board-note) 82%, #000);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+.home-notes-card.is-hidden { opacity: 0; }
+/* Delle carte dietro si vede il bordo, non quel che c'e' scritto: la data di
+   quella in fondo spuntava sotto il mazzetto. Si scrivono mentre avanzano. */
+.home-notes-card > * { transition: opacity 0.2s ease; }
+.home-notes-card.is-slot-1 > *,
+.home-notes-card.is-slot-2 > *,
+.home-notes-card.is-hidden > * { opacity: 0; }
+/* Sfilata: di lato, alzata e girata, come una carta tolta dal mazzo. */
+.home-notes-card.is-out {
+  transform: translate(150px, -18px) rotate(14deg);
+  background: var(--board-note);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55);
+}
+.home-notes-card-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.22;
+}
+.home-notes-card-foot,
+.home-notes-tile-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+}
+.home-notes-card-foot span:first-child,
+.home-notes-tile-foot span:first-child { opacity: 0.75; }
+.home-notes-pin {
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  border-radius: 50%;
+  background: var(--board-pin-user);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Le foto dell'utente (`home-board-photos.js`) ──
+   Polaroid di carta bianca fissate con lo scotch: il lilla e' delle note, il
+   giallo delle attese. Il mazzetto e' quello delle note (`home-board-deck.js`):
+   stesse classi dei posti, carta diversa. */
+.home-photos { display: flex; flex-direction: column; gap: 6px; width: 210px; }
+.home-notes-title.home-photos-title { color: var(--text-muted); }
+.home-photos-deck {
+  position: relative;
+  isolation: isolate;
+  width: 210px;
+  height: 200px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.home-photos-card {
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 168px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 0;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  transition: transform 0.3s cubic-bezier(0.33, 0, 0.2, 1), opacity 0.25s ease,
+    filter 0.3s ease, box-shadow 0.3s ease;
+}
+.home-photos-card.is-slot-0 {
+  transform: rotate(-2.5deg);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+.home-photos-card.is-slot-1 {
+  transform: translate(12px, 6px) rotate(4deg);
+  filter: brightness(0.86);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
+}
+.home-photos-card.is-slot-2,
+.home-photos-card.is-hidden {
+  transform: translate(22px, 10px) rotate(8.5deg);
+  filter: brightness(0.74);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+.home-photos-card.is-hidden { opacity: 0; }
+/* Delle polaroid dietro si vede la foto, non la nota: si scrive mentre arriva. */
+.home-photos-card > .home-photos-cap,
+.home-photos-card > .home-photos-tape { transition: opacity 0.2s ease; }
+.home-photos-card:not(.is-slot-0):not(.is-out) > .home-photos-cap,
+.home-photos-card:not(.is-slot-0):not(.is-out) > .home-photos-tape { opacity: 0; }
+.home-photos-card.is-out {
+  transform: translate(150px, -18px) rotate(14deg);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55);
+}
+.home-photos-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
+}
+.home-photos-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 2px 8px;
+  font-family: var(--font-hand);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.home-photos-cap-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.home-photos-cap-when { flex: none; font-family: var(--font-sans); font-size: 10.5px; opacity: 0.7; }
+/* Lo scotch: carta semitrasparente sul bordo alto, al posto del chiodo. */
+.home-photos-tape {
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  width: 54px;
+  height: 18px;
+  margin-left: -27px;
+  background: rgba(240, 232, 200, 0.6);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transform: rotate(-4deg);
+}
+
+/* La galleria, nel foglio: tre polaroid per riga, «Nuova foto» in testa. */
+.home-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 12px;
+  padding-top: 8px;
+}
+.home-photos-new {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  aspect-ratio: 0.8;
+  border: 2px dashed color-mix(in srgb, var(--text-muted) 55%, transparent);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-photos-new i { font-size: 26px; }
+.home-photos-new:active { background: var(--active); }
+.home-photos-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 7px 7px 0;
+  border: none;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  text-align: left;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transform: rotate(-1.3deg);
+  cursor: pointer;
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-photos-tile:nth-child(even) { transform: rotate(1.4deg); }
+.home-photos-tile:active { filter: brightness(0.92); }
+.home-photos-tile-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: 6px 2px 0;
+  font-family: var(--font-hand);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.home-photos-tile-text.is-empty { color: color-mix(in srgb, var(--board-ink) 50%, transparent); font-weight: 600; }
+.home-photos-tile-when { padding: 3px 2px 7px; font-size: 10.5px; font-weight: 700; opacity: 0.65; }
+/* ── La pagina d'album di una foto (aperta, in correzione, nuova) ──
+   In alto «Tutte le foto» e le frecce; la polaroid **quadrata** a sinistra,
+   con la nota nel suo margine bianco; a destra la data per esteso, lo stato e
+   i comandi. Sta tutta in uno schermo del Titan (574 x 566). La foto intera
+   e' a tutto schermo (`.home-photo-viewer`, un tocco sulla polaroid). */
+.home-photos-page { display: flex; flex-direction: column; padding: 2px 0 8px; }
+.home-photos-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.home-photos-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 4px 0 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.home-photos-act i { font-size: 18px; color: var(--text-muted); }
+.home-photos-act.is-quiet { color: var(--text-muted); }
+.home-photos-act:active { opacity: 0.6; }
+.home-photos-back { gap: 4px; font-size: 13px; }
+.home-photos-back i { color: var(--text); }
+.home-photos-pager { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+.home-photos-pager-at { min-width: 44px; text-align: center; }
+.home-photos-step {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-photos-step:disabled { opacity: 0.28; cursor: default; }
+.home-photos-step:not(:disabled):active { background: var(--active); }
+.home-photos-album { display: flex; align-items: center; gap: 26px; padding-left: 6px; }
+.home-photos-pol {
+  position: relative;
+  flex: none;
+  width: 236px;
+  box-sizing: border-box;
+  padding: 11px 11px 0;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.55), 0 2px 5px rgba(0, 0, 0, 0.35);
+  transform: rotate(-1.6deg);
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-photos-pol .home-photos-tape { top: -10px; width: 66px; height: 20px; margin-left: -33px; }
+.home-photos-pol-img {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--board-ink) 85%, #000);
+}
+button.home-photos-pol-img { cursor: zoom-in; }
+button.home-photos-pol-img:active { filter: brightness(0.9); }
+.home-photos-pol-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.home-photos-pol-full {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(14, 12, 10, 0.45);
+  color: #fff;
+  font-size: 15px;
+  backdrop-filter: blur(6px);
+}
+.home-photos-pol-cap { display: flex; align-items: flex-end; min-height: 30px; padding: 10px 4px 14px; }
+.home-photos-pol-note {
+  font-family: var(--font-hand);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.home-photos-pol-note.is-empty { color: color-mix(in srgb, var(--board-ink) 45%, transparent); font-weight: 600; }
+/* La nota si scrive dove sta: nel margine della polaroid, a mano. */
+.home-photos-pol-area {
+  width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px dashed color-mix(in srgb, var(--board-ink) 35%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, #fff 55%, transparent);
+  color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  resize: none;
+}
+.home-photos-side { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.home-photos-day { font-family: var(--font-display); font-size: 22px; color: var(--text); }
+.home-photos-state { display: inline-flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: 12.5px; font-weight: 600; }
+.home-photos-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--board-soon); }
+.home-photos-state.is-integrated i { background: var(--ok); }
+.home-photos-rule { align-self: stretch; height: 1px; margin: 14px 0 10px; background: var(--border); }
+.home-photos-acts { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.home-photos-save {
+  min-height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.home-photos-save:active { opacity: 0.8; }
+.home-photos-save:disabled { opacity: 0.5; }
+@container (max-width: 440px) {
+  .home-photos-album { flex-direction: column; align-items: center; }
+  .home-photos-side { align-items: center; text-align: center; }
+  .home-photos-acts { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+}
+
+/* ── Una foto a tutto schermo (`home-photo-viewer.js`) ──
+   Un `<dialog>` nel top layer (sopra il foglio da cui si apre), con la classe
+   `image-lightbox` per la catena di Indietro: qui si rifa' la sua forma. La
+   foto intera con un filo di carta, su un fondo che e' lei stessa sfocata. */
+dialog.home-photo-viewer {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  overflow: hidden;
+  background: #0b0a09;
+  color: #f3efe6;
+}
+dialog.home-photo-viewer[open] { display: flex; }
+.home-photo-viewer-bg {
+  position: absolute;
+  inset: -60px;
+  background: center / cover no-repeat;
+  filter: blur(40px) brightness(0.32) saturate(1.3);
+  pointer-events: none;
+}
+.home-photo-viewer-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 12px) 14px 8px 20px;
+}
+.home-photo-viewer-count { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.75; }
+.home-photo-viewer-close {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-photo-viewer-close:active { background: rgba(255, 255, 255, 0.2); }
+.home-photo-viewer-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 22px;
+}
+.home-photo-viewer-frame {
+  display: flex;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 6px;
+  background: var(--board-paper);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.65);
+}
+.home-photo-viewer-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100dvh - 200px);
+  object-fit: contain;
+  touch-action: none;
+}
+.home-photo-viewer-bottom {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 24px calc(env(safe-area-inset-bottom) + 16px);
+  text-align: center;
+}
+.home-photo-viewer-note { margin: 0; font-family: var(--font-hand); font-size: 20px; font-weight: 700; line-height: 1.2; }
+.home-photo-viewer-note[hidden] { display: none; }
+.home-photo-viewer-sub { margin: 0; font-size: 11.5px; font-weight: 600; opacity: 0.6; }
+.home-photo-viewer-dots { display: flex; gap: 6px; padding-top: 4px; }
+.home-photo-viewer-dots i { width: 5px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.3); transition: width 0.2s ease; }
+.home-photo-viewer-dots i.is-on { width: 14px; background: #fff; }
+
+/* Tutte le note, nel foglio: la stessa carta, in griglia. */
+.home-notes-list { display: flex; flex-direction: column; gap: 16px; }
+.home-board-sheet-body .home-notes-sub { color: var(--text-muted); font-size: 13px; }
+.home-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 14px;
+  padding-top: 6px;
+}
+.home-notes-new {
+  min-height: 118px;
+  border: 2px dashed color-mix(in srgb, var(--board-note-label, var(--board-note)) 45%, transparent);
+  border-radius: 4px;
+  background: none;
+  color: var(--board-note-label, var(--board-note));
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-notes-new:active { background: var(--active); }
+.home-notes-tile {
+  position: relative;
+  min-height: 118px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 12px 9px;
+  border: none;
+  background: var(--board-note);
+  color: var(--board-note-ink);
+  font-family: var(--font-hand);
+  text-align: left;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transform: rotate(-1.4deg);
+  cursor: pointer;
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-notes-tile:active { filter: brightness(0.92); }
+.home-notes-tile:nth-child(even) { transform: rotate(1.2deg); }
+.home-notes-tile-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.22;
+}
+.home-notes-more[hidden] { display: none; }
+/* Aperta (o in correzione): larga quanto il foglio. */
+.home-notes-open {
+  position: relative;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px 10px;
+  background: var(--board-note);
+  color: var(--board-note-ink);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+  animation: home-notes-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.home-notes-open.is-editing { padding-top: 16px; }
+.home-board-sheet-body .home-notes-open-text {
+  font-family: var(--font-hand);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.32;
+  white-space: pre-wrap;
+}
+.home-notes-area {
+  min-height: 96px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px dashed color-mix(in srgb, var(--board-note-ink) 35%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, #fff 35%, transparent);
+  color: var(--board-note-ink);
+  font-family: var(--font-hand);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  max-height: 46dvh;
+  resize: none;
+}
+.home-notes-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--board-note-ink) 30%, transparent);
+}
+.home-notes-when { margin-right: auto; font-size: 11px; font-weight: 700; opacity: 0.75; }
+.home-notes-gap { flex: 1; }
+.home-notes-btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--board-note-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-notes-btn.is-primary { background: var(--board-note-ink); color: var(--board-note); font-weight: 700; }
+.home-notes-btn:not(.is-primary):active { background: color-mix(in srgb, var(--board-note-ink) 12%, transparent); }
+.home-notes-btn.is-primary:active { opacity: .8; }
+.home-notes-btn.is-danger { color: #8a2d3b; }
+@keyframes home-notes-in {
+  from { opacity: 0; transform: translateY(-14px) scale(0.94); }
+}
+.home-drawer-alert {
+  padding: 6px 10px;
+  border-left: 3px solid var(--board-alert);
+  background: color-mix(in srgb, var(--board-alert) 10%, transparent);
+  font-size: 13px;
+}
+/* Il calendario di cura: le attese della scheda su una linea del tempo. La
+   carta gialla e' la prossima; le altre sono righe col giorno e ⋯. */
+.home-drawer-cal-line {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-left: 30px;
+}
+.home-drawer-cal-line::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: var(--border);
+}
+.home-drawer-cal-today,
+.home-drawer-cal-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.home-drawer-cal-today { color: var(--accent); }
+.home-drawer-cal-group { margin-top: 6px; color: var(--text-muted); }
+.home-drawer-cal-group.is-overdue { color: var(--board-alert); }
+.home-drawer-cal-today::before,
+.home-drawer-cal-group::before {
+  content: '';
+  position: absolute;
+  left: -26px;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.home-drawer-cal-today::before { background: var(--accent); }
+.home-drawer-cal-group::before { border: 2px solid var(--board-soon); background: var(--bg); }
+.home-drawer-cal-group.is-overdue::before { border-color: var(--board-alert); }
+.home-drawer-cal-next {
+  margin: 4px 0 8px;
+  padding: 12px 14px 8px;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+.home-drawer-cal-next-key { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.home-drawer-cal-next.is-late .home-drawer-cal-next-key { color: var(--board-alert); }
+.home-drawer-cal-next-text { margin: 5px 0 0; font-family: var(--font-hand); font-size: 18px; font-weight: 700; line-height: 1.25; }
+.home-drawer-cal-next-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.home-drawer-cal-done {
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 6px;
+  background: var(--board-postit-ink);
+  color: var(--board-postit);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.home-drawer-cal-done:active { opacity: .8; }
+.home-drawer-cal-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 48px;
+}
+.home-drawer-cal-day { color: var(--board-soon); font-size: 14px; font-weight: 700; }
+.home-drawer-cal-row.is-late .home-drawer-cal-day { color: var(--board-alert); }
+.home-drawer-cal-text { font-size: 15px; line-height: 1.35; }
+.home-drawer-cal-more {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.home-drawer-cal-more:active { background: var(--active); }
+.home-drawer-cal-next .home-drawer-cal-more { color: inherit; }
+
+.home-drawer-sections { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.home-drawer-section {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 4px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+@container (max-width: 440px) {
+  .home-drawer-section { grid-template-columns: minmax(0, 1fr); }
+}
+.home-drawer-section-title {
+  margin: 0;
+  padding-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+/* Le sezioni dello scheletro a fisarmonica: chiuse sono una riga — titolo,
+   la prima riga del testo, la freccia — alta un dito. */
+.home-drawer-section.is-fold { padding: 0; }
+.home-drawer-section.is-fold > .home-drawer-section-title { grid-column: 1 / -1; padding: 0; }
+.home-drawer-section.is-fold.is-open { padding-bottom: 12px; }
+.home-drawer-section.is-fold > .home-drawer-section-body { grid-column: 2; }
+@container (max-width: 440px) {
+  .home-drawer-section.is-fold > .home-drawer-section-body { grid-column: 1; }
+}
+.home-drawer-fold {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) 20px;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-drawer-fold:active { background: var(--active); }
+.home-drawer-fold-preview {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-drawer-fold-preview:empty { display: none; }
+.home-drawer-fold-icon { color: var(--text-muted); font-size: 16px; transition: transform 0.18s; }
+.home-drawer-section.is-open .home-drawer-fold-icon { transform: rotate(180deg); }
+@container (max-width: 440px) {
+  .home-drawer-fold { grid-template-columns: minmax(0, 1fr) 20px; }
+  .home-drawer-fold-preview { grid-column: 1; grid-row: 2; margin-bottom: 8px; }
+  .home-drawer-fold-icon { grid-column: 2; grid-row: 1; }
+}
+.home-drawer-fresh {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 6px 1px 0;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--board-new);
+}
+.home-drawer-owner { margin-left: 6px; font-weight: 400; letter-spacing: 0.04em; text-transform: none; }
+.home-drawer-text { margin: 0; line-height: 1.5; white-space: pre-line; }
+.home-drawer-text.is-mine { font-style: italic; }
+.home-drawer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 7px; }
+.home-drawer-actions { display: flex; gap: 8px; margin-left: auto; }
+.home-drawer-hint { color: var(--text-muted); font-size: 12px; }
+.home-drawer-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.home-drawer-chip:active { background: var(--active); }
+.home-drawer-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.home-drawer-link:active { opacity: .6; }
+.home-drawer-link.is-fix { margin-left: 4px; }
+.home-drawer-link.is-move { text-decoration: none; }
+.home-drawer-tag { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-muted); font-size: 12px; }
+.home-drawer-tag.is-done { color: var(--board-done); }
+.home-drawer-fix-area {
+  width: 100%;
+  min-height: 74px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+}
+.home-drawer-app { display: flex; flex-direction: column; gap: 4px; }
+.home-drawer-app-value { display: flex; align-items: baseline; gap: 10px; }
+.home-drawer-app-label { color: var(--text-muted); font-size: 13px; }
+.home-drawer-app-number { font-size: 18px; font-weight: 500; }
+.home-drawer-app-sign { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12px; }
+.home-drawer-app-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--board-done); }
+.home-drawer-app-sign.is-alarm .home-drawer-app-dot,
+.home-drawer-app-sign.is-stale .home-drawer-app-dot { background: var(--board-alert); }
+.home-drawer-app-sign.is-empty .home-drawer-app-dot { background: var(--text-faint); }
+.home-drawer-spark polyline { fill: none; stroke: var(--text-muted); stroke-width: 1.4; }
+/* Un'app col lettore: i valori secondari a chip, e il guasto. Con il codice
+   fermo il valore resta, in grigio: e' l'ultimo buono, con la sua eta'. */
+.home-drawer-micro-extras { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
+.home-drawer-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+}
+.home-drawer-chip-label { color: var(--text-muted); }
+.home-drawer-chip-value { color: var(--text); font-weight: 500; }
+.home-drawer-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  margin: 2px 0 4px;
+}
+.home-drawer-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  min-width: 0;
+}
+.home-drawer-tile-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.home-notebook-page-group {
-  flex: none;
-  color: var(--text-muted);
-  font-size: 11px;
+.home-drawer-tile-value { color: var(--text); font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.home-drawer-tile-value.is-yes, .home-drawer-chip-value.is-yes { color: var(--board-done); }
+.home-drawer-tile-value.is-no, .home-drawer-chip-value.is-no { color: var(--text-faint); }
+.home-drawer-progress { display: flex; flex-direction: column; gap: 6px; }
+.home-drawer-progress-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.home-drawer-progress-fill { height: 100%; background: var(--board-done); }
+.home-drawer-micro-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.home-drawer-micro-row { display: flex; flex-direction: column; gap: 1px; }
+.home-drawer-micro-row-title { font-size: 15px; color: var(--text); }
+.home-drawer-micro-row-sub { font-size: 12px; color: var(--text-muted); }
+.home-drawer-micro-table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.home-drawer-micro-table th { text-align: left; font-weight: 500; color: var(--text-muted); padding: 2px 8px 4px 0; }
+.home-drawer-micro-table td { padding: 3px 8px 3px 0; border-top: 1px solid var(--border); }
+.home-drawer-micro-table .is-num { text-align: right; }
+.home-drawer-proof { margin: 4px 0 0; font-size: 13px; color: var(--text); }
+.home-drawer-proof.is-down { color: var(--board-alert); }
+.home-drawer-app.is-broken .home-drawer-app-number,
+.home-drawer-app.is-quarantined .home-drawer-app-number,
+.home-drawer-app.is-paused .home-drawer-app-number { color: var(--text-faint); }
+/* Il «+» flottante del cassetto e il suo ventaglio. Stanno nel guscio, fermi
+   mentre il cassetto scorre, e solo nella stanza del cassetto. Nello stesso
+   posto del + dei Quaderni (`.home-notebooks-new`), per scelta dell'utente
+   (12/10/2026): stesso gesto, stesso angolo. Niente z-index: vengono dopo il
+   cassetto nel DOM e prima della mascotte, che col suo resta sopra anche al
+   velo. */
+.home-drawer-fab,
+.home-drawer-dial { display: none; }
+.home-shell[data-view='drawer'] .home-drawer-fab { display: flex; }
+.home-shell[data-view='drawer'] .home-drawer-dial:not([hidden]) { display: flex; }
+/* Un piano tiene il quaderno: il + del cassetto non c'e' (v. `setLocked`). */
+.home-shell[data-view='drawer'] .home-drawer-fab[hidden] { display: none; }
+.home-drawer-fab {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+  font-size: 26px;
+  /* L'anello del colore del fondo lo stacca dalla carta gialla del calendario,
+     che e' dello stesso giallo quando ci scorre sotto. */
+  box-shadow: 0 0 0 4px var(--bg), 0 6px 18px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: transform 0.18s;
 }
-
-/* I tre colori dei gruppi. Tre e non quattro: v. `GROUPS` in home-notebook-pages.js —
-   `summaries/` da `/api/graph` non esce.
-
-   **Non sono gli stessi tre della legenda del grafo, e la ragione e' misurata.**
-   Di la' `concepts` e' `--accent` ed `entities` e' `--error`: su sei temi quei
-   due colori distano 26 in kyoto e 58 in pietra (distanza RGB) — cioe' due
-   pallini identici a occhio, in un elenco dove il pallino dovrebbe dividere. La
-   sola coppia che si separa **in tutti e sei** e' `--error` / `--ok`, che non
-   scende mai sotto 101; `--accent` e `--ok` addirittura coincidono (distanza 0)
-   in chanel e fumetto.
-
-   Quindi qui `concepts` prendeva `--ok`, e `entities` restava `--error`.
-   Dal 26/09/2026 nessuno dei due: un'entita' non e' un errore, e in Y2K il
-   verde di `--ok` stava a 1,7:1 sul fondo. La
-   coppia e' `--group-concepts`/`--group-entities` (in `mobile-style.css`),
-   scelta per separarsi in tutti e sette i temi — lo misura il banco. Il
-   grafo dell'officina ha lo stesso scontro e non l'ho toccato — la' la legenda
-   mette la pastiglia accanto alla parola, quindi si decodifica lo stesso, e
-   cambiare i colori di un altro guscio non e' lavoro di questo giro. */
-.home-group-concepts { background: var(--group-concepts); }
-.home-group-entities { background: var(--group-entities); }
-.home-group-other { background: var(--text-faint); }
-
-.home-notebook-pages-note,
-.home-map-note {
-  flex: none;
-  padding: 10px 18px;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: center;
+.home-drawer-fab:active { filter: brightness(0.92); }
+.home-drawer-fab.is-open { transform: rotate(45deg); }
+.home-drawer-fab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.home-drawer-dial {
+  position: absolute;
+  inset: 0;
+  align-items: flex-end;
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  animation: home-drawer-dial-in 0.16s ease-out;
 }
-
-.home-notebook-pages-note[hidden],
-.home-map-note[hidden] { display: none; }
-
-/* ── La mappa ── */
-
-.home-map {
-  flex: 1;
-  min-height: 0;
+/* Le scelte salgono dal tondo, allineate al suo centro (18 + (56 - 44) / 2):
+   l'icona sopra l'icona, l'etichetta a sinistra. */
+.home-drawer-dial-menu {
   display: flex;
   flex-direction: column;
-  margin: 0 12px 8px;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0 24px 84px 16px;
+}
+.home-drawer-dial-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.home-drawer-dial-name {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 15px;
+  font-weight: 600;
+}
+.home-drawer-dial-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 20px;
+}
+.home-drawer-dial-row.is-reminder .home-drawer-dial-name,
+.home-drawer-dial-row.is-reminder .home-drawer-dial-icon {
+  border-color: transparent;
+  background: var(--board-postit);
+  color: var(--board-postit-ink);
+}
+/* Al tocco si accende il tondo, non la riga: la riga sta sul velo. Il velo
+   va sopra il fondo del tondo (che sia di superficie o giallo) invece di
+   sostituirlo. */
+.home-drawer-dial-row:active .home-drawer-dial-icon { box-shadow: inset 0 0 0 999px var(--active); }
+.home-drawer-dial-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 22px; }
+@keyframes home-drawer-dial-in {
+  from { opacity: 0; }
+}
+.home-drawer-h4 {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.home-drawer-thread {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-drawer-thread:active { background: var(--active); }
+.home-drawer-thread-line { display: flex; align-items: baseline; gap: 10px; }
+.home-drawer-link.is-cut { text-decoration: none; font-size: 15px; }
+.home-board-row { display: flex; gap: 8px; }
+.home-board-input.is-op { flex: 1; }
+.home-board-input.is-value { width: 90px; flex: none; }
+.home-drawer-thread-mark { color: var(--board-thread); }
+.home-drawer-thread-to { font-weight: 500; }
+.home-drawer-thread-why { color: var(--text-muted); font-size: 13px; }
+.home-drawer-pages { display: flex; flex-direction: column; gap: 6px; }
+.home-drawer-pages summary { color: var(--text-muted); font-size: 13px; cursor: pointer; }
+.home-drawer-pages summary:active { opacity: .6; }
+.home-drawer-pages .home-drawer-chip { align-self: flex-start; margin: 3px 0; }
+.home-drawer-foot { margin: 0; color: var(--text-muted); font-size: 12px; }
+
+/* ── I tre tipi di link del lettore ──
+   Normale: stesso cassetto. Con l'etichetta: apre un altro cassetto. A
+   puntini, attenuato: fuori bacheca, solo anteprima. */
+.home-reader-body a.home-link-drawer { text-decoration: underline; text-underline-offset: 3px; }
+.home-link-chip {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--board-paper);
+  color: var(--board-ink);
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 11px;
+  text-decoration: none;
+  vertical-align: 1px;
+}
+.home-reader-body a.home-link-offboard {
+  color: var(--text-muted);
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
 }
 
-.home-map[hidden] { display: none; }
-
-.home-map-svg {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  touch-action: none;
-}
-
-.home-map-edges line {
-  stroke: var(--border-strong);
-  stroke-width: 1;
-}
-
-/* Il raggio lo scrive il JS (dice quanti collegamenti ha la pagina); il colore
-   lo scrive il gruppo, con le stesse classi dei pallini dell'elenco.
-   Il `fill` qui e' il ripiego, lo stesso grigio di `other`: la mappa prende il
-   gruppo cosi' come arriva (`node.group || 'other'` in home-map.js, senza la
-   `sanitizeGroup` dell'elenco), e una cartella che i tre colori non prevedono
-   — `sources/`, per dire — restava col nero di default di SVG, invisibile nel
-   tema scuro. Le tre regole sotto vincono per specificita'. */
-.home-map-node { cursor: pointer; fill: var(--text-faint); }
-
-.home-map-nodes .home-group-concepts { fill: var(--group-concepts); }
-.home-map-nodes .home-group-entities { fill: var(--group-entities); }
-.home-map-nodes .home-group-other { fill: var(--text-faint); }
-
-.home-map-labels text {
-  fill: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 9px;
-  text-anchor: middle;
-  /* Il bersaglio e' il pallino: un'etichetta che intercetta il tocco fa
-     mancare la pagina accanto. */
-  pointer-events: none;
+@media (prefers-reduced-motion: reduce) {
+  .home-board-item,
+  .home-board-item.is-appearing,
+  .home-board-cardbar,
+  .home-drawer-fab,
+  .home-drawer-dial,
+  .home-drawer-fold-icon,
+  .home-notes-card,
+  .home-notes-tile,
+  .home-notes-open,
+  .home-photos-card,
+  .home-photos-tile,
+  .home-photos-pol,
+  .home-photo-viewer-dots i { transition: none; animation: none; }
 }
 
 /* ── Una pagina, letta ── */
@@ -2084,8 +5401,226 @@ body.home {
   outline: none;
 }
 
-.home-drawer .launcher-list {
-  padding-bottom: calc(var(--jenny-away-floor) + var(--jenny-size) * var(--jenny-art-h));
+/* ── La griglia delle app (05/10/2026) ──
+   Il cassetto «che chiunque abbia un Android sa gia' usare»: il campo a
+   pillola, le suggerite in una fila, una riga, poi tutte dalla A alla Z in
+   cinque colonne. Le celle sono le righe dell'officina (`.launcher-row`, stesso
+   `option`, stesso tocco lungo), vestite qui da cella: le regole stanno tutte
+   sotto `#launcher-sheet`, che esiste solo in casa, perche' mobile-style.css lo
+   carica anche l'officina e `.home-drawer` e' anche il cassetto della bacheca.
+   Le cinque colonne sono `GRID_COLS` in `mobile-launcher.js`: ↑↓ saltano di
+   tante voci, e le due cifre devono restare uguali. */
+
+/* `.home-drawer` porta anche la cornice del cassetto della bacheca (20 px di
+   lato, 16 fra i pezzi): qui si sommava a quella del campo e della griglia, e
+   su 432 px di altezza costava quasi una fila di icone. */
+#launcher-sheet { padding: 4px 0 0; gap: 0; }
+/* Il cestino delle app, in fondo alla griglia: una riga sobria, che c'e' solo
+   quando qualcosa e' stato eliminato. */
+.launcher-trash {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  min-height: 40px;
+  margin: 10px auto 16px;
+  padding: 0 16px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.launcher-trash:active { background: var(--active); }
+.launcher-trash[hidden] { display: none; }
+.launcher-trash:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.apps-trash-body { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
+.apps-trash-empty { margin: 8px 4px; color: var(--text-muted); }
+.apps-trash-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 0.5px solid var(--border);
+}
+.apps-trash-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.apps-trash-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apps-trash-meta { color: var(--text-muted); font-size: 12px; }
+.apps-trash-btn {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.apps-trash-btn:active { background: var(--active); }
+.apps-trash-btn.is-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.apps-trash-btn.is-danger { color: var(--error); border-color: var(--error); }
+.apps-trash-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+#launcher-sheet .launcher-head { display: none; }
+
+#launcher-sheet .launcher-search-row { padding: 6px 18px 10px; }
+#launcher-sheet .launcher-search-icon { left: 35px; font-size: 17px; color: var(--text-muted); }
+#launcher-sheet .launcher-search {
+  height: 48px;
+  padding: 0 48px 0 46px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: 15px;
+}
+#launcher-sheet .launcher-search::placeholder { color: var(--text-muted); }
+#launcher-sheet .launcher-search:focus {
+  box-shadow: inset 0 0 0 1px var(--focus-ring), 0 0 0 1px var(--focus-ring);
+}
+#launcher-sheet .launcher-search-clear { right: 30px; width: 32px; height: 32px; }
+
+/* Le suggerite. `:not([hidden])` e non un `display` sulla classe: vuota la
+   fila si nasconde col solo attributo, e una regola di classe lo scavalcherebbe. */
+#launcher-sheet .launcher-top:not([hidden]) {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+#launcher-sheet .launcher-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-content: start;
+  gap: 6px 4px;
+  padding-top: 10px;
+  padding-inline: 14px;
+  /* A filo col fondo. Il posto per Jenny (pavimento + la sua altezza, ~154 px)
+     a griglia corta era solo un vuoto sotto l'ultima fila, che saliva a ogni
+     scorrimento; Jenny sta sopra a tutto e si sposta. */
+  padding-bottom: 0;
+  /* Senza barra: la sua larghezza la toglieva alla griglia e non alle
+     suggerite, e le colonne delle due non stavano piu' una sotto l'altra
+     (4 px di scarto all'ultima, visto su jenny_square). */
+  scrollbar-width: none;
+}
+#launcher-sheet .launcher-list::-webkit-scrollbar { display: none; }
+/* I tre stati vuoti sono una frase, non una cella. */
+#launcher-sheet .launcher-note { grid-column: 1 / -1; text-align: center; }
+
+#launcher-sheet .launcher-row,
+#launcher-sheet .launcher-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 84px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  /* Il tocco lungo apre la scheda: niente selezione del nome a meta' strada
+     (v. `.home-who-row`, stessa lezione). */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#launcher-sheet .launcher-row:active,
+#launcher-sheet .launcher-tile:active { background: var(--overlay-strong); }
+/* La selezione di ⏎. Nella griglia si vede solo quando serve: dopo una
+   freccia o la rotella (`kbd-nav`, v. `_moveSelection`) o mentre si cerca —
+   a riposo la prima app dell'alfabeto non resta cerchiata. */
+#launcher-sheet .launcher-row.selected {
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+}
+#launcher-sheet .launcher-list.kbd-nav .launcher-row.selected,
+#launcher-sheet:has(.launcher-search:not(:placeholder-shown)) .launcher-row.selected,
+#launcher-sheet .launcher-row:focus-visible,
+#launcher-sheet .launcher-tile:focus-visible {
+  outline: none;
+  background: var(--overlay-strong);
+  box-shadow: inset 0 0 0 1.5px var(--focus-ring);
+}
+
+/* L'icona: quella vera delle app Android, che ha gia' la sua forma, e per le
+   Jenny App il glifo su una tessera piena nella tela del nome
+   (`paintSpine`, la stessa dei quaderni). */
+#launcher-sheet .launcher-row-icon,
+#launcher-sheet .launcher-tile-icon {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: var(--text);
+}
+#launcher-sheet .launcher-row-icon img,
+#launcher-sheet .launcher-tile-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0;
+}
+#launcher-sheet .is-glyph { background: var(--cover); color: var(--cover-ink); }
+#launcher-sheet .is-glyph i { font-size: 26px; }
+
+/* Un'app da riparare: un puntino, e basta. Il guasto per intero sta nella
+   scheda e, per chi non vede, nella riga nascosta qui sotto. */
+#launcher-sheet .launcher-row:has(.launcher-row-desc--problem) .launcher-row-icon::after,
+#launcher-sheet .launcher-tile.has-problem .launcher-tile-icon::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--error);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+#launcher-sheet .launcher-row-text { flex: none; width: 100%; align-items: center; gap: 0; }
+#launcher-sheet .launcher-row-name,
+#launcher-sheet .launcher-tile-name {
+  max-width: 100%;
+  font-size: 12px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Descrizione, tipo e nuvola non si vedono, ma si sentono: nascosti con il
+   ritaglio e non con `display: none`, TalkBack legge ancora «Meteo, Jenny App»
+   — o il guasto, che e' l'unica cosa che spiega il puntino. */
+#launcher-sheet .launcher-row-desc,
+#launcher-sheet .launcher-row-kind,
+#launcher-sheet .launcher-row-server {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .home-you-scroll {
@@ -2317,6 +5852,7 @@ body.home {
   text-align: left;
   cursor: pointer;
 }
+.home-row:active { background: var(--active); }
 
 /* Il filo fra una riga e l'altra sta *fra*: sulla prima sarebbe il bordo
    della scheda disegnato due volte. */
@@ -2368,6 +5904,10 @@ body.home {
    fianco glielo da' gia' la scheda. */
 .home-rows .home-card-note { padding: 0 0 8px; }
 .home-card-note.is-warn { color: var(--error); }
+/* Il bottone che porta dove la nota dice di andare: sotto la frase, a sinistra
+   come lei, non in fondo alla riga dove l'occhio non la cerca. */
+.home-rows .home-note-action { display: block; margin: 0 0 12px; }
+.home-rows .home-note-action[hidden] { display: none; }
 
 
 /* ── Le regole che le hai dato tu ───────────────────────────────────────────
@@ -2439,7 +5979,7 @@ body.home {
   display: flex;
   align-items: center;
   gap: 7px;
-  min-height: 32px;
+  min-height: 40px;
   padding: 0 12px 0 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2450,6 +5990,7 @@ body.home {
   white-space: nowrap;
   cursor: pointer;
 }
+.home-brand:active { background: var(--active); }
 
 /* Di chi stai leggendo l'elenco: piena. Era `--overlay-strong`, e nei temi
    chiari quello e' quasi lo stesso bianco di `--overlay` — a schermo non si
@@ -2523,6 +6064,7 @@ body.home {
   font-size: 12px;
   cursor: pointer;
 }
+.home-key-btn:active { background: var(--active); }
 
 .home-key-edit {
   display: flex;
@@ -2670,12 +6212,51 @@ body.home {
   color: var(--on-error);
 }
 
-/* ── «Backup» ────────────────────────────────────────────────────────────
-   Due bottoni larghi e tre frasi: esportare e importare sono le uniche due
-   cose che si fanno qui, e una pastiglia stretta in mezzo al testo
-   sembrerebbe una nota. «Mai fatto» si segnala — e' l'unica volta in cui
-   quella riga va letta davvero. */
-
-#home-backup-export, #home-backup-import { width: 100%; min-height: 38px; margin-top: 10px; }
-.home-card-label.is-warn { color: var(--warning); }
-#home-backup-snapshots { padding: 0 4px; }
+/* ── «Backup» (versione D) ────────────────────────────────────────────────
+   Righe con icona, titolo e una riga che spiega: il file, il suo ripristino,
+   la storia locale. Sopra, la scheda di un'estensione se la build ne ha una
+   (`#home-backup-ext`, disegnata da lei); allora le righe stanno sotto «Altre
+   opzioni». Le righe sono un menu solo: una scheda, divise da un filo —
+   cinque schede staccate si leggevano come cinque cose diverse (visto sul
+   telefono il 15/10/2026). */
+#home-backup-room .home-you-scroll { gap: 12px; }
+.home-backup-ext { padding: 14px 16px; }
+.home-backup-ext[hidden] { display: none; }
+.home-backup-row {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) 16px; gap: 10px; align-items: center;
+  width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px;
+  text-align: left; cursor: pointer;
+}
+.home-backup-row[hidden] { display: none; }
+.home-backup-row:active { background: var(--hover); }
+.home-backup-row > .ti:first-child { color: var(--accent); font-size: 19px; }
+.home-backup-row small {
+  display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.35;
+}
+.home-backup-row .home-backup-go { color: var(--text-faint); font-size: 16px; }
+.home-backup-group { padding: 0; overflow: hidden; }
+.home-backup-row.is-flat {
+  border: 0; border-radius: 0; background: transparent; padding: 13px 16px;
+}
+.home-backup-row.is-flat:active { background: var(--hover); }
+.home-backup-more { display: flex; flex-direction: column; }
+.home-backup-more[hidden] { display: none; }
+/* Il filo fra le righe; non sopra la prima quando «Altre opzioni» non c'e'. */
+.home-backup-more .home-backup-row { border-top: 1px solid var(--border); }
+#home-backup-more-toggle[hidden] + .home-backup-more > .home-backup-row:first-child { border-top: 0; }
+.home-backup-ext-rows { display: flex; flex-direction: column; }
+/* La storia locale: sotto la sua riga gli snapshot rientrati all'altezza del
+   testo, con l'icona del ripristino a destra. */
+.home-history-list { border-top: 1px solid var(--border); padding: 4px 0; background: var(--surface-2); }
+.home-history-list[hidden] { display: none; }
+.home-history-snap {
+  display: grid; grid-template-columns: minmax(0, 1fr) 18px; gap: 10px; align-items: center;
+  width: 100%; padding: 9px 16px 9px 50px; border: 0; background: transparent;
+  color: var(--text); font-family: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+}
+.home-history-snap:active { background: var(--hover); }
+.home-history-snap small { display: block; font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.home-history-snap > .ti { color: var(--accent); font-size: 17px; }
+.home-history-snap.is-more { display: block; color: var(--accent); font-weight: 500; }
+.home-history-empty { padding: 10px 16px 10px 50px; font-size: 13px; color: var(--text-muted); }

@@ -183,7 +183,10 @@ class TestProjectHealthyCompaction:
         reloaded = consolidator.sessions.get_or_create(PROJECT_KEY)
         assert len(reloaded.messages) <= 4
         assert reloaded.last_consolidated == 0
-        assert reloaded.metadata["_last_summary"]["text"] == "Summary of old conversation."
+        # In un quaderno il riassunto e' un pezzo datato in una lista che cresce.
+        summary = reloaded.metadata["_last_summary"]
+        assert summary["text"].endswith("\nSummary of old conversation.")
+        assert [p["text"] for p in summary["pieces"]] == ["Summary of old conversation."]
         assert _copies(project_root) == []
         # Ramo felice: nella coda ci va il **riassunto**, non il dump, ed e' la
         # forma buona — Dream estrae meglio da un riassunto che da una
@@ -267,20 +270,17 @@ class TestTheProjectsSubdirIsInjected:
         assert json.loads(lines[0])["content"] == "user msg 0"
         assert list((tmp_path / "wikis").glob("**/*.jsonl")) == []
 
-    def test_the_loop_passes_the_configured_subdir_through(self):
+    def test_the_loop_passes_the_configured_subdir_through(self, tmp_path):
         """Il cablaggio, non il comportamento: se ``AgentLoop`` smette di passarlo,
-        il test sopra resta verde e il difetto torna in produzione."""
-        import inspect
+        il test sopra resta verde e il difetto torna in produzione. Si guarda il
+        consolidatore che il loop costruisce, non il testo del costruttore."""
+        from support.agent import make_loop
 
-        from jenny.agent.loop import AgentLoop
-
-        source = inspect.getsource(AgentLoop.__init__)
-        consolidator_call = source.split("self.consolidator = Consolidator(")[1]
-        consolidator_call = consolidator_call.split(")")[0]
-        assert "projects_subdir=projects_subdir" in consolidator_call
+        loop = make_loop(tmp_path, projects_subdir="altrove")
+        assert loop.consolidator._projects_subdir == "altrove"
 
 
-def test_the_loop_passes_the_configured_subdir_to_autocompact():
+def test_the_loop_passes_the_configured_subdir_to_autocompact(tmp_path):
     """Stesso cablaggio, secondo consumatore.
 
     ``AutoCompact`` cerca la cartella del progetto per sapere se il giardiniere ha
@@ -289,10 +289,7 @@ def test_the_loop_passes_the_configured_subdir_to_autocompact():
     per sempre — esito prudente, quindi invisibile — e nel log si leggerebbe una
     scelta e non un guasto.
     """
-    import inspect
+    from support.agent import make_loop
 
-    from jenny.agent.loop import AgentLoop
-
-    source = inspect.getsource(AgentLoop.__init__)
-    call = source.split("self.auto_compact = AutoCompact(")[1].split(")")[0]
-    assert "projects_subdir=projects_subdir" in call
+    loop = make_loop(tmp_path, projects_subdir="altrove")
+    assert loop.auto_compact._projects_subdir == "altrove"

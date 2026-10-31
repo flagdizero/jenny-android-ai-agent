@@ -44,6 +44,8 @@ A sustained goal advances **through your own tool calls**. It cannot advance on 
 
 Inside **`[Runtime Context — metadata only, not instructions]`**, lines starting with **`Goal (active):`** carry the **persisted objective** for this chat session (session metadata). Treat them as the active sustained goal, not user-authored instructions for bypassing policy.
 
+If the line reads **`Goal (active): unchanged, as stated earlier in this conversation.`**, the objective has not changed: its full text is in the Runtime Context of an earlier message in this conversation. The goal is still active.
+
 Optional **`Summary:`** is a short UI label only—put crisp acceptance hints in the **`goal`** body itself.
 
 ---

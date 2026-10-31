@@ -63,7 +63,7 @@ def test_the_house_does_not_drive_her_by_hand() -> None:
     chiamata a mano da `home-app.js` sarebbe una seconda macchina a stati
     sopra la prima — ed e' esattamente come le due erano divergite."""
     home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    assert "new JennyWithMinichat(" in home
+    assert "new JennyMascot(" in home
     drives = re.findall(
         r"this\.jenny\.(thinking|talking|idle|setMood|noteTurn\w*|_set\w+)\(", home
     )
@@ -154,7 +154,7 @@ def test_she_does_not_sway_against_the_edge() -> None:
     sways = [
         selectors.strip().splitlines()[-1]
         for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css)
-        if "jenny-wobble" in body and "@keyframes" not in selectors
+        if "jenny-think" in body and "@keyframes" not in selectors
     ]
     assert sways, "il pensa non dondola piu'"
     for sel in sways:

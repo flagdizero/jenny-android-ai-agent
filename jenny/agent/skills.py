@@ -5,12 +5,18 @@ import os
 import re
 from pathlib import Path
 
+from loguru import logger
+
 from jenny.utils.path import atomic_write
 
+# Neutra sugli strumenti: le skill sempre attive arrivano anche
+# all'orchestratore, che ``python_exec`` non l'ha. «use python_exec as the only
+# execution tool» era un'istruzione su uno strumento che non aveva.
 _ANDROID_SKILL_NOTE = (
     "\n\n[Platform compatibility note: Android is the only supported runtime. "
-    "There is no shell, no pip, and no CLI tools; use python_exec as the only "
-    "execution tool. Skill requirements may only reference python/python3 binaries.]\n"
+    "There is no shell, no pip, and no CLI tools: code runs only through python_exec, "
+    "yours if you have it, a subagent's if you do not. Skill requirements may only "
+    "reference python/python3 binaries.]\n"
 )
 
 try:
@@ -357,6 +363,34 @@ class SkillsLoader:
         """Get jenny metadata for a skill (cached in frontmatter)."""
         raw_meta = self.get_skill_metadata(name) or {}
         return self._parse_jenny_metadata(raw_meta.get("metadata"))
+
+    def get_helper_skills(self) -> set[str]:
+        """Le skill che dichiarano ``helper: <tipo>``: le legge quel subagent, non chi delega.
+
+        ``app-creator`` e' scritta per chi costruisce l'app (fasi a domande,
+        «proponi e conferma», manifest): un orchestratore che la trova nel proprio
+        elenco la legge, progetta l'app nel brief e segue le fasi con l'utente.
+        Il 28/10/2026 sul s22 costava 30-40 s prima di ogni ``spawn``, piu' una
+        domanda di conferma in piu'; e l'``app-builder`` la rilegge comunque.
+
+        Conta solo un tipo che esiste (``AGENT_TYPE_NAMES``): una skill che nomina
+        un aiutante che non c'e' resta a chi delega, che altrimenti non la
+        vedrebbe nessuno.
+        """
+        from jenny.agent.agent_types import AGENT_TYPE_NAMES
+
+        hidden: set[str] = set()
+        for entry in self.list_skills(filter_unavailable=False):
+            helper = (self.get_skill_metadata(entry["name"]) or {}).get("helper")
+            if not helper:
+                continue
+            if helper in AGENT_TYPE_NAMES:
+                hidden.add(entry["name"])
+            else:
+                logger.warning(
+                    "Skill {} names an unknown helper {!r}; it stays visible", entry["name"], helper,
+                )
+        return hidden
 
     def get_always_skills(self) -> list[str]:
         """Get skills marked as always=true that meet requirements."""

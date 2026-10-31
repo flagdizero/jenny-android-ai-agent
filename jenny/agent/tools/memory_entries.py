@@ -36,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -43,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.agent.memory_archive import ArchivedEntry, archive_entry
+from jenny.agent.memory_search import similarity
 from jenny.agent.tools.base import Tool
 from jenny.agent.tools.file_state import FileStates
 from jenny.utils.path import atomic_write
@@ -446,6 +448,44 @@ def render_entries(entries: list[Entry]) -> str:
     return "\n".join(out)
 
 
+# Sopra questa somiglianza una voce comparsa è la nuova versione di una sparita
+# nella stessa scrittura. Tarata sul telefono il 12/10/2026: fra le 688 coppie di
+# fatti diversi di USER.md e MEMORY.md la più simile arrivava a 0,18; fra le
+# sostituzioni vere fatte da Dream la meno simile a 0,21 (un fatto riassunto in
+# metà parole). Sotto soglia non si lega niente, e costa solo una riga in più
+# nell'indice di ``recall``; un legame sbagliato direbbe che un fatto ne ha
+# sostituito un altro che non c'entra.
+_SUPERSEDE_MIN_SIMILARITY = 0.2
+
+
+def pair_successors(gone: list[Entry], arrived: list[Entry]) -> dict[str, str]:
+    """Quale voce comparsa ha preso il posto di quale sparita: ``{vecchio: nuovo}``.
+
+    Abbinamento avido dalla coppia più simile in giù, ogni voce al più una
+    volta. Serve alle scritture a file intero (``apply_patch``, ``edit_file``,
+    ``write_file`` del review pass), che portano solo il prima e il dopo: un
+    ``memory replace`` il legame lo conosce già e lo scrive da sé.
+    """
+    scored = sorted(
+        (
+            (similarity(old.text, new.text), i, j)
+            for i, old in enumerate(gone)
+            for j, new in enumerate(arrived)
+        ),
+        reverse=True,
+    )
+    pairs: dict[str, str] = {}
+    used: set[int] = set()
+    for score, i, j in scored:
+        if score < _SUPERSEDE_MIN_SIMILARITY:
+            break
+        if gone[i].id in pairs or j in used:
+            continue
+        pairs[gone[i].id] = arrived[j].id
+        used.add(j)
+    return pairs
+
+
 def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
     """Gancio pre-scrittura che degrada le voci in uscita da un file di memoria.
 
@@ -494,7 +534,7 @@ def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
             # File che non c'è ancora: non se ne sta andando niente.
             return
 
-        def save(text: str, heading: str) -> None:
+        def save(text: str, heading: str, superseded_by: str = "") -> None:
             archived_id = entry_id(text)
             try:
                 archive_entry(
@@ -504,6 +544,7 @@ def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
                         text=text,
                         source=source,
                         heading=heading,
+                        superseded_by=superseded_by,
                     ),
                 )
             except OSError:
@@ -511,11 +552,15 @@ def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
                     "Could not archive entry {} leaving {}", archived_id, source,
                 )
 
-        surviving = {entry.id for entry in parse_entries(new_text)}
-        for entry in parse_entries(before):
-            if entry.id in surviving:
-                continue
-            save(entry.text, entry.heading)
+        old_entries = parse_entries(before)
+        new_entries = parse_entries(new_text)
+        old_ids = {entry.id for entry in old_entries}
+        surviving = {entry.id for entry in new_entries}
+        gone = [entry for entry in old_entries if entry.id not in surviving]
+        arrived = [entry for entry in new_entries if entry.id not in old_ids]
+        successors = pair_successors(gone, arrived)
+        for entry in gone:
+            save(entry.text, entry.heading, successors.get(entry.id, ""))
         # E poi tutto il resto che se ne va. Le voci hanno il loro giro sopra, con
         # id e deduplica intatti; qui passa ciò che ``parse_entries`` non vede —
         # prosa, elenchi numerati, righe sciolte — che fino a oggi lasciava il
@@ -582,11 +627,14 @@ class MemoryEntryTool(Tool):
         self._entry_archiver = entry_archiver
         # Esito del run in voci, non in byte. È tutto il punto della fase 1: "il
         # fatto è atterrato?" smette di essere una differenza di dimensioni e
-        # diventa una risposta. I tre contatori restano distinti perché rispondono
+        # diventa una risposta. I contatori restano distinti perché rispondono
         # a domande diverse, e chi li legge (``batch_was_not_consolidated``) li
         # tratta in modo diverso a ragione.
         self.entries_added = 0
         self.entries_replaced = 0
+        # Una ``remove`` riuscita: conta solo per un batch che porta una
+        # ``[correction]`` (v. ``batch_was_not_consolidated``).
+        self.entries_removed = 0
         # Una ``add`` di un fatto che c'era già. Non è un fallimento e non è un
         # no-op: dice che *quel contenuto è in memoria*, cioè esattamente quel che
         # il chiamante voleva sapere. Senza questo numero un batch di soli
@@ -660,6 +708,13 @@ class MemoryEntryTool(Tool):
                     "description": (
                         "Section to add under, e.g. 'Preferences'. Created if "
                         "missing. Omit to append at the end of the file."
+                    ),
+                },
+                "wrong": {
+                    "type": "boolean",
+                    "description": (
+                        "For remove: true when the entry was never true (the user "
+                        "corrected it), not merely outdated."
                     ),
                 },
             },
@@ -809,14 +864,27 @@ class MemoryEntryTool(Tool):
             )
 
         if action == "replace":
-            new_text, why = replace_entry(
-                text, str(kwargs.get("target") or ""), str(kwargs.get("text") or ""),
-            )
+            target = str(kwargs.get("target") or "")
+            new_text, why = replace_entry(text, target, str(kwargs.get("text") or ""))
             if why:
                 return f"Cannot replace in {MEMORY_TARGETS[file]}: {why}"
-            refusal = self._write(path, new_text)
+            refusal = self._refusal(path, new_text)
             if refusal is not None:
                 return refusal
+            # La versione vecchia va in archivio da qui, col legame alla nuova:
+            # qui si sa con certezza chi sostituisce chi, mentre la rete al confine
+            # del file (``_commit``) vedrebbe solo una voce sparita e una comparsa.
+            # Dopo il controllo del budget, perché una sostituzione rifiutata
+            # lascia la voce viva e non deve figurare come sostituita.
+            old_entry, _ = find_entry(parse_entries(text), target)
+            after = {e.id for e in parse_entries(new_text)}
+            if old_entry is not None and old_entry.id not in after:
+                replaced_by = after - {e.id for e in parse_entries(text)}
+                # Un archivio che non si scrive non ferma la sostituzione: la rete
+                # in ``_commit`` riprova senza legame, come per ogni altra scrittura.
+                with suppress(OSError):
+                    self._demote(file, old_entry, superseded_by=next(iter(replaced_by), ""))
+            self._commit(path, new_text)
             self.entries_replaced += 1
             return self._report(file, path, "Replaced.")
 
@@ -836,7 +904,7 @@ class MemoryEntryTool(Tool):
             # destinazione nel prompt di Dream è già costato run interi, e una
             # destinazione che il modello può dimenticare non è una garanzia.
             try:
-                archived = self._demote(file, entry)
+                archived = self._demote(file, entry, retracted=kwargs.get("wrong") is True)
             except OSError as exc:
                 return (
                     f"Cannot remove from {MEMORY_TARGETS[file]}: the entry could not "
@@ -849,6 +917,7 @@ class MemoryEntryTool(Tool):
                 # perché quella è una proprietà del guard, non di questo tool, e
                 # ingoiare un rifiuto direbbe "rimossa" su un file intatto.
                 return refusal
+            self.entries_removed += 1
             return self._report(
                 file, path, f"Removed {entry.id}. Kept in the archive as {archived.name}.",
             )
@@ -876,7 +945,9 @@ class MemoryEntryTool(Tool):
         self._commit(path, text)
         return None
 
-    def _demote(self, file: str, entry: Entry) -> Path:
+    def _demote(
+        self, file: str, entry: Entry, *, superseded_by: str = "", retracted: bool = False,
+    ) -> Path:
         """Sposta la voce nel tier freddo prima che lasci il file caldo.
 
         Questa è la riga per cui la fase 2 esiste: da qui in poi togliere una voce
@@ -895,6 +966,8 @@ class MemoryEntryTool(Tool):
                 text=entry.text,
                 source=MEMORY_TARGETS[file],
                 heading=entry.heading,
+                superseded_by=superseded_by,
+                retracted=retracted,
             ),
         )
 

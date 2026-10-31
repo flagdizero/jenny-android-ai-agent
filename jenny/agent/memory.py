@@ -18,7 +18,7 @@ from jenny.agent.internal_run import (
     internal_run_should_commit as _internal_run_should_commit,
 )
 from jenny.agent.internal_run import prune_internal_sessions as _prune_internal_sessions
-from jenny.agent.memory_archive import archive_dir
+from jenny.agent.memory_archive import archive_dir, history_archive_dir
 from jenny.session.keys import (
     DREAM_SESSION_PREFIX,
     internal_session_kind,
@@ -42,6 +42,9 @@ from jenny.utils.prompt_templates import render_template
 # sola ne prende fra un quarto e tre quarti, quindi due passaggi in piu' sono il
 # punto in cui la curva si appiattisce. Zero disattiva la finestra.
 _DREAM_PROJECT_REPLAY = 3
+
+# L'anno e il mese in testa a un ``timestamp`` di ``history.jsonl``.
+_MONTH = re.compile(r"\d{4}-\d{2}")
 
 # Il tetto in caratteri della storia di un batch di Dream, a voci intere (v.
 # ``MemoryStore.build_dream_prompt``). Prima c'era un taglio a 500 caratteri per
@@ -543,6 +546,10 @@ class MemoryStore:
         max_chars: int | None = None,
         session_key: str | None = None,
         prompt_visible: bool = True,
+        kind: str | None = None,
+        about: str | None = None,
+        ref: str | None = None,
+        untrusted: bool = False,
     ) -> int:
         """Append *entry* to history.jsonl and return its auto-incrementing cursor.
 
@@ -605,6 +612,14 @@ class MemoryStore:
         intanto arrivato. Il flag tocca solo quel blocco: Dream continua a
         vederla, e ``recall_history`` la elenca e la apre dalla chat personale
         come ogni altra voce.
+
+        **Le righe del diario** (dal 12/10/2026): ``kind`` dice che la voce e' una
+        riga breve e chi ne e' l'autore (``said``/``inferred`` come nel journal
+        dei quaderni), ``about`` di quale quaderno parla, ``ref`` dove sta la
+        fonte, ``untrusted`` che e' nata con un risultato non fidato in vista.
+        Senza ``kind`` la voce e' una nota del consolidatore, come tutte quelle
+        gia' su disco. Come ``prompt_visible``, ogni chiave si scrive solo quando
+        dice qualcosa.
         """
         limit = max_chars if max_chars is not None else _HISTORY_ENTRY_HARD_CAP
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -641,6 +656,11 @@ class MemoryStore:
             # sempre comportate le voci gia' su disco.
             if not prompt_visible:
                 record["prompt_visible"] = False
+            for key, value in (("kind", kind), ("about", about), ("ref", ref)):
+                if value:
+                    record[key] = value
+            if untrusted:
+                record["untrusted"] = True
             append_lines_durable(self.history_file, [json.dumps(record, ensure_ascii=False)])
             # Small full-file replacement each append: use the same atomic
             # temp-file+fsync+rename helper as every other on-disk cursor/state
@@ -846,6 +866,9 @@ class MemoryStore:
             # informato a meta' turno, chiunque stia chiedendo. V.
             # :meth:`append_history` (``prompt_visible``).
             if entry.get("prompt_visible") is not False
+            # Le righe del diario hanno il loro blocco (``jenny/agent/diary.py``),
+            # brevi e attribuite: qui sarebbero due volte.
+            and not entry.get("kind")
         ]
         if session_key is None:
             return entries
@@ -858,7 +881,7 @@ class MemoryStore:
         ]
 
     def compact_history(self) -> None:
-        """Drop oldest entries if the file exceeds *max_history_entries*.
+        """Move the oldest entries out of the file past *max_history_entries*.
 
         The read→rewrite must hold ``_append_lock``: ``append_history`` runs on
         real threads (Consolidator via ``asyncio.to_thread``) and fsyncs a new
@@ -884,6 +907,13 @@ class MemoryStore:
         aveva nessuno. Le voci interne invece si tagliano come prima: Dream non le
         legge, e trattenerle vorrebbe dire non tagliarle mai su un'installazione
         dove parla solo l'heartbeat.
+
+        **E quel che esce non si cancella**: va in ``memory/history-archive/
+        <AAAA-MM>.jsonl`` (v. :meth:`_archive_history_entries`), dove
+        ``recall_history`` lo ritrova. Prima il tetto cancellava: misurato sul
+        telefono il 12/10/2026, 498 voci in due mesi a 10–16 al giorno, cioè le
+        prime perdite a metà novembre — di appunti che sono l'unica copia del
+        dettaglio che Dream non ha tenuto.
         """
         if self.max_history_entries <= 0:
             return
@@ -893,14 +923,47 @@ class MemoryStore:
                 return
             dream_cursor = self.get_last_dream_cursor()
             cut = len(entries) - self.max_history_entries
-            kept = [
-                entry
-                for index, entry in enumerate(entries)
-                if index >= cut or self._awaits_dream(entry, dream_cursor)
-            ]
-            if len(kept) == len(entries):
+            kept: list[dict[str, Any]] = []
+            dropped: list[dict[str, Any]] = []
+            for index, entry in enumerate(entries):
+                if index >= cut or self._awaits_dream(entry, dream_cursor):
+                    kept.append(entry)
+                else:
+                    dropped.append(entry)
+            if not dropped:
+                return
+            # Prima l'archivio, poi la riscrittura: un crash in mezzo lascia le
+            # voci in tutti e due i posti, e chi legge deduplica per cursore. Al
+            # contrario, le perderebbe. Se l'archivio non si scrive, il vivo resta
+            # com'è: sforare il tetto costa spazio, cancellare costa la storia.
+            try:
+                self._archive_history_entries(dropped)
+            except OSError as exc:
+                logger.warning(
+                    "history archive not writable, keeping {} entries in history.jsonl: {}",
+                    len(dropped), exc,
+                )
                 return
             self._write_entries(kept)
+
+    def _archive_history_entries(self, entries: list[dict[str, Any]]) -> None:
+        """Accoda *entries* a ``memory/history-archive/<AAAA-MM>.jsonl``, una riga ciascuna.
+
+        Il mese viene dal ``timestamp`` della voce (``"%Y-%m-%d %H:%M"``); una
+        voce senza un mese leggibile va in ``unknown.jsonl`` invece di sparire.
+        Un file al mese e non all'anno per ``grep``, che è come il modello cerca
+        davvero (misurato sull'emulatore il 12/10/2026) e che salta in silenzio i
+        file oltre 2 MB: al ritmo del telefono un anno ci arriva, un mese resta
+        sui 300 kB. Un append non riscrive mai quel che c'è già.
+        """
+        by_month: dict[str, list[str]] = {}
+        for entry in entries:
+            ts = entry.get("timestamp")
+            month = ts[:7] if isinstance(ts, str) and _MONTH.match(ts) else "unknown"
+            by_month.setdefault(month, []).append(json.dumps(entry, ensure_ascii=False))
+        target = ensure_dir(history_archive_dir(self.memory_dir))
+        for month, lines in sorted(by_month.items()):
+            append_lines_durable(target / f"{month}.jsonl", lines)
 
     @classmethod
     def _awaits_dream(cls, entry: dict[str, Any], dream_cursor: int) -> bool:
@@ -910,7 +973,20 @@ class MemoryStore:
             return False
         if not cls._valid_history_payload(entry):
             return False
-        return cls._history_entry_scope(entry.get("session_key")) != "internal"
+        return (cls._history_entry_scope(entry.get("session_key")) != "internal"
+                and cls._dream_reads(entry))
+
+    @staticmethod
+    def _dream_reads(entry: dict[str, Any]) -> bool:
+        """Le righe del diario (``kind``) non vanno a Dream, come le voci interne.
+
+        Una riga specchiata dal journal di un quaderno porta a Dream la stessa
+        materia che gli porta gia' la raccolta progetto→diario, che la riassume
+        all'inattivita': leggerle entrambe sarebbe estrarre due volte lo stesso
+        fatto. Finche' la raccolta esiste, la riga e' solo per i prompt e per
+        ``recall_history``. Una riga ``untrusted`` non ci va comunque.
+        """
+        return not entry.get("kind") and not entry.get("untrusted")
 
     # -- JSONL helpers -------------------------------------------------------
 
@@ -1196,6 +1272,7 @@ class MemoryStore:
             (entry, kind)
             for entry in self.read_unprocessed_history(since_cursor=last_cursor)
             if (kind := self._history_entry_scope(entry.get("session_key"))) != "internal"
+            and self._dream_reads(entry)
         ]
         if not pending:
             return None
@@ -1516,9 +1593,8 @@ class MemoryStore:
         # aveva altro modo naturale che ``write_file``. La risposta era un
         # ``WorkspaceBoundaryError`` con in coda "do not retry with alternative
         # tools": un vicolo chiuso, con il tentativo già contato, quindi cursore
-        # fermo e ``stuck`` in salita — il "rifiuto di *path*" che il commento di
-        # ``format_stuck_alarm`` dice di aver visto sul Titan 2 con tutti i file
-        # all'81% o meno.
+        # fermo e ``stuck`` in salita — il "rifiuto di *path*" visto sul Titan 2
+        # con tutti i file all'81% o meno.
         #
         # Non allarga il perimetro: sono gli stessi tre file che ``edit_file`` e
         # ``apply_patch`` qui sopra riscrivono già interi. Cambia due cose, entrambe

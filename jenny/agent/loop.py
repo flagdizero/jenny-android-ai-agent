@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import functools
+import json
 import time
+import uuid
+from collections.abc import Mapping
 from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, NamedTuple
@@ -16,6 +19,7 @@ from jenny.agent.autocompact import AutoCompact
 from jenny.agent.context import ContextBuilder
 from jenny.agent.cron_turns import CronTurnCoordinator
 from jenny.agent.hook import AgentHook, CompositeHook
+from jenny.agent.loop_plan import PLAN_STALE_META, LoopPlanMixin, is_plan_turn
 from jenny.agent.loop_provider import ProviderPresetMixin
 from jenny.agent.loop_tasks import LoopTasksMixin
 from jenny.agent.memory import Consolidator
@@ -37,15 +41,20 @@ from jenny.agent.tools.nothing_to_report import declared_marker_lines
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.tools.self import MyTool
 from jenny.agent.turn_epochs import TurnEpochs, TurnToken
-from jenny.agent.turn_persistence import FollowupState, TurnPersistenceMixin
+from jenny.agent.turn_persistence import (
+    FollowupState,
+    TurnPersistenceMixin,
+    record_sent_content,
+)
 from jenny.agent.turn_states import StateHandlersMixin
 from jenny.agent.turn_types import (
-    StateTraceEntry as StateTraceEntry,
-)
-from jenny.agent.turn_types import (
+    AgentLoopRun,
     TurnContext,
     TurnOutcome,
     TurnState,
+)
+from jenny.agent.turn_types import (
+    StateTraceEntry as StateTraceEntry,
 )
 from jenny.bus.events import INTERNAL_CHANNEL, InboundMessage, OutboundMessage
 from jenny.bus.progress import build_bus_progress_callback
@@ -63,6 +72,14 @@ from jenny.providers.base import LLMProvider
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
+from jenny.runtime.screen import has_screen, screen_runtime_lines
+from jenny.runtime.user_text import say
+from jenny.security.subagent_policy import (
+    bind_turn_taint,
+    note_turn_taint,
+    reset_turn_taint,
+    turn_taint_for,
+)
 from jenny.security.workspace_access import (
     WorkspaceScopeResolver,
     bind_workspace_scope,
@@ -80,7 +97,10 @@ from jenny.session.goal_state import (
 )
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
+    MID_TURN_META,
     SUBAGENT_RESULT_EVENT,
+    SUBAGENT_TAINT_META,
+    TOOL_TAINT_META,
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
@@ -104,7 +124,9 @@ from jenny.session.turn_visibility import (
 from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, reserved_output_tokens
 from jenny.utils.llm_runtime import LLMRuntime
 from jenny.utils.prompt_templates import render_template
+from jenny.utils.wiki_migration import restore_wiki_id
 from jenny.utils.wiki_paths import find_wiki_by_id, wiki_id, wiki_schema_file
+from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
 if TYPE_CHECKING:
     from jenny.config.schema import (
@@ -176,6 +198,15 @@ def _new_turn_id(session_key: str) -> str:
 # un wakelock eterno scarica la batteria senza dare spiegazioni.
 _TURN_WAKELOCK_TIMEOUT_S = 1800.0
 
+# I turni che il runner chiude con un avviso invece di una risposta
+# (``AgentRunner._finish_on_blank``), e il ``kind`` d'errore che quell'avviso
+# porta alla WebUI.
+_BLANK_TURN_ERROR_KINDS = {
+    "empty_final_response": "empty",
+    "output_truncated": "truncated",
+    "provider_refused": "refused",
+}
+
 # ``/init`` non e' nel router (v. ``_expand_project_init``): il letterale sta
 # qui, e la voce che lo fa comparire in ``/help`` sta in
 # ``command/specs.py::BUILTIN_COMMAND_SPECS``. Sono due posti, ma il secondo
@@ -190,7 +221,9 @@ PROJECT_INIT_COMMAND = "/init"
 PROJECT_TIDY_COMMAND = "/tidy"
 
 
-class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, LoopTasksMixin):
+class AgentLoop(
+    StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, LoopTasksMixin, LoopPlanMixin,
+):
     """
     The agent loop is the core processing engine.
 
@@ -267,6 +300,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         initial_model_preset: str | None = None,
         ui_query: Any | None = None,
         orchestrator_mode: bool | None = None,
+        main_reasoning_effort: str | None = None,
     ):
         from jenny.config.schema import ToolsConfig
 
@@ -312,6 +346,10 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             orchestrator_mode if orchestrator_mode is not None
             else defaults.orchestrator_mode
         )
+        # Il ragionamento dei turni di Jenny (``AgentDefaults.main_reasoning_effort``);
+        # ``None`` lascia quello del provider, che vale per tutti. Il gateway lo
+        # aggiorna a caldo (``GatewayContainer._on_settings_changed``).
+        self.main_reasoning_effort = main_reasoning_effort
         self.cron_service = cron_service
         # Checkpoint del workspace da prendere prima di un run di Dream, iniettato
         # dal ``GatewayContainer`` (che possiede il ``SnapshotService``) accanto al
@@ -384,6 +422,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # divergenti sugli stessi file.
             session_manager=self.sessions,
             usage_hooks=self._measuring_hooks(),
+            cron_service=self.cron_service,
+            timezone=self.context.timezone or "UTC",
         )
         self._max_messages = max_messages if max_messages > 0 else 120
         self._running = False
@@ -471,6 +511,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         if bus is None:
             bus = MessageBus()
         defaults = config.agents.defaults
+        from jenny.utils.helpers import set_honest_prompt_estimate
+
+        set_honest_prompt_estimate(defaults.honest_context_estimate)
         provider = extra.pop("provider", None) or make_provider(config)
         model = extra.pop("model", None) or defaults.model
         context_window_tokens = extra.pop("context_window_tokens", None) or defaults.context_window_tokens
@@ -503,6 +546,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             model_presets_config=config.model_presets,
             initial_model_preset=initial_model_preset,
             orchestrator_mode=defaults.orchestrator_mode,
+            main_reasoning_effort=defaults.main_reasoning_effort,
             **extra,
         )
 
@@ -528,6 +572,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             android_context=get_android_context(),
             ui_query_service=self._ui_query,
             orchestrator=self.orchestrator_mode,
+            memory_store=self.context.memory,
         )
         loader = ToolLoader()
         registered = loader.load(ctx, self.tools, scope=self.tool_scope)
@@ -546,6 +591,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         app_tools, _changed = self._app_tools_syncer.sync(self.tools)
         if app_tools:
             registered.append(f"apps:{len(app_tools)}")
+        # Un'app pubblicata a meta' turno porta le sue azioni subito: senza, il
+        # 07/10/2026 Jenny ha lanciato un subagent per provare la lista della
+        # spesa appena nata (che i subagent non hanno) e l'ha provata da se' solo
+        # al turno dopo.
+        from jenny.agent.tools.app_tool import AppTool
+
+        if isinstance(app_tool := self.tools.get("app"), AppTool):
+            app_tool.on_apps_changed = self._sync_apps_and_notify
 
         logger.info("Registered {} tools: {}", len(registered), registered)
 
@@ -634,9 +687,6 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
     async def submit_cron_turn(self, msg: InboundMessage) -> TurnOutcome:
         return await self._cron_turns.submit(msg)
 
-    def pending_cron_job_ids_for_session(self, session_key: str) -> set[str]:
-        return self._cron_turns.pending_job_ids_for_session(session_key)
-
     def _persist_user_message_early(
         self,
         msg: InboundMessage,
@@ -671,6 +721,83 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         line = location_runtime_line(channel, chat_id, self.tools_config.location)
         return [line] if line else []
 
+    def _turn_tool_view(
+        self, msg: InboundMessage, session: Session, session_key: str, *, silent: bool
+    ) -> ToolRegistry | None:
+        """Il registro di questo turno, o ``None`` se e' quello del loop intero.
+
+        Fuori restano, solo quando il turno non li puo' usare: le azioni che
+        **scrivono** delle app non posate sulla bacheca di questo quaderno (le
+        letture restano: da qui un'app non posata si legge,
+        ``apps/permissions.py``); ``recall_history``, che nei quaderni rifiuta;
+        ``nothing_to_report``, che serve solo a un giro silenzioso. Il resto
+        e' il registro del loop, vivo (``ToolRegistryView``).
+        """
+        from jenny.agent.tools.app_actions import AppActionTool
+        from jenny.agent.tools.registry import ToolRegistryView
+
+        in_project = is_project_session_key(session_key)
+        root: Path | None = None
+        if in_project:
+            from jenny.utils.wiki_paths import is_wiki_root
+
+            root = self.workspace_scopes.for_message(msg, session.metadata).project_path
+            if root is not None and not is_wiki_root(root):
+                root = None
+        # La bacheca si rilegge quando cambia: un'app posata a meta' turno
+        # (``app action=place``) si usa subito.
+        board: dict[str, Any] = {"sig": object(), "placed": set()}
+
+        def placed() -> set[str]:
+            if root is None:
+                return set()
+            from jenny.board.placements import placed_slugs
+            from jenny.board.store import board_path
+
+            try:
+                sig: Any = board_path(root).stat().st_mtime_ns
+            except OSError:
+                sig = None
+            if sig != board["sig"]:
+                board.update(sig=sig, placed=set(placed_slugs(root)))
+            return board["placed"]
+
+        # I tool del piano a lista: il proprio filtro, che legge lo stato del
+        # piano una volta per turno (``loop_plan.py``).
+        plan_hidden = self._plan_tool_filter(msg, session_key)
+
+        def hidden(name: str, tool: Any) -> bool:
+            plan_verdict = plan_hidden(name)
+            if plan_verdict is not None:
+                return plan_verdict
+            if name == "nothing_to_report":
+                return not silent
+            # Lo schermo si legge solo nel turno nato da un tocco sulla
+            # mascotte, che ne porta la lettura (``runtime/screen.py``): da
+            # Telegram, da un promemoria o dall'app non c'e' niente da vedere.
+            if name == "screen":
+                return not has_screen(msg.metadata)
+            # «Ci spostiamo?» ha senso solo dove c'e' un tasto da toccare: la
+            # chat personale, nell'app (non Telegram, non una notifica).
+            if name == "suggest_notebook":
+                return in_project or silent or msg.channel != "websocket"
+            # ``notebook`` lavora solo nella chat di un quaderno (fuori risponde
+            # «not from here»): ~2,9k caratteri di schema in ogni turno della
+            # chat personale, per uno strumento che li' non puo' servire. La
+            # stessa radice che il tool risolve (``NotebookReadTool._root``).
+            if name == "notebook":
+                return root is None
+            if not in_project:
+                return False
+            if name == "recall_history":
+                return True
+            return (isinstance(tool, AppActionTool) and not tool.read_only
+                    and tool._slug not in placed())
+
+        if not any(hidden(n, self.tools.get(n)) for n in self.tools.tool_names):
+            return None
+        return ToolRegistryView(self.tools, hidden)
+
     def _build_initial_messages(
         self,
         msg: InboundMessage,
@@ -696,7 +823,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # che passa da qui. Dire a Dream o al giardiniere "non puoi scrivere file,
             # delega con `spawn`" e falso due volte — scrivere e il loro unico
             # mestiere, e `spawn` non ce l'hanno.
-            orchestrator=self.orchestrator_mode and turn_tools is self.tools,
+            orchestrator=self.orchestrator_mode and (
+                turn_tools is self.tools or getattr(turn_tools, "view_of", None) is self.tools),
             history=history,
             current_message=msg.content,
             media=msg.media if msg.media else None,
@@ -705,10 +833,17 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             sender_id=msg.sender_id,
             session_summary=pending_summary,
             session_metadata=session.metadata,
+            # L'ultimo messaggio salvato, prima di questo: quel che l'utente ha
+            # appuntato sulla bacheca dopo, il turno lo dice.
+            board_since=session.messages[-1].get("timestamp") if session.messages else None,
             workspace=scope.project_path,
             include_memory_recent_history=include_memory_recent_history,
             session_key=session.key,
-            current_runtime_lines=self._location_runtime_lines(msg.channel, chat_id),
+            current_runtime_lines=[
+                *self._location_runtime_lines(msg.channel, chat_id),
+                *screen_runtime_lines(msg.metadata),
+                *self._plan_runtime_lines(msg, session, session.key),
+            ],
         )
 
     async def _dispatch_command_inline(
@@ -768,7 +903,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         Costa la lettura di una frontmatter, e solo per le chat di progetto la
         cui sessione ha gia' un id annotato. Una wiki **senza** id non fa
         scattare niente: un id assente non e' un errore (v. ``wiki_paths.wiki_id``),
-        e trattarlo come discordanza rifiuterebbe ogni wiki fatta a mano.
+        e trattarlo come discordanza rifiuterebbe ogni wiki fatta a mano. Una wiki
+        che l'id l'aveva e l'ha **perso** se lo vede rimettere qui (v. sotto).
         """
         if not is_project_session_key(key):
             return False
@@ -783,7 +919,16 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 # rifiuto, ed e' quello che sa anche inseguire un rinomino.
                 return False
             current = wiki_id(root)
-            if current is None or current == str(recorded):
+            if current is None:
+                # L'id e' **sparito**, non cambiato: un aiutante, un
+                # ``python_exec``, adb. Non e' un'altra cartella, e il turno
+                # passa — ma prima l'id si rimette, o il prossimo avvio ne
+                # conierebbe uno nuovo e chiuderebbe fuori questa chat (Piante,
+                # Titan, 26/10). ``restore_wiki_id`` non lo rimette se un'altra
+                # cartella lo dichiara: quella conversazione e' sua.
+                restore_wiki_id(root, Path(self.workspace))
+                return False
+            if current == str(recorded):
                 return False
         except Exception:
             # Un controllo che non si puo' fare non deve fermare una chat: il
@@ -1057,6 +1202,12 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             moved, why_not = follow_renamed_project(self.workspace, key, new_key)
             if not moved:
                 return ProjectFollowOutcome(why_not=why_not)
+            # Dietro la chat vanno anche i cron del quaderno: senza, ogni giro
+            # fallirebbe con «notebook gone» e consegnerebbe al nome vecchio.
+            from jenny.board.cron_link import follow_renamed_notebook
+
+            follow_renamed_notebook(self.cron_service, key[len(PROJECT_SESSION_PREFIX):],
+                                    target.name)
             return ProjectFollowOutcome(moved_to=target.name)
         except Exception:
             logger.opt(exception=True).error("Inseguimento del rinomino fallito per {}", key)
@@ -1083,7 +1234,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         await self.bus.publish_outbound(OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
-            content=refusal(spec, key),
+            content=refusal(spec),
             metadata={**dict(msg.metadata or {}), "render_as": "text"},
         ))
         return True
@@ -1128,7 +1279,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content="`/init` is unavailable: its prompt template could not be loaded.",
+                content=say("cmd.unavailable", command="/init"),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return None
@@ -1221,7 +1372,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content="`/tidy` is unavailable: its prompt template could not be loaded.",
+                content=say("cmd.unavailable", command="/tidy"),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return None
@@ -1336,6 +1487,11 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         # Chi vuole restare dichiara ``runs_when_ephemeral()``; il default e' ``False``,
         # quindi un hook che parla continua a non essere montato senza fare niente.
         extra = [h for h in self._extra_hooks if not ephemeral or h.runs_when_ephemeral()]
+        # Un turno di pianificazione conta le letture del quaderno: senza,
+        # ``plan_propose`` rifiuta (``loop_plan.PlanReadHook``).
+        plan_reads = self._plan_read_hook(metadata, session_key)
+        if plan_reads is not None:
+            extra.append(plan_reads)
         if extra:
             hook = CompositeHook([loop_hook] + extra)
 
@@ -1347,6 +1503,11 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             if not self._turn_epochs.is_current(turn_token):
                 return
             self._set_runtime_checkpoint(session, payload)
+
+        # I resoconti di aiutanti consumati a meta turno: marcati ``handled`` a
+        # fine turno riuscito (``SubagentManager.mark_handled``), non quando
+        # entrano — Jenny li ha in mano solo quando il turno li ha visti tutti.
+        drained_subagent_ids: list[str] = []
 
         async def _drain_pending(*, limit: int = _MAX_INJECTIONS_PER_TURN) -> list[dict[str, Any]]:
             """Drain follow-up messages already waiting in the pending queue.
@@ -1389,19 +1550,53 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                     if isinstance(pending_msg.metadata, dict)
                     else None
                 )
-                if injected_event == SUBAGENT_RESULT_EVENT:
+                if is_plan_turn(pending_msg.metadata):
+                    # Un passo del piano arrivato a turno in volo (non dovrebbe:
+                    # il driver apre i passi a sessione ferma): resta riconoscibile
+                    # come riga sintetica, non diventa una bolla dell'utente.
+                    message[INJECTED_EVENT_META] = injected_event
+                elif injected_event == SUBAGENT_RESULT_EVENT:
                     message[INJECTED_EVENT_META] = SUBAGENT_RESULT_EVENT
                     task_id = pending_msg.metadata.get("subagent_task_id")
                     if task_id:
                         message["subagent_task_id"] = task_id
+                        drained_subagent_ids.append(task_id)
+                    if taint := pending_msg.metadata.get(SUBAGENT_TAINT_META):
+                        message[SUBAGENT_TAINT_META] = list(taint)
+                        # Arrivato a metà turno: da qui il turno lo eredita.
+                        note_turn_taint(taint)
+                else:
+                    message[MID_TURN_META] = True
                 return message
 
             items: list[dict[str, Any]] = []
+            deferred: list[InboundMessage] = []
             while len(items) < limit:
                 try:
-                    items.append(_to_user_message(pending_queue.get_nowait()))
+                    queued = pending_queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
+                # Un turno del piano a meta' turno: vecchio si scarta, dentro un
+                # cron aspetta la fine del cron (``LoopPlanMixin._plan_injection``).
+                verdict = self._plan_injection(queued, metadata, session_key)
+                if verdict == "drop":
+                    logger.info("Stale plan turn dropped mid-turn for session {}", session_key)
+                    continue
+                if verdict == "defer":
+                    deferred.append(queued)
+                    continue
+                items.append(_to_user_message(queued))
+                # Il rientro di un aiutante della pianificazione, anche a meta'
+                # turno, e' una lettura del quaderno (``loop_plan.py``).
+                if session_key:
+                    await self._plan_count_helper_result(queued, session_key)
+                    await self._plan_note_step_report(queued, session_key)
+            for queued in deferred:
+                # Rimesso in coda: a fine turno si ripubblica e diventa un turno suo.
+                try:
+                    pending_queue.put_nowait(queued)
+                except asyncio.QueueFull:
+                    await self.bus.publish_inbound(queued)
 
             return items
 
@@ -1423,6 +1618,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         file_state_token = bind_file_states(self._file_state_store.for_session(active_session_key))
         request_token = bind_request_context(request_ctx)
         workspace_token = bind_workspace_scope(effective_scope)
+        # Il taint del turno (``security.subagent_policy``): un risultato non
+        # fidato ancora in vista fa nascere contaminati i lavori che Jenny avvia.
+        in_view = getattr(session, "messages", None)
+        if isinstance(in_view, list):
+            in_view = in_view[getattr(session, "last_consolidated", 0) or 0:]
+        turn_taint_token = bind_turn_taint(
+            turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META, TOOL_TAINT_META)
+        )
         # Compute lazily because long_task may create goal metadata during this run.
 
         def _goal_continue() -> str | None:
@@ -1493,10 +1696,10 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 # senza passare dalla FSM.
                 tools=tools or self.tools,
                 model=self.model,
+                reasoning_effort=self._turn_reasoning_effort((tools or self.tools).tool_names),
                 max_iterations=self.max_iterations,
                 max_tool_result_chars=self.max_tool_result_chars,
                 hook=hook,
-                error_message="Sorry, I encountered an error calling the AI model.",
                 concurrent_tools=True,
                 workspace=effective_scope.project_path,
                 session_key=session.key if session else None,
@@ -1536,11 +1739,18 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                     message_metadata=metadata,
                 ),
                 on_context_overflow=_on_context_overflow,
+                closed_reasoning_flagged=session is not None,
             ))
         finally:
+            reset_turn_taint(turn_taint_token)
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)
             reset_file_states(file_state_token)
+        for drained_id in drained_subagent_ids:
+            self._mark_subagent_handled(drained_id)
+        # E i resoconti scritti in storia senza turno (risveglio unico per
+        # passo): questo turno li ha avuti davanti.
+        self._release_held_subagent_results(active_session_key, session)
         self._last_usage = result.usage
         if result.goal_stalled and session is not None:
             # Il runner ha rifiutato di spronare il goal: sta aspettando una
@@ -1558,10 +1768,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # dopo un rifiuto non transitorio del provider (modello senza
             # supporto vision) e ha ritentato solo testo: avvisa in chat invece
             # di lasciare che sembri che l'allegato sia stato ignorato.
-            notice = (
-                "\n\n⚠️ The attached images were not processed: "
-                "the active model does not support image input."
-            )
+            notice = "\n\n" + say("turn.images_dropped")
             result.final_content += notice
             if result.messages and result.messages[-1].get("role") == "assistant":
                 last = result.messages[-1]
@@ -1582,9 +1789,20 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             if on_stream and on_stream_end and should_stream:
                 await on_stream(result.final_content or "")
                 await on_stream_end(resuming=False)
-        elif result.stop_reason == "error":
-            logger.error("LLM returned error: {}", (result.final_content or "")[:200])
-        return result.final_content, result.tools_used, result.messages, result.stop_reason, result.had_injections
+        # ``getattr``: i runner finti dei test tornano oggetti senza questi campi.
+        error_kind = getattr(result, "error_kind", None)
+        if result.stop_reason == "error":
+            logger.error(
+                "LLM returned error ({}): {}",
+                error_kind, (getattr(result, "error", None) or "")[:200],
+            )
+        return AgentLoopRun(
+            (
+                result.final_content, result.tools_used, result.messages,
+                result.stop_reason, result.had_injections,
+            ),
+            error_kind=error_kind,
+        )
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
@@ -1825,6 +2043,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                             ))
                             stream_segment += 1
 
+                    # Un piano in pausa fa il turno in sola lettura; da bloccato,
+                    # il messaggio e' la risposta (``loop_plan.py``).
+                    await self._plan_before_turn(msg, session_key)
                     outcome = await self._process_message(
                         msg, on_stream=on_stream, on_stream_end=on_stream_end,
                         pending_queue=pending, turn_token=turn_token,
@@ -1846,6 +2067,13 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                                 channel=msg.channel, chat_id=msg.chat_id,
                                 content="", metadata=msg.metadata or {},
                             ))
+                        elif msg.channel == "system" and ":" in msg.chat_id:
+                            # Un turno di sistema che ha parlato solo con ``message``
+                            # (il rientro di un aiutante) chiude nella chat d'origine,
+                            # come quando consegna. Con ``system`` la WebUI proietta
+                            # solo la chat personale: in un quaderno il ``turn_end``
+                            # non arrivava e la mascotte restava a pensare.
+                            completed_channel, completed_chat_id = msg.chat_id.split(":", 1)
                         continuing = turn_continuation.internal_continuation_pending(msg.metadata)
                         if not continuing:
                             await self._runtime_events().turn_completed(
@@ -1853,6 +2081,16 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                                 chat_id=completed_chat_id,
                                 session_key=session_key,
                                 metadata=msg.metadata,
+                            )
+                            # Il piano a lista guarda il turno appena chiuso: passo
+                            # chiuso → il seguente; aperto senza aiutanti → il
+                            # promemoria, poi il blocco. Dopo la consegna, cosi'
+                            # la risposta del passo arriva prima del passo dopo.
+                            # ``getattr``: un ``_process_message`` finto nei test
+                            # torna esiti senza il campo.
+                            await self._plan_turn_ended(
+                                msg, session_key,
+                                stop_reason=getattr(outcome, "stop_reason", ""),
                             )
                     self._cron_turns.complete(msg, outcome=outcome)
                 except asyncio.CancelledError:
@@ -1897,13 +2135,14 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                     if self._turn_epochs.is_current(turn_token):
                         # Un turno silenzioso non consegna nemmeno i propri
                         # errori: l'utente non ha chiesto questo lavoro e una
-                        # bolla "Sorry, I encountered an error." in chat sarebbe
+                        # bolla d'errore (``error.internal``) in chat sarebbe
                         # rumore per un fallimento che appartiene alla run record
                         # del job. L'eccezione risale comunque al chiamante.
                         if not self._is_silent_turn(msg, session_key):
                             await self.bus.publish_outbound(OutboundMessage(
                                 channel=msg.channel, chat_id=msg.chat_id,
-                                content="Sorry, I encountered an error.",
+                                content=say("error.internal"),
+                                metadata={"error": {"kind": "generic"}},
                             ))
                         if not turn_continuation.internal_continuation_pending(msg.metadata):
                             await self._runtime_events().turn_completed(
@@ -1912,6 +2151,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                                 session_key=session_key,
                                 metadata=msg.metadata,
                             )
+                            # Un turno caduto lascia il passo aperto come uno
+                            # finito senza chiuderlo: stesso giudizio.
+                            await self._plan_turn_ended(msg, session_key)
                     self._cron_turns.complete(msg, error=exc)
                 finally:
                     # Drain any messages still in the pending queue and re-publish
@@ -1981,6 +2223,28 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         silent = self._is_silent_turn(msg, key)
         if silent:
             mark_silent_turn(msg.metadata)
+        elif channel == "websocket":
+            # Un turno della WebUI ha l'id che il client manda col messaggio; un
+            # turno di sistema non ha un messaggio del client, e senza id la
+            # rilettura non accorpa (``home-chat.js``): la frase e il file del
+            # rientro di un aiutante, una bolla dal vivo, ricaricando erano due.
+            # Nei metadata del messaggio lo ereditano i passi, il tool
+            # ``message`` e il ``turn_end``; la risposta finale lo prende qui sotto.
+            msg.metadata.setdefault(WEBUI_TURN_METADATA_KEY, f"system:{uuid.uuid4().hex}")
+        # Un turno di passo del piano parla del passo aperto *adesso*: uno
+        # rimasto sul bus dopo un Ferma o una Pausa non deve fare un passo che
+        # l'utente ha fermato (``PlanDriver.step_message_current``).
+        is_plan = is_plan_turn(msg.metadata)
+        if is_plan and (
+            self.plan_driver is None or not self.plan_driver.step_message_current(msg.metadata)
+        ):
+            logger.info("Stale plan turn dropped for session {}", key)
+            # Non e' un turno: il gancio di fine turno non deve giudicarlo.
+            msg.metadata[PLAN_STALE_META] = True
+            return TurnOutcome.silent()
+        # Il rientro di un aiutante durante una pianificazione e' ancora
+        # pianificazione: sola lettura e ``plan_propose`` (``loop_plan.py``).
+        await self._plan_system_turn(msg, key)
         session = self.sessions.get_or_create(key)
         if self._restore_runtime_checkpoint(session):
             self.sessions.save(session)
@@ -1989,12 +2253,17 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
 
         session, pending = self.auto_compact.prepare_session(session, key)
         if pending:
-            logger.info("Memory compact triggered for session {}", key)
+            # Non e' una compattazione: e' il riassunto archiviato che torna nel
+            # prompt, cioe' quasi ogni turno. Il vecchio «Memory compact
+            # triggered» a INFO faceva credere a una compattazione continua.
+            logger.debug("Archived summary attached to the prompt for {}", key)
 
         await self.consolidator.maybe_consolidate_by_tokens(
             session,
             replay_max_messages=self._max_messages,
+            max_rounds=self.consolidator.INLINE_ROUNDS,
         )
+        pending = self.auto_compact.summary_for(session, key)
         is_subagent = msg.sender_id == "subagent"
         followup_state = self._subagent_followup_state(session, msg) if is_subagent else None
         if followup_state in (FollowupState.DELIVERED, FollowupState.EMPTY):
@@ -2003,6 +2272,22 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             logger.debug(
                 "Subagent announce skipped for session {}: {}", key, followup_state.value,
             )
+            if followup_state is FollowupState.DELIVERED:
+                # Jenny l'ha gia avuto e ci ha risposto: la casa puo togliere
+                # la scheda anche se la prima consegna non l'aveva marcato.
+                self._mark_subagent_handled(msg.metadata.get("subagent_task_id"))
+            return TurnOutcome.silent()
+        # Un rientro nuovo di un aiutante della pianificazione e' una lettura del
+        # quaderno; uno gia' consegnato o vuoto, scartato qui sopra, no.
+        if is_subagent:
+            await self._plan_count_helper_result(msg, key)
+            # I buchi «To research» di un aiutante del passo aperto, prima di
+            # decidere se tenerlo: anche un resoconto tenuto senza turno conta.
+            await self._plan_note_step_report(msg, key)
+        if is_subagent and not silent and self._hold_subagent_result(
+            msg, key, session, followup_state,
+        ):
+            # In storia senza turno: Jenny si sveglia con l'ultimo del passo.
             return TurnOutcome.silent()
         # Prelude di tooling condiviso con lo stato BUILD della FSM: sincronizza i
         # tool delle app, imposta il contesto tool e azzera lo stato per-turno del
@@ -2015,7 +2300,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             "max_messages": self._max_messages,
             "max_tokens": self._replay_token_budget(),
             "include_timestamps": True,
-            "extend_to_user": is_subagent,
+            "extend_to_user": is_subagent or is_plan,
+            "replay_sent": True,
         }
         # La storia si legge PRIMA di scrivere il rientro, come fa la FSM con un
         # messaggio dell'utente (``_state_build``): la finestra resta ancorata
@@ -2031,7 +2317,25 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # Scritto da un turno d'annuncio interrotto: e' gia' in ``history``,
             # come ultima riga ``user``, e il contesto runtime ci si unisce sopra.
             self.sessions.save(session)
-        workspace_scope = self.workspace_scopes.for_message(msg, session.metadata)
+        plan_row: dict[str, Any] | None = None
+        if is_plan:
+            # Come il rientro di un aiutante: in storia prima del turno, marcato
+            # come riga sintetica, cosi' in chat non diventa una bolla
+            # dell'utente e il turno dopo lo rimanda com'e' partito.
+            plan_row = self._persist_plan_turn(session, msg)
+            self.sessions.save(session)
+        # Lo scope dal canale d'origine e dalla chiave, non da ``msg``: il canale
+        # di un turno di sistema e' ``system``, e ``for_message`` ci vedeva la
+        # radice del workspace — il prompt di un passo del piano, o del rientro
+        # di un aiutante nella chat di un quaderno, si costruiva con le
+        # istruzioni del workspace invece che con quelle del quaderno. E' lo
+        # stesso scope con cui ``_run_agent_loop`` fa girare i tool del turno.
+        workspace_scope = self.workspace_scopes.for_turn(
+            channel=channel,
+            message_metadata=msg.metadata,
+            session_metadata=session.metadata,
+            session_key=key,
+        )
 
         # Il rientro arriva al modello come messaggio ``user``, la stessa forma
         # dell'iniezione a meta' turno: e' una notizia, non una cosa che ha detto
@@ -2039,7 +2343,12 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         # (``enforce_role_alternation``) e il modello rispondeva alla domanda
         # precedente con i dati vecchi — il 02/10/2026 «ancora in corso» due
         # volte, e la sintesi mai consegnata.
+        # Un registro solo per la richiesta e per l'inventario del prompt, come
+        # nel turno dell'utente (``_build_initial_messages``): dicono la stessa
+        # cosa due volte, e devono venire dalla stessa fonte.
+        turn_tools = self._system_turn_tools(msg, key, session, silent=silent)
         messages = self.context.build_messages(
+            available_tools=(turn_tools or self.tools).tool_names,
             history=history,
             current_message=(
                 msg.content if followup_state in (None, FollowupState.NEW) else ""
@@ -2052,8 +2361,35 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             session_metadata=session.metadata,
             workspace=workspace_scope.project_path,
             session_key=key,
-            current_runtime_lines=self._location_runtime_lines(channel, chat_id),
+            current_runtime_lines=[
+                *self._location_runtime_lines(channel, chat_id),
+                *self._plan_runtime_lines(msg, session, key),
+            ],
         )
+        # Il rientro si rimandera' com'e' partito (``SENT_CONTENT_META``): scritto
+        # qui sopra, il messaggio costruito e' lui solo se in coda non c'era gia'
+        # una riga ``user``; scritto da un turno interrotto, e' lui la coda su cui
+        # il contesto runtime si e' unito. Prima del blocco dell'heartbeat, che
+        # non si salva.
+        announce_row = self._subagent_followup_row(session, msg) if is_subagent else None
+        if announce_row is not None and (
+            followup_state is FollowupState.PENDING
+            or not (history and history[-1].get("role") == "user")
+        ):
+            record_sent_content(announce_row, messages)
+        if plan_row is not None and not (history and history[-1].get("role") == "user"):
+            record_sent_content(plan_row, messages)
+        if (
+            followup_state in (FollowupState.NEW, FollowupState.PENDING)
+            and messages[-1].get("role") == "user"
+        ):
+            # Il rientro arriva al runner riconoscibile come quello iniettato a
+            # meta' turno: se il provider rifiuta di rispondere, e' la riga che
+            # il recovery toglie dalla richiesta (``_recover_provider_refusal``).
+            # Un dict nuovo, e fuori dal salvataggio (``save_skip``): la storia
+            # non cambia, e il provider il marcatore non lo vede.
+            messages[-1] = {**messages[-1], INJECTED_EVENT_META: SUBAGENT_RESULT_EVENT}
+        self._settle_closed_reasoning(session, messages)
         # Un controllo dell'heartbeat delegato con ``spawn`` non ha un esito nel
         # turno che lo delega: `spawn` ritorna subito. QUESTO turno è l'unico che
         # il risultato ce l'ha, ed è già quello a cui il preambolo dell'heartbeat
@@ -2076,20 +2412,42 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         # turno interrotto): si salta tutto il prompt, che sia finito in un
         # messaggio suo o unito a una coda ``user``. Un altro messaggio di
         # sistema invece va salvato, e salta solo cio' che lo precede.
-        save_skip = len(messages) if is_subagent else 1 + len(history)
+        save_skip = len(messages) if is_subagent or is_plan else 1 + len(history)
         t_wall = time.time()
-        # Differenza deliberata dallo stato RUN della FSM: il path di sistema NON
-        # emette run_status_changed("running"). Un turno subagent/announce è di
-        # background e non deve accendere il banner "in esecuzione" nella WebUI; la
-        # transizione a "idle" a fine turno resta gestita a livello di dispatch.
-        final_content, _, all_msgs, stop_reason, _ = await self._run_agent_loop(
-            messages, session=session, channel=channel, chat_id=chat_id,
-            message_id=msg.metadata.get("message_id"),
-            metadata=msg.metadata,
-            session_key=key,
-            pending_queue=pending_queue,
-            turn_token=turn_token,
+        # Un turno d'annuncio che parlera' nella chat si fa vedere come un turno
+        # dell'utente: ``running`` e i passi dei tool sulla chat d'origine, poi
+        # ``idle``. Fino al 07/10/2026 non emetteva niente, per non accendere la
+        # bolla per un lavoro di sottofondo; ma un annuncio visibile finisce
+        # comunque in chat, e l'utente che ci scrive dentro viene iniettato qui.
+        # Sul Titan: 453 s di lavoro su un «metti il tasto», e a schermo niente.
+        # Il turno silenzioso (heartbeat, lavori interni) resta invisibile.
+        origin = None if silent else InboundMessage(
+            channel=channel, sender_id=msg.sender_id, chat_id=chat_id, content="",
+            metadata=dict(msg.metadata or {}),
         )
+        on_progress = None
+        if origin is not None:
+            on_progress = await self._build_bus_progress_callback(origin)
+            await self._runtime_events().run_status_changed(
+                origin, key, "running", started_at=t_wall,
+            )
+        try:
+            run = await self._run_agent_loop(
+                messages, on_progress=on_progress,
+                session=session, channel=channel, chat_id=chat_id,
+                message_id=msg.metadata.get("message_id"),
+                metadata=msg.metadata,
+                session_key=key,
+                pending_queue=pending_queue,
+                turn_token=turn_token,
+                # Il registro del loop meno i tool del piano che questo turno
+                # non puo' usare: un passo aperto li mostra, il resto no.
+                tools=turn_tools,
+            )
+            final_content, tools_used, all_msgs, stop_reason, had_injections = run
+        finally:
+            if origin is not None:
+                await self._runtime_events().run_status_changed(origin, key, "idle")
         # Re-sync dei tool delle app dopo l'esecuzione (mirror dello stato RUN):
         # il turno può aver creato/eliminato app durante il run.
         await self._sync_apps_and_notify()
@@ -2112,6 +2470,9 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             ephemeral=False,
             clear_pending=False,
         )
+        if is_subagent:
+            # Il resoconto e in storia e il turno che lo presenta e finito.
+            self._mark_subagent_handled(msg.metadata.get("subagent_task_id"))
         spoke_via_tool = self._message_tool_spoke()
         if silent:
             # Un turno di sistema silenzioso non ha un outbound: ne il contenuto
@@ -2138,25 +2499,264 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 except Exception:
                     logger.exception("Heartbeat follow-up: could not record the outcome")
             return (
-                TurnOutcome.spoke_via_tool(final_text=text)
+                TurnOutcome.spoke_via_tool(final_text=text, stop_reason=stop_reason)
                 if spoke_via_tool
-                else TurnOutcome.silent(final_text=text)
+                else TurnOutcome.silent(final_text=text, stop_reason=stop_reason)
             )
-        # Differenza deliberata dal path utente: nessuna soppressione MessageTool
-        # (_assemble_outbound). Un turno di sistema VISIBILE ha un contratto di
-        # outbound proprio e restituisce sempre una risposta (contenuto o fallback).
+        subagent_status = msg.metadata.get("subagent_status")
+        if (is_subagent and subagent_status not in (None, "ok")
+                and ("subagent_restart" in tools_used
+                     # Un aiutante fermato al budget, o da un provider che non
+                     # rispondeva, si fa continuare con ``subagent_send``
+                     # (``subagent_announce.md``): come un rilancio, in chat parla
+                     # solo il lavoro ripreso. Solo se l'invio a QUESTO aiutante
+                     # e' andato: un invio rifiutato, o a un altro aiutante,
+                     # lascia l'utente senza notizie. Sul telefono, il 25/10/2026,
+                     # l'interrotto mancava: in chat era arrivato «si è arenato su
+                     # un errore di rete, l'ho ripreso».
+                     or ((subagent_status == "budget"
+                          or msg.metadata.get("subagent_interrupted") is True)
+                         and self._sent_to_announced_helper(
+                             all_msgs[save_skip:], msg.metadata)))):
+            # Un subagent caduto e rilanciato: in chat parla solo l'esito del
+            # rilancio. Il 07/10/2026 l'utente si e' visto arrivare «piccolo
+            # intoppo, l'ho rilanciato» e poi il risultato vero, e ha chiesto che
+            # resti solo il secondo. La risposta resta nella storia, cosi' Jenny
+            # sa di averlo rilanciato.
+            logger.info("Subagent relaunched after a failure; no message to {}", key)
+            return TurnOutcome.silent(final_text=final_content or "", stop_reason=stop_reason)
+        if is_plan and not (final_content or "").strip():
+            # Un passo chiuso coi soli tool non ha niente da dire: il riempitivo
+            # «Background task completed.» sarebbe una bolla vuota di senso, e la
+            # scheda del piano mostra gia' l'avanzamento.
+            return TurnOutcome.silent(final_text="", stop_reason=stop_reason)
+        if spoke_via_tool and not had_injections:
+            # Come nel path utente (``_assemble_outbound``): se ``message`` ha gia'
+            # parlato nella chat d'origine, la risposta finale e' un doppione.
+            # L'annuncio di un aiutante le chiede di mettere il riassunto nel
+            # messaggio col file (``subagent_announce.md``); e il 28/10/2026 sul
+            # s22 la chat mostrava due volte la stessa frase. Un utente che ha
+            # scritto a meta' turno aspetta invece la risposta: quella resta.
+            return TurnOutcome.spoke_via_tool(
+                final_text=final_content or "", stop_reason=stop_reason,
+            )
+        # Altrimenti un turno di sistema VISIBILE restituisce sempre una risposta
+        # (contenuto o fallback).
         content = final_content or "Background task completed."
         outbound_metadata: dict[str, Any] = {}
+        if blank_kind := _BLANK_TURN_ERROR_KINDS.get(stop_reason):
+            # Come nel turno dell'utente (``_assemble_outbound``).
+            outbound_metadata["error"] = {"kind": blank_kind}
         if origin_message_id := msg.metadata.get("origin_message_id"):
             outbound_metadata["origin_message_id"] = origin_message_id
+        if turn_id := msg.metadata.get(WEBUI_TURN_METADATA_KEY):
+            outbound_metadata[WEBUI_TURN_METADATA_KEY] = turn_id
         return TurnOutcome.delivered(
             OutboundMessage(
                 channel=channel,
                 chat_id=chat_id,
                 content=content,
                 metadata=outbound_metadata,
-            )
+            ),
+            stop_reason=stop_reason,
         )
+
+    async def shutdown(self, *, timeout_s: float = 10.0) -> None:
+        """Il drain di :class:`LoopTasksMixin`, preceduto dai timer del risveglio unico.
+
+        Prima di tutto il resto: un risveglio che scatta mentre i turni si
+        drenano pubblicherebbe un turno che nessuno prenderà più
+        (``PlanDriver.close_held_timers``).
+        """
+        close: Any = getattr(self.plan_driver, "close_held_timers", None)
+        if close is not None:
+            try:
+                await close()
+            except Exception:  # noqa: BLE001 — lo shutdown va avanti comunque
+                logger.opt(exception=True).warning("Plan wake-up timers not closed")
+        await super().shutdown(timeout_s=timeout_s)
+
+    def _system_turn_tools(
+        self, msg: InboundMessage, key: str, session: Session, *, silent: bool,
+    ) -> ToolRegistry | None:
+        """Il registro di un turno di sistema: lo stesso del turno dell'utente in quella chat.
+
+        Lo calcola :meth:`_turn_tool_view` col canale e la chat d'origine (un
+        turno di sistema arriva su ``system``, con l'origine nel ``chat_id``).
+        Non e' solo pulizia: il rientro di un aiutante che portava tool diversi
+        dal turno prima non ritrovava niente nella cache del provider (0 token
+        su ~21,7k sul s22 il 28/10/2026). Una copia delle sue regole ne
+        perdeva alcune (``suggest_notebook``, ``recall_history`` e le azioni
+        delle app non posate nei quaderni, ``notebook`` in un progetto che non
+        e' un quaderno): un filtro solo, e le due liste non possono divergere.
+        """
+        channel, chat_id = (
+            msg.chat_id.split(":", 1) if ":" in msg.chat_id else (INTERNAL_CHANNEL, msg.chat_id)
+        )
+        origin = dataclasses.replace(msg, channel=channel, chat_id=chat_id)
+        return self._turn_tool_view(origin, session, key, silent=silent)
+
+    def _hold_subagent_result(
+        self,
+        msg: InboundMessage,
+        key: str,
+        session: Session,
+        followup_state: FollowupState | None,
+    ) -> bool:
+        """Scrive in storia il resoconto di un aiutante **senza turno**, se va tenuto.
+
+        Il risveglio unico per passo (``PlanDriver.hold_helper_result``): con un
+        piano in corsa, il resoconto riuscito di un aiutante il cui fratello
+        dello stesso passo lavora ancora non apre un turno — niente chiamata al
+        modello, niente messaggio in uscita. La riga si scrive come per un turno
+        d'annuncio, così il turno dell'ultimo resoconto le vede tutte, e i
+        controlli che contano una riga per id (doppioni, letture del piano)
+        restano com'erano. ``handled`` arriva solo al risveglio
+        (:meth:`_release_held_subagent_results`).
+
+        Solo un esito ``ok``: un errore, un budget o uno stop svegliano subito,
+        perché Jenny deve poter far continuare o rilanciare l'aiutante. A metà
+        turno non si tiene niente: Jenny è sveglia comunque, e il resoconto
+        entra nel turno in volo (``_drain_pending``).
+        """
+        if followup_state not in (FollowupState.NEW, FollowupState.PENDING):
+            return False
+        meta = msg.metadata if isinstance(msg.metadata, dict) else {}
+        if meta.get("subagent_status") != "ok":
+            return False
+        driver = self.plan_driver
+        hold: Any = getattr(driver, "hold_helper_result", None)
+        if hold is None:
+            return False
+        try:
+            held = hold(key, meta.get("subagent_task_id")) is True
+        except Exception:  # noqa: BLE001 — nel dubbio il turno parte, come prima
+            logger.opt(exception=True).warning("Helper result hold failed for {}", key)
+            return False
+        if not held:
+            return False
+        if followup_state is FollowupState.NEW:
+            self._persist_subagent_followup(session, msg)
+        # PENDING: la riga c'e' gia' (``_subagent_followup_state`` l'ha riportata
+        # a ``user``), e si salva com'e'.
+        self.sessions.save(session)
+        # Non e' un turno: il gancio di fine turno del piano non lo giudica (lo
+        # stesso marcatore di un turno di passo vecchio, ``_plan_turn_ended``).
+        msg.metadata[PLAN_STALE_META] = True
+        logger.info(
+            "Subagent result {} recorded without a turn for session {}: {}",
+            meta.get("subagent_task_id"), key, FollowupState.HELD.value,
+        )
+        return True
+
+    def _release_held_subagent_results(
+        self, session_key: str | None, session: Session | None = None,
+    ) -> None:
+        """Marca ``handled`` i resoconti tenuti di *session_key*: un turno li ha visti.
+
+        Lo chiama :meth:`_run_agent_loop` alla fine di ogni turno riuscito: le
+        righe tenute stanno in storia, quindi qualunque turno della sessione —
+        quello dell'ultimo resoconto, il risveglio del driver, o un messaggio
+        dell'utente arrivato nel mezzo — le ha avute davanti. Il driver spegne
+        il suo timer nello stesso momento.
+
+        Solo quelli la cui riga c'e' ancora: un ``/new`` nel frattempo ha
+        buttato la conversazione, e Jenny quei resoconti non li ha mai visti —
+        si lasciano cadere, senza ``handled``.
+        """
+        driver = self.plan_driver
+        take: Any = getattr(driver, "take_held_results", None)
+        if not session_key or take is None:
+            return
+        try:
+            held = list(take(session_key) or ())
+        except Exception:  # noqa: BLE001 — contabilita della casa, come mark_handled
+            logger.opt(exception=True).debug("Held helper results not released for {}", session_key)
+            return
+        if not held:
+            return
+        if session is not None:
+            in_history = {
+                row.get("subagent_task_id")
+                for row in session.messages
+                if row.get(INJECTED_EVENT_META) == SUBAGENT_RESULT_EVENT
+            }
+            gone = [task_id for task_id in held if task_id not in in_history]
+            if gone:
+                logger.info("Held helper results dropped, no longer in history: {}", gone)
+            held = [task_id for task_id in held if task_id in in_history]
+        for task_id in held:
+            self._mark_subagent_handled(task_id)
+
+    #: L'inizio dei risultati di ``subagent_send`` che non hanno mandato niente
+    #: (``SubagentSendTool.execute``: target sconosciuto, doppione, pool pieno),
+    #: e quello di un'eccezione del tool (``ToolRegistry``).
+    _SEND_REFUSED_PREFIXES = ("Cannot send", "Refused", "Error")
+
+    def _sent_to_announced_helper(
+        self, turn_messages: list[dict[str, Any]], metadata: Mapping[str, Any] | None,
+    ) -> bool:
+        """Questo turno ha mandato davvero un ``subagent_send`` all'aiutante annunciato.
+
+        Il bersaglio e' il ``task_id`` dell'annuncio o il suo lineage (``send``
+        accetta entrambi); riuscito = il risultato del tool non e' un rifiuto.
+        Senza questo, un invio fallito o diretto a un altro aiutante zittiva il
+        turno d'annuncio, e l'utente non sapeva che l'aiutante si era fermato.
+        """
+        meta = metadata if isinstance(metadata, Mapping) else {}
+        targets = {
+            value for value in (meta.get("subagent_task_id"), meta.get("subagent_lineage_id"))
+            if isinstance(value, str) and value
+        }
+        if not targets:
+            return False
+        aimed: set[str] = set()
+        for message in turn_messages:
+            role = message.get("role")
+            if role == "assistant":
+                for call in message.get("tool_calls") or ():
+                    if not isinstance(call, Mapping):
+                        continue
+                    function = call.get("function")
+                    function = function if isinstance(function, Mapping) else call
+                    if function.get("name") != "subagent_send":
+                        continue
+                    arguments = function.get("arguments")
+                    if isinstance(arguments, str):
+                        try:
+                            arguments = json.loads(arguments)
+                        except ValueError:
+                            continue
+                    if (isinstance(arguments, Mapping)
+                            and arguments.get("task_id") in targets and call.get("id")):
+                        aimed.add(str(call["id"]))
+            elif role == "tool" and message.get("tool_call_id") in aimed:
+                content = message.get("content")
+                if isinstance(content, list):
+                    content = "".join(
+                        part.get("text", "") for part in content if isinstance(part, Mapping)
+                    )
+                if isinstance(content, str) and not content.lstrip().startswith(
+                    self._SEND_REFUSED_PREFIXES
+                ):
+                    return True
+        return False
+
+    def _mark_subagent_handled(self, task_id: Any) -> None:
+        """``SubagentManager.mark_handled`` per un resoconto che Jenny ha avuto.
+
+        Non solleva: e contabilita della casa, e un turno finito non deve
+        fallire per lei. ``getattr``: nei test il manager e spesso un finto.
+        """
+        if not isinstance(task_id, str) or not task_id:
+            return
+        mark = getattr(self.subagents, "mark_handled", None)
+        if not callable(mark):
+            return
+        try:
+            mark(task_id)
+        except Exception:  # noqa: BLE001 — vedi docstring
+            logger.opt(exception=True).debug("Subagent handled mark failed for {}", task_id)
 
     async def _process_message(
         self,
@@ -2169,6 +2769,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         ephemeral: bool = False,
         tools: ToolRegistry | None = None,
         turn_token: TurnToken | None = None,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
     ) -> TurnOutcome:
         """Process a single inbound message and return its outcome."""
         # Un surrogato UTF-16 isolato (un frame tagliato dentro un'emoji) diventa
@@ -2213,6 +2814,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 msg.metadata,
             ),
             on_progress=on_progress,
+            on_retry_wait=on_retry_wait,
             on_stream=on_stream,
             on_stream_end=on_stream_end,
             pending_queue=pending_queue,
@@ -2303,6 +2905,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             # intatto — la history della sessione e' gia' stata scritta da SAVE.
             final_text=(ctx.final_content or "")
             + (self._nothing_to_report_lines(ctx.tools) if ctx.silent else ""),
+            stop_reason=ctx.stop_reason,
         )
 
     def _nothing_to_report_lines(self, tools: ToolRegistry | None = None) -> str:
@@ -2343,8 +2946,15 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         on_stream: Callable[[str], Awaitable[None]] | None,
         *,
         turn_latency_ms: int | None = None,
+        error_kind: str | None = None,
     ) -> OutboundMessage | None:
-        """Assemble the final outbound message from turn results."""
+        """Assemble the final outbound message from turn results.
+
+        *error_kind* (un turno finito in errore del provider) diventa
+        ``metadata["error"] = {"kind": ...}``: il canale WebSocket lo porta nel
+        payload e nel transcript, e la WebUI ne fa una bolla d'errore invece di
+        una risposta qualunque.
+        """
         # MessageTool suppression
         tool_spoke = self._message_tool_spoke()
         if tool_spoke:
@@ -2361,10 +2971,23 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         # scartato i delta, e siamo qui solo nell'unico caso in cui la soppressione
         # non scatta — tool + injection utente a metà turno. Segnarlo streammato
         # farebbe scartare al dispatcher un testo che nessuno ha mai visto.
-        if on_stream is not None and not tool_spoke and stop_reason not in {"error", "tool_error"}:
+        # Un turno finito vuoto, troncato o rifiutato ha come risposta l'avviso
+        # del runner (``_finish_on_blank``), che nessuno ha streammato: segnato
+        # ``_streamed``, il dispatcher lo scartava e dal vivo non si vedeva
+        # niente. Porta invece il suo ``error``: la casa ne fa una bolla con
+        # «Riprova» e lascia a schermo il testo scritto prima dello strumento.
+        blank_kind = _BLANK_TURN_ERROR_KINDS.get(stop_reason)
+        if (
+            on_stream is not None and not tool_spoke
+            and stop_reason not in {"error", "tool_error"} and blank_kind is None
+        ):
             meta["_streamed"] = True
         if turn_latency_ms is not None:
             meta["latency_ms"] = int(turn_latency_ms)
+        if stop_reason == "error" and error_kind:
+            meta["error"] = {"kind": error_kind}
+        elif blank_kind is not None:
+            meta["error"] = {"kind": blank_kind}
 
         return OutboundMessage(
             channel=msg.channel,
@@ -2534,6 +3157,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         persist_user_message: bool = True,
         visibility: TurnVisibility | None = None,
         metadata: dict[str, Any] | None = None,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
     ) -> OutboundMessage | None:
         """Process a message directly and return the outbound payload.
 
@@ -2568,6 +3192,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
             persist_user_message=persist_user_message,
             visibility=visibility,
             metadata=metadata,
+            on_retry_wait=on_retry_wait,
         )
         return outcome.message
 
@@ -2586,6 +3211,7 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         persist_user_message: bool = True,
         visibility: TurnVisibility | None = None,
         metadata: dict[str, Any] | None = None,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
     ) -> TurnOutcome:
         """Come :meth:`process_direct`, ma restituisce l'esito intero del turno.
 
@@ -2595,6 +3221,11 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
         ``process_direct`` non puo' dire ne se l'agente ha parlato col tool
         ``message`` ne cosa ha scritto come risposta finale — ed e' li che
         l'heartbeat dichiara i task che non ha potuto eseguire.
+
+        ``on_retry_wait`` riceve le righe d'attesa del retry del provider (v.
+        ``providers/retry_notice.py``). Senza, un turno interno le pubblica sul
+        canale interno, dove nessuno le legge; con, chi aspetta il lavoro — la
+        bolla di lavoro della home — sa che il modello sta riprovando.
         """
         metadata = dict(metadata or {})
         if not persist_user_message:
@@ -2623,6 +3254,8 @@ class AgentLoop(StateHandlersMixin, ProviderPresetMixin, TurnPersistenceMixin, L
                 }
                 if tools is not None:
                     kwargs["tools"] = tools
+                if on_retry_wait is not None:
+                    kwargs["on_retry_wait"] = on_retry_wait
                 return await self._process_message(
                     msg,
                     **kwargs,

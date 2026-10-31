@@ -17,8 +17,10 @@ importano ``ws_test_client``.
 
 from __future__ import annotations
 
+import asyncio
 import random
 import socket
+from typing import Any
 
 _LOW = 30_000
 _HIGH = 60_000
@@ -42,3 +44,26 @@ def free_port() -> int:
                 continue
             return port
     raise RuntimeError("could not find a free localhost port")
+
+
+async def wait_listening(channel: Any, *, timeout: float = 5.0) -> None:
+    """Aspetta che il canale avviato con ``create_task(channel.start())`` accetti
+    connessioni sulla sua porta.
+
+    Prima ogni test aspettava 0,3 s fissi: troppo per un server che è su in
+    pochi millisecondi, e poco su una macchina carica. Qui si prova a connettersi
+    ogni 10 ms finché la porta risponde, fino a *timeout*.
+    """
+    host, port = channel.config.host, channel.config.port
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        try:
+            _, writer = await asyncio.open_connection(host, port)
+        except OSError:
+            if asyncio.get_running_loop().time() > deadline:
+                raise TimeoutError(f"{host}:{port} non ascolta dopo {timeout}s") from None
+            await asyncio.sleep(0.01)
+            continue
+        writer.close()
+        await writer.wait_closed()
+        return

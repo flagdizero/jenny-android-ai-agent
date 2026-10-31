@@ -106,7 +106,11 @@ function mountDialogs() {
 
 mountDialogs();
 
-export function confirmDialog(message, okText, cancelText) {
+/** *danger*: il si' fa qualcosa che non si annulla (eliminare per sempre). Il
+ *  bottone e' rosso, non dell'accento: lo stesso colore della conferma di
+ *  tutti i giorni diceva che era una domanda come le altre (giro UX del
+ *  10/10/2026). */
+export function confirmDialog(message, okText, cancelText, { danger = false } = {}) {
   okText = okText || i18n.t('dialog.confirm');
   cancelText = cancelText || i18n.t('dialog.cancel');
   const dialog = document.getElementById('oc-confirm-dialog');
@@ -124,6 +128,7 @@ export function confirmDialog(message, okText, cancelText) {
   msgEl.textContent = message;
   okBtn.textContent = okText;
   cancelBtn.textContent = cancelText;
+  okBtn.classList.toggle('oc-btn-danger', danger);
 
   return new Promise((resolve) => {
     let settled = false;

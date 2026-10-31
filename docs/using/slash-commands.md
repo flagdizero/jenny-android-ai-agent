@@ -24,14 +24,14 @@ Two consequences worth naming. Working on a notebook is always done **from insid
 
 Two commands — `/stop` and `/status` — are handled on a "priority" fast path that runs even while a turn is actively streaming or a tool is executing. The rest wait for the current dispatch to be free, which in practice is rarely noticeable.
 
-All server-side command responses below are **hardcoded in English**, regardless of whether the WebUI is set to Italian or English. This is true for the confirmation text, the usage/error messages, and the `/status`/`/model` output.
+Server-side command responses follow the language set for Jenny (`agents.defaults.language`, Italian or English): the confirmation text, the usage and error messages, `/help`, and the `/status`/`/model` output. The examples below show the English text.
 
 ## The server commands
 
 | Command | Arguments | What it does |
 |---|---|---|
 | `/new` | none | Stops the active task (if any) and clears the model's context for a fresh conversation |
-| `/stop` | none | Cancels the active agent turn for this chat |
+| `/stop` | `[all]` | Cancels the active agent turn for this chat; background mini-mes (subagents) keep going unless you send `/stop all` |
 | `/status` | none | Shows a runtime snapshot: version, model, token usage, context budget, session size, uptime, active tasks |
 | `/model` | `[preset]` | Shows the current model/preset, or switches the active preset |
 | `/history` | `[n]` | Prints the last `n` persisted user/assistant messages (default 10, max 50) |
@@ -65,29 +65,23 @@ If a conversation seems to keep dragging in an old topic — or to ignore a rule
 
 ### `/stop` — cancel the active turn
 
-While a turn runs, the home's send button turns into **Stop** and sends this command for you. The workshop Console has no stop button, so there typing `/stop` (or picking it from the Commands chip) is the way to interrupt a turn that's in progress. It works specifically because it's on the priority fast path (it's processed even mid-turn, before the normal dispatch lock). Response:
+While a turn runs, the home's send button turns into **Stop** and sends this command for you. The workshop Console has no stop button, so there typing `/stop` (or picking it from the Commands chip) is the way to interrupt a turn that's in progress. It works specifically because it's on the priority fast path (it's processed even mid-turn, before the normal dispatch lock). The reply is a short sentence in the agent's language (`agents.defaults.language`): that it stopped, or that there was nothing to stop.
 
-```text
-Stopped N task(s).
-```
+`/stop` also cancels an active `/goal`. It does **not** stop the helpers (subagents) already working in the background for this chat: each one has its own bubble, and you stop it from there. When some are still running, the reply says how many keep going.
 
-or, if nothing was running:
+`/stop all` stops everything: the turn, the goal, and every mini-me (subagent) of this chat — one that finishes after being stopped has its result silently thrown away. It undoes nothing: a mini-me that had changed files offers to undo them from its bubble ([Helpers](helpers.md)).
 
-```text
-No active task to stop.
-```
-
-`/stop` also cancels an active `/goal` and discards any subagent working in the background for this chat — a subagent that finishes after being stopped has its result silently thrown away.
+In a notebook, `/stop` also ends a [plan](plans.md): during the planning it drops the planning (*I stopped preparing the plan.*), and while a plan runs it is the same as **Stop and keep what it did** (*I stopped the plan. The notebook stays as it is now.*). `/new` ends a planning too.
 
 ### `/status` — runtime snapshot
 
 No arguments. Output is a fixed-format block (rendered as plain text, not markdown), for example:
 
 ```text
-🐈 jenny v1.0.0
+🐈 jenny v2.0.0
 🧠 Model: gpt-4o
 📊 Tokens: 1234 in / 567 out (40% cached)
-📚 Context: 12k/65k (22% of input budget)
+📚 Context: 12k/131k (12% of input budget)
 💬 Session: 48 messages
 ⏱ Uptime: 2h 14m
 ⚡ Tasks: 0 active
@@ -262,7 +256,7 @@ In the personal chat:
 ```text
 ✿ jenny commands:
 /new — Stop the current task and start a fresh conversation.
-/stop — Cancel the active agent turn for this chat.
+/stop — Cancel the active agent turn for this chat. Helpers working in the background keep going: stop each from its own bubble, or send /stop all to stop everything.
 /status — Display runtime, provider, and channel status.
 /model [preset] — Show or switch the active model preset.
 /history [n] — Print the last N persisted conversation messages.

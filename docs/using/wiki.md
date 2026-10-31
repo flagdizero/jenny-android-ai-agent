@@ -20,7 +20,7 @@ The one thing that *does* happen on its own is the reverse direction: the person
 
 ## Wikis and notebooks
 
-Everything on this page describes a wiki as something you *ask* Jenny to build and maintain. There is a second way to work with one: open it as a **[notebook](./projects.md)** from the **Notebooks** page. A notebook is a wiki — the same folder, the same pages, the same graph — but the conversation is bound to it, its map and pages are put in front of Jenny on every turn, facts you mention are captured into a journal inside it, and a background pass (the [gardener](./gardener.md)) turns those journal lines into pages between conversations.
+Everything on this page describes a wiki as something you *ask* Jenny to build and maintain. There is a second way to work with one: open it as a **[notebook](./projects.md)** from the **Notebooks** page. A notebook is a wiki — the same folder, the same pages, the same links — but the conversation is bound to it, it opens on a [board](./board.md) of the subjects it keeps coming back to, its board (or its map) and pages are put in front of Jenny on every turn, facts you mention are captured into a journal inside it, and a background pass (the [gardener](./gardener.md)) turns those journal lines into pages between conversations.
 
 So the two views are not alternatives: a wiki you created by asking can be opened as a notebook tomorrow, and a notebook you created in the app is immediately a wiki you can ask Jenny about.
 
@@ -32,58 +32,46 @@ Because everything is plain Markdown under the workspace, wiki pages are files l
 
 ## Opening a notebook
 
-A wiki is reached through the conversation that belongs to it, not from a tab of
-its own. Open the **Notebooks** page and tap the notebook: it opens there, and its
-header row reads **← Notebooks › name**, with a **Chat | Pages** switch at the
-right that carries the notebook's page count. Tap **Pages** to open its pages,
-and **Chat** to come back. A notebook you pinned as a page of its own has the
-same way in as a pill at the left of its composer, with the name and the count.
+A wiki is reached through the notebook that belongs to it, not from a tab of
+its own. Open the **Notebooks** page and tap the notebook: it opens on its
+[board](./board.md), under the header row **← Notebooks › name**. A notebook you
+pinned as a page of its own opens its board when you land on that page. The
+notebook's chat is behind Jenny: tap her over the board to talk in it.
 
-There are two tabs over the same data — **Pages** and **Map** — and a search
-box on the Pages tab.
-
-### Pages
-
-A list ordered by kind — entities first, then concepts, then the rest — and
-alphabetical inside each kind. Each row carries a coloured dot and its kind's
-name at the right. That marking only appears when it separates something: a
-notebook whose pages are all of one kind gets a plain list.
-
-Tapping a page opens it. Back returns to the list.
-
-### Map
-
-The same pages as nodes, links as edges, laid out by a force simulation. Drag to
-pan, pinch to zoom, drag a node to move it — and a node you have moved **stays
-where you put it** across openings, kept per notebook in
-`workspace/.jenny/map-layout.json`. It is not frozen: it keeps following the
-physics from the position you gave it, so the rest of the map still settles
-around it. Tap a node to open its page.
-
-<p align="center"><img src="../img/wiki-graph.png" alt="The Map tab of a notebook about cats: breed pages as nodes, links as edges" width="300"></p>
-
-Names are drawn for up to forty nodes, chosen by how connected they are —
-because the one question a map answers better than a list is where the notebook
-knots together. Below that cap every name is drawn.
+The board is how you reach the pages now. Each card on it opens a **drawer** — a
+short summary of one subject with links to the pages it was written from — and
+every page chip in a drawer opens that page in the reader. The notebook's page
+list and its graph **map** are gone: the board replaced both. See
+[Notebook board](./board.md).
 
 ### Searching
 
-The search box, on the Pages tab, searches **page contents**, not just titles:
-as you type, matching pages stay and the rest fall away. The Map tab has no
-search. The last word matches by prefix, so results narrow letter by letter.
+The **lens** in the board's header searches the whole notebook, including pages
+that are in no drawer. It searches **page contents**, not just titles, as you
+type. The last word matches by prefix, so results narrow letter by letter.
 
 - Accents are optional — typing `citta` finds "Città".
 - Page titles, file paths, headings and frontmatter tags all count, and a hit in
   a title ranks above one buried in a paragraph.
 - Very common words are ignored rather than treated as a failed search.
 
-Search runs entirely on-device: the index is built alongside the map and rebuilt
-only when a page actually changes, so typing never waits on anything.
+Card names are matched too, and each result says where it lives: a card, the
+drawer a page is in, or **not on the board**. A page off the board opens as a
+short preview with **I want it on the board**.
+
+Search runs entirely on-device: the index is rebuilt only when a page actually
+changes, so typing never waits on anything.
 
 ### Reading a page
 
 The page is rendered from its Markdown, with `[[wikilinks]]` clickable. A link
 that leaves the notebook is not pretended to be openable — it says so instead.
+
+In a notebook with a board, links are shown through the board: a link to a page
+in the same drawer opens it in place, a link to a page in another drawer carries
+a chip with that card's name and opens its drawer, and a dotted link to a page
+that is on no card opens a short preview. Back from a page returns to the drawer
+you opened it from. See [Pages, from a drawer](./board.md#pages-from-a-drawer).
 
 Mermaid diagrams are the one place in Jenny's UI where they render as diagrams:
 a fenced ` ```mermaid ` block in a wiki page is drawn. Chat replies do not render
@@ -134,19 +122,20 @@ scroll back to, and processing them is Jenny's job, not a screen.
 ## Privacy notes
 
 - The wiki only shows a small, fixed set of page metadata to the UI: title, type, entity type, tags, and created/updated dates. Anything else in a page's frontmatter — including source URLs and provenance notes Jenny records internally — stays server-side and out of the interface, even though it's present in the raw file — which the page's own editor shows you in full.
-- Every ingested source keeps a `summaries/` folder of per-source digest pages. These are deliberately kept out of the page list, the map and search to avoid cluttering navigation, but they are **not** encrypted or otherwise access-controlled — the pages are still readable if you know (or Jenny gives you) a direct link, and they still live as plain files in your workspace.
+- Every ingested source keeps a `summaries/` folder of per-source digest pages. These are deliberately kept out of search and off the board to avoid cluttering navigation, but they are **not** encrypted or otherwise access-controlled — the pages are still readable if you know (or Jenny gives you) a direct link, and they still live as plain files in your workspace.
 
 ## Turning it off
 
 A config key, `wiki.enabled` (default `true`), can disable the wiki backend entirely; when it's off, wiki API calls fail. There is no toggle for this in Settings — it's config.json-only, see [Configuration reference](../reference/configuration.md).
 
 With it off, the notebook list still shows what is on disk, and opening a
-notebook's pages reports that the wiki is switched off rather than failing
+notebook's board reports that the wiki is switched off rather than failing
 silently.
 
 ## See also
 
-- [Notebooks](projects.md) — opening a wiki as a conversation: capture, the map, and the write boundary.
+- [Notebooks](projects.md) — opening a wiki as a conversation: capture, what Jenny sees, and the write boundary.
+- [Notebook board](board.md) — the cards, drawers, reminders and proposals a notebook opens on.
 - [The gardener](gardener.md) — the pass that maintains a notebook's pages on its own.
 - [Tour of the WebUI](webui-tour.md) — overall navigation: the home's pages, and the workshop's dock.
 - [Backup and restore](backup.md) — wiki content is part of your regular workspace backup.

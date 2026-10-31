@@ -6,6 +6,7 @@ import base64
 import binascii
 import json
 import re
+from datetime import datetime
 from typing import Any, Callable, NamedTuple
 
 from jenny.session.history_meta import is_synthetic_history_row
@@ -334,6 +335,21 @@ def _select_transcript_page(
     return lines, page
 
 
+def _session_ms(message: dict[str, Any]) -> int | None:
+    """L'ora di un messaggio di sessione in ms epoch, o ``None``.
+
+    La sessione la scrive ISO naive in ora locale (``Session.add_message``):
+    ``fromisoformat`` + ``timestamp`` la legge nello stesso fuso in cui e' nata.
+    """
+    raw = message.get("timestamp")
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return int(datetime.fromisoformat(raw).timestamp() * 1000)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def _session_user_event(
     session_key: str,
     message: dict[str, Any],
@@ -358,31 +374,46 @@ def _session_user_event(
         return None
     media = message.get("media")
     chat_id = session_key.split(":", 1)[1] if ":" in session_key else session_key
-    return _build_user_transcript_event(
+    event = _build_user_transcript_event(
         chat_id,
         text,
         media_paths=media if isinstance(media, list) else None,
     )
+    at = _session_ms(message)
+    if event is not None and at is not None:
+        event["at"] = at
+    return event
 
 
 def _assistant_text_signature(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+class _SessionTurn(NamedTuple):
+    """Un turno della sessione, per riconoscerlo nel transcript: la riga utente
+    (``user``), i testi delle risposte (``signature``) e l'ora dell'ultima
+    risposta (``answer_at``, ms epoch, o ``None``)."""
+
+    user: dict[str, Any]
+    signature: tuple[str, ...]
+    answer_at: int | None
+
+
 def _session_backfill_turns(
     session_key: str,
     session_messages: list[dict[str, Any]],
-) -> list[tuple[dict[str, Any], tuple[str, ...]]]:
-    turns: list[tuple[dict[str, Any], tuple[str, ...]]] = []
+) -> list[_SessionTurn]:
+    turns: list[_SessionTurn] = []
     current_user: dict[str, Any] | None = None
     assistant_texts: list[str] = []
+    answer_at: int | None = None
 
     def flush() -> None:
         if current_user is None:
             return
         signature = tuple(text for text in assistant_texts if text)
         if signature:
-            turns.append((current_user, signature))
+            turns.append(_SessionTurn(current_user, signature, answer_at))
 
     for message in session_messages:
         role = message.get("role")
@@ -390,11 +421,13 @@ def _session_backfill_turns(
             flush()
             current_user = _session_user_event(session_key, message)
             assistant_texts = []
+            answer_at = None
             continue
         if role == "assistant" and current_user is not None:
             text = _assistant_text_signature(message.get("content"))
             if text:
                 assistant_texts.append(text)
+                answer_at = _session_ms(message) or answer_at
     flush()
     return turns
 
@@ -411,7 +444,7 @@ def _transcript_turn_signature(records: list[dict[str, Any]]) -> tuple[str, ...]
 
 
 def _find_unique_session_turn(
-    session_turns: list[tuple[dict[str, Any], tuple[str, ...]]],
+    session_turns: list[_SessionTurn],
     signature: tuple[str, ...],
     start: int,
 ) -> int | None:
@@ -419,7 +452,7 @@ def _find_unique_session_turn(
         return None
     found: int | None = None
     for index in range(start, len(session_turns)):
-        if session_turns[index][1] != signature:
+        if session_turns[index].signature != signature:
             continue
         if found is not None:
             return None
@@ -435,6 +468,23 @@ def _with_backfilled_user(
         if rec.get("event") in _TURN_DISPLAY_EVENTS:
             return [*records[:index], dict(user_event), *records[index:]]
     return records
+
+
+def _with_session_times(
+    records: list[dict[str, Any]],
+    turn: _SessionTurn,
+) -> list[dict[str, Any]]:
+    """Le righe di un turno scritto prima che il transcript portasse l'ora
+    (``at``) la prendono dal turno di sessione che gli corrisponde: la riga
+    utente quella del messaggio utente, le altre quella dell'ultima risposta.
+    Una riga che l'ora ce l'ha gia' la tiene. Copie, non le righe lette: quelle
+    possono stare in una cache."""
+    user_at = turn.user.get("at")
+    out: list[dict[str, Any]] = []
+    for rec in records:
+        at = user_at if rec.get("event") == "user" else turn.answer_at
+        out.append(rec if "at" in rec or at is None else {**rec, "at": at})
+    return out
 
 
 def _build_synthetic_transcript(
@@ -459,20 +509,26 @@ def _build_synthetic_transcript(
             content = msg.get("content")
             text = content if isinstance(content, str) else ""
             if text.strip():
-                lines.append({
+                answer: dict[str, Any] = {
                     "event": "message",
                     "chat_id": chat_id,
                     "text": text,
                     "kind": "message",
                     "turn_id": f"synthetic:{turn_counter}",
                     "turn_phase": "answer",
-                })
-                lines.append({
+                }
+                end: dict[str, Any] = {
                     "event": "turn_end",
                     "chat_id": chat_id,
                     "turn_id": f"synthetic:{turn_counter}",
                     "turn_phase": "complete",
-                })
+                }
+                at = _session_ms(msg)
+                if at is not None:
+                    answer["at"] = at
+                    end["at"] = at
+                lines.append(answer)
+                lines.append(end)
                 turn_counter += 1
     return lines
 
@@ -498,7 +554,10 @@ def _inject_missing_user_events_from_session(
         if match_index is None:
             out.extend(turn)
             continue
-        out.extend(turn if has_user else _with_backfilled_user(turn, session_turns[match_index][0]))
+        matched = session_turns[match_index]
+        if not has_user:
+            turn = _with_backfilled_user(turn, matched.user)
+        out.extend(_with_session_times(turn, matched))
         session_cursor = match_index + 1
     return out
 

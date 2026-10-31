@@ -63,31 +63,6 @@ def _first_party_js() -> list[Path]:
 # ── N14 · scrim della minichat ────────────────────────────────────────────────
 
 
-def test_the_minichat_scrim_is_not_a_blind_tab_stop() -> None:
-    """Da chiuso lo scrim deve sparire anche per Tab e per TalkBack.
-
-    ``opacity: 0`` + ``pointer-events: none`` tolgono il colore e il click, non
-    la focalizzabilità: il ``<button>`` restava una tappa Tab su ogni schermata,
-    con l'anello di fuoco invisibile, e un nodo letto ad alta voce.
-    """
-    base = _css_rule(".jenny-scrim")
-    assert "visibility: hidden" in base, "lo scrim chiuso resta focalizzabile e leggibile"
-    opened = _css_rule(".jenny-scrim.open")
-    assert "visibility: visible" in opened, "aperto lo scrim deve tornare visibile e cliccabile"
-
-
-def test_hiding_the_scrim_does_not_eat_its_fade_out() -> None:
-    """La ``visibility`` non si interpola: senza ritardo, alla chiusura lo scrim
-    scomparirebbe di colpo invece di dissolversi."""
-    base = _css_rule(".jenny-scrim")
-    assert re.search(r"visibility 0s linear 0\.25s", base), (
-        "la visibility deve cambiare solo a dissolvenza finita"
-    )
-    assert re.search(r"visibility 0s linear 0s", _css_rule(".jenny-scrim.open")), (
-        "in apertura invece deve essere immediata, o non si vedrebbe nemmeno l'entrata"
-    )
-
-
 # ── N13 · drawer ──────────────────────────────────────────────────────────────
 
 

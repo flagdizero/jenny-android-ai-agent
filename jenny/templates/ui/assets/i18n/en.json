@@ -1,10 +1,7 @@
 {
   "nav": {
-    "chat": "Chat",
-    "apps": "Apps",
     "workspace": "Workspace",
     "settings": "Settings",
-    "wiki": "Wiki",
     "ariaLabel": "Navigation",
     "console": "Console",
     "brain": "Brain",
@@ -52,7 +49,7 @@
       "title": "New chat"
     },
     "stop": {
-      "title": "Stop the current task"
+      "title": "Stop the reply (the mini-mes keep going)"
     },
     "status": {
       "title": "Runtime and provider status"
@@ -86,11 +83,11 @@
     }
   },
   "subagents": {
-    "title": "Subagents",
+    "title": "Mini-mes",
     "headCount": "{running} running",
     "headCountFinished": "{running} running · {finished} just finished",
     "untitled": "untitled",
-    "openDetail": "Open subagent details",
+    "openDetail": "Open mini-me details",
     "idle": "idle {duration}",
     "attempt": "attempt {n}",
     "stalledHint": "No progress for a while — relaunch?",
@@ -128,16 +125,17 @@
       "loading": "Loading…",
       "failed": "Could not load the activity.",
       "live": "Still running: this is a preview and will change.",
-      "empty": "No activity was recorded for this subagent"
+      "empty": "No activity was recorded for this mini-me"
     },
-    "stopped": "Subagent stopped",
-    "relaunched": "Subagent relaunched",
+    "stopped": "Mini-me stopped",
+    "relaunched": "Mini-me relaunched",
     "actionFailed": "Action failed",
     "state": {
       "running": "running",
       "stalled": "stalled",
       "done": "done",
       "failed": "failed",
+      "budget": "out of budget",
       "cancelled": "cancelled"
     },
     "phase": {
@@ -209,7 +207,6 @@
     "cronRecoveredBackup": "Your scheduled reminders were restored from the last good backup: the job list could not be read at startup. Check that they are all there.",
     "cronRecoveredEmpty": "The scheduled reminder list could not be read and there was no usable backup, so Jenny started with none: the ones you had created will not fire again and need recreating. The unreadable file was kept aside:",
     "themeLabel": "Theme",
-    "mascotVisible": "Show mascot",
     "mascotSize": "Mascot size",
     "mascotSizeSmall": "Small",
     "mascotSizeMedium": "Medium",
@@ -217,6 +214,10 @@
     "floatingEnabled": "Floating mascot",
     "floatingHint": "{name} stays above other apps: tap her and you can talk, with the answer in a bubble. It's the same conversation as in the app.",
     "floatingBlocked": "Android won't let her open the window: allow “Display over other apps” in the system settings.",
+    "floatingAllow": "Open settings",
+    "screenEnabled": "Reads the screen",
+    "screenHint": "When you tap the mascot, {name} reads the app underneath once — its text, the address and a screenshot of that app alone — so you can say “save this”. She touches nothing and skips apps that block screenshots.",
+    "screenOff": "It is turned on in Accessibility: tap the switch and enable “Jenny — reading the screen”. If Android calls it a restricted setting, unlock it from the app info (⋮ → Allow restricted settings).",
     "tokenUsage": "Token Usage",
     "version": "Version",
     "maxTokens": "Max Tokens",
@@ -224,6 +225,8 @@
     "temperature": "Temperature",
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Reasoning Effort",
+    "mainReasoningEffort": "Jenny's reasoning",
+    "mainReasoningEffortSame": "Same as helpers",
     "addProvider": "Add provider",
     "noProviders": "No providers configured.",
     "edit": "Edit",
@@ -344,6 +347,7 @@
       "availableCritical": "Security update available: version {version}. Worth installing right away.",
       "notes": "What changed",
       "install": "Install now",
+      "installOnPhone": "Install it from the phone",
       "starting": "Starting the installation…",
       "startFailed": "I couldn't start the installation.",
       "restarting": "Installation started: Jenny will restart on her own shortly. The connection will drop and come back by itself, nothing for you to do.",
@@ -460,6 +464,53 @@
       "summaryOff": "off",
       "summaryUnknown": "could not read"
     },
+    "remote": {
+      "title": "From other devices",
+      "rowName": "Tailscale",
+      "intro": "Open this Jenny from your computer or another phone, through Tailscale. The phone stays the server: chat, notebooks and searches are the same.",
+      "toggle": "Reachable over Tailscale",
+      "tsUp": "Tailscale is running on this phone · {address}",
+      "tsUnknown": "Tailscale doesn't seem to be running on this phone",
+      "offHint": "Off, Jenny only listens inside the phone. On, only your Tailscale devices can reach her; the home Wi-Fi stays out. And Jenny keeps Tailscale on: if it drops, or you turn it off, she turns it back on.",
+      "listening": "Listening on Tailscale · {address}",
+      "waiting": "Waiting for Tailscale",
+      "reviving": "Jenny is turning Tailscale back on · attempt {count}",
+      "needsYou": "Tailscale needs you",
+      "error": "Can't listen: {error}",
+      "openFrom": "Open from",
+      "copyLink": "Copy link",
+      "copied": "Link copied",
+      "showQr": "Show QR",
+      "hideQr": "Hide QR",
+      "keyHint": "The link carries Jenny's key: whoever has it gets in. Don't paste it into a chat.",
+      "scanFrom": "Scan it from the other phone",
+      "scanHint": "Tailscale must be on there too, with the same account.",
+      "connected": "Connected now",
+      "noneConnected": "Nobody, for now.",
+      "since": "since {time}",
+      "windows": "{count} windows",
+      "disconnectAll": "Disconnect everyone and change the key",
+      "disconnectTitle": "Change the key?",
+      "disconnectBody": "The other devices get disconnected and the old link stops working. Nothing changes on the phone.",
+      "disconnectBodyHere": "The other devices get disconnected, this one included, and the old link stops working. To get back in you'll need the new link, from the phone.",
+      "disconnectConfirm": "Change the key",
+      "disconnectDone": "Key changed: old links no longer work.",
+      "tsDown": "Tailscale isn't running on this phone, so nobody can get in from outside. Jenny is trying to turn it back on by herself; if you're in a hurry, open the Tailscale app.",
+      "tsNeedsYou": "Jenny opened Tailscale, but it didn't turn on: it probably wants you to log in or to allow the VPN. Open it and check: Jenny has stopped trying on her own.",
+      "openTailscale": "Open Tailscale",
+      "openTailscaleFailed": "Can't find the Tailscale app on this phone.",
+      "autoResume": "As soon as Tailscale is back, Jenny starts listening again by herself.",
+      "remoteHere": "You're using Jenny from another device. If you turn this off here, this window gets disconnected and turning it back on takes the phone.",
+      "turnOffHereTitle": "Turn off from here?",
+      "turnOffHereBody": "This window gets disconnected right away. Turning it back on will take the phone.",
+      "turnOffHereConfirm": "Turn off",
+      "summaryOff": "off",
+      "summaryWaiting": "on · waiting for Tailscale",
+      "summaryOn": "on",
+      "summaryOnNamed": "on · {name} connected",
+      "summaryOnMany": "on · {count} connected",
+      "failed": "Didn't work: {error}"
+    },
     "whoThinksHint": "Each brand holds its models: one tap on a model makes it answer.",
     "answersWith": "answers with {model}",
     "manageBrand": "Manage {name}",
@@ -519,7 +570,8 @@
       "too_many_images": "Too many images in one message",
       "too_many_videos": "Too many videos in one message",
       "unknown": "Something went wrong",
-      "unknown_type": "I didn't understand the request"
+      "unknown_type": "I didn't understand the request",
+      "untyped_frame": "I didn't understand the request"
     }
   },
   "dialog": {
@@ -561,8 +613,9 @@
       "memory": "Long-term memory: what has to survive from one session to the next — project context, useful facts, notes worth keeping.\n\nDream, the consolidation pass that runs after conversations, is what maintains it. You can read it and correct it, but you rarely need to write here by hand.\n\nNot here: facts about you (USER.md), working conventions (AGENTS.md), repeatable procedures (Skills).",
       "heartbeat": "The recurring checks Jenny goes through on every heartbeat.\n\nWrite them under \"## Active Tasks\": that is the only section that gets read. When a task is done, delete it instead of leaving it there — a list of finished work is re-read on every beat.\n\nNot here: one-off requests (just ask in chat) and repeatable procedures (Skills)."
     },
-    "deleteProjectConfirm": "Delete the notebook “{name}”? Its pages and its conversation go with it.",
-    "deleteProjectConfirmWithChat": "Delete the notebook “{name}”? Its pages and its conversation go with it: {count} messages.",
+    "deleteProjectConfirm": "Delete the notebook “{name}” for good? Its pages, board, reminders and conversation go with it, and it can't be undone.",
+    "deleteProjectConfirmWithChat": "Delete the notebook “{name}” for good? Its pages, board, reminders and conversation ({count} messages) go with it, and it can't be undone.",
+    "deleteProjectForever": "Delete for good",
     "deleteProjectFailed": "I could not delete the notebook “{name}”. Nothing was changed.",
     "deleteProjectBusy": "I'm still working in “{name}”: delete it once I've finished.",
     "deletedProject": "Notebook “{name}” deleted, conversation included",
@@ -570,13 +623,13 @@
     "changedOnDisk": "The file changed since you opened it: nothing was saved. Close the editor and reopen it to see how it is now."
   },
   "launcher": {
-    "open": "Open apps",
     "kindSkill": "Skill",
     "kindJennyApp": "Jenny App",
     "kindAndroidApp": "Android App",
     "loading": "Loading...",
     "empty": "No app or Jenny App to open.",
     "recent": "Most used",
+    "suggested": "Suggested",
     "results": "Results",
     "searchPlaceholder": "Search apps…",
     "clearSearch": "Clear search",
@@ -594,13 +647,11 @@
     "delete": "Delete",
     "uninstall": "Uninstall",
     "appInfo": "App info",
-    "enable": "Enable",
     "close": "Close",
     "brokenConfirm": "The app \"{name}\" is broken: {error}. Ask Jenny to fix it?",
     "brokenPrompt": "The app \"{slug}\" is broken with this error: {error}. Can you fix it?",
     "uninstalled": "{name} uninstalled",
     "uninstalledMany": "Uninstalled: {names}",
-    "deleteAppConfirm": "Delete app \"{name}\"? It will be removed permanently.",
     "launchFailed": "Could not start {name} — it may have been uninstalled or disabled.",
     "deleteFailed": "Delete failed",
     "appDeleted": "App deleted",
@@ -609,31 +660,46 @@
     "frameCleartextBlocked": "{host} will not load: it is plain http, and the app's network policy allows cleartext only to the local gateway. It needs an https server, or an external-view app.",
     "frameLoadFailed": "{host} failed to load: {reason}",
     "viewProxyFailed": "Could not open the external view: {error}",
+    "viewPhoneOnly": "“{name}” shows a website through the phone: it can't open from here. Open it on the phone.",
     "pinAsPage": "Add as a page",
     "unpinPage": "Remove from pages",
     "unpinned": "Removed from pages",
     "pageExternal": "It opens outside Jenny, so it can't be a page",
     "pageBroken": "It's broken: fix it first",
-    "pageFull": "The pages are full"
-  },
-  "graph": {
-    "concepts": "Concepts",
-    "entities": "Entities",
-    "other": "Other",
-    "searchPlaceholder": "Search page contents…"
+    "pageFull": "The pages up top are full: to make room, remove one from ⋯ at the end of the row",
+    "trashed": "“{name}” moved to the trash",
+    "undo": "Undo",
+    "restoreFailed": "I couldn't put it back",
+    "restoreTaken": "There is already an app with that name: rename or delete it, then try again",
+    "restored": "“{name}” is back",
+    "trashRow": "Trash · {count}",
+    "trashTitle": "App trash",
+    "trashEmpty": "The trash is empty.",
+    "trashRecords": "{count} records · deleted on {when}",
+    "trashNoData": "deleted on {when}",
+    "restore": "Put back",
+    "purge": "Delete for good",
+    "purgeConfirm": "Delete “{name}” for good? It can't be put back.",
+    "purgeConfirmData": "Delete “{name}” and its {count} records for good? It can't be put back.",
+    "purgeFailed": "I couldn't delete it",
+    "place": "Put in a notebook…",
+    "placeWhere": "Where do I put “{name}”?",
+    "placeHow": "In “{notebook}”",
+    "placeAsCard": "On its own",
+    "placeNextTo": "Next to “{card}”, tied by a thread",
+    "placeParams": "One more thing",
+    "placeParam": "{name}",
+    "placeGo": "Put it there",
+    "placed": "“{name}” is in {notebook}",
+    "placeFailed": "I couldn't put it there",
+    "placeNoNotebooks": "You have no notebooks yet: make one from the Notebooks page."
   },
   "header": {
     "back": "Back",
     "refresh": "Refresh"
   },
   "jenny": {
-    "closeMinichat": "Close minichat",
-    "askHere": "Ask here...",
-    "askJenny": "Ask Jenny",
-    "send": "Send",
-    "workingReply": "I'm still working on it… the answer will show up here ✿",
-    "connectionError": "Cannot send: check your connection.",
-    "busy": "Jenny is answering…"
+    "replyWaiting": "new reply"
   },
   "themes": {
     "chanel": {
@@ -693,7 +759,8 @@
       "pre_restore": "pre-restore",
       "pre_export": "pre-export",
       "import": "imported",
-      "manual": "manual"
+      "manual": "manual",
+      "pre_gardener": "before the gardener"
     },
     "passphraseRequired": "Enter a passphrase",
     "retentionLabel": "Keep history for",
@@ -726,7 +793,11 @@
       "every": "every {every}",
       "expr": "schedule: {expr}",
       "at": "once, on {when}",
-      "unknown": "schedule not recognised"
+      "unknown": "schedule not recognised",
+      "daily": "every day at {time}",
+      "weekly": "every {days} at {time}",
+      "weekdays": "on weekdays at {time}",
+      "monthly": "on day {days} of every month at {time}"
     },
     "when": {
       "now": "now",
@@ -761,7 +832,8 @@
       "noRuns": "No runs recorded.",
       "text": "Reminder text",
       "paused": "paused",
-      "pausedSince": "Paused since {when}: it does not run until you resume it."
+      "pausedSince": "Paused since {when}: it does not run until you resume it.",
+      "inNotebook": "It lives in the notebook {place}: you find it on its board too."
     },
     "health": {
       "couldNotCheck": "Could not check {n} times in a row",
@@ -776,7 +848,7 @@
       "fileUnreadable": "HEARTBEAT.md is there but cannot be read: check the file permissions.",
       "taskOk": "fine",
       "taskBroken": "has not run for {n} cycles",
-      "taskPending": "handed to a subagent, waiting for its verdict",
+      "taskPending": "handed to a mini-me, waiting for her verdict",
       "orphans": "Entries with no task",
       "orphansHint": "Checks left in the state after their line was removed from HEARTBEAT.md. They explain the counters above and need nothing."
     },
@@ -891,7 +963,261 @@
     "askAboutReadonly": "Ask about {name} (read-only)…"
   },
   "home": {
-    "empty": "Nothing here yet.\nGo ahead.",
+    "moveOffer": {
+      "open": "Open the notebook “{notebook}”"
+    },
+    "journalMark": {
+      "label": "Noted in “{notebook}”",
+      "where": "“{notebook}”"
+    },
+    "staged": {
+      "title": "To approve · {count}",
+      "file": "Change to {path}",
+      "newFile": "New file: {path}",
+      "why": "A Jenny job that read content from outside ({sources}) wants to change a file she uses on her own. It is not written yet.",
+      "unknownSource": "unknown source",
+      "toolResults": "results her tools had saved",
+      "moreSources": "{list} and {count} more",
+      "showDiff": "Show the changes",
+      "hideDiff": "Hide the changes",
+      "truncated": "The changes are longer: only the start is shown.",
+      "install": "Install",
+      "discard": "Discard",
+      "installed": "Done: {path} is updated.",
+      "discarded": "Discarded: the file stayed as it was.",
+      "conflict": "The file changed in the meantime: nothing was written. Look at the changes again.",
+      "failed": "That didn't work. Try again."
+    },
+    "plan": {
+      "toggle": "Plan",
+      "toggleOn": "Plan on: the next message asks for a plan",
+      "toggleOff": "Ask for a plan",
+      "placeholder": "What do you want to plan?",
+      "placeholderDrafting": "Answer Jenny for the plan",
+      "toggleDrafting": "Jenny is drafting a plan: tap to cancel it",
+      "cancelDrafting": "Cancel the plan",
+      "composerOff": "The chat is off while the plan runs",
+      "hintPlan": "Jenny drafts a plan and touches nothing until you approve",
+      "hintRevise": "You're revising plan v{version}: write what to change",
+      "hintRunning": "While the plan runs: Pause to talk to her",
+      "closingStep": "Closing the step…",
+      "closingPlan": "Closing the plan…",
+      "startingPlan": "Getting the first step ready…",
+      "cover": {
+        "have": "What I already know · {count}:",
+        "search": "What I'll look up · {count}:",
+        "leave": "Stays uncovered · {count}:",
+        "ask": "Still to ask · {count}:",
+        "more": "and {count} more",
+        "all": "Item by item",
+        "hide": "Hide the items",
+        "haveLabel": "Already there",
+        "missingLabel": "Missing",
+        "whyLabel": "Why",
+        "strategy": {
+          "notebook": "notebook",
+          "web": "web",
+          "ask": "to ask",
+          "leave": "uncovered"
+        }
+      },
+      "assume": {
+        "title": "I decide · {count}",
+        "sub": "Approving the plan, you approve these too."
+      },
+      "drafts": {
+        "questionOne": "Jenny wants to change {file}: look at the change, then install or discard it.",
+        "questionMany": "Jenny wants to change {count} files: look at the changes, then install or discard them.",
+        "note": "The plan picks up again by itself as soon as you decide.",
+        "file": "Change to {path}",
+        "newFile": "New file: {path}",
+        "why": "It comes from a job that read content from outside ({sources}): that's why it waits for you.",
+        "loading": "Reading the draft…",
+        "gone": "Already decided: the plan picks up again by itself.",
+        "failed": "I couldn't read the draft.",
+        "retry": "Try again"
+      },
+      "untitled": "Plan",
+      "steps": "{count} steps",
+      "stepsCut": "{count} of {total} steps",
+      "photoLine": "Before starting, the app takes a {bold}: it's the point you can always go back to.",
+      "photoWord": "photo of the notebook",
+      "photoTaken": "notebook photo {time}",
+      "photoTakenNoTime": "notebook photo taken",
+      "version": "v{version}",
+      "reviewing": "revising",
+      "progress": "{done} of {total}",
+      "pausingVer": "pausing · {done} of {total}",
+      "pausedVer": "paused · {done} of {total}",
+      "blockedVer": "stuck · {done} of {total}",
+      "doneVer": "done · {minutes} min",
+      "doneVerShort": "done",
+      "stoppedVer": "stopped · {done} of {total}",
+      "rolledBackVer": "rolled back",
+      "cutSub": "you took it out: I won't do this step",
+      "tag": {
+        "trash": "trash",
+        "new": "new",
+        "moved": "moved",
+        "changed": "changed",
+        "covers": "{count} to look up"
+      },
+      "nowSince": "for {minutes} min",
+      "nowJustStarted": "just started",
+      "machineClean": "automatic check: all good ({pages} pages)",
+      "machineCleanOne": "automatic check: all good (1 page)",
+      "machineLeft": "automatic check: left to fix {n}",
+      "machineLost": "automatic check: {n} facts lost",
+      "machineLostOne": "automatic check: 1 fact lost",
+      "lostFacts": "{n} facts lost",
+      "lostFactOne": "1 fact lost",
+      "machineLeftPages": "Still to fix: {pages}",
+      "blockedSince": "stuck since {time}",
+      "blockedNoQuestion": "Jenny stopped and is waiting for you.",
+      "skipped": "skipped",
+      "skippedBecause": "skipped: {why}",
+      "interrupted": "stopped halfway",
+      "full": "The full plan",
+      "fullSub": "v{version}",
+      "approve": "Approve",
+      "approveSome": "Approve the {count} steps",
+      "revise": "Revise",
+      "discard": "Drop it",
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Stop",
+      "pausingNote": "I'll stop at the end of this step.",
+      "pausedNote": "Paused: it picks up again at step {step}. You can talk to her meanwhile.",
+      "pausedNoteEnd": "Paused. You can talk to her meanwhile.",
+      "blockedNote": "The rest waits for your answer: {bold}.",
+      "blockedNoteBold": "I won't go on alone",
+      "answerPlaceholder": "Your answer",
+      "questionMore": "Show all",
+      "questionLess": "Show less",
+      "answer": "Answer",
+      "answered": "Answer sent: the plan picks up again.",
+      "summary": {
+        "newPages": "new pages",
+        "changed": "changed",
+        "removed": "removed",
+        "sources": "research"
+      },
+      "doing": {
+        "helperOne": "1 mini-me",
+        "helpers": "{count} mini-mes",
+        "round": "research round {n} of {total}",
+        "gapOne": "1 gap open",
+        "gaps": "{count} gaps open"
+      },
+      "gapsListed": "{count} gaps listed",
+      "gapsListedOne": "1 gap listed",
+      "gapsNoteOne": "1 thing to look up: the list is in {bold}.",
+      "gapsNote": "{count} things to look up: the list is in {bold}.",
+      "seeChanges": "See the changes",
+      "rollback": "Go back to before the plan",
+      "redo": "Redo the plan",
+      "redoMessage": "Redo the plan «{title}» from scratch.",
+      "undoRollback": "Undo the rollback",
+      "undone": "Rollback undone: the notebook is as it was after the plan.",
+      "rolledBack": "The notebook is back to before the plan: {count} files put back.",
+      "rolledBackNote": "Notebook as it was at the {bold} photo.",
+      "rolledBackNoteNoTime": "Notebook as it was before the plan.",
+      "close": "Remove the card",
+      "more": "and {count} more",
+      "badge": "Plan {done}/{total}",
+      "lock": "Read-only while the plan runs",
+      "lockRename": "«{name}» has an open plan: rename it once the plan is closed.",
+      "lockDelete": "«{name}» has an open plan: delete it once the plan is closed.",
+      "waitTurn": "Wait for Jenny to finish: then it goes through by itself.",
+      "stopRollbackFailed": "The plan is stopped, but going back to before it didn't work.",
+      "stopRollbackConflict": "The plan is stopped, but the notebook had changed: going back didn't start.",
+      "rollbackHalf": "Going back stopped halfway ({applied} of {total} files): the notebook may be only partly back to before the plan. Trying again is safe.",
+      "rollbackHalfNoCount": "Going back stopped halfway: the notebook may be only partly back to before the plan. Trying again is safe.",
+      "undoHalf": "Undoing the rollback stopped halfway ({applied} of {total} files): the notebook may be only partly back to after the plan. Trying again is safe.",
+      "undoHalfNoCount": "Undoing the rollback stopped halfway: the notebook may be only partly back to after the plan. Trying again is safe.",
+      "rollbackRetry": "Try going back again",
+      "undoRetry": "Try undoing again",
+      "sheetClose": "Close",
+      "strip": {
+        "title": "Plan · {title}",
+        "blocked": "Plan stuck: it needs an answer",
+        "drafts": "Plan stuck: a change to approve",
+        "paused": "Plan paused · {title}",
+        "step": "Step {n} · {title}",
+        "resumeFrom": "picks up again at step {n}",
+        "show": "Show the plan"
+      },
+      "stepSheet": {
+        "title": "Step {n} · {title}",
+        "when": "Done at {time}.",
+        "counts": "It wrote {added} files, changed {changed}, removed {removed}.",
+        "nothing": "It didn't change any file in the notebook."
+      },
+      "changes": {
+        "title": "What the plan changed",
+        "sub": "From the {start} photo to the {end} one. The app works it out by comparing the two photos.",
+        "subNoTime": "The app works it out by comparing the photo from before with the one from after.",
+        "added": "{count} new in {group}",
+        "changed": "{count} changed in {group}",
+        "removed": "{count} removed from {group}",
+        "none": "The notebook is as it was before the plan."
+      },
+      "group": {
+        "pages": "pages",
+        "sources": "research and sources",
+        "board": "board",
+        "other": "other files",
+        "journal": "journal"
+      },
+      "groupThe": {
+        "pages": "the pages",
+        "sources": "the research and sources",
+        "board": "the board",
+        "other": "the other files"
+      },
+      "stopSheet": {
+        "title": "Stop the plan?",
+        "sub": "{done} of {total} steps done. The step in progress stops right away.",
+        "continue": "Continue",
+        "continueSub": "nothing happened",
+        "keep": "Stop and keep what it did",
+        "keepSub": "the plan closes halfway, the files stay",
+        "back": "Stop and go back to before the plan",
+        "backSub": "the app puts the notebook back as it was at {time}",
+        "backSubNoTime": "the app puts the notebook back as it was before the plan"
+      },
+      "rollbackSheet": {
+        "title": "Go back to before the plan?",
+        "sub": "The app puts the notebook back as it was at the {time} photo. Jenny has no part in it: the code does it, file by file.",
+        "subNoTime": "The app puts the notebook back as it was before the plan. Jenny has no part in it: the code does it, file by file.",
+        "restored": "{count} files come back as they were",
+        "restoredOne": "1 file comes back as it was",
+        "removed": "{count} new files go away",
+        "removedOne": "1 new file goes away",
+        "left": "Left as they are: {names}, changed after the plan",
+        "nothing": "There's nothing to put back.",
+        "keep": "Keep {group} ({count})",
+        "cancel": "Leave it",
+        "confirm": "Go back"
+      },
+      "fullSheet": {
+        "sub": "The full plan, version {version}. Read-only: to change it, use Revise.",
+        "dropped": "Taken out by you",
+        "coverage": "What the work needs",
+        "assumptions": "I decide",
+        "doneWhen": "Done when",
+        "covers": "Looks up"
+      },
+      "error": {
+        "conflict": "The plan changed in the meantime: here is the latest version.",
+        "busy": "Jenny is finishing a turn: try again in a moment.",
+        "gone": "This plan is gone.",
+        "failed": "That didn't work. Try again.",
+        "planRunning": "Another plan is working on this notebook: wait for it to finish, or stop it first.",
+        "rollbackFailed": "Going back stopped halfway: the notebook may be only partly restored. Trying again is safe."
+      }
+    },
+    "empty":"Nothing here yet.\nGo ahead.",
     "emptyNotebook": "The notebook is here, the conversation isn’t.\nWhat you write here stays here.",
     "placeholder": "Write to {name}",
     "placeholderNotebook": "Write to {name}, in the notebook",
@@ -899,21 +1225,129 @@
     "wire": {
       "offline": "Connection lost, retrying"
     },
-    "subagents": {
-      "one": "Working · {label}",
-      "oneUnnamed": "An agent is working",
-      "oneStalled": "Stuck · {label}",
-      "stalled": "An agent is stuck",
-      "many": "{count} agents working",
-      "manyStalled": "{count} agents, one is stuck",
-      "openInWorkshop": "Press and hold to see them in the workshop"
+    "work": {
+      "title": {
+        "gardener": "Tidying the notebook",
+        "gardenerAuto": "Tidying the notebook on my own",
+        "dream": "Sorting my memories",
+        "helperOne": "I sent a mini-me: {label}",
+        "helperUnnamed": "A mini-me is on it",
+        "helpersMany": "{count} mini-mes at work"
+      },
+      "phase": {
+        "start": "Getting started",
+        "pages": "Writing the pages",
+        "board": "Setting up the board",
+        "review": "Rereading my memories",
+        "memory": "Updating my memory"
+      },
+      "doing": {
+        "think": "Thinking",
+        "read": "Reading",
+        "search": "Searching",
+        "write": "Writing",
+        "out": "Online",
+        "run": "Running code",
+        "delegate": "Calling a mini-me",
+        "busy": "Working"
+      },
+      "writesOne": "1 written",
+      "writesMany": "{count} written",
+      "slow": "Taking longer than usual",
+      "retry": "The model isn't answering, retrying ({attempt} of {of})",
+      "autoNote": "If you write to me now I'll stop, and pick it up later.",
+      "done": "Done",
+      "failed": "I couldn't finish",
+      "helperFailed": "My mini-me got stuck: {label}",
+      "helperFailedUnnamed": "My mini-me got stuck",
+      "helperInterrupted": "My mini-me was interrupted: {label}",
+      "helperInterruptedUnnamed": "My mini-me was interrupted",
+      "helperStoppedAgain": "Tripped again: that's {count} times.",
+      "helperDone": "My mini-me is done: {label}",
+      "helperDoneUnnamed": "My mini-me is done",
+      "helpersDoneMany": "{count} mini-mes are done",
+      "helperSlow": "She's small but stubborn: this takes a while",
+      "helperRetry": "Get her back up",
+      "helperRetryFailed": "I couldn't get her back up.",
+      "helperContinue": "Let her continue",
+      "helperContinueFailed": "I couldn't get her going again.",
+      "helperStop": "Stop her",
+      "helperStopNamed": "Stop the mini-me: {label}",
+      "helperStoppedByYou": "You stopped the mini-me: {label}",
+      "helperStoppedByYouUnnamed": "You stopped the mini-me",
+      "helperStoppedByJenny": "I stopped the mini-me: {label}",
+      "helperStoppedByJennyUnnamed": "I stopped the mini-me",
+      "stopSheet": {
+        "title": "Stop the mini-me “{label}”?",
+        "titleUnnamed": "Stop the mini-me?",
+        "continue": "Let her work",
+        "continueSub": "nothing happened",
+        "keep": "Stop and keep what she did",
+        "keepSub": "she stops now, the files she changed stay",
+        "keepSubNothing": "she stops now; she hasn't changed anything yet",
+        "undo": "Stop and undo her changes"
+      },
+      "undoSheet": {
+        "title": "Undo her changes?",
+        "keep": "Leave it as it is",
+        "keepSub": "the files stay as they are now",
+        "undo": "Undo her changes"
+      },
+      "undoSubOne": "I put 1 file back as it was; if someone else changed it too, it stays",
+      "undoSubMany": "I put {count} files back as they were; the ones others changed too stay",
+      "undoLimit": "Messages sent, searches made and reminders that already went off can't be undone.",
+      "undoActionOne": "Undo her change (1 file)",
+      "undoActionMany": "Undo her changes ({count} files)",
+      "stopFailed": "I couldn't stop her.",
+      "undoFailed": "I couldn't undo it.",
+      "sheetClose": "Close",
+      "undone": {
+        "you": "Undone: {count} files put back as they were before her.",
+        "jenny": "I undid her changes: {count} files put back as they were.",
+        "nothing": "Undone: she hadn't changed anything.",
+        "keptOthers": "{count} left as they are, because someone else changed them too: {files}",
+        "keptOther": "{count} left as they are: {files}"
+      },
+      "result": {
+        "pagesOne": "1 page updated.",
+        "pagesMany": "{count} pages updated.",
+        "boardProposed": "I've set up a board for you: it's in the envelope.",
+        "research": "This notebook is a study archive: the board comes once it has a journal.",
+        "nothing": "Nothing new to tidy.",
+        "alreadyRunning": "I'm already on it: one pass at a time.",
+        "dreamAdvanced": "I've sorted my memories.",
+        "dreamNothing": "Nothing new to remember.",
+        "dreamHeld": "I found nothing to add."
+      },
+      "why": {
+        "helperStoppedKept": "What she did is still there: {count} files changed.",
+        "model": "The model didn't answer. What I had already written stays.",
+        "notAProject": "There's no notebook to tidy here.",
+        "error": "Something went wrong.",
+        "helperBudget": "She ran out of breath before the end.",
+        "helperError": "She tripped on an error.",
+        "helperRestart": "The app restarted under her: what she did is saved, and she can pick up from there.",
+        "helperProvider": "The model stopped answering for a while; what she had done is saved."
+      },
+      "openBoard": "Open the board",
+      "retryAction": "Try again",
+      "inProgress": "In progress",
+      "step": "Step {at} of {of}",
+      "time": {
+        "now": "now",
+        "min": "{min} min",
+        "sec": "{sec} s"
+      }
     },
     "threadError": "I can't read the conversation.\nTry again shortly.",
     "origin": {
       "telegram": "from Telegram",
       "notification": "from the shade",
-      "floating": "from the bubble"
+      "floating": "from the bubble",
+      "remote": "from another device",
+      "remoteNamed": "from {device}"
     },
+    "retry": "Try again",
     "stop": "Stop",
     "verbs": {
       "think": [
@@ -960,11 +1394,11 @@
         "running it…"
       ],
       "delegate": [
-        "calling backup…",
+        "splitting myself in two…",
+        "calling a mini-me…",
+        "cloning myself, back in a sec…",
         "not doing all this myself 💅…",
-        "waking someone up…",
-        "delegating, i'm good at it…",
-        "putting someone on it…"
+        "sending a little me…"
       ],
       "busy": [
         "doing stuff…",
@@ -980,19 +1414,30 @@
     "workshop": "Workshop",
     "back": {
       "chat": "back to the chat",
-      "pages": "back to the pages",
       "settings": "back to Settings",
-      "notebooks": "back to the notebooks"
+      "board": "back to the board",
+      "drawer": "back to the drawer",
+      "page": "back to the previous page",
+      "notebooks": "back to Notebooks",
+      "apps": "back to Apps",
+      "pinned": "back to the pinned page"
     },
     "path": {
       "label": "Where you are"
+    },
+    "over": {
+      "label": "The chat, over the page",
+      "close": "close the chat",
+      "toBoard": "go to the {name} board"
+    },
+    "door": {
+      "open": "Open the board"
     },
     "you": {
       "workshopHint": "watch, tune, repair"
     },
     "jenny": {
       "title": "{name}",
-      "hidden": "hidden",
       "floatingShort": "floating",
       "name": "Her name",
       "nameHint": "The name she introduces herself with, and the one you call her by. Changing it erases nothing she remembers.",
@@ -1006,26 +1451,26 @@
     },
     "backHome": "Back to the house",
     "who": {
-      "title": "Talking to",
-      "personal": "personal",
-      "notebooks": "Notebooks",
       "none": "No notebooks yet.",
       "loadFailed": "I could not read the list: what you see may be incomplete.",
-      "newNotebook": "New notebook"
-    },
-    "notebookPages": {
-      "open": "Notebook pages",
-      "chat": "Chat",
-      "view": "Notebook view",
-      "countOne": "1 page",
-      "countMany": "{count} pages",
-      "tabList": "Pages",
-      "tabMap": "Map",
-      "index": "Notebook index",
-      "loading": "Looking…",
-      "none": "This notebook has no pages yet. We write them by talking.",
-      "noMatch": "No page with those words.",
-      "failed": "I could not read this notebook’s pages."
+      "newNotebook": "New notebook",
+      "search": "Search notebooks…",
+      "clearSearch": "Clear search",
+      "inUse": "In use",
+      "archive": "Archive",
+      "archiveHint": "untouched for over a month",
+      "inArchive": "archived",
+      "sortRecent": "Recent",
+      "sortAz": "A–Z",
+      "sortLabel": "Order: {order}",
+      "results": "Results",
+      "noResult": "No notebook matches “{query}”.",
+      "create": "Create “{name}”",
+      "emptyHint": "A notebook keeps its pages, its drawers and a chat of its own together: create one here, or ask Jenny.",
+      "pages": "{count} pages",
+      "page": "{count} page",
+      "pagesShort": "{count} p",
+      "plateKeys": "⏎ open · ⇧⏎ sheet · ←→ choose"
     },
     "reader": {
       "failed": "I could not open this page.",
@@ -1036,10 +1481,6 @@
       "saveFailed": "I couldn't save this page.",
       "conflict": "Jenny changed this page while you were editing it. Reload it? What you wrote here will be lost.",
       "discardConfirm": "Leave without saving? Your changes to this page will be lost."
-    },
-    "map": {
-      "noLinks": "The pages do not point to each other yet: the map appears once they start to.",
-      "failed": "I could not load the map."
     },
     "model": {
       "title": "Who answers",
@@ -1074,14 +1515,24 @@
     "backup": {
       "title": "Backup",
       "never": "never",
-      "neverLong": "You haven't exported a backup yet.",
-      "last": "Last backup: {when}.",
-      "export": "Export a backup",
-      "import": "Restore from a file",
-      "exportHint": "One encrypted file, with a passphrase you choose: everything is in it — conversations, notebooks, settings. Keep it somewhere that isn't this phone.",
-      "importHint": "Replaces everything there is now with what's in the file, and restarts Jenny.",
-      "snapshots": "Jenny also keeps a local history of the workspace, automatically: it's there to put back something deleted by mistake, and you can browse it in the workshop. It lives on this phone though — of a lost phone it saves nothing.",
-      "snapshotsOff": "The local workspace history is off: the only net is the backup you export yourself. You can turn it back on in the workshop."
+      "more": {
+        "title": "More options",
+        "file": "Copy to a file",
+        "fileSub": "One file encrypted with a password you choose: everything is in it. Keep it somewhere that isn't this phone.",
+        "fileLast": "Last file: {when}.",
+        "restore": "Restore from a file",
+        "restoreSub": "Replaces everything with what's in the file, then restarts."
+      },
+      "history": {
+        "title": "Local history",
+        "sub": "Automatic: puts back a file deleted by mistake. It lives on this phone, though — a lost phone takes it with it.",
+        "off": "Off: the only safety net is the backup you export. Turn it back on in the workshop, Memory → Local history.",
+        "loading": "One moment…",
+        "showAll": "Show the others ({n})",
+        "today": "today at {time}",
+        "yesterday": "yesterday at {time}",
+        "weekday": "{day} at {time}"
+      }
     },
     "audit": {
       "report": "Report",
@@ -1100,6 +1551,7 @@
     "pages": {
       "appGone": "The app “{name}” is gone.",
       "notebookGone": "The notebook “{name}” is gone.",
+      "appUnreachable": "I can't open this app right now.",
       "removePage": "Remove the page",
       "saveFailed": "Couldn't save the pages. Nothing was changed.",
       "unknown": "I can't read the home's pages, so I changed nothing. Try again shortly."
@@ -1109,7 +1561,8 @@
       "deleted": "Notebook “{name}” deleted",
       "renamePrompt": "New name for “{name}”",
       "renamed": "Notebook renamed to “{name}”",
-      "renameFailed": "I could not rename “{name}”. {error}",
+      "renameFailed": "I could not rename “{name}”. Try again shortly.",
+      "unpinned": "Removed from the pages",
       "renameBusy": "I'm still working in “{name}”: rename it once I've finished.",
       "renameTaken": "There is already a notebook or a conversation called “{name}”.",
       "renameMissing": "“{name}” is no longer there: it may have been deleted or renamed."
@@ -1119,6 +1572,7 @@
       "app": "Apps",
       "notebooks": "Notebooks",
       "settings": "Settings",
+      "sortOpen": "Arrange the pages",
       "sortHelp": "Drag to move · × to remove",
       "done": "Done",
       "move": "Move {name}: left and right arrows",
@@ -1174,6 +1628,335 @@
       "llm-wiki": "The wiki is your second brain: use it to ingest articles, notes and research. Jenny compiles and links the pages for you, and you can ask her questions about what's inside.",
       "skill-creator": "If Jenny doesn't yet know how to do something you need often, you can ask her to learn a new skill: explain what you want and she'll build the instructions herself to do it next time.",
       "ssh": "Commands on the remote machines you registered in Settings → Workshop → Hands → SSH: Jenny can check a service, read a log, update a server or move a file. She can only reach hosts you declared yourself, and long commands keep running even with the phone asleep."
+    }
+  },
+  "board": {
+    "failed": "I couldn't read this notebook's board.",
+    "listView": "List view",
+    "moveFailed": "I couldn't move it: putting it back where it was.",
+    "noThreads": "This card has no threads.",
+    "offboard": "not on the board",
+    "empty": {
+      "title": "The board is empty.",
+      "hint": "Tell me about something in this notebook, in the chat. Start from here:",
+      "example": "Let me tell you about something in this notebook: ",
+      "proposed": "I've prepared a board for you: it's in the envelope."
+    },
+    "since": {
+      "row": "Since you last looked · {count} new",
+      "title": "Since you last looked",
+      "note": "Every line is written by code, not by the model: it tells what was actually done.",
+      "envelopeOne": "There is 1 proposal in the envelope.",
+      "envelopeMany": "There are {count} proposals in the envelope.",
+      "kind": {
+        "board_created": "The board was born, with {cards} cards.",
+        "card_added": "{title} has a place on the board.",
+        "card_removed": "{title} was put away: its pages stay, and search finds them.",
+        "connection_added": "A new thread between two cards.",
+        "page_attached": "A page went into a drawer.",
+        "section_added": "A mini app went into a drawer.",
+        "sections_regenerated": "{title}: {count} drawer sections rewritten.",
+        "pages_assigned": "{count} new pages went into drawers.",
+        "reminders_added": "{count} new reminders taken from the journal.",
+        "suggestions_added": "{count} new proposals in the envelope.",
+        "corrections_applied": "{count} corrections applied to the wiki.",
+        "reminder_due": "It's time: {text}.",
+        "app_event": "{title}: {app} is {state}.",
+        "other": "Something changed on the board.",
+        "micro_kept": "{title}: the micro app {app} is in the drawer and runs on its own.",
+        "micro_fixed": "{title}: I fixed the micro app {app}.",
+        "cron_result": "{title}: {app} has something to tell you.",
+        "cron_result_notebook": "{app} has something to tell you."
+      }
+    },
+    "signal": {
+      "new": "new",
+      "soon": "coming up",
+      "alert": "problem",
+      "auto": "something runs on its own"
+    },
+    "envelope": {
+      "label": "Jenny's proposals: {count}",
+      "title": "Jenny's proposals",
+      "emptyTitle": "The envelope is empty",
+      "empty": "When the board should change shape, the proposal arrives here. Two at a time at most.",
+      "from": "Jenny",
+      "keep": "Leave it",
+      "putAway": "Put it away",
+      "later": "Later",
+      "no": "No",
+      "yes": "Yes",
+      "full": "The board is full: take something off first.",
+      "failed": "I couldn't do it.",
+      "kind": {
+        "initial_board": "I've prepared this notebook's board. Does it look right?",
+        "add_card": "Shall I make room on the board for {subject}?",
+        "remove_card": "Shall I put {subject} away? Its pages stay.",
+        "add_connection": "Shall I tie {subject} with a thread?",
+        "attach_page": "Shall I put this page in the {subject} drawer?",
+        "add_section": "Shall I put an app in the drawer of {subject}?",
+        "add_app_card": "Shall I make {subject} a card, with its value on the cover?"
+      }
+    },
+    "search": {
+      "title": "Search the notebook",
+      "placeholder": "Search the notebook",
+      "none": "Nothing with these words.",
+      "card": "card"
+    },
+    "preview": {
+      "notOnBoard": "This page isn't on the board: I use it for my own work. If you need it here, tell me.",
+      "close": "Close",
+      "want": "I want it on the board",
+      "wanted": "I'll see to it on the next pass."
+    },
+    "drawer": {
+      "loading": "Looking…",
+      "failed": "I couldn't open this drawer.",
+      "today": "today at {time}",
+      "yesterday": "yesterday at {time}",
+      "pagesOne": "Drawer · 1 wiki page",
+      "pagesMany": "Drawer · {count} wiki pages",
+      "updated": "updated {when}",
+      "noSummary": "I haven't written this drawer yet: I'll do it on the next pass.",
+      "threads": "Threads",
+      "allPages": "The pages ({count})",
+      "foot": "Jenny writes the summary from the wiki. To change it, correct it: the correction goes to the right page and comes back here.",
+      "fix": "Correct",
+      "fixLabel": "Correction",
+      "fixTarget": "Goes as a report on “{page}”.",
+      "fixSend": "Send to Jenny",
+      "fixPending": "Your correction · report on “{page}”, I'm working it in",
+      "fixDone": "Applied to the wiki",
+      "fixFailed": "I couldn't send the correction.",
+      "threadRemove": "Remove the thread to {card}",
+      "threadRemoveConfirm": "Remove the thread to {card}? Jenny will not propose it again.",
+      "calendar": {
+        "title": "Care calendar",
+        "today": "Today · {date}",
+        "overdue": "Overdue",
+        "whenever": "When it happens"
+      },
+      "automations": "Automations"
+    },
+    "reminder": {
+      "done": "Done",
+      "edit": "Edit",
+      "drop": "Remove",
+      "dropConfirm": "Remove “{text}”?",
+      "actions": "More on “{text}”"
+    },
+    "app": {
+      "open": "Open the app",
+      "source": "source: {app}",
+      "alert": {
+        "alarm": "Live data from {app}, not from the wiki: it's in alarm.",
+        "stale": "Live data from {app}, not from the wiki: nothing new is coming in."
+      },
+      "state": {
+        "ok": "updated {when}",
+        "alarm": "in alarm · {when}",
+        "stale": "stalled since {when}",
+        "empty": "no data yet",
+        "missing": "This app is gone.",
+        "broken": "This app is broken: open it from the Apps page to see why.",
+        "no_section": "This app has no view for drawers.",
+        "trashed": "in the trash"
+      },
+      "event": {
+        "ok": "back to normal",
+        "alarm": "in alarm",
+        "stale": "stalled",
+        "empty": "without data",
+        "missing": "gone",
+        "broken": "broken",
+        "no_section": "without a view"
+      },
+      "remindWhen": "Remind me when…",
+      "remindDefault": "Check {app}",
+      "below": "{label} drops below",
+      "above": "{label} rises above",
+      "threshold": "Threshold",
+      "restore": "Put the app back"
+    },
+    "section": {
+      "remove": "Remove",
+      "removeConfirm": "Remove this section? The wiki does not change.",
+      "moveUp": "Move up",
+      "failed": "I couldn't save it.",
+      "save": "Save",
+      "reminderWhat": "What?",
+      "reminderWhen": "When?",
+      "reminderMonth": "Month only",
+      "noApps": "None of your apps has anything to show on a card yet.",
+      "newApp": "Make a new one…",
+      "newAppPrompt": "I'd like an app to put next to {card}, that ",
+      "appParam": "{app}: {name}?",
+      "otherPrompt": "In the {card} drawer I'd like a section that ",
+      "kind": {
+        "note": "Note",
+        "reminder": "Reminder",
+        "app": "App",
+        "photo": "Photo",
+        "other": "Other",
+        "micro": "App",
+        "cron": "Cron"
+      },
+      "addFab": "Add to the drawer",
+      "close": "Close"
+    },
+    "micro": {
+      "what": "What do you want to see, or do?",
+      "whatPlaceholder": "For example: the soil moisture and whether the sensor is online",
+      "explain": "I write it and try it right away: it becomes a card of its own, tied to this one by a thread.",
+      "prepare": "Make it",
+      "linkApp": "Or put one of your apps next to it…",
+      "prompt": "I'd like an app that {what}, to put on the board next to {card}",
+      "resume": "Resume",
+      "pause": "Pause",
+      "change": "Change",
+      "every": "every {minutes} min",
+      "via": "from {what}",
+      "yes": "yes",
+      "no": "no",
+      "unreachable": "The last reading found no network or no device: it will try again by itself.",
+      "state": {
+        "broken": "It broke: the value above is the last good one.",
+        "quarantined": "The last reading never stopped: it is on hold until we fix it.",
+        "paused": "Paused."
+      },
+      "noRows": "No rows yet.",
+      "moreRows": "and {count} more"
+    },
+    "cron": {
+      "paused": "paused",
+      "next": "next {when}",
+      "costs": "Jenny does it (uses the model)",
+      "last": "Last result ({when}): {text}",
+      "quiet": "Last run {when}: nothing to tell you.",
+      "changePrompt": "In the {card} drawer, the cron «{name}»: I'd like ",
+      "prompt": "In the {card} drawer, every ",
+      "removeConfirm": "Remove «{name}»? Jenny stops doing it.",
+      "changeNotebookPrompt": "In the automations of the whole notebook, «{name}»: I'd like "
+    },
+    "card": {
+      "add": "New card",
+      "newTitle": "New card",
+      "name": "What is it called?",
+      "namePlaceholder": "Maple, Monstera, Trip to Lisbon…",
+      "create": "Create",
+      "rename": "Rename",
+      "renameTitle": "Rename the card",
+      "save": "Save",
+      "remove": "Remove from the board",
+      "removed": "“{title}” removed from the board",
+      "undo": "Undo",
+      "restoreFailed": "I couldn't put it back",
+      "full": "The board is full: remove something first",
+      "failed": "That didn't work, try again",
+      "actions": "Actions on the card {title}",
+      "close": "Close",
+      "what": "What goes in it?",
+      "whatNothing": "Nothing for now",
+      "appPlaced": "“{name}” is on the board, next to {card}"
+    },
+    "cover": {
+      "minutes": "{count} min ago",
+      "hours": "{count} h ago",
+      "days": "{count} d ago"
+    },
+    "slip": {
+      "more": "and {count} more",
+      "empty": "no data yet",
+      "alarm": "in alarm",
+      "broken": "stopped reading",
+      "stoppedFor": "stopped · {age}",
+      "updatedAt": "at {time}",
+      "online": "online",
+      "offline": "offline",
+      "of": "of {max}",
+      "nothingAhead": "nothing coming",
+      "allDone": "all done",
+      "dec": "minus {label}",
+      "inc": "plus {label}",
+      "failed": "That didn't work: try from the app"
+    },
+    "postit": {
+      "more": "+{count} more"
+    },
+    "notes": {
+      "title": "Your notes",
+      "all": "All ›",
+      "new": "New note",
+      "hint": "tap a note to read it all",
+      "readMore": "Read all",
+      "deck": "Note {n} of {count}: {text}. Tap for the next one.",
+      "edit": "Edit",
+      "close": "Close",
+      "removeConfirm": "Remove this note? What already went into the wiki stays.",
+      "integrated": "✓ in the wiki",
+      "pending": "waiting for the wiki",
+      "placeholder": "For example: it stays on the south windowsill only in winter."
+    },
+    "photos": {
+      "title": "Your photos",
+      "hint": "newest first; each photo with its note goes into the journal, and Jenny sees it",
+      "new": "New photo",
+      "noNote": "No note",
+      "deck": "Photo {n} of {count}: {text}, {when}. Tap for the next one.",
+      "placeholder": "A few words about this photo",
+      "noteLabel": "The photo's note",
+      "now": "Now",
+      "integrated": "✓ in the wiki",
+      "pending": "waiting for the wiki",
+      "removeConfirm": "Remove this photo from the card? The file stays with the notebook's material, and what already went into the wiki stays.",
+      "full": "See the whole photo, full screen",
+      "back": "All photos",
+      "pager": "{n} of {count}",
+      "prev": "Previous photo",
+      "next": "Next photo",
+      "fullShort": "Full screen",
+      "edit": "Edit the note",
+      "remove": "Remove from the card",
+      "viewer": "{card} · {n} of {count}"
+    },
+    "notesPostit": {
+      "label": "{card}, your notes — {notes}. Tap to see them all.",
+      "more": "+{count} notes",
+      "moreOne": "+1 note"
+    },
+    "gallery": {
+      "label": "{card}, {count} photos. Tap to see them.",
+      "labelOne": "{card}, 1 photo. Tap to see it."
+    },
+    "list": {
+      "notes": "{count} notes",
+      "notesOne": "1 note",
+      "photos": "{count} photos",
+      "photosOne": "1 photo",
+      "auto": "{count} automations",
+      "autoOne": "1 automation"
+    },
+    "auto": {
+      "more": "+{count} more",
+      "notebook": "The whole notebook",
+      "trouble": "couldn't look for {count} runs",
+      "last": "last: «{text}»",
+      "quiet": "last run {when}: nothing",
+      "onlyIf": "writes only if it matters"
+    },
+    "agenda": {
+      "title": "The whole notebook",
+      "empty": "No reminders for the whole notebook.",
+      "add": "+ Reminder",
+      "new": "Reminder for the whole notebook"
+    },
+    "add": {
+      "title": "Add to the board",
+      "card": "A card",
+      "reminder": "A reminder for the whole notebook",
+      "automation": "An automation: ask Jenny",
+      "automationPrompt": "An automation in this notebook: every "
     }
   }
 }

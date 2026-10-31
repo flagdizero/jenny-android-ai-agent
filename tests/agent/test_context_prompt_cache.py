@@ -325,32 +325,23 @@ def test_default_soul_template_contains_execution_rules() -> None:
     assert "multi-step tasks" in soul
 
 
-def test_channel_format_hint_never_injected(tmp_path) -> None:
-    """No channel-specific format hints remain — none is injected for any channel."""
-    workspace = _make_workspace(tmp_path)
-    builder = ContextBuilder(workspace)
-
-    prompt = builder.build_system_prompt(channel=None)
-    assert "Format Hint" not in prompt
-
-    prompt2 = builder.build_system_prompt(channel="websocket")
-    assert "Format Hint" not in prompt2
-
-    prompt3 = builder.build_system_prompt(channel="unknown-channel")
-    assert "Format Hint" not in prompt3
-
-
 def test_build_messages_passes_channel_to_system_prompt(tmp_path) -> None:
     """build_messages should pass channel through to build_system_prompt."""
     workspace = _make_workspace(tmp_path)
     builder = ContextBuilder(workspace)
+    seen: list[str | None] = []
+    real = builder.build_system_prompt
 
-    messages = builder.build_messages(
+    def spy(*args, **kwargs):
+        seen.append(kwargs.get("channel"))
+        return real(*args, **kwargs)
+
+    builder.build_system_prompt = spy  # type: ignore[method-assign]
+    builder.build_messages(
         history=[], current_message="hi",
         channel="websocket", chat_id="123",
     )
-    system = messages[0]["content"]
-    assert "Format Hint" not in system
+    assert seen == ["websocket"]
 
 
 def test_system_prompt_keeps_message_tool_out_of_current_chat_replies(tmp_path) -> None:

@@ -219,8 +219,11 @@ class TestTheThreeThingsItMustNotDo:
         dalla configurazione che quella promessa la rende vera.
         """
         params = inspect.signature(run_dream_review).parameters
+        # ``reporter`` e' la bolla di lavoro di ``/dream`` (05/10/2026): un
+        # osservatore che riceve progresso e riprova, senza modo di fare un
+        # checkpoint.
         assert set(params) == {
-            "agent", "store", "report", "snapshotted", "write_size_guard",
+            "agent", "store", "report", "snapshotted", "write_size_guard", "reporter",
         }
         # ``snapshotted`` è un bool, non un gancio: non c'è modo di passargli
         # una funzione da chiamare per fare il checkpoint.

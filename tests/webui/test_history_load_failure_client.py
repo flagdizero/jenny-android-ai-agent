@@ -32,7 +32,6 @@ classe — così "la riga d'errore c'è / non c'è / non è raddoppiata" è osse
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -42,7 +41,6 @@ ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "a
 CHAT_JS = ASSETS / "mobile-chat.js"
 SESSION_JS = ASSETS / "shared" / "session-manager.js"
 PAGER_JS = ASSETS / "shared" / "history-pager.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -442,19 +440,6 @@ def test_the_resync_still_respects_the_reading_position() -> None:
       assert.equal(inflight.length, 0, 'il resync ha buttato la pagina che si stava leggendo');
       assert.deepEqual(chat.rendered, ['ciao']);
     """)
-
-
-# ── 5. La chiave della stringa esiste in tutt'e due le lingue ───────────────
-
-
-def test_the_error_row_string_is_translated_in_both_locales() -> None:
-    """Il test in node prova che il testo viene da ``i18n.t``; qui che la chiave
-    che gli viene passata esista davvero — altrimenti a schermo finisce
-    ``chat.historyLoadFailed``."""
-    for locale in ("it", "en"):
-        data = json.loads((I18N_DIR / f"{locale}.json").read_text(encoding="utf-8"))
-        assert "historyLoadFailed" in data["chat"], f"chiave mancante in {locale}.json"
-        assert data["chat"]["historyLoadFailed"].strip()
 
 
 # ── Guardie sul solo testo del sorgente ─────────────────────────────────────

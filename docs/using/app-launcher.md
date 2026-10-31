@@ -42,7 +42,7 @@ In the workshop, the sheet's list deliberately stops short of the very bottom of
 
 A long press on a row (or **Shift+Enter** on the highlighted one) opens a card over the drawer, with the app's name and icon and a short list of actions. Which actions depends on the kind of row.
 
-<p align="center"><img src="../img/app-card.png" alt="The card a long press opens on a Jenny App: Open, Add as a page, Edit, Delete" width="300"></p>
+<p align="center"><img src="../img/app-card.png" alt="The card a long press opens on a Jenny App: Open, Add as a page, Put in a notebook, Edit, Delete" width="300"></p>
 
 For an **Android app**:
 

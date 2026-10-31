@@ -20,7 +20,9 @@ INDEX = UI / "index.html"
 WHO_JS = UI / "assets" / "home-who.js"
 APP_JS = UI / "assets" / "home-app.js"
 CSS = UI / "assets" / "home-style.css"
+THEMES_CSS = UI / "assets" / "mobile-style.css"
 I18N = UI / "assets" / "i18n"
+THEMES = ("chanel", "synthwave", "kyoto", "sticker", "comic", "y2k", "stone")
 
 
 def _member(source: str, name: str) -> str:
@@ -81,14 +83,13 @@ def test_back_leaves_the_notebook_only_after_the_overlays() -> None:
     uscire dal quaderno con lo stesso tasto farebbe sparire due cose per un
     gesto — e la seconda senza che nessuno l'abbia chiesta.
 
-    Dal 26/09/2026 il quaderno si chiude un gradino piu' in la', dentro
-    `goBackOneRoom` (un quaderno aperto nei Quaderni torna all'elenco): qui
-    resta l'ordine, gli strati prima di tutto."""
+    Dal 05/10/2026 un quaderno si apre sulla sua bacheca, e Indietro ne esce
+    come da ogni stanza, dentro `goBackOneRoom`: qui resta l'ordine, gli
+    strati prima di tutto."""
     src = APP_JS.read_text(encoding="utf-8")
     body = _member(src, "handleHardwareBack")
     assert "if (this._closeOverlays()) return;" in body, "gli strati non hanno più la precedenza"
     assert body.index("_closeOverlays") < body.index("goBackOneRoom"), "le stanze prima degli strati"
-    assert "closeNotebook()" in _member(src, "goBackOneRoom"), "Indietro non chiude più un quaderno"
 
 
 def test_a_switch_releases_the_turn_that_was_running() -> None:
@@ -133,23 +134,17 @@ def test_a_tapped_alert_lands_in_the_personal_conversation() -> None:
 def test_every_word_on_screen_comes_from_the_translations() -> None:
     """Nessun testo cablato: la regola di AGENTS.md non ha eccezioni, e questo
     è codice nuovo. Un `textContent` può ricevere solo una traduzione o un
-    dato (il nome di un quaderno, la sua data).
+    dato (il nome di un quaderno, la sua data, un numero).
 
-    L'unica eccezione è un **segno**, non una parola: il fiore di Jenny, che non
-    si traduce e che l'officina disegna identico (`chat-identity-flower`,
-    `dock-flower`). Tradurlo non vorrebbe dire niente; metterlo nei file di
-    lingua vorrebbe dire due posti da cui può divergere.
+    Fino al 05/10/2026 c'era un'eccezione, il fiore di Jenny sulla riga
+    personale: la riga è uscita dalla pagina, e il fiore con lei.
     """
     src = WHO_JS.read_text(encoding="utf-8")
     for line in src.splitlines():
         m = re.search(r"\.textContent\s*=\s*(.+);", line)
         if not m:
             continue
-        value = m.group(1)
-        if value == "'✿'":
-            continue
-        assert not re.match(r"^['\"`]", value), f"stringa cablata a schermo: {line.strip()}"
-    assert src.count("'✿'") == 1, "il fiore è un segno solo, in un punto solo"
+        assert not re.match(r"^['\"`]", m.group(1)), f"stringa cablata a schermo: {line.strip()}"
 
 
 def test_the_panel_speaks_both_languages() -> None:
@@ -157,7 +152,10 @@ def test_the_panel_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         section = data["home"]["who"]
-        for key in ("title", "personal", "notebooks", "none", "loadFailed"):
+        for key in ("none", "loadFailed", "search",
+                    "clearSearch", "inUse", "archive", "archiveHint", "inArchive", "sortRecent",
+                    "sortAz", "sortLabel", "results", "noResult", "create", "emptyHint",
+                    "pages", "pagesShort", "plateKeys", "newNotebook", "page"):
             assert section.get(key, "").strip(), f"home.who.{key} manca in {locale}.json"
         words[locale] = section
     assert words["it"] != words["en"], "una delle due lingue non è stata tradotta"
@@ -171,3 +169,112 @@ def test_the_notebooks_borrow_the_words_the_workshop_already_has() -> None:
     for key in ("scope.loading", "scope.unopenableSection", "scope.invalidName"):
         assert f"'{key}'" in src, f"{key} non è più quella dell'officina"
     assert "UNOPENABLE_HINT_KEYS" in src, "la mappa dei motivi non è più quella condivisa"
+
+
+# ── La vetrina (05/10/2026) ─────────────────────────────────────────────────
+
+
+def test_the_search_and_the_plate_stay_out_of_the_list_that_scrolls() -> None:
+    """Come il +: la ricerca resta in cima e la targhetta in fondo mentre le
+    mensole scorrono."""
+    html = INDEX.read_text(encoding="utf-8")
+    page = html.split('data-page="notebooks"', 1)[1].split('data-page="settings"', 1)[0]
+    listed = page.split('id="home-notebooks"', 1)[1].split("</div>", 1)[0]
+    for el in ('id="home-notebooks-search"', 'id="home-notebooks-plate"'):
+        assert el in page, f"{el} non e' nella pagina Quaderni"
+        assert el not in listed, f"{el} e' finito dentro l'elenco che scorre"
+    assert page.index('id="home-notebooks-search"') < page.index('id="home-notebooks"')
+    app = APP_JS.read_text(encoding="utf-8")
+    for el in ("home-notebooks-search", "home-notebooks-search-clear", "home-notebooks-plate"):
+        assert f"getElementById('{el}')" in app, f"il guscio non passa {el} al pannello"
+
+
+def _theme_blocks() -> dict[str, dict[str, str]]:
+    """Le tele per tema, come le vede il browser: `:root` (Chanel) sotto, il
+    blocco del tema sopra."""
+    css = THEMES_CSS.read_text(encoding="utf-8")
+    section = css.split("/* ── Le tele dei quaderni ──", 1)[1].split("/* ── Reset ── */", 1)[0]
+    blocks = dict(re.findall(r'(:root|\[data-theme="(?:\w+)"\])\s*\{([^}]*)\}', section))
+    root = dict(re.findall(r"--(spine-[\w-]+|shelf):\s*([^;]+);", blocks[":root"]))
+    out = {}
+    for theme in THEMES:
+        values = dict(root)
+        own = blocks.get(f'[data-theme="{theme}"]', "")
+        values.update(re.findall(r"--(spine-[\w-]+|shelf):\s*([^;]+);", own))
+        out[theme] = values
+    return out
+
+
+def _luminance(hex_color: str) -> float:
+    n = int(hex_color.lstrip("#"), 16)
+    channels = []
+    for v in ((n >> 16) & 255, (n >> 8) & 255, n & 255):
+        c = v / 255
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    r, g, b = channels
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def test_every_theme_has_six_cloths_each_with_its_ink() -> None:
+    """Sei tele per tema, ognuna col suo inchiostro: `spineOf` sceglie fra
+    sei, e una tela che manca in un tema farebbe una copertina trasparente
+    proprio li'."""
+    spines = (UI / "assets" / "shared" / "spines.js").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^export const SPINES = 6;$", spines), "spineOf non sceglie piu' fra sei"
+    for theme, values in _theme_blocks().items():
+        for n in range(1, 7):
+            assert re.fullmatch(r"#[0-9a-f]{6}", values.get(f"spine-{n}", "")), f"{theme}: --spine-{n}"
+            assert values.get(f"spine-{n}-ink") in ("#17141c", "#fbf8f2"), f"{theme}: --spine-{n}-ink"
+
+
+def test_a_notebooks_name_reads_on_its_cloth_in_every_theme() -> None:
+    """Il nome sta a 14 px sulla tela: testo normale, quindi 4,5:1. Il conto
+    si rifa' qui, cosi' ritoccare la tinta di un tema lo dice invece di
+    lasciarlo scoprire a chi guarda."""
+    for theme, values in _theme_blocks().items():
+        for n in range(1, 7):
+            cloth, ink = _luminance(values[f"spine-{n}"]), _luminance(values[f"spine-{n}-ink"])
+            hi, lo = max(cloth, ink), min(cloth, ink)
+            ratio = (hi + 0.05) / (lo + 0.05)
+            assert ratio >= 4.5, f"{theme} --spine-{n}: {ratio:.2f}:1 sotto 4,5"
+
+
+def test_the_cover_wears_the_theme_finish_not_its_own() -> None:
+    """La tessera non decide filo, ombra, angoli, bagliore, lucido e storta:
+    li legge dal tema. Un valore scritto qui varrebbe per sette temi che non
+    si somigliano. Dal 06/10/2026 gli angoli sono quelli delle tessere
+    (`--tile-radius`), e la tessera grande si stacca come dice il tema."""
+    css = CSS.read_text(encoding="utf-8")
+    cover = css.split("\n.home-who-cover {", 1)[1].split("}", 1)[0]
+    for token in ("--spine-edge", "--tile-radius", "--spine-shadow", "--spine-glow",
+                  "--spine-gloss", "--spine-jitter", "--cover", "--cover-ink"):
+        assert f"var({token}" in cover, f"la tessera non legge {token}"
+    hero = css.split("\n.home-who-cover.is-hero {", 1)[1].split("}", 1)[0]
+    assert "var(--hero-lift)" in hero, "la tessera grande non si stacca piu' come dice il tema"
+
+
+def test_every_theme_finishes_the_tiles() -> None:
+    """Gli angoli e lo stacco della tessera grande stanno accanto alle tele, e
+    un tema che non li dice eredita quelli di Chanel: un anello d'oro su un
+    fumetto. Ogni tema li scrive."""
+    css = THEMES_CSS.read_text(encoding="utf-8")
+    section = css.split("/* ── Le tele dei quaderni ──", 1)[1].split("/* ── Reset ── */", 1)[0]
+    blocks = dict(re.findall(r'(:root|\[data-theme="(?:\w+)"\])\s*\{([^}]*)\}', section))
+    for theme in THEMES:
+        own = blocks[":root" if theme == "chanel" else f'[data-theme="{theme}"]']
+        for token in ("--tile-radius", "--hero-lift"):
+            assert f"{token}:" in own, f"{theme}: manca {token}"
+
+
+def test_the_bento_keeps_every_tile_easy_to_touch() -> None:
+    """La tessera piu' piccola e' una colonna per una fila: mai sotto i 112 px
+    di larghezza e i 104 di altezza, ben sopra i 44 di un tocco comodo."""
+    css = CSS.read_text(encoding="utf-8")
+    shelf = css.split("\n.home-who-shelf {", 1)[1].split("}", 1)[0]
+    assert "minmax(112px, 1fr)" in shelf and "grid-auto-rows: 104px" in shelf
+    assert "grid-auto-flow: dense" in shelf, "le tessere grandi lasciano buchi"
+    # Le colonne le conta il JS con gli stessi due numeri: se divergono, il
+    # rettangolo si calcola su una griglia che non e' quella a schermo.
+    src = WHO_JS.read_text(encoding="utf-8")
+    assert "export const TILE_MIN = 112;" in src and "export const TILE_GAP = 10;" in src
+    assert "gap: 10px" in shelf

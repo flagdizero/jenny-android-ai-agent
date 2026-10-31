@@ -18,6 +18,7 @@ from jenny.bus.queue import MessageBus
 from jenny.config.paths import get_uploads_dir
 from jenny.config.schema import Base
 from jenny.pydantic_compat import Field, field_validator, model_validator
+from jenny.runtime.tailscale import revive as revive_tailscale
 from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
 from jenny.session.manager import scrub_lone_surrogates
 from jenny.session.webui_turns import websocket_turn_wall_started_at
@@ -58,9 +59,9 @@ from jenny.channels.ws_parsing import (
     _extract_data_url_mime,
     _is_websocket_upgrade,
     _parse_envelope,
-    _parse_inbound_payload,
     classify_media_item,
 )
+from jenny.channels.ws_remote import RemoteListener, auth_secret, server_listening
 from jenny.channels.ws_sender import OutboundSenderMixin
 from jenny.session.keys import (
     PROJECT_SESSION_PREFIX,
@@ -79,6 +80,14 @@ from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 # «Failed to fetch». L'export di un backup da 310 MB sul telefono ne dura di
 # più. Il server ascolta su localhost, quindi un tetto largo non apre niente.
 _HTTP_OPEN_TIMEOUT_S = 600.0
+
+# Ogni quanto il server della WebView guarda se i suoi socket sono ancora in
+# ascolto. Quelli su ``127.0.0.1`` Android non li distrugge (lo fa con gli
+# indirizzi di un'interfaccia che cade, v. ``channels.ws_remote``), ma senza
+# questo ascoltatore il telefono resta senza Jenny: un controllo ogni mezzo
+# minuto costa niente, e un ascoltatore morto per una causa mai vista si rifà.
+_LISTENER_CHECK_S = 30.0
+_LISTENER_CLOSE_TIMEOUT_S = 5.0
 
 
 class WebSocketConfig(Base):
@@ -174,6 +183,13 @@ class WebSocketChannel(OutboundSenderMixin):
         self._conn_authed: dict[Any, bool] = {}
         self._stop_event: asyncio.Event | None = None
         self._server_task: asyncio.Task[None] | None = None
+        # Il secondo ascoltatore, sul tailnet (``gateway.remoteAccess``). Nasce
+        # spento; lo accende ``start`` se la config lo vuole, e l'RPC
+        # ``remote.set`` a caldo. V. ``channels.ws_remote``.
+        self._remote = RemoteListener(
+            serve=self._serve_remote, port=self.config.port, revive=revive_tailscale
+        )
+        self._serve_kwargs: dict[str, Any] = {}
         # Attività fine dei subagent: chi guarda cosa, e l'unico task che la
         # spinge. Il registro nasce vuoto e il task non esiste finché nessuno
         # guarda — il costo aggiunto con il pannello chiuso è zero.
@@ -352,7 +368,7 @@ class WebSocketChannel(OutboundSenderMixin):
         fallisce chiuso.
         """
         supplied = _query_first(query, "token")
-        secret = self.config.token_issue_secret.strip()
+        secret = auth_secret(self.config.token_issue_secret.strip())
         token_matches = bool(secret and supplied and _secret_matches(supplied, secret))
 
         if self.config.websocket_requires_token:
@@ -396,28 +412,135 @@ class WebSocketChannel(OutboundSenderMixin):
             f"{scheme}://{self.config.host}:{self.config.port}{self.config.path}",
         )
 
-        async def runner() -> None:
-            server = await serve(
+        # Gli stessi per i due ascoltatori: quello Tailscale e' questo server,
+        # su un altro indirizzo.
+        self._serve_kwargs = {
+            "open_timeout": _HTTP_OPEN_TIMEOUT_S,
+            "max_size": self.config.max_message_bytes,
+            "ping_interval": self.config.ping_interval_s,
+            "ping_timeout": self.config.ping_timeout_s,
+            "ssl": ssl_context,
+            "logger": ws_logger,
+        }
+
+        async def open_server() -> Any:
+            return await serve(
                 handler,
                 self.config.host,
                 self.config.port,
                 process_request=process_request,
-                open_timeout=_HTTP_OPEN_TIMEOUT_S,
-                max_size=self.config.max_message_bytes,
-                ping_interval=self.config.ping_interval_s,
-                ping_timeout=self.config.ping_timeout_s,
-                ssl=ssl_context,
-                logger=ws_logger,
+                **self._serve_kwargs,
             )
+
+        async def runner() -> None:
+            server = await open_server()
             try:
+                await self.apply_remote_access()
                 assert self._stop_event is not None
-                await self._stop_event.wait()
+                while True:
+                    try:
+                        await asyncio.wait_for(self._stop_event.wait(), timeout=_LISTENER_CHECK_S)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
+                    if server_listening(server):
+                        continue
+                    server = await self._rebind_listener(server, open_server)
             finally:
+                await self._remote.stop()
                 server.close()
                 await server.wait_closed()
 
         self._server_task = asyncio.create_task(runner())
         await self._server_task
+
+    async def _rebind_listener(self, server: Any, open_server: Any) -> Any:
+        """Rifà il server della WebView quando i suoi socket non ascoltano più.
+
+        Se il bind fallisce resta quello chiuso, che al prossimo controllo
+        risulta ancora morto: si riprova lì, senza mai uscire dal giro.
+        """
+        self.logger.error(
+            "WebSocket listener on {}:{} stopped listening, rebinding",
+            self.config.host,
+            self.config.port,
+        )
+        server.close()
+        try:
+            await asyncio.wait_for(server.wait_closed(), timeout=_LISTENER_CLOSE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            self.logger.warning("WebSocket listener did not close in time, rebinding anyway")
+        try:
+            return await open_server()
+        except OSError as exc:
+            self.logger.error("WebSocket listener cannot rebind: {}", exc)
+            return server
+
+    async def _echo_user_to_others(
+        self, sender: Any, chat_id: str, event: dict[str, Any],
+    ) -> None:
+        """Il messaggio appena scritto, alle altre finestre della stessa chat.
+
+        Chi l'ha scritto l'ha gia' disegnato; le altre — il telefono mentre
+        scrivi dal Mac, il Mac mentre scrivi dal telefono — lo vedevano solo al
+        ricaricamento, e intanto ricevevano dal vivo la risposta: risposte senza
+        domanda. L'evento e' gia' nel transcript: qui si consegna e basta, mai
+        ``prepare_and_append``, o la riga si raddoppia.
+        """
+        conns = [c for c in self._subs.get(chat_id, ()) if c is not sender]
+        if not conns:
+            return
+        wire = self._user_echo_wire(event)
+        wire["rev"] = self._transcripts.revision(chat_id)
+        raw = json.dumps(wire, ensure_ascii=False)
+        await self._fanout(conns, raw, label=" user_echo ")
+
+    # -- Ascoltatore Tailscale ---------------------------------------------
+
+    async def _serve_remote(self, hosts: tuple[str, ...]) -> Any:
+        """Il server sul tailnet: stesso handler, stessa porta, altri indirizzi.
+
+        Ogni richiesta passa prima da ``RemoteListener.admit`` — indirizzi e
+        chiave — e solo dopo dal router di sempre. Un rifiuto e' un 403 senza
+        corpo: chi non e' del tailnet non sa nemmeno che li' c'e' Jenny.
+        """
+        remote = self._remote
+
+        async def process_request(connection: ServerConnection, request: WsRequest) -> Any:
+            if remote.admit(connection) is None:
+                return connection.respond(403, "Forbidden\n")
+            return await self._dispatch_http(connection, request)
+
+        async def handler(connection: ServerConnection) -> None:
+            remote.track(connection)
+            try:
+                await self._connection_loop(connection)
+            finally:
+                remote.forget(connection)
+
+        # Una lista di indirizzi: ``serve`` la passa a ``loop.create_server``,
+        # che la accetta, anche se l'annotazione di ``websockets`` dice ``str``.
+        return await serve(
+            handler,
+            list(hosts),  # type: ignore[arg-type]
+            remote.port,
+            process_request=process_request,
+            **self._serve_kwargs,
+        )
+
+    async def apply_remote_access(self) -> None:
+        """Porta l'ascoltatore Tailscale allo stato di ``gateway.remoteAccess``.
+
+        Non solleva: un config illeggibile lascia l'ascoltatore com'era, e il
+        server della WebView non deve mai cadere per colpa sua.
+        """
+        from jenny.config.loader import load_config
+
+        try:
+            remote = (await asyncio.to_thread(load_config)).gateway.remote_access
+            await self._remote.apply(enabled=remote.enabled, key=remote.key)
+        except Exception:
+            self.logger.opt(exception=True).warning("remote access: could not apply config")
 
     async def _connection_loop(self, connection: Any) -> None:
         request = connection.request
@@ -465,19 +588,15 @@ class WebSocketChannel(OutboundSenderMixin):
                 if envelope is not None:
                     await self._dispatch_envelope(connection, client_id, envelope)
                     continue
-
-                content = _parse_inbound_payload(raw)
-                if content is None:
-                    continue
-                await self._handle_message(
-                    sender_id=client_id,
-                    chat_id=default_chat_id,
-                    content=content,
-                    metadata={
-                        "remote": getattr(connection, "remote_address", None),
-                        "conn_id": conn_id,
-                    },
-                )
+                # Un frame senza ``type`` (testo nudo, ``{"content": ...}``) era il
+                # protocollo di prima delle buste: dal 27/10/2026 non lo manda più
+                # nessuno, né la WebUI né gli script, ed è stato tolto. Si risponde
+                # come a una busta sbagliata: errore morbido, connessione aperta.
+                if raw.strip():
+                    await self._send_event(
+                        connection, "error",
+                        detail="frame without a type", reason="untyped_frame",
+                    )
         except Exception as e:
             self.logger.warning("connection loop error (client={}): {}", client_id, e, exc_info=True)
         finally:
@@ -654,6 +773,11 @@ class WebSocketChannel(OutboundSenderMixin):
     ) -> None:
         """Route one typed inbound envelope (``attach`` / ``detach`` / ``message`` / ...)."""
         t = envelope.get("type")
+        if t == "ping":
+            # Il battito di una WebUI aperta da un altro dispositivo: scopre un
+            # socket rimasto mezzo aperto (v. ``shared/ws-manager.js``).
+            await self._send_event(connection, "pong")
+            return
         if t == "attach":
             cid = self._envelope_chat_id(envelope)
             if cid is None:
@@ -742,6 +866,19 @@ class WebSocketChannel(OutboundSenderMixin):
             # (v. ``readonly_from_metadata``).
             if envelope.get(WORKSPACE_READONLY_METADATA_KEY) is True:
                 metadata[WORKSPACE_READONLY_METADATA_KEY] = True
+            # Il tasto Piano: apre una pianificazione, che propone la lista e
+            # non tocca niente (``jenny/plan/driver.py``). Solo nella chat di un
+            # quaderno: un piano fotografa un quaderno, e fuori non ce n'e' uno.
+            # La sola lettura la impone il server, non la fiducia nel client. I
+            # messaggi dopo, finche' la pianificazione dura, arrivano senza il
+            # flag: li marca il driver (``PlanDriver._settle_drafting``), perche'
+            # lo stato e' suo e non del client.
+            if envelope.get("plan") is True and is_project_chat_id(cid):
+                metadata["plan_mode"] = True
+                metadata[WORKSPACE_READONLY_METADATA_KEY] = True
+                revise = envelope.get("plan_revise")
+                if isinstance(revise, str) and revise.strip():
+                    metadata["plan_revise"] = revise.strip()[:64]
             if envelope.get("webui") is True:
                 metadata["webui"] = True
                 metadata.update(self._transcripts.client_turn_metadata(envelope.get("turn_id")))
@@ -749,13 +886,26 @@ class WebSocketChannel(OutboundSenderMixin):
             conn_id = self._conn_ids.get(connection)
             if conn_id is not None:
                 metadata["conn_id"] = conn_id
+            # Da fuori (ascoltatore Tailscale): la provenienza viaggia col turno.
+            # ``origin_channel`` e' la stessa chiave dei turni da Telegram, e ne
+            # eredita le regole: la risposta la porta come ``origin``, e il
+            # telefono non suona per una conversazione che stai leggendo altrove
+            # (v. ``ws_sender.send``).
+            origin = self._remote.origin_of(connection)
+            if origin:
+                metadata["origin_channel"] = origin["origin"]
+                if origin.get("device"):
+                    metadata["origin_device"] = origin["device"]
             if self.is_allowed(client_id):
-                self._transcripts.append_user_message(
+                written = self._transcripts.append_user_message(
                     cid,
                     content,
                     metadata=metadata,
                     media_paths=media_paths or None,
+                    origin=origin,
                 )
+                if written is not None:
+                    await self._echo_user_to_others(connection, cid, written)
             await self._handle_message(
                 sender_id=client_id,
                 chat_id=cid,
@@ -812,6 +962,10 @@ class WebSocketChannel(OutboundSenderMixin):
             )
             return
 
+        if method.startswith("remote."):
+            await self._handle_remote_rpc(connection, rpc_id, method, params)
+            return
+
         try:
             result = await ws_rpc.run_rpc(
                 self.gateway.commands,
@@ -829,6 +983,54 @@ class WebSocketChannel(OutboundSenderMixin):
         await self._send_event(
             connection, "rpc_result", **ws_rpc.result_frame(rpc_id, result),
         )
+
+    async def _handle_remote_rpc(
+        self, connection: Any, rpc_id: str, method: str, params: dict[str, Any],
+    ) -> None:
+        """``remote.status`` / ``remote.set`` / ``remote.rotate``.
+
+        Li serve il canale e non ``webui.commands``: accendere e spegnere vuol
+        dire aprire e chiudere un suo server, e ``here`` — se chi chiede e' gia'
+        collegato da fuori — lo sa solo lui. Stessa autorizzazione degli altri RPC.
+        """
+        from jenny.channels import ws_rpc
+        from jenny.channels.ws_remote import write_remote_access
+        from jenny.webui.commands import CommandError
+
+        try:
+            ws_rpc.authorize(
+                secret=self.config.token_issue_secret,
+                connection_authenticated=self._conn_authed.get(connection, False),
+            )
+            if method == "remote.set":
+                enabled = params.get("enabled")
+                if not isinstance(enabled, bool):
+                    raise CommandError("bad_request", "enabled must be a boolean")
+                await write_remote_access(enabled=enabled)
+                await self.apply_remote_access()
+            elif method == "remote.rotate":
+                await write_remote_access(rotate=True)
+                await self.apply_remote_access()
+            elif method != "remote.status":
+                raise CommandError("not_found", f"unknown command: {method}")
+            result = await self._remote.status()
+            # La chiave serve al pannello per comporre link e QR; solo a
+            # opzione accesa, quando un link ha senso.
+            result["key"] = self._remote.key if self._remote.enabled else None
+            result["here"] = self._remote.is_remote(connection)
+        except CommandError as exc:
+            await self._send_event(connection, "rpc_result", **ws_rpc.error_frame(rpc_id, exc))
+            return
+        except Exception:
+            self.logger.opt(exception=True).warning("rpc {} failed", method)
+            await self._send_event(
+                connection, "rpc_result",
+                **ws_rpc.error_frame(rpc_id, CommandError("internal", "remote access failed")),
+            )
+            return
+        # Dopo un `remote.rotate` chiesto da fuori questa connessione e' gia'
+        # chiusa: la risposta non arriva (`_send_event` lo tollera), e va bene cosi'.
+        await self._send_event(connection, "rpc_result", **ws_rpc.result_frame(rpc_id, result))
 
     # -- Osservazione dell'attività di un subagent -------------------------
 

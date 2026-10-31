@@ -2,11 +2,10 @@
 
 Due costi che crescevano col quadrato, misurati contando le chiamate:
 
-* **la storia**: ogni ``_append`` chiamava ``gap.refresh()``, che legge il
-  rettangolo di **ogni** ``.home-msg`` del filo (``shared/jenny-gap.js``); e
-  ``load()``/``prependTurns()`` appendono un turno alla volta. Una pagina di N
-  turni costava N letture di N rettangoli, ognuna dopo una scrittura — layout
-  forzato a ogni giro. Adesso il margine si ricalcola una volta a pagina finita;
+* **la storia**: ogni ``_append`` rifa la sagoma di Jenny (``band.refresh()``,
+  ``home-band.js``), che misura l'ultimo blocco dopo una scrittura — layout
+  forzato a ogni giro; e ``load()``/``prependTurns()`` appendono un turno alla
+  volta. Adesso la sagoma si rifa una volta a pagina finita;
 * **lo stream**: ogni ``delta`` ridisegnava in modo sincrono il markdown del
   buffer intero. L'officina raccoglie i delta e disegna una volta per
   fotogramma (``_scheduleFlush``); adesso anche la casa, e la resa finale la fa
@@ -20,7 +19,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
@@ -28,6 +27,8 @@ HOME_CHAT_JS = ASSETS / "home-chat.js"
 pytestmark = requires_node
 
 _METHODS = (
+    "_journalMarkOf",
+    "_moveOfferOf",
     "load",
     "_read",
     "prependTurns",
@@ -43,6 +44,8 @@ _METHODS = (
     "_ensureBlock",
     "_ensureTurn",
     "_resetTurn",
+    "_markPassing",
+    "_dropPassing",
 )
 
 _HARNESS = """
@@ -86,10 +89,11 @@ let refreshes = 0;
 function makeChat() {
   return {
     el: makeNode(),
-    gap: { refresh: () => { refreshes += 1; } },
+    band: { refresh: () => { refreshes += 1; } },
     pager: { adopt() {}, ensureReach() {} },
     turnNode: null, blockNode: null, buffer: '', turnId: null,
     _empty: false, _seconds: null, _frame: null, _batching: false,
+    _passing: [], _lastSegment: null, _blockSource: new WeakMap(),
     _shownKey: null, _reading: 0, _readGen: 0, _live: new WeakSet(), _anchor: null,
     syncEmpty() {}, scrollToBottom() {}, _follow() {}, _tailOf() {}, _register() {},
     _appendUser(text, origin, media, toTop = false) {
@@ -100,6 +104,8 @@ function makeChat() {
       const n = makeNode(); n.className = 'home-msg home-msg-jenny'; n.innerHTML = content;
       return this._append(n, toTop);
     },
+    // Il punto di lettura ha il suo banco (`test_home_place_client.py`).
+    restorePlace() { this.scrollToBottom(); },
     __METHODS__,
   };
 }
@@ -121,31 +127,31 @@ def _run(script: str) -> None:
     nodes = re.search(r"(?m)^const THREAD_NODES = .*;$", src)
     assert nodes, "const THREAD_NODES non trovata"
     harness = _HARNESS.replace("__METHODS__", methods).replace("__THREAD_NODES__", nodes.group(0))
-    run_js(harness + "\n" + script)
+    run_js(harness + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers") + "\n" + script)
 
 
-def test_a_history_page_measures_the_gap_once() -> None:
+def test_a_history_page_measures_the_shape_once() -> None:
     _run("""
       const chat = makeChat();
       turns = exchange(25);                  // 50 bolle
       await chat.load();
       assert.equal(chat.el.children.length, 50);
-      assert.equal(refreshes, 1, `margine ricalcolato ${refreshes} volte per una pagina`);
+      assert.equal(refreshes, 1, `sagoma rifatta ${refreshes} volte per una pagina`);
     """)
 
 
-def test_an_older_page_measures_the_gap_once() -> None:
+def test_an_older_page_measures_the_shape_once() -> None:
     _run("""
       const chat = makeChat();
       chat.prependTurns(exchange(20));
       assert.equal(chat.el.children.length, 40);
-      assert.equal(refreshes, 1, `margine ricalcolato ${refreshes} volte per una pagina`);
+      assert.equal(refreshes, 1, `sagoma rifatta ${refreshes} volte per una pagina`);
     """)
 
 
-def test_a_live_message_still_measures_the_gap_right_away() -> None:
-    """Fuori dalla storia niente cambia: il messaggio che arriva si scansa
-    subito, non alla prossima pagina."""
+def test_a_live_message_still_measures_the_shape_right_away() -> None:
+    """Fuori dalla storia niente cambia: col messaggio che arriva la sagoma si
+    rifa subito, non alla prossima pagina."""
     _run("""
       const chat = makeChat();
       chat._ensureTurn();

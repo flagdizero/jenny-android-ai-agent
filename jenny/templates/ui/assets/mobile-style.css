@@ -65,15 +65,6 @@
   --glint:         #fff1cf;
   --glow:          rgba(200, 169, 106, 0.55);
   --meta:          #c8a96a;
-  /* I due gruppi delle pagine di un quaderno (il pallino dell'elenco, il nodo
-     della mappa): una coppia di tinte **sue**, non due stati. Erano `--ok` ed
-     `--error`, cioe' «riuscito» e «sbagliato»: ogni entita' aveva il pallino
-     di un errore, e in Y2K il verde dei concetti stava a 1,7:1 sul fondo.
-     Blu e oro, piu' scuri nei tre temi chiari: sopra
-     3:1 su ogni fondo (e' un segno, non una parola), lontani fra loro e dal
-     grigio di «altro». Il banco e' in `test_notebook_groups_contract.py`. */
-  --group-concepts: #6aa9e8;
-  --group-entities: #c8a96a;
   --bubble-user-bg: #f4f1ea;
   --bubble-user-text: #141414;
   --bubble-user-border: none;
@@ -93,26 +84,56 @@
   --dock-icon:     22px;
   /* Lato del canvas quadrato della mascotte. Default = taglia piccola; le
      altre taglie la riscrivono su <html> (v. shared/mascot.js). Tutta la
-     geometria di .jenny-duo e delle bolle minichat ne deriva. */
+     geometria di .jenny-duo ne deriva. */
   --jenny-size:    120px;
   /* Dove appoggia i piedi, dal fondo (in casa) o dal dock (in officina):
-     appena sopra il campo della minichat, che sta a 12 px ed e' alto una riga
-     del composer. **Sempre**, in ogni vista dell'officina — console compresa —
-     e aperta o chiusa la minichat. Dall'utente, il 28/09/2026: «il pavimento
-     e' dove appare nella minichat, sempre, in ogni schermata», e della console,
-     dove lei stava sopra la riga dei chip: «deve essere uguale agli altri».
-     Prima stava a 20 px e saltava su all'apertura, e in console sopra tutta la
-     barra di input. `FLOOR_NO_COMPOSER` in home-app.js e' lo stesso numero. */
+     l'altezza di una riga del composer sopra il bordo, **sempre**, in ogni
+     vista dell'officina — console compresa. Dall'utente, il 28/09/2026: «il
+     pavimento e' dove appare nella minichat, sempre, in ogni schermata» (la
+     minichat non c'e' piu' dal 05/10/2026, il posto le e' rimasto), e della
+     console: «deve essere uguale agli altri». `FLOOR_NO_COMPOSER` in
+     home-app.js e' lo stesso numero. */
   --jenny-away-floor: 66px;
   /* Il pavimento di Jenny: dove poggia il bordo basso del suo quadrato, cioe'
      i piedi meno il margine trasparente sotto di loro (il 12,24% del lato, lo
      stesso di `.home-shell`). La casa lo riscrive su `.home-shell`, dove in
-     chat lei sta sul composer. Lo leggono lo sprite e il fumetto e il pensa
-     della minichat. */
+     chat lei sta sul composer. Lo legge lo sprite. */
   --jenny-floor:   calc(var(--dock-height) + var(--jenny-away-floor) - var(--jenny-size) * 0.1224);
   --font-sans:     'Inter', system-ui, sans-serif;
   --font-display:  'Tenor Sans', var(--font-sans);
   --font-mono:     'Fira Code', monospace;
+  /* La bacheca dei quaderni: colori di **materiale**, non di interfaccia —
+     il sughero, la carta delle polaroid, il giallo dei post-it, il rosso dei
+     fili e delle puntine. Scuri qui; i temi chiari li schiariscono in fondo
+     al blocco dei temi. La mano delle etichette e' Comic Neue, l'unico
+     carattere scritto a mano che la casa porta gia' con se'. */
+  --board-bg:          #1b1815;
+  --board-grain:       rgba(255, 238, 214, 0.06);
+  --board-paper:       #f2eee5;
+  --board-ink:         #29251f;
+  --board-postit:      #e8d26a;
+  --board-postit-ink:  #3a321c;
+  /* Le note dell'utente: post-it lilla, per non confondersi col giallo delle
+     attese. Come il giallo, uguale in ogni tema. */
+  --board-note:        #d7c4f0;
+  --board-note-ink:    #34264a;
+  /* Le automazioni (i cron del quaderno): l'etichetta menta, con l'icona tonda
+     scura e il filo menta. Come il giallo e il lilla, uguale in ogni tema; il
+     filo si scurisce nei temi chiari, dove il menta chiaro non si vedrebbe. */
+  --board-auto:        #b4e6cf;
+  --board-auto-ink:    #0f3326;
+  --board-auto-icon:   #0f3326;
+  --board-auto-thread: #7cc7a6;
+  --board-thread:      #c4473c;
+  --board-new:         #5b97e0;
+  --board-soon:        #e6c341;
+  --board-alert:       #d9533f;
+  --board-done:        #8cc58a;
+  --board-pin-jenny:   #8f8b84;
+  --board-pin-user:    #cf4a3e;
+  --board-envelope:    #e7dfcd;
+  --board-envelope-flap: #d4c8ae;
+  --font-hand:     'Comic Neue', var(--font-sans);
 }
 
 [data-theme="chanel"] {
@@ -194,7 +215,8 @@
   --bubble-user-text: #e5ddd0;
   --bubble-user-border: 1px solid #4a443b;
   --bubble-user-shadow: none;
-  --radius-bubble: 2px 14px 2px 14px;
+  /* La bolla tonda come negli altri temi (06/10/2026): gli angoli tagliati
+     `2px 14px 2px 14px` stonavano accanto alla scheda di vetro di Jenny. */
   --radius-seg:    2px;
 }
 
@@ -264,8 +286,6 @@
   --glint:         #ff4fa3;
   --glow:          transparent;
   --meta:          #6842ff;
-  --group-concepts: #2f6db3;
-  --group-entities: #8a6420;
   --bubble-user-bg: #1b1820;
   --bubble-user-text: #faf6ef;
   --bubble-user-border: none;
@@ -303,8 +323,6 @@
   --glint:         #f56ab5;
   --glow:          rgba(245, 106, 181, 0.35);
   --meta:          #785a8e;
-  --group-concepts: #2f6db3;
-  --group-entities: #8a6420;
   --bubble-user-bg: linear-gradient(180deg, #ffa7dd, #f56ab5);
   --bubble-user-text: #46245a;
   --bubble-user-border: 1px solid #ffffff;
@@ -341,8 +359,6 @@
   --glint:         #d2ab78;
   --glow:          transparent;
   --meta:          #656057;
-  --group-concepts: #2f6db3;
-  --group-entities: #8a6420;
   --bubble-user-bg: #37332c;
   --bubble-user-text: #f4f1ec;
   --bubble-user-border: none;
@@ -358,10 +374,259 @@
      chanel e fumetto: l'accento *è* il testo, cioè il fondo della scheda.
    Il conto lo rifà un banco (`test_home_you_contract.py`), quindi ritoccare la
    tinta di un tema lo dice invece di lasciarlo scoprire a chi guarda. */
+/* La bacheca nei temi chiari: un sughero chiaro, e il filo piu' scuro perche'
+   si legga sulla carta. Synthwave tinge il filo del suo rosa. */
+[data-theme="comic"],
+[data-theme="y2k"],
+[data-theme="stone"] {
+  --board-bg:      #d9cfbf;
+  --board-grain:   rgba(80, 60, 30, 0.10);
+  --board-paper:   #fffdf8;
+  --board-thread:  #a8352b;
+  --board-done:    #3f8a3c;
+  /* Il giallo del post-it, sulla carta chiara, non si vede: un ocra. */
+  --board-postit-thread: #a8841c;
+  /* E il filo menta, per la stessa ragione, un verde bottiglia. */
+  --board-auto-thread: #2f7d5c;
+  /* Il lilla delle note come testo sulla pagina (il titoletto, «Nuova nota»):
+     sul fondo chiaro si leggeva a 1,3:1. Questo regge almeno 5,5:1 sui fondi
+     e le superfici di tutti e tre. */
+  --board-note-label: #6a4a9c;
+}
+[data-theme="synthwave"] { --board-thread: #f92aad; }
+[data-theme="kyoto"] { --board-bg: #241f1a; --board-thread: #a94f3b; }
+[data-theme="sticker"] { --board-bg: #1d1724; }
+
+/* Il velo dietro la chat aperta sopra una pagina (dal 05/10/2026: Jenny e' la
+   porta della chat, e la chat sale sopra quel che stai guardando — v.
+   `.home-over` in home-style.css e `:root.chat-over` qui sotto). Deve lasciar
+   leggere la pagina sotto **e** la chat sopra: nei temi scuri e' un nero
+   al 60%, nei tre chiari lo sfondo del tema al 60% — un nero sotto testo
+   nero non si leggerebbe. La pagina sotto e' anche sfocata appena
+   (`--chat-veil-blur`): resta riconoscibile, ma il suo testo non si confonde
+   con quello della chat. Con la sfocatura il velo e' stato provato al 62/72%,
+   e sul telefono si e' preferito tornare all'80%: la pagina sotto e' un
+   riferimento, la chat e' quel che si legge. Con la sfocatura forte (sotto)
+   l'80% la spegneva quasi del tutto, e dal 06/10/2026 e' al 60%.
+   Il contrasto lo conta un banco (`test_chat_veil_contrast.py`), tema per
+   tema, come se sotto non ci fosse sfocatura: la sfocatura e' margine.
+
+   Dal 06/10/2026 la sfocatura e' forte (18 px, con un po' di saturazione):
+   della pagina sotto restano i colori e le masse, non le forme. E' scelta
+   sulla tela «la chat sul vetro» (Vetro 2), insieme ai token del vetro qui
+   sotto. Costa poco perche' sfoca una cosa ferma: la pagina sotto e' inerte,
+   e il filtro non si anima (v. `.home-beneath`, `.view-beneath`). Se sul
+   telefono scatta, si scende 12 → 8 qui e basta. */
+:root {
+  --chat-veil: rgba(8, 7, 10, 0.6);
+  --chat-veil-blur: 18px;
+  /* Le barre ferme dell'officina sopra il velo (v. `:root.chat-over
+     #title-chat`): la tinta del velo, quasi opaca. */
+  --chat-band: rgba(8, 7, 10, 0.97);
+}
+[data-theme="comic"],
+[data-theme="y2k"],
+[data-theme="stone"] {
+  --chat-veil: color-mix(in srgb, var(--bg) 60%, transparent);
+  --chat-band: color-mix(in srgb, var(--bg) 97%, transparent);
+}
+
+/* Il vetro della chat (06/10/2026, Vetro 2): il campo dove scrivi, e in casa
+   la bolla del lavoro in corso. Ovunque, sulla pagina chat come sopra una
+   pagina, con lo stesso codice: sopra il velo lascia passare la pagina
+   sfocata, sulla pagina chat e' una pastiglia leggera sul fondo del tema.
+
+   **Le risposte di Jenny non hanno scheda**, apposta: le bolle le hai solo tu,
+   e lei scrive sul fondo, come una pagina, perche' le sue risposte sono la
+   cosa lunga della chat e su uno schermo quadrato ogni margine e' una riga in
+   meno (provata sulla tela e tolta il 06/10/2026). Fino a quel giorno, in
+   officina, Fumetto e Sticker la scheda l'avevano: tolta anche li', perche'
+   la regola e' la stessa per tutti.
+
+   **Solo trasparenza, mai `backdrop-filter`**: dietro c'e' gia' una pagina
+   sfocata e ferma, quindi il vetro costa come un colore. E **niente ombre
+   sfumate fuori**: la bolla del lavoro cresce mentre lavora, e un'ombra
+   sfumata andrebbe ridipinta ogni volta (lo stesso conto di
+   `.launcher-row.selected`). Il riflesso e' interno e di 1 px; le ombre nette
+   di Sticker e Fumetto non sfumano, e costano come un bordo.
+
+   Nei temi scuri il vetro e' fume': una tinta nera al 30% col bordo chiaro.
+   Chiaro come la tela (6-9% di bianco) andava bene col velo all'80%; al 60%
+   il testo nel campo, sopra un glifo della pagina, scendeva sotto 4,5
+   (06/10/2026, v. `test_chat_veil_contrast.py`).
+
+   Ogni tema lo veste a modo suo: sottile nei temi scuri, ciano in
+   Synthwave, adesivo in Sticker, inchiostro in Fumetto, lucido in Y2K, brina
+   in Stone. */
+:root {
+  --glass-bg: rgba(0, 0, 0, 0.3);
+  --glass-border: 1px solid rgba(244, 241, 234, 0.14);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
+  --glass-field-border: 1px solid rgba(244, 241, 234, 0.2);
+}
+[data-theme="synthwave"] {
+  --glass-bg: rgba(0, 0, 0, 0.3);
+  --glass-border: 1px solid rgba(3, 237, 249, 0.3);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
+  --glass-field-border: 1px solid rgba(3, 237, 249, 0.35);
+}
+[data-theme="kyoto"] {
+  --glass-bg: rgba(0, 0, 0, 0.3);
+  --glass-border: 1px solid rgba(229, 221, 208, 0.16);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
+  --glass-field-border: 1px solid rgba(229, 221, 208, 0.22);
+}
+[data-theme="sticker"] {
+  --glass-bg: rgba(0, 0, 0, 0.3);
+  --glass-border: 2px solid rgba(255, 255, 255, 0.55);
+  --glass-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
+  --glass-field-bg: rgba(0, 0, 0, 0.3);
+  --glass-field-border: 2px solid rgba(255, 255, 255, 0.55);
+}
+[data-theme="comic"] {
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: 2px solid #1b1820;
+  --glass-shadow: 3px 3px 0 rgba(27, 24, 32, 0.85);
+  --glass-field-bg: rgba(255, 255, 255, 0.72);
+  --glass-field-border: 2px solid #1b1820;
+}
+[data-theme="y2k"] {
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.95);
+  --glass-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.7);
+  --glass-field-bg: rgba(255, 255, 255, 0.65);
+  --glass-field-border: 1px solid rgba(255, 255, 255, 0.95);
+}
+[data-theme="stone"] {
+  --glass-bg: rgba(244, 241, 236, 0.62);
+  --glass-border: 1px solid rgba(55, 51, 44, 0.12);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --glass-field-bg: rgba(244, 241, 236, 0.72);
+  --glass-field-border: 1px solid rgba(55, 51, 44, 0.18);
+}
+
 [data-theme="synthwave"],
 [data-theme="kyoto"],
 [data-theme="y2k"] {
   --accent-on-text: var(--accent);
+}
+
+/* ── Le tele dei quaderni ──
+   Ogni quaderno ha una tela, la stessa ovunque compaia: la copertina nei
+   Quaderni, il pallino della fila, la pastiglia, il percorso. Sei per tema,
+   scelte con `spineOf(nome)` in home-who.js, e **non vogliono dire niente
+   oltre l'identita'**: per questo stanno qui e non sono `--error` o
+   `--accent`, che un significato ce l'hanno.
+   Ogni tela ha il suo inchiostro, deciso col contrasto e non indovinato:
+   tutti sopra 4,5:1 sul nome a 14 px (il conto sta in
+   `test_home_who_contract.py`).
+   La finitura e' del tema: il filo intorno, l'ombra, gli angoli, il bagliore
+   di Synthwave, il lucido di Y2K, la storta degli adesivi.
+   Le tessere del bento (06/10/2026) hanno due finiture loro: gli angoli
+   (`--tile-radius`, piu' morbidi di quelli di un dorso) e il modo in cui la
+   tessera grande del quaderno piu' recente si stacca dalle altre
+   (`--hero-lift`): l'anello d'oro di Chanel e di Kyoto, l'ombra piena degli
+   adesivi e del fumetto. Il bagliore di Synthwave non sta qui perche' e' del
+   colore della tela, che qui non si conosce: lo raddoppia la tessera. */
+:root {
+  --spine-1: #f4f1ea; --spine-1-ink: #17141c;
+  --spine-2: #c8a96a; --spine-2-ink: #17141c;
+  --spine-3: #8a8a8a; --spine-3-ink: #17141c;
+  --spine-4: #d9cbb0; --spine-4-ink: #17141c;
+  --spine-5: #6e6e6e; --spine-5-ink: #fbf8f2;
+  --spine-6: #b5aa94; --spine-6-ink: #17141c;
+  --spine-edge:   1px solid rgba(244, 241, 234, 0.32);
+  --spine-shadow: 0 0 0 transparent;
+  --spine-glow:   0px;
+  --spine-radius: 2px;
+  --spine-gloss:  none;
+  --spine-jitter: 0deg;
+  --tile-radius:  2px;
+  --hero-lift:    0 0 0 1px var(--bg), 0 0 0 2px #c8a96a;
+}
+[data-theme="synthwave"] {
+  --spine-1: #f92aad; --spine-1-ink: #17141c;
+  --spine-2: #03edf9; --spine-2-ink: #17141c;
+  --spine-3: #7b2ff7; --spine-3-ink: #fbf8f2;
+  --spine-4: #ff8a3d; --spine-4-ink: #17141c;
+  --spine-5: #2de2a6; --spine-5-ink: #17141c;
+  --spine-6: #ffd319; --spine-6-ink: #17141c;
+  --spine-edge:   1px solid rgba(255, 255, 255, 0.16);
+  --spine-glow:   14px;
+  --spine-radius: 3px;
+  --tile-radius:  16px;
+  --hero-lift:    0 0 0 transparent;
+}
+[data-theme="kyoto"] {
+  --spine-1: #a94f3b; --spine-1-ink: #fbf8f2;
+  --spine-2: #c08a3e; --spine-2-ink: #17141c;
+  --spine-3: #5f6b4e; --spine-3-ink: #fbf8f2;
+  --spine-4: #3e4a5c; --spine-4-ink: #fbf8f2;
+  --spine-5: #8a6a55; --spine-5-ink: #fbf8f2;
+  --spine-6: #e5ddd0; --spine-6-ink: #17141c;
+  --spine-edge:   0 solid transparent;
+  --spine-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  --spine-radius: 2px 9px 2px 9px;
+  --tile-radius:  4px 18px 4px 18px;
+  --hero-lift:    0 2px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px #c99b4a;
+}
+[data-theme="sticker"] {
+  --spine-1: #a78bfa; --spine-1-ink: #17141c;
+  --spine-2: #ffd23f; --spine-2-ink: #17141c;
+  --spine-3: #5eead4; --spine-3-ink: #17141c;
+  --spine-4: #fb7185; --spine-4-ink: #17141c;
+  --spine-5: #60a5fa; --spine-5-ink: #17141c;
+  --spine-6: #f4effa; --spine-6-ink: #17141c;
+  --spine-edge:   2.5px solid #ffffff;
+  --spine-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+  --spine-radius: 8px;
+  --spine-jitter: 1deg;
+  --tile-radius:  16px;
+  --hero-lift:    5px 5px 0 rgba(0, 0, 0, 0.6);
+}
+[data-theme="comic"] {
+  --spine-1: #ffd23f; --spine-1-ink: #17141c;
+  --spine-2: #ef4444; --spine-2-ink: #17141c;
+  --spine-3: #3b82f6; --spine-3-ink: #17141c;
+  --spine-4: #9b87ff; --spine-4-ink: #17141c;
+  --spine-5: #22c55e; --spine-5-ink: #17141c;
+  --spine-6: #fb923c; --spine-6-ink: #17141c;
+  --spine-edge:   2px solid #1b1820;
+  --spine-shadow: 3px 3px 0 #1b1820;
+  --spine-radius: 3px;
+  --spine-jitter: 0.5deg;
+  --tile-radius:  4px;
+  --hero-lift:    5px 5px 0 #1b1820;
+}
+[data-theme="y2k"] {
+  --spine-1: #f56ab5; --spine-1-ink: #17141c;
+  --spine-2: #b76bf0; --spine-2-ink: #17141c;
+  --spine-3: #7dd3fc; --spine-3-ink: #17141c;
+  --spine-4: #fda4af; --spine-4-ink: #17141c;
+  --spine-5: #c4b5fd; --spine-5-ink: #17141c;
+  --spine-6: #86efac; --spine-6-ink: #17141c;
+  --spine-edge:   2px solid #ffffff;
+  --spine-shadow: 0 4px 10px rgba(70, 36, 90, 0.22);
+  --spine-radius: 10px;
+  --spine-gloss:  linear-gradient(90deg, rgba(255, 255, 255, 0) 8%,
+                    rgba(255, 255, 255, 0.55) 24%, rgba(255, 255, 255, 0) 46%);
+  --tile-radius:  20px;
+  --hero-lift:    0 6px 18px rgba(245, 106, 181, 0.55);
+}
+[data-theme="stone"] {
+  --spine-1: #7f6446; --spine-1-ink: #fbf8f2;
+  --spine-2: #a08a5c; --spine-2-ink: #17141c;
+  --spine-3: #5f6d62; --spine-3-ink: #fbf8f2;
+  --spine-4: #8a5d46; --spine-4-ink: #fbf8f2;
+  --spine-5: #4f5a66; --spine-5-ink: #fbf8f2;
+  --spine-6: #7d6b7f; --spine-6-ink: #fbf8f2;
+  --spine-edge:   1px solid #c2bbac;
+  --spine-shadow: 0 2px 4px rgba(55, 51, 44, 0.15);
+  --spine-radius: 2px;
+  --tile-radius:  4px;
+  --hero-lift:    0 8px 16px rgba(55, 51, 44, 0.28);
 }
 
 /* ── Reset ── */
@@ -377,6 +642,17 @@
   outline-offset: 2px;
 }
 
+/* Un pulsante si tocca e si tiene premuto, non si seleziona. Dentro una
+   pagina che lascia selezionare (il cassetto, per copiare dalla wiki) la
+   pressione lunga su un pulsante con del testo — il mazzetto delle note —
+   accendeva la selezione blu e il menu Copia/Condividi. Anche qui `:where()`
+   non pesa: chi vuole il contrario lo dice e vince. */
+:where(button, summary, [role="button"]) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 html {
   overflow: hidden;
   overscroll-behavior: none;
@@ -384,6 +660,12 @@ html {
      bloccati anche lato nativo: user-scalable=no + textZoom 100). */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Il lampo blu del WebView al tocco: spento qui una volta per tutte. Si
+     eredita, quindi vale per ogni elemento del documento, anche per quelli
+     che crea il JS e per i pezzi che hanno solo un `click`. Il riscontro al
+     tocco lo da' ogni pulsante con il suo `:active`: lo chiede
+     `test_tap_feedback_contract.py`. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -513,7 +795,6 @@ body {
   display: inline-flex; align-items: center; justify-content: center;
   transition: opacity .2s cubic-bezier(.25,.1,.25,1), transform .25s cubic-bezier(.34,1.56,.64,1), background .2s cubic-bezier(.25,.1,.25,1);
   flex-shrink: 0;
-  -webkit-tap-highlight-color: transparent;
 }
 .ibtn:hover { transform: scale(1.08); }
 .ibtn:active { transform: scale(0.92); }
@@ -620,7 +901,6 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
-  -webkit-tap-highlight-color: transparent;
   transition: background .16s ease, border-color .16s ease, color .16s ease;
 }
 .scope-chip:hover, .write-switch:hover, .commands-chip:hover { background: var(--overlay-strong); }
@@ -815,8 +1095,8 @@ body {
   color: var(--text);
   cursor: pointer;
   transition: background .12s;
-  -webkit-tap-highlight-color: transparent;
 }
+.scope-menu-item:active, .commands-menu-item:active { background: var(--active); }
 .scope-menu-item:hover,
 .scope-menu-item:focus-visible,
 .commands-menu-item:hover,
@@ -882,7 +1162,6 @@ body {
   font-size: 14px;
   cursor: pointer;
   transition: background .12s, color .12s;
-  -webkit-tap-highlight-color: transparent;
 }
 .scope-menu-del:hover,
 .scope-menu-del:focus-visible { background: var(--overlay-strong); color: var(--error); outline: none; }
@@ -907,7 +1186,7 @@ body {
   .scope-menu-item { transition: none; }
 }
 
-/* ── Compose: l'input unico, identico in chat e nella minichat di Jenny.
+/* ── Compose: l'input della chat.
    Pillola (testo + eventuali azioni) e bottone di invio tondo esterno. ── */
 .compose-row {
   display: flex;
@@ -917,12 +1196,14 @@ body {
 .compose-pill {
   flex: 1;
   min-width: 0;
-  min-height: 50px; /* = padding + bottone allega + bordo: tiene uguali chat e minichat */
+  min-height: 50px; /* = padding + bottone allega + bordo */
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
+  /* Di vetro (06/10/2026, v. `--glass-field-bg`), come `.home-field`. */
+  background: var(--glass-field-bg);
+  border: var(--glass-field-border);
+  box-shadow: var(--glass-shadow);
   /* Radius fisso = metà del min-height: a una riga è identico alla pillola,
      in multiriga i corner restano 25px (rettangolo arrotondato, stile WhatsApp). */
   border-radius: 25px;
@@ -991,7 +1272,6 @@ body {
   color: var(--text-faint);
   font-size: 16px;
   transition: background 0.2s cubic-bezier(.25,.1,.25,1), color 0.2s cubic-bezier(.25,.1,.25,1), transform 0.25s cubic-bezier(.34,1.56,.64,1), border-color 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
 }
 .input-action:hover {
   background: var(--hover);
@@ -1015,7 +1295,6 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
-  -webkit-tap-highlight-color: transparent;
 }
 .compose-drawer i, .compose-send i { font-size: 18px; }
 .compose-drawer:active, .compose-send:active { transform: scale(0.92); }
@@ -1098,7 +1377,6 @@ body {
   background: none;
   font: inherit;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   transition: color 0.2s cubic-bezier(.25,.1,.25,1);
   color: var(--text-muted);
 }
@@ -1227,6 +1505,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   transition: color .2s cubic-bezier(.25,.1,.25,1), border-color .2s, background .2s, transform .25s cubic-bezier(.34,1.56,.64,1);
 }
+.launcher-close:active { background: var(--active); }
 .drawer-close:hover, .launcher-close:hover,
 .file-preview-close:hover, .session-info-close:hover { color: var(--text); }
 .drawer-close:hover, .launcher-close:hover { background: var(--overlay-strong); }
@@ -1309,6 +1588,7 @@ body {
   white-space: nowrap;
   flex-shrink: 0;
 }
+.ws-crumb:active { opacity: .6; }
 .ws-crumb:hover {
   background: var(--surface-2);
   color: var(--text-accent);
@@ -1499,6 +1779,11 @@ body {
    Quindi in chat scorre `html`, e nessun antenato del testo ritaglia.
    Solo in chat: senza `mode-chat` il guscio è quello fisso di sempre. */
 #view-chat { position: relative; flex-direction: column; height: 100%; }
+/* Le altre due viste, nel foglio e non piu' inline (05/10/2026): un `height`
+   inline vincerebbe sulla regola che, con la chat aperta sopra, le fissa allo
+   schermo (v. `:root.chat-over .view-beneath`). Stessa mossa che la chat ha
+   fatto il 22/09/2026. */
+#view-settings, #view-workspace { flex-direction: column; height: 100%; }
 
 :root.mode-chat { overflow-y: auto; overflow-x: hidden; }
 :root.mode-chat body { position: static; overflow: visible; }
@@ -1550,6 +1835,75 @@ body {
 :root.mode-chat .drawer,
 :root.mode-chat .drawer-backdrop,
 :root.mode-chat .swipe-scrim { position: fixed; }
+
+/* ── La chat sopra una vista (05/10/2026) ─────────────────────────────────
+   Jenny e' la porta della chat: toccata fuori dalla Console, la chat sale a
+   tutto schermo sopra la vista (Cervello, Mani, Memoria, un file), e la vista
+   resta visibile sotto un velo — v. `MobileApp.openChatOver`.
+
+   **Lo scroller resta il documento.** `<html>` tiene `mode-chat`, quindi ogni
+   regola qui sopra vale tale e quale; `chat-over` aggiunge solo quel che
+   cambia: la vista sotto si fissa allo schermo (fuori dal flusso, inerte, non
+   selezionabile) e la chat prende il velo. Vietati qui `overflow`, `contain`,
+   `clip-path` e `mask` su `#view-chat` e sui suoi antenati: un antenato che
+   ritaglia riporta il difetto dei manici (`test_chat_root_scroller_contract`).
+   Una regola che deve valere solo nella Console si scrive
+   `:root.mode-chat:not(.chat-over)`.
+
+   I livelli: la vista sotto a 0, la chat a 30, il dock a 31 (il filo gli
+   scorre dietro), i drawer — aperti *dalla* chat, quelli di sotto si chiudono
+   — a 32-33. Sopra una mini-app tutto sale di 80: la chat le sta davanti
+   (110), e restano sopra la lightbox (115) e Jenny (120). */
+:root.chat-over .view-beneath {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--dock-height);
+  height: auto;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Sotto il velo, sfocata — lei e non il velo: un `backdrop-filter` su
+   `#view-chat` sarebbe una proprieta' in piu' sullo scroller dei manici, e
+   andrebbe ricalcolato a ogni scorrere della chat; la vista sotto e' ferma.
+   Lo stesso per una mini-app sotto. Il filtro non si anima (v.
+   `.home-beneath`). */
+:root.chat-over .view-beneath,
+:root.chat-over-app .app-frame-overlay {
+  filter: blur(var(--chat-veil-blur)) saturate(1.4);
+}
+:root.chat-over #view-chat { z-index: 30; background: var(--chat-veil); }
+/* Le barre ferme sopra il velo: la testata, il campo e il dock. Il testo della
+   chat ci scorre **sotto** (lo scroller e' il documento), quindi non possono
+   diventare trasparenti come in casa: sono una banda quasi opaca nella tinta
+   del velo (`--chat-band`), e la pagina sfocata non ci passa. Dentro la barra
+   del campo i fondi suoi si tolgono, o farebbero una lastra nella banda. */
+:root.chat-over #title-chat,
+:root.chat-over .chat-bottom,
+:root.chat-over .dock { background: var(--chat-band); }
+:root.chat-over #input-bar,
+:root.chat-over .subagents { background: transparent; }
+:root.chat-over .chat-bottom { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+/* La riga di Copia e dei secondi sta fuori dalla scheda, direttamente sul
+   velo: nei suoi grigi discreti li' non si legge, quindi prende il colore del
+   testo (come `.home-over .home-copy` in casa). */
+:root.chat-over .chat-msg-action,
+:root.chat-over .chat-meta,
+:root.chat-over .chat-time { color: var(--text); }
+:root.chat-over .dock { z-index: 31; }
+:root.chat-over .drawer-backdrop { z-index: 32; }
+:root.chat-over .drawer { z-index: 33; }
+:root.chat-over-app #view-chat { z-index: 111; }
+:root.chat-over-app .dock { z-index: 112; }
+:root.chat-over-app .drawer-backdrop { z-index: 113; }
+:root.chat-over-app .drawer,
+:root.chat-over-app .session-info-popover { z-index: 114; }
+/* Sopra una mini-app il cassetto delle app (99/100) finirebbe sotto la chat:
+   il suo bottone non si offre. */
+:root.chat-over-app #btn-launcher { display: none; }
 
 /* Finché c'è una selezione la chrome non partecipa al hit-test: è la
    condizione perché il motore ritrovi il testo sotto il composer o il dock
@@ -1669,8 +2023,8 @@ body {
   font-size: 11px;
   color: var(--text-muted);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.chat-history-more:active { background: var(--active); }
 .chat-history-more:hover { background: var(--overlay-strong); }
 .chat-history-more:disabled { opacity: .5; }
 
@@ -1725,6 +2079,21 @@ body {
   color: var(--meta);
 }
 
+/* L'ora del messaggio (06/10/2026): della famiglia dei secondi, nella stessa
+   riga. Il punto fra l'ora e i secondi sta qui e non nel DOM, perche' i due
+   arrivano in ordine diverso dal vivo e dalla cronologia. */
+.chat-time {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chat-time + .chat-meta::before {
+  content: '\00B7';
+  margin-right: 6px;
+}
+
 /* La riga in coda alla bolla: Copia e i secondi. Discreta come `.chat-meta`
    che le sta dentro — e' un'affordance, non un pulsante di prima fila. */
 .chat-msg-actions {
@@ -1745,7 +2114,6 @@ body {
   color: var(--text-faint);
   border-radius: var(--radius-seg);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   transition: color .12s, background .12s;
 }
 .chat-msg-action i {
@@ -1789,8 +2157,8 @@ body {
   font-size: 10px;
   cursor: pointer;
   user-select: none;
-  -webkit-tap-highlight-color: transparent;
 }
+.chat-thinking-header:active, .chat-tool-header:active, .tool-events-header:active { background: var(--active); }
 .chat-thinking-header, .tool-events-header, .sa-digest-head {
   font-weight: 500;
   color: var(--text-muted);
@@ -2174,6 +2542,7 @@ body {
   transition: background 0.25s cubic-bezier(.25,.1,.25,1), box-shadow 0.25s cubic-bezier(.25,.1,.25,1), border-color 0.25s cubic-bezier(.25,.1,.25,1), transform 0.25s cubic-bezier(.34,1.56,.64,1);
   box-shadow: inset 0 1px 2px rgba(0,0,0,0.06), inset 0 -0.5px 0 rgba(255,255,255,0.02);
 }
+.chat-file-edit:active { background: var(--active); }
 .chat-file-edit:hover {
   background: var(--hover);
   border-color: rgba(255,255,255,0.14);
@@ -2340,7 +2709,6 @@ body {
   background: var(--overlay);
   padding: 5px 8px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 /* Il feedback al tap sta sulla card, non sul bordo colorato: quello codifica lo
    stato e cambiarlo al tocco farebbe sembrare che il job sia cambiato. */
@@ -2355,6 +2723,8 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 .sa-row.state-failed, .sa-row.state-cancelled { border-left-color: var(--error); }
+/* Fermata al budget: non un errore, una pausa che si riprende. Ambra come lo stallo. */
+.sa-row.state-budget { border-left-color: var(--warning); }
 .sa-row.state-done { border-left-color: var(--text-faint); }
 
 .sa-main {
@@ -2401,6 +2771,7 @@ body {
 .state-stalled .sa-state { color: var(--warning); }
 .state-failed .sa-state,
 .state-cancelled .sa-state { color: var(--error); }
+.state-budget .sa-state { color: var(--warning); }
 
 /* Riga meta: i due orologi in testa e non comprimibili, il resto troncabile.
    Prima l'idle era un flex item a sé fuori dalla meta; adesso apre la riga
@@ -2471,7 +2842,6 @@ body {
   border-radius: var(--radius-sm);
   color: var(--text);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .sa-btn:active { background: var(--active); }
 .sa-btn[disabled] { opacity: 0.45; cursor: default; }
@@ -2565,6 +2935,24 @@ body {
   animation: lightbox-fade 0.12s ease-out;
 }
 
+/* Una lightbox che e' un `<dialog>` nel top layer (la foto della galleria a
+   tutto schermo, `home-photo-viewer.js`, che si apre dal foglio della
+   bacheca): via le misure e i bordi che il browser da' a un dialog, e il velo
+   lo fa il suo fondo. Nel top layer sta anche sopra Jenny, come il foglio da
+   cui si apre. */
+dialog.image-lightbox {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  box-sizing: border-box;
+  color: inherit;
+}
+dialog.image-lightbox:not([open]) { display: none; }
+dialog.image-lightbox::backdrop { background: transparent; }
+
 @keyframes lightbox-fade {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -2595,6 +2983,7 @@ body {
   line-height: 1;
   cursor: pointer;
 }
+.image-lightbox-close:active { opacity: .7; }
 
 /* Barra azioni del lightbox workspace (app di sistema / condividi / salva). */
 .ws-lightbox-actions {
@@ -2622,6 +3011,7 @@ body {
   white-space: nowrap;
   cursor: pointer;
 }
+.ws-lightbox-actions button:active { opacity: .7; }
 
 .ws-lightbox-actions button i {
   font-size: 15px;
@@ -2711,6 +3101,7 @@ body {
   font-size: 10px;
   padding: 0;
 }
+.attach-remove:active { opacity: .7; }
 /* Anteprima di un allegato non-immagine (documento, archivio, …). */
 .attach-thumb.attach-file {
   width: auto;
@@ -2903,6 +3294,16 @@ body {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* ── «Metti in un quaderno…»: i parametri e il bottone ── */
+.app-place-note { margin: 0; color: var(--text-muted); font-size: 13px; text-align: center; }
+.app-place-btn {
+  min-height: 44px; padding: 0 18px; border-radius: var(--radius-pill);
+  border: 0.5px solid var(--accent); background: var(--accent); color: var(--on-accent);
+  font: inherit; font-size: 14px; cursor: pointer;
+}
+.app-place-btn:active { filter: brightness(0.92); }
+.app-place-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
 /* ── Jenny App frame overlay ── */
 .app-frame-overlay {
   position: fixed; inset: 0; z-index: 110;
@@ -2926,6 +3327,7 @@ body {
   background: none; border: none; cursor: pointer;
   color: var(--text-muted); font-size: 20px; padding: 4px 8px;
 }
+.app-frame-close:active { background: var(--active); }
 .app-frame-overlay iframe { flex: 1; width: 100%; border: 0; background: transparent; }
 /* Fascia d'errore di un sub-frame che non ha caricato. Sta *sotto* l'header e
    sopra l'iframe: il riquadro bianco resta visibile (è l'informazione che
@@ -3161,8 +3563,8 @@ body {
   display: flex; align-items: center; justify-content: center;
   visibility: hidden; opacity: 0;
   transition: opacity .15s cubic-bezier(.25,.1,.25,1);
-  -webkit-tap-highlight-color: transparent;
 }
+.launcher-search-clear:active { background: var(--active); }
 .launcher-search-clear.visible { visibility: visible; opacity: 1; }
 .launcher-search-clear i { font-size: 12px; }
 /* L'area di tocco e' piu' grande del disegno: la crocetta resta da 22 px, ma
@@ -3203,7 +3605,6 @@ body {
   background: var(--overlay);
   flex-shrink: 0;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   transition: background .15s cubic-bezier(.25,.1,.25,1), transform .15s cubic-bezier(.34,1.56,.64,1);
 }
 .launcher-row:active { background: var(--overlay-strong); transform: scale(0.985); }
@@ -3306,8 +3707,8 @@ body {
   color: var(--text);
   font-size: 11px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.launcher-status-retry:active { background: var(--active); }
 .launcher-status-retry:disabled { opacity: 0.5; cursor: default; }
 
 
@@ -3387,6 +3788,30 @@ body {
   color: var(--ok);
   border-color: var(--ok);
 }
+
+/* Il toast con «Annulla» (`showUndo`): il testo e un bottone vero, in riga.
+   Il toast di solito non si tocca; questo si', quindi il bottone ha l'altezza
+   di un bersaglio. */
+.mobile-toast.has-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px 4px 16px;
+}
+.mobile-toast-text { flex: 1; min-width: 0; }
+.mobile-toast-action {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-toast-action:active { opacity: .6; }
+.mobile-toast-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Il toast entra nel top layer come popover per finire SOPRA le modali aperte
    con showModal() (vedi shared/utils.js: nessun z-index puo superarle). Il
@@ -3543,6 +3968,7 @@ body {
   transition: background .2s cubic-bezier(.25,.1,.25,1), color .2s cubic-bezier(.25,.1,.25,1), box-shadow .2s cubic-bezier(.25,.1,.25,1), transform .25s cubic-bezier(.34,1.56,.64,1);
   min-height: 36px;
 }
+.oc-btn:active { background: var(--active); }
 .oc-btn-cancel {
   background: var(--overlay);
   color: var(--text-faint);
@@ -3566,6 +3992,13 @@ body {
 .oc-btn-confirm:active {
   filter: brightness(1.15);
   transform: scale(0.97);
+}
+/* Un si' che non si annulla: rosso, e senza il bagliore dell'accento. */
+.oc-btn-confirm.oc-btn-danger {
+  background: var(--error);
+  color: var(--on-error);
+  border-color: var(--error);
+  box-shadow: none;
 }
 
 /* ── Detail Dialog (dialog.js::detailDialog) ──
@@ -3636,7 +4069,6 @@ body {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .oc-detail-close:active { color: var(--text); }
 .oc-detail-close i { font-size: 19px; }
@@ -3644,8 +4076,12 @@ body {
    sola di esse (la lista di attività) è elastica e scorre. `overflow-y: auto`
    resta come rete — una piega aperta su un incarico lungo può sfondare il tetto
    della modale — ma nel caso normale qui non si scorre affatto, ed è ciò che
-   toglie il ballo fra tre scroll annidati della prima versione. */
-.oc-detail-body {
+   toglie il ballo fra tre scroll annidati della prima versione.
+   Il selettore porta il genitore perché la modale è anche un `.oc-sheet-inner`,
+   e `.oc-sheet-inner > * { flex: none }`, più in basso nel file, a pari peso
+   vinceva: il corpo cresceva quanto il contenuto, il foglio lo tagliava, e la
+   lista non scorreva più (dal 10/10/2026 al 28/10/2026). */
+.oc-detail-inner > .oc-detail-body {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -3699,6 +4135,8 @@ body {
 .sa-sum.is-failed .sa-sum-dot,
 .sa-sum.is-cancelled .sa-sum-dot { background: var(--error); }
 .sa-sum.is-failed .sa-sum-state { color: var(--error); }
+.sa-sum.is-budget .sa-sum-dot { background: var(--warning); }
+.sa-sum.is-budget .sa-sum-state { color: var(--warning); }
 /* Su base intera: la riga di stallo non è una voce del riepilogo, è la frase che
    spiega perché è ambra — e lo spiega senza far a capo in mezzo ai numeri. */
 .sa-sum-hint {
@@ -3756,7 +4194,6 @@ body {
   cursor: pointer;
   font-size: 11.5px;
   color: var(--text-muted);
-  -webkit-tap-highlight-color: transparent;
 }
 .sa-fold-head::-webkit-details-marker { display: none; }
 .sa-fold-head:active { color: var(--text); }
@@ -4249,6 +4686,21 @@ body {
   flex-direction: column;
   padding: 20px 16px 24px;
   gap: 4px;
+  /* Un elenco lungo (dieci quaderni in «Metti in un quaderno…», le schede
+     di una bacheca piena, il cestino) non esce piu' dallo schermo: il foglio
+     ha un tetto, la lista scorre dentro, e titolo e «Annulla» restano a
+     schermo. Sul Titan (566 px di altezza) le ultime righe e «Annulla» erano
+     irraggiungibili (giro UX del 10/10/2026). Stesso modello di `.oc-detail`. */
+  box-sizing: border-box;
+  max-height: 92dvh;
+}
+.oc-sheet-inner > * { flex: none; }
+.oc-sheet-inner > .oc-sheet-actions,
+.oc-sheet-inner > .apps-trash-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .oc-sheet-title {
   font-size: 14px;
@@ -4454,6 +4906,97 @@ body {
   word-break: break-all;
 }
 
+/* ── Da altri dispositivi (mobile-remote-access.js) ─────────────────── */
+.remote-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.remote-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.remote-dot-ok { background: var(--ok); }
+.remote-dot-warn { background: var(--warning); }
+.remote-sub {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.remote-addr {
+  display: block;
+  padding: 8px 10px;
+  font: 12.5px var(--font-mono, monospace);
+  word-break: break-all;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.remote-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.remote-actions .settings-btn-add {
+  flex: 1;
+  justify-content: center;
+}
+.remote-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.remote-hint-center { text-align: center; }
+.remote-here,
+.remote-ts-down { margin: 10px 0; }
+/* Il QR resta nero su bianco in ogni tema: un lettore lo vuole cosi'. */
+.remote-qr {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 2px;
+}
+.remote-qr-box {
+  width: 168px;
+  padding: 10px;
+  line-height: 0;
+  background: #fff;
+  border-radius: 10px;
+}
+.remote-qr-box svg { width: 100%; height: auto; }
+.remote-peer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-top: 0.5px solid var(--border);
+}
+.remote-peer i { font-size: 18px; color: var(--text-muted); }
+.remote-peer-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.remote-peer-ip { font: 11px var(--font-mono, monospace); color: var(--text-faint); }
+.remote-peer-when { font-size: 12px; color: var(--text-faint); }
+/* Due classi: `.settings-btn-add` sta piu' in basso nel file e, a pari
+   specificita', vincerebbe col suo colore. */
+.settings-btn-add.remote-danger {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+}
+
 
 /* ── Gruppi di impostazioni ──────────────────────────────────────────────
    Una soprascritta fuori, una scheda aperta sotto. Erano fisarmoniche: testa
@@ -4539,7 +5082,6 @@ body {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .cron-row:first-of-type, .brand-row:first-of-type, .ssh-row:first-of-type { border-top: 0; }
 .cron-row:active, .brand-row:active, .ssh-row:active,
@@ -4616,12 +5158,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.brand-key {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
 .brand-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* ── Il pannello di una marca ─────────────────────────────────────────────
@@ -4672,7 +5208,6 @@ body {
   color: var(--text-muted);
   font-size: 18px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .brand-manage:active { opacity: .6; }
 
@@ -4721,7 +5256,6 @@ body {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .brand-model:first-child { border-top: 0; }
 .brand-model:active, .brand-more:active, .brand-custom-open:active { opacity: .6; }
@@ -4812,8 +5346,8 @@ body {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
+.skill-row-text:active { background: var(--active); }
 .skill-row-name {
   font-family: var(--font-mono);
   font-size: 12.5px;
@@ -5404,6 +5938,7 @@ body {
   text-decoration: none;
   transition: color .12s, border-color .12s;
 }
+.chat-file-path-link:active { opacity: .6; }
 
 .chat-file-path-link:hover {
   color: var(--text-accent);
@@ -5913,14 +6448,24 @@ body {
   display: block;
 }
 
-/* Caduta dall'alto: parte sopra il viewport e accelera (gravità). */
-@keyframes onboarding-jenny-drop {
-  from { transform: translateX(-50%) translateY(-100vh); }
-  to { transform: translateX(-50%) translateY(0); }
+/* I suoi gesti (v. `_startJenny` in onboarding-wizard.js): sono nel catalogo
+   della mascotte, shared/mascot-motion.js, e il saluto e' lo stesso suo.
+   La caduta: lei scende dall'alto accelerando (gravita'), e intanto si allunga
+   sempre di piu'; al tonfo si schiaccia attorno ai piedi della posa a terra
+   (92% del quadrato) e rimbalza; si rialza caricando le gambe. */
+.onboarding-jenny[data-squash="fall"] {
+  animation: jenny-drop var(--jenny-squash-ms) cubic-bezier(0.55, 0, 1, 0.45) both;
 }
-
-.onboarding-jenny.dropping {
-  animation: onboarding-jenny-drop 650ms cubic-bezier(0.55, 0, 1, 0.45) both;
+.onboarding-jenny[data-squash="fall"] .jenny-squash {
+  animation: jenny-fall-stretch var(--jenny-squash-ms) cubic-bezier(0.55, 0, 1, 0.45) both;
+  transform-origin: 50% 50%;
+}
+.onboarding-jenny[data-squash="impact"] .jenny-squash {
+  animation: jenny-impact var(--jenny-squash-ms) ease-out;
+  transform-origin: 50% 92%;
+}
+.onboarding-jenny[data-squash="getup"] .jenny-squash {
+  animation: jenny-getup var(--jenny-squash-ms) ease-out;
 }
 
 /* Viewport bassi (Titan 2: 552px CSS, di cui ~496 per lo step): lo step più
@@ -5978,16 +6523,6 @@ body {
   background-image: radial-gradient(rgba(27, 24, 32, 0.10) 1px, transparent 1.3px);
   background-size: 9px 9px;
 }
-[data-theme="comic"] .chat-msg-ai .chat-content:not(:empty) {
-  background: var(--surface);
-  border: 2px solid #1b1820;
-  border-radius: 12px 12px 12px 2px;
-  padding: 8px 12px;
-  box-shadow: 3px 3px 0 rgba(27, 24, 32, 0.15);
-}
-[data-theme="comic"] .compose-pill {
-  border: 2px solid #1b1820;
-}
 [data-theme="comic"] .view-title-text,
 [data-theme="comic"] .chat-identity-name {
   letter-spacing: .02em;
@@ -6002,10 +6537,6 @@ body {
   color: #ffffff;
   box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.6), 0 3px 8px rgba(245, 106, 181, 0.5);
 }
-[data-theme="y2k"] .compose-pill {
-  background: #ffffff;
-  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(245, 106, 181, 0.15);
-}
 
 /* — Sticker: adesivi die-cut (rotazioni ridotte a ±0.5° per il text rendering
      dei WebView Android; translateZ forza la layer promotion) — */
@@ -6014,14 +6545,6 @@ body {
 }
 [data-theme="sticker"] .chat-msg-user .chat-content {
   transform: rotate(0.5deg) translateZ(0);
-}
-[data-theme="sticker"] .chat-msg-ai .chat-content:not(:empty) {
-  background: var(--surface);
-  border: 2.5px solid #ffffff;
-  border-radius: 14px;
-  padding: 8px 12px;
-  transform: rotate(-0.5deg) translateZ(0);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
 }
 
 /* ══════════════════════════════════════════════════
@@ -6050,14 +6573,14 @@ body {
      `--jenny-floor`, che il `bottom` qui sotto legge — su `.home-shell` in
      home-style.css.
      **Il livello e' uno per le due interfacce** (D3, 25/09/2026: «Jenny sempre
-     sopra»): 120 sta sopra la mini-app (110) e la lightbox (115), e sopra di
-     lei ci sono solo la sua minichat (121) e il top layer (`<dialog>`, toast),
-     che nessun numero scavalca. Un livello nuovo sopra il suo lo fermano
+     sopra»): 120 sta sopra la mini-app (110), la chat aperta sopra una pagina
+     (111-112) e la lightbox (115), e sopra di lei c'e' solo il top layer
+     (`<dialog>`, toast), che nessun numero scavalca. Un livello nuovo sopra il suo lo fermano
      `test_she_is_on_top_of_everything_in_the_house` e
      `test_she_is_on_top_of_everything_in_the_workshop`. */
   right: calc(var(--jenny-size) * var(--jenny-dock) * -1);
   /* Il pavimento del guscio (v. `--jenny-floor`): uguale per tutti gli stati
-     di lei — fuori, al bordo, pensa, parla, con la minichat aperta. In
+     di lei — fuori, al bordo, pensa, parla, con la chat aperta sopra. In
      officina e' uno per ogni vista; in casa cambia fra la chat e le pagine. */
   bottom: var(--jenny-floor);
   width: var(--jenny-size);
@@ -6076,14 +6599,16 @@ body {
   transition: right 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.15);
 }
 /* Sopra una lightbox lei si vede ma non si tocca. La lightbox si chiude
-   toccando dovunque, e un tocco che finisse su di lei aprirebbe la minichat
-   sopra l'immagine: in officina un livello in piu' in mezzo alla catena di
-   Indietro, in casa un cambio di posa al posto della chiusura. Cosi' le due
-   cose non stanno mai aperte insieme — mentre la minichat e' aperta lo scrim
-   (119) copre la chat e un'immagine non si apre — e l'ordine fra loro in
-   `MobileApp._overlayLayers` non e' una domanda che si pone. Stessa forma del
-   cassetto, dove lei resta sopra e il dito le passa attraverso. */
+   toccando dovunque, e un tocco che finisse su di lei chiuderebbe la chat
+   sotto l'immagine (o la aprirebbe): un cambiamento diverso da quello che il
+   dito voleva. Stessa forma del cassetto, dove lei resta sopra e il dito le
+   passa attraverso. */
 :root:has(.image-lightbox) .jenny-duo { pointer-events: none; }
+/* La chat sopra la pagina, in casa (`#home-over`): sopra la mini-app (110),
+   perche' Jenny si apre anche li' e la chat deve starle davanti; sotto la
+   lightbox (115), che si apre *dalla* chat; sotto di lei (120), che e' il
+   bottone che la chiude. */
+.home-over { z-index: 112; }
 .jenny-duo.dragging { cursor: grabbing; transition: none; }
 .jenny-duo:active { filter: brightness(0.92); }
 .jenny-duo:focus { outline: none; }
@@ -6095,9 +6620,11 @@ body {
   -webkit-user-drag: none;
 }
 .jenny-duo.out { right: calc(var(--jenny-size) * var(--jenny-out) * -1); }
+/* Il respiro: si allunga del 3% e si stringe appena, coi piedi fermi.
+   Fino al 05/10/2026 saliva e scendeva di 4 px tutta intera. */
 .jenny-duo.out img {
-  animation: jenny-bob 3.4s ease-in-out infinite;
-  transform-origin: 50% 100%;
+  animation: jenny-breath 3.4s ease-in-out infinite;
+  transform-origin: 50% 88%;
 }
 .jenny-duo.dragging img { animation: none; }
 /* Il dondolio del pensa e' della Jenny venuta fuori: messa via mentre pensa,
@@ -6106,33 +6633,139 @@ body {
    cambiare stato), quindi e' qui che si decide, non in JS. Solo sull'arte di
    riposo: le pose del volo non ereditano gli stati (v. `.jenny-fly img`). */
 .jenny-duo.out.thinking .jenny-art-stack img {
-  animation: jenny-wobble 1.1s ease-in-out infinite;
-  transform-origin: 50% 90%;
+  animation: jenny-think 1.6s ease-in-out infinite;
+  transform-origin: 50% 88%;
 }
-.jenny-duo.hidden-mode { display: none; }
 /* TEMP: nessun movimento in Y tra stati finché l'allineamento non è confermato. */
 
-/* Anti-flash: attributo impostato in bootstrap.js prima del render, per
-   evitare che la mascotte compaia un istante prima che mobile-jenny.js
-   applichi la preferenza "non visibile" (fonte di verità a runtime). */
-:root[data-mascot-hidden] .jenny-duo,
-:root[data-mascot-hidden] .jenny-scrim,
-:root[data-mascot-hidden] .jenny-mc { display: none; }
 
 /* Arte a due livelli: a mascotte intera il
    corpo (senza faccia) e la faccia sono due img impilate sullo stesso quadrato.
    Il corpo resta in flusso e dà l'altezza al duo, la faccia gli sta sopra in
    absolute. Da docked l'arte è cotta e la faccia si spegne (.off).
    La faccia si nasconde con `visibility` e MAI con `display`: sono due istanze
-   della stessa animazione (jenny-bob/jenny-wobble, sotto) e partono insieme
+   della stessa animazione (jenny-breath/jenny-think, sotto) e partono insieme
    solo se restano entrambe in layout — un display:none le sfaserebbe. */
-.jenny-art-stack { position: relative; }
+.jenny-art-stack, .jenny-rest { position: relative; }
 .jenny-art-stack img.jenny-face {
   position: absolute;
   left: 0;
   top: 0;
 }
 .jenny-art-stack img.jenny-face.off { visibility: hidden; }
+
+/* ── I gesti (v. MOTIONS in shared/mascot-motion.js) ──
+   Tre livelli annidati, una trasformazione ciascuno, cosi' si sommano invece
+   di sovrascriversi: `.jenny-lean` l'inclinazione del moto, `.jenny-squash`
+   lo schiaccia e allunga, e dentro l'arte, le cui img hanno il respiro.
+   L'origine e' dove l'arte poggia: i piedi stanno a 674/768 del quadrato in
+   tutte le pose frontali, hello1 e hello2 comprese.
+   Il gesto sta in `data-lean`/`data-squash` e la durata in
+   `--jenny-lean-ms`/`--jenny-squash-ms`, scritte dal JS: qui nessuna durata
+   e' un numero.
+   **Mai in diagonale, e la stessa lista in ogni fotogramma** (`translate
+   rotate scale`, in quest'ordine): una scala fuori dagli assi del disegno lo
+   storce, e due liste diverse il browser le interpola per matrice, che puo'
+   storcerlo lo stesso. Lo tiene `test_mascot_motion_contract.py`. */
+.jenny-lean, .jenny-squash { transform-origin: 50% 88%; }
+
+/* Il saluto: tre animazioni, una durata. Il corpo (carica, salto, dondolio a
+   tempo col braccio, assestamento) e i due fotogrammi, accesi a scatti sui
+   contenitori e mai sulle img. Al bordo no: li' l'arte e' di lato. */
+.jenny-wave, .jenny-wave > div {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.jenny-wave > div { opacity: 0; }
+.jenny-duo.out[data-squash="greet"] .jenny-squash,
+.onboarding-jenny[data-squash="greet"] .jenny-squash {
+  animation: jenny-greet var(--jenny-squash-ms) linear both;
+}
+.jenny-duo.out[data-squash="greet"] .jenny-rest,
+.onboarding-jenny[data-squash="greet"] .jenny-rest {
+  animation: jenny-greet-rest var(--jenny-squash-ms) step-end both;
+}
+.jenny-duo.out[data-squash="greet"] .jenny-wave-a,
+.onboarding-jenny[data-squash="greet"] .jenny-wave-a {
+  animation: jenny-greet-a var(--jenny-squash-ms) step-end both;
+}
+.jenny-duo.out[data-squash="greet"] .jenny-wave-b,
+.onboarding-jenny[data-squash="greet"] .jenny-wave-b {
+  animation: jenny-greet-b var(--jenny-squash-ms) step-end both;
+}
+/* Il saltello: il saluto quando il braccio non si puo' alzare (pensa, parla,
+   al bordo). Il sobbalzo, quando tocchi il velo dietro la chat: «chiudi da me». */
+.jenny-duo[data-squash="hop"] .jenny-squash {
+  animation: jenny-hop var(--jenny-squash-ms) linear;
+}
+.jenny-duo[data-squash="nudge"] .jenny-squash {
+  animation: jenny-nudge var(--jenny-squash-ms) linear;
+}
+/* Esce e rientra: si sporge nel verso in cui va. */
+.jenny-duo[data-lean="go-in"] .jenny-lean {
+  animation: jenny-go-in var(--jenny-lean-ms) ease-out;
+}
+.jenny-duo[data-lean="go-edge"] .jenny-lean {
+  animation: jenny-go-edge var(--jenny-lean-ms) ease-out;
+}
+/* Il parlato, l'umore e il pallino solo fuori: al bordo c'e' mezza Jenny, e
+   mezza Jenny che si deforma contro il bordo somiglia a un guasto della
+   pagina (lo stesso argomento del dondolio del pensa). */
+.jenny-duo.out[data-lean="gest"] .jenny-lean {
+  animation: jenny-gest var(--jenny-lean-ms) ease-out;
+}
+.jenny-duo.out[data-squash="syl"] .jenny-squash {
+  animation: jenny-syl var(--jenny-squash-ms) ease-out;
+}
+.jenny-duo.out[data-squash="happy"] .jenny-squash {
+  animation: jenny-happy var(--jenny-squash-ms) linear;
+}
+.jenny-duo.out[data-squash="sad"] .jenny-squash {
+  animation: jenny-sad var(--jenny-squash-ms) ease-in-out;
+}
+.jenny-duo.out[data-squash="angry"] .jenny-squash {
+  animation: jenny-angry var(--jenny-squash-ms) linear;
+}
+.jenny-duo.out[data-squash="perk"] .jenny-squash {
+  animation: jenny-perk var(--jenny-squash-ms) ease-out;
+}
+.jenny-duo[data-squash="land"] .jenny-squash {
+  animation: jenny-land var(--jenny-squash-ms) ease-out;
+}
+
+/* Il pallino «c'e' una risposta che non hai visto» (v. `setBadge`). Sta sulla
+   testa a sinistra, dove si vede sia al bordo (dove di lei sporge meta') sia
+   fuori; in volo sparisce con l'arte di riposo. Il colore e' quello del tema. */
+.jenny-dot {
+  position: absolute;
+  left: 30%;
+  top: 16%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 10px rgba(var(--accent-rgb), 0.8);
+  display: none;
+  pointer-events: none;
+}
+.jenny-duo.has-dot .jenny-dot {
+  display: block;
+  animation: jenny-dot-pop 0.42s cubic-bezier(0.3, 1.4, 0.5, 1),
+    jenny-dot-glow 2s ease-in-out 0.42s infinite;
+}
+.jenny-duo.flying .jenny-dot { display: none; }
+/* A movimento ridotto i gesti non si muovono. Il saluto resta, fermo: il
+   braccio alzato per il tempo del saluto, e si legge lo stesso. */
+@media (prefers-reduced-motion: reduce) {
+  .jenny-duo .jenny-lean,
+  .jenny-duo .jenny-squash,
+  .jenny-duo .jenny-rest,
+  .jenny-duo .jenny-wave > div,
+  .jenny-duo .jenny-dot { animation: none !important; }
+  .jenny-duo.out[data-squash="greet"] .jenny-rest { visibility: hidden; }
+  .jenny-duo.out[data-squash="greet"] .jenny-wave-b { opacity: 1; }
+}
 
 /* Volo Pegman: durante il grab il layer .jenny-fly (una posa per fase:
    hang/fall/ground/walk1/walk2, una sola visibile via .on) sostituisce
@@ -6165,213 +6798,163 @@ body {
 /* Verso sinistra la posa di caduta si specchia in place (attorno al proprio centro). */
 .jenny-fly img.flip { transform: scaleX(-1); }
 
-.jenny-scrim {
-  position: absolute;
-  inset: 0;
-  z-index: 119;
-  background: rgba(0, 0, 0, 0.45);
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  /* Lo scrim è un <button> a schermo intero con aria-label: da chiuso, senza
-     visibility, resta una tappa Tab cieca (l'anello di fuoco è invisibile) e un
-     nodo TalkBack fantasma su OGNI schermata. Che il problema fosse noto lo
-     dimostra il tabindex="-1" messo sul .jenny-duo accanto. La visibility non
-     si interpola: la si ritarda di quanto dura la dissolvenza, così l'uscita
-     resta visibile e l'entrata è immediata (v. .open). */
-  visibility: hidden;
-  transition: opacity 0.25s, visibility 0s linear 0.25s;
+@keyframes jenny-breath {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  45% { transform: translate(0px, 0px) rotate(0deg) scale(0.985, 1.03); }
 }
-.jenny-scrim.open {
-  opacity: 1;
-  pointer-events: auto;
-  visibility: visible;
-  transition: opacity 0.25s, visibility 0s linear 0s;
+/* Il saluto, 1500 ms: 0 · 120 carica · 420 atterra · 600/780/960/1140 il
+   braccio · 1380 giu' · 1500. Il corpo si piega verso il braccio a ogni
+   sventolata, e l'ondeggiare si spegne: e' questo che lo fa un saluto e non
+   un cambio di posa. */
+@keyframes jenny-greet {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  8% { transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.93); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
+  18% { transform: translate(0px, -14px) rotate(-1deg) scale(0.97, 1.05); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  28% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  31% { transform: translate(0px, 0px) rotate(0deg) scale(1.04, 0.95); animation-timing-function: ease-in-out; }
+  34% { transform: translate(0px, 0px) rotate(2.2deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  46% { transform: translate(0px, 0px) rotate(-2deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  58% { transform: translate(0px, 0px) rotate(1.6deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  70% { transform: translate(0px, 0px) rotate(-1.1deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  84% { transform: translate(0px, 0px) rotate(0.5deg) scale(1, 1); animation-timing-function: ease-in-out; }
+  92% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: ease-out; }
+  96% { transform: translate(0px, 0px) rotate(0deg) scale(0.99, 1.01); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-/* Nascosta per preferenza (mascotte non visibile) o onboarding, v. setMode()
-   in mobile-jenny.js. Senza `!important`: `.jenny-scrim.open` non tocca
-   `display` (apre con opacita' e visibilita'), quindi non c'e' niente da
-   battere. Qui c'era scritto che serviva a vincere su `.open`. */
-.jenny-scrim.hidden-mode { display: none; }
-
-/* Minichat: campo centrato in basso, fumetto solo sopra la sua testa. */
-.jenny-mc { position: absolute; inset: 0; z-index: 121; pointer-events: none; display: none; }
-.jenny-mc.open { display: block; }
-/* Stessa specificita' di `.open` e scritta dopo: vince per ordine, senza
-   `!important`. Tenerla sotto. */
-.jenny-mc.hidden-mode { display: none; }
-/* Il fumetto e' scuro: la superficie delle schede, col testo della chat e un
-   bordo che lo stacca dallo scrim. Prima era `--accent` / `--on-accent`, nero
-   su rosa in Synthwave; il 28/09/2026 l'utente l'aveva chiesto «bianco su rosa
-   come gli altri messaggi», e visto a schermo, con una risposta intera dentro,
-   ha cambiato idea: «fallo scuro, che cosi' ti acceca». Raggio e corpo del
-   testo restano quelli dei messaggi. Il contrasto di ogni parola su
-   `--surface` lo misura gia' `test_home_you_contract.py`, in ogni tema.
-   Contiene tutta la risposta e scorre dentro di se': l'altezza va dalla sua
-   testa al margine alto. Il testo scorre in `.jenny-mc-text`, e non qui,
-   perche' un `overflow` sul fumetto taglierebbe la coda. */
-.jenny-mc-bubble {
-  display: none;
-  flex-direction: column;
-  position: absolute;
-  /* right tale che la coda (right 12 + mezza diagonale 6) cada sull'asse di Jenny */
-  right: 14px;
-  /* la coda deve galleggiare sopra l'ahoge, non poggiare sulla testa */
-  bottom: calc(var(--jenny-floor) + var(--jenny-size) - 4px);
-  max-width: calc(100% - 28px);
-  max-height: calc(100% - var(--jenny-floor) - var(--jenny-size) - 12px);
-  box-sizing: border-box;
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow);
-  border-radius: var(--radius-bubble);
-  font-size: 14.5px;
-  line-height: 1.45;
-  pointer-events: auto;
+@keyframes jenny-greet-rest { 0% { visibility: visible; } 8% { visibility: hidden; } 92% { visibility: visible; } }
+@keyframes jenny-greet-a {
+  0% { opacity: 0; } 8% { opacity: 1; } 28% { opacity: 0; } 40% { opacity: 1; }
+  52% { opacity: 0; } 64% { opacity: 1; } 76% { opacity: 0; } 100% { opacity: 0; }
 }
-/* La coda: un quadratino ruotato col fondo e il bordo della bolla, e non un
-   triangolo di bordi, che non sa portare un contorno. Sta dietro la bolla
-   (`z-index: -1`, dentro il contesto di `.jenny-mc`), quindi se ne vede solo
-   la meta' che sporge, e il bordo sui due lati esterni la chiude. */
-.jenny-mc-bubble::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  bottom: -6px;
-  right: 12px;
-  width: 12px;
-  height: 12px;
-  background: var(--surface);
-  border-right: 1px solid var(--border-strong);
-  border-bottom: 1px solid var(--border-strong);
-  transform: rotate(45deg);
+@keyframes jenny-greet-b {
+  0% { opacity: 0; } 28% { opacity: 1; } 40% { opacity: 0; } 52% { opacity: 1; }
+  64% { opacity: 0; } 76% { opacity: 1; } 92% { opacity: 0; } 100% { opacity: 0; }
 }
-.jenny-mc-text {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 9px 13px;
-  overflow-wrap: anywhere;
-  /* Lo scorrimento resta suo: la pista della casa non deve prenderlo per uno
-     swipe di pagina. */
-  touch-action: pan-y;
+/* Due saltelli in 1000 ms, ciascuno con la sua carica e il suo atterraggio. */
+@keyframes jenny-hop {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  8% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: ease-out; }
+  22% { transform: translate(0px, -10px) rotate(0deg) scale(0.98, 1.02); animation-timing-function: ease-in; }
+  42% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: ease-out; }
+  58% { transform: translate(0px, -10px) rotate(0deg) scale(0.98, 1.02); animation-timing-function: ease-in; }
+  80% { transform: translate(0px, 0px) rotate(0deg) scale(1.02, 0.98); animation-timing-function: ease-out; }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-.jenny-mc-block + .jenny-mc-block { margin-top: 8px; }
-.jenny-mc-block[data-kind="note"] { font-style: italic; opacity: .85; }
-/* Il markdown del fumetto: le regole dei messaggi della casa (`.home-block`),
-   sulla stessa superficie scura. */
-.jenny-mc-text > * > :first-child { margin-top: 0; }
-.jenny-mc-text > * > :last-child { margin-bottom: 0; }
-.jenny-mc-text p { margin: 0 0 8px; }
-.jenny-mc-text ul, .jenny-mc-text ol { margin: 0 0 8px; padding-left: 20px; }
-.jenny-mc-text li { margin: 2px 0; }
-.jenny-mc-text h1, .jenny-mc-text h2, .jenny-mc-text h3 {
-  margin: 10px 0 6px;
-  font-size: 15.5px;
-  font-weight: 600;
+/* «Chiudi da me»: si carica appena, si sporge verso di te, torna. */
+@keyframes jenny-nudge {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  22% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
+  48% { transform: translate(-6px, -4px) rotate(-3deg) scale(0.985, 1.02); animation-timing-function: ease-in-out; }
+  72% { transform: translate(1px, 0px) rotate(0.8deg) scale(1.01, 0.99); animation-timing-function: ease-out; }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-.jenny-mc-text a { color: var(--text-accent); }
-.jenny-mc-text code {
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
-  background: var(--overlay);
-  font-family: var(--font-mono);
-  font-size: 13px;
+/* Verso l'interno la testa va avanti a sinistra (rotazione antioraria), verso
+   il bordo a destra. Frena con un piccolo schiacciamento. */
+@keyframes jenny-go-in {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  25% { transform: translate(0px, 0px) rotate(-4deg) scale(0.985, 1.015); }
+  62% { transform: translate(0px, 0px) rotate(1.5deg) scale(1.02, 0.98); }
+  82% { transform: translate(0px, 0px) rotate(-0.5deg) scale(1, 1); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-.jenny-mc-text pre {
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  overflow-x: auto;
+@keyframes jenny-go-edge {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  25% { transform: translate(0px, 0px) rotate(4deg) scale(0.985, 1.015); }
+  62% { transform: translate(0px, 0px) rotate(-1.5deg) scale(1.02, 0.98); }
+  82% { transform: translate(0px, 0px) rotate(0.5deg) scale(1, 1); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-.jenny-mc-text pre code { padding: 0; background: none; }
-.jenny-mc-text blockquote {
-  margin: 0 0 8px;
-  padding-left: 10px;
-  border-left: 2px solid var(--border);
-  color: var(--text-muted);
+@keyframes jenny-gest {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  30% { transform: translate(0px, 0px) rotate(0deg) scale(1.045, 0.95); }
+  65% { transform: translate(0px, 0px) rotate(0deg) scale(0.97, 1.035); }
 }
-.jenny-mc-text table {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  margin: 0 0 8px;
+@keyframes jenny-syl {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  35% { transform: translate(0px, 0px) rotate(0deg) scale(0.988, 1.022); }
 }
-.jenny-mc-text th, .jenny-mc-text td {
-  padding: 3px 8px;
-  border: 1px solid var(--border);
+@keyframes jenny-happy {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); animation-timing-function: ease-out; }
+  15% { transform: translate(0px, 0px) rotate(0deg) scale(1.06, 0.92); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
+  35% { transform: translate(0px, -12px) rotate(0deg) scale(0.95, 1.07); animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5); }
+  58% { transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.94); animation-timing-function: ease-out; }
+  78% { transform: translate(0px, 0px) rotate(0deg) scale(0.98, 1.02); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-.jenny-mc-text img { max-width: 100%; height: auto; }
-.jenny-mc-think {
-  display: none;
-  position: absolute;
-  right: 30px;
-  bottom: calc(var(--jenny-floor) + var(--jenny-size) - 4px);
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  padding: 3px 12px;
-  border-radius: var(--radius-pill);
-  animation: jenny-pulse 1.1s ease-in-out infinite;
+@keyframes jenny-sad {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  28% { transform: translate(0px, 1px) rotate(-1deg) scale(1.035, 0.955); }
+  72% { transform: translate(0px, 1px) rotate(-1deg) scale(1.035, 0.955); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-/* Il form della minichat È il compose condiviso (.compose-row/.compose-pill/
-   .compose-send): qui solo posizionamento e visibilità. */
-.jenny-mc-ask {
-  display: none;
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: calc(var(--dock-height) + 12px);
-  margin: 0;
-  pointer-events: auto;
+@keyframes jenny-angry {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  12% { transform: translate(0px, -3px) rotate(0deg) scale(0.96, 1.06); }
+  22% { transform: translate(0px, 0px) rotate(0deg) scale(1.07, 0.92); }
+  34% { transform: translate(0px, 0px) rotate(-3deg) scale(1.04, 0.96); }
+  46% { transform: translate(0px, 0px) rotate(3deg) scale(1.02, 0.98); }
+  58% { transform: translate(0px, 0px) rotate(-2deg) scale(1, 1); }
+  70% { transform: translate(0px, 0px) rotate(1deg) scale(1.01, 0.99); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
 }
-.jenny-mc-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: none;
-  outline: none;
-  font: inherit;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.6;
-  letter-spacing: -0.01em;
-  min-height: 22px;
-  color: var(--text);
-  padding: 0;
+@keyframes jenny-perk {
+  0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  30% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); }
+  60% { transform: translate(0px, -3px) rotate(0deg) scale(0.98, 1.03); }
 }
-.jenny-mc-input::placeholder {
-  color: var(--text-faint);
-  font-style: italic;
-  letter-spacing: 0;
+@keyframes jenny-drop {
+  from { transform: translate(-50%, -100vh) rotate(0deg) scale(1, 1); }
+  to { transform: translate(-50%, 0px) rotate(0deg) scale(1, 1); }
 }
-.jenny-mc.open[data-state="ask"] .jenny-mc-ask,
-.jenny-mc.open[data-state="reply"] .jenny-mc-ask { display: flex; animation: jenny-pop 0.2s ease-out; }
-.jenny-mc.open[data-state="think"] .jenny-mc-think { display: block; }
-.jenny-mc.open[data-state="reply"] .jenny-mc-bubble { display: flex; animation: jenny-pop 0.22s ease-out; }
-
-@keyframes jenny-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-@keyframes jenny-wobble { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
-@keyframes jenny-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-@keyframes jenny-pop { from { opacity: 0; transform: translateY(6px) scale(0.94); } to { opacity: 1; transform: none; } }
+@keyframes jenny-fall-stretch {
+  from { transform: translate(0px, 0px) rotate(0deg) scale(0.96, 1.05); }
+  to { transform: translate(0px, 0px) rotate(0deg) scale(0.93, 1.08); }
+}
+@keyframes jenny-impact {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1.14, 0.87); }
+  40% { transform: translate(0px, 0px) rotate(0deg) scale(0.94, 1.06); }
+  70% { transform: translate(0px, 0px) rotate(0deg) scale(1.03, 0.97); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+/* Il 35% e' il cambio di posa (GETUP_SWAP_MS in onboarding-wizard.js): da
+   schiacciata a terra ad allungata in piedi. */
+@keyframes jenny-getup {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  35% { transform: translate(0px, 0px) rotate(0deg) scale(1.07, 0.92); }
+  70% { transform: translate(0px, -4px) rotate(0deg) scale(0.95, 1.06); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-land {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  35% { transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.95); }
+  70% { transform: translate(0px, 0px) rotate(0deg) scale(0.985, 1.015); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+@keyframes jenny-dot-pop {
+  0% { transform: scale(0); } 60% { transform: scale(1.35); }
+  80% { transform: scale(0.9); } 100% { transform: scale(1); }
+}
+@keyframes jenny-dot-glow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--bg), 0 0 6px rgba(var(--accent-rgb), 0.5); }
+  50% { box-shadow: 0 0 0 2px var(--bg), 0 0 14px rgba(var(--accent-rgb), 0.95); }
+}
+/* Il pensa: ondeggia, e a ogni passaggio al centro si allunga un poco («mmh»).
+   Fino al 05/10/2026 era un pendolo rigido di 2,5 gradi in 1,1 s. */
+@keyframes jenny-think {
+  0%, 100% { transform: translate(0px, 0px) rotate(-2deg) scale(1.012, 0.988); }
+  25% { transform: translate(0px, 0px) rotate(0deg) scale(0.99, 1.016); }
+  50% { transform: translate(0px, 0px) rotate(2deg) scale(1.012, 0.988); }
+  75% { transform: translate(0px, 0px) rotate(0deg) scale(0.99, 1.016); }
+}
 
 /* In landscape basso il dock dell'officina sparisce (v. il `@media
    (max-height: 380px)` dopo `.dock`): niente spazio nemmeno per lei. Stessa
    soglia, di proposito: lei sta dove sta il dock.
    **Solo nell'officina**, la cui radice e' `.app`: la casa il dock non ce
    l'ha, e la stessa altezza la faceva sparire anche li' senza motivo.
-   Senza `!important`: (0,2,0) e scritta dopo `.jenny-mc.open`, vince per
-   ordine. */
+   */
 @media (max-height: 380px) {
-  .app .jenny-duo, .app .jenny-scrim, .app .jenny-mc { display: none; }
+  .app .jenny-duo { display: none; }
 }
 
 /* ── Telegram pairing (onboarding step 4 + sezione impostazioni) ── */

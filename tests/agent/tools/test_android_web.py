@@ -36,6 +36,19 @@ def _clean_bridge_state():
     android_web.reset_android_web_state()
 
 
+# La GET diretta vera: i test che la provano la rimettono al suo posto.
+_REAL_DIRECT_FETCH = android_web._direct_fetch
+
+
+@pytest.fixture(autouse=True)
+def _no_direct_get(monkeypatch):
+    """I test della WebView non escono in rete: qui la GET diretta non porta niente."""
+    async def _none(url):
+        return None
+
+    monkeypatch.setattr(android_web, "_direct_fetch", _none)
+
+
 class TestLooksLikeCaptcha:
     @pytest.mark.parametrize(
         "text",
@@ -535,3 +548,411 @@ class TestToolGating:
         ctx = SimpleNamespace(android_context=Mock(), config=cfg)
         assert AndroidWebSearchTool.enabled(ctx) is True
         assert AndroidWebFetchTool.enabled(ctx) is True
+
+
+class TestSearchDefault:
+    """Otto risultati di partenza: con cinque le ricerche vere restavano povere."""
+
+    def test_config_default(self):
+        assert AndroidWebSearchConfig().max_results == 8
+        with pytest.raises(Exception):  # il tetto resta 10
+            AndroidWebSearchConfig(max_results=11)
+
+    def test_tool_default_and_description(self):
+        assert AndroidWebSearchTool(android_context=object()).max_results == 8
+        assert "count defaults to 8 (max 10)" in AndroidWebSearchTool.description
+
+    async def test_the_default_reaches_the_bridge(self):
+        bridge = Mock()
+        bridge.searchBing.return_value = json.dumps({"results": RESULTS, "pageText": ""})
+        with patch.object(android_web, "_get_bridge", return_value=bridge):
+            await AndroidWebSearchTool(android_context=object()).execute("python")
+        assert bridge.searchBing.call_args[0][1] == 8
+
+
+_ARTICLE = "<html><body><article>" + ("<p>Paragrafo di contenuto vero.</p>" * 60) + "</article></body></html>"
+_BROWSER_TEXT = "Il testo dell'articolo, letto dal browser. " * 40
+
+
+def _allow_public(monkeypatch):
+    """Validazione senza DNS: passa tutto tranne il loopback e la rete locale."""
+    import jenny.security.network as net
+
+    def fake(url, **kw):
+        blocked = "127.0.0.1" in url or "192.168." in url
+        return (not blocked, "private address" if blocked else "")
+
+    monkeypatch.setattr(net, "validate_url_target", fake)
+
+
+class TestFetchFallsBackToTheBrowser:
+    """``web_fetch`` riprova in una sessione del browser quando ``fetchUrl`` non basta."""
+
+    def _tool(self) -> AndroidWebFetchTool:
+        return AndroidWebFetchTool(android_context=object(), timeout=5, owner="ab12cd34")
+
+    def _browser(self, monkeypatch, result):
+        from jenny.agent.tools import browser
+
+        calls = []
+
+        async def fake(context, url, *, owner, cfg, max_chars, timeout):
+            calls.append({"url": url, "owner": owner, "max_chars": max_chars,
+                          "timeout": timeout, "max_sessions": cfg.max_sessions})
+            return result
+
+        monkeypatch.setattr(browser, "read_page_once", fake)
+        return calls
+
+    async def test_a_short_page_is_read_again_in_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        calls = self._browser(monkeypatch, {
+            "url": "https://example.com/a", "text": _BROWSER_TEXT, "chars": 1720,
+            "truncated": False,
+        })
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=("<html><body>Loading…</body></html>", "https://example.com/a")):
+            out = json.loads(await self._tool().execute("https://example.com/a", maxChars=9000))
+        assert out["extractor"] == "browser"
+        assert out["fallback_reason"] == "short_text"
+        assert "letto dal browser" in out["text"]
+        assert out["text"].startswith(android_web._UNTRUSTED_BANNER)
+        assert set(out) >= {"url", "finalUrl", "status", "truncated", "length", "untrusted"}
+        assert calls == [{"url": "https://example.com/a", "owner": "ab12cd34",
+                          "max_chars": 9000, "timeout": 5, "max_sessions": 3}]
+
+    async def test_a_cookie_wall_is_read_again_in_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        wall = ("<p>We use cookies to improve your experience. Accept all or manage "
+                "your consent preferences.</p>" * 12)
+        self._browser(monkeypatch, {
+            "url": "https://example.com/b", "text": "Articolo. " * 70, "chars": 700,
+            "truncated": False,
+        })
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(f"<html><body>{wall}</body></html>", "https://example.com/b")):
+            out = json.loads(await self._tool().execute("https://example.com/b"))
+        assert out["extractor"] == "browser"
+        assert out["fallback_reason"] == "cookie_wall"
+
+    async def test_a_full_page_does_not_open_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        calls = self._browser(monkeypatch, {"skipped": "should not be asked"})
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(_ARTICLE, "https://example.com/c")):
+            out = json.loads(await self._tool().execute("https://example.com/c"))
+        assert calls == []
+        assert out["extractor"] == "webview"
+        assert "fallback_reason" not in out
+
+    async def test_a_browser_that_finds_less_leaves_the_first_result(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "https://example.com/d", "text": "x",
+                                    "chars": 1, "truncated": False})
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=("<html><body>Breve ma vero.</body></html>",
+                                        "https://example.com/d")):
+            out = json.loads(await self._tool().execute("https://example.com/d"))
+        assert out["extractor"] == "webview"
+        assert "Breve ma vero." in out["text"]
+
+    async def test_a_bridge_error_is_rescued_by_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "https://example.com/e", "text": _BROWSER_TEXT,
+                                    "chars": 1720, "truncated": False})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/e"))
+        assert "error" not in out
+        assert out["extractor"] == "browser"
+        assert out["fallback_reason"] == "no_document"
+
+    async def test_a_timeout_is_rescued_by_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "https://example.com/f", "text": _BROWSER_TEXT,
+                                    "chars": 1720, "truncated": True})
+        with patch.object(android_web, "_bridge_fetch", side_effect=asyncio.TimeoutError):
+            with patch.object(android_web, "destroy_bridge"):
+                out = json.loads(await self._tool().execute("https://example.com/f"))
+        assert out["fallback_reason"] == "timeout"
+        assert out["truncated"] is True
+
+    async def test_when_the_browser_fails_too_the_error_says_so(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"error": "browser_open did not answer within 15s"})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/g"))
+        assert out["error"].startswith("WebView returned no HTML document")
+        assert "tried the browser too" in out["error"]
+        assert "did not answer" in out["error"]
+        assert "http_get" in out["hint"]
+
+    async def test_a_skipped_fallback_leaves_the_error_as_it_was(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"skipped": "no free browser session"})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/h"))
+        assert out["error"] == "WebView returned no HTML document"
+
+    async def test_the_browser_landing_on_a_private_address_is_withheld(self, monkeypatch):
+        _allow_public(monkeypatch)
+        self._browser(monkeypatch, {"url": "http://192.168.1.1/admin", "text": "router admin " * 80,
+                                    "chars": 1040, "truncated": False})
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/i"))
+        assert "text" not in out
+        assert "router admin" not in json.dumps(out)
+        assert "tried the browser too" in out["error"]
+        assert "blocked address" in out["error"]
+
+    async def test_a_blocked_redirect_does_not_try_the_browser(self, monkeypatch):
+        _allow_public(monkeypatch)
+        calls = self._browser(monkeypatch, {"skipped": "should not be asked"})
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=("<html>admin</html>", "http://127.0.0.1:9111/admin")):
+            out = json.loads(await self._tool().execute("https://example.com/j"))
+        assert calls == []
+        assert "blocked" in out["error"].lower()
+
+    async def test_the_owner_comes_from_the_context(self):
+        ctx = SimpleNamespace(android_context=object(), config=ToolsConfig(),
+                              subagent_lineage_id="ab12cd34")
+        assert AndroidWebFetchTool.create(ctx).owner == "ab12cd34"
+        ctx.subagent_lineage_id = None
+        assert AndroidWebFetchTool.create(ctx).owner == "main"
+
+    async def test_the_fetch_has_its_own_shorter_timeout(self):
+        """La lettura non aspetta il timeout della ricerca: oltre i 15 s passa
+        al ripiego nel browser."""
+        cfg = ToolsConfig()
+        cfg.android_web.search.timeout = 40
+        ctx = SimpleNamespace(android_context=object(), config=cfg, subagent_lineage_id=None)
+        assert AndroidWebFetchTool.create(ctx).timeout == 15
+        cfg.android_web.fetch.timeout = 25
+        assert AndroidWebFetchTool.create(ctx).timeout == 25
+
+    async def test_without_android_the_fallback_is_silent(self, monkeypatch):
+        """Fuori da Chaquopy la classe Kotlin non c'e': il ripiego si salta e
+        l'errore resta quello di prima, senza «tried the browser too»."""
+        _allow_public(monkeypatch)
+        with patch.object(android_web, "_bridge_fetch",
+                          side_effect=ValueError("WebView returned no HTML document")):
+            out = json.loads(await self._tool().execute("https://example.com/k"))
+        assert out["error"] == "WebView returned no HTML document"
+
+
+class TestLooksLikeCookieWall:
+    @pytest.mark.parametrize("text", [
+        "Questo sito usa i cookie. Accetta tutti / Rifiuta",
+        "We value your privacy. Cookie consent: Accept",
+    ])
+    def test_detects(self, text):
+        assert android_web._looks_like_cookie_wall(text)
+
+    @pytest.mark.parametrize("text", [
+        "Ricetta dei biscotti: farina, burro, zucchero.",
+        "Accept-Language header explained",
+        "cookie " + "testo lungo " * 400 + " accept",   # pagina lunga: non e' un muro
+    ])
+    def test_does_not_fire(self, text):
+        assert not android_web._looks_like_cookie_wall(text)
+
+
+_LONG_ARTICLE = (
+    "<html><body><article>" + ("<p>Calathea: luce filtrata, terriccio umido.</p>" * 80)
+    + "</article></body></html>"
+)
+
+
+class TestFetchReadsDirectlyFirst:
+    """Una pagina HTML con un testo vero arriva da una GET, senza la WebView.
+
+    La WebView è una sola, sotto ``_BRIDGE_LOCK``: le pagine chieste insieme si
+    leggevano una alla volta. Tutto ciò che la GET non porta va alla WebView.
+    """
+
+    def _serve(self, monkeypatch, handler):
+        import httpx
+
+        _allow_public(monkeypatch)
+        monkeypatch.setattr(android_web, "_direct_fetch", _REAL_DIRECT_FETCH)
+        transport = httpx.MockTransport(handler)
+        fake_httpx = SimpleNamespace(
+            AsyncClient=lambda **kw: httpx.AsyncClient(transport=transport, **kw)
+        )
+        monkeypatch.setattr(android_web, "httpx", fake_httpx)
+
+    def _tool(self) -> AndroidWebFetchTool:
+        return AndroidWebFetchTool(android_context=object(), timeout=5)
+
+    async def test_a_page_with_real_text_skips_the_webview(self, monkeypatch):
+        import httpx
+
+        self._serve(monkeypatch, lambda req: httpx.Response(
+            200, headers={"content-type": "text/html; charset=utf-8"}, text=_LONG_ARTICLE))
+        bridge = Mock(side_effect=AssertionError("the WebView should not be asked"))
+        with patch.object(android_web, "_bridge_fetch", bridge):
+            out = json.loads(await self._tool().execute("https://example.com/calathea"))
+        assert out["extractor"] == "direct"
+        assert "luce filtrata" in out["text"]
+        assert out["text"].startswith(android_web._UNTRUSTED_BANNER)
+
+    async def test_it_does_not_wait_for_the_webview(self, monkeypatch):
+        """La WebView occupata da un'altra lettura non ferma una pagina che la GET legge."""
+        import httpx
+
+        self._serve(monkeypatch, lambda req: httpx.Response(
+            200, headers={"content-type": "text/html"}, text=_LONG_ARTICLE))
+        async with android_web._BRIDGE_LOCK:
+            out = json.loads(await asyncio.wait_for(
+                self._tool().execute("https://example.com/calathea"), timeout=2))
+        assert out["extractor"] == "direct"
+
+    @pytest.mark.parametrize("response", [
+        {"status_code": 200, "headers": {"content-type": "text/html"},
+         "text": "<html><body><div id=app>Loading…</div></body></html>"},
+        {"status_code": 403, "headers": {"content-type": "text/html"}, "text": "robot policy"},
+        {"status_code": 200, "headers": {"content-type": "application/pdf"}, "content": b"%PDF"},
+        {"status_code": 200, "headers": {"content-type": "text/html"},
+         "text": "<p>We use cookies. Accept all or manage your consent.</p>" * 40},
+    ], ids=["javascript-page", "refused", "not-html", "cookie-wall"])
+    async def test_what_the_get_cannot_read_goes_to_the_webview(self, monkeypatch, response):
+        import httpx
+
+        self._serve(monkeypatch, lambda req: httpx.Response(**response))
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(_LONG_ARTICLE, "https://example.com/p")) as bridge:
+            out = json.loads(await self._tool().execute("https://example.com/p"))
+        bridge.assert_called_once()
+        assert out["extractor"] == "webview"
+
+    async def test_a_charset_declared_only_in_the_page_is_honoured(self, monkeypatch):
+        """Una pagina ISO-8859-1 che lo dice solo nel ``<meta>`` non perde le accentate."""
+        import httpx
+
+        page = ('<html><head><meta charset="iso-8859-1"></head><body>'
+                + "<p>Perché la calathea è così delicata? Più luce, però filtrata.</p>" * 60
+                + "</body></html>")
+        self._serve(monkeypatch, lambda req: httpx.Response(
+            200, headers={"content-type": "text/html"}, content=page.encode("latin-1")))
+        out = json.loads(await self._tool().execute("https://example.com/vecchia"))
+        assert out["extractor"] == "direct"
+        assert "Perché la calathea è così delicata" in out["text"]
+
+    async def test_indentation_is_not_text(self, monkeypatch):
+        """Lo scheletro di una pagina JavaScript, molto indentato, va alla WebView."""
+        import httpx
+
+        skeleton = "<html><body>" + ("<li>\n" + " " * 60 + "Menu</li>\n") * 80 + "</body></html>"
+        self._serve(monkeypatch, lambda req: httpx.Response(
+            200, headers={"content-type": "text/html"}, text=skeleton))
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(_LONG_ARTICLE, "https://example.com/app")) as bridge:
+            out = json.loads(await self._tool().execute("https://example.com/app"))
+        bridge.assert_called_once()
+        assert out["extractor"] == "webview"
+
+    async def test_a_site_refusing_the_browser_is_asked_again_as_jenny(self, monkeypatch):
+        """Wikimedia rifiuta col 403 un browser finto dal telefono, e accetta un nome con recapito."""
+        import httpx
+
+        from jenny.security.fetch import JENNY_USER_AGENT
+
+        agents = []
+
+        def handler(req):
+            agents.append(req.headers["user-agent"])
+            if req.headers["user-agent"] != JENNY_USER_AGENT:
+                return httpx.Response(403, text="Please respect our robot policy")
+            return httpx.Response(200, headers={"content-type": "text/html"}, text=_LONG_ARTICLE)
+
+        self._serve(monkeypatch, handler)
+        bridge = Mock(side_effect=AssertionError("the WebView should not be asked"))
+        with patch.object(android_web, "_bridge_fetch", bridge):
+            out = json.loads(await self._tool().execute("https://it.wikipedia.org/wiki/Calathea"))
+        assert out["extractor"] == "direct"
+        assert agents == [android_web.BROWSER_USER_AGENT, JENNY_USER_AGENT]
+
+    async def test_a_redirect_to_the_local_network_is_not_followed(self, monkeypatch):
+        import httpx
+
+        asked = []
+
+        def handler(req):
+            asked.append(str(req.url))
+            return httpx.Response(302, headers={"location": "http://192.168.1.1/admin"})
+
+        self._serve(monkeypatch, handler)
+        with patch.object(android_web, "_bridge_fetch",
+                          return_value=(_LONG_ARTICLE, "https://example.com/r")):
+            out = json.loads(await self._tool().execute("https://example.com/r"))
+        assert asked == ["https://example.com/r"]
+        assert out["extractor"] == "webview"
+
+
+_KOTLIN_TIMEOUT = json.dumps({"error": "WebView timeout after 30s for https://www.bing.com/search?q=x"})
+
+
+class TestASearchEngineThatDoesNotAnswer:
+    """Dopo un timeout le ricerche rinunciano subito per un minuto.
+
+    Su s22 il motore non rispondeva per minuti, e ogni ricerca aspettava il
+    tetto pieno; quelle in coda dietro al lock lo aspettavano in fila (30, 60, 90 s).
+    """
+
+    def _tool(self) -> AndroidWebSearchTool:
+        return AndroidWebSearchTool(android_context=object(), timeout=30)
+
+    async def test_the_next_search_gives_up_at_once_and_says_why(self):
+        bridge = Mock()
+        bridge.searchBing.return_value = _KOTLIN_TIMEOUT
+        with patch.object(android_web, "_get_bridge", return_value=bridge):
+            first = await self._tool().execute("calathea")
+            with patch.object(android_web, "destroy_bridge") as destroy:
+                second = await self._tool().execute("calathea care")
+        assert "WebView timeout" in first
+        assert bridge.searchBing.call_count == 1
+        assert "did not answer a moment ago" in second
+        assert "web_fetch" in second
+        destroy.assert_not_called()
+
+    async def test_searches_queued_behind_the_timeout_do_not_wait_in_turn(self):
+        calls = []
+
+        def search(query, max_results, timeout):
+            calls.append(query)
+            return _KOTLIN_TIMEOUT
+
+        bridge = Mock()
+        bridge.searchBing = search
+        with patch.object(android_web, "_get_bridge", return_value=bridge):
+            out = await asyncio.gather(*(self._tool().execute(q) for q in ("a", "b", "c")))
+        assert calls == ["a"]
+        assert sum("did not answer a moment ago" in o for o in out) == 2
+
+    async def test_a_minute_later_it_searches_again(self, monkeypatch):
+        now = [1000.0]
+        monkeypatch.setattr(android_web.time, "monotonic", lambda: now[0])
+        bridge = Mock()
+        bridge.searchBing.side_effect = [
+            _KOTLIN_TIMEOUT, json.dumps({"results": RESULTS, "pageText": ""}),
+        ]
+        with patch.object(android_web, "_get_bridge", return_value=bridge):
+            await self._tool().execute("a")
+            now[0] += 61
+            out = await self._tool().execute("b")
+        assert "python.org" in out
+
+    async def test_another_error_does_not_stop_the_searches(self):
+        bridge = Mock()
+        bridge.searchBing.side_effect = [
+            json.dumps({"error": "WebView HTTP error: 500"}),
+            json.dumps({"results": RESULTS, "pageText": ""}),
+        ]
+        with patch.object(android_web, "_get_bridge", return_value=bridge):
+            await self._tool().execute("a")
+            out = await self._tool().execute("b")
+        assert "python.org" in out

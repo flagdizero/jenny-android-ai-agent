@@ -85,7 +85,7 @@ ws://{host}:{port}{path}?client_id={id}&token={secret}
 
 ## Wire Protocol
 
-All frames are JSON text. A server frame names itself with an `event` field; a client envelope with a `type` field (plain-text legacy frames aside, see below).
+All frames are JSON text. A server frame names itself with an `event` field; a client envelope with a `type` field.
 
 ### Server → Client
 
@@ -120,7 +120,11 @@ connection that sent a turn rather than every client of the chat.
 with `kind` `image`/`video`/`file`) are present only when the reply has attachments;
 `media_urls` leaves out a path the gateway could not sign. Other optional fields: `origin` (the
 channel the turn came from, e.g. `"telegram"`), `latency_ms`, `tool_events`, `agent_ui`,
-`session_boundary: true` (after `/new`: the client draws a separator instead of a bubble) and
+`session_boundary: true` (after `/new`: the client draws a separator instead of a bubble),
+`error: {"kind": "<kind>"}` (the turn ended in a model error; `text` is already the message for
+the user, in the agent's language, saying what to do — `kind` is one of `connection`, `timeout`,
+`auth`, `rate_limit`, `server`, `credit`, `generic`; it is persisted in the transcript and comes
+back as `error` on the replayed message) and
 `kind` — `"tool_hint"` or `"progress"` for an interim activity line rather than an answer.
 
 **`user`** — a user message that entered from another channel (e.g. Telegram), echoed to the
@@ -188,7 +192,7 @@ Reasoning frames only flow when the channel's `showReasoning` is `true` (default
 
 `model_preset` is omitted when no named preset is active. The frame can also carry a `provider` field (the name of the active provider entry), present only when the gateway knows it. WebUI clients use this event to keep the displayed model badge in sync across slash commands, config reloads, and settings changes.
 
-**`subagent_status`** — snapshot of the background subagents, pushed on every state transition to the chat that spawned them, and scoped to that chat's session (a project chat sees its own subagents, the personal chat its own; work started by silent internal turns publishes nothing):
+**`subagent_status`** — snapshot of the background subagents, pushed on every state transition (and, at most every 5 seconds, at the end of an iteration, so `last_tool` and `elapsed_s` stay fresh) to the chat that spawned them, and scoped to that chat's session (a project chat sees its own subagents, the personal chat its own; work started by silent internal turns publishes nothing):
 
 ```json
 {
@@ -212,6 +216,28 @@ Reasoning frames only flow when the channel's `showReasoning` is `true` (default
 `state` is one of `running`, `done`, `failed`, `cancelled`, `stalled`; `recent` is newest-first and capped at 10 entries. `idle_s` is seconds since the last observed sign of progress — it is what distinguishes a subagent stuck for four minutes from one working for four minutes. `can_restart` reflects the cap on *automatic* restarts only: a human pressing Relaunch is never refused.
 
 The frame is a recomputable refresh hint — it is never persisted to the transcript and never retried, since the next snapshot replaces it. The same payload is served verbatim by `GET /api/subagents`, which is how the WebUI panel comes back after a page reload instead of waiting for the next transition; pass `?session_key=` (`websocket:default` or `project:<name>`) for the same per-chat scope the frame has. `POST`-style actions ride on GET like every other gateway route (see the transport constraint in [Write a mini-app](../contribute/write-a-mini-app.md)): `GET /api/subagents/<task_id>/restart` (always a manual relaunch) and `GET /api/subagents/<task_id>/cancel`.
+
+**`work_status`** — the state of a long piece of work that someone is waiting for in a chat: a gardener pass (`/gardener`, or an automatic pass on the notebook you have open) or a Dream cycle started with `/dream`. The home WebUI draws it as the *work bubble* at the bottom of the chat. It goes only to the connections subscribed to that `chat_id` (`project:<name>` for a notebook, `default` for the personal chat), so an automatic pass on a notebook nobody is looking at reaches nobody:
+
+```json
+{
+  "event": "work_status",
+  "chat_id": "project:orto",
+  "id": "gardener-3f9a1c2b7d4e",
+  "kind": "gardener",
+  "state": "running",
+  "manual": true,
+  "phases": ["pages", "board"],
+  "phase": "pages",
+  "writes": 3,
+  "retry": {"attempt": 2, "of": 3},
+  "started_at": 1791215890.9,
+  "updated_at": 1791215962.1,
+  "project": "orto"
+}
+```
+
+`kind` is `gardener` or `dream`; `state` is `running`, `done` or `failed`. `phases` are the steps of the work (`pages` and `board` for the gardener, `review` and `memory` for Dream — Dream learns whether it reviews only once it has started, so its first frame may have none). `writes` counts the page writes as they happen. `retry` is set while the provider is retrying a failed model call and clears when the model answers. `manual: false` marks an automatic gardener pass: a message in that notebook makes it stand down. A finished frame adds `ended_at` and an `outcome` of plain fields, never prose — for the gardener `status`, `writes`, `board`, `proposals` (proposals waiting in the board's envelope), `absence` (why the notebook has no board) and, when it failed, `reason`; for Dream `status` and `reviewed`. Updates for the same work are throttled to one every 2 seconds; transitions go out at once. Like `subagent_status` it is never persisted and never retried. `GET /api/work?session_key=` (`websocket:default` or `project:<name>`) serves `{"work": [...]}`, the same payloads for the work in progress and for work finished in the last minute, which is how the bubble comes back after a reload. The command's text replies — the immediate `Gardening <name>...` / `Dreaming...` and the final report — carry the same id as `work_id` on their `message` frame (and in the transcript), so a client that draws the bubble can skip them.
 
 `GET /api/subagents/<task_id>/digest` serves the condensed "what did it do" of one subagent, for the block the chat shows under its result: `{"task_id", "events", "count", "source"}`, up to 300 events. `source` says how complete it is — `"digest"` is the persisted, immutable one written when the subagent finished, `"live"` is a preview built from the running subagent's activity (it will change), and `"none"` means there is nothing to show (empty `events`, never a 404). Unlike `/activity`, it has no cursor.
 
@@ -313,6 +339,23 @@ re-read the list. Broadcast, and carries no payload beyond the event name:
 {"event": "apps_list_changed"}
 ```
 
+**`staged_changed`** — the drafts waiting for your approval changed (a subagent saved one, or one
+was installed or discarded); the home reads them again with `staged.list`. Broadcast, with how
+many are pending:
+
+```json
+{"event": "staged_changed", "count": 1}
+```
+
+**`plan_changed`** — a notebook's step-by-step plan changed (proposed, approved, a step opened or
+closed, paused, blocked, stopped, rolled back), or a planning started or ended in that notebook;
+the plan card reads it again with `plan.get`. Broadcast, with the notebook and the plan
+(`plan_id` is `""` when a planning starts or ends and the notebook has no open plan yet):
+
+```json
+{"event": "plan_changed", "notebook": "garden", "plan_id": "p_3f9a0c12bb47"}
+```
+
 **`error`** — soft error for malformed inbound envelopes. The connection stays open. `detail`
 is human-readable, `reason` is the stable token for a client to branch on (`missing_content`,
 `unknown_type`, `invalid_task_id`, `invalid_project_name`, or — with `detail: "image_rejected"`
@@ -329,31 +372,28 @@ is human-readable, `reason` is the stable token for a client to branch on (`miss
 {"event": "rpc_result", "id": "rpc-9f2a", "ok": true, "result": {"path": "SOUL.md", "bytes": 4213}}
 ```
 
+**`pong`** — the answer to a `ping` envelope, with no other fields. It proves the socket is still
+alive end to end, which a WebSocket-level ping (sent only by the server, invisible to page
+JavaScript) cannot prove to the browser:
+
+```json
+{"event": "pong"}
+```
+
 ### Client → Server
 
-**Legacy (default chat):** send a plain string, or a JSON object with a recognized text field:
-
-```json
-"Hello Jenny!"
-```
-
-```json
-{"content": "Hello Jenny!"}
-```
-
-Recognized fields: `content`, `text`, `message` (checked in that order). Invalid JSON is treated as plain text. These frames route to the personal chat (`default`, announced in `ready`).
-
-**Typed envelopes:** any JSON object with a string `type` field is a typed envelope:
+Every client frame is a **typed envelope**: a JSON object with a string `type` field. A frame without one (plain text, or `{"content": ...}`) gets `{"event":"error","reason":"untyped_frame"}` and reaches nothing; a blank frame is ignored.
 
 | `type` | Fields | Effect |
 |--------|--------|--------|
 | `attach` | `chat_id` | Subscribe the connection to a chat, e.g. a project's, or again after a reconnect. Replies with `attached`. |
 | `detach` | `chat_id` | Stop following a project chat (`"project:<name>"`). Replies with `detached`. Anything else — the personal chat, a missing or unrecognised `chat_id` — is ignored with no reply. |
-| `message` | `content`, `chat_id`, `media`, `webui`, `turn_id`, `readonly` | Send a user message on that chat, subscribing the connection to it if it was not already. |
+| `message` | `content`, `chat_id`, `media`, `webui`, `turn_id`, `readonly`, `plan`, `plan_revise` | Send a user message on that chat, subscribing the connection to it if it was not already. |
 | `subagent_watch` | `task_id`, `since` | Start receiving `subagent_activity` frames for that subagent, from the event after `since` (default `0`). An unknown task is not an error: the answer is an empty window and the watch stays. |
 | `subagent_unwatch` | `task_id` | Stop them. Replies with `subagent_unwatched`. Idempotent. |
 | `ui_result` | `correlation_id`, `payload` or `error` | Answer a `ui_query`. `payload` is a JSON object of at most 256 KB (the WebUI sends `{view, drawer, html, app?}`); `error` reports that the client could not collect it. An answer from a connection other than the one asked, or for an unknown or expired `correlation_id`, is dropped. |
 | `rpc` | `id`, `method`, `params` | Run a gateway command and reply with `rpc_result`. See [Commands (rpc)](#commands-rpc). |
+| `ping` | — | Replies with `pong` and nothing else. The WebUI sends it every 25 s, and when its tab becomes visible again, only when it was opened from another device (not over loopback): a socket left half-open by a dropped Tailscale tunnel looks `OPEN` to the browser, and only a frame sent on it finds out. No answer within 10 s and the WebUI drops the socket and reconnects. |
 
 **`chat_id`** (in `attach`, `detach` and `message`) picks the conversation: `"project:<name>"`
 is that project's chat, and anything else — missing, `"default"`, an unknown string — is the
@@ -368,6 +408,15 @@ WebP, GIF; 8 MB each), 1 video (MP4, WebM, QuickTime; 20 MB) and 4 other files (
 one item fails, nothing is kept and the answer is an `error` with `detail: "image_rejected"`.
 `webui: true` plus an optional `turn_id` mark the message as sent by the WebUI, and
 `readonly: true` runs that one turn with the workspace read-only (any other value is ignored).
+`plan: true`, only on a notebook's chat (`"project:<name>"`), starts a planning: read-only
+whatever `readonly` says, and Jenny answers with a step-by-step plan for the user to approve
+instead of doing the job; `plan_revise: "<plan id>"` asks for a new version of a proposed plan.
+A planning can take several turns — Jenny looks at the notebook and may ask up to three questions
+first — and while it lasts **the server** treats every message on that chat as part of it,
+read-only, with or without `plan: true` (the WebUI keeps sending it while the Plan button is on:
+it continues the planning going on, and opens a new one only if there is none). It ends when Jenny proposes the plan, with
+`plan.cancel_drafting` (turning the Plan button off), with `/stop`, or after 12 hours without a
+turn; `plan.get {notebook}` says whether one is going on (`drafting`).
 
 ```json
 {"type": "message", "chat_id": "project:garden", "content": "What did we plant in May?", "webui": true}
@@ -408,9 +457,12 @@ Reply — always one `rpc_result` per request, correlated by the opaque `id`:
  "error": {"code": "too_large", "message": "file too large to save (1300000 > 1000000 bytes)"}}
 ```
 
-Error codes: `bad_request`, `forbidden`, `not_found`, `too_large`, `conflict`, `name_taken`, `unavailable`, `internal`.
+Error codes: `bad_request`, `forbidden`, `not_found`, `too_large`, `conflict`, `name_taken`, `unavailable`, `busy`, `bad_state`, `plan_running`, `rollback_failed`, `internal`.
 `name_taken` means the name asked for already belongs to something else (today: a notebook's new name is already a folder's or a conversation's).
 `conflict` is the only one that is not about the request but about the world: the request was fine, and the world moved underneath it — the file changed since the client read it (`page.write`, `workspace.write` with a `base`), or Jenny is still writing in that notebook (`project.rename`, `project.delete`). A client that gets it should not correct what it sent: re-read, or try again once she has finished.
+`busy` and `bad_state` come from the `plan.*` commands: Jenny is working in that notebook right now (a turn or a helper in flight — try again in a moment), or the plan is not in a state where that command applies.
+`plan_running` means the notebook is held by a plan that has started and is not closed yet (running, pausing, paused or waiting for an answer): until it finishes, or is stopped, nothing the user does writes in it — `page.write`, `audit.create`, the `board.*` writes (`board.seen` and `board.preview` excepted), `project.rename`, `project.delete`, and the `workspace.*` writes on a path inside it; nor does rolling back an older plan of the same notebook. Jenny's own file tools refuse to write in it too, from any conversation other than that notebook's. Everything that changes between the plan's first and last photo is then the plan's, which is what lets it be rolled back.
+`rollback_failed` means a rollback (or its undo) started and stopped halfway, for a disk error: the notebook is partly back, `plan.rollback_failed` on the plan says so, and asking again is safe — what was already put back counts as "already as it was".
 A frame whose `id` is missing or malformed is dropped with a log line — there is nothing to
 correlate a reply to.
 
@@ -424,14 +476,57 @@ correlate a reply to.
 | `page.write` | `wiki`, `page`, `content`, `base` | Save a notebook page edited by hand from the reader. `base` is the markdown the editor opened on: if the file changed underneath, the answer is `conflict` and nothing is written. Honours `wiki.enabled` plus the same workspace flags. |
 | `audit.create` | `wiki`, `target`, `sel_start`, `sel_end`, `comment`, `author` | File a report anchored to a passage of a notebook page. `sel_start`/`sel_end` are offsets in the page's markdown source, which the gateway re-reads to compute the anchors; `target` defaults to `index.md`, `author` to `anonymous`. Replies `{id, filename, path}`. An unknown notebook is `bad_request`, a target outside the notebook's pages `forbidden`, a missing page `not_found`, a selection that cannot anchor `bad_request`. Honours `wiki.enabled`, and refuses with `unavailable` when the configuration cannot be read. |
 | `project.create` | `name`, `seed` | Create a project chat with its seed instruction. Both are required and whitespace-collapsed. |
+| `project.greet` | `name`, `lang`? | Jenny's first message in a notebook just created, asked once its chat is open: a short greeting written by the model from the notebook's name and scope line, in `lang` (`it`/`en`, default the configured language). It reaches the chat as a normal message of hers and is saved in the conversation. Only on an empty conversation, and dropped if the user wrote meanwhile: then the reply is `{greeted: false, reason}`. Without a model, or when it fails or takes more than 15 seconds, a fixed sentence is written instead. Replies `{greeted, fallback, text}`; `not_found` for a notebook that does not exist. |
 | `project.delete` | `name` | Delete a project chat and its session. Refused with `conflict` before anything is touched while something is still writing under that notebook (a turn, a subagent started there, a gardener pass, the autocompact), and with `bad_request` if the name is no project. A home page pinned to it goes with it. |
-| `project.rename` | `name`, `new_name` | Rename a project: its folder first, then its chat follows (the same order as a folder renamed by hand, which the gateway already knows how to finish after a crash). Refused before anything is touched if the new name would not open (`bad_request`), is already taken by a folder or a conversation (`name_taken`), or the old name is not a notebook (`not_found`), and with `conflict` while something is still writing under either name (a turn, a subagent started there, a gardener pass, the autocompact). A home page pinned to it follows the new name. |
+| `project.rename` | `name`, `new_name` | Rename a project: its folder first, then its chat follows (the same order as a folder renamed by hand, which the gateway already knows how to finish after a crash). Refused before anything is touched if the new name would not open (`bad_request`), is already taken by a folder or a conversation (`name_taken`), or the old name is not a notebook (`not_found`), and with `conflict` while something is still writing under either name (a turn, a subagent started there, a gardener pass, the autocompact). A home page pinned to it follows the new name, and so do its scheduled jobs — their place on the board and the chat they deliver to; their ids are in `moved_crons`. |
 | `home.pages.set` | `pages`, `order` | Save the home pages: the whole list of added pages (`{id, kind, ref}`, at most 8, unique ids) and the order of every page, fixed ones included — each exactly once, or the answer is `bad_request` and nothing is written. Replies `{ok, pages, order}`. The list is read with `GET /api/home/pages`, which answers `{pages, order, fixed, max, kinds}`. |
 | `settings.provider.models` | `provider`, `format`, `api_base`, `api_key` | List a provider's models, also for a provider not saved yet (onboarding and the provider card ask with the key just typed). Read-only: the configuration is not touched. Replies `{status, message, model_count, …}`. |
 | `settings.provider.update` | `name`, `format`, `api_base`, `api_key`, `ca_bundle`, `ca_bundle_clear` | Create or update a provider with its API key, then hot-reload the active provider. |
 | `telegram.save` | `token` | Save the Telegram bot token (checked with `getMe`) and restart the channel. |
 | `ssh.host.save` | `alias`, `host`, `port`, `username`, `auth`, `password`, `description`, `job_log_dir` | Create or update an SSH host. A missing `password` keeps the saved one. |
 | `onboarding.save` | `provider_name`, `format`, `api_key`, `api_base`, `model`, `bot_name`, `bot_icon`, `locale` | The first-run setup: save the provider with its API key, the model and Jenny's name, then wake the agent that was waiting for it and write the welcome message into the conversation. Replies `{status, chat_id, welcome_message}`. A missing provider or model is `bad_request` and nothing is saved. |
+| `apps.trash` | — | The app trash, newest first: `{trash: [{id, slug, name, at, records}]}`. Deleting an app moves its folder here, data included. |
+| `apps.restore` | `id` | Put an app back from the trash (`id` is the trash entry). `conflict` when an app with that slug exists again. |
+| `apps.purge` | `id` | Delete a trash entry for good, data included. The only way an app's files are erased. |
+| `staged.list` | — | The drafts waiting for your approval, oldest first: `{staged: [{id, target, sources, created_ms, new_file, target_sha256, diff, truncated}]}`. A draft is a change a subagent wanted to make to a file Jenny loads on her own (a skill, `HEARTBEAT.md`, `cron/`, `USER.md`, memory) after reading content from outside you; see [Security model](../internals/security-model.md). |
+| `staged.install` | `id`, `target_sha256` | Write a draft into place. `target_sha256` is the one `staged.list` returned (`null` for a new file): if the file changed since, the answer is `conflict` and nothing is written. No tool of the model can call this. |
+| `staged.discard` | `id` | Throw a draft away; the file stays as it was. |
+| `plan.get` | `id` or `notebook` | A step-by-step plan: `{plan}`, its `plan.json` plus `done` (steps behind it, done or skipped), `total` (cut steps excluded), `current_step_id`, `can_rollback`, `can_undo_rollback`, and `rollback_failed` (`{at, kind, error, applied?, total?}`) while a rollback that stopped halfway has not been retried. `plan.json` carries `coverage` (`[{item, have, missing, strategy, why}]`, `strategy` one of `notebook`, `web`, `ask`, `leave`: how each item the job needs is covered), `assumptions` (`[string]`: what Jenny decided on her own; approving approves them), `steps[].done_when` (each step's "done" criterion) — all empty for a plan written before them — and `blocked: {step, question, reason, at, kind, drafts}` while it waits: `kind: "question"` is a question for the user (`drafts: []`), `kind: "drafts"` means the step left changes as drafts (`drafts: [{id, target}]`, the ids of `staged.list`) that the user installs or discards with `staged.install` / `staged.discard`; when all are decided the step closes by itself and the plan goes on. With `notebook`: that notebook's open plan, or its most recent closed one, or `plan: null`, and next to it `drafting: {since, revise, reads} \| null` — the planning going on in that notebook (`revise`: the plan being reviewed, or `null`; `reads`: how many times Jenny has read the notebook since it started). |
+| `plan.list` | — | The open plans of every notebook, for the badge on its cover: `{plans: [{id, notebook, status, title, done, total, updated_at}]}`. |
+| `plan.full` | `id` | The full plan, read-only: `{title, coverage, assumptions, steps: [{id, title, detail, kind, status, tag, done_when}]}`. `detail` is what Jenny reads when the step opens. |
+| `plan.cancel_drafting` | `notebook` | End the planning going on in that notebook (the Plan button turned off, or "Cancel the plan"): the next message is an ordinary one. `{cancelled}` is `false` when there was none. Emits `plan_changed`. |
+| `plan.approve` | `id`, `version`, `cut` | Approve a proposed plan, without the steps listed in `cut`: photo of the notebook, then the first step opens. `conflict` when `version` is not the one shown (Jenny wrote a newer one), `busy` while a turn or a helper is running there. No tool of the model can call this. |
+| `plan.discard` | `id` | Throw a proposal away. |
+| `plan.pause` | `id` | Pause after the current step. While paused, the notebook's chat is read-only. |
+| `plan.resume` | `id` | Cancel a pause that has not arrived yet, or open the next step (`busy` while a turn runs there). |
+| `plan.stop` | `id`, `then` | Stop now: the turn and the helpers at work there are cancelled, the current step is `interrupted`, last photo. `then: "rollback"` goes on with `plan.rollback` and replies its `report` — or `rollback_error: {code, message}` when the plan stopped but the rollback was refused (ask again with `plan.rollback`). A `/stop` typed in that notebook's chat is a stop with `then: "keep"`. |
+| `plan.answer` | `id`, `text` | Answer the question of a blocked plan: it runs again, and `text` is posted in the chat as the user's message. A message typed in that chat while the plan is blocked counts as the answer too. Not for a plan waiting on drafts (`bad_state`): those are decided with `staged.*`, and a message typed meanwhile is an ordinary read-only one. |
+| `plan.step_files` | `id`, `step` | What one step changed: `{added, changed, removed}` (paths in the notebook), from the photos before and after it. `bad_state` while the step has not finished. |
+| `plan.changes` | `id` | What the whole plan changed: `{added, changed, removed, groups: {path: group}}`, from its first photo to its last (to the last finished step while it runs). Groups: `pages`, `sources`, `board`, `other`, `journal`. |
+| `plan.rollback_preview` | `id` | What going back would do, without doing it: `{report, expect_end}`. `report` lists the paths `restored`, `removed`, `already` as they were, `left` (changed after the plan: not touched), `kept`, `excluded` (the journal never goes back), with `counts` and per-group counts in `groups`. `expect_end` is the id of the photo of the notebook this summary was computed on. Only for a plan `done` or `stopped`. |
+| `plan.rollback` | `id`, `keep`, `expect_end` | Put the notebook back as it was before the plan, except the groups in `keep`. `expect_end` is the one the preview returned: the rollback photographs the notebook again, and if that photo is another one (the notebook changed since the summary), or Jenny is working there, the answer is `conflict` and nothing is touched. Replies `{report, discarded_drafts}`: the plan's drafts still waiting for approval are thrown away with the rollback (`[{id, target}]`), so they cannot bring back part of the work just undone. Jenny reads a line about it in her next turn, and a `[system]` line goes at the end of the notebook's journal. |
+| `plan.undo_rollback` | `id` | Undo the rollback: the notebook goes back as the plan had left it, where nothing changed since. Replies `{report}`; drafts discarded by the rollback do not come back. |
+| `board.seen` | `wiki`, `card` | Record that the user looked: the notebook's board (no `card`), or one card's drawer. Drives the "since you last looked" row and the blue dots. A notebook without a board is a no-op. |
+| `board.move` | `wiki`, `kind`, `id`, `x`, `y` | Move a card (`kind: card`), or something hanging from a card, `id` being the card's: its sticky note of reminders (`kind: postit`), its label of automations (`kind: auto`), its lilac note of the user's notes (`kind: notes`) or its gallery of photos (`kind: photos`). With `id: ""`, `postit` and `auto` move the free sticky note and the free label of the whole notebook. It goes to `x`,`y` percent of the board. The position becomes the user's, and the gardener never moves it again. |
+| `board.card.add` | `wiki`, `title`, `near`?, `glyph`?, `app`?, `link`? | Make a card yourself. With `app` (`{slug, params}`) the card **is** that app: its value takes the place of the photo, a tap opens the app, and the title defaults to the app's name; with `link` (a card id) it is tied to that card by a thread and lands next to it. It lands in the free spot nearest `near` (`{x, y}` in board coordinates: the point the user held on the empty wall, or the centre of the view), with no pages yet; its title and place are the user's. A full board refuses with `conflict`. Replies `{card: {id, title, pos}}`. |
+| `board.card.rename` | `wiki`, `id`, `title` | Rename a card. The title becomes the user's, and the gardener no longer rewrites it. |
+| `board.card.remove` | `wiki`, `id` | Remove a card from the board, with an undo. The card, its threads and its place are kept for 7 days (at most 5 cards); its notebook crons and micro apps are paused and its reminders stay quiet meanwhile. The wiki is not touched. Replies `{title}`. |
+| `board.card.restore` | `wiki`, `id` | The undo of `board.card.remove`: the card goes back where it was, with its threads, and what it paused resumes. Pages another card took meanwhile stay with that card. `conflict` when the board is full. |
+| `board.suggestion.respond` | `wiki`, `id`, `answer`, `near`? | Answer one of Jenny's proposals in the envelope with `yes`, `no` or `later`. `yes` applies it (a card placed in a free spot — near `near`, `{x, y}` in board coordinates, the centre of what the user is looking at, when given — a thread, a page attached…); `no` is remembered for that subject and kind; `later` defers it for a few passes. A full board refuses a new card with `conflict`. |
+| `board.connection.remove` | `wiki`, `a`, `b` | Remove the thread between two cards. Only the user removes threads. |
+| `board.offboard.want` | `wiki`, `page`, `from` | "I want to see it on the board": a page that is in no drawer is flagged for the next board pass, which attaches it to a drawer or proposes a card. |
+| `board.preview` | `wiki`, `page` | Count one preview of a page that is in no drawer. The board pass reads the count: a page the user keeps peeking at is one the board is neglecting. |
+| `board.fix` | `wiki`, `card`, `section`, `text` | Correct a drawer section. Nothing on the board is written: the correction becomes an audit (`source: board`) on the first page the section comes from, the board pass applies it to the wiki and the summary is rewritten from there. Replies `{id, path, target}`. |
+| `board.section.add` | `wiki`, `card`, `kind`, … | Add a section to a drawer: `note` (`text`, also journaled as a `[said]` line), `reminder` (`text`, `when`) or `photo` (`mime`, base64 `data`, `caption`; saved under `raw/photos/`; a non-empty `caption` is the user's note on the photo, journaled as a `[said]` line ending in `(photo: <path>)`). An app is never a section (`kind: "app"` is refused: it is a card of its own, see `board.card.add`). Replies `{id}`. |
+| `board.section.update` | `wiki`, `card`, `id`, `text`, `when` | Edit a note or the note of a photo (a new journal line: the journal is append-only; a photo's note emptied writes none), or a reminder. |
+| `board.section.remove` | `wiki`, `card`, `id` | Remove a section the user added. The wiki is not touched; a reminder section drops its reminder, a micro app goes to `board/micro/.trash/` and loses its approval, a notebook cron is removed from the scheduler. |
+| `board.section.reorder` | `wiki`, `card`, `order` | Reorder the sections the user added (`order` is their ids). |
+| `board.reminder.add` | `wiki`, `card?`, `text`, `when` | Add the user's reminder: on a card (`card`), or for the whole notebook (`card` empty), where it is a line of the board's free sticky note. Returns its `id`. |
+| `board.reminder.done` | `wiki`, `id` | Mark a reminder done: it leaves the board and becomes a journal line. |
+| `board.reminder.update` | `wiki`, `id`, `text`?, `when`? | Edit an open reminder by its id — one Jenny wrote too, which has no drawer section — from the care calendar. The reminder becomes the user's. |
+| `board.reminder.drop` | `wiki`, `id` | Remove an open reminder by its id: it stays in `reminders.json` as `dropped`, and the drawer section that pointed to it, if any, goes. |
+| `board.cron.pause` | `wiki`, `job`, `paused` | Pause (`true`) or resume (`false`) a notebook cron from its drawer; only a job bound to this notebook. |
+| `board.cron.remove` | `wiki`, `job` | Remove a notebook cron and what it leaves on the board (its last result); only a job bound to this notebook. |
 
 **Authorization is the handshake's, not the frame's.** Only a connection that presented
 `token_issue_secret` at handshake time may run a command, even if `websocket_requires_token`
@@ -475,7 +570,7 @@ All fields go under the top-level `websocket` object in `config.json`. These are
 | `sendProgress` | bool | `true` | Send interim progress text while a turn runs. With it off the client sees nothing until the turn produces its answer. |
 | `sendToolHints` | bool | `false` | Include one-line tool hints in that progress stream ("reading SOUL.md", "searching…"). Off by default: it is the noisiest of the four. With it off the hint text is dropped but the `tool_events` it carried (the tools that are starting) still arrive, as a `progress` message with no text, wherever `sendProgress` is on. |
 | `showReasoning` | bool | `true` | Forward `reasoning_delta` / `reasoning_end` frames when the provider exposes incremental reasoning. |
-| `sendMaxRetries` | int | `3` | Attempts the dispatcher makes for one outbound frame before dropping it. Refresh-hint frames (`goal_status`, `mascot_mood`, `subagent_status`, `runtime_model_updated`, `app_data_changed`, `apps_list_changed`) are exempt by design: the next one replaces a pending one, so retrying them is pointless. `subagent_activity` is not retried as a frame either — the watcher's cursor simply does not move, so the next tick resends the same events. |
+| `sendMaxRetries` | int | `3` | Attempts the dispatcher makes for one outbound frame before dropping it. Refresh-hint frames (`goal_status`, `mascot_mood`, `subagent_status`, `work_status`, `runtime_model_updated`, `app_data_changed`, `apps_list_changed`, `staged_changed`, `plan_changed`) are exempt by design: the next one replaces a pending one, so retrying them is pointless. `subagent_activity` is not retried as a frame either — the watcher's cursor simply does not move, so the next tick resends the same events. |
 
 ### Keep-alive
 
@@ -503,6 +598,8 @@ For production deployments where `websocketRequiresToken: true` (the default, an
 4. The same secret is used for all subsequent HTTP API requests via `Authorization: Bearer <secret>`.
 
 On the Android app specifically, Kotlin reads the secret from `config.json` and hands it to the WebView as a URL **fragment** (`#bs=...`), never as a query parameter, so it never ends up in logs or server-side request records; the WebView's JavaScript exchanges it at `/webui/bootstrap` for the actual WebSocket URL.
+
+The bootstrap also carries `ui_version`, a fingerprint of the WebUI files this gateway serves (empty for the first moments after start, while it is computed), and `boot`, an id of the gateway process. The WebUI reads them again every time its socket reopens: if the files changed — an update installed while a page stayed open, typically a browser on another device — the page reloads itself, but only once nothing is typed in a field, no finger is down, no dialog is open and no turn is running.
 
 ### Example setup
 
@@ -559,14 +656,14 @@ After a reconnect the connection is back on the personal chat only, so a client 
 
 ### Rules
 
-- A chat's frames (`message`, `user`, `delta`, `stream_end`, `reasoning_*`, `turn_end`, `goal_status`, `mascot_mood`, `file_edit`, `subagent_status`) carry the `chat_id` they belong to and go only to the connections subscribed to it.
-- Some frames carry no `chat_id`: `runtime_model_updated`, `app_data_changed` and `apps_list_changed` go to every connection; `error`, `rpc_result`, `ui_query` and `subagent_unwatched` go to one.
+- A chat's frames (`message`, `user`, `delta`, `stream_end`, `reasoning_*`, `turn_end`, `goal_status`, `mascot_mood`, `file_edit`, `subagent_status`, `work_status`) carry the `chat_id` they belong to and go only to the connections subscribed to it.
+- Some frames carry no `chat_id`: `runtime_model_updated`, `app_data_changed`, `apps_list_changed`, `staged_changed` and `plan_changed` go to every connection; `error`, `rpc_result`, `ui_query` and `subagent_unwatched` go to one.
 - The personal chat cannot be left: proactive messages and the mascot's frames reach a connection there even while it is showing a project.
 - Errors (invalid envelope, unknown `type`, missing `content`, an impossible project name) are soft: the server replies with `{"event":"error","detail":"...","reason":"..."}` and keeps the connection open.
 
 ### Backward compatibility
 
-Legacy clients that only send plain text or `{"content": ...}` keep working unchanged: those frames route to the personal chat. No config flag is needed.
+Until October 2026 the channel also accepted untyped frames (plain text, or `{"content"|"text"|"message": ...}`) and routed them to the personal chat. Nothing in Jenny sent them any more, and they were removed: such a frame now gets an `untyped_frame` error. A client that sent them sends `{"type": "message", "content": ...}` instead, which without a `chat_id` goes to the same personal chat.
 
 ### Security boundary
 

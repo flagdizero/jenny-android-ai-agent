@@ -96,8 +96,23 @@ function create(tag, { id, cls, text } = {}) {
     querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
   };
   el.classList = makeClassList(el);
+  el.style = makeStyle(el);
   if (id) el.attrs.id = id;
   return el;
+}
+/* Lo stile in linea sta nell'attributo `style`, come nel DOM vero: e' per
+   questo che un clone se lo porta dietro. Basta l'altezza. */
+function makeStyle(el) {
+  return {
+    get height() {
+      const m = /height:\s*([^;]+)/.exec(el.attrs.style || '');
+      return m ? m[1].trim() : '';
+    },
+    set height(v) {
+      if (v) el.attrs.style = `height: ${v};`;
+      else delete el.attrs.style;
+    },
+  };
 }
 function makeClassList(el) {
   return {
@@ -126,7 +141,7 @@ track.append(p0, p1, p2);
 const chat = create('div', { id: 'home-chat', cls: 'home-chat' });
 const thread = create('div', { id: 'home-thread', cls: 'home-thread' });
 const empty = create('div', { id: 'home-empty', cls: 'home-empty' });
-const work = create('div', { id: 'home-activity', cls: 'home-activity' });
+const work = create('div', { cls: 'home-live' });
 const network = create('div', { id: 'home-wire', cls: 'home-wire' });
 const attachments = create('div', { id: 'home-pending', cls: 'home-pending' });
 const composer = create('div', { cls: 'home-composer' });
@@ -190,7 +205,10 @@ def _run(body: str) -> None:
                   change,
                   currentKey: () => current,
                   atBottom: () => { atBottom += 1; },
+                  homeKey: () => 'A',
                 });
+                const over = create('div', { cls: 'home-over' });
+                root.appendChild(over);
                 """
             )
             + body,
@@ -267,11 +285,26 @@ def test_what_belongs_to_a_moment_stays_out_of_the_photo() -> None:
         "field.value = 'mezza frase';\n"
         "t.arrives(p1, 'B');\n"
         "const snapshot = snapshotOf(p0);\n"
-        "for (const sel of ['.home-activity', '.home-wire', '.home-pending']) {\n"
+        "for (const sel of ['.home-live', '.home-wire', '.home-pending']) {\n"
         "  assert.ok(snapshot.querySelector(sel).hasAttribute('hidden'), sel);\n"
         "}\n"
         "assert.equal(snapshot.querySelector('textarea').value, '');\n"
         "assert.equal(field.value, 'mezza frase', 'la bozza vera e stata toccata');\n"
+    )
+
+
+def test_the_photo_does_not_keep_the_height_of_the_draft() -> None:
+    """Svuotato il campo della foto, va tolta anche l'altezza che la bozza gli
+    aveva dato: un clone se la porta dietro, e la foto mostrava un campo vuoto
+    alto quanto tre righe che non c'erano piu'."""
+    _run(
+        "field.value = 'una\\ndue\\ntre';\n"
+        "field.style.height = '83px';\n"
+        "t.arrives(p1, 'B');\n"
+        "const copy = snapshotOf(p0).querySelector('textarea');\n"
+        "assert.equal(copy.value, '');\n"
+        "assert.equal(copy.style.height, '', 'la foto ha tenuto l altezza della bozza');\n"
+        "assert.equal(field.style.height, '83px', 'il campo vero e stato toccato');\n"
     )
 
 
@@ -413,149 +446,11 @@ def test_a_notebook_never_seen_arrives_as_an_empty_chat() -> None:
     c'e' niente qui» sarebbe falso — c'e', solo non l'abbiamo ancora letto.
     """
     _run(
-        "t.snapshotIfNeeded(p2, 'C');\n"
-        "const f = snapshotOf(p2);\n"
+        "t.lift(over, 'C');\n"
+        "const f = snapshotOf(over);\n"
         "assert.ok(f, 'nessuna foto');\n"
         "assert.deepEqual(messagesOf(f), []);\n"
         "assert.ok(f.querySelector('.home-empty').hasAttribute('hidden'));\n"
-    )
-
-
-def test_a_photo_already_there_is_not_printed_again() -> None:
-    """Passa a ogni cambio di pagina: ristamparla a ogni giro costerebbe."""
-    _run(
-        "t.snapshotIfNeeded(p2, 'C');\n"
-        "const before = snapshotOf(p2);\n"
-        "t.snapshotIfNeeded(p2, 'C');\n"
-        "assert.equal(snapshotOf(p2), before);\n"
-    )
-
-
-def test_where_the_chat_is_parked_there_is_no_photo_over_it() -> None:
-    """Parcheggiata mentre guardi un'app, resta lei: viva e' meglio che in foto."""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.snapshotIfNeeded(p1, 'B');\n"
-        "assert.equal(snapshotOf(p1), null);\n"
-    )
-
-
-def test_a_panel_about_to_be_thrown_away_gives_the_chat_back_first() -> None:
-    """Ridisegnare le pagine non deve portare via la chat col pannello.
-
-    E torna **sotto** la foto della pagina 0, se c'e': cosi' non si vede la
-    conversazione sbagliata in quella pagina.
-    """
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.bringBackHome(p1, p0);\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.equal(p0.children[0], chat, 'la chat deve stare sotto la foto');\n"
-        "p1.remove();\n"
-        "assert.equal(document.getElementById('home-thread'), thread, 'la chat e andata via col pannello');\n"
-    )
-
-
-def test_giving_back_from_a_panel_that_does_not_hold_it_does_nothing() -> None:
-    _run(
-        "t.bringBackHome(p2, p0);\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.equal(p0.children.filter((c) => c === chat).length, 1);\n"
-    )
-
-
-def test_leaving_a_panel_leaves_no_photo_over_what_is_underneath() -> None:
-    """Un quaderno chiuso nei Quaderni: sotto torna l'elenco, e una foto della
-    chat lo coprirebbe. La chat torna a casa e prende la conversazione di casa.
-    (26/09/2026)"""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "a = t.leaves(p1, p0, 'A');\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.equal(snapshotOf(p1), null, 'l\u2019elenco e\u2019 coperto da una foto');\n"
-        "reads[1].finish(); await a;\n"
-        "assert.deepEqual(changes, ['B', 'A']);\n"
-        "assert.equal(snapshotOf(p0), null);\n"
-    )
-
-
-def test_leaving_keeps_the_negative_for_the_next_visit() -> None:
-    """Riaprendo lo stesso quaderno, la foto che copre la lettura e' quella di
-    com'era, non uno scheletro vuoto."""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "a = t.leaves(p1, p0, 'A'); reads[1].finish(); await a;\n"
-        "a = t.arrives(p1, 'B');\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p1)), ['B1', 'B2', 'B3']);\n"
-        "reads[2].finish(); await a;\n"
-    )
-
-
-def test_leaving_a_panel_the_chat_is_not_in_only_clears_its_photo() -> None:
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "await t.arrives(p0, 'A').then(() => {});\n"
-        "reads[1].finish();\n"
-        "assert.ok(snapshotOf(p1), 'la pagina lasciata non ha la sua foto');\n"
-        "await t.leaves(p1, p0, 'A');\n"
-        "assert.equal(snapshotOf(p1), null);\n"
-        "assert.equal(chat.parentElement, p0);\n"
-        "assert.deepEqual(changes, ['B', 'A'], 'ha cambiato conversazione per niente');\n"
-    )
-
-
-def test_after_coming_home_out_of_place_page_zero_keeps_its_own_photo() -> None:
-    """**Trovato rileggendo, dopo il giro sul telefono del 23/09/2026.**
-
-    Sei sulla pagina di un quaderno e aggiungi o togli una pagina: il
-    ridisegno riporta la chat a casa **cosi' com'e'**, cioe' mostrando il
-    quaderno, sotto la foto della pagina 0. Subito dopo la pista torna sulla
-    pagina del quaderno, e la chat riparte da casa. Se a quel punto il trasloco
-    fotografasse la chat e appendesse la foto nella pagina che lascia, la
-    pagina 0 riceverebbe la foto **del quaderno**: la si vedrebbe entrare a
-    meta' scorrimento, e il trucco si vedrebbe.
-    """
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
-        "t.bringBackHome(p1, p0);\n"            # il ridisegno
-        "await t.arrives(p2, 'B');\n"           # la pagina del quaderno, rifatta
-        "assert.equal(chat.parentElement, p2);\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2'],\n"
-        "  'la pagina 0 ha preso la foto del quaderno');\n"
-    )
-
-
-def test_coming_home_out_of_place_then_arriving_home_still_switches() -> None:
-    """E se dopo il ridisegno si torna proprio alla pagina 0, la chat cambia:
-    era a casa, ma con la conversazione sbagliata sotto la foto."""
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.bringBackHome(p1, p0);\n"
-        "a = t.arrives(p0, 'A');\n"
-        "assert.ok(snapshotOf(p0), 'la chat sbagliata e scoperta durante la lettura');\n"
-        "reads[1].finish(); await a;\n"
-        "assert.deepEqual(changes, ['B', 'A']);\n"
-        "assert.equal(snapshotOf(p0), null);\n"
-        "assert.deepEqual(messagesOf(chat), ['A1', 'A2']);\n"
-    )
-
-
-def test_the_out_of_place_mark_lasts_one_arrival_only() -> None:
-    """Il segno vale per l'arrivo dopo il ridisegno, e poi si spegne.
-
-    Se restasse, la pagina 0 non aggiornerebbe piu' la sua foto: la
-    conversazione va avanti, e scorrendo entrerebbe quella di ieri.
-    """
-    _run(
-        "let a = t.arrives(p1, 'B'); reads[0].finish(); await a;\n"
-        "t.bringBackHome(p1, p0);\n"
-        "await t.arrives(p2, 'B');\n"                         # consuma il segno
-        "histories.A = ['A1', 'A2', 'A3 nuovo'];\n"
-        "a = t.arrives(p0, 'A'); reads[1].finish(); await a;\n"
-        "a = t.arrives(p2, 'B'); reads[2].finish(); await a;\n"
-        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2', 'A3 nuovo'],\n"
-        "  'la pagina 0 ha smesso di aggiornare la sua foto');\n"
     )
 
 
@@ -580,8 +475,8 @@ def test_a_newer_arrival_expires_the_older_cover_timer() -> None:
         + "t.arrives(p1, 'B');\n"
         "t.arrives(p0, 'A');\n"
         "assert.equal(live.size, 1, 'il tetto dell\\u2019arrivo superato e\\u2019 ancora armato');\n"
-        "t.bringBackHome(p0, p1);\n"
-        "assert.equal(live.size, 0, 'riportata a casa, il tetto dell\\u2019arrivo in volo resta');\n"
+        "t.lower(p0);\n"
+        "assert.equal(live.size, 0, 'riabbassata, il tetto dell\\u2019arrivo in volo resta');\n"
     )
 
 
@@ -596,4 +491,124 @@ def test_a_read_that_ends_first_switches_the_cover_timer_off() -> None:
         "reads[0].finish();\n"
         "await arrivo;\n"
         "assert.equal(live.size, 0, 'la lettura ha vinto e il tetto e\\u2019 rimasto armato');\n"
+    )
+
+
+# ── Il velo: la chat sopra la pagina (05/10/2026) ──────────────────────────
+
+
+def test_lifting_with_the_same_conversation_moves_the_chat_and_reads_nothing() -> None:
+    """Il caso comune: sopra le App la chat ha gia' la personale."""
+    _run(
+        "await t.lift(over, 'A');\n"
+        "assert.equal(chat.parentElement, over);\n"
+        "assert.deepEqual(changes, [], 'niente da rileggere');\n"
+        "assert.equal(snapshotOf(over), null, 'nessuna foto nel velo');\n"
+        "assert.equal(document.getElementById('home-chat'), chat);\n"
+    )
+
+
+def test_lifting_leaves_a_photo_where_the_chat_was() -> None:
+    _run(
+        "t.lift(over, 'A');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
+    )
+
+
+def test_lifting_into_another_conversation_covers_the_read() -> None:
+    _run(
+        "const done = t.lift(over, 'B');\n"
+        "assert.equal(current, 'B', 'il cambio e subito');\n"
+        "assert.ok(snapshotOf(over), 'la lettura si vedrebbe');\n"
+        "reads[0].finish();\n"
+        "await done;\n"
+        "assert.equal(snapshotOf(over), null);\n"
+        "assert.deepEqual(messagesOf(chat), ['B1', 'B2', 'B3']);\n"
+    )
+
+
+def test_lowering_the_home_conversation_leaves_no_photo_at_home() -> None:
+    _run(
+        "await t.lift(over, 'A');\n"
+        "t.lower(p0);\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.equal(snapshotOf(p0), null, 'a casa c e lei, non la sua foto');\n"
+    )
+
+
+def test_lowering_a_notebook_shows_the_personal_photo_at_home() -> None:
+    """Chiusa sopra la bacheca, la chat ha ancora il quaderno: la pagina chat
+    mostra la personale in foto finche' un arrivo non la rimette."""
+    _run(
+        "const done = t.lift(over, 'B');\n"
+        "reads[0].finish(); await done;\n"
+        "t.lower(p0);\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.equal(current, 'B', 'riabbassare non cambia conversazione');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
+        "assert.equal(snapshotOf(over), null);\n"
+    )
+
+
+def test_a_read_still_running_when_lowered_touches_nothing() -> None:
+    _run(
+        "const done = t.lift(over, 'B');\n"
+        "t.lower(p0);\n"
+        "reads[0].finish(); await done;\n"
+        "assert.equal(chat.parentElement, p0);\n"
+        "assert.ok(snapshotOf(p0), 'la lettura tardiva ha tolto la foto di casa');\n"
+    )
+
+
+def test_retune_switches_at_once_behind_the_personal_photo() -> None:
+    """Un quaderno si apre sulla bacheca: la chiave cambia subito, e la pagina
+    chat, se la vedi passando, mostra ancora la personale."""
+    _run(
+        "const done = t.retune(p0, 'B');\n"
+        "assert.equal(current, 'B', 'openBoard legge la chiave subito dopo');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2']);\n"
+        "reads[0].finish(); await done;\n"
+        "assert.ok(snapshotOf(p0), 'la foto della personale resta');\n"
+        "assert.equal(chat.parentElement, p0);\n"
+    )
+
+
+def test_retune_back_home_drops_the_photo_when_read() -> None:
+    _run(
+        "let done = t.retune(p0, 'B');\n"
+        "reads[0].finish(); await done;\n"
+        "done = t.retune(p0, 'A');\n"
+        "reads[1].finish(); await done;\n"
+        "assert.equal(current, 'A');\n"
+        "assert.equal(snapshotOf(p0), null);\n"
+    )
+
+
+def test_retune_to_the_conversation_it_has_does_nothing() -> None:
+    _run(
+        "await t.retune(p0, 'A');\n"
+        "assert.deepEqual(changes, []);\n"
+        "assert.equal(snapshotOf(p0), null);\n"
+    )
+
+
+def test_the_startup_read_is_followed_so_an_unread_chat_is_not_photographed() -> None:
+    """All'avvio la casa legge il filo da se', non dal trasloco.
+
+    Un quaderno ripreso all'avvio (``_restorePlace``) apre la bacheca mentre
+    quella lettura e' ancora in corso: senza ``follow`` la personale si
+    fotografava vuota, e il suo «non c'e' niente qui» restava in trasparenza
+    sotto la chat (s22, 28/10/2026). Finita una lettura, si fotografa di nuovo.
+    """
+    _run(
+        "write();\n"                                   # il filo dell'avvio, non ancora letto
+        "let boot; t.follow(new Promise((r) => { boot = r; }));\n"
+        "t.retune(p0, 'B');\n"
+        "const f = snapshotOf(p0);\n"
+        "assert.deepEqual(messagesOf(f), [], 'fotografata a meta lettura');\n"
+        "assert.ok(f.querySelector('.home-empty').hasAttribute('hidden'),\n"
+        "  'la foto dice «non c e niente qui» di una chat non ancora letta');\n"
+        "reads[0].finish(); await tick();\n"
+        "assert.equal(t._reliable, true, 'letta B, la chat si fotografa di nuovo');\n"
+        "boot();\n"
     )

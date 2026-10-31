@@ -68,3 +68,15 @@ def test_a_fresh_workspace_is_fine(tmp_path) -> None:
     ws.mkdir()
 
     assert sweep_retired_artifacts(ws) == []
+
+
+def test_the_map_layout_goes_with_the_map(tmp_path) -> None:
+    """Gli spilli della mappa a grafo: la mappa e' uscita dalla casa con la
+    bacheca, e il file non lo legge piu' nessuno. Il resto di ``.jenny/`` resta."""
+    ws = tmp_path / "workspace"
+    (ws / ".jenny").mkdir(parents=True)
+    (ws / ".jenny" / "map-layout.json").write_text('{"piante": {}}', encoding="utf-8")
+    (ws / ".jenny" / "internal.json").write_text("{}", encoding="utf-8")
+    removed = {p.relative_to(ws).as_posix() for p in sweep_retired_artifacts(ws)}
+    assert removed == {".jenny/map-layout.json"}
+    assert (ws / ".jenny" / "internal.json").exists()

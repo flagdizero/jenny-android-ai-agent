@@ -196,3 +196,103 @@ async def test_persist_preserves_unknown_keys(tmp_path) -> None:
     await persist_schema_migrations(config_path=path)
     written = json.loads(path.read_text(encoding="utf-8"))
     assert written["somethingFromTheFuture"] == {"keep": "me"}
+
+
+# ── v4: la finestra di contesto da 64K a 128K ────────────────────────────────
+
+_NEW_WINDOW = AgentDefaults.model_fields["context_window_tokens"].default
+
+
+def test_the_old_context_window_default_moves_to_128k() -> None:
+    """Il caso reale del 05/10: il Titan aveva 65536 scritto nel file."""
+    assert _NEW_WINDOW == 131072
+    config = Config.model_validate({
+        "configVersion": 3, "agents": {"defaults": {"contextWindowTokens": 65536}},
+    })
+    assert config.agents.defaults.context_window_tokens == _NEW_WINDOW
+    assert config.config_version == CURRENT_CONFIG_VERSION
+
+
+def test_a_context_window_the_user_picked_stays() -> None:
+    legacy = Config.model_validate({
+        "configVersion": 3, "agents": {"defaults": {"contextWindowTokens": 262144}},
+    })
+    assert legacy.agents.defaults.context_window_tokens == 262144
+    stamped = Config.model_validate({
+        "configVersion": CURRENT_CONFIG_VERSION,
+        "agents": {"defaults": {"contextWindowTokens": 65536}},
+    })
+    assert stamped.agents.defaults.context_window_tokens == 65536
+
+
+def test_a_preset_window_is_a_choice_and_is_not_migrated() -> None:
+    config = Config.model_validate({
+        "configVersion": 3,
+        "modelPresets": {"piccolo": {"model": "m", "contextWindowTokens": 65536}},
+    })
+    assert config.model_presets["piccolo"].context_window_tokens == 65536
+
+
+# ── v5: maxTokens 16384 -> 32000 ─────────────────────────────────────────────
+
+
+def test_v5_moves_the_old_output_default_and_nothing_else() -> None:
+    """L'08/10/2026 sul s22 un app-builder ha bruciato tutti i 16384 token di
+    output in ragionamento: il default sale a 32000, come in OpenCode."""
+    moved = Config.model_validate({"configVersion": 4,
+                                   "agents": {"defaults": {"maxTokens": 16384}}})
+    assert moved.agents.defaults.max_tokens == 32000
+    chosen = Config.model_validate({"configVersion": 4,
+                                    "agents": {"defaults": {"maxTokens": 8000}}})
+    assert chosen.agents.defaults.max_tokens == 8000
+    stamped = Config.model_validate({"configVersion": CURRENT_CONFIG_VERSION,
+                                     "agents": {"defaults": {"maxTokens": 16384}}})
+    assert stamped.agents.defaults.max_tokens == 16384
+
+
+def test_the_reply_never_takes_more_than_a_quarter_of_the_window() -> None:
+    from jenny.utils.helpers import output_tokens_for_window
+
+    assert output_tokens_for_window(32000, 131072) == 32000
+    assert output_tokens_for_window(32000, 65536) == 16384
+    assert output_tokens_for_window(32000, 8192) == 4096
+    assert output_tokens_for_window(2048, 131072) == 2048
+    assert output_tokens_for_window(32000, None) == 32000
+
+
+def test_the_provider_gets_the_clamped_output_budget() -> None:
+    from jenny.providers.factory import _make_provider_core
+
+    config = Config.model_validate({
+        "providers": {"default": "local", "providers": [
+            {"name": "local", "format": "openai_compat", "apiKey": "x",
+             "apiBase": "http://127.0.0.1:8080/v1"}]},
+        "agents": {"defaults": {"model": "m", "contextWindowTokens": 32768}},
+    })
+    assert _make_provider_core(config).generation.max_tokens == 8192
+
+
+# ── v6: il tetto di web_search da 30 a 15 s ──────────────────────────────────
+
+
+@pytest.mark.parametrize("web_key", ["androidWeb", "android_web"])
+def test_v6_moves_the_old_search_cap_and_nothing_else(web_key) -> None:
+    """Il 28/10/2026 sul s22 le ricerche riuscite rispondevano entro 2,2 s, e un
+    motore muto costava i 30 s pieni: il default scende a 15."""
+    moved = Config.model_validate({"configVersion": 5, "tools": {web_key: {
+        "search": {"timeout": 30, "maxResults": 6}, "fetch": {"timeout": 30}}}})
+    assert moved.tools.android_web.search.timeout == 15
+    assert moved.tools.android_web.search.max_results == 6
+    assert moved.tools.android_web.fetch.timeout == 30
+    chosen = Config.model_validate({"configVersion": 5,
+                                    "tools": {web_key: {"search": {"timeout": 45}}}})
+    assert chosen.tools.android_web.search.timeout == 45
+    stamped = Config.model_validate({"configVersion": CURRENT_CONFIG_VERSION,
+                                     "tools": {web_key: {"search": {"timeout": 30}}}})
+    assert stamped.tools.android_web.search.timeout == 30
+
+
+def test_v6_leaves_a_tools_block_of_the_wrong_shape_to_the_validator() -> None:
+    for tools in ({"androidWeb": None}, {"androidWeb": {"search": "x"}}, []):
+        data = {"configVersion": 5, "tools": tools}
+        assert Config._migrate_by_version(data) == data

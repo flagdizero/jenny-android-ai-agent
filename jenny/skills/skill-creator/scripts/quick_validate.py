@@ -20,6 +20,7 @@ ALLOWED_FRONTMATTER_KEYS = {
     "always",
     "internal",
     "locked",
+    "helper",
     "user_summary",
     "disabled",
     "license",
@@ -189,6 +190,10 @@ def validate_skill(skill_path):
     always = frontmatter.get("always")
     if always is not None and not isinstance(always, bool):
         return False, f"'always' must be a boolean, got {type(always).__name__}"
+
+    helper = frontmatter.get("helper")
+    if helper is not None and (not isinstance(helper, str) or not helper.strip()):
+        return False, "'helper' must name the helper type that reads this skill (e.g. app-builder)"
 
     for child in skill_path.iterdir():
         if child.name == "SKILL.md":

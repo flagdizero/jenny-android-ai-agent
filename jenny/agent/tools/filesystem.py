@@ -8,6 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from jenny.agent import staged_writes
+from jenny.agent.staged_writes import StagedRef
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.file_state import FileStates, current_file_states
 from jenny.agent.tools.filesystem_edit_match import (
@@ -27,17 +29,40 @@ from jenny.agent.wiki_provenance import wiki_page_provenance_guard
 from jenny.config.tool_schemas import (
     FileToolsConfig,  # noqa: F401 — re-export (def in config.tool_schemas)
 )
+from jenny.security.subagent_policy import check_read as check_subagent_read
+from jenny.security.subagent_policy import check_write as check_subagent_write
+from jenny.security.subagent_policy import current_subagent_policy
+from jenny.security.subagent_policy import must_stage as must_stage_subagent_write
+from jenny.security.subagent_policy import note_write as note_subagent_write
 from jenny.security.workspace_access import current_tool_workspace, current_turn_is_readonly
-from jenny.security.workspace_policy import ReadOnlyTurnError, _path_key, _safe_expanduser
+from jenny.security.workspace_policy import (
+    ReadOnlyTurnError,
+    _path_key,
+    _safe_expanduser,
+    refuse_board_write,
+)
 from jenny.utils.helpers import build_image_content_blocks, detect_image_mime
 from jenny.utils.path import atomic_write
-from jenny.utils.wiki_paths import page_chars, wiki_page_rel
+from jenny.utils.wiki_paths import page_chars, wiki_id_at_risk, wiki_id_refusal, wiki_page_rel
 
 # Costruito una volta all'import: il gancio non ha stato e ricava tutto dal
 # percorso che riceve, quindi una istanza per tool sarebbe una istanza per niente.
 # ``wiki_provenance`` è una foglia — stdlib e ``wiki_paths``, che questo modulo
 # importa già — proprio perché è qui che va montata (v. la sua docstring).
 _WIKI_PROVENANCE_GUARD = wiki_page_provenance_guard()
+
+
+def _wiki_id_guard(path: Path, text: str) -> str | None:
+    """Rifiuta la scrittura che toglierebbe o cambierebbe l'id di un quaderno.
+
+    L'id in ``AGENTS.md`` e' cio' che lega il quaderno alla sua chat. Il 26/10
+    sul Titan un aiutante, riscrivendo il layout di Piante, ha «pulito» i due
+    ``id:`` tenendo quello sbagliato: la bozza e' arrivata all'utente, che l'ha
+    installata, e al riavvio la chat era chiusa fuori. Qui si ferma
+    all'aiutante, prima della bozza, e il rifiuto gli dice cosa rifare.
+    """
+    current = wiki_id_at_risk(path, text)
+    return None if current is None else wiki_id_refusal(path, current)
 
 # Gancio pre-scrittura: riceve il path risolto e il testo esatto che finirebbe su
 # disco, ritorna ``None`` per lasciar passare o un messaggio di rifiuto da
@@ -67,6 +92,16 @@ def _page_over_ceiling_note(rel: str, chars: int, ceiling: int) -> str:
         "along the things it talks about — each part becomes a page named after its own thing, "
         "carrying the sentences that were already about it, moved word for word — then add the "
         "new pages to the map."
+    )
+
+
+def staged_reply(ref: StagedRef) -> str:
+    """Risposta al modello per una scrittura messa in bozza (non un errore)."""
+    return (
+        f"Saved as a draft for the user's approval, not written yet: {ref.target_rel}. "
+        "This job read content from outside the user, and this file is one Jenny loads "
+        "on her own, so the user will see the change and where it came from in the app "
+        "and decide. Do not try to write it another way; mention the draft in your report."
     )
 
 
@@ -317,13 +352,17 @@ class _FsTool(Tool):
         )
 
     def _resolve_read(self, path: str) -> Path:
-        return self._resolve_with_extra(
+        resolved = self._resolve_with_extra(
             path,
             self._extra_read_allowed_dirs,
             None,
             include_media_dir=self._read_media_dir,
             for_write=False,
         )
+        # Dentro un subagent, i file segreti dell'installazione (config.json e
+        # le sue copie) non si leggono; fuori è una no-op. V. ``subagent_policy``.
+        check_subagent_read(resolved)
+        return resolved
 
     def _resolve_write(self, path: str, *, preview: bool = False) -> Path:
         # ``preview``: la risoluzione di un dry-run (``apply_patch``). Stessi
@@ -360,13 +399,18 @@ class _FsTool(Tool):
                 self._extra_write_allowed_files,
                 include_media_dir=False,
             )
-        return self._resolve_with_extra(
+        resolved = self._resolve_with_extra(
             path,
             self._extra_write_allowed_dirs,
             self._extra_write_allowed_files,
             include_media_dir=False,
             for_write=True,
         )
+        # La bacheca di un quaderno si scrive solo dai suoi imbuti (v.
+        # ``BoardWriteError``): qui passano write_file, edit_file e apply_patch.
+        refuse_board_write(resolved)
+        check_subagent_write(resolved)
+        return resolved
 
     def _archive_departing(self, path: Path, text: str) -> None:
         """Salva le voci che questa scrittura sta per far sparire.
@@ -376,7 +420,8 @@ class _FsTool(Tool):
         prima scrittura, e archiviare lì significherebbe degradare voci di una
         patch poi rifiutata.
         """
-        if self._entry_archiver is None:
+        if self._entry_archiver is None or must_stage_subagent_write(path):
+            # Una scrittura messa in bozza non fa sparire niente (ancora).
             return
         self._entry_archiver(path, text)
 
@@ -400,7 +445,7 @@ class _FsTool(Tool):
         rientra nel tetto sia una che rimpicciolisce (v.
         ``FileStates.record_write_refused``).
 
-        **Due ganci, e il secondo non lo monta nessuno.** Il primo è quello
+        **Tre ganci, e gli ultimi due non li monta nessuno.** Il primo è quello
         iniettato dal chiamante (il tetto dei file di memoria, la cessione del
         passo del giardiniere, la sua guardia di provenienza): chi non ne passa
         nessuno non ne ha. Il secondo è
@@ -408,7 +453,10 @@ class _FsTool(Tool):
         **sempre** e ricava il progetto dal percorso — perché il difetto del 26/08
         era esattamente che un gancio andava montato e la conversazione non lo
         montava: la passata con meno contesto era l'unica trattenuta. Fuori da una
-        ``wiki/`` di progetto quel gancio torna ``None`` e non costa niente.
+        ``wiki/`` di progetto quel gancio torna ``None`` e non costa niente. Il
+        terzo, :func:`_wiki_id_guard`, vale sempre anche lui, per la stessa
+        ragione: guarda solo l'``AGENTS.md`` di un quaderno, e altrove costa il
+        confronto di un nome di file.
 
         Il gancio iniettato resta **primo**: quando è la cessione del passo, quel
         rifiuto è l'unica cosa vera da dire alla passata (v.
@@ -424,6 +472,8 @@ class _FsTool(Tool):
             refusal = guard(path, text)
         if refusal is None:
             refusal = _WIKI_PROVENANCE_GUARD(path, text)
+        if refusal is None:
+            refusal = _wiki_id_guard(path, text)
         if refusal is None:
             return None
         self._file_states.record_write_refused(path, text)
@@ -515,7 +565,7 @@ class _FsTool(Tool):
                 return True
         return False
 
-    def _commit_write(self, path: Path, text: str) -> None:
+    def _commit_write(self, path: Path, text: str, *, full: bool = False) -> StagedRef | None:
         """Imbuto unico di scrittura dei tool sui file, e sede della scelta atomica.
 
         La regola sulle scritture atomiche vale per verso: i file **dell'utente**
@@ -533,11 +583,42 @@ class _FsTool(Tool):
         testo qui è già esattamente ciò che deve finire su disco.
         """
         data = text.encode("utf-8")
+        if must_stage_subagent_write(path):
+            # Un subagent non fidato su un file che Jenny carica da sola: la
+            # scrittura va in bozza, e la mette al suo posto solo un tocco
+            # dell'utente in app (``agent.staged_writes``). Il chiamante risponde
+            # al modello con :func:`staged_reply` invece di «Successfully».
+            return self._stage(path, data, full=full)
         if self._is_exact_allowed_file(path):
             atomic_write(path, data)
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        # Dentro un subagent: un lavoro non fidato contamina il file, uno fidato
+        # che lo riscrive per intero (``full``: solo ``write_file``) lo ripulisce.
+        # V. ``security.taint_ledger``.
+        note_subagent_write(path, full=full)
+        return None
+
+    @staticmethod
+    def _stage(path: Path, data: bytes, *, full: bool) -> StagedRef:
+        policy = current_subagent_policy()
+        assert policy is not None  # ``must_stage`` è vero solo dentro un subagent
+        rel = "/".join(policy.relative(path) or (path.name,))
+        if not full and rel in policy.staged:
+            # Una modifica parziale si calcola dal file su disco, che non ha la
+            # bozza dentro: applicarla la sostituirebbe perdendo la precedente.
+            raise PermissionError(
+                f"'{rel}' already has a draft from this job waiting for the user's "
+                "approval; to change it again, write the whole file with write_file."
+            )
+        ref = staged_writes.stage(
+            policy.install_root, rel, data,
+            sources=policy.taint_sources(), task_id=policy.task_id,
+        )
+        with policy.lock:
+            policy.staged[rel] = ref.id
+        return ref
 
     def _resolve(self, path: str) -> Path:
         return self._resolve_read(path)
@@ -620,6 +701,12 @@ class ReadFileTool(_FsTool):
     _scopes = {"core", "orchestrator", "subagent"}
 
     _MAX_CHARS = 128_000
+    # Per l'orchestratore: cio' che legge resta nella conversazione per sempre,
+    # e il 07/10/2026 sul Titan tre letture (uno script da 16 k, uno schermo da
+    # 12 k, una skill da 6 k) erano un decimo di ogni richiesta del quaderno. Oltre
+    # questo tetto la lettura va delegata.
+    _ORCHESTRATOR_MAX_CHARS = 12_000
+    _orchestrator = False
     # Oltre questo il file non si carica in memoria: sul telefono un log
     # da centinaia di MB, decodificato e spezzato in righe, vale il gateway.
     _MAX_FILE_BYTES = 16 * 1024 * 1024
@@ -630,8 +717,36 @@ class ReadFileTool(_FsTool):
     def name(self) -> str:
         return "read_file"
 
+    @classmethod
+    def create(cls, ctx: Any) -> Tool:
+        tool = super().create(ctx)
+        tool._orchestrator = bool(getattr(ctx, "orchestrator", False))  # type: ignore[attr-defined]
+        return tool
+
+    @property
+    def _max_chars(self) -> int:
+        return self._ORCHESTRATOR_MAX_CHARS if self._orchestrator else self._MAX_CHARS
+
+    def _slice_hint(self) -> str:
+        """Dove mandare chi deve leggere un pezzo che ``read_file`` non da'.
+
+        All'orchestratore niente ``python_exec``: non ce l'ha, e il consiglio lo
+        mandava a cercarlo.
+        """
+        if self._orchestrator:
+            return "ask a subagent to read it and report what matters"
+        return "slice it with python_exec, or ask a subagent that has it"
+
     @property
     def description(self) -> str:
+        if self._orchestrator:
+            return (
+                "Read a file (text, image, or PDF document). Text output format: "
+                "LINE_NUM|CONTENT. What you read stays in this conversation for good: read the "
+                "part you need with offset and limit, and delegate long reads to a subagent. "
+                f"Reads over ~{self._ORCHESTRATOR_MAX_CHARS // 1000}K chars are cut. "
+                "Use force=true to re-read content even if unchanged."
+            )
         return (
             "Read a file (text, image, or PDF document). "
             "Text output format: LINE_NUM|CONTENT. "
@@ -686,9 +801,8 @@ class ReadFileTool(_FsTool):
             if st.st_size > self._MAX_FILE_BYTES:
                 return (
                     f"Error: {path} is too large for read_file ({st.st_size:,} bytes; the "
-                    f"limit is {self._MAX_FILE_BYTES:,}). grep skips it too. Read the part "
-                    "you need with python_exec (seek and read a slice), or ask a subagent "
-                    "that has it."
+                    f"limit is {self._MAX_FILE_BYTES:,}). grep skips it too: "
+                    f"{self._slice_hint()}."
                 )
             raw = await asyncio.to_thread(fp.read_bytes)
             if not raw:
@@ -761,11 +875,11 @@ class ReadFileTool(_FsTool):
             result = "\n".join(numbered)
 
             long_line_note = ""
-            if len(result) > self._MAX_CHARS:
+            if len(result) > self._max_chars:
                 trimmed, chars = [], 0
                 for line in numbered:
                     chars += len(line) + 1
-                    if chars > self._MAX_CHARS:
+                    if chars > self._max_chars:
                         break
                     trimmed.append(line)
                 end = start + len(trimmed)
@@ -776,12 +890,11 @@ class ReadFileTool(_FsTool):
                     # l'invito era «Use offset=<la stessa>», all'infinito.
                     # Se ne mostra la testa e l'offset successivo la scavalca.
                     end = start + 1
-                    result = numbered[0][: self._MAX_CHARS]
+                    result = numbered[0][: self._max_chars]
                     long_line_note = (
                         f"(Line {end} is {len(all_lines[start]):,} characters long; only "
-                        f"its first ~{self._MAX_CHARS:,} are shown. read_file cannot page "
-                        "inside a line: slice it with python_exec, or ask a subagent that "
-                        "has it.)"
+                        f"its first ~{self._max_chars:,} are shown. read_file cannot page "
+                        f"inside a line: {self._slice_hint()}.)"
                     )
 
             if long_line_note:
@@ -834,8 +947,9 @@ class ReadFileTool(_FsTool):
                 f"Use pages='{end + 2}-{min(end + 1 + self._MAX_PDF_PAGES, total_pages)}' "
                 "to continue.)"
             )
-        if len(result) > self._MAX_CHARS:
-            result = result[:self._MAX_CHARS] + "\n\n(PDF text truncated at ~128K chars)"
+        if len(result) > self._max_chars:
+            result = (result[:self._max_chars]
+                      + f"\n\n(PDF text truncated at ~{self._max_chars // 1000}K chars)")
         return result
 
 # ---------------------------------------------------------------------------
@@ -886,7 +1000,8 @@ class WriteFileTool(_FsTool):
             # ha scritto, non che quel quanto ha appena spento la pagina.
             note = self._wiki_page_ceiling_note(fp, content)
             self._archive_departing(fp, content)
-            self._commit_write(fp, content)
+            if (staged := self._commit_write(fp, content, full=True)) is not None:
+                return staged_reply(staged)
             self._file_states.record_write(fp)
             msg = f"Successfully wrote {len(content)} characters to {fp}"
             return msg if note is None else f"{msg}\n{note}"
@@ -983,7 +1098,8 @@ class EditFileTool(_FsTool):
                         return refusal
                     note = self._wiki_page_ceiling_note(fp, new_text)
                     self._archive_departing(fp, new_text)
-                    self._commit_write(fp, new_text)
+                    if (staged := self._commit_write(fp, new_text, full=True)) is not None:
+                        return staged_reply(staged)
                     self._file_states.record_write(fp)
                     msg = f"Successfully created {fp}"
                     return msg if note is None else f"{msg}\n{note}"
@@ -1008,7 +1124,8 @@ class EditFileTool(_FsTool):
                     return refusal
                 note = self._wiki_page_ceiling_note(fp, new_text)
                 self._archive_departing(fp, new_text)
-                self._commit_write(fp, new_text)
+                if (staged := self._commit_write(fp, new_text)) is not None:
+                    return staged_reply(staged)
                 self._file_states.record_write(fp)
                 msg = f"Successfully edited {fp}"
                 return msg if note is None else f"{msg}\n{note}"
@@ -1102,7 +1219,8 @@ class EditFileTool(_FsTool):
                 return refusal
             note = self._wiki_page_ceiling_note(fp, new_content)
             self._archive_departing(fp, new_content)
-            self._commit_write(fp, new_content)
+            if (staged := self._commit_write(fp, new_content)) is not None:
+                return staged_reply(staged)
             self._file_states.record_write(fp)
             msg = f"Successfully edited {fp}"
             if warning:
@@ -1180,10 +1298,15 @@ class ListDirTool(_FsTool):
     _scopes = {"core", "orchestrator", "subagent"}
 
     _DEFAULT_MAX = 200
+    # ``.jenny`` e' lo stato interno di Jenny (il segnalibro del giardiniere, gli
+    # output dei tool salvati su file): non e' materiale da sfogliare. L'11/10/2026
+    # la passata della bacheca l'ha trovato con ``find_files`` e ha riletto cinque
+    # volte l'output salvato di un tool della chat (500 righe di una skill), per
+    # niente. Un output salvato resta leggibile dal percorso esatto che lo annuncia.
     _IGNORE_DIRS = {
         ".git", "node_modules", "__pycache__", ".venv", "venv",
         "dist", "build", ".tox", ".mypy_cache", ".pytest_cache",
-        ".ruff_cache", ".coverage", "htmlcov",
+        ".ruff_cache", ".coverage", "htmlcov", ".jenny",
     }
 
     @property
@@ -1221,7 +1344,9 @@ class ListDirTool(_FsTool):
 
             if recursive:
                 for item in sorted(dp.rglob("*")):
-                    if any(p in self._IGNORE_DIRS for p in item.parts):
+                    # Le parti **sotto** la cartella chiesta: chi elenca apposta
+                    # dentro una cartella ignorata vede il suo contenuto.
+                    if any(p in self._IGNORE_DIRS for p in item.relative_to(dp).parts):
                         continue
                     total += 1
                     if len(items) < cap:

@@ -17,6 +17,7 @@ from support.runner import make_spec
 
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMProvider, LLMResponse
+from jenny.runtime.user_text import say
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -163,7 +164,10 @@ async def test_exhausted_retries_report_truncation_not_a_generic_failure():
     result = await AgentRunner(provider).run(_make_spec())
 
     assert result.stop_reason == "output_truncated"
-    assert "output token limit" in (result.final_content or "")
+    # Due testi: all'utente la frase in parole semplici (nessun «token»), alla
+    # cronologia del modello la diagnosi inglese che nomina il limite.
+    assert result.final_content == say("turn.truncated")
+    assert "output token limit" in (result.messages[-1]["content"] or "")
     # 1 tentativo iniziale + 2 retry, e nessuna chiamata di finalizzazione: il
     # turno ha già fatto attendere l'utente, non si spende un'altra chiamata.
     assert calls["n"] == 3

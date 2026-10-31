@@ -113,18 +113,77 @@ class TestExpiry:
 
 
 class TestRetentionCap:
-    def test_only_the_three_most_recent_lineages_per_origin_survive(
+    def test_only_the_most_recent_lineages_per_origin_survive(
         self, tmp_path: Path
     ) -> None:
         store, sessions = _store(tmp_path)
         base = time.time()
-        for i in range(MAX_HISTORY_PER_ORIGIN + 2):
+        total = MAX_HISTORY_PER_ORIGIN + 2
+        for i in range(total):
             store.save(f"L{i}", "unified:default", _MESSAGES, now=base + i)
 
         alive = sorted(p.name for p in sessions.sessions_dir.glob("subagent_*.jsonl"))
-        assert alive == ["subagent_L2.jsonl", "subagent_L3.jsonl", "subagent_L4.jsonl"]
+        assert alive == sorted(f"subagent_L{i}.jsonl" for i in range(2, total))
         assert store.load("L0") is None
-        assert store.load("L4") == _MESSAGES
+        assert store.load(f"L{total - 1}") == _MESSAGES
+
+    def test_the_injected_cap_raises_the_fixed_one_for_an_origin(self, tmp_path: Path) -> None:
+        """Il 26/10 un passo di piano ha fatto girare 8 aiutanti: le storie dei 5
+        editor finiti sono cadute proprio quando il giro li rimandava alle pagine,
+        e due su tre sono ripartiti da zero. Con il piano in corsa il tetto sale."""
+        store, _sessions = _store(tmp_path)
+        store.set_limit_provider(lambda origin: 12 if origin == "project:piante" else None)
+        assert store.max_for("project:piante") == 12
+        assert store.max_for("unified:default") == MAX_HISTORY_PER_ORIGIN
+        base = time.time()
+        for i in range(10):
+            store.save(f"P{i}", "project:piante", _MESSAGES, now=base + i)
+            store.save(f"U{i}", "unified:default", _MESSAGES, now=base + i)
+        assert all(store.load(f"P{i}") == _MESSAGES for i in range(10))
+        assert store.load("U0") is None
+        # Un provider che da' meno del tetto fisso non lo abbassa, e uno rotto non conta.
+        store.set_limit_provider(lambda origin: 1)
+        assert store.max_for("project:piante") == MAX_HISTORY_PER_ORIGIN
+
+        def _broken(origin: str) -> int:
+            raise RuntimeError("boom")
+
+        store.set_limit_provider(_broken)
+        assert store.max_for("project:piante") == MAX_HISTORY_PER_ORIGIN
+
+    def test_the_cap_covers_every_slot_of_a_plan_step(self) -> None:
+        """Un passo di piano fa girare ``PLAN_HELPER_SLOTS`` normali piu uno breve
+        nella stessa sessione: col tetto a 3 i primi fermati al budget perdevano
+        la storia prima che Jenny potesse farli continuare."""
+        from jenny.agent.subagent import PLAN_HELPER_SLOTS
+
+        assert MAX_HISTORY_PER_ORIGIN >= PLAN_HELPER_SLOTS + 1
+
+    def test_finished_histories_go_before_budget_ones(self, tmp_path: Path) -> None:
+        from jenny.agent.subagent_history import KIND_BUDGET
+
+        store, _ = _store(tmp_path, max_per_origin=2)
+        base = time.time()
+        store.save("stopped", "project:nb", _MESSAGES, now=base, kind=KIND_BUDGET)
+        store.save("done1", "project:nb", _MESSAGES, now=base + 1)
+        store.save("done2", "project:nb", _MESSAGES, now=base + 2)
+
+        # Il budget e il piu vecchio, ma aspetta di continuare: esce un ``done``.
+        assert store.load("stopped") == _MESSAGES
+        assert store.load("done1") is None
+        assert store.has("stopped") and store.has("done2") and not store.has("done1")
+
+    def test_the_kind_survives_a_restart(self, tmp_path: Path) -> None:
+        from jenny.agent.subagent_history import KIND_BUDGET
+
+        store, sessions = _store(tmp_path, max_per_origin=2)
+        base = time.time()
+        store.save("stopped", "project:nb", _MESSAGES, now=base, kind=KIND_BUDGET)
+        store.save("done1", "project:nb", _MESSAGES, now=base + 1)
+        fresh = SubagentHistoryStore(sessions, max_per_origin=2)
+        fresh.save("done2", "project:nb", _MESSAGES, now=base + 2)
+        assert fresh.load("stopped") == _MESSAGES
+        assert fresh.load("done1") is None
 
     def test_cap_is_per_origin_session_key(self, tmp_path: Path) -> None:
         store, _ = _store(tmp_path, max_per_origin=1)

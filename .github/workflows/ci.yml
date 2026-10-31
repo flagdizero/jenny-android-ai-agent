@@ -62,10 +62,10 @@ jobs:
       # The `dev` extra pins pytest, pytest-asyncio, ruff and the test-only
       # backends to exact versions (pyproject.toml).
       - run: pip install -e ".[dev]"
-      - run: ruff check jenny/ tests/
+      - run: ruff check jenny/ jenny_extensions/ tests/
       # pyright is a static check only (zero runtime impact); config in pyrightconfig.json.
       # BLOCKING: restricted to the already-error-clean subset — must stay green.
-      - run: npx --yes pyright@1.1.411 jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
+      - run: npx --yes pyright@1.1.411 jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
       # NON-BLOCKING visibility: full perimeter, surfaces residual errors without failing CI.
       - run: npx --yes pyright@1.1.411 || true
 
@@ -127,6 +127,10 @@ jobs:
       # release, cioè ha insegnato a ignorare l'unico segnale che conta. Per
       # vederlo in locale: `pytest -q --cov=jenny`, sapendo che quelle prove
       # della sandbox falliranno e che il motivo è questo.
-      - run: pytest -q
+      # `-n auto`: un processo per core (pytest-xdist, nell'extra `dev`);
+      # `worksteal` perché i file jsdom sono pochi e lunghi, e con la
+      # distribuzione di default un processo resta con la coda. `--durations`
+      # mette nel log i test più lenti: uno nuovo si vede, invece di sommarsi.
+      - run: pytest -q -n auto --dist worksteal --durations=25
         env:
           NODE_PATH: ${{ github.workspace }}/node_modules

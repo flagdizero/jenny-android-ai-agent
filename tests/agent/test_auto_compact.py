@@ -15,6 +15,7 @@ from jenny.bus.queue import MessageBus
 from jenny.command import CommandContext
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse
+from jenny.runtime.user_text import say
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 
@@ -184,11 +185,6 @@ class TestSessionTTLConfig:
         assert data["idleCompactAfterMinutes"] == 30
         assert "sessionTtlMinutes" not in data
 
-    def test_session_file_cap_is_internal_constant(self):
-        """Session file cap should remain an internal constant, not a config field."""
-        from jenny.session.manager import FILE_MAX_MESSAGES
-        assert FILE_MAX_MESSAGES == 2000
-
 
 class TestAgentLoopTTLParam:
     """Test that AutoCompact receives and stores session_ttl_minutes."""
@@ -198,8 +194,8 @@ class TestAgentLoopTTLParam:
         loop = _make_loop(tmp_path, session_ttl_minutes=25)
         assert loop.auto_compact._ttl == 25
 
-    def test_loop_default_ttl_zero(self, tmp_path):
-        """AutoCompact default TTL should be 0 (disabled)."""
+    def test_loop_passes_a_zero_ttl_through(self, tmp_path):
+        """An explicit 0 (disabled) reaches AutoCompact as 0; the schema default is 15."""
         loop = _make_loop(tmp_path, session_ttl_minutes=0)
         assert loop.auto_compact._ttl == 0
 
@@ -276,28 +272,13 @@ class TestAgentLoopTTLParam:
         assert [m["content"] for m in archived] == ["u2", "u3"]
 
 
+
+def _prompt_summary(loop, key: str) -> str | None:
+    """Il riassunto che arriva nel prompt di *key*, letto come lo legge il turno."""
+    return loop.auto_compact.summary_for(loop.sessions.get_or_create(key), key)
+
 class TestAutoCompact:
     """Test the _archive method."""
-
-    @pytest.mark.asyncio
-    async def test_is_expired_boundary(self, tmp_path):
-        """Exactly at TTL boundary should be expired (>= not >)."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
-        ts = datetime.now() - timedelta(minutes=15)
-        assert loop.auto_compact._is_expired(ts) is True
-        ts2 = datetime.now() - timedelta(minutes=14, seconds=59)
-        assert loop.auto_compact._is_expired(ts2) is False
-        await loop.close_background_tasks()
-
-    @pytest.mark.asyncio
-    async def test_is_expired_string_timestamp(self, tmp_path):
-        """_is_expired should parse ISO string timestamps."""
-        loop = _make_loop(tmp_path, session_ttl_minutes=15)
-        ts = (datetime.now() - timedelta(minutes=20)).isoformat()
-        assert loop.auto_compact._is_expired(ts) is True
-        assert loop.auto_compact._is_expired(None) is False
-        assert loop.auto_compact._is_expired("") is False
-        await loop.close_background_tasks()
 
     @pytest.mark.asyncio
     async def test_is_expired_tolerates_an_unreadable_timestamp(self, tmp_path):
@@ -435,7 +416,7 @@ class TestAutoCompact:
 
     @pytest.mark.asyncio
     async def test_auto_compact_stores_summary(self, tmp_path):
-        """_archive should store the summary in _summaries."""
+        """_archive leaves a summary that reaches the prompt."""
         loop = _make_loop(tmp_path, session_ttl_minutes=15)
         session = loop.sessions.get_or_create("internal:test")
         _add_turns(session, 6, prefix="hello")
@@ -447,9 +428,8 @@ class TestAutoCompact:
 
         await loop.auto_compact._archive("internal:test")
 
-        entry = loop.auto_compact._summaries.get("internal:test")
-        assert entry is not None
-        assert entry[0] == "User said hello."
+        summary = _prompt_summary(loop, "internal:test")
+        assert summary is not None and "User said hello." in summary
         session_after = loop.sessions.get_or_create("internal:test")
         assert len(session_after.messages) == loop.auto_compact._RECENT_SUFFIX_MESSAGES
         await loop.close_background_tasks()
@@ -465,7 +445,7 @@ class TestAutoCompact:
 
         session_after = loop.sessions.get_or_create("internal:test")
         assert len(session_after.messages) == 0
-        assert "internal:test" not in loop.auto_compact._summaries
+        assert _prompt_summary(loop, "internal:test") is None
         await loop.close_background_tasks()
 
     @pytest.mark.asyncio
@@ -564,7 +544,7 @@ class TestAutoCompactIdleDetection:
         ctx = CommandContext(msg=msg, session=session, key="internal:test", raw=raw, loop=loop)
         result = await loop.commands.dispatch_priority(ctx)
         assert result is not None
-        assert "stopped" in result.content.lower() or "no active task" in result.content.lower()
+        assert result.content in (say("stop.done"), say("stop.none"))
 
         # Session should be untouched since priority commands skip _process_message
         session_after = loop.sessions.get_or_create("internal:test")
@@ -683,7 +663,7 @@ class TestAutoCompactEdgeCases:
         session_after = loop.sessions.get_or_create("internal:test")
         assert len(session_after.messages) == loop.auto_compact._RECENT_SUFFIX_MESSAGES
         # "(nothing)" summary should not be stored
-        assert "internal:test" not in loop.auto_compact._summaries
+        assert _prompt_summary(loop, "internal:test") is None
 
         await loop.close_background_tasks()
 
@@ -798,8 +778,6 @@ class TestAutoCompactIntegration:
             "[/Runtime Context]" in str(m.get("content", "")) for m in session_after.messages
         )
 
-        # Pending summary should be consumed (one-shot)
-        assert "internal:test" not in loop.auto_compact._summaries
 
         # The new message should be processed (response exists)
         assert response.message is not None
@@ -881,9 +859,8 @@ class TestProactiveAutoCompact:
         session_after = loop.sessions.get_or_create("unified:default")
         assert len(session_after.messages) == loop.auto_compact._RECENT_SUFFIX_MESSAGES
         assert len(archived_messages) == 2
-        entry = loop.auto_compact._summaries.get("unified:default")
-        assert entry is not None
-        assert entry[0] == "User chatted about old things."
+        summary = _prompt_summary(loop, "unified:default")
+        assert summary is not None and "User chatted about old things." in summary
         await loop.close_background_tasks()
 
     @pytest.mark.asyncio
@@ -904,7 +881,7 @@ class TestProactiveAutoCompact:
         assert len(session_after.messages) == 12
         assert _fake_compact.state["count"] == 0
         assert "dream:20260602-155256" not in loop.auto_compact._archiving
-        assert "dream:20260602-155256" not in loop.auto_compact._summaries
+        assert _prompt_summary(loop, "dream:20260602-155256") is None
         await loop.close_background_tasks()
 
     @pytest.mark.asyncio
@@ -991,7 +968,7 @@ class TestProactiveAutoCompact:
         await self._run_check_expired(loop)
 
         # Empty session should not produce a summary
-        assert "unified:default" not in loop.auto_compact._summaries
+        assert _prompt_summary(loop, "unified:default") is None
         await loop.close_background_tasks()
 
     @pytest.mark.asyncio
@@ -1069,11 +1046,11 @@ class TestProactiveAutoCompact:
 
         # First tick: skips (no messages), refreshes updated_at
         await self._run_check_expired(loop)
-        assert "unified:default" not in loop.auto_compact._summaries
+        assert _prompt_summary(loop, "unified:default") is None
 
         # Second tick: should NOT re-schedule because updated_at is fresh
         await self._run_check_expired(loop)
-        assert "unified:default" not in loop.auto_compact._summaries
+        assert _prompt_summary(loop, "unified:default") is None
         await loop.close_background_tasks()
 
     @pytest.mark.asyncio
@@ -1136,7 +1113,7 @@ class TestSummaryPersistence:
 
     @pytest.mark.asyncio
     async def test_summary_recovered_after_restart(self, tmp_path):
-        """Summary should be recovered from metadata when _summaries is empty (simulates restart)."""
+        """Summary should be recovered from metadata after a restart."""
         loop = _make_loop(tmp_path, session_ttl_minutes=15)
         session = loop.sessions.get_or_create("internal:test")
         _add_turns(session, 6, prefix="hello")
@@ -1150,9 +1127,6 @@ class TestSummaryPersistence:
 
         # Archive
         await loop.auto_compact._archive("internal:test")
-
-        # Simulate restart: clear in-memory state
-        loop.auto_compact._summaries.clear()
         loop.sessions.invalidate("internal:test")
 
         # prepare_session should recover summary from metadata
@@ -1179,9 +1153,6 @@ class TestSummaryPersistence:
         loop.consolidator.compact_idle_session = _make_fake_compact(loop)
 
         await loop.auto_compact._archive("internal:test")
-
-        # Clear in-memory to force metadata path
-        loop.auto_compact._summaries.clear()
         loop.sessions.invalidate("internal:test")
         reloaded = loop.sessions.get_or_create("internal:test")
 
@@ -1197,7 +1168,7 @@ class TestSummaryPersistence:
 
     @pytest.mark.asyncio
     async def test_metadata_cleanup_on_inmemory_path(self, tmp_path):
-        """In-memory _summaries path should also clean up _last_summary from metadata."""
+        """The summary stays in the metadata, for restarts too."""
         loop = _make_loop(tmp_path, session_ttl_minutes=15)
         session = loop.sessions.get_or_create("internal:test")
         _add_turns(session, 6, prefix="hello")
@@ -1208,8 +1179,7 @@ class TestSummaryPersistence:
 
         await loop.auto_compact._archive("internal:test")
 
-        # Both _summaries and metadata have the summary
-        assert "internal:test" in loop.auto_compact._summaries
+        assert _prompt_summary(loop, "internal:test") is not None
         loop.sessions.invalidate("internal:test")
         reloaded = loop.sessions.get_or_create("internal:test")
         assert "_last_summary" in reloaded.metadata
@@ -1235,13 +1205,11 @@ class TestSummaryPersistence:
         )
         await loop.auto_compact._archive("internal:test")
 
-        # Consume the first summary via hot path
         _, summary1 = loop.auto_compact.prepare_session(
             loop.sessions.get_or_create("internal:test"), "internal:test"
         )
         assert summary1 is not None
         assert "First summary." in summary1
-        assert "internal:test" not in loop.auto_compact._summaries  # popped by hot path
 
         # Add new messages and archive again (simulating a later turn)
         _add_turns(session, 4, prefix="world")
@@ -1254,7 +1222,6 @@ class TestSummaryPersistence:
         await loop.auto_compact._archive("internal:test")
 
         # The second archive writes a new summary
-        assert "internal:test" in loop.auto_compact._summaries
 
         # prepare_session must return the new summary
         reloaded = loop.sessions.get_or_create("internal:test")

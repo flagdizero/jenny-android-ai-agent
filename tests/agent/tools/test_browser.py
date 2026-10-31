@@ -94,17 +94,35 @@ class FakeBridge:
 
 
 def _install(monkeypatch, bridge_cls=FakeBridge):
-    holder = {}
+    """Mette il bridge finto al posto della classe Kotlin.
+
+    ``holder["bridge"]`` e' l'ultimo costruito, ``holder["all"]`` tutti, e
+    ciascuno porta lo ``slot`` con cui e' nato (il profilo Kotlin).
+    """
+    holder = {"all": []}
 
     def factory():
-        def make(context):
+        def make(context, slot=0):
             b = bridge_cls(context)
+            b.slot = slot
             holder["bridge"] = b
+            holder["all"].append(b)
             return b
         return make
 
     monkeypatch.setattr(browser, "_resolve_bridge_class", factory)
     return holder
+
+
+def _main():
+    """Lo stato della sessione di Jenny, quella dei tool costruiti senza ``owner``."""
+    return browser._state(browser.MAIN_OWNER)
+
+
+def _instance(owner=browser.MAIN_OWNER):
+    """La WebView viva di ``owner``, o ``None``: senza creare la sessione."""
+    session = browser._SESSIONS.get(owner)
+    return session.instance if session is not None else None
 
 
 def _allow_url(monkeypatch):
@@ -120,9 +138,9 @@ def _allow_url(monkeypatch):
     monkeypatch.setattr(net, "validate_url_target", lambda url, **kw: (True, ""))
 
 
-def _tool(cls, **over):
+def _tool(cls, owner=browser.MAIN_OWNER, **over):
     cfg = AndroidWebBrowserConfig(**over)
-    return cls(android_context=object(), cfg=cfg)
+    return cls(android_context=object(), cfg=cfg, owner=owner)
 
 
 class TestDecode:
@@ -296,7 +314,7 @@ class TestLifecycle:
         _install(monkeypatch, Slow)
         out = await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=-9.9)
         assert "error" in out
-        assert browser._BROWSER_INSTANCE is None   # sessione buttata, non lasciata appesa
+        assert _instance() is None   # sessione buttata, non lasciata appesa
 
     async def test_exception_drops_the_session(self, monkeypatch):
         class Explodes(FakeBridge):
@@ -306,7 +324,7 @@ class TestLifecycle:
         _install(monkeypatch, Explodes)
         out = await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=1)
         assert "error" in out
-        assert browser._BROWSER_INSTANCE is None
+        assert _instance() is None
 
     async def test_close_closes_and_forgets(self, monkeypatch):
         _allow_url(monkeypatch)
@@ -315,7 +333,7 @@ class TestLifecycle:
         b = holder["bridge"]
         await _tool(BrowserCloseTool).execute()
         assert b.closed == 1
-        assert browser._BROWSER_INSTANCE is None
+        assert _instance() is None
 
     async def test_the_session_is_reused_across_calls(self, monkeypatch):
         _allow_url(monkeypatch)
@@ -326,9 +344,9 @@ class TestLifecycle:
         assert holder["bridge"] is first
 
     def test_reset_recreates_the_lock(self):
-        old = browser._BROWSER_LOCK
+        old = _main().lock
         browser.reset_browser_state()
-        assert browser._BROWSER_LOCK is not old
+        assert _main().lock is not old
 
     async def test_reset_closes_the_session_left_open(self, monkeypatch):
         """Un gateway ripartito nello stesso processo non eredita la sessione
@@ -343,7 +361,7 @@ class TestLifecycle:
 
         browser.reset_browser_state()
         assert old.closed == 1, "la sessione del giro prima e' rimasta aperta"
-        assert browser._BROWSER_INSTANCE is None
+        assert _instance() is None
 
         await _tool(BrowserOpenTool).execute(url="https://esempio.test/")
         assert holder["bridge"] is not old
@@ -356,9 +374,9 @@ class TestLifecycle:
             def close(self):
                 raise RuntimeError("main thread fermo")
 
-        browser._BROWSER_INSTANCE = _Broken()
+        _main().instance = _Broken()
         browser.reset_browser_state()
-        assert browser._BROWSER_INSTANCE is None
+        assert _instance() is None
 
 
 class TestClosingOutsideTheLoop:
@@ -377,7 +395,7 @@ class TestClosingOutsideTheLoop:
         b = holder["bridge"]
         assert b.closed == 1
         assert b.close_thread != threading.get_ident()
-        assert browser._BROWSER_INSTANCE is None
+        assert _instance() is None
 
     async def test_browser_close(self, monkeypatch):
         holder = _install(monkeypatch, self._Register)
@@ -456,7 +474,7 @@ class TestClosingOutsideTheLoop:
         """Senza lucchetto la chiusura strappava la WebView a una chiamata in corso."""
         holder = _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5)
-        async with browser._BROWSER_LOCK:
+        async with _main().lock:
             closing = asyncio.create_task(_tool(BrowserCloseTool).execute())
             await asyncio.sleep(0.05)
             assert holder["bridge"].closed == 0
@@ -505,9 +523,9 @@ class TestClosingOnInactivity:
         holder = _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=0.1)
         b = holder["bridge"]
-        assert browser._BROWSER_INSTANCE is not None
+        assert _instance() is not None
         await asyncio.sleep(0.35)
-        assert browser._BROWSER_INSTANCE is None
+        assert _instance() is None
         assert b.closed == 1
 
     async def test_activity_postpones_the_close(self, monkeypatch):
@@ -516,30 +534,30 @@ class TestClosingOnInactivity:
         for _ in range(6):
             await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=0.2)
             await asyncio.sleep(0.05)
-        assert browser._BROWSER_INSTANCE is not None
+        assert _instance() is not None
 
     async def test_a_single_guardian_per_session(self, monkeypatch):
         monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
         _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=5)
-        first = browser._IDLE_TASK
+        first = _main().idle_task
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=5)
-        assert browser._IDLE_TASK is first
+        assert _main().idle_task is first
 
     async def test_the_reset_stops_it(self, monkeypatch):
         monkeypatch.setattr(browser, "_IDLE_POLL_S", 0.02)
         _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=5)
-        task = browser._IDLE_TASK
+        task = _main().idle_task
         browser.reset_browser_state()
         await asyncio.sleep(0.05)
         assert task.cancelled() or task.done()
-        assert browser._IDLE_TASK is None
+        assert browser.MAIN_OWNER not in browser._SESSIONS
 
     async def test_no_idle_guardian_when_disabled(self, monkeypatch):
         _install(monkeypatch)
         await browser._call(object(), "snapshot", "full", "", 100, 30, timeout=5, idle_s=0)
-        assert browser._IDLE_TASK is None
+        assert _main().idle_task is None
 
 
 class TestEngineInThePage:
@@ -580,8 +598,8 @@ class TestEngineInThePage:
 
 def _index(monkeypatch, mapping):
     """Finge l'indice ruolo/nome lasciato dall'ultimo snapshot."""
-    browser._LAST_INDEX.clear()
-    browser._LAST_INDEX.update(mapping)
+    _main().last_index.clear()
+    _main().last_index.update(mapping)
 
 
 class TestSensitiveVerbs:
@@ -695,44 +713,44 @@ class TestPassword:
 
 class TestRefIndex:
     def test_the_snapshot_updates_it(self):
-        browser._LAST_INDEX.clear()
-        browser._render_snapshot({
+        _main().last_index.clear()
+        browser._render_snapshot(_main(), {
             "url": "https://x.test/", "version": 3, "refs": 1, "total": 1,
             "index": {"3:e0": ["button", "Paga ora"]}, "text": "- button ...",
         })
-        assert browser._LAST_INDEX == {"3:e0": ("button", "Paga ora")}
+        assert _main().last_index == {"3:e0": ("button", "Paga ora")}
 
     def test_refs_accumulate_in_the_same_document(self):
         """Guardare due volte non deve uccidere i ref della prima occhiata."""
-        browser._LAST_INDEX.clear()
-        browser._INDEX_VERSION = ""
-        browser._render_snapshot({"url": "u", "version": 2, "index": {"2:e0": ["button", "A"]},
-                                  "text": ""})
-        browser._render_snapshot({"url": "u", "version": 2, "index": {"2:e1": ["link", "B"]},
-                                  "text": ""})
-        assert set(browser._LAST_INDEX) == {"2:e0", "2:e1"}
+        _main().last_index.clear()
+        _main().index_version = ""
+        browser._render_snapshot(_main(), {"url": "u", "version": 2,
+                                           "index": {"2:e0": ["button", "A"]}, "text": ""})
+        browser._render_snapshot(_main(), {"url": "u", "version": 2,
+                                           "index": {"2:e1": ["link", "B"]}, "text": ""})
+        assert set(_main().last_index) == {"2:e0", "2:e1"}
 
     def test_a_new_document_empties_it(self):
-        browser._LAST_INDEX.clear()
-        browser._INDEX_VERSION = ""
-        browser._render_snapshot({"url": "u", "version": 2, "index": {"2:e0": ["button", "A"]},
-                                  "text": ""})
-        browser._render_snapshot({"url": "v", "version": 3, "index": {"3:e0": ["link", "B"]},
-                                  "text": ""})
-        assert set(browser._LAST_INDEX) == {"3:e0"}
+        _main().last_index.clear()
+        _main().index_version = ""
+        browser._render_snapshot(_main(), {"url": "u", "version": 2,
+                                           "index": {"2:e0": ["button", "A"]}, "text": ""})
+        browser._render_snapshot(_main(), {"url": "v", "version": 3,
+                                           "index": {"3:e0": ["link", "B"]}, "text": ""})
+        assert set(_main().last_index) == {"3:e0"}
 
     def test_a_snapshot_without_index_does_not_clear_it(self):
         """Un bridge vecchio non deve disarmare la politica in silenzio."""
-        browser._LAST_INDEX.clear()
-        browser._LAST_INDEX["1:e0"] = ("button", "Paga")
-        browser._render_snapshot({"url": "https://x.test/", "text": "..."})
-        assert browser._LAST_INDEX == {"1:e0": ("button", "Paga")}
+        _main().last_index.clear()
+        _main().last_index["1:e0"] = ("button", "Paga")
+        browser._render_snapshot(_main(), {"url": "https://x.test/", "text": "..."})
+        assert _main().last_index == {"1:e0": ("button", "Paga")}
 
-    def test_closing_empties_it(self, monkeypatch):
+    async def test_closing_empties_it(self, monkeypatch):
         _install(monkeypatch)
-        browser._LAST_INDEX["1:e0"] = ("button", "Paga")
-        browser.destroy_browser()
-        assert browser._LAST_INDEX == {}
+        _main().last_index["1:e0"] = ("button", "Paga")
+        await browser._destroy_browser_async(_main())
+        assert _main().last_index == {}
 
 
 class TestTheGuardMakesItselfHeard:

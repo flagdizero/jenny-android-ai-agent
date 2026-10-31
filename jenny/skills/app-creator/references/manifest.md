@@ -150,6 +150,134 @@ Constraints:
 - the server must be reachable from the phone when the app is opened (LAN, or Tailscale — the
   SSRF policy allows both). If it is not, say so rather than adding a "ping" action to check.
 
+## Summary (`summary`) — required for any app that keeps state
+
+The summary is how the app shows **outside its screen**: on a notebook board it is a **strip** —
+a paper card two polaroids wide with a header (icon, name, one datum on the right) and a few
+**blocks** below. A tap opens the app's screen (an app with no screen opens the card's drawer,
+which shows the same strip). The house draws it from your description; you never write HTML
+for it. An app that keeps state — a reader, or any storage action that writes — **must**
+declare one; an app with no state (a calculator, a converter) declares none and shows on a
+board as a polaroid with its icon.
+
+```json
+"summary": {
+  "collection": "items",
+  "meta": { "count": true, "where": { "done": false }, "label": "to buy" },
+  "blocks": [
+    { "kind": "checklist", "text": "what", "done": "done", "toggle": "set_done", "max": 4 },
+    { "kind": "buttons", "actions": [{ "action": "clear_done", "label": "Clear" }] }
+  ]
+}
+```
+
+- `collection` — the collection blocks read unless they name their own (`"readings"` with a
+  reader, implicitly). `where` + `params` filter it; `params` are asked when the app is placed on
+  a board (which sensor) and used as `$name`; a block may add its own `where`.
+- `meta` — the datum on the right of the header: `{field, unit, label}` (the latest record's
+  field) or `{count: true, where, label}` ("4 to buy"). Leave it out and the house shows the
+  state ("at 14:02", "stopped · 2 d ago", "in alarm").
+- `alarm` (`{field, op, value}`), `staleAfterMinutes` — the strip's state: an alarm turns it red,
+  stale data greys it out. The alarm tests its own `field` on the latest record, which need not
+  be the one the strip shows.
+- `blocks` — **1 to 4**, from this closed list (16 kinds). Each takes whole **rows**; the strip's size is the
+  smallest that holds them: **S 2 · M 4 · L 6 · XL 9 rows**. More than 9 rows is an error: show
+  less on the board, the rest stays in the app. Lists count at their `max` (≤ 5), so the size
+  never depends on the data.
+
+| `kind` | Rows | Fields |
+|---|---|---|
+| `value` | 2 | `field`, `unit`, `label`, `delta` (a field, e.g. the % change), `deltaUnit`, `trend` (true: a week's line) |
+| `numbers` | 2 | `items`: 1–3 of `{field, label, unit}` or `{count: true, where, label}` |
+| `chart` | 2 | `field` (a number), `days` (1–31); the `alarm` threshold is drawn as a band |
+| `status` | 1 | `online` (a bool field: `false` turns the pill red), `text` (a field); shows fresh / stopped / in alarm |
+| `progress` | 1 | `field`, `max` (a number or the field holding the target), `unit`, `label` |
+| `bars` | `max` | `collection`, `label`, `value`, `weight` (0–100), `target` (0–100), `unit`, `max` |
+| `table` | `max` | `collection`, `columns` (1–3 `{label, type, unit}`), `max` — newest first |
+| `events` | `max` | `collection`, `date`, `text`, `max` — from today on, soonest first |
+| `checklist` | `max` | `collection`, `text`, `done` (a bool field), `toggle` (an `update` action declaring `done`), `hideDone` |
+| `buttons` | 1 per 3 | `actions`: 1–6 of `"name"` or `{action, label}` |
+| `switches` | 1 each | `collection`, `items`: 1–4 of `{field, label, action}` (the action declares `field`) |
+| `counter` | 2 | `items`: 1–2 of `{field, label, dec, inc}` (actions with no required params) |
+| `week` | 2 | `collection`, `date` — this week, days with a record marked |
+| `month` | 6 | `collection`, `date`, `alarmWhere` — this month; always an XL strip |
+| `note` | `lines` | `field` (text), `lines` (1–3) |
+| `photos` | 3 | `max` (1–3) — the newest images in the app's `data/media/` (jpg, png, webp, gif, ≤ 8 MB) |
+
+Controls (`checklist`, `buttons`, `switches`, `counter`) call **only actions this app declares**,
+and only with what a tap can supply: the record's `id`, the toggled field, the placement's
+params. An action with other `required` params cannot be a button — the tool says so.
+
+How to choose: one thing that matters at a glance first (`value` for a number, `checklist` for
+a list), then at most one or two blocks of context. Examples — a sensor: `value` + `chart` +
+`status` (L); a portfolio: `value` (with `delta`) + `bars` of the positions (M or L); a shopping
+list: `checklist` + `buttons` (M or L); tax deadlines: `month` + `events` (XL); a savings goal:
+`progress` (S).
+
+Without `blocks`, the older forms still work and become one block each: `view` `value` /
+`chips` / `progress` / `list` / `table` with `field`, `columns`, `verbs`. The older `section`
+block is still read as a `value`. Write `blocks` in new apps.
+
+## Reader (`reader` + `run.py`)
+
+A reader is a small Python program next to the manifest that reads something **by itself**,
+every N minutes, with **no model turn** — a sensor, a price, a count — or recomputes a total
+from the app's own data. It replaces the old notebook "micro apps".
+
+```json
+"reader": {
+  "every": 30, "net": ["192.168.1.40"], "uses": "waterbot-imh", "key": "sensor",
+  "fields": {
+    "sensor":   { "label": "Sensor", "type": "text" },
+    "moisture": { "label": "Moisture", "type": "number", "unit": "%", "min": 0, "max": 100 },
+    "online":   { "label": "Online", "type": "bool" }
+  }
+}
+```
+
+```python
+def run(ctx):
+    hub = ctx.http.get_json("http://192.168.1.40/sensors")
+    return [{"sensor": s["name"], "moisture": s["moisture"], "online": s["online"],
+             "_source": f"hub, seen {s['seen']}"} for s in hub if s["name"] in
+            {w["sensor"] for w in ctx.wanted}]
+```
+
+- `every` — minutes between readings, from 15 to 1440 (once a day); default 60.
+- `fields` — exactly what `run(ctx)` returns, at most 8: `number` (with optional `min`/`max`),
+  `bool`, `text`, or one `rows` field (a list of dicts with declared `columns`, up to 4 columns
+  and 20 rows) for a list or table. A missing, wrong-typed or out-of-range value is an **error**,
+  never a value; the optional `_source` text says where the value came from.
+- `key` — a text field naming the series when one reader reads several things (three sensors):
+  then `run` returns a **list** of dicts, one per series, and `ctx.wanted` lists the params the
+  placements on the boards need (`[{"sensor": "acerello"}, …]`).
+- `net` — the only hosts `ctx.http.get_json / get_text / post_json` may reach (at most 4),
+  as bare host names: `api.example.com`, never `https://…` or a port. `ctx.http` is a plain
+  HTTP client — no cookies, no JavaScript, not a browser: a source that answered `web_fetch`
+  (which goes through the phone's browser) may refuse it. Try a source with `app run`, which
+  is the reader's real environment.
+- `uses` — at most one installed skill whose scripts `run` imports: reuse it instead of
+  re-implementing an API, and its credentials stay where they are. **Never put a credential in
+  `run.py` or `app.json`** — the `app` tool refuses it.
+- `ctx.now` (ISO), `ctx.prev` (the last reading **as it was written**: after you rename a
+  field it still carries the old name, so read it defensively), `ctx.data("collection")` (the app's own
+  records, read-only: a reader that **aggregates** — a portfolio's value from its operations and
+  current prices — also runs right after every write, so the summary always matches the data).
+- The code reads, never writes; at most 6 KB; 20 s per run and **at most 8 HTTP requests per run**
+  (the ninth raises `at most 8 requests per run`); three errors in a row mark it broken. Keep the
+  real error when you retry: one that ends on the cap hides why the earlier calls failed.
+- Readings are kept as the last 48 plus one per day for about 13 months: a long trend (a
+  portfolio's year) is drawn from the reader's own readings and grows from the first one — it is
+  not rebuilt from the past. A reading equal to the previous one adds no row: it moves the
+  previous one's time forward, so few rows mean "nothing changed", not "the reader did not run".
+- **A value you could not read is an error, not the old value.** Let the exception rise
+  (a network failure becomes "unreachable", anything else an error the tool shows you), and do
+  not wrap the fetch in `except Exception: continue`: that hides the reason — a 429, the
+  request cap — and leaves a reading that looks fresh and is wrong.
+- The draft's test run reads the live app's data (`ctx.prev`, `ctx.data`) without changing it,
+  and the tool's reply shows the values it read: check them against what you expect before
+  saying the app works.
+
 ## Complete example
 
 ```json
@@ -168,9 +296,18 @@ Constraints:
       "kind": "storage", "op": "append", "collection": "care",
       "params": { "plant": {"type": "string"}, "note": {"type": "string"} },
       "required": ["plant"] }
-  ]
+  ],
+  "summary": {
+    "collection": "care",
+    "meta": { "count": true, "label": "care notes" },
+    "blocks": [ { "kind": "table", "collection": "care", "max": 3,
+                  "columns": { "plant": { "label": "Plant" }, "note": { "label": "Note" } } } ]
+  }
 }
 ```
+
+An app with a storage action that writes keeps state, so it declares a `summary`: without it
+the draft is refused.
 
 ## AGENT.md
 
@@ -330,8 +467,8 @@ window.addEventListener('popstate', (e) => {
 - **No `<form>` at all** — there is no `allow-forms`, and the submission is blocked *before*
   the `submit` event is fired, so `event.preventDefault()` never runs and cannot rescue it.
   Use a plain `<button type="button">` with a click handler, add a `keydown` listener for
-  Enter on the input, and call `jenny.action(...)` from the handler. `validate_app.py`
-  rejects any `<form>` in `index.html`.
+  Enter on the input, and call `jenny.action(...)` from the handler. The draft refuses a
+  screen with a `<form>`, a modal call or a direct `/api/apps/` fetch.
 - **Never call the actions API with `fetch` directly, and never with POST or custom
   headers** — the gateway is GET-only and cannot answer CORS preflights. Always go through
   `jenny.action()`, which issues the correct simple GET.

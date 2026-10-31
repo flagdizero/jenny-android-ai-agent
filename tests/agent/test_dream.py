@@ -736,8 +736,7 @@ class TestWriteFileSaysWhatThePromptSays:
     ``SOUL.md``, che non ha un tool per voci e che il review pass deve accorciare
     come prosa. Il tentativo rifiutato resta contato (``record_write_attempt``
     sta prima della risoluzione), quindi il cursore non avanza e ``stuck``
-    sale — il "rifiuto di *path*" che il commento di ``format_stuck_alarm``
-    dice di aver visto sul Titan 2.
+    sale — il "rifiuto di *path*" visto sul Titan 2.
     """
 
     @pytest.mark.asyncio
@@ -869,11 +868,6 @@ def _errored_resp() -> SimpleNamespace:
 
 
 class TestFileStatesWriteCounters:
-    def test_counters_start_at_zero(self):
-        fs = FileStates()
-        assert fs.writes_ok == 0
-        assert fs.writes_attempted == 0
-
     def test_record_write_attempt_increments_only_attempts(self):
         fs = FileStates()
         fs.record_write_attempt()
@@ -1257,10 +1251,12 @@ class TestEphemeralHooks:
         provider.get_default_model.return_value = "test-model"
         provider.supports_tools = True
         provider.generation = MagicMock(max_tokens=4096)
+        # Una risposta vera, non un ``MagicMock``: di un mock anche
+        # ``has_tool_calls`` è un mock, cioè vero, e il runner girava tutte le
+        # sue duecento iterazioni (quasi due secondi a test) su un turno che
+        # doveva durarne una.
         provider.chat_with_retry = AsyncMock(
-            return_value=MagicMock(
-                content="done", finish_reason="stop", tool_calls=[], usage={},
-            )
+            return_value=LLMResponse(content="done", finish_reason="stop", tool_calls=[], usage={})
         )
 
         spy = MagicMock(spec=AgentHook)
@@ -1316,11 +1312,11 @@ class TestEphemeralHooks:
 
         await loop.process_direct("test", session_key="dream:hook-test", ephemeral=True)
 
-        spy.after_iteration.assert_called()
+        spy.after_iteration.assert_called_once()
 
     async def test_extra_hooks_fire_for_normal_sessions(self, tmp_path, _make_loop_with_spy):
         """Without ephemeral, extra hooks should fire normally."""
         loop, spy = _make_loop_with_spy
 
         await loop.process_direct("test", session_key="internal:normal")
-        spy.before_iteration.assert_called()
+        spy.before_iteration.assert_called_once()

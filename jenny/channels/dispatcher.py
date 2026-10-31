@@ -23,6 +23,7 @@ from jenny.bus.queue import MessageBus
 from jenny.config.schema import Config
 from jenny.providers import retry_notice
 from jenny.runtime.notifier import notify_delivery
+from jenny.session.keys import WEBUI_CHANNEL
 from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 if TYPE_CHECKING:
@@ -63,6 +64,8 @@ class WebSocketDispatcher:
         get_subagent_manager: Callable[[], Any | None] | None = None,
         get_cron_service: Callable[[], Any | None] | None = None,
         get_busy_session_keys: Callable[[], Collection[str]] | None = None,
+        get_llm: Callable[[], tuple[Any, str] | None] | None = None,
+        get_plan_driver: Callable[[], Any | None] | None = None,
         runtime_events: Any | None = None,
     ):
         self.config = config
@@ -72,6 +75,8 @@ class WebSocketDispatcher:
         self._get_subagent_manager = get_subagent_manager
         self._get_cron_service = get_cron_service
         self._get_busy_session_keys = get_busy_session_keys
+        self._get_llm = get_llm
+        self._get_plan_driver = get_plan_driver
         self._webui_runtime_model_name = webui_runtime_model_name
         self._onboarding_event = onboarding_event
         self._on_settings_changed = on_settings_changed
@@ -118,6 +123,8 @@ class WebSocketDispatcher:
             get_subagent_manager=self._get_subagent_manager,
             get_cron_service=self._get_cron_service,
             get_busy_session_keys=self._get_busy_session_keys,
+            get_llm=self._get_llm,
+            get_plan_driver=self._get_plan_driver,
             logger=logger,
             onboarding_event=self._onboarding_event,
             on_settings_changed=self._on_settings_changed,
@@ -527,8 +534,15 @@ class WebSocketDispatcher:
         # un turno streammato (es. cron con WebView connessa-ma-in-pausa a
         # schermo spento) — resta solo l'alert di sistema Android. Il gate
         # foreground sta nel bridge Kotlin; `skip_persist` esclude i retry.
-        if not skip_persist and msg.content.strip():
-            notify_delivery(msg.content, msg.metadata)
+        # Il `chat_id` porta il quaderno nella notifica solo dalla WebUI: è
+        # l'unico canale in cui un `chat_id` può nominarne uno.
+        # Un turno con ``origin_channel`` e' partito altrove — oggi un altro
+        # dispositivo del tailnet (v. ``channels.ws_remote``): la risposta la
+        # stai leggendo li', e il telefono non suona. Stessa regola del ramo non
+        # streammato in ``ws_sender.send``; questo e' il caso normale.
+        if not skip_persist and msg.content.strip() and not msg.metadata.get("origin_channel"):
+            chat_id = msg.chat_id if msg.channel == WEBUI_CHANNEL else None
+            notify_delivery(msg.content, msg.metadata, chat_id=chat_id)
         return None
 
     def _coalesce_stream_deltas(

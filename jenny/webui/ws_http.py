@@ -61,6 +61,7 @@ from jenny.channels.http_utils import (
 from jenny.channels.http_utils import (
     safe_host_header as _safe_host_header,
 )
+from jenny.channels.ws_remote import on_remote_listener
 from jenny.config.paths import get_workspace_path
 from jenny.security.workspace_policy import is_path_within
 from jenny.session.keys import (
@@ -72,6 +73,7 @@ from jenny.session.keys import (
     webui_transcript_key,
 )
 from jenny.session.webui_turns import websocket_turn_wall_started_at
+from jenny.webui import static_cache
 from jenny.webui.android_apps_api import (
     launch_android_app,
     open_android_app_info,
@@ -80,7 +82,9 @@ from jenny.webui.android_apps_api import (
 )
 from jenny.webui.file_preview import WebUIFilePreviewError, file_preview_payload
 from jenny.webui.media_gateway import WebUIMediaGateway
+from jenny.webui.phone_only import refuse_if_remote
 from jenny.webui.transcript import build_webui_thread_response
+from jenny.webui.transcript_store import transcript_revision
 from jenny.webui.workspaces import WebUIWorkspaceController
 
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
@@ -239,10 +243,18 @@ class GatewayHTTPHandler:
         # (senza restart del processo → senza sync) riservirebbe altrimenti una
         # copia manomessa. Per il contenuto attivo (HTML/JS/CSS) serviamo i byte
         # canonici del package, mai il disco. Cache lazy (una lettura per file).
-        from jenny.utils.android_assets import _UI_MANIFEST
+        # I file delle estensioni (``jenny/extensions.py``) stanno sotto
+        # ``assets/ext/<nome>/`` e si servono dal **loro** pacchetto, con la
+        # stessa regola: mai dalla copia su disco.
+        from jenny.utils.android_assets import ui_sources
 
-        self._ui_manifest_set = frozenset(_UI_MANIFEST)
+        self._ui_sources = ui_sources()
         self._canonical_ui_cache: dict[str, bytes | None] = {}
+        # L'impronta dei file serviti, per la pagina che deve accorgersi di un
+        # aggiornamento (``jenny/webui/ui_version.py``): si calcola in un thread.
+        from jenny.webui import ui_version
+
+        ui_version.warm()
         self.runtime_model_name = runtime_model_name
         self.bus = bus
         self.media = media
@@ -286,6 +298,22 @@ class GatewayHTTPHandler:
             json_safe=_json_safe,
         )
 
+        from jenny.webui.board_routes import BoardRoutes
+
+        # La bacheca di un quaderno: stesso cancello della wiki (token, wiki
+        # accesa, quaderno che esiste), per questo i due controlli si prendono
+        # in prestito da ``WikiRoutes`` invece di essere ricopiati.
+        self.board_routes = BoardRoutes(
+            check_api_token=self.check_api_secret,
+            get_workspace_root=lambda: self._get_workspace_root(),
+            check_wiki_enabled=lambda: self.wiki_routes._check_wiki_enabled(),
+            get_wikis_dir=lambda: self.wiki_routes._get_wikis_dir(),
+            # Late-binding: il getter dello scheduler si assegna piu' sotto.
+            get_cron_service=lambda: (
+                self._get_cron_service() if getattr(self, "_get_cron_service", None) else None
+            ),
+        )
+
         from jenny.webui.workspace_routes import WorkspaceRoutes
 
         self.workspace_routes = WorkspaceRoutes(
@@ -300,7 +328,7 @@ class GatewayHTTPHandler:
             get_workspace_root=lambda: self._get_workspace_root(),
             log=self._log,
             check_app_token=self.check_app_secret,
-            get_secret=lambda: self.config.token_issue_secret.strip(),
+            get_secret=lambda: self._auth_secret(),
         )
 
         from jenny.webui.backup_routes import BackupRoutes
@@ -312,6 +340,18 @@ class GatewayHTTPHandler:
             get_backup_manager=self._get_backup_manager,
             log=self._log,
         )
+
+        # Le route delle estensioni impacchettate in questa build. Ognuna
+        # dichiara il suo ``prefix``; il token lo controlla il core, prima di
+        # passargliela, come per ogni altra route ``/api/``.
+        from jenny import extensions
+
+        self.extension_routes: list[Any] = [
+            router
+            for ext in extensions.load()
+            if ext.make_routers is not None
+            for router in ext.make_routers(snapshot_service, self._log)
+        ]
 
         from jenny.webui.home_routes import HomeRoutes
 
@@ -344,6 +384,12 @@ class GatewayHTTPHandler:
             log=self._log,
         )
 
+        from jenny.webui.work_routes import WorkRoutes
+
+        # La bolla di lavoro della home (giardiniere, Dream): lo snapshot per
+        # chi si ricollega a lavoro iniziato.
+        self.work_routes = WorkRoutes(check_api_token=self.check_api_secret, log=self._log)
+
     def _resolve_subagent_manager(self) -> Any | None:
         if self._get_subagent_manager is None:
             return None
@@ -361,17 +407,29 @@ class GatewayHTTPHandler:
 
     # -- Token management ---------------------------------------------------
 
+    def _auth_secret(self) -> str:
+        """La chiave contro cui si controlla questa richiesta.
+
+        Il segreto della WebView, tranne sull'ascoltatore Tailscale, dove vale
+        solo la chiave di ``gateway.remoteAccess`` (v. ``channels.ws_remote``).
+        Anche il token di una Jenny App ne deriva: coniato e verificato sullo
+        stesso ascoltatore, torna.
+        """
+        from jenny.channels.ws_remote import auth_secret
+
+        return auth_secret(self.config.token_issue_secret.strip())
+
     def check_api_secret(self, request: WsRequest) -> bool:
         from jenny.channels.http_utils import check_api_secret as _check
 
-        return _check(request.headers, request.path, self.config.token_issue_secret.strip())
+        return _check(request.headers, request.path, self._auth_secret())
 
     def check_app_secret(self, request: WsRequest, slug: str) -> bool:
         """Il segreto, **o** il token della Jenny App *slug*: solo per le sue route."""
         from jenny.channels.http_utils import check_app_secret as _check
 
         return _check(
-            request.headers, request.path, self.config.token_issue_secret.strip(), slug
+            request.headers, request.path, self._auth_secret(), slug
         )
 
     # -- Main dispatch ------------------------------------------------------
@@ -433,7 +491,7 @@ class GatewayHTTPHandler:
             # _is_foreign_navigation (la vista esterna che si porta sulla SPA).
             if _is_foreign_navigation(request.headers):
                 return _http_error(403, "Forbidden")
-            response = self._serve_static(got)
+            response = self._serve_static(got, request.headers)
             if response is not None:
                 return response
 
@@ -470,7 +528,10 @@ class GatewayHTTPHandler:
     # -- Bootstrap ----------------------------------------------------------
 
     def _handle_bootstrap(self, connection: Any, request: Any) -> Response:
-        secret = self.config.token_issue_secret.strip()
+        from jenny import extensions
+        from jenny.webui import ui_version
+
+        secret = self._auth_secret()
         if secret:
             if not _issue_route_secret_matches(request.headers, secret):
                 return _http_error(401, "Unauthorized")
@@ -485,6 +546,17 @@ class GatewayHTTPHandler:
                 "ws_url": ws_url,
                 "model_name": _resolve_bootstrap_model_name(self.runtime_model_name),
                 "provider": _default_provider_name_from_config() or "",
+                # Aperta da un altro dispositivo (Tailscale): la pagina nasconde
+                # quel che ha senso solo col telefono in mano (v. ``phone_only``).
+                "remote": on_remote_listener(),
+                # Le estensioni di questa build: le shell ne caricano il modulo
+                # e le traduzioni prima del primo render (``jenny/extensions.py``).
+                "extensions": extensions.bootstrap_info(),
+                # Quali file serve e quale processo: la pagina li confronta a ogni
+                # riconnessione e si ricarica dopo un aggiornamento
+                # (``jenny/webui/ui_version.py``, ``shared/update-watch.js``).
+                "ui_version": ui_version.current(),
+                "boot": ui_version.BOOT_ID,
             }
         )
 
@@ -538,6 +610,10 @@ class GatewayHTTPHandler:
             except ValueError:
                 return _http_error(400, "invalid limit")
         before = _query_first(query, "before")
+        # Prima della lettura e non dopo: una riga entrata nel frattempo rende
+        # la revisione vecchia, e il prossimo confronto rilegge. Al contrario
+        # direbbe «aggiornato» a una storia che quella riga non ce l'ha.
+        rev = transcript_revision(webui_transcript_key(decoded_key))
         data = build_webui_thread_response(
             # La trascrizione sta sotto ``websocket:<chat_id>``, anche per un
             # progetto che il client chiede come ``project:<nome>``: v.
@@ -563,6 +639,7 @@ class GatewayHTTPHandler:
         )
         if data is None:
             return _http_error(404, "webui thread not found")
+        data["rev"] = rev
         # Il client non legge ``sessionKey``, ma la risposta resta indirizzata con
         # la chiave che ha chiesto.
         data["sessionKey"] = decoded_key
@@ -642,6 +719,15 @@ class GatewayHTTPHandler:
         if backup_response is not None:
             return backup_response
 
+        for router in self.extension_routes:
+            if not got.startswith(router.prefix):
+                continue
+            if not self.check_api_secret(request):
+                return _http_error(401, "Unauthorized")
+            extension_response = await router.dispatch(request, got)
+            if extension_response is not None:
+                return extension_response
+
         home_response = await self.home_routes.dispatch(request, got)
         if home_response is not None:
             return home_response
@@ -655,6 +741,14 @@ class GatewayHTTPHandler:
         subagent_response = await self.subagent_routes.dispatch(request, got)
         if subagent_response is not None:
             return subagent_response
+
+        work_response = await self.work_routes.dispatch(request, got)
+        if work_response is not None:
+            return work_response
+
+        board_response = await self.board_routes.dispatch(request, got)
+        if board_response is not None:
+            return board_response
 
         # Wiki + audit routes (delegated to WikiRoutes)
         wiki_response = await self.wiki_routes.dispatch(request, got)
@@ -671,11 +765,17 @@ class GatewayHTTPHandler:
     async def _handle_webui_android_apps(self, request: WsRequest) -> Response:
         if not self.check_api_secret(request):
             return _http_error(401, "Unauthorized")
+        # Da fuori le app del telefono non si aprono (v. ``phone_only``): una
+        # lista vuota, senza nemmeno chiedere al ponte.
+        if on_remote_listener():
+            return _http_json_response({"apps": []})
         return _http_json_response(await webui_android_apps_payload())
 
     async def _handle_webui_android_app_launch(self, request: WsRequest, raw_package: str) -> Response:
         if not self.check_api_secret(request):
             return _http_error(401, "Unauthorized")
+        if (refused := refuse_if_remote()) is not None:
+            return refused
         package = unquote(raw_package)
         if not package or _ANDROID_PACKAGE_RE.match(package) is None:
             return _http_error(400, "invalid package name")
@@ -689,6 +789,8 @@ class GatewayHTTPHandler:
     ) -> Response:
         if not self.check_api_secret(request):
             return _http_error(401, "Unauthorized")
+        if (refused := refuse_if_remote()) is not None:
+            return refused
         package = unquote(raw_package)
         if not package or _ANDROID_PACKAGE_RE.match(package) is None:
             return _http_error(400, "invalid package name")
@@ -700,6 +802,8 @@ class GatewayHTTPHandler:
     ) -> Response:
         if not self.check_api_secret(request):
             return _http_error(401, "Unauthorized")
+        if (refused := refuse_if_remote()) is not None:
+            return refused
         package = unquote(raw_package)
         if not package or _ANDROID_PACKAGE_RE.match(package) is None:
             return _http_error(400, "invalid package name")
@@ -798,18 +902,19 @@ class GatewayHTTPHandler:
         """
         if not rel.endswith(self._CANONICAL_UI_SUFFIXES):
             return None
-        if rel not in self._ui_manifest_set:
+        source = self._ui_sources.get(rel)
+        if source is None:
             return None
         if rel not in self._canonical_ui_cache:
             try:
                 from jenny.utils.android_assets import read_asset
 
-                self._canonical_ui_cache[rel] = read_asset("jenny.templates.ui", rel)
+                self._canonical_ui_cache[rel] = read_asset(*source)
             except Exception:  # noqa: BLE001 - lettura best-effort, fallback al disco
                 self._canonical_ui_cache[rel] = None
         return self._canonical_ui_cache[rel]
 
-    def _serve_static(self, request_path: str) -> Response | None:
+    def _serve_static(self, request_path: str, headers: Any = None) -> Response | None:
         assert self.static_dist_path is not None
         # Forma canonica prima di tutto: senza segmenti vuoti né ``.``. Il
         # filesystem legge ``assets//x.js`` e ``assets/./x.js`` come
@@ -842,8 +947,13 @@ class GatewayHTTPHandler:
         # del package, mai dalla copia su disco scrivibile. Fallback al disco per
         # font/immagini e per eventuali file fuori manifest.
         body = self._canonical_ui_bytes(served_rel)
+        # La chiave dell'impronta: i byte del package non cambiano finche' il
+        # processo vive; un file del disco si riconosce da dimensione e mtime.
+        etag_key: tuple[Any, ...] = ("pkg", served_rel)
         if body is None:
             try:
+                st = candidate.stat()
+                etag_key = ("disk", str(candidate), st.st_size, st.st_mtime_ns)
                 body = candidate.read_bytes()
             except OSError as e:
                 self._log.warning("static: failed to read {}: {}", candidate, e)
@@ -853,17 +963,41 @@ class GatewayHTTPHandler:
             ctype = "application/octet-stream"
         if ctype.startswith("text/") or ctype in {"application/javascript", "application/json"}:
             ctype = f"{ctype}; charset=utf-8"
-        if candidate.name == "index.html":
-            cache = "no-cache"
-        else:
-            cache = "no-cache"
+        # ``no-cache`` = ricontrolla a ogni uso, e l'``ETag`` e' il modo di
+        # ricontrollare: un 304 di pochi byte invece del file intero, e un
+        # aggiornamento di Jenny che arriva subito (v. ``static_cache``).
+        cache = "no-cache"
+        etag = static_cache.etag_for(etag_key, body)
+        get = getattr(headers, "get", None)
+        encoding: str | None = None
+        vary: list[tuple[str, str]] = []
+        if static_cache.compressible(ctype):
+            vary = [("Vary", "Accept-Encoding")]
+            # Compressi solo per chi arriva da fuori: sul telefono il file sta
+            # gia' a un passo, e comprimerlo costerebbe CPU per niente.
+            if on_remote_listener() and get and static_cache.accepts_gzip(get("Accept-Encoding")):
+                packed = static_cache.gzip_variant(etag, body)
+                if packed is not None:
+                    etag, body = packed
+                    encoding = "gzip"
+        if get and static_cache.matches(get("If-None-Match"), etag):
+            return _http_response(
+                b"",
+                status=304,
+                content_type=ctype,
+                extra_headers=[("Cache-Control", cache), ("ETag", etag), *vary],
+            )
         # ACAO lets opaque-origin app iframes load shared kit assets (fonts
         # especially: @font-face fetches are CORS-mode). Public content, no
         # credentials, so "*" is safe.
         extra_headers = [
             ("Cache-Control", cache),
+            ("ETag", etag),
             ("Access-Control-Allow-Origin", "*"),
+            *vary,
         ]
+        if encoding:
+            extra_headers.append(("Content-Encoding", encoding))
         # M1 (migliorie/webui.md): defense-in-depth CSP for the SPA shell,
         # ENFORCING dal 18 lug 2026 dopo smoke test pulito (era Report-Only).
         # Applied only to the shell documents (the pages that host a SPA — v.

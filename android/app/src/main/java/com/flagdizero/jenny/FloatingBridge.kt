@@ -1,13 +1,18 @@
 package com.flagdizero.jenny
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.util.Log
 
 /**
  * Bridge per la mascotte flottante, esposto a Python via Chaquopy
  * (`jclass("com.flagdizero.jenny.FloatingBridge")`), mai istanziato da Kotlin —
  * stesso pattern di `NotifierBridge`.
  *
- * Due metodi, uno per verso:
+ * Due metodi, uno per verso, più `isActive` e `openPermissionSettings` per il
+ * pannello impostazioni:
  *
  * * `setEnabled` — la volontà, letta da `config.floating.enabled` all'avvio del
  *   gateway (`jenny/runtime/floating.py`);
@@ -67,6 +72,36 @@ class FloatingBridge(context: Context) {
      * tutte le volte che è vera e non solo appena si tocca l'interruttore.
      */
     fun isActive(): Boolean = onMain { FloatingOverlayController.isActive() }
+
+    /**
+     * Porta l'utente dove si concede «Mostra sopra altre app»: un'app non può
+     * concederselo da sé.
+     *
+     * Il `package:` chiede la pagina della sola Jenny, ma dal 11 Android lo
+     * **ignora** e apre l'elenco di tutte le app, dove lei è una riga. La pagina
+     * di una sola app esiste (`android.settings.MANAGE_APP_OVERLAY_PERMISSION`),
+     * ma un'app qualunque riceve `SecurityException`: misurato su jenny_s22,
+     * Android 16, il 25/10/2026. Il secondo tentativo, senza pacchetto, è per le
+     * ROM che rifiutano anche il primo.
+     */
+    fun openPermissionSettings(): Boolean {
+        val tries = listOf(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${appContext.packageName}"),
+            ),
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+        )
+        for (intent in tries) {
+            try {
+                appContext.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return true
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot open overlay permission settings (${intent.data})", e)
+            }
+        }
+        return false
+    }
 
     /** Disegna la risposta nel fumetto. `false` se non c'è nessuna finestra. */
     fun showReply(text: String): Boolean = onMain {

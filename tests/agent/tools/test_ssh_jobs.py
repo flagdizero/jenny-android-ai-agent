@@ -202,7 +202,13 @@ async def test_poll_returns_only_the_new_output_then_the_exit_code(tmp_path):
             "printf 'beta\\n'; exit 7",
         )
 
-        first = await _drain(env, job.job_id, until=lambda text, _j: "alpha" in text)
+        # Anche il cursore, non solo il testo: un poll può consegnare «alpha»
+        # prima di averlo contato (v. ``test_jobs_and_cursors_survive_a_new_store``),
+        # e allora il poll dopo lo ridà, per scelta. Qui si prova il caso in cui
+        # è stato contato.
+        first = await _drain(
+            env, job.job_id, until=lambda text, j: "alpha" in text and j.cursor > 0
+        )
         assert "beta" not in first
 
         gate.write_text("go")
@@ -354,7 +360,11 @@ async def test_jobs_and_cursors_survive_a_new_store(tmp_path):
     """Su Android il gateway viene ucciso di routine: il cursore deve restare."""
     async with shell_env(tmp_path) as env:
         job = await _start(env, "printf 'hello\\n'")
-        await _drain(env, job.job_id, until=lambda text, _j: "hello" in text)
+        # «hello» può arrivare prima del cursore: il poll legge la dimensione
+        # del log prima del delta, apposta (v. ``_poll_command``), e se il file
+        # cresce in mezzo il delta c'è già mentre il cursore resta indietro di
+        # un giro. Sotto carico (``pytest -n``) succede: si aspetta il cursore.
+        await _drain(env, job.job_id, until=lambda text, j: "hello" in text and j.cursor > 0)
         cursor = env.store.get(job.job_id).cursor
         assert cursor > 0
 

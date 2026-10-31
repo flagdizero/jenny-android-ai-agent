@@ -34,14 +34,11 @@ function writeStorage(key, value) {
   }
 }
 
-const VISIBLE_KEY = 'jenny-mascot-visible';
 const SIZE_KEY = 'jenny-mascot-size';
-/* Visibilita' e taglia si chiamavano `jenny-mascotte-visible` e
-   `jenny-mascotte-size` fino al rinomino in inglese del 25/09/2026. Il valore
-   scelto dall'utente passa al nome nuovo (se quello non c'e' gia'), e il nome
-   vecchio finisce fra le chiavi morte qui sotto. */
+/* La taglia si chiamava `jenny-mascotte-size` fino al rinomino in inglese del
+   25/09/2026. Il valore scelto dall'utente passa al nome nuovo (se quello non
+   c'e' gia'), e il nome vecchio finisce fra le chiavi morte qui sotto. */
 const RENAMED_KEYS = [
-  ['jenny-mascotte-visible', VISIBLE_KEY],
   ['jenny-mascotte-size', SIZE_KEY],
 ];
 for (const [before, after] of RENAMED_KEYS) {
@@ -58,8 +55,11 @@ for (const [before, after] of RENAMED_KEYS) {
    tutti e due i gusci:
    - `jenny-mascotte-color`: il bianco/nero (08/09/2026);
    - `jenny-mascotte-dock-side`, `jenny-mascotte-side`: il lato (5961d22);
-   - `jenny-mascotte-visible`, `jenny-mascotte-size`: i nomi di prima di
-     `VISIBLE_KEY` e `SIZE_KEY`, copiati qui sopra (25/09/2026);
+   - `jenny-mascotte-size`: il nome di prima di `SIZE_KEY`, copiato qui
+     sopra (25/09/2026);
+   - `jenny-mascot-visible` e il suo nome di prima `jenny-mascotte-visible`:
+     «Mostra la mascotte», tolta il 05/10/2026 — Jenny e' la porta della
+     chat, e una porta che si spegne lascia la chat senza strada;
    - `jenny-advanced-mode`: la modalità sviluppatore (78ff330);
    - `jenny-home-view`: la vista di Home scelta dall'utente (3d57980);
    - `locale`: il selettore di lingua dell'officina (v. shared/i18n.js). */
@@ -68,6 +68,8 @@ const DEAD_KEYS = [
   'jenny-mascotte-dock-side',
   'jenny-mascotte-side',
   ...RENAMED_KEYS.map(([before]) => before),
+  'jenny-mascot-visible',
+  'jenny-mascotte-visible',
   'jenny-advanced-mode',
   'jenny-home-view',
   'locale',
@@ -85,20 +87,6 @@ for (const key of DEAD_KEYS) {
  *  scrivere il pixel. */
 export const MASCOT_SIZES = { sm: 120, md: 160, lg: 210 };
 
-export function mascotVisible() {
-  const v = readStorage(VISIBLE_KEY);
-  if (v === null) return true; // default: visibile
-  return v === '1';
-}
-
-export function setMascotVisible(on) {
-  writeStorage(VISIBLE_KEY, on ? '1' : '0');
-  window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: { visible: on },
-  }));
-  return on;
-}
-
 export function mascotSize() {
   const s = readStorage(SIZE_KEY);
   return s in MASCOT_SIZES ? s : 'sm'; // default: piccola
@@ -109,7 +97,7 @@ export function setMascotSize(size) {
   writeStorage(SIZE_KEY, normalized);
   applyMascotSize();
   window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: { visible: mascotVisible(), size: normalized },
+    detail: { size: normalized },
   }));
   return normalized;
 }

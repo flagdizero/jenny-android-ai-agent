@@ -21,6 +21,9 @@ from jenny.bus.events import (
     OUTBOUND_META_AGENT_UI,
     OUTBOUND_META_SUBAGENT_ACTIVITY,
     OUTBOUND_META_SUBAGENT_STATUS,
+    OUTBOUND_META_WORK_ID,
+    OUTBOUND_META_WORK_START,
+    OUTBOUND_META_WORK_STATUS,
     OutboundMessage,
 )
 from jenny.channels.subagent_activity_wire import (
@@ -221,8 +224,23 @@ class OutboundSenderMixin:
             if isinstance(slug, str) and slug:
                 await self.send_app_data_changed(slug)
             return []
+        if msg.metadata.get("_board_changed"):
+            notebook = msg.metadata.get("notebook")
+            if isinstance(notebook, str) and notebook:
+                await self.send_board_changed(notebook)
+            return []
         if msg.metadata.get("_apps_list_changed"):
             await self.send_apps_list_changed()
+            return []
+        if msg.metadata.get("_staged_changed"):
+            count = msg.metadata.get("count")
+            await self.send_staged_changed(count if isinstance(count, int) else 0)
+            return []
+        if msg.metadata.get("_plan_changed"):
+            notebook = msg.metadata.get("notebook")
+            plan_id = msg.metadata.get("plan_id")
+            if isinstance(notebook, str) and notebook and isinstance(plan_id, str):
+                await self.send_plan_changed(notebook, plan_id)
             return []
         if msg.metadata.get("_user_echo"):
             return await self._send_user_echo(
@@ -240,6 +258,7 @@ class OutboundSenderMixin:
                 or msg.metadata.get("_mascot_mood")
                 or msg.metadata.get(OUTBOUND_META_SUBAGENT_STATUS) is not None
                 or msg.metadata.get(OUTBOUND_META_SUBAGENT_ACTIVITY) is not None
+                or msg.metadata.get(OUTBOUND_META_WORK_STATUS) is not None
             ):
                 self.logger.debug("no active subscribers for chat_id={}", msg.chat_id)
             else:
@@ -252,6 +271,15 @@ class OutboundSenderMixin:
         if subagent_status is not None:
             if conns:
                 await self.send_subagent_status(msg.chat_id, subagent_status)
+            return []
+        # Lo stato di un lavoro lungo (giardiniere, Dream): stessa disciplina
+        # dello snapshot dei subagent — frame dedicato, mai una bolla vuota,
+        # mai nel transcript. A zero iscritti si perde, ed e' voluto: chi non
+        # guarda quella chat non sta aspettando niente.
+        work_status = msg.metadata.get(OUTBOUND_META_WORK_STATUS)
+        if work_status is not None:
+            if conns:
+                await self.send_work_status(msg.chat_id, work_status)
             return []
         # Attività fine di un subagent: stessa disciplina dello snapshot (frame
         # dedicato, mai una bolla, mai nel transcript) più una regola in più —
@@ -386,6 +414,21 @@ class OutboundSenderMixin:
         agent_ui = msg.metadata.get(OUTBOUND_META_AGENT_UI)
         if agent_ui is not None:
             payload["agent_ui"] = agent_ui
+        work_id = msg.metadata.get(OUTBOUND_META_WORK_ID)
+        if isinstance(work_id, str) and work_id:
+            # Il testo e' il resoconto di un lavoro che la home mostra gia' come
+            # bolla: con l'id lo riconosce e non lo disegna due volte. Persiste
+            # nel transcript insieme al resto del payload.
+            payload["work_id"] = work_id
+            if msg.metadata.get(OUTBOUND_META_WORK_START):
+                payload["work_start"] = True
+        error = msg.metadata.get("error")
+        if isinstance(error, dict) and isinstance(error.get("kind"), str) and error["kind"]:
+            # Il turno è finito in un errore del provider (o in un'eccezione):
+            # il testo è già la frase per l'utente, ``kind`` dice alla WebUI di
+            # disegnarlo come errore. Solo ``kind``, nella forma esatta che il
+            # client legge, e persiste nel transcript come il resto del payload.
+            payload["error"] = {"kind": error["kind"]}
         if msg.metadata.get("_session_boundary"):
             # /new: il client rende un separatore al posto della bolla. Finisce
             # anche nel transcript persistito (payload è ciò che viene salvato),
@@ -417,8 +460,9 @@ class OutboundSenderMixin:
                 # `not skip_persist` così un retry non ri-squilla; il gate
                 # foreground sta nel bridge Kotlin. I messaggi con origin sono
                 # proiezioni di turni già consegnati sul canale d'origine
-                # (l'utente sta chattando lì): nessuno squillo sul server.
-                notify_delivery(text, msg.metadata)
+                # (l'utente sta chattando lì): nessuno squillo sul server. Il
+                # `chat_id` porta il quaderno nella notifica (v. notifier).
+                notify_delivery(text, msg.metadata, chat_id=msg.chat_id)
         raw = json.dumps(payload, ensure_ascii=False)
         target_conns = only_conns if only_conns is not None else conns
         if not target_conns:
@@ -698,7 +742,10 @@ class OutboundSenderMixin:
         conns = only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
         if not conns:
             return []
-        raw = json.dumps(body, ensure_ascii=False)
+        # La revisione del filo dopo questa riga, solo sul filo e non su disco:
+        # chi la riceve sa di avere tutto fino a qui (v. ``transcript_revision``).
+        wire = {**body, "rev": self._transcripts.revision(chat_id)}
+        raw = json.dumps(wire, ensure_ascii=False)
         return await self._fanout(conns, raw, label=" turn_end ")
 
     async def send_goal_status(
@@ -769,6 +816,20 @@ class OutboundSenderMixin:
         raw = json.dumps(body, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next snapshot replaces it).
         await self._fanout(conns, raw, label=" subagent_status ")
+
+    async def send_work_status(self, chat_id: str, payload: Any) -> None:
+        """Manda ai client lo stato di un lavoro lungo (``work_status``).
+
+        Il payload e' quello di ``WorkReporter.payload``, servito identico da
+        ``GET /api/work``. Come lo snapshot dei subagent non persiste e non si
+        ritenta: il prossimo aggiornamento rimpiazza quello perso.
+        """
+        conns = list(self._subs.get(chat_id, ()))
+        if not conns or not isinstance(payload, dict):
+            return
+        body: dict[str, Any] = {**payload, "event": "work_status", "chat_id": chat_id}
+        raw = json.dumps(body, ensure_ascii=False)
+        await self._fanout(conns, raw, label=" work_status ")
 
     # -- Attività fine di un subagent (solo per chi la sta guardando) --------
     #
@@ -971,6 +1032,15 @@ class OutboundSenderMixin:
         # Idempotent refresh-hint: discard pending, no retry (next change replaces it).
         await self._fanout(conns, raw, label=" app_data_changed ")
 
+    async def send_board_changed(self, notebook: str) -> None:
+        """Broadcast that a notebook's board changed (an open board redraws)."""
+        conns = list(self._conn_chats)
+        if not conns:
+            return
+        raw = json.dumps({"event": "board_changed", "notebook": notebook}, ensure_ascii=False)
+        # Idempotent refresh-hint, like app_data_changed: the next change replaces it.
+        await self._fanout(conns, raw, label=" board_changed ")
+
     async def send_apps_list_changed(self) -> None:
         """Broadcast that the Jenny Apps list changed (WebUI grid refreshes)."""
         conns = list(self._conn_chats)
@@ -979,6 +1049,27 @@ class OutboundSenderMixin:
         raw = json.dumps({"event": "apps_list_changed"}, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next change replaces it).
         await self._fanout(conns, raw, label=" apps_list_changed ")
+
+    async def send_plan_changed(self, notebook: str, plan_id: str) -> None:
+        """Broadcast that a notebook's plan changed (the plan card re-reads ``plan.get``)."""
+        conns = list(self._conn_chats)
+        if not conns:
+            return
+        raw = json.dumps(
+            {"event": "plan_changed", "notebook": notebook, "plan_id": plan_id},
+            ensure_ascii=False,
+        )
+        # Idempotent refresh-hint, like board_changed: the next change replaces it.
+        await self._fanout(conns, raw, label=" plan_changed ")
+
+    async def send_staged_changed(self, count: int) -> None:
+        """Broadcast that the drafts awaiting approval changed (the home card redraws)."""
+        conns = list(self._conn_chats)
+        if not conns:
+            return
+        raw = json.dumps({"event": "staged_changed", "count": count}, ensure_ascii=False)
+        # Idempotent refresh-hint: the client re-reads ``staged.list``.
+        await self._fanout(conns, raw, label=" staged_changed ")
 
     async def send_runtime_model_updated(
         self,

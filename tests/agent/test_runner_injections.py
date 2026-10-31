@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from support.agent import make_loop
-from support.aio import wait_until
+from support.aio import stop_agent_loop, wait_until
 from support.runner import make_spec
 
 from jenny.agent.turn_types import TurnOutcome
@@ -646,8 +646,7 @@ async def test_followup_routed_to_pending_queue(tmp_path):
 
     queued_msg = await asyncio.wait_for(pending.get(), timeout=2)
 
-    loop.stop()
-    await asyncio.wait_for(run_task, timeout=2)
+    await stop_agent_loop(loop, run_task)
 
     assert loop._dispatch.await_count == 0
     assert queued_msg.content == "follow-up"
@@ -688,19 +687,18 @@ async def test_cron_turn_deferred_while_session_active(tmp_path):
         lambda: loop._cron_turns.deferred_queues.get(session_key), timeout=1.0, interval=0.05
     )
 
-    loop.stop()
-    await asyncio.wait_for(run_task, timeout=2)
+    await stop_agent_loop(loop, run_task)
 
     assert pending.empty()
     assert loop._dispatch.await_count == 0
     assert loop._cron_turns.deferred_queues[session_key] == [msg]
-    assert loop.pending_cron_job_ids_for_session(session_key) == {"job-1"}
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == {"job-1"}
 
     await loop._cron_turns.publish_next_deferred(session_key)
     queued = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=0.5)
     assert queued is msg
     assert session_key not in loop._cron_turns.deferred_queues
-    assert loop.pending_cron_job_ids_for_session(session_key) == set()
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == set()
 
 
 @pytest.mark.asyncio
@@ -726,7 +724,7 @@ async def test_submitted_cron_turn_reports_pending_until_completed(tmp_path):
     queued = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=0.5)
 
     assert queued is msg
-    assert loop.pending_cron_job_ids_for_session(session_key) == {"job-1"}
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == {"job-1"}
 
     response = OutboundMessage(
         channel="websocket",
@@ -736,7 +734,7 @@ async def test_submitted_cron_turn_reports_pending_until_completed(tmp_path):
     loop._cron_turns.complete(msg, outcome=TurnOutcome.delivered(response))
 
     assert (await asyncio.wait_for(submit_task, timeout=0.5)).message is response
-    assert loop.pending_cron_job_ids_for_session(session_key) == set()
+    assert loop._cron_turns.pending_job_ids_for_session(session_key) == set()
 
 
 @pytest.mark.asyncio
@@ -815,8 +813,7 @@ async def test_pending_queue_full_falls_back_to_queued_task(tmp_path):
 
     await asyncio.wait_for(dispatched.wait(), timeout=2)
 
-    loop.stop()
-    await asyncio.wait_for(run_task, timeout=2)
+    await stop_agent_loop(loop, run_task)
 
     assert loop._dispatch.await_count == 1
     dispatched_msg = loop._dispatch.await_args.args[0]

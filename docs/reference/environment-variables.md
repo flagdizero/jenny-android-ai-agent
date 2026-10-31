@@ -41,7 +41,7 @@ Also defined in `runtime_env.py`, but consumed by the model providers (`jenny/pr
 
 ## Release signing variables
 
-Consumed only by `android/app/build.gradle.kts` when building the Android app, not by the Python gateway. They provide the four pieces of a release keystore so `./gradlew app:assembleRelease` can produce a signed, installable APK.
+Consumed only by `android/app/build.gradle.kts` when building the Android app, not by the Python gateway. They provide the four pieces of a release keystore so `./gradlew app:assembleFossRelease` can produce a signed, installable APK.
 
 | Variable | Default | Effect |
 |---|---|---|
@@ -53,8 +53,8 @@ Consumed only by `android/app/build.gradle.kts` when building the Android app, n
 Notes:
 
 - All four must be set (and the keystore file must actually exist at the given path) for the release build to be signed. The build also accepts the same four values from a gitignored `android/keystore.properties` file (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`) as a local alternative to environment variables — environment variables take precedence when both are present.
-- If neither source supplies a complete set, `assembleRelease` still succeeds but produces an **unsigned APK that cannot be installed on a device** — the build intentionally does not fail, so anyone can still reproduce and inspect the artifact. Gradle prints an explicit warning at build time: `[jenny] WARNING: release signing credentials not found — the APK will be UNSIGNED and cannot be installed on a device.`
-- These variables never affect `./gradlew app:installDebug`, the normal day-to-day build/deploy command — debug builds use the Android debug keystore automatically and are unaffected by any of this.
+- If neither source supplies a complete set, `assembleFossRelease` still succeeds but produces an **unsigned APK that cannot be installed on a device** — the build intentionally does not fail, so anyone can still reproduce and inspect the artifact. Gradle prints an explicit warning at build time: `[jenny] WARNING: release signing credentials not found — the APK will be UNSIGNED and cannot be installed on a device.`
+- These variables never affect `./gradlew app:installFossDebug`, the normal day-to-day build/deploy command — debug builds use the Android debug keystore automatically and are unaffected by any of this.
 - Signing uses v2 and v3 scheme only (v1/JAR signing is deliberately disabled — it only matters below API 24, and Jenny's `minSdk` is 26).
 
 See also: [Build from source](../contribute/build-from-source.md), [Install the APK](../start/install.md).

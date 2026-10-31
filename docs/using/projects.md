@@ -2,13 +2,13 @@
 
 Everything you say to Jenny normally lands in one continuous personal conversation. A **notebook** is the other kind: a separate conversation bound to one folder, which remembers what it is told by *writing it down* in that folder instead of by feeding Jenny's personal memory.
 
-In the home you switch between them on the **Notebooks** page: tap the personal row for the personal chat, or a notebook to open it there. In the workshop's Console you switch with the chip above the message box: it shows her name (*Jenny* unless you renamed her) when you are in the personal chat, and `wikis › <name>` when you are inside a notebook.
+In the home the personal chat is the **Jenny** page; a notebook opens from the **Notebooks** page on its board, and its chat is behind Jenny — tap her over the board. In the workshop's Console you switch with the chip above the message box: it shows her name (*Jenny* unless you renamed her) when you are in the personal chat, and `wikis › <name>` when you are inside a notebook.
 
 ## What a notebook is
 
 A notebook is a folder under `workspace/wikis/<name>/` — the same place [wikis](./wiki.md) live, because a notebook *is* a wiki. There is no separate `notebooks/` directory, and a notebook you create in the app is a wiki like any other.
 
-<p align="center"><img src="../img/notebook-open.png" alt="An open notebook: the header with Notebooks › cats and the Chat | Pages switch, above its own conversation" width="300"></p>
+<p align="center"><img src="../img/notebook-board.png" alt="An open notebook on its board: polaroid cards, an app strip, decks of photos and notes, reminders and threads, under Notebooks › garden" width="300"></p>
 
 A freshly created notebook looks like this:
 
@@ -26,6 +26,17 @@ workspace/wikis/greenhouse/
     resolved/
 ```
 
+Once the notebook has a [board](./board.md), its files sit beside the rest (`raw/photos/` appears with the first photo added to a drawer):
+
+```text
+  board/
+    board.json           the board: skeleton, cards and positions, your sections, threads, proposals
+    reminders.json       the notebook's reminders
+    cards/<id>.json      each drawer's summary, written from the wiki and regenerable
+  raw/
+    photos/              photos added to drawers
+```
+
 Subfolders under `wiki/` are allowed, not required. Wikis that existed before this layout keep whatever structure they already have — Jenny follows the structure it finds, and that notebook's `AGENTS.md` is the authority on how that one works.
 
 ## How a notebook differs from the personal chat
@@ -36,13 +47,15 @@ Subfolders under `wiki/` are allowed, not required. Wikis that existed before th
 | Feeds long-term memory? | Yes — the [Dream](./memory.md) pipeline builds `MEMORY.md`, `USER.md`, `SOUL.md` from it | **Only `USER.md`.** It is archived into `memory/history.jsonl` under its own key, and Dream may take facts about *you* from it into `USER.md`, nothing else |
 | Remembers by | Dream, between conversations | Writing facts into its own folder, during the conversation |
 | Where writes may land | Anywhere in the workspace | **Only inside its own folder** |
-| Reminders, cron, scheduled jobs | Yes | Refused — Jenny tells you to switch to the personal chat |
-| Mini-app data | Read and write | Read yes, change no (mini-apps and their data are personal) |
-| Prompt carries | Your profile, plus the [list of your wikis](./memory.md#how-jenny-knows-which-wikis-you-have) | Your profile, plus **this notebook's** map and pages — not the list of the other wikis |
+| Reminders, cron, scheduled jobs | Yes | Only with a [board](./board.md): a job belongs to one card or to the whole notebook — Jenny decides — and delivers here (see [Notebook crons](./scheduling.md#notebook-crons)). Without a board it is refused, and Jenny points to the personal chat |
+| App data | Read and write | Read yes; change only the apps placed on this notebook's board (see [Apps on a notebook's board](./mini-apps.md#apps-on-a-notebooks-board)) |
+| Prompt carries | Your profile, the [list of your wikis](./memory.md#how-jenny-knows-which-wikis-you-have), and the [diary](./memory.md#the-diary-what-happened-in-your-notebooks): what was written in every notebook's journal lately | Your profile, plus **this notebook's** board (or its map) and pages — not the list of the other wikis, and nothing from another notebook |
 
-The memory boundary is deliberately **one-directional**, and it is worth reading twice: *who you are travels into a notebook, where else you work does not.* `SOUL.md`, `USER.md` and `memory/MEMORY.md` are read from the installation root and reach a notebook's turns, so Jenny still knows your language, your habits and your context while working there. What does not reach a notebook is the cross-notebook inventory (the `## Wikis` block) and the tail of your personal conversation. The way back is narrower still, and it carries only who you are: a notebook conversation is archived into `memory/history.jsonl` under the notebook's own key, no chat's prompt ever shows those entries as recent history, and Dream digests them in a separate batch whose only write tool is the entry tool on `USER.md`. A fact about you said inside a notebook can land in `USER.md`; the notebook's own material cannot reach `MEMORY.md` or `SOUL.md`.
+Going in, the boundary is narrow on purpose: *who you are travels into a notebook, where else you work does not.* `SOUL.md` and `USER.md` are read from the installation root and reach a notebook's turns in full, so Jenny still knows your language, your habits and your context while working there; of `memory/MEMORY.md` a notebook gets only a one-line pointer, not the content. What does not reach a notebook is the cross-notebook inventory (the `## Wikis` block), the tail of your personal conversation, and anything from another notebook.
 
-The practical consequence: **a notebook is not private from Jenny, and the personal chat is barely informed by it.** Beyond what Dream carries into `USER.md`, a notebook's archived entries reach the personal chat only if Jenny goes looking with `recall_history`, which from the personal chat reads every entry in the file (inside a notebook that tool refuses). If you want something you said in a notebook to be part of Jenny's general knowledge, say it in the personal chat too.
+Coming out, the personal chat **is kept informed**, because Jenny is one person and should know what you did with her elsewhere. Every line a notebook writes into its journal also leaves a short copy in `memory/history.jsonl` — the fact, who said it, which notebook, and where the full line is — and the personal chat sees the last days of those copies in its [diary](./memory.md#the-diary-what-happened-in-your-notebooks). So if you tell a notebook you watched a film, the personal chat knows it without being told twice. It works the other way too: in the personal chat, when you mention something that belongs to one of your notebooks — the mechanic coming on Thursday for the camper — Jenny writes it into that notebook's journal herself, without you opening it. She never creates a notebook to do so, and something about you (your health, how you feel) stays out of the notebooks even when it comes up while talking about one. And when a conversation in the personal chat turns into real work on one notebook's subject, Jenny offers once to continue there: a button under her reply opens that notebook's chat, where she knows what you were in the middle of. What does not come out is the notebook's own material as knowledge: a notebook conversation is also archived into `memory/history.jsonl` under the notebook's own key, and Dream digests it in a separate batch whose only write tool is the entry tool on `USER.md`. A fact about you said inside a notebook can land in `USER.md`; the notebook's own material cannot reach `MEMORY.md` or `SOUL.md`.
+
+The practical consequence: **a notebook is not private from Jenny, and the personal chat knows what happened in it lately** — as one-line events, not as pages. For details, Jenny opens the notebook's journal or searches with `recall_history`, which from the personal chat reads every entry in the file (inside a notebook that tool refuses). The personal chat on Telegram is the same conversation, and sees the same diary.
 
 ## Writes stay inside the folder, reads do not
 
@@ -57,7 +70,7 @@ In the home, tap the round **+** on the **Notebooks** page; in the workshop's Co
 1. **Notebook name.** Letters, numbers, dot, dash and underscore; it must start with a letter or a digit and fit in 64 characters. No spaces and no accents — this name is a folder name *and* a conversation address, so `Greenhouse Notes` and `caffè` are refused. The rule is written under the field, and a name that breaks it keeps the dialog open with what you typed and the reason underneath, so you can fix it in place (the same goes for **Rename**). If the name already exists you get a warning rather than a refusal ("If it was left half-built I'll finish it, otherwise the creation will be refused") with a **Try anyway** button. If the name matches a conversation whose notebook folder is gone, you are asked first — "“name” still has a conversation", with the number of messages — and choose **Pick it up** to carry on in that chat or **Start clean** to throw it away.
 2. **What is it about** — one line: what belongs here and what does not. This is required; without it the chat starts on nothing. It is stored as the notebook's summary and as the opening line of both `AGENTS.md` and the map, and it is capped at 500 characters.
 
-On success you land straight in the new notebook. The scaffolding — folders, `AGENTS.md`, an empty-but-structured `wiki/index.md`, today's `log/` entry — is written for you; nothing that already exists is overwritten, which is why re-running the creation on a half-built folder repairs it instead of clobbering it.
+On success you land straight in the new notebook's chat, and Jenny speaks first: a short greeting, written by the model from the name and the line you just wrote, that ends by asking where to start. If the model cannot be reached, or takes more than 15 seconds, a fixed sentence takes its place ("Hi! This is our space to talk about: …"), so the chat never opens empty. A conversation you chose to pick up is not greeted. In the home the chat opens over the notebook's [board](./board.md), which you find when you close it; the sections of its drawers are proposed by Jenny once the notebook has a few pages, or you can ask her for the ones you want while the board is still empty. The scaffolding — folders, `AGENTS.md`, an empty-but-structured `wiki/index.md`, today's `log/` entry — is written for you; nothing that already exists is overwritten, which is why re-running the creation on a half-built folder repairs it instead of clobbering it.
 
 Later, once the notebook has some pages, `/init` inside it rewrites that notebook's `AGENTS.md` from what the folder actually contains — its scope, the conventions the pages already follow, and the open questions. Outside a notebook, `/init` refuses and tells you to open one (in the home from the **Notebooks** page; the server's text also mentions the workshop's chip above the composer, and still calls the notebook a *project*).
 
@@ -97,23 +110,25 @@ The journal is append-only by construction — the tool that writes it can only 
 Two things follow from this design that surprise people:
 
 - **Jenny does not ask permission to write.** The switch already answered that question; asking again in words would reopen what you closed. If you do not want a turn to capture, flip the workshop's switch to Read-only — in read-only the capture instructions are not even part of the prompt, so Jenny does not attempt it and does not offer.
-- **Capture is not authorship.** A journal line is not a page. Turning lines into pages, and keeping the map current, happens when you ask for it — or on its own, later, in a [gardener](./gardener.md) pass.
+- **Capture is not authorship.** A journal line is not a page. Turning lines into pages, and keeping the map current, happens when you ask for it — Jenny hands that to the [notebook editor](./board.md#asking-jenny) — or on its own, later, in a [gardener](./gardener.md) pass.
 
 What arrives from outside — an article, a document, a page you pasted — goes verbatim into `raw/research/` first, and into a page second, with the page's `source:` pointing back at the raw copy.
 
-## What Jenny actually sees: the map and the pages
+## What Jenny actually sees: the board, the map and the pages
 
-Two things from the notebook folder are put in front of the model on **every** turn.
+Two things from the notebook folder are put in front of the model on **every** turn: the board or the map, and the pages.
 
-**The map** is `wiki/index.md`: what the notebook is, what is decided, what is open, and which pages exist. It is injected whole up to **2,000 characters**. Past that it is not head-truncated — that would deliver the prose and drop the index, which inverts the point — so instead the list of page links is kept in the order the map names them and whatever budget is left goes to the head of the file, cut at a line boundary. A notice reports the map's true size, and `(+N more)` if even the bare list did not fit.
+**The board**, when the notebook has one with at least one card, takes the map's place: one line per card — its name, its brief, its nearest reminder, and a problem flag when a mini app in its drawer is in alarm or stalled — plus how many pages are off the board, within the same **2,000 characters**. `wiki/index.md` is then not injected, but it still exists, Jenny is told it lists every page, and it still decides the order of the pages below. When your message names a card by its title, that card's whole drawer (up to 2,500 characters, at most two drawers per message) is added to that turn's context — next to the time, not in the cached system prompt, so a message that names nothing costs nothing extra. See [Notebook board](./board.md).
 
-This is why the map must stay short: it is paid for on every single message. When a section of it outgrows a few lines, that content belongs on its own page.
+**The map**, in a notebook without a board (or with an empty one), is `wiki/index.md`: what the notebook is, what is decided, what is open, and which pages exist. It is injected whole up to **2,000 characters**. Past that it is not head-truncated — that would deliver the prose and drop the index, which inverts the point — so instead the list of page links is kept in the order the map names them and whatever budget is left goes to the head of the file, cut at a line boundary. A notice reports the map's true size, and `(+N more)` if even the bare list did not fit.
+
+This is why the map must stay short when it is injected: it is paid for on every single message. When a section of it outgrows a few lines, that content belongs on its own page.
 
 **The pages** come next, up to **6,000 characters** in total, in the order the map names them (pages the map never mentions go last, alphabetically). On real notebooks that is typically **one to four pages of twenty to fifty** — so the block states the count — *"Those are 2 of the notebook's 33 pages"* — and carries a notice naming how many were left out and reminding Jenny that `read_file` opens them.
 
 Consequences worth knowing:
 
-- **A page that is not there is not missing.** `read_file` opens it, and the map tells Jenny it exists. The order is the selection, and the order comes from your map — moving a page's link higher in `wiki/index.md` is how you make it arrive first.
+- **A page that is not there is not missing.** `read_file` opens it, and the map — or, with a board, the drawers and the count of pages off the board — tells Jenny it exists. The order is the selection, and the order comes from your map — moving a page's link higher in `wiki/index.md` is how you make it arrive first.
 - **No page ever enters half.** A page that does not fit is skipped whole, and the scan moves on to the next one.
 - **A page over 6,000 characters never enters a turn at all**, in any conversation in that notebook. That is what a gardener split is for; you can also split it by hand.
 - **Answers should cite.** Jenny is told to name the pages it leant on, as `[[page-name]]`. An answer that cites nothing is the visible sign that a notebook is not working yet.
@@ -137,7 +152,7 @@ When a notebook's history *is* compacted, the messages that leave the live sessi
 
 ## Renaming a notebook from the app
 
-In the home, press and hold the notebook's row on the **Notebooks** page and choose **Rename**. The name follows the same rule as at creation (letters, numbers, dot, dash and underscore; the rule is written under the field and a name that breaks it keeps the dialog open). Jenny renames the folder first and then moves the conversation after it, so the chat, its history and a page you pinned for the notebook all follow the new name; if you were inside it, you stay inside, under the new name.
+In the home, press and hold the notebook's row on the **Notebooks** page and choose **Rename**. The name follows the same rule as at creation (letters, numbers, dot, dash and underscore; the rule is written under the field and a name that breaks it keeps the dialog open). Jenny renames the folder first and then moves the conversation after it, so the chat, its history, a page you pinned for the notebook and its reminders and automations (the ones Jenny scheduled there) all follow the new name; if you were inside it, you stay inside, under the new name.
 
 It is refused, before anything moves, in three cases, each with its own message: she is still working in that notebook (a turn, a subagent, a gardener pass or an idle compaction is writing — try again once she has finished); the new name already belongs to a notebook or a conversation; or the notebook is no longer there. If the process dies between the folder and the chat, what is left is exactly the state the next section describes, and the gateway finishes the move on its own at the next turn or start.
 
@@ -147,7 +162,7 @@ The folder name is the conversation's address, so renaming it — from the file 
 
 | What happened | What you see |
 |---|---|
-| Renamed to a valid name | Jenny says it moved the history to the new name, nothing was lost, and asks you to open the new name (from **Notebooks** in the home, from the chip in the workshop). |
+| Renamed to a valid name | Jenny says it moved the history to the new name — its scheduled automations move with it — nothing was lost, and asks you to open the new name (from **Notebooks** in the home, from the chip in the workshop). |
 | Renamed to a name that cannot be a conversation (spaces, accents) | Jenny says it found the folder but left the history under the old name rather than moving it somewhere nothing could open, names the character rule, and points out that renaming it back also works. Nothing is moved. |
 | The folder is simply gone | Jenny says it could not find where it went, that nothing is lost, and that the chat comes back as soon as the folder does. |
 | A previous move stopped halfway | Jenny says part of the history is under each name, that nothing was deleted, and that restarting it finishes the join on the way up. This is the one case that does **not** claim "nothing is lost" in the same breath. |
@@ -158,6 +173,8 @@ Two folders swapping names is refused rather than guessed at, and a notebook who
 ## See also
 
 - [The gardener](./gardener.md) — the background pass that turns journal lines into pages, when it runs, and how to turn it off.
-- [Wiki](./wiki.md) — the page list, the map, editing a page and reporting one, which work on notebooks too.
+- [Notebook board](./board.md) — the cards, drawers, reminders and proposals a notebook opens on.
+- [Plans](./plans.md) — a big job in a notebook, proposed as steps you approve and run one at a time.
+- [Wiki](./wiki.md) — reading, searching, editing a page and reporting one, which work on notebooks too.
 - [Memory and Dream](./memory.md) — the personal side of remembering, and the budgets.
 - [Slash commands](./slash-commands.md) — `/gardener`, `/init` and the rest.

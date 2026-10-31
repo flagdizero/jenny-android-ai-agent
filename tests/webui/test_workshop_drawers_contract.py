@@ -237,9 +237,10 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
 
     Due schermate che sanno esportare sono due posti da tenere allineati per un
     gesto che si fa una volta al mese — e due posti in cui puo' comparire una
-    passphrase. In officina resta la **storia locale**, che e' quel che la casa
-    manda a sfogliare qui: «si sfoglia in officina. Vive pero' su questo
-    telefono — di un telefono perso non salva niente».
+    passphrase. La **storia locale** invece sta in tutti e due: la casa la
+    sfoglia e la ripristina sotto la sua riga, perche' chi cerca «il file di
+    stamattina» non deve sapere che esiste un'officina; le manopole (crearne
+    uno a mano, per quanto tenerla) restano solo di qua.
     """
     workshop = _src("mobile-settings.js")
     for flow in ("runExportFlow", "runImportFlow"):
@@ -258,12 +259,12 @@ def test_the_encrypted_backup_lives_in_one_place() -> None:
         "toglierebbe dall'app"
     )
 
-    # Quel che resta di qua: la storia locale, con le sue tre manopole.
+    # La storia locale: il ripristino in tutti e due, le manopole solo qui.
     for piece in ("btn-snapshot-create", "snapshot-retention", "runSnapshotRestore"):
         assert piece in workshop, f"la storia locale ha perso {piece}"
-    assert "runSnapshotRestore" not in home, (
-        "la casa ha preso anche gli snapshot: la sua frase manda a sfogliarli qui"
-    )
+    assert "runSnapshotRestore" in home, "la casa non ripristina piu' gli snapshot"
+    for knob in ("createSnapshot", "updateSnapshotRetention"):
+        assert knob not in home, f"la casa ha preso anche {knob}, che sta in officina"
 
 
 def test_choosing_the_model_saves_model_and_brand_together() -> None:
@@ -395,7 +396,7 @@ def test_the_workshop_no_longer_carries_a_wiki_of_its_own() -> None:
     html = WORKSHOP.read_text(encoding="utf-8")
     for node in ('id="view-wiki"', 'id="view-graph"', 'id="drawer-audit"',
                  'id="drawer-files"', 'id="wiki-feedback-dialog"'):
-        assert node not in html, f"{node} e' tornato in officina.html"
+        assert node not in html, f"{node} e' tornato in workshop.html"
 
     from jenny.utils.android_assets import _UI_MANIFEST
 
@@ -425,7 +426,7 @@ def test_the_shell_no_longer_loads_a_library_at_every_boot() -> None:
     html = WORKSHOP.read_text(encoding="utf-8")
     for heavy in ("katex", "mermaid", "d3.min.js"):
         assert heavy not in html, (
-            f"officina.html carica {heavy} all'avvio: si carica quando serve, "
+            f"workshop.html carica {heavy} all'avvio: si carica quando serve, "
             f"non a ogni partenza"
         )
     home = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
@@ -438,13 +439,13 @@ def test_the_notebook_did_not_disappear_with_it() -> None:
     stanza e demolirla, e senza questo banco i due sopra sarebbero soddisfatti
     anche da un prodotto che non sa piu' aprire un quaderno.
 
-    La casa ne ha tre pezzi — l'elenco, la mappa e il lettore — e le route del
-    server che li nutrono non si sono toccate.
+    La casa ne ha tre pezzi — la bacheca, il cassetto di una scheda e il
+    lettore — e le route del server che li nutrono.
     """
-    for name in ("home-notebook-pages.js", "home-map.js", "home-reader.js"):
+    for name in ("home-board.js", "home-board-drawer.js", "home-reader.js"):
         assert (ASSETS / name).exists(), f"{name} manca: il quaderno non si apre da nessuna parte"
     home = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
-    for node in ('id="home-notebook-pages"', 'id="home-map"', 'id="home-reader"'):
+    for node in ('id="home-board"', 'id="home-board-drawer"', 'id="home-reader"'):
         assert node in home, f"{node} manca dalla casa"
 
 

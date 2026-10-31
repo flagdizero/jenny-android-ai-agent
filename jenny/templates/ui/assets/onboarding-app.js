@@ -15,6 +15,7 @@ import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { isFirstRun } from './shared/first-run.js';
 import { OnboardingController } from './onboarding-wizard.js';
+import { prepareExtensions, mountExtensions } from './shared/extensions.js';
 
 /* Oltre il fade del loading nativo (400 ms in `MainActivity.hideLoading`).
    Serve perche' `onNativeReady` arriva una volta sola per WebView: al primo
@@ -51,9 +52,12 @@ class OnboardingApp {
       return;
     }
 
+    prepareExtensions();
     await i18n.load(i18n.locale);
 
     this.controller = new OnboardingController();
+    /* Le estensioni prima del primo disegno: il loro gancio e' sul primo passo. */
+    await mountExtensions('onboarding', { onboarding: this.controller });
     this.controller.activate();
   }
 

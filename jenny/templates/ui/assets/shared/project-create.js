@@ -88,14 +88,18 @@ export const NOTEBOOK_WORDS = {
  *  @param t      il traduttore: `(key, vars) => string`.
  *  @param known  i nomi già in elenco, per l'avviso della regola 3. Può essere
  *                vecchio o mancante, ed è previsto: non è lui l'ultima parola.
+ *  @param initial il nome già scritto nel campo, se c'è (di norma vuoto).
  *  @returns il nome creato, oppure `null` se non è stato creato niente — e
  *           `null` vuol dire *davvero* niente su disco, in tutte le uscite.
  */
-export async function createProjectFlow({ words = NOTEBOOK_WORDS, t, known = [] }) {
+export async function createProjectFlow({ words = NOTEBOOK_WORDS, t, known = [], initial = '' }) {
   /* La regola si dice prima (`hint`) e un nome che non la rispetta tiene il
      dialog aperto col testo scritto (`validate`): prima era un toast dopo
-     Conferma, e il giro ricominciava da zero. */
+     Conferma, e il giro ricominciava da zero. `initial` e' il nome gia'
+     scritto — quello cercato nei Quaderni senza trovarlo — e passa dalla
+     stessa regola di un nome battuto a mano. */
   const name = await promptDialog(t(words.namePrompt), {
+    initial,
     placeholder: t(words.namePlaceholder),
     hint: t(words.nameHint),
     validate: (value) => (isOpenableProjectName(value.trim()) ? null : t(words.invalidName)),

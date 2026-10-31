@@ -279,7 +279,7 @@ def test_the_alert_notification_carries_a_routable_action() -> None:
     proattivo non veniva mostrato.
     """
     notifier = read_source(NOTIFIER)
-    assert "MainActivity.openChatIntent(context)" in notifier
+    assert "MainActivity.openChatIntent(context, AlertConversation.ofTag(tag))" in notifier
     kotlin = _main_activity()
     assert re.search(r"\bconst val ACTION_OPEN_CHAT\b", kotlin)
     builder = _code_only(_until_blank_line(kotlin, "openChatIntent"))
@@ -322,7 +322,10 @@ def test_alerts_left_from_before_an_update_get_the_token_too() -> None:
     notifier = read_source(NOTIFIER)
     tap = _code_only(_until_blank_line(notifier, "alertTapIntent"))
     assert "tag.hashCode()" in tap, "il codice di sempre: e' quello che identifica l'intent"
-    assert "MainActivity.openChatIntent(context)" in tap
+    assert "MainActivity.openChatIntent(context, AlertConversation.ofTag(tag))" in tap
+    # Niente `setData`: cambierebbe l'identita' dell'intent, e il rinfresco qui
+    # sotto creerebbe un PendingIntent nuovo invece di riscrivere quello in tendina.
+    assert "setData" not in tap
     assert "PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE" in tap
     builder = _code_only(_fun_body(notifier, "baseBuilder"))
     assert ".setContentIntent(alertTapIntent(context, tag))" in builder, (
@@ -339,10 +342,11 @@ def test_alerts_left_from_before_an_update_get_the_token_too() -> None:
     assert boot.index("refreshAlertTapIntents(") < boot.index("GatewayStarter.ensureUp(")
 
 
-def test_tapping_the_alert_closes_what_is_above_and_lands_in_chat() -> None:
-    """Il ramo deve smontare i livelli sopra la vista e *forzare* la chat — la
-    vista "home" è una preferenza e può non esserlo, mentre il messaggio che
-    l'utente ha toccato sta in chat.
+def test_tapping_the_alert_brings_the_chat_without_taking_the_place() -> None:
+    """Il ramo deve portare a schermo la chat — il messaggio che l'utente ha
+    toccato sta lì — e nella casa **senza togliere il posto**: la chat sale
+    sopra la pagina in cui eri, mini-app o quaderno che sia (dal 10/10/2026;
+    prima smontava i livelli e tornava alla pagina chat).
 
     Il guscio non compone più il comportamento da sé. ``goHome()`` seguito da
     ``switchMode('chat', false)`` lasciava la entry di radice a descrivere la
@@ -353,12 +357,13 @@ def test_tapping_the_alert_closes_what_is_above_and_lands_in_chat() -> None:
     kotlin = _main_activity()
     on_new_intent = _code_only(_fun_body(kotlin, "onNewIntent"))
     assert "isOurOpenChat(this, intent)" in on_new_intent
-    assert "OPEN_CHAT_JS" in on_new_intent
-    open_chat_js = re.search(r"OPEN_CHAT_JS = \"\"\"(.*?)\"\"\"", kotlin, re.S)
-    assert open_chat_js, "OPEN_CHAT_JS non trovato"
-    body = open_chat_js.group(1)
-    assert "app.openChat()" in body
-    assert "goHome()" not in body, "il guscio non ricompone il comportamento a mano"
+    assert "AlertConversation.openChatJs(conversation)" in on_new_intent
+    assert "val conversation = openChatConversation(intent)" in on_new_intent
+    assert '"alert-tap", conversation)' in on_new_intent, "cancella gli avvisi di un'altra chat"
+    helper = read_source(JAVA / "AlertConversation.kt")
+    open_chat_js = _code_only(_fun_body(helper, "openChatJs"))
+    assert "app.openChat($arg)" in open_chat_js
+    assert "goHome()" not in open_chat_js, "il guscio non ricompone il comportamento a mano"
 
     # E il lato SPA deve davvero farlo, non solo esistere. Dal 29/09/2026
     # l'officina non apre piu' la sua Console — l'ultima vista usata, magari un
@@ -366,11 +371,40 @@ def test_tapping_the_alert_closes_what_is_above_and_lands_in_chat() -> None:
     # 27/09). Torna false: la chat li' non si e' aperta, e gli avvisi li
     # cancella la casa quando la mostra.
     open_chat = _method(_app_js(), "openChat")
-    assert "api.navigate('/html-mobile/', { replace: true })" in open_chat
+    assert "api.navigate(`/html-mobile/${chat}`, { replace: true })" in open_chat
+    assert "?mode=chat&chat=" in open_chat, "l'avviso di un quaderno arriva alla casa senza quaderno"
     assert "return false;" in open_chat
     home = _method((UI_ASSETS / "home-app.js").read_text(encoding="utf-8"), "openChat")
-    assert "this._closeAllOverlays()" in home
-    assert "this.switchConversation(null)" in home, "la casa deve aprire la conversazione personale"
+    assert "this.openChatOver({ key: sessionManager.personalKey })" in home, (
+        "la casa deve aprire la conversazione personale sopra la pagina"
+    )
+    assert "_closeAllOverlays" not in home, "l'avviso chiude di nuovo l'app aperta"
+    assert "_setView(" not in home, "l'avviso cambia di nuovo stanza"
+
+
+def test_home_from_another_app_brings_the_house_back_where_it_was() -> None:
+    """Jenny è il launcher: ogni Home, anche quello che ti riporta qui da
+    un'altra app, arriva come intent ``CATEGORY_HOME`` a ``onNewIntent``.
+    Solo quello premuto con la casa già davanti la riporta alla chat
+    (``goHome``); quello del rientro no — altrimenti ogni giro in un'altra app
+    finiva in chat, fuori dal quaderno e dalla mini-app (10/10/2026).
+
+    «Eri via» lo dice ``onStop``, e il segno si spegne a fine ``onResume``,
+    che per un'activity riportata davanti arriva **dopo** ``onNewIntent``.
+    """
+    kotlin = _main_activity()
+    on_new_intent = _code_only(_fun_body(kotlin, "onNewIntent"))
+    home_branch = re.search(r"if \(intent\?\.hasCategory\(Intent\.CATEGORY_HOME\) == true(.*?)\)\s*\{(.*?)\}",
+                            on_new_intent, re.S)
+    assert home_branch, "il ramo Home non c'è più"
+    assert "!cameBackFromBackground" in home_branch.group(1), "Home dal rientro riporta di nuovo alla chat"
+    assert "goHome()" in home_branch.group(2)
+    assert "cameBackFromBackground = true" in _code_only(_fun_body(kotlin, "onStop"))
+    on_resume = _code_only(_fun_body(kotlin, "onResume")).strip()
+    assert on_resume.rstrip().endswith("cameBackFromBackground = false"), (
+        "il segno va spento in fondo a onResume, dopo che onNewIntent l'ha letto"
+    )
+    assert "cameBackFromBackground = false" not in _code_only(_fun_body(kotlin, "onPause"))
 
 
 def test_pending_alerts_are_cleared_where_the_chat_reaches_the_screen() -> None:
@@ -403,8 +437,59 @@ def test_the_resume_branch_asks_what_is_on_screen_before_clearing() -> None:
     """
     body = _code_only(_fun_body(_main_activity(), "onResume"))
     assert "CHAT_ON_SCREEN_JS" in body
+    # La risposta e' **quale** chat e' a schermo: la personale solo per
+    # `"personal"` esatto — `"null"` (SPA assente) non e' un si' — e un quaderno
+    # solo per un `project:` ben formato.
+    assert 'val onChat = key == "personal"' in body
+    assert "val notebook = asConversation(key)" in body
     clear_line = next(line for line in body.splitlines() if "clearAlerts" in line)
-    assert '== "true"' in clear_line, clear_line
+    assert "if (onChat || notebook != null)" in clear_line, clear_line
+    assert '"resume-on-chat", notebook)' in clear_line, clear_line
+    # La stessa risposta riaccende lo stato che onPause ha spento.
+    assert "isChatOnScreen = onChat" in body
+    assert "notebookChatOnScreen = notebook" in body
+
+
+def test_an_alert_is_silenced_only_while_the_chat_is_on_screen() -> None:
+    """Jenny è il launcher: «in primo piano» vuol dire anche la pagina App o
+    una bacheca, e lì il promemoria arrivava muto (giro UX del 10/10/2026).
+    Si sopprime solo se la chat personale è a schermo, che la SPA dice a ogni
+    cambio (``chatOpened``/``chatClosed``) e che si spegne quando l'activity va
+    dietro o la pagina riparte."""
+    notifier = _code_only(_fun_body(read_source(JAVA / "NotifierBridge.kt"), "postAlert"))
+    gate = notifier[: notifier.index("return false")]
+    assert (
+        "MainActivity.isInForeground && MainActivity.chatOnScreen(AlertConversation.ofTag(tag))"
+        in gate
+    ), "un avviso tace solo con la **sua** chat a schermo"
+    kotlin = _main_activity()
+    opened = _code_only(_fun_body(kotlin, "chatOpened"))
+    assert "isChatOnScreen = notebook == null" in opened
+    assert "notebookChatOnScreen = notebook" in opened
+    assert '"chat-view-opened", notebook)' in opened
+    closed = _code_only(_fun_body(kotlin, "chatClosed"))
+    assert "isChatOnScreen = false" in closed and "notebookChatOnScreen = null" in closed
+    assert '"chatClosed" -> chatClosed()' in kotlin
+    for fun in ("onPause", "onPageStarted"):
+        body = _code_only(_fun_body(kotlin, fun))
+        assert "isChatOnScreen = false" in body and "notebookChatOnScreen = null" in body, fun
+    # La casa lo dice anche quando la chat esce, non solo quando arriva.
+    home = (UI_ASSETS / "home-app.js").read_text(encoding="utf-8")
+    report = _method(home, "_reportChatOnScreen")
+    assert "chatClosed" in report and "chatOpened" in report
+    close = _method(home, "closeChatOver")
+    assert "this._reportChatOnScreen()" in close, "il velo che scende non lo dice"
+
+
+def test_a_reply_is_silenced_whenever_the_app_is_in_front() -> None:
+    """La risposta a un messaggio scritto nell'app (``postReply``) tace con
+    l'app davanti, su qualunque pagina: dentro un quaderno la chat personale
+    non è mai a schermo, e col gate di ``postAlert`` ogni risposta squillava
+    con l'utente che la stava leggendo (10/10/2026)."""
+    reply = _code_only(_fun_body(read_source(JAVA / "NotifierBridge.kt"), "postReply"))
+    gate = reply[: reply.index("return false")]
+    assert "if (MainActivity.isInForeground)" in gate
+    assert "isChatOnScreen" not in gate
 
 
 def test_the_chat_visible_question_asks_a_method_every_shell_has() -> None:
@@ -436,8 +521,11 @@ def test_the_workshop_answer_is_its_chat_mode() -> None:
     li' non c'e' (collaudo del 27/09/2026)."""
     app_js = _app_js()
     answer = _method(app_js, "isChatOnScreen")
-    assert "this.currentMode === 'chat'" in answer
+    assert "this.chatVisible()" in answer
     assert "sessionManager.currentKey === sessionManager.personalKey" in answer
+    # La Console, o la chat aperta sopra una vista (05/10/2026): la chat c'e'.
+    visible = _method(app_js, "chatVisible")
+    assert "this.currentMode === 'chat'" in visible and "this._chatOver === true" in visible
     assert "this.currentMode = mode" in app_js
     assert "switchMode('chat'" in app_js
 
@@ -457,7 +545,9 @@ def test_entering_the_chat_view_notifies_the_native_shell() -> None:
     # Sta sulla porta dei comandi, che solo il frame principale della SPA
     # raggiunge (v. tests/security/test_native_bridge_origin.py): dall'iframe
     # di una Jenny App non si cancellano gli avvisi dell'utente.
-    assert '"chatOpened" -> chatOpened()' in _main_activity()
+    # Senza argomento (l'officina) e' la personale: `isNull(0)` vale anche fuori
+    # dall'array.
+    assert '"chatOpened" -> chatOpened(if (a.isNull(0)) null else a.optString(0))' in _main_activity()
     assert "'chatOpened'" in (UI_ASSETS / "shared" / "native-bridge.js").read_text("utf-8")
 
 
@@ -508,3 +598,45 @@ def test_every_event_the_shell_dispatches_has_a_listener() -> None:
         f"Cadono nel vuoto in silenzio — nessun errore, e la cosa che dovevano "
         f"far succedere semplicemente non succede."
     )
+
+
+def test_a_dead_renderer_rebuilds_the_activity_instead_of_killing_the_app() -> None:
+    """Senza ``onRenderProcessGone`` la morte del renderer fa cadere il
+    processo intero, e la casa ripartiva dalla chat. Si ricostruisce
+    l'activity, e la casa riprende il posto salvato (10/10/2026)."""
+    body = _code_only(_fun_body(_main_activity(), "onRenderProcessGone"))
+    assert "recreate()" in body
+    assert "return true" in body, "false lascia cadere il processo"
+
+
+# ── L'avviso di un quaderno (10/10/2026) ─────────────────────────────────────
+
+def test_the_notebook_tag_separator_is_the_same_on_both_sides() -> None:
+    """Python scrive il quaderno nel tag (``project:<nome>|<tag>``), Kotlin lo
+    rilegge da li': un separatore diverso e ogni avviso torna personale."""
+    from jenny.runtime.notifier import CONVERSATION_TAG_SEPARATOR
+
+    helper = read_source(JAVA / "AlertConversation.kt")
+    assert f'const val SEPARATOR = "{CONVERSATION_TAG_SEPARATOR}"' in helper
+    assert 'PROJECT_PREFIX = "project:"' in helper
+
+
+def test_a_notebook_alert_has_no_reply_action() -> None:
+    """Rispondi dalla tendina entra nella chat personale: sotto il nome di un
+    quaderno sarebbe una frase che finisce altrove."""
+    builder = _code_only(_fun_body(read_source(NOTIFIER), "baseBuilder"))
+    assert "if (AlertConversation.ofTag(tag) == null) builder.addAction(replyAction(context, tag))" in builder
+
+
+def test_a_cold_start_carries_the_notebook_to_the_url_and_the_house_reads_it() -> None:
+    kotlin = _main_activity()
+    url = _code_only(_fun_body(kotlin, "buildGatewayUrl"))
+    assert "&chat=${Uri.encode(it)}" in url
+    redirect = _code_only(_fun_body(kotlin, "redirectToHome"))
+    assert "EXTRA_OPEN_CHAT_CONVERSATION" in redirect, "il passaggio alla home perde il quaderno"
+    home = (UI_ASSETS / "home-app.js").read_text(encoding="utf-8")
+    restore = home[home.index("async _restorePlace()") :]
+    assert "await this._enterNotebookChat(notebook)" in restore[: restore.index("\n  }")]
+    # Mentre il posto si riprende, il guscio non sente la pagina chat di passaggio.
+    report = _method(home, "_reportChatOnScreen")
+    assert "this._placeHeld" in report

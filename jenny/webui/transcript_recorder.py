@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 from typing import Any
 
 from loguru import logger
 
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
-from jenny.webui.transcript_store import append_transcript_object
+from jenny.webui.transcript_store import append_transcript_object, transcript_revision
 
 _WEBUI_TURN_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
@@ -54,6 +55,10 @@ class WebUITranscriptRecorder:
     def __init__(self, log: Any = logger) -> None:
         self._log = log
         self._turn_sequences: dict[tuple[str, str], int] = {}
+
+    def revision(self, chat_id: str) -> str:
+        """La revisione del filo di *chat_id*, quella che legge anche la route del thread."""
+        return transcript_revision(f"websocket:{chat_id}")
 
     def client_turn_metadata(self, value: Any) -> dict[str, str]:
         return {WEBUI_TURN_METADATA_KEY: _normalize_webui_turn_id(value)}
@@ -95,9 +100,18 @@ class WebUITranscriptRecorder:
         *,
         metadata: dict[str, Any],
         media_paths: list[str] | None = None,
-    ) -> None:
+        origin: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        """Scrive la riga utente e restituisce l'evento scritto, o ``None``.
+
+        *origin* (``{"origin": "remote", "device": "mac"}``) dice da dove e'
+        partito il messaggio quando non e' questo telefono: finisce nella riga,
+        cosi' il segnetto «dal Mac» c'e' anche dopo un ricaricamento. L'evento
+        restituito e' quello che il canale rimanda alle altre finestre: stessi
+        id di turno, stessa forma del transcript.
+        """
         # I due comandi che nel registro sono solo rumore: quel che hanno fatto
-        # lo dice gia' la riga che segue — «Stopped N task(s).» per il primo, il
+        # lo dice gia' la riga che segue — la risposta di `/stop` (anche `/stop all`), il
         # separatore di sessione per il secondo. `/new` ci e' entrato quando il
         # confine e' diventato il pavimento della cronologia visibile: la sua
         # riga utente sta nello **stesso** turno del confine (i turni si spezzano
@@ -105,20 +119,29 @@ class WebUITranscriptRecorder:
         # il pavimento — e la chat appena azzerata si riapriva con un `/new`
         # appeso in cima. Gli altri comandi restano: `/model fast` o
         # `/goal <cosa>` sono decisioni, e rileggerle serve.
-        if text.strip() in ("/stop", "/new") and not media_paths:
-            return
+        if text.strip() in ("/stop", "/stop all", "/new") and not media_paths:
+            return None
         payload = _build_user_transcript_event(
             chat_id,
             text,
             media_paths=media_paths,
         )
         if payload is None:
-            return
+            return None
+        if origin:
+            payload.update(origin)
         self.prepare_and_append(chat_id, payload, metadata=metadata, phase="user")
+        return payload
 
     def append(self, chat_id: str, event: dict[str, Any]) -> None:
         try:
             dup = json.loads(json.dumps(event, ensure_ascii=False))
+            # L'ora della riga, in ms epoch: la WebUI la mostra sotto ogni
+            # messaggio. Solo su disco, non sul filo — dal vivo il client usa
+            # il proprio orologio, che per un messaggio appena arrivato dice la
+            # stessa cosa. Qui e non in `prepare_and_append` perche' e' l'unico
+            # punto da cui passano tutte le righe.
+            dup.setdefault("at", int(time.time() * 1000))
             append_transcript_object(f"websocket:{chat_id}", dup)
         except (OSError, ValueError, TypeError) as e:
             self._log.warning("webui transcript append failed: {}", e)

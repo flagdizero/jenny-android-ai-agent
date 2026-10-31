@@ -1,6 +1,5 @@
 package com.flagdizero.jenny
 
-import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
@@ -17,6 +16,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -32,9 +32,10 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowManager
-import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.view.animation.OvershootInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -55,8 +56,11 @@ import io.noties.markwon.ext.tables.TableTheme
 import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.linkify.LinkifyPlugin
+import org.json.JSONObject
 import java.io.File
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 
 /**
@@ -268,10 +272,11 @@ object FloatingOverlayController {
      */
     private const val CHIP_GAP_DP = 10
 
-    /** La bolla: raggio pieno, e l'angolo stretto in basso dal lato di chi
-     *  parla — lo stesso `--radius-bubble` della chat, semplificato. */
-    private const val BUBBLE_RADIUS_DP = 16
-    private const val BUBBLE_CORNER_DP = 5
+    /** Il testo delle bolle: corpo e interlinea di `.home-block` nella chat
+     *  dell'app (14,5 px, 1,45; la tua 1,4). */
+    private const val BUBBLE_TEXT_SP = 14.5f
+    private const val BUBBLE_LINE_EM = 1.45f
+    private const val BUBBLE_MINE_LINE_EM = 1.4f
 
     /** Larghezza massima di una bolla, in frazione della lista: anche la più
      *  lunga lascia vedere da che parte sta chi l'ha scritta. */
@@ -320,10 +325,9 @@ object FloatingOverlayController {
     /** Oltre questo spostamento il gesto è un trascinamento e non un tap. */
     private const val DRAG_SLOP_DP = 8
 
-    /** Quanto si aspetta la risposta prima di dire che non arriva. Uguale al
-     *  `REPLY_TIMEOUT_MS` della minichat della WebUI: è lo stesso agente, con
-     *  gli stessi tempi, e due soglie diverse per la stessa attesa sarebbero
-     *  due verità diverse su quando Jenny è in ritardo. */
+    /** Quanto si aspetta la risposta prima di dire che non arriva. Era uguale
+     *  al `REPLY_TIMEOUT_MS` della minichat della WebUI (tolta il 05/10/2026,
+     *  ora la WebUI apre la chat vera): stesso agente, stessi tempi. */
     private const val REPLY_TIMEOUT_MS = 90_000L
 
     /** Ripiego se Python non ha ancora spinto la config. */
@@ -344,6 +348,17 @@ object FloatingOverlayController {
     /** ...e in chat: tocchi e fuoco, per il campo di testo. */
     private const val STAGE_CHAT = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
+    /**
+     * Quanto è sfocata l'app sotto la chat, in dp.
+     *
+     * Sopra una pagina fitta la conversazione non si leggeva: le bolle sono
+     * quasi opache, ma tutto intorno — il chip, lo spazio fra una bolla e
+     * l'altra — era testo di qualcun altro (detto dall'utente il 25/10/2026).
+     * Abbastanza da spegnere le lettere, non abbastanza da far sparire la
+     * pagina: si capisce ancora dov'eri.
+     */
+    private const val CHAT_BLUR_DP = 24
+
     private const val PREFS = "jenny_floating"
 
     // Fra le preferenze non c'e' il bordo: e' sempre il destro (24/09/2026).
@@ -361,6 +376,9 @@ object FloatingOverlayController {
     /** ...e i colori del tema, nella stessa forma: sei interi separati da
      *  virgola, nell'ordine di [Palette]. */
     private const val PREF_PALETTE = "palette"
+
+    /** ...e la bolla dell'utente, nel JSON che la WebUI ha mandato. */
+    private const val PREF_BUBBLE = "bubble"
 
     /** Una riga della conversazione. `mine` = l'ha scritta l'utente. */
     private data class Line(val mine: Boolean, val text: String)
@@ -435,6 +453,42 @@ object FloatingOverlayController {
         onAccent = 0xFF0A090B.toInt(),  // --on-accent
     )
 
+    /** Un'ombra della bolla, in dp: `blur` zero è l'ombra piena e sfalsata di
+     *  Sticker e Fumetto, più di zero l'alone di Synthwave e Y2K. */
+    private data class Shadow(val dx: Float, val dy: Float, val blur: Float, val color: Int)
+
+    private data class Stroke(val width: Float, val color: Int)
+
+    /**
+     * La bolla dell'utente com'è nella chat dell'app: i token
+     * `--bubble-user-*` e `--radius-bubble` del tema attivo, spinti dalla WebUI
+     * (`bubbleStyle` in `shared/theme.js`).
+     *
+     * Era `--accent` con `--on-accent` sopra, e in cinque temi su sette la bolla
+     * dell'app è un'altra cosa: in Synthwave un rosa più scuro col testo bianco e
+     * un alone, in Kyoto una bolla trasparente col bordo, in Sticker un bordo
+     * bianco e un'ombra sfalsata. [fill] ha un colore, o i due capi di una
+     * sfumatura dall'alto in basso (Y2K); [radii] i quattro angoli in dp,
+     * nell'ordine di `border-radius`.
+     */
+    private data class BubbleStyle(
+        val fill: List<Int>,
+        val text: Int,
+        val stroke: Stroke?,
+        val shadow: Shadow?,
+        val radii: List<Float>,
+    )
+
+    /** Il ripiego, con lo stesso criterio di [DEFAULT_PALETTE]: i token
+     *  `synthwave` di `mobile-style.css`. */
+    private val DEFAULT_BUBBLE = BubbleStyle(
+        fill = listOf(0xFFD61A8F.toInt()),                      // --bubble-user-bg
+        text = 0xFFFFFFFF.toInt(),                              // --bubble-user-text
+        stroke = null,                                          // --bubble-user-border
+        shadow = Shadow(0f, 0f, 16f, 0x80D61A8F.toInt()),       // --bubble-user-shadow
+        radii = listOf(14f, 14f, 4f, 14f),                      // --radius-bubble
+    )
+
     private val main = Handler(Looper.getMainLooper())
 
     /** Stato voluto da Python (`config.floating.enabled`). Separato dal fatto
@@ -460,12 +514,20 @@ object FloatingOverlayController {
     @Volatile
     private var expanded = false
 
+    /** Fra il tocco e l'apertura della chat, mentre si legge lo schermo. */
+    private var opening = false
+
     private var appContext: Context? = null
     private var windowManager: WindowManager? = null
 
     /** Il **palco**: quello che si vede. Schermo intero, immobile. */
     private var root: FrameLayout? = null
     private var params: WindowManager.LayoutParams? = null
+
+    /** Android sfoca le finestre adesso? Lo dice il listener di [watchBlur]:
+     *  può cambiare a chat aperta (risparmio energetico, opzioni sviluppatore). */
+    private var blurOn = false
+    private var blurListener: java.util.function.Consumer<Boolean>? = null
 
     /**
      * La finestra **di lei**: grande quanto lo sprite, toccabile (quindi mai
@@ -523,6 +585,10 @@ object FloatingOverlayController {
      *  layout. È quel che fa salire lei quando il testo va a capo: v. [parkTop]. */
     private var pillHeightPx = 0
 
+    /** Dov'era il bordo alto della pillola, in px schermo, l'ultima volta che
+     *  lei ci si è messa sopra; `-1` = da rimisurare (v. [followPill]). */
+    private var lastPillTopPx = -1
+
     /** Quanto la tastiera (o la barra di sistema) alza il composer, in px. Vale
      *  solo a chat aperta, che è l'unico momento in cui arrivano gli insets. */
     private var chatBottomInsetPx = 0
@@ -537,6 +603,10 @@ object FloatingOverlayController {
      *  prima che la SPA abbia caricato. */
     @Volatile
     private var palette = DEFAULT_PALETTE
+
+    /** La bolla dell'utente in vigore: v. [BubbleStyle]. */
+    @Volatile
+    private var userBubble = DEFAULT_BUBBLE
     /** Il riquadro della mascotte (corpo + faccia). Si chiama così da quando
      *  il fumetto ha smesso di stargli sopra in colonna. */
     private var column: FrameLayout? = null
@@ -558,7 +628,7 @@ object FloatingOverlayController {
     private var waitingForReply = false
 
     /** Il respiro in corso (bob o wobble), o `null` se sta ferma. */
-    private var breath: ObjectAnimator? = null
+    private var breath: ValueAnimator? = null
 
     /** Sta scivolando verso un ancoraggio? Finché è vero il respiro aspetta:
      *  animano la stessa `translationY`, e insieme la fanno tremare. */
@@ -789,6 +859,49 @@ object FloatingOverlayController {
     }
 
     /**
+     * La bolla dell'utente del tema attivo, spinta dalla **WebUI** in JSON (v.
+     * [BubbleStyle]). Come [setPalette]: da qualunque thread, a finestra
+     * montata o no. Un JSON che non si legge lascia la bolla di prima, intera.
+     */
+    fun setBubbleStyle(json: String) {
+        val wanted = parseBubble(json) ?: run {
+            Log.w(TAG, "Floating bubble: cannot read the style, keeping the current one")
+            return
+        }
+        main.post {
+            if (wanted == userBubble) return@post
+            userBubble = wanted
+            appContext?.let { ctx ->
+                ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit().putString(PREF_BUBBLE, json).apply()
+            }
+            renderHistory()
+            Log.i(TAG, "Floating bubble updated")
+        }
+    }
+
+    private fun parseBubble(json: String?): BubbleStyle? = try {
+        val o = JSONObject(json ?: return null)
+        val fill = o.getJSONArray("fill").let { a -> List(a.length()) { Color.parseColor(a.getString(it)) } }
+        val radii = o.getJSONArray("radii").let { a -> List(a.length()) { a.getDouble(it).toFloat() } }
+        val stroke = o.optJSONObject("stroke")?.let {
+            Stroke(it.getDouble("width").toFloat(), Color.parseColor(it.getString("color")))
+        }
+        val shadow = o.optJSONObject("shadow")?.let {
+            Shadow(
+                it.getDouble("dx").toFloat(), it.getDouble("dy").toFloat(),
+                it.getDouble("blur").toFloat(), Color.parseColor(it.getString("color")),
+            )
+        }
+        if (fill.size !in 1..2 || radii.size != 4) null
+        else BubbleStyle(fill, Color.parseColor(o.getString("text")), stroke, shadow, radii)
+    } catch (e: Exception) {
+        // JSONException o IllegalArgumentException di `parseColor`: è lo stesso
+        // «non si legge», e la risposta è la stessa.
+        null
+    }
+
+    /**
      * Ridipinge quello che è già a schermo.
      *
      * Il tema si cambia in Impostazioni → Personalizzazione, cioè con la
@@ -805,6 +918,10 @@ object FloatingOverlayController {
             it.setHintTextColor(palette.hint)
         }
         syncSend(bloom = false)
+        // Le bolle portano la superficie, il bordo e i colori del markdown
+        // della palette: senza, restavano del tema di prima fino al messaggio
+        // successivo.
+        renderHistory()
     }
 
     /**
@@ -886,10 +1003,13 @@ object FloatingOverlayController {
             expanded = false
             val container = buildViews(ctx)
             val lp = stageParams()
+            // Nasce fermo, quindi nascosto: v. [applyStage].
+            container.visibility = View.GONE
             wm.addView(container, lp)
             windowManager = wm
             root = container
             params = lp
+            watchBlur(ctx, wm)
             // Ordine di inserimento = ordine di sovrapposizione: palco in
             // fondo, lei in mezzo, maniglia sopra. I tocchi li prende sempre
             // la maniglia, che è l'unica a poter crescere fino a coprire lo
@@ -922,6 +1042,10 @@ object FloatingOverlayController {
         cancelTimeout()
         main.removeCallbacks(holdRunnable)
         expanded = false
+        lastPillTopPx = -1
+        // Una lettura ancora in corso finisce su `openChat`, che a finestra
+        // smontata non fa niente (`root == null`).
+        opening = false
         waitingForReply = false
         // Un volo lasciato aperto qui tornerebbe a mordere al prossimo
         // montaggio: `startFlight` nasconde la mascotte ferma con un `post`
@@ -931,9 +1055,8 @@ object FloatingOverlayController {
         sizePendingAfterFlight = false  // il montaggio dopo nasce già alla taglia giusta
         // Gli animator prima delle viste. Il respiro è `INFINITE` e resta
         // registrato presso l'AnimationHandler del main anche con la vista
-        // staccata: senza `cancel` chiede un fotogramma a ogni vsync finché il
-        // GC non raccoglie la colonna (l'ObjectAnimator la tiene solo
-        // debolmente, e solo allora si ferma da sé). `sliding` si
+        // staccata, e il suo listener tiene la colonna: senza `cancel` chiede un
+        // fotogramma a ogni vsync per sempre. `sliding` si
         // spegne prima: il `cancel` dello scivolamento chiama `onAnimationEnd`,
         // che altrimenti ricollocherebbe la colonna e farebbe ripartire il
         // respiro su viste che stanno per sparire.
@@ -946,6 +1069,7 @@ object FloatingOverlayController {
         sendButton?.animate()?.cancel()
         val wm = windowManager
         if (wm != null) {
+            unwatchBlur(wm)
             for (v in listOfNotNull(grip, mascotWin, root)) {
                 try {
                     wm.removeView(v)
@@ -1022,6 +1146,11 @@ object FloatingOverlayController {
         lp.gravity = Gravity.TOP or Gravity.START
         lp.x = 0
         lp.y = 0
+        // Il raggio si scrive una volta: conta solo quando [applyStage] accende
+        // `FLAG_BLUR_BEHIND`, cioè in chat.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            lp.blurBehindRadius = appContext?.let { dp(it, CHAT_BLUR_DP) } ?: 0
+        }
         return lp
     }
 
@@ -1058,14 +1187,130 @@ object FloatingOverlayController {
         val wm = windowManager ?: return
         val view = root ?: return
         val lp = params ?: return
-        if (lp.flags == flags && lp.softInputMode == softInput) return
-        lp.flags = flags
+        // **Da fermo il palco non c'è**, non solo non si tocca. Era una finestra
+        // a schermo intero, vuota e trasparente, sopra ogni app: ogni tocco del
+        // telefono la attraversava, e Android lo segnalava all'app sotto come
+        // «schermata coperta» (`FLAG_WINDOW_IS_OBSCURED`). Le app normali lo
+        // ignorano; le schermate che si difendono dal tapjacking
+        // (`filterTouchesWhenObscured`: «Accedi con Google», le conferme) lo
+        // scartano — e non si poteva toccare niente finché c'era la mascotte.
+        // Visto il 15/10/2026: Claude rispondeva, Accedi con Google no; su
+        // jenny_s22 `dumpsys window` dava il palco `fillxfill`, `isVisible=true`
+        // con Jenny parcheggiata. Da fermo non disegna niente (velo, arte del
+        // volo e campo sono tutti GONE), quindi toglierlo non toglie niente; una
+        // vista radice GONE rende invisibile la finestra, che smette di coprire.
+        val asleep = flags == STAGE_ASLEEP
+        val visibility = if (asleep) View.GONE else View.VISIBLE
+        if (view.visibility != visibility) view.visibility = visibility
+        // In chat il palco sfoca quel che ha sotto: v. [CHAT_BLUR_DP]. Il flag
+        // si mette anche a sfocatura spenta — Android allora non disegna
+        // niente, e il velo più scuro di [scrimFor] fa da solo.
+        val wanted = if (flags == STAGE_CHAT) flags or blurFlag() else flags
+        if (lp.flags == wanted && lp.softInputMode == softInput) return
+        lp.flags = wanted
         lp.softInputMode = softInput
         try {
             wm.updateViewLayout(view, lp)
         } catch (e: Exception) {
             Log.i(TAG, "Could not change the stage: ${e.javaClass.simpleName}")
         }
+    }
+
+    /** `FLAG_BLUR_BEHIND` dove la sfocatura fra finestre esiste (dal 12);
+     *  prima di allora il flag non sfocava niente, e non si chiede. */
+    private fun blurFlag(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+        } else {
+            0
+        }
+
+    /**
+     * Si mette in ascolto della sfocatura fra finestre, e veste il velo per
+     * com'è adesso.
+     *
+     * Android la può spegnere in qualunque momento — risparmio energetico,
+     * un video in tunneling, le opzioni sviluppatore, e su un emulatore senza
+     * GPU non c'è mai — e senza di lei l'unica cosa che separa la chat dalla
+     * pagina sotto è il velo: quindi il velo cambia con lei, anche a chat
+     * aperta.
+     */
+    private fun watchBlur(ctx: Context, wm: WindowManager) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            setBlurOn(false)
+            return
+        }
+        setBlurOn(wm.isCrossWindowBlurEnabled)
+        val listener = java.util.function.Consumer<Boolean> { on -> setBlurOn(on) }
+        try {
+            wm.addCrossWindowBlurEnabledListener(ctx.mainExecutor, listener)
+            blurListener = listener
+        } catch (e: Exception) {
+            Log.i(TAG, "Cannot watch window blur: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun unwatchBlur(wm: WindowManager) {
+        val listener = blurListener ?: return
+        blurListener = null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        try {
+            wm.removeCrossWindowBlurEnabledListener(listener)
+        } catch (e: Exception) {
+            Log.i(TAG, "Window blur listener already gone: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun setBlurOn(on: Boolean) {
+        val changed = on != blurOn
+        blurOn = on
+        scrim?.background = scrimFor(on)
+        if (changed) Log.i(TAG, "Cross-window blur ${if (on) "on" else "off"}")
+    }
+
+    /**
+     * Il velo dietro la chat: trasparente in alto e sempre più scuro verso il
+     * campo, che è dove deve andare l'occhio.
+     *
+     * **Con la sfocatura** basta un filo: la pagina sotto è già senza lettere,
+     * e il velo serve solo a dare profondità. **Senza**, il velo è quasi una
+     * superficie: misurato su jenny_s22 sopra una pagina di Wikipedia, al 55%
+     * in cima i titoli della pagina si leggevano ancora e uno finiva dentro il
+     * chip. All'85% resta l'ombra della pagina, non le sue lettere.
+     */
+    private fun scrimFor(blur: Boolean): Drawable = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        if (blur) {
+            intArrayOf(0x1A000000, 0x40000000, 0xB3000000.toInt())
+        } else {
+            intArrayOf(0xD9000000.toInt(), 0xE6000000.toInt(), 0xF2000000.toInt())
+        },
+    )
+
+    /**
+     * Esegue [action] dopo il prossimo fotogramma disegnato dal palco.
+     *
+     * Se il palco non disegna mai (il sistema nasconde gli overlay, v. le
+     * Impostazioni) l'azione non parte: lei resta accesa sopra l'arte del volo,
+     * cioè due Jenny sovrapposte per un istante — mai nessuna.
+     */
+    private fun afterStageDrawn(action: () -> Unit) {
+        val view = root ?: run { main.post(action); return }
+        var done = false
+        val listener = object : ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                if (done) return
+                done = true
+                // Toglierlo dentro `onDraw` non è permesso: al giro dopo,
+                // insieme all'azione.
+                main.post {
+                    if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnDrawListener(this)
+                    action()
+                }
+            }
+        }
+        view.viewTreeObserver.addOnDrawListener(listener)
+        view.invalidate()
     }
 
     /**
@@ -1125,7 +1370,28 @@ object FloatingOverlayController {
      */
     private fun expand() {
         val ctx = appContext ?: return
-        if (expanded) return
+        if (expanded || opening) return
+        // Prima si legge lo schermo, poi si apre la chat: **in quest'ordine, e
+        // non in parallelo**. Il palco in CHAT è una finestra toccabile a
+        // schermo intero, e Android toglie dall'elenco delle finestre
+        // accessibili quelle che una finestra così copre per intero: con la
+        // chat aperta Chrome per il servizio non esiste, e quando torna
+        // ricostruisce l'albero un pezzo alla volta. Misurato su `jenny_s22`
+        // il 13/10/2026: lette in parallelo all'apertura, una pagina da 24k
+        // caratteri ne dava 880, e alla seconda prova zero. La lettura dura
+        // ~0,3 s e ha un tetto (v. [ScreenSnapshots.capture]); a servizio
+        // spento la chat si apre subito.
+        opening = true
+        ScreenSnapshots.capture(ctx) {
+            opening = false
+            openChat()
+        }
+    }
+
+    /** La seconda metà di [expand], quando lo schermo è stato letto. */
+    private fun openChat() {
+        val ctx = appContext ?: return
+        if (expanded || root == null) return
 
         // Il palco non si muove e non cambia taglia: cambia solo *cosa
         // accetta*. La maniglia resta toccabile e resta dov'è — è piccola e
@@ -1192,6 +1458,7 @@ object FloatingOverlayController {
         if (!expanded) return
         hideKeyboard(ctx)
         expanded = false
+        lastPillTopPx = -1
         scrim?.visibility = View.GONE
         inputRow?.visibility = View.GONE
         // Chiudere è un gesto, e vale come «ho finito»: la conversazione se ne
@@ -1242,15 +1509,10 @@ object FloatingOverlayController {
             }
         }
 
-        // Un velo, non un blackout: trasparente in alto — quello che stavi
-        // guardando resta leggibile — e sempre più scuro verso il campo, che è
-        // dove deve andare l'occhio. Il grigio uniforme al 40% del primo giro
-        // sembrava un difetto di rendering, non una scelta.
+        // Un velo, non un blackout: v. [scrimFor], che lo veste anche per la
+        // sfocatura che Android dà o non dà.
         val dim = View(ctx).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x00000000, 0x40000000, 0xCC000000.toInt())
-            )
+            background = scrimFor(blurOn)
             visibility = View.GONE
             setOnClickListener { collapse() }
         }
@@ -1502,17 +1764,8 @@ object FloatingOverlayController {
             setPadding(dp(ctx, BAR_TEXT_PAD_DP), pad, pad, pad)
             background = barBackground(ctx)
             elevation = dp(ctx, PILL_ELEVATION_DP).toFloat()
-            // Quando il testo va a capo la pillola cresce verso l'alto, e lei
-            // — che ci sta in piedi sopra — sale con la pillola: `parkTop`
-            // legge l'altezza misurata da qui.
-            addOnLayoutChangeListener { _, _, t, _, b, _, _, _, _ ->
-                val h = b - t
-                if (h <= 0 || h == pillHeightPx) return@addOnLayoutChangeListener
-                pillHeightPx = h
-                if (expanded && flight == null) {
-                    slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
-                }
-            }
+            // Lei sta in piedi sulla pillola, quindi la segue: v. [followPill].
+            viewTreeObserver.addOnGlobalLayoutListener { followPill(ctx) }
         }
         val field = EditText(ctx).apply {
             hint = ctx.getString(R.string.floating_input_hint)
@@ -1871,7 +2124,7 @@ object FloatingOverlayController {
     }
 
     /** Ricostruisce le bolle dal modello. È l'unico posto che tocca le view
-     *  della lista: un cambio di tema o di lato ripassa di qui. */
+     *  della lista: un cambio di tema ripassa di qui. */
     private fun renderHistory() {
         val ctx = appContext ?: return
         val list = historyList ?: return
@@ -1883,15 +2136,15 @@ object FloatingOverlayController {
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { gravity = Gravity.CENTER_HORIZONTAL })
         for (line in history) {
-            val bubble = bubbleView(ctx, line)
-            // Il tuo messaggio sta dal lato dove lei **non** sta — lei è a
-            // destra, quindi il tuo a sinistra — il suo dal suo.
-            val atStart = line.mine
-            list.addView(bubble, LinearLayout.LayoutParams(
+            val view = bubbleView(ctx, line)
+            // I lati della chat dell'app: il tuo a destra, il suo a sinistra.
+            // Erano al contrario, per stare vicino a lei che è sempre a destra,
+            // e le due chat si leggevano in due modi opposti.
+            list.addView(view, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
-                gravity = if (atStart) Gravity.START else Gravity.END
+                gravity = if (line.mine) Gravity.END else Gravity.START
                 topMargin = dp(ctx, BUBBLE_GAP_DP)
             })
         }
@@ -1996,33 +2249,35 @@ object FloatingOverlayController {
 
     /** Una bolla: il fondo, l'angolo stretto dal lato di chi parla, il testo. */
     private fun bubbleView(ctx: Context, line: Line): TextView {
-        val atStart = line.mine
-        val r = dp(ctx, BUBBLE_RADIUS_DP).toFloat()
-        val c = dp(ctx, BUBBLE_CORNER_DP).toFloat()
-        // topLeft, topRight, bottomRight, bottomLeft — due valori ciascuno.
-        val corners = floatArrayOf(
-            r, r,
-            r, r,
-            if (atStart) r else c, if (atStart) r else c,
-            if (atStart) c else r, if (atStart) c else r,
-        )
+        val style = userBubble
+        // L'ombra piena e sfalsata si disegna dentro la view, accanto alla
+        // bolla: il padding le fa posto dal suo lato.
+        val hard = style.shadow?.takeIf { line.mine && it.blur == 0f }
+        val dx = hard?.let { dpf(ctx, it.dx).toInt() } ?: 0
+        val dy = hard?.let { dpf(ctx, it.dy).toInt() } ?: 0
         return TextView(ctx).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(if (line.mine) palette.onAccent else palette.text)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, BUBBLE_TEXT_SP)
+            setLineSpacing(0f, lineEm(if (line.mine) BUBBLE_MINE_LINE_EM else BUBBLE_LINE_EM))
+            setTextColor(if (line.mine) style.text else palette.text)
             maxWidth = (listWidth(ctx) * BUBBLE_MAX_RATIO).toInt()
-            setPadding(dp(ctx, 13), dp(ctx, 9), dp(ctx, 13), dp(ctx, 9))
-            background = GradientDrawable().apply {
-                cornerRadii = corners
-                if (line.mine) {
-                    setColor(palette.accent)
-                } else {
-                    // Come la pillola: stessa superficie, stesso velo, stesso
-                    // bordo. Quello che dice «è lei» è il lato, non il colore.
-                    setColor(veiled(palette.surface))
-                    setStroke(dp(ctx, 1), palette.border)
-                }
+            setPadding(
+                dp(ctx, 13) + max(-dx, 0), dp(ctx, 9) + max(-dy, 0),
+                dp(ctx, 13) + max(dx, 0), dp(ctx, 9) + max(dy, 0),
+            )
+            background = lineBackground(ctx, line, hard, dx, dy)
+            // Sopra un'altra app ogni bolla si stacca dal fondo, come la
+            // pillola. L'ombra del tema prende il suo posto: quella piena è
+            // già disegnata, l'alone tinge l'ombra di sistema del suo colore.
+            val glow = style.shadow?.takeIf { line.mine && it.blur > 0f }
+            elevation = when {
+                hard != null -> 0f
+                glow != null -> max(dpf(ctx, glow.blur / 2f), dp(ctx, BUBBLE_ELEVATION_DP).toFloat())
+                else -> dp(ctx, BUBBLE_ELEVATION_DP).toFloat()
             }
-            elevation = dp(ctx, BUBBLE_ELEVATION_DP).toFloat()
+            if (glow != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                outlineSpotShadowColor = glow.color
+                outlineAmbientShadowColor = glow.color
+            }
             // **Il markdown è solo suo.** Quello che l'utente ha scritto si
             // mostra com'è scritto: se ha digitato `*ciao*` intendeva gli
             // asterischi. È anche quel che fa la SPA, che riempie la bolla
@@ -2051,6 +2306,58 @@ object FloatingOverlayController {
             }
         }
     }
+
+    /**
+     * Il fondo di una bolla.
+     *
+     * **La tua** è quella del tema ([userBubble]): riempimento o sfumatura, bordo,
+     * angoli, e l'ombra piena sotto, sfalsata di `dx, dy`. Un riempimento
+     * trasparente (Kyoto) nell'app lascia vedere la pagina; qui sotto c'è
+     * un'altra app, e il testo non si leggerebbe: prende la superficie velata
+     * della sua, e il bordo del tema resta.
+     *
+     * **La sua** è la superficie velata col bordo, come la pillola; gli angoli
+     * sono quelli del tema specchiati, con l'angolo stretto dal suo lato.
+     */
+    private fun lineBackground(ctx: Context, line: Line, hard: Shadow?, dx: Int, dy: Int): Drawable {
+        val style = userBubble
+        val r = style.radii.map { dpf(ctx, it) }
+        // `border-radius` va in senso orario da in alto a sinistra; lo
+        // specchio scambia sinistra e destra.
+        val (tl, tr, br, bl) = if (line.mine) r else listOf(r[1], r[0], r[3], r[2])
+        val radii = floatArrayOf(tl, tl, tr, tr, br, br, bl, bl)
+        val face = GradientDrawable().apply {
+            cornerRadii = radii
+            val see = line.mine && style.fill.any { Color.alpha(it) > 0 }
+            when {
+                see && style.fill.size == 2 -> {
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    colors = style.fill.toIntArray()
+                }
+                see -> setColor(style.fill[0])
+                else -> setColor(veiled(palette.surface))
+            }
+            if (line.mine) {
+                style.stroke?.let { setStroke(max(dpf(ctx, it.width).toInt(), 1), it.color) }
+            } else {
+                setStroke(dp(ctx, 1), palette.border)
+            }
+        }
+        if (hard == null) return face
+        val shade = GradientDrawable().apply {
+            cornerRadii = radii
+            setColor(hard.color)
+        }
+        return LayerDrawable(arrayOf(shade, face)).apply {
+            setLayerInset(0, max(dx, 0), max(dy, 0), max(-dx, 0), max(-dy, 0))
+            setLayerInset(1, max(-dx, 0), max(-dy, 0), max(dx, 0), max(dy, 0))
+        }
+    }
+
+    /** Il moltiplicatore di `setLineSpacing` che dà un'interlinea di `em`
+     *  volte il corpo, come `line-height` nel CSS: Android moltiplica la
+     *  spaziatura naturale del carattere, che è già più alta del corpo. */
+    private fun TextView.lineEm(em: Float): Float = em * textSize / paint.fontSpacing
 
     /** Il chip che porta all'app. Costruito una volta sola: cambia etichetta,
      *  non identità. */
@@ -2112,16 +2419,29 @@ object FloatingOverlayController {
      * pillola cresce, la tastiera si alza — e senza questo conto le bolle
      * uscirebbero dal bordo di sopra, dove la colonna cresce e non c'è nessuno
      * a fermarle.
+     *
+     * **Il posto si misura sul palco, non sullo schermo.** Il conto era «schermo
+     * meno l'inset della tastiera», e alla prima apertura dopo l'avvio
+     * quell'inset non arriva: il sistema rimpicciolisce la finestra invece di
+     * dichiararlo (v. [followPill]). Con una risposta lunga la lista si
+     * prendeva allora l'altezza di uno schermo senza tastiera e spingeva la
+     * pillola fuori dalla finestra — il campo spariva, e lei finiva sopra le
+     * bolle (`jenny_s22`, 13/10/2026). L'altezza del palco segue tutti e due i
+     * casi: nel primo la finestra è più bassa, nel secondo l'inset sta già nel
+     * padding della riga. Lo schermo resta il ripiego prima del primo layout.
      */
     private fun syncListCap(ctx: Context) {
         val scroll = historyScroll ?: return
+        val row = inputRow ?: return
         val pill = max(inputBar?.height ?: 0, dp(ctx, PILL_DP))
-        val bottom = max(chatBottomInsetPx, navInset(ctx))
-        val cap = max(
-            screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - pill -
-                standHeight(ctx) - dp(ctx, COMPOSER_PAD_TOP_DP) - dp(ctx, LIST_TOP_MARGIN_DP),
-            0,
-        )
+        val host = (row.parent as? View)?.height ?: 0
+        val room = if (host > 0) {
+            host - row.paddingTop - row.paddingBottom
+        } else {
+            val bottom = max(chatBottomInsetPx, navInset(ctx))
+            screenHeight(ctx) - bottom - dp(ctx, COMPOSER_PAD_BOTTOM_DP) - dp(ctx, COMPOSER_PAD_TOP_DP)
+        }
+        val cap = max(room - pill - standHeight(ctx) - dp(ctx, LIST_TOP_MARGIN_DP), 0)
         if (cap == scroll.maxHeight) return
         scroll.maxHeight = cap
         scroll.requestLayout()
@@ -2338,9 +2658,14 @@ object FloatingOverlayController {
         art.translationY = startTop
         art.rotation = 0f
         art.scaleX = 1f
+        art.scaleY = 1f
         art.setImageBitmap(sprite("jenny-hang"))
         art.visibility = View.VISIBLE
-        main.post { if (flight != null) mascot.visibility = View.INVISIBLE }
+        // Il palco era nascosto (v. [applyStage]) e il suo primo fotogramma
+        // arriva dopo una relayout: spegnere lei «al giro dopo» poteva cadere
+        // prima, e per un fotogramma non c'era nessuna delle due. Si aspetta che
+        // il palco abbia disegnato davvero.
+        afterStageDrawn { if (flight != null) mascot.visibility = View.INVISIBLE }
 
         val width = screenWidth(ctx)
         val dockY = parkTop(ctx).toFloat() + size * FloatingFlight.PIVOT_Y
@@ -2353,8 +2678,12 @@ object FloatingOverlayController {
             density = metrics.density,
             dockPivotY = dockY,
             dockPivotX = rightDock,
-            onFrame = { left, top, rot, pose, flip -> drawFlight(left, top, rot, pose, flip) },
+            onFrame = { left, top, rot, pose, flip, shape ->
+                drawFlight(left, top, rot, pose, flip, shape, size, metrics.density)
+            },
             onSettled = { endFlight(ctx) },
+            // Animazioni di sistema spente: il volo resta, la deformazione no.
+            squash = ValueAnimator.areAnimatorsEnabled(),
         ).also {
             it.grab(
                 startLeft + size * FloatingFlight.PIVOT_X,
@@ -2372,12 +2701,25 @@ object FloatingOverlayController {
         rotationDeg: Float,
         pose: FloatingFlight.Pose,
         flip: Boolean,
+        shape: FloatingSquash.Shape,
+        size: Int,
+        density: Float,
     ) {
         val art = flightArt ?: return
+        // Le scale stanno sugli assi del disegno: attorno alla mano appesa e in
+        // aria, attorno ai piedi a terra, così i piedi restano dove sono. La
+        // rotazione c'è solo appesa, attorno alla mano, e la View applica la
+        // scala prima della rotazione, come `rotate() scale()` in CSS.
+        art.pivotY = size * when (pose) {
+            FloatingFlight.Pose.GROUND -> FloatingSquash.FEET_GROUND
+            FloatingFlight.Pose.WALK1, FloatingFlight.Pose.WALK2 -> FloatingSquash.FEET_WALK
+            else -> FloatingFlight.PIVOT_Y
+        }
         art.translationX = left
-        art.translationY = top
+        art.translationY = top + shape.dy * density
         art.rotation = rotationDeg
-        art.scaleX = if (flip) -1f else 1f
+        art.scaleX = shape.sx * (if (flip) -1f else 1f)
+        art.scaleY = shape.sy
         val name = when (pose) {
             FloatingFlight.Pose.HANG -> "jenny-hang"
             FloatingFlight.Pose.FALL -> "jenny-fall"
@@ -2624,39 +2966,51 @@ object FloatingOverlayController {
         mascot.translationX = 0f
         mascot.translationY = 0f
         mascot.rotation = 0f
+        mascot.scaleX = 1f
+        mascot.scaleY = 1f
     }
 
     /**
-     * Il respiro: `jenny-bob` quando è fuori, `jenny-wobble` mentre pensa.
+     * Il respiro: `jenny-breath` quando è fuori, `jenny-think` mentre pensa
+     * (mobile-style.css), con gli stessi periodi — 3,4 s e 1,6 s per ciclo
+     * intero — e la stessa origine, dove l'arte poggia (88% del quadrato).
      *
-     * Stessi tempi e stesse origini del CSS. L'ampiezza però **non** si copia
-     * in pixel: là sono 4 px su uno sprite da 120, qui il lato è un altro, e un
-     * respiro copiato in pixel sarebbe un respiro più corto. Si porta il
-     * rapporto.
+     * Sono scale e rotazioni, non pixel, quindi valgono a ogni taglia. Le curve
+     * sono le sinusoidi che passano per i fotogrammi del CSS: il respiro si
+     * allunga fino a 0,985 × 1,03 a metà ciclo; il pensa ondeggia di ±2° e si
+     * allunga (0,99 × 1,016) a ogni passaggio al centro.
+     *
+     * Fino al 05/10/2026 era `jenny-bob` (4 px su e giù) e `jenny-wobble`, e il
+     * respiro durava il doppio del CSS: un `REVERSE` di 3,4 s fa un ciclo di 6,8.
+     *
+     * Con le animazioni di sistema spente sta ferma: un animatore infinito a
+     * durata zero si fermerebbe sul suo ultimo fotogramma, cioè inclinata.
      */
     private fun startBreathing() {
-        val ctx = appContext ?: return
         val mascot = column ?: return
         if (sliding || flight != null || !expanded) return
         stopBreathing()
-        if (waitingForReply) {
-            mascot.pivotX = mascot.width / 2f
-            mascot.pivotY = mascot.height * 0.9f
-            breath = ObjectAnimator.ofFloat(mascot, View.ROTATION, -2.5f, 2.5f).apply {
-                duration = 1_100
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                interpolator = AccelerateDecelerateInterpolator()
-                start()
-            }
-            return
-        }
-        val amplitude = -mascotSize(ctx) * (4f / 120f)
-        breath = ObjectAnimator.ofFloat(mascot, View.TRANSLATION_Y, 0f, amplitude).apply {
-            duration = 3_400
+        if (!ValueAnimator.areAnimatorsEnabled()) return
+        mascot.pivotX = mascot.width / 2f
+        mascot.pivotY = mascot.height * 0.88f
+        val thinking = waitingForReply
+        breath = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = if (thinking) 1_600 else 3_400
             repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
+            interpolator = LinearInterpolator()
+            addUpdateListener { a ->
+                val t = (a.animatedValue as Float).toDouble()
+                if (thinking) {
+                    val c2 = cos(4 * PI * t).toFloat()
+                    mascot.rotation = (-2 * cos(2 * PI * t)).toFloat()
+                    mascot.scaleX = 1.001f + 0.011f * c2
+                    mascot.scaleY = 1.002f - 0.014f * c2
+                } else {
+                    val k = ((1 - cos(2 * PI * t)) / 2).toFloat()
+                    mascot.scaleX = 1f - 0.015f * k
+                    mascot.scaleY = 1f + 0.03f * k
+                }
+            }
             start()
         }
     }
@@ -2668,6 +3022,8 @@ object FloatingOverlayController {
         column?.let {
             it.translationY = 0f
             it.rotation = 0f
+            it.scaleX = 1f
+            it.scaleY = 1f
         }
     }
 
@@ -2761,6 +3117,33 @@ object FloatingOverlayController {
     }
 
     /**
+     * Lei segue la pillola: dopo **ogni** layout della finestra, se la pillola
+     * sta altrove sullo schermo o è cresciuta, lei ci torna sopra.
+     *
+     * Non basta ascoltare gli insets della tastiera, né l'altezza della pillola.
+     * Alla prima apertura dopo l'avvio il sistema non consegna l'inset dell'IME
+     * a questa finestra (`ime=0` per tutta l'apertura, con la tastiera su) e la
+     * **ridimensiona** invece: la pillola sale sopra la tastiera senza cambiare
+     * né padding né altezza, e lei restava dov'era — dietro la tastiera
+     * (`jenny_s22`, 13/10/2026). Guardando dove la pillola è *disegnata*, ogni
+     * causa — inset, finestra ridimensionata, testo che va a capo — porta allo
+     * stesso conto.
+     */
+    private fun followPill(ctx: Context) {
+        if (!expanded || flight != null) return
+        // Prima il tetto della lista: se la finestra si è ristretta, è lui che
+        // rimette la pillola dentro (v. [syncListCap]), e solo dopo la pillola
+        // sta dove lei deve andare.
+        syncListCap(ctx)
+        val top = measuredPillTop() ?: return
+        val h = inputBar?.height ?: return
+        if (top == lastPillTopPx && h == pillHeightPx) return
+        lastPillTopPx = top
+        pillHeightPx = h
+        slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))
+    }
+
+    /**
      * Dov'è **davvero** il bordo alto della pillola, in coordinate schermo — o
      * `null` se la pillola non è a schermo.
      *
@@ -2817,6 +3200,7 @@ object FloatingOverlayController {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (mascotPx <= 0) mascotPx = prefs.getInt(PREF_SIZE, 0)
         storedPalette(prefs.getString(PREF_PALETTE, null))?.let { palette = it }
+        parseBubble(prefs.getString(PREF_BUBBLE, null))?.let { userBubble = it }
     }
 
     private fun saveParkPosition(ctx: Context) {

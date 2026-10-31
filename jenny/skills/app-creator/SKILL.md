@@ -8,22 +8,54 @@ description: >
   - User wants to connect an external server (REST API) as an app with UI
   Do NOT use for skills (chat-only capabilities, no screen) — use skill-creator for those.
 locked: true
+helper: app-builder
 ---
 
 # App Creator
 
-A Jenny App is a folder in `apps/<slug>/` (workspace-relative) that packages a UI for the
-user and typed actions for the agent. If it needs a screen, it's an app; if it only lives in
+A Jenny App is a folder in `apps/<slug>/` (workspace-relative). It is always **general** — it
+lives in the App page, not inside a notebook — and every part is optional: a screen for the
+user, typed actions for the agent, a **reader** that reads something by itself on a clock, and
+a **summary**, the way it shows on a notebook board: a **strip** of a few blocks (a value, a
+list, a week…) that the house draws; a tap opens the screen.
+If it needs a screen, a live value or a place on a board, it's an app; if it only lives in
 chat, it's a skill.
 
 ```
 apps/<slug>/
-├── app.json        # manifest: name, icon, external server, typed actions (the contract)
+├── app.json        # manifest: name, icon, server, actions, reader, summary (the contract)
 ├── AGENT.md        # context for the agent: what the app is, preferences, thresholds
+├── run.py          # optional reader: `def run(ctx)`, run every N minutes with no model
 ├── app/
-│   └── index.html  # the UI (HTML/JS only — no per-app Python); only app/ is web-served
+│   └── index.html  # optional screen (HTML/JS); only app/ is web-served
 └── data/           # app state (collections), shared between UI and agent — never web-served
 ```
+
+<rule>
+**Write apps only with the `app` tool — never with write_file, edit_file or python_exec**
+(they refuse app code). `app action=draft` validates the files and runs the reader once on the
+app's real data; when something fails nothing changes (an existing app keeps running as it
+was): fix it with `app action=edit`. What happens when it works depends on your `app` tool:
+
+- it has `draft` and `publish`: the app is **live at once**, and the reply carries its first
+  real value;
+- it has `publish` but no `draft` (a notebook chat): you do not write the files — spawn an
+  `app-builder` with what the user wants, check the values it reports, then
+  `app action=publish`;
+- it has `draft` but no `publish` (you are the app-builder): the new version waits for the
+  main agent to publish it — report what you built and what it read.
+
+There is nothing for the user to approve; an app they do not like, they delete.
+</rule>
+
+<rule>
+**Every app that keeps state declares a `summary` with `blocks`** (see the reference): a
+reader, or any storage action that writes, means there is something to show at a glance —
+"38 %", "4 to buy", "€ 12,430". Do not ask the user whether they want it, nor which blocks:
+choose them yourself from what the app is for — the one thing that matters first, then at most
+one or two blocks of context. The strip's size (S/M/L/XL) follows from the blocks. An app with
+no state (a calculator) has none.
+</rule>
 
 For the full manifest schema, action kinds, and UI conventions, read
 [references/manifest.md](references/manifest.md) before writing any file.
@@ -42,7 +74,7 @@ nothing when tapped:
 - **Never call `/api/apps/` with `fetch`.** Always go through `jenny.action()` — the
   gateway is GET-only and answers no CORS preflight.
 
-`scripts/validate_app.py` rejects the first as an error and warns on the others.
+`app action=draft` refuses a screen that does any of the three.
 </rule>
 
 <rule>
@@ -67,7 +99,9 @@ there changes page — a button never keeps it, a sideways-dragged component alw
   the swipe.
 - A component dragged sideways by your own code (carousel, swipe-to-delete row, map,
   drawing area) declares it with CSS `touch-action: pan-y` (`none` if it also takes
-  vertical drags). `<input type="range">` and `overflow-x: auto` rows need nothing.
+  vertical drags). `<input type="range">` and `overflow-x: auto` rows need nothing — and a
+  carousel built on native scrolling (`overflow-x: auto` + `scroll-snap-type`) is such a row:
+  `touch-action: pan-y` on it, or on its slides, stops the finger from swiping it at all.
 - `touch-action: none` on `body` takes the swipe from the whole app: only for a full-screen
   game.
 </rule>
@@ -85,7 +119,9 @@ unclear (e.g. the user tapped "+" and has written nothing yet), use English.
 
 <rule>
 **Follow the Guided Conversation Flow below.** Ask ONE question at a time. Only write files
-AFTER the user has confirmed name and actions in Phase 3.
+AFTER the user has confirmed name and actions in Phase 3 — unless the request already answers
+the flow: what the app shows, where the data comes from (or that it is kept locally) and how
+often it reads. Then say the plan in one line and build it, without asking for confirmation.
 Never write real secrets into app.json or index.html, and never declare `server.auth` at all (see Secrets below).
 
 **This conversation is not a sustained goal: do not call `long_task` for it.** Each phase
@@ -130,34 +166,33 @@ Slug rules: lowercase alphanumeric with single hyphens, max 32 chars, folder nam
 after the slug. Action names: snake_case, unique within the app — the agent will see them as
 tools named `<slug>_<action>`.
 
-### Phase 4: Write the Files
+### Phase 4: Draft the App
 
-Only after confirmation, create the folder and write, in this order:
+Only after confirmation, call `app action=draft slug=<slug>` with `files` (in a notebook chat,
+the `app-builder` does this step). The first call of a new app carries `app.json`:
 
-1. `apps/<slug>/app.json` — follow [references/manifest.md](references/manifest.md) exactly.
-2. `apps/<slug>/AGENT.md` — 5–15 lines: what the app is for, user preferences and thresholds
-   learned in the conversation (e.g. "water the basil when humidity drops below 20%"),
-   anything the agent needs to act well. NOT a copy of the manifest.
-3. `apps/<slug>/app/index.html` — UI built on the Jenny Kit (theme tokens, classless base,
-   component vocabulary, chart helpers) following the conventions in the reference. Never
-   invent a custom design or load anything from an external host.
-4. `apps/<slug>/data/` — create the directory; leave collections to be created on first write.
+1. `app.json` — follow [references/manifest.md](references/manifest.md) exactly, including the
+   `summary` with its `blocks` (and the `reader`, if the app reads something by itself).
+2. `AGENT.md` — 5–15 lines: what the app is for, user preferences and thresholds learned in the
+   conversation (e.g. "water the basil when humidity drops below 20%"), anything the agent
+   needs to act well. NOT a copy of the manifest.
+3. `run.py` — the reader, if any: `def run(ctx):` returning exactly the reader's fields.
+4. `app/index.html` — the screen, if any: built on the Jenny Kit (theme tokens, classless base,
+   component vocabulary, chart helpers) following the conventions in the reference. Never invent
+   a custom design or load anything from an external host.
 
-### Phase 5: Validate
+Collections in `data/` are created on first write. If the tool reports a problem, fix it with
+`app action=edit` (one exact replacement in one file) and it tries again.
 
-Run the validator and fix anything it reports:
+### Phase 5: Tell and Place
 
-```
-python_exec(
-    working_dir="<workspace>/skills/app-creator/scripts",
-    code="import validate_app; validate_app.main(['validate_app.py', '<workspace>/apps/<slug>'])",
-)
-```
-
-`working_dir` is what makes the bare `import` resolve; the app path must be absolute, because
-the script walks it with `pathlib`.
-
-Then tell the user the app is ready and will appear in the Jenny Apps grid.
+Once it is live (after `draft`, or after `publish`), the tool's answer carries the first real
+value: check it, then tell the user, in one or two lines, what it does and that it is in the App
+page. If the app is about a subject of a notebook (a plant, a portfolio),
+offer to put it on that notebook's board — `app action=place` makes a card that **is** the app,
+tied by a thread to the card it belongs with (`card`, e.g. the "Portfolio" app next to "ETF") —
+and do it when the user agrees. An app never goes inside another card's drawer. Placing it in a notebook also
+lets that notebook's chat use it.
 
 ## Secrets
 
@@ -168,19 +203,28 @@ app is rejected at load as broken. This section previously said to write `secret
 "so manifests keep working when the store lands"; that advice shipped a real app whose only
 action was dead on arrival, and it is withdrawn.
 
-So: an app can only talk to an endpoint that needs no credentials (a LAN or Tailscale server
-without auth is the normal case). If the user's endpoint *does* need a token, say plainly
-that Jenny Apps cannot authenticate to an app server yet, and do not write a manifest that
-pretends otherwise. Never put a raw token in `app.json` or `index.html`. If the user pastes a
-token in chat, do not echo it and do not write it to any file in the workspace.
+So the **screen's `http` actions** can only talk to an endpoint that needs no credentials (a
+LAN or Tailscale server without auth is the normal case).
+
+**A reader can authenticate, through an installed skill.** When an installed skill already
+holds the credential and a script that calls the service (e.g. `waterbot-imh`, whose script
+carries the hub's access headers), declare it in the reader (`"uses": "<skill>"`) and import
+its script from `run.py`: the reader fetches the data, the app stores it, and the screen and
+the summary read the app's own collections. That is the way to build an app on a protected
+service — see `uses` in [references/manifest.md](references/manifest.md). Only when no
+installed skill holds the credential, say plainly that the app cannot reach that service yet.
+
+Never put a raw token in `app.json`, `run.py` or `index.html` (the `app` tool refuses it). If
+the user pastes a token in chat, do not echo it and do not write it to any file in the
+workspace.
 
 ## Boundaries
 
 - Apps live in `apps/`, never in `ui/` — `ui/` is re-extracted from the package on every
   startup and would overwrite them.
-- No per-app Python and no code execution in actions: actions are declarative
-  (`storage`/`http` only). If an app needs real server-side logic, it belongs in the app's
-  external server behind an `http` action.
+- Actions are declarative (`storage`/`http` only). The only Python an app has is its reader
+  (`run.py`), which reads and never writes; real server-side logic belongs in the app's external
+  server behind an `http` action.
 - The app never contacts the agent on its own. The only app→agent path is the user's explicit
   hand-off to chat. Proactivity ("let me know if...") is scheduled work on the agent side, offered
   as a follow-up after the app works — where it goes is decided by the recurring-work rule, not

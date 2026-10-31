@@ -56,8 +56,8 @@ android {
         // uno di quelli e' installato. Pubblicare a 12 avrebbe significato non
         // poter provare l'aggiornamento proprio sul dispositivo che lo riceve:
         // l'updater pretende un codice STRETTAMENTE maggiore di quello installato.
-        versionCode = 17
-        versionName = "1.0.0"
+        versionCode = 18
+        versionName = "2.0.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
@@ -82,6 +82,19 @@ android {
                 enableV3Signing = true
             }
         }
+    }
+
+    // Due build dallo stesso codice. `foss` (GitHub, F-Droid) è Jenny senza
+    // nessuna libreria Google; `play` (Play Store) aggiunge le estensioni —
+    // oggi la copia su Google Drive. Il codice di un'estensione sta fuori dal
+    // core: Kotlin in `src/play/`, Python in `jenny_extensions/` (v. il blocco
+    // `chaquopy` più sotto e `jenny/extensions.py`). La `foss` quindi non ne
+    // contiene nemmeno il codice, e `scripts/check_foss_apk.py` lo verifica.
+    // Stesso `applicationId`: è la stessa app, distribuita in due posti.
+    flavorDimensions += "store"
+    productFlavors {
+        create("foss") { dimension = "store" }
+        create("play") { dimension = "store" }
     }
 
     buildTypes {
@@ -152,6 +165,11 @@ chaquopy {
         maybeCreate("main").apply {
             srcDir("../../")
             include("jenny/**")
+        }
+        // Le estensioni Python, solo nel flavor che le vuole.
+        maybeCreate("play").apply {
+            srcDir("../../")
+            include("jenny_extensions/**")
         }
     }
 }
@@ -293,4 +311,14 @@ dependencies {
     implementation("io.noties.markwon:ext-tasklist:4.6.2")
     implementation("io.noties.markwon:linkify:4.6.2")
     implementation("io.noties.markwon:html:4.6.2")
+
+    // Test JVM delle regole native senza Android (`./gradlew testFossDebugUnitTest`).
+    // La CI non costruisce l'APK, quindi non li gira: si lanciano a mano prima
+    // di un install. Il primo è `ImeBindingPolicyTest`.
+    testImplementation("junit:junit:4.13.2")
+
+    // Solo nel flavor `play`: il consenso a Google Drive e il token per la
+    // copia notturna (`src/play/.../DriveBridge.kt`). La `foss` non ha
+    // nessuna libreria Google.
+    "playImplementation"("com.google.android.gms:play-services-auth:21.2.0")
 }

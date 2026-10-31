@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 import websockets
-from port_alloc import free_port
+from port_alloc import free_port, wait_listening
 
 from jenny.channels.http_utils import (
     check_api_secret,
@@ -103,7 +103,7 @@ async def test_non_ascii_token_gets_a_clean_401_on_every_door() -> None:
     port = free_port()
     channel = _channel(port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     base = f"http://127.0.0.1:{port}"
     try:
         # ?token= percentuale-codificato: arriva decodificato come "sécret".

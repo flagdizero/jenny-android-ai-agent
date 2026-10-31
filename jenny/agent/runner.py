@@ -12,8 +12,14 @@ from typing import Any, Callable, Literal
 from loguru import logger
 
 from jenny.agent.context_governor import (
+    blank_closed_reasoning,
+    closed_reasoning_can_be_blank,
     extract_context_limit,
+    input_budget,
     is_context_length_error,
+    label_mid_turn_messages,
+    last_helper_result,
+    mask_refused_results,
     snip_history,
 )
 from jenny.agent.history_repair import (
@@ -24,6 +30,24 @@ from jenny.agent.history_repair import (
     microcompact,
 )
 from jenny.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext
+from jenny.agent.inflight_compaction import (
+    LLM_FAILURES_BEFORE_DETERMINISTIC,
+    MAX_SUMMARY_WORDS,
+    MIN_CHAIN_RATIO,
+    SUMMARY_MAX_CHARS,
+    TAIL_RATIO,
+    TRIGGER_RATIO,
+    InFlightCheckpoint,
+    apply_checkpoint,
+    chain_start,
+    chain_tokens,
+    collect_user_messages,
+    deterministic_summary,
+    find_request_index,
+    format_range,
+    mark_compacted,
+    plan_cut,
+)
 from jenny.agent.request_execution import RequestExecutionMixin, RequestOverrides
 from jenny.agent.response_outcome import (
     ResponseOutcome,
@@ -38,20 +62,30 @@ from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.usage_accounting import (
     accumulate_usage,
     merge_usage,
+    usage_dict,
     usage_or_estimate,
 )
 from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from jenny.providers.opencode import conversation_scope
+from jenny.providers.retry_policy import classify_user_error
+from jenny.runtime.user_text import say
+from jenny.security.subagent_policy import current_turn_taint
+from jenny.session.history_meta import TOOL_TAINT_META
 from jenny.utils.helpers import (
+    CHARS_PER_TOKEN,
     build_assistant_message,
+    estimate_prompt_tokens_chain,
     extract_reasoning,
     maybe_persist_tool_result,
     merge_message_content,
     truncate_text,
 )
+from jenny.utils.prompt_templates import render_template
 from jenny.utils.runtime import (
     EMPTY_FINAL_RESPONSE_MESSAGE,
     OUTPUT_TRUNCATED_MESSAGE,
+    PROVIDER_REFUSED_MESSAGE,
+    build_budget_notice_message,
     build_goal_continue_message,
     build_length_recovery_message,
     ensure_nonempty_tool_result,
@@ -61,11 +95,6 @@ from jenny.utils.runtime import (
 
 GoalContinueMessage = str | Callable[[], str | None]
 
-_DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
-_ARREARAGE_ERROR_MESSAGE = (
-    "The AI provider rejected the request because the API key is out of quota or the "
-    "account is in arrears. Please top up / check the billing status of your API key and try again."
-)
 _MAX_CONTEXT_LENGTH_RETRIES = 2  # Max attempts to recover from context_length errors per turn
 _PERSISTED_MODEL_ERROR_PLACEHOLDER = "[Assistant reply unavailable due to model error.]"
 _PARTIAL_CONTENT_INTERRUPTED_MARKER = "[response was interrupted by an error]"
@@ -115,7 +144,6 @@ class AgentRunSpec:
     max_tokens: int | None = None
     reasoning_effort: str | None = None
     hook: AgentHook | None = None
-    error_message: str | None = _DEFAULT_ERROR_MESSAGE
     max_iterations_message: str | None = None
     concurrent_tools: bool = False
     fail_on_tool_error: bool = False
@@ -143,6 +171,22 @@ class AgentRunSpec:
     # non si sprona e non si parcheggia, perche' il rientro riapre il turno.
     delegated_work_pending: Callable[[], bool] | None = None
     finalize_on_max_iterations: bool = True
+    # Il prompt della chiamata senza tool che chiude un run a budget esaurito.
+    # ``None`` = quello di default, che parla all'utente; un subagent passa il
+    # suo (``SUBAGENT_BUDGET_FINALIZATION_PROMPT``), che parla all'orchestratore.
+    max_iterations_finalization_prompt: str | None = None
+    # Avviso di budget: chiamato con l'indice (da 0) dell'iterazione appena
+    # finita, SOLO dopo i tool (Checkpoint 1) — l'unico punto in cui un messaggio
+    # in piu entra prima della chiamata successiva senza trasformare una risposta
+    # finale in un'altra iterazione. Un testo diventa una riga ``user`` marcata
+    # ``budget_notice``; ``None`` non fa niente. Non passa dalla coda delle
+    # iniezioni: quella ha un tetto di cicli e la telemetria «dall'orchestratore».
+    iteration_notice: Callable[[int], str | None] | None = None
+    # Il ragionamento dei turni chiusi si svuota solo dove la storia lo ha
+    # marcato (``context_governor.settle_closed_reasoning``), non al confine
+    # dell'ultima risposta: lo chiede il loop, che marca quando costruisce il
+    # turno. I subagent e i chiamanti diretti restano col confine.
+    closed_reasoning_flagged: bool = False
     on_context_overflow: Callable[[int], Any] | None = None  # Called when context_length error; receives current window, returns new window
 
 
@@ -163,6 +207,10 @@ class AgentRunResult:
     # spronarlo: sta aspettando l'utente. Il product layer lo usa per
     # parcheggiare il goal invece di lasciare che il modello lo chiuda.
     goal_stalled: bool = False
+    # Con ``stop_reason == "error"``: il tipo d'errore del provider per chi legge
+    # (``retry_policy.classify_user_error``), che il loop mette nei metadata
+    # dell'outbound come ``error: {kind}``. ``None`` per ogni altro esito.
+    error_kind: str | None = None
 
 
 @dataclass
@@ -208,6 +256,21 @@ class _RunCounters:
     goal_continue_cycles: int = 0
     tools_at_last_goal_continue: int = 0
     goal_stalled: bool = False
+    error_kind: str | None = None
+    # I risultati d'aiutante dopo i quali il provider ha rifiutato di rispondere
+    # (``_recover_provider_refusal``): la copia per il modello li porta come
+    # segnaposto per il resto del run. Mai azzerata: ogni voce è un tentativo
+    # già speso, e rimetterla in vista rifarebbe la richiesta rifiutata.
+    refused_results: list[Any] = field(default_factory=list)
+    # Compattazione a meta' turno (``agent/inflight_compaction.py``): dove sta la
+    # richiesta del turno, il checkpoint in vigore, i riassunti falliti (oltre
+    # ``LLM_FAILURES_BEFORE_DETERMINISTIC`` si fa senza modello) e l'usage della
+    # chiamata di riassunto, che si somma alla richiesta successiva perche' gli
+    # hook di misura la contino.
+    request_index: int | None = None
+    checkpoint: InFlightCheckpoint | None = None
+    compaction_llm_failures: int = 0
+    pending_usage: dict[str, int] = field(default_factory=dict)
 
 
 class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
@@ -534,9 +597,11 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         # helper lo mutano per riferimento (stessa istanza), così i reset e le
         # accumulazioni restano visibili all'iterazione successiva.
         state = _RunCounters(tool_errors=ToolErrorBudget.from_spec(spec))
+        state.request_index = find_request_index(spec.initial_messages)
 
         for iteration in range(spec.max_iterations):
-            messages_for_model = self._govern_context(spec, messages, iteration)
+            messages_for_model = await self._context_for_model(spec, messages, iteration, state)
+            messages_for_model = mask_refused_results(messages_for_model, state.refused_results)
             context = AgentHookContext(
                 iteration=iteration,
                 messages=messages,
@@ -563,6 +628,9 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             )
             response.content = cleaned_content
             raw_usage = self._usage_or_estimate(spec, messages_for_model, response)
+            if state.pending_usage:
+                raw_usage = self._merge_usage(raw_usage, state.pending_usage)
+                state.pending_usage = {}
             context.usage = dict(raw_usage)
             self._accumulate_usage(state.usage, raw_usage)
             if reasoning_text and not context.streamed_reasoning:
@@ -596,6 +664,13 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             if outcome is ResponseOutcome.TRUNCATED_BLANK:
                 if await self._recover_blank_truncation(
                     spec, hook, context, response, state, raw_usage, output_budget, iteration
+                ) == "continue":
+                    continue
+
+            # --- Rifiuto del provider: un tentativo col contesto cambiato ---
+            if outcome is ResponseOutcome.REFUSED:
+                if await self._recover_provider_refusal(
+                    spec, hook, context, response, messages, state, iteration
                 ) == "continue":
                     continue
 
@@ -661,6 +736,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                 if await self._finish_on_blank(
                     spec, hook, context, messages, state,
                     truncated=outcome is ResponseOutcome.TRUNCATED_BLANK,
+                    refused=outcome is ResponseOutcome.REFUSED,
                 ) == "continue":
                     continue
                 break
@@ -705,6 +781,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             # esaurito, la continuazione interna (``session.turn_continuation``) ha
             # ancora la parola e il goal non sta aspettando nessuno.
             goal_stalled=state.goal_stalled and state.stop_reason != "max_iterations",
+            error_kind=state.error_kind if state.stop_reason == "error" else None,
         )
 
     # --- Branch handlers estratti da ``_run_core`` (behavior-identical) ---
@@ -715,11 +792,223 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
     # proposito (vedi il drain "after final response" nel driver, che precede
     # ``on_stream_end`` per tenere viva la card in streaming).
 
+    async def _context_for_model(
+        self,
+        spec: AgentRunSpec,
+        messages: list[dict[str, Any]],
+        iteration: int,
+        state: _RunCounters,
+    ) -> list[dict[str, Any]]:
+        """La richiesta per il modello: governance, compattazione a meta' turno, snip.
+
+        La compattazione guarda la richiesta gia' governata (microcompact e tetto
+        per risultato applicati) ma non ancora tagliata: lo snip resta l'ultima
+        rete, e se scatta dopo una compattazione vuol dire che la coda da sola non
+        sta nella finestra.
+        """
+        view = apply_checkpoint(messages, state.checkpoint)
+        if state.request_index is None or not spec.context_window_tokens:
+            return self._govern_context(spec, view, iteration)
+        governed = self._govern_context(spec, view, iteration, snip=False)
+        try:
+            compacted = await self._maybe_compact_in_flight(spec, messages, governed, state, iteration)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "In-flight compaction failed on turn {} for {}; the snip stays the safety net",
+                iteration, spec.session_key or "default",
+            )
+            compacted = False
+        if compacted:
+            return self._govern_context(spec, apply_checkpoint(messages, state.checkpoint), iteration)
+        return self._finish_governance(spec, view, governed, iteration)
+
+    async def _maybe_compact_in_flight(
+        self,
+        spec: AgentRunSpec,
+        messages: list[dict[str, Any]],
+        governed: list[dict[str, Any]],
+        state: _RunCounters,
+        iteration: int,
+    ) -> bool:
+        """Sostituisce i primi passi del turno con un checkpoint, se la richiesta sta per riempirsi."""
+        anchor = state.request_index
+        if anchor is None or anchor >= len(messages) or messages[anchor].get("role") != "user":
+            return False
+        budget = input_budget(self.provider, spec)
+        if budget <= 0:
+            return False
+        tools = spec.tools.get_definitions()
+        estimate, _ = estimate_prompt_tokens_chain(self.provider, spec.model, governed, tools)
+        if estimate <= budget * TRIGGER_RATIO:
+            return False
+
+        from jenny.utils.token_calibration import factor
+
+        scale = factor(spec.model)
+        start = chain_start(anchor, state.checkpoint)
+        cap = spec.max_tool_result_chars
+        chain = chain_tokens(messages, start, scale=scale, max_tool_chars=cap)
+        if chain < budget * MIN_CHAIN_RATIO:
+            return False
+        tail_budget = int(min(budget * TAIL_RATIO, chain * 0.5))
+        cut = plan_cut(messages, start, tail_budget, scale=scale, max_tool_chars=cap)
+        if cut is None:
+            return False
+
+        compacted = messages[start:cut]
+        previous = state.checkpoint
+        summary, strategy = await self._write_checkpoint_summary(
+            spec, governed, messages[anchor], compacted, previous, estimate, budget, tools, state,
+        )
+        state.checkpoint = InFlightCheckpoint(
+            anchor=anchor,
+            cut=cut,
+            summary=summary[:SUMMARY_MAX_CHARS],
+            user_messages=collect_user_messages(previous.user_messages if previous else [], compacted),
+            compactions=previous.compactions + 1 if previous else 1,
+            deterministic=strategy == "deterministic",
+        )
+        mark_compacted(messages, state.checkpoint)
+        # ``pending_usage`` qui e' solo quel che e' costato il checkpoint: si somma
+        # alla richiesta dopo, e da li' in poi non si distingue piu'.
+        spent = state.pending_usage
+        logger.info(
+            "In-flight compaction #{} for {} on turn {}: {} messages into a checkpoint of {} chars "
+            "via {} (prompt ~{} of {} tokens, kept {} recent messages; checkpoint calls: "
+            "prompt {} cached {} completion {})",
+            state.checkpoint.compactions, spec.session_key or "default", iteration, len(compacted),
+            len(state.checkpoint.summary), strategy, estimate, budget, len(messages) - cut,
+            spent.get("prompt_tokens", 0), spent.get("cached_tokens", 0),
+            spent.get("completion_tokens", 0),
+        )
+        return True
+
+    async def _write_checkpoint_summary(
+        self,
+        spec: AgentRunSpec,
+        governed: list[dict[str, Any]],
+        request: dict[str, Any],
+        compacted: list[dict[str, Any]],
+        previous: InFlightCheckpoint | None,
+        estimate: int,
+        budget: int,
+        tools: list[dict[str, Any]],
+        state: _RunCounters,
+    ) -> tuple[str, str]:
+        """Il testo del checkpoint e come e' stato scritto.
+
+        Prima con la stessa richiesta che stava per partire, istruzione in coda:
+        il prefisso e' identico, quindi il provider lo trova in cache e il
+        riassunto costa poco piu' dell'output (il ``self_compact`` di Letta, il
+        riassunto di Cline). Se non c'e' posto, o il modello chiama un tool invece
+        di scrivere, col trascritto dei passi e senza tool. Se fallisce anche
+        quello, il checkpoint senza modello.
+        """
+        previous_summary = previous.summary if previous else None
+        if state.compaction_llm_failures < LLM_FAILURES_BEFORE_DETERMINISTIC:
+            instruction = render_template(
+                "agent/inflight_checkpoint.md", strip=True, max_words=MAX_SUMMARY_WORDS,
+            )
+            attempts: list[tuple[str, list[dict[str, Any]], list[dict[str, Any]] | None]] = []
+            if estimate + len(instruction) // CHARS_PER_TOKEN + 64 <= budget:
+                cached = list(governed)
+                self._append_injected_messages(cached, [{"role": "user", "content": instruction}])
+                attempts.append(("cached-prefix", cached, tools))
+            transcript = format_range(
+                compacted,
+                request=request,
+                previous_summary=previous_summary,
+                max_chars=max(4_000, int(budget * 0.6) * CHARS_PER_TOKEN),
+            )
+            attempts.append(("transcript", [
+                {"role": "system", "content": "You write context checkpoints for an AI agent "
+                                              "that is in the middle of a long task."},
+                {"role": "user", "content": f"{transcript}\n\n{instruction}"},
+            ], None))
+            for strategy, request_messages, request_tools in attempts:
+                text, why = await self._request_checkpoint(
+                    spec, request_messages, request_tools, state,
+                )
+                if text:
+                    return text, strategy
+                logger.warning(
+                    "In-flight compaction for {}: no checkpoint from the {} request ({})",
+                    spec.session_key or "default", strategy, why,
+                )
+            state.compaction_llm_failures += 1
+        return deterministic_summary(compacted, previous_summary=previous_summary), "deterministic"
+
+    async def _request_checkpoint(
+        self,
+        spec: AgentRunSpec,
+        request_messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        state: _RunCounters,
+    ) -> tuple[str | None, str]:
+        """Il checkpoint, o ``None`` e il perche' (per il log: si e' visto fallire
+        sul telefono senza sapere se il modello avesse chiamato un tool)."""
+        kwargs = self._build_request_kwargs(spec, request_messages, tools=tools)
+        if tools is None:
+            kwargs.pop("tool_choice", None)
+        timeout_s = spec.llm_timeout_s
+        if timeout_s is None:
+            from jenny.config.runtime_env import llm_timeout_s
+
+            timeout_s = llm_timeout_s()
+        coro = self.provider.chat_with_retry(**kwargs)
+        try:
+            response = await (
+                asyncio.wait_for(coro, timeout=timeout_s) if timeout_s and timeout_s > 0 else coro
+            )
+        except asyncio.TimeoutError:
+            return None, f"timed out after {timeout_s:g}s"
+        accumulate_usage(state.pending_usage, usage_dict(response.usage))
+        if response.finish_reason == "error":
+            return None, f"provider error: {(response.content or '')[:200]}"
+        if response.has_tool_calls:
+            names = ", ".join(call.name for call in response.tool_calls)
+            return None, f"the model called {names} instead of writing"
+        _, text = extract_reasoning(
+            response.reasoning_content, response.thinking_blocks, response.content,
+        )
+        text = (text or "").strip()
+        if len(text) < 40:
+            return None, f"reply too short ({len(text)} chars, finish {response.finish_reason})"
+        return text, "ok"
+
+    def _finish_governance(
+        self,
+        spec: AgentRunSpec,
+        view: list[dict[str, Any]],
+        governed: list[dict[str, Any]],
+        iteration: int,
+    ) -> list[dict[str, Any]]:
+        """Lo snip e la riparazione che lo segue, su una richiesta gia' governata."""
+        try:
+            governed = self._snip_history(spec, governed)
+            governed = self._drop_orphan_tool_results(governed)
+            return self._backfill_missing_tool_results(governed)
+        except Exception:
+            logger.exception(
+                "Context governance failed on turn {} for {}; applying minimal repair",
+                iteration,
+                spec.session_key or "default",
+            )
+            try:
+                repaired = self._drop_orphan_tool_results(view)
+                return self._backfill_missing_tool_results(repaired)
+            except Exception:
+                return view
+
     def _govern_context(
         self,
         spec: AgentRunSpec,
         messages: list[dict[str, Any]],
         iteration: int,
+        *,
+        snip: bool = True,
     ) -> list[dict[str, Any]]:
         try:
             # Keep the persisted conversation untouched. Context governance
@@ -728,12 +1017,19 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             # later when the caller saves only the new turn.
             messages_for_model = self._drop_orphan_tool_results(messages)
             messages_for_model = self._backfill_missing_tool_results(messages_for_model)
+            if closed_reasoning_can_be_blank(self.provider, spec.model):
+                messages_for_model = blank_closed_reasoning(
+                    messages_for_model,
+                    flagged_only=getattr(spec, "closed_reasoning_flagged", False),
+                )
+            messages_for_model = label_mid_turn_messages(messages_for_model)
             messages_for_model = self._microcompact(messages_for_model)
             messages_for_model = self._apply_tool_result_budget(spec, messages_for_model)
-            messages_for_model = self._snip_history(spec, messages_for_model)
-            # Snipping may have created new orphans; clean them up.
-            messages_for_model = self._drop_orphan_tool_results(messages_for_model)
-            messages_for_model = self._backfill_missing_tool_results(messages_for_model)
+            if snip:
+                messages_for_model = self._snip_history(spec, messages_for_model)
+                # Snipping may have created new orphans; clean them up.
+                messages_for_model = self._drop_orphan_tool_results(messages_for_model)
+                messages_for_model = self._backfill_missing_tool_results(messages_for_model)
         except Exception:
             logger.exception(
                 "Context governance failed on turn {} for {}; applying minimal repair",
@@ -782,6 +1078,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
 
         await hook.before_execute_tools(context)
 
+        taint_before = current_turn_taint()
         results, new_events, fatal_error = await self._execute_tools(
             spec,
             response.tool_calls,
@@ -798,6 +1095,13 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         context.tool_results = list(results)
         context.tool_events = list(new_events)
         completed_tool_results: list[dict[str, Any]] = []
+        # Quel che questo giro di tool ha portato di non fidato nel turno di
+        # Jenny (``subagent_policy.policy_after_tool``) resta scritto sui suoi
+        # risultati: e' cosi' che il turno dopo, finche' le righe sono in vista,
+        # nasce ancora contaminato. Il giro intero e non il singolo tool: le
+        # chiamate concorrenti marcano lo stesso turno, e marcare in piu' non
+        # apre niente.
+        new_taint = [s for s in current_turn_taint() if s not in taint_before]
         for tool_call, result in zip(response.tool_calls, results):
             tool_message = {
                 "role": "tool",
@@ -810,6 +1114,8 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                     result,
                 ),
             }
+            if new_taint:
+                tool_message[TOOL_TAINT_META] = list(new_taint)
             messages.append(tool_message)
             completed_tool_results.append(tool_message)
         if fatal_error is not None:
@@ -856,8 +1162,37 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         )
         if _drained:
             state.had_injections = True
+        self._append_iteration_notice(spec, messages, iteration)
         await hook.after_iteration(context)
         return "continue"
+
+    @classmethod
+    def _append_iteration_notice(
+        cls,
+        spec: AgentRunSpec,
+        messages: list[dict[str, Any]],
+        iteration: int,
+    ) -> None:
+        """Aggiunge l'avviso di budget di ``spec.iteration_notice``, se ne ha uno.
+
+        Dopo le iniezioni dello stesso checkpoint, cosi l'avviso e l'ultima cosa
+        che il modello legge prima di rispondere. Non conta in
+        ``injection_cycles`` e non alza ``had_injections``: non e un messaggio
+        dell'orchestratore, e non deve consumare il tetto dei suoi cicli. Un
+        callback che solleva non ferma il run: un avviso perso costa meno di un
+        lavoro buttato.
+        """
+        notice_fn = spec.iteration_notice
+        if notice_fn is None:
+            return
+        try:
+            text = notice_fn(iteration)
+        except Exception:
+            logger.exception("iteration_notice callback failed")
+            return
+        if not isinstance(text, str) or not text.strip():
+            return
+        cls._append_injected_messages(messages, [build_budget_notice_message(text)])
 
     async def _recover_empty_content(
         self,
@@ -903,7 +1238,60 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             context.usage = dict(raw_usage)
             context.tool_calls = list(response.tool_calls)
             clean = hook.finalize_content(context, response.content)
+            if hook.wants_streaming() and not is_blank_text(clean):
+                # La finalizzazione e' una richiesta senza streaming, ma il turno
+                # si' (``_assemble_outbound`` lo segna ``_streamed``): senza
+                # passare di qui la risposta non arrivava ai client, e non finiva
+                # nemmeno nel transcript.
+                await hook.on_stream(context, clean)
         return "proceed", response, clean
+
+    async def _recover_provider_refusal(
+        self,
+        spec: AgentRunSpec,
+        hook: AgentHook,
+        context: AgentHookContext,
+        response: LLMResponse,
+        messages: list[dict[str, Any]],
+        state: _RunCounters,
+        iteration: int,
+    ) -> Literal["continue", "proceed"]:
+        """Il provider ha rifiutato di rispondere: si ritenta solo cambiando il contesto.
+
+        Il rifiuto (``content_filter`` da DeepSeek, ``refusal`` da Anthropic)
+        dipende dal contesto: sul telefono, due volte dopo il rientro di un
+        aiutante, e i due retry identici del ramo vuoto e la finalizzazione
+        senza tool sono stati rifiutati tutti uguali. Qui un solo tentativo,
+        con l'ultimo risultato d'aiutante sostituito da un segnaposto nella
+        copia per il modello (``mask_refused_results``); se l'ultima riga
+        ``user`` non è un risultato d'aiutante, o è già stato tolto, niente
+        tentativo: il turno finisce in ``provider_refused`` (``_finish_on_blank``).
+
+        Il nome del metodo è il gancio del tracciamento di debug, come gli altri
+        recovery: il suo evento è ``kind="provider_refused"``.
+        """
+        target = last_helper_result(messages)
+        if target is None or target in state.refused_results:
+            logger.warning(
+                "Provider refused to answer on turn {} for {} (finish_reason='{}'); "
+                "nothing left to change, giving up",
+                iteration,
+                spec.session_key or "default",
+                response.finish_reason,
+            )
+            return "proceed"
+        state.refused_results.append(target)
+        logger.warning(
+            "Provider refused to answer on turn {} for {} (finish_reason='{}'); "
+            "retrying with the last helper result replaced by a placeholder",
+            iteration,
+            spec.session_key or "default",
+            response.finish_reason,
+        )
+        if hook.wants_streaming():
+            await hook.on_stream_end(context, resuming=False)
+        await hook.after_iteration(context)
+        return "continue"
 
     async def _recover_length(
         self,
@@ -1153,12 +1541,22 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         messages: list[dict[str, Any]],
         state: _RunCounters,
     ) -> Literal["continue", "break"]:
-        if LLMProvider.is_arrearage_response(response):
-            state.final_content = _ARREARAGE_ERROR_MESSAGE
-        else:
-            state.final_content = clean or spec.error_message or _DEFAULT_ERROR_MESSAGE
+        # All'utente la frase del suo tipo d'errore, nella sua lingua, che dice
+        # cosa fare; il testo grezzo del provider («Error calling LLM: All
+        # connection attempts failed», il corpo HTTP) resta nel log e in
+        # ``state.error``, che è quel che legge chi delega (il subagent lo passa
+        # al modello che l'ha lanciato). La cronologia del modello non cambia:
+        # lì va il segnaposto (o il testo parziale), sotto.
+        kind = classify_user_error(response)
+        logger.warning(
+            "LLM error ({}, status={}, kind={}): {}",
+            kind, response.error_status_code, response.error_kind,
+            (clean or response.content or "")[:500],
+        )
+        state.error_kind = kind
+        state.final_content = say(f"error.{kind}")
         state.stop_reason = "error"
-        state.error = state.final_content
+        state.error = clean or state.final_content
         if response.partial_content:
             self._append_interrupted_partial_content(messages, response.partial_content)
         else:
@@ -1185,16 +1583,28 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         state: _RunCounters,
         *,
         truncated: bool = False,
+        refused: bool = False,
     ) -> Literal["continue", "break"]:
-        # Due esiti distinti sotto lo stesso sintomo (contenuto vuoto): dirlo
+        # Tre esiti distinti sotto lo stesso sintomo (contenuto vuoto): dirlo
         # all'utente, invece di collassarli sul messaggio generico, è ciò che
-        # rende il limite di token diagnosticabile senza leggere i log.
-        state.final_content = (
-            OUTPUT_TRUNCATED_MESSAGE if truncated else EMPTY_FINAL_RESPONSE_MESSAGE
-        )
-        state.stop_reason = "output_truncated" if truncated else "empty_final_response"
-        state.error = state.final_content
-        self._append_final_message(messages, state.final_content)
+        # rende il limite di token — o il no del provider — diagnosticabile
+        # senza leggere i log.
+        #
+        # Due testi: la cronologia del modello tiene la frase inglese di sempre
+        # (``utils/runtime.py``), l'utente legge la sua nella sua lingua — senza
+        # «alza i max output tokens», che a chi tiene un telefono non dice niente.
+        if refused:
+            persisted = PROVIDER_REFUSED_MESSAGE
+            state.final_content = say("turn.refused")
+            # Lo legge il driver del piano: un passo rifiutato non prende il
+            # promemoria, che rifarebbe la stessa richiesta (``PlanDriver``).
+            state.stop_reason = "provider_refused"
+        else:
+            persisted = OUTPUT_TRUNCATED_MESSAGE if truncated else EMPTY_FINAL_RESPONSE_MESSAGE
+            state.final_content = say("turn.truncated" if truncated else "turn.empty")
+            state.stop_reason = "output_truncated" if truncated else "empty_final_response"
+        state.error = persisted
+        self._append_final_message(messages, persisted)
         context.final_content = state.final_content
         context.error = state.error
         context.stop_reason = state.stop_reason
@@ -1236,8 +1646,26 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                 state.usage,
             )
         if state.final_content is None:
-            state.final_content = self._max_iterations_fallback(spec)
-        self._append_final_message(messages, state.final_content)
+            fallback = self._max_iterations_fallback(spec)
+            self._append_final_message(messages, fallback)
+            # Il testo del template (inglese) resta nella cronologia; all'utente
+            # la stessa cosa nella sua lingua. Chi passa un proprio
+            # ``max_iterations_message`` (il subagent) parla a un modello, non a
+            # una persona, e riceve il suo testo così com'è.
+            state.final_content = (
+                fallback if spec.max_iterations_message
+                else say("turn.max_iterations", max_iterations=spec.max_iterations)
+            )
+        else:
+            self._append_final_message(messages, state.final_content)
+        if hook.wants_streaming() and state.final_content:
+            # Come la finalizzazione dopo le risposte vuote: una richiesta senza
+            # streaming in un turno che i client seguono a pezzi.
+            context = AgentHookContext(
+                iteration=spec.max_iterations, messages=messages, session_key=spec.session_key,
+            )
+            await hook.on_stream(context, state.final_content)
+            await hook.on_stream_end(context, resuming=False)
 
     # Contabilità usage estratta in ``agent/usage_accounting.py``. Delegatori
     # sottili: le funzioni di stima ricevono ``self.provider`` esplicitamente.

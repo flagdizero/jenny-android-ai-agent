@@ -330,6 +330,12 @@ class LLMProvider(ABC):
     provider_name: str | None = None
 
     _CHAT_RETRY_DELAYS = (1, 2, 4)
+    # Modalità ``background``: chi chiama non ha un utente che aspetta (un
+    # aiutante), e arrendersi costa il lavoro fatto. Nella riprova del 25/10 un
+    # 429 di OpenCode Go durava più dei 7 secondi della scala standard: nove
+    # richieste perse, otto aiutanti chiusi e rilanciati da zero. Quasi tre
+    # minuti di pazienza, col ``Retry-After`` del server se c'è (stesso tetto).
+    _BACKGROUND_RETRY_DELAYS = (5, 15, 30, 60, 60)
     _PERSISTENT_MAX_DELAY = 60
     # Tetto di una singola attesa in modalità standard (v. ``_run_with_retry``).
     _STANDARD_MAX_DELAY = 60
@@ -920,7 +926,10 @@ class LLMProvider(ABC):
         on_stream_recover: Callable[[], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         attempt = 0
-        delays = list(self._CHAT_RETRY_DELAYS)
+        delays = list(
+            self._BACKGROUND_RETRY_DELAYS if retry_mode == "background"
+            else self._CHAT_RETRY_DELAYS
+        )
         persistent = retry_mode == "persistent"
         last_response: LLMResponse | None = None
         last_error_key: str | None = None

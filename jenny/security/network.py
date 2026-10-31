@@ -165,6 +165,22 @@ def _is_blocked(
     return any(form in net for form in _address_forms(addr) for net in blocked_networks)
 
 
+def is_blocked_ip(ip: str) -> bool:
+    """True se un IP letterale cade nei range che ``validate_url_target`` rifiuta.
+
+    Serve a chi controlla una connessione già risolta, senza URL: la guardia
+    sui socket grezzi di ``python_exec`` (``_patch_socket_egress``). Stessa
+    lista e stessa eccezione di ``security.ssrfWhitelist``, così una
+    destinazione permessa a ``http_get`` è permessa anche lì e viceversa. Un
+    valore che non è un IP conta come bloccato.
+    """
+    try:
+        addr = ipaddress.ip_address(ip.split("%", 1)[0])
+    except ValueError:
+        return True
+    return _is_blocked(addr, _BLOCKED_NETWORKS)
+
+
 def _validate_target(
     url: str,
     blocked_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
@@ -292,28 +308,19 @@ def validate_ssh_target(host: str) -> tuple[bool, str]:
     return True, ""
 
 
-# ── Varianti asincrone: il DNS non deve bloccare il loop ───────────────────
+# ── Variante asincrona: il DNS non deve bloccare il loop ────────────────────
 #
 # Le tre policy risolvono il nome con ``socket.getaddrinfo``, che è bloccante:
 # chiamate dal thread del loop, un DNS lento fermava tutto il gateway. Da un
-# chiamante asincrono si usano queste, che fanno la stessa cosa in un thread.
-# Chiamano la funzione sincrona **per nome, al momento della chiamata**: chi la
-# sostituisce nel modulo (i test lo fanno) sostituisce anche queste.
+# chiamante asincrono si usa la variante qui sotto, o ``asyncio.to_thread`` sul
+# posto (``apps/http.py``, ``apps/proxy.py``). Chiama la funzione sincrona **per
+# nome, al momento della chiamata**: chi la sostituisce nel modulo (i test lo
+# fanno) sostituisce anche questa.
 
 
 async def validate_url_target_async(url: str, *, allow_loopback: bool = False) -> tuple[bool, str]:
     """:func:`validate_url_target`, con la risoluzione fuori dal loop."""
     return await asyncio.to_thread(validate_url_target, url, allow_loopback=allow_loopback)
-
-
-async def validate_app_server_target_async(url: str) -> tuple[bool, str]:
-    """:func:`validate_app_server_target`, con la risoluzione fuori dal loop."""
-    return await asyncio.to_thread(validate_app_server_target, url)
-
-
-async def validate_ssh_target_async(host: str) -> tuple[bool, str]:
-    """:func:`validate_ssh_target`, con la risoluzione fuori dal loop."""
-    return await asyncio.to_thread(validate_ssh_target, host)
 
 
 def _is_allowed_loopback_target(

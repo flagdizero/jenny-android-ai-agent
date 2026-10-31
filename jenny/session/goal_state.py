@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Protocol
 
 from jenny.session.manager import SessionManager
 
@@ -19,6 +19,47 @@ _MAX_OBJECTIVE_IN_RUNTIME = 4000
 # continuazione interna, expire e ``/stop`` si comportano esattamente come prima.
 _AWAITING_INPUT = "awaiting_input"
 _AWAITING_SINCE = "awaiting_since"
+
+
+class PlanProbe(Protocol):
+    """Quel che questo modulo chiede ai piani a lista (``jenny.plan.driver``)."""
+
+    def plan_running(self, session_key: str) -> bool: ...
+
+    def plan_open(self, session_key: str) -> bool: ...
+
+
+# Il piano non vive nei metadati della sessione ma in ``plan.json``, fuori dal
+# workspace: una sua copia qui sarebbe la seconda verità che diverge. Il driver
+# dei piani si registra (``GatewayContainer``) e risponde dal suo indice in
+# memoria; senza driver (i test, l'agente non ancora nato) nessun piano è vivo.
+# Stesso schema di ``board/notify.py``: un gancio, non un import del driver.
+_plan_probe: PlanProbe | None = None
+
+
+def set_plan_probe(probe: PlanProbe | None) -> None:
+    global _plan_probe
+    _plan_probe = probe
+
+
+def plan_running_in_session(session_key: str | None) -> bool:
+    """True se la sessione ha un piano a lista che sta girando (``running``/``pausing``)."""
+    if not session_key or _plan_probe is None:
+        return False
+    try:
+        return bool(_plan_probe.plan_running(session_key))
+    except Exception:  # noqa: BLE001 — un indice rotto non deve fermare un turno
+        return False
+
+
+def plan_open_in_session(session_key: str | None) -> bool:
+    """True se la sessione ha un piano a lista aperto (proposto, in corso, fermo)."""
+    if not session_key or _plan_probe is None:
+        return False
+    try:
+        return bool(_plan_probe.plan_open(session_key))
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def goal_state_raw(metadata: Mapping[str, Any] | None) -> Any:
@@ -212,9 +253,17 @@ def sustained_goal_turn(
     metadata: Mapping[str, Any] | None,
     *,
     message_metadata: Mapping[str, Any] | None = None,
+    session_key: str | None = None,
 ) -> bool:
-    """True when this turn should use sustained-goal runtime limits."""
+    """True when this turn should use sustained-goal runtime limits.
+
+    Un piano a lista che gira conta come un goal sostenuto: un passo può
+    durare quanto un goal, e il tetto del modello lo romperebbe a metà. Un
+    posto solo che decide, non due.
+    """
     if sustained_goal_active(metadata):
+        return True
+    if plan_running_in_session(session_key):
         return True
     if not message_metadata:
         return False
@@ -284,4 +333,7 @@ def runner_wall_llm_timeout_s(
     meta: Mapping[str, Any] | None = metadata
     if meta is None and session_key:
         meta = sessions.get_or_create(session_key).metadata
-    return 0.0 if sustained_goal_turn(meta, message_metadata=message_metadata) else None
+    sustained = sustained_goal_turn(
+        meta, message_metadata=message_metadata, session_key=session_key
+    )
+    return 0.0 if sustained else None

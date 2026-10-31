@@ -1,134 +1,46 @@
-"""Test per gli script della skill app-creator (`validate_app.py`).
+"""I controlli dello schermo di un'app: stanno nella bozza del tool ``app``.
 
-Il validatore gira dall'agente via `python_exec` ed è l'unico punto che può
-fermare un'app generata prima che l'utente la apra. Finché non controllava le
-capacità della sandbox certificava `VALID` app morte in silenzio: da qui i test.
+Erano in ``skills/app-creator/scripts/validate_app.py``, che l'agente avrebbe
+dovuto eseguire e non eseguiva nessuno; il 07/10/2026 Jenny se l'e' letto per
+capire le regole e ne ha dedotto che reader e summary non si validano. Lo script
+e' rimasto come stub (un file tolto resterebbe sul telefono) e i controlli
+vivono dove la bozza si valida davvero.
 """
 
-import importlib
-import sys
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parents[2] / "jenny" / "skills" / "app-creator" / "scripts"
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+from jenny.agent.tools.app_tool import AppTool, _silent_screen_failure
 
-validate_app_module = importlib.import_module("validate_app")
-
-MANIFEST = """{
-  "name": "Todo",
-  "description": "A plain todo list",
-  "actions": [
-    {
-      "name": "add_task",
-      "description": "Append a task",
-      "kind": "storage",
-      "op": "append",
-      "collection": "tasks",
-      "params": {"text": {"type": "string"}},
-      "required": ["text"]
-    }
-  ]
-}"""
-
-# Preamble condiviso: linka kit e SDK, così i warning che restano nei test sono
-# solo quelli che il singolo caso vuole verificare.
-HEAD = (
-    '<link rel="stylesheet" href="/html-mobile/assets/apps/jenny-kit.css">'
-    '<script src="/html-mobile/assets/apps/jenny-sdk.js"></script>'
-)
+SCRIPT = (Path(__file__).resolve().parents[2] / "jenny" / "skills" / "app-creator"
+          / "scripts" / "validate_app.py")
 
 
-def _write_app(tmp_path: Path, body: str, slug: str = "todo") -> Path:
-    app_dir = tmp_path / "apps" / slug
-    (app_dir / "app").mkdir(parents=True)
-    (app_dir / "app.json").write_text(MANIFEST, encoding="utf-8")
-    (app_dir / "AGENT.md").write_text("A todo list.\n", encoding="utf-8")
-    (app_dir / "app" / "index.html").write_text(f"<html><head>{HEAD}</head>{body}</html>", "utf-8")
-    return app_dir
+def test_the_script_is_a_stub_that_points_at_the_draft() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "app action=draft" in text and "def validate_app" not in text
 
 
-def test_form_is_rejected_as_an_error(tmp_path: Path) -> None:
-    app_dir = _write_app(
-        tmp_path,
-        '<body><form id="f"><input id="t"><button type="submit">Add</button></form></body>',
-    )
-
-    errors, _ = validate_app_module.validate_app(app_dir)
-
-    assert any("allow-forms" in e for e in errors), errors
+def test_a_form_is_refused_even_with_a_submit_handler() -> None:
+    html = ('<form id="f"><input id="t"></form><script>f.addEventListener("submit", '
+            'e => { e.preventDefault(); jenny.action("add", {}); });</script>')
+    assert "allow-forms" in _silent_screen_failure(html)
+    assert "allow-forms" in _silent_screen_failure("<FORM><INPUT></FORM>")
 
 
-def test_form_is_rejected_even_with_a_submit_handler(tmp_path: Path) -> None:
-    """Il rimedio documentato in passato non funziona: bloccare comunque.
-
-    L'invio è bloccato prima che l'evento `submit` sia emesso, quindi un handler
-    con `preventDefault()` non viene mai chiamato e l'app resta morta.
-    """
-    app_dir = _write_app(
-        tmp_path,
-        "<body><form id=\"f\"><input id=\"t\"></form>"
-        '<script>document.getElementById("f").addEventListener("submit", function (e) {'
-        ' e.preventDefault(); jenny.action("add_task", {text: "x"}); });</script></body>',
-    )
-
-    errors, _ = validate_app_module.validate_app(app_dir)
-
-    assert any("allow-forms" in e for e in errors), errors
+def test_the_word_form_in_prose_is_fine() -> None:
+    assert _silent_screen_failure("<p>Fill in the form below to add a task.</p>") is None
 
 
-def test_form_detection_is_case_insensitive(tmp_path: Path) -> None:
-    app_dir = _write_app(tmp_path, '<body><FORM><INPUT id="t"></FORM></body>')
-
-    errors, _ = validate_app_module.validate_app(app_dir)
-
-    assert any("allow-forms" in e for e in errors), errors
-
-
-def test_the_word_form_in_prose_is_not_a_false_positive(tmp_path: Path) -> None:
-    app_dir = _write_app(tmp_path, "<body><p>Fill in the form below to add a task.</p></body>")
-
-    errors, _ = validate_app_module.validate_app(app_dir)
-
-    assert not any("allow-forms" in e for e in errors), errors
+def test_modals_and_direct_api_calls_are_refused() -> None:
+    assert "allow-modals" in _silent_screen_failure('if (confirm("sure?")) {}')
+    assert "allow-modals" in _silent_screen_failure("window.alert(1)")
+    assert "jenny.action" in _silent_screen_failure("fetch('/api/apps/todo/actions/add')")
+    assert _silent_screen_failure("confirmBox(); const prompt = 1; x.alert(2)") is None
 
 
-def test_button_with_click_handler_is_accepted(tmp_path: Path) -> None:
-    app_dir = _write_app(
-        tmp_path,
-        '<body><div><input id="t"><button id="b" type="button">Add</button></div>'
-        '<script>document.getElementById("b").addEventListener("click", function () {'
-        ' jenny.action("add_task", {text: document.getElementById("t").value}); });'
-        'document.getElementById("t").addEventListener("keydown", function (e) {'
-        ' if (e.key === "Enter") document.getElementById("b").click(); });</script></body>',
-    )
-
-    errors, warnings = validate_app_module.validate_app(app_dir)
-
-    assert errors == []
-    assert warnings == []
-
-
-def test_modal_calls_are_warnings_not_errors(tmp_path: Path) -> None:
-    app_dir = _write_app(
-        tmp_path,
-        '<body><button id="b" type="button">Del</button>'
-        '<script>if (confirm("sure?")) { alert("done"); }</script></body>',
-    )
-
-    errors, warnings = validate_app_module.validate_app(app_dir)
-
-    assert errors == []
-    assert any("allow-modals" in w for w in warnings), warnings
-    joined = " ".join(warnings)
-    assert "confirm()" in joined and "alert()" in joined
-
-
-def test_valid_app_reports_no_errors_end_to_end(tmp_path: Path) -> None:
-    """Guardia contro un validatore che diventa a prova di tutto: un'app corretta
-    deve restare corretta, altrimenti le nuove regole bloccano il lavoro buono."""
-    app_dir = _write_app(tmp_path, '<body><button type="button">Add</button></body>')
-
-    errors, warnings = validate_app_module.validate_app(app_dir)
-
-    assert (errors, warnings) == ([], [])
+def test_a_good_screen_passes_the_draft_checks() -> None:
+    html = ('<button id="b" type="button">Add</button><script>b.addEventListener("click", '
+            '() => jenny.action("add_task", {text: "x"}));</script>')
+    assert AppTool._check_files({"app/index.html": html}) is None
+    refused = AppTool._check_files({"app/index.html": "<form></form>"})
+    assert refused and refused.startswith("app/index.html:")

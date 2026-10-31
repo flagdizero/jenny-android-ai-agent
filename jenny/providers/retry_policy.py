@@ -158,6 +158,37 @@ def is_arrearage_response(response: "LLMResponse") -> bool:
     return any(marker in content for marker in NON_RETRYABLE_429_TEXT_MARKERS)
 
 
+def classify_user_error(response: "LLMResponse") -> str:
+    """Il tipo d'errore *per chi legge la chat*: quale frase mostrargli.
+
+    Uno fra ``credit``, ``auth``, ``rate_limit``, ``server``, ``timeout``,
+    ``connection``, ``generic`` — le chiavi ``error.<tipo>`` di
+    ``jenny/runtime/user_text.py``, e il valore di ``error.kind`` nel payload
+    WebSocket. Diverso da :func:`is_transient_response`, che decide se ritentare:
+    qui si decide cosa dire, dopo che i tentativi sono finiti.
+
+    Prima i metadati strutturati (lo status, poi ``error_kind``); il testo solo
+    per il credito, dove i provider non mettono uno status affidabile.
+    """
+    if is_arrearage_response(response):
+        return "credit"
+    status = response.error_status_code
+    if status is not None:
+        code = int(status)
+        if code in (401, 403):
+            return "auth"
+        if code == 429:
+            return "rate_limit"
+        if code >= 500:
+            return "server"
+        if code == 408:
+            return "timeout"
+    kind = (response.error_kind or "").strip().lower()
+    if kind in ("timeout", "connection"):
+        return kind
+    return "generic"
+
+
 def extract_error_type_code(payload: Any) -> tuple[str | None, str | None]:
     data: dict[str, Any] | None = None
     if isinstance(payload, dict):

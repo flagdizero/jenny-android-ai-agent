@@ -10,11 +10,10 @@ The jenny-sdk.js hides the transport from app HTML.
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 from jenny.apps.executor import AppActionError, execute_action
-from jenny.apps.manifest import SLUG_RE, scan_apps
+from jenny.apps.manifest import scan_apps
 
 
 def list_apps_payload(workspace: Path) -> dict:
@@ -36,6 +35,18 @@ def list_apps_payload(workspace: Path) -> dict:
                     # non incornicia app/index.html, chiede l'URL del proxy e
                     # usa un sandbox diverso (v. openApp in mobile-apps.js).
                     "view_kind": app.manifest.view_kind,
+                    # Un'app senza schermo (solo un lettore) non si apre: il
+                    # tocco mostra il suo foglio, col valore.
+                    "has_screen": app.manifest.view_kind == "external"
+                    or (app.dir / "app" / "index.html").is_file(),
+                    # La vista compatta per un cassetto della bacheca, se l'app
+                    # ne dichiara una: il menu «Aggiungi sezione» propone solo
+                    # queste, e chiede i parametri che la sezione vuole.
+                    "section": (
+                        {"params": app.manifest.section.params}
+                        if app.manifest.section is not None
+                        else None
+                    ),
                 }
             )
         else:
@@ -55,23 +66,17 @@ def list_apps_payload(workspace: Path) -> dict:
 
 
 def delete_app(workspace: Path, slug: str) -> dict:
-    """Delete a Jenny app by removing its ``<workspace>/apps/<slug>/`` folder.
+    """«Elimina» un'app: la sposta nel cestino (``apps/.trash/``), dati compresi.
 
-    Uninstalling a Jenny app permanently deletes it (unlike Android apps, which
-    only open the system uninstaller). Raises ``ValueError`` on an invalid slug
-    and ``FileNotFoundError`` when the app folder does not exist.
+    Fino al 06/10/2026 era ``rmtree``, senza ritorno. Adesso si rimette con
+    ``apps.restore`` e si butta davvero solo con ``apps.purge`` (v.
+    :mod:`jenny.apps.trash`). ``ValueError`` per uno slug non valido,
+    ``FileNotFoundError`` se l'app non c'e'.
     """
-    if not slug or SLUG_RE.match(slug) is None:
-        raise ValueError("invalid app slug")
-    apps_root = (Path(workspace) / "apps").resolve()
-    app_dir = (apps_root / slug).resolve()
-    # Defence-in-depth: the validated slug cannot escape, but confirm anyway.
-    if app_dir.parent != apps_root:
-        raise ValueError("invalid app slug")
-    if not app_dir.is_dir():
-        raise FileNotFoundError(f"app '{slug}' not found")
-    shutil.rmtree(app_dir)
-    return {"deleted": True}
+    from jenny.apps.trash import trash_app
+
+    trashed = trash_app(workspace, slug)
+    return {"deleted": True, "trashed": trashed}
 
 
 async def execute_app_action_payload(

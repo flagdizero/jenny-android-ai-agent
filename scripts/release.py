@@ -15,12 +15,15 @@ Flusso tipico::
     # 1. alza la versione (rifiuta una versione che non sale)
     python3 scripts/release.py 0.7.0
 
-    # 2. costruisci e firma l'APK con il keystore locale
-    (cd android && ./gradlew app:assembleRelease)
+    # 2. costruisci e firma l'APK con il keystore locale: il flavor `foss`, che
+    #    e' quello di GitHub (e dell'updater interno). Il flavor `play` esce
+    #    come bundle per il Play Store, caricato a mano.
+    (cd android && ./gradlew app:assembleFossRelease app:bundlePlayRelease)
 
-    # 3. genera il manifest sull'APK appena firmato
+    # 3. genera il manifest sull'APK appena firmato (controlla anche che sia
+    #    davvero la build libera: v. ``scripts/check_foss_apk.py``)
     python3 scripts/release.py 0.7.0 --manifest-only \\
-        --apk android/app/build/outputs/apk/release/app-release.apk \\
+        --apk android/app/build/outputs/apk/foss/release/app-foss-release.apk \\
         --summary-it "..." --summary-en "..."
 
 Solo stdlib: il progetto è stdlib-only per scelta (vedi FORK_BOUNDARY.md).
@@ -276,6 +279,34 @@ def hash_apk(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
+def ensure_foss_apk(path: Path) -> None:
+    """L'APK di GitHub dev'essere la build libera: niente estensioni, niente Google.
+
+    Il controllo vero e' ``scripts/check_foss_apk.py``; qui lo si chiama perche'
+    allegare per sbaglio l'APK ``play`` a una release GitHub lo manderebbe a tutti
+    gli utenti dell'updater interno.
+    """
+    import importlib.util
+    import zipfile
+
+    spec = importlib.util.spec_from_file_location(
+        "check_foss_apk", Path(__file__).resolve().parent / "check_foss_apk.py"
+    )
+    assert spec is not None and spec.loader is not None
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    try:
+        found = checker.inspect(path)
+    except (zipfile.BadZipFile, KeyError) as exc:
+        raise ReleaseError(f"not an APK built by Gradle: {path} ({exc})") from None
+    leaks = [item for items in found.values() for item in items]
+    if leaks:
+        raise ReleaseError(
+            f"{path} is not the foss build: it contains {leaks[0]}"
+            + (f" and {len(leaks) - 1} more" if len(leaks) > 1 else "")
+        )
+
+
 def apk_asset_name(version: str) -> str:
     """Nome con cui l'APK va allegato alla release."""
     return f"jenny-{version}.apk"
@@ -506,6 +537,10 @@ def run(args: argparse.Namespace) -> int:
         )
     if not 0 <= args.rollout <= 100:
         raise ReleaseError(f"--rollout must be between 0 and 100 (got {args.rollout})")
+    # Prima di scrivere qualunque cosa: un APK sbagliato non deve lasciare un
+    # bump di versione a meta'.
+    if args.apk is not None:
+        ensure_foss_apk(args.apk)
 
     files = VersionFiles.under(args.repo_root)
     current = read_current_state(files)
@@ -544,14 +579,16 @@ def run(args: argparse.Namespace) -> int:
     # -- fase 2: manifest --------------------------------------------------
     if args.apk is None:
         _print_header("Next steps")
-        print("1. Build and sign the APK:")
-        print("     (cd android && ./gradlew app:assembleRelease)")
-        print("2. Generate the manifest on the signed APK:")
+        print("1. Build and sign the GitHub APK (foss) and the Play Store bundle (play):")
+        print("     (cd android && ./gradlew app:assembleFossRelease app:bundlePlayRelease)")
+        print("2. Generate the manifest on the signed foss APK:")
         print(
             f"     python3 scripts/release.py {version} --manifest-only \\\n"
-            "         --apk android/app/build/outputs/apk/release/app-release.apk \\\n"
+            "         --apk android/app/build/outputs/apk/foss/release/app-foss-release.apk \\\n"
             '         --summary-it "..." --summary-en "..."'
         )
+        print("3. Upload the bundle to the Play Store by hand:")
+        print("     android/app/build/outputs/bundle/playRelease/app-play-release.aab")
         return 0
 
     if not args.summary_it or not args.summary_en:

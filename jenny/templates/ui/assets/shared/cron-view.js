@@ -128,7 +128,7 @@ export function describeSchedule(schedule, { tr, locale, timeZone } = {}) {
     });
   }
   if (kind === 'cron' && schedule.expr) {
-    return tr('cron.schedule.expr', { expr: schedule.expr });
+    return describeShape(schedule.shape, { tr, locale }) || tr('cron.schedule.expr', { expr: schedule.expr });
   }
   if (kind === 'at' && schedule.at_ms) {
     return tr('cron.schedule.at', {
@@ -136,6 +136,57 @@ export function describeSchedule(schedule, { tr, locale, timeZone } = {}) {
     });
   }
   return tr('cron.schedule.unknown');
+}
+
+/** La forma di un'espressione cron comune a parole («ogni domenica alle 18:30»).
+ *
+ *  La forma la calcola il server (`cronexpr.shape`, lo stesso interprete che fa
+ *  scattare i job): qui non c'è un secondo parser. `null` quando l'espressione
+ *  non ha una forma comune, e allora si mostra com'è. */
+export function describeShape(shape, { tr, locale } = {}) {
+  if (!shape?.pattern) return null;
+  if (shape.pattern === 'minutes' && shape.every) {
+    return tr('cron.schedule.every', { every: humanizeDuration(shape.every * 60_000, { tr, locale }) });
+  }
+  if (shape.pattern === 'hours' && shape.every) {
+    return tr('cron.schedule.every', { every: humanizeDuration(shape.every * 3_600_000, { tr, locale }) });
+  }
+  const time = clockTime(shape.hour, shape.minute, locale);
+  if (shape.pattern === 'daily') return tr('cron.schedule.daily', { time });
+  if (shape.pattern === 'weekly' && shape.dow?.length) {
+    if (shape.dow.join(',') === '1,2,3,4,5') return tr('cron.schedule.weekdays', { time });
+    return tr('cron.schedule.weekly', { days: listOf(shape.dow.map((d) => weekdayName(d, locale)), locale), time });
+  }
+  if (shape.pattern === 'monthly' && shape.dom?.length) {
+    return tr('cron.schedule.monthly', { days: listOf(shape.dom.map(String), locale), time });
+  }
+  return null;
+}
+
+function clockTime(hour, minute, locale) {
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' })
+      .format(new Date(2026, 0, 1, hour, minute));
+  } catch {
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+}
+
+/** Il nome del giorno *d* (0 = domenica), dal calendario: il 18/10/2026 è una domenica. */
+function weekdayName(d, locale) {
+  try {
+    return new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(new Date(2026, 9, 18 + d));
+  } catch {
+    return String(d);
+  }
+}
+
+function listOf(items, locale) {
+  try {
+    return new Intl.ListFormat(locale, { type: 'conjunction' }).format(items);
+  } catch {
+    return items.join(', ');
+  }
 }
 
 /** Data e ora nel fuso **del job**, non in quello del dispositivo.
@@ -236,6 +287,12 @@ export function heartbeatView(block) {
   };
 }
 
+/** Dove sta un cron di un quaderno: «Piante › Acero», o «Piante» se è di tutto il quaderno. */
+export function placeText(place) {
+  if (!place?.notebook) return null;
+  return place.card ? `${place.notebook} › ${place.cardTitle || place.card}` : place.notebook;
+}
+
 /** Il modello di vista completo. Una chiamata, tutto quel che la sezione rende. */
 export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
   const stamp = Number.isFinite(nowMs) ? nowMs : payload?.now_ms;
@@ -266,6 +323,8 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
       health: jobHealth(job),
       monitor: job.mode === 'monitor',
       oneShot: job.one_shot,
+      /* Un cron del quaderno dice dove sta: «piante › acero». */
+      place: placeText(job.place),
       messagePreview: job.message_preview,
       message: job.message,
       schedule: describeSchedule(job.schedule, { tr, locale, timeZone: tz }),

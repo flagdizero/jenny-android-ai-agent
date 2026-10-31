@@ -171,10 +171,11 @@ class TestTheAlertItself:
     ) -> None:
         """Il testo non ripete il *motivo*.
 
-        Quello lo scrive il modello, sta in ``last_error`` e in ``/cron``, e una
-        seconda copia qui potrebbe divergere da quella. L'allarme dice quale
-        controllo e da quanto — le due cose che decidono se valga la pena
-        alzarsi — e dove trovare il resto.
+        Quello lo scrive il modello e sta in ``last_error``, e una seconda copia
+        qui potrebbe divergere da quella. L'allarme dice quale controllo e da
+        quanto — le due cose che decidono se valga la pena alzarsi — e dove
+        trovare il resto: in chat, chiedendo a Jenny, e non con un comando da
+        digitare (dalla tendina delle notifiche non si digita niente).
         """
         sent = _spy(monkeypatch)
         state = CronJobState(
@@ -191,7 +192,8 @@ class TestTheAlertItself:
         content, _metadata = sent[0]
         assert "RainCheck: pioggia nelle città" in content
         assert str(WATCHDOG_AFTER_FAILURES) in content
-        assert "/cron" in content
+        assert "/" not in content.replace("RainCheck: pioggia nelle città", "")
+        assert "Ask me in chat" in content
 
     def test_the_tag_does_not_collide_with_a_real_message(
         self, monkeypatch: pytest.MonkeyPatch

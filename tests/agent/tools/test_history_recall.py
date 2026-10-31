@@ -77,14 +77,46 @@ class TestIndex:
         root = _workspace(tmp_path, [_entry(5, "- una sola")])
         assert "(+" not in await _tool(root).execute()
 
-    async def test_the_cut_is_announced_and_drops_the_oldest(self, tmp_path):
+    async def test_a_long_log_comes_in_pages(self, tmp_path):
         long = [_entry(i, "- " + "x" * 200) for i in range(1, 400)]
         root = _workspace(tmp_path, long)
-        out = await _tool(root).execute()
-        assert "older turns are not listed" in out
-        assert len(out) < _INDEX_MAX_CHARS + 2_000
-        assert "[399]" in out          # la piu' recente resta
-        assert "[1] " not in out       # la piu' vecchia e' quella che cade
+        first = await _tool(root).execute()
+        assert "Page 1 of" in first
+        assert len(first) < _INDEX_MAX_CHARS + 2_000
+        assert "[399]" in first        # la piu' recente in prima pagina
+        assert "[1] " not in first
+        pages = int(first.split("Page 1 of ")[1].split(";")[0])
+        assert "[1] " in await _tool(root).execute(page=pages)
+
+
+class TestSearch:
+    async def test_the_matching_note_is_shown_not_the_first(self, tmp_path):
+        root = _workspace(tmp_path, [
+            _entry(3, "- [durable] Ha iniziato un corso di ceramica\n"
+                      "- [ephemeral] Era stanco\n"
+                      "- [durable] The cat's vet is Dr. Zafkril"),
+            _entry(4, "- [durable] Altro"),
+        ])
+        out = await _tool(root).execute(query=["veterinario", "vet"])
+        assert "Dr. Zafkril" in out
+        assert "[3]" in out and "[4]" not in out
+        assert "ceramica" not in out  # solo le note che combaciano
+
+    async def test_it_searches_the_archived_part_too(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(9, "- viva")])
+        arch = root / "memory" / "history-archive"
+        arch.mkdir()
+        (arch / "2026-01.jsonl").write_text(
+            json.dumps(_entry(2, "- [durable] La barca del nonno era la Brezza")) + "\n",
+            encoding="utf-8",
+        )
+        out = await _tool(root).execute(query=["barca"])
+        assert "Brezza" in out
+
+    async def test_no_match_never_reads_as_never_said(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(1, "- niente")])
+        out = await _tool(root).execute(query=["dentista"])
+        assert "does not mean it was never said" in out
 
 
 class TestOpening:
@@ -120,6 +152,47 @@ class TestDifficultFiles:
         p.write_text(p.read_text() + '{"cursor": 2, "conte\n', encoding="utf-8")
         out = await _tool(root).execute()
         assert "sana" in out
+
+
+class TestTheArchivedPart:
+    """Quel che ``compact_history`` sposta in ``history-archive/`` resta cronologia."""
+
+    @staticmethod
+    def _archive(root: Path, month: str, entries: list[dict]) -> None:
+        arch = root / "memory" / "history-archive"
+        arch.mkdir(parents=True, exist_ok=True)
+        (arch / f"{month}.jsonl").write_text(
+            "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries),
+            encoding="utf-8",
+        )
+
+    async def test_the_index_reaches_into_the_archive(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(9, "- viva")])
+        self._archive(root, "2026-08", [_entry(3, "- archiviata")])
+        out = await _tool(root).execute()
+        assert out.index("[9]") < out.index("[3]")
+        assert "holds 2 turns" in out
+
+    async def test_an_archived_cursor_opens(self, tmp_path):
+        root = _workspace(tmp_path, [_entry(9, "- viva")])
+        self._archive(root, "2025-12", [_entry(3, "- archiviata", ts="2025-12-30 10:00")])
+        out = await _tool(root).execute(cursors=["3"])
+        assert "archiviata" in out
+        assert "No entry" not in out
+
+    async def test_a_cursor_in_both_places_counts_once(self, tmp_path):
+        """Un crash fra l'archiviazione e la riscrittura lascia la voce in due posti."""
+        root = _workspace(tmp_path, [_entry(3, "- doppia"), _entry(4, "- dopo")])
+        self._archive(root, "2026-08", [_entry(3, "- doppia")])
+        out = await _tool(root).execute()
+        assert "holds 2 turns" in out
+        assert out.count("[3]") == 1
+
+    async def test_only_the_archive_is_enough(self, tmp_path):
+        (tmp_path / "memory").mkdir()
+        self._archive(tmp_path, "2026-08", [_entry(3, "- sola in archivio")])
+        out = await _tool(tmp_path).execute()
+        assert "sola in archivio" in out
 
 
 class TestProjectBoundary:
@@ -162,7 +235,7 @@ class TestAlongsideRecall:
     def test_the_two_names_are_not_confused(self, tmp_path):
         assert _tool(tmp_path).name == "recall_history"
 
-    @pytest.mark.parametrize("expected", ["verbatim", "recall holds facts"])
+    @pytest.mark.parametrize("expected", ["not the exact words", "recall holds facts"])
     def test_the_description_says_which_window_it_covers(self, tmp_path, expected):
         """Due popolazioni diverse: se le descrizioni non lo dicono, sceglie a caso."""
         assert expected in _tool(tmp_path).description
@@ -174,3 +247,36 @@ class TestAlongsideRecall:
     def test_create_takes_the_root(self):
         t = HistoryRecallTool.create(SimpleNamespace(workspace="/tmp/radice"))
         assert t._memory_dir == Path("/tmp/radice/memory")
+
+
+async def test_a_diary_row_opens_with_its_journal_lines(tmp_path: Path) -> None:
+    """Dall'indice alla pagina: la riga del diario porta con se' le righe vere attorno."""
+    from jenny.agent.memory import MemoryStore
+
+    journal = tmp_path / "wikis" / "film" / "raw" / "journal" / "20261011.md"
+    journal.parent.mkdir(parents=True)
+    journal.write_text("# 2026-10-11\n\n- 18:09 — [said] Lady Vendetta visto\n"
+                       "- 18:09 — [said] Preferisce Old Boy: Lady Vendetta è confuso\n",
+                       encoding="utf-8")
+    store = MemoryStore(tmp_path)
+    cursor = store.append_history("Lady Vendetta visto", session_key="project:film",
+                                  kind="said", about="film",
+                                  ref="wikis/film/raw/journal/20261011.md:3")
+    tool = HistoryRecallTool(workspace=tmp_path)
+    listing = await tool.execute()
+    assert "(notebook film, the user said) Lady Vendetta visto" in listing
+    opened = await tool.execute(cursors=[str(cursor)])
+    assert "Source, wikis/film/raw/journal/20261011.md lines 1-4" in opened
+    assert "Preferisce Old Boy" in opened
+
+
+async def test_a_ref_outside_the_installation_is_not_read(tmp_path: Path) -> None:
+    from jenny.agent.memory import MemoryStore
+
+    outside = tmp_path.parent / "segreto.txt"
+    outside.write_text("non leggermi", encoding="utf-8")
+    root = tmp_path / "ws"
+    store = MemoryStore(root)
+    cursor = store.append_history("x", kind="said", ref="../segreto.txt:1")
+    opened = await HistoryRecallTool(workspace=root).execute(cursors=[str(cursor)])
+    assert "non leggermi" not in opened

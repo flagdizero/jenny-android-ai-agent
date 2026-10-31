@@ -31,19 +31,28 @@ capita a ogni turno.
 
 from __future__ import annotations
 
-from datetime import datetime
+import asyncio
+from contextlib import suppress
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
 from jenny.agent.tools.base import Tool, tool_parameters
+from jenny.agent.tools.context import current_request_context
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
+from jenny.security.subagent_policy import (
+    current_subagent_policy,
+    current_turn_taint,
+    journal_touch,
+)
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
     current_workspace_scope,
 )
+from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
 from jenny.utils.helpers import safe_zoneinfo
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
 
@@ -61,6 +70,10 @@ _NO_PROJECT_REFUSAL = (
 # che non ci sta e' materiale da pagina, e il posto di una pagina non lo decide
 # la cattura (v. la docstring del modulo).
 _MAX_TEXT_CHARS = 500
+
+# La copia nel diario e' un indice, non la riga: la fonte resta nel journal, e
+# la chat personale deve poterne vedere tante senza pagarle per intero.
+_MIRROR_MAX_CHARS = 300
 
 # ── Attribuzione: di chi e' il fatto che la riga registra ────────────────────
 #
@@ -111,6 +124,12 @@ _PARAMETERS = tool_parameters_schema(
         "be true next week, not what was said. No leading '- ', no timestamp: both are added. "
         f"At most {_MAX_TEXT_CHARS} characters; anything longer belongs on a page, not here."
     ),
+    notebook=StringSchema(
+        "From the personal chat: the notebook this fact belongs to (its name, as in the Wikis "
+        "list). The line goes into that notebook's journal. Leave it empty for something about "
+        "the user themselves or that belongs to no notebook: it is kept in your own diary. "
+        "Inside a notebook, leave it empty (only this notebook's journal can be written)."
+    ),
     attribution=StringSchema(
         "Whose fact this is. 'said' when the user stated it themselves; 'inferred' when you "
         "concluded it, including when you offered the options and they only rejected one — an "
@@ -140,6 +159,7 @@ class JournalAppendTool(Tool):
         origin_marker: str = "",
         timezone: str | None = None,
         now: Any = None,
+        memory_store: Any = None,
     ) -> None:
         # Iniettabile per i test; in produzione nessuno lo passa. Resta la
         # sola **data**: l'istante lo dà ``_stamp`` (v. ``_append``), e chi
@@ -166,6 +186,9 @@ class JournalAppendTool(Tool):
         # e' l'unico modo che ha di non essere dimenticato, e una riga di diario
         # senza origine e' indistinguibile da una detta a voce quel giorno.
         self._origin_marker = origin_marker
+        # Il diario della memoria (``history.jsonl``), dove ogni riga detta qui
+        # lascia la sua copia breve: v. :meth:`_mirror`.
+        self._memory = memory_store
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
@@ -173,7 +196,8 @@ class JournalAppendTool(Tool):
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:
-        return cls(timezone=getattr(ctx, "timezone", None))
+        return cls(timezone=getattr(ctx, "timezone", None),
+                   memory_store=getattr(ctx, "memory_store", None))
 
     @property
     def name(self) -> str:
@@ -182,14 +206,19 @@ class JournalAppendTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Append one line to this project's working journal (raw/journal/<today>.md). "
-            "Use it the moment the user says something that will still be true next week — a "
-            "constraint, a decision, a preference, a name, a date — before answering them. "
-            "Append-only by construction: it can neither rewrite a line nor touch any other "
-            "file, so it is always safe to call. Only inside a project."
+            "Append one line to a notebook's working journal (raw/journal/<today>.md) — this "
+            "notebook's, or from the personal chat the one named in `notebook` — or, from the "
+            "personal chat with no notebook, to your own diary. Use it the moment the user says "
+            "something that will still be true next week — a constraint, a decision, a "
+            "preference, a name, a date, something done — before answering them; and, from the "
+            "personal chat, the answer when the user asks you to find something out about a "
+            "notebook's subject, even one you knew. Append-only by "
+            "construction: it can neither rewrite a line nor touch any other file, so it is "
+            "always safe to call. It never creates a notebook."
         )
 
-    async def execute(self, text: str = "", attribution: str = "", **_: Any) -> str:
+    async def execute(self, text: str = "", attribution: str = "", notebook: str = "",
+                      **_: Any) -> str:
         line = " ".join((text or "").split())
         if not line:
             return "Nothing to append: `text` was empty."
@@ -233,13 +262,19 @@ class JournalAppendTool(Tool):
         # ``write_root()`` e non ``project_path``: dal passo T4.4 la radice
         # scrivibile del turno la dice un solo metodo, anche a chi — come questo
         # tool — ha una destinazione fissa e non un percorso da validare.
-        root = self._root or (scope.write_root() if scope is not None else None)
-        if root is None or not is_wiki_root(root):
-            return _NO_PROJECT_REFUSAL
+        own = self._root or (scope.write_root() if scope is not None else None)
+        own = own if own is not None and is_wiki_root(own) else None
+        target, refusal = self._target(own, (notebook or "").strip())
+        if refusal:
+            return refusal
         if current_turn_is_readonly():
             return READONLY_TOOL_REFUSAL
+        fact = " ".join(text.split())
+        if target is None:
+            return await self._personal(fact, choice)
 
-        written = await self._append(root, line)
+        written = await self._append(target, line, text=fact,
+                                     attribution="" if self._origin_marker else choice)
         if fallback:
             return (
                 f"{written}\n\nNote: attribution {fallback!r} is not one of 'said' / "
@@ -249,6 +284,74 @@ class JournalAppendTool(Tool):
                 "the line above stays either way."
             )
         return written
+
+    def _target(self, own: Path | None, notebook: str) -> tuple[Path | None, str]:
+        """Dove va la riga: ``(radice del quaderno, "")``, ``(None, "")`` per il
+        diario personale, o ``(None, rifiuto)``.
+
+        **I cassetti** (dal 12/10/2026): dalla chat personale Jenny mette un
+        fatto nel quaderno a cui appartiene, senza che l'utente debba aprirlo.
+        Da un quaderno si scrive solo il suo journal — il confine di scrittura
+        del quaderno, detto qui perche' questo tool scrive senza passare dai
+        tool di file. Un subagent non riempie i cassetti: lavora per un compito,
+        e cosa e' di quale quaderno lo decide la conversazione. E un quaderno
+        che non c'e' non si crea: lo dice, con l'elenco di quelli che ci sono.
+        """
+        if own is not None:
+            if notebook and notebook != own.name:
+                return None, (
+                    f"From the notebook '{own.name}' only its own journal can be written, not "
+                    f"'{notebook}'. Nothing was written. Leave `notebook` empty to write here; "
+                    "to note something for another notebook, tell the user to say it there or "
+                    "in the personal chat."
+                )
+            return own, ""
+        if not notebook:
+            if self._memory is None:
+                return None, _NO_PROJECT_REFUSAL
+            return None, ""
+        if current_subagent_policy() is not None:
+            return None, (
+                "A subagent does not write into the notebooks' journals from outside them. "
+                "Nothing was written: put the fact in your result, and Jenny will file it."
+            )
+        roots = self._notebooks()
+        if notebook not in roots:
+            known = ", ".join(sorted(roots)) or "none"
+            return None, (
+                f"No notebook named '{notebook}' (existing: {known}). Nothing was written. "
+                "Never create a notebook on your own: if none fits, leave `notebook` empty "
+                "to keep it in your diary, or ask the user whether to open one."
+            )
+        return roots[notebook], ""
+
+    def _notebooks(self) -> dict[str, Path]:
+        from jenny.board.placements import _wikis_dirs
+        from jenny.utils.wiki_paths import discover_wiki_roots
+
+        workspace = Path(getattr(self._memory, "workspace", "") or ".")
+        roots: dict[str, Path] = {}
+        for wikis in _wikis_dirs(workspace):
+            with suppress(OSError):
+                roots.update(discover_wiki_roots(wikis))
+        return roots
+
+    async def _personal(self, fact: str, attribution: str) -> str:
+        """Una riga del diario personale: un fatto che non e' di nessun quaderno."""
+        request = current_request_context()
+        content = fact if len(fact) <= _MIRROR_MAX_CHARS else (
+            fact[: _MIRROR_MAX_CHARS - 1].rstrip() + "…")
+        try:
+            await asyncio.to_thread(
+                self._memory.append_history, content,
+                session_key=(request.session_key if request is not None else None)
+                or UNIFIED_SESSION_KEY,
+                kind=attribution, untrusted=bool(current_turn_taint()),
+            )
+        except Exception as exc:  # noqa: BLE001 — una riga persa si dice
+            logger.warning("journal_append: personal diary failed: {}", exc)
+            return f"Could not write to your diary: {exc}"
+        return f"Noted in your diary: {content}"
 
     def _stamp(self) -> datetime:
         """L'istante della riga, nel fuso in cui il modello legge l'ora.
@@ -271,28 +374,176 @@ class JournalAppendTool(Tool):
         tz = safe_zoneinfo(self._timezone) if self._timezone else None
         return datetime.now(tz=tz) if tz else datetime.now().astimezone()
 
-    async def _append(self, root: Path, line: str) -> str:
+    async def _append(self, root: Path, line: str, *, text: str = "",
+                      attribution: str = "") -> str:
         # Un colpo d'orologio, due usi: la pagina e l'ora della riga.
         stamp = self._stamp()
         day = self._today() if self._today is not None else stamp.date()
         page = wiki_journal_dir(root) / journal_page_name(day)
         entry = f"- {stamp.strftime('%H:%M')} — {line}\n"
+        # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
+        # La copia nel diario personale (``_mirror``) resta: è la memoria.
+        journal_touch(page)
         try:
-            page.parent.mkdir(parents=True, exist_ok=True)
-            fresh = not page.exists()
-            # Append in `a`, e non "leggi-modifica-riscrivi": il contratto
-            # append-only vale anche contro se stessi, e una riscrittura potrebbe
-            # perdere quel che un altro scrittore ha appeso nel frattempo.
-            with page.open("a", encoding="utf-8") as fh:
-                if fresh:
-                    fh.write(f"# {day.isoformat()}\n\n")
-                fh.write(entry)
+            lineno = append_journal_entry(page, day, entry)
         except OSError as exc:
             logger.warning("journal_append on {} failed: {}", page, exc)
             return f"Could not append to the journal: {exc}"
 
         logger.info("journal_append: {} <- {}", page.name, line[:60])
+        if attribution:
+            await self._mirror(root, page, lineno, text, attribution)
         return f"Appended to {page.parent.name}/{page.name}: {entry.strip()}"
 
+    async def _mirror(self, root: Path, page: Path, lineno: int, text: str,
+                      attribution: str) -> None:
+        """La copia breve della riga nel diario della memoria (``history.jsonl``).
 
-TOOLS = [JournalAppendTool]
+        Il journal resta la fonte del quaderno; questa e' l'indice che la chat
+        personale vede: il fatto in una riga, chi l'ha detto, di quale quaderno
+        parla, dove sta l'originale. Senza, quel che l'utente diceva in un
+        quaderno arrivava al diario solo con la raccolta all'inattivita' (un
+        riassunto, quindici minuti dopo), e la chat personale non lo vedeva
+        comunque — misurato l'11/10/2026 sul caso del film.
+
+        Le righe ``[recovered]`` del giardiniere non si specchiano: sono fatti
+        gia' detti e persi dalla cattura, recuperati a posteriori, e il diario
+        datato al recupero mentirebbe sul quando. Un fallimento qui non tocca la
+        riga gia' scritta: il journal e' la fonte, il diario un indice.
+        """
+        store = self._memory
+        if store is None:
+            return
+        workspace = Path(getattr(store, "workspace", "") or "")
+        try:
+            where = page.relative_to(workspace)
+        except ValueError:
+            where = page
+        request = current_request_context()
+        session_key = request.session_key if request is not None else None
+        content = text if len(text) <= _MIRROR_MAX_CHARS else (
+            text[: _MIRROR_MAX_CHARS - 1].rstrip() + "…")
+        try:
+            await asyncio.to_thread(
+                store.append_history, content,
+                session_key=session_key or f"{PROJECT_SESSION_PREFIX}{root.name}",
+                kind=attribution, about=root.name, ref=f"{where.as_posix()}:{lineno}",
+                untrusted=bool(current_turn_taint()),
+            )
+        except Exception as exc:  # noqa: BLE001 — v. la docstring
+            logger.warning("journal_append: diary mirror failed: {}", exc)
+
+
+def append_journal_entry(page: Path, day: date, entry: str) -> int:
+    """Appende *entry* (una riga già formata) alla pagina di diario *page*.
+
+    Restituisce il numero di righe fisiche del file dopo l'aggiunta, cioè il
+    numero della riga appena scritta contato come lo conta il cursore del
+    giardiniere: chi scrive una riga per conto dell'utente (una nota della
+    bacheca) ci lega «quando questa riga è stata letta».
+
+    Append in ``a``, e non "leggi-modifica-riscrivi": il contratto append-only
+    vale anche contro se stessi, e una riscrittura potrebbe perdere quel che un
+    altro scrittore ha appeso nel frattempo.
+    """
+    page.parent.mkdir(parents=True, exist_ok=True)
+    fresh = not page.exists()
+    with page.open("a", encoding="utf-8") as fh:
+        if fresh:
+            fh.write(f"# {day.isoformat()}\n\n")
+        fh.write(entry)
+    with page.open(encoding="utf-8") as fh:
+        return sum(1 for _ in fh)
+
+
+# ── «Ci spostiamo?» ──────────────────────────────────────────────────────────
+#
+# Dalla chat personale, quando la conversazione e' diventata lavoro su un
+# quaderno, Jenny propone di passarci: un tasto sotto la risposta, e decide
+# l'utente (scelta del 12/10/2026: proposta, non spostamento automatico). Il
+# passaggio porta con se' il contesto: una riga di diario che parla di quel
+# quaderno, e che il quaderno vede nel suo blocco «Diary» — sa da dove venite.
+
+_SUGGEST_PARAMETERS = tool_parameters_schema(
+    notebook=StringSchema("The notebook to offer, by its name in the Wikis list."),
+    context=StringSchema(
+        "One line for the notebook to pick up from: what you and the user were working on, "
+        "and where you had got to. It is what you will find there if they accept."
+    ),
+    required=["notebook", "context"],
+)
+
+
+@tool_parameters(_SUGGEST_PARAMETERS)
+class SuggestNotebookTool(Tool):
+    """Offer to move the conversation into a notebook: a button under the reply."""
+
+    # Solo l'agente con cui l'utente parla: un subagent non decide dove si
+    # conversa.
+    _scopes = {"core", "orchestrator"}
+
+    def __init__(self, memory_store: Any = None) -> None:
+        self._memory = memory_store
+        self._lookup = JournalAppendTool(memory_store=memory_store)
+
+    @classmethod
+    def enabled(cls, ctx: Any) -> bool:
+        return getattr(ctx, "memory_store", None) is not None
+
+    @classmethod
+    def create(cls, ctx: Any) -> Tool:
+        return cls(memory_store=getattr(ctx, "memory_store", None))
+
+    @property
+    def name(self) -> str:
+        return "suggest_notebook"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Offer to continue in one of the user's notebooks: a button to open it appears "
+            "under your reply, and the user decides. Use it only when the conversation has "
+            "become work on that notebook's subject — several exchanges, pages or a board to "
+            "write — never for a passing fact (file that with journal_append). Offer it once: "
+            "if the user stays here, go on here. Personal chat in the app only."
+        )
+
+    async def execute(self, notebook: str = "", context: str = "", **_: Any) -> str:
+        name = (notebook or "").strip()
+        line = " ".join((context or "").split())
+        request = current_request_context()
+        scope = current_workspace_scope()
+        own = scope.write_root() if scope is not None else None
+        if own is not None and is_wiki_root(own):
+            return "You are already in a notebook: there is nowhere to move. Nothing was offered."
+        if request is not None and request.channel != "websocket":
+            return ("A notebook opens only in the app, not from here. Nothing was offered: "
+                    "go on in this conversation.")
+        if current_subagent_policy() is not None:
+            return "A subagent cannot move the user's conversation. Nothing was offered."
+        roots = self._lookup._notebooks()
+        if name not in roots:
+            known = ", ".join(sorted(roots)) or "none"
+            return f"No notebook named '{name}' (existing: {known}). Nothing was offered."
+        if not line:
+            return "Say in `context` what you were working on: it is what the notebook picks up."
+        if len(line) > _MIRROR_MAX_CHARS:
+            line = line[: _MIRROR_MAX_CHARS - 1].rstrip() + "…"
+        try:
+            await asyncio.to_thread(
+                self._memory.append_history, f"From the personal chat: {line}",
+                session_key=(request.session_key if request is not None else None)
+                or UNIFIED_SESSION_KEY,
+                kind="inferred", about=name, untrusted=bool(current_turn_taint()),
+            )
+        except Exception as exc:  # noqa: BLE001 — il tasto vale anche senza la riga
+            logger.warning("suggest_notebook: handoff line not written: {}", exc)
+        return (
+            f"The user now sees a button under your reply that opens the notebook '{name}'; "
+            "there the conversation picks up from what you wrote in `context`. Do not repeat "
+            "the offer in this conversation, and do not move anything yourself: if they stay "
+            "here, go on here."
+        )
+
+
+TOOLS = [JournalAppendTool, SuggestNotebookTool]

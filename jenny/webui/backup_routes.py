@@ -45,6 +45,23 @@ if TYPE_CHECKING:
 BACKUP_DATA_HEADER = "X-Jenny-Backup-Data"
 
 
+def decode_backup_data(request: WsRequest) -> dict[str, Any] | Response:
+    """Il payload JSON di una route backup, dall'header ``X-Jenny-Backup-Data``.
+
+    Riusato dalle route delle estensioni che parlano di backup.
+    """
+    raw = case_insensitive_header(request.headers, BACKUP_DATA_HEADER)
+    if not raw:
+        return http_error(400, "missing backup data header")
+    try:
+        data = json.loads(base64.b64decode(raw, validate=True).decode("utf-8"))
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        return http_error(400, "invalid backup data header")
+    if not isinstance(data, dict):
+        return http_error(400, "invalid backup data header")
+    return data
+
+
 class BackupRoutes:
     """Route ``/api/backup/{export,import,snapshots,snapshots/*}``."""
 
@@ -87,16 +104,7 @@ class BackupRoutes:
     # -- helpers --
 
     def _payload(self, request: WsRequest) -> dict[str, Any] | Response:
-        raw = case_insensitive_header(request.headers, BACKUP_DATA_HEADER)
-        if not raw:
-            return http_error(400, "missing backup data header")
-        try:
-            data = json.loads(base64.b64decode(raw, validate=True).decode("utf-8"))
-        except (binascii.Error, ValueError, UnicodeDecodeError):
-            return http_error(400, "invalid backup data header")
-        if not isinstance(data, dict):
-            return http_error(400, "invalid backup data header")
-        return data
+        return decode_backup_data(request)
 
     # -- handlers --
 

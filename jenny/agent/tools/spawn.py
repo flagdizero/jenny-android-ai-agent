@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Any
 from jenny.agent.agent_types import (
     AGENT_TYPE_NAMES,
     DEFAULT_AGENT_TYPE,
+    PLANNING_HELPER_TYPES,
     UnknownAgentTypeError,
 )
 from jenny.agent.tools.base import Tool, tool_parameters
-from jenny.agent.tools.context import ContextAware, RequestContext
+from jenny.agent.tools.context import ContextAware, RequestContext, current_request_context
 from jenny.agent.tools.schema import (
     BooleanSchema,
     NumberSchema,
@@ -27,7 +28,12 @@ if TYPE_CHECKING:
 @tool_parameters(
     tool_parameters_schema(
         task=StringSchema("The task for the subagent to complete"),
-        label=StringSchema("Optional short label for the task (for display)"),
+        label=StringSchema(
+            "Short label the user sees while the subagent works: 2-5 words naming "
+            "what it does, in the language you are speaking with the user (e.g. "
+            "'flight prices to Lisbon'). Without one the user sees the first words "
+            "of the task, cut off."
+        ),
         agent_type=StringSchema(
             "Which kind of subagent to run. Pick deliberately — it decides which "
             "tools the subagent gets. "
@@ -36,17 +42,32 @@ if TYPE_CHECKING:
             "a login or a site's own search box), read/list/write files, NO code "
             "execution — use it for gathering material online. "
             "'writer': read/list/write files and apply_patch, NO network — use it "
-            "for docs, wiki pages and synthesis of material already gathered. "
+            "for docs and synthesis of material already gathered, outside a notebook "
+            "(in a notebook, the notebook-editor writes). "
             "'coder': filesystem, search, apply_patch, python_exec, exec sessions "
-            "and logs, NO network — use it to write or change code. "
-            "'analyst': python_exec plus read/list/write, NO network — use it for "
-            "computation, data and charts. "
+            "and logs, no web tools (python_exec reaches public sites only through "
+            "its http_get/http_post) — use it to write or change code. "
+            "'analyst': python_exec plus read/list/write, no web tools (same "
+            "python_exec network) — use it for computation, data and charts. "
             "'sysadmin': SSH to the machines the user registered (run commands, "
             "start and follow long jobs, transfer files) plus read/list/write, NO "
             "network and NO local code execution — the only type that reaches a "
             "remote machine, and the only way to do so. "
-            "'operator': everything (fallback for tasks that fit none of the above).",
+            "'app-builder': writes and tests a new version of one of the user's apps (the "
+            "app tool, read/list/grep), NO network — use it to create or change an app, then "
+            "publish its work with `app action=publish`. It writes code only: it cannot use "
+            "the app's actions (add a record, mark an item), so do that yourself after "
+            "publishing. "
+            "'notebook-editor': only in a notebook's chat — changes this notebook as the "
+            "user asks: its pages, the map and the board (cards, which pages each holds, "
+            "drawers, reminders, threads), NO network. Every change to a notebook goes to it. "
+            "'operator': the whole subagent toolset except SSH (fallback for tasks that fit "
+            "none of the above; never a way around a missing tool).",
             enum=AGENT_TYPE_NAMES,
+        ),
+        app=StringSchema(
+            "For agent_type=app-builder: the slug of the app it works on. A follow-up on "
+            "an app goes back to the builder that already worked on it, which knows the code."
         ),
         quick=BooleanSchema(
             description=(
@@ -95,6 +116,38 @@ class SpawnTool(Tool, ContextAware):
         self._session_key.set(ctx.session_key or f"{ctx.channel}:{ctx.chat_id}")
         self._origin_message_id.set(ctx.message_id)
 
+    async def _to_known_builder(self, session_key: str, task: str,
+                                app: str | None) -> str | None:
+        """Un ritocco a un'app va al costruttore che ci ha gia' lavorato.
+
+        Il 08/10/2026 sul Titan sei ritocchi al Portafoglio sono stati sei
+        costruttori nuovi: ognuno rileggeva la guida (20-60 s), vedeva solo il
+        brief e aggiungeva il suo pezzo, finche' l'utente ha chiamato il codice
+        «un casino». La regola «follow-up: subagent_send» Jenny non l'ha mai
+        applicata; qui la applica lo strumento. L'app si prende da ``app`` o, se
+        manca, dal brief, quando nomina una sola delle app che un costruttore ha
+        toccato in questa conversazione.
+        """
+        import re
+
+        from jenny.agent.subagent import SubagentSendError
+        from jenny.agent.tools.app_tool import apps_with_builders, builder_for
+
+        slug = (app or "").strip()
+        if not slug:
+            named = [s for s in apps_with_builders(session_key)
+                     if re.search(rf"(?<![\w-]){re.escape(s)}(?![\w-])", task)]
+            slug = named[0] if len(named) == 1 else ""
+        lineage = builder_for(session_key, slug) if slug else None
+        if lineage is None or not self._manager.continuable(lineage):
+            return None
+        try:
+            result = await self._manager.send(lineage, task)
+        except SubagentSendError:
+            return None
+        return (f"Sent to the app-builder that already worked on `{slug}` [{lineage}]: it "
+                f"knows the code and continues from it. {result.text}")
+
     @property
     def name(self) -> str:
         return "spawn"
@@ -119,6 +172,7 @@ class SpawnTool(Tool, ContextAware):
         temperature: float | None = None,
         agent_type: str | None = None,
         quick: bool = False,
+        app: str | None = None,
         **kwargs: Any,
     ) -> str:
         """Spawn a subagent to execute the given task."""
@@ -129,6 +183,48 @@ class SpawnTool(Tool, ContextAware):
             SubagentConcurrencyLimitError,
         )
 
+        # Mentre si prepara un piano si guarda il quaderno, non il web: solo
+        # l'editore, in sola lettura (``agent_types.PLANNING_HELPER_TYPES``).
+        request = current_request_context()
+        wanted = agent_type or DEFAULT_AGENT_TYPE
+        if (
+            request is not None
+            and request.metadata.get("plan_mode") is True
+            and wanted not in PLANNING_HELPER_TYPES
+        ):
+            return (
+                f"Cannot spawn a '{wanted}' while preparing a plan: now you only look at the "
+                "notebook. A notebook-editor can take stock of it for you (read-only). What "
+                "must be searched on the web goes into the plan as a `research` step, with "
+                "the item marked `web` in the coverage."
+            )
+        # Le app si scrivono solo per una conversazione con l'utente: un
+        # costruttore lanciato da un cron, dal giardiniere o da Dream non potrebbe
+        # comunque scrivere (il tool ``app`` lo rifiuta), quindi lo si dice qui,
+        # prima di spendere un giro intero.
+        if (agent_type or "") == "app-builder":
+            from jenny.session.keys import is_personal_session_key, is_project_session_key
+
+            key = self._session_key.get() or ""
+            if not (is_personal_session_key(key) or is_project_session_key(key)):
+                return ("Cannot spawn an app-builder here: apps are written only for a "
+                        "conversation with the user (the personal chat or a notebook's chat).")
+            routed = await self._to_known_builder(key, task, app)
+            if routed is not None:
+                return routed
+        # Un quaderno lo cambia l'editore, e solo l'editore: il ``writer`` scriveva
+        # le pagine senza poter toccare la bacheca, e Jenny doveva scegliere fra due
+        # tipi che si sovrapponevano. Lo separa il codice, non il prompt.
+        if (agent_type or "") in ("notebook-editor", "writer"):
+            from jenny.session.keys import is_project_session_key
+
+            in_notebook = is_project_session_key(self._session_key.get() or "")
+            if agent_type == "notebook-editor" and not in_notebook:
+                return ("Cannot spawn a notebook-editor here: it changes a notebook only from "
+                        "that notebook's chat.")
+            if agent_type == "writer" and in_notebook:
+                return ("Cannot spawn a writer in a notebook: spawn a notebook-editor, which "
+                        "writes the pages and the board.")
         # L'invariante di concorrenza vive nel manager (dove sta lo stato); qui
         # si formatta soltanto il messaggio per il modello.
         try:

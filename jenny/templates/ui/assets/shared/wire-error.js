@@ -36,6 +36,7 @@ const KNOWN = new Set([
   'too_many_videos',
   'too_many_files',
   'unknown_type',
+  'untyped_frame',
   'invalid_task_id',
   'invalid_project_name',
 ]);

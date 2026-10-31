@@ -31,43 +31,48 @@ Your theme choice lives in the WebView's local storage on this specific device, 
 
 ## Mascot
 
-A small companion (Jenny, styled as "✿") follows the conversation from the corner of the screen. On the home's chat page she is simply present beside the conversation, and a tap sends her to the edge or brings her back out; she comes back the way you left her. Everywhere else — the home's other pages (Apps, Notebooks, Settings) and the rooms opened from them, and every view of the workshop except the Console — she lives docked at the edge: tap her, or swipe her inward from the edge, and she pops out with a one-turn minichat, a text field ("Ask here…") and a speech bubble for the reply.
+A small companion (Jenny, styled as "✿") follows the conversation from the corner of the screen, and she is **the door to the chat**. On the home's chat page, and in the workshop's Console, the chat is already there: a tap on her makes her wave — she winds up, hops raising her arm and waves three times. While she is thinking or talking a raised arm would say something she isn't doing, so then she only hops. Everywhere else — the home's other pages (Apps, Notebooks, Settings), the rooms opened from them, a notebook's board, a mini-app, and every view of the workshop except the Console — she lives docked at the edge: tap her, or swipe her inward from the edge, and **the real chat comes up full screen over what you are looking at**. The page stays beneath it, blurred behind a veil so that its colours show through while the chat stays readable, but it can't be touched; tap her again, or press Back, and the chat goes away and the page is where you left it.
 
-A few things about that minichat are worth knowing before you rely on it:
+A few things about that chat are worth knowing before you rely on it:
 
-- Replies are capped at **280 characters** and stripped down to plain text — no markdown, no code blocks, no formatting survives.
-- It talks over the **same conversation** as your main chat. Anything you ask the mascot lands in the same history the main chat sees, so a question you type into the minichat can come back up later if you ask Jenny to recall the conversation.
-- The mascot gets **no automatic awareness of which screen you're on** — nothing about the current view is silently attached to what you type to her. Jenny does have a pull-based tool that can fetch the HTML of whatever's open (chat, Wiki, Workspace, apps, settings) when she decides it's relevant, but that tool works the same way regardless of whether you asked through the mascot's minichat or the main chat box — so talking to her isn't any blinder than talking in chat, it's just never handed screen context for free.
+- It is **the same chat** as the chat page: history, attachments, the Stop button, everything. Over a notebook's board, its card drawers and its pages it is that notebook's conversation (the message box says "…, in the notebook"); everywhere else it is your personal conversation.
+- Jenny can see **the page under the chat**. She has a pull-based tool that fetches what is on screen when she decides it's relevant, and with the chat open over a page it describes that page, not the chat — so "what does this setting do?" asked over the Settings page, or over the workshop's Brain, is answered about what you are looking at.
+- If a reply arrives while the chat is closed, a **pink dot** appears on her head: tap her to read it. It lights for the conversation she would open from where you are.
+- She can't be switched off: since she is the way into the chat, a door that disappears would leave the chat unreachable.
 
 While waiting for a reply she switches between a "thinking" pose and, once text starts streaming back, a "talking" pose with an animated mouth. If you leave her alone reading a long reply she quiets back down into "thinking" after about a second of no new text.
 
-Once a reply is done she reacts to it for 12 seconds: **happy, sad or angry**. The reaction comes from the emoji she wrote in that reply — her own signature four, 😏 😈 💅 🤭 (the ones her character sheet gives her), or any of the smiles and hearts, make her happy, a 😔 or a 💔 sad, a 😤 or a 😒 angry. When a reply mixes them, the most frequent wins, and on a tie the last one: the tone of a reply is at its end. Emoji inside code or in quoted lines don't count, and neither do ambiguous ones (🤔, 😅, or her own 🙄 and 😭, which are tone rather than mood) or things that aren't feelings (☀️, 🍝) — a reply without an emotional emoji shows no face at all. Nothing is asked of the model, so it costs nothing and works with any model and in any language. Errors make her sad on their own. She reacts *after* speaking, never while. `agents.defaults.mascotMood` in `config.json` turns it off — see [Configuration](../reference/configuration.md).
+Every move of hers squashes and stretches, the way a cartoon character's body does: at rest she breathes, thinking she sways, talking she stretches a hair on each syllable, and coming out from the edge she leans into the slide. The deformation always stays on the drawing's own axes, so she never looks sheared, and at the docked edge — where only half of her shows — the talking and the moods leave her body still.
+
+Once a reply is done she reacts to it for 12 seconds: **happy, sad or angry**. The reaction comes from the emoji she wrote in that reply — her own signature four, 😏 😈 💅 🤭 (the ones her character sheet gives her), or any of the smiles and hearts, make her happy, a 😔 or a 💔 sad, a 😤 or a 😒 angry. When a reply mixes them, the most frequent wins, and on a tie the last one: the tone of a reply is at its end. Emoji inside code or in quoted lines don't count, and neither do ambiguous ones (🤔, 😅, or her own 🙄 and 😭, which are tone rather than mood) or things that aren't feelings (☀️, 🍝) — a reply without an emotional emoji shows no face at all. Nothing is asked of the model, so it costs nothing and works with any model and in any language. Errors make her sad on their own. She reacts *after* speaking, never while, and the face arrives with a body reaction: a hop when happy, a droop when sad, a stamp when angry. `agents.defaults.mascotMood` in `config.json` turns it off — see [Configuration](../reference/configuration.md).
 
 Her face and her body are two separate drawings stacked on each other, which is why an expression can ride on top of any pose rather than being a pose of its own. It works at the docked edge too, where she is seen from the side: the same happy, sad and angry faces are drawn in profile, over her side pose.
 
-Drag her instead of tapping and she takes flight: she hangs from your finger with a bit of pendulum physics, and on release falls, bounces, gets up, and walks back home to her docked position. It's a pure fidget interaction with no functional effect — dragging her doesn't send anything or change any setting.
+Drag her instead of tapping and she takes flight: she hangs from your finger with a bit of pendulum physics, and on release falls, bounces, gets up, and walks back home to her docked position. Hanging she stretches as much as you yank her, in the air she stretches with her speed, the thud squashes her as hard as she landed, and each step dips on the change of foot. It's a pure fidget interaction with no functional effect — dragging her doesn't send anything or change any setting.
 
 Her preferences are on the home's **Settings** page, in the row named after her (**Jenny** unless you gave her another name):
 
 | Setting | Options | Default |
 |---|---|---|
-| Show mascot | on / off | On |
 | Mascot size | Small / Medium / Large | Small |
 | Floating mascot | on / off (Android only) | Off |
+| Reads the screen | on / off, in Android's Accessibility settings (Android 14+, with the floating mascot on) | Off |
 
 The same screen holds **Her name** (up to 40 characters). The Settings row, the chat page and the other places that name her follow it, and changing it erases nothing she remembers. Under the mascot settings sits **The rules you gave her**: a text of yours, up to 2,000 characters, that she reads every turn and never rewrites — Dream included. Both have their own **Save** button.
 
-**Floating mascot** puts her in a window above other apps: tap her there to talk, and the answer comes in a bubble, in the same conversation as the app. It needs Android's "Display over other apps" permission, and the page tells you when that is missing.
+**Floating mascot** puts her in a window above other apps: tap her there to talk, and the answer comes in a bubble, in the same conversation as the app. It reads like the app's chat: your messages on the right, in the theme's bubble, and hers on the left — in a bubble of her own here, because beneath them is another app. It needs Android's "Display over other apps" permission, and the page tells you when that is missing.
 
-Size is the side of the square she occupies — 120, 160 or 210 px; she starts small. The rest of her geometry follows from it, including where the minichat bubble sits relative to her head, so she stays coherent at every size rather than growing out of her own speech balloon.
+**Reads the screen** lets her see what you were looking at when you tapped her: say "save this" over a recipe page, or "keep this picture", and she reads the app underneath — once, at the tap — and decides where it goes. She can't look by herself, and she skips apps that block screenshots. Android lets only you switch an accessibility service on, so the switch takes you to Accessibility; if Android calls it a restricted setting, allow it from Jenny's app info first.
+
+Size is the side of the square she occupies — 120, 160 or 210 px; she starts small. The rest of her geometry follows from it, so she stays coherent at every size.
 
 Which edge she docks on is not a setting: she always docks on the right, and after a throw she walks back there.
 
 She comes in one look, in color. There used to be a black-and-white switch here, drawn from a second set of line-art artwork; it was retired when her expressions were drawn, because keeping both meant drawing every expression twice.
 
-Like the theme, **Show mascot** and **Mascot size** are stored in this device's local storage, not in `config.json` and not in your encrypted backup. A reinstall brings her back showing and small. **Floating mascot** is the exception: it lives in `config.json` (`floating.enabled`), because the window is started by the app's background service, which can't read the WebView's storage.
+Like the theme, **Mascot size** is stored in this device's local storage, not in `config.json` and not in your encrypted backup. A reinstall brings her back small. **Floating mascot** is the exception: it lives in `config.json` (`floating.enabled`), because the window is started by the app's background service, which can't read the WebView's storage.
 
-If your phone has "reduce motion" turned on at the OS level, Jenny respects it: the animated mouth-flap while she talks is skipped in favor of a static pose. The drag-to-fly gesture itself is a direct manipulation you control with your finger, so it still works if you choose to use it.
+If your phone has "reduce motion" turned on at the OS level, Jenny respects it: the animated mouth-flap while she talks is skipped in favor of a static pose, and her gestures stand still: no hops, sways or squashes, and the wave shows as a raised arm for the length of a wave. The drag-to-fly gesture itself is a direct manipulation you control with your finger, so it still works if you choose to use it, without the squash and stretch.
 
 ## UI language
 
@@ -76,7 +81,7 @@ The interface exists in two languages: Italian and English. It follows the phone
 This is worth separating clearly from a similarly named setting:
 
 - **UI language** only controls what the buttons, labels, and toasts in the WebUI say.
-- **`agents.defaults.language`** is a `config.json` field, and the *only* place that writes it is the onboarding wizard. It captures the UI language active when you set the phone up, and uses it for a handful of backend-generated strings (like the initial welcome message).
+- **`agents.defaults.language`** is a `config.json` field, and the *only* place that writes it is the onboarding wizard. It captures the UI language active when you set the phone up, and uses it for the text the backend writes to you: the initial welcome message, provider errors, notification titles and slash-command replies.
 
 Changing the phone's language later does **not** touch `agents.defaults.language`. Any backend-generated text that depends on that field keeps using the language you had during onboarding until you edit `config.json` directly; see [Configuration](../reference/configuration.md). Several backend error messages (settings validation, some model-list failures) are in English regardless of either.
 
@@ -86,5 +91,7 @@ None of this affects what language Jenny actually *replies* to you in during a n
 
 - [Settings](../reference/settings.md): where this page's controls live.
 - [Chat basics](chat.md) — how the main conversation renders.
+- [Tool reference → screen](../reference/tools.md#screen) — exactly what a screen reading contains, what it leaves out and how long it lasts.
+- [Jenny from your other devices](remote-access.md) — what the floating mascot and screen reading can't do from a browser.
 - [Backup and restore](backup.md) — what does and doesn't travel in a `.jbk` file.
 - [Configuration](../reference/configuration.md) — `config.json` reference, including `agents.defaults.language`.

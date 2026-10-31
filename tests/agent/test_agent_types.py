@@ -41,11 +41,23 @@ EXPECTED_TOOLS = {
         "ssh_hosts", "ssh_exec", "ssh_job", "ssh_transfer",
         "read_file", "list_dir", "write_file",
     },
+    # Scrive e prova le app: il tool ``app`` (faccia del costruttore, scope
+    # ``apps``) e la sola lettura. Niente web, niente esecuzione.
+    "app-builder": {"app", "read_file", "list_dir", "grep"},
+    # Cambia un quaderno su richiesta: i tool ``board`` e ``notebook`` (scope
+    # ``notebook``) e i file. Niente web, niente esecuzione, come ``writer``.
+    "notebook-editor": {
+        "board", "notebook", "read_file", "write_file", "edit_file", "list_dir",
+        "apply_patch", "grep",
+    },
     "operator": None,  # tutto lo scope subagent
 }
 
 _CODE_EXECUTION = {"python_exec", "write_stdin", "list_exec_sessions"}
-_NETWORK = {"web_search", "web_fetch", "download_file"}
+# I tool del web. ``python_exec`` raggiunge la rete anche lui, con
+# ``http_get``/``http_post``: non sta qui perché non è un tool del web, ed è
+# dichiarato a parte (``test_python_exec_is_network_for_whoever_has_it``).
+_WEB_TOOLS = {"web_search", "web_fetch", "download_file"}
 _SSH = {"ssh_hosts", "ssh_exec", "ssh_job", "ssh_transfer"}
 
 
@@ -100,15 +112,17 @@ def _load_type(name: str, tmp_path: Path) -> set[str]:
     return loaded
 
 
-def test_six_types_exist() -> None:
+def test_eight_types_exist() -> None:
     assert AGENT_TYPE_NAMES == (
-        "researcher", "writer", "coder", "analyst", "sysadmin", "operator",
+        "researcher", "writer", "coder", "analyst", "sysadmin", "app-builder",
+        "notebook-editor", "operator",
     )
     assert DEFAULT_AGENT_TYPE == "operator"
 
 
 @pytest.mark.parametrize(
-    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "operator"]
+    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "app-builder",
+             "notebook-editor", "operator"]
 )
 def test_declared_allowlist_matches_contract(name: str) -> None:
     expected = EXPECTED_TOOLS[name]
@@ -119,7 +133,9 @@ def test_declared_allowlist_matches_contract(name: str) -> None:
         assert declared == frozenset(expected)
 
 
-@pytest.mark.parametrize("name", ["researcher", "writer", "coder", "analyst", "sysadmin"])
+@pytest.mark.parametrize(
+    "name", ["researcher", "writer", "coder", "analyst", "sysadmin", "notebook-editor"]
+)
 def test_type_registry_contains_exactly_its_tools(name: str, tmp_path: Path) -> None:
     assert _load_type(name, tmp_path) == EXPECTED_TOOLS[name]
 
@@ -148,10 +164,32 @@ def test_researcher_cannot_execute_code(tmp_path: Path) -> None:
     assert "edit_file" not in loaded
 
 
-@pytest.mark.parametrize("name", ["writer", "analyst", "coder", "sysadmin"])
-def test_non_researcher_types_have_no_network(name: str, tmp_path: Path) -> None:
-    """Confine simmetrico: chi esegue/scrive non va a prendersi la fonte."""
-    assert not (_load_type(name, tmp_path) & _NETWORK)
+@pytest.mark.parametrize("name", ["writer", "analyst", "coder", "sysadmin", "notebook-editor"])
+def test_non_researcher_types_have_no_web_tools(name: str, tmp_path: Path) -> None:
+    """Chi esegue o scrive non ha i tool del web (python_exec è a parte, sotto)."""
+    assert not (_load_type(name, tmp_path) & _WEB_TOOLS)
+
+
+def test_python_exec_is_network_for_whoever_has_it(tmp_path: Path) -> None:
+    """Fino all'11/10/2026 docs e prompt dicevano «coder/analyst: NO network».
+
+    Non era vero: ``python_exec`` porta ``http_get``/``http_post``. Il confine che
+    regge è un altro (la politica per lavoro di ``security.subagent_policy``);
+    qui si fissa chi ha la rete per questa via, così un tipo nuovo con
+    ``python_exec`` non si descrive di nuovo «senza rete».
+    """
+    with_exec = {
+        name for name in ("researcher", "writer", "coder", "analyst", "sysadmin",
+                          "app-builder", "notebook-editor")
+        if "python_exec" in _load_type(name, tmp_path)
+    }
+    assert with_exec == {"coder", "analyst"}
+    from jenny.agent.tools.python_exec import PythonNamespace
+    from jenny.agent.tools.python_exec_builtins import _register_builtin_functions
+
+    ns = PythonNamespace()
+    _register_builtin_functions(ns, workspace=str(tmp_path), restrict_to_workspace=True)
+    assert {"http_get", "http_post"} <= set(ns._template)
 
 
 # -- SSH: il confine del tipo ``sysadmin`` -------------------------------------
@@ -163,7 +201,7 @@ def test_sysadmin_has_the_four_ssh_tools_and_nothing_that_executes_or_browses(
     """La catena corta: da "pagina ostile" a "shell su un server" non c'e ponte."""
     loaded = _load_type("sysadmin", tmp_path)
     assert _SSH <= loaded
-    assert not (loaded & _NETWORK)
+    assert not (loaded & _WEB_TOOLS)
     assert not (loaded & _CODE_EXECUTION)
     assert "apply_patch" not in loaded
     assert "edit_file" not in loaded
@@ -186,9 +224,10 @@ def test_ssh_tools_are_in_no_pre_existing_scope(scope: str, tmp_path: Path) -> N
 
 
 def test_only_sysadmin_reaches_the_remote_scope() -> None:
+    extra = {"sysadmin": ("subagent", "remote"), "app-builder": ("subagent", "apps"),
+             "notebook-editor": ("subagent", "notebook")}
     for name, agent_type in AGENT_TYPES.items():
-        expected = ("subagent", "remote") if name == "sysadmin" else ("subagent",)
-        assert agent_type.scopes == expected, name
+        assert agent_type.scopes == extra.get(name, ("subagent",)), name
 
 
 def test_multi_scope_allowlist_is_split_per_scope() -> None:

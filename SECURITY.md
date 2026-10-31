@@ -23,7 +23,7 @@ person, so please allow reasonable time for a fix before disclosing.
 
 ## Supported versions
 
-Security fixes go into the latest 1.x release only. Releases before 1.0 get none: the update
+Security fixes go into the latest 2.x release only. Releases before 1.0 get none: the update
 check inside the app offers the newest release, and that is the way to get a fix.
 
 ## Trust model

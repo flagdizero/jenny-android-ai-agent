@@ -474,7 +474,7 @@ class TestFormatterPerTool:
         )
         assert "SECRET-HOSTNAME-42" not in summary
 
-    @pytest.mark.parametrize("scope", ["subagent", "remote"])
+    @pytest.mark.parametrize("scope", ["subagent", "remote", "apps", "notebook"])
     def test_every_agent_reachable_scope_tool_has_a_formatter(self, scope):
         # Il test che tiene vera la copertura quando un tool nuovo entra in uno
         # scope raggiungibile da un subagent: senza questo, un tool aggiunto
@@ -500,7 +500,7 @@ class TestFormatterPerTool:
         from jenny.agent.agent_types import AGENT_TYPES
 
         scopes = {scope for t in AGENT_TYPES.values() for scope in t.scopes}
-        assert scopes == {"subagent", "remote"}
+        assert scopes == {"subagent", "remote", "apps", "notebook"}
 
     def test_all_agent_type_allowlists_are_covered(self):
         from jenny.agent.agent_types import AGENT_TYPES

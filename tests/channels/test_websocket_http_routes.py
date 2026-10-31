@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from port_alloc import free_port
+from port_alloc import free_port, wait_listening
 
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
 from jenny.session.manager import Session, SessionManager
@@ -118,7 +118,7 @@ async def test_bootstrap_returns_metadata_for_localhost(
     sm = _seed_session(tmp_path)
     channel = _ch(bus, session_manager=sm, port=port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         resp = await _http_get(
             f"http://127.0.0.1:{port}/webui/bootstrap",
@@ -173,7 +173,7 @@ async def test_webui_skills_route_requires_token_and_hides_paths(
         port=port,
     )
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         deny = await _http_get(f"http://127.0.0.1:{port}/api/webui/skills")
         assert deny.status_code == 401
@@ -254,7 +254,7 @@ async def test_webui_thread_resigns_assistant_media_urls(
 
     channel = _ch(bus, port=port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         await _bootstrap(port)
         token = _AUTH_SECRET
@@ -294,7 +294,7 @@ async def test_session_routes_reject_non_websocket_keys(
     )
     channel = _ch(bus, session_manager=sm, port=port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         await _bootstrap(port)
         token = _AUTH_SECRET
@@ -329,7 +329,7 @@ async def test_session_routes_reject_invalid_key(
     sm = _seed_session(tmp_path)
     channel = _ch(bus, session_manager=sm, port=port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         await _bootstrap(port)
         token = _AUTH_SECRET
@@ -355,7 +355,7 @@ async def test_static_serves_index_when_dist_present(
     sm = _seed_session(tmp_path / "ws_state")
     channel = _ch(bus, session_manager=sm, port=port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         # Bare ``GET /`` is a browser opening the app: it must return the SPA
         # index.html, not the WS-upgrade handler's 401/426.
@@ -396,7 +396,7 @@ async def test_static_rejects_path_traversal(
     secret.write_text("classified")
     channel = _ch(bus, port=port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         resp = await _http_get(f"http://127.0.0.1:{port}/../secret.txt")
         # Normalized by httpx into /secret.txt → falls back to index.html, not 'classified'.
@@ -411,7 +411,7 @@ async def test_unknown_route_returns_404(bus: MagicMock) -> None:
     port = free_port()
     channel = _ch(bus, port=port)
     server_task = asyncio.create_task(channel.start())
-    await asyncio.sleep(0.3)
+    await wait_listening(channel)
     try:
         resp = await _http_get(f"http://127.0.0.1:{port}/api/unknown")
         assert resp.status_code == 404
@@ -693,3 +693,15 @@ def test_ensure_minimal_config_does_not_overwrite_explicit_secret(tmp_path: Path
     data = json.loads(config_path.read_text(encoding="utf-8"))
     assert "token_issue_secret" not in data["websocket"]
     assert data["websocket"]["token"] == "static-tok"
+
+
+def test_bootstrap_carries_the_webui_fingerprint_and_the_boot(
+        bus: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    """La pagina li confronta a ogni riconnessione e si ricarica dopo un aggiornamento."""
+    from jenny.webui import ui_version
+
+    monkeypatch.setattr(ui_version, "_value", "abc123")
+    channel = _ch(bus, host="127.0.0.1", tokenIssueSecret="")
+    body = json.loads(channel.gateway.http._handle_bootstrap(_LOCAL, _NO_HEADERS).body)
+    assert body["ui_version"] == "abc123"
+    assert body["boot"] == ui_version.BOOT_ID and len(body["boot"]) == 12

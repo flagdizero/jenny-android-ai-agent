@@ -112,6 +112,11 @@ def test_the_view_height_is_no_longer_inline() -> None:
     view = _parsed().attrs["view-chat"]
     assert "height" not in (view.get("style") or "")
     assert "flex-direction: column" in _rule("#view-chat")
+    # Anche le altre due (05/10/2026): con la chat aperta sopra, la vista sotto
+    # si fissa allo schermo da una regola del foglio, che un inline batterebbe.
+    for other in ("view-settings", "view-workspace"):
+        assert "height" not in (_parsed().attrs[other].get("style") or ""), other
+    assert "height: 100%" in _rule("#view-settings, #view-workspace")
 
 
 def test_the_viewport_height_travels_as_a_variable() -> None:

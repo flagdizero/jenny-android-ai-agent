@@ -40,7 +40,9 @@ export const api = {
     "utils.js": """
 export function escapeHtml(s) { return String(s); }
 export function showToast() {}
+export function showUndo() { return () => {}; }
 """,
+    "rpc-client.js": "export const rpc = { calls: [], async apps(m, p) { this.calls.push([m, p]); return { ok: true }; } };\n",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k, locale: 'it' };\n",
     "ws-manager.js": "export const wsManager = new EventTarget();\n",
@@ -116,6 +118,41 @@ def test_a_list_nobody_asked_for_is_not_read() -> None:
         """
         new AppsSource();
         frame({ event: 'apps_list_changed' });
+        await tick();
+        assert.equal(api.reads, 0);
+        """
+    )
+
+
+def test_a_reopened_socket_reads_the_list_again() -> None:
+    """Un ``apps_list_changed`` perso a socket giu' non torna: la riapertura
+    rilegge. Il 19/10/2026 sul Titan un'app ripubblicata con lo schermo restava
+    «senza schermo» per il telefono, e il tocco nel cassetto apriva il suo
+    foglio, fino al riavvio."""
+    _run(
+        """
+        let screen = false;
+        api.getJennyApps = async () => {
+          api.reads += 1;
+          return { apps: [{ slug: 'spesa', name: 'Spesa', has_screen: screen }] };
+        };
+        const source = new AppsSource();
+        await source.loadJennyApps();
+        // A socket giu' l'app prende lo schermo, e il frame non arriva.
+        screen = true;
+        wsManager.dispatchEvent(new CustomEvent('chat:open'));
+        await tick();
+        assert.equal(api.reads, 2, 'la riapertura non ha riletto l\\u2019elenco');
+        assert.equal(source.jennyApps[0].has_screen, true);
+        """
+    )
+
+
+def test_a_reopened_socket_does_not_read_a_list_nobody_asked_for() -> None:
+    _run(
+        """
+        new AppsSource();
+        wsManager.dispatchEvent(new CustomEvent('chat:open'));
         await tick();
         assert.equal(api.reads, 0);
         """

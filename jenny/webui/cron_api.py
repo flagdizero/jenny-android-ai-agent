@@ -38,7 +38,7 @@ from loguru import logger
 from jenny.cron.heartbeat_tasks import parse_heartbeat_tasks
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import next_run_on_resume
-from jenny.cron.types import CronJob
+from jenny.cron.types import CronJob, job_display_name
 from jenny.utils.clock import now_ms as _now_ms
 
 # Quanto testo di un promemoria entra nell'elenco. Il resto arriva col dettaglio:
@@ -83,6 +83,25 @@ def _job_kind(job: CronJob) -> str:
     return "system" if job.payload.kind == "system_event" else "user"
 
 
+def _place(link: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Dove sta un cron del quaderno: ``{notebook, card, cardTitle}``, ``card`` vuoto
+    per tutto il quaderno. Il segnaposto del disco (``cron_link``) non esce di qui."""
+    if not link:
+        return None
+    from jenny.board import model
+    from jenny.board.cron_link import notebook_root, scope_of
+    from jenny.board.store import read_board
+
+    notebook = str(link.get("notebook") or "")
+    scope = scope_of(link)
+    title = ""
+    if scope != model.NOTEBOOK:
+        root = notebook_root(notebook)
+        card = model.card_by_id(read_board(root) or {}, scope) if root is not None else None
+        title = card["title"] if card else ""
+    return {"notebook": notebook, "card": scope, "cardTitle": title}
+
+
 def _schedule_payload(job: CronJob) -> dict[str, Any]:
     """La schedulazione **strutturata**, non una frase.
 
@@ -90,6 +109,8 @@ def _schedule_payload(job: CronJob) -> dict[str, Any]:
     il modello. Questa esce su una UI bilingue, quindi la frase la compone il
     client: `assets/shared/cron-view.js`, con le sue chiavi i18n.
     """
+    from jenny.cron.cronexpr import shape
+
     schedule = job.schedule
     return {
         "kind": schedule.kind,
@@ -97,6 +118,9 @@ def _schedule_payload(job: CronJob) -> dict[str, Any]:
         "expr": schedule.expr,
         "at_ms": schedule.at_ms,
         "tz": schedule.tz,
+        # La forma di un'espressione comune, per dirla a parole («ogni domenica
+        # alle 18:30»); ``None`` quando non ce l'ha, e il client mostra l'espressione.
+        "shape": shape(schedule.expr) if schedule.kind == "cron" and schedule.expr else None,
     }
 
 
@@ -239,7 +263,9 @@ def _job_payload(
     message = job.payload.message or ""
     return {
         "id": job.id,
-        "name": job.name,
+        # Mai vuoto per il pannello: un job senza nome mostra l'inizio del
+        # messaggio, come quando quel ripiego stava nel nome stesso.
+        "name": job_display_name(job),
         "kind": kind,
         "purpose": system_job_purpose(job.id) if kind == "system" else None,
         "protected": kind == "system",
@@ -249,6 +275,9 @@ def _job_payload(
         "actions": _job_actions(job, now_ms),
         "mode": job.payload.mode,
         "one_shot": job.delete_after_run,
+        # Un cron del quaderno: dove sta, cosi' l'elenco dell'officina lo dice
+        # «Piante › Acero», o «Piante» per tutto il quaderno. ``None`` per gli altri.
+        "place": _place(job.payload.board),
         # Il testo del promemoria e' contenuto dell'utente: l'anteprima
         # nell'elenco, l'intero solo nel dettaglio. Per i job di sistema non c'e'
         # niente da mostrare — il container li registra senza messaggio e il

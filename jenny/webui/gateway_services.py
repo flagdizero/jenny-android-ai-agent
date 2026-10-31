@@ -66,6 +66,12 @@ def build_gateway_services(
     # Le sessioni sotto cui qualcosa scrive adesso, late-binding come i due sopra:
     # l'agente puo' nascere dopo il gateway. Senza agente non scrive nessuno.
     get_busy_session_keys: Callable[[], Collection[str]] | None = None,
+    # La coppia ``(provider, modello)`` dell'agente, per il saluto di un
+    # quaderno nuovo (``project.greet``). Late-binding come i getter sopra.
+    get_llm: Callable[[], tuple[Any, str] | None] | None = None,
+    # Il driver dei piani a lista, late-binding come i getter sopra: nasce con
+    # l'agente (``GatewayContainer._instantiate_agent``).
+    get_plan_driver: Callable[[], Any | None] | None = None,
     logger: Any = default_logger,
     onboarding_event: Any | None = None,
     on_settings_changed: Callable[[], None] | None = None,
@@ -131,6 +137,12 @@ def build_gateway_services(
             # l'agente differito, come faceva la rotta GET che ha sostituito.
             session_manager=session_manager,
             onboarding_event=onboarding_event,
+            get_cron_service=get_cron_service,
+            # ``project.greet`` manda il saluto alla chat dal bus, come un
+            # avviso di Jenny, e lo chiede al modello dell'agente.
+            bus=bus,
+            get_llm=get_llm,
+            get_plan_driver=get_plan_driver,
         ),
         session_manager=session_manager,
         get_subagent_manager=get_subagent_manager,

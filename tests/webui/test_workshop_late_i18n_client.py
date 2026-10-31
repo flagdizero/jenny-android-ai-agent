@@ -22,8 +22,6 @@ from support.js_harness import ASSETS, function, member, requires_node, run_js
 pytestmark = requires_node
 
 HEADER = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
-# La minichat e' dei due gusci dal 28/09/2026: le sue etichette stanno li'.
-JENNY = (ASSETS / "shared" / "jenny-minichat.js").read_text(encoding="utf-8")
 
 _I18N = """
 import assert from 'node:assert/strict';
@@ -68,40 +66,36 @@ console.log('ok');
     assert out.strip() == "ok"
 
 
-def test_the_minichat_labels_are_translated_after_load() -> None:
+def test_the_chat_identity_and_commands_are_translated_after_load() -> None:
+    """La riga «Jenny · online» e il chip «Commands» la chat li scrive al primo
+    ``activate()``, che puo' venire prima delle traduzioni. Fino al 05/10/2026
+    le traduzioni arrivavano in tempo per caso (le chiedeva per prima la
+    minichat); senza di lei sul telefono restavano ``chat.online`` e
+    ``commands.label``. Ora il guscio, a traduzioni arrivate, le fa riscrivere."""
+    chat = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
+    app = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
     out = run_js(
         _I18N
+        + "let chipRenders = 0;\nconst commandsChip = { render() { chipRenders += 1; } };\n"
+        + "class C {\n"
+        + member(chat, "applyTranslations")
+        + "\n}\n"
         + """
-function node() {
-  const n = {
-    attrs: {}, classList: { add() {} }, dataset: {}, placeholder: '',
-    setAttribute(k, v) { this.attrs[k] = v; },
-    addEventListener() {},
-    appendChild() {},
-    children: {},
-    querySelector(sel) { return (this.children[sel] ||= node()); },
-  };
-  return n;
-}
-globalThis.document = { createElement: () => node(), getElementById: () => null };
-class JennyMascot { _buildDom() {} }
-class J extends JennyMascot {
-  constructor() { super(); this.host = node(); this._adapter = { placeholder: () => '' }; }
-  _busy() { return false; }
-"""
-        + member(JENNY, "_buildDom")
-        + member(JENNY, "_syncPlaceholder")
-        + """
-  _setOut() {}
-}
-const j = new J();
-j._buildDom();
-await new Promise((r) => setTimeout(r, 0));
-assert.equal(j.scrim.attrs['aria-label'], 'T:jenny.closeMinichat');
-assert.equal(j.input.attrs['aria-label'], 'T:jenny.askJenny');
-assert.equal(j.sendBtn.attrs['aria-label'], 'T:jenny.send');
-assert.equal(j.input.placeholder, 'T:jenny.askHere');
+const c = new C();
+const on = new Set(['on']);
+c.identityStatus = { classList: { contains: (k) => on.has(k) } };
+c.identityLabel = { textContent: 'chat.online' };
+await i18n.load();
+c.applyTranslations();
+assert.equal(c.identityLabel.textContent, 'T:chat.online');
+assert.equal(chipRenders, 1);
+on.clear();
+c.applyTranslations();
+assert.equal(c.identityLabel.textContent, 'T:chat.offline');
 console.log('ok');
 """
     )
     assert out.strip() == "ok"
+    load = app[app.index("i18n.load(i18n.locale).then(() => {"):]
+    load = load[: load.index("});")]
+    assert "this.controllers.chat?.applyTranslations?.();" in load

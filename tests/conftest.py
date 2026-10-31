@@ -35,7 +35,30 @@ _MODULE_REGISTRIES: tuple[tuple[str, str], ...] = (
     # Un turno websocket segnato «in corso» e mai chiuso: il canale lo legge
     # all'attach e manda un `goal_status` che le prove dopo non si aspettano.
     ("jenny.session.webui_turns", "_WEBSOCKET_TURN_WALL_STARTED_AT"),
+    # Il rapporto vero/stima dei token e l'ultimo numero vero per sessione:
+    # una prova con un provider finto che riporta l'usage cambierebbe la stima
+    # di tutte quelle dopo.
+    ("jenny.utils.token_calibration", "_factors"),
+    ("jenny.utils.token_calibration", "_last_real"),
+    # I tentativi recenti del tool ``app``, condivisi fra istanze: senza, il
+    # tetto scatta in un file di prove che ne ha fatti pochi.
+    ("jenny.agent.tools.app_tool", "_RECENT_FAILURES"),
+    ("jenny.agent.tools.app_tool", "_BUILDERS"),
 )
+
+
+@pytest.fixture(autouse=True)
+def _user_text_in_english(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Le frasi per l'utente (``jenny.runtime.user_text``) in inglese, sempre.
+
+    La lingua si legge da ``config.json`` a ogni frase, e il workspace della
+    suite è condiviso: senza questo un test che scrive la config cambierebbe la
+    lingua di quelli dopo. Chi prova un'altra lingua la passa a ``say`` o
+    rifà questo patch; la lettura vera la prova ``tests/runtime/test_user_text.py``.
+    """
+    from jenny.runtime import user_text
+
+    monkeypatch.setattr(user_text, "current_language", lambda: "en")
 
 
 @pytest.fixture(autouse=True)

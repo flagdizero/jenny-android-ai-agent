@@ -15,6 +15,15 @@ atomico a ogni transizione terminale (append + prune). Il JSONL e scelto
 proprio per la tolleranza: una riga troncata o corrotta viene saltata e il
 resto dello storico resta leggibile, perche il gateway deve poter bootare
 comunque.
+
+Un tentativo **in corso** lascia invece un *segnaposto* a parte, un file JSON
+per task sotto ``<workspace>/subagents/running/<task_id>.json``, scritto alla
+partenza e tolto quando il record terminale e su disco. Non sta nel JSONL dei
+record perche quello per contratto porta solo esiti: chi lo legge (snapshot,
+``find``, ``mark_handled``) non deve imparare a saltare i vivi. Un segnaposto
+che sopravvive al processo e la prova che l'aiutante e morto con lui: al boot
+``SubagentManager`` lo trasforma in un record terminale (v.
+:meth:`SubagentRecordStore.load_running`).
 """
 
 from __future__ import annotations
@@ -42,7 +51,13 @@ from jenny.utils.path import atomic_write
 # Stati coarse-grained del ciclo di vita di un subagent. Restano distinti da
 # ``SubagentStatus.phase`` (fine-grained, già consumato altrove): il phase dice
 # *cosa sta facendo* il subagent, lo state dice *se e ancora in gioco*.
-SUBAGENT_STATES = ("running", "done", "failed", "cancelled", "stalled")
+#
+# ``budget`` e terminale come ``failed`` ma non e un fallimento: il subagent si e
+# fermato al tetto di iterazioni con la conversazione integra, e la sua storia
+# Tier-2 resta su disco perche ``subagent_send`` lo faccia continuare da dove era.
+# Fino al 24/10/2026 finiva in ``failed`` e ``_cleanup`` cancellava la storia,
+# quindi ogni ripresa ripartiva da zero e il lavoro fatto si perdeva.
+SUBAGENT_STATES = ("running", "done", "failed", "cancelled", "stalled", "budget")
 
 # Provenienza di una cancellazione. ``state="cancelled"`` da solo non dice CHI ha
 # fermato il subagent, e le tre risposte portano a decisioni opposte:
@@ -92,6 +107,12 @@ _CANCEL_PROVENANCE: dict[str, tuple[str, str]] = {
 }
 
 
+#: Chi può fermare (e annullare) un aiutante: l'utente, o Jenny principale.
+#: Un aiutante non ferma un altro aiutante (``subagent_control`` non è nel suo
+#: scope).
+STOPPED_BY = ("user", "jenny")
+
+
 def cancellation_stop_reason(reason: str) -> str | None:
     """``stop_reason`` che porta la provenienza, o ``None`` se sconosciuta."""
     entry = _CANCEL_PROVENANCE.get(reason)
@@ -104,6 +125,18 @@ def cancellation_summary(reason: str) -> str:
     return entry[1] if entry is not None else "This subagent was cancelled."
 
 
+#: Il riassunto di un aiutante interrotto da un riavvio **con** una fotografia
+#: della conversazione da cui ripartire. La regola di ``cancelled_at_shutdown``
+#: («rilancialo») qui sarebbe sbagliata: rilanciarlo butterebbe il lavoro che
+#: la fotografia esiste per salvare.
+INTERRUPTED_RESUMABLE_SUMMARY = (
+    "The app was closed while this subagent was still working, so its work was "
+    "interrupted, not finished or refused. Its conversation up to that point was "
+    "saved: continue it with subagent_send (it picks up where it stopped) instead "
+    "of relaunching it from scratch."
+)
+
+
 # Il tipo di agente e definito in ``jenny/agent/agent_types.py``; qui viene
 # ri-esportato perche i consumatori storici della spec importano da questo
 # modulo.
@@ -113,9 +146,11 @@ __all__ = [
     "CANCEL_REASON_SUPERSEDED",
     "CANCEL_REASON_USER",
     "DEFAULT_AGENT_TYPE",
+    "INTERRUPTED_RESUMABLE_SUMMARY",
     "MAX_RECORDS_PER_SESSION",
     "MAX_RESULT_SUMMARY_CHARS",
     "RECORD_TTL_S",
+    "STOPPED_BY",
     "SUBAGENT_CANCEL_REASONS",
     "SUBAGENTS_DIRNAME",
     "SUBAGENT_STATES",
@@ -149,6 +184,8 @@ MAX_RESULT_SUMMARY_CHARS = 800
 _MAX_RECORD_FILE_BYTES = 2_000_000
 
 _RECORDS_DIRNAME = "records"
+# Segnaposti dei tentativi in corso (v. docstring del modulo).
+_RUNNING_DIRNAME = "running"
 # Radice di tutto cio che i subagent lasciano su disco. Pubblica perche la
 # condivide ``jenny/agent/subagent_activity.py``, che ci mette la sua
 # sottodirectory ``activity/``: due letterali "subagents" separati sarebbero
@@ -162,6 +199,28 @@ _CORRECTIVE_HEADER = "## Corrective note from the previous attempt"
 
 def _coerce_str(value: Any, default: str = "") -> str:
     return value if isinstance(value, str) else default
+
+
+# Lunghezza massima del label ricavato dal task quando il modello non ne da uno.
+_DEFAULT_LABEL_CHARS = 40
+
+
+def default_label(task: str) -> str:
+    """Il label di ripiego, dalle prime parole del task.
+
+    La casa lo mostra in «Ho mandato una mini-me: {label}». Fino al 14/10/2026
+    era ``task[:30] + "..."``, che tagliava a meta parola («Research the best
+    way to co...»); ora si ferma all'ultimo spazio, e taglia secco solo se in
+    quei caratteri uno spazio non c'e.
+    """
+    text = " ".join(task.split())
+    if len(text) <= _DEFAULT_LABEL_CHARS:
+        return text
+    head = text[:_DEFAULT_LABEL_CHARS]
+    cut = head.rfind(" ")
+    if cut > 0:
+        head = head[:cut]
+    return head.rstrip(" ,;:.-") + "…"
 
 
 def _coerce_float(value: Any, default: float = 0.0) -> float:
@@ -194,6 +253,18 @@ class SubagentSpec:
     # Job breve: puo occupare lo slot riservato del pool (vedi
     # ``SubagentManager._check_capacity``).
     quick: bool = False
+    # Fonti non fidate da cui il lavoro nasce gia' contaminato: un compito
+    # scritto da Jenny dopo aver letto un risultato non fidato, o la ripresa di
+    # una conversazione che ne conteneva. Non vuoto ⇒ il lavoro parte
+    # *untrusted* (v. ``security.subagent_policy``). Sta nella spec perche' un
+    # rilancio rigioca lo stesso compito, e quindi lo stesso testo.
+    taint_seed: tuple[str, ...] = ()
+    # Il piano e il passo del turno che ha lanciato il lavoro
+    # (``current_request_context().metadata``), ``None`` fuori da un piano. Nella
+    # spec, e non solo nello status, perche un rilancio o una ripresa restano
+    # lavoro dello stesso passo, e la casa raggruppa gli aiutanti per passo.
+    plan_id: str | None = None
+    plan_step: str | None = None
 
     def __post_init__(self) -> None:
         # Il tipo si valida qui, alla costruzione della spec, e non piu in la:
@@ -244,6 +315,9 @@ class SubagentSpec:
             "session_key": self.session_key,
             "origin_message_id": self.origin_message_id,
             "quick": self.quick,
+            "taint_seed": list(self.taint_seed),
+            "plan_id": self.plan_id,
+            "plan_step": self.plan_step,
         }
 
     @classmethod
@@ -257,7 +331,7 @@ class SubagentSpec:
         temperature = raw.get("temperature")
         return cls(
             task=task,
-            label=_coerce_str(raw.get("label")) or task[:30],
+            label=_coerce_str(raw.get("label")) or default_label(task),
             agent_type=coerce_agent_type(raw.get("agent_type")),
             temperature=(
                 float(temperature)
@@ -274,6 +348,14 @@ class SubagentSpec:
                 else None
             ),
             quick=bool(raw.get("quick", False)),
+            # Un record scritto prima dell'11/10/2026 non ha la chiave: parte pulito.
+            taint_seed=tuple(
+                x for x in (raw.get("taint_seed") if isinstance(raw.get("taint_seed"), list) else [])
+                if isinstance(x, str)
+            )[:8],
+            # Chiavi aggiunte il 24/10/2026: un record precedente non le ha.
+            plan_id=raw.get("plan_id") if isinstance(raw.get("plan_id"), str) else None,
+            plan_step=raw.get("plan_step") if isinstance(raw.get("plan_step"), str) else None,
         )
 
 
@@ -335,6 +417,27 @@ class SubagentRecord:
     # aprire il file**.
     activity_events: int = 0
     activity_bytes: int = 0
+    # Quando il resoconto di questo tentativo e arrivato a Jenny e il suo turno
+    # e finito (``SubagentManager.mark_handled``), orologio di parete. La casa lo
+    # usa per togliere la scheda «si e fermato» quando Jenny ha gia deciso cosa
+    # farne: senza, la scheda restava li anche dopo che Jenny aveva ripreso il
+    # lavoro con un aiutante nuovo.
+    handled_at: float | None = None
+    # Fermato al budget con una storia ancora riprendibile (``budget`` e
+    # ``SubagentManager.continuable``), misurato una volta alla terminazione:
+    # lo snapshot si pubblica ogni pochi secondi e non deve rileggere la storia.
+    # Vale anche per un tentativo ``cancelled`` per ``shutdown`` — morto col
+    # processo o fermato da uno shutdown ordinato — che ha lasciato una
+    # fotografia della conversazione (``SubagentManager.interrupted_helpers``).
+    resumable: bool = False
+    # Riprese dopo un budget gia spese dal lineage fino a questo tentativo: dopo
+    # un riavvio e cio che fa rispettare a ``send`` il tetto delle riprese
+    # (``SubagentManager``, ``MAX_BUDGET_RESUMES``).
+    budget_resumes: int = 0
+    # Chi l'ha fermato, per un ``cancelled`` per ``user``: ``"user"`` (il tasto
+    # della casa, l'officina, ``/stop``) o ``"jenny"`` (``subagent_cancel``). La
+    # casa lo dice sulla scheda: «fermata da te», «fermata da Jenny».
+    stopped_by: str | None = None
 
     @property
     def session_key(self) -> str:
@@ -362,6 +465,10 @@ class SubagentRecord:
             "ended_at": self.ended_at,
             "activity_events": self.activity_events,
             "activity_bytes": self.activity_bytes,
+            "handled_at": self.handled_at,
+            "resumable": self.resumable,
+            "budget_resumes": self.budget_resumes,
+            "stopped_by": self.stopped_by,
         }
 
     @classmethod
@@ -398,6 +505,12 @@ class SubagentRecord:
             # digest", che e proprio la verita per quei record.
             activity_events=max(0, _coerce_int(raw.get("activity_events"), 0)),
             activity_bytes=max(0, _coerce_int(raw.get("activity_bytes"), 0)),
+            handled_at=_coerce_float(raw.get("handled_at")) or None,
+            resumable=raw.get("resumable") is True,
+            budget_resumes=max(0, _coerce_int(raw.get("budget_resumes"), 0)),
+            stopped_by=(
+                raw.get("stopped_by") if raw.get("stopped_by") in STOPPED_BY else None
+            ),
         )
 
 
@@ -443,6 +556,77 @@ class SubagentRecordStore:
             return None
         stem = safe_filename(session_key.replace(":", "_")) or "unknown"
         return root / f"{stem}.jsonl"
+
+    @property
+    def running_root(self) -> Path | None:
+        # Solo un percorso vero: il segnaposto si scrive alla *partenza* di ogni
+        # aiutante, e un workspace finto (un ``MagicMock`` nei test) diventava un
+        # percorso relativo, con cartelle ``MagicMock/mock/<id>/`` nella
+        # directory corrente.
+        if not isinstance(self._workspace, (str, Path)):
+            return None
+        return Path(self._workspace) / SUBAGENTS_DIRNAME / _RUNNING_DIRNAME
+
+    def _running_path(self, task_id: str) -> Path | None:
+        root = self.running_root
+        stem = safe_filename(task_id)
+        if root is None or not stem:
+            return None
+        return root / f"{stem}.json"
+
+    # -- tentativi in corso ---------------------------------------------------
+
+    def mark_running(self, record: SubagentRecord) -> None:
+        """Scrive il segnaposto di un tentativo che parte (``state="running"``).
+
+        Con fsync: serve proprio dopo un kill, quindi non puo restare in page
+        cache. ~1-2 KB, una volta per tentativo. Solleva sugli errori di I/O: il
+        chiamante decide (``SubagentManager`` logga e prosegue).
+        """
+        path = self._running_path(record.task_id)
+        if path is None:
+            return
+        atomic_write(path, json.dumps(record.to_dict(), ensure_ascii=False))
+
+    def clear_running(self, task_id: str) -> None:
+        """Toglie il segnaposto di *task_id*. Non solleva."""
+        path = self._running_path(task_id)
+        if path is None:
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:
+            logger.warning("Could not delete running marker {}: {}", path, e)
+
+    def load_running(self) -> list[SubagentRecord]:
+        """I segnaposti rimasti su disco, dal piu vecchio al piu nuovo.
+
+        Letto al boot, prima che parta qualunque aiutante: ogni voce e quindi un
+        tentativo morto col processo precedente. Un file illeggibile si cancella
+        (non dice piu niente di utile) e non ferma gli altri.
+        """
+        root = self.running_root
+        if root is None:
+            return []
+        try:
+            paths = sorted(root.glob("*.json"))
+        except OSError as e:
+            logger.warning("Subagent running dir unreadable {}: {}", root, e)
+            return []
+        out: list[SubagentRecord] = []
+        for path in paths:
+            try:
+                if path.stat().st_size > _MAX_RECORD_FILE_BYTES:
+                    raise ValueError("running marker too large")
+                out.append(SubagentRecord.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning("Dropping unreadable running marker {}: {}", path, e)
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        out.sort(key=lambda r: r.started_at)
+        return out
 
     # -- read ----------------------------------------------------------------
 
@@ -512,6 +696,47 @@ class SubagentRecordStore:
         return records
 
     # -- write ---------------------------------------------------------------
+
+    def mark_handled(
+        self, task_id: str, at: float, *, session_key: str | None = None,
+    ) -> SubagentRecord | None:
+        """Scrive ``handled_at`` sul record di *task_id*, se c'e e non l'ha gia.
+
+        Ritorna il record (aggiornato o gia marcato), o ``None`` se non esiste.
+        Con *session_key* legge solo il file di quella chiave; senza, li scorre
+        tutti (record di un processo precedente: il chiamante lo fa fuori dal
+        loop).
+        Il primo istante vince: un resoconto consegnato due volte non deve
+        spostare l'ora in cui Jenny l'ha avuto, e non riscrivere il file a ogni
+        doppione risparmia una scrittura con fsync su un telefono.
+        """
+        root = self.root
+        if root is None or not task_id:
+            return None
+        if session_key is not None:
+            # La chiave nota: un file solo, invece di tutti.
+            known = self._path_for(session_key)
+            paths = [known] if known is not None else []
+        else:
+            try:
+                paths = sorted(root.glob("*.jsonl"))
+            except OSError as e:
+                logger.warning("Subagent record dir unreadable {}: {}", root, e)
+                return None
+        for path in paths:
+            records = self._read_file(path)
+            found = next((r for r in records if r.task_id == task_id), None)
+            if found is None:
+                continue
+            if found.handled_at is not None:
+                return found
+            found.handled_at = at
+            payload = "".join(
+                json.dumps(r.to_dict(), ensure_ascii=False) + "\n" for r in records
+            )
+            atomic_write(path, payload)
+            return found
+        return None
 
     def append(self, record: SubagentRecord, *, now: float | None = None) -> None:
         """Aggiunge un record e riscrive il file potato (TTL + cap).

@@ -66,7 +66,7 @@ def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
     webui_stem = SessionManager.safe_key(webui_transcript_key(session_key))
     webui = get_webui_dir()
     return [
-        workspace / "sessions" / f"{stem}.jsonl",
+        project_session_file(workspace, session_key),
         webui / f"{webui_stem}.jsonl",
         webui / f"{webui_stem}.segments",
         webui / f"{webui_stem}.json",  # thread legacy, se questa installazione ne ha uno
@@ -79,6 +79,16 @@ def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
     ]
 
 
+def project_session_file(workspace: Path, session_key: str) -> Path:
+    """Il file di sessione di *session_key*: la prima delle sue tracce.
+
+    A parte da :func:`project_trace_paths` perche' chi chiede solo questo — la
+    migrazione delle wiki, all'avvio — non deve toccare la cartella della WebUI,
+    che ``get_webui_dir`` crea quando la nomina.
+    """
+    return workspace / "sessions" / f"{SessionManager.safe_key(session_key)}.jsonl"
+
+
 def recorded_wiki_id(workspace: Path, session_key: str) -> str | None:
     """L'id della wiki che *session_key* si e' annotato, o ``None``.
 
@@ -87,7 +97,7 @@ def recorded_wiki_id(workspace: Path, session_key: str) -> str | None:
     probabilmente sta per sparire, e mettere in cache una sessione in quel
     momento e' il modo di farla riscrivere subito dopo.
     """
-    path = project_trace_paths(workspace, session_key)[0]
+    path = project_session_file(workspace, session_key)
     try:
         with path.open("r", encoding="utf-8") as handle:
             first = handle.readline()

@@ -16,6 +16,7 @@ import httpx
 from loguru import logger
 
 from jenny.apps.manifest import PLACEHOLDER_RE, AppAction, AppManifest
+from jenny.security.fetch import JENNY_USER_AGENT
 from jenny.security.network import validate_app_server_target
 
 DEFAULT_TIMEOUT_S = 20.0
@@ -98,7 +99,8 @@ async def execute_http_action(
             timeout=timeout_s, follow_redirects=False
         ) as client:
             async with client.stream(
-                method, url, params=query or None, json=body
+                method, url, params=query or None, json=body,
+                headers={"User-Agent": JENNY_USER_AGENT},
             ) as response:
                 raw = bytearray()
                 async for chunk in response.aiter_bytes():

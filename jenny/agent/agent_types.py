@@ -9,8 +9,13 @@ tool, e il tool ``spawn`` per pubblicarne l'enum al modello.
 
 La separazione fra i tipi non e decorativa: ``researcher`` legge il web e NON
 puo eseguire codice, ``writer`` scrive testo e NON ha rete. Chi ha letto pagine
-non fidate non e lo stesso che poi esegue codice — e un confine di sicurezza, e
-allargare una di queste due allowlist lo cancella.
+non fidate non e lo stesso che poi esegue codice, e allargare una di queste due
+allowlist lo cancella. Ma non e il confine che regge da solo: ``operator`` ha
+tutto lo scope, e ``python_exec`` porta la rete a ``coder`` e ``analyst``. Il
+confine vero e la politica per lavoro di ``security.subagent_policy`` (dall'11/10/2026),
+che non toglie tool a nessun tipo: blocca l'uscita dei dati solo all'incrocio
+fra contenuto non fidato e dati personali, e mette in bozza le scritture ai file
+che Jenny carica da sola.
 """
 
 from __future__ import annotations
@@ -133,8 +138,10 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
         max_iterations=120,
         requires=frozenset(("read_file", "write_file")),
     ),
-    # Calcolo, dati, grafici. Nessuna rete: gira codice, quindi non deve poter
-    # anche scaricare cio che esegue.
+    # Calcolo, dati, grafici. Nessun tool del web; la rete c'e' comunque, con
+    # ``http_get``/``http_post`` di ``python_exec`` (fino all'11/10/2026 questo
+    # commento diceva «nessuna rete», e non era vero). Il confine che regge e'
+    # la politica per lavoro di ``security.subagent_policy``, non l'allowlist.
     AgentType(
         name="analyst",
         tools=frozenset(("python_exec", *_FS_READ, "write_file")),
@@ -172,6 +179,45 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
         scopes=("subagent", "remote"),
         requires=frozenset(("ssh_hosts", "ssh_exec", "ssh_job", "ssh_transfer")),
     ),
+    # Scrive e prova le app dell'utente: il tool ``app`` nella sua faccia di
+    # costruttore (scope ``apps``), che scrive solo bozze e le prova sui dati veri;
+    # a pubblicarle e' l'agente principale. Nato il 07/10/2026, per decisione
+    # dell'utente: l'orchestratore scriveva file interi dentro argomenti JSON, e
+    # restavano nella conversazione del quaderno.
+    #
+    # Niente web e niente ``python_exec``: il lettore si prova con ``app run``,
+    # nel suo ambiente vero (``ctx.http``), e chi ha letto pagine non fidate non
+    # e' chi scrive codice che gira da solo ogni mezz'ora. Lo scope a parte e'
+    # cio' che tiene ``app`` fuori da ``operator``, come gli ``ssh_*``.
+    AgentType(
+        name="app-builder",
+        tools=frozenset(("app", *_FS_READ, "grep")),
+        temperature=0.1,
+        max_iterations=40,
+        scopes=("subagent", "apps"),
+        requires=frozenset(("app",)),
+    ),
+    # Cambia un quaderno come l'ha chiesto l'utente: pagine, mappa e bacheca (il
+    # tool ``board``, scope ``notebook``), cassetti compresi. Nato il 09/10/2026,
+    # per decisione dell'utente: un quaderno si modifica tutto su richiesta, da
+    # un editore solo, e il giardiniere resta a fare manutenzione e proposte. Le
+    # sue scritture sulla bacheca valgono come dell'utente, quindi il
+    # giardiniere non le disfa.
+    #
+    # Niente rete e niente ``python_exec``, come ``writer``: chi scrive il
+    # quaderno non va a prendersi contenuto non fidato. Lo scope a parte tiene
+    # ``board`` fuori da ``operator``, come ``app`` e gli ``ssh_*``. Il tool
+    # ``notebook`` (la faccia dello scope ``notebook``) gli dà le letture in
+    # blocco e ``remove_pages``: dal 24/10/2026, dopo una prova in cui l'editore
+    # ha fatto 39 ``read_file`` uno per iterazione e non poteva cancellare.
+    AgentType(
+        name="notebook-editor",
+        tools=frozenset(("board", "notebook", *_FS_ALL, "apply_patch", "grep")),
+        temperature=0.2,
+        max_iterations=60,
+        scopes=("subagent", "notebook"),
+        requires=frozenset(("board",)),
+    ),
     # Fallback per cio che non rientra negli altri: l'intero scope ``subagent``,
     # cioe esattamente il subagent generico che esisteva prima dei tipi. Resta
     # ``tools=None`` di proposito, ed e il motivo per cui i tool SSH stanno in
@@ -182,6 +228,16 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
 
 AGENT_TYPES: dict[str, AgentType] = {t.name: t for t in _AGENT_TYPES}
 AGENT_TYPE_NAMES: tuple[str, ...] = tuple(AGENT_TYPES)
+
+# Gli aiutanti che un turno di pianificazione può lanciare: solo l'editore, che
+# legge pagine, bacheca e fonti — l'inventario di un quaderno grande — e in un
+# turno in sola lettura non scrive niente (eredita lo scope). Non ``researcher``
+# né i tipi con la rete (``operator``, e ``python_exec`` per ``coder`` e
+# ``analyst``): il loro risultato porterebbe contenuto del web nella sessione,
+# e ogni aiutante lanciato dopo dai passi del piano nascerebbe contaminato, con
+# le scritture su ``AGENTS.md`` in bozza a metà piano. Cosa cercare lo decide la
+# pianificazione; cercarlo è un passo ``research`` del piano.
+PLANNING_HELPER_TYPES: frozenset[str] = frozenset({"notebook-editor"})
 
 
 def get_agent_type(name: str | None) -> AgentType:

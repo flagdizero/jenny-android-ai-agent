@@ -34,7 +34,10 @@ class App {
     this._threadFailed = false;
     this._threadReads = 0;
     this.activity = { stop: () => this.log.push('activity.stop') };
-    this.subagents = { load: () => this.log.push('subagents.load') };
+    this.work = {
+      loadSubagents: () => this.log.push('work.loadSubagents'),
+      loadWork: () => this.log.push('work.loadWork'),
+    };
     this.jenny = { _releaseTrackedTurn: () => this.log.push('jenny.release') };
     this.gate = null;
     this.chat = {
@@ -70,21 +73,23 @@ def test_the_first_open_is_the_boot_and_touches_nothing() -> None:
       const app = new App();
       app._onWireOpen();
       await tick();
-      // Gli agenti si leggono anche al primo giro: e' la loro lettura d'avvio.
-      assert.deepEqual(app.log, ['wire:true', 'subagents.load']);
+      // Chi lavora si legge anche al primo giro: e' la sua lettura d'avvio.
+      assert.deepEqual(app.log, ['wire:true', 'work.loadSubagents', 'work.loadWork']);
       assert.equal(app._running, true);
     """)
 
 
 def test_every_open_rereads_the_agents_at_work() -> None:
-    """A socket chiuso le transizioni dei subagent non arrivano, e nessuno le
-    ridice: il chip della casa si rilegge a ogni apertura."""
+    """A socket chiuso le transizioni dei subagent e dei lavori lunghi non
+    arrivano, e nessuno le ridice: le bolle della casa si rileggono a ogni
+    apertura."""
     _run("""
       const app = new App();
       app._onWireOpen();
       app._onWireOpen();
       await tick();
-      assert.equal(app.log.filter((x) => x === 'subagents.load').length, 2, app.log.join(','));
+      assert.equal(app.log.filter((x) => x === 'work.loadSubagents').length, 2, app.log.join(','));
+      assert.equal(app.log.filter((x) => x === 'work.loadWork').length, 2, app.log.join(','));
     """)
 
 

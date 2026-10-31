@@ -110,7 +110,7 @@ const classes = () => {
            toggle: (c, on) => (on ?? !s.has(c)) ? s.add(c) : s.delete(c), contains: (c) => s.has(c) };
 };
 
-function fly(vw, path, { out = false } = {}) {
+function fly(vw, path, { out = false, squash = false } = {}) {
   globalThis.innerWidth = vw;
   globalThis.innerHeight = 640;
   const size = 120;
@@ -126,9 +126,10 @@ function fly(vw, path, { out = false } = {}) {
   // Ogni transform scritto si registra: quello che conta è l'ultimo non vuoto,
   // cioè l'ultimo passo disegnato prima che endFlight() lo azzeri.
   let last = '';
+  const drawn = [];
   const style = {};
   Object.defineProperty(style, 'transform', {
-    get: () => '', set: (v) => { if (v) last = v; },
+    get: () => '', set: (v) => { if (v) { last = v; drawn.push(v); } },
   });
   const fly = { style };
   const setOutCalls = [];
@@ -139,6 +140,7 @@ function fly(vw, path, { out = false } = {}) {
     isOut: () => out,
     setOut: (v) => setOutCalls.push(v),
     onFlightEnd: () => { ended = true; },
+    squash: () => squash,
   });
   const pump = (n) => {
     for (let i = 0; i < n && frames.length; i++) {
@@ -157,7 +159,7 @@ function fly(vw, path, { out = false } = {}) {
   for (let i = 0; i < 2000 && !ended; i++) pump(1);
   assert.ok(ended, 'il volo non è mai finito');
   const [tx] = (last.match(/translate\(([-\d.]+)px/) || [, 'NaN']).slice(1).map(Number);
-  return { tx, ms: clock - releasedAt, setOutCalls };
+  return { tx, ms: clock - releasedAt, setOutCalls, drawn };
 }
 """
 
@@ -197,4 +199,46 @@ def test_pulling_inward_a_little_still_opens_her() -> None:
     _run_flight("""
 const r = fly(575, [[575 - 30, 450], [575 - 90, 450], [575 - 110, 450]]);
 assert.deepEqual(r.setOutCalls, [true]);
+""")
+
+
+@node
+def test_pulled_toward_the_edge_she_stays_out() -> None:
+    """Fuori, tirarla verso il bordo la rimetteva via — e con la chat aperta
+    sopra una pagina la chiudeva. Adesso torna dove stava."""
+    _run_flight("""
+const r = fly(575, [[575 - 60, 450], [575 - 20, 450], [575 - 5, 450]], { out: true });
+assert.ok(Math.abs(r.tx) < 6, `si è fermata a ${r.tx}px dal suo posto`);
+assert.deepEqual(r.setOutCalls, []);
+""")
+
+
+@node
+def test_flung_across_the_screen_she_walks_back_out() -> None:
+    """Lasciata nella metà sinistra mentre era fuori: torna fuori, non al bordo."""
+    _run_flight("""
+const r = fly(575, [[575 - 60, 450], [300, 400], [40, 380]], { out: true });
+assert.ok(Math.abs(r.tx) < 6, `si è fermata a ${r.tx}px dal suo posto`);
+assert.deepEqual(r.setOutCalls, []);
+""")
+
+
+@node
+def test_squash_and_stretch_leaves_the_flight_where_it_was() -> None:
+    """La deformazione si disegna sopra la fisica e non la tocca: stesso arrivo,
+    stessa durata, stessa decisione. E resta sugli assi del disegno: ogni passo
+    comincia dalla posizione, e nessuna rotazione viene dopo una scala."""
+    _run_flight("""
+const path = [[575 - 30, 450], [300, 300], [200, 120], [260, 100]];
+const plain = fly(575, path);
+const soft = fly(575, path, { squash: true });
+assert.equal(soft.tx, plain.tx);
+assert.equal(soft.ms, plain.ms);
+assert.deepEqual(soft.setOutCalls, plain.setOutCalls);
+assert.ok(plain.drawn.every((t) => !t.includes('scale(')), 'senza deformazione non si deforma');
+assert.ok(soft.drawn.some((t) => t.includes('scale(')), 'non si e mai deformata');
+for (const t of soft.drawn) {
+  assert.match(t, /^translate\\(/, t);
+  assert.doesNotMatch(t, /scale\\([^)]*\\).*rotate\\(/, t);
+}
 """)

@@ -247,6 +247,18 @@ class Tool(ABC):
                 return False
             return val
 
+        if t in ("array", "object") and isinstance(val, str):
+            # Il caso inverso: una lista o un oggetto mandati come testo JSON
+            # (``files="{...}"``) diventano quello che il modello intendeva, invece di
+            # un rifiuto che gli costa un giro per riscrivere la stessa cosa.
+            try:
+                parsed = json.loads(val)
+            except ValueError:
+                return val
+            if isinstance(parsed, list if t == "array" else dict):
+                return self._cast_value(parsed, schema)
+            return val
+
         if t == "array" and isinstance(val, list):
             items = schema.get("items")
             return [self._cast_value(x, items) for x in val] if items else val

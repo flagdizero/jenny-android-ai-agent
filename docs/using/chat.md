@@ -34,13 +34,13 @@ Tapping the identity row opens a "Session Info" popover with details such as the
 
 ### There is no stop button in the Console
 
-The Console has no dedicated stop/cancel button (in the home, the send button turns into **Stop** while a turn runs and sends `/stop` for you). To interrupt a turn that is in progress here, pick **`/stop`** from the Commands chip, or send it as a chat message. `/stop` is processed with priority even while the agent is mid-turn — it doesn't wait in line behind whatever the model is doing — and it always ends the turn cleanly (you'll see something like "Stopped 1 task(s)." or "No active task to stop."). See [Slash commands](slash-commands.md) for the rest of the command list.
+The Console has no dedicated stop/cancel button (in the home, the send button turns into **Stop** while a turn runs and sends `/stop` for you). To interrupt a turn that is in progress here, pick **`/stop`** from the Commands chip, or send it as a chat message. `/stop` is processed with priority even while the agent is mid-turn — it doesn't wait in line behind whatever the model is doing — and it always ends the turn cleanly (you'll see a short reply saying it stopped, or that there was nothing to stop). Mini-mes (subagents) already working in the background keep going — stop them from their own bubbles, or with `/stop all`. See [Slash commands](slash-commands.md) for the rest of the command list.
 
 ## Anatomy of a response
 
 A reply is built incrementally, not delivered all at once:
 
-<p align="center"><img src="../img/workshop-console.png" alt="A reply in the Console with its tool pills (one failed call, one successful) and the Show thinking block" width="300"></p>
+<p align="center"><img src="../img/workshop-console.png" alt="A reply in the Console with the Show thinking block and the pill of the app tool it called, above a table" width="300"></p>
 
 - **Streaming text.** The response text is re-rendered as markdown as it arrives.
 - **Tool pills.** When the agent uses a tool, a small pill appears with the tool's name and a spinner; the spinner turns into a checkmark or an X depending on whether the call succeeded. Tap a pill to expand it and see the tool's result.
@@ -56,7 +56,7 @@ A reply is built incrementally, not delivered all at once:
 
 ## The Subagents panel
 
-Most real work is done by subagents rather than by the agent you're typing to (see [Scheduling and proactivity](scheduling.md#subagents-spawn)). The turn that starts one does not wait for it: Jenny tells you the job started and the turn ends, so you can keep talking; the result comes back later as a message of its own. Without something on screen, that would mean minutes of silence with no way to tell a working job from a stuck one. The Subagents panel is that something: a strip in the workshop that appears just above the message box whenever background work exists. The home shows the short version — a chip saying how many agents are working for that conversation — and pressing and holding it opens the workshop.
+Most real work is done by subagents rather than by the agent you're typing to (see [Scheduling and proactivity](scheduling.md#subagents-spawn)). The turn that starts one does not wait for it: Jenny tells you the job started and the turn ends, so you can keep talking; the result comes back later as a message of its own. Without something on screen, that would mean minutes of silence with no way to tell a working job from a stuck one. The Subagents panel is that something: a strip in the workshop, titled **Mini-mes**, that appears just above the message box whenever background work exists. The home shows the short version — a bubble in the thread for the conversation's mini-mes, as Jenny calls her subagents — and pressing and holding it opens the workshop.
 
 **It shows live work, not history.** When nothing is running the panel isn't collapsed, it's absent — the header alone would cost space above the composer for no information. A card that reaches a terminal state stays for the rest of the current turn so you can see the transition, then disappears when the turn ends. Nothing from a past turn is ever shown, including after a reload.
 

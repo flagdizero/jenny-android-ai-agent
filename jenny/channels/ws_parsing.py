@@ -14,32 +14,12 @@ from typing import Any
 from websockets.http11 import Request as WsRequest
 
 
-def _parse_inbound_payload(raw: str) -> str | None:
-    """Parse a client frame into text; return None for empty or unrecognized content."""
-    text = raw.strip()
-    if not text:
-        return None
-    if text.startswith("{"):
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError:
-            return text
-        if isinstance(data, dict):
-            for key in ("content", "text", "message"):
-                value = data.get(key)
-                if isinstance(value, str) and value.strip():
-                    return value
-            return None
-        return None
-    return text
-
-
 def _parse_envelope(raw: str) -> dict[str, Any] | None:
     """Return a typed envelope dict if the frame is a new-style JSON envelope, else None.
 
     A frame qualifies when it parses as a JSON object with a string ``type`` field.
-    Legacy frames (plain text, or ``{"content": ...}`` without ``type``) return None;
-    callers should fall back to :func:`_parse_inbound_payload` for those.
+    Anything else (plain text, ``{"content": ...}`` without ``type``) returns None,
+    and the channel answers it with an ``untyped_frame`` error.
     """
     text = raw.strip()
     if not text.startswith("{"):

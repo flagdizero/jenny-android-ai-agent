@@ -1,0 +1,1709 @@
+{
+ "rates": {
+  "abstains_after_search|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "says_it_does_not_know": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "abstains_after_search|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "says_it_does_not_know": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "abstains_when_unknown|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "says_it_does_not_know": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "abstains_when_unknown|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "says_it_does_not_know": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "ambiguous_app_asks_first|claude-haiku-5-5|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "ambiguous_app_asks_first|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "board_change_goes_to_notebook_editor|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_journal_only": [
+     3,
+     3
+    ],
+    "notebook_editor": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "board_change_goes_to_notebook_editor|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_journal_only": [
+     3,
+     3
+    ],
+    "notebook_editor": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "compaction_keeps_task_state|claude-haiku-5-5|normal": {
+   "checks": {
+    "compacted": [
+     4,
+     4
+    ],
+    "early_flags_kept": [
+     4,
+     4
+    ],
+    "late_flag_kept": [
+     4,
+     4
+    ],
+    "no_unknown_tool": [
+     4,
+     4
+    ],
+    "turn_finished": [
+     4,
+     4
+    ]
+   },
+   "runs": 4
+  },
+  "compaction_keeps_task_state|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "compacted": [
+     4,
+     4
+    ],
+    "early_flags_kept": [
+     4,
+     4
+    ],
+    "late_flag_kept": [
+     4,
+     4
+    ],
+    "no_unknown_tool": [
+     4,
+     4
+    ],
+    "turn_finished": [
+     4,
+     4
+    ]
+   },
+   "runs": 4
+  },
+  "conditional_check_is_a_monitor|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_reminder": [
+     3,
+     3
+    ],
+    "scheduled_somewhere": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "conditional_check_is_a_monitor|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_reminder": [
+     3,
+     3
+    ],
+    "scheduled_somewhere": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "consolidator_skips_known_keeps_new|claude-haiku-5-5|normal": {
+   "checks": {
+    "archive_written": [
+     3,
+     3
+    ],
+    "known_fact_skipped": [
+     3,
+     3
+    ],
+    "new_fact_kept": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "consolidator_skips_known_keeps_new|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "archive_written": [
+     3,
+     3
+    ],
+    "known_fact_skipped": [
+     3,
+     3
+    ],
+    "new_fact_kept": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_frees_space_and_writes|claude-haiku-5-5|normal": {
+   "checks": {
+    "cursor_advanced": [
+     3,
+     3
+    ],
+    "fact_landed": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_frees_space_and_writes|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "cursor_advanced": [
+     3,
+     3
+    ],
+    "fact_landed": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_marks_retraction|claude-haiku-5-5|calibrated": {
+   "checks": {
+    "false_fact_gone": [
+     3,
+     3
+    ],
+    "marked_retracted": [
+     0,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_marks_retraction|claude-haiku-5-5|normal": {
+   "checks": {
+    "false_fact_gone": [
+     5,
+     5
+    ],
+    "marked_retracted": [
+     5,
+     5
+    ],
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "dream_marks_retraction|deepseek-v4.1-flash|calibrated": {
+   "checks": {
+    "false_fact_gone": [
+     3,
+     3
+    ],
+    "marked_retracted": [
+     0,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_marks_retraction|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "false_fact_gone": [
+     5,
+     5
+    ],
+    "marked_retracted": [
+     5,
+     5
+    ],
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "dream_replace_links_versions|claude-haiku-5-5|normal": {
+   "checks": {
+    "linked_to_successor": [
+     3,
+     3
+    ],
+    "new_fact_live": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "old_fact_archived": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "dream_replace_links_versions|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "linked_to_successor": [
+     3,
+     3
+    ],
+    "new_fact_live": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "old_fact_archived": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "english_reply_over_italian_content|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "reply_in_english": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "english_reply_over_italian_content|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "reply_in_english": [
+     3,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "follow_up_goes_back_to_the_subagent|claude-haiku-5-5|normal": {
+   "checks": {
+    "delegated_first": [
+     5,
+     5
+    ],
+    "no_fresh_spawn": [
+     5,
+     5
+    ],
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "subagent_send": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "follow_up_goes_back_to_the_subagent|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "delegated_first": [
+     5,
+     5
+    ],
+    "no_fresh_spawn": [
+     5,
+     5
+    ],
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "subagent_send": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "forget_names_dream|claude-haiku-5-5|normal": {
+   "checks": {
+    "memory_untouched": [
+     5,
+     5
+    ],
+    "names_dream": [
+     5,
+     5
+    ],
+    "no_done_claim": [
+     5,
+     5
+    ],
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "forget_names_dream|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "memory_untouched": [
+     4,
+     4
+    ],
+    "names_dream": [
+     4,
+     4
+    ],
+    "no_done_claim": [
+     0,
+     4
+    ],
+    "no_unknown_tool": [
+     4,
+     4
+    ],
+    "turn_finished": [
+     4,
+     4
+    ]
+   },
+   "runs": 4
+  },
+  "goal_that_must_ask_stays_open|claude-haiku-5-5|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "goal_registered": [
+     3,
+     3
+    ],
+    "no_false_close": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "goal_that_must_ask_stays_open|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "asks": [
+     3,
+     3
+    ],
+    "goal_registered": [
+     3,
+     3
+    ],
+    "no_false_close": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "greeting_after_notebook_no_recap|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "greeting_after_notebook_no_recap|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "greeting_asks_one_pending_thing|claude-haiku-5-5|normal": {
+   "checks": {
+    "asks_about_one": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_list": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "greeting_asks_one_pending_thing|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "asks_about_one": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_a_list": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_alarm_speaks_once|claude-haiku-5-5|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_template_leak": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_message": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_alarm_speaks_once|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_template_leak": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_message": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_quiet_run_stays_silent|claude-haiku-5-5|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_message": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "read_the_file": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "heartbeat_quiet_run_stays_silent|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "heartbeat_ran": [
+     3,
+     3
+    ],
+    "no_message": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "read_the_file": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "knowledge_update_newer_wins|claude-haiku-5-5|normal": {
+   "checks": {
+    "newer_fact_wins": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "knowledge_update_newer_wins|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "newer_fact_wins": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "maybe_done_is_not_reminded|claude-haiku-5-5|normal": {
+   "checks": {
+    "maybe_done_not_a_todo": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "open_one_listed": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "maybe_done_is_not_reminded|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "maybe_done_not_a_todo": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "open_one_listed": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "new_subject_is_not_a_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_notebook_created": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_filed_in_a_drawer": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "new_subject_is_not_a_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_notebook_created": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "not_filed_in_a_drawer": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_chatter_stays_out|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_journal_write": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_chatter_stays_out|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_journal_write": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_event_reaches_personal|claude-haiku-5-5|normal": {
+   "checks": {
+    "knew_where": [
+     3,
+     3
+    ],
+    "knows_it": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ],
+    "without_digging": [
+     2,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_event_reaches_personal|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "knew_where": [
+     3,
+     3
+    ],
+    "knows_it": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ],
+    "without_digging": [
+     2,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_fact_goes_to_journal|claude-haiku-5-5|normal": {
+   "checks": {
+    "fact_in_journal": [
+     3,
+     3
+    ],
+    "journal_append_used": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_fact_goes_to_journal|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "fact_in_journal": [
+     3,
+     3
+    ],
+    "journal_append_used": [
+     3,
+     3
+    ],
+    "no_spawn": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_topic_stays_out|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_topic_stays_out|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "notebook_stays_out": [
+     3,
+     3
+    ],
+    "prelude_journaled": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "passing_fact_goes_to_its_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     3,
+     3
+    ],
+    "no_move_for_a_passing_fact": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "quiet_filing": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "passing_fact_goes_to_its_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     3,
+     3
+    ],
+    "no_move_for_a_passing_fact": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "quiet_filing": [
+     2,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "pending_thread_stays_out_mid_topic|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "thread_stays_out": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "pending_thread_stays_out_mid_topic|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "thread_stays_out": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "personal_fact_stays_personal|claude-haiku-5-5|normal": {
+   "checks": {
+    "health_not_in_the_notebook": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "personal_fact_stays_personal|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "health_not_in_the_notebook": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "plain_reminder|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_heartbeat_edit": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_reminder": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "plain_reminder|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_heartbeat_edit": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "one_reminder": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "recall_across_languages|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "recall_called": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_across_languages|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "recall_called": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_deep_archive|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_deep_archive|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "searched_memory": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_history_deep|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     1,
+     5
+    ],
+    "searched_history": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_history_deep|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "nonce_in_reply": [
+     5,
+     5
+    ],
+    "searched_history": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_retracted|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "retracted_not_asserted": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_retracted|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "retracted_not_asserted": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_superseded|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "older_version_found": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "recall_superseded|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     5,
+     5
+    ],
+    "older_version_found": [
+     5,
+     5
+    ],
+    "turn_finished": [
+     5,
+     5
+    ]
+   },
+   "runs": 5
+  },
+  "research_goes_to_its_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     1,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "research_goes_to_its_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "filed_in_its_notebook": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "temporal_past_state|claude-haiku-5-5|normal": {
+   "checks": {
+    "dated_answer": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "temporal_past_state|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "dated_answer": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "tool_error_is_owned|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "no_user_fix_advice": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "tool_error_is_owned|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "no_user_fix_advice": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "web_task_goes_to_researcher|claude-haiku-5-5|normal": {
+   "checks": {
+    "acknowledged": [
+     3,
+     3
+    ],
+    "no_polling": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "researcher": [
+     3,
+     3
+    ],
+    "spawned": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "web_task_goes_to_researcher|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "acknowledged": [
+     3,
+     3
+    ],
+    "no_polling": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "researcher": [
+     3,
+     3
+    ],
+    "spawned": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "work_session_offers_the_notebook|claude-haiku-5-5|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "offers_once": [
+     3,
+     3
+    ],
+    "offers_the_notebook": [
+     0,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "work_session_offers_the_notebook|deepseek-v4.1-flash|normal": {
+   "checks": {
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "offers_once": [
+     3,
+     3
+    ],
+    "offers_the_notebook": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  }
+ },
+ "updated": "2026-10-12"
+}

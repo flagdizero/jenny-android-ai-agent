@@ -231,6 +231,23 @@ def _quiet_enough(sessions: Any, key: str, now: datetime, idle_min: int) -> bool
     return age is None or age >= idle_min * 60
 
 
+def _plan_held_notebooks(workspace: Path) -> set[str]:
+    """I quaderni tenuti da un piano partito (``jenny/plan/model.py::HELD_STATUSES``).
+
+    Dal disco e non dal driver: il giardiniere gira dal dispatcher del cron,
+    che il driver non lo conosce, e ``plan.json`` è comunque l'unica fonte.
+    """
+    try:
+        from jenny.plan.model import HELD_STATUSES
+        from jenny.plan.store import PlanStore
+
+        plans = PlanStore.for_workspace(workspace).list_all()
+    except Exception:  # noqa: BLE001 — la lettura dei piani non deve fermare il tick
+        logger.warning("gardener: plans unreadable, no notebook skipped for a plan")
+        return set()
+    return {p.notebook for p in plans if p.status in HELD_STATUSES}
+
+
 def pick_project(
     workspace: Path,
     *,
@@ -253,8 +270,14 @@ def pick_project(
     """
     at = now or datetime.now()
     candidates: list[GardenerPick] = []
+    held = _plan_held_notebooks(workspace)
 
     for name in sorted(discover_wiki_roots(workspace / wikis_dir_name)):
+        if name in held:
+            # Un piano a lista partito tiene il quaderno: le scritture del
+            # giardiniere finirebbero nelle foto come se le avesse fatte il piano,
+            # e il ritorno indietro le disferebbe. Si giardina a piano chiuso.
+            continue
         store = GardenerStore.for_project(workspace, name, wikis_dir_name=wikis_dir_name)
         if store is None:
             continue
@@ -284,10 +307,23 @@ def pick_project(
             # docstring del modulo): questo apre un file in più, e lo apre solo per
             # i progetti che sono già arrivati fin qui e non hanno niente da
             # promuovere.
-            if not store.map_needs_pruning(state):
+            if store.map_needs_pruning(state):
+                candidates.append(
+                    GardenerPick(store=store, delta=delta, reason="map",
+                                 last_run_at=state.last_run_at, last_touch=state.last_touch)
+                )
+                continue
+            # **La terza ragione: la bacheca.** Una prima bacheca da proporre,
+            # cassetti con le pagine cambiate, una correzione fatta dal cassetto,
+            # una pagina chiesta in bacheca. La domanda e' la stessa che si fa la
+            # passata (``board_pass.board_needs_pass``), freno compreso, e sta
+            # per ultima perche' apre piu' file di tutte.
+            from jenny.agent.board_pass import board_needs_pass
+
+            if not board_needs_pass(store.root, store.workspace):
                 continue
             candidates.append(
-                GardenerPick(store=store, delta=delta, reason="map",
+                GardenerPick(store=store, delta=delta, reason="board",
                              last_run_at=state.last_run_at, last_touch=state.last_touch)
             )
             continue

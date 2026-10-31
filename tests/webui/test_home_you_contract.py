@@ -623,14 +623,6 @@ def test_a_theme_chip_writes_its_name_in_the_page_ink() -> None:
     assert "var(--text-muted)" in _rule(css, ".home-themes")
 
 
-def test_the_lit_count_is_not_faded() -> None:
-    """Il numero sulla linguetta accesa: con l'opacita' 0,75 sopra, il suo
-    contrasto e' quello di `--on-accent` sbiadito, e nessun banco lo misura."""
-    body = _rule(CSS.read_text(encoding="utf-8"), ".home-view-seg.is-on .home-view-count")
-    assert "var(--on-accent)" in body
-    assert "opacity" not in body
-
-
 # ── «Chi risponde» ──────────────────────────────────────────────────────────
 
 
@@ -804,13 +796,19 @@ def test_the_local_history_and_the_exported_backup_are_two_things() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         backup = data["home"]["backup"]
-        for key in ("title", "never", "neverLong", "last", "export", "import",
-                    "exportHint", "importHint", "snapshots", "snapshotsOff"):
+        for key in ("title", "never"):
             assert backup.get(key, "").strip(), f"home.backup.{key} manca in {locale}.json"
-        assert "{when}" in backup["last"], "la riga non interpola la data"
-        assert backup["snapshots"] != backup["snapshotsOff"], (
+        more = backup["more"]
+        for key in ("title", "file", "fileSub", "fileLast", "restore", "restoreSub"):
+            assert more.get(key, "").strip(), f"home.backup.more.{key} manca in {locale}.json"
+        assert "{when}" in more["fileLast"], "la riga del file non interpola la data"
+        history = backup["history"]
+        for key in ("title", "sub", "off", "loading", "showAll", "today", "yesterday", "weekday"):
+            assert history.get(key, "").strip(), f"home.backup.history.{key} manca in {locale}.json"
+        assert history["sub"] != history["off"], (
             "la storia locale accesa e spenta si leggono uguali"
         )
+        assert history["sub"] != more["fileSub"], "la storia si legge come il backup"
 
 
 def test_the_house_takes_its_typefaces_from_the_theme() -> None:

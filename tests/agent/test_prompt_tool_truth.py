@@ -159,3 +159,20 @@ def test_no_inventory_when_the_caller_does_not_offer_one(workspace):
     )
 
     assert "# The tools you actually have" not in prompt
+
+
+def _skills_section(workspace: Path, *, orchestrator: bool, tools: list[str]) -> str:
+    prompt = ContextBuilder(workspace, orchestrator=orchestrator).build_system_prompt(
+        include_memory_recent_history=False, available_tools=tools,
+    )
+    return prompt.split("\n# Skills\n", 1)[1].split("\n---\n", 1)[0]
+
+
+def test_who_delegates_does_not_see_the_app_builders_guide(workspace):
+    """Il 28/10/2026 sul s22 Jenny leggeva ``app-creator`` e ne seguiva le fasi a
+    domande prima di ogni ``spawn`` dell'``app-builder``: 30-40 s e una conferma in piu'."""
+    orchestrating = _skills_section(workspace, orchestrator=True, tools=["read_file", "spawn"])
+    assert "**cron**" in orchestrating
+    assert "app-creator" not in orchestrating
+    alone = _skills_section(workspace, orchestrator=False, tools=["read_file", "app"])
+    assert "**app-creator**" in alone

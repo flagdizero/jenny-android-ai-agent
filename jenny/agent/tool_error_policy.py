@@ -28,7 +28,7 @@ SSRF_BOUNDARY_NOTE: str = (
     "alternate DNS, redirects, proxies, or another tool. Ask the user for "
     "local files, logs, screenshots, or an explicit safe public URL instead. "
     "If the user explicitly trusts this private URL, ask them to whitelist "
-    "the exact IP/CIDR via tools.ssrfWhitelist."
+    "the exact IP/CIDR via security.ssrfWhitelist."
 )
 
 # Suffisso appeso agli errori tool per invitare il modello a cambiare approccio.

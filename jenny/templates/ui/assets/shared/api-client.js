@@ -52,6 +52,13 @@ class ApiClient {
     }
   }
 
+  /** Le estensioni di questa build (`jenny/extensions.py`), dalla risposta di
+   *  `/webui/bootstrap`: `[{name, entry, css, i18n}]`. Vuoto prima del bootstrap. */
+  extensions() {
+    const list = this._bootstrapInfo?.extensions;
+    return Array.isArray(list) ? list : [];
+  }
+
   async _fetch(url, opts = {}) {
     if (!this._secret) await this.bootstrap();
     const headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${this._secret}` };
@@ -70,6 +77,33 @@ class ApiClient {
   // Ultimo body di /webui/bootstrap ({model_name, provider, ...}), o null se
   // il bootstrap non è ancora avvenuto.
   getBootstrapInfo() { return this._bootstrapInfo; }
+
+  /** `/webui/bootstrap` riletto adesso, senza toccare lo stato della pagina:
+   *  quel che il gateway di *ora* serve, da confrontare con quello con cui la
+   *  pagina è partita (`shared/update-watch.js`). `null` se non risponde. */
+  async freshBootstrapInfo() {
+    const headers = {};
+    if (this._bootstrapSecret) headers['X-Jenny-Auth'] = this._bootstrapSecret;
+    try {
+      const res = await fetch('/webui/bootstrap', { headers, cache: 'no-store' });
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Aperta da un altro dispositivo (il Mac via Tailscale)? Lo dice il server
+   *  nel bootstrap: non `!window.JennyNative`, che e' vero anche in un banco di
+   *  prova sul Mac e non dice da dove arrivi. Da fuori la pagina nasconde
+   *  quel che ha senso solo col telefono in mano (v. `jenny/webui/phone_only.py`). */
+  async isRemote() {
+    try {
+      await this.bootstrap();
+    } catch {
+      return false;
+    }
+    return !!this._bootstrapInfo?.remote;
+  }
 
   // Reload the page while re-injecting the bootstrap secret into the URL
   // fragment. A plain window.location.reload() would drop the secret: the
@@ -294,6 +328,63 @@ class ApiClient {
     return rpc.createAudit({ wiki, target, selStart, selEnd, comment });
   }
 
+  /** La bacheca di un quaderno, gia' risolta dal server: schede coi loro
+   *  segnali, post-it delle attese, fili, busta, «dall'ultima volta». */
+  async getBoard(wiki) {
+    const res = await this._fetch(`/api/board?wiki=${encodeURIComponent(wiki)}`);
+    if (!res.ok) {
+      const err = new Error(`Board failed: ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
+  /** Il cassetto di una scheda: riassunto per sezioni, sezioni dell'utente,
+   *  attese, fili, correzioni in corso. */
+  async getBoardCard(wiki, card) {
+    const params = new URLSearchParams({ wiki, card });
+    const res = await this._fetch(`/api/board/card?${params}`);
+    if (!res.ok) {
+      const err = new Error(`Board card failed: ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
+  /** Una foto di una sezione, come `blob:`: un `<img src>` non porterebbe il
+   *  token, quindi la si chiede da qui e se ne fa un indirizzo locale. */
+  async getBoardPhotoUrl(wiki, path) {
+    const params = new URLSearchParams({ wiki, path });
+    const res = await this._fetch(`/api/board/photo?${params}`);
+    if (!res.ok) throw new Error(`Board photo failed: ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  }
+
+  /** Un'immagine di una Jenny App (il blocco Foto della sua striscia), come
+   *  `blob:`: la rotta vuole il segreto, che un `<img src>` non porterebbe. */
+  async getAppMediaUrl(slug, name) {
+    const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/media/${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error(`App media failed: ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  }
+
+  /** Esegue un'azione di una Jenny App da fuori della sua cornice: i verbi di
+   *  una sezione mini app nel cassetto. Il segreto della SPA vale anche sulle
+   *  rotte delle app (`check_app_secret`). */
+  async runAppAction(slug, name, params = {}) {
+    const url = `/api/apps/${encodeURIComponent(slug)}/actions/${encodeURIComponent(name)}`
+      + `?params=${encodeURIComponent(JSON.stringify(params))}`;
+    const res = await this._fetch(url);
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* corpo non JSON */ }
+    if (!res.ok || (data && data.ok === false)) {
+      throw new Error((data && data.error) || `${name}: HTTP ${res.status}`);
+    }
+    return data;
+  }
+
   async getPage({ wiki, page } = {}) {
     const params = new URLSearchParams();
     if (wiki) params.set('wiki', wiki);
@@ -481,6 +572,20 @@ class ApiClient {
   async updateFloating(params) {
     const res = await this._postWithQuery('/api/settings/floating/update', params);
     if (!res.ok) throw new Error(`Floating update failed: ${res.status}`);
+    return res.json();
+  }
+
+  /** Apre Impostazioni → Accessibilità, dove si accende la lettura dello
+   *  schermo: un'app non puo' accenderla da se'. */
+  async openScreenSettings() {
+    const res = await this._postWithQuery('/api/settings/floating/screen-settings', {});
+    if (!res.ok) throw new Error(`Screen settings failed: ${res.status}`);
+    return res.json();
+  }
+
+  async openFloatingPermission() {
+    const res = await this._postWithQuery('/api/settings/floating/permission-settings', {});
+    if (!res.ok) throw new Error(`Overlay permission settings failed: ${res.status}`);
     return res.json();
   }
 
@@ -718,6 +823,16 @@ class ApiClient {
     return res.json();
   }
 
+  // I lavori lunghi della conversazione (giardiniere, Dream): lo stesso payload
+  // del frame `work_status`, per la bolla di lavoro della casa quando si riapre
+  // a lavoro iniziato. `sessionKey` come sopra.
+  async getWork({ sessionKey } = {}) {
+    const qs = sessionKey ? `?session_key=${encodeURIComponent(sessionKey)}` : '';
+    const res = await this._fetch(`/api/work${qs}`);
+    if (!res.ok) throw new Error(`Work failed: ${res.status}`);
+    return res.json();
+  }
+
   // Il corpo di errore di queste route è testo semplice, non JSON: il messaggio
   // del manager è già scritto per essere mostrato all'utente, quindi lo si
   // propaga così com'è (409 = rilancio impossibile, 429 = niente slot liberi).
@@ -727,9 +842,30 @@ class ApiClient {
     return res.json();
   }
 
-  async cancelSubagent(taskId, { sessionKey } = {}) {
-    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/cancel`, { sessionKey }));
+  // Fa continuare una mini-me fermata dal budget: riprende con la sua storia
+  // (`subagent_send` lato manager), invece di ripartire da zero come il
+  // rilancio. Stessa forma ed errori di `restartSubagent`.
+  async continueSubagent(taskId, { sessionKey } = {}) {
+    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/continue`, { sessionKey }));
+    if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Continue failed: ${res.status}`);
+    return res.json();
+  }
+
+  // Ferma una mini-me. Con `undo` la ferma e toglie il suo lavoro: rimette i
+  // file che ha cambiato, solo quelli ancora come li ha lasciati lei. La
+  // risposta porta allora il resoconto (`report`: rimessi, lasciati col motivo).
+  async cancelSubagent(taskId, { sessionKey, undo = false } = {}) {
+    const query = undo ? { sessionKey, undo: '1' } : { sessionKey };
+    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/cancel`, query));
     if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Cancel failed: ${res.status}`);
+    return res.json();
+  }
+
+  // «Annulla le sue modifiche» su una mini-me gia' ferma o finita. Stessa
+  // risposta di `cancelSubagent` con `undo`.
+  async undoSubagent(taskId, { sessionKey } = {}) {
+    const res = await this._fetch(subagentUrl(`/${encodeURIComponent(taskId)}/undo`, { sessionKey }));
+    if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Undo failed: ${res.status}`);
     return res.json();
   }
 

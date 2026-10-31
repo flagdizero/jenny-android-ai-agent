@@ -34,7 +34,7 @@ hardware and keep the whole loop offline.
   <img src="docs/img/hero-chat.png"  alt="Jenny reading back data from a mini-app she wrote herself, in chat" width="200">
   <img src="docs/img/apps.png"       alt="A mini-app the AI agent wrote on request: a meal log for a cat"   width="200">
   <img src="docs/img/themes.png"     alt="Settings, with the theme picker and Synthwave '84 selected"         width="200">
-  <img src="docs/img/wiki-graph.png" alt="Graph view of a wiki the agent wrote and cross-linked itself"       width="200">
+  <img src="docs/img/notebook-board.png" alt="A notebook's board: one card per subject, written from the wiki the agent keeps" width="200">
 </p>
 
 ---
@@ -49,7 +49,7 @@ work and proactive messages possible at all.
 If you have ever self-hosted an AI agent on a server, this is that: except the host is a
 phone you already own, it has a screen, and its battery is the UPS.
 
-**It is a 1.0, built by one person, not a polished consumer product.** Sideloaded, no store and no silent auto-updates (Jenny tells you when a release exists and installs it only when you confirm), and the
+**It is built by one person, not a polished consumer product.** Sideloaded, no store and no silent auto-updates (Jenny tells you when a release exists and installs it only when you confirm), and the
 [known limitations](#known-limitations) are listed in full rather than discovered later.
 
 ## Is it actually free software?
@@ -80,8 +80,9 @@ device, so switching provider doesn't cost you your memory.
 
 **📚 It builds you a wiki.** Feed it articles, notes, PDFs or web pages and ask it to compile
 them: you get cross-linked Markdown pages — concepts and entities, joined by `[[wikilinks]]` —
-browsable from the notebook they belong to, with a graph view of how they connect (that's the fourth screenshot
-above). Driven entirely from chat through a built-in `llm-wiki` skill: create one, ingest a
+behind the notebook they belong to. The notebook opens on its **board**: one card per subject,
+each with a drawer summarising the pages it comes from, plus the reminders and threads that
+matter now (that's the fourth screenshot above). Driven entirely from chat through a built-in `llm-wiki` skill: create one, ingest a
 source, compile, ask it questions, run a lint pass for dead links and orphan pages. It does
 **not** update itself — every step is a request you make, or a job you schedule. Multiple wikis
 live side by side as plain files in the workspace, so they're editable and backed up like
@@ -103,7 +104,8 @@ is what makes "alert me if the basil needs water" work end to end.
 
 **📱 It can be your Android launcher.** It declares `HOME` + `DEFAULT` + `LAUNCHER` and handles
 the Home gesture, listing and launching your installed apps from a panel inside the UI. Seven
-visual themes and a draggable mascot you can switch off. Judged purely as a launcher it would
+visual themes and a draggable mascot that is the door to the chat: tap her anywhere and the
+conversation comes up over what you are looking at. Judged purely as a launcher it would
 be a bad one — no widgets, folders or icon packs. The launcher part is the *how*, not the
 *what*. → [Launcher setup](https://jenny.flagdizero.com/docs/start/launcher-setup/)
 
@@ -119,7 +121,7 @@ most of which is the embedded CPython runtime. Verify it against the hash publis
 release page:
 
 ```bash
-shasum -a 256 jenny-1.0.0.apk
+shasum -a 256 jenny-2.0.0.apk
 ```
 
 Android will ask you to allow installing from outside the Play Store. The APK is signed with
@@ -159,10 +161,11 @@ Two disclosures I would rather you hear from me than discover:
 
 - **Your prompts go to whichever provider you chose.** On-device storage is not on-device
   inference. If a location fix ends up in the agent's reasoning, it ends up in that prompt.
-- **`android:allowBackup="true"` is set on purpose** — losing your memory when you change
-  phone would be worse. But with Google backup on, the app's private storage, *including the
-  config file that holds your API keys in plain text*, is eligible for your Google account's
-  backup. Turn backup off for this app and use Jenny's own encrypted backup instead.
+- **The copy on Google Drive (Play Store build) is only as strong as the password you choose for it.** It is
+  encrypted and opt-in, and it opens with that password alone — Google holds the copy, not a
+  way to read it. Forget the password and lose the phone, and the copy is gone too: nobody can
+  recover it. Someone who gets into your Google account can try passwords against it, so pick
+  a long one. (Android's own backup takes nothing from Jenny.)
   → [Privacy in detail](https://jenny.flagdizero.com/docs/internals/privacy/)
 
 Security, short version: **`python_exec` is not a sandbox** — arbitrary Python, in-process; the
@@ -197,8 +200,8 @@ Collected in one place rather than scattered, so you can judge before installing
 
 ## Status and roadmap
 
-**1.0, the first stable release.** It has been my daily driver for months, and from here on a
-change that breaks something you rely on gets a new major number — see the
+**2.0.** It has been my daily driver for months, and since 1.0 a change that breaks
+something you rely on gets a new major number — see the
 [changelog](CHANGELOG.md). It is still one person's project with rough edges, onboarding most of
 all, which is exactly where feedback is worth most.
 
@@ -223,7 +226,7 @@ would want it — GitHub's search ranks on them, and this project has no marketi
 A native Android app with an embedded CPython 3.11 (Chaquopy 17), `minSdk 26` /
 `targetSdk 34`. The agent runs as a persistent foreground service and serves a mobile-first
 SPA over loopback. Messages flow through an async bus that decouples the channel from the
-core. Over 12,000 tests; CI runs `ruff`, `pytest` on 3.11 and 3.12, and `pyright` — blocking on the
+core. Over 15,000 tests; CI runs `ruff`, `pytest` on 3.11 and 3.12, and `pyright` — blocking on the
 subsystems that are already type-clean, advisory on the rest, which is the honest state of a
 codebase being tightened rather than one pretending to be finished.
 

@@ -54,6 +54,7 @@ import assert from 'node:assert/strict';
 globalThis.window = { matchMedia: () => ({ matches: false }) };
 globalThis.performance = globalThis.performance || { now: () => Date.now() };
 const { JennyMascot } = await import('./shared/jenny-mascot.js');
+const { MotionChannels } = await import('./shared/mascot-motion.js');
 
 function classes(...initial) {
   const s = new Set(initial);
@@ -72,8 +73,13 @@ function jenny() {
     _streamTurnId: null, _runSeen: false, _lastClosedTurnId: null,
     _mood: null, _moodUntil: 0, _moodTimer: null,
     _talk: { timer: null, animIdx: 0, open: false, lastTextAt: 0, switchAt: 0 },
-    el: { classList: classes('out') },
+    _greetTimer: null,
+    el: {
+      classList: classes('out'), offsetWidth: 0, style: { setProperty() {} },
+      setAttribute() {}, removeAttribute() {},
+    },
   });
+  j._motions = new MotionChannels(j.el);
   j._syncArt = () => {};
   j._noteTalkActivity = () => { j._talk.lastTextAt = -1e9; };
   j._stopTalk = () => {};
@@ -92,6 +98,7 @@ def _run(body: str) -> None:
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "shared" / "jenny-mascot.js", root / "shared" / "jenny-mascot.js")
         shutil.copy(ASSETS / "shared" / "bot-name.js", root / "shared" / "bot-name.js")
+        shutil.copy(ASSETS / "shared" / "mascot-motion.js", root / "shared" / "mascot-motion.js")
         for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"

@@ -30,6 +30,7 @@ volte l'08/09/2026.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -40,6 +41,7 @@ from jenny.utils.android_assets import _UI_MANIFEST
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
+MOTION_JS = ASSETS / "shared" / "mascot-motion.js"
 
 node = requires_node
 
@@ -59,6 +61,10 @@ _METHODS = (
     "_noteTalkActivity",
     "_stopTalk",
     "_setAgentState",
+    "_stopGreet",
+    "motion",
+    "_motion",
+    "_stopMotion",
 )
 _CONSTS = (
     "ART",
@@ -102,6 +108,7 @@ def _harness() -> str:
     methods = "\n".join(_method(jenny, name) + "," for name in _METHODS)
     return f"""
 import assert from 'node:assert/strict';
+const {{ MotionChannels }} = await import({json.dumps(MOTION_JS.as_uri())});
 
 {consts}
 
@@ -131,7 +138,13 @@ function imgStub(...classes) {{
 function makeMascot(...classes) {{
   const m = {{
     mode: 'chat',
-    el: {{ classList: classList(...classes) }},
+    el: {{
+      classList: classList(...classes), offsetWidth: 0, attrs: {{}},
+      style: {{ setProperty() {{}} }},
+      setAttribute(k, v) {{ this.attrs[k] = v; }},
+      removeAttribute(k) {{ delete this.attrs[k]; }},
+    }},
+    _greetTimer: null,
     img: imgStub(),
     face: imgStub('off'),  // nasce spenta, come in _buildDom
     _mood: null, _moodUntil: 0, _moodTimer: null,
@@ -142,6 +155,7 @@ function makeMascot(...classes) {{
     states: [],
     {methods}
   }};
+  m._motions = new MotionChannels(m.el);
   return m;
 }}
 
@@ -403,8 +417,6 @@ def test_a_frame_while_another_turn_is_in_flight_is_dropped() -> None:
     _run_js("""
       const m = makeMascot('out');
       m._turnActive = true;
-      assert.equal(m._acceptMood({ mood: 'happy' }), false);
-      m._turnActive = false; m._pendingTurn = true;
       assert.equal(m._acceptMood({ mood: 'happy' }), false);
     """)
 

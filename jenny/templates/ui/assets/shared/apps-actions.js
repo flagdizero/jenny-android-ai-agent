@@ -20,7 +20,8 @@
  */
 
 import { api } from './api-client.js';
-import { escapeHtml, showToast } from './utils.js';
+import { escapeHtml, showToast, showUndo } from './utils.js';
+import { rpc } from './rpc-client.js';
 import { confirmDialog } from './dialog.js';
 import { i18n } from './i18n.js';
 import { currentTheme, themeTokens } from './theme.js';
@@ -208,6 +209,13 @@ export class AppsActions {
       return;
     }
 
+    /* Senza schermo non c'e' niente da aprire (una pagina che non esiste):
+       il tocco mostra il suo foglio, da cui si mette su una bacheca. */
+    if (app.has_screen === false) {
+      this.showJennyAppSheet(slug);
+      return;
+    }
+
     if (!api.getSecret()) {
       try { await api.bootstrap(); } catch { return; }
     }
@@ -248,14 +256,29 @@ export class AppsActions {
     requestAnimationFrame(() => overlay.classList.add('visible'));
     this._openApp = { slug, overlay, iframe, depth: 1 };
     if (external) this._openApp.external = true;
+    /* Chi sta sotto sa che adesso c'e' un'app sopra (la casa: la chat non e'
+       piu' a schermo, gli avvisi tornano a squillare). */
+    this.shell?.onAppOpened?.(slug);
   }
   async _openExternalView(slug, app) {
+    /* Da un altro dispositivo una vista esterna non si apre: passa dal proxy
+       del telefono su 127.0.0.1, che dal Mac e' il Mac stesso. Lo si dice,
+       invece di montare una cornice vuota (e il server la rifiuta comunque,
+       `phone_only`). */
+    if (await api.isRemote()) {
+      showToast(i18n.t('apps.viewPhoneOnly', { name: app?.name || slug }));
+      return;
+    }
     let url;
     try {
       const res = await fetch(`/api/webui/apps/${encodeURIComponent(slug)}/view`, {
         headers: { 'Authorization': `Bearer ${api.getSecret()}` },
       });
       const body = await res.json().catch(() => ({}));
+      if (body.error === 'phone_only') {
+        showToast(i18n.t('apps.viewPhoneOnly', { name: app?.name || slug }));
+        return;
+      }
       if (!res.ok || !body.url) throw new Error(body.error || `HTTP ${res.status}`);
       url = body.url;
     } catch (e) {
@@ -298,6 +321,9 @@ export class AppsActions {
     const open = this._openApp;
     if (!open) return;
     this._openApp = null;
+    /* Chi sta sotto (la bacheca, con la polaroid dell'app) si rilegge: quel
+       che hai scritto nell'app deve vedersi appena la chiudi. */
+    this.shell?.onAppClosed?.(open.slug);
     open.overlay.classList.remove('visible');
     setTimeout(() => open.overlay.remove(), 200);
     /* Il listener del proxy vive quanto la vista: chiuderlo qui è la via
@@ -372,7 +398,10 @@ export class AppsActions {
       const app = this.source.jennyApps.find(a => a.slug === open.slug);
       const name = app?.name || open.slug;
       const text = String(msg.text || '').slice(0, 4000);
-      this.closeApp();
+      /* La casa apre la chat **sopra** l'app (il velo): si parla di quel che si
+         sta guardando, e richiusa la chat l'app e' ancora li'. L'officina la
+         chat la mostra al posto dell'app, e l'app va chiusa. */
+      if (!this.shell.keepsAppUnderChat) this.closeApp();
       this.shell.sendChatPrompt(i18n.t('apps.chatAboutApp', { name, text }));
       return;
     }
@@ -484,9 +513,14 @@ export class AppsActions {
        solo se il guscio ha le pagine — l'officina no, e la scheda non deve
        sapere in che guscio vive: lo dice la porta che le passano. */
     const homePages = this.shell?.homePages?.() || null;
+    /* Un'app senza schermo (solo un lettore) non ha niente da aprire ne' da
+       mettere come pagina: vive sulla sua polaroid. */
+    const screen = app.has_screen !== false;
     const actions = [
-      { icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' },
-      ...(homePages ? [pageRow(homePages.state('app', slug), app)] : []),
+      ...(screen ? [{ icon: 'ti-player-play', label: i18n.t('apps.open'), action: 'open' }] : []),
+      ...(homePages && screen ? [pageRow(homePages.state('app', slug), app)] : []),
+      ...(app.section
+        ? [{ icon: 'ti-layout-board', label: i18n.t('apps.place'), action: 'place' }] : []),
       { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
       { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
     ];
@@ -515,7 +549,9 @@ export class AppsActions {
   }
   async _handleJennySheetAction(action, app) {
     const slug = app.slug;
-    if (action === 'open') {
+    if (action === 'place') {
+      this.showPlaceSheet(slug);
+    } else if (action === 'open') {
       this.openApp(slug);
     } else if (action === 'pin') {
       await this.shell?.homePages?.()?.append('app', slug);
@@ -526,23 +562,127 @@ export class AppsActions {
     } else if (action === 'edit') {
       this._startAppModification(app);
     } else if (action === 'delete') {
-      const ok = await confirmDialog(
-        i18n.t('apps.deleteAppConfirm', { name: app.name || slug })
-      );
-      if (!ok) return;
+      /* Niente domanda prima: l'app va nel cestino (dati compresi) e per
+         qualche secondo c'e' «Annulla». Dal 06/10/2026: prima era una domanda
+         e poi un `rmtree`, senza ritorno. Dal cestino, in fondo alla griglia,
+         si rimette anche dopo. */
+      let trashed = null;
       try {
-        await api.deleteJennyApp(slug);
+        trashed = (await api.deleteJennyApp(slug))?.trashed || null;
         await this.source.loadJennyApps();
         /* Il gateway ha tolto anche la sua pagina, se ne aveva una (v.
            `apps_api.delete_app`): qui la casa lo deve sapere, o resterebbe un
            pagina verso un'app che non c'e' piu'. */
         await this.shell?.homePages?.()?.reload();
-        showToast(i18n.t('apps.appDeleted'), 'success');
       } catch {
         showToast(i18n.t('apps.deleteFailed'), 'error');
+        return;
       }
+      if (!trashed) {
+        showToast(i18n.t('apps.appDeleted'), 'success');
+        return;
+      }
+      showUndo(i18n.t('apps.trashed', { name: app.name || slug }), async () => {
+        try {
+          await rpc.apps('restore', { id: trashed });
+          await this.source.loadJennyApps();
+        } catch {
+          showToast(i18n.t('apps.restoreFailed'), 'error');
+        }
+      }, { label: i18n.t('apps.undo') });
     }
   }
+
+  /** «Metti in un quaderno…»: quale quaderno, poi da sola o accanto a una
+   *  scheda che c'e' (legata da un filo), poi (se l'app li chiede) i
+   *  parametri. Tre domande al piu', una alla volta, nello stesso foglio.
+   *  L'app diventa sempre una polaroid sua: non entra nel cassetto di
+   *  un'altra scheda. Posarla e' anche darle il permesso: la chat di quel
+   *  quaderno potra' usarla. */
+  async showPlaceSheet(slug) {
+    const app = this.source.jennyApps.find(a => a.slug === slug);
+    const sheet = document.getElementById('jenny-app-sheet');
+    if (!app || !sheet) return;
+    const title = document.getElementById('jenny-app-sheet-title');
+    const body = document.getElementById('jenny-app-sheet-actions');
+    const head = (text) => {
+      title.innerHTML = `<div class="app-sheet-head"><div class="app-sheet-name">${escapeHtml(text)}</div></div>`;
+    };
+    const rows = (items) => {
+      body.innerHTML = '';
+      for (const it of items) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'oc-sheet-action';
+        b.innerHTML = `<i class="ti ${it.icon}" aria-hidden="true"></i>${escapeHtml(it.label)}`;
+        b.addEventListener('click', it.go);
+        body.appendChild(b);
+      }
+    };
+    const params = Object.keys(app.section?.params || {});
+    const finish = async (notebook, card) => {
+      const ask = async (values) => {
+        try {
+          await rpc.board('card.add', notebook, {
+            app: { slug, params: values }, ...(card ? { link: card.id } : {}),
+          });
+        } catch (err) {
+          showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'apps.placeFailed'), 'error');
+          return;
+        }
+        sheet.close();
+        showToast(i18n.t('apps.placed', { name: app.name || slug, notebook }), 'success');
+      };
+      if (!params.length) return ask({});
+      head(i18n.t('apps.placeParams'));
+      body.innerHTML = '';
+      const inputs = {};
+      for (const name of params) {
+        const label = document.createElement('label');
+        label.className = 'app-place-field';
+        label.textContent = i18n.t('apps.placeParam', { name });
+        const input = document.createElement('input');
+        input.type = 'text';
+        label.appendChild(input);
+        body.appendChild(label);
+        inputs[name] = input;
+      }
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'app-place-btn';
+      go.textContent = i18n.t('apps.placeGo');
+      go.addEventListener('click', () => ask(Object.fromEntries(Object.entries(inputs)
+        .map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v))));
+      body.appendChild(go);
+    };
+    const chooseCard = async (notebook) => {
+      let cards = [];
+      try { cards = (await api.getBoard(notebook))?.cards || []; } catch { cards = []; }
+      head(i18n.t('apps.placeHow', { notebook }));
+      rows([
+        { icon: 'ti-square-plus', label: i18n.t('apps.placeAsCard'), go: () => finish(notebook, null) },
+        ...cards.map((c) => ({
+          icon: 'ti-link', label: i18n.t('apps.placeNextTo', { card: c.title }),
+          go: () => finish(notebook, c),
+        })),
+      ]);
+    };
+    let notebooks = [];
+    try {
+      notebooks = ((await api.listProjects())?.projects || [])
+        .sort((a, b) => String(b.modified || '').localeCompare(String(a.modified || '')));
+    } catch { notebooks = []; }
+    head(i18n.t('apps.placeWhere', { name: app.name || slug }));
+    if (!notebooks.length) {
+      body.innerHTML = `<p class="app-place-note">${escapeHtml(i18n.t('apps.placeNoNotebooks'))}</p>`;
+    } else {
+      rows(notebooks.map((nb) => ({ icon: 'ti-notebook', label: nb.name, go: () => chooseCard(nb.name) })));
+    }
+    document.getElementById('jenny-app-sheet-cancel').onclick = () => sheet.close();
+    this._translateSheet(sheet);
+    if (!sheet.open) sheet.showModal();
+  }
+
   _startAppModification(app) {
     this.shell.sendChatPrompt(i18n.t('apps.editAppPrompt', { name: app.name || app.slug, slug: app.slug }));
   }

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 import shutil
 from pathlib import Path
 from typing import Any
@@ -331,8 +332,28 @@ def _append_to_active_transcript(session_key: str, obj: dict[str, Any]) -> None:
     append_lines_durable(path, [raw], tolerate_fsync_error=True)
 
 
+# La revisione di ogni filo: quante righe ci sono entrate da quando il gateway
+# e' partito, col prefisso di questo avvio. Serve a una finestra per sapere, con
+# una richiesta piccola, se il filo che ha a schermo e' ancora quello vero (la
+# casa del telefono quando torni a guardarla, dopo una chat dal Mac). Non sta su
+# disco e non deve: a un riavvio il prefisso cambia, ogni confronto fallisce e
+# chi chiede rilegge — che e' anche quel che fa gia' alla riconnessione.
+_BOOT = secrets.token_hex(4)
+_REVISIONS: dict[str, int] = {}
+
+
+def transcript_revision(session_key: str) -> str:
+    """La revisione attuale del filo *session_key* (``"<avvio>.<righe>"``)."""
+    return f"{_BOOT}.{_REVISIONS.get(session_key, 0)}"
+
+
+def _bump_revision(session_key: str) -> None:
+    _REVISIONS[session_key] = _REVISIONS.get(session_key, 0) + 1
+
+
 def append_transcript_object(session_key: str, obj: dict[str, Any]) -> None:
     _append_to_active_transcript(session_key, obj)
+    _bump_revision(session_key)
     if obj.get("event") == "turn_end":
         _rotate_active_transcript_if_needed(session_key)
 
@@ -354,4 +375,6 @@ def delete_webui_transcript(session_key: str) -> bool:
             removed = True
         except OSError as e:
             logger.warning("Failed to delete webui transcript segments {}: {}", segments_dir, e)
+    if removed:
+        _bump_revision(session_key)
     return removed

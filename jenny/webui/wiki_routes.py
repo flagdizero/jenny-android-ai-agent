@@ -351,10 +351,24 @@ class WikiRoutes:
         else:
             rel_page = "_index.md"
 
+        board_links = None
+        if current_wiki:
+            from jenny.board.links import page_membership
+
+            board_links = await loop.run_in_executor(
+                None, page_membership, wikis[wiki_name].parent, current_wiki, rel_page,
+                rendered.html,
+            )
+
         return http_json_response(
             {
                 "wiki": current_wiki,
                 "page": rel_page,
+                # L'appartenenza alla bacheca della pagina e di ogni pagina che
+                # linka: il lettore la usa per tradurre i link in tre tipi
+                # (stesso cassetto, altro cassetto, fuori bacheca). ``None`` se
+                # il quaderno non ha una bacheca: allora i link restano link.
+                "board": board_links,
                 "path": str(full.relative_to(wikis_dir)).replace(os.sep, "/"),
                 "title": rendered.title,
                 "frontmatter": self._json_safe(_filter_frontmatter(rendered.frontmatter)),

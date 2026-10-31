@@ -8,9 +8,9 @@ Jenny does not phone home in the telemetry sense (the daily update check, covere
 
 The WebUI itself is served entirely from `127.0.0.1` — no page, font, or script it loads comes from the internet.
 
-## The six data recipients
+## The seven data recipients
 
-Data only leaves the phone through one of these six paths, each gated by a condition you control.
+Data only leaves the phone through one of these seven paths, each gated by a condition you control. The GitHub and F-Droid build has six: the Google Drive copy exists only in the Play Store build, and the other build contains no code for it.
 
 | Recipient | What it receives | Condition |
 |---|---|---|
@@ -19,6 +19,7 @@ Data only leaves the phone through one of these six paths, each gated by a condi
 | **Sites visited by `web_fetch` / `browser_open` / `download_file`** | Whatever a normal browser visit to that site would reveal: the site sees the request coming from a real, hidden Android WebView, with the phone's own IP address, user-agent, and WebView cookies — not an anonymized fetch. | Only when the agent calls `web_fetch`, `browser_open` or `download_file` on a URL. |
 | **`api.telegram.org`** | Messages, if you've paired a Telegram bot: your conversation transits Telegram's servers under Telegram's terms, not Jenny's. | Only if `telegram.enabled` is `true` (default `false` — off until you explicitly connect a bot). |
 | **GitHub Releases** (`github.com`) | A plain `GET` of the release's `latest.json`, to find out whether a newer version exists. No identifier, no version, no query string: GitHub sees an IP address and a timestamp, like any HTTP server. Nothing about you or your data is in it. | Every 24 hours by default (`updates.enabled`, default `true`; `updates.checkIntervalH`, default `24`). `updates.enabled: false` stops the periodic check; the **Check now** button in Settings still makes one request when you press it. |
+| **Your Google Drive** | An encrypted copy of the whole workspace — everything listed under "What stays local" below, `config.json` included — in a "Jenny" folder Jenny creates. Google sees encrypted packs, their sizes and when they were written. It opens only with a password you choose, which is never stored — not on the phone, not in Drive: Google holds the copy, not a way to read it. | Play Store build only. Only after you tap **Turn on the Drive copy** in **Settings → Backup** (`extensions.drive.provider`, default off); then once a day on Wi-Fi, never over mobile data. See [Backup and restore](../using/backup.md#copy-on-google-drive). |
 | **The SSH hosts you registered** | The commands the agent runs on that machine, and — through `ssh_transfer` — the content of any workspace file it uploads there. Files fetched with `ssh_transfer` travel the other way, from the server into the workspace. | Only if `tools.ssh.enable` is `true` (default `false`), only for an alias a person registered in the workshop (**Hands → SSH**) whose host key you accepted by hand, and only through a `sysadmin` subagent. The agent can never name an address, only one of your aliases. |
 
 One more, smaller case: if your configured provider is OpenRouter, Jenny adds fixed attribution headers to every request (`HTTP-Referer` pointing at Jenny's GitHub repo, `X-OpenRouter-Title: Jenny`, `X-OpenRouter-Categories: android-agent,personal-agent`) so OpenRouter can attribute traffic to the app. This doesn't add a new recipient — OpenRouter is already your chosen LLM provider — but it does add identifying metadata to that traffic.
@@ -36,13 +37,13 @@ Everything else lives in the app's private storage (`<filesDir>/workspace` and n
 
 **Wiki content is not on this list, and used to be.** The personal chat's system prompt carries the name and one-line scope of every wiki under `workspace/wikis/` (the `summary:` of each `AGENTS.md`), so those names and lines go to your LLM provider on every turn. Page content does not, unless the agent opens a page during a turn — which was always possible under the workspace-to-provider chain below. Versions before 0.10.0 also compiled a directory of the entities in your wikis with a periodic job (Atlas), sending the page inventory to the provider to do it; that job no longer exists, and no derived copy of wiki content is kept in `memory/`.
 
-**A [notebook](../using/projects.md) sends more, and it sends it every turn.** Inside a notebook conversation, that notebook's map (`wiki/index.md`, up to 2,000 characters) and up to 6,000 characters of its pages are part of the system prompt on every message — so page content goes to your provider whether or not the current question touches it. Two further things are worth knowing: what you say in a notebook is captured into a journal file *inside* that folder before Jenny answers, so the sentence is written to disk as well as sent; and a [gardener](../using/gardener.md) pass sends the unread journal lines, the map, the list of page names and your recent messages in that notebook to the provider on its own schedule, with no message from you. The gardener is switched off in the workshop, under **Memory → Gardener**; the per-turn injection is a property of working in a notebook, and the way not to pay it is to use the personal chat. What a notebook does *not* send is the list of your other wikis — that block is withheld from notebook turns and from gardener passes.
+**A [notebook](../using/projects.md) sends more, and it sends it every turn.** Inside a notebook conversation, that notebook's board (one line per card, up to 2,000 characters) — or, without a board, its map (`wiki/index.md`, up to 2,000 characters) — and up to 6,000 characters of its pages are part of the system prompt on every message, and a message that names a card adds that card's drawer — so page content goes to your provider whether or not the current question touches it. Two further things are worth knowing: what you say in a notebook is captured into a journal file *inside* that folder before Jenny answers, so the sentence is written to disk as well as sent; and a [gardener](../using/gardener.md) pass sends the unread journal lines, the map, the list of page names and your recent messages in that notebook to the provider on its own schedule, with no message from you — and its board pass sends the board, the drawers to rewrite with their pages, and your corrections. The hourly notebook clock sends a due reminder and the page that explains it, to write the announcement. The gardener is switched off in the workshop, under **Memory → Gardener**; the per-turn injection is a property of working in a notebook, and the way not to pay it is to use the personal chat. What a notebook does *not* send is the list of your other wikis — that block is withheld from notebook turns and from gardener passes.
 
-## The `allowBackup` exception
+## Android's own backup
 
-Android's manifest declares `android:allowBackup="true"` with no exclusion rules. In practice this means Google's automatic cloud backup for this app **can** include app data — potentially `config.json`, with your provider API keys in plaintext, and your chat history — as part of a normal Android device backup to Google's servers. This is the one real exception to "everything stays local": it's not something Jenny does deliberately, it's a consequence of a manifest flag not yet paired with backup exclusion rules.
+The manifest keeps `android:allowBackup="true"`, but with exclusion rules (`res/xml/data_extraction_rules.xml`, and `backup_rules.xml` for Android 11 and older): Google's automatic **cloud** backup takes nothing from Jenny. Before those rules it was eligible to take everything, `config.json` with plaintext API keys included — in practice it failed, because Jenny's private storage is far above the 25 MB quota, but that was luck, not design. The copy that does go to the cloud is Jenny's own, encrypted, and off until you turn it on (see the table above).
 
-Until this is tightened, if you care about your API keys not potentially ending up in a Google Account backup, check your device's backup settings for this app, or disable Android's app data backup for Jenny specifically.
+The **phone-to-phone transfer** Android offers when you set up a new phone (cable or Wi-Fi) is allowed and carries everything except caches — API keys included. It goes from one of your phones to another, never through a server.
 
 ## The workspace-to-provider chain
 
@@ -50,8 +51,9 @@ It's worth stating this relationship plainly, because it's easy to underestimate
 
 ## How to shrink the surface
 
-None of the six recipients above are mandatory except your LLM provider (Jenny can't function without one). To reduce what leaves the device:
+None of the seven recipients above are mandatory except your LLM provider (Jenny can't function without one). To reduce what leaves the device:
 
+- **Leave the Drive copy off** (Play Store build) if you'd rather your Google account didn't hold even an encrypted copy — or install the GitHub or F-Droid build, which has no Google library at all. The `.jbk` export with a passphrase is the alternative.
 - **Turn off update checks** (`updates.enabled: false`) if you don't want the daily request to GitHub; you can still look for a new version by hand with **Check now**.
 - **Turn off location sharing** in the workshop (**Hands → Location**) if you don't want your last-known location included in every turn sent to the provider.
 - **Leave SSH off** unless you actually want Jenny reaching a server — it is off by default, and every registered host is a machine that receives commands and can receive workspace files.

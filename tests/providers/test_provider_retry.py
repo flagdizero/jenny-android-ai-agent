@@ -1024,3 +1024,49 @@ async def test_chat_stream_with_retry_normalizes_explicit_none_max_tokens() -> N
     assert response.content == "ok"
     assert provider.last_kwargs["max_tokens"] == 4096
     assert provider.last_kwargs["temperature"] == 0.7
+
+
+@pytest.mark.asyncio
+async def test_background_retry_waits_minutes_before_giving_up(monkeypatch) -> None:
+    """La modalità degli aiutanti: un 429 che dura più della scala standard
+    (1, 2, 4 s) non li chiude; cinque attese, 5-15-30-60-60 s, poi l'errore."""
+    provider = ScriptedProvider(
+        [LLMResponse(content=f"429 rate limit {n}", finish_reason="error") for n in range(6)]
+    )
+    delays: list[float] = []
+
+    async def _fake_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr("jenny.providers.base.asyncio.sleep", _fake_sleep)
+
+    response = await provider.chat_with_retry(
+        messages=[{"role": "user", "content": "hello"}], retry_mode="background",
+    )
+
+    assert response.finish_reason == "error"
+    assert provider.calls == 6
+    assert sum(delays) == 5 + 15 + 30 + 60 + 60
+
+
+@pytest.mark.asyncio
+async def test_background_retry_recovers_after_a_long_rate_limit(monkeypatch) -> None:
+    provider = ScriptedProvider([
+        LLMResponse(content="429 rate limit a", finish_reason="error"),
+        LLMResponse(content="429 rate limit b", finish_reason="error"),
+        LLMResponse(content="429 rate limit c", finish_reason="error"),
+        LLMResponse(content="429 rate limit d", finish_reason="error"),
+        LLMResponse(content="ok"),
+    ])
+
+    async def _fake_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("jenny.providers.base.asyncio.sleep", _fake_sleep)
+
+    response = await provider.chat_with_retry(
+        messages=[{"role": "user", "content": "hello"}], retry_mode="background",
+    )
+
+    assert response.content == "ok"
+    assert provider.calls == 5

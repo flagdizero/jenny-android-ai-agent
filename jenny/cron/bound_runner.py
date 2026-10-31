@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
+from jenny.board.cron_link import last_message_text, link_alive, record_result, scope_of
 from jenny.bus.events import InboundMessage
 from jenny.cron.could_not_check import (
     ESCALATE_AFTER_FAILURES,
@@ -29,9 +30,12 @@ from jenny.cron.types import (
     CronJobSilencedError,
     CronJobState,
     CronMonitorCouldNotCheckError,
+    job_display_name,
+    job_user_label,
 )
 from jenny.cron.webui_metadata import cron_proactive_delivery_metadata
 from jenny.runtime.power import keep_awake
+from jenny.session.keys import notebook_cron_session_key
 from jenny.session.turn_visibility import mark_silent_turn
 from jenny.utils.prompt_templates import render_template
 
@@ -129,6 +133,14 @@ def _bound_session_delivery_context(
     monitor: bool = False,
 ) -> tuple[str, str, dict[str, Any]]:
     channel, chat_id, metadata = origin_delivery_context(job)
+    # ``webui`` dice che l'utente ha scritto *questo* messaggio nella WebUI, e
+    # la sua risposta tace con l'app davanti (``runtime.notifier.is_app_reply``).
+    # Un job lo eredita dal turno che l'ha creato (``origin_metadata``), e fino
+    # al 28/10/2026 lo si rimetteva anche qui, per il titolo della sessione che
+    # non c'e' piu': con Jenny launcher, sempre davanti, un promemoria creato
+    # dalla chat non suonava mai a schermo acceso. Tolto alla consegna, non alla
+    # creazione: i job gia' nello store ce l'hanno.
+    metadata.pop("webui", None)
 
     if monitor:
         # Un monitor è lavoro interno: dichiararlo esplicitamente qui è ciò che
@@ -144,7 +156,6 @@ def _bound_session_delivery_context(
         metadata.pop("_wants_stream", None)
 
     if channel == "websocket":
-        metadata["webui"] = True
         metadata.update(
             cron_proactive_delivery_metadata(
                 "websocket",
@@ -195,10 +206,19 @@ async def _run_bound_cron_job(
         raise ValueError(f"cron job {job.id} is missing payload.session_key")
 
     monitor = job.payload.mode == "monitor"
+    board_link = job.payload.board
+    if board_link is not None and not link_alive(board_link):
+        # Il quaderno o la sua scheda non ci sono piu': il cron non ha piu' casa.
+        where = scope_of(board_link) or "whole notebook"
+        raise ValueError(f"notebook gone: {board_link.get('notebook')}/{where}")
     # Un monitor gira in una sessione tutta sua: ``payload.session_key`` resta il
     # target di consegna e il valore registrato nella run record, ma non è più la
-    # sessione in cui il turno viene eseguito.
-    turn_session_key = monitor_session_key(job.id) if monitor else session_key
+    # sessione in cui il turno viene eseguito. Quella di un cron del quaderno
+    # porta il nome del quaderno, da cui il turno ricava il recinto.
+    if monitor and board_link is not None:
+        turn_session_key = notebook_cron_session_key(str(board_link["notebook"]), job.id)
+    else:
+        turn_session_key = monitor_session_key(job.id) if monitor else session_key
 
     # L'escalation si decide PRIMA del turno, perché è una riga di prompt: solo
     # il modello, dentro il turno, sa se il controllo è riuscito adesso, ed è
@@ -221,24 +241,25 @@ async def _run_bound_cron_job(
     channel, chat_id, metadata = _bound_session_delivery_context(
         job,
         turn_seed=f"cron:{job.id}",
-        source_label=job.name,
+        # Il titolo della notifica: solo un nome vero, mai l'istruzione del job.
+        source_label=job_user_label(job),
         monitor=monitor,
     )
     if monitor:
         metadata[CRON_MONITOR_META] = True
     metadata[CRON_TRIGGER_META] = {
         "job_id": job.id,
-        "job_name": job.name,
+        "job_name": job_display_name(job),
         "run_id": run_id,
         "prompt_ref": prompt_ref,
         "persist_content": (
-            f"Scheduled cron job triggered: {job.name}\n\n{job.payload.message}"
+            f"Scheduled cron job triggered: {job_display_name(job)}\n\n{job.payload.message}"
         ),
     }
     metadata[CRON_DEFER_UNTIL_IDLE_META] = True
     run_record_base: dict[str, Any] = {
         "job_id": job.id,
-        "job_name": job.name,
+        "job_name": job_display_name(job),
         "session_key": session_key,
         "prompt_ref": prompt_ref,
         "prompt_vars": {"message": job.payload.message},
@@ -284,6 +305,23 @@ async def _run_bound_cron_job(
             cron_tool.reset_cron_context(cron_token)
 
     response = outcome.text
+
+    if board_link is not None:
+        said = response or ""
+        if monitor and outcome.spoke:
+            try:
+                said = last_message_text(agent.sessions.get_or_create(turn_session_key))
+            except Exception:  # noqa: BLE001 — l'esito nel cassetto e' una cortesia
+                said = ""
+            said = said or outcome.final_text
+        record_result(board_link, job_id=job.id,
+                      status="ok" if (outcome.spoke or not monitor) else "silent",
+                      text=said if (outcome.spoke or not monitor) else "",
+                      job_name=job_display_name(job))
+        # L'etichetta mostra l'ultimo giro: la bacheca aperta lo deve vedere subito.
+        from jenny.board.notify import board_changed
+
+        await board_changed(str(board_link.get("notebook")))
 
     if monitor:
         _prune_monitor_session(agent, turn_session_key)

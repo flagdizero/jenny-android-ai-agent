@@ -1,23 +1,21 @@
-"""La ricerca di un quaderno, guidata davvero: indice Python → ``wiki-search.js`` → righe.
+"""La ricerca di un quaderno, guidata davvero: indice Python → ``wiki-search.js`` → risultati.
 
 ``test_wiki_search_client.py`` verifica il motore di ricerca in isolamento
-(query → maschera) e ``test_home_notebook_pages_client.py`` l'elenco della casa con un
-indice finto. Qui i tre pezzi veri girano insieme: la risposta di
+(query → maschera). Qui i tre pezzi veri girano insieme: la risposta di
 ``/api/graph`` la costruisce :class:`WikiSearchService` come fa la rotta, la
-smonta ``assets/shared/wiki-search.js`` e la legge ``assets/home-notebook-pages.js``,
-importato come modulo. Si guarda ciò che la ricerca *provoca*: quali righe
-restano, quali si nascondono, cosa dice la nota.
+smonta ``assets/shared/wiki-search.js`` e la legge la lente della bacheca
+(``HomeBoard.searchResults`` in ``assets/home-board.js``), importata come
+modulo. Si guarda cosa la ricerca *trova*, e cosa dice di dove sta.
 
 È l'unico punto in cui si nota la classe di bug più cara di questa
 funzionalità — la maschera che indicizza l'array sbagliato — con un indice che
-nessuno ha scritto a mano. Le pagine di prova sono scelte perché l'ordine a
-schermo (per titolo) sia **diverso** da quello del server (per percorso): se
-la riga si cercasse per posizione a video, ogni ricerca accenderebbe il vicino.
+nessuno ha scritto a mano. La maschera è indicizzata per posizione nell'array
+``nodes`` del server, e qui i titoli sono scelti perché nessuno coincida col
+percorso: leggerla con un'altra chiave accenderebbe la pagina vicina.
 
-Prima questo file guidava ``mobile-graph.js`` in jsdom; quel controller è
-uscito con il grafo dell'officina, e l'unico consumatore di ``/api/graph`` è
-ora la casa. Il DOM qui è finto e minimo come negli altri banchi della casa:
-basta node, niente jsdom.
+Ogni risultato dice dove sta: il cassetto in cui la pagina è, oppure «fuori
+bacheca» — la lente è l'unica porta verso le pagine che non stanno in nessun
+cassetto.
 """
 
 from __future__ import annotations
@@ -46,89 +44,57 @@ _PAGES = {
     "batteria.md": "# Vita della batteria\n\nConsumo e ottimizzazioni. Vedi [[Doze]].",
 }
 
-# Le due dipendenze di ``home-notebook-pages.js`` che non sono sotto prova: la fetch
-# (che qui serve la risposta già costruita) e le traduzioni (la chiave basta).
-_API_STUB = "export const api = { getGraph: async () => globalThis.__GRAPH__ };\n"
-_I18N_STUB = "export const i18n = { t: (k) => k };\n"
+# Le dipendenze di ``home-board.js`` che non sono sotto prova: la rete, i
+# comandi, le traduzioni (la chiave basta) e gli aiuti di ``utils``.
+_STUBS = {
+    "api-client.js": "export const api = {};\n",
+    "rpc-client.js": "export const rpc = {};\n",
+    "i18n.js": "export const i18n = { locale: 'it', t: (k) => k };\n",
+    "utils.js": (
+        "export const escapeHtml = (s) => s; export const showToast = () => {};\n"
+        "export const showUndo = () => () => {};\n"
+        "export const ensureVendor = async () => {};\n"
+    ),
+    "dialog.js": "export const confirmDialog = async () => true;\n",
+}
 
 _HARNESS = r"""
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-/* Un DOM finto con la sola meccanica che `NotebookPages` usa. */
-function makeEl(tag) {
-  const el = {
-    tag, className: '', textContent: '', value: '', placeholder: '', type: '',
-    hidden: false, dataset: {}, attrs: {}, children: [],
-    isFragment: tag === '#fragment',
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener() {},
-    closest() { return null; },
-    appendChild(child) {
-      if (child.isFragment) { el.children.push(...child.children); child.children = []; }
-      else el.children.push(child);
-      return child;
-    },
-    classList: { toggle() {}, add() {}, remove() {}, contains: () => false },
-  };
-  Object.defineProperty(el, 'innerHTML', {
-    get() { return ''; },
-    set(v) { if (!v) el.children.length = 0; },
-  });
-  return el;
-}
-const nodes = {};
-globalThis.document = {
-  createElement: (tag) => makeEl(tag),
-  createDocumentFragment: () => makeEl('#fragment'),
-  getElementById: (id) => (nodes[id] ||= makeEl('div')),
-};
-globalThis.__GRAPH__ = JSON.parse(
-  fs.readFileSync(new URL('./graph.json', import.meta.url), 'utf-8'));
+globalThis.document = { getElementById: () => null };
+const graph = JSON.parse(fs.readFileSync(new URL('./graph.json', import.meta.url), 'utf-8'));
 
-const { NotebookPages } = await import('./assets/home-notebook-pages.js');
-const pages = new NotebookPages();
-await pages.load('main');
+const { HomeBoard } = await import('./assets/home-board.js');
+const { WikiSearchIndex } = await import('./assets/shared/wiki-search.js');
+const board = new HomeBoard({});
+board._graph = graph;
+// Una scheda sola, «Sonno», che tiene in cassetto la pagina su Doze.
+board.data = { cards: [{ id: 'sonno', title: 'Sonno' }], pageOwners: { 'doze.md': 'sonno' } };
+const index = WikiSearchIndex.from(graph.search);
+const find = (q) => board.searchResults(q, index).map((r) => `${r.kind}:${r.path || r.card}`);
 
-const rows = () => pages.listEl.children;
-const shown = () => rows().filter((r) => !r.hidden).map((r) => r.dataset.label);
-const type = (text) => { pages.queryEl.value = text; pages._applySearch(); };
+// 1. Una parola presente nel corpo di una sola pagina, che sta in un cassetto.
+assert.deepEqual(find('profondo '), ['page:doze.md']);
 
-// `index.md` si chiama per quel che e' (v. `labelOf`): qui l'i18n finto
-// restituisce la chiave, che cade nello stesso posto di «Home».
-assert.deepEqual(rows().map((r) => r.dataset.label),
-  ['CPU sveglia', 'Doze mode', 'home.notebookPages.index', 'Lavori ricorrenti', 'Vita della batteria'],
-  'ordine a schermo per titolo');
-assert.deepEqual(rows().map((r) => r.dataset.node), ['4', '2', '3', '1', '0'],
-  'ogni riga porta la posizione che il server le ha dato');
-
-// 1. Una parola presente nel corpo di una sola pagina.
-type('profondo ');
-assert.deepEqual(shown(), ['Doze mode'], 'match sul corpo della pagina');
-assert.equal(pages.noteEl.hidden, true);
-
-// 2. Prefisso: ogni tappa della digitazione accende già.
+// 2. Prefisso: ogni tappa della digitazione trova gia'. La scheda si trova per
+//    nome; delle due pagine, una e' in cassetto e l'altra fuori bacheca.
 for (const p of ['son', 'sonn', 'sonno']) {
-  type(p);
-  assert.deepEqual(shown(), ['CPU sveglia', 'Doze mode'], `prefisso '${p}'`);
+  assert.deepEqual(find(p).sort(), ['card:sonno', 'offboard:wakelock.md', 'page:doze.md'], p);
 }
 
-// 3. La maschera indicizza l'array del *server*: la pagina 0 è l'ultima riga.
-type('batteria ');
-assert.deepEqual(shown(), ['Vita della batteria'], 'maschera letta per posizione a video');
-type('pianificazione ');
-assert.deepEqual(shown(), ['Lavori ricorrenti'], 'maschera letta per posizione a video');
+// 3. La maschera si legge per posizione nell'array del server.
+assert.deepEqual(find('batteria '), ['offboard:batteria.md']);
+assert.deepEqual(find('pianificazione '), ['offboard:cron.md']);
 
-// 4. Zero risultati: nasconde tutto e lo dichiara. Diverso da "nessun vincolo".
-type('inesistente ');
-assert.deepEqual(shown(), []);
-assert.equal(pages.noteEl.hidden, false);
-assert.equal(pages.noteEl.textContent, 'home.notebookPages.noMatch');
+// 4. Il risultato porta il nome del suo cassetto.
+const inDrawer = board.searchResults('profondo ', index)[0];
+assert.equal(inDrawer.cardTitle, 'Sonno');
 
-// 5. Query vuota: nessun vincolo, tutto di nuovo in vista.
-type('');
-assert.equal(shown().length, 5, 'query svuotata: tutte le righe di nuovo in vista');
-assert.equal(pages.noteEl.hidden, true);
+// 5. La mappa non e' un risultato, e una ricerca vuota non trova niente.
+assert.deepEqual(find('vedi '), ['offboard:batteria.md', 'page:doze.md']);
+assert.deepEqual(find('inesistente '), []);
+assert.deepEqual(find(''), []);
 
 console.log('ok');
 """
@@ -138,10 +104,21 @@ def _harness_dir(tmp_path: Path) -> Path:
     """I due moduli veri, i due stub e la risposta del server, uno accanto all'altro."""
     assets = tmp_path / "assets"
     (assets / "shared").mkdir(parents=True)
-    shutil.copy(ASSETS / "home-notebook-pages.js", assets / "home-notebook-pages.js")
+    shutil.copy(ASSETS / "home-board.js", assets / "home-board.js")
+    # Le strisce: un modulo vero, che non tocca la ricerca (06/10/2026).
+    shutil.copy(ASSETS / "home-board-blocks.js", assets / "home-board-blocks.js")
+    # Le note e le foto di una scheda, che la bacheca apre nel suo foglio (14/10/2026).
+    for name in ("home-board-deck.js", "home-board-notes.js", "home-board-photos.js",
+                 "home-photo-viewer.js"):
+        shutil.copy(ASSETS / name, assets / name)
+    # L'etichetta dei cron e il ritmo a parole, che la bacheca disegna (20/10/2026).
+    for name in ("home-board-automation.js", "home-board-agenda.js"):
+        shutil.copy(ASSETS / name, assets / name)
+    for name in ("pinch-zoom.js", "horizontal-swipe.js", "cron-view.js"):
+        shutil.copy(ASSETS / "shared" / name, assets / "shared" / name)
     shutil.copy(ASSETS / "shared" / "wiki-search.js", assets / "shared" / "wiki-search.js")
-    (assets / "shared" / "api-client.js").write_text(_API_STUB, encoding="utf-8")
-    (assets / "shared" / "i18n.js").write_text(_I18N_STUB, encoding="utf-8")
+    for name, text in _STUBS.items():
+        (assets / "shared" / name).write_text(text, encoding="utf-8")
 
     pages_dir = tmp_path / "wikis" / "main" / "wiki"
     pages_dir.mkdir(parents=True)
@@ -166,6 +143,6 @@ def _harness_dir(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_search_shows_the_rows_the_server_meant(tmp_path: Path) -> None:
+def test_board_search_finds_what_the_server_meant(tmp_path: Path) -> None:
     out = run_module(_harness_dir(tmp_path) / "harness.mjs", timeout=120)
     assert out.strip().endswith("ok")

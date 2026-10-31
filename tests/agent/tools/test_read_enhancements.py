@@ -17,10 +17,6 @@ class TestReadDescriptionFix:
         tool = ReadFileTool()
         assert "image" in tool.description.lower()
 
-    def test_description_no_longer_says_cannot_read_images(self):
-        tool = ReadFileTool()
-        assert "cannot read binary files or images" not in tool.description.lower()
-
 
 # ---------------------------------------------------------------------------
 # Read deduplication
@@ -303,10 +299,6 @@ class TestReadDescriptionUpdate:
         tool = ReadFileTool()
         desc = tool.description.lower()
         assert "pdf" in desc
-
-    def test_description_no_longer_says_cannot_read(self):
-        tool = ReadFileTool()
-        assert "cannot read" not in tool.description.lower()
 
 # ---------------------------------------------------------------------------
 # Il presupposto del dedup, e cosa succede quando cade

@@ -13,6 +13,7 @@ import pytest
 
 from jenny.agent import dream_cycle
 from jenny.agent.dream_cycle import claim_dream_cycle, release_dream_cycle
+from jenny.runtime.user_text import say
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +87,7 @@ class TestTheRefusalText:
         seconda bolletta, non informazione, e un rifiuto che spaventa più del
         dovuto è un rifiuto che mente.
         """
-        text = dream_cycle.DREAM_ALREADY_RUNNING
+        text = say("cmd.dream.already_running", "en")
         assert "already running" in text
         assert "spent twice" in text
         assert "Nothing would be lost" in text

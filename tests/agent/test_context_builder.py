@@ -1210,3 +1210,44 @@ class TestWhichFileAFactBelongsIn:
 
         assert "timezone" in contract
         assert "stale the moment it is saved" in contract
+
+
+# ---------------------------------------------------------------------------
+# Il nome che l'utente ha dato all'agente
+# ---------------------------------------------------------------------------
+
+
+class TestTheBotNameReachesTheModel:
+    """``agents.defaults.bot_name`` si scriveva da Impostazioni e nessuno lo leggeva:
+    l'agente rinominato continuava a presentarsi come Jenny (SOUL.md lo dice)."""
+
+    _TOOLS = ["read_file", "write_file", "message", "cron"]
+
+    def _write_name(self, path: Path, name: str) -> None:
+        from jenny.config.loader import save_config
+        from jenny.config.schema import Config
+
+        config = Config()
+        config.agents.defaults.bot_name = name
+        save_config(config, path)
+
+    def test_a_renamed_agent_is_told_its_name_live(self, tmp_path, monkeypatch):
+        from jenny.runtime.context import get_runtime_context
+
+        path = tmp_path / "config.json"
+        monkeypatch.setattr(get_runtime_context(), "config_path", path)
+        builder = _builder(tmp_path / "ws")
+
+        self._write_name(path, "Jenny")
+        default_prompt = builder.build_system_prompt(available_tools=self._TOOLS)
+        assert "## Name" not in default_prompt
+
+        # Stesso builder, nessun riavvio: il nome nuovo vale dal prompt dopo.
+        self._write_name(path, "Ada")
+        renamed = builder.build_system_prompt(available_tools=self._TOOLS)
+        assert "## Name\nYour name is Ada: the user renamed you." in renamed
+        assert "introduce yourself as Ada" in renamed
+        # Il resto del prompt non cambia: la riga in piu' e' tutta la differenza.
+        assert renamed.replace(
+            renamed[renamed.index("## Name"):renamed.index("## Environment")], ""
+        ) == default_prompt

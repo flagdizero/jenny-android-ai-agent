@@ -12,6 +12,14 @@ a few simple rules keep things sane for everyone.
   writing code — it saves you from building something that can't be merged.
 - **Small fixes** (typos, docs, obvious bugs): just send the PR.
 
+## Branches
+
+Pull requests target **`next`**, where all work lands; `main` is for releases. The code builds
+two Gradle flavors: `foss` (GitHub and F-Droid, no Google library) and `play` (the Play Store,
+which adds the encrypted copy on Google Drive). Code only `play` needs lives outside the core —
+`jenny_extensions/` for Python and its WebUI files, `android/app/src/play/` for Kotlin — so the
+`foss` build contains none of it. See [Building from source](docs/contribute/build-from-source.md#two-flavors).
+
 ## Developer Certificate of Origin (DCO)
 
 All contributions require a DCO sign-off. This is a simple statement that you
@@ -62,6 +70,11 @@ project name and logo are covered by a separate
   The boundaries, and the limits already accepted, are described in
   [Security model](docs/internals/security-model.md).
 - Test on a real device when possible, and say which one.
+- If you change a prompt under `jenny/templates/agent/`, a skill, or a tool
+  description, run [`scripts/behaviour_check.py`](scripts/behaviour/README.md)
+  against an emulator and paste the rates that moved. Several of Jenny's
+  guarantees are sentences the model honours, not code, and no test goes red
+  when one stops holding.
 
 ## Design rules
 

@@ -100,6 +100,15 @@ _RETIRED_ABSOLUTE = "Answer from them"
 # template cambia la terza colonna; chi toglie una riga sta togliendo una regola.
 _PROJECT_MD_RULES: tuple[tuple[str, str, str], ...] = (
     (
+        "le app si creano anche da un quaderno",
+        "il 06/10/2026 sul telefono, in «piante»: l'utente chiede un'app per il WaterBot e "
+        "Jenny risponde che da quella chat fa solo «micro app», e che un'app con schermo «va "
+        "chiesta dalla chat personale». Il tool ``app`` funziona da qui; a fermarla era la "
+        "riga «write only inside this folder… do not plan one», perché le app stanno in "
+        "``workspace/apps``",
+        "One exception: the user's apps",
+    ),
+    (
         "ristrutturare la wiki è un'operazione con un manuale, non un'improvvisazione",
         "il caso del 26/08 su ``wikis/sartoria``: l'utente ha detto «sistema un po' la wiki, "
         "se necessario spezza i concetti» e il risultato è stato buono — ma la passata si è "
@@ -228,6 +237,11 @@ def test_the_block_stays_small() -> None:
     sta descrivendo *come si fa* qualcosa che capita di rado, quel paragrafo va
     nella skill e questo tetto ha fatto il suo lavoro.
 
+    **Tetto a 4.400 dal 07/10/2026, su un pavimento misurato di 3.942.** La regola
+    di cattura e' passata da cinque paragrafi argomentati a sei punti: le stesse
+    regole, dette una volta, per un modello piccolo che si perdeva nelle eccezioni
+    alle eccezioni. Senza ``capture`` il render resta sotto i 3.000.
+
     **Tetto a 6.300 dall'08/09/2026, su un pavimento misurato di 5.739.** Il tetto
     ha fatto il suo lavoro e la deliberazione è andata dall'altra parte: il
     paragrafo aggiunto è politica di cattura — la classe che questa regola dice
@@ -268,15 +282,33 @@ def test_the_block_stays_small() -> None:
     # e nessuno saprebbe che il tetto ha smesso di sorvegliare qualcosa. È il
     # solo modo di far fallire un test che sbaglia per difetto invece che per
     # eccesso, ed è la lezione del 25/08 scritta come asserzione.
-    assert len(rendered) > 4000, (
+    assert len(rendered) > 3000, (
         f"agent/project.md è {len(rendered)} caratteri: il blocco di cattura non è nel "
         "render, quindi questo tetto non sta sorvegliando quel che dice di sorvegliare. "
         "Manca `capture=True`?"
     )
-    assert len(rendered) <= 6300, (
+    assert len(rendered) <= 4400, (
         f"agent/project.md è {len(rendered)} caratteri: sta diventando il manuale della "
         "skill. Qui ci sta quel che si applica a ogni turno; il come si esegue "
         "un'operazione sta in `skills/llm-wiki/SKILL.md`."
+    )
+    # **Con i tool che l'agente principale ha davvero (ottobre 2026).** Senza
+    # ``has`` ogni ``{% if has is defined and has(...) %}`` è chiuso, quindi la
+    # misura qui sopra non vede i paragrafi che la chat di un quaderno paga a ogni
+    # turno — il contrario di ``available_tools=None``, che li apre tutti. Il
+    # paragrafo «Notebook first; when it is not enough, go and look» è di quella
+    # classe: senza, un riordino ha lasciato 32 pagine su 60 «non documentate»
+    # senza una ricerca, e il «da cercare» degli aiutanti non aveva nessuno che lo
+    # raccogliesse. Pavimento misurato 4.915 (4.142 prima dei due paragrafi),
+    # tetto a 5.400: lo stesso margine di circa il 10% della misura qui sopra.
+    gated = render_template(
+        "agent/project.md", project_path="/data/workspace/wikis/x", capture=True,
+        has=lambda name: name in ("spawn", "app", "web_search"),
+    )
+    assert len(gated) > len(rendered), "i paragrafi dietro `has` non sono nel render"
+    assert len(gated) <= 5400, (
+        f"agent/project.md con spawn, app e web_search è {len(gated)} caratteri: è il costo di ogni "
+        "turno della chat di un quaderno."
     )
 
 
@@ -447,10 +479,10 @@ def test_the_two_callers_pass_the_flag_explicitly() -> None:
     la regola non si rende (v. ``test_readonly_prompt_contract``). Il subagent lo
     lega a `False` sempre: non ha un utente da cui catturare.
     """
-    for module, expected in (
-        ("context.py", "capture=_turn_is_writable()"),
-        ("subagent.py", "capture=False"),
-    ):
+    # Il turno vero lo provano dal vivo, nei due versi,
+    # ``test_readonly_prompt_contract::test_read_only_removes_the_capture_rule``
+    # e ``::test_a_writable_turn_has_the_capture_rule_and_no_read_only_block``.
+    for module, expected in (("subagent.py", "capture=False"),):
         src = (SRC / "agent" / module).read_text(encoding="utf-8")
         assert expected in src, f"{module}: manca {expected}"
 

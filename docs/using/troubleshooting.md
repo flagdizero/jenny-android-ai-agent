@@ -146,6 +146,7 @@ If none of the above resolves it, gather this before reporting the problem:
 - [Chat basics](./chat.md) for what the online/offline indicator and error banners look like in context.
 - [Scheduling and proactivity](./scheduling.md) for the full reminders/heartbeat model, the two reminder modes, and their limits.
 - [Telegram bridge](./telegram.md) for pairing, throttling, and what does and doesn't work over Telegram.
+- [Jenny from your other devices](./remote-access.md) for what to check when another device can't reach the phone.
 - [Files and attachments](./attachments.md) for exact attachment limits.
 - [SSH access](./ssh.md) for the separate network policy SSH hosts are checked against, and why a restore doesn't restore access.
 - [Security model](../internals/security-model.md) for the SSRF whitelist and the workspace policy boundary.

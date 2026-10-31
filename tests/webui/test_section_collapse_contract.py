@@ -92,7 +92,7 @@ def test_open_chat_is_one_behaviour_in_one_place() -> None:
     Il guscio deve poter distinguere "aperta qui" da "ci pensa la casa",
     altrimenti cancella una notifica che l'utente non ha ancora visto."""
     body = _method(_src("mobile-app.js"), "openChat")
-    assert "api.navigate('/html-mobile/', { replace: true })" in body
+    assert "api.navigate(`/html-mobile/${chat}`, { replace: true })" in body
     assert "switchMode" not in body, "la Console non e' la chat dell'avviso"
     assert "return false;" in body
 

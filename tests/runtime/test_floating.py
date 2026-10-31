@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from support.kotlin_source import read_source
+from support.kotlin_source import read_code, read_source
 
 from jenny.runtime import floating as fl
 
@@ -280,3 +280,95 @@ class TestThePhysicsDoesNotDiverge:
         assert "const val PIVOT_Y = 0.4333f" in kt
         assert "export const PIVOT_X = 0.5083;" in js
         assert "export const PIVOT_Y = 0.4333;" in js
+
+
+class TestSquashParity:
+    """Lo schiaccia e allunga del volo esiste due volte: `shared/mascot-squash.js`
+    per la mascotte in chat e `FloatingSquash.kt` per quella flottante, che vive
+    fuori dalla WebView. Come per la fisica (`TestThePhysicsDoesNotDiverge`), il prezzo della
+    copia è che una parte si ritocchi e l'altra no: qui si confrontano i nomi
+    delle costanti e, funzione per funzione, i numeri scritti dentro — una curva
+    ritoccata da una parte sola cambia la sequenza.
+    """
+
+    SQUASH_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingSquash.kt"
+    SQUASH_JS = REPO / "jenny/templates/ui/assets/shared/mascot-squash.js"
+    FUNCTIONS = (
+        "heldStretch", "airStretch", "impactSquash", "loadLegs", "walkStep", "walkStart", "stretch",
+    )
+
+    @staticmethod
+    def _numbers(body: str) -> list[float]:
+        import re
+
+        # `0.45f` in Kotlin e `0.45` in JS sono lo stesso numero; `walk1` no.
+        return [float(n) for n in re.findall(r"(?<![\w.])(\d+(?:\.\d+)?)f?(?![\w.])", body)]
+
+    @staticmethod
+    def _js() -> str:
+        import re
+
+        src = TestSquashParity.SQUASH_JS.read_text(encoding="utf-8")
+        return re.sub(r"/\*.*?\*/|//[^\n]*", "", src, flags=re.S)
+
+    @staticmethod
+    def _body(src: str, name: str, *, kotlin: bool) -> str:
+        import re
+
+        head = rf"\bfun {name}\(" if kotlin else rf"\bfunction {name}\("
+        m = re.search(head, src)
+        assert m, f"{name} non trovata"
+        i = src.index("{", m.end())
+        depth, j = 1, i + 1
+        while depth:
+            depth += {"{": 1, "}": -1}.get(src[j], 0)
+            j += 1
+        return src[i + 1 : j - 1]
+
+    def test_the_constants_are_the_same(self):
+        import re
+
+        kt = TestThePhysicsDoesNotDiverge._kt_numbers(read_code(self.SQUASH_KT))
+        js = TestThePhysicsDoesNotDiverge._js_numbers(self._js())
+        feet = re.search(r"FEET = \{ ground: ([\d.]+), walk: ([\d.]+) \}", self._js())
+        assert feet, "FEET non trovato in mascot-squash.js"
+        js["FEET_GROUND"], js["FEET_WALK"] = float(feet.group(1)), float(feet.group(2))
+        assert set(kt) == set(js), (
+            f"costanti solo in Kotlin: {sorted(set(kt) - set(js))}, solo in JS: {sorted(set(js) - set(kt))}"
+        )
+        for name, value in kt.items():
+            assert value == pytest.approx(js[name]), f"{name}: {value} in Kotlin, {js[name]} in JS"
+
+    def test_every_curve_writes_the_same_numbers(self):
+        kt_src = read_code(self.SQUASH_KT)
+        js_src = self._js()
+        for name in self.FUNCTIONS:
+            kt = self._numbers(self._body(kt_src, name, kotlin=True))
+            js = self._numbers(self._body(js_src, name, kotlin=False))
+            assert kt == js, f"{name}: {kt} in Kotlin, {js} in JS"
+            assert kt, f"{name}: nessun numero confrontato"
+
+
+def test_the_floating_mascot_breathes_like_the_css():
+    """Il respiro e il pensa della flottante (`startBreathing`) sono
+    `jenny-breath` e `jenny-think` di mobile-style.css: stessi periodi per ciclo
+    intero, stessa origine, stesse ampiezze. Fino al 05/10/2026 il respiro
+    nativo durava il doppio (un `REVERSE` di 3,4 s), e nessun test lo vedeva."""
+    import re
+
+    from support.kotlin_source import function_body
+
+    css = (REPO / "jenny/templates/ui/assets/mobile-style.css").read_text(encoding="utf-8")
+    body = function_body(read_code("FloatingOverlayController"), "startBreathing")
+    assert re.search(r"animation: jenny-breath 3\.4s", css)
+    assert re.search(r"animation: jenny-think 1\.6s", css)
+    assert "if (thinking) 1_600 else 3_400" in body
+    assert "REVERSE" not in body, "un REVERSE raddoppia il ciclo"
+    assert "mascot.pivotY = mascot.height * 0.88f" in body
+    # Il respiro: 0,985 × 1,03 a meta' ciclo.
+    assert "scale(0.985, 1.03)" in css
+    assert "1f - 0.015f * k" in body and "1f + 0.03f * k" in body
+    # Il pensa: ±2° e, al centro, 0,99 × 1,016; agli estremi 1,012 × 0,988.
+    assert "rotate(-2deg) scale(1.012, 0.988)" in css and "rotate(0deg) scale(0.99, 1.016)" in css
+    assert "(-2 * cos(2 * PI * t))" in body
+    assert "1.001f + 0.011f * c2" in body and "1.002f - 0.014f * c2" in body

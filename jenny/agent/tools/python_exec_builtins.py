@@ -159,21 +159,33 @@ def _register_builtin_functions(
           Questa e' l'isolazione che conta: e' cio' che tiene un progetto lontano
           dai file di un altro, da ``USER.md`` e da ``SOUL.md``.
         """
+        from jenny.security.subagent_policy import check_read
+
         if not restrict_to_workspace:
             from jenny.security.workspace_policy import _safe_expanduser
-            return _safe_expanduser(path).resolve()
-        from jenny.agent.tools.python_exec import _path_guard_bypass
-        from jenny.security.workspace_policy import resolve_allowed_path
+            resolved = _safe_expanduser(path).resolve()
+        else:
+            from jenny.agent.tools.python_exec import _path_guard_bypass
+            from jenny.security.workspace_policy import resolve_allowed_path
 
-        allowed_root = _write_root() if for_write else workspace
-        # La base va letta PRIMA del bypass, che la azzera. Il bypass copre la
-        # sola risoluzione: `Path.resolve()` passa da `os.lstat` su ogni
-        # prefisso del percorso e sotto guard quei prefissi sono fuori dal
-        # workspace, quindi senza bypass ogni chiamata logga una raffica di
-        # rifiuti spuri (stessa ragione di `_guarded_os_path`).
-        base = _resolution_base()
-        with _path_guard_bypass():
-            return resolve_allowed_path(path, workspace=base, allowed_root=allowed_root)
+            allowed_root = _write_root() if for_write else workspace
+            # La base va letta PRIMA del bypass, che la azzera. Il bypass copre
+            # la sola risoluzione: `Path.resolve()` passa da `os.lstat` su ogni
+            # prefisso del percorso e sotto guard quei prefissi sono fuori dal
+            # workspace, quindi senza bypass ogni chiamata logga una raffica di
+            # rifiuti spuri (stessa ragione di `_guarded_os_path`).
+            base = _resolution_base()
+            with _path_guard_bypass():
+                resolved = resolve_allowed_path(path, workspace=base, allowed_root=allowed_root)
+        if not for_write:
+            # Dentro un subagent i file segreti non si leggono (``subagent_policy``).
+            # Sotto bypass: il controllo legge il registro di provenienza, che per
+            # il codice guardato è un file segreto.
+            from jenny.agent.tools.python_exec import _path_guard_bypass as _bypass
+
+            with _bypass():
+                check_read(resolved)
+        return resolved
 
     def _write_path(path: str) -> Path:
         """Percorso di una scrittura: confinato alla cartella del progetto."""
@@ -182,7 +194,13 @@ def _register_builtin_functions(
         # ``wiki_audit``, che leggono. Bloccare la' avrebbe spento due letture
         # per chiudere una scrittura.
         _refuse_if_readonly(f"refused write to {path}")
-        return _enforce_path(path, for_write=True)
+        resolved = _enforce_path(path, for_write=True)
+        # La bacheca di un quaderno ha i suoi imbuti (``BoardWriteError``).
+        from jenny.agent.tools.python_exec import _path_guard_bypass, _refuse_guarded_write
+
+        with _path_guard_bypass():
+            _refuse_guarded_write(resolved)
+        return resolved
 
     # File I/O
     def read_file(path: str, encoding: str = "utf-8") -> str:
@@ -246,6 +264,14 @@ def _register_builtin_functions(
         return results
 
     # HTTP
+    def _url_host(url: str) -> str:
+        from urllib.parse import urlparse
+
+        try:
+            return urlparse(url).hostname or ""
+        except ValueError:
+            return ""
+
     def http_get(url: str, headers: dict | None = None, timeout: int = 30) -> str:
         """Make an HTTP GET request and return the response body.
 
@@ -260,12 +286,26 @@ def _register_builtin_functions(
         following it.
         """
         from jenny.security.network import validate_url_target
+        from jenny.security.subagent_policy import (
+            approved_egress,
+            egress_refusal,
+            mark_untrusted,
+        )
 
+        # J1 prima della risoluzione: anche chiedere il nome al DNS fa uscire
+        # qualcosa (v. ``security.subagent_policy``).
+        if refusal := egress_refusal(url):
+            return refusal
         ok, error = validate_url_target(url)
         if not ok:
             return f"Error: SSRF blocked: {error}"
         import httpx
-        resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
+
+        # La risposta è testo che non viene dall'utente: il lavoro diventa non
+        # fidato appena la si chiede.
+        mark_untrusted(f"http_get:{_url_host(url)}")
+        with approved_egress():
+            resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
         if resp.has_redirect_location:
             location = resp.headers.get("location", "")
             return (
@@ -285,12 +325,22 @@ def _register_builtin_functions(
     ) -> str:
         """Make an HTTP POST request and return the response body."""
         from jenny.security.network import validate_url_target
+        from jenny.security.subagent_policy import (
+            approved_egress,
+            egress_refusal,
+            mark_untrusted,
+        )
 
+        if refusal := egress_refusal(url):
+            return refusal
         ok, error = validate_url_target(url)
         if not ok:
             return f"Error: SSRF blocked: {error}"
         import httpx
-        resp = httpx.post(url, data=data, json=json_data, headers=headers, timeout=timeout)
+
+        mark_untrusted(f"http_post:{_url_host(url)}")
+        with approved_egress():
+            resp = httpx.post(url, data=data, json=json_data, headers=headers, timeout=timeout)
         resp.raise_for_status()
         return resp.text
 

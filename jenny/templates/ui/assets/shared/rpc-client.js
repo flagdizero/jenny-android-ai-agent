@@ -61,6 +61,41 @@ async function send(method, params, opts) {
 }
 
 export const rpc = {
+  /** Una scrittura della bacheca di un quaderno: i comandi `board.*`
+   *  (`jenny/webui/board_commands.py`). `wiki` e' il nome del quaderno; il
+   *  resto dei parametri dipende dal comando. */
+  board(method, wiki, params = {}) {
+    return send(`board.${method}`, { wiki, ...params });
+  },
+
+  /** Jenny dagli altri dispositivi (`remote.status`, `remote.set`,
+   *  `remote.rotate`): li serve il canale stesso, in
+   *  `jenny/channels/websocket.py::_handle_remote_rpc`. Sul WebSocket e non su
+   *  /api/ perche' la risposta porta la chiave del link. */
+  remote(method, params = {}) {
+    return send(`remote.${method}`, params);
+  },
+
+  /** Il cestino delle app (`apps.trash`, `apps.restore`, `apps.purge`):
+   *  `jenny/webui/apps_commands.py`. */
+  apps(method, params = {}) {
+    return send(`apps.${method}`, params);
+  },
+
+  /** Le bozze che aspettano un tuo tocco (`staged.list`, `staged.install`,
+   *  `staged.discard`): `jenny/webui/staged_commands.py`. */
+  staged(method, params = {}) {
+    return send(`staged.${method}`, params);
+  },
+
+  /** Il piano a lista di un quaderno (`plan.get`, `plan.list`, `plan.approve`,
+   *  `plan.stop`, `plan.rollback`, …): `jenny/webui/plan_commands.py`. Come le
+   *  bozze, nessun tool del modello le raggiunge: Approva, Ferma e Torna
+   *  indietro sono tocchi dell'utente per costruzione. */
+  plan(method, params = {}) {
+    return send(`plan.${method}`, params);
+  },
+
   /** Salva un file di testo del workspace (tetto 1 MB, lato server).
    *
    *  `base`, facoltativo, e' il testo da cui l'editor e' partito: se il file su
@@ -103,6 +138,12 @@ export const rpc = {
    *  e' testo libero, e la superficie /api/ non sa trasportarne. */
   createProject(name, seed, conversation) {
     return send('project.create', { name, seed, conversation });
+  },
+
+  /** Il primo messaggio di Jenny in un quaderno appena creato. Il testo arriva
+   *  alla chat dal filo; la risposta dice solo se c'e' stato (`greeted`). */
+  greetProject(name, lang) {
+    return send('project.greet', { name, lang });
   },
 
   /** Salva una pagina di quaderno modificata a mano dal lettore.

@@ -45,6 +45,8 @@ const post = (source, data) => { for (const fn of [...winListeners]) fn({ source
 
 const nodes = {
   'home-reader': { outerHTML: '<section id="home-reader">una pagina</section>' },
+  'home-board': { outerHTML: '<section id="home-board">le schede</section>' },
+  'home-board-drawer': { outerHTML: '<section id="home-board-drawer">un cassetto</section>' },
 };
 globalThis.document = { getElementById: (id) => nodes[id] ?? null };
 
@@ -134,6 +136,25 @@ def test_an_open_room_wins_over_the_page_under_it() -> None:
       const { payload } = await ask('c3');
       assert.equal(payload.view, 'home:reader');
       assert.match(payload.html, /una pagina/);
+    """)
+
+
+def test_the_board_is_described() -> None:
+    """Fino al 05/10/2026 la bacheca mancava dalla tabella: HTML vuoto."""
+    _run("""
+      app.view = 'board';
+      const { payload } = await ask('b1');
+      assert.equal(payload.view, 'home:board');
+      assert.match(payload.html, /le schede/);
+    """)
+
+
+def test_a_card_drawer_is_described() -> None:
+    _run("""
+      app.view = 'drawer';
+      const { payload } = await ask('b2');
+      assert.equal(payload.view, 'home:drawer');
+      assert.match(payload.html, /un cassetto/);
     """)
 
 

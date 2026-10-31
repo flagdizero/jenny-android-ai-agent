@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cosa Android porta fuori dal telefono da sé (Android 12 e oltre).
+
+  cloud-backup (Auto Backup verso Google Drive): niente. Misurato il
+  15/10/2026: i dati dell'app pesano già 174 MB su un emulatore, contro una
+  quota di 25 MB, quindi quel backup falliva sempre in silenzio — e se un
+  giorno fosse entrato avrebbe portato config.json con le chiavi dei provider.
+  Per portarsi Jenny fuori dal telefono c'è il backup cifrato che esporta
+  l'utente (`snapshot/backup.py`).
+
+  device-transfer (da telefono a telefono, col cavo o il Wi-Fi alla prima
+  configurazione): tutto, chiavi comprese — è un trasloco fra due telefoni
+  dell'utente, ed è una migrazione che funziona. Fuori solo quel che si
+  rigenera da sé (l'interprete estratto da Chaquopy) e i temporanei — anche
+  quelli delle estensioni che una build può avere, tutti sotto `ext_tmp/`
+  (v. `jenny/extensions.py`).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="chaquopy/" />
+        <exclude domain="file" path="backup_staging/" />
+        <exclude domain="file" path="ext_tmp/" />
+    </device-transfer>
+</data-extraction-rules>

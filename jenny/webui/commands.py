@@ -63,6 +63,14 @@ class CommandError(Exception):
     scrivendo in quel quaderno (``project.rename``, ``project.delete``). Chi lo
     riceve non deve correggere quel che ha mandato: rilegge, o riprova quando
     lei ha finito.
+
+    Quattro codici vengono dai piani a lista (``plan_commands.py``): ``busy``
+    (Jenny lavora nel quaderno, si riprova fra poco), ``bad_state`` (non da
+    questo stato del piano), ``plan_running``: il quaderno è tenuto da un piano
+    partito e non ancora chiuso, e finché il piano non finisce, o l'utente non
+    lo ferma, l'utente non ci scrive (né torna indietro con un piano più
+    vecchio); e ``rollback_failed``: un ritorno partito si è fermato a metà per
+    un errore del disco, il quaderno è in parte tornato, e riprovare è sicuro.
     """
 
     def __init__(self, code: str, message: str) -> None:
@@ -110,6 +118,20 @@ class CommandContext:
     # l'evento l'onboarding salva e l'agente non parte fino al riavvio.
     session_manager: Any | None = None
     onboarding_event: Any | None = None
+    # Lo scheduler, per i cron del quaderno: togliere la sezione di un cron dal
+    # cassetto toglie il job, e la pausa passa da li'. Facoltativo come i ganci
+    # qui sopra; senza, quei comandi rispondono ``unavailable``.
+    get_cron_service: Callable[[], Any | None] | None = None
+    # Per ``project.greet``: il bus su cui il saluto va alla chat, e la coppia
+    # ``(provider, modello)`` dell'agente, risolta a call-time perche' l'agente
+    # nasce dopo il gateway (onboarding) e cambia provider a caldo. Facoltativi:
+    # senza bus il saluto non si scrive, senza modello si scrive la frase fissa.
+    bus: Any | None = None
+    get_llm: Callable[[], tuple[Any, str] | None] | None = None
+    # Il driver dei piani a lista (``jenny/plan/driver.py``), late-binding come
+    # ``get_llm``: nasce con l'agente. Senza, le RPC ``plan.*`` che muovono un
+    # piano rispondono ``unavailable`` e le letture vanno allo store.
+    get_plan_driver: Callable[[], Any | None] | None = None
 
 
 Command =Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
@@ -255,6 +277,18 @@ async def _write_live_config(content: str, base: str) -> str:
     return config_path.read_text(encoding="utf-8")
 
 
+def _clear_taint(root: Any, full_path: Any) -> None:
+    from pathlib import Path
+
+    from jenny.security.taint_ledger import ledger_for
+
+    try:
+        rel = Path(full_path).resolve().relative_to(Path(root).resolve()).as_posix()
+    except (OSError, ValueError):
+        return
+    ledger_for(Path(root)).clear(rel)
+
+
 async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Scrive un file di testo del workspace (salvataggio dall'editor WebUI).
 
@@ -302,6 +336,10 @@ async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dic
             await asyncio.to_thread(write_file, full_path, content)
         else:
             await asyncio.to_thread(_write_file_unchanged, full_path, content, base)
+        # Il file ora è tuo per intero: se un lavoro non fidato l'aveva scritto,
+        # chi lo legge da qui in poi non eredita più quel taint
+        # (``security.taint_ledger``).
+        _clear_taint(ctx.get_workspace_root(), full_path)
     except ValueError as exc:
         raise CommandError("bad_request", str(exc)) from exc
     except FileNotFoundError as exc:
@@ -950,6 +988,57 @@ async def project_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
 
+async def project_greet(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Il primo messaggio di Jenny in un quaderno appena creato.
+
+    Separato da :func:`project_create` di proposito: la creazione scrive su
+    disco ed e' istantanea, il saluto aspetta un modello. Lo chiede il client
+    quando la chat del quaderno e' gia' aperta, cosi' lo vede arrivare. Le
+    regole (solo su una chat vuota, la frase fissa se il modello manca) stanno
+    in ``jenny/webui/project_greet.py``.
+    """
+    from jenny.config.loader import load_config
+    from jenny.session.keys import is_valid_project_name
+    from jenny.utils.wiki_paths import discover_wiki_roots, read_wiki_scope
+    from jenny.webui.project_greet import greet_project
+
+    name = _require_str(params, "name").strip()
+    if not is_valid_project_name(name):
+        raise CommandError("bad_request", "invalid project name")
+    _require_wiki_enabled()
+    if ctx.session_manager is None or ctx.bus is None:
+        raise CommandError("unavailable", "greeting is unavailable")
+    # La radice, non la pages-dir di ``discover_wikis``: lo scope sta
+    # nell'``AGENTS.md`` accanto a ``wiki/``, non dentro.
+    wiki_root = (await asyncio.to_thread(discover_wiki_roots, _wikis_dir(ctx))).get(name)
+    if wiki_root is None:
+        raise CommandError("not_found", "no such notebook")
+
+    try:
+        defaults = load_config().agents.defaults
+        language, bot_name = defaults.language, defaults.bot_name
+    except Exception:
+        language, bot_name = "en", "Jenny"
+    # La lingua dell'interfaccia, se il client la dice: e' quella in cui
+    # l'utente sta leggendo adesso.
+    lang = params.get("lang")
+    if isinstance(lang, str) and lang in ("it", "en"):
+        language = lang
+
+    return await greet_project(
+        name=name,
+        wiki_root=wiki_root,
+        workspace=ctx.get_workspace_root(),
+        language=language,
+        bot_name=bot_name,
+        session_manager=ctx.session_manager,
+        bus=ctx.bus,
+        llm=ctx.get_llm() if ctx.get_llm is not None else None,
+        busy_session_keys=ctx.busy_session_keys,
+        read_scope=read_wiki_scope,
+    )
+
+
 async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Cancella un progetto: l'albero della wiki **e** la sua conversazione.
 
@@ -965,7 +1054,11 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     la WebView usa per le operazioni che cambiano il disco.
     """
     from jenny.session.keys import is_valid_project_name, project_session_key
-    from jenny.webui.project_delete import ProjectDeleteError, delete_project
+    from jenny.webui.project_delete import (
+        ProjectDeleteError,
+        delete_project,
+        remove_notebook_crons,
+    )
 
     name = _require_str(params, "name").strip()
     if not is_valid_project_name(name):
@@ -995,6 +1088,14 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         raise CommandError("bad_request", str(exc)) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
+    # I cron delle sue schede se ne vanno con lui: restando, fallirebbero a ogni
+    # giro con «notebook gone». Sul loop e dopo la cancellazione riuscita, come
+    # la pagina qui sotto (il perche' del loop sta in ``remove_notebook_crons``).
+    get_cron = getattr(ctx, "get_cron_service", None)
+    outcome["removed_crons"] = remove_notebook_crons(get_cron() if get_cron else None, name)
+    # I suoi piani se ne vanno con lui, foto comprese: senza il quaderno non c'è
+    # niente da riprendere né a cui tornare.
+    await asyncio.to_thread(_plans_follow, ctx, name, None)
     # La sua pagina in casa, se ne aveva una: se ne va con lui. **Dopo** la
     # cancellazione, fuori dal thread — e se non ci riesce il quaderno resta
     # cancellato: la pagina verso il nulla la toglie l'utente.
@@ -1051,6 +1152,17 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
+    # I suoi cron lo seguono: link della bacheca e chat in cui consegnano. Sul
+    # loop e dopo il rinomino riuscito, come la pulizia dei cron della
+    # cancellazione (il perché del loop sta in ``remove_notebook_crons``).
+    from jenny.board.cron_link import follow_renamed_notebook
+
+    get_cron = getattr(ctx, "get_cron_service", None)
+    outcome["moved_crons"] = follow_renamed_notebook(get_cron() if get_cron else None,
+                                                     name, new_name)
+    # E i suoi piani: le foto sono relative alla cartella, quindi restano valide.
+    await asyncio.to_thread(_plans_follow, ctx, name, new_name)
+
     from jenny.webui.home_pages import rename_pages_of
 
     try:
@@ -1060,6 +1172,33 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     except Exception:  # noqa: BLE001 — il rinomino e' gia' riuscito
         logger.opt(exception=True).warning("Pages of renamed notebook {} not followed", name)
     return outcome
+
+
+def _plans_follow(ctx: CommandContext, name: str, new_name: str | None) -> None:
+    """I piani di un quaderno rinominato (*new_name*) o cancellato (``None``).
+
+    Dal driver quando c'è, che così aggiorna anche il suo indice; dallo store
+    altrimenti. Mai un errore: il quaderno è già rinominato o cancellato, e un
+    piano rimasto indietro si pota da solo.
+    """
+    try:
+        getter = ctx.get_plan_driver
+        driver = getter() if getter is not None else None
+        if driver is not None:
+            if new_name is None:
+                driver.notebook_deleted(name)
+            else:
+                driver.notebook_renamed(name, new_name)
+            return
+        from jenny.plan.store import PlanStore
+
+        store = PlanStore.for_workspace(ctx.get_workspace_root())
+        if new_name is None:
+            store.delete_for_notebook(name)
+        else:
+            store.follow_rename(name, new_name)
+    except Exception:  # noqa: BLE001
+        logger.opt(exception=True).warning("Plans of notebook {} not followed", name)
 
 
 def _home_pages_from(params: Mapping[str, Any]) -> tuple[list[Any], list[str]]:
@@ -1347,6 +1486,7 @@ COMMANDS: dict[str, Command] = {
     "page.write": page_write,
     "audit.create": audit_create,
     "project.create": project_create,
+    "project.greet": project_greet,
     "project.delete": project_delete,
     "project.rename": project_rename,
     "home.pages.set": home_pages_set,
@@ -1356,6 +1496,95 @@ COMMANDS: dict[str, Command] = {
     "ssh.host.save": ssh_host_save,
     "onboarding.save": onboarding_save,
 }
+
+
+# Le RPC che scrivono in un quaderno, e dove sta il suo nome. Un piano partito
+# tiene il quaderno (``jenny/plan/model.py::HELD_STATUSES``): tutto quel che
+# cambia fra la foto A e la B dev'essere del piano, così il ritorno non deve
+# indovinare di chi è un file (deciso il 23/10). ``board.seen`` e
+# ``board.preview`` restano aperte: la prima segna solo «l'hai guardata», la
+# seconda non scrive.
+_NOTEBOOK_WRITES_BY_NAME: dict[str, tuple[str, ...]] = {
+    "page.write": ("wiki",),
+    # Una segnalazione scrive un file in ``audit/`` del quaderno: dentro la foto
+    # B, quindi il ritorno la cancellerebbe come se l'avesse scritta il piano.
+    "audit.create": ("wiki",),
+    "project.rename": ("name", "new_name"),
+    "project.delete": ("name",),
+}
+_BOARD_READS = frozenset({"board.seen", "board.preview"})
+_PATH_WRITES: dict[str, tuple[str, ...]] = {
+    "workspace.write": ("path",),
+    "workspace.delete": ("path",),
+    "workspace.rename": ("old_path", "new_path"),
+    "workspace.copy": ("dest",),
+}
+
+
+def _held_notebooks(ctx: CommandContext) -> set[str]:
+    """I quaderni tenuti da un piano partito, adesso."""
+    getter = ctx.get_plan_driver
+    driver = getter() if getter is not None else None
+    if driver is not None:
+        return set(driver.held_notebooks())
+    from jenny.plan.model import HELD_STATUSES
+    from jenny.plan.store import PlanStore
+
+    try:
+        plans = PlanStore.for_workspace(ctx.get_workspace_root()).list_all()
+    except OSError:
+        return set()
+    return {p.notebook for p in plans if p.status in HELD_STATUSES}
+
+
+def _refuse_held_notebook(
+    ctx: CommandContext, method: str, params: Mapping[str, Any]
+) -> None:
+    """``plan_running`` se *method* scriverebbe in un quaderno tenuto da un piano."""
+    names: list[str] = []
+    if method in _NOTEBOOK_WRITES_BY_NAME:
+        keys = _NOTEBOOK_WRITES_BY_NAME[method]
+        names = [str(params.get(k)).strip() for k in keys if isinstance(params.get(k), str)]
+    elif method.startswith("board.") and method not in _BOARD_READS:
+        if isinstance(params.get("wiki"), str):
+            names = [str(params["wiki"])]
+    elif method in _PATH_WRITES:
+        paths = [params.get(k) for k in _PATH_WRITES[method]]
+        if method == "workspace.copy" and not params.get("dest"):
+            # Senza ``dest`` la copia nasce accanto all'originale.
+            paths = [params.get("path")]
+        names = _notebooks_of_paths(ctx, paths)
+    if not names:
+        return
+    held = _held_notebooks(ctx)
+    hit = sorted(n for n in names if n in held)
+    if hit:
+        raise CommandError(
+            "plan_running",
+            f"notebook {hit[0]!r} is read-only while its plan runs: pause, stop or "
+            "wait for the plan first",
+        )
+
+
+def _notebooks_of_paths(ctx: CommandContext, paths: list[Any]) -> list[str]:
+    """I quaderni dentro cui cadono questi percorsi del workspace (o che sono)."""
+    root = ctx.get_workspace_root()
+    try:
+        wikis = _notebooks_dir(root)
+    except OSError:
+        return []
+    names: list[str] = []
+    for rel in paths:
+        if not isinstance(rel, str) or not rel.strip():
+            continue
+        try:
+            full = (root / rel.strip().lstrip("/")).resolve()
+            inside = full.relative_to(wikis)
+        except (OSError, ValueError):
+            continue
+        if inside.parts:
+            names.append(inside.parts[0])
+    return names
 
 
 async def dispatch_command(
@@ -1369,8 +1598,32 @@ async def dispatch_command(
     traceback non deve mai raggiungere il client.
     """
     handler = COMMANDS.get(method)
+    if handler is None and method.startswith("plan."):
+        # La scheda del piano a lista: solo l'interfaccia approva, ferma e torna
+        # indietro (``plan_commands.py``).
+        from jenny.webui.plan_commands import PLAN_COMMANDS
+
+        handler = PLAN_COMMANDS.get(method)
+    if handler is None and method.startswith("board."):
+        # Le scritture della bacheca stanno in un modulo loro, che importa da
+        # questo: caricate qui, al primo uso, per non chiudere un cerchio
+        # d'import all'avvio.
+        from jenny.webui.board_commands import BOARD_COMMANDS
+
+        handler = BOARD_COMMANDS.get(method)
+    if handler is None and method.startswith("apps."):
+        # Il cestino delle app e le risposte alla prova: stesso motivo.
+        from jenny.webui.apps_commands import APPS_COMMANDS
+
+        handler = APPS_COMMANDS.get(method)
+    if handler is None and method.startswith("staged."):
+        # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
+        from jenny.webui.staged_commands import STAGED_COMMANDS
+
+        handler = STAGED_COMMANDS.get(method)
     if handler is None:
         raise CommandError("bad_request", f"unknown method: {method}")
+    _refuse_held_notebook(ctx, method, params)
     try:
         return await handler(ctx, params)
     except CommandError:

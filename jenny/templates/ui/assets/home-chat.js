@@ -17,9 +17,11 @@
  *  **E il 02/10/2026 sono rientrati i subagent, ma solo per dire che ci sono.**
  *  Un turno non li aspetta piu': Jenny risponde «ci sto lavorando» e il turno
  *  finisce, mentre il lavoro va avanti per minuti. Senza un segno la
- *  conversazione sembrava ferma. Il segno e' un chip fuori dal filo
- *  (`home-subagents.js`) che dice quanti lavorano e se uno e' fermo; il resto
- *  — stato, strumenti, Ferma — resta in officina, e qui non si legge.
+ *  conversazione sembrava ferma. Il segno era un chip fuori dal filo; dal
+ *  05/10/2026 e' una bolla di lavoro **dentro** il filo, nel suo posto vivo in
+ *  fondo (`this.live`, `home-work.js`), insieme a quelle del giardiniere e di
+ *  Dream. Dice chi lavora, cosa fa e da quanto; il resto — strumenti, Ferma —
+ *  resta in officina, e qui non si legge.
  *
  *  **Le regole del filo non sono state inventate qui.** Sono quelle che
  *  `mobile-chat.js` ha imparato sbagliando, e che valgono identiche in casa
@@ -39,6 +41,7 @@
  *     una bolla sola.
  */
 
+import { api } from './shared/api-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
@@ -48,6 +51,7 @@ import { renderRich } from './shared/rich-content.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
+import { chatTime, chatTimeIso } from './shared/chat-time.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
    registro completo di tutte le superfici — l'app, Telegram, la tendina delle
@@ -61,6 +65,9 @@ const ORIGINS = {
   telegram: { icon: 'ti-brand-telegram', key: 'home.origin.telegram' },
   notification: { icon: 'ti-bell', key: 'home.origin.notification' },
   floating: { icon: 'ti-message-circle', key: 'home.origin.floating' },
+  /* Scritto da un altro dispositivo del tailnet (il Mac, un secondo
+     telefono). Col nome che gli da' MagicDNS, quando c'e': «dal mac». */
+  remote: { icon: 'ti-device-laptop', key: 'home.origin.remote', named: 'home.origin.remoteNamed' },
 };
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
@@ -82,7 +89,47 @@ const HISTORY_PAGE_SIZE = 50;
    storia non le porta, quindi una rilettura della stessa le perde — ed e' il
    prezzo giusto: quel rifiuto l'hai gia' letto, e il messaggio e' tornato nel
    campo. */
-const THREAD_NODES = '.home-msg, .home-boundary, .home-note';
+/* I nodi del filo sono i suoi **figli**: le bolle di lavoro in corso stanno nel
+   posto vivo (`.home-live`, v. il costruttore) e hanno la loro vita — una
+   rilettura della storia non le tocca. Una bolla finita scende nel filo e da
+   li' e' un messaggio come gli altri. */
+const THREAD_NODES = ':scope > .home-msg, :scope > .home-msg-work, :scope > .home-boundary, :scope > .home-note';
+
+/** Quel che un turno ha messo nei cassetti: le chiamate a `journal_append` con un
+ *  quaderno, riuscite. Gli eventi arrivano due volte (inizio e fine) e la storia
+ *  li fonde per `call_id`: conta la fine, e solo se il tool ha scritto davvero —
+ *  un rifiuto («No notebook named…») non e' un'annotazione.
+ *  @param {any[]} events  `tool_events` dal vivo o `toolEvents` della storia */
+export function journalNotes(events) {
+  const out = [];
+  const seen = new Set();
+  for (const ev of Array.isArray(events) ? events : []) {
+    if (!ev || ev.name !== 'journal_append' || ev.phase !== 'end') continue;
+    const args = ev.arguments || {};
+    const notebook = typeof args.notebook === 'string' ? args.notebook.trim() : '';
+    if (!notebook || !String(ev.result || '').startsWith('Appended to')) continue;
+    const key = ev.call_id || `${notebook}\u0000${args.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ notebook, text: String(args.text || '') });
+  }
+  return out;
+}
+
+/** I quaderni che il turno ha proposto di aprire («ci spostiamo?»): le chiamate a
+ *  `suggest_notebook` riuscite. La scelta e' dell'utente, con un tocco: il tasto
+ *  lo disegna `_moveOfferOf`.
+ *  @param {any[]} events */
+export function moveOffers(events) {
+  const out = [];
+  for (const ev of Array.isArray(events) ? events : []) {
+    if (!ev || ev.name !== 'suggest_notebook' || ev.phase !== 'end') continue;
+    const notebook = String(ev.arguments?.notebook || '').trim();
+    if (notebook && String(ev.result || '').startsWith('The user now sees a button')
+        && !out.includes(notebook)) out.push(notebook);
+  }
+  return out;
+}
 
 function mediaKind(entry) {
   if (entry.kind) return entry.kind;
@@ -107,9 +154,9 @@ export class HomeChat {
        Un delta non rende da se': mette in coda un disegno, e i delta dello
        stesso fotogramma ne pagano uno solo (v. `_delta`). */
     this._frame = null;
-    /* Vero mentre la storia entra a blocchi (`load`, `prependTurns`): il
-       margine attorno a Jenny si ricalcola una volta alla fine invece che a
-       ogni messaggio (v. `_append`). */
+    /* Vero mentre la storia entra a blocchi (`load`, `prependTurns`): la
+       sagoma di Jenny si ricalcola una volta alla fine invece che a ogni
+       messaggio (v. `_append`). */
     this._batching = false;
     /* **La storia arriva mentre il filo e' vivo.** Una lettura e' una fetch
        che dura, e intanto il socket porta frame: la risposta che Jenny sta
@@ -138,11 +185,33 @@ export class HomeChat {
        serve quando una risposta si incolla altrove. `WeakMap` perche' la
        chiave e' il nodo, e una ricarica del filo li butta tutti. */
     this._source = new WeakMap();
+    /* Lo stesso markdown, per blocco: togliere un blocco di passaggio deve
+       toglierlo anche da cio' che Copia copia. */
+    this._blockSource = new WeakMap();
+    /* **La frase fra un passo e l'altro.** Il testo che Jenny scrive prima di
+       uno strumento («ok, la cerco e te la metto in un file») resta a schermo
+       mentre lo strumento gira, e se ne va quando arriva il testo dopo — o a
+       fine turno. E' la regola della rilettura: `transcript_replay.py`
+       (`demote_interrupted_assistant`) fa di quel testo un pensiero, e la casa
+       non lo mostra. Dal vivo restavano tutte, una sotto l'altra: sul s22 il
+       28/10/2026 una ricerca ne lasciava quattro che dicevano la stessa cosa,
+       e riaprendo l'app ne restava una. `_lastSegment` e' l'ultimo blocco
+       chiuso da `_streamEnd`, che diventa di passaggio se lo segue un passo. */
+    this._lastSegment = null;
+    this._passing = [];
     /* L'allegato dietro ogni pastiglia di file: il percorso che il ponte
        nativo sa aprire non sta nell'URL firmato (v. `_openMediaFile`). */
     this._files = new WeakMap();
     /* I secondi dell'ultimo `turn_end`, in attesa che la bolla si chiuda. */
     this._seconds = null;
+    /* Le annotazioni nei cassetti del turno in corso (`journalNotes`): lo
+       strumento gira prima che la risposta abbia una bolla, e il segno si
+       disegna quando la bolla si chiude. */
+    this._pendingJournal = [];
+    /* I quaderni proposti nel turno in corso, per il tasto «Apri». */
+    this._pendingMoves = [];
+    /* Chi apre un quaderno (il guscio, `home-app.js`): senza, il tasto non c'e'. */
+    this.onOpenNotebook = null;
     /* L'ultimo invio, finché il gateway non ha dimostrato di averlo preso.
        `null` = non c'è niente da riprendere. */
     this._pendingSend = null;
@@ -151,6 +220,33 @@ export class HomeChat {
     this.onSendRejected = null;
     /* Chi rilegge il filo dopo un `session_boundary` (v. `_message`). */
     this.onSessionBoundary = null;
+    /* Chi sa dire se un testo con `work_id` racconta un lavoro che e' gia' una
+       bolla (`WorkBubbles.claims`): quel testo non si disegna due volte. */
+    this.claimsWork = null;
+    /* Chi rimanda un messaggio dopo un errore del modello (il «Riprova» sotto
+       la risposta che non e' arrivata): riceve il testo da rimandare. */
+    this.onRetry = null;
+    /* Il testo di ogni bolla dell'utente, e se aveva allegati: e' quel che
+       «Riprova» rimanda. */
+    this._userSent = new WeakMap();
+
+    /* **Il posto vivo**, sempre sotto i messaggi e sopra la fascia: le bolle di chi sta
+       lavorando adesso (`home-work.js`) e, per ultima, la riga di Jenny al
+       lavoro (`home-activity.js`, un divisore e non una bolla). I messaggi entrano sopra di lui, quindi chi
+       lavora resta sotto l'ultima cosa detta, come un messaggio in arrivo. */
+    this.live = document.createElement('div');
+    this.live.className = 'home-live';
+    this.live.hidden = true;
+    this.el.appendChild(this.live);
+
+    /* **La fascia** (06/10/2026, `home-band.js`), dopo il posto vivo: l'ultimo
+       figlio del filo in assoluto. Alta meta' di Jenny, ci scende la coda
+       dell'ultima risposta (una regola `:has()` in home-style.css, niente JS),
+       ed e' il posto per far vedere chi lavora. La sagoma sopra la fascia la
+       rifa `this.band`, che le consegna il guscio. */
+    this.bandEl = document.createElement('div');
+    this.bandEl.className = 'home-band';
+    this.el.appendChild(this.bandEl);
 
     /* **Uno `scroll` non e' sempre un gesto.** Quando una riga compare sotto il
        filo — gli allegati in attesa, la riga di lavoro — il contenitore si
@@ -165,6 +261,20 @@ export class HomeChat {
     this._lastTop = 0;
     this._stick = true;
     this.el.addEventListener('scroll', () => this._onScroll());
+    /* Dove eri rimasto a leggere, per conversazione: la distanza dal fondo
+       (v. `restorePlace`). Niente se eri in fondo, che e' dove si torna. */
+    this._marks = new Map();
+    /* «↓» sopra il composer: compare quando sei risalito, col pallino se
+       intanto sotto e' arrivato qualcosa. Sta dentro `#home-chat`, quindi
+       sale nel velo con lei. E' il FAB dell'officina (`#chat-scroll-fab`). */
+    this._newBelow = false;
+    this.fab = document.createElement('button');
+    this.fab.type = 'button';
+    this.fab.className = 'home-scroll-fab';
+    this.fab.innerHTML = '<i class="ti ti-chevron-down" aria-hidden="true"></i>'
+      + '<span class="home-scroll-fab-dot" aria-hidden="true"></span>';
+    this.fab.addEventListener('click', () => this.scrollToBottom());
+    this.el.parentElement?.appendChild(this.fab);
 
     /* Delegato, e non un ascoltatore per bolla: le bolle sono centinaia dopo
        tre pagine di storia. Come in officina, e per la stessa ragione — la CSP
@@ -225,13 +335,24 @@ export class HomeChat {
       if (!e.defaultPrevented) this._openLink(e, link);
       return;
     }
+    const offer = e.target.closest('.home-move-offer');
+    if (offer && this.el.contains(offer)) {
+      this.onOpenNotebook?.(offer.dataset.notebook);
+      return;
+    }
+    const mark = e.target.closest('.home-journal-mark');
+    if (mark && this.el.contains(mark)) {
+      this._toggleJournal(mark);
+      return;
+    }
     const btn = e.target.closest('.home-copy');
     if (btn && this.el.contains(btn)) this._copy(btn.closest('.home-msg'));
   }
 
   /* Tre esiti, e in nessuno la pagina naviga: l'ancora scorre il filo, un'altra
      origine si apre fuori dalla WebView, il resto lo dice. La regola e' in
-     `shared/content-link.js`, perche' la usa anche il fumetto della minichat. */
+     `shared/content-link.js` (ci stava anche per il fumetto della minichat,
+     tolta il 05/10/2026). */
   _openLink(e, a) {
     openContentLink(e, a, this.el, (type) => showToast(i18n.t('common.linkNotOpenable'), type));
   }
@@ -300,6 +421,7 @@ export class HomeChat {
     }
     if (gen !== this._readGen || res.stale) return null;
     const { thread } = res;
+    this.rev = thread?.rev || null;
     /* Cosa se ne va si decide adesso, a storia arrivata, e non alla partenza:
        nel frattempo puo' essere entrata in cima una pagina piu' vecchia
        chiesta con lo scorrimento. Contata alla partenza restava a schermo, la
@@ -320,18 +442,22 @@ export class HomeChat {
       this._inBatch(() => {
         for (const turn of this._buildTurns(messages)) {
           if (turn.boundary) this._appendBoundary();
-          else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media);
-          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs);
+          else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at, turn.device);
+          else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at, turn.error,
+            turn.journal, turn.moves);
         }
       });
     } finally {
       this._anchor = null;
     }
+    this.onThreadChange?.();
     if (!this._reading) this._live = new WeakSet();
     this._empty = !this.el.querySelector(THREAD_NODES);
     this.syncEmpty();
     this.pager.adopt(thread?.page);
-    this.scrollToBottom();
+    /* Dove eri rimasto, o in fondo (v. `restorePlace`): la prima parte e'
+       sincrona, e `ensureReach` qui sotto misura gia' il filo al suo posto. */
+    this.restorePlace();
     /* Dopo il disegno e dopo l'aggancio al fondo: `ensureReach` misura se il
        filo trabocca, e prima del disegno la risposta sarebbe sempre "no". */
     this.pager.ensureReach();
@@ -349,20 +475,21 @@ export class HomeChat {
     this._inBatch(() => {
       for (const turn of this._buildTurns(messages).reverse()) {
         if (turn.boundary) this._appendBoundary(true);
-        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true);
-        else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs);
+        else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true, turn.at, turn.device);
+        else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs, turn.at, null,
+          turn.journal, turn.moves);
       }
     });
+    this.onThreadChange?.();
   }
 
-  /** Molti messaggi in fila, e il margine attorno a Jenny ricalcolato **una
-   *  volta**, alla fine.
+  /** Molti messaggi in fila, e la sagoma di Jenny ricalcolata **una volta**,
+   *  alla fine.
    *
-   *  `gap.refresh()` legge il rettangolo di ogni messaggio del filo: chiamato
-   *  a ogni `_append`, una pagina di N turni costava N letture di N
-   *  rettangoli — quadratico, e ogni lettura dopo una scrittura forza il
-   *  layout. Il risultato di una sola misura in fondo e' lo stesso, perche'
-   *  quel che conta e' dove stanno i messaggi quando la pagina e' finita. */
+   *  `band.refresh()` misura l'ultimo blocco, e ogni misura dopo una
+   *  scrittura forza il layout: a ogni `_append` una pagina di N turni ne
+   *  costava N. Il risultato di una misura sola in fondo e' lo stesso, perche'
+   *  conta solo com'e' il fondo quando la pagina e' finita. */
   _inBatch(fill) {
     const outer = !this._batching;
     this._batching = true;
@@ -371,7 +498,7 @@ export class HomeChat {
     } finally {
       if (outer) {
         this._batching = false;
-        this.gap?.refresh();
+        this.band?.refresh();
       }
     }
   }
@@ -385,8 +512,12 @@ export class HomeChat {
     const turns = [];
     let current = null;
     const flush = () => { if (current) turns.push(current); current = null; };
-
     for (const msg of messages) {
+      /* Di un lavoro lungo (`/gardener`, `/dream`) la storia tiene due testi:
+         l'annuncio («Gardening…») e il resoconto. L'annuncio non si mostra mai:
+         o il lavoro e' ancora in corso, e allora e' la bolla a dirlo, o e'
+         finito, e allora c'e' il resoconto. */
+      if (msg.workStart) continue;
       if (msg.session_boundary) {
         flush();
         turns.push({ boundary: true });
@@ -399,7 +530,9 @@ export class HomeChat {
           user: true,
           text: msg.text || msg.content || '',
           origin: msg.origin,
+          device: msg.device || null,
           media: Array.isArray(msg.media) ? msg.media : [],
+          at: msg.sentAt ?? null,
         });
         continue;
       }
@@ -407,13 +540,19 @@ export class HomeChat {
       // Regola 4: senza id non si accorpa. Mai.
       if (!current || !turnId || current.turnId !== turnId) {
         flush();
-        current = { turnId, content: '', media: [], latencyMs: null };
+        current = { turnId, content: '', media: [], latencyMs: null, at: null };
       }
+      /* L'ora di una risposta e' quella del suo ultimo pezzo: quando il turno
+         si e' chiuso, come dal vivo (v. `_resetTurn`). */
+      if (msg.sentAt != null) current.at = msg.sentAt;
       if (Array.isArray(msg.media) && msg.media.length) current.media.push(...msg.media);
       /* I secondi sono l'unica cosa che l'officina teneva e la casa buttava e
          che adesso serve anche qui: sono meta' della riga che separa una
          risposta dalla successiva. */
       if (msg.latencyMs != null) current.latencyMs = msg.latencyMs;
+      /* Il turno e' finito in un errore del modello (`error: {kind}`, dal
+         gateway): la bolla avra' il suo «Riprova» anche dopo una ricarica. */
+      if (msg.error) current.error = msg.error;
       /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto di
          uno strumento, e in casa non e' niente: si butta, punto. L'officina la
          tiene come ripiego quando il turno non ha altro testo, ma quel ripiego
@@ -422,7 +561,16 @@ export class HomeChat {
          E la condizione "solo se non c'e' altro testo" non si puo' nemmeno
          valutare qui: il testo vero arriva *dopo*, in un frame successivo dello
          stesso turno. */
-      if (msg.kind === 'trace' || msg.role === 'tool') continue;
+      if (msg.kind === 'trace' || msg.role === 'tool') {
+        /* Tranne una cosa: quel che il turno ha messo in un cassetto, che diventa
+           il segno sotto la risposta (v. `_journalMarkOf`). */
+        const events = msg.toolEvents || msg.tool_events;
+        const notes = journalNotes(events);
+        if (notes.length) (current.journal ||= []).push(...notes);
+        const moves = moveOffers(events);
+        if (moves.length) (current.moves ||= []).push(...moves);
+        continue;
+      }
       const text = msg.text || msg.content || '';
       if (text) current.content += (current.content ? '\n\n' : '') + text;
     }
@@ -436,6 +584,10 @@ export class HomeChat {
   /** Un frame del websocket. Tutto cio' che non e' qui sotto non riguarda la casa. */
   handleFrame(msg) {
     if (!this._belongsHere(msg)) return;
+    /* Fin qui il filo e' completo: la revisione che `isStale` confronta. La
+       portano solo `turn_end` e l'eco di un messaggio scritto altrove, cioe'
+       i frame dopo i quali non resta niente in volo. */
+    if (msg.rev && (msg.event === 'turn_end' || msg.event === 'user')) this.rev = msg.rev;
     /* La prova che l'ultimo invio è entrato: il gateway sta rispondendo di
        qualcosa che non è un rifiuto. Da qui in poi quella bolla non è più in
        sospeso, e un errore che arrivasse dopo è un errore di altro. */
@@ -501,6 +653,7 @@ export class HomeChat {
     this._frame = null;
     if (!this.blockNode || !this.buffer) return;
     this.blockNode.innerHTML = renderMarkdown(this.buffer);
+    this.band?.refresh();
     this._follow();
   }
 
@@ -523,7 +676,9 @@ export class HomeChat {
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
       renderRich(this.blockNode);
-      this._register(this.turnNode, finalText);
+      this._register(this.turnNode, finalText, this.blockNode);
+      this._lastSegment = this.blockNode;
+      this.band?.refresh();
     }
     this.blockNode = null;
     this.buffer = '';
@@ -533,6 +688,8 @@ export class HomeChat {
   /* Regola 2: testo gia' completo, blocco proprio, chiuso subito. */
   _message(msg) {
     if (msg.session_boundary) {
+      // Il punto di lettura era in una storia che non c'e' piu'.
+      this._marks?.delete(sessionManager.currentKey);
       /* Il contesto e' stato azzerato. La storia sul server e' cambiata sotto i
          piedi: si ricarica invece di indovinare. La rilettura la fa chi sa
          dire che non e' arrivata (il guscio, `onSessionBoundary`); senza di
@@ -542,19 +699,48 @@ export class HomeChat {
       else this.reload().catch((err) => console.warn('home: thread reload after a boundary failed', err));
       return;
     }
+    /* Prima di buttare i frame degli strumenti, quel che hanno messo nei
+       cassetti: il segno sotto la risposta (v. `_journalMarkOf`). */
+    const notes = journalNotes(msg.tool_events);
+    if (notes.length) this._pendingJournal.push(...notes);
+    const moves = moveOffers(msg.tool_events);
+    if (moves.length) this._pendingMoves.push(...moves);
+    /* Un passo: il testo scritto subito prima diventa di passaggio. Il testo
+       di un frame `progress` lo e' da se' (la rilettura ne fa una riga di
+       strumento, che la casa butta): si vede finche' non arriva il seguito. */
+    const step = msg.kind === 'progress' || msg.kind === 'tool_hint';
+    if (step && (msg.tool_events?.length || msg.text)) {
+      if (this.buffer) this._streamEnd();
+      this._markPassing(this._lastSegment);
+    }
     // Un suggerimento di strumento e' esattamente cio' che la casa non mostra.
     if (msg.kind === 'tool_hint') return;
-    if (msg.text) {
+    // L'annuncio o il resoconto di un lavoro che e' gia' una bolla: la bolla
+    // dice la stessa cosa, e meglio.
+    if (msg.work_id && this.claimsWork?.(msg.work_id)) return;
+    if (msg.text || msg.media_urls?.length) {
       if (this.buffer) this._streamEnd();
+      /* Solo un testo che risponde prende il posto della frase di passaggio.
+         Un file da solo (`message` col solo allegato) o un avviso d'errore (il
+         turno finito vuoto) no: quella frase era il riassunto del file, o la
+         risposta prima che il turno si perdesse, e resta. La rilettura fa lo
+         stesso (`transcript_replay.py`, `restore_demoted`). */
+      if (step || (msg.text && !msg.error)) this._dropPassing();
+      else this._keepPassing();
+    }
+    if (msg.text) {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
       renderRich(block);
       this._ensureTurn().appendChild(block);
-      this._register(this.turnNode, msg.text);
+      this._register(this.turnNode, msg.text, block);
+      if (step) this._markPassing(block);
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
     if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
+    if (msg.error && this.turnNode) this._offerRetry(this.turnNode);
+    if (msg.text || msg.media_urls?.length) this.band?.refresh();
     this._follow();
   }
 
@@ -567,7 +753,7 @@ export class HomeChat {
    */
   appendOwn(text, media = []) {
     this._resetTurn();
-    const node = this._appendUser(text, null, media);
+    const node = this._appendUser(text, null, media, false, Date.now());
     this.scrollToBottom();
     /* Partito non vuol dire entrato: il gateway può ancora rifiutarlo (un
        allegato che non riesce ad aprire). Finché non arriva niente che dimostri
@@ -620,7 +806,9 @@ export class HomeChat {
     node.className = 'home-note';
     node.textContent = text;
     this._append(node);
-    this.scrollToBottom();
+    /* Segue il fondo se ci si era; se stai rileggendo piu' su, il «↓» si
+       accende invece di strapparti via (giro UX del 10/10/2026). */
+    this._follow();
     return node;
   }
 
@@ -641,7 +829,7 @@ export class HomeChat {
     const media = msg.media_urls || msg.media || [];
     if (!text && !media.length) return;
     this._resetTurn();
-    this._appendUser(text, msg.origin_channel || msg.origin, media);
+    this._appendUser(text, msg.origin_channel || msg.origin, media, false, Date.now(), msg.device);
     this._follow();
   }
 
@@ -667,23 +855,58 @@ export class HomeChat {
       this._cancelRender();
       this._flushDelta();
     }
+    const dropped = this._dropPassing();
+    this._lastSegment = null;
+    /* Un turno di soli passi, senza niente dopo: come nella rilettura, non e'
+       una bolla vuota con l'ora sotto. E' niente. */
+    if (dropped && this.turnNode && !this.turnNode.children.length) {
+      this.turnNode.remove();
+      this.turnNode = null;
+    }
     if (this.turnNode) {
       const closed = this.turnNode;
-      this._tailOf(closed, this._seconds);
-      /* La bolla e' cresciuta di una riga **dopo** essere stata misurata: il
-         margine per scansare la mascotte va rifatto, e chi era in fondo deve
+      /* Dal vivo l'ora e' quella dell'orologio di qui: il frame non ne porta
+         una, e per una risposta appena chiusa dice la stessa cosa del
+         transcript (che la rilettura usera'). */
+      this._tailOf(closed, this._seconds, Date.now());
+      this._journalMarkOf(closed, this._pendingJournal);
+      this._moveOfferOf(closed, this._pendingMoves);
+      /* La coda dell'ultima risposta scende nella fascia e non allunga niente;
+         quella di una risposta con qualcosa sotto si', e chi era in fondo deve
          restarci. Solo se la bolla e' ancora nel filo — `reload()` passa di
          qui con un nodo che sta per essere buttato. */
-      if (closed.isConnected) {
-        this.gap?.refresh();
-        this._follow();
-      }
+      if (closed.isConnected) this._follow();
     }
     this._seconds = null;
+    this._pendingJournal = [];
+    this._pendingMoves = [];
     this.turnNode = null;
     this.blockNode = null;
     this.buffer = '';
     this.turnId = null;
+  }
+
+  /** Il filo a schermo e' rimasto indietro rispetto a quello vero?
+   *
+   *  Una richiesta piccola (l'ultima riga) e un confronto di revisione: la
+   *  casa la fa tornando visibile, e rilegge solo se serve. Le chat scritte
+   *  dal Mac arrivano gia' dal vivo; questo copre quel che il vivo puo'
+   *  perdere. Senza revisione (gateway vecchio, lettura mai riuscita) o con
+   *  una lettura in corso risponde «no». Un turno in corso lo esclude chi
+   *  chiama (la casa sa se Jenny sta lavorando): a meta' turno il filo cresce
+   *  e rileggerlo strapperebbe la risposta che sta arrivando. */
+  async isStale() {
+    if (!this.rev || this._reading) return false;
+    const key = sessionManager.currentKey;
+    const known = this.rev;
+    let data;
+    try {
+      data = await api.fetchWebuiThread(key, { limit: 1 });
+    } catch {
+      return false;
+    }
+    if (key !== sessionManager.currentKey || known !== this.rev) return false;
+    return Boolean(data?.rev) && data.rev !== known;
   }
 
   /** Ributta giu' la conversazione da capo.
@@ -704,10 +927,10 @@ export class HomeChat {
 
   /* ── Disegno ── */
 
-  _appendUser(text, origin, media, toTop = false) {
+  _appendUser(text, origin, media, toTop = false, at = null, device = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-user';
-    const badge = this._originBadge(origin);
+    const badge = this._originBadge(origin, device);
     if (badge) node.appendChild(badge);
     if (text) {
       const block = document.createElement('div');
@@ -717,10 +940,20 @@ export class HomeChat {
       node.appendChild(block);
     }
     if (media?.length) this._appendMedia(node, media);
+    if (text) this._userSent.set(node, { text, media: Boolean(media?.length) });
+    /* L'ora, sotto la bolla e fuori dalla sua pelle (che e' di `.home-block`):
+       quel che hai scritto ha la sua, come le risposte. */
+    const time = this._timeEl(at);
+    if (time) node.appendChild(time);
+    /* L'ora in millisecondi sul nodo: chi mette qualcosa al suo posto nel filo
+       (la scheda di un piano finito, `HomePlan.place`) la legge da qui, anche
+       dopo una rilettura della storia. */
+    if (Number(at) > 0 && node.dataset) node.dataset.at = String(Number(at));
     return this._append(node, toTop);
   }
 
-  _appendAssistant(content, media, toTop = false, latencyMs = null) {
+  _appendAssistant(content, media, toTop = false, latencyMs = null, at = null, error = null,
+    journal = null, moves = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-jenny';
     if (content) {
@@ -732,13 +965,62 @@ export class HomeChat {
       this._register(node, content);
     }
     if (media?.length) this._appendMedia(node, media);
-    /* Prima di `_append`: quello misura il nodo per scansare la mascotte, e
-       misurarlo senza la sua ultima riga vorrebbe dire misurarlo corto. */
-    this._tailOf(node, latencyMs);
+    /* Prima di `_append`, che rifa la sagoma: il nodo va misurato intero. */
+    this._tailOf(node, latencyMs, at);
+    this._journalMarkOf(node, journal);
+    this._moveOfferOf(node, moves);
+    if (Number(at) > 0 && node.dataset) node.dataset.at = String(Number(at));
     this._append(node, toTop);
+    /* Dopo: `_append` toglie i «Riprova» di prima, e la storia piu' vecchia
+       (`toTop`) non ne ha — il presente e' in fondo. */
+    if (error && !toTop) this._offerRetry(node);
   }
 
-  /** La riga in coda a una risposta: il Copia e i secondi che ci ha messo.
+  /** «Riprova» sotto una risposta finita in un errore del modello.
+   *
+   *  Rimanda il messaggio dell'utente a cui rispondeva — prima andava
+   *  riscritto a mano. Solo per l'ultima cosa detta: qualunque bolla nuova lo
+   *  toglie (`_append`), perche' riprovare una domanda di tre messaggi fa
+   *  vorrebbe dire rispondere fuori posto. Niente «Riprova» se quel messaggio
+   *  aveva allegati: il testo da solo non sarebbe la stessa domanda. */
+  _offerRetry(node) {
+    if (!node || node.querySelector('.home-retry')) return;
+    let prev = node.previousElementSibling;
+    while (prev && !String(prev.className).includes('home-msg-user')) {
+      if (String(prev.className).includes('home-msg-jenny')) return;
+      prev = prev.previousElementSibling;
+    }
+    const sent = prev && this._userSent.get(prev);
+    if (!sent || sent.media) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-retry';
+    btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i>';
+    const label = document.createElement('span');
+    label.textContent = i18n.t('home.retry');
+    btn.appendChild(label);
+    btn.addEventListener('click', () => {
+      btn.remove();
+      this.onRetry?.(sent.text);
+    });
+    node.appendChild(btn);
+  }
+
+  /** L'ora di un messaggio (v. `shared/chat-time.js`), o `null` se non ce
+   *  n'e' una: una cronologia scritta prima del 06/10/2026 che la sessione non
+   *  sa datare resta senza, invece di prendere un'ora inventata. */
+  _timeEl(at) {
+    const text = chatTime(at);
+    if (!text) return null;
+    const el = document.createElement('time');
+    el.className = 'home-time';
+    el.dateTime = chatTimeIso(at);
+    el.textContent = text;
+    return el;
+  }
+
+  /** La riga in coda a una risposta: il Copia, l'ora e i secondi che ci ha
+   *  messo.
    *
    *  **E' anche il confine fra una risposta e la successiva.** In casa non c'e'
    *  ne' bolla ne' avatar: due risposte di fila sono due gruppi di paragrafi,
@@ -746,29 +1028,104 @@ export class HomeChat {
    *  una finisce — e invece di una linea che non fa niente, ci sono le due
    *  cose che uno vorrebbe li'.
    *
-   *  Una riga sola, icona e poi tempo, come in officina. I secondi possono
-   *  mancare del tutto: una consegna proattiva non ha un turno dietro, quindi
-   *  nessuno ha misurato niente, e in quel caso resta il solo Copia.
+   *  Una riga sola, icona e poi tempo, come in officina: «⧉ 11:26 · 4.2s». I
+   *  secondi possono mancare del tutto: una consegna proattiva non ha un
+   *  turno dietro, quindi nessuno ha misurato niente, e resta «⧉ 11:40».
    */
-  _tailOf(node, latencyMs) {
+  /** Il segno discreto dei cassetti: un'icona nella coda della risposta quando
+   *  il turno ha annotato qualcosa in un quaderno. Niente frase «l'ho messo
+   *  in…» nella risposta (scelta dell'utente, 12/10/2026): chi vuole sapere
+   *  dove, tocca, e vede il quaderno e la riga. */
+  _journalMarkOf(node, notes) {
+    if (!node || !notes?.length || node.querySelector('.home-journal-mark')) return;
+    let row = node.querySelector('.home-tail');
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'home-tail';
+      node.appendChild(row);
+    }
+    const names = [...new Set(notes.map((n) => n.notebook))];
+    const label = i18n.t('home.journalMark.label', { notebook: names.join(', ') });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-journal-mark';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<i class="ti ti-notebook" aria-hidden="true"></i>';
+    row.insertBefore(btn, row.firstChild);
+    const detail = document.createElement('div');
+    detail.className = 'home-journal-detail';
+    detail.hidden = true;
+    for (const note of notes) {
+      const line = document.createElement('div');
+      line.className = 'home-journal-line';
+      const where = document.createElement('span');
+      where.className = 'home-journal-where';
+      where.textContent = i18n.t('home.journalMark.where', { notebook: note.notebook });
+      line.appendChild(where);
+      line.appendChild(document.createTextNode(' ' + note.text));
+      detail.appendChild(line);
+    }
+    node.appendChild(detail);
+  }
+
+  /** «Ci spostiamo?»: il tasto che apre il quaderno proposto. Resta anche
+   *  dopo, nella storia: la proposta e' stata fatta, e toccarla piu' tardi apre
+   *  lo stesso quaderno. */
+  _moveOfferOf(node, notebooks) {
+    if (!node || !notebooks?.length || !this.onOpenNotebook) return;
+    if (node.querySelector('.home-move-offer')) return;
+    for (const notebook of notebooks) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'home-move-offer';
+      btn.dataset.notebook = notebook;
+      btn.innerHTML = '<i class="ti ti-notebook" aria-hidden="true"></i> ';
+      btn.appendChild(document.createTextNode(i18n.t('home.moveOffer.open', { notebook })));
+      node.appendChild(btn);
+    }
+  }
+
+  _toggleJournal(btn) {
+    const detail = btn.closest('.home-msg')?.querySelector('.home-journal-detail');
+    if (!detail) return;
+    detail.hidden = !detail.hidden;
+    btn.setAttribute('aria-expanded', String(!detail.hidden));
+  }
+
+  _tailOf(node, latencyMs, at = null) {
     if (!node || node.querySelector('.home-tail')) return;
     /* Solo sulle risposte. Quel che hai scritto tu ha gia' la sua bolla col
        suo bordo: e' separato da se', e un Copia sotto le proprie parole non
        serve a nessuno. Oggi nessun chiamante ci passa una bolla utente — la
        guardia e' perche' la prossima non debba ricordarselo. */
     if (!String(node.className).includes('home-msg-jenny')) return;
-    // Un turno in cui Jenny ha solo lavorato non ha testo da copiare.
-    if (!this._textOf(node)) return;
+    /* Un turno in cui Jenny ha solo lavorato non ha testo da copiare; una
+       risposta di sole immagini non ha Copia, ma la sua ora si'. */
+    const hasText = Boolean(this._textOf(node));
+    const time = this._timeEl(at);
+    if (!hasText && !time) return;
     const row = document.createElement('div');
     row.className = 'home-tail';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'home-copy';
-    btn.title = i18n.t('chat.copy');
-    btn.setAttribute('aria-label', i18n.t('chat.copy'));
-    btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i>';
-    row.appendChild(btn);
+    if (hasText) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'home-copy';
+      btn.title = i18n.t('chat.copy');
+      btn.setAttribute('aria-label', i18n.t('chat.copy'));
+      btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i>';
+      row.appendChild(btn);
+    }
+    if (time) row.appendChild(time);
     if (latencyMs != null) {
+      if (time) {
+        const sep = document.createElement('span');
+        sep.className = 'home-tail-sep';
+        sep.setAttribute('aria-hidden', 'true');
+        sep.textContent = '·';
+        row.appendChild(sep);
+      }
       const s = document.createElement('span');
       s.className = 'home-seconds';
       s.textContent = (latencyMs / 1000).toFixed(1) + 's';
@@ -779,11 +1136,44 @@ export class HomeChat {
 
   /* Il markdown di una bolla si accumula: un turno testo → strumento → testo
      apre piu' blocchi, e copiarne uno solo sarebbe copiare meta' risposta. */
-  _register(node, text) {
+  _register(node, text, block = null) {
     const clean = String(text || '').trim();
     if (!node || !clean) return;
     const before = this._source.get(node);
     this._source.set(node, before ? `${before}\n\n${clean}` : clean);
+    if (block) this._blockSource.set(block, clean);
+  }
+
+  /** Il blocco resta a schermo finche' non arriva qualcosa dopo (v. `_passing`). */
+  _markPassing(block) {
+    if (block && block.isConnected && !this._passing.includes(block)) this._passing.push(block);
+    if (block === this._lastSegment) this._lastSegment = null;
+  }
+
+  /** Le frasi di passaggio restano: non sono piu' di passaggio. */
+  _keepPassing() {
+    this._passing = [];
+  }
+
+  /** Se ne vanno le frasi di passaggio, e con loro il loro pezzo di Copia.
+   *  Dice se ce n'erano. */
+  _dropPassing() {
+    if (!this._passing.length) return false;
+    const turns = new Set();
+    for (const block of this._passing) {
+      if (block.parentNode) turns.add(block.parentNode);
+      block.remove();
+    }
+    this._passing = [];
+    for (const turn of turns) {
+      const kept = [...turn.querySelectorAll('.home-block')]
+        .map((b) => this._blockSource.get(b))
+        .filter(Boolean);
+      if (kept.length) this._source.set(turn, kept.join('\n\n'));
+      else this._source.delete(turn);
+    }
+    this.band?.refresh();
+    return true;
   }
 
   /* Il sorgente se c'e', altrimenti la rete di `innerText`: perde le
@@ -817,13 +1207,14 @@ export class HomeChat {
     this._append(hr, toTop);
   }
 
-  _originBadge(origin) {
+  _originBadge(origin, device = null) {
     if (!origin || origin === 'websocket') return null;
     const known = ORIGINS[origin];
     const badge = document.createElement('div');
     badge.className = 'home-origin';
     const icon = known ? known.icon : 'ti-arrows-exchange';
-    const label = known ? i18n.t(known.key) : origin;
+    const label = !known ? origin
+      : (device && known.named) ? i18n.t(known.named, { device }) : i18n.t(known.key);
     badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
     return badge;
   }
@@ -894,6 +1285,7 @@ export class HomeChat {
     if (!this.turnNode) {
       this.turnNode = document.createElement('div');
       this.turnNode.className = 'home-msg home-msg-jenny';
+      if (this.turnNode.dataset) this.turnNode.dataset.at = String(Date.now());
       this._append(this.turnNode);
     }
     return this.turnNode;
@@ -902,6 +1294,8 @@ export class HomeChat {
   /** Il blocco di testo del segmento di stream in corso. */
   _ensureBlock() {
     if (!this.blockNode) {
+      // Il seguito e' arrivato: la frase di passaggio lascia il posto.
+      this._dropPassing();
       this.blockNode = document.createElement('div');
       this.blockNode.className = 'home-block';
       this._ensureTurn().appendChild(this.blockNode);
@@ -910,8 +1304,12 @@ export class HomeChat {
   }
 
   _append(node, toTop = false) {
+    /* Una cosa nuova in fondo: il «Riprova» di prima non e' piu' dell'ultima
+       risposta (v. `_offerRetry`). */
+    if (!toTop) for (const old of this.el.querySelectorAll('.home-retry')) old.remove();
     if (toTop) this.el.insertBefore(node, this.el.firstChild);
     else if (this._anchor?.parentNode === this.el) this.el.insertBefore(node, this._anchor);
+    else if (this.live?.parentNode === this.el) this.el.insertBefore(node, this.live);
     else this.el.appendChild(node);
     /* Nato mentre una lettura era in volo: e' del presente, e la storia che
        arriva non lo butta (v. `_read`). La storia entra sempre in blocco
@@ -921,18 +1319,38 @@ export class HomeChat {
       this._empty = false;
       this.syncEmpty();
     }
-    /* Chi le finisce nell'angolo si scansa. Qui e non nel `_follow()`: quello
-       scorre, e il margine va deciso **dopo** che il nodo e' nel filo e prima
-       che l'occhio ci arrivi. Dentro un blocco di storia lo fa `_inBatch`,
-       una volta sola alla fine. */
-    if (!this._batching) this.gap?.refresh();
+    /* Il fondo del filo e' cambiato: la sagoma va rifatta **dopo** che il nodo
+       e' nel filo e prima che l'occhio ci arrivi. Dentro un blocco di storia
+       lo fa `_inBatch`, una volta sola alla fine. */
+    if (!this._batching) this.band?.refresh();
     return node;
   }
 
-  /** Mostra o nasconde lo stato vuoto secondo quel che c'e' nel filo. */
+  /** Mostra o nasconde lo stato vuoto secondo quel che c'e' nel filo. Una
+   *  bolla di lavoro conta: una conversazione nuova in cui il giardiniere sta
+   *  lavorando non e' vuota. */
   syncEmpty() {
     const empty = document.getElementById('home-empty');
-    if (empty) empty.hidden = !this._empty;
+    if (empty) empty.hidden = !this._empty || this.live?.hidden === false;
+  }
+
+  /** Il posto vivo e' cambiato: una bolla e' comparsa, cresciuta, sparita.
+   *  Si nasconde da vuoto (un figlio vuoto del filo prenderebbe comunque il
+   *  suo `gap`), e il fondo si riaggancia solo se ci si era. Acceso, separa
+   *  l'ultima risposta dalla fascia: la sagoma va via o torna. */
+  liveChanged() {
+    this.live.hidden = ![...this.live.children].some((child) => !child.hidden);
+    this.syncEmpty();
+    this.band?.refresh();
+    this._follow();
+  }
+
+  /** Una bolla di lavoro finita scende nel filo: da qui e' un messaggio come
+   *  gli altri, e quel che arriva dopo le va sotto. */
+  settle(node) {
+    node.classList.add('home-msg-work');
+    this._append(node);
+    this.liveChanged();
   }
 
   /* ── Scorrimento ── */
@@ -947,11 +1365,12 @@ export class HomeChat {
     if (this._atBottom()) this._stick = true;
     else if (top < this._lastTop) this._stick = false;
     this._lastTop = top;
-    /* Il filo scorre e lei no, quindi quale messaggio le stia dietro cambia.
-       Si ricalcola a scorrimento **fermo** e non qui dentro: il margine manda
-       il testo a capo, e rifarlo a ogni fotogramma sposterebbe sotto le dita
-       quel che si sta leggendo. */
-    this.gap?.scrolling();
+    this._mark();
+    this._paintFab();
+    /* Niente altro, ed e' voluto: lo spazio per Jenny (la fascia e la sagoma,
+       `home-band.js`) dipende da cosa c'e' nel filo, non da dove sta. Fino al
+       06/10/2026 qui si ricalcolava chi le stava dietro, e il testo tornava a
+       capo sotto il dito ogni volta che ti fermavi. */
   }
 
   _atBottom() {
@@ -964,9 +1383,75 @@ export class HomeChat {
     return this._stick;
   }
 
-  /** Segue il fondo, ma solo se ci si era. */
+  /** Segue il fondo, ma solo se ci si era. Se no, il «↓» si accende: sotto
+   *  e' arrivato qualcosa che non stai guardando. */
   _follow() {
-    if (this._stick) this.scrollToBottom();
+    if (this._stick) {
+      this.scrollToBottom();
+      return;
+    }
+    this._newBelow = true;
+    this._paintFab();
+  }
+
+  /* Ricorda dove sei, per la conversazione a schermo. Non con il filo nascosto
+     o staccato (alto zero): azzererebbe un ricordo buono, come avverte
+     `_rememberScrollAnchor` dell'officina. */
+  _mark() {
+    const key = this._shownKey;
+    if (!key || !this.el.clientHeight) return;
+    if (this._atBottom()) this._marks.delete(key);
+    else this._marks.set(key, this.el.scrollHeight - this.el.scrollTop);
+  }
+
+  /** Torna dove eri rimasto in questa conversazione — o in fondo, se eri li'
+   *  o se non c'e' un ricordo.
+   *
+   *  Lo chiamano il trasloco (la chat che sale nel velo o ridiscende) e la
+   *  lettura del filo. Fino al 10/10/2026 entrambi portavano sempre in fondo:
+   *  chi stava rileggendo la storia, aperta e chiusa Jenny, ricominciava da
+   *  capo. Se il punto sta oltre la storia ricaricata si chiedono fino a tre
+   *  pagine in piu'; oltre, si resta in cima a quel che c'e'. */
+  async restorePlace() {
+    const key = sessionManager.currentKey;
+    const fromBottom = this._marks.get(key);
+    if (fromBottom == null || !this.el.clientHeight) {
+      this.scrollToBottom();
+      return;
+    }
+    for (let i = 0; i < 3 && this.el.scrollHeight < fromBottom && this.pager.hasMore; i += 1) {
+      await this.pager.loadMore();
+      if (sessionManager.currentKey !== key) return;
+    }
+    this.el.scrollTop = Math.max(0, this.el.scrollHeight - fromBottom);
+    this._lastTop = this.el.scrollTop;
+    this._stick = this._atBottom();
+    this._paintFab();
+  }
+
+  /* Il «↓» si mostra solo da lontano: oltre un terzo di schermo dal fondo, e
+     mai sotto la soglia di `STICK_PX`. Appena sopra il fondo quel che c'e'
+     sotto si vede gia', e il tasto copriva la scheda del piano (prova 2,
+     24/10/2026). Il filo invece smette di seguire appena oltre `STICK_PX`:
+     le due soglie sono diverse di proposito. */
+  _farFromBottom() {
+    const height = this.el.clientHeight;
+    if (!height) return false;
+    const gap = this.el.scrollHeight - this.el.scrollTop - height;
+    return gap > Math.max(STICK_PX, height / 3);
+  }
+
+  _paintFab() {
+    if (!this.fab) return;
+    const away = this._farFromBottom();
+    /* «Qualcosa di nuovo sotto» si spegne solo arrivando in fondo: nella fascia
+       fra `STICK_PX` e un terzo di schermo il tasto si nasconde, ma il nuovo
+       non l'hai ancora visto, e risalendo il tasto deve ancora dirlo. */
+    if (this._atBottom()) this._newBelow = false;
+    this.fab.classList.toggle('visible', away);
+    this.fab.classList.toggle('has-new', away && this._newBelow);
+    this.fab.setAttribute('aria-label', i18n.t('chat.scrollToBottom'));
+    this.fab.tabIndex = away ? 0 : -1;
   }
 
   /** Riaggancia il fondo **se ci si era**: chi sta rileggendo più su non si
@@ -980,5 +1465,8 @@ export class HomeChat {
     // Anche il ricordo, o il primo gesto dopo sembrerebbe un ritorno indietro.
     this._lastTop = this.el.scrollTop;
     this._stick = true;
+    if (this._shownKey) this._marks?.delete(this._shownKey);
+    this._newBelow = false;
+    this._paintFab();
   }
 }

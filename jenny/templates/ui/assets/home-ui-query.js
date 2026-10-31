@@ -6,12 +6,14 @@
  *  che l'app fosse in background.
  *
  *  Cosa si descrive, dal piu' specifico:
- *  - una **stanza** aperta sopra la pista (le pagine del quaderno, il lettore,
- *    le stanze delle impostazioni): `view` e' il suo nome, l'HTML e' il suo;
- *  - altrimenti la **pagina** della pista a schermo — la chat, un quaderno, il
- *    cassetto delle app, i Quaderni, le Impostazioni, un'app appesa: `view` e'
- *    il suo id, l'HTML il suo pannello. I Quaderni con un quaderno aperto
- *    dicono `notebook`: li' dentro c'e' la chat di quel quaderno.
+ *  - una **stanza** aperta sopra la pista (la bacheca di un quaderno, un
+ *    cassetto, il lettore, le stanze delle impostazioni): `view` e' il suo
+ *    nome, l'HTML e' il suo;
+ *  - altrimenti la **pagina** della pista a schermo — la chat, la porta di un
+ *    quaderno, il cassetto delle app, i Quaderni, le Impostazioni, un'app
+ *    appesa: `view` e' il suo id, l'HTML il suo pannello.
+ *  Con la chat aperta sopra la pagina (`over: 'chat'`) si descrive sempre
+ *  quel che sta sotto: e' di quello che l'utente sta parlando.
  *  Il prefisso `home:` dice a Jenny in che guscio e' l'utente: le stesse
  *  parole («chat», «settings») nell'officina sono un'altra schermata.
  *
@@ -24,9 +26,13 @@ import { UiQueryResponder, requestFrameHtml } from './shared/ui-query.js';
 
 /* Le stanze della casa e il loro elemento. Sono le chiavi di `BACK_TO` in
    `home-app.js`; una stanza nuova senza riga qui manda a Jenny un HTML vuoto,
-   non un errore. */
+   non un errore — ed e' successo: fino al 05/10/2026 qui c'era ancora `pages`
+   (le pagine del quaderno, sparite con la bacheca) e mancavano la bacheca e il
+   cassetto, quindi «cosa vedi?» davanti alla bacheca tornava vuoto. Un
+   contratto ora tiene questa tabella allineata a `BACK_TO` e a `index.html`. */
 const ROOM_ELEMENTS = {
-  pages: 'home-notebook-pages',
+  board: 'home-board',
+  drawer: 'home-board-drawer',
   reader: 'home-reader',
   jenny: 'home-jenny-room',
   model: 'home-model-room',
@@ -59,9 +65,6 @@ export class HomeUiQuery extends UiQueryResponder {
       container = document.getElementById(ROOM_ELEMENTS[room] || '');
     } else {
       name = entry?.id || 'chat';
-      /* I Quaderni con un quaderno aperto sono una chat, non l'elenco: dirlo
-         «notebooks» farebbe credere a Jenny di guardare la lista. */
-      if (entry?.kind === 'notebooks' && pages?.notebooksConversation) name = 'notebook';
       container = pages?.panelOf?.(index) || null;
     }
     const payload = {
@@ -69,6 +72,10 @@ export class HomeUiQuery extends UiQueryResponder {
       drawer: null,
       html: this._pruneHtml(container ? container.outerHTML : ''),
     };
+    /* La chat aperta sopra la pagina (dal 05/10/2026): quel che si descrive
+       resta la pagina sotto — e' quella di cui l'utente sta parlando — ma
+       Jenny deve sapere che la sta guardando attraverso la chat. */
+    if (app?.chatOver) payload.over = 'chat';
 
     const shown = await this._openApp(room, entry);
     if (shown) payload.app = shown;

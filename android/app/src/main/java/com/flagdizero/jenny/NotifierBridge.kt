@@ -260,6 +260,13 @@ class NotifierBridge(context: Context) {
          *  di sempre e la conversazione — e l'icona, l'intent del tocco e
          *  soprattutto **l'azione Rispondi** devono restare identici: una
          *  conversazione a cui non si può rispondere sarebbe un vicolo cieco.
+         *
+         *  Tranne in un caso, ed è voluto: **l'alert di un quaderno non ha
+         *  Rispondi.** La risposta dalla tendina entra nella chat personale
+         *  (`session_key_for_channel`: la vita fuori di Jenny non entra in un
+         *  quaderno), e una frase scritta sotto il nome di un quaderno che
+         *  finisce altrove è peggio di nessuna azione. Lì la strada è il tocco,
+         *  che porta nel quaderno (v. [AlertConversation]).
          */
         private fun baseBuilder(context: Context, tag: String): NotificationCompat.Builder {
             // L'action non è decorativa: è l'unica cosa che distingue questo
@@ -268,17 +275,19 @@ class NotifierBridge(context: Context) {
             // aveva niente da riconoscere e il tap riportava l'app dov'era,
             // mini-app aperta compresa, invece che in chat. Porta anche il
             // gettone che la distingue da un'action scritta da un'altra app.
-            return NotificationCompat.Builder(context, CHANNEL_ID)
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_jenny)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setContentIntent(alertTapIntent(context, tag))
-                .addAction(replyAction(context, tag))
+            if (AlertConversation.ofTag(tag) == null) builder.addAction(replyAction(context, tag))
+            return builder
         }
 
-        /** Il tocco sull'alert di *tag*: l'intent che porta in chat, gettone
-         *  compreso. Lo stesso `requestCode` e gli stessi flag a ogni chiamata,
+        /** Il tocco sull'alert di *tag*: l'intent che porta in chat — quella del
+         *  quaderno, se il tag ne nomina uno ([AlertConversation.ofTag]) —
+         *  gettone compreso. Lo stesso `requestCode` e gli stessi flag a ogni chiamata,
          *  ed e' questo che lo rende riscrivibile: un `PendingIntent` si
          *  riconosce da codice, intent (action e componente, non gli extra) e
          *  flag, e con `FLAG_UPDATE_CURRENT` una seconda richiesta uguale
@@ -288,7 +297,7 @@ class NotifierBridge(context: Context) {
             PendingIntent.getActivity(
                 context,
                 tag.hashCode(),
-                MainActivity.openChatIntent(context),
+                MainActivity.openChatIntent(context, AlertConversation.ofTag(tag)),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -467,10 +476,15 @@ class NotifierBridge(context: Context) {
          *  dall'``onResume`` liscio di allora).
          *
          *  Non tocca la notifica persistente del gateway, che vive su un altro
-         *  canale. */
-        fun clearAlerts(context: Context, trigger: String) {
+         *  canale.
+         *
+         *  Cancella solo gli alert di *conversation*, la chat arrivata a schermo
+         *  (`null`: la personale): aprire un quaderno non dice niente degli
+         *  avvisi personali, né la chat personale di quelli di un quaderno. */
+        fun clearAlerts(context: Context, trigger: String, conversation: String? = null) {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             val pending = manager.activeNotifications.filter {
+                AlertConversation.ofTag(it.tag) == conversation &&
                 // La notifica di mancata consegna resta. Non è un messaggio da
                 // leggere — è un testo dell'utente che non è arrivato, con il
                 // pulsante per rimandarlo — quindi "la chat è a schermo" non la
@@ -486,7 +500,10 @@ class NotifierBridge(context: Context) {
             // dei tre percorsi qui sotto, o il dito dell'utente sulla tendina.
             // Misurato il 27/08/2026: la prima verifica di questa funzione è
             // stata inconcludente esattamente per questo.
-            Log.d(TAG, "clearAlerts($trigger): cancelled ${pending.size} alert(s)")
+            Log.d(
+                TAG,
+                "clearAlerts($trigger, ${conversation ?: "personal"}): cancelled ${pending.size} alert(s)"
+            )
         }
     }
 
@@ -499,15 +516,43 @@ class NotifierBridge(context: Context) {
     private fun ensureChannel() = ensureAlertChannel(appContext)
 
     /**
-     * Posta un alert che squilla. Ritorna false quando soppresso (app in
-     * foreground), permesso mancante o errore — il chiamante Python logga e
+     * Posta un alert che squilla. Ritorna false quando soppresso (la sua chat
+     * è a schermo), permesso mancante o errore — il chiamante Python logga e
      * basta, il messaggio resta comunque in chat.
+     *
+     * Soppresso solo se la chat è davvero davanti, non se l'app lo è: Jenny è
+     * il launcher, e «in primo piano» voleva dire anche la pagina App o una
+     * bacheca, dove il promemoria arrivava muto (v. MainActivity.isChatOnScreen).
+     * «La sua chat» è quella del tag: la personale, o il quaderno di un cron del
+     * quaderno ([AlertConversation.ofTag]).
      */
     fun postAlert(title: String, body: String, tag: String): Boolean {
-        if (MainActivity.isInForeground) {
-            Log.d(TAG, "Alert suppressed: app in foreground")
+        if (MainActivity.isInForeground && MainActivity.chatOnScreen(AlertConversation.ofTag(tag))) {
+            Log.d(TAG, "Alert suppressed: the chat is on screen")
             return false
         }
+        return post(title, body, tag)
+    }
+
+    /**
+     * Come [postAlert], per la risposta a un messaggio scritto nell'app: tace
+     * se l'app è davanti, su qualunque pagina.
+     *
+     * Il gate di [postAlert] (solo la chat personale a schermo) è giusto per un
+     * avviso che parte da Jenny, e sbagliato per una risposta: chi ha appena
+     * scritto la aspetta, e la vede arrivare. Dentro un quaderno, che ha una
+     * chat sua, la chat personale non è mai a schermo — e dal 10/10/2026 ogni
+     * risposta lì squillava, con l'utente che la stava leggendo.
+     */
+    fun postReply(title: String, body: String, tag: String): Boolean {
+        if (MainActivity.isInForeground) {
+            Log.d(TAG, "Reply alert suppressed: app in foreground")
+            return false
+        }
+        return post(title, body, tag)
+    }
+
+    private fun post(title: String, body: String, tag: String): Boolean {
         // Se su questo tag è già aperto un filo, questa è la sua continuazione e
         // non una scheda nuova. È il caso normale di una risposta: la domanda
         // l'utente l'ha scritta *dentro* quella notifica, e la risposta deve

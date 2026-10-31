@@ -20,9 +20,10 @@
  */
 
 import { i18n } from './shared/i18n.js';
-import { escapeHtml } from './shared/utils.js';
+import { escapeHtml, showToast } from './shared/utils.js';
 import { drawRow } from './shared/apps-actions.js';
 import { projectKey } from './shared/conversation-list.js';
+import { initialOf, paintSpine } from './shared/spines.js';
 
 export class NotebookCard {
   /** @param guscio `{ homePages(), open(name), delete(name), rename?(name) }`. */
@@ -63,11 +64,17 @@ export class NotebookCard {
 
   show(name) {
     if (!this.sheet || !name) return;
-    document.getElementById('home-notebook-sheet-title').innerHTML =
+    /* In testa la sua copertina in piccolo, con la tela e l'iniziale della
+       pagina Quaderni, e il nome **intero**: sulla copertina puo' essere
+       tagliato a due righe, e la scheda e' il posto dove lo si legge tutto. */
+    const title = document.getElementById('home-notebook-sheet-title');
+    title.innerHTML =
       `<div class="app-sheet-head">
-        <div class="app-sheet-icon"><i class="ti ti-notebook" aria-hidden="true"></i></div>
+        <div class="app-sheet-icon home-who-mini" aria-hidden="true">${escapeHtml(initialOf(name))}</div>
         <div class="app-sheet-name">${escapeHtml(name)}</div>
       </div>`;
+    const mini = title.querySelector('.home-who-mini');
+    if (mini) paintSpine(mini, name);
 
     const actions = document.getElementById('home-notebook-sheet-actions');
     actions.innerHTML = this.rows(name).map(drawRow).join('');
@@ -100,7 +107,13 @@ export class NotebookCard {
     const homePages = this.shell.homePages?.();
     if (action === 'open') return this.shell.open(name);
     if (action === 'pin') return homePages?.append('conversation', key);
-    if (action === 'unpin') return homePages?.detach('conversation', key);
+    if (action === 'unpin') {
+      /* Detto, come per un'app (`apps.unpinned`): la pagina sparisce dalla
+         fila in alto, che dalla scheda spesso non si vede. */
+      const done = await homePages?.detach('conversation', key);
+      if (done) showToast(i18n.t('home.notebook.unpinned'), 'success');
+      return done;
+    }
     if (action === 'rename') return this.shell.rename?.(name);
     if (action === 'delete') return this.shell.delete(name);
     return undefined;

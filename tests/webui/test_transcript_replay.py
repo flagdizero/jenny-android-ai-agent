@@ -267,3 +267,140 @@ def test_consecutive_proactive_answers_stay_distinct_messages() -> None:
     ]
     messages = replay_transcript_to_ui_messages(lines)
     assert [m["content"] for m in messages] == [f"avviso {i}" for i in range(4)]
+
+
+def test_the_text_of_a_long_work_keeps_its_id_and_its_role() -> None:
+    """La bolla di lavoro della home (05/10/2026): l'annuncio e il resoconto di
+    un ``/gardener`` portano l'id del lavoro, e l'annuncio dice di esserlo."""
+    lines = [
+        {"event": "message", "chat_id": "project:orto", "text": "Gardening orto...",
+         "work_id": "gardener-1", "work_start": True},
+        {"event": "message", "chat_id": "project:orto", "text": "The gardener read 2 lines.",
+         "work_id": "gardener-1"},
+        {"event": "message", "chat_id": "project:orto", "text": "altro"},
+    ]
+    start, report, other = replay_transcript_to_ui_messages(lines)
+    assert (start["workId"], start.get("workStart")) == ("gardener-1", True)
+    assert (report["workId"], report.get("workStart")) == ("gardener-1", None)
+    assert "workId" not in other
+
+
+def test_a_turn_that_ended_in_an_error_stays_an_error_bubble() -> None:
+    """Il turno finito in errore del provider: il payload dal vivo porta
+    ``error: {kind}`` (``ws_sender``), e riaprendo la chat la stessa chiave, con
+    la stessa forma, arriva nel messaggio rigiocato. Un ``error`` storto non passa."""
+    lines = [
+        {"event": "message", "chat_id": "default", "text": "Non riesco a raggiungere il modello.",
+         "error": {"kind": "connection"}},
+        {"event": "message", "chat_id": "default", "text": "ciao"},
+        {"event": "message", "chat_id": "default", "text": "x", "error": "connection"},
+        {"event": "message", "chat_id": "default", "text": "y", "error": {"kind": ""}},
+    ]
+    failed, ok, bad_shape, empty_kind = replay_transcript_to_ui_messages(lines)
+    assert failed["error"] == {"kind": "connection"}
+    assert failed["content"] == "Non riesco a raggiungere il modello."
+    assert "error" not in ok
+    assert "error" not in bad_shape
+    assert "error" not in empty_kind
+
+
+def _answers(messages: list[dict]) -> list[str]:
+    """I testi che la casa mostra: le risposte, non i pensieri ne' le righe degli strumenti."""
+    return [
+        m["content"] for m in messages
+        if m.get("role") == "assistant" and m.get("kind") != "trace" and m.get("content")
+    ]
+
+
+def _before_a_tool(text: str) -> list[dict]:
+    return [
+        {"event": "user", "chat_id": "c1", "text": "dimmi"},
+        {"event": "delta", "text": text},
+        {"event": "stream_end", "text": text},
+        {"event": "message", "kind": "progress", "text": "",
+         "tool_events": [{"phase": "start", "name": "message"}]},
+    ]
+
+
+def test_text_before_a_tool_gives_way_to_the_answer() -> None:
+    lines = [
+        *_before_a_tool("ok, la cerco"),
+        {"event": "delta", "text": "fatto"},
+        {"event": "stream_end", "text": "fatto"},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["fatto"]
+
+
+def test_a_file_on_its_own_keeps_the_text_before_it() -> None:
+    """Come dal vivo: il riassunto prima di ``message`` col solo file resta."""
+    lines = [
+        *_before_a_tool("ecco la ricerca: tre fonti"),
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["ecco la ricerca: tre fonti"]
+
+
+def test_an_error_notice_keeps_the_answer_before_it() -> None:
+    lines = [
+        *_before_a_tool("si annaffia una volta a settimana"),
+        {"event": "message", "text": "Ho finito i passaggi ma non…", "error": {"kind": "empty"}},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == [
+        "si annaffia una volta a settimana", "Ho finito i passaggi ma non…",
+    ]
+
+
+def test_a_file_after_the_answer_does_not_bring_the_old_line_back() -> None:
+    lines = [
+        *_before_a_tool("ok, la cerco"),
+        {"event": "delta", "text": "ecco il file"},
+        {"event": "stream_end", "text": "ecco il file"},
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["ecco il file"]
+
+
+def test_a_progress_line_before_a_file_on_its_own_comes_back() -> None:
+    """Il rientro di un aiutante: in un turno di sistema la frase arriva come ``progress``.
+
+    Dal vivo resta sopra il file (``_keepPassing``); riaprendo la chat era sparita,
+    perche' la rilettura ne fa una riga di strumento.
+    """
+    lines = [
+        {"event": "message", "kind": "progress", "text": "ecco la ricerca: luce filtrata"},
+        {"event": "message", "kind": "progress", "text": "",
+         "tool_events": [{"phase": "start", "name": "message"}]},
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["ecco la ricerca: luce filtrata"]
+
+
+def test_a_progress_line_followed_by_the_answer_stays_a_tool_line() -> None:
+    lines = [
+        {"event": "message", "kind": "progress", "text": "l'aiutante ha finito"},
+        {"event": "message", "text": "acqua una volta al mese"},
+        {"event": "message", "text": "", "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    assert _answers(replay_transcript_to_ui_messages(lines)) == ["acqua una volta al mese"]
+
+
+def test_a_line_before_a_file_that_was_deleted_stays() -> None:
+    """Il file allegato non c'e' piu': la frase scritta sopra resta.
+
+    Rileggendo, il file mancante non torna da ``augment_assistant_media``; prima
+    la frase restava pensiero e la casa la buttava con lui (s22, 28/10/2026).
+    """
+    lines = [
+        {"event": "message", "kind": "progress", "text": "ecco la ricerca: luce filtrata"},
+        {"event": "message", "text": "", "media": ["/ws/output/r.md"],
+         "media_urls": [{"url": "/m/r.md", "name": "r.md"}]},
+        {"event": "turn_end"},
+    ]
+    messages = replay_transcript_to_ui_messages(lines, augment_assistant_media=lambda _p: [])
+    assert _answers(messages) == ["ecco la ricerca: luce filtrata"]

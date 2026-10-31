@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
@@ -74,6 +74,10 @@ const renderMarkdown = (t) => t;
    `test_rich_surfaces_contract.py`. */
 const renderRich = () => {};
 const i18n = { t: (key) => 'i18n:' + key };
+/* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
+   suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
+const chatTime = (ms) => (ms ? '11:26' : '');
+const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
 
 function makeChat() {
   const chat = {
@@ -81,6 +85,7 @@ function makeChat() {
     _empty: true,
     _stick: true,
     _source: new WeakMap(),
+    _userSent: new WeakMap(),
     _seconds: null,
     _batching: false,
     _follow() {},
@@ -99,10 +104,13 @@ function makeChat() {
     __PREPEND__,
     __IN_BATCH__,
     __APPEND_USER__,
+    __TIME_EL__,
     __APPEND_ASSISTANT__,
     __APPEND_BOUNDARY__,
     __APPEND__,
     __TAIL__,
+    __JOURNAL_MARK__,
+    __MOVE_OFFER__,
     __REGISTER__,
     __TEXT__,
   };
@@ -130,13 +138,16 @@ def _harness() -> str:
         .replace("__PREPEND__", member(src, "prependTurns"))
         .replace("__IN_BATCH__", member(src, "_inBatch"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
+        .replace("__TIME_EL__", member(src, "_timeEl"))
         .replace("__APPEND_ASSISTANT__", member(src, "_appendAssistant"))
         .replace("__APPEND_BOUNDARY__", member(src, "_appendBoundary"))
         .replace("__APPEND__", member(src, "_append"))
         .replace("__TAIL__", member(src, "_tailOf"))
         .replace("__REGISTER__", member(src, "_register"))
         .replace("__TEXT__", member(src, "_textOf"))
-    )
+        .replace("__JOURNAL_MARK__", member(src, "_journalMarkOf"))
+        .replace("__MOVE_OFFER__", member(src, "_moveOfferOf"))
+    ) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
 
 
 def _run_js(script: str) -> None:
@@ -229,6 +240,22 @@ def test_an_older_page_does_not_wake_the_empty_state() -> None:
 # ── Il filo con cui la casa è legata al modulo condiviso ─────────────────────
 
 
+def test_a_turn_takes_the_time_of_its_last_part() -> None:
+    """L'ora che la cronologia porta (``sentAt``) arriva alla bolla: quella di
+    chi scrive la sua, quella di una risposta in piu' pezzi l'ultima — quando
+    il turno si e' chiuso, come dal vivo."""
+    _run_js("""
+      const chat = makeChat();
+      const turns = chat._buildTurns([
+        { role: 'user', content: 'ciao', sentAt: 100 },
+        { role: 'assistant', content: 'primo', turnId: 't1', sentAt: 200 },
+        { role: 'assistant', content: 'secondo', turnId: 't1', sentAt: 300 },
+        { role: 'user', content: 'di prima', },
+      ]);
+      assert.deepEqual(turns.map((t) => t.at), [100, 300, null]);
+    """)
+
+
 def test_the_house_measures_and_listens_on_the_same_element() -> None:
     """In officina scroller ed emettitore sono due oggetti diversi (il documento
     e `window`); in casa il filo è entrambi. È la sola asimmetria fra i gusci, e
@@ -285,7 +312,10 @@ const STICK_PX = __STICK_PX__;  // il numero vero, letto dal sorgente
 
 function makeChat(el) {
   const chat = { el, _stick: true, _lastTop: el.scrollTop, __ON_SCROLL__, __AT_BOTTOM__,
-                 __FOLLOW__, __KEEP__, __SCROLL__ };
+                 __FOLLOW__, __KEEP__, __SCROLL__,
+                 // Il punto di lettura e il «↓» hanno il loro banco
+                 // (`test_home_place_client.py`): qui conta l'aggancio.
+                 _mark() {}, _paintFab() {} };
   // L'aggancio vero: senza, `fire()` non chiama niente e il banco passa a vuoto.
   el.addEventListener('scroll', () => chat._onScroll());
   return chat;

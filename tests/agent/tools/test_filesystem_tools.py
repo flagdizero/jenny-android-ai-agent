@@ -117,15 +117,6 @@ class TestFindMatch:
         assert match is None
         assert count == 0
 
-    def test_crlf_normalisation(self):
-        # Caller normalises CRLF before calling _find_match, so test with
-        # pre-normalised content to verify exact match still works.
-        content = "line1\nline2\nline3"
-        old_text = "line1\nline2\nline3"
-        match, count = _find_match(content, old_text)
-        assert match is not None
-        assert count == 1
-
     def test_line_trim_fallback(self):
         content = "    def foo():\n        pass\n"
         old_text = "def foo():\n    pass"

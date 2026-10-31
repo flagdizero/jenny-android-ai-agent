@@ -10,13 +10,20 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.session.history_meta import is_synthetic_history_row
+from jenny.session.history_meta import (
+    CHECKPOINT_META,
+    COMPACTED_META,
+    REASONING_DROPPED_META,
+    SENT_CONTENT_META,
+    is_synthetic_history_row,
+)
 from jenny.utils.helpers import (
     channel_delivery_aware_user_start,
     ensure_dir,
     estimate_message_tokens,
     find_legal_message_start,
     image_placeholder_text,
+    merge_message_content,
     recent_message_start_index,
     safe_filename,
 )
@@ -135,13 +142,25 @@ class Session:
         max_tokens: int = 0,
         include_timestamps: bool = False,
         extend_to_user: bool = False,
+        replay_sent: bool = False,
     ) -> list[dict[str, Any]]:
         """Return unconsolidated messages for LLM input.
 
         History is sliced by message count first (``max_messages``), then by
         token budget from the tail (``max_tokens``) when provided.
+
+        Con *replay_sent* una riga che porta il testo com'e' partito
+        (``SENT_CONTENT_META``) torna con quello, senza ``[Message Time]`` e
+        senza breadcrumb: e' la richiesta del turno dopo, e deve rimandare il
+        prefisso che il provider ha gia' in cache. Lo chiedono solo i due
+        costruttori del turno; il consolidatore e ``/history`` leggono
+        ``content``.
         """
-        unconsolidated = self.messages[self.last_consolidated:]
+        # Le righe sostituite dal checkpoint di un turno lungo non tornano: al
+        # loro posto, in coda alla richiesta, il checkpoint (``CHECKPOINT_META``).
+        unconsolidated = [
+            m for m in self.messages[self.last_consolidated:] if not m.get(COMPACTED_META)
+        ]
         max_messages = max_messages if max_messages > 0 else 120
         start_idx = recent_message_start_index(
             unconsolidated,
@@ -165,8 +184,25 @@ class Session:
         for message in sliced:
             if message.get("_command"):
                 continue
+            checkpoint = message.get(CHECKPOINT_META)
+            if isinstance(checkpoint, str) and checkpoint:
+                if out and out[-1].get("role") == "user":
+                    out[-1] = {
+                        **out[-1],
+                        "content": merge_message_content(out[-1].get("content"), checkpoint),
+                    }
+                else:
+                    out.append({"role": "user", "content": checkpoint})
             content = message.get("content", "")
             role = message.get("role")
+            sent = message.get(SENT_CONTENT_META) if replay_sent else None
+            if isinstance(sent, str):
+                replayed: dict[str, Any] = {"role": role, "content": sent}
+                for key in ("tool_calls", "tool_call_id", "name"):
+                    if key in message:
+                        replayed[key] = message[key]
+                out.append(replayed)
+                continue
             if role == "assistant" and isinstance(content, str):
                 content = _sanitize_assistant_replay_text(content)
             # Synthesize an ``[image: path]`` breadcrumb from the persisted
@@ -186,7 +222,8 @@ class Session:
                 if not any(key in message for key in ("tool_calls", "reasoning_content", "thinking_blocks")):
                     continue
             entry: dict[str, Any] = {"role": message["role"], "content": content}
-            for key in ("tool_calls", "tool_call_id", "name", "reasoning_content", "thinking_blocks"):
+            for key in ("tool_calls", "tool_call_id", "name", "reasoning_content", "thinking_blocks",
+                        REASONING_DROPPED_META):
                 if key in message:
                     entry[key] = message[key]
             out.append(entry)

@@ -24,10 +24,10 @@ from jenny.agent.dream_cycle import (
     batch_was_not_consolidated,
     consolidation_landed,
     finish_dream_cycle,
-    format_stuck_alarm,
 )
 from jenny.agent.memory import MemoryStore
 from jenny.agent.memory_budget import budget_report
+from jenny.runtime.user_text import say
 
 
 @pytest.fixture
@@ -215,30 +215,6 @@ class TestBatchWasNotConsolidated:
         assert STUCK_IS_ALARMING == 4
 
 
-class TestTheAlarmNamesOneCauseAgain:
-    """Questo test difendeva la vaghezza, ed era giusto finché le cause erano tre.
-
-    Sostituisce ``TestTheAlarmNoLongerNamesOneCause``, che chiedeva l'opposto:
-    con il caso di 12:01 — scrittura riuscita che non porta niente — una frase
-    sui rifiuti mandava chi la legge a controllare la cosa sbagliata, quindi la
-    frase era stata sfumata fino a coprire tutti e tre i casi. Vera e inutile.
-
-    La fase 5 ha tolto il motivo: gli altri due casi salgono ora su
-    ``nothing_new_runs``, che logga e non allarma, quindi qui arriva una causa
-    sola. Una diagnosi che può essere precisa deve esserlo — indica un rimedio
-    che esiste, alzare un tetto.
-    """
-
-    def test_it_blames_the_cap_because_now_only_the_cap_gets_here(self):
-        alarm = format_stuck_alarm(4)
-
-        assert "size cap" in alarm
-        assert "4 runs" in alarm
-
-    def test_the_hedge_is_gone(self):
-        assert "are not landing" not in format_stuck_alarm(4)
-
-
 class TestTheEvidenceIsNowCounted:
     """La stima è diventata una verifica, e la soglia se n'è andata con lei.
 
@@ -318,6 +294,27 @@ class TestTheEvidenceIsNowCounted:
             before=before, history_text=correction, stuck=0, replaced=1
         )
 
+    def test_a_remove_settles_a_correction(self, store):
+        """Una correzione che smentisce senza sostituire si applica con una
+        remove: anche quella è il consolidamento, o il batch si rigioca."""
+        store.user_file.write_text("y" * 1999, encoding="utf-8")
+        before = _report(store, user=2000)
+        store.user_file.write_text("y" * 1900, encoding="utf-8")
+        correction = "[2026-10-12 09:00] - [correction] Non ha mai suonato il contrabbasso\n"
+
+        assert not batch_was_not_consolidated(
+            before=before, history_text=correction, stuck=0, removed=1, attempted=1
+        )
+
+    def test_a_bare_remove_does_not_settle_a_batch_of_new_facts(self, store):
+        store.user_file.write_text("y" * 1999, encoding="utf-8")
+        before = _report(store, user=2000)
+        store.user_file.write_text("y" * 1900, encoding="utf-8")
+
+        assert batch_was_not_consolidated(
+            before=before, history_text=_REAL_BATCH, stuck=0, removed=1, attempted=1
+        )
+
     def test_a_correction_batch_with_no_replace_is_still_held(self, store):
         store.user_file.write_text("y" * 1999, encoding="utf-8")
         before = _report(store, user=2000)
@@ -345,6 +342,7 @@ class TestARunWithoutTheEntryTool:
 
         assert NO_ENTRIES.entries_added == 0
         assert NO_ENTRIES.entries_replaced == 0
+        assert NO_ENTRIES.entries_removed == 0
         assert NO_ENTRIES.entries_already_present == 0
 
     def test_which_leaves_the_size_net_in_charge(self, store):
@@ -492,14 +490,13 @@ class TestTheAlarmCanNameItsCauseAgain:
     """
 
     def test_it_names_the_cap(self):
-        text = format_stuck_alarm(STUCK_IS_ALARMING)
+        text = say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
 
-        assert "size cap" in text
-        assert "refusing its writes" in text
+        assert "memory files are full" in text
 
     def test_it_still_says_how_long(self):
-        assert str(STUCK_IS_ALARMING) in format_stuck_alarm(STUCK_IS_ALARMING)
+        assert str(STUCK_IS_ALARMING) in say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
 
     def test_it_no_longer_hedges(self):
-        assert "are not landing" not in format_stuck_alarm(STUCK_IS_ALARMING)
+        assert "are not landing" not in say("alarm.dream_stuck", stuck=STUCK_IS_ALARMING)
 

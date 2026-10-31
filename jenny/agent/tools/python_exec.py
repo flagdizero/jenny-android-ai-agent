@@ -46,6 +46,14 @@ from jenny.agent.tools.schema import (
 )
 from jenny.config.paths import get_workspace_path
 from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in config.tool_schemas)
+from jenny.security.subagent_policy import StagedWriteRequiredError
+from jenny.security.subagent_policy import check_read as _check_subagent_read
+from jenny.security.subagent_policy import check_write as _check_subagent_write
+from jenny.security.subagent_policy import current_subagent_policy as _current_subagent_policy
+from jenny.security.subagent_policy import must_stage as _must_stage_subagent_write
+from jenny.security.subagent_policy import note_move as _note_subagent_move
+from jenny.security.subagent_policy import note_write as _note_subagent_write
+from jenny.security.workspace_policy import refuse_board_write
 from jenny.utils.helpers import truncate_head_tail
 
 logger = logging.getLogger(__name__)
@@ -55,13 +63,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 #
 # IMPORTANT / TRUST BOUNDARY: python_exec runs arbitrary Python IN-PROCESS on
-# the single Chaquopy interpreter. With `os`/`sys`/`shutil`/`httpx` in
+# the single Chaquopy interpreter. With `os`/`sys`/`shutil`/`asyncio` in
 # `allowed_modules`, there is NO in-process sandbox that resists a motivated
 # adversary. The REAL containment is:
 #   * the Android app sandbox (the app's own uid/permissions),
 #   * the workspace path policy (filesystem reads and writes — see
 #     security.workspace_policy),
-#   * the SSRF policy (outbound network — see security.network).
+#   * the SSRF policy (outbound network — see security.network; raw sockets
+#     included, see `_patch_socket_egress`).
 # The allow/block module lists below are a USABILITY GUARDRAIL (they stop the
 # agent from accidentally reaching for e.g. `subprocess`), NOT a containment
 # control. Deployments that don't trust the model should disable python_exec
@@ -1029,6 +1038,108 @@ def _patch_asyncio_thread_hops() -> None:
     loop_cls.run_in_executor = _guarded_run_in_executor  # type: ignore[method-assign]
 
 
+# ---------------------------------------------------------------------------
+# Socket grezzi: la stessa politica SSRF di ``http_get``
+# ---------------------------------------------------------------------------
+#
+# ``socket`` è bloccato solo come ``import socket``: ``asyncio`` è ammesso e
+# porta con sé il modulo (``asyncio.base_events.socket``), e
+# ``asyncio.open_connection`` apre TCP verso qualunque indirizzo. Misurato
+# l'11/10/2026 con un server su 127.0.0.1: entrambe le forme si connettevano,
+# cioè il codice di un subagent raggiungeva il gateway stesso e la rete di
+# casa saltando ``validate_url_target``. Le helper ``http_get``/``http_post``
+# erano l'unica strada controllata, e non l'unica strada.
+#
+# Il controllo sta sui metodi di ``socket.socket`` (la classe Python, non il
+# tipo C), dove arrivano tutte le librerie: asyncio, urllib, http.client,
+# httpx. È GUARD-GATED come gli altri wrapper globali: per il codice host è un
+# passthrough, quindi il gateway non lo vede. Un nome viene risolto qui e la
+# connessione va all'IP appena controllato, così una seconda risoluzione non
+# può cambiare destinazione (DNS rebinding).
+#
+# Resta aperto il tipo C ``_socket.socket`` (``asyncio.base_events.socket._socket``):
+# i suoi metodi non si possono rimpiazzare. Vedi ``TestKnownRemainingDoors``.
+_SOCKET_EGRESS_METHODS = ("connect", "connect_ex", "sendto", "sendmsg")
+
+
+class SocketEgressError(PermissionError):
+    """Connessione rifiutata dalla guardia sui socket di ``python_exec``."""
+
+
+def _checked_socket_address(family: int, address: Any) -> Any:
+    """Restituisce l'indirizzo da usare davvero, o solleva se è bloccato."""
+    import socket as _socket_mod
+
+    from jenny.security.network import is_blocked_ip
+    from jenny.security.subagent_policy import socket_egress_refusal
+
+    # J1: all'incrocio un socket aperto a mano non ha un URL da confrontare con
+    # il compito; passa solo ciò che ``http_get``/``http_post`` hanno approvato.
+    if refusal := socket_egress_refusal():
+        raise SocketEgressError(refusal)
+
+    if family not in (_socket_mod.AF_INET, _socket_mod.AF_INET6):
+        raise SocketEgressError(
+            "python_exec: only internet sockets are allowed (no unix or raw "
+            "sockets); use http_get/http_post"
+        )
+    if not isinstance(address, tuple) or len(address) < 2:
+        raise SocketEgressError("python_exec: unrecognized socket address")
+    host, port = address[0], address[1]
+    if isinstance(host, bytes):
+        host = host.decode("idna", "replace")
+    try:
+        infos = _socket_mod.getaddrinfo(host, port, family, _socket_mod.SOCK_STREAM)
+    except OSError as exc:
+        raise SocketEgressError(f"python_exec: cannot resolve {host!r}: {exc}") from exc
+    ips = [info[4][0] for info in infos]
+    blocked = [ip for ip in ips if is_blocked_ip(ip)]
+    if not ips or blocked:
+        raise SocketEgressError(
+            f"python_exec: connection to {host!r} refused — it resolves to a "
+            "private or internal address (same network policy as http_get)"
+        )
+    return (ips[0], port, *address[2:])
+
+
+def _patch_socket_egress() -> None:
+    """Monta la guardia sui metodi di uscita di ``socket.socket``.
+
+    Idempotente (il metodo reale è su ``_jenny_real_fn``). Vedi il commento
+    qui sopra.
+    """
+    import socket as _socket_mod
+
+    cls = _socket_mod.socket
+
+    def _wrap(name: str) -> None:
+        current = getattr(cls, name)
+        real = getattr(current, "_jenny_real_fn", current)
+
+        if name in ("connect", "connect_ex"):
+            def _guarded(self: Any, address: Any, /) -> Any:
+                if _guarded_exec_is_active():
+                    address = _checked_socket_address(self.family, address)
+                return real(self, address)
+        elif name == "sendto":
+            def _guarded(self: Any, data: Any, *rest: Any) -> Any:
+                if _guarded_exec_is_active() and rest:
+                    rest = (*rest[:-1], _checked_socket_address(self.family, rest[-1]))
+                return real(self, data, *rest)
+        else:  # sendmsg(buffers, ancdata, flags, address)
+            def _guarded(self: Any, *args: Any) -> Any:
+                if _guarded_exec_is_active() and len(args) >= 4:
+                    args = (*args[:3], _checked_socket_address(self.family, args[3]))
+                return real(self, *args)
+
+        _guarded._jenny_real_fn = real  # type: ignore[attr-defined]
+        setattr(cls, name, _guarded)
+
+    for method in _SOCKET_EGRESS_METHODS:
+        if hasattr(cls, method):
+            _wrap(method)
+
+
 def _refuse_write_if_readonly(op: str) -> None:
     """Chiude una mutazione quando il turno è in sola lettura.
 
@@ -1058,6 +1169,30 @@ def _refuse_write_if_readonly(op: str) -> None:
 
     if current_turn_is_readonly():
         raise ReadOnlyTurnError(f"refused {op}")
+
+
+def _refuse_guarded_write(path: Any, *, tree: bool = False) -> None:
+    """I recinti di scrittura che non dipendono dal confine di workspace.
+
+    La bacheca di un quaderno e il codice di un'app (``refuse_board_write``), e
+    dentro un subagent i file segreti e il codice di sistema
+    (``security.subagent_policy``). Un solo nome per ogni via di scrittura di
+    questo file, così un recinto nuovo non è un punto di chiamata da
+    dimenticare.
+    """
+    refuse_board_write(path)
+    # *tree*: la scrittura toglie o sposta una cartella intera (``rmtree``, una
+    # rinomina), e il registro dell'annulla ne annota il contenuto.
+    _check_subagent_write(path, tree=tree)
+    # Un file che Jenny carica da sola, in un lavoro non fidato: da qui non si
+    # può mettere in bozza (un ``open`` può appendere, rinominare, troncare),
+    # quindi si rimanda ai tool dei file, che la bozza la fanno.
+    if _must_stage_subagent_write(path):
+        raise StagedWriteRequiredError(os.path.basename(str(path)))
+    # Un lavoro non fidato contamina ciò che scrive. Qui non si sa se la
+    # scrittura è completa (``open(..., 'a')`` passa di qui come ``'w'``), quindi
+    # si registra soltanto e non si pulisce mai: pulire è di ``write_file``.
+    _note_subagent_write(path)
 
 
 # Flag di ``os.open`` che significano "questa apertura può cambiare il file".
@@ -1531,11 +1666,18 @@ class PythonNamespace:
                 # Percorso dell'interprete (vedi `_runtime_path_prefixes`):
                 # passa invariato, così Chaquopy può estrarre e leggere i `.so`.
                 return str(file)
-            return resolve_allowed_path(
+            resolved = resolve_allowed_path(
                 str(file),
                 workspace=base or root,
                 allowed_root=root,
             )
+            if for_write:
+                # La bacheca di un quaderno ha i suoi imbuti (``BoardWriteError``).
+                _refuse_guarded_write(resolved)
+            else:
+                # Dentro un subagent i file segreti non si leggono nemmeno.
+                _check_subagent_read(resolved)
+            return resolved
 
     @staticmethod
     def _open_target(resolved: Any) -> Any:
@@ -1692,6 +1834,9 @@ class PythonNamespace:
                 )
             except Exception:
                 return False
+            # Importare un file è leggerlo: se l'ha scritto un lavoro non fidato,
+            # il lavoro che lo importa lo diventa (``taint_ledger``).
+            _check_subagent_read(origin)
         return True
 
     def _guarded_import(self, name: str, *args, **kwargs):
@@ -1951,6 +2096,10 @@ class PythonNamespace:
                     workspace=anchor,
                     allowed_root=boundary,
                 )
+                if flags & _OS_OPEN_WRITE_FLAGS:
+                    _refuse_guarded_write(resolved)
+                else:
+                    _check_subagent_read(resolved)
             return real_open(str(resolved), flags, mode)
 
         _workspace_open._jenny_real_open = real_open  # type: ignore[attr-defined]
@@ -2231,6 +2380,9 @@ class PythonNamespace:
                         return _real(*args, **kwargs)
                     raw = _default
                 resolved = self._guarded_os_path(raw, op=_op, boundary=boundary)
+                if _is_mutating(_op):
+                    with _path_guard_bypass():
+                        _refuse_guarded_write(resolved)
                 return _real(resolved, *rest, **kwargs)
 
             self._install_os_wrapper(mod, name, _single, real)
@@ -2265,6 +2417,12 @@ class PythonNamespace:
                     return _real(*args, **kwargs)
                 src = self._guarded_os_path(raw_src, op=_op, boundary=boundary)
                 dst = self._guarded_os_path(raw_dst, op=_op, boundary=boundary)
+                if _is_mutating(_op):
+                    with _path_guard_bypass():
+                        _refuse_guarded_write(src, tree=True)
+                        _refuse_guarded_write(dst, tree=True)
+                        # Il taint della sorgente segue il file (``taint_ledger``).
+                        _note_subagent_move(src, dst)
                 return _real(src, dst, *rest, **kwargs)
 
             self._install_os_wrapper(mod, name, _two, real)
@@ -2299,6 +2457,8 @@ class PythonNamespace:
             if raw_src is None or raw_dst is None:
                 return real(*args, **kwargs)
             dst = self._guarded_os_path(raw_dst, op="os.symlink", boundary=boundary)
+            with _path_guard_bypass():
+                _refuse_guarded_write(dst)
             target = self._normalize_path_arg(raw_src, op="os.symlink")
             base = boundary if os.path.isabs(target) else os.path.dirname(dst)
             self._guarded_os_path(target, op="os.symlink", boundary=boundary, base=base)
@@ -2375,6 +2535,7 @@ class PythonNamespace:
             self._reject_rmtree_callbacks(args, kwargs)
             target = self._guarded_os_path(path, op="shutil.rmtree", boundary=boundary)
             with _path_guard_bypass():
+                _refuse_guarded_write(target, tree=True)
                 return real(target, *args, **kwargs)
 
         _guarded_rmtree._jenny_real_fn = real  # type: ignore[attr-defined]
@@ -2756,6 +2917,9 @@ class PythonNamespace:
         # `rules` (stub di evasione di `os`, filtro di `sys.modules`), non solo
         # il confine di path. Vedi `_patch_asyncio_thread_hops`.
         _patch_asyncio_thread_hops()
+        # Anche questa in entrambe le modalità: la rete non è una questione di
+        # workspace. Vedi `_patch_socket_egress`.
+        _patch_socket_egress()
         # I wrapper di path servono in DUE casi, non in uno solo. Il confine di
         # workspace è il primo; il secondo è un turno in **sola lettura**, che
         # non è una questione di *dove* si scrive e vale quindi anche senza
@@ -2867,11 +3031,20 @@ class PythonNamespace:
         try:
             self._enter_guard(working_dir)
             with _capture_streams(stdout_buf, stderr_buf):
-                # Try eval first (for expressions)
+                # Un'espressione si valuta (il suo valore torna), il resto si
+                # esegue. La scelta si fa compilando, e l'esecuzione sta FUORI
+                # dall'``except``: dentro, ogni errore del codice arrivava al
+                # modello dopo un «SyntaxError: invalid syntax» sulla prima
+                # riga e un «During handling of the above exception», e un
+                # modello piccolo correggeva la sintassi invece dell'errore
+                # vero (sul Titan, il 07/10/2026, un HTTP 429 sepolto così).
                 try:
-                    result = eval(self._compile(code, "eval"), ns)
+                    compiled, mode = self._compile(code, "eval"), "eval"
                 except SyntaxError:
-                    # Fall back to exec (for statements)
+                    compiled, mode = None, "exec"
+                if mode == "eval":
+                    result = eval(compiled, ns)
+                else:
                     exec(self._compile(code, "exec"), ns)
         except (PythonExecInterrupted, _SessionStopped, asyncio.CancelledError):
             # Interrupt del sandbox (timeout / stop): non è un errore del
@@ -3153,8 +3326,15 @@ async def run_python_async(
     ident_cell: list[int | None] = [None]
     done_cell = [False]
 
+    # Dentro un aiutante il registro dell'annulla conta questo thread: dopo una
+    # cancellazione può continuare a scrivere, e l'annulla lo aspetta.
+    _policy = _current_subagent_policy()
+    journal = _policy.journal if _policy is not None else None
+
     def _run():
         ident_cell[0] = threading.get_ident()
+        if journal is not None:
+            journal.enter_thread()
         try:
             if function:
                 return namespace.call_function(
@@ -3178,6 +3358,8 @@ async def run_python_async(
             return "", traceback.format_exc(), None
         finally:
             done_cell[0] = True
+            if journal is not None:
+                journal.exit_thread()
 
     # Costruito QUI, sul thread dell'event loop, dove le due metà del turno
     # esistono ancora. Il contesto è copiato per questa singola esecuzione, e

@@ -20,6 +20,26 @@ if TYPE_CHECKING:
     from jenny.session.manager import Session
 
 
+class AgentLoopRun(tuple):
+    """Il ritorno di ``AgentLoop._run_agent_loop``: la quintupla di sempre, più ``error_kind``.
+
+    ``(final_content, tools_used, messages, stop_reason, had_injections)`` si
+    spacchetta come prima — i chiamanti e i test che lo fanno non cambiano — e
+    in più porta il tipo d'errore del provider quando il turno è finito in
+    errore (``AgentRunResult.error_kind``), che RESPOND mette nei metadata
+    dell'outbound. Un attributo e non un sesto elemento proprio per non rompere
+    quelle spacchettature; chi lo legge usa ``getattr(..., "error_kind", None)``,
+    perché un ``_run_agent_loop`` finto nei test torna una tupla nuda.
+    """
+
+    error_kind: str | None
+
+    def __new__(cls, items: tuple[Any, ...], *, error_kind: str | None = None) -> AgentLoopRun:
+        run = super().__new__(cls, items)
+        run.error_kind = error_kind
+        return run
+
+
 class TurnDisposition(Enum):
     """Come si e' concluso un turno, dal punto di vista di chi lo ha chiesto.
 
@@ -63,17 +83,30 @@ class TurnOutcome:
     da "non ho potuto controllare" (v. ``jenny/cron/bound_runner.py``).
     """
 
-    @classmethod
-    def delivered(cls, message: OutboundMessage, *, final_text: str = "") -> "TurnOutcome":
-        return cls(TurnDisposition.DELIVERED, message, final_text or message.content)
+    stop_reason: str = ""
+    """Come è finito il giro del modello (``AgentRunResult.stop_reason``), o vuoto.
+
+    Vuoto per un turno che il modello non l'ha visto (scartato, tenuto, già
+    consegnato). Lo legge il driver del piano a fine turno: un passo finito in
+    ``provider_refused`` si blocca subito, senza il promemoria che rifarebbe la
+    stessa richiesta. Qui e non nei metadata inbound, che finiscono nell'outbound.
+    """
 
     @classmethod
-    def spoke_via_tool(cls, *, final_text: str = "") -> "TurnOutcome":
-        return cls(TurnDisposition.SPOKE_VIA_TOOL, None, final_text)
+    def delivered(
+        cls, message: OutboundMessage, *, final_text: str = "", stop_reason: str = ""
+    ) -> "TurnOutcome":
+        return cls(
+            TurnDisposition.DELIVERED, message, final_text or message.content, stop_reason
+        )
 
     @classmethod
-    def silent(cls, *, final_text: str = "") -> "TurnOutcome":
-        return cls(TurnDisposition.SILENT, None, final_text)
+    def spoke_via_tool(cls, *, final_text: str = "", stop_reason: str = "") -> "TurnOutcome":
+        return cls(TurnDisposition.SPOKE_VIA_TOOL, None, final_text, stop_reason)
+
+    @classmethod
+    def silent(cls, *, final_text: str = "", stop_reason: str = "") -> "TurnOutcome":
+        return cls(TurnDisposition.SILENT, None, final_text, stop_reason)
 
     @classmethod
     def of(
@@ -82,13 +115,14 @@ class TurnOutcome:
         *,
         spoke_via_tool: bool,
         final_text: str = "",
+        stop_reason: str = "",
     ) -> "TurnOutcome":
         """Costruisce l'esito dai due soli fatti che il turno conosce."""
         if message is not None:
-            return cls.delivered(message, final_text=final_text)
+            return cls.delivered(message, final_text=final_text, stop_reason=stop_reason)
         if spoke_via_tool:
-            return cls.spoke_via_tool(final_text=final_text)
-        return cls.silent(final_text=final_text)
+            return cls.spoke_via_tool(final_text=final_text, stop_reason=stop_reason)
+        return cls.silent(final_text=final_text, stop_reason=stop_reason)
 
     @property
     def spoke(self) -> bool:
@@ -140,6 +174,9 @@ class TurnContext:
     all_messages: list[dict[str, Any]] = field(default_factory=list)
     stop_reason: str = ""
     had_injections: bool = False
+    # Il tipo d'errore del provider, se il turno è finito in errore
+    # (``AgentLoopRun.error_kind``): diventa ``error: {kind}`` nell'outbound.
+    error_kind: str | None = None
 
     user_persisted_early: bool = False
     save_skip: int = 0

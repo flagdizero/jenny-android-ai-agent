@@ -7,7 +7,6 @@ test fissano: cosa e' una wiki, e cosa e' una pagina.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from jenny.utils.wiki_paths import (
@@ -29,17 +28,6 @@ def _make_wiki(wikis_dir: Path, name: str, *, pages: dict[str, str] | None = Non
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(body, encoding="utf-8")
     return root
-
-
-def _touch_newer(path: Path) -> None:
-    """Riscrive *path* forzando un mtime più recente.
-
-    Su filesystem a granularità bassa due write consecutive possono condividere
-    lo stesso mtime: qui lo spostiamo in avanti a mano invece di sperare.
-    """
-    path.write_text(path.read_text(encoding="utf-8") + "\nmore\n", encoding="utf-8")
-    st = path.stat()
-    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
 
 
 class TestDiscovery:

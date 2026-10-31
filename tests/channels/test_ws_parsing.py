@@ -14,7 +14,6 @@ from jenny.channels.ws_parsing import (
     _extract_data_url_mime,
     _is_websocket_upgrade,
     _parse_envelope,
-    _parse_inbound_payload,
     classify_media_item,
 )
 
@@ -45,32 +44,6 @@ def test_classify_octet_stream_without_image_name_is_file() -> None:
 def test_classify_non_dict_is_file() -> None:
     assert classify_media_item("nope") == "file"
     assert classify_media_item(None) == "file"
-
-# -- _parse_inbound_payload ---------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("ciao", "ciao"),
-        ("  ciao  ", "ciao"),
-        ("", None),
-        ("   \n\t ", None),
-        ('{"content": "dal json"}', "dal json"),
-        ('{"text": "campo text"}', "campo text"),
-        ('{"message": "campo message"}', "campo message"),
-        ('{"content": "primo", "text": "secondo"}', "primo"),
-        ('{"content": "   "}', None),
-        ('{"content": 42}', None),
-        ("{}", None),
-        ("[1, 2]", "[1, 2]"),  # solo gli oggetti JSON vengono interpretati
-
-        ('{"malformato": ', '{"malformato":'),  # JSON rotto → testo grezzo
-    ],
-)
-def test_parse_inbound_payload(raw: str, expected: str | None) -> None:
-    assert _parse_inbound_payload(raw) == expected
-
 
 # -- _parse_envelope ----------------------------------------------------------------
 

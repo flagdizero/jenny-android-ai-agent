@@ -36,6 +36,7 @@ _METHODS = (
     "_ensureMsgActions",
     "_appendMsgActions",
     "_appendLatency",
+    "_appendTime",
 )
 
 
@@ -101,6 +102,10 @@ function el(tag) {
 }
 const document = { createElement: el };
 const i18n = { t: (key) => key };
+/* L'ora: il formato e' di `shared/chat-time.js` (`test_chat_time_client.py`);
+   qui conta dove si posa. */
+const chatTime = (ms) => (ms ? '11:26' : '');
+const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
 
 function bubble(role, ...texts) {
   const msg = el('div');
@@ -127,7 +132,7 @@ function actions(msg) {
   const row = msg.children.find((c) => c.className.split(' ').includes('chat-msg-actions'));
   if (!row) return null;
   return row.children.map((b) => (
-    b.className === 'chat-meta' ? b.textContent : b.className.split(' ')[1]
+    ['chat-meta', 'chat-time'].includes(b.className) ? b.textContent : b.className.split(' ')[1]
   ));
 }
 """.replace("__METHODS__", methods)
@@ -279,4 +284,54 @@ def test_a_tools_only_turn_offers_nothing_to_copy() -> None:
       assert.equal(actions(msg), null);
       c._appendLatency(msg, 1500);
       assert.deepEqual(actions(msg), ['1.5s']);
+    """)
+
+
+# ── L'ora (06/10/2026) ───────────────────────────────────────────────────────
+
+
+def test_the_time_sits_between_copy_and_the_seconds() -> None:
+    """«⧉ 11:26 · 4.2s» in tutti e due gli ordini d'arrivo: dal vivo i secondi
+    arrivano col `turn_end` prima dell'ora, nella cronologia dopo il Copia."""
+    _run_js("""
+      const c = chat();
+      const live = bubble('ai', 'risposta');
+      c._appendLatency(live, 4200);
+      c._appendMsgActions(live);
+      c._appendTime(live, 1791200000000);
+      assert.deepEqual(actions(live), ['chat-msg-copy', '11:26', '4.2s']);
+      const history = bubble('ai', 'risposta');
+      c._appendMsgActions(history);
+      c._appendTime(history, 1791200000000);
+      c._appendLatency(history, 4200);
+      assert.deepEqual(actions(history), ['chat-msg-copy', '11:26', '4.2s']);
+    """)
+
+
+def test_the_dot_between_time_and_seconds_is_drawn_by_the_css() -> None:
+    css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
+    assert re.search(r"\.chat-time \+ \.chat-meta::before\s*\{[^}]*content: '\\00B7'", css)
+
+
+def test_your_bubble_gets_a_row_with_only_its_time() -> None:
+    """Sotto quel che hai scritto non c'e' Copia, ma l'ora si'."""
+    _run_js("""
+      const c = chat();
+      const msg = bubble('user', 'ciao');
+      c._appendMsgActions(msg);
+      c._appendTime(msg, 1791200000000);
+      assert.deepEqual(actions(msg), ['11:26']);
+    """)
+
+
+def test_the_time_is_written_once_and_never_invented() -> None:
+    _run_js("""
+      const c = chat();
+      const msg = bubble('ai', 'risposta');
+      c._appendMsgActions(msg);
+      c._appendTime(msg, null);
+      assert.deepEqual(actions(msg), ['chat-msg-copy']);
+      c._appendTime(msg, 1791200000000);
+      c._appendTime(msg, 1791200999999);
+      assert.deepEqual(actions(msg), ['chat-msg-copy', '11:26']);
     """)

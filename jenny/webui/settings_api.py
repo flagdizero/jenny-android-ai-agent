@@ -25,6 +25,7 @@ from jenny.channels.http_utils import (
     parse_flag,
     query_first,
 )
+from jenny.channels.ws_remote import on_remote_listener
 from jenny.config import store
 from jenny.config.loader import get_config_path, load_config
 from jenny.config.schema import KEEP_AWAKE_MODES, Config, FloatingConfig
@@ -289,7 +290,7 @@ WELCOME_TEMPLATES: dict[str, str] = {
 
 # Tupla e non `set`: la UI ne fa un menu', e l'ordine di un `set` non e'
 # garantito fra due esecuzioni. Il controllo `in` costa uguale su due voci.
-_CONTEXT_WINDOW_TOKEN_OPTIONS = (65_536, 262_144)
+_CONTEXT_WINDOW_TOKEN_OPTIONS = (65_536, 131_072, 262_144)
 _ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Vocabolario accettato dal layer provider (``openai_compat_provider._build_kwargs``
 # normalizza "minimum" in "minimal"). La select della WebUI ne espone un
@@ -926,6 +927,7 @@ def settings_payload(
             "context_window_options": list(_CONTEXT_WINDOW_TOKEN_OPTIONS),
             "temperature": effective_preset.temperature,
             "reasoning_effort": effective_preset.reasoning_effort,
+            "main_reasoning_effort": defaults.main_reasoning_effort,
             "timezone": defaults.timezone,
             "bot_name": defaults.bot_name,
             "bot_icon": defaults.bot_icon,
@@ -949,11 +951,13 @@ def settings_payload(
         },
         # Mascotte flottante. ``available`` dice se la finestra può esistere su
         # questo dispositivo: fuori da Android no, e la UI nasconde la voce
-        # invece di offrire un interruttore che non farebbe nulla.
+        # invece di offrire un interruttore che non farebbe nulla. Nemmeno da un
+        # altro dispositivo (Tailscale): la mascotte compare sul telefono, che
+        # e' nel cassetto, e la route la rifiuta (v. ``phone_only``).
         "floating": {
             "enabled": config.floating.enabled,
             "reply_hold_s": config.floating.reply_hold_s,
-            "available": _android_context() is not None,
+            "available": _android_context() is not None and not on_remote_listener(),
         },
         "runtime": {
             "config_path": str(_safe_expanduser(get_config_path())),
@@ -1045,6 +1049,14 @@ async def update_agent_settings(query: QueryParams) -> dict[str, Any]:
     return settings_payload(requires_restart=restart.get("required", False))
 
 
+# Gli alias di ``_apply_agent_settings`` che non chiedono il riavvio e non
+# toccano il provider, perche' il loro valore non vive in memoria: chi lo usa lo
+# rilegge da ``config.json`` ogni volta. E' la terza via dell'invariante in
+# ``tests/webui/test_settings_alias_invariant.py``, che per ognuno di questi
+# prova anche la rilettura vera.
+LIVE_FROM_DISK_ALIASES: frozenset[str] = frozenset({"bot_name", "botName"})
+
+
 def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, bool]:
     """Applica le impostazioni agente a *config*; ritorna (modificato, richiede-riavvio).
 
@@ -1092,15 +1104,16 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         defaults.temperature = temperature
         changed = True
 
-    reasoning_effort = _parse_reasoning_effort(
-        _query_first_alias(query, "reasoning_effort", "reasoningEffort")
-    )
-    if (
-        not isinstance(reasoning_effort, _Unset)
-        and defaults.reasoning_effort != reasoning_effort
+    # Il ragionamento di tutti e quello della sola Jenny. Per il secondo la
+    # stringa vuota non vuol dire «decide il provider» ma «come il primo».
+    for field, aliases in (
+        ("reasoning_effort", ("reasoning_effort", "reasoningEffort")),
+        ("main_reasoning_effort", ("main_reasoning_effort", "mainReasoningEffort")),
     ):
-        defaults.reasoning_effort = reasoning_effort
-        changed = True
+        effort = _parse_reasoning_effort(_query_first_alias(query, *aliases))
+        if not isinstance(effort, _Unset) and getattr(defaults, field) != effort:
+            setattr(defaults, field, effort)
+            changed = True
 
     # ``validate_timezone_name`` rifiuta i nomi IANA sconosciuti, e degrada ad
     # accettare se ``tzdata`` manca.
@@ -1108,9 +1121,11 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         changed = True
         restart_required = True
 
+    # Niente riavvio: il nome lo rilegge da ``config.json`` chi lo usa, a ogni
+    # uso — il prompt d'identità a ogni turno, il titolo di ogni notifica
+    # (``runtime/user_text.current_bot_name``). V. ``LIVE_FROM_DISK_ALIASES``.
     if _apply_str(query, defaults, "bot_name", "bot_name", "botName"):
         changed = True
-        restart_required = True
 
     # ``required=False``: l'icona vuota è "nessuna icona", che è una scelta
     # legittima — a differenza del nome vuoto, che è un errore di battitura.
@@ -1471,6 +1486,14 @@ async def update_floating_settings(query: QueryParams) -> dict[str, Any]:
     # Ciò che Android ha concesso, non ciò che l'utente ha chiesto: è la
     # differenza che l'interruttore deve poter raccontare.
     payload["floating"]["active"] = applied
+    # E lo stato della lettura dello schermo, che vive sotto la mascotte: senza,
+    # la riga «Legge lo schermo» non compariva accendendo la mascotte, ma solo
+    # alla prossima apertura delle Impostazioni (visto su ``jenny_s22``,
+    # 13/10/2026).
+    if payload["floating"].get("available"):
+        from jenny.runtime.screen import screen_state
+
+        payload["floating"]["screen"] = await screen_state()
     return payload
 
 

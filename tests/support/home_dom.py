@@ -11,6 +11,8 @@ costruisce la casa sul markup vero.
 Finti restano i confini: ``fetch`` (una tabella di rotte, piu' un gancio per
 fallire o rallentare una rotta), il ``WebSocket`` (ricorda cosa gli si manda,
 e ``frame()`` gli fa arrivare un frame), e ``showModal`` dove jsdom non l'ha.
+Gli script che la casa carica su richiesta (``ensureVendor``) arrivano dalla
+cartella della UI, come dall'APK.
 
 jsdom **non** e' una dipendenza del repo: senza, questi test si saltano con
 :data:`requires_jsdom`. Si trova con ``NODE_PATH`` (``require`` lo rispetta,
@@ -82,6 +84,30 @@ if (!w.HTMLDialogElement.prototype.showModal) {
 w.matchMedia = w.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
 globalThis.matchMedia = w.matchMedia;
 
+/* Uno `<script src>` messo nella testa (`ensureVendor`) si carica dalla
+   cartella della UI: jsdom senza risorse non lo caricherebbe mai, e non
+   direbbe nemmeno di aver fallito. Un UMD si appoggia su `globalThis`, che qui
+   e' la finestra; un file che non c'e' e' un `onerror`, come nella WebView. */
+const appendToHead = w.document.head.appendChild.bind(w.document.head);
+w.document.head.appendChild = (el) => {
+  const src = el.tagName === 'SCRIPT' ? el.getAttribute('src') || '' : '';
+  const node = appendToHead(el);
+  if (src.startsWith('/html-mobile/')) {
+    setTimeout(() => {
+      let code;
+      try {
+        code = fs.readFileSync(UI + src.slice('/html-mobile'.length), 'utf8');
+      } catch {
+        el.onerror?.();
+        return;
+      }
+      new Function('window', 'self', 'globalThis', code)(w, w, w);
+      el.onload?.();
+    }, 0);
+  }
+  return node;
+};
+
 export const locales = {
   it: JSON.parse(fs.readFileSync(UI + '/assets/i18n/it.json', 'utf8')),
   en: JSON.parse(fs.readFileSync(UI + '/assets/i18n/en.json', 'utf8')),
@@ -130,12 +156,35 @@ globalThis.fetch = async (url, init) => {
 
 /* Il socket: ricorda cosa gli si manda, e si apre al giro dopo. Un comando
    (`rpc`) il cui metodo sta in `rpcAnswers` riceve la risposta al giro dopo,
-   col risultato che la funzione calcola dai parametri; gli altri restano
-   senza, come un gateway che non risponde. Una funzione che torna
+   col risultato che la funzione calcola dai parametri. Una funzione che torna
    `rpcFailed(...)` fa rispondere un rifiuto (`ok: false`), come un comando
-   che il gateway non ha potuto eseguire. */
+   che il gateway non ha potuto eseguire.
+
+   Un metodo che non sta in `rpcAnswers` riceve subito un rifiuto
+   (`unknown_method`), come da un gateway che non lo conosce. Prima restava
+   senza risposta, e la richiesta aspettava il suo timeout di venti secondi:
+   e' successo due volte (`apps.trash`, `plan.changes`) prima che qualcuno se ne
+   accorgesse. Chi vuole davvero un gateway muto su un metodo lo mette in
+   `rpcSilent`. */
 export const sent = [];
-export const rpcAnswers = {};
+export const rpcSilent = new Set();
+export const rpcAnswers = {
+  /* La pagina App chiede il cestino ogni volta che si accende: un gateway vero
+     risponde sempre, e senza risposta la richiesta aspetterebbe il suo
+     timeout tenendo vivo node per venti secondi a test. */
+  'apps.trash': () => ({ ok: true, trash: [] }),
+  /* Le bozze da approvare si rileggono a ogni apertura del socket: stessa
+     ragione, una casa senza bozze. */
+  'staged.list': () => ({ ok: true, staged: [] }),
+  /* I piani a lista, idem: si rileggono a ogni apertura (il lucchetto e il
+     bollino dei quaderni) e a ogni cambio di conversazione. Una casa senza piani. */
+  'plan.list': () => ({ ok: true, plans: [] }),
+  'plan.get': () => ({ ok: true, plan: null }),
+  /* I conti di un piano finito o fermato: la scheda li chiede appena lo vede
+     chiuso. Senza risposta erano venti secondi in piu' per ogni prova che ne
+     chiude uno. Un piano che non ha cambiato niente. */
+  'plan.changes': () => ({ ok: true, added: [], changed: [], removed: [], groups: {} }),
+};
 const RPC_FAILED = Symbol('rpcFailed');
 export const rpcFailed = (code = 'unavailable', message = 'failed') => ({ [RPC_FAILED]: { code, message } });
 export class FakeWS {
@@ -148,14 +197,14 @@ export class FakeWS {
   send(d) {
     const msg = JSON.parse(d);
     sent.push(msg);
-    const answer = msg.type === 'rpc' ? rpcAnswers[msg.method] : null;
-    if (answer) {
-      const out = answer(msg.params || {});
-      const reply = out && out[RPC_FAILED]
-        ? { event: 'rpc_result', id: msg.id, ok: false, error: out[RPC_FAILED] }
-        : { event: 'rpc_result', id: msg.id, ok: true, result: out };
-      setTimeout(() => this.onmessage?.({ data: JSON.stringify(reply) }), 0);
-    }
+    if (msg.type !== 'rpc' || rpcSilent.has(msg.method)) return;
+    const answer = rpcAnswers[msg.method]
+      || (() => rpcFailed('unknown_method', `${msg.method} non ha risposta nel banco`));
+    const out = answer(msg.params || {});
+    const reply = out && out[RPC_FAILED]
+      ? { event: 'rpc_result', id: msg.id, ok: false, error: out[RPC_FAILED] }
+      : { event: 'rpc_result', id: msg.id, ok: true, result: out };
+    setTimeout(() => this.onmessage?.({ data: JSON.stringify(reply) }), 0);
   }
   close() {}
 }
@@ -167,6 +216,26 @@ export const frame = (m) => FakeWS.last.onmessage({ data: JSON.stringify(m) });
 
 export const unhandled = [];
 process.on('unhandledRejection', (e) => unhandled.push(String((e && e.message) || e)));
+
+/* I timer che la prova stessa ha messo e che non sono ancora partiti. A fine
+   prova node esce subito (v. `_POSTLUDE`), senza aspettare i timer della
+   pagina: un `setTimeout` scritto nella prova senza `await`, con gli assert
+   dentro, verrebbe tagliato e la prova passerebbe senza averli eseguiti. Qui
+   lo si vede: conta solo chi chiama `setTimeout` direttamente da `case.mjs`. */
+export const caseTimers = new Map();
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+globalThis.setTimeout = function (fn, ms, ...args) {
+  const caller = (new Error().stack || '').split('\n')[2] || '';
+  if (!caller.includes('/case.mjs:')) return realSetTimeout(fn, ms, ...args);
+  const id = realSetTimeout((...a) => { caseTimers.delete(id); fn(...a); }, ms, ...args);
+  caseTimers.set(id, caller.trim());
+  return id;
+};
+globalThis.clearTimeout = function (id) {
+  caseTimers.delete(id);
+  return realClearTimeout(id);
+};
 
 export const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 export const $ = (id) => document.getElementById(id);
@@ -193,16 +262,47 @@ export async function boot() {
 """
 
 
-def run_home(script: str, *, timeout: float = 60) -> str:
+# In coda a ogni prova: node esce appena l'ultimo assert e' passato. Senza,
+# restava vivo circa un secondo ad aspettare i timer della pagina (animazioni,
+# riletture), e su ~350 prove erano minuti. Prima di uscire guarda due cose che
+# l'attesa lasciava passare in silenzio: un rifiuto di promessa non gestito e un
+# timer della prova non ancora partito. Lo stdout si chiude prima di `exit`: su
+# macOS una pipe e' asincrona, e un `process.exit` secco ne tronca la coda.
+_POSTLUDE = r"""
+;{
+  const { unhandled: __unhandled, caseTimers: __timers } = await import('./boot.mjs');
+  await new Promise((r) => setImmediate(r));
+  const __problems = [];
+  if (__unhandled.length) {
+    __problems.push('rifiuti non gestiti:\n  ' + __unhandled.join('\n  '));
+  }
+  if (__timers.size) {
+    __problems.push('timer della prova mai partiti (manca un await?):\n  '
+      + [...__timers.values()].join('\n  '));
+  }
+  const __code = __problems.length ? 1 : 0;
+  process.stderr.write(__problems.join('\n') + (__code ? '\n' : ''), () =>
+    process.stdout.write('', () => process.exit(__code)));
+}
+"""
+
+
+def run_home(script: str, *, timeout: float = 20) -> str:
     """Esegue *script* (un modulo ES che importa da ``./boot.mjs``) e ne
-    ritorna lo stdout. ``assert`` di node che fallisce fa fallire il test."""
+    ritorna lo stdout. ``assert`` di node che fallisce fa fallire il test, e
+    cosi' un rifiuto di promessa non gestito o un timer della prova rimasto in
+    sospeso (v. ``_POSTLUDE``).
+
+    *timeout* e' un tetto, non una stima: la prova piu' lenta oggi dura meno di
+    quattro secondi. Era 60, e una richiesta senza risposta che aspettava i suoi
+    venti secondi ci stava dentro senza che nessuno se ne accorgesse."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "boot.mjs").write_text(
             _BOOT.replace("__UI__", json.dumps(str(UI))), encoding="utf-8"
         )
         entry = root / "case.mjs"
-        entry.write_text(script, encoding="utf-8")
+        entry.write_text(script + _POSTLUDE, encoding="utf-8")
         proc = subprocess.run(
             [str(NODE), str(entry)],
             capture_output=True,

@@ -176,6 +176,84 @@ class TestItIsASetOfFactsNotALogOfEvents:
         assert found is not None and found.name == "2026-08-18-a1b2c3d4.md"
 
 
+class TestLineage:
+    """``superseded_by`` e ``retracted``: chi ha preso il posto, e cosa era falso."""
+
+    def test_the_fields_round_trip(self, tmp_path: Path):
+        from dataclasses import replace
+
+        from jenny.agent.memory_archive import read_archived
+
+        path = archive_entry(
+            tmp_path, replace(_ENTRY, superseded_by="deadbeef", retracted=True),
+            when=date(2026, 8, 18),
+        )
+        back = read_archived(path)
+        assert back is not None
+        assert back.superseded_by == "deadbeef"
+        assert back.retracted
+
+    def test_an_old_file_reads_as_unlinked(self, tmp_path: Path):
+        from jenny.agent.memory_archive import read_archived
+
+        path = archive_entry(tmp_path, _ENTRY, when=date(2026, 8, 18))
+        back = read_archived(path)
+        assert back is not None
+        assert back.superseded_by == "" and not back.retracted
+        assert "superseded_by" not in path.read_text(encoding="utf-8")
+
+    def test_a_second_archiving_adds_the_link_it_lacked(self, tmp_path: Path):
+        """La rete al confine del file e ``replace`` archiviano la stessa voce:
+        chi arriva primo non deve decidere se il legame resta."""
+        from dataclasses import replace
+
+        first = archive_entry(tmp_path, _ENTRY, when=date(2026, 8, 18))
+        again = archive_entry(
+            tmp_path, replace(_ENTRY, superseded_by="deadbeef"), when=date(2026, 9, 30),
+        )
+        assert again == first
+        text = first.read_text(encoding="utf-8")
+        assert "superseded_by: deadbeef" in text
+        assert "demoted: 2026-08-18" in text
+        assert text.rstrip().endswith("Preferisce risposte brevi e concrete")
+
+    def test_a_link_already_there_is_not_overwritten(self, tmp_path: Path):
+        from dataclasses import replace
+
+        archive_entry(tmp_path, replace(_ENTRY, superseded_by="aaaaaaaa"))
+        path = archive_entry(tmp_path, replace(_ENTRY, superseded_by="bbbbbbbb"))
+        text = path.read_text(encoding="utf-8")
+        assert "superseded_by: aaaaaaaa" in text
+        assert "bbbbbbbb" not in text
+
+    def test_a_hand_edited_header_keeps_its_own_keys(self, tmp_path: Path):
+        from dataclasses import replace
+
+        path = archive_entry(tmp_path, _ENTRY, when=date(2026, 8, 18))
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("---\n\n", "note: mine\n---\n\n", 1),
+            encoding="utf-8",
+        )
+        archive_entry(tmp_path, replace(_ENTRY, retracted=True))
+        text = path.read_text(encoding="utf-8")
+        assert "note: mine" in text and "retracted: yes" in text
+
+    def test_a_headerless_file_gets_a_header_with_the_link(self, tmp_path: Path):
+        from dataclasses import replace
+
+        from jenny.agent.memory_archive import read_archived
+
+        directory = archive_dir(tmp_path)
+        directory.mkdir(parents=True)
+        path = directory / "2026-08-18-a1b2c3d4.md"
+        path.write_text("Preferisce risposte brevi e concrete\n", encoding="utf-8")
+        archive_entry(tmp_path, replace(_ENTRY, superseded_by="deadbeef"))
+        back = read_archived(path)
+        assert back is not None
+        assert back.text == "Preferisce risposte brevi e concrete"
+        assert back.superseded_by == "deadbeef"
+
+
 class TestItRoundTripsWithTheEntryTool:
     """L'archivio e i file caldi devono parlare la stessa lingua, o rimettere a
     posto una voce diventa un lavoro di traduzione."""

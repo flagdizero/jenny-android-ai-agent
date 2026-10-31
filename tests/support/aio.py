@@ -94,3 +94,21 @@ def drain_nowait(queue: asyncio.Queue) -> list:
             out.append(queue.get_nowait())
         except asyncio.QueueEmpty:
             return out
+
+
+async def stop_agent_loop(loop: Any, task: asyncio.Task) -> None:
+    """Ferma un ``AgentLoop.run()`` avviato con ``create_task`` senza aspettare
+    il suo secondo.
+
+    ``stop()`` abbassa solo il flag: ``run()`` se ne accorge quando la lettura
+    del bus scade, cioè fino a un secondo dopo, e ogni test che lo aspettava
+    pagava quel secondo. Dopo il ciclo ``run()`` non ha altro da fare, quindi
+    cancellarlo a flag abbassato è la stessa uscita, subito: col flag giù la
+    cancellazione esce da ``run()`` invece di essere ignorata.
+    """
+    loop.stop()
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass

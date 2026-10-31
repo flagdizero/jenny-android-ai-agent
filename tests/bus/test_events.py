@@ -50,14 +50,6 @@ def test_inbound_message_default_media_and_metadata_are_empty() -> None:
     assert msg.metadata == {}
 
 
-def test_inbound_message_default_factories_are_independent_per_instance() -> None:
-    """I default_factory di dataclass devono creare liste/dict distinti per istanza."""
-    a = InboundMessage(channel="websocket", sender_id="u1", chat_id="c1", content="a")
-    b = InboundMessage(channel="websocket", sender_id="u1", chat_id="c1", content="b")
-    a.media.append("img.png")
-    a.metadata["k"] = "v"
-    assert b.media == []
-    assert b.metadata == {}
 
 
 def test_inbound_message_default_timestamp_is_datetime() -> None:

@@ -168,8 +168,8 @@ class WsTestClient:
         await self.ws.send(json.dumps(data, ensure_ascii=False))
 
     async def send_content(self, content: str) -> None:
-        """Send content in the preferred JSON format ``{"content": ...}``."""
-        await self.send_json({"content": content})
+        """Send a message to the personal chat, as the WebUI does."""
+        await self.send_json({"type": "message", "content": content})
 
     # -- Connection introspection -----------------------------------------
 

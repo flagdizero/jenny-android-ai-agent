@@ -144,19 +144,20 @@ def test_a_tap_on_the_composer_margin_still_lands_in_the_field() -> None:
     assert re.search(r"padding:\s*10px 0 10px 14px;", inp), inp
 
 
-def test_the_page_search_has_a_name() -> None:
-    """La `<label>` della ricerca pagine conteneva solo la lente nascosta:
-    nome vuoto, e il segnaposto tradotto scartato. Ora e' un `<div>` e il campo
-    copre la pastiglia intera (la lente non prende i tocchi)."""
+def test_the_board_search_has_a_name() -> None:
+    """La lente della bacheca e' un bottone con un'icona sola: il nome glielo
+    da' il guscio, tradotto; e il campo che apre porta il segnaposto anche
+    come nome, perche' TalkBack non legge un segnaposto da solo."""
     root = _tree("index.html")
-    q = _by_id(root, "home-notebook-pages-q")
-    assert not any(a.tag == "label" for a in q.ancestors())
-    assert "home-search" in q.parent.classes()
-    pages = (ASSETS / "home-notebook-pages.js").read_text(encoding="utf-8")
-    assert "this.queryEl.placeholder = i18n.t(" in pages
-    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
-    icon = re.search(r"\n\.home-search > \.ti \{([^}]*)\}", css)
-    assert icon and "pointer-events: none" in icon.group(1)
+    lens = _by_id(root, "home-board-search-open")
+    assert lens.tag == "button"
+    app = (ASSETS / "home-app.js").read_text(encoding="utf-8")
+    assert "this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'))" in app
+    # Anche il + della bacheca, e i nomi si danno appena i bottoni ci sono.
+    assert _by_id(root, "home-board-add").tag == "button"
+    assert "this.boardAddBtn?.setAttribute('aria-label', i18n.t('board.add.title'))" in app
+    board = (ASSETS / "home-board.js").read_text(encoding="utf-8")
+    assert "input.setAttribute('aria-label', i18n.t('board.search.placeholder'))" in board
 
 
 # ── Icone e nomi ──────────────────────────────────────────────────────
@@ -195,7 +196,6 @@ def test_the_workshop_icon_buttons_carry_a_translated_name() -> None:
 
 _HOME_LABELLED = {
     "home-name": "home-name-label",
-    "home-jenny-visible": "home-jenny-visible-label",
     "home-jenny-floating": "home-jenny-floating-label",
 }
 

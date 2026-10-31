@@ -7,12 +7,17 @@ import time
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 from jenny import __version__
 from jenny.bus.events import OutboundMessage
 from jenny.command.router import CommandContext, CommandRouter
+from jenny.runtime.user_text import say
 from jenny.utils.helpers import build_status_content
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from jenny.agent.dream_review import ReviewOutcome
     from jenny.agent.gardener import GardenerOutcome
 
@@ -25,35 +30,77 @@ if TYPE_CHECKING:
 # Il prefisso resta registrato nel router *proprio* per arrivare qui: senza,
 # `/dream budget` non sarebbe piu' un comando e finirebbe **al modello** come
 # messaggio — che e' il modo peggiore di dire "non esiste piu'".
-def _moved_to_settings(command: str, section: str, still: str) -> str:
-    """«Quell'argomento non c'e' piu', la manopola e' in Impostazioni → Officina → <cassetto>».
+def _moved_to_settings(command: str, still: str) -> str:
+    """«Quell'argomento non c'e' piu', la manopola e' in Impostazioni → Officina → Memoria».
 
     Le manopole di Dream e del giardiniere stanno nell'officina, nel cassetto
     Memoria (gruppi *Dream* e *Gardener*): la pagina Impostazioni della casa le
     raggiunge solo dalla riga Officina, quindi il percorso la nomina.
     """
-    return (
-        f"`{command}` does not take arguments any more: those settings live in "
-        f"**Settings → Workshop → {section}**, where they sit next to the numbers they "
-        f"act on.\n\n"
-        f"{still}"
-    )
+    return say("cmd.moved_to_settings", command=command, still=still)
 
 
 async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
-    """Cancel all active tasks and subagents for the session."""
+    """Ferma il turno in corso; gli aiutanti in background continuano.
+
+    ``/stop`` ferma quel che Jenny sta facendo adesso nella chat (e il goal
+    sostenuto, se c'e'), ma **non** i subagent lanciati prima: sono lavori che
+    l'utente vede ciascuno nella propria bolla, e da li' li ferma uno per uno.
+    Fino al 10/10/2026 li cancellava tutti, e un «basta» detto alla risposta
+    corrente buttava via anche un lavoro lungo che non c'entrava. ``/stop all``
+    (:func:`cmd_stop_all`) e' la forma di prima: ferma tutto.
+    """
+    return await _stop(ctx, spare_subagents=True)
+
+
+async def cmd_stop_all(ctx: CommandContext) -> OutboundMessage:
+    """Ferma tutto: il turno, il goal e ogni aiutante della sessione."""
+    return await _stop(ctx, spare_subagents=False)
+
+
+async def _stop(ctx: CommandContext, *, spare_subagents: bool) -> OutboundMessage:
     loop = ctx.loop
     msg = ctx.msg
-    total = await loop._cancel_active_tasks(ctx.key)
+    total = await loop._cancel_active_tasks(ctx.key, spare_subagents=spare_subagents)
     if total:
         # Il turno ripudiato salta il proprio restore/turn_end: li emette /stop,
         # in modo deterministico (la UI riceve sempre turn_end) — ma **dopo** la
         # propria risposta (v. `CommandContext.after_reply`).
         loop._restore_cancelled_turn(ctx.key)
         ctx.after_reply.append(lambda: loop._emit_stop_turn_end(msg, ctx.key))
-    content = f"Stopped {total} task(s)." if total else "No active task to stop."
+    # Nella chat di un quaderno con un piano partito, ``/stop`` e' «Ferma e
+    # tieni»: senza, il driver aprirebbe il passo dopo a turno fermato, e gli
+    # aiutanti del passo continuerebbero a scrivere nel quaderno.
+    driver = getattr(loop, "plan_driver", None)
+    if driver is not None and driver.held_status(ctx.key) is not None:
+        if await driver.stop_for_session(ctx.key):
+            return OutboundMessage(
+                channel=msg.channel, chat_id=msg.chat_id, content=say("plan.stopped"),
+                metadata=dict(msg.metadata or {}),
+            )
+    # Un ``/stop`` mentre si prepara un piano chiude anche la pianificazione:
+    # senza, il messaggio dopo sarebbe ancora in sola lettura, con Jenny che
+    # riprende le domande del piano che l'utente ha appena fermato.
+    from jenny.plan.driver import PlanDriver
+
+    if isinstance(driver, PlanDriver) and driver.drafting_for(ctx.key) is not None:
+        if await driver.end_drafting(ctx.key, "stop") and not total:
+            return OutboundMessage(
+                channel=msg.channel, chat_id=msg.chat_id,
+                content=say("plan.stopped_planning"), metadata=dict(msg.metadata or {}),
+            )
+    parts = [say("stop.done" if total else "stop.none")]
+    if spare_subagents:
+        helpers = 0
+        with suppress(Exception):
+            counted = loop.subagents.get_running_count_by_session(ctx.key)
+            helpers = counted if isinstance(counted, int) else 0
+        if helpers == 1:
+            parts.append(say("stop.helper_running"))
+        elif helpers > 1:
+            parts.append(say("stop.helpers_running", count=helpers))
     return OutboundMessage(
-        channel=msg.channel, chat_id=msg.chat_id, content=content,
+        channel=msg.channel, chat_id=msg.chat_id, content=" ".join(parts),
         metadata=dict(msg.metadata or {})
     )
 
@@ -62,11 +109,15 @@ async def cmd_status(ctx: CommandContext) -> OutboundMessage:
     """Build an outbound status message for a session."""
     loop = ctx.loop
     session = ctx.session or loop.sessions.get_or_create(ctx.key)
-    ctx_est = 0
-    with suppress(Exception):
-        ctx_est, _ = loop.consolidator.estimate_session_prompt_tokens(session)
+    # Il numero vero dell'ultima chiamata, quando c'e': la stima e' un ripiego.
+    # ``_last_usage`` invece somma tutte le chiamate di un turno, e non e' la
+    # grandezza della conversazione.
+    from jenny.utils.token_calibration import last_real
+
+    ctx_est = last_real(ctx.key) or 0
     if ctx_est <= 0:
-        ctx_est = loop._last_usage.get("prompt_tokens", 0)
+        with suppress(Exception):
+            ctx_est, _ = loop.consolidator.estimate_session_prompt_tokens(session)
 
     active_tasks = loop._active_tasks.get(ctx.key, [])
     task_count = sum(1 for t in active_tasks if not t.done())
@@ -99,6 +150,14 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
 
     loop = ctx.loop
     cancelled = await loop._cancel_active_tasks(ctx.key)
+    # Una conversazione nuova non continua un piano in preparazione: senza, il
+    # primo messaggio dopo ``/new`` sarebbe ancora in sola lettura, con Jenny
+    # che riprende le domande di un piano che la conversazione non ricorda più.
+    from jenny.plan.driver import PlanDriver
+
+    driver = getattr(loop, "plan_driver", None)
+    if isinstance(driver, PlanDriver) and driver.drafting_for(ctx.key) is not None:
+        await driver.end_drafting(ctx.key, "new")
     if cancelled:
         # Materializza il lavoro parziale del turno fermato PRIMA dello
         # snapshot, così finisce nell'archivio invece di andare perso.
@@ -115,6 +174,12 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
     # Dream resta dov'e' — quelle voci devono ancora finire in MEMORY.md. Vedi
     # ``memory.HISTORY_FLOOR_METADATA_KEY``.
     session.metadata[HISTORY_FLOOR_METADATA_KEY] = loop.context.memory.current_history_cursor()
+    # La vista del diario si ricongela: le sue righe «nuove da allora» e «non
+    # piu' in sospeso» parlavano alla conversazione appena buttata. Il diario
+    # resta (e' memoria, non conversazione): cambia solo da quando si conta.
+    from jenny.agent.diary import DIARY_STATE_KEY
+
+    session.metadata.pop(DIARY_STATE_KEY, None)
     loop.sessions.save(session)
     loop.sessions.invalidate(session.key)
     # La conversazione e' vuota, quindi non contiene piu' il contenuto di nessun
@@ -136,7 +201,7 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
         )
     return OutboundMessage(
         channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
-        content="New session started.",
+        content=say("cmd.new.done"),
         # `_session_boundary` dice ai client di rendere questa conferma come
         # separatore invece che come bolla. Il transcript NON viene toccato da
         # /new (si azzera il contesto del modello, non il registro visibile):
@@ -147,7 +212,7 @@ async def cmd_new(ctx: CommandContext) -> OutboundMessage:
 
 
 def _format_preset_names(names: list[str]) -> str:
-    return ", ".join(f"`{name}`" for name in names) if names else "(none configured)"
+    return ", ".join(f"`{name}`" for name in names) if names else say("cmd.model.none_configured")
 
 
 def _model_preset_names(loop) -> list[str]:
@@ -155,7 +220,7 @@ def _model_preset_names(loop) -> list[str]:
 
 
 def _active_model_preset_name(loop) -> str:
-    return loop.model_preset or "(none)"
+    return loop.model_preset or say("cmd.model.no_preset")
 
 
 def _command_error_message(exc: Exception) -> str:
@@ -163,14 +228,12 @@ def _command_error_message(exc: Exception) -> str:
 
 
 def _model_command_status(loop) -> str:
-    names = _model_preset_names(loop)
-    active = _active_model_preset_name(loop)
-    return "\n".join([
-        "## Model",
-        f"- Current model: `{loop.model}`",
-        f"- Current preset: `{active}`",
-        f"- Available presets: {_format_preset_names(names)}",
-    ])
+    return say(
+        "cmd.model.status",
+        model=loop.model,
+        preset=_active_model_preset_name(loop),
+        presets=_format_preset_names(_model_preset_names(loop)),
+    )
 
 
 async def cmd_model(ctx: CommandContext) -> OutboundMessage:
@@ -192,7 +255,7 @@ async def cmd_model(ctx: CommandContext) -> OutboundMessage:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content="Usage: `/model [preset]`",
+            content=say("cmd.model.usage"),
             metadata=metadata,
         )
 
@@ -204,21 +267,21 @@ async def cmd_model(ctx: CommandContext) -> OutboundMessage:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content=(
-                f"Could not switch model preset: {_command_error_message(exc)}\n\n"
-                f"Available presets: {_format_preset_names(names)}"
+            content=say(
+                "cmd.model.switch_failed",
+                error=_command_error_message(exc),
+                presets=_format_preset_names(names),
             ),
             metadata=metadata,
         )
 
     max_tokens = getattr(getattr(loop.provider, "generation", None), "max_tokens", None)
-    lines = [
-        f"Switched model preset to `{loop.model_preset}`.",
-        f"- Model: `{loop.model}`",
-        f"- Context window: {loop.context_window_tokens}",
-    ]
+    lines = [say(
+        "cmd.model.switched",
+        preset=loop.model_preset, model=loop.model, window=loop.context_window_tokens,
+    )]
     if max_tokens is not None:
-        lines.append(f"- Max output tokens: {max_tokens}")
+        lines.append(say("cmd.model.max_output", max_tokens=max_tokens))
     return OutboundMessage(
         channel=ctx.msg.channel,
         chat_id=ctx.msg.chat_id,
@@ -236,17 +299,20 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     if args:
         # `/dream budget` viveva qui. Le manopole della memoria stanno in
         # Impostazioni dal 31/08/2026: v. ``_MOVED_TO_SETTINGS``.
-        return _reply(msg, _moved_to_settings(
-                "/dream",
-                "Memory",
-                "`/dream` on its own still runs a consolidation now.",
-            ))
+        return _reply(msg, _moved_to_settings("/dream", say("cmd.dream.moved")))
 
-    from jenny.agent.dream_cycle import (
-        DREAM_ALREADY_RUNNING,
-        claim_dream_cycle,
-        release_dream_cycle,
+    from jenny.agent.dream_cycle import claim_dream_cycle, release_dream_cycle
+    from jenny.bus.events import OUTBOUND_META_WORK_ID, OUTBOUND_META_WORK_START
+    from jenny.runtime.work_status import WorkReporter
+
+    # La bolla di lavoro della home, come per ``/gardener``: le fasi le decide
+    # ``begin_dream_cycle``, che sola sa se tocca la revisione. Solo il ciclo
+    # chiesto a mano ha la bolla: quello del cron non lo aspetta nessuno.
+    reporter = WorkReporter(
+        loop.bus, kind="dream", chat_id=msg.chat_id, channel=msg.channel,
+        phases=(), manual=True,
     )
+    work_meta = {OUTBOUND_META_WORK_ID: reporter.id}
 
     async def _dream_cycle():
         # Prologo ed epilogo del ciclo sono gli stessi del job cron, e stanno in
@@ -296,7 +362,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             # rispettare uno spazio di cui non gli si dice la misura.
             cfg = load_config().agents.defaults.dream
             prologue = await begin_dream_cycle(
-                loop, store=store, cfg=cfg, take_snapshot=snapshot_cb,
+                loop, store=store, cfg=cfg, take_snapshot=snapshot_cb, reporter=reporter,
             )
             if prologue.review is not None:
                 review_note = _format_dream_review_note(prologue.review)
@@ -314,37 +380,37 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                 # Il turno è lo stesso del job cron (``run_dream_turn``): qui resta
                 # la frase da dire a chi ha lanciato il comando.
                 turn = await run_dream_turn(
-                    loop, store, prologue, take_snapshot=snapshot_cb,
+                    loop, store, prologue, take_snapshot=snapshot_cb, reporter=reporter,
                 )
                 advanced, refused = turn.advanced, turn.refused
-                elapsed = time.monotonic() - t0
+                elapsed = f"{time.monotonic() - t0:.1f}"
+                # Non ha scritto (rifiuti, blocchi) o non si e' chiuso: per la
+                # bolla e' un lavoro non riuscito. Tutto il resto — anche
+                # «niente di nuovo» — e' un lavoro fatto.
+                failed = turn.outcome in (DreamOutcome.BLOCKED, DreamOutcome.INCOMPLETE)
+                reporter.finish(
+                    "failed" if failed else "done",
+                    status=turn.outcome.value,
+                    reviewed=prologue.review is not None,
+                    reason="model" if failed else None,
+                )
                 if turn.outcome is DreamOutcome.NO_INPUT:
                     await loop.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel, chat_id=msg.chat_id,
                         content=_prefix_review_note(
                             review_note, _format_dream_no_input_message()
                         ),
-                        metadata={"render_as": "text"},
+                        metadata={"render_as": "text", **work_meta},
                     ))
                     return
                 if turn.outcome is DreamOutcome.ADVANCED:
-                    content = f"Dream completed in {elapsed:.1f}s."
+                    content = say("cmd.dream.done", elapsed=elapsed)
                 elif turn.outcome is DreamOutcome.HELD_BATCH:
-                    content = (
-                        f"Dream completed in {elapsed:.1f}s but consolidated nothing "
-                        "from its batch (no memory file grew); memory cursor was not "
-                        "advanced, so those entries come back next run."
-                    )
+                    content = say("cmd.dream.held", elapsed=elapsed)
                 elif turn.outcome is DreamOutcome.BLOCKED:
-                    content = (
-                        f"Dream completed in {elapsed:.1f}s but wrote nothing "
-                        "(attempts blocked/refused); memory cursor was not advanced."
-                    )
+                    content = say("cmd.dream.blocked", elapsed=elapsed)
                 else:
-                    content = (
-                        f"Dream did not complete after {elapsed:.1f}s; "
-                        "memory cursor was not advanced."
-                    )
+                    content = say("cmd.dream.incomplete", elapsed=elapsed)
                 content = _prefix_review_note(review_note, content)
             finally:
                 # Anti-livelock, con la stessa regola del percorso cron perché è
@@ -369,10 +435,12 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
                     refused=refused,
                 )
         except Exception as e:
-            elapsed = time.monotonic() - t0
             content = _prefix_review_note(
-                review_note, f"Dream failed after {elapsed:.1f}s: {e}"
+                review_note,
+                say("cmd.dream.failed", elapsed=f"{time.monotonic() - t0:.1f}", error=e),
             )
+            if reporter.state == "running":
+                reporter.finish("failed", reason="error")
         finally:
             # La contabilita' dei token **non passa da qui**: la fa
             # ``TokenUsageHook.after_iteration`` sul turno stesso, che e' l'unico
@@ -387,7 +455,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             if pruned_keys:
                 loop.evict_pruned_sessions(pruned_keys)
         await loop.bus.publish_outbound(OutboundMessage(
-            channel=msg.channel, chat_id=msg.chat_id, content=content,
+            channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=work_meta,
         ))
 
     async def _run_dream():
@@ -406,8 +474,9 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
     # risposta immediata al comando può dire la verità invece di promettere
     # "Dreaming..." a un ciclo che non partirà.
     if not claim_dream_cycle():
+        reporter.forget()
         return OutboundMessage(
-            channel=msg.channel, chat_id=msg.chat_id, content=DREAM_ALREADY_RUNNING,
+            channel=msg.channel, chat_id=msg.chat_id, content=say("cmd.dream.already_running"),
         )
     try:
         # Tracciato dal loop, non ``create_task`` nudo: cosi' lo shutdown lo
@@ -419,9 +488,12 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
         # Se il task non arriva nemmeno a esistere, il suo ``finally`` non girerà:
         # la presa va restituita qui o resta appesa a un ciclo che non c'è.
         release_dream_cycle()
+        reporter.forget()
         raise
+    reporter.start()
     return OutboundMessage(
-        channel=msg.channel, chat_id=msg.chat_id, content="Dreaming...",
+        channel=msg.channel, chat_id=msg.chat_id, content=say("cmd.dream.started"),
+        metadata={**work_meta, OUTBOUND_META_WORK_START: True},
     )
 
 
@@ -465,20 +537,14 @@ def _format_dream_review_note(outcome: "ReviewOutcome") -> str:
 
     files = "MEMORY.md, USER.md, SOUL.md"
     if outcome.status == STATUS_FAILED:
-        note = (
-            "A memory review pass ran first but did not complete cleanly; "
-            f"{outcome.freed:,} chars freed across {files}."
-        )
+        note = say("cmd.dream.review_failed", freed=f"{outcome.freed:,}", files=files)
     elif outcome.freed > 0:
-        note = (
-            f"A memory review pass ran first and freed {outcome.freed:,} chars "
-            f"across {files}."
-        )
+        note = say("cmd.dream.review_freed", freed=f"{outcome.freed:,}", files=files)
     else:
         # Zero o negativo. Un review che non trova niente da potare è un esito
         # valido — il suo prompt lo dice al modello — e il negativo è il caso in
         # cui ha ristrutturato spostando testo *fra* i tre file misurati.
-        note = f"A memory review pass ran first; nothing was freed across {files}."
+        note = say("cmd.dream.review_nothing", files=files)
     extra = [_format_dream_refusals(outcome), _format_dream_demotions(outcome)]
     return " ".join([note, *(part for part in extra if part)])
 
@@ -506,12 +572,7 @@ def _format_dream_refusals(outcome: "ReviewOutcome") -> str:
     refused = getattr(outcome, "unresolved_refusals", 0)
     if refused <= 0:
         return ""
-    return (
-        f"{refused} write(s) were refused by their size budget and never landed — "
-        "**Settings → Workshop → Memory** shows which file is full, as a gauge against "
-        "its cap: "
-        "raise it or prune the file, then run `/dream` again."
-    )
+    return say("cmd.dream.refused", count=refused)
 
 
 # Quanti id di voci degradate si nominano nella risposta di `/dream`. Il tetto non
@@ -535,28 +596,12 @@ def _format_dream_demotions(outcome: "ReviewOutcome") -> str:
         return ""
     shown = ids[:_DEMOTIONS_NAMED_IN_NOTE]
     more = len(ids) - len(shown)
-    tail = f", and {more} more" if more else ""
-    return (
-        f"It also moved {len(ids)} fact(s) into `memory/archive/` instead of "
-        f"deleting them — ask me to recall {', '.join(shown)}{tail} to read them back."
-    )
+    tail = say("cmd.dream.demoted_more", more=more) if more else ""
+    return say("cmd.dream.demoted", count=len(ids), ids=", ".join(shown), more=tail)
 
 
 def _format_dream_no_input_message() -> str:
-    return "\n".join([
-        "Dream has no conversation history to process yet.",
-        "",
-        "Dream reads new entries from `memory/history.jsonl` after the current Dream cursor.",
-        (
-            "Short chats only reach that file after token compaction or idle auto-compact, "
-            "so a fresh or short WebUI chat may leave Dream with no input."
-        ),
-        "",
-        "Next steps:",
-        "- Enable `agents.defaults.idleCompactAfterMinutes` so completed chats become Dream input automatically.",
-        "- Compact the current chat into memory once that manual action is available.",
-        "- If you expected history to exist, check whether `memory/history.jsonl` has new entries after the Dream cursor.",
-    ])
+    return say("cmd.dream.no_input")
 
 
 async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
@@ -580,20 +625,29 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     loop = ctx.loop
     msg = ctx.msg
     if ctx.args.strip():
-        return _reply(msg, _moved_to_settings(
-            "/gardener",
-            "Memory",
-            "A pass runs on the project you are in: open it and send `/gardener` there.",
-        ))
+        return _reply(msg, _moved_to_settings("/gardener", say("cmd.gardener.moved")))
     if not is_project_session_key(ctx.key):
         # Un rifiuto che dice **dove**, non solo che qui non si può: la lezione
         # dei rifiuti del passo 6, e la stessa forma del rifiuto di
         # ``journal_append`` fuori da un progetto.
         return _reply(msg, _gardener_no_target())
     target = ctx.key[len(PROJECT_SESSION_PREFIX):]
+    # La bolla di lavoro della home: compare adesso, cresce mentre la passata
+    # lavora, e alla fine diventa il resoconto (v. ``runtime/work_status.py``).
+    # I due testi qui sotto restano per chi la bolla non ce l'ha — l'officina,
+    # Telegram — e portano l'id del lavoro, cosi' la home non li disegna due
+    # volte.
+    from jenny.bus.events import OUTBOUND_META_WORK_ID, OUTBOUND_META_WORK_START
+    from jenny.runtime.work_status import WorkReporter
+
+    reporter = WorkReporter(
+        loop.bus, kind="gardener", chat_id=msg.chat_id, channel=msg.channel,
+        phases=("pages", "board"), project=target, manual=True,
+    )
+    reporter.start()
 
     async def _run():
-        from jenny.agent.gardener import GardenerStore, run_gardener
+        from jenny.agent.gardener import GardenerStore, report_gardener_outcome, run_gardener
         from jenny.config.loader import load_config
 
         try:
@@ -603,17 +657,26 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
                 config.workspace_path, target, wikis_dir_name=wikis_dir
             )
             if store is None:
-                content = (
-                    f"`{target}` is not a project I can garden: I look for "
-                    f"`{wikis_dir}/{target}/wiki/`, and there is nothing there."
+                content = say(
+                    "cmd.gardener.not_a_project",
+                    name=target, path=f"{wikis_dir}/{target}/wiki/",
                 )
+                reporter.finish("failed", reason="not_a_project")
             else:
-                content = _format_gardener_outcome(target, await run_gardener(loop, store))
+                # ``yield_to_user=False``: chi ha lanciato la passata puo'
+                # scriverle mentre lavora senza fermarla (v. ``run_gardener``).
+                outcome = await run_gardener(
+                    loop, store, reporter=reporter, yield_to_user=False
+                )
+                absence = _gardener_board_absence(store.root)
+                content = _format_gardener_outcome(target, outcome, absence=absence)
+                report_gardener_outcome(reporter, outcome, store.root, absence=absence)
         except Exception as e:
-            content = f"The gardener failed: {e}"
+            content = say("cmd.gardener.error", error=e)
+            reporter.finish("failed", reason="error")
         await loop.bus.publish_outbound(OutboundMessage(
             channel=msg.channel, chat_id=msg.chat_id, content=content,
-            metadata={"render_as": "text"},
+            metadata={"render_as": "text", OUTBOUND_META_WORK_ID: reporter.id},
         ))
 
     # Tracciato dal loop (v. ``cmd_dream``): una passata che sta scrivendo
@@ -621,7 +684,8 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     loop._schedule_background(_run())
     return OutboundMessage(
         channel=msg.channel, chat_id=msg.chat_id,
-        content=f"Gardening {target}...",
+        content=say("cmd.gardener.started", name=target),
+        metadata={OUTBOUND_META_WORK_ID: reporter.id, OUTBOUND_META_WORK_START: True},
     )
 
 
@@ -647,15 +711,72 @@ def _gardener_no_target() -> str:
     cui aggirarsi.
     """
     from jenny.command.scope import refusal, spec_for_line
-    from jenny.session.keys import UNIFIED_SESSION_KEY
 
     spec = spec_for_line("/gardener")
     assert spec is not None  # è nella tabella: se non c'è, è un errore di programmazione
-    return refusal(spec, UNIFIED_SESSION_KEY)
+    return refusal(spec)
 
 
-def _format_gardener_outcome(name: str, outcome: "GardenerOutcome") -> str:
-    """Messaggio utente per una passata.
+def _format_gardener_outcome(name: str, outcome: "GardenerOutcome", *, absence: str = "") -> str:
+    """Messaggio utente per una passata: la wiki, poi la bacheca se e' girata.
+
+    La passata della bacheca gira anche a diario vuoto (una prima bacheca da
+    proporre, un cassetto stantio), quindi la frase «non c'era niente, nessun
+    token speso» sarebbe falsa proprio quando la bacheca ha lavorato: in quel
+    caso la wiki tace e parla solo la bacheca.
+
+    *absence* e' il perche' il quaderno non ha bacheca, dopo la passata
+    (``board_absence``). Se la bacheca non e' girata **e** il quaderno non ne ha
+    una, si dice perche': il 05/10 un ``/gardener`` su un archivio di ricerca
+    ha risposto solo «niente di nuovo nel diario», e la domanda successiva,
+    «perche' la bacheca e' vuota?», e' finita in una causa inventata.
+    """
+    board = _gardener_board_line(name, outcome.board) or _gardener_no_board_line(name, absence)
+    if not board:
+        return _format_wiki_outcome(name, outcome)
+    if outcome.status == "skipped_no_delta" and outcome.board:
+        return say("cmd.gardener.no_delta_board", name=name, board=board)
+    return f"{_format_wiki_outcome(name, outcome)} {board}"
+
+
+def _gardener_board_absence(root: Path) -> str:
+    """``board_absence`` per la risposta di ``/gardener``, o ``""`` se non si sa dire."""
+    try:
+        from jenny.board.context_block import board_absence
+
+        return board_absence(root)
+    except Exception as exc:  # noqa: BLE001 — la risposta esce comunque, senza il perche'
+        logger.warning("gardener: cannot tell why {} has no board: {}", root.name, exc)
+        return ""
+
+
+# Gli esiti che hanno una frase propria in ``user_text`` (``cmd.gardener.*``).
+_NO_BOARD_REASONS = frozenset({"research", "no_pages", "proposed", "declined", "later", "next_pass"})
+_BOARD_PASS_STATUSES = frozenset({"done", "incomplete", "failed"})
+
+
+def _gardener_no_board_line(name: str, absence: str) -> str:
+    """Perche' *name* resta senza bacheca, o ``""`` se ce l'ha (o non si sa)."""
+    if absence in _NO_BOARD_REASONS:
+        return say(f"cmd.gardener.no_board.{absence}", name=name)
+    return ""
+
+
+def _gardener_board_line(name: str, status: str) -> str:
+    """La frase della passata della bacheca, o ``""`` se non e' partita."""
+    if status in _BOARD_PASS_STATUSES:
+        return say(f"cmd.gardener.board.{status}", name=name)
+    return ""
+
+
+_WIKI_OUTCOME_STATUSES = frozenset({
+    "written", "nothing_to_promote", "partial_write", "commit_failed",
+    "aborted_user_active", "already_running", "no_write", "incomplete",
+})
+
+
+def _format_wiki_outcome(name: str, outcome: "GardenerOutcome") -> str:
+    """Messaggio utente per la passata della wiki.
 
     Gli esiti "non ho fatto niente" hanno frasi distinte, come per Dream: un
     comando che risponde "fatto" senza aver fatto niente è peggio di uno che dice
@@ -684,54 +805,16 @@ def _format_gardener_outcome(name: str, outcome: "GardenerOutcome") -> str:
     """
     elapsed = f"{outcome.elapsed:.1f}s"
     if outcome.status == "skipped_no_delta":
-        return (
-            f"Nothing new in {name}'s journal since the last pass, so there was nothing to "
-            "promote — no tokens spent."
-        )
+        return say("cmd.gardener.skipped_no_delta", name=name)
     if outcome.map_pass and outcome.status not in ("failed", "incomplete"):
         return _gardener_map_pass_line(name, outcome, elapsed)
-    if outcome.status == "written":
-        return (
-            f"The gardener read {outcome.lines} journal lines in {name} and wrote "
-            f"{outcome.writes} times, in {elapsed}. See `wiki/index.md` and today's `log/`."
+    if outcome.status in _WIKI_OUTCOME_STATUSES:
+        return say(
+            f"cmd.gardener.{outcome.status}",
+            name=name, elapsed=elapsed, lines=outcome.lines, writes=outcome.writes,
+            detail=outcome.detail,
         )
-    if outcome.status == "nothing_to_promote":
-        return (
-            f"The gardener read {outcome.lines} journal lines in {name} in {elapsed} and "
-            "judged that none of them earned a page. The journal is marked as read."
-        )
-    if outcome.status == "partial_write":
-        return (
-            f"The gardener wrote {outcome.writes} pages in {name} in {elapsed}, but some writes "
-            "were refused, so the journal was left unread — the next pass will see those lines "
-            "again."
-        )
-    if outcome.status == "commit_failed":
-        return (
-            f"The gardener wrote {outcome.writes} pages in {name} in {elapsed}, but could not "
-            f"record how far it had read: {outcome.detail}. The pages are on disk and the "
-            "journal was left unread, so the next pass will see those lines again."
-        )
-    if outcome.status == "aborted_user_active":
-        return (
-            f"You came back to {name} while the gardener was working there, so it stood down "
-            f"after {elapsed} rather than write over you ({outcome.writes} pages had already "
-            "landed). The journal was left unread, so the next pass will see those lines again."
-        )
-    if outcome.status == "already_running":
-        return (
-            f"A pass on {name} is already running, so this one did not start — the gardener "
-            "works on one project one pass at a time, or two passes overwrite each other's "
-            "pages. Try again once it has finished."
-        )
-    if outcome.status == "no_write":
-        return (
-            f"The gardener finished in {elapsed} without writing (attempts blocked or refused); "
-            "the journal was left unread, so the next pass will try again."
-        )
-    if outcome.status == "incomplete":
-        return f"The gardener did not finish after {elapsed}; nothing was changed."
-    return f"The gardener failed after {elapsed}: {outcome.detail}"
+    return say("cmd.gardener.failed", elapsed=elapsed, detail=outcome.detail)
 
 
 def _gardener_map_pass_line(name: str, outcome: "GardenerOutcome", elapsed: str) -> str:
@@ -749,22 +832,18 @@ def _gardener_map_pass_line(name: str, outcome: "GardenerOutcome", elapsed: str)
     """
     from jenny.agent.gardener import MAP_TARGET_CHARS
 
-    lede = f"Nothing new in {name}'s journal, so the gardener went in for the map alone"
+    lede = say("cmd.gardener.map_lede", name=name)
     if outcome.map_after < outcome.map_before:
-        moved = (
-            f"`wiki/index.md` went from {outcome.map_before} to {outcome.map_after} characters "
-            f"in {elapsed}, against a ceiling of {MAP_TARGET_CHARS}"
+        moved = say(
+            "cmd.gardener.map_moved",
+            before=outcome.map_before, after=outcome.map_after, elapsed=elapsed,
+            ceiling=MAP_TARGET_CHARS,
         )
-        if outcome.map_after <= MAP_TARGET_CHARS:
-            return f"{lede}: {moved} — it fits now, so every turn sees all of it again."
-        return (
-            f"{lede}: {moved} — still over, and it will not be tried again until the map grows "
-            "past that."
-        )
-    return (
-        f"{lede}, and after {elapsed} it is still {outcome.map_after} characters against a "
-        f"ceiling of {MAP_TARGET_CHARS}: nothing was moved out of it. It will not be tried "
-        "again until the map grows past that."
+        key = "map_fits" if outcome.map_after <= MAP_TARGET_CHARS else "map_still_over"
+        return say(f"cmd.gardener.{key}", lede=lede, moved=moved)
+    return say(
+        "cmd.gardener.map_unchanged",
+        lede=lede, elapsed=elapsed, after=outcome.map_after, ceiling=MAP_TARGET_CHARS,
     )
 
 
@@ -787,7 +866,7 @@ def _format_history_message(msg: dict) -> str | None:
         return None
     if len(content) > _HISTORY_MAX_CONTENT_CHARS:
         content = content[:_HISTORY_MAX_CONTENT_CHARS] + "…"
-    label = "👤 You" if role == "user" else "🤖 Bot"
+    label = say("cmd.history.you") if role == "user" else say("cmd.history.bot")
     return f"{label}: {content}"
 
 
@@ -803,7 +882,7 @@ async def cmd_history(ctx: CommandContext) -> OutboundMessage:
         except ValueError:
             return OutboundMessage(
                 channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
-                content="Usage: /history [count] — e.g. /history 5 (default: 10, max: 50)",
+                content=say("cmd.history.usage"),
                 metadata=dict(ctx.msg.metadata or {}),
             )
 
@@ -816,11 +895,11 @@ async def cmd_history(ctx: CommandContext) -> OutboundMessage:
     if not recent:
         return OutboundMessage(
             channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
-            content="No conversation history yet.",
+            content=say("cmd.history.empty"),
             metadata=dict(ctx.msg.metadata or {}),
         )
 
-    header = f"Last {len(recent)} message(s):\n"
+    header = say("cmd.history.header", count=len(recent)) + "\n"
     return OutboundMessage(
         channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
         content=header + "\n".join(recent),
@@ -844,7 +923,7 @@ async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content="Usage: /goal <long-running task description>",
+            content=say("cmd.goal.usage"),
             metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
         )
     current_task = asyncio.current_task()
@@ -855,10 +934,7 @@ async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
         return OutboundMessage(
             channel=ctx.msg.channel,
             chat_id=ctx.msg.chat_id,
-            content=(
-                "A task is already running for this chat. "
-                "Use `/stop` first, then send `/goal <long-running task description>` again."
-            ),
+            content=say("cmd.goal.busy"),
             metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
         )
 
@@ -876,9 +952,9 @@ async def cmd_skill(ctx: CommandContext) -> OutboundMessage:
     loop = ctx.loop
     skills = loop.context.skills.list_skills(filter_unavailable=False)
     if not skills:
-        content = "No skills available."
+        content = say("cmd.skill.none")
     else:
-        lines = [f"Available skills ({len(skills)}):", ""]
+        lines = [say("cmd.skill.header", count=len(skills)), ""]
         for entry in skills:
             desc = loop.context.skills._get_skill_description(entry["name"])
             lines.append(f"- **{entry['name']}** — {desc}")
@@ -915,12 +991,12 @@ def build_help_text(session_key: str | None = None) -> str:
     """
     from jenny.command.scope import visible_specs
 
-    lines = ["✿ jenny commands:"]
+    lines = [say("cmd.help.header")]
     for spec in visible_specs(session_key):
         command = spec.command
         if spec.arg_hint:
             command = f"{command} {spec.arg_hint}"
-        lines.append(f"{command} — {spec.description}")
+        lines.append(f"{command} — {say(spec.help_key)}")
     return "\n".join(lines)
 
 
@@ -943,6 +1019,7 @@ def register_builtin_commands(router: CommandRouter) -> None:
     # comandi, quindi non c'e' finestra in cui accetti senza controllare.
     router.availability = _scope_refusal
     router.priority("/stop", cmd_stop)
+    router.priority("/stop all", cmd_stop_all)
     router.priority("/status", cmd_status)
     router.exact("/new", cmd_new)
     router.exact("/model", cmd_model)

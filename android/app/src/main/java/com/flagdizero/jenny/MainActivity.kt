@@ -6,6 +6,7 @@ import android.animation.ObjectAnimator
 import android.app.Activity
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.app.role.RoleManager
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -28,7 +29,9 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebChromeClient.FileChooserParams
@@ -124,6 +127,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_LAUNCHER_USAGE = "launcher_usage"
         // Chiave del Bundle per pendingExportPath: v. onSaveInstanceState.
         private const val STATE_PENDING_EXPORT = "pending_export_path"
+        private const val STATE_BORN_AS_HOME = "born_as_home"
         // First launch pays Chaquopy bootstrap + package extraction inside
         // GatewayService, which can take well beyond the WebView retry window.
         private const val BOOT_POLL_INTERVAL_MS = 250L
@@ -157,7 +161,8 @@ class MainActivity : AppCompatActivity() {
          * proattivo. Senza, l'intent era indistinguibile da un rilancio
          * qualunque dell'activity: `onNewIntent` instrada solo CATEGORY_HOME,
          * quindi il tap portava l'app in primo piano esattamente dov'era —
-         * dentro una mini-app, in Wiki, ovunque — e non in chat.
+         * dentro una mini-app, in Wiki, ovunque — senza mostrare il messaggio.
+         * Il posto si tiene ancora (dal 10/10/2026): la chat sale sopra.
          */
         const val ACTION_OPEN_CHAT = "com.flagdizero.jenny.action.OPEN_CHAT"
 
@@ -189,44 +194,71 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        /** L'intent con cui un nostro alert (o la mascotte) porta in chat. */
-        fun openChatIntent(context: Context): Intent =
+        /** La chat in cui porta un [ACTION_OPEN_CHAT]: `project:<nome>` per
+         *  l'alert di un quaderno, assente per la personale (v.
+         *  [AlertConversation]). Fuori dal gettone non conta niente: lo si legge
+         *  solo dopo [isOurOpenChat]. */
+        private const val EXTRA_OPEN_CHAT_CONVERSATION =
+            "com.flagdizero.jenny.extra.OPEN_CHAT_CONVERSATION"
+
+        /** L'intent con cui un nostro alert (o la mascotte) porta in chat:
+         *  quella di *conversation*, o la personale. */
+        fun openChatIntent(context: Context, conversation: String? = null): Intent =
             Intent(context, MainActivity::class.java)
                 .setAction(ACTION_OPEN_CHAT)
                 .putExtra(EXTRA_OPEN_CHAT_TOKEN, openChatToken(context))
+                .apply { if (conversation != null) putExtra(EXTRA_OPEN_CHAT_CONVERSATION, conversation) }
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        /** La conversazione chiesta da un [ACTION_OPEN_CHAT] nostro, o `null`
+         *  (la personale). Quale quaderno esista lo decide la SPA. */
+        private fun openChatConversation(intent: Intent?): String? =
+            asConversation(intent?.getStringExtra(EXTRA_OPEN_CHAT_CONVERSATION))
+
+        /** `project:<nome>`, o `null` per qualunque altra cosa: la personale. */
+        private fun asConversation(value: String?): String? =
+            value?.takeIf { it.startsWith("project:") && it.length > "project:".length }
+
+        /** Un [ACTION_OPEN_CHAT] passato alla home da [redirectToHome]: l'intent
+         *  home deve restare `ACTION_MAIN`, quindi la richiesta viaggia qui,
+         *  col suo gettone accanto. */
+        private const val EXTRA_OPEN_CHAT_VIA_HOME = "com.flagdizero.jenny.extra.OPEN_CHAT_VIA_HOME"
 
         /** È un [ACTION_OPEN_CHAT] fatto da noi? (v. [EXTRA_OPEN_CHAT_TOKEN]) */
         private fun isOurOpenChat(context: Context, intent: Intent?): Boolean {
-            if (intent?.action != ACTION_OPEN_CHAT) return false
+            val asked = intent?.action == ACTION_OPEN_CHAT ||
+                intent?.getBooleanExtra(EXTRA_OPEN_CHAT_VIA_HOME, false) == true
+            if (intent == null || !asked) return false
             val presented = intent.getStringExtra(EXTRA_OPEN_CHAT_TOKEN) ?: return false
             return java.security.MessageDigest.isEqual(
                 presented.toByteArray(), openChatToken(context).toByteArray()
             )
         }
 
-        /**
-         * Porta la WebUI in chat da un tap sull'alert. `goHome()` è l'unico
-         * punto che smonta *tutti* i livelli sopra la vista (mini-app compresa,
-         * col suo cleanup); lo `switchMode` dopo serve perché la vista "home"
-         * è una preferenza e può non essere la chat — qui la chat non è una
-         * preferenza, è dove sta il messaggio che l'utente ha appena toccato.
-         * È no-op se la chat è già davanti.
+        /** Un intent home vero: quello che dà a un'activity il tipo `home`
+         *  (`ActivityRecord.isHomeIntent`: `ACTION_MAIN` e la sola categoria
+         *  HOME). */
+        private fun isHomeIntent(intent: Intent?): Boolean =
+            intent?.action == Intent.ACTION_MAIN &&
+                intent.categories?.let { it.size == 1 && Intent.CATEGORY_HOME in it } == true
+
+        /** Jenny è la home predefinita del telefono, adesso?
          *
-         * Ritorna un booleano vero: `false` se la SPA non c'è, e in quel caso
-         * gli alert NON vengono cancellati — la chat non si è aperta.
-         */
-        // La SPA sa da sé cosa comporta "apri la chat" (smontare gli overlay,
-        // collassare il sotto-stato delle sezioni, ripartire dalla radice):
-        // comporlo qui da goHome + switchMode lasciava la entry di radice a
-        // descrivere la vista home mentre a schermo c'era la chat.
-        private const val OPEN_CHAT_JS = """
-            (function () {
-              var app = window.mobileApp;
-              if (!app || typeof app.openChat !== 'function') return false;
-              return app.openChat() !== false;
-            })()
-        """
+         *  Dal ruolo, non risolvendo l'intent HOME: da Android 11 la visibilità
+         *  dei pacchetti nasconde gli altri launcher (le `<queries>` vedono
+         *  solo LAUNCHER), e `resolveActivity` trovava solo noi — rispondeva
+         *  «sì» anche con Nexus come home, misurato sull'emulatore il
+         *  10/10/2026. Sotto Android 10 il ruolo non c'è, ma nemmeno la
+         *  visibilità: lì la risoluzione dice il vero. */
+        private fun isDefaultHome(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val roles = context.getSystemService(RoleManager::class.java) ?: return false
+                return roles.isRoleAvailable(RoleManager.ROLE_HOME) && roles.isRoleHeld(RoleManager.ROLE_HOME)
+            }
+            val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val found = context.packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)
+            return found?.activityInfo?.packageName == context.packageName
+        }
 
         /**
          * La chat è la vista a schermo? È la domanda che separa questo
@@ -234,21 +266,57 @@ class MainActivity : AppCompatActivity() {
          * il ritorno in primo piano non dice niente su cosa l'utente stia
          * guardando, e in un launcher scatta a ogni pressione di Home.
          *
-         * Senza SPA caricata il risultato è ``null``, che non è ``"true"``:
-         * nessun alert viene cancellato, ed è la direzione d'errore giusta.
+         * Senza SPA caricata il risultato è ``null``, che non è né
+         * ``"personal"`` né un quaderno: nessun alert viene cancellato, ed è la
+         * direzione d'errore giusta.
          *
          * Lo chiede a un metodo e non a un campo: leggeva ``app.currentMode``,
          * che esiste solo nell'officina, e nella casa — il guscio di default —
          * la risposta era sempre no e gli alert non si cancellavano mai
          * (24/09/2026). Ogni guscio sa a modo suo cosa vuol dire "la chat è a
          * schermo"; qui si chiede, come per ``openChat``.
+         *
+         * Risponde **quale** chat: `"personal"`, `"project:<nome>"` o `""`. Un
+         * guscio senza ``chatOnScreenKey`` (l'officina) risponde come prima,
+         * solo per la personale.
          */
         private const val CHAT_ON_SCREEN_JS = """
             (function () {
               var app = window.mobileApp;
-              return !!(app && typeof app.isChatOnScreen === 'function' && app.isChatOnScreen());
+              if (!app) return '';
+              if (typeof app.chatOnScreenKey === 'function') return app.chatOnScreenKey() || '';
+              return typeof app.isChatOnScreen === 'function' && app.isChatOnScreen() ? 'personal' : '';
             })()
         """
+
+        /**
+         * Costringe la pagina a comporre un frame nuovo, iframe compresi.
+         *
+         * Sul Titan 2, sbloccando con l'impronta a schermo spento, Android fa
+         * resume/pause cinque volte in 70 ms prima di accendere lo schermo
+         * (logcat del 10/10/2026), e ognuna passa da `webView.onPause()` /
+         * `onResume()`. Dopo la raffica la WebView restava vuota — la pagina
+         * c'era, una mini-app aperta compresa, e ricompariva al primo tocco:
+         * nessuno chiedeva al compositor un frame nuovo.
+         *
+         * Un'opacità sulla radice per un frame basta a chiederlo e non si vede;
+         * un `transform` farebbe lo stesso, ma per quel frame sposterebbe tutto
+         * ciò che è `position: fixed`.
+         */
+        private const val REPAINT_JS = """
+            (function () {
+              var root = document.documentElement;
+              if (!root) return;
+              root.style.opacity = '0.999';
+              requestAnimationFrame(function () {
+                requestAnimationFrame(function () { root.style.opacity = ''; });
+              });
+            })()
+        """
+
+        // Attesa dall'ultimo onResume prima del ridisegno: la raffica dello
+        // sblocco dura ~70 ms, e lo schermo si accende subito dopo.
+        private const val REPAINT_SETTLE_MS = 300L
 
         // Finestra minima fra due recuperi della SPA: il ricaricamento non è
         // istantaneo e senza questo una raffica di pressioni lo farebbe ripartire
@@ -259,12 +327,35 @@ class MainActivity : AppCompatActivity() {
         // arrivata senza che Android mostrasse un dialog (negata per sempre).
         private const val LOCATION_NO_DIALOG_MS = 400L
 
-        // Letto da NotifierBridge (thread Python via Chaquopy) per sopprimere
-        // gli alert quando l'utente sta già guardando la chat. @Volatile:
-        // scritto dal main thread (onResume/onPause), letto da altri thread.
+        // L'activity è davanti (onResume/onPause). Letto dalla mascotte
+        // flottante e da UpdateBridge; NotifierBridge lo legge insieme a
+        // [isChatOnScreen]. @Volatile: scritto dal main thread, letto da altri.
         @Volatile
         var isInForeground = false
             private set
+
+        // La chat personale è la cosa che l'utente ha davanti. Da solo
+        // isInForeground non lo dice: Jenny è il launcher, e sta davanti anche
+        // sulla pagina App, nelle Impostazioni, sopra una bacheca — e lì un
+        // promemoria soppresso era un promemoria perso (giro UX del
+        // 10/10/2026). Lo dice la SPA a ogni cambio (chatOpened/chatClosed);
+        // si spegne quando l'activity va dietro o la pagina riparte, e al
+        // rientro lo richiede onResume. Letto da NotifierBridge (thread
+        // Python via Chaquopy).
+        @Volatile
+        var isChatOnScreen = false
+            private set
+
+        // Il gemello per i quaderni: `project:<nome>` se a schermo c'è la chat
+        // di quel quaderno. Stesse regole di [isChatOnScreen], che resta solo
+        // della personale — è quella che zittisce gli avvisi di Jenny.
+        @Volatile
+        var notebookChatOnScreen: String? = null
+            private set
+
+        /** La chat di *conversation* (`null`: la personale) è a schermo? */
+        fun chatOnScreen(conversation: String?): Boolean =
+            if (conversation == null) isChatOnScreen else notebookChatOnScreen == conversation
     }
 
     private var retryCount = 0
@@ -274,9 +365,17 @@ class MainActivity : AppCompatActivity() {
     private var loadingView: FrameLayout? = null
     private var errorView: FrameLayout? = null
     private var webView: WebView? = null
+
+    // Le estensioni native di questo flavor, agganciate a questa Activity
+    // (v. [NativeExtension]); vuoto nel flavor `foss`.
+    private var nativeExtensions: Map<String, NativeExtension.Attached> = emptyMap()
     // Il callback del tasto Indietro. Abilitato solo mentre la SPA è a schermo:
     // v. onCreate, onPageFinished, showLoading e showError.
     private var backCallback: OnBackPressedCallback? = null
+    // Il ridisegno dopo un rientro (v. REPAINT_JS): rimandato a ogni onResume,
+    // quindi a una raffica ne segue uno solo, a raffica finita.
+    private val repaintHandler = Handler(Looper.getMainLooper())
+    private val repaintRunnable = Runnable { forceRepaint() }
     // L'ultimo splash chiesto al sistema da questa activity (v. syncSplashTheme),
     // per non ripetere la chiamata a ogni setThemeBars. 0 = nessuno ancora.
     private var requestedSplashTheme = 0
@@ -286,6 +385,19 @@ class MainActivity : AppCompatActivity() {
     // thread di polling — scritta in onCreate prima che quel thread parta.
     @Volatile
     private var openChatOnLoad = false
+    // ...e in quale chat: `project:<nome>` per l'alert di un quaderno, o null.
+    @Volatile
+    private var openChatConversationOnLoad: String? = null
+    // L'activity è passata da onStop dall'ultimo onResume: è stata dietro
+    // un'altra app (o a schermo spento). Un Home che arriva così riporta la
+    // casa davanti, e non deve anche riportarla alla chat (v. onNewIntent).
+    // Main thread soltanto: onStop, onNewIntent e onResume.
+    private var cameBackFromBackground = false
+
+    // Nata da un intent home, cioè nel task home? Letto in onCreate e non
+    // dopo: onNewIntent sostituisce `intent` con quello di una notifica, e
+    // una copia home resta home. V. redirectToHome.
+    private var bornAsHome = false
     // Resolved once the gateway socket is confirmed listening (config.json,
     // and therefore the bootstrap secret, is guaranteed to already exist by
     // then — ensure_minimal_config() runs before the port is opened). Falls
@@ -599,6 +711,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Le estensioni del flavor, prima di qualunque `return`: registrano i
+        // loro launcher, e l'ordine di registrazione dev'essere sempre lo
+        // stesso (v. [NativeExtension.attach]).
+        nativeExtensions = Extensions.all.associate { it.name to it.attach(this) }
+        // Una ricreazione (onRenderProcessGone, un cambio di configurazione)
+        // rilegge `intent`, che onNewIntent può aver sostituito con quello di
+        // una notifica: chi è nata home lo resta, e lo dice lo stato salvato.
+        bornAsHome = savedInstanceState?.getBoolean(STATE_BORN_AS_HOME) ?: isHomeIntent(intent)
+        // Prima di costruire qualunque cosa: se questa copia è di troppo, se ne
+        // va senza aver acceso una WebView (v. redirectToHome).
+        if (savedInstanceState == null && !bornAsHome && isDefaultHome(this) && redirectToHome()) return
         pendingExportPath = savedInstanceState?.getString(STATE_PENDING_EXPORT)
         setContentView(R.layout.activity_main)
 
@@ -647,7 +770,8 @@ class MainActivity : AppCompatActivity() {
         // per un intent nostro (v. EXTRA_OPEN_CHAT_TOKEN).
         if (isOurOpenChat(this, intent)) {
             openChatOnLoad = true
-            NotifierBridge.clearAlerts(this, "cold-start-alert-tap")
+            openChatConversationOnLoad = openChatConversation(intent)
+            NotifierBridge.clearAlerts(this, "cold-start-alert-tap", openChatConversationOnLoad)
         }
 
         // Catena, non due chiamate: ensureNotificationPermission() invoca
@@ -690,6 +814,7 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         pendingExportPath?.let { outState.putString(STATE_PENDING_EXPORT, it) }
+        outState.putBoolean(STATE_BORN_AS_HOME, bornAsHome)
     }
 
     /**
@@ -883,38 +1008,131 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Tap su una notifica proattiva: si va in chat, chiudendo prima
-        // qualunque livello sopra (la mini-app aperta per prima). Gli alert
-        // pendenti si cancellano SOLO qui — cioè solo quando la chat viene
-        // davvero aperta. Stavano in onResume, che in un launcher scatta a
+        // Tap su una notifica proattiva: la chat personale sale sopra la
+        // pagina in cui eri, che resta sotto (v. openChat nella casa); quella
+        // di un quaderno porta nel quaderno, con la sua chat sopra. Gli
+        // alert pendenti si cancellano SOLO qui — cioè solo quando la chat
+        // viene davvero aperta. Stavano in onResume, che in un launcher scatta a
         // ogni ritorno alla home: l'alert veniva cancellato comunque, fosse
         // stato letto o no, e il messaggio proattivo restava senza alcun
         // segnale. Solo per un intent nostro: l'action la può scrivere
         // chiunque (v. EXTRA_OPEN_CHAT_TOKEN), e senza gettone l'intent
         // prosegue come un avvio qualunque.
         if (isOurOpenChat(this, intent)) {
-            webView?.evaluateJavascript(OPEN_CHAT_JS) { result ->
+            val conversation = openChatConversation(intent)
+            webView?.evaluateJavascript(AlertConversation.openChatJs(conversation)) { result ->
                 if (result?.trim() == "true") {
-                    NotifierBridge.clearAlerts(this@MainActivity, "alert-tap")
+                    NotifierBridge.clearAlerts(this@MainActivity, "alert-tap", conversation)
                 } else {
-                    Log.w(TAG, "Alert tap could not reach the SPA; chat not opened")
+                    Log.w(TAG, "Alert tap did not bring the chat on screen; alerts kept")
                 }
             }
             return
         }
         // This app is the device HOME launcher (see AndroidManifest: category
-        // HOME + DEFAULT). Pressing the system Home button / doing the home
-        // swipe gesture while we are already the foreground task re-delivers the
-        // HOME intent here instead of a fresh onCreate (launchMode=singleTask).
-        // A launcher's Home means "collapse back to the home screen": close any
-        // open Jenny mini-app overlay and return the WebUI to chat (✿). It is a
-        // no-op when already home. The gateway service is untouched.
+        // HOME + DEFAULT), so every Home press re-delivers the HOME intent here
+        // instead of a fresh onCreate (launchMode=singleTask) — the one that
+        // brings us back from another app too.
+        //
+        // Solo un Home premuto con la casa GIÀ davanti la riporta alla chat
+        // (goHome: chiude la mini-app, esce dal quaderno, torna alla pagina
+        // chat). Quello che arriva da un'altra app riporta la casa davanti e
+        // basta, dov'era: un quaderno, una pagina della wiki, una mini-app.
+        // Fino al 10/10/2026 li trattava uguali, e ogni giro in un'altra app
+        // finiva in chat. È la regola dei launcher (Launcher3 guarda
+        // FLAG_ACTIVITY_BROUGHT_TO_FRONT per la stessa domanda): il primo Home
+        // riporta a casa, il secondo alla pagina di partenza. La domanda qui è
+        // posta a onStop e non al flag: è la nostra definizione di «eri via»,
+        // schermo spento compreso.
+        //
         // Solo per il VERO intent Home (ACTION_MAIN + CATEGORY_HOME): anche
         // l'alarm di restartApp arriva qui via onNewIntent (intent esplicito,
         // senza categoria) e non deve simulare una pressione di Home.
-        if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {
+        if (intent?.hasCategory(Intent.CATEGORY_HOME) == true && !cameBackFromBackground) {
             webView?.evaluateJavascript("if (window.mobileApp) window.mobileApp.goHome()") {}
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        cameBackFromBackground = true
+        // La rete di redirectToHome: una copia nata come app normale quando
+        // Jenny non era ancora la home (l'onboarding, che te la fa scegliere
+        // proprio da qui). Diventata home, il primo Home ne crea un'altra nel
+        // task home, e questa resterebbe ferma dietro, con la sua WebView.
+        if (!bornAsHome && !isChangingConfigurations && isDefaultHome(this)) {
+            Log.i(TAG, "Standard-task copy left behind by the home: finishing it")
+            finishAndRemoveTask()
+        }
+    }
+
+    /**
+     * Una sola Jenny quando Jenny è la home.
+     *
+     * Android tiene le activity `home` e quelle normali in task diversi, anche
+     * con `singleTask` e la stessa affinità: un intent esplicito senza
+     * categoria HOME, quando il task home non c'è, crea un task `standard`; il
+     * primo Home ne crea poi uno `home`, con una seconda copia di Jenny. Sul
+     * Titan 2, il 09/10/2026, erano due WebView e due WebSocket sul gateway
+     * nello stesso processo (254 MB di PSS in tutto), e la copia di troppo si
+     * rivedeva dai Recenti, ferma da ore. Riprodotto sull'emulatore: un
+     * `install -r` con un'altra app davanti toglie il task home e il sistema
+     * non lo rimette; poi basta un intent esplicito — l'`am start -n` del
+     * nostro flusso di installazione, ma anche la notifica del gateway, la
+     * mascotte, un avviso: sono tutti espliciti — e un Home.
+     *
+     * Se il task home esistesse, `singleTask` ci avrebbe mandato lì via
+     * `onNewIntent`: arrivare qui, nati non-home con Jenny home, vuol dire che
+     * non c'è. Lo si crea con un intent home **implicito** — con il componente
+     * esplicito Android non dà il tipo `home` a un'app che non sia di sistema —
+     * ristretto al nostro pacchetto, e questa copia se ne va. Una richiesta di
+     * chat viaggia con lui ([EXTRA_OPEN_CHAT_VIA_HOME]).
+     */
+    private fun redirectToHome(): Boolean {
+        val home = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .setPackage(packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (isOurOpenChat(this, intent)) {
+            home.putExtra(EXTRA_OPEN_CHAT_VIA_HOME, true)
+                .putExtra(EXTRA_OPEN_CHAT_TOKEN, intent.getStringExtra(EXTRA_OPEN_CHAT_TOKEN))
+            openChatConversation(intent)?.let { home.putExtra(EXTRA_OPEN_CHAT_CONVERSATION, it) }
+        }
+        Log.i(TAG, "Started outside the home task while Jenny is the home: redirecting")
+        try {
+            startActivity(home)
+        } catch (e: Exception) {
+            // Senza home a cui passare, questa copia resta: meglio due Jenny
+            // per un po' che nessuna.
+            Log.w(TAG, "Redirect to the home task failed (${e.javaClass.simpleName})")
+            return false
+        }
+        finish()
+        return true
+    }
+
+    // Il fuoco torna alla finestra (un dialogo, la tendina, un'altra app che
+    // se ne va): Android rilega da sé, e qui si controlla che sia bastato.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            imeBinding.recheck()
+            // Lo sblocco dalla schermata di blocco ridà il fuoco qui, dopo
+            // l'ultimo onResume: anche questo rientro va ridisegnato.
+            scheduleRepaint()
+        }
+    }
+
+    private fun scheduleRepaint() {
+        repaintHandler.removeCallbacks(repaintRunnable)
+        repaintHandler.postDelayed(repaintRunnable, REPAINT_SETTLE_MS)
+    }
+
+    private fun forceRepaint() {
+        if (!isInForeground || !loaded) return
+        val wv = webView ?: return
+        wv.invalidate()
+        wv.evaluateJavascript(REPAINT_JS, null)
     }
 
     override fun onPause() {
@@ -922,9 +1140,12 @@ class MainActivity : AppCompatActivity() {
         // Copre anche lo schermo spento: da qui in poi i messaggi proattivi
         // possono squillare come notifica di sistema.
         isInForeground = false
+        isChatOnScreen = false
+        notebookChatOnScreen = null
         // ...e la mascotte flottante può tornare a schermo: l'app non è più
         // davanti, quindi non c'è più il rischio di vederne due.
         FloatingOverlayController.onAppForegroundChanged()
+        repaintHandler.removeCallbacks(repaintRunnable)
         // Stop WebView JS/animation processing while backgrounded; the
         // gateway keeps running independently in GatewayService.
         webView?.onPause()
@@ -933,11 +1154,15 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isInForeground = true
+        // Il tasto Home con la casa davanti passa di qui, e Chromium ne esce con
+        // la tastiera slegata dal campo che ha ancora il fuoco: v. ImeBinding.
+        imeBinding.recheck()
         // La mascotte flottante si toglie di mezzo: questa app è la home del
         // telefono, e sulla schermata iniziale la mascotte c'è già dentro la
         // SPA. Due Jenny sarebbero una di troppo.
         FloatingOverlayController.onAppForegroundChanged()
         webView?.onResume()
+        scheduleRepaint()
         // Terzo modo in cui la chat arriva a schermo: il rientro in primo piano
         // con la chat GIÀ attiva. Non passa da nessun cambio vista, quindi
         // ChatController.activate() non viene chiamato e la SPA non ha niente da
@@ -949,12 +1174,24 @@ class MainActivity : AppCompatActivity() {
         // la chat è quello che l'utente ha davanti. Asincrono per forza — la
         // risposta arriva dal thread JS — e va bene: un alert cancellato una
         // frazione di secondo dopo il resume è indistinguibile.
+        // La stessa risposta riaccende isChatOnScreen, che onPause ha spento:
+        // la SPA lo dice solo ai cambi, e rientrando non cambia niente.
         webView?.evaluateJavascript(CHAT_ON_SCREEN_JS) { result ->
-            if (result?.trim() == "true") NotifierBridge.clearAlerts(this, "resume-on-chat")
+            // Il risultato è la stringa JS in JSON (`"personal"`): la si apre
+            // con lo stesso parser, non togliendo le virgolette a mano.
+            val key = result?.let { runCatching { JSONArray("[$it]").optString(0) }.getOrNull() }
+            val onChat = key == "personal"
+            val notebook = asConversation(key)
+            isChatOnScreen = onChat
+            notebookChatOnScreen = notebook
+            if (onChat || notebook != null) NotifierBridge.clearAlerts(this, "resume-on-chat", notebook)
         }
         // Pacchetti installati/disinstallati mentre eravamo dietro (tipicamente
         // l'uninstaller di sistema): ora la SPA può aggiornare la griglia.
         flushPackageNotices()
+        // Dopo onNewIntent, che arriva prima di onResume: il Home del rientro
+        // ha già visto il flag acceso (v. onNewIntent).
+        cameBackFromBackground = false
     }
 
     private fun startGatewayAndLoad() {
@@ -1031,7 +1268,12 @@ class MainActivity : AppCompatActivity() {
         // `openChatOnLoad` è l'altra sorgente: il tap su un alert arrivato con
         // l'activity morta (v. onCreate). Scritto sul main thread prima che
         // parta il thread di polling che chiama questo metodo.
-        val base = if (bootToChat || openChatOnLoad) "$GATEWAY_URL?mode=chat" else GATEWAY_URL
+        val chat = openChatConversationOnLoad?.let { "&chat=${Uri.encode(it)}" }.orEmpty()
+        val base = when {
+            openChatOnLoad -> "$GATEWAY_URL?mode=chat$chat"
+            bootToChat -> "$GATEWAY_URL?mode=chat"
+            else -> GATEWAY_URL
+        }
         val secret = readBootstrapSecret() ?: return base
         return "$base#bs=${Uri.encode(secret)}"
     }
@@ -1145,9 +1387,29 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
+            /**
+             * Il renderer della WebView è morto (Android l'ha ucciso per
+             * memoria mentre l'utente stava in un'altra app pesante, o è
+             * caduto). Senza questo override la WebView fa cadere l'intero
+             * processo — gateway compreso — e si ripartiva da zero, in chat.
+             * Qui si ricostruisce solo l'activity: la WebView morta se ne va
+             * con onDestroy (che la toglie e la distrugge, come vuole la
+             * documentazione), quella nuova ricarica la casa, e la casa
+             * riprende il posto che aveva salvato (`home-app.js`
+             * `_restorePlace`; giro UX del 10/10/2026).
+             */
+            override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                Log.w(TAG, "WebView renderer gone (crashed=${detail?.didCrash()}): rebuilding the activity")
+                if (!isFinishing && !isDestroyed) recreate()
+                return true
+            }
+
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 mainFrameError = false
+                // Un documento nuovo non ha ancora detto cosa mostra.
+                isChatOnScreen = false
+                notebookChatOnScreen = null
                 if (!loaded) showLoading()
             }
 
@@ -1163,6 +1425,7 @@ class MainActivity : AppCompatActivity() {
                 // La SPA c'è: da qui in poi un cambio di inset la si può
                 // avvisare. Il primo valore glielo dà comunque il getter.
                 refreshGestureInsets()
+                imeBinding.onPageShown()
             }
 
             override fun onReceivedError(
@@ -1347,6 +1610,13 @@ class MainActivity : AppCompatActivity() {
     private var nativeBridgesInstalled = false
 
     private val nativeCommands = NativeCommands()
+
+    // Il fuoco della pagina e la tastiera, tenuti d'accordo: v. ImeBinding.kt.
+    // `webView` letto a ogni controllo, non catturato: onRenderProcessGone e
+    // onDestroy lo azzerano.
+    private val imeBinding by lazy {
+        ImeBinding(view = { webView }, imm = getSystemService(InputMethodManager::class.java))
+    }
 
     private fun installNativeBridges(wv: WebView) {
         if (nativeBridgesInstalled) return
@@ -1555,7 +1825,6 @@ class MainActivity : AppCompatActivity() {
         fun dispatch(method: String, a: JSONArray): Any? = when (method) {
             "setGestureExclusion" ->
                 setGestureExclusion(a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3)).let { null }
-            "clearGestureExclusion" -> clearGestureExclusion().let { null }
             "getLauncherUsage" -> getLauncherUsage()
             "setLauncherUsage" -> setLauncherUsage(a.getString(0)).let { null }
             "setMascotSize" -> setMascotSize(a.getInt(0), a.getDouble(1)).let { null }
@@ -1563,7 +1832,10 @@ class MainActivity : AppCompatActivity() {
                 a.getString(0), a.getString(1), a.getString(2),
                 a.getString(3), a.getString(4), a.getString(5)
             ).let { null }
-            "chatOpened" -> chatOpened().let { null }
+            "setFloatingBubble" -> FloatingOverlayController.setBubbleStyle(a.getString(0)).let { null }
+            "chatOpened" -> chatOpened(if (a.isNull(0)) null else a.optString(0)).let { null }
+            "chatClosed" -> chatClosed().let { null }
+            "setEditableFocus" -> imeBinding.onDomFocus(a.getString(0)).let { null }
             "setThemeBars" -> setThemeBars(a.getString(0), a.getString(1)).let { null }
             "exportBackup" -> exportBackup(a.getString(0), a.getString(1)).let { null }
             "importBackup" -> importBackup().let { null }
@@ -1575,7 +1847,21 @@ class MainActivity : AppCompatActivity() {
             "requestLocationPermission" -> requestLocationPermission().let { null }
             "requestExactAlarmPermission" -> requestExactAlarmPermission()
             "openBatterySettings" -> openBatterySettings()
+            "extensionCall" -> extensionCall(a).let { null }
             else -> throw IllegalArgumentException("unknown native command")
+        }
+
+        /**
+         * `extensionCall(nome, metodo, …argomenti)`: il comando di
+         * un'estensione nativa (v. [NativeExtension]). Uno solo e generico,
+         * così questo elenco chiuso non nomina quel che una build non ha.
+         */
+        private fun extensionCall(a: JSONArray) {
+            val extension = nativeExtensions[a.getString(0)]
+                ?: throw IllegalArgumentException("unknown native extension")
+            val args = JSONArray()
+            for (i in 2 until a.length()) args.put(a.get(i))
+            extension.call(a.getString(1), args)
         }
 
         /**
@@ -1607,11 +1893,6 @@ class MainActivity : AppCompatActivity() {
                 wv.systemGestureExclusionRects =
                     if (r > l && b > t) listOf(android.graphics.Rect(l, t, r, b)) else emptyList()
             }
-        }
-
-        fun clearGestureExclusion() {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-            runOnUiThread { webView?.systemGestureExclusionRects = emptyList() }
         }
 
         /**
@@ -1736,9 +2017,29 @@ class MainActivity : AppCompatActivity() {
          * ``NotificationManager`` è thread-safe, quindi non serve saltare sul
          * thread UI come fanno i metodi qui sopra — quelli toccano la WebView e
          * la finestra, questo no.
+         *
+         * Accende anche [isChatOnScreen]: da qui un avviso proattivo non
+         * squilla più, il messaggio lo stai già vedendo.
+         *
+         * *conversation* è la chat arrivata a schermo: `null` per la personale,
+         * `project:<nome>` per quella di un quaderno, che accende
+         * [notebookChatOnScreen] e cancella solo gli alert di quel quaderno.
          */
-        fun chatOpened() {
-            NotifierBridge.clearAlerts(this@MainActivity, "chat-view-opened")
+        fun chatOpened(conversation: String?) {
+            val notebook = asConversation(conversation)
+            isChatOnScreen = notebook == null
+            notebookChatOnScreen = notebook
+            NotifierBridge.clearAlerts(this@MainActivity, "chat-view-opened", notebook)
+        }
+
+        /**
+         * La chat personale è uscita di scena dentro la SPA: un'altra pagina,
+         * una bacheca, il velo richiuso, un'app aperta sopra. Da qui gli avvisi
+         * tornano a squillare anche con Jenny davanti (v. [isChatOnScreen]).
+         */
+        fun chatClosed() {
+            isChatOnScreen = false
+            notebookChatOnScreen = null
         }
 
         /**
@@ -2192,9 +2493,18 @@ class MainActivity : AppCompatActivity() {
     // ── Backup: helper I/O (thread di background + callback JS) ──
 
     private fun notifyBackupJs(callback: String, ok: Boolean) {
+        notifyJs("jennyBackup", callback, ok.toString())
+    }
+
+    /**
+     * Chiama `window.<global>.<callback>(<argJs>)` nella pagina, se c'è.
+     * [argJs] è già JavaScript: un booleano, o una stringa passata da
+     * `JSONObject.quote`. Lo usano il backup e le estensioni native.
+     */
+    internal fun notifyJs(global: String, callback: String, argJs: String) {
         runOnUiThread {
             webView?.evaluateJavascript(
-                "window.jennyBackup && window.jennyBackup.$callback && window.jennyBackup.$callback($ok)",
+                "window.$global && window.$global.$callback && window.$global.$callback($argJs)",
                 null
             )
         }

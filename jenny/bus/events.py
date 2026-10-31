@@ -29,6 +29,23 @@ OUTBOUND_META_SUBAGENT_STATUS = "_subagent_status"
 # rete di sicurezza che ``OUTBOUND_META_SUBAGENT_STATUS`` fornisce allo snapshot.
 OUTBOUND_META_SUBAGENT_ACTIVITY = "_subagent_activity"
 
+# Stato di un lavoro lungo che qualcuno aspetta in una chat: una passata del
+# giardiniere, un ciclo di Dream lanciato a mano. Il valore è il payload di
+# ``jenny/runtime/work_status.py::WorkReporter.payload``, identico a quello
+# servito da ``GET /api/work``: una sola forma, due trasporti, come lo snapshot
+# dei subagent qui sopra. La home lo rende come la bolla di lavoro.
+OUTBOUND_META_WORK_STATUS = "_work_status"
+
+# Su un messaggio di testo: l'id del lavoro di cui quel testo è il resoconto. La
+# home, che quel lavoro lo mostra già come bolla, non lo disegna una seconda
+# volta; l'officina, che la bolla non ce l'ha, lo legge come prima.
+OUTBOUND_META_WORK_ID = "_work_id"
+
+# Accanto a ``_work_id``: questo testo e' l'**annuncio** del lavoro («Gardening
+# orto...»), non il suo resoconto. La cronologia della home lo salta sempre: o
+# il lavoro e' ancora una bolla, o il resoconto c'e' gia'.
+OUTBOUND_META_WORK_START = "_work_start"
+
 # Channel name for messages that stay inside the agent (cron, Dream, heartbeat,
 # subagents) and are never delivered to a real chat channel. Defined here — a
 # leaf module with no internal deps — so core (loop/cron/delivery) can import it
@@ -59,9 +76,9 @@ COORDINATION_FLAGS = (
     "_progress", "_stream_delta", "_stream_end", "_streamed",
     "_reasoning_delta", "_reasoning_end", "_retry_wait",
     "_turn_end", "_file_edit_events", "_goal_status",
-    "_runtime_model_updated", "_app_data_changed",
-    "_apps_list_changed", "_user_echo",
-    "_subagent_status", "_subagent_activity",
+    "_runtime_model_updated", "_app_data_changed", "_board_changed",
+    "_apps_list_changed", "_staged_changed", "_plan_changed", "_user_echo",
+    "_subagent_status", "_subagent_activity", "_work_status",
 )
 
 

@@ -79,6 +79,24 @@ That is deliberately all it carries. The prompt knows your wikis by name and sco
 
 Two things follow. The block is withheld from [notebook](./projects.md) conversations and from [gardener](./gardener.md) passes — inside a notebook, the list of your other subjects is exactly the cross-project inventory the boundary keeps out. And there is no compiled directory of entities any more: versions before 0.10.0 built one from the wikis with a periodic job (Atlas) into `memory/WIKI.md`. That job, its config block and its files are removed at the first start of a version without it; nothing you wrote is touched.
 
+## The diary: what happened in your notebooks
+
+Jenny is one person across the personal chat and your notebooks, so the personal chat carries a `# Diary` block: what was written lately in the notebooks' journals, one line per event — the day and time, the notebook, whether **you said it** or Jenny noted it, and the fact itself. Each line is a short copy of a journal line, kept in `memory/history.jsonl` with a pointer back to the full one; the journal stays the source.
+
+It has two grades, the way memory does:
+
+- **the last three days, line by line**;
+- **the rest of the week as a trace**: one line per day, with the notebooks touched and how many things happened in each, so Jenny knows *that* something happened on Tuesday and opens the source for *what*;
+- nothing older: past a week Jenny searches with `recall_history`.
+
+Below the lines the personal chat also sees **what is still waiting**: every reminder on a notebook's [board](./board.md) that has come due and is not marked done yet, for up to two weeks. Nothing new is stored for it — the board's `reminders.json` already knows which reminders fired and which were closed, and the diary only reads it. When you have talked about the same notebook since the reminder fired (you told the film notebook you watched the film, say), the reminder shows as *maybe done*, so Jenny does not remind you of something you already did. And at an opening — your first message after a pause, a greeting, the start of a day — she may ask about **one** of them, the one that matters most, in a sentence: never a list, never in the middle of another topic, and not again in the same conversation if you let it drop.
+
+A line is an index, not the whole story, and the prompt tells Jenny so: she uses a line only when the conversation touches it, never brings up one notebook's matters while you talk about something else, and checks the source before stating a detail the line does not contain.
+
+What it leaves out on purpose. A notebook sees only lines *about itself* written elsewhere, never another notebook's. Dream, the gardener, cron jobs and subagents see none of it. A line written while Jenny had an untrusted result in view — a web page she read — stays in its own conversation instead of reaching another one as a fact (see the [security model](../internals/security-model.md#subagents-and-untrusted-content)). And the lines are not Dream's input: the notebook's conversation already reaches Dream through its own archive entry, so reading both would extract the same fact twice.
+
+The block is part of the cached prompt, so it does not change on every write. It is frozen at a point in time; lines written after that — and a reminder that fires, closes or becomes *maybe done* — reach Jenny once, with the turn that follows them, and the block is rebuilt only when the provider's cache would be cold anyway — after an hour's pause — or when more than twelve changes have piled up. `/new` rebuilds it too.
+
 ## The files
 
 ```text
@@ -101,13 +119,15 @@ These files play different roles:
 - `history.jsonl` remembers what happened on the way there, as compressed, timestamped summaries.
 - Recurring workflows can also be promoted into `workspace/skills/<name>/SKILL.md` by Dream, rather than staying as prose inside `MEMORY.md` or `USER.md`.
 
-All of these are plain text in your workspace. You can read them, edit them by hand, or just ask Jenny to change something in them — nothing about memory is hidden behind a locked format.
+All of these are plain text in your workspace. You can read them and edit them by hand — nothing about memory is hidden behind a locked format.
+
+You can also just ask Jenny to remember, change or forget something, but she does not edit these files while you talk: what you said stays in the conversation, and Dream applies it on its next pass. She tells you so, and `/dream` runs that pass now. A hand edit takes effect on the next message.
 
 ### `history.jsonl` instead of a plain history file
 
-`history.jsonl` replaced an older, more casual "history as prose" format because it needed to be an operational substrate, not just pleasant reading. The JSON-lines format gives Jenny stable incremental cursors, safer machine parsing, easier batching per Dream run, and a cleaner boundary between raw history and curated knowledge. It's capped at **1000 entries**; once the cap is reached, the oldest entries are dropped to make room for new ones as the file is compacted.
+`history.jsonl` replaced an older, more casual "history as prose" format because it needed to be an operational substrate, not just pleasant reading. The JSON-lines format gives Jenny stable incremental cursors, safer machine parsing, easier batching per Dream run, and a cleaner boundary between raw history and curated knowledge. It's capped at **1000 entries**. Past the cap, the oldest entries Dream has already read move out of the file into `memory/history-archive/<YYYY-MM>.jsonl`, one file per month (small enough for `grep`, which skips files over 2 MB), and nothing is deleted. `recall_history` reads both, so an old entry can still be found and opened.
 
-You can search it yourself with the `python_exec` tool or by asking Jenny to `grep` it, if you ever want to see exactly what got archived. Jenny reads it herself with the `recall_history` tool, from the personal chat only (inside a project the tool refuses). That tool lists **every** entry in the file, not just the personal chat's: the journals of your projects (notebooks) are included, and so are entries hidden from the prompt with `prompt_visible=False` — such as the conversation `/new` just archived.
+You can search it yourself with the `python_exec` tool or by asking Jenny to `grep` it, if you ever want to see exactly what got archived. Jenny reads it herself with the `recall_history` tool, from the personal chat only (inside a project the tool refuses). She searches it by words (in Italian and English) or browses it a page at a time, over the archived months too. It covers **every** entry, not just the personal chat's: the journals of your projects (notebooks) are included, and so are entries hidden from the prompt with `prompt_visible=False` — such as the conversation `/new` just archived.
 
 ## What Jenny actually remembers when you open a new chat
 
@@ -117,6 +137,7 @@ At the start of every conversation, Jenny's system prompt includes:
 - `MEMORY.md`, if it has real content (an untouched template file isn't injected).
 - The `## Wikis` block: one line per wiki under `workspace/wikis/` — its name and one-line scope — rendered from disk at every build. It sits under the same "Memory" heading as `MEMORY.md` but is injected independently — an untouched `MEMORY.md` doesn't suppress it — and never inside a project conversation.
 - Any history entries from `memory/history.jsonl` that Dream hasn't processed yet (capped to the last 50 entries / roughly 8,000 tokens of text) — this is the bridge between "compacted but not yet dreamed" and the durable files.
+- The [diary](#the-diary-what-happened-in-your-notebooks): the last week of your notebooks' journals, in two grades.
 
 So a brand-new chat isn't a blank slate: it inherits your durable profile and project notes from the last Dream pass, plus whatever's been compacted since then but not yet folded in.
 
@@ -174,9 +195,9 @@ Dream's configuration lives under `agents.defaults.dream` in `config.json`, and 
 
 The budgets are counted in **characters**, not tokens, because that is the only unit the model can count while it is writing.
 
-**These caps bind Dream, not Jenny.** The refusal is mounted only on the tools Dream's own runs get. The tools Jenny uses while you are talking to her carry no size guard at all, so a chat turn can write past a budget and nothing stops it — measured on a real device at 2,399 characters against a cap of 2,400. That is deliberate. A refusal in the middle of a conversation would land on the one writer that has you sitting there, and it would trade a visible failure for an invisible one: the thing you just asked Jenny to remember would quietly not be saved. So for the main agent the numbers are **advisory** — the size the review pass aims for, not a wall. They are enforced where the writer is unattended and has a review pass behind it to make room.
+**These caps bind Dream, not other writers.** The refusal is mounted only on the tools Dream's own runs get. Anything else that writes these files carries no size guard: your own hand edits, and a chat turn that writes them anyway — Jenny is told to leave them to Dream, but with orchestrator mode off she has the file tools to do it, and one such write was measured on a real device at 2,399 characters against a cap of 2,400. That is deliberate. A refusal in the middle of a conversation would land on the one writer that has you sitting there, and it would trade a visible failure for an invisible one. So outside Dream the numbers are **advisory** — the size the review pass aims for, not a wall. They are enforced where the writer is unattended and has a review pass behind it to make room.
 
-The cost of that choice is worth knowing: a chat turn can leave a file saturated, and it is Dream that then finds no room. If you see Dream reporting that it consolidated nothing, a file already at its cap is the first thing to check — the workshop's Memory drawer shows each file's size against its budget.
+The cost of that choice is worth knowing: a hand edit or a chat turn can leave a file saturated, and it is Dream that then finds no room. If you see Dream reporting that it consolidated nothing, a file already at its cap is the first thing to check — the workshop's Memory drawer shows each file's size against its budget.
 
 **Being over budget is not an error.** It means the next thing Dream wants to add has to wait for the review pass to make room — usually by *moving* something to where it belongs (a task specification to a skill file, project context to `MEMORY.md`) rather than by forgetting it.
 
@@ -184,7 +205,7 @@ The cost of that choice is worth knowing: a chat turn can leave a file saturated
 
 A cadence below **12** runs does not get written without an explicit confirmation, and the server refuses it whatever asks — the floor is not a client-side politeness. The reason is that below that the review passes start meeting each other: the second one lands on a file the first has already pruned, and it keeps looking for things to remove. Measured on a real device, two consecutive passes took `USER.md` from 3,524 characters to 1,626 — 31% of that on the second pass alone — and a forced pass on a later build removed five real entries: two open questions, a plan, a biographical detail and one insight.
 
-Losing them is no longer possible. Every entry that leaves `USER.md` or `memory/MEMORY.md` is written to `memory/archive/` before the shrinking write lands, whichever tool does the shrinking — measured over two runs at `reviewEveryRuns: 1`, ten entries were archived and nothing was lost. So the floor is not there to stop deletion any more. It is there because a faster cadence spends tokens on every Dream run, unattended, for pruning that has nothing left to prune, and 12 is the cadence the rest of the design assumes.
+Losing them is no longer possible. Every entry that leaves `USER.md` or `memory/MEMORY.md` is written to `memory/archive/` before the shrinking write lands, whichever tool does the shrinking — measured over two runs at `reviewEveryRuns: 1`, ten entries were archived and nothing was lost. When the entry left because a new wording took its place, its archived file says which one (`superseded_by:` with the new entry's id); when Dream removed it because you said it was never true, the file says `retracted: yes`. Files archived before this existed carry neither. So the floor is not there to stop deletion any more. It is there because a faster cadence spends tokens on every Dream run, unattended, for pruning that has nothing left to prune, and 12 is the cadence the rest of the design assumes.
 
 If you want a faster cadence anyway — measuring on a real device is the reason this path exists — typing a value below the floor in the workshop's Memory drawer raises a dialog carrying those measurements, and only an explicit yes writes it. Setting it back to 12 needs no confirmation.
 

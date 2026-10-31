@@ -62,7 +62,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-__all__ = ["CronExpr", "next_after", "parse"]
+__all__ = ["CronExpr", "next_after", "parse", "shape"]
 
 _MINUTE, _HOUR, _DOM, _MONTH, _DOW, _SECOND, _YEAR = range(7)
 _NAMES = ("minute", "hour", "day of month", "month", "day of week", "second", "year")
@@ -352,6 +352,55 @@ def parse(expr: str) -> CronExpr:
             for i in (_MINUTE, _HOUR)
         ),
     )
+
+
+def shape(expr: str) -> dict | None:
+    """La forma di un'espressione comune, perché un'interfaccia la possa dire a parole.
+
+    ``{"pattern": "daily", "hour": 18, "minute": 30}`` («ogni giorno alle 18:30»),
+    ``weekly`` con ``dow`` (0 = domenica), ``monthly`` con ``dom``, ``hours`` e
+    ``minutes`` con ``every`` (ogni N ore, ogni N minuti). ``None`` per tutto il
+    resto: due orari al giorno, i mesi, ``L``, ``x#n``, i secondi. Chi la mostra
+    ripiega allora sull'espressione com'è, che resta comunque vera.
+    """
+    try:
+        text = _MACROS.get(str(expr).strip().lower(), str(expr).strip().lower())
+        if len(text.split()) != 5:
+            return None
+        spec = parse(text)
+    except ValueError:
+        return None
+    if spec.months is not None or spec.dom_weekday or spec.dow_nth:
+        return None
+    if spec.dom is not None and not all(isinstance(d, int) for d in spec.dom):
+        return None
+    minutes, hours = spec.minutes, spec.hours
+    every_minutes = _cycle_step(minutes, 0, 59)
+    every_hours = _cycle_step(hours, 0, 23)
+    days_free = spec.dom is None and spec.dow is None
+    if every_minutes and every_hours == 1 and days_free:
+        return {"pattern": "minutes", "every": every_minutes}
+    if len(minutes) == 1 and every_hours and days_free:
+        return {"pattern": "hours", "every": every_hours, "minute": minutes[0]}
+    if len(minutes) != 1 or len(hours) != 1:
+        return None
+    at = {"hour": hours[0], "minute": minutes[0]}
+    if days_free:
+        return {"pattern": "daily", **at}
+    if spec.dom is None:
+        return {"pattern": "weekly", "dow": sorted(spec.dow or ()), **at}
+    if spec.dow is None:
+        return {"pattern": "monthly", "dom": sorted(int(d) for d in spec.dom), **at}
+    return None
+
+
+def _cycle_step(values: tuple[int, ...], lo: int, hi: int) -> int | None:
+    """Il passo di un ``*/n`` (1 per la ``*``), o ``None`` se i valori non lo sono."""
+    if values == tuple(range(lo, hi + 1)):
+        return 1
+    if _covers_the_cycle(values, lo, hi):
+        return values[1] - values[0]
+    return None
 
 
 def _covers_the_cycle(values: tuple[int, ...], lo: int, hi: int) -> bool:

@@ -179,10 +179,6 @@ def test_the_subagent_is_told_only_when_the_turn_is_read_only() -> None:
     assert "current_workspace_scope()" in src
 
 
-def test_the_main_prompt_renders_it_only_when_read_only() -> None:
-    src = (SRC / "agent" / "context.py").read_text(encoding="utf-8")
-    assert 'render_template("agent/readonly.md")' in src
-    assert "if not _turn_is_writable():" in src
 
 
 def test_a_turn_with_no_bound_scope_is_writable() -> None:
@@ -251,6 +247,43 @@ def test_read_only_removes_the_capture_rule(tmp_path) -> None:
     # La pianta però resta: in sola lettura si legge e si descrive, e per farlo
     # bisogna sapere com'è fatta la cartella.
     assert "raw/journal/YYYYMMDD.md" in prompt
+
+
+def test_a_writable_turn_has_the_capture_rule_and_no_read_only_block(tmp_path) -> None:
+    """Il rovescio del test sopra, sullo stesso progetto: scrivibile, la regola di
+    cattura c'è e il blocco di sola lettura no. Insieme i due provano che il
+    prompt principale segue la scrivibilità del turno (``_turn_is_writable``),
+    cosa che prima si fissava leggendo il sorgente di ``context.py``."""
+    from jenny.agent.context import ContextBuilder
+    from jenny.security.workspace_access import (
+        WorkspaceScope,
+        bind_workspace_scope,
+        reset_workspace_scope,
+        workspace_sandbox_status,
+    )
+
+    project = tmp_path / "wikis" / "viaggio"
+    (project / "wiki").mkdir(parents=True)
+    scope = WorkspaceScope(
+        project_path=project,
+        access_mode="restricted",
+        restrict_to_workspace=True,
+        sandbox_status=workspace_sandbox_status(
+            restrict_to_workspace=True, workspace=project
+        ),
+        writable=True,
+    )
+    token = bind_workspace_scope(scope)
+    try:
+        prompt = ContextBuilder(tmp_path).build_system_prompt(
+            workspace=project, session_key="project:viaggio"
+        )
+    finally:
+        reset_workspace_scope(token)
+
+    assert "# Project Folder" in prompt
+    assert "# Read-Only Turn" not in prompt
+    assert "before you answer" in prompt
 
 
 # ── La simmetria col passo 3 ─────────────────────────────────────────────

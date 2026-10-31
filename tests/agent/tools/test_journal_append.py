@@ -351,9 +351,9 @@ def test_it_is_registered_in_the_loader() -> None:
     src = Path(loader.__file__).read_text(encoding="utf-8")
     assert '"journal",' in src
 
-    from jenny.agent.tools.journal import TOOLS
+    from jenny.agent.tools.journal import TOOLS, SuggestNotebookTool
 
-    assert TOOLS == [JournalAppendTool]
+    assert TOOLS == [JournalAppendTool, SuggestNotebookTool]
 
 
 # ── L'attribuzione: di chi è il fatto che la riga registra ───────────────────
@@ -454,3 +454,223 @@ async def test_a_recovery_pass_keeps_its_own_marker_and_ignores_attribution(tmp_
     assert "[inferred]" not in body, "l'attribuzione non deve poter degradare un recupero"
     assert "[said]" not in body, "e nemmeno raddoppiare il prefisso"
     assert "inferred" not in out, "niente nota di ripiegamento: non ha ripiegato niente"
+
+
+# ── Lo specchio nel diario della memoria ─────────────────────────────────────
+
+
+def _history(store_root: Path) -> list[dict]:
+    import json
+
+    path = store_root / "memory" / "history.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+async def test_a_line_leaves_its_short_copy_in_the_diary(tmp_path) -> None:
+    """Il fatto, chi l'ha detto, di quale quaderno parla e dove sta l'originale."""
+    from jenny.agent.memory import MemoryStore
+    from jenny.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
+
+    project = _wiki(tmp_path, "film")
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=MemoryStore(tmp_path))
+    token = _bind(project)
+    request = bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:film", session_key="project:film"))
+    try:
+        await tool.execute(text="Ha visto Perfect Days, gli è piaciuto", attribution="said")
+    finally:
+        reset_request_context(request)
+        reset_workspace_scope(token)
+    [row] = _history(tmp_path)
+    assert row["content"] == "Ha visto Perfect Days, gli è piaciuto"
+    assert row["kind"] == "said" and row["about"] == "film"
+    assert row["session_key"] == "project:film"
+    assert row["ref"] == "wikis/film/raw/journal/20260822.md:3"
+    assert "untrusted" not in row
+    assert _page(project).read_text().splitlines()[2].endswith(row["content"])
+
+
+async def test_a_line_from_a_tainted_turn_is_marked_untrusted(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+    from jenny.security.subagent_policy import TurnTaint, enter_turn_taint
+
+    project = _wiki(tmp_path)
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=MemoryStore(tmp_path))
+    token = _bind(project)
+    try:
+        with enter_turn_taint(TurnTaint(["web_fetch:evil.example"])):
+            await tool.execute(text="Il volo parte alle 7", attribution="inferred")
+    finally:
+        reset_workspace_scope(token)
+    [row] = _history(tmp_path)
+    assert row["untrusted"] is True and row["kind"] == "inferred"
+    assert row["session_key"] == "project:viaggio"
+
+
+async def test_a_recovered_line_is_not_mirrored(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+
+    project = _wiki(tmp_path)
+    tool = JournalAppendTool(today=lambda: _DAY, root=project, origin_marker="[recovered]",
+                             memory_store=MemoryStore(tmp_path))
+    await tool.execute(text="Parte il 3 settembre")
+    assert "[recovered]" in _page(project).read_text()
+    assert _history(tmp_path) == []
+
+
+async def test_a_failing_diary_does_not_lose_the_journal_line(tmp_path) -> None:
+    class _Broken:
+        workspace = tmp_path
+
+        def append_history(self, *a, **k):
+            raise OSError("disco pieno")
+
+    project = _wiki(tmp_path)
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=_Broken())
+    token = _bind(project)
+    try:
+        out = await tool.execute(text="Parte il 3 settembre", attribution="said")
+    finally:
+        reset_workspace_scope(token)
+    assert out.startswith("Appended")
+    assert "Parte il 3 settembre" in _page(project).read_text()
+
+
+# ── I cassetti: dalla chat personale, nel quaderno giusto ────────────────────
+
+
+def _personal_request():
+    from jenny.agent.tools.context import RequestContext, bind_request_context
+
+    return bind_request_context(RequestContext(
+        channel="websocket", chat_id="default", session_key="unified:default"))
+
+
+async def test_from_the_personal_chat_a_fact_goes_into_its_notebook(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+    from jenny.agent.tools.context import reset_request_context
+
+    project = _wiki(tmp_path, "giardino")
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=MemoryStore(tmp_path))
+    request = _personal_request()
+    try:
+        out = await tool.execute(text="L'acero va potato a novembre", attribution="inferred",
+                                 notebook="giardino")
+    finally:
+        reset_request_context(request)
+    assert out.startswith("Appended")
+    assert "[inferred] L'acero va potato a novembre" in _page(project).read_text()
+    [row] = _history(tmp_path)
+    assert row["about"] == "giardino" and row["session_key"] == "unified:default"
+
+
+async def test_from_the_personal_chat_without_a_notebook_it_is_a_diary_line(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+    from jenny.agent.tools.context import reset_request_context
+
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=MemoryStore(tmp_path))
+    request = _personal_request()
+    try:
+        out = await tool.execute(text="Ha visto Perfect Days", attribution="said")
+    finally:
+        reset_request_context(request)
+    assert out == "Noted in your diary: Ha visto Perfect Days"
+    [row] = _history(tmp_path)
+    assert row["kind"] == "said" and "about" not in row
+    assert row["session_key"] == "unified:default"
+
+
+async def test_a_notebook_that_does_not_exist_is_not_created(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+
+    _wiki(tmp_path, "giardino")
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=MemoryStore(tmp_path))
+    out = await tool.execute(text="Prende un cane", attribution="said", notebook="cane")
+    assert "No notebook named 'cane'" in out and "giardino" in out
+    assert not (tmp_path / "wikis" / "cane").exists()
+    assert _history(tmp_path) == []
+
+
+async def test_from_a_notebook_only_its_own_journal(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+
+    project = _wiki(tmp_path, "film")
+    _wiki(tmp_path, "giardino")
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=MemoryStore(tmp_path))
+    token = _bind(project)
+    try:
+        out = await tool.execute(text="x", attribution="said", notebook="giardino")
+        same = await tool.execute(text="Old Boy rivisto", attribution="said", notebook="film")
+    finally:
+        reset_workspace_scope(token)
+    assert out.startswith("From the notebook 'film' only its own journal")
+    assert same.startswith("Appended")
+
+
+async def test_a_subagent_does_not_fill_the_drawers(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+    from jenny.security.subagent_policy import SubagentRunPolicy, enter_subagent_policy
+
+    project = _wiki(tmp_path, "giardino")
+    tool = JournalAppendTool(today=lambda: _DAY, memory_store=MemoryStore(tmp_path))
+    with enter_subagent_policy(SubagentRunPolicy.for_run("t1", tmp_path)):
+        out = await tool.execute(text="x", attribution="said", notebook="giardino")
+    assert out.startswith("A subagent does not write")
+    assert not _page(project).exists()
+
+
+
+# ── «Ci spostiamo?» ──────────────────────────────────────────────────────────
+
+
+async def test_suggesting_a_notebook_leaves_the_handoff_line(tmp_path) -> None:
+    """Il quaderno trova nel suo diario da dove venite."""
+    from jenny.agent.memory import MemoryStore
+    from jenny.agent.tools.context import reset_request_context
+    from jenny.agent.tools.journal import SuggestNotebookTool
+
+    _wiki(tmp_path, "camper")
+    tool = SuggestNotebookTool(memory_store=MemoryStore(tmp_path))
+    request = _personal_request()
+    try:
+        out = await tool.execute(notebook="camper",
+                                 context="Stavamo mettendo in fila la manutenzione: tagliando a novembre")
+    finally:
+        reset_request_context(request)
+    assert out.startswith("The user now sees a button")
+    [row] = _history(tmp_path)
+    assert row["about"] == "camper" and row["kind"] == "inferred"
+    assert row["content"].startswith("From the personal chat: Stavamo mettendo")
+
+
+async def test_no_offer_from_a_notebook_from_telegram_or_for_a_missing_one(tmp_path) -> None:
+    from jenny.agent.memory import MemoryStore
+    from jenny.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
+    from jenny.agent.tools.journal import SuggestNotebookTool
+
+    project = _wiki(tmp_path, "camper")
+    tool = SuggestNotebookTool(memory_store=MemoryStore(tmp_path))
+    token = _bind(project)
+    try:
+        assert (await tool.execute(notebook="camper", context="x")).startswith(
+            "You are already in a notebook")
+    finally:
+        reset_workspace_scope(token)
+    request = bind_request_context(RequestContext(channel="telegram", chat_id="1",
+                                                  session_key="unified:default"))
+    try:
+        assert "only in the app" in await tool.execute(notebook="camper", context="x")
+    finally:
+        reset_request_context(request)
+    assert "No notebook named 'cane'" in await tool.execute(notebook="cane", context="x")
+    assert _history(tmp_path) == []

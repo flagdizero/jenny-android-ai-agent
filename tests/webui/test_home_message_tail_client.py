@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
@@ -33,11 +33,17 @@ HOME_CSS = ASSETS / "home-style.css"
 pytestmark = requires_node
 
 _METHODS = (
+    "_journalMarkOf",
+    "_moveOfferOf",
     "_tailOf",
+    "_timeEl",
+    "_appendUser",
     "_register",
     "_textOf",
     "_appendAssistant",
     "_resetTurn",
+    "_markPassing",
+    "_dropPassing",
     "_turnEnd",
     "_ensureTurn",
 )
@@ -83,12 +89,18 @@ const renderMarkdown = (t) => t;
    `test_rich_surfaces_contract.py`. */
 const renderRich = () => {};
 const i18n = { t: (key) => key };
+/* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
+   suo banco (`test_chat_time_client.py`); qui conta solo se c'e' e dove sta. */
+const chatTime = (ms) => (ms ? '11:26' : '');
+const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
 
 function makeChat() {
   return {
     el: makeNode(),
     _empty: false,
     _source: new WeakMap(),
+    _passing: [], _lastSegment: null, _blockSource: new WeakMap(),
+    _userSent: new WeakMap(),
     _seconds: null,
     turnNode: null,
     blockNode: null,
@@ -98,19 +110,19 @@ function makeChat() {
     syncEmpty() {},
     _follow() {},
     _appendMedia() {},
+    _originBadge() { return null; },
     _append(node) { this.el.appendChild(node); return node; },
     __METHODS__,
   };
 }
 
 /* Cosa c'e' nella coda di una bolla, nell'ordine: le classi dei pulsanti e il
-   testo dei secondi. `null` se la coda non c'e' proprio. */
+   testo di ora, separatore e secondi. `null` se la coda non c'e' proprio. */
+const TEXTS = ['home-seconds', 'home-time', 'home-tail-sep'];
 function tail(node) {
   const row = node.children.find((c) => c.className === 'home-tail');
   if (!row) return null;
-  return row.children.map((c) => (
-    c.className === 'home-seconds' ? c.textContent : c.className
-  ));
+  return row.children.map((c) => (TEXTS.includes(c.className) ? c.textContent : c.className));
 }
 const ultima = (chat) => chat.el.children[chat.el.children.length - 1];
 """
@@ -119,7 +131,7 @@ const ultima = (chat) => chat.el.children[chat.el.children.length - 1];
 def _harness() -> str:
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     methods = ",\n    ".join(member(src, name) for name in _METHODS)
-    return _HARNESS.replace("__METHODS__", methods)
+    return _HARNESS.replace("__METHODS__", methods) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
 
 
 def _run_js(script: str) -> None:
@@ -174,6 +186,63 @@ def test_a_user_bubble_has_no_tail() -> None:
     """)
 
 
+# ── L'ora (06/10/2026) ───────────────────────────────────────────────────────
+
+
+def test_a_history_answer_gets_copy_then_its_time_then_the_seconds() -> None:
+    """«⧉ 11:26 · 4.2s»: l'ora sta fra il Copia e i secondi, col punto in
+    mezzo solo quando ci sono tutti e due."""
+    _run_js("""
+      const c = makeChat();
+      c._appendAssistant('una risposta', [], false, 4000, 1791200000000);
+      assert.deepEqual(tail(ultima(c)), ['home-copy', '11:26', '\u00b7', '4.0s']);
+      const time = ultima(c).children.find((x) => x.className === 'home-tail')
+        .children.find((x) => x.className === 'home-time');
+      assert.equal(time.dateTime, new Date(1791200000000).toISOString());
+    """)
+
+
+def test_a_proactive_message_gets_its_time_without_the_dot() -> None:
+    _run_js("""
+      const c = makeChat();
+      c._appendAssistant('un avviso arrivato da solo', [], false, null, 1791200000000);
+      assert.deepEqual(tail(ultima(c)), ['home-copy', '11:26']);
+    """)
+
+
+def test_an_answer_of_only_images_gets_its_time_and_no_copy() -> None:
+    _run_js("""
+      const c = makeChat();
+      c._appendAssistant('', [{ url: '/x.png' }], false, null, 1791200000000);
+      assert.deepEqual(tail(ultima(c)), ['11:26']);
+    """)
+
+
+def test_your_bubble_gets_its_time_under_it() -> None:
+    """Sotto la bolla, fuori dalla sua pelle: l'ultimo figlio del messaggio,
+    dopo il blocco che porta lo sfondo."""
+    _run_js("""
+      const c = makeChat();
+      const tua = c._appendUser('ciao', null, [], false, 1791200000000);
+      const last = tua.children[tua.children.length - 1];
+      assert.equal(last.className, 'home-time');
+      assert.equal(last.textContent, '11:26');
+      assert.equal(tua.children[0].className, 'home-block');
+    """)
+
+
+def test_without_a_time_nothing_is_invented() -> None:
+    """Una cronologia di prima che la sessione non sa datare resta senza:
+    un'ora finta sarebbe peggio di nessuna."""
+    _run_js("""
+      const c = makeChat();
+      const tua = c._appendUser('ciao', null, [], false, null);
+      assert.ok(!tua.children.some((x) => x.className === 'home-time'));
+      c._appendAssistant('una risposta', [], false, null, null);
+      assert.deepEqual(tail(ultima(c)), ['home-copy']);
+    """)
+
+
 # ── Quando arriva ────────────────────────────────────────────────────────────
 
 
@@ -183,7 +252,7 @@ def test_the_live_turn_gets_its_tail_at_turn_end() -> None:
       const bubble = c._ensureTurn();
       c._register(bubble, 'risposta dal vivo');
       c._turnEnd(21300);
-      assert.deepEqual(tail(bubble), ['home-copy', '21.3s']);
+      assert.deepEqual(tail(bubble), ['home-copy', '11:26', '·', '21.3s']);
     """)
 
 
@@ -203,8 +272,8 @@ def test_an_answer_cut_short_by_the_next_one_still_gets_its_tail() -> None:
       const second = c._ensureTurn();
       c._register(second, 'la seconda');
       c._turnEnd(1500);
-      assert.deepEqual(tail(before), ['home-copy'], 'la prima è rimasta senza confine');
-      assert.deepEqual(tail(second), ['home-copy', '1.5s']);
+      assert.deepEqual(tail(before), ['home-copy', '11:26'], 'la prima è rimasta senza confine');
+      assert.deepEqual(tail(second), ['home-copy', '11:26', '·', '1.5s']);
     """)
 
 
@@ -219,7 +288,7 @@ def test_the_seconds_do_not_leak_into_the_next_answer() -> None:
       const second = c._ensureTurn();
       c._register(second, 'la seconda');
       c._resetTurn();
-      assert.deepEqual(tail(second), ['home-copy']);
+      assert.deepEqual(tail(second), ['home-copy', '11:26']);
     """)
 
 
@@ -297,7 +366,8 @@ def test_the_source_is_recorded_wherever_the_text_is_complete() -> None:
 def test_the_tail_is_one_row() -> None:
     """Una riga sola, chiesta esplicitamente: `display: flex` sulla coda, non
     due nodi impilati."""
-    m = re.search(r"\.home-tail\s*\{([^}]*)\}", HOME_CSS.read_text(encoding="utf-8"))
+    # La regola della coda, non quella che la porta nella fascia (`> .home-tail`).
+    m = re.search(r"(?m)^\.home-tail\s*\{([^}]*)\}", HOME_CSS.read_text(encoding="utf-8"))
     assert m, ".home-tail non ha stile: sarebbe due righe una sotto l'altra"
     assert "display: flex" in m.group(1)
     assert "align-items: center" in m.group(1)

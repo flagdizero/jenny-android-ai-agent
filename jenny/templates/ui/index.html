@@ -10,7 +10,7 @@
      servono davvero. KaTeX, Mermaid e D3 in casa ci sono, ma **a richiesta**:
      i primi due li carica `shared/rich-content.js` quando un messaggio o una
      pagina contengono davvero una formula o un diagramma, il terzo
-     `home-map.js` al primo tocco sulla mappa. La differenza non e' estetica —
+     le Jenny App che disegnano un grafico. La differenza non e' estetica —
      e' il tempo che passa fra il tocco sull'icona e la prima riga leggibile.
 
      Vale la stessa CSP dell'officina (`script-src 'self'`, v. _SHELL_DOCUMENTS
@@ -23,6 +23,7 @@
 <!-- Il ponte col guscio Android, ricomposto in window.JennyNative prima che
      giri qualunque modulo: v. il commento in testa al file. -->
 <script src="/html-mobile/assets/shared/native-bridge.js"></script>
+<script src="/html-mobile/assets/shared/editable-focus.js"></script>
 
 <link href="/html-mobile/assets/vendor/fonts/google-fonts.css" rel="stylesheet">
 <link href="/html-mobile/assets/vendor/fonts/theme-fonts.css" rel="stylesheet">
@@ -85,23 +86,22 @@
       </nav>
     </div>
     <div class="home-actions">
-      <!-- Nelle pagine di un quaderno: l'interruttore fra la sua chat e le sue
-           pagine, lo stesso che la fila mostra nella chat del quaderno e nello
-           stesso punto. Chat e pagine sono due viste dello stesso posto.
-           Nel lettore non c'e': li' il comando e' «Modifica», e all'elenco
-           delle pagine riporta la freccia. Ha preso il posto di «Parlane», che
-           fino al 26/09/2026 era la strada per la chat da qui. -->
-      <div class="home-view-switch" id="home-view-switch" role="group" hidden>
-        <button class="home-view-seg" id="home-view-chat" type="button" aria-pressed="false">
-          <i class="ti ti-message" aria-hidden="true"></i>
-          <span id="home-view-chat-label"></span>
-        </button>
-        <button class="home-view-seg is-on" id="home-view-pages" type="button" aria-pressed="true">
-          <i class="ti ti-book" aria-hidden="true"></i>
-          <span id="home-view-pages-label"></span>
-          <span class="home-view-count" id="home-view-pages-count"></span>
-        </button>
-      </div>
+      <!-- La lente e' l'unica porta verso tutta la wiki, comprese le pagine che
+           non stanno in nessun cassetto; l'elenco mostra le stesse schede in
+           fila, per chi non ama le bacheche e per lo screen reader. -->
+      <!-- Il + della bacheca: una scheda nuova al centro di quel che guardi.
+           Tenere premuto il muro vuoto fa lo stesso, nel punto del dito; ma un
+           gesto sul vuoto non lo scopre nessuno, e questo si vede. -->
+      <button class="home-board-tool" id="home-board-add" type="button" hidden>
+        <i class="ti ti-plus" aria-hidden="true"></i>
+      </button>
+      <button class="home-board-tool" id="home-board-search-open" type="button" hidden>
+        <i class="ti ti-search" aria-hidden="true"></i>
+      </button>
+      <button class="home-board-tool" id="home-board-list-toggle" type="button"
+              aria-pressed="false" hidden>
+        <i class="ti ti-list" aria-hidden="true"></i>
+      </button>
       <!-- Dal lettore: correggi tu, adesso. Compare solo li', e sparisce
            mentre l'editor e' aperto — da quel momento i comandi sono Salva e
            Annulla, e stanno in basso. -->
@@ -123,7 +123,7 @@
        scelta: sono cromatura del guscio, e duplicarle in ogni pannello
        vorrebbe dire tenerne N allineate.
 
-       Le stanze (`home-notebook-pages`, `home-reader`, …) restano sorelle della pista
+       Le stanze (`home-board`, `home-board-drawer`, `home-reader`, …) restano sorelle della pista
        e le passano sopra: entrare in una stanza copre le pagine, non le
        sposta. -->
   <div class="home-showcase">
@@ -155,8 +155,17 @@
         <div class="launcher-head">
           <span class="launcher-title" id="launcher-title" data-i18n="launcher.recent">Più usate</span>
         </div>
+        <!-- Le suggerite: le app che apri di piu', in una fila sopra la griglia.
+             Fuori dalla lista apposta — un'app suggerita sta anche nell'A–Z, e
+             un `listbox` non puo' avere due voci per una cosa sola. Le
+             disegna `mobile-launcher.js` (`_renderTop`); vuota si nasconde. -->
+        <div class="launcher-top" id="launcher-top" role="group"
+             aria-label="Suggerite" data-i18n-aria="launcher.suggested" hidden></div>
         <div class="launcher-list" id="launcher-list" role="listbox"
              aria-label="Risultati" data-i18n-aria="launcher.resultsList"></div>
+        <!-- Il cestino delle app: c'e' solo quando non e' vuoto. «Elimina» non
+             cancella piu' niente, sposta qui (v. home-apps-trash.js). -->
+        <button class="launcher-trash" id="launcher-trash" type="button" hidden></button>
       </div>
     </div>
     <div class="home-page" data-page="chat">
@@ -176,14 +185,9 @@
         <div class="home-empty-text" id="home-empty-text"></div>
       </div>
 
-      <!-- La riga di lavoro: cosa sta facendo Jenny, mentre lo fa. Tocco lungo per
-           aprire lo stesso turno in officina, con pensieri, strumenti e tempi. -->
-      <div class="home-activity" id="home-activity" hidden></div>
-
-      <!-- Gli agenti che lavorano per questa conversazione dopo che il turno e'
-           finito (`home-subagents.js`). Dice solo che lavorano: tocco lungo per
-           vederli in officina. Senza agenti non occupa spazio. -->
-      <div class="home-subagents" id="home-subagents" role="status" aria-live="polite" hidden></div>
+      <!-- Chi lavora — Jenny che scrive, il giardiniere, Dream, gli aiutanti — non
+           sta qui sotto: e' una bolla in fondo al filo, nel suo posto vivo
+           (`home-chat.js`, `home-work.js`). -->
 
       <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
            riconnessione). A filo funzionante non occupa spazio. -->
@@ -193,22 +197,6 @@
       <div class="home-pending" id="home-pending" hidden></div>
 
       <div class="home-composer">
-        <!-- Il quaderno in cui sei, e le sue pagine. Stava in testa, accanto al
-             titolo; la testa e' diventata la fila delle pagine, e la pastiglia e'
-             scesa qui, al posto che era del bottone del cassetto — il cassetto
-             oggi e' la pagina App. Compare solo dentro un quaderno.
-             Dal 26/09/2026 porta **il nome**, col pallino. Resta **solo nelle
-             pagine fissate** su un quaderno: nei Quaderni il nome lo dice il
-             percorso in alto, e alle pagine si va dall'interruttore Chat | Pagine
-             accanto (v. `home-strip.js`) — la strada fra chat e pagine sta in
-             alto, nello stesso punto nei due versi. -->
-        <div class="home-notebook-pill" id="home-notebook-pill" hidden>
-          <button class="home-notebook-pages-open" id="home-notebook-pages-open" type="button">
-            <span class="home-notebook-dot" id="home-notebook-dot" aria-hidden="true"></span>
-            <span class="home-notebook-name" id="home-notebook-name"></span>
-            <span class="home-notebook-count" id="home-notebook-pages-count"></span>
-          </button>
-        </div>
         <!-- Un `<div>`, non una `<label>`: una label che avvolge anche la
              graffetta dava al campo il nome del bottone («Allega», per
              TalkBack), e una label non puo' contenere un bottone. Il nome del
@@ -228,12 +216,33 @@
     </div>
     <!-- La pagina Quaderni: «Con chi parli», che era la tendina del titolo. La
          disegna `home-who.js` qui dentro invece che in un `<dialog>`.
-         Dal 26/09/2026 e' anche **il posto in cui un quaderno si apre**: con un
-         quaderno aperto il pannello porta `data-open`, l'elenco e il + si
-         nascondono, e ci arriva la chat — la stessa, spostata dal trasloco
-         (`home-move.js`), come nelle pagine conversazione. -->
+         Toccare un quaderno apre la sua bacheca (dal 05/10/2026: fino ad
+         allora il quaderno si apriva qui dentro, con la sua chat). -->
     <div class="home-page" data-page="notebooks">
+      <!-- La ricerca: fuori dall'elenco, come il +, perche' resti in cima
+           mentre le mensole scorrono. Una lettera premuta sulla pagina ci
+           arriva da sola (type-ahead, v. `home-who.js`), che ne traduce anche
+           le parole: la casa non ha una passata generica sui `data-i18n`.
+           Un `<div>` e non una `<label>`: una label che avvolge anche la ✕
+           darebbe al campo il nome del bottone, e non puo' contenerne uno (la
+           stessa regola del composer). La lente sta sopra il campo e lascia
+           passare il tocco, quindi tutta la striscia scrive. -->
+      <div class="home-who-search">
+        <i class="ti ti-search" aria-hidden="true"></i>
+        <input class="home-who-search-input" id="home-notebooks-search" type="search"
+               autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+               enterkeyhint="search" placeholder="Cerca un quaderno…"
+               aria-label="Cerca un quaderno">
+        <button class="home-who-search-clear" id="home-notebooks-search-clear" type="button"
+                aria-label="Pulisci la ricerca" hidden>
+          <i class="ti ti-x" aria-hidden="true"></i>
+        </button>
+      </div>
       <div class="home-notebooks" id="home-notebooks"></div>
+      <!-- La targhetta: il nome intero della copertina che ha il fuoco, per chi
+           sceglie con le frecce. Muta per lo screen reader, che il nome lo
+           legge gia' dall'etichetta della copertina. -->
+      <div class="home-who-plate" id="home-notebooks-plate" aria-hidden="true" hidden></div>
       <!-- «Nuovo quaderno»: un + tondo che resta fermo mentre l'elenco scorre.
            Era una riga in fondo all'elenco, e con tanti quaderni finiva sotto il
            bordo. Fuori da `#home-notebooks` apposta: quello scorre, e il
@@ -328,48 +337,36 @@
     </div>
   </div>
 
-  <!-- ── La seconda stanza: le pagine di un quaderno ──────────────────────
-       Wiki, grafo e progetti sono una cosa sola (v. la tavola `Concetto`), e
-       questa e' quella cosa: due linguette sopra la stessa risposta del
-       server — `/api/graph` porta nodi, archi e indice full-text insieme. -->
-  <section class="home-notebook-pages" id="home-notebook-pages">
-    <div class="home-tabs" role="tablist">
-      <button class="home-tab is-on" id="home-tab-list" type="button"
-              role="tab" aria-selected="true" aria-controls="home-notebook-page-list"></button>
-      <button class="home-tab" id="home-tab-map" type="button"
-              role="tab" aria-selected="false" aria-controls="home-map"></button>
+  <!-- ── La seconda stanza: la bacheca di un quaderno ─────────────────────
+       Un quaderno si apre sulla bacheca, non sulle pagine: poche schede curate,
+       i post-it delle attese, i fili, la busta con le proposte di Jenny. La
+       wiki sta dietro, e ci si arriva da un cassetto o dalla lente. -->
+  <section class="home-board" id="home-board">
+    <!-- Un piano aperto chiude il quaderno all'utente (v. `home-plan.js`). -->
+    <div class="home-plan-lock" id="home-board-lock" hidden></div>
+    <button class="home-board-since" id="home-board-since" type="button" hidden></button>
+    <div class="home-board-canvas" id="home-board-canvas">
+      <!-- Il muro: la tela e' la finestra (la busta resta ferma nel suo angolo),
+           il muro dentro si sposta e si ingrandisce. Lo schermo dell'origine e'
+           quello di sempre; si va in tutte le direzioni. -->
+      <div class="home-board-wall" id="home-board-wall">
+        <svg class="home-board-threads" id="home-board-threads" aria-hidden="true"></svg>
+      </div>
     </div>
-
-    <!-- Anche qui un `<div>`: la `<label>` vuota (c'era solo la lente) dava al
-         campo un nome vuoto, e il segnaposto tradotto non arrivava a TalkBack.
-         Il campo copre tutta la pastiglia, lente compresa, e il tocco resta. -->
-    <div class="home-search">
-      <i class="ti ti-search" aria-hidden="true"></i>
-      <input class="home-search-input" id="home-notebook-pages-q" type="search"
-             autocomplete="off" autocapitalize="none" spellcheck="false">
-    </div>
-
-    <!-- La nota sta **prima** dell'elenco: l'elenco e' `flex: 1`, quindi da
-         vuoto si prende tutta l'altezza e spingerebbe «nessuna pagina con
-         queste parole» sul bordo inferiore, dove sembra un piede di pagina
-         invece che la risposta alla ricerca appena fatta. -->
-    <div class="home-notebook-pages-note" id="home-notebook-pages-note" hidden></div>
-
-    <div class="home-notebook-page-list" id="home-notebook-page-list" role="tabpanel"
-         aria-labelledby="home-tab-list"></div>
-
-    <div class="home-map" id="home-map" role="tabpanel"
-         aria-labelledby="home-tab-map" hidden>
-      <svg class="home-map-svg" id="home-map-svg" aria-hidden="true"></svg>
-      <div class="home-map-note" id="home-map-note" hidden></div>
-    </div>
+    <div class="home-board-list" id="home-board-list" role="list" hidden></div>
+    <div class="home-board-empty" id="home-board-empty" hidden></div>
   </section>
+
+  <!-- Il cassetto di una scheda: il riassunto per sezioni, scritto da Jenny
+       dalla wiki, e le sezioni che aggiungi tu. -->
+  <section class="home-board-drawer" id="home-board-drawer"></section>
 
   <!-- ── La terza stanza: una pagina ──────────────────────────────────────
        L'HTML lo rende gia' il server (`/api/page`); qui si sanifica e si
        cablano i wikilink, che aprono un'altra pagina dello stesso quaderno.
        Audit, briciole di pane e LaTeX restano dell'officina. -->
   <section class="home-reader" id="home-reader">
+    <div class="home-plan-lock" id="home-reader-lock" hidden></div>
     <article class="home-reader-body" id="home-reader-body"></article>
     <!-- Modifica: una textarea, e niente CodeMirror. Sono 200+ kB per colorare
          del markdown su 590 px, e la casa e' rimasta magra apposta. Il contatore
@@ -398,6 +395,17 @@
     </div>
   </section>
 
+
+  <!-- Il foglio della bacheca, uno per tutto quel che sale dal basso:
+       «dall'ultima volta», la busta, la ricerca, l'anteprima di una pagina fuori
+       bacheca, «aggiungi sezione». -->
+  <dialog class="oc-sheet home-board-sheet" id="home-board-sheet">
+    <div class="oc-sheet-inner home-board-sheet-inner">
+      <span class="home-board-grip" aria-hidden="true"></span>
+      <h2 class="home-board-sheet-title" id="home-board-sheet-title"></h2>
+      <div class="home-board-sheet-body" id="home-board-sheet-body"></div>
+    </div>
+  </dialog>
 
   <!-- Il foglio di «Segnala». `<dialog>` e non un pannello: `showModal()` lo
        mette nel top layer, cioe' sopra la mascotte — che in casa e' l'unico
@@ -446,13 +454,6 @@
       </div>
 
       <div class="home-rows">
-        <div class="home-row">
-          <span class="home-row-label" id="home-jenny-visible-label"></span>
-          <button class="home-switch" id="home-jenny-visible" type="button" role="switch"
-                  aria-labelledby="home-jenny-visible-label">
-            <span class="home-switch-knob"></span>
-          </button>
-        </div>
         <div class="home-row home-row-stack">
           <span class="home-row-label" id="home-jenny-size-label"></span>
           <div class="home-seg" id="home-jenny-size" role="radiogroup"></div>
@@ -470,6 +471,22 @@
              testo nudo, e a taglia grande le finirebbe addosso — le schede le
              passano davanti perche' sono opache, una riga di testo no. -->
         <div class="home-card-note" id="home-jenny-floating-note" hidden></div>
+        <!-- Il permesso si concede da una pagina di sistema: il bottone porta
+             li', e c'e' solo quando Android ha detto di no. -->
+        <button class="home-save home-note-action" id="home-jenny-floating-allow" type="button"
+                hidden></button>
+        <!-- La lettura dello schermo, al tocco sulla mascotte. Vive di lei, e
+             sta qui sotto: senza la finestra flottante non c'e' niente da
+             toccare, e la riga sparisce. L'interruttore vero e' di Android
+             (Accessibilita'): questo lo mostra e porta li'. -->
+        <div class="home-row" id="home-jenny-screen-row" hidden>
+          <span class="home-row-label" id="home-jenny-screen-label"></span>
+          <button class="home-switch" id="home-jenny-screen" type="button" role="switch"
+                  aria-labelledby="home-jenny-screen-label">
+            <span class="home-switch-knob"></span>
+          </button>
+        </div>
+        <div class="home-card-note" id="home-jenny-screen-note" hidden></div>
       </div>
 
       <!-- Chi e'. Non e' `SOUL.md` intero: e' **la tua parte** di quel file.
@@ -518,6 +535,7 @@
         </div>
         <div class="home-key-edit" id="home-key-edit" hidden>
           <input class="home-key-input" id="home-key-input" type="password"
+                 aria-labelledby="home-key-label"
                  autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
           <button class="home-save" id="home-key-save" type="button"></button>
         </div>
@@ -579,31 +597,76 @@
   </section>
 
   <!-- ── L'ottava stanza: «Backup» ───────────────────────────────────────
-       La terza vista di `shared/backup-flow.js` (le altre due: officina e
-       onboarding). L'unica cosa nuova e' la data: «ultimo backup» non aveva
-       nessuna fonte, in nessun file — v. `home-backup.js`. -->
+       Le righe del core: il file cifrato e il suo ripristino (la terza vista
+       di `shared/backup-flow.js`) e la storia locale, tutte aperte. Una build
+       con un'estensione di backup (`jenny/extensions.py`) monta la sua scheda
+       sopra, in `#home-backup-ext`, e allora le righe scendono sotto «Altre
+       opzioni», chiuse — v. `home-backup.js`. -->
   <section class="home-backup-room" id="home-backup-room">
     <div class="home-you-scroll">
 
-      <div class="home-card">
-        <div class="home-card-head">
-          <i class="ti ti-archive" aria-hidden="true"></i>
-          <span class="home-card-label" id="home-backup-when"></span>
+      <!-- La scheda di un'estensione; senza, resta vuota e nascosta. -->
+      <div class="home-card home-backup-ext" id="home-backup-ext" aria-live="polite" hidden></div>
+
+      <div class="home-card home-backup-group">
+        <button class="home-backup-row is-flat" id="home-backup-more-toggle" type="button"
+                aria-expanded="true" aria-controls="home-backup-more" hidden></button>
+        <div class="home-backup-more" id="home-backup-more">
+          <button class="home-backup-row is-flat" id="home-backup-export" type="button"></button>
+          <button class="home-backup-row is-flat" id="home-backup-import" type="button"></button>
+          <!-- La storia locale: somiglia abbastanza da essere scambiata per un
+               backup, e non lo e' — vive sullo stesso telefono. Si sfoglia e
+               si ripristina qui, senza andare in officina: l'elenco si apre
+               sotto la sua riga. -->
+          <button class="home-backup-row is-flat" id="home-backup-history" type="button"
+                  aria-expanded="false" aria-controls="home-backup-history-list"></button>
+          <div class="home-history-list" id="home-backup-history-list" hidden></div>
+          <!-- Le righe di un'estensione (le sue impostazioni). -->
+          <div class="home-backup-ext-rows" id="home-backup-ext-rows"></div>
         </div>
-        <div class="home-card-note" id="home-backup-export-note"></div>
-        <button class="home-save" id="home-backup-export" type="button"></button>
       </div>
-
-      <div class="home-card" id="home-backup-import-card">
-        <div class="home-card-note" id="home-backup-import-note"></div>
-        <button class="home-key-btn" id="home-backup-import" type="button"></button>
-      </div>
-
-      <!-- La storia locale: somiglia abbastanza da essere scambiata per un
-           backup, e non lo e' — vive sullo stesso telefono. -->
-      <div class="home-card-note" id="home-backup-snapshots"></div>
     </div>
   </section>
+
+  <!-- Il velo: la chat sopra la pagina. Dal 05/10/2026 Jenny e' la porta della
+       conversazione: toccata dove la chat non c'e', la chat vera (`#home-chat`,
+       sempre lei, spostata e non copiata) sale qui dentro, a tutto schermo, e
+       la pagina sotto resta visibile in trasparenza ma non si tocca. Si chiude
+       ritoccando Jenny o con Indietro (v. `HomeApp.openChatOver`). -->
+  <div class="home-over" id="home-over" role="dialog" aria-modal="true" hidden>
+    <!-- La testa del velo: dove scrivi (06/10/2026). La fila delle pagine
+         resta sotto, sfocata, e senza questa riga non si sapeva piu' se si
+         scriveva in un quaderno o nella chat di sempre.
+
+         Nella chat di un quaderno e' il percorso della bacheca **piu' una
+         voce**: «‹ QUADERNI › ● FILM › JENNY» (22/10/2026, deciso con
+         l'utente su una tela). Le prime voci stanno allo stesso pixel
+         dell'intestazione delle stanze, quindi aprendo la chat la riga non
+         salta: si allunga. La freccia chiude il velo come Indietro, QUADERNI
+         porta all'elenco, il quaderno alla sua bacheca. Nella chat di sempre
+         c'e' solo il nome di lei: non sta dentro niente. L'ultima voce resta
+         un'etichetta — toccarla e' toccare il velo. La scrive
+         `_applyOverTitle`, e segue la conversazione, non la pagina sotto. -->
+    <div class="home-over-head" id="home-over-head">
+      <button class="home-back" id="home-over-back" type="button" hidden>
+        <i class="ti ti-chevron-left" aria-hidden="true"></i>
+      </button>
+      <nav class="home-path" id="home-over-path">
+        <button class="home-path-root" id="home-over-notebooks" type="button" hidden>
+          <span class="home-path-name" id="home-over-notebooks-name"></span>
+        </button>
+        <span class="home-path-sep" data-over-sep aria-hidden="true" hidden>›</span>
+        <button class="home-path-root home-over-notebook" id="home-over-notebook" type="button" hidden>
+          <span class="home-path-dot" id="home-over-dot" aria-hidden="true" hidden></span>
+          <span class="home-path-name" id="home-over-notebook-name"></span>
+        </button>
+        <span class="home-path-sep" data-over-sep aria-hidden="true" hidden>›</span>
+        <h2 class="home-path-here home-over-title" id="home-over-title">
+          <span class="home-path-name" id="home-over-name"></span>
+        </h2>
+      </nav>
+    </div>
+  </div>
 
 </main>
 
@@ -620,6 +683,28 @@
     <div class="oc-sheet-actions" id="android-app-actions"></div>
     <button class="oc-sheet-cancel" id="android-app-cancel" data-i18n="common.cancel">Annulla</button>
   </div>
+</dialog>
+
+<!-- Il cestino delle app: Rimetti, o Elimina per sempre (l'unico punto da cui
+     un'app non torna). -->
+<dialog class="oc-sheet apps-trash-sheet" id="apps-trash-sheet">
+  <div class="oc-sheet-inner">
+    <div class="oc-sheet-title" id="apps-trash-sheet-title"></div>
+    <div class="apps-trash-body" id="apps-trash-sheet-body"></div>
+    <button class="oc-sheet-cancel" id="apps-trash-sheet-close" data-i18n="common.close">Chiudi</button>
+  </div>
+</dialog>
+
+<!-- I fogli del piano a lista: cosa ha fatto un passo, le modifiche, Ferma, il
+     ritorno, il piano completo. Uno solo, riempito da `home-plan.js`. -->
+<dialog class="oc-sheet home-plan-sheet" id="home-plan-sheet">
+  <div class="oc-sheet-inner home-plan-sheet-inner" id="home-plan-sheet-body"></div>
+</dialog>
+
+<!-- Ferma o annulla una mini-me (`home-work.js`): la stessa forma del Ferma del
+     piano, quindi le stesse classi del suo foglio. -->
+<dialog class="oc-sheet home-plan-sheet home-work-sheet" id="home-work-sheet">
+  <div class="oc-sheet-inner home-plan-sheet-inner"></div>
 </dialog>
 
 <dialog class="oc-sheet" id="jenny-app-sheet">

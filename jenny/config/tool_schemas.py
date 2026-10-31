@@ -78,17 +78,32 @@ class AndroidWebSearchConfig(Base):
     ``settings_api._parse_int`` li legge da ``model_fields``, quindi il
     messaggio di rifiuto — che nomina il range — non può divergere dal
     validatore. È l'invariante di ``test_settings_bounds_come_from_the_schema``.
+
+    ``timeout`` 15 dal 28/10/2026, prima 30. Sul s22 le 184 ricerche riuscite
+    del banco hanno risposto tutte entro 2,2 s (il tempo in coda dietro al lock
+    non conta: il tetto vale per la chiamata). Un motore muto costava invece
+    il tetto pieno prima che le ricerche rinunciassero da sole. Non 10: un
+    tetto superato ferma tutte le ricerche per un minuto (``_SEARCH_STALL_S``),
+    e su una rete mobile debole il margine serve. Chi aggiorna lo sposta la
+    migrazione v6 di ``Config._migrate_by_version``.
     """
 
     search_engine: str = "bing"
-    max_results: int = Field(default=5, ge=1, le=10)
-    timeout: int = Field(default=30, ge=1, le=120)
+    max_results: int = Field(default=8, ge=1, le=10)
+    timeout: int = Field(default=15, ge=1, le=120)
 
 
 class AndroidWebFetchConfig(Base):
-    """Android WebView-backed fetch configuration."""
+    """Android WebView-backed fetch configuration.
+
+    ``timeout`` e' suo, non quello della ricerca: una pagina che in 15 s non
+    arriva passa al ripiego nel browser (``AndroidWebFetchTool._after_failure``)
+    invece di aspettarne 30. Nella prova A del 24/10 17 letture su 426 sono
+    andate in timeout, e ognuna costava il timeout pieno piu' il ripiego.
+    """
 
     max_chars: int = 50000
+    timeout: int = Field(default=15, ge=1, le=120)
 
 
 class AndroidWebBrowserConfig(Base):
@@ -112,6 +127,12 @@ class AndroidWebBrowserConfig(Base):
     max_snapshot_chars: int = 2500
     max_read_chars: int = 4000
     idle_close_s: int = 300
+    # Quante sessioni (WebView, ciascuna nel suo profilo) possono stare aperte
+    # insieme: una per Jenny e una per aiutante, piu' i ripieghi brevi di
+    # ``web_fetch``. Ognuna costa ~100 MB sul telefono e divide il renderer
+    # con la WebView visibile, quindi il default e' prudente; su un emulatore
+    # si puo' alzare.
+    max_sessions: int = Field(default=3, ge=1, le=10)
 
 
 class AndroidWebToolsConfig(Base):

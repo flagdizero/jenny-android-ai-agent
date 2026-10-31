@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from jenny.agent import staged_writes
 from jenny.agent.tools.base import tool_parameters
-from jenny.agent.tools.filesystem import _FsTool
+from jenny.agent.tools.filesystem import _FsTool, _wiki_id_guard, staged_reply
 from jenny.agent.tools.schema import (
     ArraySchema,
     BooleanSchema,
@@ -15,6 +16,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
+from jenny.security.subagent_policy import current_subagent_policy
 from jenny.utils.file_edit_events import line_diff_stats
 
 
@@ -238,6 +240,15 @@ class ApplyPatchTool(_FsTool):
                 # Il dry-run non passa dal gancio: non scrive niente, quindi non
                 # c'è niente da rifiutare, e rifiutarlo nasconderebbe proprio il
                 # riepilogo che serve a capire di quanto si sta sforando.
+                #
+                # **Tranne l'id di un quaderno**, che non e' una misura: nessun
+                # taglio fa passare una patch che lo toglie, e un dry-run che
+                # dice «succeeded» per una patch che la scrittura vera rifiutera'
+                # e' una verifica che mente. L'ha notato l'aiutante stesso, al
+                # collaudo su jenny_s22 (26/10).
+                for target, pending_text in writes.items():
+                    if (refusal := _wiki_id_guard(target, pending_text)) is not None:
+                        return refusal
                 return "Patch dry-run succeeded:\n" + "\n".join(
                     _format_summary(summary) for summary in summaries
                 )
@@ -265,6 +276,7 @@ class ApplyPatchTool(_FsTool):
             for path in writes:
                 backups[path] = path.read_bytes() if path.exists() else None
 
+            staged: list = []
             try:
                 for path, content in writes.items():
                     # Dentro il ciclo di scrittura e non insieme al controllo del
@@ -278,8 +290,16 @@ class ApplyPatchTool(_FsTool):
                     # in posto o via ``atomic_write`` (v. il suo docstring); il
                     # testo qui è già byte-per-byte quello che deve finire su
                     # disco, come con il vecchio ``newline=""``.
-                    self._commit_write(path, content)
+                    if (ref := self._commit_write(path, content)) is not None:
+                        staged.append(ref)
             except Exception:
+                # Le bozze di una patch fallita non devono restare in attesa:
+                # l'utente approverebbe metà di una modifica.
+                for ref in staged:
+                    policy = current_subagent_policy()
+                    if policy is not None:
+                        staged_writes.discard(policy.install_root, ref.id)
+                        policy.staged.pop(ref.target_rel, None)
                 for path, data in backups.items():
                     if data is None:
                         if path.exists():
@@ -289,11 +309,16 @@ class ApplyPatchTool(_FsTool):
                         path.write_bytes(data)
                 raise
 
+            staged_targets = {ref.target_rel for ref in staged}
             for path in writes:
                 self._file_states.record_write(path)
             applied = "Patch applied:\n" + "\n".join(
                 _format_summary(summary) for summary in summaries
             )
+            if staged:
+                applied += "\n" + "\n".join(staged_reply(ref) for ref in staged)
+                if len(staged_targets) == len(writes):
+                    applied = "\n".join(staged_reply(ref) for ref in staged)
             # Il riepilogo di questo tool e' un **delta di righe**, mai una
             # dimensione: da solo non dice a cosa la patch ha portato il file.
             return applied if not notes else applied + "\n" + "\n".join(notes)

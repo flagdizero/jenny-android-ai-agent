@@ -90,6 +90,17 @@ def _read_records(path: Path) -> list[dict]:
     return records
 
 
+def read_collection(app_dir: Path, collection: str) -> list[dict]:
+    """I record di una collezione, nell'ordine in cui sono stati scritti.
+
+    Lettura pubblica e senza lock, per chi guarda i dati di un'app senza
+    passare da un'azione: la sezione compatta della bacheca
+    (``jenny/board/sections.py``). Le scritture sono append di righe intere, e
+    una riga a metà si salta come una corrotta.
+    """
+    return _read_records(_collection_path(app_dir, collection))
+
+
 def _check_size(path: Path, max_bytes: int) -> None:
     if path.is_file() and path.stat().st_size >= max_bytes:
         raise StorageError(
@@ -122,17 +133,6 @@ def _new_record(params: dict) -> dict:
 # Le op che cambiano il contenuto di una collezione. ``query`` non c'e' apposta:
 # una mini-app deve poter ancora *mostrare* i suoi dati.
 _MUTATING_OPS = frozenset({"append", "set", "update", "delete"})
-
-# Il rifiuto dentro un progetto. Dice **dove** si fa, come quello dei promemoria
-# del passo 3: e' l'unico posto in cui Jenny lo viene a sapere, e da cui lo
-# ridice all'utente.
-_PROJECT_REFUSAL = (
-    "Not from here: the mini-apps and their data are personal, and this is a project "
-    "conversation, which writes only inside its own folder. Reading them works — this is "
-    "about changing them. Tell the user to switch to the personal chat (the chip above the "
-    "composer) if they want it saved there; do not look for another way to write it."
-)
-
 
 def _in_a_project(app_dir: Path) -> bool:
     """Se il turno in corso e' la conversazione di un progetto.
@@ -222,11 +222,16 @@ async def execute_storage_action(
     #    L'alternativa era dichiarare le app condivise e spendere una riga di
     #    prompt a ogni turno per l'eccezione; una Todo per progetto darebbe
     #    sette liste vuote invece di quella che usi.
+    #    Dal 06/10/2026 con un'eccezione: un'app **posata** sulla bacheca di
+    #    quel quaderno si scrive da li' (``jenny/apps/permissions.py``).
     if action.op in _MUTATING_OPS:
         if current_turn_is_readonly():
             raise StorageError(READONLY_TOOL_REFUSAL)
-        if _in_a_project(app_dir):
-            raise StorageError(_PROJECT_REFUSAL)
+        from jenny.apps.permissions import write_refusal
+
+        refusal = write_refusal(app_dir)
+        if refusal is not None:
+            raise StorageError(refusal)
     path = _collection_path(app_dir, action.collection)
 
     async with _lock_for(path):

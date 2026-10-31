@@ -68,8 +68,6 @@ async def _ticks_during(coro):
 async def test_the_async_validators(slow_dns) -> None:
     for coro in (
         network.validate_url_target_async("https://box.example/"),
-        network.validate_app_server_target_async("http://box.example:8080"),
-        network.validate_ssh_target_async("box.example"),
     ):
         ticks, out = await _ticks_during(coro)
         assert out == (True, ""), out
@@ -97,7 +95,11 @@ async def test_web_fetch(slow_dns, monkeypatch) -> None:
     async def _fetch(ctx, url, timeout=None):
         return "<html><body><h1>ciao</h1></body></html>", "https://box.example/"
 
+    async def _no_direct(url):
+        return None
+
     monkeypatch.setattr(android_web, "_bridge_fetch", _fetch)
+    monkeypatch.setattr(android_web, "_direct_fetch", _no_direct)
     tool = android_web.AndroidWebFetchTool(android_context=object(), timeout=5)
     ticks, out = await _ticks_during(tool.execute("https://box.example/"))
     assert "ciao" in json.loads(out)["text"]

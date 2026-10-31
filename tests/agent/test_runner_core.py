@@ -11,6 +11,7 @@ import pytest
 from support.runner import empty_tools, make_spec
 
 from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from jenny.runtime.user_text import say
 
 
 @pytest.mark.asyncio
@@ -85,12 +86,14 @@ async def test_runner_returns_max_iterations_fallback():
     ))
 
     assert result.stop_reason == "max_iterations"
-    assert result.final_content == (
+    # L'utente legge la frase nella sua lingua; la cronologia del modello tiene
+    # il testo inglese del template.
+    assert result.final_content == say("turn.max_iterations", max_iterations=2)
+    assert result.messages[-1]["role"] == "assistant"
+    assert result.messages[-1]["content"] == (
         "I reached the maximum number of tool call iterations (2) "
         "without completing the task. You can try breaking the task into smaller steps."
     )
-    assert result.messages[-1]["role"] == "assistant"
-    assert result.messages[-1]["content"] == result.final_content
     assert provider.chat_with_retry.await_count == 3
     assert provider.chat_with_retry.await_args_list[-1].kwargs["tools"] is None
     assert tools.execute.await_count == 2
@@ -168,7 +171,9 @@ async def test_runner_times_out_hung_llm_request():
 
     assert (time.monotonic() - started) < 1.0
     assert result.stop_reason == "error"
-    assert "timed out" in (result.final_content or "").lower()
+    assert result.error_kind == "timeout"
+    assert result.final_content == say("error.timeout")
+    assert "timed out" in (result.error or "").lower()
 
 
 @pytest.mark.asyncio
@@ -317,7 +322,9 @@ async def test_runner_uses_specific_message_after_empty_finalization_retry():
         max_iterations=3,
     ))
 
-    assert result.final_content == EMPTY_FINAL_RESPONSE_MESSAGE
+    # All'utente la frase nella sua lingua; la cronologia tiene l'inglese di sempre.
+    assert result.final_content == say("turn.empty")
+    assert result.messages[-1]["content"] == EMPTY_FINAL_RESPONSE_MESSAGE
     assert result.stop_reason == "empty_final_response"
 
 
@@ -544,3 +551,49 @@ async def test_runner_passes_reasoning_effort_to_provider():
     ))
 
     assert captured["reasoning_effort"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_a_max_iterations_answer_reaches_the_stream():
+    """Il tetto di iterazioni chiude con una richiesta senza streaming.
+
+    Il turno della WebUI e' segnato ``_streamed``: una risposta mai passata dallo
+    stream il dispatcher la scarta, e l'utente non vedeva niente.
+    """
+    from jenny.agent.hook import AgentHook, AgentHookContext
+    from jenny.agent.runner import AgentRunner
+
+    provider = MagicMock(spec=LLMProvider)
+
+    async def chat_stream_with_retry(*, on_content_delta=None, **kwargs):
+        return LLMResponse(
+            content="", tool_calls=[ToolCallRequest(id="c1", name="list_dir", arguments={})],
+        )
+
+    provider.chat_stream_with_retry = chat_stream_with_retry
+    provider.chat_with_retry = AsyncMock(return_value=LLMResponse(
+        content="Ho letto la cartella; resta da guardare il resto.", tool_calls=[],
+    ))
+    streamed: list[str] = []
+    ended: list[bool] = []
+
+    class StreamingHook(AgentHook):
+        def wants_streaming(self) -> bool:
+            return True
+
+        async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+            streamed.append(delta)
+
+        async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
+            ended.append(resuming)
+
+    result = await AgentRunner(provider).run(make_spec(
+        initial_messages=[{"role": "user", "content": "guarda la cartella"}],
+        tools=empty_tools(),
+        max_iterations=1,
+        hook=StreamingHook(),
+    ))
+
+    assert result.stop_reason == "max_iterations"
+    assert "".join(streamed) == "Ho letto la cartella; resta da guardare il resto."
+    assert ended[-1] is False

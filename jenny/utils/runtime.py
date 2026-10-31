@@ -36,6 +36,24 @@ OUTPUT_TRUNCATED_MESSAGE = (
     "a smaller piece of the task."
 )
 
+# Il provider ha rifiutato di rispondere (``content_filter``/``refusal``), anche
+# dopo il tentativo senza l'ultimo risultato d'aiutante. Distinto dalla risposta
+# vuota per la stessa ragione di OUTPUT_TRUNCATED_MESSAGE: «non ho prodotto una
+# risposta» manda a cercare un difetto di Jenny, e qui ha detto no il provider.
+PROVIDER_REFUSED_MESSAGE = (
+    "The model provider refused to answer this request (content filter), so I "
+    "could not reply. Please try again or rephrase the request."
+)
+
+# Prende il posto del risultato d'aiutante dopo il quale il provider ha
+# rifiutato di rispondere, nella sola copia mandata al modello: la storia tiene
+# il risultato com'era (``context_governor.mask_refused_results``).
+PROVIDER_REFUSED_RESULT_PLACEHOLDER = (
+    "[The provider refused to process this helper result, so it is not shown here. "
+    "The files the helper wrote are in the workspace or the notebook: read them if "
+    "you need them.]"
+)
+
 FINALIZATION_RETRY_PROMPT = (
     "Please provide your response to the user based on the conversation above."
 )
@@ -47,6 +65,36 @@ BUDGET_EXHAUSTED_FINALIZATION_PROMPT = (
     "unless the evidence above clearly shows it is complete. State what was "
     "done, what remains, and the best next step if anything is incomplete."
 )
+
+# Il prompt di sopra parla «all'utente», e un subagent un utente non ce l'ha:
+# risponde all'orchestratore, che deve decidere se farlo continuare. Quello che
+# gli serve e cio che il resoconto di un aiutante fermato non portava (prova del
+# 24/10/2026: solo gli ultimi tre tool): fatto, file scritti, cosa resta, come
+# riprendere. La ripresa e reale — ``subagent_send`` riparte dalla sua storia —
+# quindi il prompt lo dice, e il resoconto non deve ricominciare da capo.
+SUBAGENT_BUDGET_FINALIZATION_PROMPT = (
+    "Your model-call budget for this job is exhausted: no more tools can run. "
+    "Write your report to the orchestrator (the main agent that started you), "
+    "based only on the conversation and tool results above: what is done, "
+    "which files you wrote or changed (their paths), what remains, and how to "
+    "continue. The orchestrator can resume you with this conversation intact, "
+    "so name the next concrete step. Do not claim the job is complete unless "
+    "the evidence above shows it is. Do not call or request tools."
+)
+
+# Avviso che un subagent riceve verso la fine del budget
+# (``AgentRunSpec.iteration_notice``): una volta, dopo i tool, prima della
+# chiamata successiva. ``{left}`` e il numero di chiamate che restano.
+SUBAGENT_BUDGET_NOTICE_TEMPLATE = (
+    "You have {left} model calls left for this job. Write down what you have "
+    "now (save your work to its files), then finish with a report of what is "
+    "done, which files you wrote, and what remains."
+)
+
+#: Marcatore ``injected_event`` dell'avviso di budget: dice da dove arriva una
+#: riga ``user`` che nessuno ha scritto. Vive solo nella conversazione di un
+#: subagent, che non finisce mai nella storia di una sessione dell'utente.
+BUDGET_NOTICE_EVENT = "budget_notice"
 
 LENGTH_RECOVERY_PROMPT = (
     "Output limit reached. Continue exactly where you left off "
@@ -124,9 +172,18 @@ def build_finalization_retry_message() -> dict[str, str]:
     return {"role": "user", "content": FINALIZATION_RETRY_PROMPT}
 
 
-def build_budget_exhausted_finalization_message() -> dict[str, str]:
-    """Prompt the model for a no-tools final response after budget exhaustion."""
-    return {"role": "user", "content": BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
+def build_budget_exhausted_finalization_message(prompt: str | None = None) -> dict[str, str]:
+    """Prompt the model for a no-tools final response after budget exhaustion.
+
+    *prompt* sostituisce il testo di default: un subagent riferisce
+    all'orchestratore, non all'utente (``SUBAGENT_BUDGET_FINALIZATION_PROMPT``).
+    """
+    return {"role": "user", "content": prompt or BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
+
+
+def build_budget_notice_message(text: str) -> dict[str, str]:
+    """L'avviso di budget come riga ``user`` marcata (``BUDGET_NOTICE_EVENT``)."""
+    return {"role": "user", "content": text, INJECTED_EVENT_META: BUDGET_NOTICE_EVENT}
 
 
 def build_length_recovery_message() -> dict[str, str]:
@@ -204,9 +261,9 @@ def workspace_violation_signature(
             return _normalize_violation_target(val.strip())
 
     if tool_name == "python_exec":
-        cmd = str(arguments.get("command") or arguments.get("code") or "").strip()
-        if cmd:
-            match = _OUTSIDE_PATH_PATTERN.search(cmd)
+        code = str(arguments.get("code") or "").strip()
+        if code:
+            match = _OUTSIDE_PATH_PATTERN.search(code)
             if match:
                 return _normalize_violation_target(match.group(1))
         cwd = str(arguments.get("working_dir") or "").strip()

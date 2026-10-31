@@ -191,6 +191,36 @@ UPDATE_SESSION_KEY = "cron:update_check"
 # annunciate in passato sono rumore che tornerebbe nel contesto a ogni release.
 _UPDATE_HISTORY_KEEP = 4
 
+
+async def run_silent_alert_turn(
+    agent: "CronCapableAgent",
+    prompt: str,
+    *,
+    session_key: str,
+    label: str,
+) -> None:
+    """Un turno silenzioso in cui Jenny avvisa l'utente con il tool ``message``.
+
+    È la forma dell'annuncio di un aggiornamento, offerta ai giri delle
+    estensioni: il prompt deve dire che la risposta non arriva a nessuno e che
+    l'unico modo di parlare è ``message``. La sessione *session_key* (``cron:…``)
+    tiene solo una coda cortissima, perché gli avvisi passati sono rumore.
+    """
+    from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
+
+    await agent.process_direct(
+        prompt,
+        session_key=session_key,
+        channel="websocket",
+        chat_id="default",
+        on_progress=silent_progress,
+        visibility=TurnVisibility.SILENT,
+        metadata={WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": label}},
+    )
+    session = agent.sessions.get_or_create(session_key)
+    session.retain_recent_legal_suffix(_UPDATE_HISTORY_KEEP)
+    agent.sessions.save(session)
+
 _UPDATE_PREAMBLE = (
     "[This is the scheduled update check, and it is SILENT: whatever you write "
     "as your answer is NOT delivered to anyone. The only way to reach the user "
@@ -223,16 +253,18 @@ def _alert_gardener_stuck(name: str, failures: int, status: str) -> None:
     allarme che significa «questo progetto è fermo» è il comportamento voluto.
     """
     from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.user_text import say
     from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
+    # Nella lingua dell'utente, e con un posto dove guardare che sta
+    # nell'interfaccia: un comando da digitare non è una cosa che si fa dalla
+    # tendina delle notifiche.
     notify_delivery(
-        f"The gardener has failed {failures} passes in a row on '{name}' ({status}): "
-        f"its journal is not becoming pages. Open that project and send /gardener to see "
-        f"the error.",
+        say("alarm.gardener_stuck", failures=failures, name=name, status=status),
         {
             WEBUI_MESSAGE_SOURCE_METADATA_KEY: {
                 "kind": "cron",
-                "label": f"Gardener · {name}",
+                "label": say("alarm.gardener_label", name=name),
             }
         },
     )
@@ -317,8 +349,13 @@ class CronDispatcher:
         # messaggio dell'utente — un test che non può muoverlo non può provare
         # niente su quel confronto.
         now_ms: Callable[[], int] | None = None,
+        # I giri delle estensioni (``jenny/extensions.py``): ``id → giro``.
+        # Instradati per id prima del controllo sull'agente, perché un giro di
+        # un'estensione può non aver bisogno del modello.
+        extension_jobs: dict[str, Callable[[], Awaitable[str | None]]] | None = None,
     ) -> None:
         self._get_agent = get_agent
+        self._extension_jobs = dict(extension_jobs or {})
         self._config = config
         self._cron = cron
         self._hb_cfg = heartbeat_cfg
@@ -378,8 +415,12 @@ class CronDispatcher:
         memoria, e che non le fermava.
 
         Da disco e non da ``self._config``, perché quel ``Config`` è catturato
-        quando il container si costruisce e niente lo aggiorna.
+        quando il container si costruisce e niente lo aggiorna. Per i giri delle
+        estensioni il cancello sta nel giro stesso.
         """
+        if job.payload.kind == "system_event" and job.id in self._extension_jobs:
+            return await self._extension_jobs[job.id]()
+
         agent = self._get_agent()
         if not agent:
             logger.warning("Cron: skipped job '{}' - no provider configured", job.name)
@@ -400,6 +441,8 @@ class CronDispatcher:
                 return await self._run_heartbeat(agent, job)
             if job.id == "update_check":
                 return await self._run_update_check(agent)
+            if job.id == "reminders":
+                return await self._run_reminders(agent)
         elif is_bound_cron_job(job):
             return await run_bound_cron_job(job, agent=agent, cron=self._cron)
 
@@ -433,7 +476,7 @@ class CronDispatcher:
         la selezione e poi si ritira con ``already_running``. Una lettura di file
         piccoli, e in cambio nessuna copia della guardia in due posti.
         """
-        from jenny.agent.gardener import run_gardener
+        from jenny.agent.gardener import report_gardener_outcome, run_gardener
         from jenny.agent.gardener_schedule import pick_project
         from jenny.config.loader import load_config
 
@@ -475,8 +518,36 @@ class CronDispatcher:
         # dopo. Così il prompt e il commit parlano della **stessa** lettura, e le
         # righe arrivate nel frattempo restano non lette invece di finire sotto un
         # cursore che le dichiara digerite.
-        outcome = await run_gardener(agent, pick.store, delta=pick.delta)
+        #
+        # **E chi e' dentro quel quaderno la vede lavorare.** La bolla di lavoro
+        # va alla chat del progetto: se nessuno ci e' collegato il frame non
+        # arriva a nessuno, ed e' giusto — nessuno sta aspettando. Se qualcuno
+        # c'e', la bolla gli dice anche perche' un suo messaggio la fermera'
+        # (``manual=False``: una passata automatica cede il passo all'utente).
+        reporter = self._gardener_reporter(agent, pick.store.name)
+        outcome = await run_gardener(agent, pick.store, delta=pick.delta, reporter=reporter)
+        if reporter is not None:
+            try:
+                report_gardener_outcome(reporter, outcome, pick.store.root)
+            except Exception as exc:  # noqa: BLE001 — la bolla non tocca l'esito
+                logger.debug("Gardener: work bubble not closed: {}", exc)
         return self._record_gardener_attempt(pick.store, outcome)
+
+    @staticmethod
+    def _gardener_reporter(agent: Any, name: str) -> Any:
+        """La bolla di lavoro di una passata automatica, o ``None`` senza bus."""
+        bus = getattr(agent, "bus", None)
+        if bus is None:
+            return None
+        from jenny.runtime.work_status import WorkReporter
+        from jenny.session.keys import project_session_key
+
+        reporter = WorkReporter(
+            bus, kind="gardener", chat_id=project_session_key(name),
+            phases=("pages", "board"), project=name, manual=False,
+        )
+        reporter.start()
+        return reporter
 
     def _record_gardener_attempt(
         self, store: "GardenerStore", outcome: "GardenerOutcome"
@@ -736,6 +807,28 @@ class CronDispatcher:
             )
         return turn.advanced, turn.refused
 
+    async def _run_reminders(self, agent: "CronCapableAgent") -> str | None:
+        """L'orologio dei quaderni: le attese delle bacheche, e gli eventi delle app.
+
+        Il cancello e' ``wiki.enabled``, letto da disco come gli altri: il job
+        registrato da un avvio con la wiki accesa resta nello store del cron
+        anche dopo che e' stata spenta. Il lavoro sta in ``jenny/board/clock.py``.
+        """
+        from jenny.board.clock import run_reminders
+        from jenny.config.loader import load_config
+
+        config = load_config()
+        if not config.wiki.enabled:
+            logger.debug("Reminders: wiki disabled")
+            return None
+        return await run_reminders(
+            agent,
+            self._config.workspace_path,
+            wikis_dir_name=getattr(self._config.wiki, "wikis_dir", "wikis") or "wikis",
+            timezone_name=config.agents.defaults.timezone or None,
+            cron=self._cron,
+        )
+
     async def _run_update_check(self, agent: "CronCapableAgent") -> str | None:
         """Update check: annuncia una versione nuova UNA volta sola, poi tace.
 
@@ -855,9 +948,10 @@ class CronDispatcher:
             # turno ha davvero prodotto un messaggio. Stesso tag, quindi le due
             # notifiche si sostituiscono invece di sommarsi.
             from jenny.runtime.notifier import post_alert
+            from jenny.runtime.user_text import say
 
             await post_alert(
-                f"Aggiornamento critico {info.version_name} disponibile",
+                say("alarm.update_critical", version=info.version_name),
                 source_metadata,
             )
 

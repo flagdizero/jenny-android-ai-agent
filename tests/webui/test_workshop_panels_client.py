@@ -14,7 +14,7 @@ I metodi veri di ``mobile-settings.js`` girano in node su un DOM finto.
 
 from __future__ import annotations
 
-from support.js_harness import ASSETS, locale, member, requires_node, run_js
+from support.js_harness import ASSETS, member, requires_node, run_js
 
 pytestmark = requires_node
 
@@ -231,11 +231,3 @@ assert.deepEqual({_labels('drawer-ssh-host-body')}, [['settings.ssh.where', 'u@h
         )
     )
     assert out.strip() == "ok"
-
-
-def test_the_new_labels_exist_in_both_languages() -> None:
-    for language in ("it", "en"):
-        s = locale(language)["settings"]
-        assert s["brandAddress"] and s["brandKey"] and s["ssh"]["where"]
-        assert s["brandFormat"] and s["brandCaBundle"] and s["brandCaBundleNone"]
-

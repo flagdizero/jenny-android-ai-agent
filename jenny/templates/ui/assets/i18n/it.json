@@ -1,10 +1,7 @@
 {
   "nav": {
-    "chat": "Chat",
-    "apps": "Apps",
     "workspace": "Workspace",
     "settings": "Impostazioni",
-    "wiki": "Wiki",
     "ariaLabel": "Navigazione",
     "console": "Console",
     "brain": "Cervello",
@@ -52,7 +49,7 @@
       "title": "Chat nuova"
     },
     "stop": {
-      "title": "Ferma quel che sta girando"
+      "title": "Ferma la risposta (le mini-me continuano)"
     },
     "status": {
       "title": "Stato di runtime e provider"
@@ -86,12 +83,12 @@
     }
   },
   "subagents": {
-    "title": "Subagent",
-    "headCount": "{running} attivi",
-    "headCountFinished": "{running} attivi · {finished} appena conclusi",
+    "title": "Mini-me",
+    "headCount": "{running} attive",
+    "headCountFinished": "{running} attive · {finished} appena concluse",
     "untitled": "senza titolo",
-    "openDetail": "Apri il dettaglio del subagent",
-    "idle": "fermo {duration}",
+    "openDetail": "Apri il dettaglio della mini-me",
+    "idle": "ferma {duration}",
     "attempt": "tentativo {n}",
     "stalledHint": "Nessun progresso da un po' — rilanciare?",
     "autoCapReached": "Tentativi automatici esauriti ({attempt}/3) — rilanciare a mano non li ricarica.",
@@ -128,17 +125,18 @@
       "loading": "Caricamento…",
       "failed": "Attività non caricata.",
       "live": "Ancora al lavoro: questa è un'anteprima e cambierà.",
-      "empty": "Nessuna attività registrata per questo subagent"
+      "empty": "Nessuna attività registrata per questa mini-me"
     },
-    "stopped": "Subagent fermato",
-    "relaunched": "Subagent rilanciato",
+    "stopped": "Mini-me fermata",
+    "relaunched": "Mini-me rilanciata",
     "actionFailed": "Azione non riuscita",
     "state": {
       "running": "in corso",
-      "stalled": "fermo",
-      "done": "concluso",
-      "failed": "fallito",
-      "cancelled": "annullato"
+      "stalled": "ferma",
+      "done": "conclusa",
+      "failed": "fallita",
+      "budget": "senza fiato",
+      "cancelled": "annullata"
     },
     "phase": {
       "initializing": "avvio",
@@ -209,7 +207,6 @@
     "cronRecoveredBackup": "I promemoria programmati sono stati recuperati dall'ultimo backup valido: all'avvio l'elenco dei job non era leggibile. Controlla che ci siano tutti.",
     "cronRecoveredEmpty": "L'elenco dei promemoria programmati non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita senza nessuno: quelli che avevi creato non suoneranno più e vanno ricreati. Il file illeggibile è stato messo da parte qui:",
     "themeLabel": "Tema",
-    "mascotVisible": "Mostra la mascotte",
     "mascotSize": "Dimensione mascotte",
     "mascotSizeSmall": "Piccola",
     "mascotSizeMedium": "Media",
@@ -217,6 +214,10 @@
     "floatingEnabled": "Mascotte flottante",
     "floatingHint": "{name} resta sopra le altre app: toccala e le parli, la risposta compare in un fumetto. È la stessa conversazione dell'app.",
     "floatingBlocked": "Android non le lascia aprire la finestra: concedi «Sovrapponi ad altre app» dalle impostazioni di sistema.",
+    "floatingAllow": "Apri le impostazioni",
+    "screenEnabled": "Legge lo schermo",
+    "screenHint": "Quando tocchi la mascotte, {name} legge una volta l'app che sta sotto — il testo, l'indirizzo e uno screenshot di quella sola app — così puoi dirle «salvati questo». Non tocca niente e salta le app che vietano gli screenshot.",
+    "screenOff": "Si accende da Accessibilità: tocca l'interruttore e attiva «Jenny — lettura dello schermo». Se Android la dice un'impostazione con restrizioni, sbloccala dalle info dell'app (⋮ → Consenti impostazioni con restrizioni).",
     "tokenUsage": "Utilizzo token",
     "version": "Versione",
     "maxTokens": "Token massimi",
@@ -224,6 +225,8 @@
     "temperature": "Temperatura",
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Sforzo di ragionamento",
+    "mainReasoningEffort": "Ragionamento di Jenny",
+    "mainReasoningEffortSame": "Come gli aiutanti",
     "addProvider": "Aggiungi provider",
     "noProviders": "Nessun provider configurato.",
     "edit": "Modifica",
@@ -344,6 +347,7 @@
       "availableCritical": "Aggiornamento di sicurezza disponibile: versione {version}. Conviene installarlo subito.",
       "notes": "Che cosa cambia",
       "install": "Installa ora",
+      "installOnPhone": "Si installa dal telefono",
       "starting": "Avvio dell'installazione…",
       "startFailed": "Non sono riuscita ad avviare l'installazione.",
       "restarting": "Installazione avviata: Jenny si riavvia da sola tra poco. La connessione cadrà e tornerà da sé, non serve fare niente.",
@@ -460,6 +464,53 @@
       "summaryOff": "spento",
       "summaryUnknown": "non leggibile"
     },
+    "remote": {
+      "title": "Da altri dispositivi",
+      "rowName": "Tailscale",
+      "intro": "Apri questa Jenny dal computer o da un altro telefono, attraverso Tailscale. Il telefono resta il server: chat, quaderni e ricerche sono gli stessi.",
+      "toggle": "Raggiungibile da Tailscale",
+      "tsUp": "Tailscale attivo su questo telefono · {address}",
+      "tsUnknown": "Tailscale non risulta attivo su questo telefono",
+      "offHint": "Spento, Jenny ascolta solo dentro il telefono. Acceso, la raggiungono soltanto i tuoi dispositivi Tailscale; la Wi-Fi di casa resta fuori. E Jenny tiene acceso Tailscale: se cade, o lo spegni, lo riaccende lei.",
+      "listening": "In ascolto su Tailscale · {address}",
+      "waiting": "In attesa di Tailscale",
+      "reviving": "Jenny sta riaccendendo Tailscale · tentativo {count}",
+      "needsYou": "Tailscale ha bisogno di te",
+      "error": "Non riesce ad ascoltare: {error}",
+      "openFrom": "Apri da",
+      "copyLink": "Copia il link",
+      "copied": "Link copiato",
+      "showQr": "Mostra il QR",
+      "hideQr": "Nascondi il QR",
+      "keyHint": "Il link contiene la chiave di Jenny: chi lo ha entra. Non incollarlo in chat.",
+      "scanFrom": "Inquadra dall'altro telefono",
+      "scanHint": "Serve Tailscale acceso anche lì, con lo stesso account.",
+      "connected": "Collegati adesso",
+      "noneConnected": "Nessuno, per ora.",
+      "since": "dalle {time}",
+      "windows": "{count} finestre",
+      "disconnectAll": "Scollega tutti e cambia la chiave",
+      "disconnectTitle": "Cambiare la chiave?",
+      "disconnectBody": "Gli altri dispositivi si scollegano e il vecchio link smette di funzionare. Sul telefono non cambia niente.",
+      "disconnectBodyHere": "Gli altri dispositivi si scollegano, compreso questo, e il vecchio link smette di funzionare. Per rientrare servirà il link nuovo, dal telefono.",
+      "disconnectConfirm": "Cambia la chiave",
+      "disconnectDone": "Chiave cambiata: i vecchi link non funzionano più.",
+      "tsDown": "Tailscale non è attivo su questo telefono, quindi da fuori non si entra. Jenny prova a riaccenderlo da sola; se hai fretta, apri l'app Tailscale.",
+      "tsNeedsYou": "Jenny ha aperto Tailscale, ma non si è acceso: probabilmente vuole che tu faccia l'accesso o che autorizzi la VPN. Aprilo e controlla: Jenny ha smesso di provarci da sola.",
+      "openTailscale": "Apri Tailscale",
+      "openTailscaleFailed": "Non trovo l'app Tailscale su questo telefono.",
+      "autoResume": "Appena Tailscale torna su, Jenny ricomincia ad ascoltare da sola.",
+      "remoteHere": "Stai usando Jenny da un altro dispositivo. Se spegni qui, questa finestra si scollega e per riaccendere serve il telefono.",
+      "turnOffHereTitle": "Spegnere da qui?",
+      "turnOffHereBody": "Questa finestra si scollega subito. Per riaccendere servirà il telefono.",
+      "turnOffHereConfirm": "Spegni",
+      "summaryOff": "spento",
+      "summaryWaiting": "acceso · in attesa di Tailscale",
+      "summaryOn": "acceso",
+      "summaryOnNamed": "acceso · {name} collegato",
+      "summaryOnMany": "acceso · {count} collegati",
+      "failed": "Non riuscito: {error}"
+    },
     "whoThinksHint": "Ogni marca tiene i suoi modelli: un tocco su un modello lo fa rispondere.",
     "answersWith": "risponde con {model}",
     "manageBrand": "Gestisci {name}",
@@ -519,7 +570,8 @@
       "too_many_images": "Troppe immagini in un messaggio solo",
       "too_many_videos": "Troppi video in un messaggio solo",
       "unknown": "Qualcosa non ha funzionato",
-      "unknown_type": "Non ho capito la richiesta"
+      "unknown_type": "Non ho capito la richiesta",
+      "untyped_frame": "Non ho capito la richiesta"
     }
   },
   "dialog": {
@@ -561,8 +613,9 @@
       "memory": "La memoria a lungo termine: quello che deve restare da una sessione all'altra — contesto dei progetti, fatti utili, note da ricordare.\n\nLa mantiene Dream, la consolidazione che gira dopo le conversazioni. Puoi leggerla e correggerla, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill).",
       "heartbeat": "I controlli ricorrenti che Jenny ripassa a ogni battito.\n\nVanno scritti sotto «## Active Tasks»: è l'unica sezione che viene letta. Quando un'attività è finita, cancellala invece di lasciarla lì — un elenco di cose già fatte viene riletto a ogni battito.\n\nNon qui: le richieste una tantum (basta chiederle in chat) e le procedure ripetibili (le Skill)."
     },
-    "deleteProjectConfirm": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione.",
-    "deleteProjectConfirmWithChat": "Eliminare il quaderno «{name}»? Spariscono le sue pagine e la sua conversazione: {count} messaggi.",
+    "deleteProjectConfirm": "Eliminare per sempre il quaderno «{name}»? Spariscono pagine, bacheca, promemoria e conversazione, e non si potrà annullare.",
+    "deleteProjectConfirmWithChat": "Eliminare per sempre il quaderno «{name}»? Spariscono pagine, bacheca, promemoria e conversazione ({count} messaggi), e non si potrà annullare.",
+    "deleteProjectForever": "Elimina per sempre",
     "deleteProjectFailed": "Non ho potuto eliminare il quaderno «{name}». Non ho toccato niente.",
     "deleteProjectBusy": "Sto ancora lavorando in «{name}»: eliminalo quando ho finito.",
     "deletedProject": "Quaderno “{name}” eliminato, conversazione compresa",
@@ -570,13 +623,13 @@
     "changedOnDisk": "Il file è cambiato da quando l’hai aperto: non ho salvato niente. Chiudi l’editor e riaprilo per vedere com’è ora."
   },
   "launcher": {
-    "open": "Apri app",
     "kindSkill": "Skill",
     "kindJennyApp": "Jenny App",
     "kindAndroidApp": "App Android",
     "loading": "Caricamento...",
     "empty": "Nessuna app o Jenny App da aprire.",
     "recent": "Più usate",
+    "suggested": "Suggerite",
     "results": "Risultati",
     "searchPlaceholder": "Cerca un'app…",
     "clearSearch": "Pulisci la ricerca",
@@ -594,13 +647,11 @@
     "delete": "Elimina",
     "uninstall": "Disinstalla",
     "appInfo": "Info app",
-    "enable": "Abilita",
     "close": "Chiudi",
     "brokenConfirm": "L'app \"{name}\" è rotta: {error}. Chiedo a Jenny di sistemarla?",
     "brokenPrompt": "L'app \"{slug}\" risulta rotta con questo errore: {error}. Puoi sistemarla?",
     "uninstalled": "{name} disinstallata",
     "uninstalledMany": "Disinstallate: {names}",
-    "deleteAppConfirm": "Eliminare l'app \"{name}\"? Verrà rimossa definitivamente.",
     "launchFailed": "Impossibile avviare {name}: forse è stata disinstallata o disattivata.",
     "deleteFailed": "Eliminazione non riuscita",
     "appDeleted": "App eliminata",
@@ -609,31 +660,46 @@
     "frameCleartextBlocked": "{host} non si carica: usa http e la policy di rete dell'app permette il traffico in chiaro solo verso il gateway locale. Servono un server in https, oppure un'app di tipo vista esterna.",
     "frameLoadFailed": "{host} non si è caricato: {reason}",
     "viewProxyFailed": "Impossibile aprire la vista esterna: {error}",
+    "viewPhoneOnly": "«{name}» mostra un sito attraverso il telefono: da qui non si apre. Aprila sul telefono.",
     "pinAsPage": "Metti come pagina",
     "unpinPage": "Togli dalle pagine",
     "unpinned": "Tolta dalle pagine",
     "pageExternal": "Si apre fuori da Jenny: non può stare in una pagina",
     "pageBroken": "È rotta: va riparata prima",
-    "pageFull": "Le pagine sono piene"
-  },
-  "graph": {
-    "concepts": "Concetti",
-    "entities": "Entità",
-    "other": "Altro",
-    "searchPlaceholder": "Cerca nelle pagine…"
+    "pageFull": "Le pagine in alto sono al completo: per farne posto, togline una da ⋯ in fondo alla fila",
+    "trashed": "«{name}» nel cestino",
+    "undo": "Annulla",
+    "restoreFailed": "Non sono riuscita a rimetterla",
+    "restoreTaken": "C'è già un'app con quel nome: rinomina o elimina quella, poi riprova",
+    "restored": "«{name}» è tornata",
+    "trashRow": "Cestino · {count}",
+    "trashTitle": "Cestino delle app",
+    "trashEmpty": "Il cestino è vuoto.",
+    "trashRecords": "{count} dati · eliminata il {when}",
+    "trashNoData": "eliminata il {when}",
+    "restore": "Rimetti",
+    "purge": "Elimina per sempre",
+    "purgeConfirm": "Eliminare per sempre «{name}»? Non si potrà più rimettere.",
+    "purgeConfirmData": "Eliminare per sempre «{name}» e i suoi {count} dati? Non si potrà più rimettere.",
+    "purgeFailed": "Non sono riuscita a eliminarla",
+    "place": "Metti in un quaderno…",
+    "placeWhere": "Dove metto «{name}»?",
+    "placeHow": "In «{notebook}»",
+    "placeAsCard": "Da sola",
+    "placeNextTo": "Accanto a «{card}», con un filo",
+    "placeParams": "Ancora una cosa",
+    "placeParam": "{name}",
+    "placeGo": "Mettila",
+    "placed": "«{name}» è in {notebook}",
+    "placeFailed": "Non sono riuscita a metterla",
+    "placeNoNotebooks": "Non hai ancora quaderni: creane uno dalla pagina Quaderni."
   },
   "header": {
     "back": "Indietro",
     "refresh": "Aggiorna"
   },
   "jenny": {
-    "closeMinichat": "Chiudi la minichat",
-    "askHere": "Chiedi qui...",
-    "askJenny": "Chiedi a Jenny",
-    "send": "Invia",
-    "workingReply": "Ci sto ancora lavorando... la risposta arriva qui ✿",
-    "connectionError": "Non riesco a inviare: controlla la connessione.",
-    "busy": "Jenny sta rispondendo..."
+    "replyWaiting": "risposta nuova"
   },
   "themes": {
     "chanel": {
@@ -693,7 +759,8 @@
       "pre_restore": "pre-ripristino",
       "pre_export": "pre-export",
       "import": "importato",
-      "manual": "manuale"
+      "manual": "manuale",
+      "pre_gardener": "prima del giardiniere"
     },
     "passphraseRequired": "Inserisci una passphrase",
     "retentionLabel": "Conserva la storia per",
@@ -726,7 +793,11 @@
       "every": "ogni {every}",
       "expr": "orario: {expr}",
       "at": "una volta, il {when}",
-      "unknown": "schedulazione non riconosciuta"
+      "unknown": "schedulazione non riconosciuta",
+      "daily": "ogni giorno alle {time}",
+      "weekly": "ogni {days} alle {time}",
+      "weekdays": "nei giorni feriali alle {time}",
+      "monthly": "il {days} di ogni mese alle {time}"
     },
     "when": {
       "now": "adesso",
@@ -761,7 +832,8 @@
       "noRuns": "Nessuna esecuzione registrata.",
       "text": "Testo del promemoria",
       "paused": "in pausa",
-      "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi."
+      "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi.",
+      "inNotebook": "Sta nel quaderno {place}: lo trovi anche sulla sua bacheca."
     },
     "health": {
       "couldNotCheck": "Non ha potuto controllare {n} volte di fila",
@@ -776,7 +848,7 @@
       "fileUnreadable": "HEARTBEAT.md c'è ma non si legge: controlla i permessi del file.",
       "taskOk": "regolare",
       "taskBroken": "non parte da {n} giri",
-      "taskPending": "affidato a un subagent, in attesa del verdetto",
+      "taskPending": "affidato a una mini-me, aspetto il suo verdetto",
       "orphans": "Voci senza task",
       "orphansHint": "Controlli rimasti nello stato dopo che la riga è stata tolta da HEARTBEAT.md. Spiegano i contatori qui sopra e non richiedono niente."
     },
@@ -891,7 +963,261 @@
     "askAboutReadonly": "Chiedi qualcosa su {name} (sola lettura)…"
   },
   "home": {
-    "empty": "Non c'è ancora niente qui.\nComincia tu.",
+    "moveOffer": {
+      "open": "Apri il quaderno «{notebook}»"
+    },
+    "journalMark": {
+      "label": "Annotato in «{notebook}»",
+      "where": "«{notebook}»"
+    },
+    "staged": {
+      "title": "Da approvare · {count}",
+      "file": "Modifica a {path}",
+      "newFile": "Nuovo file: {path}",
+      "why": "Un lavoro di Jenny che ha letto contenuti da fuori ({sources}) vuole cambiare un file che lei usa da sola. Non è ancora scritto.",
+      "unknownSource": "fonte sconosciuta",
+      "toolResults": "risultati salvati dai suoi strumenti",
+      "moreSources": "{list} e altre {count}",
+      "showDiff": "Mostra le modifiche",
+      "hideDiff": "Nascondi le modifiche",
+      "truncated": "Le modifiche sono più lunghe: qui c'è solo l'inizio.",
+      "install": "Installa",
+      "discard": "Scarta",
+      "installed": "Fatto: {path} è aggiornato.",
+      "discarded": "Scartata: il file è rimasto com'era.",
+      "conflict": "Il file è cambiato nel frattempo: niente è stato scritto. Riguarda le modifiche.",
+      "failed": "Non ci sono riuscita. Riprova."
+    },
+    "plan": {
+      "toggle": "Piano",
+      "toggleOn": "Piano acceso: il prossimo messaggio chiede un piano",
+      "toggleOff": "Chiedi un piano",
+      "placeholder": "Cosa vuoi pianificare?",
+      "placeholderDrafting": "Rispondi a Jenny per il piano",
+      "toggleDrafting": "Jenny sta preparando un piano: tocca per annullarlo",
+      "cancelDrafting": "Annulla il piano",
+      "composerOff": "Durante il piano la chat è spenta",
+      "hintPlan": "Jenny prepara un piano e non tocca niente finché non approvi",
+      "hintRevise": "Stai rivedendo il piano v{version}: scrivi cosa cambiare",
+      "hintRunning": "Durante il piano: Pausa per parlarle",
+      "closingStep": "Chiudo il passo…",
+      "closingPlan": "Chiudo il piano…",
+      "startingPlan": "Preparo il primo passo…",
+      "cover": {
+        "have": "Cosa so già · {count}:",
+        "search": "Cosa vado a cercare · {count}:",
+        "leave": "Resta scoperto · {count}:",
+        "ask": "Ancora da chiedere · {count}:",
+        "more": "e altre {count}",
+        "all": "Voce per voce",
+        "hide": "Nascondi le voci",
+        "haveLabel": "C'è già",
+        "missingLabel": "Manca",
+        "whyLabel": "Perché",
+        "strategy": {
+          "notebook": "quaderno",
+          "web": "web",
+          "ask": "da chiedere",
+          "leave": "scoperto"
+        }
+      },
+      "assume": {
+        "title": "Decido io · {count}",
+        "sub": "Approvando il piano approvi anche queste."
+      },
+      "drafts": {
+        "questionOne": "Jenny vuole cambiare {file}: guarda la modifica, poi installala o scartala.",
+        "questionMany": "Jenny vuole cambiare {count} file: guarda le modifiche, poi installale o scartale.",
+        "note": "Il piano riparte da solo appena decidi.",
+        "file": "Modifica a {path}",
+        "newFile": "Nuovo file: {path}",
+        "why": "Viene da un lavoro che ha letto contenuti da fuori ({sources}): per questo aspetta te.",
+        "loading": "Rileggo la bozza…",
+        "gone": "Già decisa: il piano riparte da solo.",
+        "failed": "Non sono riuscita a leggere la bozza.",
+        "retry": "Riprova"
+      },
+      "untitled": "Piano",
+      "steps": "{count} passi",
+      "stepsCut": "{count} passi su {total}",
+      "photoLine": "Prima di cominciare l'app fa una {bold}: è il punto a cui puoi sempre tornare.",
+      "photoWord": "foto del quaderno",
+      "photoTaken": "foto del quaderno {time}",
+      "photoTakenNoTime": "foto del quaderno fatta",
+      "version": "v{version}",
+      "reviewing": "in revisione",
+      "progress": "{done} di {total}",
+      "pausingVer": "si ferma · {done} di {total}",
+      "pausedVer": "in pausa · {done} di {total}",
+      "blockedVer": "fermo · {done} di {total}",
+      "doneVer": "fatto · {minutes} min",
+      "doneVerShort": "fatto",
+      "stoppedVer": "fermato · {done} di {total}",
+      "rolledBackVer": "tornato indietro",
+      "cutSub": "lo togli tu: questo passo non lo faccio",
+      "tag": {
+        "trash": "cestino",
+        "new": "nuovo",
+        "moved": "spostato",
+        "changed": "cambiato",
+        "covers": "{count} da cercare"
+      },
+      "nowSince": "da {minutes} min",
+      "nowJustStarted": "appena cominciato",
+      "machineClean": "controllo automatico: tutto a posto ({pages} pagine)",
+      "machineCleanOne": "controllo automatico: tutto a posto (1 pagina)",
+      "machineLeft": "controllo automatico: da sistemare ancora {n}",
+      "machineLost": "controllo automatico: {n} fatti persi",
+      "machineLostOne": "controllo automatico: 1 fatto perso",
+      "lostFacts": "{n} fatti persi",
+      "lostFactOne": "1 fatto perso",
+      "machineLeftPages": "Da sistemare ancora: {pages}",
+      "blockedSince": "fermo da {time}",
+      "blockedNoQuestion": "Jenny si è fermata e aspetta te.",
+      "skipped": "saltato",
+      "skippedBecause": "saltato: {why}",
+      "interrupted": "interrotto a metà",
+      "full": "Il piano completo",
+      "fullSub": "v{version}",
+      "approve": "Approva",
+      "approveSome": "Approva i {count} passi",
+      "revise": "Rivedi",
+      "discard": "Lascia stare",
+      "pause": "Pausa",
+      "resume": "Riprendi",
+      "stop": "Ferma",
+      "pausingNote": "Mi fermo alla fine di questo passo.",
+      "pausedNote": "In pausa: riparte dal passo {step}. Intanto puoi parlarle.",
+      "pausedNoteEnd": "In pausa. Intanto puoi parlarle.",
+      "blockedNote": "Il resto aspetta la tua risposta: {bold}.",
+      "blockedNoteBold": "non vado avanti da sola",
+      "answerPlaceholder": "La tua risposta",
+      "questionMore": "Mostra tutto",
+      "questionLess": "Mostra meno",
+      "answer": "Rispondi",
+      "answered": "Risposta mandata: il piano riparte.",
+      "summary": {
+        "newPages": "pagine nuove",
+        "changed": "cambiati",
+        "removed": "tolti",
+        "sources": "ricerche"
+      },
+      "doing": {
+        "helperOne": "1 mini-me",
+        "helpers": "{count} mini-me",
+        "round": "ricerca {n} di {total}",
+        "gapOne": "1 lacuna aperta",
+        "gaps": "{count} lacune aperte"
+      },
+      "gapsListed": "{count} lacune in lista",
+      "gapsListedOne": "1 lacuna in lista",
+      "gapsNoteOne": "1 cosa da cercare: la lista è in {bold}.",
+      "gapsNote": "{count} cose da cercare: la lista è in {bold}.",
+      "seeChanges": "Vedi le modifiche",
+      "rollback": "Torna a prima del piano",
+      "redo": "Rifai il piano",
+      "redoMessage": "Rifai il piano «{title}» da capo.",
+      "undoRollback": "Annulla il ritorno",
+      "undone": "Ritorno annullato: il quaderno è com'era dopo il piano.",
+      "rolledBack": "Il quaderno è tornato a prima del piano: {count} file rimessi a posto.",
+      "rolledBackNote": "Quaderno com'era alla foto delle {bold}.",
+      "rolledBackNoteNoTime": "Quaderno com'era prima del piano.",
+      "close": "Togli la scheda",
+      "more": "e altri {count}",
+      "badge": "Piano {done}/{total}",
+      "lock": "In sola lettura durante il piano",
+      "lockRename": "«{name}» ha un piano aperto: si rinomina quando è chiuso.",
+      "lockDelete": "«{name}» ha un piano aperto: si elimina quando è chiuso.",
+      "waitTurn": "Aspetta che Jenny finisca: poi lo faccio da sola.",
+      "stopRollbackFailed": "Il piano è fermo, ma il ritorno a prima non è riuscito.",
+      "stopRollbackConflict": "Il piano è fermo, ma il quaderno era cambiato: il ritorno a prima non è partito.",
+      "rollbackHalf": "Il ritorno si è fermato a metà ({applied} file su {total}): il quaderno può essere tornato a prima del piano solo in parte. Riprovare è sicuro.",
+      "rollbackHalfNoCount": "Il ritorno si è fermato a metà: il quaderno può essere tornato a prima del piano solo in parte. Riprovare è sicuro.",
+      "undoHalf": "L'annullamento del ritorno si è fermato a metà ({applied} file su {total}): il quaderno può essere com'era dopo il piano solo in parte. Riprovare è sicuro.",
+      "undoHalfNoCount": "L'annullamento del ritorno si è fermato a metà: il quaderno può essere com'era dopo il piano solo in parte. Riprovare è sicuro.",
+      "rollbackRetry": "Riprova a tornare indietro",
+      "undoRetry": "Riprova ad annullare",
+      "sheetClose": "Chiudi",
+      "strip": {
+        "title": "Piano · {title}",
+        "blocked": "Piano fermo: ti serve una risposta",
+        "drafts": "Piano fermo: una modifica da approvare",
+        "paused": "Piano in pausa · {title}",
+        "step": "Passo {n} · {title}",
+        "resumeFrom": "riparte dal passo {n}",
+        "show": "Mostra il piano"
+      },
+      "stepSheet": {
+        "title": "Passo {n} · {title}",
+        "when": "Fatto alle {time}.",
+        "counts": "Ha scritto {added} file, ne ha cambiati {changed}, tolti {removed}.",
+        "nothing": "Non ha cambiato file del quaderno."
+      },
+      "changes": {
+        "title": "Cosa ha cambiato il piano",
+        "sub": "Dalla foto delle {start} a quella delle {end}. Lo calcola l'app confrontando le due foto.",
+        "subNoTime": "Lo calcola l'app confrontando la foto di prima con quella di dopo.",
+        "added": "{count} nuovi in {group}",
+        "changed": "{count} cambiati in {group}",
+        "removed": "{count} tolti da {group}",
+        "none": "Il quaderno è com'era prima del piano."
+      },
+      "group": {
+        "pages": "pagine",
+        "sources": "ricerche e fonti",
+        "board": "bacheca",
+        "other": "altri file",
+        "journal": "diario"
+      },
+      "groupThe": {
+        "pages": "le pagine",
+        "sources": "le ricerche e le fonti",
+        "board": "la bacheca",
+        "other": "gli altri file"
+      },
+      "stopSheet": {
+        "title": "Fermo il piano?",
+        "sub": "Fatti {done} passi su {total}. Il passo in corso si ferma subito.",
+        "continue": "Continua",
+        "continueSub": "non è successo niente",
+        "keep": "Ferma e tieni quello che ha fatto",
+        "keepSub": "il piano si chiude a metà, i file restano",
+        "back": "Ferma e torna a prima del piano",
+        "backSub": "l'app rimette il quaderno com'era alle {time}",
+        "backSubNoTime": "l'app rimette il quaderno com'era prima del piano"
+      },
+      "rollbackSheet": {
+        "title": "Torno a prima del piano?",
+        "sub": "L'app rimette il quaderno com'era alla foto delle {time}. Jenny non c'entra: lo fa il codice, file per file.",
+        "subNoTime": "L'app rimette il quaderno com'era prima del piano. Jenny non c'entra: lo fa il codice, file per file.",
+        "restored": "Tornano {count} file com'erano",
+        "restoredOne": "Torna 1 file com'era",
+        "removed": "Vanno via {count} file nuovi",
+        "removedOne": "Va via 1 file nuovo",
+        "left": "Lasciati com'erano: {names}, cambiati dopo il piano",
+        "nothing": "Non c'è niente da rimettere a posto.",
+        "keep": "Tieni {group} ({count})",
+        "cancel": "Lascia così",
+        "confirm": "Torna a prima"
+      },
+      "fullSheet": {
+        "sub": "Il piano completo, versione {version}. Si legge e basta: per cambiarlo c'è Rivedi.",
+        "dropped": "Tolti da te",
+        "coverage": "Cosa serve al lavoro",
+        "assumptions": "Decido io",
+        "doneWhen": "Fatto quando",
+        "covers": "Cerca"
+      },
+      "error": {
+        "conflict": "Il piano è cambiato nel frattempo: ecco l'ultima versione.",
+        "busy": "Jenny sta finendo un turno: riprova tra un momento.",
+        "gone": "Questo piano non c'è più.",
+        "failed": "Non ci sono riuscita. Riprova.",
+        "planRunning": "Un altro piano sta lavorando su questo quaderno: aspetta che finisca, o fermalo prima.",
+        "rollbackFailed": "Il ritorno si è fermato a metà: il quaderno può essere tornato solo in parte. Riprovare è sicuro."
+      }
+    },
+    "empty":"Non c'è ancora niente qui.\nComincia tu.",
     "emptyNotebook": "Questo quaderno c’è, la conversazione no.\nQuello che scrivi qui resta qui.",
     "placeholder": "Scrivi a {name}",
     "placeholderNotebook": "Scrivi a {name}, nel quaderno",
@@ -899,21 +1225,129 @@
     "wire": {
       "offline": "Filo interrotto, sto riprovando"
     },
-    "subagents": {
-      "one": "Al lavoro · {label}",
-      "oneUnnamed": "Un agente al lavoro",
-      "oneStalled": "Fermo · {label}",
-      "stalled": "Un agente è fermo",
-      "many": "{count} agenti al lavoro",
-      "manyStalled": "{count} agenti, uno è fermo",
-      "openInWorkshop": "Tieni premuto per vederli in officina"
+    "work": {
+      "title": {
+        "gardener": "Sistemo il quaderno",
+        "gardenerAuto": "Sistemo il quaderno da sola",
+        "dream": "Riordino i ricordi",
+        "helperOne": "Ho mandato una mini-me: {label}",
+        "helperUnnamed": "Una mini-me è al lavoro",
+        "helpersMany": "{count} mini-me al lavoro"
+      },
+      "phase": {
+        "start": "Comincio",
+        "pages": "Scrivo le pagine",
+        "board": "Preparo la bacheca",
+        "review": "Rileggo i ricordi",
+        "memory": "Aggiorno la memoria"
+      },
+      "doing": {
+        "think": "Ragiona",
+        "read": "Legge",
+        "search": "Cerca",
+        "write": "Scrive",
+        "out": "È in rete",
+        "run": "Fa girare del codice",
+        "delegate": "Chiama una mini-me",
+        "busy": "Lavora"
+      },
+      "writesOne": "1 scritta",
+      "writesMany": "{count} scritte",
+      "slow": "Ci metto più del solito",
+      "retry": "Il modello non risponde, riprovo ({attempt} di {of})",
+      "autoNote": "Se mi scrivi adesso mi fermo, e riprendo più tardi.",
+      "done": "Fatto",
+      "failed": "Non ci sono riuscita",
+      "helperFailed": "La mini-me si è inceppata: {label}",
+      "helperFailedUnnamed": "La mini-me si è inceppata",
+      "helperInterrupted": "La mini-me è stata interrotta: {label}",
+      "helperInterruptedUnnamed": "La mini-me è stata interrotta",
+      "helperStoppedAgain": "Di nuovo inciampata: è la {count}ª volta.",
+      "helperDone": "La mini-me ha finito: {label}",
+      "helperDoneUnnamed": "La mini-me ha finito",
+      "helpersDoneMany": "{count} mini-me hanno finito",
+      "helperSlow": "È piccola ma testarda: ci mette un po'",
+      "helperRetry": "Rimettila in piedi",
+      "helperRetryFailed": "Non sono riuscita a rimetterla in piedi.",
+      "helperContinue": "Falla continuare",
+      "helperContinueFailed": "Non sono riuscita a farla ripartire.",
+      "helperStop": "Fermala",
+      "helperStopNamed": "Ferma la mini-me: {label}",
+      "helperStoppedByYou": "Hai fermato la mini-me: {label}",
+      "helperStoppedByYouUnnamed": "Hai fermato la mini-me",
+      "helperStoppedByJenny": "Ho fermato la mini-me: {label}",
+      "helperStoppedByJennyUnnamed": "Ho fermato la mini-me",
+      "stopSheet": {
+        "title": "Fermo la mini-me «{label}»?",
+        "titleUnnamed": "Fermo la mini-me?",
+        "continue": "Lasciala lavorare",
+        "continueSub": "non è successo niente",
+        "keep": "Ferma e tieni quello che ha fatto",
+        "keepSub": "si ferma subito, i file che ha cambiato restano",
+        "keepSubNothing": "si ferma subito; non ha ancora cambiato niente",
+        "undo": "Ferma e annulla le sue modifiche"
+      },
+      "undoSheet": {
+        "title": "Annullo le sue modifiche?",
+        "keep": "Lascia com'è",
+        "keepSub": "i file restano come sono adesso",
+        "undo": "Annulla le sue modifiche"
+      },
+      "undoSubOne": "rimetto com'era 1 file; se l'ha cambiato anche qualcun altro, resta",
+      "undoSubMany": "rimetto com'erano {count} file; quelli cambiati anche da altri restano",
+      "undoLimit": "Messaggi mandati, ricerche fatte e promemoria già suonati non si annullano.",
+      "undoActionOne": "Annulla la sua modifica (1 file)",
+      "undoActionMany": "Annulla le sue modifiche ({count} file)",
+      "stopFailed": "Non sono riuscita a fermarla.",
+      "undoFailed": "Non sono riuscita ad annullare.",
+      "sheetClose": "Chiudi",
+      "undone": {
+        "you": "Annullato: {count} file rimessi com'erano prima di lei.",
+        "jenny": "Ho annullato le sue modifiche: {count} file rimessi com'erano.",
+        "nothing": "Annullato: non aveva cambiato niente.",
+        "keptOthers": "{count} lasciati come sono, perché li ha cambiati anche qualcun altro: {files}",
+        "keptOther": "{count} lasciati come sono: {files}"
+      },
+      "result": {
+        "pagesOne": "1 pagina aggiornata.",
+        "pagesMany": "{count} pagine aggiornate.",
+        "boardProposed": "Ti ho preparato la bacheca: è nella busta.",
+        "research": "Questo quaderno è un archivio di studio: la bacheca arriva quando c'è un diario.",
+        "nothing": "Niente di nuovo da sistemare.",
+        "alreadyRunning": "Ci sto già lavorando: una passata alla volta.",
+        "dreamAdvanced": "Ho riordinato i ricordi.",
+        "dreamNothing": "Niente di nuovo da ricordare.",
+        "dreamHeld": "Non ho trovato niente da aggiungere."
+      },
+      "why": {
+        "helperStoppedKept": "Quello che ha fatto è rimasto: {count} file cambiati.",
+        "model": "Il modello non ha risposto. Quello che avevo già scritto resta.",
+        "notAProject": "Qui non c'è un quaderno da sistemare.",
+        "error": "Qualcosa è andato storto.",
+        "helperBudget": "Le è finito il fiato prima di arrivare in fondo.",
+        "helperError": "È inciampata in un errore.",
+        "helperRestart": "L'ha fermata il riavvio dell'app: quel che ha fatto è salvato, e può ripartire da lì.",
+        "helperProvider": "Il modello ha smesso di rispondere per un po'; quello che aveva fatto è salvo."
+      },
+      "openBoard": "Apri la bacheca",
+      "retryAction": "Riprova",
+      "inProgress": "In corso",
+      "step": "Passo {at} di {of}",
+      "time": {
+        "now": "ora",
+        "min": "{min} min",
+        "sec": "{sec} s"
+      }
     },
     "threadError": "Non riesco a leggere la conversazione.\nRiprova fra poco.",
     "origin": {
       "telegram": "da Telegram",
       "notification": "dalla tendina",
-      "floating": "dal fumetto"
+      "floating": "dal fumetto",
+      "remote": "da un altro dispositivo",
+      "remoteNamed": "da {device}"
     },
+    "retry": "Riprova",
     "stop": "Ferma",
     "verbs": {
       "think": [
@@ -960,11 +1394,11 @@
         "lo faccio girare…"
       ],
       "delegate": [
-        "chiamo rinforzi…",
+        "mi faccio in due…",
+        "chiamo una mini-me…",
+        "clono me stessa, torno subito…",
         "mica faccio tutto io 💅…",
-        "sveglio qualcuno…",
-        "delego, che sono brava…",
-        "metto qualcuno al lavoro…"
+        "mando una piccola me…"
       ],
       "busy": [
         "sto facendo cose…",
@@ -980,19 +1414,30 @@
     "workshop": "Officina",
     "back": {
       "chat": "torna alla chat",
-      "pages": "torna alle pagine",
       "settings": "torna alle Impostazioni",
-      "notebooks": "torna ai quaderni"
+      "board": "torna alla bacheca",
+      "drawer": "torna al cassetto",
+      "page": "torna alla pagina di prima",
+      "notebooks": "torna ai Quaderni",
+      "apps": "torna alle App",
+      "pinned": "torna alla pagina in alto"
     },
     "path": {
       "label": "Dove sei"
+    },
+    "over": {
+      "label": "La chat, sopra la pagina",
+      "close": "chiudi la chat",
+      "toBoard": "vai alla bacheca di {name}"
+    },
+    "door": {
+      "open": "Apri la bacheca"
     },
     "you": {
       "workshopHint": "osserva, regola, ripara"
     },
     "jenny": {
       "title": "{name}",
-      "hidden": "nascosta",
       "floatingShort": "flottante",
       "name": "Come si chiama",
       "nameHint": "Il nome con cui si presenta e con cui la chiami. Cambiarlo non cancella niente di quel che ricorda.",
@@ -1006,26 +1451,26 @@
     },
     "backHome": "Torna alla casa",
     "who": {
-      "title": "Con chi parli",
-      "personal": "personale",
-      "notebooks": "Quaderni",
       "none": "Non hai ancora nessun quaderno.",
       "loadFailed": "Non sono riuscita a leggere l'elenco: quello che vedi può essere incompleto.",
-      "newNotebook": "Nuovo quaderno"
-    },
-    "notebookPages": {
-      "open": "Pagine del quaderno",
-      "chat": "Chat",
-      "view": "Vista del quaderno",
-      "countOne": "1 pagina",
-      "countMany": "{count} pagine",
-      "tabList": "Pagine",
-      "tabMap": "Mappa",
-      "index": "Indice del quaderno",
-      "loading": "Sto guardando…",
-      "none": "Questo quaderno non ha ancora pagine. Scrivono io e te, parlandone.",
-      "noMatch": "Nessuna pagina con queste parole.",
-      "failed": "Non sono riuscita a leggere le pagine di questo quaderno."
+      "newNotebook": "Nuovo quaderno",
+      "search": "Cerca un quaderno…",
+      "clearSearch": "Pulisci la ricerca",
+      "inUse": "In uso",
+      "archive": "Archivio",
+      "archiveHint": "fermi da più di un mese",
+      "inArchive": "archivio",
+      "sortRecent": "Recenti",
+      "sortAz": "A–Z",
+      "sortLabel": "Ordine: {order}",
+      "results": "Risultati",
+      "noResult": "Nessun quaderno per «{query}».",
+      "create": "Crea «{name}»",
+      "emptyHint": "Un quaderno tiene insieme le pagine, i cassetti e una chat sua: crealo qui, o chiedilo a Jenny.",
+      "pages": "{count} pagine",
+      "page": "{count} pagina",
+      "pagesShort": "{count} p",
+      "plateKeys": "⏎ apri · ⇧⏎ scheda · ←→ scegli"
     },
     "reader": {
       "failed": "Non sono riuscita ad aprire questa pagina.",
@@ -1036,10 +1481,6 @@
       "saveFailed": "Non sono riuscita a salvare questa pagina.",
       "conflict": "Jenny ha cambiato questa pagina mentre la modificavi. La ricarico? Quel che hai scritto qui si perde.",
       "discardConfirm": "Esci senza salvare? Le modifiche a questa pagina si perdono."
-    },
-    "map": {
-      "noLinks": "Le pagine non si rimandano ancora l’una all’altra: la mappa compare quando cominciano a farlo.",
-      "failed": "Non sono riuscita a caricare la mappa."
     },
     "model": {
       "title": "Chi risponde",
@@ -1074,14 +1515,24 @@
     "backup": {
       "title": "Backup",
       "never": "mai fatto",
-      "neverLong": "Non hai ancora esportato nessun backup.",
-      "last": "Ultimo backup: {when}.",
-      "export": "Esporta un backup",
-      "import": "Ripristina da un file",
-      "exportHint": "Un file cifrato con una passphrase che scegli tu: dentro c'è tutto — le conversazioni, i quaderni, le impostazioni. Mettilo da qualche parte che non sia questo telefono.",
-      "importHint": "Sostituisce tutto quello che c'è adesso con quello che c'è nel file, e riavvia Jenny.",
-      "snapshots": "Jenny tiene anche una storia locale del workspace, automatica: serve a rimettere a posto una cosa cancellata per sbaglio, e si sfoglia in officina. Vive però su questo telefono — di un telefono perso non salva niente.",
-      "snapshotsOff": "La storia locale del workspace è spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina."
+      "more": {
+        "title": "Altre opzioni",
+        "file": "Copia su un file",
+        "fileSub": "Un file cifrato con una password scelta da te: dentro c'è tutto. Tienilo da qualche parte che non sia questo telefono.",
+        "fileLast": "Ultimo file: {when}.",
+        "restore": "Ripristina da un file",
+        "restoreSub": "Sostituisce tutto con quello che c'è nel file, poi riavvio."
+      },
+      "history": {
+        "title": "Storia locale",
+        "sub": "Automatica: rimette a posto un file cancellato per sbaglio. Vive però su questo telefono — di un telefono perso non salva niente.",
+        "off": "Spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina, Memoria → Storia locale.",
+        "loading": "Un attimo…",
+        "showAll": "Mostra gli altri ({n})",
+        "today": "oggi alle {time}",
+        "yesterday": "ieri alle {time}",
+        "weekday": "{day} alle {time}"
+      }
     },
     "audit": {
       "report": "Segnala",
@@ -1100,6 +1551,7 @@
     "pages": {
       "appGone": "L'app «{name}» non c'è più.",
       "notebookGone": "Il quaderno «{name}» non c'è più.",
+      "appUnreachable": "Non riesco ad aprire questa app adesso.",
       "removePage": "Togli la pagina",
       "saveFailed": "Non ho potuto salvare le pagine. Non ho cambiato niente.",
       "unknown": "Non riesco a leggere le pagine della casa: non ho cambiato niente. Riprova fra poco."
@@ -1109,7 +1561,8 @@
       "deleted": "Quaderno «{name}» eliminato",
       "renamePrompt": "Nuovo nome per «{name}»",
       "renamed": "Quaderno rinominato in «{name}»",
-      "renameFailed": "Non ho potuto rinominare «{name}». {error}",
+      "renameFailed": "Non ho potuto rinominare «{name}». Riprova fra poco.",
+      "unpinned": "Tolto dalle pagine",
       "renameBusy": "Sto ancora lavorando in «{name}»: rinominalo quando ho finito.",
       "renameTaken": "C'è già un quaderno o una conversazione che si chiama «{name}».",
       "renameMissing": "«{name}» non c'è più: forse è stato cancellato o rinominato."
@@ -1119,6 +1572,7 @@
       "app": "App",
       "notebooks": "Quaderni",
       "settings": "Impostazioni",
+      "sortOpen": "Riordina le pagine",
       "sortHelp": "Trascina per spostare · × per togliere",
       "done": "Fatto",
       "move": "Sposta {name}: frecce sinistra e destra",
@@ -1174,6 +1628,335 @@
       "llm-wiki": "La wiki è il tuo secondo cervello: usala per fare ingest di articoli, note e ricerche. Jenny compila e collega le pagine per te, e puoi farle domande sui contenuti raccolti.",
       "skill-creator": "Se Jenny non sa ancora fare qualcosa che ti serve spesso, puoi chiederle di imparare una nuova skill: le spieghi cosa vuoi e lei si costruisce da sola le istruzioni per farlo la prossima volta.",
       "ssh": "Comandi sulle macchine remote che hai registrato in Impostazioni → Officina → Mani → SSH: Jenny può controllare un servizio, leggere un log, aggiornare un server o scambiare un file. Raggiunge solo gli host che hai dichiarato tu, e i comandi lunghi restano in corso anche a telefono spento."
+    }
+  },
+  "board": {
+    "failed": "Non sono riuscita a leggere la bacheca di questo quaderno.",
+    "listView": "Vista elenco",
+    "moveFailed": "Non sono riuscita a spostarla: la rimetto dov'era.",
+    "noThreads": "Questa scheda non ha fili.",
+    "offboard": "fuori bacheca",
+    "empty": {
+      "title": "La bacheca è vuota.",
+      "hint": "Raccontami di qualcosa di questo quaderno, in chat. Comincia da qui:",
+      "example": "Ti racconto una cosa di questo quaderno: ",
+      "proposed": "Ti ho preparato una bacheca: è nella busta."
+    },
+    "since": {
+      "row": "Dall'ultima volta · {count} novità",
+      "title": "Dall'ultima volta",
+      "note": "Ogni riga la scrive il codice, non il modello: racconta quello che è stato fatto davvero.",
+      "envelopeOne": "Nella busta c'è 1 proposta.",
+      "envelopeMany": "Nella busta ci sono {count} proposte.",
+      "kind": {
+        "board_created": "La bacheca è nata, con {cards} schede.",
+        "card_added": "{title} ha un posto in bacheca.",
+        "card_removed": "{title} è stata messa via: le sue pagine restano, e la ritrovi con la ricerca.",
+        "connection_added": "Un filo nuovo fra due schede.",
+        "page_attached": "Una pagina è entrata in un cassetto.",
+        "section_added": "Una mini app è entrata in un cassetto.",
+        "sections_regenerated": "{title}: riscritte {count} sezioni del cassetto.",
+        "pages_assigned": "{count} pagine nuove sono entrate nei cassetti.",
+        "reminders_added": "{count} promemoria nuovi presi dal diario.",
+        "suggestions_added": "{count} proposte nuove nella busta.",
+        "corrections_applied": "{count} correzioni integrate nella wiki.",
+        "reminder_due": "È il momento: {text}.",
+        "app_event": "{title}: {app} è {state}.",
+        "other": "Qualcosa è cambiato in bacheca.",
+        "micro_kept": "{title}: la micro app {app} è nel cassetto e gira da sola.",
+        "micro_fixed": "{title}: ho sistemato la micro app {app}.",
+        "cron_result": "{title}: {app} ha qualcosa da dirti.",
+        "cron_result_notebook": "{app} ha qualcosa da dirti."
+      }
+    },
+    "signal": {
+      "new": "novità",
+      "soon": "attesa vicina",
+      "alert": "problema",
+      "auto": "qualcosa gira da solo"
+    },
+    "envelope": {
+      "label": "Proposte di Jenny: {count}",
+      "title": "Proposte di Jenny",
+      "emptyTitle": "La busta è vuota",
+      "empty": "Quando la bacheca dovrebbe cambiare forma, la proposta arriva qui. Al massimo due per volta.",
+      "from": "Jenny",
+      "keep": "Lascia stare",
+      "putAway": "Metti via",
+      "later": "Più avanti",
+      "no": "No",
+      "yes": "Sì",
+      "full": "La bacheca è piena: prima togli qualcosa.",
+      "failed": "Non sono riuscita a farlo.",
+      "kind": {
+        "initial_board": "Ho preparato la bacheca di questo quaderno. Va bene così?",
+        "add_card": "Faccio un posto in bacheca a {subject}?",
+        "remove_card": "Metto via {subject}? Le sue pagine restano.",
+        "add_connection": "Lego {subject} con un filo?",
+        "attach_page": "Metto questa pagina nel cassetto di {subject}?",
+        "add_section": "Metto un'app nel cassetto di {subject}?",
+        "add_app_card": "Faccio di {subject} una scheda, col suo valore in copertina?"
+      }
+    },
+    "search": {
+      "title": "Cerca nel quaderno",
+      "placeholder": "Cerca nel quaderno",
+      "none": "Niente con queste parole.",
+      "card": "scheda"
+    },
+    "preview": {
+      "notOnBoard": "Questa pagina non è in bacheca: la uso io per lavorare. Se ti serve qui, dimmelo.",
+      "close": "Chiudi",
+      "want": "Voglio vederla in bacheca",
+      "wanted": "Ci penso alla prossima passata."
+    },
+    "drawer": {
+      "loading": "Sto guardando…",
+      "failed": "Non sono riuscita ad aprire questo cassetto.",
+      "today": "oggi alle {time}",
+      "yesterday": "ieri alle {time}",
+      "pagesOne": "Cassetto · 1 pagina della wiki",
+      "pagesMany": "Cassetto · {count} pagine della wiki",
+      "updated": "aggiornato {when}",
+      "noSummary": "Non ho ancora scritto questo cassetto: lo faccio alla prossima passata.",
+      "threads": "Fili",
+      "allPages": "Le pagine ({count})",
+      "foot": "Il riassunto lo scrive Jenny dalla wiki. Per cambiarlo, correggi: la correzione va nella pagina giusta e torna qui.",
+      "fix": "Correggi",
+      "fixLabel": "Correzione",
+      "fixTarget": "Va come segnalazione su «{page}».",
+      "fixSend": "Invia a Jenny",
+      "fixPending": "Tua correzione · segnalazione su «{page}», la sto integrando",
+      "fixDone": "Integrata nella wiki",
+      "fixFailed": "Non sono riuscita a mandare la correzione.",
+      "threadRemove": "Togli il filo con {card}",
+      "threadRemoveConfirm": "Togliere il filo con {card}? Jenny non lo riproporrà.",
+      "calendar": {
+        "title": "Calendario di cura",
+        "today": "Oggi · {date}",
+        "overdue": "In ritardo",
+        "whenever": "Quando succede"
+      },
+      "automations": "Automazioni"
+    },
+    "reminder": {
+      "done": "Fatto",
+      "edit": "Correggi",
+      "drop": "Togli",
+      "dropConfirm": "Togliere «{text}»?",
+      "actions": "Altro su «{text}»"
+    },
+    "app": {
+      "open": "Apri l'app",
+      "source": "fonte: {app}",
+      "alert": {
+        "alarm": "Dato live di {app}, non della wiki: è in allarme.",
+        "stale": "Dato live di {app}, non della wiki: non arriva niente di nuovo."
+      },
+      "state": {
+        "ok": "aggiornato {when}",
+        "alarm": "in allarme · {when}",
+        "stale": "fermo da {when}",
+        "empty": "ancora nessun dato",
+        "missing": "Questa app non c'è più.",
+        "broken": "Questa app è rotta: aprila dalla sezione App per vedere perché.",
+        "no_section": "Questa app non ha una vista per i cassetti.",
+        "trashed": "nel cestino"
+      },
+      "event": {
+        "ok": "tornato a posto",
+        "alarm": "in allarme",
+        "stale": "fermo",
+        "empty": "senza dati",
+        "missing": "sparito",
+        "broken": "rotto",
+        "no_section": "senza vista"
+      },
+      "remindWhen": "Avvisami quando…",
+      "remindDefault": "Controlla {app}",
+      "below": "{label} scende sotto",
+      "above": "{label} sale sopra",
+      "threshold": "Soglia",
+      "restore": "Rimetti l'app"
+    },
+    "section": {
+      "remove": "Togli",
+      "removeConfirm": "Togliere questa sezione? La wiki non cambia.",
+      "moveUp": "Sposta su",
+      "failed": "Non sono riuscita a salvarla.",
+      "save": "Salva",
+      "reminderWhat": "Cosa?",
+      "reminderWhen": "Quando?",
+      "reminderMonth": "Solo il mese",
+      "noApps": "Nessuna tua app ha ancora qualcosa da mostrare su una scheda.",
+      "newApp": "Creane una nuova…",
+      "newAppPrompt": "Vorrei un'app da mettere accanto a {card}, che ",
+      "appParam": "{app}: {name}?",
+      "otherPrompt": "Nel cassetto {card} vorrei una sezione che ",
+      "kind": {
+        "note": "Nota",
+        "reminder": "Promemoria",
+        "app": "App",
+        "photo": "Foto",
+        "other": "Altro",
+        "micro": "App",
+        "cron": "Cron"
+      },
+      "addFab": "Aggiungi al cassetto",
+      "close": "Chiudi"
+    },
+    "micro": {
+      "what": "Cosa vuoi vedere, o fare?",
+      "whatPlaceholder": "Per esempio: l'umidità della terra e se il sensore è online",
+      "explain": "La scrivo io e la provo subito: diventa una scheda sua, legata a questa con un filo.",
+      "prepare": "Preparala",
+      "linkApp": "Oppure mettici accanto una tua app…",
+      "prompt": "Vorrei un'app che {what}, da mettere sulla bacheca accanto a {card}",
+      "resume": "Riprendi",
+      "pause": "Pausa",
+      "change": "Cambia",
+      "every": "ogni {minutes} min",
+      "via": "da {what}",
+      "yes": "sì",
+      "no": "no",
+      "unreachable": "L'ultima lettura non ha trovato la rete o il dispositivo: riprova da sola.",
+      "state": {
+        "broken": "Si è rotta: il valore qui sopra è l'ultimo buono.",
+        "quarantined": "L'ultima lettura non si è più fermata: è ferma finché non la sistemiamo.",
+        "paused": "In pausa."
+      },
+      "noRows": "Ancora nessuna riga.",
+      "moreRows": "e altre {count}"
+    },
+    "cron": {
+      "paused": "in pausa",
+      "next": "prossimo {when}",
+      "costs": "lo fa Jenny (usa il modello)",
+      "last": "Ultimo esito ({when}): {text}",
+      "quiet": "Ultimo giro {when}: niente da dirti.",
+      "changePrompt": "Nel cassetto {card}, il cron «{name}»: vorrei ",
+      "prompt": "Nel cassetto {card}, ogni ",
+      "removeConfirm": "Togliere «{name}»? Jenny smette di farlo.",
+      "changeNotebookPrompt": "Nelle automazioni di tutto il quaderno, «{name}»: vorrei "
+    },
+    "card": {
+      "add": "Nuova scheda",
+      "newTitle": "Nuova scheda",
+      "name": "Come si chiama?",
+      "namePlaceholder": "Acerello, Monstera, Viaggio a Lisbona…",
+      "create": "Crea",
+      "rename": "Rinomina",
+      "renameTitle": "Rinomina la scheda",
+      "save": "Salva",
+      "remove": "Togli dalla bacheca",
+      "removed": "«{title}» tolta dalla bacheca",
+      "undo": "Annulla",
+      "restoreFailed": "Non sono riuscita a rimetterla",
+      "full": "La bacheca è piena: togli prima qualcosa",
+      "failed": "Non è andata, riprova",
+      "actions": "Azioni sulla scheda {title}",
+      "close": "Chiudi",
+      "what": "Cosa ci metti?",
+      "whatNothing": "Niente per ora",
+      "appPlaced": "«{name}» è sulla bacheca, accanto a {card}"
+    },
+    "cover": {
+      "minutes": "{count} min fa",
+      "hours": "{count} h fa",
+      "days": "{count} g fa"
+    },
+    "slip": {
+      "more": "e altre {count}",
+      "empty": "ancora nessun dato",
+      "alarm": "in allarme",
+      "broken": "non legge più",
+      "stoppedFor": "ferma · {age}",
+      "updatedAt": "alle {time}",
+      "online": "online",
+      "offline": "offline",
+      "of": "di {max}",
+      "nothingAhead": "niente in arrivo",
+      "allDone": "tutto fatto",
+      "dec": "meno {label}",
+      "inc": "più {label}",
+      "failed": "Non è andata: riprova dall'app"
+    },
+    "postit": {
+      "more": "+{count} altre"
+    },
+    "notes": {
+      "title": "Le tue note",
+      "all": "Tutte ›",
+      "new": "Nuova nota",
+      "hint": "tocca una nota per leggerla tutta",
+      "readMore": "Leggi tutto",
+      "deck": "Nota {n} di {count}: {text}. Tocca per la prossima.",
+      "edit": "Correggi",
+      "close": "Chiudi",
+      "removeConfirm": "Togliere questa nota? Quello che è già finito nella wiki resta.",
+      "integrated": "✓ nella wiki",
+      "pending": "in attesa della wiki",
+      "placeholder": "Per esempio: lo tengo sul davanzale sud solo d'inverno."
+    },
+    "photos": {
+      "title": "Le tue foto",
+      "hint": "dalla più recente; ogni foto con la sua nota finisce nel diario, e Jenny la vede",
+      "new": "Nuova foto",
+      "noNote": "Senza nota",
+      "deck": "Foto {n} di {count}: {text}, {when}. Tocca per la prossima.",
+      "placeholder": "Due parole su questa foto",
+      "noteLabel": "La nota della foto",
+      "now": "Adesso",
+      "integrated": "✓ nella wiki",
+      "pending": "in attesa della wiki",
+      "removeConfirm": "Togliere questa foto dalla scheda? Il file resta fra il materiale del quaderno, e quel che è già nella wiki resta.",
+      "full": "Vedi la foto intera, a tutto schermo",
+      "back": "Tutte le foto",
+      "pager": "{n} di {count}",
+      "prev": "Foto precedente",
+      "next": "Foto successiva",
+      "fullShort": "A tutto schermo",
+      "edit": "Correggi la nota",
+      "remove": "Togli dalla scheda",
+      "viewer": "{card} · {n} di {count}"
+    },
+    "notesPostit": {
+      "label": "{card}, le tue note — {notes}. Tocca per vederle tutte.",
+      "more": "+{count} note",
+      "moreOne": "+1 nota"
+    },
+    "gallery": {
+      "label": "{card}, {count} foto. Tocca per vederle.",
+      "labelOne": "{card}, 1 foto. Tocca per vederla."
+    },
+    "list": {
+      "notes": "{count} note",
+      "notesOne": "1 nota",
+      "photos": "{count} foto",
+      "photosOne": "1 foto",
+      "auto": "{count} automazioni",
+      "autoOne": "1 automazione"
+    },
+    "auto": {
+      "more": "+{count} altri",
+      "notebook": "Tutto il quaderno",
+      "trouble": "non riesce a guardare da {count} giri",
+      "last": "ultimo: «{text}»",
+      "quiet": "ultimo giro {when}: niente",
+      "onlyIf": "ti scrive solo se serve"
+    },
+    "agenda": {
+      "title": "Tutto il quaderno",
+      "empty": "Nessun promemoria di tutto il quaderno.",
+      "add": "+ Promemoria",
+      "new": "Promemoria di tutto il quaderno"
+    },
+    "add": {
+      "title": "Aggiungi alla bacheca",
+      "card": "Una scheda",
+      "reminder": "Un promemoria di tutto il quaderno",
+      "automation": "Un'automazione: chiedila a Jenny",
+      "automationPrompt": "Un'automazione in questo quaderno: ogni "
     }
   }
 }

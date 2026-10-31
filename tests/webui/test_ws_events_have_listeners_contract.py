@@ -65,7 +65,7 @@ SHELLS = {
 SHELL_WITHOUT_LISTENER = {
     "index.html": {
         # Il dettaglio dei subagent e' un arnese d'operatore: la casa ne mostra
-        # solo il chip «al lavoro» (``subagent_status``, ``home-subagents.js``), e
+        # solo la bolla di lavoro (``subagent_status``, ``home-work.js``), e
         # «apri nell'officina» porta dove c'e' il resto.
         "subagent_activity": "dettaglio dei subagent: solo officina",
         "subagent_unwatched": "dettaglio dei subagent: solo officina",
@@ -73,7 +73,21 @@ SHELL_WITHOUT_LISTENER = {
         # legge dalle impostazioni quando la apri.
         "runtime_model_updated": "il modello si rilegge all'apertura della stanza",
     },
-    "workshop.html": {},
+    "workshop.html": {
+        # La bolla di lavoro e' della casa (05/10/2026). L'officina legge lo
+        # stesso lavoro dal resoconto di testo che il comando continua a
+        # mandare, come prima.
+        "work_status": "la bolla di lavoro e' solo della casa",
+        # La bacheca dei quaderni e' solo della casa: l'officina non ne ha una
+        # da ridisegnare.
+        "board_changed": "la bacheca e' solo della casa",
+        # Le bozze da approvare hanno la loro scheda nella chat della casa
+        # (``home-staged.js``); l'officina, per ora, non la mostra.
+        "staged_changed": "la scheda delle bozze e' solo della casa",
+        # Il piano a lista ha la sua scheda nella chat del quaderno della casa
+        # (``home-plan.js``); l'officina non lo mostra.
+        "plan_changed": "la scheda del piano e' solo della casa",
+    },
 }
 
 _IMPORT = re.compile(

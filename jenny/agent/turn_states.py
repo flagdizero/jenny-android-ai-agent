@@ -18,13 +18,14 @@ from loguru import logger
 
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.tools.nothing_to_report import NothingToReportTool
+from jenny.agent.turn_persistence import record_sent_content
 from jenny.agent.turn_types import TurnState
 from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
+from jenny.runtime.user_text import say
 from jenny.session import turn_continuation
 from jenny.session.goal_state import note_goal_turn
 from jenny.utils.document import extract_documents, prepare_attachments
-from jenny.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
     import asyncio
@@ -75,6 +76,7 @@ class StateHandlersMixin:
             on_stream: Callable[[str], Awaitable[None]] | None,
             *,
             turn_latency_ms: int | None = None,
+            error_kind: str | None = None,
         ) -> OutboundMessage | None: ...
         def _message_tool_spoke(self, tools: ToolRegistry | None = None) -> bool: ...
         async def _build_bus_progress_callback(
@@ -96,6 +98,12 @@ class StateHandlersMixin:
             self, msg: InboundMessage, session: Session, **kwargs: Any
         ) -> bool: ...
         def _replay_token_budget(self) -> int: ...
+        def _settle_closed_reasoning(
+            self, session: Session, built: list[dict[str, Any]]
+        ) -> None: ...
+        def _turn_tool_view(
+            self, msg: InboundMessage, session: Session, session_key: str, *, silent: bool
+        ) -> ToolRegistry | None: ...
         async def _run_agent_loop(
             self,
             initial_messages: list[dict],
@@ -297,7 +305,11 @@ class StateHandlersMixin:
             await self.consolidator.maybe_consolidate_by_tokens(
                 ctx.session,
                 replay_max_messages=self._max_messages,
+                max_rounds=self.consolidator.INLINE_ROUNDS,
             )
+            # Il riassunto appena scritto vale gia' per questo turno: quel che ha
+            # tolto dalla cronologia non deve sparire per un turno intero.
+            ctx.pending_summary = self.auto_compact.summary_for(ctx.session, ctx.session_key)
         # Pick up app manifest changes before the runner reads tool definitions
         # (mirror of the per-turn skills rescan; cheap stat-only when unchanged).
         await self._begin_turn_tooling(
@@ -308,11 +320,21 @@ class StateHandlersMixin:
             ctx.session_key,
         )
 
+        # Gli strumenti di questo turno: quelli del loop meno cio' che qui non
+        # serve. Solo sul registro del loop: un registro sostituito (Dream, il
+        # giardiniere) e' gia' quello giusto.
+        if ctx.tools is self.tools:
+            view = self._turn_tool_view(
+                ctx.msg, ctx.session, ctx.session_key, silent=ctx.silent)
+            if view is not None:
+                ctx.tools = view
+
         _hist_kwargs: dict[str, Any] = {
             "max_messages": self._max_messages,
             "max_tokens": self._replay_token_budget(),
             "include_timestamps": True,
             "extend_to_user": False,
+            "replay_sent": True,
         }
         ctx.history = ctx.session.get_history(**_hist_kwargs)
         self._runtime_events().record_turn_runtime(
@@ -333,6 +355,15 @@ class StateHandlersMixin:
         ctx.user_persisted_early = self._persist_user_message_early(
             ctx.msg, ctx.session
         )
+        # La riga appena salvata si rimandera' com'e' partita. Non se
+        # ``build_messages`` l'ha fusa a una domanda rimasta senza risposta: quel
+        # messaggio rappresenta due righe, e il turno dopo ne rimanda due.
+        if ctx.user_persisted_early and ctx.session is not None and not (
+            ctx.history and ctx.history[-1].get("role") == "user"
+        ):
+            record_sent_content(ctx.session.messages[-1], ctx.initial_messages)
+        if ctx.session is not None:
+            self._settle_closed_reasoning(ctx.session, ctx.initial_messages)
 
         # Un turno silenzioso non installa i callback che pubblicano sul bus:
         # progress e retry-wait sono indirizzati alla chat d'origine e vengono
@@ -384,6 +415,7 @@ class StateHandlersMixin:
         ctx.all_messages = all_msgs
         ctx.stop_reason = stop_reason
         ctx.had_injections = had_injections
+        ctx.error_kind = getattr(result, "error_kind", None)
         # Re-sync app tools after execution: tools may have created/deleted
         # apps (e.g. python_exec + shutil.rmtree) during this turn.
         await self._sync_apps_and_notify()
@@ -397,7 +429,7 @@ class StateHandlersMixin:
             (ctx.final_content is None or not ctx.final_content.strip())
             and not ctx.suppress_response
         ):
-            ctx.final_content = EMPTY_FINAL_RESPONSE_MESSAGE
+            ctx.final_content = say("turn.empty")
 
         latency_started_at = (
             ctx.visible_run_started_at
@@ -437,6 +469,7 @@ class StateHandlersMixin:
             ctx.had_injections,
             ctx.on_stream,
             turn_latency_ms=ctx.turn_latency_ms,
+            error_kind=ctx.error_kind if ctx.stop_reason == "error" else None,
         )
         if ctx.ephemeral and ctx.outbound is not None:
             ctx.outbound.metadata["_stop_reason"] = ctx.stop_reason

@@ -83,18 +83,14 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
 
     **Lightbox e minichat sono l'unica coppia fuori ordine, e non per sbaglio.**
     Con D3 (25/09/2026, «Jenny sempre sopra», anche alle immagini) la lightbox è
-    scesa da 1000 a 115, sotto di lei: la minichat (121) le starebbe sopra. Le
-    due però non stanno mai aperte insieme — sopra una lightbox lei non prende
-    tocchi, e mentre la minichat è aperta il suo scrim (119) copre la chat e
-    un'immagine non si apre — quindi fra loro l'ordine della catena non si vede.
-    Il banco controlla quelle due condizioni invece di fingere che l'ordine lo
-    decidano i numeri.
+    scesa da 1000 a 115, sotto di lei. Dal 05/10/2026 la chat aperta sopra una
+    mini-app (111) sta fra l'app e la lightbox, che si apre *dalla* chat.
     """
     body = _method(_app(), "_overlayLayers")
     layers = [
         "dialog[open]",                  # top layer: showModal() sta sopra ogni z-index
-        ".image-lightbox",               # z-index 115 (v. sotto: mai con la minichat)
-        ".jenny-mc.open",                # minichat, z-index 121
+        ".image-lightbox",               # z-index 115
+        "...(overApp ? [chatOver] : [])",  # la chat sopra una mini-app, 111
         ".app-frame-overlay",            # mini-app, z-index 110
         "this.drawer.activeDrawer",      # drawer
     ]
@@ -109,19 +105,15 @@ def test_the_layer_list_is_ordered_by_real_stacking() -> None:
     css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
     z = {
         name: int(re.search(rf"\n{re.escape(name)} \{{[^}}]*?z-index: (\d+);", css).group(1))
-        for name in (".image-lightbox", ".jenny-scrim", ".jenny-mc")
+        for name in (".image-lightbox", ".jenny-duo")
     }
     frame = re.search(r"\.app-frame-overlay \{[^}]*?z-index: (\d+);", css)
     assert frame, "livello della mini-app non trovato"
-    # La lightbox sta sopra la mini-app e sotto lo scrim della minichat.
-    assert int(frame.group(1)) < z[".image-lightbox"] < z[".jenny-scrim"] < z[".jenny-mc"], z
-    # Le due condizioni che tengono lightbox e minichat separate.
+    over_app = int(re.search(r":root\.chat-over-app #view-chat \{ z-index: (\d+);", css).group(1))
+    # La chat sopra una mini-app sta fra l'app e la lightbox, e lei sopra tutto.
+    assert int(frame.group(1)) < over_app < z[".image-lightbox"] < z[".jenny-duo"], z
     assert ":root:has(.image-lightbox) .jenny-duo { pointer-events: none; }" in css, (
-        "sopra una lightbox lei aprirebbe la minichat: due livelli insieme, fuori ordine"
-    )
-    scrim_open = re.search(r"\n\.jenny-scrim\.open \{([^}]*)\}", css)
-    assert scrim_open and "pointer-events: auto" in scrim_open.group(1), (
-        "con la minichat aperta un'immagine della chat si aprirebbe da sotto lo scrim"
+        "sopra una lightbox un tocco su di lei aprirebbe o chiuderebbe la chat sotto l'immagine"
     )
 
 
@@ -232,7 +224,10 @@ def test_the_layers_are_dismissed_through_public_entry_points() -> None:
     cleanup dei rispettivi proprietari (listener su ``document``, object URL,
     tastiera da abbassare). La shell parla solo con gli ingressi pubblici."""
     layers = _method(_app(), "_overlayLayers")
-    assert "this.jenny?.handleBack()" in layers
+    # La chat sopra la vista (05/10/2026) si chiude dal suo ingresso pubblico,
+    # dopo il popover della sessione: il ChatController ha il suo `handleBack`.
+    assert "this.closeChatOver()" in layers
+    assert "this.controllers?.chat?.handleBack()" in layers
     assert "this._appsActions?.handleBack()" in layers
     assert "this.drawer.closeAll()" in layers
     assert "_setOut(" not in _app(), "la shell non tocca lo stato interno della mascotte"
@@ -273,17 +268,10 @@ def test_the_two_dangerous_collaborators_of_the_chain_still_exist() -> None:
     # Il livello mini-app ha anche un `close` per Home: smonta e basta.
     assert "closeApp() {" in apps, "closeApp è il congedo che Home usa sul livello mini-app"
 
-    # La minichat e' dei due gusci dal 28/09/2026: il suo Indietro sta nel
-    # modulo condiviso, e l'officina lo eredita.
-    jenny = (ASSETS / "shared" / "jenny-minichat.js").read_text(encoding="utf-8")
-    jenny_back = _method(jenny, "handleBack")
-    assert "return false;" in jenny_back, (
-        "a minichat chiusa il livello deve lasciar proseguire la catena"
-    )
-    assert "this._setOut(false)" in jenny_back, (
-        "la minichat si chiude dal proprio ingresso: scrim, tastiera e stato dell'arte inclusi"
-    )
-    assert "return true;" in jenny_back
+    # Il popover «Info sessione» della chat: senza, il livello della chat
+    # sopra la vista lo scavalcherebbe.
+    chat = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
+    assert "\n  handleBack() {" in chat, "la chat non ha piu' il suo Indietro"
 
 
 def test_the_lightbox_layer_and_its_owner_agree_on_class_and_handle() -> None:
@@ -339,7 +327,9 @@ def test_the_type_ahead_guard_consumes_the_layer_list() -> None:
     fisica finivano in un campo invisibile."""
     chat = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
     guard = re.sub(r"//.*", "", _method(chat, "_maybeTypeAheadFocus"))  # i commenti citano il prima
-    assert "window.mobileApp?.hasOverlayAbove()" in guard
+    # Dal 05/10/2026 la chat puo' essere lei stessa un livello (aperta sopra
+    # una vista): chiede cosa le sta sopra, non se c'e' lei.
+    assert "window.mobileApp?.hasOverlayAbove('chatOver')" in guard
     assert "dialog[open]" not in guard, "la guardia non riscrive i livelli per conto suo"
 
     api_body = _method(_app(), "hasOverlayAbove")
@@ -568,16 +558,18 @@ def test_the_drawers_only_sub_screen_is_the_folder_you_are_in() -> None:
     )
 
 
-def test_the_house_closes_the_minichat_before_the_app_under_it() -> None:
-    """La minichat si apre anche sopra una mini-app aperta dal cassetto (lei e'
-    a 120, l'app a 110). Indietro deve chiudere prima lei: nell'ordine opposto
-    chiudeva l'app sotto e lasciava la minichat a schermo, cioe' una pressione
-    che non cambia quel che guardi. E' l'ordine che l'officina ha gia' nel suo
-    `_overlayLayers`."""
+def test_the_house_closes_the_chat_over_the_page_before_the_app_under_it() -> None:
+    """La chat sopra la pagina (dal 05/10/2026, al posto della minichat) si
+    apre anche sopra una mini-app aperta dal cassetto: lei a 112, l'app a 110.
+    Indietro deve chiudere prima lei: nell'ordine opposto chiuderebbe l'app
+    sotto e lascerebbe la chat a schermo, cioe' una pressione che non cambia
+    quel che guardi. E l'immagine ingrandita, che si apre *dalla* chat e le sta
+    davanti (115), si chiude prima ancora."""
     home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     overlays = _method(home, "_closeOverlays")
-    mini = overlays.find("this.jenny?.handleBack()")
+    lightbox = overlays.find("document.querySelector('.image-lightbox')")
+    over = overlays.find("if (this.chatOver) return this.closeChatOver();")
     app = overlays.find("this._appActions?.handleBack()")
-    assert mini != -1, "Indietro in casa non chiude piu' la minichat"
-    assert app != -1
-    assert mini < app, "in casa Indietro chiuderebbe l'app sotto la minichat"
+    assert over != -1, "Indietro in casa non chiude piu' la chat sopra la pagina"
+    assert app != -1 and lightbox != -1
+    assert lightbox < over < app, "l'ordine di Indietro non e' quello in cui stanno a schermo"

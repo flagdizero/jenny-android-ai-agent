@@ -19,6 +19,7 @@ loads, which is why these are vendored in the first place.
 | [Mermaid](https://github.com/mermaid-js/mermaid) | 10.9.6 | MIT | `vendor/mermaid@10/LICENSE` |
 | [D3](https://github.com/d3/d3) | 7.9.0 | ISC | `vendor/d3@7/LICENSE` |
 | [CodeMirror](https://github.com/codemirror/codemirror5) | 5.65.16 | MIT | `vendor/codemirror@5.65.16/LICENSE` |
+| [QR Code Generator](https://github.com/kazuhikoarase/qrcode-generator) | 1.4.4 | MIT | `vendor/qrcode-generator@1.4.4/LICENSE` |
 | [Tabler Icons](https://github.com/tabler/tabler-icons) (webfont) | 3.19.0 | MIT | `vendor/@tabler/icons-webfont@3.19.0/LICENSE` |
 
 The KaTeX distribution includes its own web fonts under

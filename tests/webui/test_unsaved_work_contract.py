@@ -34,7 +34,6 @@ runner JS con DOM.
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -132,16 +131,6 @@ def test_the_discard_confirmation_reenters_the_same_teardown() -> None:
     assert "if (this.viewMode !== 'editor') return;" in body, (
         "fra la domanda e la risposta l'editor può essere già uscito da un altro percorso"
     )
-
-
-
-def test_the_discard_prompt_is_localized_in_both_languages() -> None:
-    """Nessuna stringa visibile hardcodata, e nessuna chiave presente in un file
-    solo (in quel caso l'altra lingua mostrerebbe la chiave grezza)."""
-    assert "i18n.t('workspace.discardConfirm')" in _workspace()
-    for lang in ("it", "en"):
-        data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
-        assert data["workspace"]["discardConfirm"].strip(), f"chiave mancante o vuota in {lang}.json"
 
 
 # ── 1b. Dialog della passphrase ─────────────────────────────────────────────

@@ -9,6 +9,14 @@ export class I18n {
   constructor() {
     this.locale = this.detectLocale();
     this.translations = {};
+    /* Le traduzioni delle estensioni (`shared/extensions.js`): `{locale: url}`
+       per estensione, fuse sopra quelle del core a ogni `load`. */
+    this._sources = [];
+  }
+
+  /** Aggiunge le traduzioni di un'estensione. Va chiamata prima di `load`. */
+  addSource(urlsByLocale) {
+    if (urlsByLocale && typeof urlsByLocale === 'object') this._sources.push(urlsByLocale);
   }
 
   detectLocale() {
@@ -29,6 +37,18 @@ export class I18n {
       this.translations[locale] = await res.json();
     } catch (e) {
       console.warn(`Failed to load locale ${locale}:`, e);
+      return;
+    }
+    for (const urls of this._sources) {
+      const url = urls[locale];
+      if (!url) continue;
+      try {
+        const res = await fetch(url);
+        if (res.ok) _deepMerge(this.translations[locale], await res.json());
+        else console.warn(`Failed to load extension locale ${url}: HTTP ${res.status}`);
+      } catch (e) {
+        console.warn(`Failed to load extension locale ${url}:`, e);
+      }
     }
   }
 
@@ -45,6 +65,19 @@ export class I18n {
     }
     return value;
   }
+}
+
+/** Fonde *extra* dentro *base*: le foglie di *extra* vincono, i rami si uniscono. */
+function _deepMerge(base, extra) {
+  for (const [key, value] of Object.entries(extra || {})) {
+    if (value && typeof value === 'object' && !Array.isArray(value)
+        && base[key] && typeof base[key] === 'object' && !Array.isArray(base[key])) {
+      _deepMerge(base[key], value);
+    } else {
+      base[key] = value;
+    }
+  }
+  return base;
 }
 
 export const i18n = new I18n();

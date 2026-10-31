@@ -189,7 +189,7 @@ Run the full check from [Code style](code-style.md):
 
 ```bash
 ruff check jenny/ tests/
-npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
+npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
 pytest -q
 ```
 

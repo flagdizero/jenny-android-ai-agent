@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from support.aio import wait_until
 
 from jenny.agent.tools.ssh_backends.base import (
     SshAuthError,
@@ -600,8 +601,9 @@ async def test_idle_connection_is_closed_without_further_calls(tmp_path):
         await env.backend.exec(target, "echo ciao", timeout_s=5, max_output_chars=1000)
         assert target.pool_key in env.backend._connections
 
-        await asyncio.sleep(2.5)
-        assert target.pool_key not in env.backend._connections
+        # Il reaper gira a scatti di un secondo: la connessione se ne va al
+        # primo o al secondo. Si aspetta quel momento, non 2,5 s fissi.
+        await wait_until(lambda: target.pool_key not in env.backend._connections, timeout=5)
 
 
 async def test_idle_reaping_can_be_switched_off(tmp_path):

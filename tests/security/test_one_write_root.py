@@ -271,6 +271,125 @@ async def _root_ssh_transfer(env: Env) -> Path:
         ssh_mod.get_ssh_backend = original  # type: ignore[assignment]
 
 
+def _bind_project_chat(env: Env) -> Any:
+    from jenny.agent.tools.context import RequestContext, bind_request_context
+
+    return bind_request_context(RequestContext(
+        channel="websocket", chat_id="project:palestra", session_key="project:palestra"))
+
+
+def _seed_board(env: Env) -> None:
+    from jenny.board.store import mutate_board
+
+    for d in (env.project, env.other):
+        mutate_board(d, lambda b: b["cards"].append(
+            {"id": "schede", "title": "Schede", "pages": [], "pos": {"x": 1, "y": 1}}))
+
+
+async def _root_app_tool(env: Env) -> Path:
+    """Il codice va nell'installazione (``apps/.drafts``) apposta; la **posa** va
+    sulla bacheca del quaderno legato, ed e' quella la radice che il tool chiede."""
+    import json
+    from unittest.mock import patch
+
+    from jenny.agent.tools.app_tool import AppTool
+    from jenny.agent.tools.context import reset_request_context
+    from jenny.board.placements import placements
+
+    _seed_board(env)
+    token = _bind_project_chat(env)
+    try:
+        with patch("jenny.config.paths.get_workspace_path", lambda: env.ws):
+            await AppTool().execute(action="draft", slug="conta", files={
+                "app.json": json.dumps({"name": "Conta", "description": "x"})})
+            out = await AppTool().execute(action="place", slug="conta", card="schede")
+    finally:
+        reset_request_context(token)
+    assert "Placed" in out, out
+    hits = [d for d in (env.project, env.other) if placements(d)]
+    assert len(hits) == 1, f"una sola bacheca attesa, trovate {hits}"
+    return hits[0]
+
+
+async def _root_cron(env: Env) -> Path:
+    """Un cron del quaderno: la radice è quella la cui bacheca dà la scheda al job.
+
+    Dal 20/10/2026 un cron non scrive più una sezione nel cassetto: la bacheca lo
+    deriva dal legame del job. La radice si misura allora da quale bacheca il tool
+    legge per trovare la scheda: le due bacheche hanno schede diverse, e il job
+    nasce legato solo se ha letto quella del progetto.
+    """
+    from types import SimpleNamespace
+
+    from jenny.agent.tools.context import RequestContext
+    from jenny.agent.tools.cron import CronTool
+    from jenny.board.store import mutate_board
+
+    mutate_board(env.project, lambda b: b["cards"].append(
+        {"id": "schede", "title": "Schede", "pages": [], "pos": {"x": 1, "y": 1}}))
+    mutate_board(env.other, lambda b: b["cards"].append(
+        {"id": "estranea", "title": "Estranea", "pages": [], "pos": {"x": 1, "y": 1}}))
+    added: list[dict[str, Any]] = []
+
+    class _Cron:
+        def add_job(self, **kw: Any) -> Any:
+            added.append(kw["board"])
+            return SimpleNamespace(id="j1", name="probe")
+
+        def list_jobs(self, include_disabled: bool = False) -> list[Any]:
+            return []
+
+        def remove_job(self, _id: str) -> str:
+            return "removed"
+
+    tool = CronTool(_Cron(), default_timezone="UTC")  # type: ignore[arg-type]
+    tool.set_context(RequestContext(channel="websocket", chat_id="project:palestra",
+                                    session_key="project:palestra"))
+    out = await tool.execute(action="add", card="schede", message="x", every_seconds=3600)
+    if "Created job" in out and added and added[0]["card"] == "schede":
+        return env.project
+    return env.other
+
+
+async def _root_board_tool(env: Env) -> Path:
+    """L'editore dei quaderni: la radice è quella la cui bacheca riceve la scheda."""
+    from jenny.agent.tools.board import BoardTool
+    from jenny.agent.tools.context import reset_request_context
+    from jenny.board.store import read_board
+
+    _seed_board(env)
+    token = _bind_project_chat(env)
+    try:
+        out = await BoardTool().execute(action="add_card", title="Sonda")
+    finally:
+        reset_request_context(token)
+    assert "added" in out, out
+    hits = [d for d in (env.project, env.other)
+            if any(c["id"] == "sonda" for c in read_board(d)["cards"])]
+    assert len(hits) == 1, f"una sola bacheca deve ricevere la scheda, trovate {hits}"
+    return hits[0]
+
+
+async def _root_notebook_tool(env: Env) -> Path:
+    """``notebook remove_pages``: la radice è quella da cui sparisce la pagina."""
+    from jenny.agent.tools.context import reset_request_context
+    from jenny.agent.tools.notebook import NotebookEditTool
+
+    for d in (env.project, env.other):
+        (d / "wiki" / "sonda.md").write_text("---\nstate: open\n---\n# Sonda\n",
+                                             encoding="utf-8")
+    token = _bind_project_chat(env)
+    try:
+        out = await NotebookEditTool().execute(action="remove_pages", pages=["wiki/sonda.md"],
+                                               reason="sonda")
+    finally:
+        reset_request_context(token)
+    assert "Removed 1 page" in out, out
+    hits = [d for d in (env.project, env.other) if not (d / "wiki" / "sonda.md").exists()]
+    assert len(hits) == 1, f"una sola pagina deve sparire, trovate {hits}"
+    return hits[0]
+
+
 # Nome della superficie → sonda. Il MODULO è la chiave del controllo
 # strutturale qui sotto: una superficie nuova senza sonda fa fallire quello.
 _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
@@ -284,6 +403,10 @@ _SURFACES: dict[str, tuple[str, Callable[[Env], Awaitable[Path]]]] = {
     "download_file": ("download.py", _root_download),
     "journal_append": ("journal.py", _root_journal),
     "ssh_transfer (down)": ("ssh.py", _root_ssh_transfer),
+    "app (place)": ("app_tool.py", _root_app_tool),
+    "cron del quaderno (add)": ("cron.py", _root_cron),
+    "board (l'editore dei quaderni)": ("board.py", _root_board_tool),
+    "notebook (remove_pages)": ("notebook.py", _root_notebook_tool),
 }
 
 

@@ -1,18 +1,14 @@
-"""Fase 0.3 — Caratterizzazione: parità (e divergenze) tra i due gate di path.
+"""I due gate di path dicono la stessa cosa: quello del core e quello della WebUI.
 
-Confronta il gate del core `security.workspace_policy.resolve_allowed_path` con
-quello della WebUI `webui.workspace_files.validate_path`, per fissare il
-comportamento ATTUALE prima dell'unificazione di Fase 2.1/2.2.
+`webui.workspace_files.validate_path` delega a
+`security.workspace_policy.resolve_allowed_path` (che e' fail-closed, e blocca
+`..` e i symlink perche' risolve prima di confrontare), e tiene solo il suo
+tipo d'errore: ``ValueError`` per le route, contro ``WorkspaceBoundaryError``
+del core. Qui si prova che i due rispondono allo stesso modo sui casi che
+contano, piu' la sentinella ``UNRESTRICTED`` che il core solo conosce.
 
-Scoperte documentate (che correggono l'audit iniziale):
-1. Entrambi usano `.resolve()`, quindi ENTRAMBI bloccano l'escape via symlink e
-   via `..` — NON c'è il "gap symlink" temuto. La vera divergenza è (2)+(3).
-2. `resolve_allowed_path` è FAIL-OPEN quando `allowed_root is None` (ritorna il
-   path risolto senza confine). `validate_path` richiede sempre la root → è
-   fail-closed al suo call site. → Fase 2.2 rende il core fail-closed.
-3. Tipi d'errore diversi: core `WorkspaceBoundaryError` (PermissionError) vs
-   webui `ValueError`; feature diverse (allowlist di file esatti solo nel core).
-   → Fase 2.1 unifica su un solo gate.
+Fino all'unificazione (Fase 2.1/2.2) il core era fail-open senza root: questo
+file nacque per fissare quella differenza, e ora fissa che non c'e' piu'.
 """
 
 from __future__ import annotations

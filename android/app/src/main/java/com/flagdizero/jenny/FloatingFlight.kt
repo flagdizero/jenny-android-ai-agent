@@ -35,6 +35,15 @@ import kotlin.math.sin
  *
  * Il bordo è uno solo, il **destro** (24/09/2026, come `shared/mascot.js`):
  * da dovunque sia caduta ci torna a piedi.
+ *
+ * ## Lo schiaccia e allunga
+ *
+ * Dal 05/10/2026, come in chat (`shared/mascot-squash.js`): ogni fotogramma
+ * porta anche una [FloatingSquash.Shape], calcolata da velocità e tempi —
+ * appesa si allunga, in aria si allunga in verticale, il tonfo la schiaccia,
+ * prima di ripartire carica le gambe da ferma, il passo affonda. La fisica non la guarda: è
+ * disegnata sopra. Con [squash] spento (animazioni di sistema disattivate) la
+ * forma resta [FloatingSquash.IDENTITY].
  */
 class FloatingFlight(
     private val sizePx: Float,
@@ -51,8 +60,13 @@ class FloatingFlight(
     private val dockPivotY: Float,
     /** Ascissa del pivot agganciata al bordo destro. */
     private val dockPivotX: Float,
-    private val onFrame: (left: Float, top: Float, rotationDeg: Float, pose: Pose, flip: Boolean) -> Unit,
+    private val onFrame: (
+        left: Float, top: Float, rotationDeg: Float, pose: Pose, flip: Boolean,
+        shape: FloatingSquash.Shape,
+    ) -> Unit,
     private val onSettled: () -> Unit,
+    /** Si deforma? No con le animazioni di sistema spente. */
+    private val squash: Boolean = true,
 ) {
 
     enum class Pose { HANG, FALL, GROUND, WALK1, WALK2 }
@@ -122,6 +136,12 @@ class FloatingFlight(
     private var lastNanos = 0L
     private var running = false
 
+    /** Per lo schiaccia e allunga: quando e a che velocità (px CSS/s) ha
+     *  toccato terra l'ultima volta, e quando si è rialzata. */
+    private var impactAt = Long.MIN_VALUE
+    private var impactV = 0f
+    private var getupAt = Long.MIN_VALUE
+
     private val frames = Choreographer.FrameCallback { now -> onVsync(now) }
 
     /** In volo? Il chiamante lo guarda per sapere se la finestra deve restare grande. */
@@ -147,6 +167,8 @@ class FloatingFlight(
         grounded = false
         settled = false
         lastNanos = 0L
+        impactAt = Long.MIN_VALUE
+        getupAt = Long.MIN_VALUE
         if (!running) {
             running = true
             Choreographer.getInstance().postFrameCallback(frames)
@@ -189,7 +211,10 @@ class FloatingFlight(
         lastNanos = nowNanos
         val nowMs = System.currentTimeMillis()
 
-        if (phase == Phase.DOWN && nowMs >= downUntil) setPhase(Phase.SLIDE)
+        if (phase == Phase.DOWN && nowMs >= downUntil) {
+            setPhase(Phase.SLIDE)
+            getupAt = nowMs
+        }
         step(dt, nowMs)
         // Toccato terra: da qui si sa dov'è caduta, quindi quanta strada ha davanti.
         if (!settled && phase != Phase.FALL && phase != Phase.HELD) settleTarget()
@@ -282,6 +307,9 @@ class FloatingFlight(
         if (phase == Phase.FALL) {
             if (py >= dockPivotY) grounded = true
             if (vy > 0f && py >= dockPivotY) {
+                // Il tonfo: quanto si schiaccia lo decide la velocità d'arrivo.
+                impactAt = nowMs
+                impactV = vy / density
                 py = dockPivotY
                 // tonfo quasi secco: al massimo un rimbalzino molto smorzato,
                 // poi resta un attimo a terra prima di rialzarsi
@@ -351,7 +379,10 @@ class FloatingFlight(
         if (phase == Phase.HELD) {
             // Appesa alla mano: ruota di −θ attorno al pivot. Nessun flip — in
             // mano l'arte resta nel suo verso, solo la caduta si specchia.
-            onFrame(left, top, -Math.toDegrees(th.toDouble()).toFloat(), Pose.HANG, false)
+            val shape = if (squash) {
+                FloatingSquash.heldStretch(kotlin.math.hypot(vx, vy) / density)
+            } else FloatingSquash.IDENTITY
+            onFrame(left, top, -Math.toDegrees(th.toDouble()).toFloat(), Pose.HANG, false, shape)
             return
         }
         val pose = when {
@@ -360,6 +391,29 @@ class FloatingFlight(
             phase == Phase.DOWN || grounded -> Pose.GROUND
             else -> Pose.FALL
         }
-        onFrame(left, top, 0f, pose, dir < 0)
+        onFrame(left, top, 0f, pose, dir < 0, if (squash) shape(pose, nowMs) else FloatingSquash.IDENTITY)
     }
+
+    /** La forma della posa *pose* al tempo *nowMs*: `shape` in mascot-drag.js. */
+    private fun shape(pose: Pose, nowMs: Long): FloatingSquash.Shape = when (pose) {
+        Pose.FALL -> FloatingSquash.airStretch(vy / density)
+        Pose.GROUND -> {
+            // Gli ultimi LOAD_MS a terra carica le gambe, ferma, prima di ripartire.
+            val loadFrom = downUntil - FloatingSquash.LOAD_MS.toLong()
+            if (phase == Phase.DOWN && nowMs >= loadFrom) {
+                FloatingSquash.loadLegs((nowMs - loadFrom).toFloat())
+            } else {
+                FloatingSquash.impactSquash(impactV, sinceMs(nowMs, impactAt))
+            }
+        }
+        // Il resto prima della conversione: un epoch in Float perde i millisecondi.
+        else -> FloatingSquash.walkStart(
+            sinceMs(nowMs, getupAt),
+            (nowMs % FloatingSquash.STEP_MS.toLong()).toFloat(),
+        )
+    }
+
+    /** Millisecondi da *at*, o infinito se non è mai successo. */
+    private fun sinceMs(nowMs: Long, at: Long): Float =
+        if (at == Long.MIN_VALUE) Float.POSITIVE_INFINITY else (nowMs - at).toFloat()
 }

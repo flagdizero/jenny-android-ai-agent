@@ -34,7 +34,9 @@ _NEIGHBORS = {
     "utils.js": """
 export function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 export function showToast() {}
+export function showUndo() { return () => {}; }
 """,
+    "rpc-client.js": "export const rpc = { calls: [], async apps(m, p) { this.calls.push([m, p]); return { ok: true }; } };\n",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k };\n",
     "ws-manager.js": "export const wsManager = { on() {}, off() {}, request() {} };\n",
@@ -50,6 +52,7 @@ function createEl(id) {
     showModal() { this.open = true; },
     close() { this.open = false; },
     querySelectorAll() { return []; },
+    querySelector() { return null; },
     addEventListener() {},
   };
   if (id) elements.set(id, el);
@@ -105,6 +108,7 @@ def _run(body: str, *, state: str | None = "free", rename: bool = False) -> None
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "home-notebook.js", root / "home-notebook.js")
         shutil.copy(ASSETS / "shared" / "apps-actions.js", root / "shared" / "apps-actions.js")
+        shutil.copy(ASSETS / "shared" / "spines.js", root / "shared" / "spines.js")
         for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")
         entry = root / "prova.mjs"
@@ -203,12 +207,20 @@ def _run_follow_up(body: str, *, confirmed: bool, current_key: str | None) -> No
         const projectKey = (n) => 'project:' + n;
         const sessionManager = {{ currentKey: {json.dumps(current_key)}, personalKey: 'websocket:default' }};
         const i18n = {{ t: (k) => k }};
+        const NOTEBOOK_ROOMS = ['board', 'drawer', 'reader'];
         function showToast(t) {{ history.push(['avviso', t]); }}
         class Shell {{
           constructor() {{
             this.who = {{ refresh: async () => history.push(['tendina']) }};
             this._drafts = new Map();
+            /* Si cancella dalla scheda dei Quaderni, ma un quaderno aperto e'
+               una bacheca (05/10/2026): da li' si esce. */
+            this.view = 'board';
+            /* La chat torna alla personale dietro la sua foto, senza farsi
+               vedere: e' il trasloco (banco suo). */
+            this.chatMove = {{ retune: async (home, k) => history.push(['conversation', k]) }};
           }}
+          _setView(v) {{ history.push(['stanza', v]); this.view = v; return true; }}
           /* La chat cambia dove sta: passare dalla regola delle pagine, dalla
              pagina Quaderni, porterebbe alla pagina chat. */
           async showConversation(k) {{ history.push(['conversation', k]); }}
@@ -236,8 +248,9 @@ def test_deleting_the_notebook_you_are_in_takes_you_home() -> None:
     """Restare in una chat che non esiste piu' vorrebbe dire scrivere a vuoto."""
     _run_follow_up(
         "await g.deleteNotebook('piante');\n"
-        "assert.deepEqual(history.map((x) => x[0]), ['chiede', 'conversation', 'tendina', 'pagine', 'avviso']);\n"
-        "assert.deepEqual(history[1], ['conversation', null]);\n",
+        "assert.deepEqual(history.map((x) => x[0]), ['chiede', 'stanza', 'conversation', 'tendina', 'pagine', 'avviso']);\n"
+        "assert.deepEqual(history[1], ['stanza', 'chat'], 'si resta sulla bacheca di un quaderno cancellato');\n"
+        "assert.deepEqual(history[2], ['conversation', 'websocket:default']);\n",
         confirmed=True,
         current_key="project:piante",
     )
@@ -272,7 +285,7 @@ def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
     apre: Indietro chiude prima lei, e solo alla pressione dopo lascia la
     pagina."""
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    chain = app_js.split("_closeOverlays() {", 1)[1].split("\n  }\n", 1)[0]
+    chain = app_js.split("_closeOverlays({ editor = true } = {}) {", 1)[1].split("\n  }\n", 1)[0]
     sheets = re.search(r"(?m)^const LONG_PRESS_SHEETS = \[(.*)\];$", app_js)
     assert sheets and "'home-notebook-sheet'" in sheets.group(1)
     assert chain.index("LONG_PRESS_SHEETS") < chain.index("handleBack()")
@@ -425,7 +438,8 @@ def test_a_refused_rename_changes_nothing_at_home() -> None:
 def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_language() -> None:
     """Il rifiuto ``conflict`` (un turno, un subagent, una passata del giardiniere
     in corso) e' una condizione attesa: la sua frase sta nell'i18n, non nel testo
-    inglese del server. Un altro errore resta quello di sempre, col motivo."""
+    inglese del server. Neanche un errore imprevisto lo mostra (10/10/2026): il
+    motivo inglese finiva nel toast italiano, e resta nel log."""
     _run_rename(
         "assert.equal(await g.renameNotebook('viaggio'), false);\n"
         "assert.deepEqual(history.at(-1), ['avviso', 'home.notebook.renameBusy|viaggio', 'error']);\n",
@@ -435,8 +449,7 @@ def test_a_rename_refused_while_jenny_works_there_is_said_in_the_readers_languag
     )
     _run_rename(
         "await g.renameNotebook('viaggio');\n"
-        "assert.deepEqual(history.at(-1), ['avviso',\n"
-        "  'home.notebook.renameFailed:a folder named viaggi already exists', 'error']);\n",
+        "assert.deepEqual(history.at(-1), ['avviso', 'home.notebook.renameFailed|viaggio', 'error']);\n",
         written="viaggi",
         current_key="project:viaggio",
         refuses=True,

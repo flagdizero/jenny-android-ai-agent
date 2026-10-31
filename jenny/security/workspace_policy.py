@@ -80,6 +80,142 @@ class _Unrestricted:
 UNRESTRICTED = _Unrestricted()
 
 
+class BoardWriteError(PermissionError):
+    """Sollevata quando uno strumento generico prova a scrivere nella bacheca.
+
+    ``<quaderno>/board/`` ha i suoi imbuti (``jenny.board.store``, il tool
+    ``board`` dell'editore dei quaderni, gli strumenti del giardiniere): sono loro a tenere il
+    lucchetto, il ``.bak``, la normalizzazione e il controllo di proprieta'
+    delle cose dell'utente. Una scrittura diretta li salterebbe tutti, e il
+    codice di una micro app riscritto a mano girerebbe senza approvazione.
+    """
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            "A notebook's board/ folder is written only through the board's own tools "
+            "(they keep what is the user's untouched). Do not write it with file tools "
+            "or python_exec, and do not look for another path: the board changes through "
+            "the `board` tool of a notebook-editor, or describe the change to the user."
+            + (f" ({detail})" if detail else "")
+        )
+
+
+BOARD_DIRNAME = "board"
+
+
+def is_board_path(path: str | Path) -> bool:
+    """True se *path* cade dentro la cartella ``board/`` di un quaderno.
+
+    Un quaderno si riconosce dalla sua ``wiki/`` accanto a ``board/``: il nome
+    della cartella dei quaderni e' configurabile, e un ``board/`` qualunque nel
+    workspace non e' una bacheca. Il percorso va gia' risolto (assoluto).
+    """
+    parts = Path(path).parts
+    # Anche la cartella stessa (``rmtree('<q>/board')``) e' una scrittura nella bacheca.
+    return any(
+        part == BOARD_DIRNAME and i > 0 and os.path.isdir(os.path.join(*parts[:i], "wiki"))
+        for i, part in enumerate(parts)
+    )
+
+
+def refuse_board_write(path: str | Path) -> None:
+    """Rifiuta una scrittura generica dentro la bacheca di un quaderno, o nel
+    codice di un'app (v. :func:`is_app_code_path`).
+
+    Il nome e' rimasto quello di prima perche' i punti che lo chiamano — gli
+    strumenti file e ogni via di scrittura di ``python_exec`` — sono gli stessi:
+    un recinto in piu' non deve voler dire un punto di chiamata in piu' da
+    dimenticare.
+    """
+    if is_board_path(path):
+        raise BoardWriteError(f"refused write to {path}")
+    if is_app_code_path(path):
+        raise AppCodeWriteError(f"refused write to {path}")
+    # Un quaderno tenuto da un piano a lista si scrive solo dal piano: import
+    # locale, perché ``workspace_access`` importa da qui.
+    from jenny.security.workspace_access import refuse_held_notebook_write
+
+    refuse_held_notebook_write(path)
+
+
+class HeldNotebookWriteError(PermissionError):
+    """Sollevata quando un tool scrive in un quaderno tenuto da un piano a lista.
+
+    Fra la foto A e la foto B di un piano tutto quel che cambia nel quaderno
+    dev'essere del piano: «Torna a prima» disfa tutto quello che trova, e una
+    pagina scritta nel frattempo dalla chat personale sparirebbe con il resto.
+    Scrive solo la conversazione del quaderno (i passi e i loro aiutanti).
+    """
+
+    def __init__(self, notebook: str, detail: str = "") -> None:
+        super().__init__(
+            f"The notebook {notebook} is running a plan; it is read-only until the plan "
+            "ends. Do not look for another path or tool: tell the user, and offer to do it "
+            "once the plan is done or stopped."
+            + (f" ({detail})" if detail else "")
+        )
+        self.notebook = notebook
+
+
+class AppCodeWriteError(PermissionError):
+    """Sollevata quando uno strumento generico prova a scrivere il codice di un'app.
+
+    Il codice di un'app (``app.json``, ``run.py``, ``app/``) cambia solo dal
+    tool ``app``, che lo valida e prova il lettore prima di salvarlo
+    (``jenny/apps/drafts.py``): scritto a mano, un'app rotta o senza riassunto
+    andrebbe in produzione. I dati (``data/``) e le note (``AGENT.md``) restano
+    scrivibili.
+    """
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            "An app's code (app.json, run.py, app/) is written only through the `app` tool: "
+            "it validates the change and runs the reader before saving. Do not write it with file tools "
+            "or python_exec, and do not look for another path. Its data/ and AGENT.md stay "
+            "writable."
+            + (f" ({detail})" if detail else "")
+        )
+
+
+APPS_DIRNAME = "apps"
+
+
+def _is_installation_root(parent: Path) -> bool:
+    try:
+        from jenny.config.paths import get_workspace_path
+
+        if get_workspace_path().resolve() == parent.resolve():
+            return True
+    except Exception:  # noqa: BLE001 — senza workspace impostato, i segni della radice
+        pass
+    return (parent / "skills").is_dir() or (parent / "memory").is_dir()
+
+
+def is_app_code_path(path: str | Path) -> bool:
+    """True se *path* e' codice di un'app dell'installazione (non dati, non note).
+
+    ``<installazione>/apps/<slug>/data/**`` e ``AGENT.md`` sono fuori: li
+    scrivono le azioni dell'app e Jenny. Tutto il resto — il manifest,
+    ``run.py``, lo schermo, la cartella dell'app stessa, le bozze e il cestino
+    (``.drafts``, ``.trash``) — passa dal tool ``app``.
+    """
+    parts = Path(path).parts
+    for i, part in enumerate(parts):
+        if part != APPS_DIRNAME or i == 0:
+            continue
+        if not _is_installation_root(Path(*parts[:i])):
+            continue
+        rest = parts[i + 1:]
+        if not rest or rest[0].startswith("."):
+            return True
+        if len(rest) >= 2 and rest[1] == "data":
+            return False
+        if len(rest) == 2 and rest[1] == "AGENT.md":
+            return False
+        return True
+    return False
+
+
 def _resolve_path(path: str | Path, workspace: str | Path | None = None, *, strict: bool = False) -> Path:
     """Resolve *path*, interpreting relative paths against *workspace* when set."""
     candidate = _safe_expanduser(path)

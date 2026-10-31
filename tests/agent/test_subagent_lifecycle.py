@@ -189,7 +189,7 @@ class TestSpawn:
         long_task = "A" * 50
         await sm.spawn(long_task, session_key="s1")
         status = next(iter(sm._task_statuses.values()))
-        assert status.label == long_task[:30] + "..."
+        assert status.label == "A" * 40 + "…"
 
         block.set()
         await _drain_subagent_tasks(sm)
@@ -328,7 +328,7 @@ class TestTerminalRetention:
         await _drain_subagent_tasks(sm)
 
         # Lo status vivo è sparito, ma il lavoro non è svanito con lui.
-        assert sm.list_statuses() == {}
+        assert sm._task_statuses == {}
         records = sm.list_records("s1")
         assert len(records) == 1
         record = records[0]

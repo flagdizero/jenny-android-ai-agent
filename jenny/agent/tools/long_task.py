@@ -31,6 +31,7 @@ from jenny.session.goal_state import (
     GOAL_STATE_KEY,
     goal_state_raw,
     parse_goal_state,
+    plan_open_in_session,
 )
 
 if TYPE_CHECKING:
@@ -144,6 +145,16 @@ class LongTaskTool(Tool, _GoalToolsMixin):
         if sess is None:
             return (
                 "Error: long_task requires an active chat session (missing routing context)."
+            )
+        # Un piano a lista e un goal non convivono nella stessa sessione: due
+        # cose che spingono il lavoro avanti, ciascuna col suo «continua»,
+        # litigherebbero sul turno. Il piano è dell'utente (l'ha approvato lui),
+        # quindi cede il goal.
+        if plan_open_in_session(sess.key):
+            return (
+                "Error: this notebook has an open plan (proposed or running), and a "
+                "sustained goal cannot run next to it. Work inside the plan's steps, or "
+                "let the user finish or stop the plan first."
             )
         if len(goal) > _GOAL_MAX_CHARS:
             return (

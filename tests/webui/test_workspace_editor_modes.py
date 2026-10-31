@@ -87,7 +87,7 @@ def test_shipped_modes_are_all_loaded() -> None:
     unloaded = sorted(shipped - _loaded_mode_files())
 
     assert not unloaded, (
-        f"modi vendorizzati e spediti ma mai caricati da officina.html: {unloaded}. "
+        f"modi vendorizzati e spediti ma mai caricati da workshop.html: {unloaded}. "
         "O si agganciano, o si tolgono dal manifest in utils/android_assets.py."
     )
 

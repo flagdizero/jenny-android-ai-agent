@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from port_alloc import free_port
+from port_alloc import free_port, wait_listening
 
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
 from jenny.session.manager import SessionManager
@@ -226,7 +226,7 @@ async def test_media_route_serves_signed_file(
         url_path = channel.gateway.media.sign_media_path(target)
         assert url_path is not None
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(f"http://127.0.0.1:{port}{url_path}")
         finally:
@@ -260,7 +260,7 @@ async def test_media_route_serves_video_byte_ranges(
         url_path = channel.gateway.media.sign_media_path(target)
         assert url_path is not None
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(
                 f"http://127.0.0.1:{port}{url_path}",
@@ -293,7 +293,7 @@ async def test_media_route_serves_suffix_video_byte_ranges(
         url_path = channel.gateway.media.sign_media_path(target)
         assert url_path is not None
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(
                 f"http://127.0.0.1:{port}{url_path}",
@@ -323,7 +323,7 @@ async def test_media_route_rejects_unsatisfiable_byte_range(
         url_path = channel.gateway.media.sign_media_path(target)
         assert url_path is not None
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(
                 f"http://127.0.0.1:{port}{url_path}",
@@ -364,7 +364,7 @@ async def test_media_route_rejects_bad_signature(
         forged = f"/api/media/{b64url_encode(forged_mac)}/{payload}"
 
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(f"http://127.0.0.1:{port}{forged}")
         finally:
@@ -399,7 +399,7 @@ async def test_media_route_rejects_path_traversal_payload(
 
     with patch("jenny.webui.media_gateway.get_media_dir", return_value=media):
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(f"http://127.0.0.1:{port}{url}")
         finally:
@@ -427,7 +427,7 @@ async def test_media_route_404s_missing_file(
         assert url_path is not None
         target.unlink()  # the file vanishes between signing and fetching
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(f"http://127.0.0.1:{port}{url_path}")
         finally:
@@ -458,7 +458,7 @@ async def test_media_route_degrades_non_image_to_octet_stream(
         ).digest()[:16]
         url = f"/api/media/{b64url_encode(mac)}/{payload}"
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(f"http://127.0.0.1:{port}{url}")
         finally:
@@ -487,7 +487,7 @@ async def test_media_route_serves_svg_with_strict_csp(
         url_path = channel.gateway.media.sign_media_path(target)
         assert url_path is not None
         server_task = asyncio.create_task(channel.start())
-        await asyncio.sleep(0.3)
+        await wait_listening(channel)
         try:
             resp = await _http_get(f"http://127.0.0.1:{port}{url_path}")
         finally:

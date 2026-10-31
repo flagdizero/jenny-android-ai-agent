@@ -71,7 +71,7 @@ def test_the_docs_list_the_dock_in_dom_order() -> None:
     dom = _dom_order()
     doc = _doc_order()
 
-    assert dom, "nessuno slot trovato in officina.html: il markup della dock è cambiato"
+    assert dom, "nessuno slot trovato in workshop.html: il markup della dock è cambiato"
     assert doc, "nessuna riga riconosciuta nella tabella di webui-tour.md"
     assert doc == dom, (
         f"webui-tour.md elenca {doc}, il DOM ha {dom}. "

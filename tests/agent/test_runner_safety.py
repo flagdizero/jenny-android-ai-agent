@@ -124,7 +124,25 @@ async def test_runner_returns_non_retryable_hint_on_ssrf_violation():
     assert tool_messages
     assert "non-bypassable security boundary" in tool_messages[0]["content"]
     assert "Do not retry" in tool_messages[0]["content"]
-    assert "tools.ssrfWhitelist" in tool_messages[0]["content"]
+    assert "security.ssrfWhitelist" in tool_messages[0]["content"]
+
+
+def test_ssrf_note_names_a_whitelist_key_that_takes_effect():
+    """La chiave che la nota fa scrivere all'utente deve funzionare davanti.
+
+    Diceva ``tools.ssrfWhitelist``: in un config che ha gia' il blocco
+    ``security`` (cioe' ogni config salvato) quella chiave si perde in silenzio.
+    """
+    import re
+
+    from jenny.agent.tool_error_policy import SSRF_BOUNDARY_NOTE
+    from jenny.config.schema import Config
+
+    match = re.search(r"via (\w+)\.(\w+)\.", SSRF_BOUNDARY_NOTE)
+    assert match, SSRF_BOUNDARY_NOTE
+    section, key = match.groups()
+    config = Config.model_validate({"security": {}, section: {key: ["10.0.0.0/8"]}})
+    assert config.security.ssrf_whitelist == ["10.0.0.0/8"]
 
 
 @pytest.mark.asyncio

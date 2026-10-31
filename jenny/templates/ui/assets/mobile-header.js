@@ -131,6 +131,7 @@ export class ViewTitleController {
        riassegnarne una per volta, che e' il modo in cui se ne dimentica una. */
     for (const name of Object.keys(VIEW_OF)) this.modeConfigs[name] = drawer(name);
     if (this.currentMode) this.setMode(this.currentMode);
+    if (this._over) this.paintOver(this._over);
   }
 
   /* Il mount di un modo e' `title-<modo>`, **tranne** per i tre cassetti, che
@@ -139,6 +140,20 @@ export class ViewTitleController {
      trovava, e usciva lasciando i cassetti senza intestazione. */
   _mount(mode) {
     return titleElement(mode);
+  }
+
+  /** Dipinge l'intestazione di *mode* nel suo mount **senza** farne la vista
+   *  corrente: la chat aperta sopra un'altra vista (05/10/2026). Il modo, il
+   *  titolo e le azioni di chi sta sotto restano i suoi. */
+  paintOver(mode) {
+    const keep = [this.currentMode, this.titleEl, this.actionsEl];
+    this.setMode(mode);
+    [this.currentMode, this.titleEl, this.actionsEl] = keep;
+    this._over = mode;
+  }
+
+  clearOver(mode) {
+    if (this._over === mode) this._over = null;
   }
 
   setMode(mode, customTitle = null) {

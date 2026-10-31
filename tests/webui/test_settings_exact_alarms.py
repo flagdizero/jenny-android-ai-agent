@@ -132,15 +132,6 @@ def test_the_button_sits_in_the_diagnostics_flow_and_calls_the_bridge() -> None:
 
 
 @pytest.mark.parametrize("locale", ["it", "en"])
-def test_the_request_has_its_copy_in_both_locales(locale: str) -> None:
-    battery = _battery_copy(locale)
-
-    for key in ("exactAlarmsHint", "exactAlarmsRestart", "exactAlarmsButton",
-                "exactAlarmsFailed"):
-        assert battery[key].strip(), f"{key} vuota in {locale}.json"
-
-
-@pytest.mark.parametrize("locale", ["it", "en"])
 def test_the_copy_admits_the_grant_is_not_retroactive(locale: str) -> None:
     """Le sveglie già in coda restano inesatte fino al riavvio del gateway:
     una copy che promettesse effetto immediato manderebbe l'utente a

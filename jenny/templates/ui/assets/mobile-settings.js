@@ -1,10 +1,12 @@
 /** Mobile Settings Controller — i gruppi aperti dei tre cassetti dell'officina. */
 
 import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
+import { RemoteAccessPanel, remoteSummary } from './mobile-remote-access.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { botName } from './shared/bot-name.js';
 import { NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
@@ -89,7 +91,7 @@ export const DRAWERS = {
     sections: ['whoThinks', 'parameters', 'battery', 'system'],
   },
   hands: {
-    sections: ['webSearch', 'position', 'ssh', 'telegram', 'skill', 'scheduling'],
+    sections: ['webSearch', 'position', 'ssh', 'telegram', 'remote', 'skill', 'scheduling'],
   },
   /* In Memoria «file» e' l'**ultima**, e non e' un dettaglio d'ordine: da
      quando quella scheda contiene l'esploratore vero la sua altezza dipende da
@@ -231,6 +233,31 @@ export class SettingsController {
   /** true se nel frattempo si è usciti dalla sezione. */
   _stale(gen) { return gen !== this._gen; }
 
+  /** Rilegge le impostazioni e ridisegna **solo** se sono cambiate. La chiama
+   *  il guscio quando si chiude la chat aperta sopra il cassetto (05/10/2026):
+   *  Jenny puo' averne appena cambiata una, e il cassetto deve dirlo. Tiene la
+   *  posizione di scorrimento — un ridisegno che riporta in cima fa perdere il
+   *  punto di cui si parlava — e non mostra il caricamento: e' un controllo,
+   *  non un ingresso. */
+  async revalidate() {
+    const gen = this._gen;
+    let settings;
+    try {
+      settings = await api.getSettings();
+    } catch {
+      return;
+    }
+    if (this._stale(gen)) return;
+    const json = JSON.stringify(settings);
+    if (json === this._loadedJson) return;
+    const top = this.contentEl?.scrollTop ?? 0;
+    botName.set(settings?.agent?.bot_name);
+    this._loadedJson = json;
+    this.data = settings;
+    this.render();
+    if (this.contentEl) this.contentEl.scrollTop = top;
+  }
+
   async loadSettings() {
     const gen = this._gen;
     this.showLoading();
@@ -362,6 +389,7 @@ export class SettingsController {
       position: () => this._group('position', i18n.t('settings.location.section'), this._renderLocation(d)),
       ssh: () => this._group('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._group('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
+      remote: () => this._group('remote', i18n.t('settings.remote.title'), this._renderRemote()),
       skill: () => this._group('skill', i18n.t('workshop.groups.skill'), this._renderSkill()),
       scheduling: () => this._group('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       // Memoria
@@ -820,6 +848,42 @@ export class SettingsController {
     if (el) el.textContent = telegramSummary(state);
   }
 
+  // ── Da altri dispositivi ───────────────────────────────────────────
+
+  /** Come Telegram: in cassetto una riga («spento», «acceso · macbook
+   *  collegato»), il pannello dietro il tocco. */
+  _renderRemote() {
+    return this._summary('remote', i18n.t('settings.remote.rowName'), i18n.t('settings.loading'));
+  }
+
+  _openRemote() {
+    const body = document.getElementById('drawer-remote-body');
+    if (!body) return;
+    this._remotePanel?.destroy();
+    this._remotePanel = new RemoteAccessPanel(body, {
+      onStatus: (status) => this._writeRemoteSummary(status),
+    });
+    this._remotePanel.refresh();
+  }
+
+  async _loadRemoteSummary() {
+    if (!this.contentEl?.querySelector('#summary-remote')) return;
+    const gen = this._gen;
+    let status = null;
+    try {
+      status = await rpc.remote('status');
+    } catch {
+      status = null;
+    }
+    if (this._stale(gen)) return;
+    this._writeRemoteSummary(status);
+  }
+
+  _writeRemoteSummary(status) {
+    const el = this.contentEl?.querySelector('#summary-remote');
+    if (el) el.textContent = status ? remoteSummary(status) : '—';
+  }
+
   // ── Models & Providers ─────────────────────────────────────────────
 
   _formatLabel(fmt) {
@@ -889,7 +953,13 @@ export class SettingsController {
       ${this._field(i18n.t('settings.maxTokens'), 'number', 'max_tokens', a.max_tokens || '', i18n.t('settings.maxTokensPlaceholder'))}
       ${this._field(i18n.t('settings.temperature'), 'number', 'temperature', a.temperature ?? '', i18n.t('settings.temperaturePlaceholder'))}
       ${this._select(i18n.t('settings.reasoningEffort'), 'reasoning_effort', a.reasoning_effort || '',
-        ['', 'low', 'medium', 'high'])}`;
+        ['', 'low', 'medium', 'high'])}
+      ${this._select(i18n.t('settings.mainReasoningEffort'), 'main_reasoning_effort',
+        a.main_reasoning_effort || '',
+        [{ v: '', t: i18n.t('settings.mainReasoningEffortSame') }, 'low', 'medium', 'high'],
+        /* Col ragionamento di tutti spento, quello di Jenny non si applica
+           (`_turn_reasoning_effort`): la select lo dice restando ferma. */
+        { disabled: !a.reasoning_effort })}`;
   }
 
   /** Le marche, un gruppo ciascuna: un'intestazione da 52 px (pallino, nome,
@@ -1311,7 +1381,7 @@ export class SettingsController {
     const engines = ws.engines || ['bing'];
     return `
       ${this._select(i18n.t('settings.searchEngine'), 'ws_engine', ws.search_engine || 'bing', engines)}
-      ${this._field(i18n.t('settings.maxResults'), 'number', 'ws_max', ws.max_results ?? 5, i18n.t('settings.maxResultsPlaceholder'))}
+      ${this._field(i18n.t('settings.maxResults'), 'number', 'ws_max', ws.max_results ?? 8, i18n.t('settings.maxResultsPlaceholder'))}
       ${this._field(i18n.t('settings.timeoutSec'), 'number', 'ws_timeout', ws.timeout ?? 30, i18n.t('settings.timeoutPlaceholder'))}
       ${this._field(i18n.t('settings.fetchMaxChars'), 'number', 'ws_fetch_max', ws.fetch_max_chars ?? 50000, i18n.t('settings.fetchMaxCharsPlaceholder'))}`;
   }
@@ -2316,6 +2386,7 @@ export class SettingsController {
     return {
       history: this._openHistory,
       telegram: this._openTelegram,
+      remote: this._openRemote,
       skill: this._openSkill,
       caps: this._openCaps,
     };
@@ -2594,7 +2665,7 @@ export class SettingsController {
    *  salva e quel che si legge non sono la stessa cosa — un numero di token si
    *  salva «65536» e si legge «65 536», e senza i separatori nessuno conta le
    *  cifre. */
-  _select(label, key, value, options) {
+  _select(label, key, value, options, { disabled = false } = {}) {
     const opts = options.map(o => {
       const v = typeof o === 'object' ? o.v : o;
       const t = typeof o === 'object' ? o.t : o;
@@ -2602,7 +2673,7 @@ export class SettingsController {
     }).join('');
     return `<div class="settings-row">
       <label class="settings-label" for="settings-${key}">${label}</label>
-      <select class="settings-select" id="settings-${key}" data-key="${key}">${opts}</select>
+      <select class="settings-select" id="settings-${key}" data-key="${key}"${disabled ? ' disabled' : ''}>${opts}</select>
     </div>`;
   }
 
@@ -2953,6 +3024,9 @@ export class SettingsController {
       }))}</p>`);
     }
     if (row.purpose) parts.push(`<p class="oc-detail-lead">${escapeHtml(row.purpose)}</p>`);
+    if (row.place) {
+      parts.push(`<p class="oc-detail-lead">${escapeHtml(i18n.t('cron.job.inNotebook', { place: row.place }))}</p>`);
+    }
     if (row.message) {
       parts.push(`<div class="settings-subheading">${i18n.t('cron.job.text')}</div>
         <p class="cron-detail-text">${escapeHtml(row.message)}</p>`);
@@ -3057,10 +3131,16 @@ export class SettingsController {
 
   _wireSections() {
     // Active config fields → auto-save on change
-    for (const key of ['max_tokens', 'temperature', 'reasoning_effort', 'context_window_tokens']) {
+    for (const key of ['max_tokens', 'temperature', 'reasoning_effort', 'main_reasoning_effort',
+      'context_window_tokens']) {
       const el = this.contentEl.querySelector(`[data-key="${key}"]`);
       if (!el) continue;
-      el.addEventListener('change', () => this._debouncedSave(key, el.value));
+      el.addEventListener('change', () => {
+        this._debouncedSave(key, el.value);
+        if (key !== 'reasoning_effort') return;
+        const main = this.contentEl.querySelector('[data-key="main_reasoning_effort"]');
+        if (main) main.disabled = !el.value;
+      });
     }
 
     this._wireWorkerSettings();
@@ -3073,6 +3153,9 @@ export class SettingsController {
     // Telegram: in cassetto solo la riga. Il widget lo monta `_openTelegram`
     // quando il pannello si apre — prima, il suo contenitore non esiste.
     this._loadTelegramSummary();
+
+    // Da altri dispositivi: stessa forma di Telegram.
+    this._loadRemoteSummary();
 
     // Skill: stessa forma: la riga si riempie da sé, il pannello all'apertura.
     this._loadSkillsSummary();

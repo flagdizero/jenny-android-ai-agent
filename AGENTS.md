@@ -10,7 +10,7 @@ Jenny is a lightweight AI agent framework written in Python with a built-in mobi
 
 ```bash
 pytest tests/config/ -v
-ruff check jenny/
+ruff check jenny/ jenny_extensions/
 ```
 
 The gateway is started by the Android runtime via `jenny.android_entry.run_gateway()`.
@@ -27,8 +27,12 @@ other device, even when one shows up in `adb devices`: pin the emulator with
 ```bash
 ~/Library/Android/sdk/emulator/emulator -avd jenny_square -no-snapshot-save &
 adb devices -l   # emulator-5554 must be listed
-cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installDebug
+cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installFossDebug
 ```
+
+Two flavors build from the same code: `foss` (GitHub, no Google library) and `play` (Play Store,
+adds the copy on Google Drive). `installPlayDebug` installs the second; the two debug builds share
+the debug key, so they replace each other in place.
 
 Debug and release APKs are signed differently: switching between them on the emulator needs
 `adb uninstall com.flagdizero.jenny` first, which wipes the emulator's workspace — and brings
@@ -48,9 +52,11 @@ Messages flow through an async `MessageBus` (`jenny/bus/queue.py`) that decouple
 ### Key Subsystems
 
 - **Agent Loop** (`jenny/agent/loop.py`, `runner.py`): The core processing engine. `AgentLoop` manages session keys, hooks, and context building. `AgentRunner` executes the multi-turn LLM conversation with tool execution.
-- **LLM Providers** (`jenny/providers/`): Provider implementations (Anthropic, OpenAI-compatible, OpenAI Responses API converters) built on a common base (`base.py`). `factory.py` creates the provider from config.
+- **LLM Providers** (`jenny/providers/`): Provider implementations (Anthropic, OpenAI-compatible, OpenAI Responses API converters) built on a common base (`base.py`). `factory.py` creates the provider from config; on an OpenCode Go base URL it wraps them in `opencode_router.py`, which learns per model which of Go's three endpoints answers.
 - **Channel** (`jenny/channels/`): four channel classes — WebSocket (`websocket.py`, the WebUI), Telegram (`telegram.py`, a paired personal-bot channel), Notification (`notification.py`, a reply typed into an Android notification, answered with a system alert) and Floating (`floating.py`, the floating mascot's bubble); the last two exist only on Android. `dispatcher.py` owns them and routes outbound bus messages to whichever are active (retry, delta coalescing, progress filtering). All four feed the same unified session. Other platform integrations were removed from this fork.
-- **Tools** (`jenny/agent/tools/`): Agent capabilities exposed to the LLM: filesystem (read/write/edit/list), `python_exec` for code execution, Android web search/fetch (`android_web.py`), cron, subagent spawning, long-running tasks / sustained goals (`long_task.py`), and self-modification. Tools are explicitly registered: `loader.py` imports a fixed module list of 23 (`_HARDCODED_TOOL_MODULES`) and each module declares `TOOLS = [...]`, yielding 41 tool classes. **Three more bypass the loader**, each because it needs a live reference the loader cannot provide: `my` (the running `AgentLoop`), `memory` (`MemoryEntryTool`, which needs the memory store) and the per-app action tool (synced per turn) — so this list is not a complete inventory of the tool surface, and `self.py`/`memory_entries.py` declaring no usable `TOOLS` is deliberate rather than an oversight. A name collision — like a module without `TOOLS`, or an `allow` entry that names no known tool — raises `ToolLoadError` and aborts startup; a failing `enabled()`/`create()` only disables that one tool, logged at ERROR and recorded in `ToolLoader.failures`.
+- **Tools** (`jenny/agent/tools/`): Agent capabilities exposed to the LLM: filesystem (read/write/edit/list), `python_exec` for code execution, Android web search/fetch (`android_web.py`), cron, subagent spawning, long-running tasks / sustained goals (`long_task.py`), the screen as it was when the user tapped the floating mascot (`screen.py`, offered only in that turn), the notebook board (`board.py`, scoped `notebook`: only the `notebook-editor` subagent has it), bulk notebook reads and checks (`notebook.py`: `check`/`map`/`read_many` for the main agent, plus `remove_pages` for the `notebook-editor`), the step-by-step plan (`plan.py`: `plan_propose` only in a planning turn, `plan_step_done`/`plan_step_skip`/`plan_blocked` only while a plan step is open), and self-modification. Tools are explicitly registered: `loader.py` imports a fixed module list of 28 (`_HARDCODED_TOOL_MODULES`) and each module declares `TOOLS = [...]`, yielding 53 tool classes (a few names have one class per scope: `app` comes in three faces, one per scope — `core`, the orchestrator's `publish`/`place`, and the `app-builder` subagent's `draft`/`edit`/`set` — and `notebook` in two, `core`/`orchestrator` and `notebook`; the scopes of one name's classes must stay disjoint, or a registry loading both collides). **Three more bypass the loader**, each because it needs a live reference the loader cannot provide: `my` (the running `AgentLoop`), `memory` (`MemoryEntryTool`, which needs the memory store) and the per-app action tool (synced per turn) — so this list is not a complete inventory of the tool surface, and `self.py`/`memory_entries.py` declaring no usable `TOOLS` is deliberate rather than an oversight. A name collision — like a module without `TOOLS`, or an `allow` entry that names no known tool — raises `ToolLoadError` and aborts startup; a failing `enabled()`/`create()` only disables that one tool, logged at ERROR and recorded in `ToolLoader.failures`.
+- **Step-by-step plans** (`jenny/plan/`): a big job in a notebook split into steps the **code** drives one at a time. `plan.json` (under `<runtime_root>/plans/`, outside the workspace) is the only source of a plan's state; `driver.py::PlanDriver` (built in the composition root) is the only thing that moves it — it opens each step with an injected turn, the model closes it with a tool, and the end-of-turn hook (`agent/loop_plan.py`) takes the photos and opens the next step. The user's decisions (approve, pause, stop, rollback) are the `plan.*` RPCs in `webui/plan_commands.py`, which no tool reaches. While a plan holds a notebook the user's writes to it answer `plan_running`. Before a plan there is a **planning** (`drafting`, one per notebook, in `plans/drafting.json`): the Plan button opens it, every turn of that chat stays a read-only planning turn until `plan_propose` (or a cancel, `/stop`, 12 h idle), and `plan_propose` refuses a planning that has not read the notebook. A step that leaves drafts (`agent/staged_writes.py`) does not close: the plan waits on them (`blocked.kind = "drafts"`) and goes on by itself once the user installs or discards them.
+- **Undoing a helper** (`jenny/agent/subagent_journal.py`): every file a subagent changes is noted per lineage (the content before its first write, then before/after hashes) under `subagents/journal/`, by the write fences it already passes (`subagent_policy.check_write`, `journal_touch` for the board, app drafts, downloads, the notebook journal and `ssh_transfer`) and by the runner after each tool. `SubagentManager.undo` puts back only the files still as that helper left them; the home's «Fermala» sheet, `/api/subagents/{id}/undo`, `.../cancel?undo=1` and `subagent_cancel undo=true` reach it. `tests/security/test_journal_write_surfaces.py` fails on a writer that is neither hooked nor declared out of it.
 - **Memory** (`jenny/agent/memory.py`): Session history persistence with Dream two-phase memory consolidation. Uses atomic writes with fsync for durability.
 - **Session Management** (`jenny/session/`): History persistence, context compaction, and sustained goal state tracking (`goal_state.py`); TTL-based auto-compaction lives in `jenny/agent/autocompact.py` (`AutoCompact`). The user conversation is a **single unified session** (`unified:default`, see `keys.py`), except that a project chat on the WebSocket channel gets its own `project:<name>` session (`session_key_for_channel`); internal work (cron, Dream, heartbeat) uses separate internal keys via `session_key_override`.
 - **Config** (`jenny/config/schema.py`, `loader.py`, `store.py`): Pydantic-*style* configuration (`jenny/pydantic_compat/`, stdlib-only — see [`FORK_BOUNDARY.md`](./FORK_BOUNDARY.md)) loaded from `workspace/config.json` inside the project root. Supports camelCase aliases for JSON compatibility. **Every write goes through `store.mutate()`** — see the rule under [Config & security](#config--security); calling `save_config()` directly reintroduces a silent data-loss bug that no test will catch for you.
@@ -70,7 +76,7 @@ Messages flow through an async `MessageBus` (`jenny/bus/queue.py`) that decouple
 
 ### Decomposed subsystems (mixins/leaf modules)
 
-Large classes are split into focused mixins/leaf modules composed via MRO (behavior-identical): `AgentLoop` ← `turn_states`/`turn_persistence`/`loop_provider`/`loop_tasks` (+ `turn_types`); `AgentRunner` ← `request_execution`/`tool_execution` (+ `context_governor`, `usage_accounting`, `history_repair`, `tool_error_policy`); `OpenAICompatProvider` ← `openai_compat_parsing` (+ `openai_compat_helpers`); `AnthropicProvider` ← `anthropic_conversion`; `WebSocketChannel` ← `ws_sender` (+ `ws_parsing`); `transcript` → `transcript_store`/`transcript_recorder`/`transcript_replay`/`transcript_markdown`/`transcript_tool_events`; `ws_http` → `*_routes` families.
+Large classes are split into focused mixins/leaf modules composed via MRO (behavior-identical): `AgentLoop` ← `turn_states`/`turn_persistence`/`loop_provider`/`loop_tasks`/`loop_plan` (+ `turn_types`); `AgentRunner` ← `request_execution`/`tool_execution` (+ `context_governor`, `usage_accounting`, `history_repair`, `tool_error_policy`); `OpenAICompatProvider` ← `openai_compat_parsing` (+ `openai_compat_helpers`); `AnthropicProvider` ← `anthropic_conversion`; `WebSocketChannel` ← `ws_sender` (+ `ws_parsing`); `transcript` → `transcript_store`/`transcript_recorder`/`transcript_replay`/`transcript_markdown`/`transcript_tool_events`; `ws_http` → `*_routes` families.
 
 ### Config & security
 
@@ -99,6 +105,26 @@ reason in the comment itself. The public references are
   changes a public URL and the site's navigation — it is not a repo-local edit. The
   content itself stays canonical here: the site holds no copy.
 
+## Branches and flavors
+
+Two long-lived branches: **`main`** for releases and **`next`**, where every change lands.
+Short-lived ones are deleted as soon as they land.
+
+The Play Store and GitHub builds come from the same commit as two Gradle flavors, `play` and
+`foss`. The one thing only `play` has — the encrypted copy on Google Drive — lives where the
+`foss` build cannot pick it up, so that build contains **no Google library and none of its code**:
+
+- Python and its WebUI files in **`jenny_extensions/drive/`**, a package next to `jenny/` that
+  Chaquopy packages only in `play` (`android/app/build.gradle.kts`);
+- Kotlin in **`android/app/src/play/`**, with `play-services-auth` as a `playImplementation`.
+
+The core reaches an extension only through generic hooks and never names it: `jenny/extensions.py`
+(periodic jobs, `/api/` routers, WebUI files served under `assets/ext/<name>/`, a free-form
+`extensions` config section), `shared/extensions.js` (loaded from `/webui/bootstrap`, mounted with
+the shell's hooks) and `NativeExtension.kt` (one generic bridge command, `extensionCall`).
+`tests/test_extensions.py` fails if `jenny/` or `android/app/src/{main,foss}` names the Drive, and
+`scripts/check_foss_apk.py` checks a built APK.
+
 ## Contribution Flow
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution flow and PR guidelines.
@@ -117,19 +143,19 @@ Run these before committing or opening a PR:
 
 ```bash
 # Lint
-ruff check jenny/ tests/
+ruff check jenny/ jenny_extensions/ tests/
 
 # Static type check (pyright basic, zero runtime impact; config: pyrightconfig.json)
 # BLOCKING subset — must stay green (already error-clean):
-npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
+npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 # Full-perimeter visibility (non-blocking; shows residual errors to tighten over time):
 npx pyright || true
 
-# Tests
-pytest -q
+# Tests (one worker per core; serial `pytest -q` works too, ~7 min)
+pytest -q -n auto --dist worksteal
 
 # Full CI-equivalent check (lint + type check + tests)
-ruff check jenny/ tests/ && npx pyright jenny/bus jenny/command jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py && pytest -q
+ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q -n auto --dist worksteal
 ```
 
 ## Common File Locations

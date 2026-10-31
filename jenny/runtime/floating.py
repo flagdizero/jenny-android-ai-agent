@@ -110,6 +110,12 @@ async def floating_active() -> bool:
     return await _call("isActive")
 
 
+async def open_permission_settings() -> bool:
+    """Apre la pagina «Mostra sopra altre app» di Jenny, dove si concede il
+    permesso. ``False`` se la pagina non si è aperta (o fuori da Android)."""
+    return await _call("openPermissionSettings")
+
+
 async def apply_floating_config() -> bool:
     """Spinge ``config.floating.enabled`` al bridge. Da chiamare all'avvio.
 

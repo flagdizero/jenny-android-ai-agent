@@ -123,9 +123,23 @@ class TestSheStandsOnTop:
     def test_the_growing_pill_pushes_it_up(self):
         source = _read()
         body = _fun(source, "private fun buildInputRow(ctx: Context): View")
-        assert "addOnLayoutChangeListener" in body
-        assert "pillHeightPx = h" in body
-        assert "slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))" in body
+        assert "addOnGlobalLayoutListener { followPill(ctx) }" in body
+        follow = _fun(source, "private fun followPill(ctx: Context)")
+        assert "pillHeightPx = h" in follow
+        assert "slideTo(ctx, parkX(ctx, out = true), parkTop(ctx))" in follow
+
+    def test_she_follows_where_the_pill_is_drawn_not_the_insets(self):
+        """Alla prima apertura dopo l'avvio l'inset della tastiera non arriva
+        (``ime=0`` con la tastiera su) e il sistema **rimpicciolisce** la
+        finestra: la pillola sale senza cambiare né padding né altezza. Lei la
+        segue solo se guarda dove la pillola è sullo schermo (``jenny_s22``,
+        13/10/2026: restava a y=1370, dietro la tastiera)."""
+        source = _read()
+        follow = _fun(source, "private fun followPill(ctx: Context)")
+        assert "measuredPillTop()" in follow and "lastPillTopPx" in follow
+        assert "syncListCap(ctx)" in follow
+        # Una chat nuova riparte da zero: la prima posizione si rimisura.
+        assert source.count("lastPillTopPx = -1") >= 3
 
     def test_the_sprite_fractions_are_the_measured_ones(self):
         """0,87 e 0,52 vengono dai pixel opachi di `jenny-body-front-idle`:

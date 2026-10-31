@@ -663,3 +663,51 @@ def test_a_shut_gate_still_stops_a_project_whose_map_is_oversized(tmp_path):
 
     assert _pick(tmp_path, sessions=sessions) is None
     assert _pick(tmp_path, active_session_keys=("project:viaggio",)) is None
+
+
+# ── Un piano a lista tiene il quaderno ───────────────────────────────────────
+
+
+@pytest.mark.parametrize("status", ["running", "pausing", "paused", "blocked"])
+def test_a_notebook_held_by_a_plan_is_not_gardened(tmp_path, status):
+    """Le scritture del giardiniere finirebbero nelle foto come se fossero del piano."""
+    from jenny.plan.model import apply_transition, validate_proposal
+    from jenny.plan.store import PlanStore
+
+    workspace = tmp_path / "workspace"
+    _project(workspace, "viaggio")
+    store = PlanStore.for_workspace(workspace)
+    plan = store.create(
+        "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a", "done_when": "a"},
+                                               {"title": "b", "detail": "b", "done_when": "b",
+                                                "kind": "check"}],
+                                     [{"item": "a", "have": "", "missing": "",
+                                       "strategy": "notebook"}])
+    )
+    path = {"running": ["running"], "pausing": ["running", "pausing"],
+            "paused": ["running", "paused"], "blocked": ["running", "blocked"]}[status]
+
+    def _go(p):
+        for wanted in path:
+            apply_transition(p, wanted)
+
+    store.update(plan.id, _go)
+    assert _pick(workspace) is None
+    store.update(plan.id, lambda p: apply_transition(p, "stopped"))
+    assert _pick(workspace) is not None
+
+
+def test_a_proposal_does_not_hold_the_notebook(tmp_path):
+    from jenny.plan.model import validate_proposal
+    from jenny.plan.store import PlanStore
+
+    workspace = tmp_path / "workspace"
+    _project(workspace, "viaggio")
+    PlanStore.for_workspace(workspace).create(
+        "viaggio", validate_proposal("Rifare", [{"title": "a", "detail": "a", "done_when": "a"},
+                                               {"title": "b", "detail": "b", "done_when": "b",
+                                                "kind": "check"}],
+                                     [{"item": "a", "have": "", "missing": "",
+                                       "strategy": "notebook"}])
+    )
+    assert _pick(workspace) is not None

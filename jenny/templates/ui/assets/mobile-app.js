@@ -16,6 +16,7 @@ import { LauncherController } from './mobile-launcher.js';
 import { ChatController } from './mobile-chat.js';
 import { WorkspaceController } from './mobile-workspace.js';
 import { AppsSource } from './shared/apps-source.js';
+import { UpdateWatch } from './shared/update-watch.js';
 import { AppsActions } from './shared/apps-actions.js';
 import { SettingsController, VIEW_OF, viewElement } from './mobile-settings.js';
 import { isFirstRun } from './shared/first-run.js';
@@ -124,6 +125,9 @@ class MobileApp {
     } catch (err) {
       console.error('Bootstrap failed:', err);
     }
+    // Dopo un aggiornamento del gateway l'officina si ricarica da sola, quando
+    // non ha niente da perdere (`shared/update-watch.js`).
+    this.updateWatch = new UpdateWatch().start();
 
     /* Il primo avvio non si fa qui: e' un documento suo, `onboarding.html`, e
        l'officina ci rimanda come la casa. Un «non lo so» (impostazioni non
@@ -151,6 +155,14 @@ class MobileApp {
       // le chiavi grezze ("scope.change").
       scopeChip.render();
       writeSwitch.render();
+      // La riga d'identita' e il chip dei comandi, per la stessa ragione.
+      this.controllers.chat?.applyTranslations?.();
+      /* I cassetti, se si sono gia' disegnati: le etichette le scrive JS e la
+         `load` qui sopra non e' attesa. Sul telefono il file arriva da
+         loopback e vince quasi sempre; aperta da Tailscale, con un giro di
+         rete in piu', l'officina restava con «settings.telegram.title». Senza
+         dati `render()` esce e non disegna niente. */
+      this._settings?.render();
     });
 
     // Sidebar navigation
@@ -369,7 +381,7 @@ class MobileApp {
     // Escape: stessa catena del tasto Indietro hardware. Sul Titan 2 la
     // tastiera fisica è sempre sotto le dita, quindi Esc *è* la scorciatoia
     // primaria: quando copriva solo drawer e dialog sembrava funzionare ed era
-    // inerte su mini-app, minichat, lightbox, sotto-stato di sezione e history.
+    // inerte su mini-app, lightbox, sotto-stato di sezione e history.
     keyboard.register('escape', () => {
       this.handleHardwareBack();
     });
@@ -435,14 +447,10 @@ class MobileApp {
      è uno, e i quattro consumatori lo percorrono.
 
      L'ordine è quello di sovrapposizione reale (z-index in mobile-style.css:
-     .app-frame-overlay 110 · .image-lightbox 115 · .jenny-scrim 119 ·
-     .jenny-duo 120 · .jenny-mc 121; `.app` non crea stacking context). La
-     minichat copre la mini-app, quindi va consumata *prima*: l'ordine opposto
-     chiudeva l'app che stava sotto lasciando a schermo la minichat, cioè una
-     pressione senza alcun cambiamento visibile. Lightbox e minichat non stanno
-     mai aperte insieme (D3: Jenny sta sopra la lightbox ma non prende tocchi,
-     e lo scrim della minichat copre le immagini), quindi fra loro due l'ordine
-     non conta.
+     .app-frame-overlay 110 · .image-lightbox 115 · .jenny-duo 120; `.app` non
+     crea stacking context). La chat aperta sopra una vista (05/10/2026, al
+     posto della minichat) ha un posto che dipende da cosa ha sotto: v.
+     `chatOver` qui sotto.
 
      Ogni livello espone:
        present()  test di presenza, senza effetti collaterali;
@@ -451,6 +459,19 @@ class MobileApp {
                   invece di ingoiare la pressione;
        close()    smontaggio completo (semantica di Home), default = dismiss. */
   _overlayLayers() {
+    /* La chat aperta sopra una vista (dal 05/10/2026, v. `openChatOver`). Il
+       suo posto nella catena dipende da cosa ha sotto: sopra una mini-app sta
+       davanti all'app (111 contro 110), e Indietro chiude prima lei; sopra una
+       vista normale le stanno davanti il cassetto delle app, i drawer e le
+       tendine che si aprono *da* lei, che si chiudono prima. */
+    const chatOver = {
+      name: 'chatOver',
+      present: () => this._chatOver === true,
+      /* Il popover «Info sessione» sta sopra la chat: una pressione, un passo. */
+      dismiss: () => { if (!this.controllers?.chat?.handleBack()) this.closeChatOver(); },
+      close: () => { this.closeChatOver(); },
+    };
+    const overApp = this._chatOverApp === true;
     return [
       {
         // <dialog> modali e sheet: con showModal() vivono nel top layer, sopra
@@ -472,12 +493,7 @@ class MobileApp {
           else lightbox.remove();
         },
       },
-      {
-        // Minichat della mascotte.
-        name: 'minichat',
-        present: () => !!document.querySelector('.jenny-mc.open'),
-        dismiss: () => this.jenny?.handleBack() ?? false,
-      },
+      ...(overApp ? [chatOver] : []),
       {
         // Mini-app aperta: gestisce la propria navigazione interna e, all'ultimo
         // livello, si chiude. Home invece la smonta e basta. L'overlay resta nel
@@ -524,6 +540,7 @@ class MobileApp {
         present: () => composeMenuOpen(),
         dismiss: () => closeComposeMenus(),
       },
+      ...(overApp ? [] : [chatOver]),
     ];
   }
 
@@ -600,7 +617,7 @@ class MobileApp {
   // una casa che a ogni Home puo' aprirsi su una schermata diversa non e' una
   // casa. Chi vuole i file o le app li raggiunge da dentro, in un tocco.
   /* Smonta *tutti* i livelli, non un sottoinsieme scritto a mano: è così che
-     si perdevano lightbox e minichat, e i dialog venivano chiusi con close()
+     si perdevano lightbox e minichat (che non c'e' piu'), e i dialog venivano chiusi con close()
      diretto. Il ciclo interno serve ai livelli impilabili (più <dialog>); il
      tetto evita che un livello che rifiuta di chiudersi — il dialog di riavvio
      dopo un restore fa preventDefault apposta — mandi il chiamante in loop. */
@@ -645,8 +662,94 @@ class MobileApp {
      quaderno. Nel dubbio no = gli avvisi restano finche' non li vedi davvero,
      che e' la direzione d'errore giusta. */
   isChatOnScreen() {
-    return this.currentMode === 'chat'
+    return this.chatVisible()
       && sessionManager.currentKey === sessionManager.personalKey;
+  }
+
+  /** La conversazione e' a schermo: la Console, o la chat aperta sopra una
+   *  vista (05/10/2026). Una risposta sola a «la chat si vede?». */
+  chatVisible() {
+    return this.currentMode === 'chat' || this._chatOver === true;
+  }
+
+  /* ── La chat sopra la vista ──────────────────────────────────────────────
+     Dal 05/10/2026 Jenny e' la porta della chat: toccata fuori dalla Console,
+     la chat sale a tutto schermo sopra la vista, e la vista resta visibile
+     sotto un velo — Jenny ti spiega il menu che hai davanti, e `ui_view` lo
+     descrive, perche' `currentMode` resta quello della vista sotto.
+
+     **Nessuno scroller nuovo.** In chat lo scroller e' il documento: e' la
+     regola che ha chiuso il difetto dei manici di selezione (v. «Lo scroller
+     della chat e' il documento» in mobile-style.css). Quindi la chat si mostra
+     **in piu'** della vista corrente, `<html>` prende `mode-chat` *e*
+     `chat-over`, e la vista sotto si fissa allo schermo e diventa inerte. Le
+     regole di `mode-chat` valgono tali e quali. */
+
+  /** Porta su la chat sopra la vista corrente. Vero se e' salita. */
+  openChatOver() {
+    if (this._chatOver === true || this.currentMode === 'chat') return false;
+    const chat = this.ensureController('chat');
+    if (!chat) return false;
+    clearSelection();
+    this.launcher.close();
+    /* Un drawer aperto sotto si chiude: da qui in poi ogni drawer aperto e'
+       uno aperto *dalla* chat, e le sta sopra. */
+    this.drawer.closeAll();
+    this._chatOverFocus = document.activeElement;
+    const root = document.documentElement;
+    const beneath = viewElement(this.currentMode);
+    const frame = document.querySelector('.app-frame-overlay');
+    /* In un blocco solo, come in `switchMode`: la classe e' *cosa c'e' a
+       schermo*, come il `display`, e una misura presa in mezzo vedrebbe una
+       pagina che non scorre. */
+    viewElement('chat').style.display = 'flex';
+    beneath?.classList.add('view-beneath');
+    root.classList.add('mode-chat', 'chat-over');
+    root.classList.toggle('chat-over-app', !!frame);
+    this._chatOver = true;
+    this._chatOverApp = !!frame;
+    this._chatOverInert = [beneath, frame].filter((el) => el && !el.inert);
+    for (const el of this._chatOverInert) el.inert = true;
+    this.header.paintOver?.('chat');
+    const activate = () => { if (this._chatOver === true) chat.activate(); };
+    if (chat.ready) chat.ready.then(activate).catch((err) => console.error('chat over:', err));
+    else activate();
+    AppState.set('chatOver', true);
+    return true;
+  }
+
+  /** Chiude la chat sopra la vista: resta la vista com'era. Vero se era su. */
+  closeChatOver({ restoreFocus = true } = {}) {
+    if (this._chatOver !== true) return false;
+    clearSelection();
+    this.controllers?.chat?.input?.blur?.();
+    const root = document.documentElement;
+    /* Il blocco simmetrico: `display` e classi insieme. L'evento di scroll che
+       ne segue trova la chat alta zero, e l'ancora di lettura resta quella. */
+    viewElement('chat').style.display = 'none';
+    this._leaveChatOverClasses();
+    root.classList.remove('mode-chat');
+    this.controllers?.chat?.deactivate?.();
+    const back = this._chatOverFocus;
+    this._chatOverFocus = null;
+    if (restoreFocus && back?.isConnected) back.focus?.();
+    /* La vista sotto si rilegge se Jenny, intanto, ha cambiato qualcosa. */
+    this.controllers?.[this.currentMode]?.revalidate?.();
+    return true;
+  }
+
+  /* Quel che apertura e chiusura hanno in comune con la promozione (la
+     Console toccata mentre la chat e' sopra: la chat resta, il resto va via). */
+  _leaveChatOverClasses() {
+    const root = document.documentElement;
+    document.querySelectorAll('.view-beneath').forEach((v) => v.classList.remove('view-beneath'));
+    root.classList.remove('chat-over', 'chat-over-app');
+    for (const el of this._chatOverInert || []) el.inert = false;
+    this._chatOverInert = [];
+    this._chatOver = false;
+    this._chatOverApp = false;
+    this.header.clearOver?.('chat');
+    AppState.set('chatOver', false);
   }
 
   /* Tap sulla notifica di un messaggio proattivo (MainActivity), con
@@ -654,9 +757,14 @@ class MobileApp {
      — e non la chat personale, dove l'avviso sta davvero (v. `openChat` della
      casa). Adesso si va a casa, come la pillola «⌂ Jenny», e la casa nasce
      sulla sua chat. Torna false: la chat qui non si e' aperta, e gli avvisi li
-     cancella la casa quando la mostra (`chatOpened`). */
-  openChat() {
-    api.navigate('/html-mobile/', { replace: true });
+     cancella la casa quando la mostra (`chatOpened`). L'avviso di un quaderno
+     (*key* = `project:<nome>`) ci arriva con `?mode=chat&chat=`, e la casa
+     entra in quel quaderno (v. `_restorePlace` della casa). */
+  openChat(key = null) {
+    const chat = typeof key === 'string' && key.startsWith('project:')
+      ? `?mode=chat&chat=${encodeURIComponent(key)}`
+      : '';
+    api.navigate(`/html-mobile/${chat}`, { replace: true });
     return false;
   }
 
@@ -712,7 +820,9 @@ class MobileApp {
    *  secondo modo di scrivere in chat divergerebbe da questo alla prima
    *  correzione. */
   sendInChat(text) {
-    this.switchMode('chat');
+    /* Sopra la vista, non al suo posto (05/10/2026): «Chiedi a Jenny» da Mani
+       parla di quel che c'e' sotto, e Jenny lo deve poter vedere. */
+    if (!this.chatVisible?.() && !this.openChatOver?.()) this.switchMode('chat');
     const chat = this.controllers?.chat;
     if (!chat?.input) return;
     /* Da `prefillComposer`: la bozza che c'era non si butta, torna appena la
@@ -746,13 +856,25 @@ class MobileApp {
   }
 
   switchMode(mode, pushState = true) {
-    if (mode === this.currentMode) return;
+    /* La voce accesa del dock con la chat sopra: un tocco, un cambiamento — la
+       chat si chiude e resta la vista. */
+    if (mode === this.currentMode) {
+      if (this._chatOver === true) this.closeChatOver();
+      return;
+    }
     if (!this.controllerFactories[mode]) {
       console.warn(`Unknown mode: ${mode}`);
       return;
     }
 
     if (!this.ensureController(mode)) return;
+    /* Un'altra voce con la chat sopra: verso la Console la chat resta e
+       diventa la vista (nessun salto: `mode-chat` non lascia mai `<html>`);
+       verso un'altra vista la chat si chiude prima. */
+    if (this._chatOver === true) {
+      if (mode === 'chat') this._leaveChatOverClasses();
+      else this.closeChatOver({ restoreFocus: false });
+    }
 
     // Hide all views
     document.querySelectorAll('.view').forEach(v => {
@@ -889,6 +1011,8 @@ class MobileApp {
         view = null; neighbors = null;
         // Guardia: un cassetto aperto possiede il proprio gesto (verticale).
         if (this.drawer.activeDrawer) return false;
+        // Con la chat aperta sopra, la vista sotto e' ferma e inerte.
+        if (this._chatOver === true) return false;
         // Guardia: c'e' del testo selezionato. Trascinare per aggiustare i
         // manici della selezione non deve far scivolare la vista sotto le dita.
         if (hasSelection()) return false;

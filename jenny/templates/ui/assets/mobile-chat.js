@@ -38,6 +38,7 @@ import { renderRich } from './shared/rich-content.js';
 import { workspacePathIn } from './shared/conversation-list.js';
 import { MARKED_OPTIONS, renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
+import { chatTime, chatTimeIso } from './shared/chat-time.js';
 import { brandLabel, getProviderBrand } from './shared/provider-brand.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { commandsChip } from './shared/commands-chip.js';
@@ -334,6 +335,20 @@ export class ChatController {
   _insertAtTop(node) {
     this._ensureIdentity();
     this.chatArea.insertBefore(node, this.identityEl.nextSibling);
+  }
+
+  /** Le parole che la chat scrive da JS, riscritte quando arrivano le
+   *  traduzioni: la riga d'identita' («online») e il chip dei comandi. Le
+   *  scrive al primo `activate()`, che puo' venire prima di `i18n.load()`, e
+   *  restavano le chiavi grezze. Fino al 05/10/2026 non si vedeva: la minichat
+   *  faceva partire il caricamento dal suo costruttore, prima di tutto il
+   *  resto, e le traduzioni arrivavano in tempo per caso. */
+  applyTranslations() {
+    if (this.identityLabel) {
+      const on = this.identityStatus?.classList.contains('on');
+      this.identityLabel.textContent = i18n.t(on ? 'chat.online' : 'chat.offline');
+    }
+    commandsChip.render();
   }
 
   _setConnectionStatus(connected) {
@@ -638,7 +653,7 @@ export class ChatController {
     // `dialog[open]`, come faceva prima, lasciava scoperti lightbox, minichat,
     // mini-app e drawer: col composer coperto i caratteri finivano in un campo
     // invisibile.
-    if (window.mobileApp?.hasOverlayAbove()) return;
+    if (window.mobileApp?.hasOverlayAbove('chatOver')) return;
     // focus() sincrono dentro il keydown: Chromium (WebView) recapita l'inserimento
     // del carattere sull'elemento appena messo a fuoco, quindi il tasto non va perso.
     this.input.focus();
@@ -717,7 +732,7 @@ export class ChatController {
 
   /* Butta la vista renderizzata e forza il reload dello storico al prossimo
      activate() — usato quando la sessione cambia fuori da questa vista
-     (es. uno scambio nella minichat di Jenny). */
+     (fino al 05/10/2026: uno scambio nella minichat di Jenny). */
   invalidateHistory() {
     /* Le bolle in composizione muoiono con il DOM che le conteneva: i
        riferimenti vanno azzerati **qui**, o restano a puntare nodi staccati e
@@ -953,6 +968,7 @@ export class ChatController {
           text: msg.text || msg.content || '',
           origin: msg.origin,
           media: Array.isArray(msg.media) ? msg.media : [],
+          at: msg.sentAt ?? null,
         });
         continue;
       }
@@ -971,8 +987,10 @@ export class ChatController {
       // quindi qui non si spezza niente che fosse legittimamente unito.
       if (!currentTurn || !turnId || currentTurn.turnId !== turnId) {
         if (currentTurn) turns.push(currentTurn);
-        currentTurn = { turnId, toolEvents: [], reasoning: '', content: '', fileEdits: [], media: [] };
+        currentTurn = { turnId, toolEvents: [], reasoning: '', content: '', fileEdits: [], media: [], at: null };
       }
+      // L'ora del turno e' quella del suo ultimo pezzo: quando si e' chiuso.
+      if (msg.sentAt != null) currentTurn.at = msg.sentAt;
       if (msg.toolEvents || msg.tool_events) {
         currentTurn.toolEvents.push(...(msg.toolEvents || msg.tool_events));
       }
@@ -1008,7 +1026,7 @@ export class ChatController {
       if (turn.boundary) {
         this._appendSessionBoundary(turn.text);
       } else if (turn.user) {
-        this.addCompletedMessage(turn.text, 'user', turn.origin, turn.media);
+        this.addCompletedMessage(turn.text, 'user', turn.origin, turn.media, turn.at);
       } else {
         this._flushPersistedTurn(turn);
       }
@@ -1020,7 +1038,7 @@ export class ChatController {
       if (turn.boundary) {
         this._appendSessionBoundary(turn.text, true);
       } else if (turn.user) {
-        this.addCompletedMessageToTop(turn.text, 'user', turn.origin, turn.media);
+        this.addCompletedMessageToTop(turn.text, 'user', turn.origin, turn.media, turn.at);
       } else {
         this._flushPersistedTurn(turn, true);
       }
@@ -1084,6 +1102,7 @@ export class ChatController {
 
     this._appendLatency(node, turn.latencyMs);
     this._appendMsgActions(node);
+    this._appendTime(node, turn.at);
 
     if (toTop) {
       this._insertAtTop(node);
@@ -1132,6 +1151,24 @@ export class ChatController {
     }
     msg.appendChild(row);
     return row;
+  }
+
+  /** L'ora del messaggio nella riga in coda (06/10/2026): «⧉ 11:26 · 4.2s»
+   *  sotto una risposta, «11:26» sotto quel che hai scritto. Fra il Copia e
+   *  i secondi, che possono arrivare prima o dopo di lei: si mette davanti ai
+   *  secondi se ci sono gia', e il punto fra le due lo disegna il CSS
+   *  (`.chat-time + .chat-meta`). Senza un'ora — una cronologia di prima che
+   *  la sessione non sa datare — non si inventa niente. */
+  _appendTime(msg, at) {
+    const text = chatTime(at);
+    if (!msg || !text) return;
+    const row = this._ensureMsgActions(msg);
+    if (row.querySelector(':scope > .chat-time')) return;
+    const el = document.createElement('time');
+    el.className = 'chat-time';
+    el.dateTime = chatTimeIso(at);
+    el.textContent = text;
+    row.insertBefore(el, row.querySelector(':scope > .chat-meta'));
   }
 
   _appendLatency(msg, latencyMs) {
@@ -1255,13 +1292,14 @@ export class ChatController {
     if (!origin || origin === 'websocket') return;
     const badge = document.createElement('div');
     badge.className = 'chat-origin-badge';
-    const icon = origin === 'telegram' ? 'ti-brand-telegram' : 'ti-arrows-exchange';
+    const icon = origin === 'telegram' ? 'ti-brand-telegram'
+      : origin === 'remote' ? 'ti-device-laptop' : 'ti-arrows-exchange';
     const label = origin.charAt(0).toUpperCase() + origin.slice(1);
     badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
     msg.insertBefore(badge, msg.firstChild);
   }
 
-  _buildCompletedMessage(text, role, origin, media) {
+  _buildCompletedMessage(text, role, origin, media, at = null) {
     const msg = document.createElement('div');
     msg.className = `chat-msg chat-msg-${role === 'user' ? 'user' : 'ai'}`;
 
@@ -1281,15 +1319,16 @@ export class ChatController {
     if (role === 'user') this._appendOriginBadge(msg, origin);
     this._setMessageSource(msg, text);
     this._appendMsgActions(msg);
+    this._appendTime(msg, at);
     return msg;
   }
 
-  addCompletedMessage(text, role, origin, media) {
-    this.chatArea.appendChild(this._buildCompletedMessage(text, role, origin, media));
+  addCompletedMessage(text, role, origin, media, at = null) {
+    this.chatArea.appendChild(this._buildCompletedMessage(text, role, origin, media, at));
   }
 
-  addCompletedMessageToTop(text, role, origin, media) {
-    this._insertAtTop(this._buildCompletedMessage(text, role, origin, media));
+  addCompletedMessageToTop(text, role, origin, media, at = null) {
+    this._insertAtTop(this._buildCompletedMessage(text, role, origin, media, at));
   }
 
   activate() {
@@ -1380,6 +1419,9 @@ export class ChatController {
   }
 
   deactivate() {
+    // La chat esce di scena: gli avvisi proattivi tornano a squillare anche
+    // con l'app davanti (v. `MainActivity.isChatOnScreen`).
+    try { window.JennyNative?.chatClosed?.(); } catch (e) { /* nessun guscio nativo */ }
     // Il popover Info sessione è appeso a document.body, non alla view: il
     // display:none del cambio sezione non lo tocca, quindi restava a schermo
     // sopra la sezione nuova, col suo setInterval da 1s ancora vivo.
@@ -1885,6 +1927,9 @@ export class ChatController {
   _handleTurnEnd(latencyMs) {
     this._appendLatency(this._currentMsg, latencyMs);
     this._appendMsgActions(this._currentMsg);
+    // Dal vivo l'ora e' quella di qui, alla chiusura del turno: il frame non
+    // ne porta una, e la rilettura userà quella del transcript.
+    this._appendTime(this._currentMsg, Date.now());
     this._dropTerminatedSubagents();
 
     this._resetStreamState();
@@ -1909,7 +1954,7 @@ export class ChatController {
     const media = msg.media_urls || [];
     if (!text.trim() && !media.length) return;
     this._resetStreamState();
-    this.addCompletedMessage(text, 'user', msg.origin, media);
+    this.addCompletedMessage(text, 'user', msg.origin, media, Date.now());
     this._bumpUnread();
     this.scrollToBottom();
   }
@@ -2303,7 +2348,7 @@ export class ChatController {
     });
     // Il pannello è della conversazione aperta: cambiandola, quel che mostrava
     // non è più di nessuno a schermo. `chat:switch` e non `invalidateHistory`,
-    // che scatta anche senza cambio (la minichat che chiude un turno).
+    // che scatta anche senza cambio.
     sessionManager.addEventListener('chat:switch', () => this._resetSubagentPanel());
     // Sopravvivere al reload è il caso comune, non l'eccezione: su Android il
     // processo della WebView muore e il frame WS di transizione è già passato.
@@ -2563,7 +2608,7 @@ export class ChatController {
      di aver toccato la matrice, e serve un tap sulla card per il resto. */
   _saCard(entry, state, mainHtml) {
     const taskId = escapeHtml(String(entry.task_id || ''));
-    const buttons = saActions(state, 'card').map(action => (
+    const buttons = saActions(state, 'card', entry).map(action => (
       action === 'stop'
         ? this._saButton(taskId, 'stop', 'ti-player-stop', 'subagents.stop')
         : this._saButton(taskId, 'restart', 'ti-refresh', 'subagents.relaunch')
@@ -2625,7 +2670,7 @@ export class ChatController {
     const closed = detailDialog({
       title: String(entry.label || i18n.t('subagents.untitled')),
       bodyHtml: this._subagentDetailHtml(entry, state),
-      actions: this._saDialogActions(state),
+      actions: this._saDialogActions(state, entry),
     });
     // La modale si è aperta ⇒ il nostro guscio è nel DOM. È il solo modo di
     // saperlo senza che detailDialog cambi contratto.
@@ -2654,8 +2699,8 @@ export class ChatController {
     return all.find(e => String(e?.task_id || '') === String(taskId)) || null;
   }
 
-  _saDialogActions(state) {
-    return saActions(state, 'modal').map(action => (
+  _saDialogActions(state, entry = null) {
+    return saActions(state, 'modal', entry).map(action => (
       action === 'stop'
         ? { id: 'stop', label: i18n.t('subagents.stop') }
         : { id: 'restart', label: i18n.t('subagents.relaunch'), variant: 'primary' }
@@ -2812,7 +2857,7 @@ export class ChatController {
     const diag = document.getElementById('sa-diag');
     if (diag) diag.innerHTML = this._saDiagRowsHtml(entry);
     this._saApplyCapNote(entry);
-    this._saSyncActions(state);
+    this._saSyncActions(state, entry);
   }
 
   _saApplyCapNote(entry) {
@@ -2831,10 +2876,10 @@ export class ChatController {
      `detailDialog` delega il click sul contenitore, quindi rimpiazzare i bottoni
      non stacca nessun handler — l'unico accoppiamento è il `data-action-id`, che
      è già il suo contratto. */
-  _saSyncActions(state) {
+  _saSyncActions(state, entry = null) {
     const host = document.getElementById('oc-detail-actions');
     if (!host) return;
-    const actions = this._saDialogActions(state);
+    const actions = this._saDialogActions(state, entry);
     const sig = actions.map(a => a.id).join(',');
     if (host.dataset.saSig === sig) return;
     host.dataset.saSig = sig;
@@ -3607,6 +3652,7 @@ export class ChatController {
     if (entries.length) this._renderMediaAttachments(msg, entries);
     this._setMessageSource(msg, text);
     this._appendMsgActions(msg);
+    this._appendTime(msg, Date.now());
     this.chatArea.appendChild(msg);
     this._autoScroll = true;
     this.scrollToBottom(true);

@@ -520,3 +520,26 @@ def test_cast_params_object_for_a_string_becomes_json() -> None:
     assert out == "[true, null]"
     # Gli scalari restano come prima.
     assert tool.cast_params({"content": 5})["content"] == "5"
+
+
+def test_cast_params_json_text_for_an_object_or_list_is_parsed() -> None:
+    """Il caso inverso: ``files="{...}"`` per un parametro ``object``.
+
+    Rifiutato, costava al modello un giro per rimandare la stessa cosa. Un testo
+    che non è JSON, o è JSON del tipo sbagliato, resta testo e lo rifiuta la
+    validazione come prima.
+    """
+    tool = CastTestTool(
+        {
+            "type": "object",
+            "properties": {
+                "files": {"type": "object"},
+                "nums": {"type": "array", "items": {"type": "integer"}},
+            },
+        }
+    )
+    out = tool.cast_params({"files": '{"index.html": "<p>ok</p>"}', "nums": '["1", 2]'})
+    assert out == {"files": {"index.html": "<p>ok</p>"}, "nums": [1, 2]}
+    assert tool.cast_params({"files": "index.html"})["files"] == "index.html"
+    assert tool.cast_params({"files": "[1]"})["files"] == "[1]"
+    assert tool.validate_params({"files": "[1]"})

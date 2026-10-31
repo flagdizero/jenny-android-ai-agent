@@ -160,24 +160,28 @@ def test_neither_shell_is_the_exception_any_more() -> None:
 
 
 def test_both_shells_answer_the_tap() -> None:
-    """Il tocco secco e' l'unico modo *scopribile* di metterla via — lo swipe
-    lo trova chi lo cerca. Se la mascotte smette di passare `onTap`, il modulo
-    condiviso ha un default che non fa niente: si perde in silenzio.
+    """Il tocco secco e' la porta della chat (dal 05/10/2026): dove la chat
+    non c'e' la porta su, dove e' sopra la pagina la chiude, dove e' a schermo
+    lei saluta. Se la mascotte smette di passare `onTap`, il modulo condiviso
+    ha un default che non fa niente: si perde in silenzio.
 
     La risposta al tocco sta nella mascotte condivisa, e i due gusci l'hanno
-    perche' usano quella, con sopra la stessa minichat: l'officina la estende,
-    la casa la crea."""
+    perche' usano quella, ciascuno con la sua porta: l'officina la estende, la
+    casa la crea. Nessuno dei due lega la fisica per conto suo."""
     src = (ASSETS / "shared" / "jenny-mascot.js").read_text(encoding="utf-8")
-    assert re.search(r"onTap:.*'out'", src), "la mascotte non gira piu' lo stato al tocco"
+    assert re.search(r"onTap: \(\) => this\._onTap\(\)", src), "la mascotte non passa piu' il tocco"
+    tap = re.search(r"\n  _onTap\(\) \{(.*?)\n  \}\n", src, re.S)
+    assert tap, "_onTap non trovato"
+    for step in ("chat.isOpen()", "chat.close()", "chat.onScreen()", "this.hello()", "chat.open("):
+        assert step in tap.group(1), f"il tocco non fa piu' {step}"
     assert "isOut:" in src and "setOut:" in src, "la mascotte non dichiara piu' lo stato"
-    minichat = (ASSETS / "shared" / "jenny-minichat.js").read_text(encoding="utf-8")
-    assert "class JennyWithMinichat extends JennyMascot" in minichat
     workshop = (ASSETS / "mobile-jenny.js").read_text(encoding="utf-8")
-    assert "class JennyCompanion extends JennyWithMinichat" in workshop
-    for name, text in (("l'officina", workshop), ("la minichat", minichat)):
-        assert "bindMascotDrag" not in text, f"{name} lega di nuovo la fisica per conto suo"
+    assert "class JennyCompanion extends JennyMascot" in workshop
+    assert "openChatOver()" in workshop and "closeChatOver()" in workshop
     home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
-    assert "new JennyWithMinichat(" in home
+    assert "new JennyMascot(" in home and "chat: {" in home
+    for name, text in (("l'officina", workshop), ("la casa", home)):
+        assert "bindMascotDrag" not in text, f"{name} lega di nuovo la fisica per conto suo"
     assert not (ASSETS / "casa-mascot.js").exists(), "e' tornata la seconda mascotte"
 
 

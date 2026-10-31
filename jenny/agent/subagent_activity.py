@@ -124,6 +124,12 @@ ACTIVITY_KINDS = frozenset({
     KIND_ERROR,
 })
 
+# Kind che il ring butta per primi quando e pieno. Sono il rumore del pannello:
+# un campione di ragionamento ogni 0,4 s, le fasi e le iterazioni che si
+# ripetono a ogni giro. I tool, i messaggi dall'orchestratore e gli esiti sono
+# cio che il digest deve poter raccontare, e restano finche c'e altro da buttare.
+_NOISE_KINDS = frozenset({KIND_THINKING, KIND_ITERATION, KIND_PHASE})
+
 # ``kind`` sconosciuto: l'evento **non** viene scartato, viene registrato come
 # ``phase``. Vedi :meth:`SubagentActivityLog.append` per il perche.
 KIND_FALLBACK = KIND_PHASE
@@ -638,6 +644,54 @@ def _end_write_file(args: Mapping[str, Any], outcome: _Outcome) -> str:
     return f"{_fmt_bytes(size)} written, {_plural(lines, 'line')}"
 
 
+# -- app (la faccia del costruttore) -----------------------------------------
+
+
+def _start_app(args: Mapping[str, Any]) -> str:
+    action = _arg_text(args, "action", limit=12) or "app"
+    slug = _arg_text(args, "slug", limit=32)
+    target = _arg_text(args, "key", limit=40) if action == "set" else _basename(args.get("path"))
+    where = f"{slug} {target}".strip() if target and target != "?" else slug
+    return f"app {action} {where}".strip()
+
+
+def _end_app(args: Mapping[str, Any], outcome: _Outcome) -> str:
+    # Solo una misura: il testo della risposta porta i valori letti, che sono
+    # contenuto dell'utente.
+    return _generic_end(outcome)
+
+
+# -- board (l'editore dei quaderni) ------------------------------------------
+
+
+def _start_board(args: Mapping[str, Any]) -> str:
+    action = _arg_text(args, "action", limit=16) or "show"
+    card = _arg_text(args, "card", limit=32)
+    return f"board {action} {card}".strip()
+
+
+def _end_board(args: Mapping[str, Any], outcome: _Outcome) -> str:
+    # Solo una misura: la risposta porta titoli e pagine del quaderno.
+    return _generic_end(outcome)
+
+
+# -- notebook (letture in blocco e remove_pages) -----------------------------
+
+
+def _start_notebook(args: Mapping[str, Any]) -> str:
+    action = _arg_text(args, "action", limit=16) or "check"
+    for key in ("paths", "pages"):
+        items = args.get(key)
+        if isinstance(items, list) and items:
+            return f"notebook {action}, {_plural(len(items), 'file')}"
+    return f"notebook {action}"
+
+
+def _end_notebook(args: Mapping[str, Any], outcome: _Outcome) -> str:
+    # Solo una misura, come ``board``: la risposta porta pagine e frammenti.
+    return _generic_end(outcome)
+
+
 # -- edit_file ---------------------------------------------------------------
 
 
@@ -1104,8 +1158,8 @@ def _end_ssh_transfer(args: Mapping[str, Any], outcome: _Outcome) -> str:
     return f"{verb} {_fmt_bytes(size)}" if size is not None else verb
 
 
-# Registro: un tool coperto ha una riga qui. Copre tutto lo scope ``subagent``
-# e tutto lo scope ``remote`` di ``agent/tools/loader.py`` (e quindi ogni
+# Registro: un tool coperto ha una riga qui. Copre tutto lo scope ``subagent``,
+# tutto lo scope ``remote`` e gli scope ``apps`` e ``notebook`` di ``agent/tools/loader.py`` (e quindi ogni
 # allowlist di ``agent/agent_types.py``, che ne e un sottoinsieme).
 _FORMATTERS: dict[str, tuple[_StartFn, _EndFn]] = {
     "read_file": (_start_read_file, _end_read_file),
@@ -1114,6 +1168,9 @@ _FORMATTERS: dict[str, tuple[_StartFn, _EndFn]] = {
     "list_dir": (_start_list_dir, _end_list_dir),
     "apply_patch": (_start_apply_patch, _end_apply_patch),
     "journal_append": (_start_journal_append, _end_journal_append),
+    "app": (_start_app, _end_app),
+    "board": (_start_board, _end_board),
+    "notebook": (_start_notebook, _end_notebook),
     "web_search": (_start_web_search, _end_web_search),
     "web_fetch": (_start_web_fetch, _end_web_fetch),
     "browser_open": (_start_browser_open, _end_browser),
@@ -1315,6 +1372,12 @@ class _TaskRing:
     # Ultima ``append`` (orologio di parete), usata solo per scegliere chi
     # sfrattare quando si raggiunge :data:`MAX_TRACKED_TASKS`.
     touched_at: float = 0.0
+    # ``seq`` degli eventi che un evento successivo rende superflui: un campione
+    # di ragionamento seguito da uno piu avanti dello stesso segmento, un
+    # ``iteration`` seguito da un altro. Sono i primi a uscire quando il ring e
+    # pieno, e uscendo non perdono niente (v. ``SubagentActivityLog.append``).
+    superseded: set[int] = field(default_factory=set)
+    last_iteration_seq: int = 0
 
 
 class SubagentActivityLog:
@@ -1408,12 +1471,78 @@ class SubagentActivityLog:
                 duration_ms=duration_ms,
             )
             ring.next_seq += 1
-            if len(ring.events) == self._capacity:
-                # ``deque(maxlen=...)`` espelle da sola: contiamo l'espulsione
-                # qui perche ``dropped`` e cio che rende il buco spiegabile.
-                ring.dropped += 1
+            self._note_superseded_locked(ring, event)
+            if len(ring.events) >= self._capacity:
+                self._make_room_locked(ring)
             ring.events.append(event)
             return event
+
+    @staticmethod
+    def _note_superseded_locked(ring: _TaskRing, event: dict[str, Any]) -> None:
+        """Marca superfluo l'evento che *event* rende inutile. Col lock preso.
+
+        **Ragionamento.** I campioni arrivano ogni 0,4 s e riempivano il ring in
+        ~80 s: un aiutante lungo perdeva i suoi primi tool, cioe proprio quel che
+        il digest deve raccontare (prova del 24/10/2026). Un campione e superato
+        dal successivo **adiacente** con la stessa etichetta (``thinking`` /
+        ``writing``) e un ``duration_ms`` non minore: e lo stesso segmento, e il
+        nuovo porta un estratto piu avanti e un tempo piu lungo. Il primo
+        campione di un segmento (``duration_ms`` 0) non e mai superato, e
+        nemmeno l'ultimo: restano l'inizio e il massimo di ogni segmento, cioe
+        tutto quel che serve a ``build_digest`` per contare i segmenti e sommare
+        i massimi.
+
+        Perche non togliere subito il precedente (pop + append): chi legge in
+        coda col proprio cursore (il pump del canale, ogni tick) vedrebbe un
+        ``seq`` mancante subito dopo il cursore e lo dichiarerebbe un buco
+        (``gap``), cioe una risincronizzazione a ogni campione. Marcarlo e
+        toglierlo solo quando serve spazio sposta il buco in fondo al ring, dove
+        nessun cursore vivo lo guarda.
+
+        **Iterazioni.** Il digest tiene solo l'ultima: ogni nuova supera la
+        precedente.
+        """
+        kind = event["kind"]
+        if kind == KIND_ITERATION:
+            if ring.last_iteration_seq:
+                ring.superseded.add(ring.last_iteration_seq)
+            ring.last_iteration_seq = event["seq"]
+            return
+        if kind != KIND_THINKING or not ring.events:
+            return
+        last = ring.events[-1]
+        if last["kind"] != KIND_THINKING:
+            return
+        previous_ms = last["duration_ms"] or 0
+        current_ms = event["duration_ms"] or 0
+        if previous_ms <= 0 or current_ms < previous_ms:
+            return
+        if last["summary"].partition(":")[0] != event["summary"].partition(":")[0]:
+            return
+        ring.superseded.add(last["seq"])
+
+    @staticmethod
+    def _make_room_locked(ring: _TaskRing) -> None:
+        """Libera un posto nel ring pieno. Col lock preso.
+
+        In quest'ordine: il piu vecchio evento superfluo (non si perde niente);
+        il piu vecchio evento di rumore (:data:`_NOISE_KINDS`); il piu vecchio in
+        assoluto. Ogni espulsione conta in ``dropped``, come prima: e il conto di
+        quel che il ring non ha piu, ed e cio che rende spiegabile un buco.
+        """
+        index: int | None = None
+        if ring.superseded:
+            index = next(
+                (i for i, e in enumerate(ring.events) if e["seq"] in ring.superseded), None
+            )
+        if index is None:
+            index = next(
+                (i for i, e in enumerate(ring.events) if e["kind"] in _NOISE_KINDS), 0
+            )
+        victim = ring.events[index]
+        del ring.events[index]
+        ring.superseded.discard(victim["seq"])
+        ring.dropped += 1
 
     def _evict_locked(self) -> None:
         """Sfratta il ring toccato meno recentemente. Chiamare col lock preso."""

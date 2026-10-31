@@ -36,6 +36,7 @@ from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
 from jenny.security.fetch import BROWSER_USER_AGENT, open_validated_stream, read_capped
 from jenny.security.network import validate_url_target
+from jenny.security.subagent_policy import journal_touch
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
@@ -200,8 +201,13 @@ class DownloadFileTool(Tool):
             if ext:
                 name += ext
 
+        # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``);
+        # la cartella prima di crearla, il file prima di scriverlo.
+        if not (self._downloads_root() / DOWNLOADS_SUBDIR).exists():
+            journal_touch(self._downloads_root() / DOWNLOADS_SUBDIR)
         downloads_dir = ensure_dir(self._downloads_root() / DOWNLOADS_SUBDIR)
         target = _unique_path(downloads_dir, name)
+        journal_touch(target)
         try:
             atomic_write(target, data)
         except OSError as e:

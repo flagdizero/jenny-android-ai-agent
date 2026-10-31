@@ -114,7 +114,19 @@ class ToolContext:
     # restare economici in questo: tutto cio che l'orchestratore produce resta
     # nella conversazione per sempre, mentre l'output di un subagent no.
     orchestrator: bool = False
+    # La conversazione dell'utente per cui lavora un subagent: dentro il suo giro
+    # la sessione di richiesta e' la sua, e il tool ``app`` deve sapere che il
+    # lavoro viene da una chat dell'utente (non da un cron o dal giardiniere).
+    origin_session_key: str | None = None
+    # Il lineage del subagent che usa questi tool: l'``app-builder`` lo lascia
+    # sull'app che sta cambiando, cosi' un ritocco torna da lui (``spawn``).
+    subagent_lineage_id: str | None = None
     # Registry in costruzione, valorizzato da ``ToolLoader.load``. Lo legge solo
     # chi deve osservare l'attivita degli *altri* tool dello stesso agente (la
     # guardia anti-polling di ``subagent_status``), non per chiamarli.
     registry: Any | None = None
+    # Il ``MemoryStore`` dell'agente principale, il solo: il lock che da' i
+    # cursori del diario e' per istanza, e una seconda istanza ne darebbe di
+    # doppi. Lo legge ``journal_append`` per specchiare le righe nel diario;
+    # un subagent non ce l'ha.
+    memory_store: Any | None = None

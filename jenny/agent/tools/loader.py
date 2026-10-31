@@ -65,11 +65,13 @@ _HARDCODED_TOOL_MODULES = [
     "browser",
     "download",
     "location",
+    "screen",
     "long_task",
     "spawn",
     "subagent_control",
     "cron",
     "journal",
+    "app_tool",
     "self",
     "memory_recall",
     "search",
@@ -82,6 +84,9 @@ _HARDCODED_TOOL_MODULES = [
     "ui_view",
     "ssh",
     "app_update",
+    "board",
+    "plan",
+    "notebook",
 ]
 
 

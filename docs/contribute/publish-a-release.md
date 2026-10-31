@@ -18,12 +18,12 @@ start offering updates to herself.
 # 1. bump every place the version lives
 python3 scripts/release.py 0.7.0
 
-# 2. build and sign the APK (needs your local keystore)
-cd android && ./gradlew app:assembleRelease && cd ..
+# 2. build and sign the GitHub APK (foss) and the Play Store bundle (play)
+cd android && ./gradlew app:assembleFossRelease app:bundlePlayRelease && cd ..
 
-# 3. hash the signed APK and generate the manifest
+# 3. check it is the foss build, hash it and generate the manifest
 python3 scripts/release.py 0.7.0 --manifest-only \
-    --apk android/app/build/outputs/apk/release/app-release.apk \
+    --apk android/app/build/outputs/apk/foss/release/app-foss-release.apk \
     --summary-it "Aggiornamenti automatici e correzioni varie." \
     --summary-en "Automatic updates and assorted fixes."
 
@@ -100,11 +100,17 @@ know its real size — step 3 prints it.
 
 ### 2. Build and sign
 
+The same code builds two flavors (see [Install](../start/install.md#two-builds-from-the-same-code)).
+GitHub — and the in-app updater, which reads GitHub — gets `foss`, the build with no Google
+library and no code for the Drive copy. The Play Store gets `play`, as a bundle:
+
 ```bash
-cd android && ./gradlew app:assembleRelease
+cd android && ./gradlew app:assembleFossRelease app:bundlePlayRelease
 ```
 
-The result lands in `android/app/build/outputs/apk/release/app-release.apk`. If the build prints
+The APK lands in `android/app/build/outputs/apk/foss/release/app-foss-release.apk`, the bundle in
+`android/app/build/outputs/bundle/playRelease/app-play-release.aab`. The bundle is uploaded to
+the Play Console by hand; nothing below touches it. If the build prints
 a warning about missing signing credentials, stop — an unsigned APK is not installable, and
 publishing one means everybody who tries to update gets an error.
 
@@ -117,12 +123,15 @@ fixed by publishing a corrected release.
 
 ```bash
 python3 scripts/release.py 0.7.0 --manifest-only \
-    --apk android/app/build/outputs/apk/release/app-release.apk \
+    --apk android/app/build/outputs/apk/foss/release/app-foss-release.apk \
     --summary-it "…" --summary-en "…"
 ```
 
 `--manifest-only` skips the bump (already done in step 1) and reuses the `versionCode` that is
-in the tree. The script hashes the APK, writes `dist/release/latest.json`, and stages a copy of
+in the tree. Before anything else the script opens the APK and refuses it unless it is the
+`foss` build — no `jenny_extensions` in its Python, no Drive or Google classes in its dex
+(`scripts/check_foss_apk.py`, which you can also run on its own). Attaching the `play` APK to a
+GitHub release would send it to everyone who updates from inside the app. The script then hashes the APK, writes `dist/release/latest.json`, and stages a copy of
 the APK named `jenny-0.7.0.apk`, because GitHub names an asset after the file you upload and the
 manifest's `apk_url` has to match it exactly. `dist/` is gitignored, so nothing it stages ends
 up in a commit.

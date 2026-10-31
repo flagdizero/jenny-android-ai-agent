@@ -115,25 +115,22 @@ def silently_broken_checks(state: CronJobState, *, now_ms: int) -> list[tuple[st
 
 
 def format_silence_alarm(job_name: str, checks: list[tuple[str, int]]) -> str:
-    """La frase dell'allarme. Una stesura sola, come ``format_stuck_alarm``.
+    """La frase dell'allarme, nella lingua dell'utente. Una stesura sola.
 
     Nomina il controllo e dice da quanti run è fermo, perché sono le due cose che
     decidono se valga la pena alzarsi. Non dice il *motivo*: quello lo scrive il
-    modello e sta in ``last_error`` e in ``/cron``, e ripeterlo qui vorrebbe dire
-    tenerne due copie che possono divergere.
+    modello e sta in ``last_error``, e ripeterlo qui vorrebbe dire tenerne due
+    copie che possono divergere. Per vederlo si chiede a Jenny in chat — è lei
+    che legge ``last_error`` col tool ``cron`` — e non con un comando da
+    digitare, che dalla tendina delle notifiche non si raggiunge.
     """
+    from jenny.runtime.user_text import say
+
     if len(checks) == 1:
         label, runs = checks[0]
-        subject = f"'{label}'" if label else job_name
-        return (
-            f"{subject} has not completed its check for {runs} runs in a row and "
-            "nothing has told you. Run /cron to see the details."
-        )
+        return say("alarm.check_silent", name=label or job_name, runs=runs)
     worst = max(runs for _, runs in checks)
-    return (
-        f"{len(checks)} checks in '{job_name}' have not completed for up to {worst} runs "
-        "in a row and nothing has told you. Run /cron to see the details."
-    )
+    return say("alarm.checks_silent", count=len(checks), name=job_name, runs=worst)
 
 
 def alert_silently_broken_checks(
@@ -164,12 +161,13 @@ def alert_silently_broken_checks(
         return []
 
     from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.user_text import say
     from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
     metadata: dict[str, Any] = {
         WEBUI_MESSAGE_SOURCE_METADATA_KEY: {
             "kind": "cron",
-            "label": f"{job_name} · controllo",
+            "label": say("alarm.check_label", name=job_name),
         }
     }
     notify_delivery(format_silence_alarm(job_name, checks), metadata)

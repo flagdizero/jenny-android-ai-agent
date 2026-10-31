@@ -33,6 +33,10 @@ class TestToolHintKnownTools:
         result = _hint([_tc("edit_file", {"path": "src/main.py", "old_text": "x", "new_text": "y"})])
         assert result == "edit src/main.py"
 
+    def test_notebook_shows_the_action(self):
+        result = _hint([_tc("notebook", {"action": "read_many", "paths": ["wiki/a.md"]})])
+        assert result == "notebook read_many"
+
     def test_apply_patch_degrades_without_top_level_path(self):
         result = _hint([_tc("apply_patch", {"edits": [{"path": "a.py", "action": "replace"}]})])
         assert result == "apply_patch"

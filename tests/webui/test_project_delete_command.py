@@ -51,7 +51,9 @@ async def test_another_notebook_busy_does_not_stop_the_delete(
         invalidate_session=lambda k: None,
         busy_session_keys=lambda: ("project:orto",),
     )
-    assert await commands.project_delete(ctx, {"name": "piante"}) == {"name": "piante"}
+    assert await commands.project_delete(ctx, {"name": "piante"}) == {
+        "name": "piante", "removed_crons": [],
+    }
 
 
 async def test_a_page_that_cannot_be_taken_does_not_undo_the_notebook_delete(
@@ -72,7 +74,9 @@ async def test_a_page_that_cannot_be_taken_does_not_undo_the_notebook_delete(
         invalidate_session=lambda k: None,
         busy_session_keys=lambda: (),
     )
-    assert await commands.project_delete(ctx, {"name": "piante"}) == {"name": "piante"}
+    assert await commands.project_delete(ctx, {"name": "piante"}) == {
+        "name": "piante", "removed_crons": [],
+    }
 
 
 def test_a_folder_that_cannot_be_removed_says_why_without_the_path(
@@ -111,3 +115,61 @@ def test_the_commands_do_not_import_http_routes() -> None:
 
     assert "home_routes" not in inspect.getsource(commands)
     assert not hasattr(apps_routes, "_stacca_la_pagina")
+
+
+async def test_the_delete_removes_the_cron_jobs_of_its_cards(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """I cron delle schede se ne vanno col quaderno, anche quelli in pausa.
+
+    Restando nello store fallivano a ogni giro con «notebook gone», e il cassetto
+    da cui si toglievano non esisteva piu'. Gli altri — un altro quaderno, la
+    chat personale, i job di sistema — restano. Servizio vero, sul loop (come in
+    produzione: dal thread della cancellazione riarmare il timer solleverebbe).
+    """
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronSchedule
+    from jenny.webui import home_pages
+
+    async def _no_page(kind, ref):
+        return 0
+
+    cron = CronService(tmp_path / "cron" / "jobs.json")
+    await cron.start()
+    try:
+        every = CronSchedule(kind="every", every_ms=3_600_000)
+
+        def add(name: str, board: dict | None) -> str:
+            return cron.add_job(
+                name=name, schedule=every, message="m", session_key="project:x",
+                origin_channel="websocket", origin_chat_id="default", board=board,
+            ).id
+
+        mine = add("acqua", {"notebook": "piante", "card": "c1", "section": "s1"})
+        paused = add("concime", {"notebook": "piante", "card": "c2", "section": "s2"})
+        cron.set_paused(paused, True)
+        other = add("semina", {"notebook": "orto", "card": "c1", "section": "s1"})
+        personal = add("pane", None)
+
+        monkeypatch.setattr(module, "delete_project", lambda **kw: {"name": kw["name"]})
+        monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
+        monkeypatch.setattr(home_pages, "detach_pages_of", _no_page)
+        ctx = SimpleNamespace(
+            get_workspace_root=lambda: tmp_path,
+            invalidate_session=lambda k: None,
+            busy_session_keys=lambda: (),
+            get_cron_service=lambda: cron,
+        )
+
+        outcome = await commands.project_delete(ctx, {"name": "piante"})
+
+        assert sorted(outcome["removed_crons"]) == sorted([mine, paused])
+        left = {j.id for j in cron.list_jobs(include_disabled=True)}
+        assert mine not in left and paused not in left
+        assert {other, personal} <= left
+    finally:
+        cron.stop()
+
+
+def test_without_a_cron_service_nothing_is_removed() -> None:
+    assert module.remove_notebook_crons(None, "piante") == []

@@ -94,3 +94,19 @@ async def test_unavailable_maps_to_ui_unavailable():
     result = await _tool(svc).execute()
     assert not result.ok
     assert result.error.code == "ui_unavailable"
+
+
+async def test_the_chat_open_over_the_view_is_said():
+    """Dal 05/10/2026 la chat sale sopra la pagina: la vista descritta e'
+    quella sotto, e il modello deve saperlo."""
+    svc = _FakeService(payload={"view": "home:settings", "over": "chat", "html": "<p>Tema</p>"})
+    result = await _tool(svc).execute()
+    assert result.ok
+    assert "view: home:settings" in result.content
+    assert "open full screen over this view" in result.content
+
+
+async def test_no_chat_over_says_nothing_about_it():
+    svc = _FakeService(payload={"view": "home:settings", "html": "<p>Tema</p>"})
+    result = await _tool(svc).execute()
+    assert "over this view" not in result.content

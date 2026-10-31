@@ -473,6 +473,25 @@ def stringify_text_blocks(content: list[dict[str, Any]]) -> str | None:
     return "\n".join(parts)
 
 
+_TOOL_RESULT_REFERENCE_HEAD = "[tool output persisted]\n"
+_TOOL_RESULT_PATH_LABEL = "Full output saved to: "
+
+
+def persisted_tool_result_path(content: str) -> str | None:
+    """Il file di un riferimento scritto da :func:`_render_tool_result_reference`.
+
+    ``None`` se *content* non e' un riferimento. Formato e lettura stanno qui
+    insieme: il microcompact svuota i vecchi risultati ma tiene il path, e una
+    copia del formato altrove invecchierebbe in silenzio.
+    """
+    if not content.startswith(_TOOL_RESULT_REFERENCE_HEAD):
+        return None
+    line = content[len(_TOOL_RESULT_REFERENCE_HEAD):].split("\n", 1)[0]
+    if not line.startswith(_TOOL_RESULT_PATH_LABEL):
+        return None
+    return line[len(_TOOL_RESULT_PATH_LABEL):] or None
+
+
 def _render_tool_result_reference(
     filepath: Path,
     *,
@@ -493,8 +512,8 @@ def _render_tool_result_reference(
     riprendere.
     """
     result = (
-        f"[tool output persisted]\n"
-        f"Full output saved to: {filepath}\n"
+        f"{_TOOL_RESULT_REFERENCE_HEAD}"
+        f"{_TOOL_RESULT_PATH_LABEL}{filepath}\n"
         f"Original size: {original_size} chars, {total_lines} lines\n"
         f"Preview:\n{preview}"
     )
@@ -610,21 +629,49 @@ def build_assistant_message(
     return msg
 
 
+# Quanto costa un'immagine nel prompt, in token. Il suo base64 non e' testo:
+# contato a caratteri, una foto da 400 KB valeva 100 mila token e faceva
+# tagliare tutta la cronologia. Un costo fisso e' piu' vicino al vero.
+IMAGE_PROMPT_TOKENS = 1_500
+_IMAGE_PART_TYPES = frozenset({"image_url", "input_image", "image"})
+
+# La stima onesta del prompt conta tutto quel che parte: testo, ragionamenti,
+# argomenti dei tool. Fino al 07/10/2026 contava solo ``content`` e sul Titan
+# diceva 50 mila token dove il provider ne contava 165 mila: la compattazione
+# non scattava mai. L'interruttore (``agents.defaults.honestContextEstimate``)
+# esiste per tornare indietro sul telefono senza una release.
+_COUNT_EVERY_FIELD = True
+
+
+def set_honest_prompt_estimate(enabled: bool) -> None:
+    """Accende o spegne la stima che conta ogni campo dei messaggi."""
+    global _COUNT_EVERY_FIELD
+    _COUNT_EVERY_FIELD = bool(enabled)
+
+
 def estimate_prompt_tokens(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
 ) -> int:
-    """Estimate prompt tokens with a character heuristic."""
+    """Estimate prompt tokens with a character heuristic.
+
+    Conta ogni messaggio come :func:`estimate_message_tokens` (testo,
+    ragionamento, chiamate ai tool, immagini a costo fisso) piu' le definizioni
+    dei tool: la stessa unita' che usano i tagli, cosi' il cancello e il taglio
+    parlano dello stesso prompt.
+    """
+    tool_tokens = len(json.dumps(tools, ensure_ascii=False)) // CHARS_PER_TOKEN if tools else 0
+    if _COUNT_EVERY_FIELD:
+        return sum(estimate_message_tokens(m) for m in messages) + tool_tokens
     total_chars = sum(len(str(m.get("content", ""))) for m in messages)
-    if tools:
-        total_chars += len(json.dumps(tools, ensure_ascii=False))
-    return total_chars // CHARS_PER_TOKEN + len(messages) * 4
+    return total_chars // CHARS_PER_TOKEN + len(messages) * 4 + tool_tokens
 
 
 def estimate_message_tokens(message: dict[str, Any]) -> int:
     """Estimate prompt tokens contributed by one persisted message."""
     content = message.get("content")
     parts: list[str] = []
+    images = 0
     if isinstance(content, str):
         parts.append(content)
     elif isinstance(content, list):
@@ -633,6 +680,8 @@ def estimate_message_tokens(message: dict[str, Any]) -> int:
                 text = part.get("text", "")
                 if text:
                     parts.append(text)
+            elif isinstance(part, dict) and part.get("type") in _IMAGE_PART_TYPES:
+                images += 1
             else:
                 parts.append(json.dumps(part, ensure_ascii=False))
     elif content is not None:
@@ -648,17 +697,33 @@ def estimate_message_tokens(message: dict[str, Any]) -> int:
     rc = message.get("reasoning_content")
     if isinstance(rc, str) and rc:
         parts.append(rc)
+    if message.get("thinking_blocks"):
+        parts.append(json.dumps(message["thinking_blocks"], ensure_ascii=False, default=str))
 
     payload = "\n".join(parts)
+    image_tokens = images * IMAGE_PROMPT_TOKENS
     if not payload:
-        return 4
-    return max(4, len(payload) // CHARS_PER_TOKEN + 4)
+        return 4 + image_tokens
+    return max(4, len(payload) // CHARS_PER_TOKEN + 4) + image_tokens
 
 
 # Token di output riservati di default quando il provider non specifica altro.
 DEFAULT_RESERVED_OUTPUT_TOKENS = 4096
 # Margine di sicurezza sul budget di contesto (stima dello spazio di output).
 CONTEXT_BUDGET_SAFETY_BUFFER = 1024
+
+
+def output_tokens_for_window(max_tokens: int, context_window_tokens: int | None) -> int:
+    """Il tetto di output davvero usato: mai piu' di un quarto della finestra.
+
+    Con il default a 32000 un modello locale da 32768 di finestra resterebbe
+    senza spazio per il prompt. OpenCode prende il limite dal catalogo dei
+    modelli; noi non lo conosciamo, e un quarto della finestra (minimo 4096) e'
+    la regola che non lo fa mai finire. Una finestra ignota non limita niente.
+    """
+    if not context_window_tokens or context_window_tokens <= 0:
+        return max_tokens
+    return min(max_tokens, max(4096, context_window_tokens // 4))
 
 
 def reserved_output_tokens(provider: Any, spec_max_tokens: Any = None) -> int:
@@ -690,7 +755,11 @@ def estimate_prompt_tokens_chain(
                 return int(tokens), str(source or "provider_counter")
     estimated = estimate_prompt_tokens(messages, tools)
     if estimated > 0:
-        return int(estimated), "heuristic"
+        # Corretta col rapporto misurato sui numeri veri del provider per questo
+        # modello (1.0 finche' non c'e' una chiamata): v. ``token_calibration``.
+        from jenny.utils.token_calibration import factor
+
+        return int(estimated * factor(model)), "heuristic"
     return 0, "none"
 
 
@@ -726,19 +795,18 @@ def build_status_content(
         else str(context_tokens_estimate)
     )
     ctx_total_str = f"{ctx_total // 1000}k" if ctx_total > 0 else "n/a"
-    token_line = f"\U0001f4ca Tokens: {last_in} in / {last_out} out"
-    if cached and last_in:
-        token_line += f" ({cached * 100 // last_in}% cached)"
-    lines = [
-        f"\U0001f408 jenny v{version}",
-        f"\U0001f9e0 Model: {model}",
-        token_line,
-        f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}% of input budget)",
-        f"\U0001f4ac Session: {session_msg_count} messages",
-        f"\u23f1 Uptime: {uptime}",
-        f"\u26a1 Tasks: {active_task_count} active",
-    ]
-    return "\n".join(lines)
+    # Import locale: ``utils`` sta sotto ``runtime`` negli strati.
+    from jenny.runtime.user_text import say
+
+    cached_note = (
+        say("cmd.status.cached", pct=cached * 100 // last_in) if cached and last_in else ""
+    )
+    return say(
+        "cmd.status.body",
+        version=version, model=model, prompt=last_in, completion=last_out, cached=cached_note,
+        used=ctx_used_str, total=ctx_total_str, pct=ctx_pct, messages=session_msg_count,
+        uptime=uptime, tasks=active_task_count,
+    )
 
 
 def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:
@@ -804,6 +872,15 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     # Extract UI assets into workspace/ui/
     n_ui = extract_package_dir("jenny.templates.ui", workspace / "ui")
     added.append(f"ui/ ({n_ui} files)")
+    # E quelli delle estensioni impacchettate in questa build (``jenny/extensions.py``).
+    from jenny.utils.android_assets import extract_extension_ui
+
+    try:
+        n_ext = extract_extension_ui(workspace / "ui")
+        if n_ext:
+            added.append(f"ui/assets/ext/ ({n_ext} files)")
+    except Exception:  # noqa: BLE001 — un'estensione senza UI non ferma la sync
+        logger.opt(exception=True).error("Could not extract the extensions' UI files")
     # Il codice che il package non spedisce piu' (un file rinominato lascia la
     # copia col nome vecchio, e il gateway la servirebbe ancora).
     from jenny.utils.android_assets import retire_withdrawn_ui_files

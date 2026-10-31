@@ -1,38 +1,21 @@
 ---
 name: memory
-description: Two-layer memory system with Dream-managed knowledge files, plus the user's wikis listed in the prompt.
+description: Where the user's long-term memory lives and how to find something said in the past.
 always: true
 internal: true
 ---
 
 # Memory
 
-## Structure
+- `SOUL.md`, `USER.md`, `memory/MEMORY.md` — personality, the user, long-term facts.
+  **Dream manages them: never edit them.** Something outdated is fixed when Dream runs next.
+  So when the user asks you to remember, change or forget something, it is not done yet: say
+  it will be applied at the next Dream pass, which `/dream` starts now.
+- `memory/history.jsonl` — past conversations, one JSON object per line, never loaded into the
+  prompt; the oldest move to `memory/history-archive/`. Do not read them whole.
+- `wikis/<name>/` — the user's notebooks; `wikis/<name>/wiki/index.md` lists their pages. Do not
+  copy their content into the files above.
 
-- `SOUL.md` — Bot personality and communication style. **Managed by Dream.** Do NOT edit.
-- `USER.md` — User profile and preferences. **Managed by Dream.** Do NOT edit.
-- `memory/MEMORY.md` — Long-term facts (project context, important events). **Managed by Dream.** Do NOT edit.
-- `wikis/<name>/` — The user's wikis. The `## Wikis` block of the system prompt lists them by name and scope; open `wikis/<name>/wiki/index.md` for the detail, and don't restate their content into the files above.
-- `memory/history.jsonl` — append-only JSONL, not loaded into context. Prefer the built-in `grep` tool to search it.
-
-## Search Past Events
-
-`memory/history.jsonl` is JSONL format — each line is a JSON object with `cursor`, `timestamp`, `content`.
-
-- For broad searches, start with `grep(..., path="memory", glob="*.jsonl", output_mode="count")` or the default `files_with_matches` mode before expanding to full content
-- Use `output_mode="content"` plus `context_before` / `context_after` when you need the exact matching lines
-- Use `fixed_strings=true` for literal timestamps or JSON fragments
-- Use `head_limit` / `offset` to page through long histories
-- Use `python_exec` only as a last-resort fallback when the built-in search cannot express what you need
-
-Examples (replace `keyword`):
-- `grep(pattern="keyword", path="memory/history.jsonl", case_insensitive=true)`
-- `grep(pattern="2026-04-02 10:00", path="memory/history.jsonl", fixed_strings=true)`
-- `grep(pattern="keyword", path="memory", glob="*.jsonl", output_mode="count", case_insensitive=true)`
-- `grep(pattern="oauth|token", path="memory", glob="*.jsonl", output_mode="content", case_insensitive=true)`
-
-## Important
-
-- **Do NOT edit SOUL.md, USER.md, or MEMORY.md.** They are automatically managed by Dream.
-- If you notice outdated information, it will be corrected when Dream runs next.
-- Users can view Dream's activity with the `/dream-log` command.
+To find something said in the past, use `recall` for facts that were moved out of the files
+above, and `recall_history` for details of past conversations that Dream did not keep.
+Search them with `query`, in both Italian and English: the memory is written in both.

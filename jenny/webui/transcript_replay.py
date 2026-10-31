@@ -44,6 +44,11 @@ def replay_transcript_to_ui_messages(
     buffer_message_id: str | None = None
     buffer_parts: list[str] = []
     suppress_until_turn_end = False
+    # L'ultima frase di passaggio di questo turno: un testo retrocesso a pensiero
+    # (``{"original": ...}``, il messaggio com'era) o il testo di un frame
+    # ``progress`` (``{"text": ...}``, che diventa una riga di strumento). Torna
+    # una risposta se dopo arriva solo un file o un errore (``restore_demoted``).
+    demoted: dict[str, Any] | None = None
     active_activity_segment_id: str | None = None
     active_file_edit_segment_id: str | None = None
     activity_segment_counter = 0
@@ -81,6 +86,15 @@ def replay_transcript_to_ui_messages(
         seq = rec.get("turn_seq")
         if isinstance(seq, (int, float)):
             fields["turnSeq"] = int(seq)
+        # L'ora in cui la riga e' stata scritta (``at``, ms epoch), se c'e': i
+        # transcript scritti prima del 06/10/2026 non ce l'hanno, e allora il
+        # messaggio non ne ha una. Sta qui per la stessa ragione del confine qui
+        # sotto: e' il punto attraversato da tutte le costruzioni di messaggio.
+        # Per una risposta conta poi la chiusura del turno (``stamp_sent_at``);
+        # senza, resta l'ora della riga che ne ha portato il testo.
+        at = rec.get("at")
+        if isinstance(at, (int, float)) and not isinstance(at, bool) and at > 0:
+            fields["sentAt"] = int(at)
         if rec.get("session_boundary"):
             # Marcatore di `/new`. Il replay ricostruisce i messaggi campo per campo
             # invece di rigirare il record salvato, quindi un flag non elencato qui
@@ -197,7 +211,7 @@ def replay_transcript_to_ui_messages(
         return str(last.get("id"))
 
     def demote_interrupted_assistant(segment: str) -> None:
-        nonlocal buffer_message_id, buffer_parts
+        nonlocal buffer_message_id, buffer_parts, demoted
         for i in range(len(messages) - 1, -1, -1):
             candidate = messages[i]
             if candidate.get("role") == "user":
@@ -217,6 +231,7 @@ def replay_transcript_to_ui_messages(
                 for part in (candidate.get("reasoning"), content)
                 if isinstance(part, str) and part.strip()
             ]
+            demoted = {"original": candidate}
             messages[i] = {
                 **candidate,
                 "content": "",
@@ -228,6 +243,47 @@ def replay_transcript_to_ui_messages(
             if buffer_message_id == candidate.get("id"):
                 buffer_message_id = None
                 buffer_parts = []
+            return
+
+    def restore_demoted() -> None:
+        """Rimette come risposta l'ultima frase di passaggio, se niente le ha risposto dopo.
+
+        Il testo prima di uno strumento diventa pensiero (o, se arriva come
+        frame ``progress`` in un turno di sistema, una riga di strumento) perche'
+        lo sostituisce la risposta che segue. Un file da solo (``message`` col
+        solo allegato) o un avviso d'errore non lo sostituiscono: quel testo era
+        il riassunto del file, o la risposta prima che il turno finisse vuoto.
+        Come dal vivo (``home-chat.js``, ``_keepPassing``).
+        """
+        nonlocal demoted
+        passing, demoted = demoted, None
+        if passing is None:
+            return
+
+        def answered_from(pos: int) -> bool:
+            return any(
+                m.get("role") == "assistant"
+                and m.get("kind") != "trace"
+                and str(m.get("content") or "").strip()
+                for m in messages[pos:]
+            )
+
+        if "text" in passing:
+            if not answered_from(passing["pos"]):
+                messages.append({
+                    "id": _new_id("pl", passing["idx"]),
+                    "role": "assistant",
+                    "content": passing["text"],
+                    **passing["turn"],
+                    "createdAt": _ts_base + passing["idx"],
+                })
+            return
+        original = passing["original"]
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("id") != original.get("id"):
+                continue
+            if not answered_from(i + 1):
+                messages[i] = {**original, "isStreaming": False}
             return
 
     def close_reasoning(prev: list[dict[str, Any]]) -> None:
@@ -267,6 +323,16 @@ def replay_transcript_to_ui_messages(
                     "latencyMs": latency_ms,
                     "isStreaming": False,
                 }
+                return
+
+    def stamp_sent_at(sent_at: int) -> None:
+        """L'ora di una risposta e' quella in cui il turno si chiude: e' quando
+        la coda compare sotto la bolla, anche dal vivo."""
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("role") == "user":
+                return
+            if messages[i].get("role") == "assistant" and messages[i].get("kind") != "trace":
+                messages[i] = {**messages[i], "sentAt": sent_at}
                 return
 
     def absorb_complete(extra: dict[str, Any], idx: int) -> None:
@@ -388,8 +454,9 @@ def replay_transcript_to_ui_messages(
         }
 
     def _on_user(rec: dict[str, Any], idx: int) -> None:
-        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts
+        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts, demoted
         demote_interrupted_assistant(_ensure_activity_segment())
+        demoted = None
         buffer_message_id = None
         buffer_parts = []
         active_activity_segment_id = None
@@ -413,6 +480,9 @@ def replay_transcript_to_ui_messages(
         origin = rec.get("origin")
         if isinstance(origin, str) and origin:
             row["origin"] = origin
+        device = rec.get("device")
+        if isinstance(device, str) and device:
+            row["device"] = device
         if media_att:
             row["media"] = media_att
             if all(m.get("kind") == "image" for m in media_att):
@@ -519,7 +589,7 @@ def replay_transcript_to_ui_messages(
         return
 
     def _on_message(rec: dict[str, Any], idx: int) -> None:
-        nonlocal buffer_message_id, buffer_parts, suppress_until_turn_end
+        nonlocal buffer_message_id, buffer_parts, suppress_until_turn_end, demoted
         if suppress_until_turn_end and rec.get("kind") in (
             "tool_hint",
             "progress",
@@ -552,6 +622,14 @@ def replay_transcript_to_ui_messages(
                 return
             segment = _ensure_activity_segment()
             demote_interrupted_assistant(segment)
+            if not structured_events and isinstance(text, str) and text.strip():
+                # Il testo di un frame ``progress`` (in un turno di sistema, la
+                # frase prima di uno strumento): resta una riga di strumento, ma
+                # e' la frase di passaggio piu' recente.
+                demoted = {
+                    "text": text, "pos": len(messages), "idx": idx,
+                    "turn": _turn_fields(rec, "answer"),
+                }
             last = messages[-1] if messages else None
             if (
                 last
@@ -614,15 +692,34 @@ def replay_transcript_to_ui_messages(
         lat = rec.get("latency_ms")
         if isinstance(lat, (int, float)) and lat >= 0:
             extra["latencyMs"] = int(lat)
+        work_id = rec.get("work_id")
+        if isinstance(work_id, str) and work_id:
+            # Il testo e' l'annuncio o il resoconto di un lavoro lungo (la bolla
+            # di lavoro della home): la cronologia della home ne tiene uno solo.
+            extra["workId"] = work_id
+            if rec.get("work_start"):
+                extra["workStart"] = True
+        error = rec.get("error")
+        if isinstance(error, dict) and isinstance(error.get("kind"), str) and error["kind"]:
+            # La bolla d'errore resta tale anche riaprendo la chat: stessa
+            # chiave e stessa forma del payload dal vivo (``ws_sender``).
+            extra["error"] = {"kind": error["kind"]}
         extra.update(_turn_fields(rec, "answer"))
+        # Conta il file che la riga *portava*, non quello che si trova ancora:
+        # un allegato cancellato non torna da ``augment_assistant_media``, e la
+        # frase scritta sopra restava pensiero — sparita dalla casa insieme a lui.
+        carried_media = bool(media or media_paths or rec.get("media_urls"))
+        if "error" in extra or (carried_media and not content_s.strip()):
+            restore_demoted()
         absorb_complete(extra, idx)
         if media:
             suppress_until_turn_end = True
         return
 
     def _on_turn_end(rec: dict[str, Any], idx: int) -> None:
-        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts, suppress_until_turn_end
+        nonlocal active_activity_segment_id, active_file_edit_segment_id, buffer_message_id, buffer_parts, suppress_until_turn_end, demoted
         suppress_until_turn_end = False
+        demoted = None
         active_activity_segment_id = None
         active_file_edit_segment_id = None
         turn_id = rec.get("turn_id")
@@ -638,6 +735,9 @@ def replay_transcript_to_ui_messages(
         lat = rec.get("latency_ms")
         if isinstance(lat, (int, float)) and lat >= 0:
             stamp_latency(int(lat))
+        at = rec.get("at")
+        if isinstance(at, (int, float)) and not isinstance(at, bool) and at > 0:
+            stamp_sent_at(int(at))
         buffer_message_id = None
         buffer_parts = []
         return

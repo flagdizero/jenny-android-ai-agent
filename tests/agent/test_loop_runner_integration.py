@@ -10,6 +10,7 @@ from support.agent import make_loop
 
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse, ToolCallRequest
+from jenny.runtime.user_text import say
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
@@ -30,9 +31,13 @@ async def test_loop_max_iterations_message_stays_stable(tmp_path):
     loop.tools.execute = AsyncMock(return_value="ok")
     loop.max_iterations = 2
 
-    final_content, _, _, _, _ = await loop._run_agent_loop([])
+    final_content, _, messages, _, _ = await loop._run_agent_loop([])
 
-    assert final_content == (
+    # All'utente la frase nella sua lingua; nella cronologia del modello resta
+    # il testo inglese del template, come sempre.
+    assert final_content == say("turn.max_iterations", max_iterations=2)
+    assert messages[-1]["role"] == "assistant"
+    assert messages[-1]["content"] == (
         "I reached the maximum number of tool call iterations (2) "
         "without completing the task. You can try breaking the task into smaller steps."
     )
@@ -57,10 +62,7 @@ async def test_loop_goal_turn_uses_standard_iteration_budget(tmp_path):
     assert stop_reason == "max_iterations"
     assert loop.provider.chat_with_retry.await_count == 3
     assert loop.provider.chat_with_retry.await_args_list[-1].kwargs["tools"] is None
-    assert final_content == (
-        "I reached the maximum number of tool call iterations (2) "
-        "without completing the task. You can try breaking the task into smaller steps."
-    )
+    assert final_content == say("turn.max_iterations", max_iterations=2)
 
 
 @pytest.mark.asyncio
@@ -168,6 +170,7 @@ async def test_streamed_flag_not_set_on_llm_error(tmp_path):
     loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
     error_resp = LLMResponse(
         content="503 service unavailable", finish_reason="error", tool_calls=[], usage={},
+        error_status_code=503,
     )
     loop.provider.chat_with_retry = AsyncMock(return_value=error_resp)
     loop.provider.chat_stream_with_retry = AsyncMock(return_value=error_resp)
@@ -183,7 +186,11 @@ async def test_streamed_flag_not_set_on_llm_error(tmp_path):
     )
 
     assert result.message is not None
-    assert "503" in result.text
+    # All'utente la frase del tipo d'errore, non il corpo del provider; e il
+    # tipo viaggia nei metadata come ``error: {kind}`` (il contratto con la WebUI).
+    assert "503" not in result.text
+    assert result.text == say("error.server")
+    assert result.message.metadata["error"] == {"kind": "server"}
     assert not result.message.metadata.get("_streamed"), \
         "_streamed must not be set when stop_reason is error"
 
@@ -255,7 +262,8 @@ async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
         InboundMessage(channel="internal", sender_id="user", chat_id="test", content="first question")
     )
     assert first.message is not None
-    assert first.text == "429 rate limit exceeded"
+    assert first.text == say("error.generic")
+    assert first.message.metadata["error"] == {"kind": "generic"}
 
     session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
     assert [

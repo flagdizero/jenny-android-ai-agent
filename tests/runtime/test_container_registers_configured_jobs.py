@@ -1,6 +1,7 @@
 """Il composition root registra i lavori periodici che la config chiede.
 
-La proprietà è una sola, e vale per tutti e quattro i job condizionali:
+La proprietà è una sola, e vale per tutti e quattro i job condizionali (quelli
+delle estensioni sono registrati sempre: v. i loro test in fondo):
 **se la config lo accende, ``GatewayContainer.build()`` lo registra nel cron con
 l'orario configurato; se la spegne, non lo registra.**
 
@@ -24,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from jenny import extensions
 from jenny.config import paths as paths_mod
 from jenny.config.schema import Config
 from jenny.cron.types import CronJob
@@ -84,6 +86,15 @@ _CONDITIONAL_JOBS = [
         111 * 1000,
         id="heartbeat",
     ),
+    # L'orologio dei quaderni non ha un intervallo configurabile: un giro ogni
+    # quarto d'ora, che e' anche il passo minimo di una micro app. Lo accende la wiki.
+    pytest.param(
+        "reminders",
+        lambda c, on: setattr(c.wiki, "enabled", on),
+        lambda c: None,
+        15 * _MINUTE_MS,
+        id="reminders",
+    ),
     pytest.param(
         "update_check",
         lambda c, on: setattr(c.updates, "enabled", on),
@@ -130,11 +141,66 @@ def test_a_disabled_job_is_not_registered(
     assert others <= set(jobs), f"spegnere {job_id} ha portato via anche {others - set(jobs)}"
 
 
-def test_by_default_all_four_periodic_jobs_are_registered(workspace: Path) -> None:
+def test_by_default_all_periodic_jobs_are_registered(workspace: Path) -> None:
     """I default di produzione, non solo i valori iniettati.
 
     Il container non è l'unico modo di spegnere un lavoro: se un domani un
     default passasse a ``False`` per sbaglio, i test sopra — che accendono
     esplicitamente — resterebbero verdi.
     """
+    expected = {p.values[0] for p in _CONDITIONAL_JOBS} | set(extensions.system_jobs())
+    assert set(_jobs(Config())) == expected
+
+
+@pytest.fixture
+def no_extensions() -> Iterator[None]:
+    """Una build senza estensioni (il flavor ``foss``)."""
+    extensions.reset_for_tests(())
+    try:
+        yield
+    finally:
+        extensions.reset_for_tests(None)
+
+
+def test_without_extensions_only_the_core_jobs(workspace: Path, no_extensions) -> None:
     assert set(_jobs(Config())) == {p.values[0] for p in _CONDITIONAL_JOBS}
+
+
+def test_extension_jobs_are_registered_always(workspace: Path) -> None:
+    """Il giro di un'estensione non ha un interruttore in config da guardare
+    all'avvio: lo si accende dalla WebUI a gateway acceso, quindi il job c'è
+    sempre e il cancello è dentro il giro."""
+    expected = extensions.system_jobs()
+    assert expected, "this checkout ships no extension with a periodic job"
+
+    jobs = _jobs(Config())
+
+    for job_id, ext_job in expected.items():
+        job = jobs[job_id]
+        assert job.schedule.kind == "every" and job.schedule.every_ms == ext_job.every_ms
+        assert job.payload.kind == "system_event"
+
+
+def test_an_orphan_system_job_is_retired(workspace: Path, no_extensions) -> None:
+    """Un job di sistema che nessuno sa eseguire — arrivato col cron dentro un
+    backup fatto da una build con un'estensione — va via all'avvio. I job del
+    core spenti invece restano: il loro cancello è nel dispatcher."""
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronPayload, CronSchedule
+
+    config = Config()
+    config.updates.enabled = False
+    seed = GatewayContainer(config)
+    seed.build()
+    for job_id in ("cloud_backup", "update_check"):
+        seed.cron.register_system_job(CronJob(
+            id=job_id, name=job_id,
+            schedule=CronSchedule(kind="every", every_ms=_HOUR_MS),
+            payload=CronPayload(kind="system_event"),
+        ))
+    assert isinstance(seed.cron, CronService)
+
+    jobs = _jobs(config)
+
+    assert "cloud_backup" not in jobs
+    assert "update_check" in jobs

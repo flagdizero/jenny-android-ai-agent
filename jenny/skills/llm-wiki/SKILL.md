@@ -158,11 +158,11 @@ The folder layout and the five operations are **not** written there — the agen
 
 ## Core principles
 
-Five rules govern everything below. If a future instruction contradicts one, flag it to the user before acting.
+Six rules govern everything below. If an instruction contradicts one, say so — to the user when they are in the conversation, in your report when you work for another agent or inside a plan — and keep to the rule.
 
 ### 1. Divide and conquer
 
-A single concept page should **never** try to cover a complex topic end-to-end. Target: **400–1200 words per page**. When a topic would blow past that:
+A single concept page should **never** try to cover a complex topic end-to-end. Target: **400–1200 words per page** — in a notebook, pages are measured in characters instead (6000; see `compile` in a project wiki). When a topic would blow past that:
 
 - Create a subfolder: `wiki/concepts/<topic>/`
 - Put a short index page at `wiki/concepts/<topic>/index.md` — definition, list of sub-pages, one-line summaries
@@ -236,24 +236,38 @@ Each wiki under `wikis/` is a closed namespace. **Never write a wikilink that po
 - If a page needs to reference material in another wiki, mention it in prose and point at `wikis/_index.md`, not a wikilink.
 - `lint` enforces this: a cross-wiki link resolves to nothing and is reported as a **dead wikilink**. That is intended, not a false positive.
 
+### 6. Keeping a source and writing for the reader are different jobs
+
+- **Keeping a source** — an `ingest`, a summary — makes you the source's archivist. It goes into `raw/` verbatim, a summary says only what the source says, and when two sources disagree you record both without choosing.
+- **Writing for the reader** — a page you compile, the answer to a query — makes you the author, and the page is for the person who will act on it.
+  - **Lead with what to do.** The page opens with the practical answer for the reader's case; reasons and sources follow.
+  - **Say each statement as what it is.** What a source says: cite it. Common practice — advice good guides commonly give, which nothing you read contradicts: write it, and say it is common practice. Your own reasoning for this case: write it as a reasoned guess and say why ("probably…, because…"). A marked guess helps more than an empty section; an unmarked one is an invention.
+  - **Numbers come from sources.** A dose, a temperature, a distance, a date or an amount is never written from memory. For plant-protection products, toxicity, and anything that can harm a person, an animal or the plant itself, write only what a source says, in its most cautious reading.
+  - **When sources disagree, choose for this case and say why** — the reader's situation, several independent sources agreeing, the more specific or more recent source — and give the other view in one line, with its source. Leave the choice open only when it depends on something only the user knows, and say what that is.
+  - **Write in the reader's language.** Quotes are translated; the original stays in `raw/`.
+  - **What you know points the search; it is not a source.** It tells you where to look and which words to use.
+  - **"Not documented" is the last resort**, written after a real search — several queries, worded differently, in the reader's language and in English — where the gap is, with the queries tried. A page needs no section listing its gaps.
+
 ---
 
 ## The five operations
 
 Every action on the wiki is one of these five. Each appends an entry to the current day's log file (`log/YYYYMMDD.md`).
 
-**Recognizing which operation you're in.** Map every action to one of the five — including ones that don't feel like a wiki edit. In particular, **pulling material from the web is not a separate "research" mode: a web search or page fetch you use is an `ingest`.** Whether a source arrives as a file, a paste, or your own live fetch, bringing it into the wiki means running the `ingest` recipe below — raw/ first. Do not improvise a shortcut path around it.
+**Recognizing which operation you're in.** Map every action to one of the five — including ones that don't feel like a wiki edit. **Looking things up is not an `ingest`, but every source you rely on passes through one.** Keeping a document the user gave you is an `ingest`: you are its archivist. Finding out what the wiki lacks — for a page that must say it, or for a question — is research you lead: search freely (core principle 6), save each source you will rely on verbatim in `raw/` first (step 1 of `ingest`) so the page can cite it, then write — a `compile` or a `query`, for the reader. Never take a path that skips `raw/`.
 
 ### 1. `compile`
 
 (Re)structure wiki content from existing `raw/` material — including splitting oversized pages, merging near-duplicates, and rebuilding `index.md`.
 
+**When `raw/` does not cover what a page must say, ingest before you compile.** Restructuring cannot create facts. A split or a merge only moves what is there and needs no search; but when the job asks a page for something `raw/` is silent on — a care topic for each plant, a section the user wants filled — search the web for it first. What the search finds is saved verbatim in `raw/` first (in a notebook: `raw/research/`, through a `researcher` subagent when you can spawn one), then the page is written from it for the reader (core principle 6). "Not documented" is the last resort, written only after a real search came back empty, and it names the queries tried: `Not documented (searched: "acer palmatum repotting soil", "maple bonsai substrate mix").`
+
 **When to run**: after a big ingest batch, when an existing page has outgrown 1200 words, when `index.md` no longer reflects reality, or when the user says "clean up the wiki".
 
 **Steps**:
 1. Read `AGENTS.md`, `wiki/index.md`, and every file in the target subtree.
-2. For each page over ~1200 words: plan a split into `concepts/<topic>/` with an index + sub-pages. Confirm the plan with the user before writing.
-3. For each pair of near-duplicate pages: propose a merge. Confirm, then rewrite.
+2. For each page over ~1200 words: plan a split into `concepts/<topic>/` with an index + sub-pages. When the user is in the conversation, show them the plan first; inside an approved plan or a delegated job, the task is the confirmation.
+3. For each pair of near-duplicate pages: propose a merge — to the user when they are in the conversation, as above — then rewrite.
 4. Regenerate `wiki/index.md` so every page is listed exactly once.
 5. Log: `## [HH:MM] compile | <what you did — files touched, splits, merges>`
 
@@ -261,21 +275,24 @@ Every action on the wiki is one of these five. Each appends an entry to the curr
 - [ ] Every page appears exactly once in `wiki/index.md`.
 - [ ] No diagram left in ASCII — flows/hierarchies/state are mermaid (core principle 2).
 - [ ] A log line for this compile exists in `log/YYYYMMDD.md`.
+- [ ] No page says "not documented" without the queries that were tried.
 - [ ] **You actually ran `lint_wiki.lint('<workspace>/wikis/<name>')` and it exits clean** (or every issue is fixed / explicitly deferred to the user). This is a hard gate: run the script, read its real output, fix, re-run — then **paste the literal lint output into your reply**. Verification is by running the tool, not by remembering the rules; a summary of "looks satisfied" is not acceptable.
 
 #### `compile` in a **project** wiki (notebook layout)
 
-The steps above assume the research layout — `concepts/`, `entities/`, `summaries/`, pages measured in words. A **project** wiki (see `agent/project.md`) is flat pages under `wiki/`, each with `state:` and `source:`, fed by an append-only `raw/journal/`. Same operation, and it is the one the user asks for with *"tidy up the wiki"* or *"split the concepts"* — but five things differ, and every one of them has been got wrong in the field.
+The steps above assume the research layout — `concepts/`, `entities/`, `summaries/`, pages measured in words. A **project** wiki (see `agent/project.md`) is flat pages under `wiki/`, each with `state:` and `source:`, fed by an append-only `raw/journal/`. Same operation, and it is the one the user asks for with *"tidy up the wiki"* or *"split the concepts"* — but six things differ, and every one of them has been got wrong in the field.
 
 1. **The trigger is characters, not words, and the number is 6000.** That is the total budget for *all* pages injected into a turn (`_PROJECT_PAGES_MAX_CHARS`). Pages are offered in **the order the map names them** and any that does not fit is skipped whole — not shortened, not summarised — in every conversation in that project. So a single page over 6000 can never be read by anyone, and a merely *large* page silently starves the pages the map lists after it. Split by the things the page talks about; each part becomes a page named after its own thing.
 
-2. **Move text verbatim. Do not merge and do not re-word.** This is the hard inversion of step 3 above: in a research wiki you may propose a merge and rewrite; here you may not. The sentences came from the user's own words through an append-only journal, and a re-wording detaches the page from the `source:` that justifies it. Nothing is deleted; text that moves into a page the original links to is still there and still reachable. Rewriting is how a wiki decays one careful pass at a time.
+2. **Move text verbatim. Do not merge and do not re-word.** This is the hard inversion of step 3 above: in a research wiki you may propose a merge and rewrite; here you may not. The sentences came from the user's own words through an append-only journal, and a re-wording detaches the page from the `source:` that justifies it. Nothing is deleted; text that moves into a page the original links to is still there and still reachable. Rewriting is how a wiki decays one careful pass at a time. This rule is about restructuring. A page you write for the reader from sources — a care guide, the answer to a research question — is written, not moved: follow core principle 6, and keep the user's own sentences in it as they are.
 
 3. **`source:` is a single value, and its shape is load-bearing.** Either a journal line — `raw/journal/<day>.md#HH:MM`, with `#HH:MM.2` for the second line of a mixed minute — or a document copied into `raw/`. **Never a YAML list.** Measured on 26/08: a pass turned one `source:` into a two-item list, and the two readers that parse it disagreed — one returned `- raw/journal/...` with the dash attached, the other returned the second item — so the page's provenance became unreadable and nothing said so. When a page now rests on two sources, keep the one that carries its `state:` and name the other in the body.
 
 4. **`state:` never goes up during a compile.** Restructuring moves text; it does not certify. Only the user's own words justify anything above `open`, and a page whose `source:` is a document or an `[inferred]` line is capped at `open` for good — which is the right value, not a defect to fix.
 
-5. **A contradiction between pages goes into the map's open section** — one line, naming both — unless the user is present and settles it, which during a compile they usually are. If they do, say so in the log line: that is the difference between a decision and a pass that decided on its own.
+5. **A contradiction between pages that carry the user's own words goes into the map's open section** — one line, naming both — unless the user is present and settles it, which during a compile they usually are. If they do, say so in the log line: that is the difference between a decision and a pass that decided on its own. A contradiction between what sources say is different: the page chooses for this case and says why (core principle 6).
+
+6. **A page written for the reader opens with "In practice"**: what to do and when, in a few lines. The details follow by question, each fact with its source and quotes translated into the reader's language; the sources close the page, each with its link and its `raw/research/` file. It does not introduce its subject again — the subject's own page does, and a link is enough — and it has no section of gaps: a gap is written where it is (core principle 6).
 
 And the map's **page list comes out of a compile whole**: every page it named before is still named after. The list is how a future conversation learns which pages exist, so an entry dropped from it is a page that has stopped existing.
 
@@ -283,6 +300,7 @@ And the map's **page list comes out of a compile whole**: every page it named be
 - [ ] Every page appears exactly once in `wiki/index.md`, and no entry was lost.
 - [ ] No page is over 6000 characters, and the map is inside its own ceiling (2000).
 - [ ] Every page written or moved carries `state:` and a single-valued `source:`.
+- [ ] Every gap the task needed filled was searched first: what the notebook lacked was ingested into `raw/research/` before the page was written, and any "not documented" left names the queries tried. If you have no network, the gap goes into your report as **to research** — what is missing, for which page — so the agent that spawned you can send a `researcher`.
 - [ ] A log line exists: `## [HH:MM] compile | <what moved where>` (`split` is also a valid op when the pass was only a split).
 - [ ] **You actually ran `lint_wiki.lint('<workspace>/wikis/<name>')` and it exits clean**, and pasted its literal output into your reply. Same hard gate as everywhere else in this skill.
 
@@ -292,7 +310,7 @@ Add a new source. **One source typically touches 5–15 wiki pages.**
 
 **Steps**:
 1. Save the source **verbatim** to the right subfolder — this happens FIRST, before any wiki page is written. A source you fetched from the web is a source like any other:
-   - web page / search result → `raw/articles/<slug>.md` (save the fetched text, **not your summary of it**)
+   - web page / search result → `raw/articles/<slug>.md` (save the fetched text, **not your summary of it**); in a notebook, `raw/research/<YYYY-MM-DD>-<slug>.md`, with the URL and the date you read it at the top
    - paper → `raw/papers/<slug>.md` (extracted text for big PDFs)
    - note → `raw/notes/<slug>.md`
    - large binary → `raw/refs/<slug>.md` pointer file (see raw file policy)
@@ -305,6 +323,8 @@ Add a new source. **One source typically touches 5–15 wiki pages.**
 5. Create or update entity pages in `wiki/entities/` for any new people / tools / papers / organizations referenced.
 6. Update `wiki/index.md` so the new pages appear under the right category.
 7. Log: `## [HH:MM] ingest | <slug> — <one-line description> (touched N pages)`
+
+In a notebook, steps 3–5 are one: write or update the flat pages that need the source. A notebook has no `summaries/` and no `entities/` folder — its pages cite `raw/research/` directly — so the two checklist items below about summaries and entity pages belong to the research layout.
 
 **Definition of done** — do NOT report the ingest as complete until every box holds. A source is not "ingested" just because concept pages exist:
 - [ ] A `wiki/summaries/<slug>.md` exists for this source (step 3 — not optional).
@@ -326,20 +346,20 @@ python_exec(
 
 and **paste the script's literal output into your reply.** If you cannot show a clean (or explicitly-deferred) lint run, the ingest is not done. Pasting real output is the contract — a summary of "the checklist looks satisfied" is not acceptable, because that is precisely the step that has silently failed before.
 
-**When sources conflict**, do not silently pick one number or claim. Record the discrepancy — cite both values on the page with their sources, and add an entry to `AGENTS.md` "Open research questions" so a human can adjudicate. A contradiction you smoothed over is a fact you invented.
+**When sources conflict while you ingest**, do not silently pick one number or claim. Record the discrepancy — cite both values on the summary with their sources, and in a research wiki add an entry to `AGENTS.md` "Open research questions" so a human can adjudicate. A contradiction you smoothed over is a fact you invented. In the pages you then write from those sources, choose for the reader and say why (core principle 6): that is a decision made in the open, not a contradiction smoothed over.
 
-Note: `lint` verifies *shape and provenance*, not *truth*. It confirms a page cites a real source; it cannot tell you the page misread that source. Getting facts right stays on you — keep the source open while writing and do not add facts that aren't in `raw/`.
+Note: `lint` verifies *shape and provenance*, not *truth*. It confirms a page cites a real source; it cannot tell you the page misread that source. Getting facts right stays on you: keep the source open while writing. A summary holds nothing its source does not say; a page for the reader takes its sourced facts from `raw/` and marks everything else as common practice or a reasoned guess (core principle 6).
 
 ### 3. `query`
 
-Answer a question **grounded in the wiki**, not general knowledge.
+Answer a question **from the wiki first**.
 
 **Steps**:
 1. Read `wiki/index.md`. Scan for relevant pages by category.
 2. Read the identified pages in full; follow one level of wikilinks.
-3. If the wiki doesn't have enough material, say so and suggest what to ingest next instead of making something up.
+3. If the wiki doesn't have enough material, search for what is missing — sources saved in `raw/` first — and answer from that; if a real search finds nothing, say so and suggest what to ingest next. What you know can frame the answer, marked as such (core principle 6), never as a sourced fact and never as a number. Never make something up.
 4. Synthesize the answer, citing pages inline with `[[Page Name]]`.
-5. Save to `outputs/queries/<YYYY-MM-DD>-<question-slug>.md`.
+5. In a research wiki, save to `outputs/queries/<YYYY-MM-DD>-<question-slug>.md`. A notebook has no `outputs/`: the answer stays in the conversation, and a durable one becomes a page.
 6. If the answer is durable (a comparison, analysis, or new synthesis) → promote a cleaned-up version to `wiki/concepts/`, add to `index.md`.
 7. Log: `## [HH:MM] query | <question-slug>` (and a separate `## [HH:MM] promote | ...` line if promoted).
 
@@ -401,7 +421,7 @@ Two things about the **journal**, which is checked in every layout. Its append-o
 
 **One bad wiki costs one wiki.** Each wiki is linted in isolation, and so is the registry pass: a crash prints `🔴 the lint crashed on this wiki: …` and the run carries on. If a whole lint dies anyway, what you get back is still every finding it had already printed, followed by `🔴 the lint crashed before it finished: …` — read that line, because it means the checks after that point never ran: the wiki is neither clean nor a known set of issues, and the count above the line is not the total.
 
-For each issue, propose a fix, confirm with the user, then apply. Log: `## [HH:MM] lint | <N> issues found, <M> fixed`.
+For each issue, apply the fix. When the user is in the conversation and a fix would change what a page says, not just its shape, propose it first. Log: `## [HH:MM] lint | <N> issues found, <M> fixed`.
 
 ### 5. `audit`
 
@@ -481,6 +501,8 @@ After scaffolding:
 5. Run `audit` whenever new feedback accumulates.
 
 ## `wiki/index.md` format
+
+This is the research wiki's catalog. A notebook's map is a different thing — what the project is, what is decided, what is open, which pages exist, within 2000 characters — and the notebook's own prompt describes it.
 
 The LLM rebuilds `index.md` on every compile and touches it on every ingest. Format:
 

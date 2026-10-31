@@ -171,6 +171,52 @@ class TestOutcomeMessages:
 
         assert "no tokens spent" in text
 
+    def test_a_board_pass_on_an_empty_journal_does_not_claim_it_cost_nothing(self):
+        text = _format_gardener_outcome(
+            "viaggio", GardenerOutcome(status="skipped_no_delta", board="done")
+        )
+
+        assert "no tokens spent" not in text
+        assert "envelope" in text
+
+    def test_a_research_archive_is_told_why_it_got_no_board(self):
+        """Il 05/10: «niente di nuovo nel diario» e basta, e la domanda dopo —
+        «perche' la bacheca e' vuota?» — e' finita in una causa inventata."""
+        text = _format_gardener_outcome(
+            "finanza", GardenerOutcome(status="skipped_no_delta"), absence="research"
+        )
+
+        assert text.startswith("Nothing new in finanza's journal")
+        assert "no tokens spent" in text
+        assert "research archive" in text
+        assert "proposes a first board" in text
+
+    def test_every_absence_says_something_specific(self):
+        lines = {
+            absence: _format_gardener_outcome(
+                "finanza", GardenerOutcome(status="skipped_no_delta"), absence=absence
+            )
+            for absence in ("research", "no_pages", "proposed", "declined", "later", "next_pass")
+        }
+
+        assert len(set(lines.values())) == len(lines)
+
+    def test_a_board_that_ran_speaks_for_itself(self):
+        text = _format_gardener_outcome(
+            "finanza", GardenerOutcome(status="skipped_no_delta", board="done"),
+            absence="proposed",
+        )
+
+        assert text.count("envelope") == 1
+
+    def test_the_board_sentence_follows_the_wiki_one(self):
+        text = _format_gardener_outcome(
+            "viaggio", GardenerOutcome(status="written", lines=4, writes=2, board="failed")
+        )
+
+        assert text.startswith("The gardener read 4 journal lines")
+        assert text.endswith("the next pass retries.")
+
     def test_the_two_ways_of_writing_nothing_are_not_the_same_sentence(self):
         """«non c'era niente che meritasse una pagina» e «ho provato e sono stato
         bloccato» sono lo stesso silenzio visto da fuori e due fatti opposti: il
@@ -294,3 +340,68 @@ class TestAMapPassSaysWhatItMoved:
         text = self._line(status="failed", detail="provider is down", map_before=9000)
 
         assert "The gardener failed" in text and "provider is down" in text
+
+
+class TestTheWorkBubble:
+    """`/gardener` apre la bolla di lavoro della home e la chiude con l'esito.
+
+    I due testi — l'annuncio e il resoconto — restano per chi la bolla non ce
+    l'ha, e portano l'id del lavoro: e' cosi' che la home non li disegna due
+    volte.
+    """
+
+    async def test_the_bubble_opens_at_once_and_closes_with_the_outcome(
+        self, tmp_path, monkeypatch
+    ):
+        from jenny.bus.events import OUTBOUND_META_WORK_ID, OUTBOUND_META_WORK_STATUS
+        from jenny.runtime import work_status
+
+        work_status.reset_registry()
+        root = tmp_path / "wikis" / "viaggio"
+        (root / "wiki").mkdir(parents=True)
+        (root / "wiki" / "index.md").write_text("# viaggio\n", "utf-8")
+        monkeypatch.setattr(
+            "jenny.config.loader.load_config",
+            lambda: SimpleNamespace(workspace_path=tmp_path, wiki=SimpleNamespace(wikis_dir="wikis")),
+        )
+        seen: dict = {}
+
+        async def _pass(agent, store, *, reporter=None, yield_to_user=True, delta=None):
+            seen["yield_to_user"] = yield_to_user
+            reporter.enter("pages")
+            return GardenerOutcome(status="written", writes=3)
+
+        monkeypatch.setattr("jenny.agent.gardener.run_gardener", _pass)
+
+        frames: list = []
+        texts: list = []
+
+        class _Bus:
+            def try_publish_outbound(self, msg):
+                frames.append(msg.metadata[OUTBOUND_META_WORK_STATUS])
+                return True
+
+            async def publish_outbound(self, msg):
+                texts.append(msg)
+
+        tasks: list = []
+        ctx = _ctx("project:viaggio")
+        ctx.loop = SimpleNamespace(
+            bus=_Bus(), _schedule_background=lambda c: tasks.append(asyncio.ensure_future(c)),
+        )
+
+        out = await cmd_gardener(ctx)
+        await asyncio.gather(*tasks)
+
+        work_id = out.metadata[OUTBOUND_META_WORK_ID]
+        assert out.metadata["_work_start"] is True
+        assert "_work_start" not in texts[-1].metadata
+        assert frames[0]["state"] == "running"
+        assert frames[0]["id"] == work_id
+        assert [f["phase"] for f in frames][:2] == [None, "pages"]
+        assert frames[-1]["state"] == "done"
+        assert frames[-1]["outcome"]["writes"] == 3
+        assert texts[-1].metadata[OUTBOUND_META_WORK_ID] == work_id
+        # Una passata chiesta a mano non cede il passo a chi l'ha chiesta.
+        assert seen["yield_to_user"] is False
+        work_status.reset_registry()

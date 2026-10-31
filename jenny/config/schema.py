@@ -9,6 +9,7 @@ from typing import Any, Literal
 from loguru import logger
 
 from jenny.config.tool_schemas import (
+    AndroidWebSearchConfig,
     AndroidWebToolsConfig,
     DiagnosticsToolConfig,
     FileToolsConfig,
@@ -315,17 +316,42 @@ class AgentDefaults(Base):
 
     model: str = ""
     # Tetto per singola risposta. Sui reasoning model il thinking pesa su questo
-    # stesso budget: con 8192 un turno che pianifica a lungo lo consumava tutto
-    # prima di dire qualcosa. 16384 lascia margine restando dentro la finestra
-    # anche coi prompt più grossi osservati (~38k su 65536).
-    max_tokens: int = 16384
-    context_window_tokens: int = 65536
+    # stesso budget (DeepSeek via OpenAI-compatibile non ne ha uno separato):
+    # con 8192 un turno che pianificava a lungo lo consumava tutto prima di dire
+    # qualcosa, e l'08/10/2026 sul s22 un app-builder ha bruciato tutti i 16384 in
+    # ragionamento, perdendo un giro. 32000 come ``OUTPUT_TOKEN_MAX`` di OpenCode.
+    # Non prende mai piu' di un quarto della finestra
+    # (``helpers.output_tokens_for_window``), cosi' un modello locale con una
+    # finestra piccola non resta senza spazio per il prompt. Chi aggiorna lo
+    # sposta la migrazione v5 di ``Config._migrate_by_version``.
+    max_tokens: int = 32000
+    # 128K dal 05/10/2026, prima 65536. Tolti i 16384 riservati alla risposta,
+    # 64K lasciavano ~48k di prompt, e un lavoro che legge molte pagine — la
+    # passata della bacheca su un quaderno di 33 — perdeva le prime mentre
+    # leggeva le ultime e ricominciava. Su un modello con una finestra più
+    # piccola non rompe niente: l'overflow si recupera da sé
+    # (``runner``: riprova con la finestra letta dall'errore del provider).
+    #
+    # Come ``max_concurrent_subagents``: alzare il default non raggiunge chi
+    # aggiorna, e lo sposta la migrazione v4 di ``Config._migrate_by_version``.
+    context_window_tokens: int = 131072
     context_block_limit: int | None = None
     temperature: float = 0.1
     # Esplicito invece di lasciare il default del provider: un reasoning model a
     # briglia sciolta consuma tutto il budget di output in ragionamento su un
     # compito aperto. "medium" limita il thinking senza appiattirlo.
     reasoning_effort: str | None = "medium"
+    # Il ragionamento della sola Jenny, l'agente principale; ``None`` vuol dire
+    # «come ``reasoning_effort``». Gli aiutanti, Dream e il giardiniere restano
+    # su quello. Basso perche' delega: il lavoro che vuole pensiero lo fa
+    # l'aiutante, e lei sceglie a chi darlo e riassume. Misurato il 28/10/2026
+    # sul s22 (stesse tre richieste di app): da 16/10/12 s a 9/8/6 s prima che
+    # l'aiutante parta. Vale solo nei turni in cui puo' delegare e non scrive un
+    # piano, e mai col ragionamento di tutti spento; un preset che sceglie il
+    # suo ``reasoning_effort`` vale anche per lei (tutto in
+    # ``AgentLoop._turn_reasoning_effort``). Campo nuovo: chi aggiorna lo
+    # riceve dal default, senza migrazione.
+    main_reasoning_effort: str | None = "low"
     max_tool_iterations: int = 200
     # L'agente principale delega: tre slot reggono due lavori lunghi piu il
     # lavoro breve. Uno slot resta sempre riservato ai job quick (vedi
@@ -405,6 +431,15 @@ class AgentDefaults(Base):
     )
     max_messages: int = Field(default=120, ge=0)
     consolidation_ratio: float = Field(default=0.5, ge=0.1, le=0.95)
+    # La stima dei token che conta ogni campo dei messaggi (ragionamenti,
+    # chiamate ai tool), non solo il testo: v. ``utils/helpers.py``. Spenta,
+    # torna la stima di prima del 07/10/2026, che non faceva mai scattare la
+    # compattazione. Esiste per tornare indietro sul telefono senza una release.
+    honest_context_estimate: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("honestContextEstimate", "honest_context_estimate"),
+        serialization_alias="honestContextEstimate",
+    )
     dream: DreamConfig = Field(default_factory=DreamConfig)
     gardener: GardenerConfig = Field(default_factory=GardenerConfig)
     model_preset: str | None = Field(
@@ -757,12 +792,27 @@ class HeartbeatConfig(Base):
     keep_recent_messages: int = 8
 
 
+class RemoteAccessConfig(Base):
+    """Jenny raggiungibile dagli altri dispositivi del tailnet (``gateway.remoteAccess``).
+
+    Spento di default. ``key`` è la chiave del link che si apre da fuori, ed è
+    **un'altra** rispetto a ``websocket.token_issue_secret``: vale solo sul
+    secondo ascoltatore (``channels.ws_remote``), quindi cambiarla scollega gli
+    altri dispositivi senza toccare la WebView del telefono, che continua con la
+    sua. Vuota finché l'utente non accende l'opzione la prima volta.
+    """
+
+    enabled: bool = False
+    key: str = ""
+
+
 class GatewayConfig(Base):
     """Gateway/server configuration."""
 
     host: str = "127.0.0.1"  # Safer default: local-only bind.
     port: int = 18790
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
+    remote_access: RemoteAccessConfig = Field(default_factory=RemoteAccessConfig)
 
 
 class ToolsConfig(Base):
@@ -1054,7 +1104,7 @@ class ModelPresetConfig(Base):
 
 # Versione corrente dello schema del config. Alzala di uno ogni volta che
 # aggiungi un ramo a ``Config._migrate_by_version``, mai altrimenti.
-CURRENT_CONFIG_VERSION = 3
+CURRENT_CONFIG_VERSION = 6
 
 # Migrazioni gia annunciate in questo processo. Solo per il log: la migrazione
 # resta idempotente e rigira a ogni parse finche il file non viene riscritto (lo
@@ -1142,6 +1192,12 @@ class Config(BaseSettings):
         # come chiave «ignota», vincendo a ogni lettura sulle modifiche dalla UI.
         serialization_alias="modelPresets",
     )
+    # Le impostazioni delle estensioni impacchettate solo in alcune build
+    # (``jenny/extensions.py``): una sezione per nome, che il core non legge.
+    # Sta qui e non in un file loro perché così passa da ``mutate`` e viaggia
+    # negli snapshot come il resto. Le chiavi interne restano come le scrive
+    # l'estensione: un dict senza modelli dentro non viene camelizzato.
+    extensions: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -1234,6 +1290,78 @@ class Config(BaseSettings):
         if version < 3 and 3 not in _ANNOUNCED_MIGRATIONS and "casa" in data:
             _ANNOUNCED_MIGRATIONS.add(3)
             logger.info("Config migration v3: the home block moves from 'casa' to 'home'")
+
+        # v4: ``contextWindowTokens`` passa da 65536 a 131072 (v. il commento sul
+        # campo). Solo il default di ``agents.defaults``: un preset in
+        # ``modelPresets`` e' scritto per un modello preciso, ed e' una scelta.
+        if version < 4:
+            agents = data.get("agents")
+            if isinstance(agents, dict):
+                defaults = agents.get("defaults")
+                if isinstance(defaults, dict):
+                    for key in ("contextWindowTokens", "context_window_tokens"):
+                        if defaults.get(key) == 65536:
+                            new_value = AgentDefaults.model_fields[
+                                "context_window_tokens"
+                            ].default
+                            if 4 not in _ANNOUNCED_MIGRATIONS:
+                                _ANNOUNCED_MIGRATIONS.add(4)
+                                logger.warning(
+                                    "Config migration v4: contextWindowTokens 65536 -> {} "
+                                    "(the old default made long reading jobs drop the "
+                                    "pages they had read; set it back explicitly to keep 64K)",
+                                    new_value,
+                                )
+                            defaults = {**defaults, key: new_value}
+                            agents = {**agents, "defaults": defaults}
+                            data = {**data, "agents": agents}
+                            break
+
+        # v5: ``maxTokens`` passa da 16384 a 32000 (v. il commento sul campo). Come
+        # la v4, solo il default di ``agents.defaults``, non i preset.
+        if version < 5:
+            agents = data.get("agents")
+            if isinstance(agents, dict):
+                defaults = agents.get("defaults")
+                if isinstance(defaults, dict):
+                    for key in ("maxTokens", "max_tokens"):
+                        if defaults.get(key) == 16384:
+                            new_value = AgentDefaults.model_fields["max_tokens"].default
+                            if 5 not in _ANNOUNCED_MIGRATIONS:
+                                _ANNOUNCED_MIGRATIONS.add(5)
+                                logger.warning(
+                                    "Config migration v5: maxTokens 16384 -> {} (a reasoning "
+                                    "model could spend the whole reply thinking; set it back "
+                                    "explicitly to keep 16384)",
+                                    new_value,
+                                )
+                            defaults = {**defaults, key: new_value}
+                            agents = {**agents, "defaults": defaults}
+                            data = {**data, "agents": agents}
+                            break
+
+        # v6: il tetto di ``web_search`` passa da 30 a 15 s (v. la docstring di
+        # ``AndroidWebSearchConfig``).
+        if version < 6:
+            tools = data.get("tools")
+            if isinstance(tools, dict):
+                for web_key in ("androidWeb", "android_web"):
+                    web = tools.get(web_key)
+                    search = web.get("search") if isinstance(web, dict) else None
+                    if not isinstance(search, dict) or search.get("timeout") != 30:
+                        continue
+                    new_value = AndroidWebSearchConfig.model_fields["timeout"].default
+                    if 6 not in _ANNOUNCED_MIGRATIONS:
+                        _ANNOUNCED_MIGRATIONS.add(6)
+                        logger.warning(
+                            "Config migration v6: androidWeb.search.timeout 30 -> {} "
+                            "(working searches answer within a few seconds; set it back "
+                            "explicitly to keep 30)",
+                            new_value,
+                        )
+                    web = {**web, "search": {**search, "timeout": new_value}}
+                    data = {**data, "tools": {**tools, web_key: web}}
+                    break
         return data
 
     @model_validator(mode="before")

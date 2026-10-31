@@ -121,3 +121,30 @@ _PROVIDERS = {"anthropic": AnthropicProvider, "openai": OpenAICompatProvider}
 def test_the_error_becomes_the_expected_response(provider: str, case: str) -> None:
     response = _PROVIDERS[provider]._handle_error(_cases()[case], partial_content="pc")
     assert tuple(getattr(response, f) for f in _FIELDS) == EXPECTED[(provider, case)]
+
+
+@pytest.mark.parametrize(
+    ("fields", "kind"),
+    [
+        ({"error_status_code": 402}, "credit"),
+        ({"error_status_code": 429, "error_code": "insufficient_quota"}, "credit"),
+        ({"error_status_code": 401}, "auth"),
+        ({"error_status_code": 403}, "auth"),
+        ({"error_status_code": 429}, "rate_limit"),
+        ({"error_status_code": 500}, "server"),
+        ({"error_status_code": 529}, "server"),
+        ({"error_status_code": 408}, "timeout"),
+        ({"error_kind": "timeout"}, "timeout"),
+        ({"error_kind": "connection"}, "connection"),
+        ({"error_kind": "stream_error"}, "generic"),
+        ({"error_status_code": 400}, "generic"),
+        ({}, "generic"),
+    ],
+)
+def test_classify_user_error(fields, kind) -> None:
+    """Il tipo per la frase all'utente: prima lo status, poi ``error_kind``."""
+    from jenny.providers.base import LLMResponse
+    from jenny.providers.retry_policy import classify_user_error
+
+    response = LLMResponse(content="Error: x", finish_reason="error", **fields)
+    assert classify_user_error(response) == kind

@@ -110,6 +110,8 @@
     <application
         android:name=".JennyApplication"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -255,6 +257,25 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- Gli occhi di Jenny (ScreenService): legge lo schermo solo al tocco
+             sulla mascotte flottante, in sola lettura. Lo accende l'utente da
+             Impostazioni → Accessibilità; `BIND_ACCESSIBILITY_SERVICE` fa sì che
+             solo il sistema possa legarsi al servizio. Su un APK scaricato dal
+             browser Android 13+ chiede prima di sbloccare le «impostazioni con
+             restrizioni» dalle info dell'app. -->
+        <service
+            android:name=".ScreenService"
+            android:exported="false"
+            android:label="@string/screen_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/screen_service" />
+        </service>
 
         <!-- Risposta rapida dalla tendina. Nessun intent-filter, e non è una
              dimenticanza: lo raggiunge il PendingIntent che NotifierBridge

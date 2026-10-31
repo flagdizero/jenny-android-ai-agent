@@ -123,7 +123,7 @@ def test_loader_registers_exec_with_real_tools_config(tmp_path):
     assert registry.has("python_exec")
 
 
-# --- Task 4: _FsTool.create() ---
+# --- _FsTool.create() ---
 
 
 def test_fs_tool_create_builds_from_context():
@@ -154,7 +154,7 @@ def test_fs_tool_create_respects_sandbox():
     assert tool._allowed_dir is None
 
 
-# --- Task 5: MessageTool, SpawnTool, CronTool ---
+# --- MessageTool, SpawnTool, CronTool ---
 
 
 async def test_message_tool_create():
@@ -202,7 +202,7 @@ def test_cron_tool_create():
     assert isinstance(tool, CronTool)
 
 
-# --- Task 6: PythonExecTool, WebTools ---
+# --- PythonExecTool, WebTools ---
 
 
 def test_python_exec_tool_enabled():
@@ -230,7 +230,7 @@ def test_python_exec_tool_create():
 
 
 
-# --- Task 7: MyToolConfig ---
+# --- MyToolConfig ---
 
 
 def test_my_tool_enabled():
@@ -243,11 +243,12 @@ def test_my_tool_enabled():
     assert MyTool.enabled(ctx) is False
 
 
-# --- Task 10: Integration test ---
+# --- The core tools, end to end ---
 
 
-def test_loader_registers_same_tools_as_old_hardcoded():
-    """Verify the loader produces the same tool set as the old _register_default_tools."""
+def test_loader_registers_the_core_tools():
+    """The loader, with a full config, registers the core tools listed below
+    (a subset: ``test_loader_list_matches_disk`` covers the whole list)."""
     from jenny.agent.tools.loader import ToolLoader
     from jenny.agent.tools.registry import ToolRegistry
 

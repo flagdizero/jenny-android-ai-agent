@@ -83,12 +83,28 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _fake_apk(path: Path, *, python: tuple[str, ...] = ("jenny/__init__.pyc",),
+              dex: bytes = b"dex\nLcom/flagdizero/jenny/MainActivity;") -> Path:
+    """Un APK finto con la forma che lo script guarda: lo zip, l'archivio
+    Python di Chaquopy dentro, un dex."""
+    import io
+    import zipfile
+
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as zf:
+        for name in python:
+            zf.writestr(name, b"x")
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("assets/chaquopy/app.imy", inner.getvalue())
+        zf.writestr("classes.dex", dex * 50)
+    return path
+
+
 @pytest.fixture
 def apk(tmp_path: Path) -> Path:
-    """APK finto: allo script servono solo i byte per hash e dimensione."""
-    path = tmp_path / "app-release.apk"
-    path.write_bytes(b"not really an apk" * 100)
-    return path
+    """APK finto della build libera: allo script servono i byte per hash e
+    dimensione, e la forma per il controllo ``foss``."""
+    return _fake_apk(tmp_path / "app-foss-release.apk")
 
 
 def _run(repo: Path, *argv: str) -> int:
@@ -485,8 +501,27 @@ def test_bump_without_an_apk_explains_the_next_step(repo: Path, capsys) -> None:
     assert _run(repo, "0.7.0") == 0
 
     stdout = capsys.readouterr().out
-    assert "assembleRelease" in stdout
+    assert "assembleFossRelease" in stdout
+    assert "bundlePlayRelease" in stdout
+    assert "apk/foss/release/app-foss-release.apk" in stdout
     assert "--manifest-only" in stdout
+
+
+def test_the_play_apk_is_refused(repo: Path, tmp_path: Path, capsys) -> None:
+    """L'APK di GitHub arriva a tutti gli utenti dell'updater: dev'essere la build
+    senza estensioni. Quello ``play`` (o qualunque cosa non sia un APK) si rifiuta."""
+    play = _fake_apk(tmp_path / "app-play-release.apk",
+                     python=("jenny/__init__.pyc", "jenny_extensions/drive/cloud.pyc"))
+    assert _run(repo, "0.7.0", *_manifest_argv(play, tmp_path / "out")) == 1
+    assert "not the foss build" in capsys.readouterr().err
+
+    google = _fake_apk(tmp_path / "google.apk", dex=b"Lcom/google/android/gms/tasks/Tasks;")
+    assert _run(repo, "0.7.0", *_manifest_argv(google, tmp_path / "out2")) == 1
+
+    junk = tmp_path / "junk.apk"
+    junk.write_bytes(b"not really an apk" * 100)
+    assert _run(repo, "0.7.0", *_manifest_argv(junk, tmp_path / "out3")) == 1
+    assert "not an APK built by Gradle" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------

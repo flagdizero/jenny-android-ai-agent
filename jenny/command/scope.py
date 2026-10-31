@@ -29,6 +29,7 @@ classificazione in un job che non gira.
 from __future__ import annotations
 
 from jenny.command.specs import BUILTIN_COMMAND_SPECS, BuiltinCommandSpec
+from jenny.runtime.user_text import say
 from jenny.session.keys import is_project_session_key
 
 __all__ = [
@@ -78,7 +79,7 @@ def visible_specs(session_key: str | None) -> tuple[BuiltinCommandSpec, ...]:
     return tuple(spec for spec in BUILTIN_COMMAND_SPECS if available(spec, session_key))
 
 
-def refusal(spec: BuiltinCommandSpec, session_key: str) -> str:
+def refusal(spec: BuiltinCommandSpec) -> str:
     """«Qui non c'e' niente su cui agire», **e dove invece c'e'**.
 
     Un rifiuto che dice solo di no costa un altro turno: e' la lezione dei
@@ -92,18 +93,12 @@ def refusal(spec: BuiltinCommandSpec, session_key: str) -> str:
     personale» e' un'istruzione senza un dove.
     """
     if spec.scope == "project":
-        body = (
-            f"`{spec.command}` works on one project, and this conversation is not a "
-            "project.\n\nOpen the project — the chip above the composer does it — and "
-            f"send `{spec.command}` there."
-        )
+        body = say("cmd.refusal.project", command=spec.command)
     else:
-        body = (
-            f"`{spec.command}` does not act on this project, so it does nothing "
-            "here.\n\nSend it from the personal chat — the chip above the composer "
-            "switches back."
-        )
-    return f"{body}\n\n{spec.scope_note}" if spec.scope_note else body
+        body = say("cmd.refusal.personal", command=spec.command)
+    if not spec.scope_note:
+        return body
+    return f"{body}\n\n{say(spec.scope_note_key)}"
 
 
 def refusal_for_line(raw: str, session_key: str) -> str | None:
@@ -115,4 +110,4 @@ def refusal_for_line(raw: str, session_key: str) -> str | None:
     spec = spec_for_line(raw)
     if spec is None or available(spec, session_key):
         return None
-    return refusal(spec, session_key)
+    return refusal(spec)

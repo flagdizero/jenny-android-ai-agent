@@ -31,6 +31,8 @@ _NEIGHBORS = {
         "  getSecret() { return 'segreto'; },\n"
         # Il token dell'app, non il segreto: e' quello che finisce nella cornice.
         "  async appToken(slug) { return 'app-' + slug; },\n"
+        # Il telefono, non un altro dispositivo: v. test_home_remote_phone_only_client.
+        "  async isRemote() { return false; },\n"
         "};\n"
     ),
     "utils.js": """
@@ -38,7 +40,9 @@ export function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 export function showToast(text, type) { globalThis.toasts.push([text, type]); }
+export function showUndo() { return () => {}; }
 """,
+    "rpc-client.js": "export const rpc = { calls: [], async apps(m, p) { this.calls.push([m, p]); return { ok: true }; } };\n",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k, locale: 'it' };\n",
     "theme.js": """

@@ -317,7 +317,7 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
 
         def _mark(msg: dict[str, Any]) -> dict[str, Any]:
             content = msg.get("content")
-            if isinstance(content, str):
+            if isinstance(content, str) and content:
                 return {**msg, "content": [
                     {"type": "text", "text": content, "cache_control": cache_marker},
                 ]}
@@ -329,8 +329,9 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
 
         if new_messages and new_messages[0].get("role") == "system":
             new_messages[0] = _mark(new_messages[0])
-        if len(new_messages) >= 3:
-            new_messages[-2] = _mark(new_messages[-2])
+        # Sull'ultimo messaggio, non sul penultimo (v. ``anthropic_conversion``).
+        if len(new_messages) >= 2:
+            new_messages[-1] = _mark(new_messages[-1])
 
         new_tools = tools
         if tools:
@@ -401,6 +402,17 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
 
     def _request_model_name(self, model_name: str) -> str:
         return model_name
+
+    def closed_reasoning_can_be_blank(self, model: str | None) -> bool:
+        """``reasoning_content: ""`` sui turni chiusi e' accettato da questo modello?
+
+        Solo DeepSeek, l'unico misurato (07/10/2026, ``opencode-go``): con i tool
+        vuole indietro il ragionamento, ma un ``""`` sui turni gia' chiusi passa
+        e non si paga. Per gli altri si manda tutto, come prima: Kimi e MiMo
+        potrebbero volerlo intero, e nessuno l'ha provato.
+        """
+        name = (model or self.default_model or "").lower()
+        return "deepseek" in name.rsplit("/", 1)[-1]
 
     @staticmethod
     def _supports_temperature(

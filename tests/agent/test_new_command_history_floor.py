@@ -232,3 +232,15 @@ class TestCmdNew:
 
         assert loop.context.memory.get_last_dream_cursor() == before
         assert loop.context.memory.read_unprocessed_history(since_cursor=before)
+
+
+async def test_new_refreezes_the_diary_view(tmp_path):
+    """Le righe «nuove» e «non piu' in sospeso» parlavano alla conversazione buttata."""
+    from jenny.agent.diary import DIARY_STATE_KEY
+
+    session = Session(key=PERSONAL)
+    session.metadata[DIARY_STATE_KEY] = {"cursor": 3, "at": "2026-10-12 10:00",
+                                         "seen": "2026-10-12 10:05", "threads": {}}
+    ctx, _, _ = _new_ctx(tmp_path, session)
+    await cmd_new(ctx)
+    assert DIARY_STATE_KEY not in session.metadata

@@ -32,7 +32,8 @@ _NEIGHBORS = {
     "api-client.js": """
 export const api = {
   cancellate: [],
-  async deleteJennyApp(slug) { this.cancellate.push(slug); },
+  trashId: null,
+  async deleteJennyApp(slug) { this.cancellate.push(slug); return this.trashId ? { deleted: true, trashed: this.trashId } : undefined; },
   getSecret() { return 'ok'; },
 };
 """,
@@ -40,7 +41,10 @@ export const api = {
 export const notices = [];
 export function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 export function showToast(text, type) { notices.push([text, type]); }
+export const undos = [];
+export function showUndo(text, onUndo) { undos.push([text, onUndo]); return () => {}; }
 """,
+    "rpc-client.js": "export const rpc = { calls: [], async apps(m, p) { this.calls.push([m, p]); return { ok: true }; } };\n",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k };\n",
     "ws-manager.js": "export const wsManager = { on() {}, off() {}, request() {} };\n",
@@ -268,4 +272,23 @@ def test_back_on_an_app_opened_from_the_home_closes_it() -> None:
         "assert.equal(actions.handleBack(), false, 'con niente aperto Indietro non e suo');\n",
         app=GARDEN,
         pages=_door("free"),
+    )
+
+
+def test_deleting_goes_to_the_trash_with_an_undo_and_no_question() -> None:
+    """Dal 06/10/2026 «Elimina» non chiede: sposta nel cestino, e l'Annulla lo
+    rimette con ``apps.restore``."""
+    _run(
+        "api.trashId = 'orto-20261006T101500Z';\n"
+        "const { undos } = await import('./shared/utils.js');\n"
+        "const { rpc } = await import('./shared/rpc-client.js');\n"
+        "await actions._handleJennySheetAction('delete', APP);\n"
+        "assert.deepEqual(api.cancellate, ['orto']);\n"
+        "assert.equal(undos.length, 1);\n"
+        "assert.equal(undos[0][0], 'apps.trashed');\n"
+        "await undos[0][1]();\n"
+        "assert.deepEqual(rpc.calls, [['restore', { id: 'orto-20261006T101500Z' }]]);\n"
+        "assert.ok(calls.filter((c) => c[0] === 'rilette').length >= 2, 'la griglia non si rilegge');\n",
+        app=GARDEN,
+        pages=None,
     )

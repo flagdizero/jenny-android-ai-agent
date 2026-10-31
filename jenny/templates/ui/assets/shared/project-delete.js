@@ -20,7 +20,6 @@ import { rpc } from './rpc-client.js';
 import { showToast } from './utils.js';
 import { confirmDialog } from './dialog.js';
 import { i18n } from './i18n.js';
-import { dropLayoutKey } from './map-layout.js';
 
 /** Le frasi del giro, come chiavi i18n: quel che si cancella è un **quaderno**,
  *  in casa come in officina. Stessa forma di `NOTEBOOK_WORDS` in
@@ -31,6 +30,7 @@ export const NOTEBOOK_DELETE_WORDS = {
   confirmWithChat: 'workspace.deleteProjectConfirmWithChat',
   failed: 'workspace.deleteProjectFailed',
   busy: 'workspace.deleteProjectBusy',
+  ok: 'workspace.deleteProjectForever',
 };
 
 /** Chiede conferma e cancella *name*. Ritorna `true` solo se è sparito davvero.
@@ -57,7 +57,10 @@ export async function deleteProjectFlow(name, words = NOTEBOOK_DELETE_WORDS) {
   const question = messages
     ? i18n.t(words.confirmWithChat, { name, count: messages })
     : i18n.t(words.confirm, { name });
-  if (!(await confirmDialog(question))) return false;
+  /* Definitivo, e lo dice: bottone rosso «Elimina per sempre», non il
+     «Conferma» di ogni domanda (scelta dell'utente, 10/10/2026). */
+  const ok = words.ok ? i18n.t(words.ok) : null;
+  if (!(await confirmDialog(question, ok, null, { danger: true }))) return false;
 
   try {
     await rpc.deleteProject(name);
@@ -67,13 +70,12 @@ export async function deleteProjectFlow(name, words = NOTEBOOK_DELETE_WORDS) {
     // subagent, una passata): una condizione attesa, da dire com'e', non un
     // fallimento generico. Chi non ha la frase ricade su quella di sempre.
     const key = err?.code === 'conflict' && words.busy ? words.busy : words.failed;
-    showToast(i18n.t(key, { name }), 'error');
+    /* Un piano aperto tiene il quaderno (`plan_running`): si dice quello. */
+    showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lockDelete', { name })
+      : i18n.t(key, { name }), 'error');
     return false;
   }
-  /* La disposizione della sua mappa se ne va con lui, o un quaderno nuovo con
-     lo stesso nome la erediterebbe. Qui e non nei chiamanti: i chiamanti sono
-     tre (la casa, il chip, il gestore file) e la cancellazione e' una. Di
-     cortesia: non fallisce mai, e non cambia l'esito. */
-  await dropLayoutKey(name);
+  /* La bacheca sta dentro la cartella del quaderno, e se ne va con lui: non
+     c'e' niente da togliere a mano. */
   return true;
 }

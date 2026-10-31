@@ -17,6 +17,7 @@ ordine di costruzione, stesso drain ordinato allo shutdown.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from loguru import logger
@@ -54,6 +55,9 @@ class GatewayContainer:
         self._provider_fingerprint: str | None = None
         self.session_manager: Any = None
         self.cron: Any = None
+        # I rinomini di quaderno ripresi all'avvio, ``(vecchio, nuovo)``: la
+        # ripresa arriva prima dello scheduler, e i cron li seguono appena c'è.
+        self._resumed_renames: list[tuple[str, str]] = []
         self.snapshot: Any = None
         self.channels: Any = None
         self._deliverer: Any = None
@@ -144,6 +148,7 @@ class GatewayContainer:
             new_model = new_config.agents.defaults.model
             new_ctx = new_config.agents.defaults.context_window_tokens
             old_model = getattr(self._agent, "model", None)
+            self._agent.main_reasoning_effort = new_config.agents.defaults.main_reasoning_effort
             self._agent._apply_provider_switch(
                 new_provider, new_model, new_ctx,
                 # Un cambio dei soli parametri di generazione non è un cambio di
@@ -196,6 +201,41 @@ class GatewayContainer:
         """
         agent = self._agent
         return getattr(agent, "record_channel_delivery", None) if agent is not None else None
+
+    def _extension_job_runners(self) -> dict[str, Callable[[], Awaitable[str | None]]]:
+        """``id → giro`` per i job di sistema delle estensioni (``jenny/extensions.py``)."""
+        from jenny import extensions
+
+        def runner(job: extensions.SystemJob) -> Callable[[], Awaitable[str | None]]:
+            async def run() -> str | None:
+                # Lo snapshot si legge a ogni giro, non alla costruzione: il
+                # servizio può nascere dopo, e l'agente cambia con l'onboarding.
+                return await job.run(
+                    extensions.ExtensionHost(snapshot=self.snapshot, get_agent=lambda: self._agent)
+                )
+
+            return run
+
+        return {job_id: runner(job) for job_id, job in extensions.system_jobs().items()}
+
+    def _retire_orphan_system_jobs(self) -> None:
+        """Ritira i job di sistema che nessuno, in questa build, sa eseguire.
+
+        Ci arrivano con lo store del cron, che sta nel workspace: un backup o una
+        copia fatti da una build con un'estensione, ripristinati su una build
+        senza. Senza questo, quel job cadrebbe su «unbound» a ogni scadenza, per
+        sempre. Si guarda all'elenco dei job **noti** (core ed estensioni), non a
+        quelli registrati in questo avvio: un lavoratore del core spento resta
+        nello store di proposito, e il suo cancello è nel dispatcher.
+        """
+        from jenny import extensions
+        from jenny.cron.purposes import SYSTEM_JOB_PURPOSES
+
+        known = set(SYSTEM_JOB_PURPOSES) | set(extensions.system_jobs())
+        for job in self.cron.list_jobs(include_disabled=True):
+            if job.payload.kind == "system_event" and job.id not in known:
+                if self.cron.retire_system_job(job.id):
+                    logger.info("Cron: retired system job '{}' (nothing runs it here)", job.id)
 
     async def _snapshot_before_dream(self) -> bool:
         """Checkpoint del workspace prima che Dream riscriva la memoria.
@@ -297,7 +337,7 @@ class GatewayContainer:
 
         wiki_cfg = getattr(self.config, "wiki", None)
         wikis_dir = getattr(wiki_cfg, "wikis_dir", "wikis") or "wikis"
-        migrate_wikis(self.config.workspace_path / wikis_dir)
+        migrate_wikis(self.config.workspace_path / wikis_dir, self.config.workspace_path)
 
     def _repair_pending_renames(self) -> None:
         """Finisce i rinomini di progetto interrotti a metà.
@@ -317,8 +357,10 @@ class GatewayContainer:
         metà", è "un rinomino a metà contro **nessun gateway**". Un rinomino
         lasciato aperto lo riprova l'avvio dopo; un gateway che non parte no.
         """
+        from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
         from jenny.session.project_rename import repair_pending_project_renames
 
+        self._resumed_renames = []
         try:
             for old_key, new_key in repair_pending_project_renames(
                 self.config.workspace_path
@@ -327,11 +369,112 @@ class GatewayContainer:
                     "Project rename resumed and completed: {} -> {}",
                     old_key, new_key,
                 )
+                if is_project_session_key(old_key) and is_project_session_key(new_key):
+                    self._resumed_renames.append((old_key[len(PROJECT_SESSION_PREFIX):],
+                                                  new_key[len(PROJECT_SESSION_PREFIX):]))
         except Exception:
             logger.opt(exception=True).error(
                 "Ripresa dei rinomini di progetto in sospeso fallita; il gateway "
                 "parte comunque e il prossimo avvio riprova"
             )
+
+    def _wire_app_notifier(self) -> None:
+        """«I dati di un'app sono cambiati» va sulla WebUI (``jenny/apps/notify.py``):
+        una scrittura dallo schermo o un lettore che ricalcola aggiornano la
+        polaroid sulla bacheca e lo schermo aperto."""
+        from jenny.apps.notify import set_notifier
+        from jenny.bus.events import OutboundMessage
+
+        bus = self.bus
+
+        async def announce(slug: str) -> None:
+            await bus.publish_outbound(OutboundMessage(
+                channel="websocket", chat_id="webui", content="",
+                metadata={"_app_data_changed": True, "app_slug": slug},
+            ))
+
+        set_notifier(announce)
+
+    def _wire_board_notifier(self) -> None:
+        """«La bacheca è cambiata» va sulla WebUI (``jenny/board/notify.py``): una
+        scrittura che non viene dalla bacheca stessa — l'editore, un'app posata,
+        la passata del giardiniere — ridisegna la bacheca aperta."""
+        from jenny.board.notify import set_notifier
+        from jenny.bus.events import OutboundMessage
+
+        bus = self.bus
+
+        async def announce(notebook: str) -> None:
+            await bus.publish_outbound(OutboundMessage(
+                channel="websocket", chat_id="webui", content="",
+                metadata={"_board_changed": True, "notebook": notebook},
+            ))
+
+        set_notifier(announce)
+
+    def _wire_staged_notifier(self) -> None:
+        """«Le bozze in attesa sono cambiate» va sulla WebUI (``agent.staged_writes``).
+
+        L'avviso può arrivare da un thread (le RPC fanno il disco fuori dal
+        loop), quindi si rientra nel loop con ``call_soon_threadsafe``.
+        """
+        import asyncio
+
+        from jenny.agent.staged_writes import StagedChange, add_change_listener
+        from jenny.bus.events import OutboundMessage
+
+        bus = self.bus
+        try:
+            gateway_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:  # ``build()`` chiamata fuori dal loop (i test)
+            gateway_loop = None
+
+        def announce(change: StagedChange) -> None:
+            message = OutboundMessage(
+                channel="websocket", chat_id="webui", content="",
+                metadata={"_staged_changed": True, "count": change.count},
+            )
+            try:
+                asyncio.get_running_loop().create_task(bus.publish_outbound(message))
+            except RuntimeError:
+                if (target := gateway_loop) is not None:
+                    target.call_soon_threadsafe(
+                        lambda: target.create_task(bus.publish_outbound(message))
+                    )
+
+        add_change_listener(announce)
+
+    def _prepare_apps(self) -> None:
+        """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
+
+        Le micro app dei cassetti diventano app generali
+        (``jenny/apps/migrate_micro.py``); poi un'app lasciata «in prova» da
+        una versione di prima (06/10/2026) diventa vera
+        (:func:`jenny.apps.drafts.promote_valid_drafts`). Entrambe idempotenti, ed entrambe
+        prima che i tool delle app si registrino. Lo stesso ``except`` largo di ``_repair_pending_renames``:
+        un'app da sistemare non deve valere un gateway che non parte.
+        """
+        try:
+            from jenny.apps.migrate_micro import migrate_micro_apps
+
+            moved = migrate_micro_apps(self.config.workspace_path)
+            if moved:
+                logger.info("Apps: {} notebook micro apps are now general apps", moved)
+            from jenny.apps.drafts import promote_valid_drafts
+
+            kept = promote_valid_drafts(self.config.workspace_path)
+            if kept:
+                logger.info("Apps: {} left on trial are now apps: {}", len(kept), kept)
+            # Le schede-app prendono la taglia della loro striscia (la prima volta
+            # dopo l'aggiornamento: prima erano tutte polaroid).
+            from jenny.board.place import refresh_app_cards
+
+            resized = refresh_app_cards(self.config.workspace_path)
+            if resized:
+                logger.info("Apps: {} app cards took the size of their strip", resized)
+        except Exception:
+            logger.opt(exception=True).error(
+                "Preparazione delle app fallita; il gateway parte comunque")
 
     def build(self) -> None:
         """Costruisce l'intero grafo di oggetti (composition point)."""
@@ -371,9 +514,19 @@ class GatewayContainer:
             self.provider = None
         self.session_manager = SessionManager(config.workspace_path)
         self._repair_pending_renames()
+        self._prepare_apps()
+        self._wire_app_notifier()
+        self._wire_board_notifier()
+        self._wire_staged_notifier()
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)
+        # Il seguito dei rinomini ripresi qui sopra: lo scheduler non gira ancora,
+        # quindi lo spostamento va nel suo giornale e si applica a ``start``.
+        from jenny.board.cron_link import follow_renamed_notebook
+
+        for old_name, new_name in self._resumed_renames:
+            follow_renamed_notebook(self.cron, old_name, new_name)
 
         # Versioning locale del workspace: snapshot automatici di sistema.
         # Lo store vive FUORI dal workspace (sibling), così lo swap atomico
@@ -432,6 +585,15 @@ class GatewayContainer:
             # Chi scrive adesso sotto quale sessione, per i comandi della WebUI che
             # non devono spostarla sotto le sue mani (``project.rename``).
             get_busy_session_keys=self._busy_session_keys,
+            # Il modello che saluta in un quaderno appena creato
+            # (``project.greet``): quello dell'agente, letto a ogni chiamata
+            # perche' l'agente puo' nascere dopo e cambiare provider a caldo.
+            get_llm=lambda: (
+                (self._agent.provider, self._agent.model) if self._agent is not None else None
+            ),
+            # Il driver dei piani a lista nasce con l'agente: le RPC ``plan.*``
+            # lo chiedono a ogni chiamata.
+            get_plan_driver=lambda: getattr(self._agent, "plan_driver", None),
             # Telegram ci legge lo stato del turno: e' l'unico segnale di
             # inizio/fine che arriva a un canale che non riceve ne' progress
             # ne' turn_end.
@@ -464,6 +626,7 @@ class GatewayContainer:
             cron=self.cron,
             heartbeat_cfg=hb_cfg,
             snapshot_before_dream=self._snapshot_before_dream,
+            extension_jobs=self._extension_job_runners(),
         ).dispatch
 
         # I lavoratori periodici che questa versione **non esegue piu'**. Il loro
@@ -474,6 +637,7 @@ class GatewayContainer:
         # lavoratore aggiunge il suo id qui, e nessun altro punto lo conosce.
         for retired in _RETIRED_SYSTEM_JOBS:
             self.cron.retire_system_job(retired)
+        self._retire_orphan_system_jobs()
 
         # Register Dream system job (idempotent on restart).
         dream_cfg = config.agents.defaults.dream
@@ -518,6 +682,26 @@ class GatewayContainer:
                 payload=CronPayload(kind="system_event"),
             ))
 
+        # L'orologio dei quaderni: le micro app dei cassetti, le attese delle
+        # bacheche e gli eventi delle sezioni, un giro ogni quarto d'ora su tutti
+        # i quaderni (il passo e' anche l'intervallo minimo di una micro app; un
+        # giro senza niente da fare legge due JSON per quaderno). Registrato con
+        # la wiki accesa; a farlo tacere quando la wiki si spegne e' il cancello
+        # in ``CronDispatcher._run_reminders``, letto da disco.
+        if config.wiki.enabled:
+            from jenny.board.clock import CLOCK_EVERY_MS
+
+            self.cron.register_system_job(CronJob(
+                id="reminders",
+                name="reminders",
+                schedule=CronSchedule(
+                    kind="every",
+                    every_ms=CLOCK_EVERY_MS,
+                    tz=config.agents.defaults.timezone,
+                ),
+                payload=CronPayload(kind="system_event"),
+            ))
+
         # Register the update-check system job (idempotent on restart). È l'unico
         # percorso periodico che tocca la rete senza che l'utente abbia chiesto
         # niente, quindi con la sezione spenta il job non viene registrato — ma
@@ -541,6 +725,23 @@ class GatewayContainer:
             logger.info("Update check: every {}h", updates_cfg.check_interval_h)
         else:
             logger.info("Update check: disabled")
+
+        # I giri delle estensioni impacchettate in questa build. Registrati
+        # **sempre**: il loro interruttore si gira dalla WebUI a gateway acceso,
+        # e il cancello «acceso o spento» vive nel giro stesso, letto da disco.
+        from jenny import extensions
+
+        for job in extensions.system_jobs().values():
+            self.cron.register_system_job(CronJob(
+                id=job.id,
+                name=job.id,
+                schedule=CronSchedule(
+                    kind="every",
+                    every_ms=job.every_ms,
+                    tz=config.agents.defaults.timezone,
+                ),
+                payload=CronPayload(kind="system_event"),
+            ))
 
     def _instantiate_agent(self, config: Config, provider: Any) -> Any:
         """Costruisce e cabla un ``AgentLoop`` (wiring condiviso build/onboarding).
@@ -584,7 +785,51 @@ class GatewayContainer:
         # Il checkpoint generico, per chi non ha il contratto di Dream: il
         # giardiniere lo chiama con il proprio trigger prima di scrivere pagine.
         agent.take_snapshot = self._take_snapshot
+        self._wire_plan_driver(agent, config)
         return agent
+
+    def _wire_plan_driver(self, agent: Any, config: Config) -> None:
+        """Il driver dei piani a lista: nasce con l'agente, perché lo guida.
+
+        Qui e non in ``build``: l'agente può nascere dopo il gateway
+        (onboarding), e questo è il punto che entrambe le nascite attraversano.
+        Al boot fa il giro di recupero (un piano trovato a metà va in pausa, un
+        ritorno rimasto a metà si riapplica) prima che il loop prenda il primo
+        messaggio. Un recupero fallito non vale un gateway che non parte: il
+        driver c'è comunque, e i piani restano come li ha lasciati il crollo.
+        """
+        from jenny.agent.plan_host import LoopPlanHost
+        from jenny.plan.driver import PlanDriver
+        from jenny.plan.store import PlanStore
+        from jenny.security.workspace_access import set_held_notebook_probe
+        from jenny.session.goal_state import set_plan_probe
+
+        driver = PlanDriver(
+            PlanStore.for_workspace(config.workspace_path), self.bus, LoopPlanHost(agent)
+        )
+        try:
+            paused = driver.recover()
+            if paused:
+                logger.info("Plans paused at boot: {}", paused)
+        except Exception:
+            logger.opt(exception=True).error("Plan recovery at boot failed")
+            driver.refresh_index()
+        agent.attach_plan_driver(driver)
+        set_plan_probe(driver)
+        # Le bozze di un passo fermo: decise sulla scheda, il passo si chiude da
+        # solo (``PlanDriver.watch_drafts``).
+        driver.watch_drafts()
+        # Il cancello di scrittura dei tool: un quaderno tenuto da un piano si
+        # scrive solo dalla sua conversazione (``workspace_access``).
+        set_held_notebook_probe(driver.held_notebook_roots)
+        # Gli aiutanti di un piano che gira: piu slot per la sua sessione
+        # (``PLAN_HELPER_SLOTS`` normali, piu uno breve). Il manager non sa cosa
+        # sia un piano: chiede al driver, attraverso questa funzione.
+        from jenny.agent.subagent import PLAN_HELPER_SLOTS
+
+        set_limit = getattr(getattr(agent, "subagents", None), "set_limit_provider", None)
+        if callable(set_limit):
+            set_limit(lambda key: PLAN_HELPER_SLOTS if key and driver.plan_running(key) else None)
 
     # -- onboarding: creazione differita dell'agent (DeferredAgentActivator) --
 

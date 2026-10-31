@@ -57,12 +57,12 @@ Under the hood there are three schedule kinds:
 
 The timezone used when you don't specify one is your **device's timezone**, resolved once when the app starts (falls back to UTC if the device timezone can't be determined). A timezone override only applies to cron-expression schedules — one-shot and interval schedules always use the device timezone.
 
-When a reminder fires — a plain reminder, that is, the default mode described in [Two modes](#two-modes-one-that-always-speaks-one-that-speaks-only-if-it-has-to) below — it runs as a completely normal agent turn in the same chat you created it from, seeded with an instruction along the lines of "the scheduled time has arrived, execute this job and report the result." The reply lands in your chat exactly like any other message from Jenny — and, if the app isn't in the foreground at that moment, it also rings as an Android notification titled "Jenny ⏰ <job name>" (see [Notifications](#android-notifications) below). If a reminder fires while you're already mid-conversation with Jenny on that same chat, it politely waits and delivers once your current turn is idle, rather than interrupting it.
+When a reminder fires — a plain reminder, that is, the default mode described in [Two modes](#two-modes-one-that-always-speaks-one-that-speaks-only-if-it-has-to) below — it runs as a completely normal agent turn in the same chat you created it from, seeded with an instruction along the lines of "the scheduled time has arrived, execute this job and report the result." The reply lands in your chat exactly like any other message from Jenny — and, if the app isn't in the foreground at that moment, it also rings as an Android notification titled with Jenny's name, "⏰ Reminder" and the job's name (see [Notifications](#android-notifications) below). If a reminder fires while you're already mid-conversation with Jenny on that same chat, it politely waits and delivers once your current turn is idle, rather than interrupting it.
 
 A few smaller things worth knowing:
 
 - A reminder job cannot schedule further jobs from inside its own execution — this only matters if you ask Jenny to "set up a reminder that then sets another reminder" in one step.
-- The job's default name is just the first 30 characters of your reminder's message, unless you give it something more memorable.
+- Jenny gives the job a short name in your language when she creates it (it is what the notification title shows). A job without a name has none: its notification title is just "⏰ Reminder".
 - You can list and remove reminders by asking (e.g. "what reminders do I have?", "remove job xyz"). You create them only by asking.
 - In the workshop, **Hands → When she acts on her own** lists them too, and tapping one opens its detail with **Pause** and **Delete**. On a paused one the buttons are **Resume** and **Delete**. Pausing needs no confirmation because resuming undoes it. Deleting asks first. A resumed reminder counts from the moment you resume it and does not catch up on the runs it missed: an hourly one runs an hour later, a daily 8:00 one at the next 8:00. A one-time reminder whose time passed while it was paused can only be deleted, because resuming it would fire it at once, late. System jobs have no buttons, since their switch lives in their own settings. There is no "run now": that would start an agent turn, which costs tokens and may message you.
 - Jenny still sees a paused reminder when she lists them, marked as paused, so she won't set it up again thinking it's gone.
@@ -95,16 +95,17 @@ Monitor mode only makes sense on a repeating schedule, so **it cannot be combine
 
 ### Protected system jobs
 
-When you ask Jenny to list reminders, you'll also see jobs you didn't create: **`dream`**, **`heartbeat`**, and — when they are on — the [gardener](gardener.md) and the update check. These are system-managed and will show up as protected — visible for inspection, but Jenny will refuse to remove them if asked (a removal attempt gets a reply along the lines of "this is a protected system-managed cron job" and cannot be removed). The way to stop one is its config switch, not the reminder list: Dream's and the gardener's are in the workshop's **Memory** drawer, the heartbeat's and the update check's are in `config.json`.
+When you ask Jenny to list reminders, you'll also see jobs you didn't create: **`dream`**, **`heartbeat`**, and — when they are on — the [gardener](gardener.md), the notebook clock (`reminders`) and the update check. These are system-managed and will show up as protected — visible for inspection, but Jenny will refuse to remove them if asked (a removal attempt gets a reply along the lines of "this is a protected system-managed cron job" and cannot be removed). The way to stop one is its config switch, not the reminder list: Dream's and the gardener's are in the workshop's **Memory** drawer, the heartbeat's, the notebook clock's and the update check's are in `config.json`.
 
 | Job | Runs | Config | What it costs you |
 |---|---|---|---|
 | `dream` | every **2 hours** | `agents.defaults.dream.enabled` (default on), `agents.defaults.dream.intervalH` (default `2`) | One agent run — a real turn against your provider, several calls if it uses tools — whenever there is new conversation to consolidate. Takes a snapshot first, so a bad run is undoable. |
 | `heartbeat` | every **30 minutes** | `gateway.heartbeat.enabled` (default on), `gateway.heartbeat.intervalS` (default `1800`) | Nothing when `## Active Tasks` is empty; one real turn when it isn't. See below. |
 | `gardener` | every **30 minutes** (how often it *looks*) | `agents.defaults.gardener.enabled` (default on), `agents.defaults.gardener.intervalMin` (default `30`) | Nothing when no notebook has new journal lines, or none has been quiet long enough; otherwise one pass on that notebook, which is a real turn against your provider. See [The gardener](gardener.md). |
+| `reminders` | every **15 minutes** | registered when `wiki.enabled` is on (default on) | Nothing in a round when no notebook reminder is due; app readers run without the model; one real turn per reminder announced. See [Notebook reminders](#notebook-reminders). |
 | `update_check` | every **24 hours** | `updates.enabled` (default on), `updates.checkIntervalH` (default `24`) | One small HTTP request to the update manifest; a real turn only on the day a new version is first announced in chat (`updates.notifyInChat`). See [Updates](webui-tour.md#updates). |
 
-`dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md); `heartbeat` is described next.
+`dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md); `reminders` in [Notebook reminders](#notebook-reminders) below; `heartbeat` is described next.
 
 ### If the reminder list itself gets damaged
 
@@ -117,6 +118,16 @@ That notice matters more here than it does for settings. A reminder that has sto
 The workshop's **Hands → When she acts on her own** is where you check the outcome: it lists your reminders and the heartbeat, and repeats the recovery notice above the list itself, because further down the screen a short list of reminders looks exactly like a correct one. See [Settings → When she acts on her own](../reference/settings.md#when-she-acts-on-her-own).
 
 The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
+
+### Notebook reminders
+
+A [notebook](projects.md) has dated reminders of its own, on its [board](board.md): the ones you add in a card's drawer, and the ones the [gardener](gardener.md) takes from the notebook's journal when a line plans something with a date. A reminder belongs to a card or to the whole notebook. They are stored in the notebook's `board/reminders.json`, not in the reminder list above, and they show as yellow sticky notes on the board: one per card, and a free one for the whole notebook.
+
+The protected system job **`reminders`** — the notebook clock — runs every 15 minutes over every notebook. A dated reminder is announced from **09:00** in your time zone on its day (on the first of the month when only the month is known), once, in a silent turn that must say what is due and why, taken from the page the reminder points to. The message arrives in the personal chat like any other proactive message, with the notifications described below. The same round runs the apps' readers (see [App](board.md#app)) and notes when an app placed on a board changes state. See [Reminders and the notebook clock](board.md#reminders-and-the-notebook-clock).
+
+### Notebook crons
+
+Inside a notebook, the `cron` tool works once the notebook has a [board](board.md) (one with no cards is enough). Every job it creates belongs to **one card** or to the **whole notebook**, and **Jenny decides which** from what you asked, without asking you: tied to the card it is about, or to the whole notebook when it concerns all of it, several cards or nothing on the board. A job that repeats is a row of a mint label on the board (the card's, or the free one); a job that fires once is a dated line of a sticky note. A notebook cron runs inside the notebook (it can write only there, like the notebook's chat), delivers in the notebook's chat with the usual notifications when it has something to say, and leaves its last result on the board. In a notebook, *list* and *remove* see only that notebook's jobs. However it is removed — from the board, from the workshop, from any chat — what it left on the board goes with it. A notebook without a board still refuses the tool and points to the personal chat. The personal chat's own jobs stay where they are.
 
 ## Heartbeat: a periodic checklist
 
@@ -163,24 +174,30 @@ What changes once a goal is active:
 
 The reason is context. Everything the main agent does stays in your conversation permanently, and a page fetch or a test run is exactly the kind of large, low-value output that would sit there forever. A subagent's tool output lives and dies with the subagent; only its conclusion comes back.
 
-### The six kinds of subagent
+### The eight kinds of subagent
 
 `spawn` picks a **type**, and the type decides which tools that agent gets. The split is a safety boundary, not a convenience: whoever reads untrusted web pages is never also the one who runs code.
 
 | Type | For | Notably cannot |
 |---|---|---|
 | `researcher` | Gathering material online | Run code |
-| `writer` | Docs, wiki pages, synthesis from material already gathered | Reach the network at all |
-| `coder` | Writing and changing code, running tests | Reach the network |
-| `analyst` | Computation, data, charts | Reach the network |
+| `writer` | Docs and synthesis from material already gathered, outside a notebook | Reach the network at all |
+| `coder` | Writing and changing code, running tests | Search or read the web (its code can still call a public site through `http_get`/`http_post`) |
+| `analyst` | Computation, data, charts | Search or read the web (same `python_exec` network as `coder`) |
 | `sysadmin` | Remote machines over SSH | Use the web, or run code locally |
+| `app-builder` | Writing and testing a new version of one of your apps | Use the web, or publish what it wrote |
+| `notebook-editor` | Changing a notebook as you asked: pages, map, board | Reach the network, or run code |
 | `operator` | Everything else — the default | (holds the general subagent toolset) |
 
 Full tool lists and sampling defaults are in the [Tool reference](../reference/tools.md).
 
+### Changes waiting for your approval
+
+A helper that has read something from outside — a web page, a search, a download — does not change on its own the files Jenny uses by herself: a skill, `HEARTBEAT.md`, a reminder, `USER.md`, her memory. The change is kept as a draft, Jenny tells you there is something to approve, and a card in the home chat shows which file, where the content came from and what would change, with **Install** and **Discard**. Nothing is written until you tap **Install**. If the same helper has also read your personal files, it can send data only to the sites you named in the request. Why, and what this does not cover: [Security model](../internals/security-model.md#subagents-and-untrusted-content).
+
 ### Watching and steering the work
 
-Because a subagent can run for minutes, the workshop's Console gives you a **Subagents panel** just above the message box: one card per running job with its type, elapsed time, idle time and current step, plus **Stop** and **Relaunch** buttons and a tap-through detail sheet showing what it actually did. It appears when work starts and disappears when the work is done. The home's chat shows the short version, a chip saying how many agents are working for that conversation; pressing and holding it opens the workshop. See [Chat basics](chat.md#the-subagents-panel).
+Because a subagent can run for minutes, the workshop's Console gives you a **Subagents panel** just above the message box: one card per running job with its type, elapsed time, idle time and current step, plus **Stop** and **Relaunch** buttons and a tap-through detail sheet showing what it actually did. It appears when work starts and disappears when the work is done. The home's chat shows the short version, where each subagent is a *mini-me* of Jenny's: a bubble saying what she is doing ("I sent a mini-me: …"), a short note when she is done, and, if she gets stuck, the reason and a button to continue or start her again. From the bubble you can also stop her, and put back the files she changed. Pressing and holding a bubble opens the workshop. See [Helpers: stop, undo, continue](helpers.md) and [Chat basics](chat.md#the-subagents-panel).
 
 Jenny has the same controls from her side: she can check on a subagent's status, send it a correction mid-run ("no, use the other table") without restarting it, relaunch a failed one, and cancel one that's going nowhere. Those tools exist only in orchestrator mode and are never given to a subagent — a subagent cannot drive its siblings.
 
@@ -192,26 +209,27 @@ Jenny has the same controls from her side: she can check on a subagent's status,
 - A subagent is **blind to your conversation** — it only knows what task text it was handed. If a delegated task comes back disappointing, the usual cause is that the task description didn't carry enough context, not that the subagent "misunderstood."
 - Subagents use the same model/provider as your main agent and consume tokens like a full turn — delegating is not free.
 - `/goal` refuses to start while a subagent is still active on the session.
-- `/stop` disowns any subagents running for that chat: their in-flight work is abandoned, and if one finishes anyway after being disowned, its stale result is silently discarded rather than injected into the chat.
+- `/stop` leaves running subagents alone: it ends the current turn, and each subagent is stopped from its own bubble. `/stop all` disowns every subagent running for that chat: their in-flight work is abandoned, and if one finishes anyway after being disowned, its stale result is silently discarded rather than injected into the chat.
 - A subagent that goes quiet for longer than `agents.defaults.subagentStallThresholdSeconds` (default 180s) is flagged as stalled. It is never cancelled for you: relaunching is a decision, and a subagent that starts making progress again is un-flagged on its own.
-- If the app process dies while a subagent is working, its in-flight work is gone. What survives is a small record of each finished attempt (task, outcome, result summary) under `workspace/subagents/records/`, kept for the last 20 attempts per chat and 7 days — enough to see what happened and replay the work.
+- If the app process dies while a subagent is working, its conversation is saved every 30 seconds or so as it works, and the home chat offers **Let her continue** from the last saved point, for up to 6 hours (an `app-builder` is the exception: it starts over). Besides that, a small record of each attempt (task, outcome, result summary) stays under `workspace/subagents/records/`, for the last 20 attempts per chat and 7 days. See [Helpers](helpers.md#when-a-helper-is-interrupted).
 
 ## Android notifications
 
 None of the proactive messages above are guaranteed to make a sound — whether a notification fires depends entirely on whether the app is in the foreground at the moment the message is delivered:
 
 - **App in the foreground:** no notification at all — you're already looking at the message as it streams in.
-- **App in the background or closed:** a system notification is posted on a dedicated channel named **"Alerts"** (**"Avvisi"** on a phone set to Italian: the channel name is an Android string resource and follows the phone's language, not Jenny's). The titles are fixed by the gateway and not translated: reminders show `Jenny ⏰ <job name>`, Heartbeat shows `Jenny · monitoraggio`, an announcement of a new version shows `Jenny · aggiornamento`, and anything else uses a plain `Jenny` title. The notification body is the message text collapsed to a single line and capped at **200 characters** (cut off with an ellipsis beyond that).
+- **App in the background or closed:** a system notification is posted on a dedicated channel named **"Alerts"** (**"Avvisi"** on a phone set to Italian: the channel name is an Android string resource and follows the phone's language, not Jenny's). The title starts with the name you gave Jenny (Settings → the bot name; `Jenny` by default) and, after it, what kind of notice it is, in Jenny's language (`agents.defaults.language`): reminders show `Jenny · ⏰ Reminder · <job name>` (no job name when the job has none), Heartbeat shows `Jenny · Monitoring`, an announcement of a new version shows `Jenny · Update`, a reply delivered in a notebook's chat shows `Jenny · <notebook>`, and anything else uses the plain name. The notification body is the message as plain text — Markdown marks (bold, headings, list bullets, link targets) are removed — collapsed to a single line and capped at **200 characters** (cut off with an ellipsis beyond that).
 - Notifications on this channel use high importance (sound and vibration by default), and you can customize or silence that from Android's own per-app notification settings — there is no volume/sound toggle inside Jenny itself. This channel is separate from the silent, persistent "Jenny is running" notification (*"Jenny è attiva"* in Italian) the foreground service keeps up at all times.
-- **You can answer from the notification.** An alert carries a **Reply** field: what you type there goes to Jenny as an ordinary message in the one conversation, and her answer comes back as a system alert. If she was not running and the reply could not be delivered, a second notification, "Jenny didn't get your message", offers **Send again** with your text kept. The floating mascot has its own bubble; when it already holds a conversation its button reads **Continue in the app** and opens the app on it.
-- Two notifications from the same source (e.g. the same reminder firing twice in a row) replace each other rather than stacking — you'll only ever see the latest one for that job.
-- Tapping a notification opens the home on Jenny's page, in the personal conversation — where the message is — even if the workshop was the last thing you had open. Pending Jenny alerts are cleared when that conversation is actually on screen: tapping one, or coming back to the app while the personal chat is showing. Opening the app on another page, or on a notebook, leaves them in place.
+- **You can answer from the notification.** An alert carries a **Reply** field — except one from a notebook, whose answer would land in the personal chat instead: what you type there goes to Jenny as an ordinary message in the one conversation, and her answer comes back as a system alert. If she was not running and the reply could not be delivered, a second notification, "Jenny didn't get your message", offers **Send again** with your text kept. The floating mascot has its own bubble; when it already holds a conversation its button reads **Continue in the app** and opens the app on it.
+- Two notifications from the same source (e.g. the same reminder firing twice in a row) replace each other rather than stacking — you'll only ever see the latest one for that job. Each notebook has its own notifications, separate from the personal chat's and from the other notebooks'.
+- Tapping a notification opens the chat where the message is, even if the workshop was the last thing you had open: the personal conversation, raised over the page you were on, or — for a message delivered in a notebook, a reply or a notebook cron — that notebook, with its board underneath and its chat on top. A notebook deleted in the meantime falls back to the personal chat. Pending Jenny alerts are cleared when their own conversation is actually on screen: tapping one, or coming back to the app while that chat is showing. Opening the app on another page, or on another conversation, leaves them in place.
 - **The chat message is always there regardless.** Whether or not a notification actually rang, the reply from a reminder, Heartbeat, or a completed subagent is written into the chat exactly the same way — the notification is only ever an added ping layered on top of a delivery that already happened.
 - On Android 13 and newer, posting notifications requires the runtime `POST_NOTIFICATIONS` permission, which the app requests automatically the first time it starts. If you deny it, everything above still happens in chat — you simply never get the ringing/vibrating notification for it.
 
 ## Related pages
 
 - [Memory and Dream](memory.md) — what the `dream` system job (visible in your reminders list) actually does.
+- [Notebook board](board.md) — a notebook's own reminders, and the `reminders` job that announces them.
 - [Telegram bridge](telegram.md) — how proactive deliveries (Heartbeat, reminders, monitors) reach a paired Telegram chat.
 - [Troubleshooting](troubleshooting.md) — what to check when a reminder never arrives, and how to tell a silent monitor apart from a broken one.
 - [Slash commands](slash-commands.md) — full reference for `/goal`, `/stop`, and the rest.
