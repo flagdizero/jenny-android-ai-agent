@@ -21,6 +21,8 @@ To give up, tap **Cancel the plan** or tap the Plan button again. This also stop
 
 ## The proposed plan
 
+<p align="center"><img src="../img/plan-proposed.png" alt="A proposed plan in a notebook's chat: what the notebook already knows, what will be looked up, what stays uncovered, and five steps with their checkboxes" width="300"></p>
+
 The plan arrives as a card in the chat:
 
 - **What it covers**: *What I already know*, *What I'll look up*, and *Stays uncovered*, each with a count. **Item by item** opens the lists.
@@ -37,6 +39,8 @@ Under it are three buttons:
 **The full plan** opens every step in detail, read-only. A notebook has one open plan at a time: a new proposal replaces the one before.
 
 ## While it runs
+
+<p align="center"><img src="../img/plan-running.png" alt="A plan at step 3 of 5: two steps done with their notes, the current one with a helper at work, and the Pause and Stop buttons" width="300"></p>
 
 When you approve, the app photographs the notebook and opens the first step. The card shows how far along it is (*3 of 8*), what the current step is doing and for how long, how many helpers it has at work, and the time of the last photo. A finished step shows its time and Jenny's note. Tap it to see what it wrote, changed and removed.
 

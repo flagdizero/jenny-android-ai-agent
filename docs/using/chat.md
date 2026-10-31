@@ -40,7 +40,7 @@ The Console has no dedicated stop/cancel button (in the home, the send button tu
 
 A reply is built incrementally, not delivered all at once:
 
-<p align="center"><img src="../img/workshop-console.png" alt="A reply in the Console with its tool pills (one failed call, one successful) and the Show thinking block" width="300"></p>
+<p align="center"><img src="../img/workshop-console.png" alt="A reply in the Console with the Show thinking block and the pill of the app tool it called, above a table" width="300"></p>
 
 - **Streaming text.** The response text is re-rendered as markdown as it arrives.
 - **Tool pills.** When the agent uses a tool, a small pill appears with the tool's name and a spinner; the spinner turns into a checkmark or an X depending on whether the call succeeded. Tap a pill to expand it and see the tool's result.

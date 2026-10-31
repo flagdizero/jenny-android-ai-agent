@@ -14,6 +14,8 @@ Press and hold any helper bubble to open the workshop, whose Console shows each 
 
 ## Stopping a helper
 
+<p align="center"><img src="../img/helper-stop.png" alt="The sheet to stop a helper: Let her work, Stop and keep what she did, Stop and undo her changes" width="300"></p>
+
 Tap **Stop her** on the bubble (or the stop icon on a helper's row). A sheet asks what to do:
 
 - **Let her work**: nothing happens.

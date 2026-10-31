@@ -8,11 +8,13 @@ The board replaced the notebook's page list and its graph map. Both are gone fro
 
 Tap a notebook on the **Notebooks** page and it opens on its board, under the header row **← Notebooks › name**. A notebook you pinned as a page of its own opens its board as soon as you land on that page. The notebook's chat is behind Jenny: tap her and its conversation comes up full screen over the board, which stays visible beneath; tap her again, or press Back, to return to the board.
 
+<p align="center"><img src="../img/chat-over-board.png" alt="A notebook's chat open over its board, which stays visible beneath, blurred" width="300"></p>
+
 Back from the board returns to the notebook's chat. Back from a drawer returns to the board, and back from a page returns to the drawer you opened it from — or to the board, if you opened it from search.
 
 ## What is on the board
 
-<p align="center"><img src="../img/notebook-board.png" alt="A notebook's board: six polaroid cards, a sticky note for a dated reminder, two red threads, the envelope with one proposal, and the Since you last looked row" width="300"></p>
+<p align="center"><img src="../img/notebook-board.png" alt="A notebook's board: six polaroid cards, the soil sensor's strip, decks of photos and lilac notes beside the cards, yellow reminders, a mint automation label, threads, and the envelope" width="300"></p>
 
 | Thing | What it is |
 |---|---|
@@ -78,7 +80,7 @@ A thread is always visible as a thin line with no words on it; its label — the
 
 ## The drawer
 
-<p align="center"><img src="../img/notebook-drawer.png" alt="The drawer of the card Acero: its brief, its next reminder, and a section with a correction waiting, with links to its two source pages" width="300"></p>
+<p align="center"><img src="../img/notebook-drawer.png" alt="The drawer of the Lemon tree card: its brief, a polaroid from its photos and a lilac note" width="300"></p>
 
 Tap a card and its drawer opens. From the top:
 

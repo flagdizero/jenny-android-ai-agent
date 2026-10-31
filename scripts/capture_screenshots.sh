@@ -30,7 +30,20 @@ SHOTS=(
 "onboarding-model|First run, step 3: the model list with one selected. Never capture step 2 once the key is typed."
 "app-card|Apps page, long press on a Jenny App: the card with Open / Add as a page / Edit / Delete."
 "workshop-console|Settings -> Workshop, Console: a reply with its tool pills and Show thinking, keyboard closed."
+"notebooks|Home -> Notebooks: the bento of covers, several notebooks with different ages."
+"chat-over-board|The notebook's board -> tap Jenny: the notebook chat over the blurred board, one exchange."
+"plan-proposed|A notebook chat -> Plan button, ask for a job: the proposed plan card, scrolled to its top."
+"plan-running|The same plan approved and at a middle step with a helper at work, Pause and Stop in view."
+"helper-stop|A notebook chat with a helper that already changed a file -> Stop her: the three-choice sheet."
 )
+
+# The 2.0 set (31/10/2026) was shot on jenny_s22 in English, with invented data only
+# (the repo is public): a "garden" notebook with six plants, a soil-sensor app and a
+# cat's meal log, answered by a scripted fake provider. The plant photos on the board
+# are public domain or CC0, from Wikimedia Commons: "Citrus x limon flowers" (Ben Cody,
+# PD), "Ficus carica bonsai A D150625 fig" and "... D150915 fig" (Tangopaso, PD),
+# "Cherry tomatoes plant" (Leon Brooks, PD), "Orange cherry tomatoes" (Punker1999, CC0),
+# "Salvia rosmarinus 168046536" (Quentin Groom, CC0).
 
 # Physical id of the display to capture, resolved at runtime rather than hardcoded:
 # it differs per device, and the Titan 2 exposes two (a 1436x1440 main panel and a

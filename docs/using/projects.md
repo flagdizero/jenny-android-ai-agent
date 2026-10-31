@@ -8,7 +8,7 @@ In the home the personal chat is the **Jenny** page; a notebook opens from the *
 
 A notebook is a folder under `workspace/wikis/<name>/` — the same place [wikis](./wiki.md) live, because a notebook *is* a wiki. There is no separate `notebooks/` directory, and a notebook you create in the app is a wiki like any other.
 
-<p align="center"><img src="../img/notebook-board.png" alt="An open notebook on its board: polaroid cards with their pins and signals, a sticky note for a reminder, red threads and the envelope, under Notebooks › piante" width="300"></p>
+<p align="center"><img src="../img/notebook-board.png" alt="An open notebook on its board: polaroid cards, an app strip, decks of photos and notes, reminders and threads, under Notebooks › garden" width="300"></p>
 
 A freshly created notebook looks like this:
 
