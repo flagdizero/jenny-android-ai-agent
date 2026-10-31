@@ -8,8 +8,8 @@ una settantina di file; qui una volta.
 
 - :data:`NODE` e :data:`requires_node`: senza node i test si saltano con lo
   stesso motivo di sempre, ``"node non disponibile"``.
-- :func:`run_js`: esegue *script* come modulo ES (``--input-type=module -e``)
-  e ne ritorna lo stdout; un codice d'uscita diverso da zero è un fallimento
+- :func:`run_js`: esegue *script* come modulo ES (``--input-type=module``, lo
+  script da stdin) e ne ritorna lo stdout; un codice d'uscita diverso da zero è un fallimento
   con lo stderr di node come messaggio.
 - :func:`run_module`: la stessa cosa per chi importa moduli veri da una
   cartella temporanea, dove lo script deve stare in un file accanto a loro.
@@ -45,9 +45,16 @@ def _check(proc: subprocess.CompletedProcess[str]) -> str:
 
 
 def run_js(script: str, *, timeout: float = 60, env: dict[str, str] | None = None) -> str:
-    """Esegue *script* come modulo ES e ne ritorna lo stdout."""
+    """Esegue *script* come modulo ES e ne ritorna lo stdout.
+
+    Lo script arriva a node da stdin, non con ``-e``: Linux rifiuta un singolo
+    argomento oltre i 128 KB (``E2BIG``, «Argument list too long»), macOS no, e il
+    banco di ``test_home_switch_client.py`` li ha superati il 30/10/2026 — verde
+    sul Mac, 89 rossi sulla CI.
+    """
     proc = subprocess.run(
-        [str(NODE), "--input-type=module", "-e", script],
+        [str(NODE), "--input-type=module"],
+        input=script,
         capture_output=True,
         text=True,
         timeout=timeout,
