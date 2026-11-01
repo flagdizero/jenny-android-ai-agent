@@ -638,25 +638,27 @@ async def test_runtime_lines_in_the_notebook_and_in_the_personal_chat(
     assert driver.runtime_lines("project:altro") == []
 
 
-async def test_the_probe_feeds_long_task_and_the_wall_timeout(driver: PlanDriver) -> None:
-    from jenny.session.goal_state import (
-        plan_open_in_session,
-        set_plan_probe,
-        sustained_goal_turn,
-    )
+async def test_a_running_plan_lifts_the_wall_timeout(driver: PlanDriver) -> None:
+    """Un passo può durare a lungo: finché il piano gira, niente tetto sul modello.
+
+    Solo un piano che gira: proposto non basta, e il quaderno accanto non c'entra.
+    È ciò che un turno (``loop``) e i suoi aiutanti (``subagent``) leggono.
+    """
+    from jenny.session.plan_probe import plan_wall_llm_timeout_s, set_plan_probe
 
     set_plan_probe(driver)
     try:
-        assert not sustained_goal_turn({}, session_key=KEY)
+        assert plan_wall_llm_timeout_s(KEY) is None
         await _propose(driver)
-        assert plan_open_in_session(KEY)
-        assert not sustained_goal_turn({}, session_key=KEY)
+        assert plan_wall_llm_timeout_s(KEY) is None
         plan = driver.store.open_plan_for("piante")
         await driver.approve(plan.id, plan.version, [])
-        assert sustained_goal_turn({}, session_key=KEY)
-        assert not sustained_goal_turn({}, session_key="project:altro")
+        assert plan_wall_llm_timeout_s(KEY) == 0.0
+        assert plan_wall_llm_timeout_s("project:altro") is None
+        assert plan_wall_llm_timeout_s(None) is None
     finally:
         set_plan_probe(None)
+    assert plan_wall_llm_timeout_s(KEY) is None
 
 
 async def test_long_task_refuses_next_to_an_open_plan(driver: PlanDriver, tmp_path: Path) -> None:
@@ -666,8 +668,8 @@ async def test_long_task_refuses_next_to_an_open_plan(driver: PlanDriver, tmp_pa
         reset_request_context,
     )
     from jenny.agent.tools.long_task import LongTaskTool
-    from jenny.session.goal_state import set_plan_probe
     from jenny.session.manager import SessionManager
+    from jenny.session.plan_probe import set_plan_probe
 
     tool = LongTaskTool(SessionManager(tmp_path / "ws2"))
     tool.set_context(RequestContext(channel="websocket", chat_id=KEY, session_key=KEY))

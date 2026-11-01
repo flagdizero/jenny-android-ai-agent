@@ -21,8 +21,9 @@ from jenny.agent.memory import (
 from jenny.agent.skills import SkillsLoader
 from jenny.config.paths import get_output_path
 from jenny.runtime.user_text import current_bot_name
-from jenny.session.goal_state import goal_state_runtime_lines, plan_running_in_session
+from jenny.session.goal_state import goal_state_runtime_lines
 from jenny.session.keys import is_personal_session_key, is_project_session_key
+from jenny.session.plan_probe import plan_running_in_session
 from jenny.utils.android_assets import (
     _RETIRED_TEMPLATE_DIGESTS,
     normalized_template_text,

@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Protocol
+from typing import Any, Mapping, MutableMapping
 
 from jenny.session.manager import SessionManager
+from jenny.session.plan_probe import plan_running_in_session
 
 GOAL_STATE_KEY = "goal_state"
 _MAX_OBJECTIVE_IN_RUNTIME = 4000
@@ -19,47 +20,6 @@ _MAX_OBJECTIVE_IN_RUNTIME = 4000
 # continuazione interna, expire e ``/stop`` si comportano esattamente come prima.
 _AWAITING_INPUT = "awaiting_input"
 _AWAITING_SINCE = "awaiting_since"
-
-
-class PlanProbe(Protocol):
-    """Quel che questo modulo chiede ai piani a lista (``jenny.plan.driver``)."""
-
-    def plan_running(self, session_key: str) -> bool: ...
-
-    def plan_open(self, session_key: str) -> bool: ...
-
-
-# Il piano non vive nei metadati della sessione ma in ``plan.json``, fuori dal
-# workspace: una sua copia qui sarebbe la seconda verità che diverge. Il driver
-# dei piani si registra (``GatewayContainer``) e risponde dal suo indice in
-# memoria; senza driver (i test, l'agente non ancora nato) nessun piano è vivo.
-# Stesso schema di ``board/notify.py``: un gancio, non un import del driver.
-_plan_probe: PlanProbe | None = None
-
-
-def set_plan_probe(probe: PlanProbe | None) -> None:
-    global _plan_probe
-    _plan_probe = probe
-
-
-def plan_running_in_session(session_key: str | None) -> bool:
-    """True se la sessione ha un piano a lista che sta girando (``running``/``pausing``)."""
-    if not session_key or _plan_probe is None:
-        return False
-    try:
-        return bool(_plan_probe.plan_running(session_key))
-    except Exception:  # noqa: BLE001 — un indice rotto non deve fermare un turno
-        return False
-
-
-def plan_open_in_session(session_key: str | None) -> bool:
-    """True se la sessione ha un piano a lista aperto (proposto, in corso, fermo)."""
-    if not session_key or _plan_probe is None:
-        return False
-    try:
-        return bool(_plan_probe.plan_open(session_key))
-    except Exception:  # noqa: BLE001
-        return False
 
 
 def goal_state_raw(metadata: Mapping[str, Any] | None) -> Any:

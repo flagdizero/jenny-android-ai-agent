@@ -31,8 +31,8 @@ from jenny.session.goal_state import (
     GOAL_STATE_KEY,
     goal_state_raw,
     parse_goal_state,
-    plan_open_in_session,
 )
+from jenny.session.plan_probe import plan_open_in_session
 
 if TYPE_CHECKING:
     from jenny.session.manager import SessionManager

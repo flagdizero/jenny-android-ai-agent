@@ -31,8 +31,8 @@ from jenny.bus.queue import MessageBus
 from jenny.plan.driver import PLAN_WAKE_META, PlanDriver
 from jenny.plan.store import PlanStore
 from jenny.providers.base import LLMProvider, LLMResponse
-from jenny.session.goal_state import set_plan_probe
 from jenny.session.history_meta import INJECTED_EVENT_META, PLAN_STEP_EVENT
+from jenny.session.plan_probe import set_plan_probe
 from tests.support.aio import wait_until
 from tests.support.plan import STEPS, propose
 

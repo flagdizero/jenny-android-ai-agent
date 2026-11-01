@@ -363,7 +363,7 @@ def current_turn_is_readonly() -> bool:
 # risponde dal suo indice in memoria, così il cancello costa un dizionario per
 # scrittura e nessun giro sul disco. Senza driver (i test, l'agente non ancora
 # nato) nessun quaderno è tenuto. Un gancio e non un import del driver, come
-# ``goal_state.set_plan_probe``: la sicurezza non dipende dal pacchetto dei piani.
+# ``plan_probe.set_plan_probe``: la sicurezza non dipende dal pacchetto dei piani.
 _held_notebook_probe: Callable[[], Mapping[Path, str]] | None = None
 
 

@@ -110,6 +110,7 @@ from jenny.session.keys import (
     session_key_for_channel,
 )
 from jenny.session.manager import Session, SessionManager, scrub_lone_surrogates
+from jenny.session.plan_probe import plan_wall_llm_timeout_s
 from jenny.session.project_rename import (
     follow_renamed_project,
     pending_project_renames,
@@ -421,7 +422,7 @@ class AgentLoop(
             max_concurrent_subagents=max_concurrent_subagents,
             stall_threshold_s=subagent_stall_threshold_seconds,
             tool_error_budget=subagent_tool_error_budget,
-            llm_wall_timeout_for_session=lambda sk: runner_wall_llm_timeout_s(self.sessions, sk),
+            llm_wall_timeout_for_session=plan_wall_llm_timeout_s,
             # LO STESSO SessionManager del loop, non uno nuovo: la storia Tier-2
             # dei subagent (``subagent:<lineage_id>``) vive nella stessa
             # directory delle sessioni, e due istanze avrebbero due cache

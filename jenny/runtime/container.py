@@ -783,7 +783,7 @@ class GatewayContainer:
         from jenny.plan.driver import PlanDriver
         from jenny.plan.store import PlanStore
         from jenny.security.workspace_access import set_held_notebook_probe
-        from jenny.session.goal_state import set_plan_probe
+        from jenny.session.plan_probe import set_plan_probe
 
         driver = PlanDriver(
             PlanStore.for_workspace(config.workspace_path), self.bus, LoopPlanHost(agent)
