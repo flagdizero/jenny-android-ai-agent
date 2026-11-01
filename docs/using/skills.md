@@ -40,7 +40,7 @@ A skill's frontmatter and origin put it in one of three groups:
 |---|---|---|
 | **Yours** | Listed under *Yours*, with a switch | Skills you or Jenny create |
 | **Built in** | Listed under *Built in*, with a lock | `cron`, `app-creator`, `skill-creator`, `llm-wiki`, `ssh` |
-| **Internal** | Not listed, only counted: *"Plus 5 internal ones Jenny uses on her own."* | `memory`, `my`, `http-client`, `data-processing`, `long-goal` |
+| **Internal** | Not listed, only counted: *"Plus 4 internal ones Jenny uses on her own."* | `memory`, `my`, `http-client`, `data-processing` |
 
 Built-in skills are core parts of how Jenny works (scheduling, building apps and skills, the wiki, remote machines over SSH). Internal skills are plumbing you're unlikely to ever need to touch directly (self-awareness bookkeeping, low-level HTTP/data helpers). A skill of your own whose frontmatter says `locked: true` is listed under *Yours*, but with a lock instead of a switch.
 

@@ -301,7 +301,9 @@ client answers with a `ui_result` frame carrying the same `correlation_id`, with
 
 **`goal_status`** — a turn started or finished, as a wall-clock hint for the UI. Sent only to
 subscribers of that chat, and never retried: it is an idempotent refresh hint, so the next
-status simply replaces a pending one. `started_at` appears only with `"running"`:
+status simply replaces a pending one. `started_at` appears only with `"running"`. The name is
+historical — it comes from the sustained goal, removed in November 2026 — and the frame is about
+every turn:
 
 ```json
 {"event": "goal_status", "chat_id": "default", "status": "running", "started_at": 1756640000.0}

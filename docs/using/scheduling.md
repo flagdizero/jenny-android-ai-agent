@@ -1,6 +1,6 @@
 # Scheduling and proactivity
 
-Jenny can remind you of things once or on a schedule, keep an eye on something in the background and speak only when it matters, work a long task across many turns, and delegate side work to a helper agent — all set up by asking in chat. The workshop shows your scheduled jobs, and lets you pause, resume or delete the ones you created.
+Jenny can remind you of things once or on a schedule, keep an eye on something in the background and speak only when it matters, and delegate side work to a helper agent — all set up by asking in chat. The workshop shows your scheduled jobs, and lets you pause, resume or delete the ones you created.
 
 ## The one thing to know before you rely on this
 
@@ -131,25 +131,6 @@ The workshop's **Hands → When she acts on her own** is where you check the out
 
 The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
 
-## `/goal` and long-running tasks
-
-For work that should span many turns — a multi-step research task, an ongoing project, a "keep an eye on this and get back to me" ask — use `/goal <description>` instead of a plain message.
-
-```
-/goal Research flight options from Milan to Tokyo for the first two weeks of September and put together a comparison table in the workspace.
-```
-
-What changes once a goal is active:
-
-- The objective is pinned into the model's context every single turn (up to 4000 characters), so it survives conversation compaction and idle-timeout summarization instead of quietly falling out of view.
-- The usual LLM wall-clock timeout is **disabled** for the whole session while the goal is active, so a turn is allowed to run much longer than normal without being cut off mid-work.
-- Only **one** goal can be active per chat at a time. If you try `/goal` again while one is already running, Jenny replies telling you to `/stop` first.
-- A goal that sits inactive for **12 hours** expires on its own at the start of the next turn (`JENNY_GOAL_INACTIVITY_TTL_H`, default 12 — see [Environment variables](../reference/environment-variables.md)).
-- `/stop` cancels the active goal outright.
-- Jenny is expected to close the loop herself by calling her own "mark goal complete" step with an honest recap — whether the goal succeeded, was cancelled, or was redirected. There's no separate "goal progress" view: while a turn is running (goal-related or not) you'll see the same "Agent running" banner with a timer at the bottom of the chat, which survives a page reload if the turn is still in flight.
-
-`/goal` doesn't spin up a separate orchestrator or a hidden process — it's still the same chat, using the same tools, just with the objective kept in view and the timeout removed. If Android kills the app mid-goal, the goal's state lives in the session, so it either resumes on your next message or quietly expires after the 12-hour inactivity window, same as above.
-
 ## Subagents (`spawn`)
 
 **Delegation is not the exception, it is how Jenny works.** With `agents.defaults.orchestratorMode` at its default of `true`, the agent you talk to is an *orchestrator*: it can read files, search, schedule, message you and drive subagents, but it cannot write files, run code, or touch the web itself. Anything in those categories reaches a subagent by definition, not because Jenny judged the task big enough. What is left to judgment is *how* the work is split, not whether to split it.
@@ -190,7 +171,6 @@ Jenny has the same controls from her side: she can check on a subagent's status,
 - By default up to **3** subagents can run at a time (`agents.defaults.maxConcurrentSubagents`, default `3`), and one slot is always kept free for a short job — so an ordinary delegation is refused once two are already running. Asking for one past the limit gets a plain "concurrency limit reached" reply instead of being queued.
 - A subagent is **blind to your conversation** — it only knows what task text it was handed. If a delegated task comes back disappointing, the usual cause is that the task description didn't carry enough context, not that the subagent "misunderstood."
 - Subagents use the same model/provider as your main agent and consume tokens like a full turn — delegating is not free.
-- `/goal` refuses to start while a subagent is still active on the session.
 - `/stop` leaves running subagents alone: it ends the current turn, and each subagent is stopped from its own bubble. `/stop all` disowns every subagent running for that chat: their in-flight work is abandoned, and if one finishes anyway after being disowned, its stale result is silently discarded rather than injected into the chat.
 - A subagent that goes quiet for longer than `agents.defaults.subagentStallThresholdSeconds` (default 180s) is flagged as stalled. It is never cancelled for you: relaunching is a decision, and a subagent that starts making progress again is un-flagged on its own.
 - If the app process dies while a subagent is working, its conversation is saved every 30 seconds or so as it works, and the home chat offers **Let her continue** from the last saved point, for up to 6 hours (an `app-builder` is the exception: it starts over). Besides that, a small record of each attempt (task, outcome, result summary) stays under `workspace/subagents/records/`, for the last 20 attempts per chat and 7 days. See [Helpers](helpers.md#when-a-helper-is-interrupted).
@@ -214,7 +194,7 @@ None of the proactive messages above are guaranteed to make a sound — whether 
 - [Notebook board](board.md) — where a notebook's jobs show, and the `reminders` job that keeps its apps fresh.
 - [Telegram bridge](telegram.md) — how proactive deliveries (reminders, monitors) reach a paired Telegram chat.
 - [Troubleshooting](troubleshooting.md) — what to check when a reminder never arrives, and how to tell a silent monitor apart from a broken one.
-- [Slash commands](slash-commands.md) — full reference for `/goal`, `/stop`, and the rest.
+- [Slash commands](slash-commands.md) — full reference for `/stop` and the rest.
 - [Android permissions](../reference/android-permissions.md) — the full permission table, including `POST_NOTIFICATIONS` and battery-optimization exemption.
 - [Configuration reference](../reference/configuration.md) — `agents.defaults.timezone`, `agents.defaults.maxConcurrentSubagents`, and related keys; the anti-doze knobs are under [`power`](../reference/configuration.md#power).
-- [Environment variables](../reference/environment-variables.md) — `JENNY_GOAL_INACTIVITY_TTL_H` and other `JENNY_*` knobs.
+- [Environment variables](../reference/environment-variables.md) — the `JENNY_*` knobs.

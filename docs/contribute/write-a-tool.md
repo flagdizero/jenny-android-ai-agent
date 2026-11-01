@@ -20,11 +20,12 @@ _HARDCODED_TOOL_MODULES = [
     "browser",
     "download",
     "location",
-    "long_task",
+    "screen",
     "spawn",
     "subagent_control",
     "cron",
     "journal",
+    "app_tool",
     "self",
     "memory_recall",
     "search",
@@ -37,10 +38,13 @@ _HARDCODED_TOOL_MODULES = [
     "ui_view",
     "ssh",
     "app_update",
+    "board",
+    "plan",
+    "notebook",
 ]
 ```
 
-That is the order `discover()` walks (23 modules at the time of writing; the file is the authority).
+That is the order `discover()` walks (27 modules at the time of writing; the file is the authority).
 
 To add a new tool:
 
