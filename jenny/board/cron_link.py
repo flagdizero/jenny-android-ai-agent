@@ -444,13 +444,17 @@ def note_of(
     condition: Any = None,
     every_ms: Any = None,
     tz_name: str | None = None,
+    paused: bool = False,
 ) -> dict[str, Any] | None:
     """La riga ``{id, card, text, when}`` di un job, o ``None`` se non è un promemoria.
 
     ``when`` è ``{kind: "date", date, precision}`` (con ``time`` per un singolo
     a un'ora esatta) o ``{kind: "condition", app, params, field, op, value,
     every_ms}``. ``date`` è sempre ``AAAA-MM-GG`` nel fuso dell'utente, anche per
-    un mese (il primo): il client la mette in un ``<input type=date>``.
+    un mese (il primo): il client la mette in un ``<input type=date>``. Un job
+    in pausa resta una riga (l'utente l'ha fermato, non tolto) e porta
+    ``paused: true``: non è «il prossimo» di nessuno e non si accende «a breve»
+    (``model.next_note``, ``model.note_is_soon``), come già non entra nel diario.
     """
     from datetime import datetime
 
@@ -472,13 +476,17 @@ def note_of(
             when["time"] = at.strftime("%H:%M")
     else:
         return None
-    return {"id": job_id, "card": scope, "text": text, "when": when}
+    note = {"id": job_id, "card": scope, "text": text, "when": when}
+    if paused:
+        note["paused"] = True
+    return note
 
 
 def notes_from_jobs(cron_jobs: Any, tz_name: str | None = None) -> list[dict[str, Any]]:
     """Le righe dei promemoria dalle istantanee di :func:`notebook_jobs`, dalla più vicina.
 
-    Solo i job vivi: un singolo già scattato non c'è più, e uno spento resta fuori.
+    Solo i job vivi: un singolo già scattato non c'è più, e uno spento resta
+    fuori. Uno in pausa c'è, segnato (v. :func:`note_of`).
     """
     out = []
     for job_id, snap in (cron_jobs or {}).items():
@@ -489,7 +497,7 @@ def notes_from_jobs(cron_jobs: Any, tz_name: str | None = None) -> list[dict[str
                        text=snap.get("name") or "", kind=sched.get("kind"),
                        at_ms=sched.get("at_ms"), precision=sched.get("precision"),
                        condition=snap.get("condition"), every_ms=sched.get("every_ms"),
-                       tz_name=tz_name)
+                       tz_name=tz_name, paused=bool(snap.get("paused")))
         if note is not None:
             out.append(note)
     return model.sorted_notes(out)
@@ -510,12 +518,23 @@ def notes_on_disk(notebook: str, workspace: Path | None = None,
             workspace = get_workspace_path()
         except RuntimeError:
             return []
+    return notes_of_disk_jobs(notebook_jobs_on_disk(notebook, workspace), tz_name)
+
+
+def notes_of_disk_jobs(jobs: list[dict[str, Any]], tz_name: str | None = None,
+                       ) -> list[dict[str, Any]]:
+    """Le righe dei promemoria fra i job di :func:`notebook_jobs_on_disk`, dalla più vicina.
+
+    Per chi ha già letto il file una volta e ne vuole sia i cron sia i promemoria
+    (il blocco della bacheca nel prompt): una lettura, non una per domanda.
+    """
     out = []
-    for job in notebook_jobs_on_disk(notebook, workspace):
+    for job in jobs:
         note = note_of(job_id=job["id"], scope=job["scope"],
                        text=job["name"] or job["message"][:60] or job["id"], kind=job["kind"],
                        at_ms=job["atMs"], precision=job["precision"],
-                       condition=job["condition"], every_ms=job["everyMs"], tz_name=tz_name)
+                       condition=job["condition"], every_ms=job["everyMs"], tz_name=tz_name,
+                       paused=bool(job.get("paused")))
         if note is not None:
             out.append(note)
     return model.sorted_notes(out)

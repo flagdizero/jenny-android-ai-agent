@@ -3613,6 +3613,7 @@ body.home {
 }
 .home-board-postit-when { font-size: 2.3cqw; font-weight: 700; line-height: 1.1; }
 .home-board-postit-row.is-late .home-board-postit-when { color: var(--board-alert); }
+.home-board-postit-row.is-paused { opacity: 0.55; }
 /* Il testo su due righe al massimo: su una sola si leggeva «Rinvaso e inci…». */
 .home-board-postit-text {
   display: -webkit-box;
@@ -4779,6 +4780,7 @@ dialog.home-photo-viewer[open] { display: flex; }
 }
 .home-drawer-cal-day { color: var(--board-soon); font-size: 14px; font-weight: 700; }
 .home-drawer-cal-row.is-late .home-drawer-cal-day { color: var(--board-alert); }
+.home-drawer-cal-row.is-paused, .home-drawer-cal-next.is-paused { opacity: 0.6; }
 .home-drawer-cal-text { font-size: 15px; line-height: 1.35; }
 /* Al posto del giorno, una condizione («umidita < 5»): nei 52 px di un giorno
    andava a capo e toccava il testo (jenny_s22, 01/11/2026). La colonna si fa

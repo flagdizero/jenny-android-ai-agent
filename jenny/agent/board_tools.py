@@ -237,7 +237,7 @@ class BoardAddReminderTool(_BoardTool):
     async def execute(self, card: str = "", text: str = "", date: str = "",
                       precision: str = "day", why: str = "", source: str = "", **_: Any) -> str:
         from jenny.board.cron_link import add_notebook_job, notebook_jobs, user_timezone
-        from jenny.cron.dates import date_schedule
+        from jenny.board.edit import BoardEditError, _when_schedule, _why_page
 
         st = self.state
         if st.cron is None:
@@ -248,21 +248,26 @@ class BoardAddReminderTool(_BoardTool):
                 and card not in st.proposed_cards):
             return st.refuse(f"there is no card `{card}` (leave `card` empty for the whole notebook)")
         clean = model.clean_text(text, model.MAX_TITLE * 2)
-        day = str(date or "").strip()
-        value = day[:7] if precision == "month" else day[:10]
+        if not clean:
+            return st.refuse("a reminder needs a text")
+        # La stessa lettura della data della bacheca (RPC): il rifiuto dice cosa
+        # non va, non un generico «scrivi YYYY-MM-DD» che copriva una data
+        # illeggibile e un mese già passato allo stesso modo.
         try:
-            schedule = date_schedule(value, user_timezone()) if len(value) in (7, 10) else None
-        except ValueError:
-            schedule = None
-        if schedule is None or not clean:
-            return st.refuse("a reminder needs a text and a date written YYYY-MM-DD")
+            schedule, _ = _when_schedule(
+                {"kind": "date", "date": str(date or "").strip(), "precision": precision},
+                None, user_timezone())
+        except BoardEditError as exc:
+            return st.refuse(exc.message)
         key = " ".join(clean.lower().split())
         for job_id, snap in notebook_jobs(st.cron, st.root.name).items():
             if (snap.get("scope") == card
                     and " ".join(str(snap.get("name") or "").lower().split()) == key):
                 return f"Already on the list (`{job_id}`): not added again."
-        page = str(why or "").strip().removeprefix("wiki/")
-        if page and page not in self._titles():
+        # Una pagina che non c'è non è un errore del promemoria: si lascia senza.
+        try:
+            page = _why_page(st.root, why) or ""
+        except BoardEditError:
             page = ""
         said = str(source or "").strip()
         message = f"{clean}\n\n(Noted from {said}.)" if said else clean
@@ -275,11 +280,6 @@ class BoardAddReminderTool(_BoardTool):
         st.reminders.append(job.id)
         where = "the whole notebook" if card == model.NOTEBOOK else f"`{card}`"
         return f"Reminder `{job.id}` added to {where}."
-
-    def _titles(self) -> set[str]:
-        from jenny.utils.wiki_paths import iter_wiki_pages
-
-        return set(iter_wiki_pages(self.state.root / "wiki", titles=False))
 
 
 @tool_parameters(tool_parameters_schema(

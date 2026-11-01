@@ -17,7 +17,6 @@ from jenny.agent.tools.schema import (
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronJobState, CronSchedule, job_display_name
-from jenny.security.subagent_policy import current_turn_taint
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
@@ -400,14 +399,11 @@ class CronTool(Tool, ContextAware):
             titles = ", ".join(f"«{c['title']}»" for c in (board or {}).get("cards") or [])
             return (f"No card «{ref}» on the board of «{notebook}». Cards: {titles or 'none'}. "
                     "Use one of them, or leave `card` empty if the job is for the whole notebook.")
-        origin_metadata: dict[str, Any] = {}
-        if turn_taint := current_turn_taint():
-            origin_metadata["_taint"] = list(turn_taint)
         try:
             job = add_notebook_job(
                 self._cron, notebook, card["id"] if card else NOTEBOOK,
                 name=(name or "").strip(), message=message, schedule=schedule, mode=job_mode,
-                why=why, condition=condition, origin_metadata=origin_metadata,
+                why=why, condition=condition,
             )
         except ValueError as exc:
             return f"Error: {exc}"
@@ -430,26 +426,6 @@ class CronTool(Tool, ContextAware):
             "expired": f"Job {job.id} cannot resume: its time passed while it was paused.",
             "protected": f"Job {job.id} is a protected system job.",
         }.get(result, f"Job {job.id} not found")
-
-    def _add_job(
-        self,
-        name: str | None,
-        message: str,
-        every_seconds: int | None,
-        cron_expr: str | None,
-        tz: str | None,
-        date: str | None = None,
-        mode: str | None = None,
-        *,
-        time: str | None = None,
-        condition: Any = None,
-    ) -> str:
-        """Un job personale dai parametri del tool (il quando ancora da costruire)."""
-        try:
-            schedule = self._schedule(every_seconds, cron_expr, tz, date, time, mode)
-        except ValueError as exc:
-            return f"Error: {exc}"
-        return self._add_personal_job(name, message, schedule, mode, condition=condition)
 
     def _add_personal_job(
         self,
@@ -480,12 +456,8 @@ class CronTool(Tool, ContextAware):
                 "messages the user, or mode=\"monitor\" for a recurring check that stays silent "
                 "unless it finds something worth reporting."
             )
+        # Il taint del turno lo aggiunge ``CronService.add_job``, per ogni porta.
         origin_metadata = dict(self._origin_metadata.get() or {})
-        if turn_taint := current_turn_taint():
-            # Un promemoria scritto con contenuto non fidato in vista: il suo testo
-            # può venire da lì, e girerà da solo. I lavori che i suoi turni
-            # avvieranno nascono contaminati (``security.subagent_policy``).
-            origin_metadata["_taint"] = list(turn_taint)
         try:
             job = self._cron.add_job(
                 name=(name or "").strip(),

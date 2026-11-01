@@ -37,20 +37,20 @@ def broken_tzdata(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(helpers, "ZoneInfo", _raise)
 
 
-def test_add_naive_at_job_without_tzdata(tmp_path, broken_tzdata: None) -> None:
+async def test_add_naive_at_job_without_tzdata(tmp_path, broken_tzdata: None) -> None:
     tool = _make_tool_with_tz(tmp_path, "Europe/Rome")
 
-    result = tool._add_job(None, "Reminder", None, None, None, "2030-03-25", time="08:00")
+    result = await tool.execute(action="add", message="Reminder", date="2030-03-25", time="08:00")
 
     assert result.startswith("Created job"), result
     job = tool._cron.list_jobs()[0]
     assert job.schedule.at_ms is not None and job.schedule.at_ms > 0
 
 
-def test_add_cron_expr_job_with_tz_without_tzdata(tmp_path, broken_tzdata: None) -> None:
+async def test_add_cron_expr_job_with_tz_without_tzdata(tmp_path, broken_tzdata: None) -> None:
     tool = _make_tool_with_tz(tmp_path, "Europe/Rome")
 
-    result = tool._add_job(None, "Standup", None, "0 8 * * *", "Europe/Rome", None)
+    result = await tool.execute(action="add", message="Standup", cron_expr="0 8 * * *", tz="Europe/Rome")
 
     assert result.startswith("Created job"), result
 
@@ -64,11 +64,11 @@ def test_service_validate_and_next_run_without_tzdata(broken_tzdata: None) -> No
     assert next_run is not None and next_run > 0
 
 
-def test_unknown_tz_still_rejected_with_tzdata(tmp_path) -> None:
+async def test_unknown_tz_still_rejected_with_tzdata(tmp_path) -> None:
     # Controllo (senza patch): la validazione stretta resta attiva su host.
     tool = _make_tool_with_tz(tmp_path, "Europe/Rome")
 
-    result = tool._add_job(None, "Standup", None, "0 8 * * *", "Not/AZone", None)
+    result = await tool.execute(action="add", message="Standup", cron_expr="0 8 * * *", tz="Not/AZone")
     assert result == "Error: unknown timezone 'Not/AZone'"
 
     with pytest.raises(ValueError, match="unknown timezone 'Not/AZone'"):

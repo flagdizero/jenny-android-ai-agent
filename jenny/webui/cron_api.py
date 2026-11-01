@@ -201,7 +201,10 @@ def _job_payload(
         "paused_at_ms": job.paused_at_ms,
         "actions": _job_actions(job, now_ms),
         "mode": job.payload.mode,
-        "one_shot": job.delete_after_run,
+        # Un singolo e' il suo ``schedule``: ``delete_after_run`` lo portano anche i
+        # job di uno store vecchio che non lo avevano, e l'officina mostrava loro
+        # una «prossima volta» che non c'e'.
+        "one_shot": job.schedule.kind == "at",
         # Un cron del quaderno: dove sta, cosi' l'elenco dell'officina lo dice
         # «Piante › Acero», o «Piante» per tutto il quaderno. ``None`` per gli altri.
         "place": _place(job.payload.board),

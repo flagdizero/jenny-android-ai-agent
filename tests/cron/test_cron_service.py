@@ -99,7 +99,7 @@ def test_add_job_rejects_an_interval_that_would_never_fire(tmp_path, every_ms) -
 
 
 @pytest.mark.parametrize("every_seconds", [0, -30])
-def test_the_cron_tool_reports_a_non_positive_interval_as_an_error(
+async def test_the_cron_tool_reports_a_non_positive_interval_as_an_error(
     tmp_path, every_seconds
 ) -> None:
     from jenny.agent.tools.context import RequestContext
@@ -110,12 +110,12 @@ def test_the_cron_tool_reports_a_non_positive_interval_as_an_error(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Standup", every_seconds, None, None, None)
+    result = await tool.execute(action="add", message="Standup", every_seconds=every_seconds)
 
     assert result.startswith("Error:"), result
 
 
-def test_the_cron_tool_reports_a_bad_expression_as_an_error(tmp_path) -> None:
+async def test_the_cron_tool_reports_a_bad_expression_as_an_error(tmp_path) -> None:
     from jenny.agent.tools.context import RequestContext
     from jenny.agent.tools.cron import CronTool
 
@@ -124,7 +124,7 @@ def test_the_cron_tool_reports_a_bad_expression_as_an_error(tmp_path) -> None:
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Standup", None, "0 25 * * *", None, None)
+    result = await tool.execute(action="add", message="Standup", cron_expr="0 25 * * *")
 
     assert result.startswith("Error: invalid cron expression '0 25 * * *'"), result
 

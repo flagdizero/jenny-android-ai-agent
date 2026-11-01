@@ -35,6 +35,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.board import model, removed
+from jenny.board.clock import CLOCK_EVERY_MS
 from jenny.board.place import app_size, app_title, find_card, tie
 from jenny.board.store import (
     board_dir,
@@ -657,7 +658,7 @@ async def remove_section(root: Path, ref: str, sid: str, *, cron: Any = None) ->
 
 # La cadenza più fitta di un promemoria a condizione: il passo dell'orologio dei
 # quaderni, che fa girare i lettori delle app.
-MIN_CONDITION_EVERY_MS = 15 * 60 * 1000
+MIN_CONDITION_EVERY_MS = CLOCK_EVERY_MS
 
 
 def _need_cron(cron: Any) -> Any:
@@ -870,10 +871,13 @@ async def attach_reminder(root: Path, ref: str, rid: str, *, cron: Any) -> dict[
         return {"reminder": {"id": job.id, "card": scope, "text": text}, "from": before,
                 "changed": False}
     try:
+        # Coi metadati d'origine di prima: chi l'ha scritto (``by``) e il taint
+        # del turno che lo scrisse non cambiano perché cambia scheda.
         moved = add_notebook_job(cron, root.name, scope, name=job.name,
                                  message=job.payload.message, schedule=job.schedule,
                                  mode=job.payload.mode, why=job.payload.why,
-                                 condition=job.payload.condition)
+                                 condition=job.payload.condition,
+                                 origin_metadata=dict(job.payload.origin_metadata or {}))
     except ValueError as exc:
         raise BoardEditError("bad_request", str(exc)) from exc
     await detach_job(cron, job.id)

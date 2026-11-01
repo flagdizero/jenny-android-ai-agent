@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine, Literal, NamedTuple
 from filelock import SoftFileLock, Timeout
 from loguru import logger
 
+from jenny.board.model import CONDITION_OPS
 from jenny.cron.session_turns import is_bound_cron_job
 from jenny.cron.silence_watchdog import alert_silently_broken_checks
 from jenny.cron.types import (
@@ -117,18 +118,13 @@ def _load_precision(raw: Any) -> Any:
     return raw if raw in ("exact", "day", "month") else None
 
 
-# I campi di una condizione e gli operatori che il confronto conosce
-# (``board/model.py::compare``).
-_CONDITION_OPS = ("<", "<=", ">", ">=", "==", "!=")
-
-
 def _load_condition(raw: Any) -> dict[str, Any] | None:
     """Il filtro di un ricorrente, o ``None``: ``{app, params, field, op, value}``."""
     if not isinstance(raw, dict):
         return None
     app, field, op = raw.get("app"), raw.get("field"), raw.get("op")
     if not (isinstance(app, str) and app and isinstance(field, str) and field
-            and op in _CONDITION_OPS and "value" in raw):
+            and op in CONDITION_OPS and "value" in raw):
         return None
     params = raw.get("params")
     return {"app": app, "params": params if isinstance(params, dict) else {},
@@ -296,6 +292,9 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
 # oltre le 9); un mese o un giorno di prima no — quelli sono un anno sbagliato.
 _PAST_GRACE_MS = 24 * 60 * 60 * 1000
 
+# Fra un tentativo e l'altro di un singolo che non ha suonato (``_settle_one_shot``).
+_ONE_SHOT_RETRY_MS = 5 * 60 * 1000
+
 
 def _refuse_past_one_time(schedule: CronSchedule, now_ms: int) -> None:
     """Un singolo nuovo con la data gia' passata si rifiuta, invece di suonare subito.
@@ -315,6 +314,28 @@ def _refuse_past_one_time(schedule: CronSchedule, now_ms: int) -> None:
         f"that date is already past (today is {today}): a one-time job needs a future "
         "date, and a month or a day said without a year is the next one to come"
     )
+
+
+def _with_turn_taint(origin_metadata: dict | None) -> dict:
+    """I metadati d'origine di un job, col taint del turno che lo scrive.
+
+    Un job scritto con contenuto non fidato in vista (una pagina ostile letta da
+    un aiutante, il risultato di un tool) può portarne il testo, e girerà da
+    solo: i lavori che i suoi turni avvieranno nascono contaminati
+    (``security.subagent_policy``). Sta qui, e non in chi chiama, perché le porte
+    sono tante — il tool ``cron``, la bacheca, il tool ``board``, il giardiniere —
+    e fino al 01/11/2026 solo la prima lo faceva: un promemoria scritto dalla
+    bacheca girava pulito. Fuori da un turno il taint è vuoto e non si tocca
+    niente; un ``_taint`` già scritto resta, e il nuovo gli si somma.
+    """
+    from jenny.security.subagent_policy import current_turn_taint
+
+    out = dict(origin_metadata or {})
+    turn_taint = current_turn_taint()
+    if turn_taint:
+        known = [str(x) for x in out.get("_taint") or () if isinstance(x, str)]
+        out["_taint"] = known + [x for x in turn_taint if x not in known]
+    return out
 
 
 def _validate_cron_expr(schedule: CronSchedule) -> None:
@@ -1290,25 +1311,55 @@ class CronService:
         ))
         job.state.run_history = job.state.run_history[-self._MAX_RUN_HISTORY:]
 
-        # Un singolo, dopo che è suonato, sparisce sempre (decisione del
-        # 31/10/2026): niente job spenti che restano nello store, niente esito
-        # orfano sulla bacheca. Anche se il giro è andato in errore — l'errore
-        # resta nel log, e un ``at`` che riprovasse suonerebbe in ritardo.
         if job.schedule.kind == "at":
-            self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
-            if job.payload.board:
-                from jenny.board.cron_link import forget_job
-
-                try:
-                    await forget_job(dict(job.payload.board), job.id)
-                except Exception:  # noqa: BLE001 — il job è già andato, la bacheca è contorno
-                    logger.exception("Cron: board not cleaned after one-shot {}", job.id)
+            await self._settle_one_shot(job, now_ms=end_ms)
         elif job.paused_at_ms is None:
             # Compute next run
             job.state.next_run_at_ms = _compute_next_run(job.schedule, _now_ms())
         # Altrimenti la pausa e' arrivata mentre il job stesso girava:
         # ``set_paused`` ha gia' tolto la prossima esecuzione, e ricalcolarla qui
         # lasciava un job «in pausa» con una scadenza armata nello store.
+
+    async def _settle_one_shot(self, job: CronJob, *, now_ms: int) -> None:
+        """Cosa resta di un singolo dopo un giro: niente, se ha suonato.
+
+        Un singolo che ha suonato sparisce sempre (decisione del 31/10/2026):
+        niente job spenti che restano nello store, niente esito orfano sulla
+        bacheca. Ma ``skipped`` ed ``error`` non sono un giro: il primo è l'agente
+        che ancora non c'è (il boot, l'onboarding), il secondo un provider che non
+        ha risposto — in entrambi il promemoria non è arrivato a nessuno, e
+        cancellarlo lo perdeva con un WARNING nel log per tutta traccia
+        (review del 01/11/2026). Resta nello store e riprova fra
+        ``_ONE_SHOT_RETRY_MS``, finché non suona o finché la sua ora non è
+        passata da più di ``_PAST_GRACE_MS``: dopo, suonerebbe a un giorno di
+        distanza, e se ne va con un ERROR che dice cosa si è perso. È lo stesso
+        «in ritardo ma suona» del recupero a telefono spento.
+        """
+        at_ms = job.schedule.at_ms or 0
+        rang = job.state.last_status not in ("skipped", "error")
+        if not rang and now_ms - at_ms <= _PAST_GRACE_MS:
+            # Messo in pausa mentre girava: ``set_paused`` ha già tolto la
+            # scadenza, e la ripresa decide se è ancora in tempo.
+            if job.paused_at_ms is None:
+                job.state.next_run_at_ms = now_ms + _ONE_SHOT_RETRY_MS
+            logger.warning(
+                "Cron: one-shot job '{}' ({}) did not ring ({}): retrying in {}s",
+                job.name, job.id, job.state.last_status, _ONE_SHOT_RETRY_MS // 1000,
+            )
+            return
+        if not rang:
+            logger.error(
+                "Cron: one-shot job '{}' ({}) never rang: its time passed more than a day "
+                "ago ({}), giving up", job.name, job.id, job.state.last_error or "",
+            )
+        self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
+        if job.payload.board:
+            from jenny.board.cron_link import forget_job
+
+            try:
+                await forget_job(dict(job.payload.board), job.id)
+            except Exception:  # noqa: BLE001 — il job è già andato, la bacheca è contorno
+                logger.exception("Cron: board not cleaned after one-shot {}", job.id)
 
     def _append_action(self, action: Literal["add", "del"], params: dict):
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1376,7 +1427,7 @@ class CronService:
                 session_key=session_key,
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
-                origin_metadata=origin_metadata or {},
+                origin_metadata=_with_turn_taint(origin_metadata),
                 board=link,
                 why=why,
                 condition=condition,
@@ -1435,6 +1486,7 @@ class CronService:
             job.name = name.strip()
         if message is not None:
             job.payload.message = message
+        job.payload.origin_metadata = _with_turn_taint(job.payload.origin_metadata)
         job.payload.why = new_why
         if new_cond != job.payload.condition:
             job.payload.condition = new_cond

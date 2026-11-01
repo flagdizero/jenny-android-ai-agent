@@ -132,7 +132,7 @@ _WIKIS_BLOCK_MOVE = (
 _CRON_TOOL_NAME = "cron"
 
 
-def _read_project_board(root: Path) -> str:
+def _read_project_board(root: Path, tz_name: str | None = None) -> str:
     """Il blocco della bacheca del quaderno *root*, o ``""``. Mai un'eccezione.
 
     Una bacheca illeggibile non deve togliere il prompt a un turno: si torna
@@ -143,18 +143,18 @@ def _read_project_board(root: Path) -> str:
         from jenny.board.sections import alert_probe
         from jenny.config.paths import get_workspace_path
 
-        return board_block(root, alert=alert_probe(get_workspace_path()))
+        return board_block(root, alert=alert_probe(get_workspace_path()), tz_name=tz_name)
     except Exception as exc:  # noqa: BLE001
         logger.warning("project block: the board of {} is unreadable: {}", root, exc)
         return ""
 
 
-def _read_project_notebook_line(root: Path) -> str:
+def _read_project_notebook_line(root: Path, tz_name: str | None = None) -> str:
     """Le cose di tutto il quaderno per il prompt, o ``""``. Mai un'eccezione."""
     try:
         from jenny.board.context_block import notebook_line
 
-        return notebook_line(root)
+        return notebook_line(root, tz_name=tz_name)
     except Exception as exc:  # noqa: BLE001
         logger.warning("project block: the notebook items of {} are unreadable: {}", root, exc)
         return ""
@@ -203,7 +203,8 @@ def _goal_lines_once(lines: list[str], history: Sequence[Mapping[str, Any]]) -> 
     return list(lines)
 
 
-def _board_turn_lines(root: Path, message: Any, since: Any = None) -> list[str]:
+def _board_turn_lines(root: Path, message: Any, since: Any = None,
+                      tz_name: str | None = None) -> list[str]:
     """I cassetti delle schede che il messaggio nomina, e quel che l'utente ha
     appuntato sulla bacheca dopo *since*, per il contesto del turno."""
     if not isinstance(message, str) or not message.strip() or not is_wiki_root(root):
@@ -211,7 +212,7 @@ def _board_turn_lines(root: Path, message: Any, since: Any = None) -> list[str]:
     try:
         from jenny.board.context_block import turn_lines
 
-        return turn_lines(root, message, since=since)
+        return turn_lines(root, message, since=since, tz_name=tz_name)
     except Exception as exc:  # noqa: BLE001 — un cassetto in meno, non un turno in meno
         logger.warning("turn context: drawers of {} not read: {}", root, exc)
         return []
@@ -1263,7 +1264,8 @@ class ContextBuilder:
         template *dichiarano* (dall'AST) con quelli che i due chiamanti passano, e
         cade se uno resta senza cibo — su entrambi i prompt.
         """
-        project_board = _read_project_board(root)
+        # Il fuso lo sa il costruttore: il blocco non rilegge la config per saperlo.
+        project_board = _read_project_board(root, self.timezone)
         # **La bacheca prende il posto della mappa** nel blocco: e' piccola,
         # curata, e dice cosa conta adesso. La mappa si legge comunque (le
         # pagine entrano nel suo ordine, v. ``_read_project_pages``), ma non si
@@ -1281,7 +1283,7 @@ class ContextBuilder:
             ),
             # I promemoria e i cron di tutto il quaderno, non legati a una scheda: ci
             # sono anche su una bacheca senza schede, quindi in tutti e due i rami.
-            "project_board_notebook": _read_project_notebook_line(root),
+            "project_board_notebook": _read_project_notebook_line(root, self.timezone),
             # T3, il gradino 1 di P4: la mappa del progetto entra **d'ufficio**,
             # non su richiesta. Il giro di wiki parte pagato, e la differenza si
             # vede alla prima domanda di una sessione nuova: senza, l'agente
@@ -1681,7 +1683,7 @@ class ContextBuilder:
         # prompt di sistema, che e' il prefisso in cache e non deve dipendere
         # dal messaggio.
         if current_role == "user":
-            extra.extend(_board_turn_lines(root, current_message, board_since))
+            extra.extend(_board_turn_lines(root, current_message, board_since, self.timezone))
         runtime_ctx = self._build_runtime_context(
             channel,
             chat_id,

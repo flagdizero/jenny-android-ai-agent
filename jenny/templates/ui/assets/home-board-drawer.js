@@ -479,10 +479,12 @@ export class BoardDrawer {
 
   /** La prossima attesa: la carta gialla, col tasto «Fatto» a portata. */
   _calNext(rem, kind) {
-    const card = el('div', `home-drawer-cal-next${kind === 'overdue' ? ' is-late' : ''}`);
+    const card = el('div', `home-drawer-cal-next${kind === 'overdue' && !rem.paused ? ' is-late' : ''}${rem.paused ? ' is-paused' : ''}`);
     const key = [whenLabel(rem.when)];
     if (rem.when?.kind === 'date' && rem.when.precision !== 'month') key.push(untilLabel(rem.when.date));
     key.push(everyLabel(rem.when));
+    /* In pausa: il job non suona finché l'utente non lo riprende (dall'officina). */
+    if (rem.paused) key.push(i18n.t('board.cron.paused'));
     card.append(el('div', 'home-drawer-cal-next-key', key.filter(Boolean).join(' · ')),
       el('p', 'home-drawer-cal-next-text', rem.text));
     const bar = el('div', 'home-drawer-cal-next-bar');
@@ -495,12 +497,12 @@ export class BoardDrawer {
   /** Un'altra attesa: il giorno (il mese lo dice il gruppo), il testo, ⋯. */
   _calRow(rem, kind) {
     const when = rem.when || {};
-    const row = el('div', `home-drawer-cal-row${kind === 'overdue' ? ' is-late' : ''}${when.kind === 'condition' ? ' is-condition' : ''}`);
+    const row = el('div', `home-drawer-cal-row${kind === 'overdue' && !rem.paused ? ' is-late' : ''}${when.kind === 'condition' ? ' is-condition' : ''}${rem.paused ? ' is-paused' : ''}`);
     let day = whenLabel(when);
     if (kind === 'month') day = when.precision === 'month' ? '—' : String(Number(String(when.date).slice(8, 10)));
-    const every = everyLabel(when);
+    const tail = [everyLabel(when), rem.paused ? i18n.t('board.cron.paused') : ''].filter(Boolean).join(' · ');
     row.append(el('span', 'home-drawer-cal-day', day),
-      el('span', 'home-drawer-cal-text', every ? `${rem.text} · ${every}` : rem.text),
+      el('span', 'home-drawer-cal-text', tail ? `${rem.text} · ${tail}` : rem.text),
       this._remMore(rem));
     return row;
   }

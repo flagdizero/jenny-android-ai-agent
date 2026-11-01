@@ -921,10 +921,11 @@ export class HomeBoard {
       const late = note.when?.kind !== 'condition' && note.when?.precision !== 'month'
         && String(note.when?.date || '') < today;
       const row = document.createElement('span');
-      row.className = `home-board-postit-row${late ? ' is-late' : ''}`;
+      /* In pausa: la riga resta (l'utente l'ha fermata, non tolta), smorzata e detta. */
+      row.className = `home-board-postit-row${late && !note.paused ? ' is-late' : ''}${note.paused ? ' is-paused' : ''}`;
       const when = document.createElement('span');
       when.className = 'home-board-postit-when';
-      when.textContent = whenLabel(note.when);
+      when.textContent = note.paused ? `${whenLabel(note.when)} · ${i18n.t('board.cron.paused')}` : whenLabel(note.when);
       const text = document.createElement('span');
       text.className = 'home-board-postit-text';
       text.textContent = note.text;

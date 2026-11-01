@@ -327,26 +327,26 @@ def test_remove_protected_dream_job_returns_clear_feedback(tmp_path) -> None:
     assert tool._cron.get_job("dream") is not None
 
 
-def test_add_cron_job_defaults_to_tool_timezone(tmp_path) -> None:
+async def test_add_cron_job_defaults_to_tool_timezone(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Morning standup", None, "0 8 * * *", None, None)
+    result = await tool.execute(action="add", message="Morning standup", cron_expr="0 8 * * *")
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
     assert job.schedule.tz == "Asia/Shanghai"
 
 
-def test_add_at_job_uses_default_timezone_for_naive_datetime(tmp_path) -> None:
+async def test_add_at_job_uses_default_timezone_for_naive_datetime(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Morning reminder", None, None, None, "2030-03-25", time="08:00")
+    result = await tool.execute(action="add", message="Morning reminder", date="2030-03-25", time="08:00")
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
@@ -354,13 +354,13 @@ def test_add_at_job_uses_default_timezone_for_naive_datetime(tmp_path) -> None:
     assert job.schedule.at_ms == expected
 
 
-def test_add_job_binds_current_session_key(tmp_path) -> None:
+async def test_add_job_binds_current_session_key(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Morning standup", 60, None, None, None)
+    result = await tool.execute(action="add", message="Morning standup", every_seconds=60)
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
@@ -370,11 +370,11 @@ def test_add_job_binds_current_session_key(tmp_path) -> None:
     assert job.payload.origin_metadata == {}
 
 
-def test_add_job_requires_session_key(tmp_path) -> None:
+async def test_add_job_requires_session_key(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context(RequestContext(channel="websocket", chat_id="chat-1"))
 
-    result = tool._add_job(None, "Background refresh", 60, None, None, None)
+    result = await tool.execute(action="add", message="Background refresh", every_seconds=60)
 
     assert result == "Error: scheduled cron jobs must be created from a chat session"
     assert tool._cron.list_jobs() == []
@@ -407,19 +407,19 @@ def test_validate_params_requires_message_only_for_add(tmp_path) -> None:
     assert "job_id is required when action='remove'" in tool.validate_params({"action": "remove"})
 
 
-def test_add_job_empty_message_returns_actionable_error(tmp_path) -> None:
+async def test_add_job_empty_message_returns_actionable_error(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "", 60, None, None, None)
+    result = await tool.execute(action="add", message="", every_seconds=60)
 
     assert "action='add' requires a non-empty 'message'" in result
     assert "Retry including message=" in result
 
 
-def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(tmp_path) -> None:
+async def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(tmp_path) -> None:
     """CronTool stores owner/session identity separately from origin delivery context."""
     tool = _make_tool(tmp_path)
     meta = {"thread": {"id": "111.222", "kind": "channel"}}
@@ -427,7 +427,7 @@ def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(tmp_pa
         channel="websocket", chat_id="C99", metadata=meta, session_key="websocket:C99:111.222"
     ))
 
-    result = tool._add_job("test", "say hi", 60, None, None, None)
+    result = await tool.execute(action="add", name="test", message="say hi", every_seconds=60)
     assert "Created job" in result
 
     jobs = tool._cron.list_jobs()

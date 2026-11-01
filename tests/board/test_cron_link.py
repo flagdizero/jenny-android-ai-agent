@@ -84,3 +84,28 @@ def test_a_crooked_link_is_refused_at_add_not_turned_personal(tmp_path) -> None:
         service.add_job("x", CronSchedule(kind="every", every_ms=60_000), "m",
                         session_key="project:casa", board={"notebook": "casa", "card": ""})
     assert service.list_jobs() == []
+
+
+def test_a_paused_reminder_is_a_marked_row_and_nobody_s_next() -> None:
+    """Un job in pausa resta sul post-it (l'utente l'ha fermato, non tolto), ma
+    segnato: non è «il prossimo» e non si accende «a breve» — non suonerà
+    finché non lo si riprende, e il diario già lo lasciava fuori."""
+    from datetime import date, timedelta
+
+    soon = date.today() + timedelta(days=3)
+    at_ms = int(__import__("datetime").datetime.combine(
+        soon, __import__("datetime").time(9, 0)).astimezone().timestamp() * 1000)
+    snaps = {
+        "p1": {"name": "Travaso", "enabled": False, "paused": True, "scope": "acero",
+               "schedule": {"kind": "at", "at_ms": at_ms, "precision": "day"}},
+        "r2": {"name": "Concime", "enabled": True, "paused": False, "scope": "acero",
+               "schedule": {"kind": "at", "at_ms": at_ms + 86_400_000 * 20, "precision": "day"}},
+    }
+    notes = cron_link.notes_from_jobs(snaps)
+    by_id = {n["id"]: n for n in notes}
+    assert by_id["p1"]["paused"] is True
+    assert "paused" not in by_id["r2"]
+    assert model.note_is_soon(by_id["p1"]) is False
+    assert model.next_note(notes, "acero")["id"] == "r2"
+    # Senza la riga in pausa non c'è un prossimo.
+    assert model.next_note([by_id["p1"]], "acero") is None

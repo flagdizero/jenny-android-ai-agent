@@ -406,6 +406,19 @@ async def _run_bound_cron_job(
 
     if monitor:
         _prune_monitor_session(agent, turn_session_key)
+        # Il controllo è nelle mani di un aiutante: il silenzio non prova niente,
+        # il verdetto arriva col suo annuncio (:mod:`jenny.cron.monitor_followup`).
+        # PRIMA di ``CHECK_FAILED``: un turno che delega e poi chiama
+        # ``nothing_to_report(checked=false)`` ha delegato — leggere prima il
+        # guasto chiudeva il giro come «non controllato» e il verdetto
+        # dell'aiutante, quando arrivava, non trovava nessuno in attesa (è
+        # l'ordine che il cappello di ``tools/nothing_to_report.py`` promette).
+        if parse_delegated_marks(outcome.final_text) and not outcome.spoke:
+            cron.write_run_record(
+                run_id,
+                {**run_record_base, "status": "delegated", "delivery": "suppressed"},
+            )
+            raise CronMonitorDelegatedError(f"cron monitor job {job.id} delegated its check")
         # Terzo stato, e va guardato PRIMA di ``spoke``: un monitor che non ha
         # potuto controllare resta un monitor che non ha controllato anche
         # quando ha parlato per dirlo. Legarlo a ``spoke`` azzererebbe la
@@ -457,14 +470,6 @@ async def _run_bound_cron_job(
                 # silenzio.
                 escalated=bool(parse_warned_marks(outcome.final_text)),
             )
-        # Il controllo è nelle mani di un aiutante: il silenzio non prova niente,
-        # il verdetto arriva col suo annuncio (:mod:`jenny.cron.monitor_followup`).
-        if parse_delegated_marks(outcome.final_text) and not outcome.spoke:
-            cron.write_run_record(
-                run_id,
-                {**run_record_base, "status": "delegated", "delivery": "suppressed"},
-            )
-            raise CronMonitorDelegatedError(f"cron monitor job {job.id} delegated its check")
         # L'esito lo dice da sé: per un monitor l'outbound finale è sempre None,
         # e ``spoke`` distingue "ho parlato col tool ``message``" da "non avevo
         # nulla da riferire" — che è un successo, non un fallimento.

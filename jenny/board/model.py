@@ -914,14 +914,19 @@ def sorted_notes(notes: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
 
 
 def next_note(notes: Iterable[Mapping[str, Any]], scope: str) -> dict[str, Any] | None:
-    """La riga più vicina dell'ambito *scope* (una scheda, o ``NOTEBOOK``)."""
-    mine = [n for n in notes if n.get("card") == scope]
+    """La riga più vicina dell'ambito *scope* (una scheda, o ``NOTEBOOK``).
+
+    Una riga in pausa non è «la prossima»: il suo job non suonerà finché l'utente
+    non lo riprende, e il segnale «a breve» o il ``[next: …]`` del prompt
+    direbbero il contrario.
+    """
+    mine = [n for n in notes if n.get("card") == scope and not n.get("paused")]
     return dict(min(mine, key=_note_key)) if mine else None
 
 
 def note_is_soon(note: Mapping[str, Any], today: date | None = None) -> bool:
     due = note_due(note)
-    if due is None:
+    if due is None or note.get("paused"):
         return False
     return due - (today or date.today()) <= timedelta(days=SOON_DAYS)
 

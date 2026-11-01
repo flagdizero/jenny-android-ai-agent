@@ -1,6 +1,6 @@
 """Regression tests for the cron tool's JSON-schema / runtime contract (#3113).
 
-The schema advertised ``required=["action"]`` while ``_add_job`` rejected empty
+The schema advertised ``required=["action"]`` while ``add`` rejected an empty
 ``message``; LLMs rationally omitted ``message`` and looped on the runtime
 error. The fix keeps ``required=["action"]`` (so ``list``/``remove`` stay
 callable) but states the per-action requirement in each field's description

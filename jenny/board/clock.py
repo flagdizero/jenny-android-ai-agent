@@ -13,10 +13,11 @@ Gira ogni quarto d'ora e fa tre cose, nessuna delle quali è un promemoria:
 
 Fino al 31/10/2026 leggeva anche ``board/reminders.json`` e annunciava le attese
 a data e a condizione in un turno silenzioso della chat personale. Quel file non
-c'è più: un promemoria del quaderno è un job dello scheduler (un singolo, o un
-ricorrente con un filtro ``condition`` guardato dal codice prima del modello,
-v. ``jenny/cron/condition.py``), e suona da solo nella chat del suo quaderno. Il
-nome del job resta ``reminders``.
+si scrive più: un promemoria del quaderno è un job dello scheduler (un singolo, o
+un ricorrente con un filtro ``condition`` guardato dal codice prima del modello,
+v. ``jenny/cron/condition.py``), e suona da solo nella chat del suo quaderno. Un
+file rimasto da un'installazione di prima lo converte in job la prima passata
+(:mod:`jenny.board.legacy_reminders`). Il nome del job resta ``reminders``.
 """
 
 from __future__ import annotations
@@ -107,6 +108,7 @@ async def run_reminders(
     resta nella firma per chi chiama. *cron* è il servizio dei job: serve a
     buttare i job delle schede tolte (:func:`jenny.board.removed.purge_removed_cards`).
     """
+    from jenny.board.legacy_reminders import migrate_legacy_reminders
     from jenny.board.removed import purge_removed_cards
     from jenny.utils.wiki_paths import discover_wiki_roots
 
@@ -114,6 +116,7 @@ async def run_reminders(
     current = _local_now(timezone_name, now)
     events = 0
     produced = 0
+    migrated = 0
     # **Prima chi produce, poi chi giudica**: i lettori delle app generali girano
     # una volta per giro, per tutti i quaderni insieme.
     try:
@@ -126,6 +129,11 @@ async def run_reminders(
         if read_board(root) is None:
             continue
         try:
+            migrated += migrate_legacy_reminders(root, cron, timezone_name=timezone_name,
+                                                 now=current)
+        except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
+            logger.exception("reminders: legacy reminders of {} not migrated", name)
+        try:
             purge_removed_cards(root, cron, now=current)
         except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
             logger.exception("reminders: removed cards of {} not purged", name)
@@ -133,6 +141,7 @@ async def run_reminders(
             events += watch_app_sections(workspace, root, timezone_name=timezone_name)
         except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
             logger.exception("reminders: app sections of {} not checked", name)
-    if not events and not produced:
+    if not events and not produced and not migrated:
         return None
-    return f"reminders: {events} app events, {produced} reader runs"
+    line = f"reminders: {events} app events, {produced} reader runs"
+    return line + (f", {migrated} reminders migrated" if migrated else "")
