@@ -352,14 +352,6 @@ def test_a_monitor_must_not_file_an_unchecked_silence() -> None:
     assert not _ok(name, _obs(""), {"n": "x"})["monitor_created"]
 
 
-def test_a_quiet_check_on_a_missing_file_records_the_failure() -> None:
-    name = "quiet_check_still_records_failure"
-    assert _ok(name, _obs("", monitor={"first_status": "could_not_check"}), {"n": "x"})[
-        "could_not_check"]
-    assert not _ok(name, _obs("", monitor={"first_status": "silenced"}), {"n": "x"})[
-        "could_not_check"]
-
-
 def test_a_condition_cadence_is_asked_or_said() -> None:
     name = "condition_cadence_is_said"
     cond = {"app": "portfolio", "field": "totale", "op": ">", "value": 90000}

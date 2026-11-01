@@ -1108,16 +1108,6 @@ def _monitor_checks(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     ]
 
 
-def _monitor_failure(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    run = _monitor_ran(obs)
-    first = run.get("first_status")
-    return [
-        Check("monitor_created", bool(run), json.dumps(run, ensure_ascii=False)[:160]),
-        Check("could_not_check", first == "could_not_check",
-              f"{first} · {run.get('error') or ''}"[:160]),
-    ]
-
-
 _CADENCE_WORDS = re.compile(
     r"\bogni\b|\bevery\b|al giorno|a settimana|\bore\b|\bhours?\b|\bminut|ogni mattina|"
     r"giornalier|daily|hourly|settiman", re.IGNORECASE)
@@ -1137,9 +1127,6 @@ def _cadence_said(obs: Observation, n: Mapping[str, str]) -> list[Check]:
 
 
 _NO_HOUR = "A day the user named without a time has no `time`: never pick an hour for them."
-_QUIET_FAILURE = (
-    '  This holds even when the check\'s own instructions told you to give up quietly in exactly that case ("if the host is unreachable, say nothing"). Obey that instruction — say nothing to the user — and still answer `checked=false`: the check did not run, and that answer is the only reason anyone will ever notice that it has been dead for hours.'
-)
 _MONITOR_PARTIAL = (
     '- Before you answer `checked=true`, make sure you actually did every step the check asks for. If a step needs something your own tools cannot do in this turn — computing a value, running a script, reaching a host or app you have no tool for — you have not checked. Either hand the check to a helper with `spawn` (see below) or answer `checked=false` naming the step you could not do.'
 )
@@ -1200,20 +1187,6 @@ LATER = [
                           "skip that step and judge the check on what you could read; if that "
                           "looks fine, answer `checked=true`.")],
         calibration_note="01/11/2026, DeepSeek v4.1 flash, 3+3: l'inversione nel .md non sposta il tasso (3/3 → 3/3): la promessa la porta anche la descrizione del tool, che vive in Python. Si tara con una build variante",
-    ),
-    Scenario(
-        name="quiet_check_still_records_failure",
-        stage=1, area="cron",
-        promise="un controllo che non trova il suo file scrive CHECK_FAILED anche se gli si "
-                "e' detto di tacere",
-        turns=["Crea un monitor ogni 2 minuti con questo testo, esatto: «Leggi "
-               "output/bh-{n}-assente.txt e avvisami se contiene ALLARME. Se il file non c'e', "
-               "non dirmi niente.»"],
-        check=_monitor_failure, monitor_after=True,
-        calibration=[Edit("agent/cron_monitor.md", _QUIET_FAILURE,
-                          "  A check whose own instructions tell you to give up quietly when "
-                          "something is missing has run as asked: obey them and answer "
-                          "`checked=true`.")],
     ),
     Scenario(
         name="condition_cadence_is_said",

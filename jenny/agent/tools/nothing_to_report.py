@@ -21,12 +21,12 @@ poi i parser di ``cron/could_not_check.py`` leggono ciò che leggevano prima.
 
 **L'esito è un argomento obbligatorio** (``checked``), dal 01/11/2026. Prima il
 tool diceva solo «niente da dire», e un controllo *non eseguito* doveva
-ricordarsi di scrivere a parte una riga ``CHECK_FAILED`` nel testo. Il behaviour
-check l'ha misurato su DeepSeek: a un monitor il cui testo diceva «se il file
-non c'è, non dirmi niente», col file assente, la riga non è mai arrivata — 0 giri
-su 3, tutti archiviati come «ha guardato, niente da dire». La domanda ora arriva
-nel momento in cui il modello chiude il turno: ``checked=false`` con il motivo
-diventa ``CHECK_FAILED: <motivo>``, ``checked=true`` diventa ``CHECK_OK``.
+ricordarsi di scrivere a parte una riga ``CHECK_FAILED`` nel testo. La domanda
+ora arriva nel momento in cui il modello chiude il turno: ``checked=false`` con
+il motivo diventa ``CHECK_FAILED: <motivo>``, ``checked=true`` diventa
+``CHECK_OK``. Un controllo il cui testo dice cosa vuol dire una cosa mancante
+(«se il file non c'è, non dirmi niente») ha previsto quell'esito: vale il testo,
+per decisione dell'utente — è lo stesso caso di «avvisami quando torna su».
 
 ``CHECK_OK`` nudo, e non è più un rischio. Su un monitor in attesa di verdetto
 azzera la sequenza dei guasti e il ricordo di aver avvisato (v.
@@ -71,8 +71,9 @@ _REASON_MAX = 200
             description=(
                 "true: you did every step the check asks for, and nothing is worth telling "
                 "the user. false: something stopped you — a missing file, a tool you do not "
-                "have, a host you cannot reach, a value you could not compute — even when "
-                "the check's own text told you to stay quiet in that case."
+                "have, a host you cannot reach, a value you could not compute. When the "
+                "check's own text says what a missing thing means, it is an outcome it "
+                "foresaw: follow it."
             ),
         ),
         reason=StringSchema(

@@ -62,9 +62,8 @@ class TestTheDeclarationItself:
         assert declared_marker_lines(tool) == "\nCHECK_OK"
 
     async def test_not_checked_becomes_the_failure_with_its_reason(self) -> None:
-        """Il caso che il behaviour check ha trovato rotto (01/11/2026): un
-        controllo a cui si era detto «se manca il file, taci» non scriveva mai la
-        riga a parte. Ora è la risposta alla domanda del tool."""
+        """Un controllo che non ha girato lo dice al tool, invece di ricordarsi
+        una riga a parte nel testo."""
         tool = _tool(silent=True)
 
         await tool.execute(checked=False, reason="  il file\n output/x.txt non esiste ")
@@ -107,7 +106,7 @@ class TestTheDeclarationItself:
         params = NothingToReportTool().parameters
         assert params["required"] == ["checked"]
         assert "task" not in params["properties"]
-        assert "stay quiet" in params["properties"]["checked"]["description"]
+        assert "you could not compute" in params["properties"]["checked"]["description"]
 
 
 class TestWhereItDoesNotApply:

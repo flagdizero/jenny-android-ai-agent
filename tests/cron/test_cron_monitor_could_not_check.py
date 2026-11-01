@@ -47,13 +47,11 @@ _MESSAGE = "controlla la pioggia nelle città e avvisami solo sopra il 70%"
 
 # Il caso della frase più ordinaria che ci sia: l'utente chiede il controllo e
 # nella stessa riga chiede di non essere disturbato quando l'host è giù.
-_QUIET_MESSAGE = "controlla il server pibox, e se è irraggiungibile non dire niente"
 
 # Le due frasi del prompt su cui gli agenti finti decidono. Stanno qui, in un
 # posto solo, perché sono l'unico punto in cui questi test conoscono la prosa
 # del template: se la riscrivi, si aggiornano qui e i test di contratto qui
 # sotto ti dicono subito che l'hai fatto.
-_SILENCE_OVERRIDE = "still answer `checked=false`"
 _ALREADY_WARNED = "ALREADY been told"
 _MUST_WARN = "must find out"
 
@@ -283,78 +281,17 @@ class TestTheStreakSpeaksOnce:
         assert job.state.next_run_at_ms is not None
 
 
-class _ObedientlySilentAgent(_FakeMonitorAgent):
-    """Il modello che applica "non dire niente" anche al marcatore.
+class TestTheSilentOutcomes:
+    """Le due uscite mute di un giro: ha controllato, o non ha potuto.
 
-    Non è un capriccio del finto: è il run delle 09:18 del 2026-08-16 sul Titan
-    2, sul ramo heartbeat (v. ``ea70015``). L'utente ha scritto "se è
-    irraggiungibile non dire niente", il prompt non diceva da nessuna parte che
-    il marcatore è un'altra cosa, e il turno è finito muto — nessun messaggio e
-    nessuna riga. Il run è stato archiviato come riuscito.
-
-    Finché il prompt non lo smentisce, questo agente fa esattamente quello.
+    Fino al 01/11/2026 qui c'era anche «un controllo a cui si è detto di tacere
+    registra comunque il guasto» (il run del pibox, Titan 2, 16/08/2026). Il
+    behaviour check l'ha misurato col modello vero: 0 giri su 3. Il modello
+    legge «se il file non c'è, non dirmi niente» come un esito previsto
+    dall'utente, e ha ragione: è il caso di «avvisami quando il sito torna su»,
+    dove ogni lettura fallita è lo stato sorvegliato. Decisione dell'utente:
+    vale il testo del controllo, e la frase è stata tolta dal prompt.
     """
-
-    message = _QUIET_MESSAGE
-
-    async def submit_cron_turn(self, msg: InboundMessage) -> TurnOutcome:
-        self.prompts.append(msg.content)
-        if self.healthy:
-            return TurnOutcome.silent(final_text="pibox risponde, nulla da segnalare.")
-        if _SILENCE_OVERRIDE not in msg.content:
-            # "Non dire niente" applicato alla lettera: niente messaggio e
-            # niente marcatore.
-            return TurnOutcome.silent(final_text="")
-        if not self._asked_to_warn(msg.content):
-            return TurnOutcome.silent(final_text="CHECK_FAILED: pibox irraggiungibile")
-        self.messages.append("Il controllo del server non riesce a partire da un po'.")
-        return TurnOutcome.spoke_via_tool(
-            final_text="CHECK_FAILED: pibox irraggiungibile\nCHECK_WARNED"
-        )
-
-
-class TestAnInstructedSilenceIsAboutTheMessage:
-    """Il guasto perfettamente mimetizzato, e la frase che lo produce.
-
-    "Controlla il server, e se è irraggiungibile non dire niente" è il modo più
-    ordinario che ci sia di scrivere un monitor. Senza l'override nel prompt il
-    turno tace del tutto, il run viene archiviato come ``silenced`` — cioè come
-    un successo — la sequenza non parte e l'escalation non arriva mai:
-    indistinguibile da un monitor sano, per sempre.
-    """
-
-    async def test_a_check_told_to_stay_quiet_still_records_a_failure(
-        self, tmp_path: Path
-    ) -> None:
-        service, job_id, agent = _monitor(
-            tmp_path, agent=_ObedientlySilentAgent(), message=_QUIET_MESSAGE
-        )
-
-        await _cycles(service, job_id, 1)
-
-        assert agent.messages == []  # l'utente non va disturbato: quello vale
-        state = _state(service, job_id)
-        assert state.last_status == "could_not_check"
-        assert state.consecutive_could_not_check == 1
-
-    async def test_a_check_told_to_stay_quiet_still_reaches_escalation(
-        self, tmp_path: Path
-    ) -> None:
-        """Il punto di tutta la contabilità: un guasto muto deve venire fuori."""
-        service, job_id, agent = _monitor(
-            tmp_path, agent=_ObedientlySilentAgent(), message=_QUIET_MESSAGE
-        )
-
-        await _cycles(service, job_id, MONITOR_ESCALATE_AFTER_FAILURES)
-
-        assert len(agent.messages) == 1
-        assert _state(service, job_id).could_not_check_escalated is True
-
-    async def test_the_prompt_says_the_line_is_written_anyway(self) -> None:
-        """Il contratto, in chiaro: obbedisci sul messaggio, rispondi ``checked=false``."""
-        prompt = _base_prompt()
-        assert _SILENCE_OVERRIDE in prompt
-        assert "reaches nobody" in prompt
 
     async def test_the_legitimate_silent_case_survives(self) -> None:
         """Un controllo che gira e non trova niente resta un successo muto."""
