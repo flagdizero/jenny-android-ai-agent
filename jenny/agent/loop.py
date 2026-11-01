@@ -365,6 +365,11 @@ class AgentLoop(
         # contratto di Dream. Lo collega il container; ``None`` fuori dal
         # gateway, e chi lo usa deve trattarlo come rete assente e proseguire.
         self.take_snapshot: Callable[[str], Awaitable[bool]] | None = None
+        # Le copie per i canali accoppiati (Telegram) di un messaggio già
+        # consegnato nella sua chat: ``ChannelDeliverer.mirror``, collegato dal
+        # container. Lo usa la risposta di un promemoria di quaderno
+        # (``cron/bound_runner.py``); ``None`` fuori dal gateway.
+        self.mirror_delivery: Callable[[OutboundMessage], Awaitable[None]] | None = None
         self.restrict_to_workspace = restrict_to_workspace
         self.extract_document_text = extract_document_text
         self.workspace_scopes = WorkspaceScopeResolver(
@@ -390,6 +395,7 @@ class AgentLoop(
             # e il picker devono elencare le stesse cartelle.
             wikis_dir_name=projects_subdir,
             wikis_enabled=wikis_enabled,
+            cron_service=self.cron_service,
         )
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()

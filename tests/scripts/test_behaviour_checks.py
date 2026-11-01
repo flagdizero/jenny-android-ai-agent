@@ -310,3 +310,64 @@ def test_quiet_filing_allows_a_word_but_not_where() -> None:
     loud = _ok("passing_fact_goes_to_its_notebook",
                _obs("Ok, l'ho messo nel quaderno del camper.", filed), nonces)
     assert not loud["quiet_filing"]
+
+
+def _cron_add(args: dict, result: str = "Created job (id: j1)") -> ToolCall:
+    return ToolCall("cron", {"action": "add", **args}, result)
+
+
+def test_a_day_must_stay_without_a_time() -> None:
+    good = _obs("ok", last_turn_calls=[_cron_add({"date": "2027-03-14"})])
+    invented = _obs("ok", last_turn_calls=[_cron_add({"date": "2027-03-14", "time": "09:00"})])
+    # Un add rifiutato (``at``, vecchia forma) e poi riprovato giusto passa.
+    retried = _obs("ok", last_turn_calls=[
+        _cron_add({"at": "2027-03-14T09:00:00"}, "Error: `at` does not exist"),
+        _cron_add({"date": "2027-03-14"})])
+    for name in ("day_without_time_personal", "day_without_time_notebook",
+                 "day_without_time_after_bad_history"):
+        assert all(_ok(name, good, {"n": "x"}).values())
+        assert not _ok(name, invented, {"n": "x"})["no_time_invented"]
+        assert all(_ok(name, retried, {"n": "x"}).values())
+
+
+def test_the_bad_history_seeds_tool_calls_with_their_results() -> None:
+    seed = SCENARIOS["day_without_time_after_bad_history"].seed_session
+    rows = [r for r in seed if isinstance(r, dict)]
+    calls = observation_from_rows(rows, []).tool_calls
+    assert [c.args.get("time") for c in calls] == ["09:00", "09:00"]
+    assert all(c.result.startswith("Created job") for c in calls)
+
+
+def test_a_monitor_must_not_file_an_unchecked_silence() -> None:
+    name = "monitor_delegates_what_it_cannot_do"
+    delegated = _obs("", monitor={"first_status": "delegated", "first_calls": ["spawn"]})
+    failed = _obs("", monitor={"first_status": "could_not_check", "first_calls": ["read_file"]})
+    faked = _obs("", monitor={"first_status": "silenced",
+                              "first_calls": ["read_file", "nothing_to_report"]})
+    never = _obs("", monitor={"first_status": None, "first_calls": []})
+    assert all(_ok(name, delegated, {"n": "x"}).values())
+    assert all(_ok(name, failed, {"n": "x"}).values())
+    assert not _ok(name, faked, {"n": "x"})["no_unchecked_silence"]
+    assert not _ok(name, never, {"n": "x"})["ran"]
+    assert not _ok(name, _obs(""), {"n": "x"})["monitor_created"]
+
+
+def test_a_quiet_check_on_a_missing_file_records_the_failure() -> None:
+    name = "quiet_check_still_records_failure"
+    assert _ok(name, _obs("", monitor={"first_status": "could_not_check"}), {"n": "x"})[
+        "could_not_check"]
+    assert not _ok(name, _obs("", monitor={"first_status": "silenced"}), {"n": "x"})[
+        "could_not_check"]
+
+
+def test_a_condition_cadence_is_asked_or_said() -> None:
+    name = "condition_cadence_is_said"
+    cond = {"app": "portfolio", "field": "totale", "op": ">", "value": 90000}
+    asked = _obs("Ogni quanto lo controllo?", last_turn_calls=[])
+    said = _obs("Fatto: lo guardo ogni 12 ore.",
+                last_turn_calls=[_cron_add({"condition": cond, "every_seconds": 43200})])
+    hidden = _obs("Fatto, ti avviso quando succede.",
+                  last_turn_calls=[_cron_add({"condition": cond, "every_seconds": 43200})])
+    assert _ok(name, asked, {"n": "x"})["cadence_said"]
+    assert _ok(name, said, {"n": "x"})["cadence_said"]
+    assert not _ok(name, hidden, {"n": "x"})["cadence_said"]

@@ -307,6 +307,10 @@ def test_the_monitor_prompt_uses_the_real_marker_values() -> None:
     costanti di ``jenny/cron/could_not_check.py``. Cambiare il valore di una
     costante lascerebbe il prompt a chiedere al modello una riga che il parser
     non riconosce più.
+
+    ``CHECK_FAILED`` non c'è più dal 01/11/2026: un controllo che non ha girato
+    lo dice ``nothing_to_report(checked=false)``, e la riga la scrive il tool
+    (``declared_marker_lines``) con la costante stessa.
     """
     from jenny.cron.could_not_check import (
         COULD_NOT_CHECK_MARKER,
@@ -315,7 +319,9 @@ def test_the_monitor_prompt_uses_the_real_marker_values() -> None:
     )
 
     text = load_bundled_template("agent/cron_monitor.md") or ""
-    for marker in (COULD_NOT_CHECK_MARKER, DELEGATED_MARKER, WARNED_MARKER):
+    assert COULD_NOT_CHECK_MARKER not in text, "il prompt chiede ancora la riga a mano"
+    assert "`checked=false`" in text
+    for marker in (DELEGATED_MARKER, WARNED_MARKER):
         assert marker in text, (
             f"il prompt del monitor non chiede più una riga `{marker}`: il valore della "
             "costante in `jenny/cron/could_not_check.py` è cambiato e la copia scritta a "

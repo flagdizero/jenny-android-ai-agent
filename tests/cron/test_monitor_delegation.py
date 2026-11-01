@@ -84,7 +84,7 @@ async def test_the_helpers_announce_gets_the_vocabulary_only_in_the_monitor_sess
     followup = _followup(service)
 
     block = followup.prompt_block(f"cron:{job_id}")
-    assert "CHECK_OK" in block and "CHECK_FAILED" in block
+    assert "`checked=true`" in block and "`checked=false`" in block
     assert "controlla la pioggia" in block
     assert followup.prompt_block("unified:default") == ""
     assert followup.prompt_block("cron:reminders") == ""
@@ -154,3 +154,16 @@ def test_the_job_id_comes_from_both_monitor_session_shapes() -> None:
     assert job_id_of_monitor_session(notebook_cron_session_key("casa", "abc123")) == "abc123"
     assert job_id_of_monitor_session("unified:default") is None
     assert job_id_of_monitor_session("project:casa") is None
+
+
+async def test_a_spoken_result_closes_the_delegation_as_run(tmp_path) -> None:
+    """Un annuncio che ha detto all'utente il risultato ha girato, anche se non
+    l'ha dichiarato: il guasto, quando c'è, lo dice ``checked=false``."""
+    agent = _Agent("CHECK_DELEGATED: read the gauge")
+    service, job_id = _monitor(tmp_path, agent)
+    await service.run_job(job_id)
+
+    _followup(service).record(f"cron:{job_id}", final_text="", spoke=True)
+
+    state = service.get_job(job_id).state
+    assert state.pending_since_ms is None and state.last_status == "ok"

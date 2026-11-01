@@ -53,7 +53,7 @@ _QUIET_MESSAGE = "controlla il server pibox, e se è irraggiungibile non dire ni
 # posto solo, perché sono l'unico punto in cui questi test conoscono la prosa
 # del template: se la riscrivi, si aggiornano qui e i test di contratto qui
 # sotto ti dicono subito che l'hai fatto.
-_SILENCE_OVERRIDE = "still write the line"
+_SILENCE_OVERRIDE = "still answer `checked=false`"
 _ALREADY_WARNED = "ALREADY been told"
 _MUST_WARN = "must find out"
 
@@ -351,7 +351,7 @@ class TestAnInstructedSilenceIsAboutTheMessage:
         assert _state(service, job_id).could_not_check_escalated is True
 
     async def test_the_prompt_says_the_line_is_written_anyway(self) -> None:
-        """Il contratto, in chiaro: obbedisci sul messaggio, scrivi la riga."""
+        """Il contratto, in chiaro: obbedisci sul messaggio, rispondi ``checked=false``."""
         prompt = _base_prompt()
         assert _SILENCE_OVERRIDE in prompt
         assert "reaches nobody" in prompt
@@ -359,7 +359,8 @@ class TestAnInstructedSilenceIsAboutTheMessage:
     async def test_the_legitimate_silent_case_survives(self) -> None:
         """Un controllo che gira e non trova niente resta un successo muto."""
         prompt = _base_prompt()
-        assert "ran and found nothing is a success" in prompt
+        assert "If you did the check and there is nothing new or noteworthy" in prompt
+        assert "`checked=true`" in prompt
 
     async def test_a_partial_check_is_not_a_quiet_one(self) -> None:
         """Il 01/11/2026, su jenny_s22: un monitor che doveva confrontare lo
@@ -368,7 +369,7 @@ class TestAnInstructedSilenceIsAboutTheMessage:
         controllo fatto a metà va a un aiutante o è un CHECK_FAILED."""
         prompt = _base_prompt()
         assert "you have not checked" in prompt
-        assert "spawn" in prompt and "CHECK_FAILED line naming the step" in prompt
+        assert "spawn" in prompt and "`checked=false` naming the step" in prompt
 
 
 class _RepeatsItsOwnWarning(_FakeMonitorAgent):

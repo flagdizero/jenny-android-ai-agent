@@ -12,7 +12,7 @@ from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
 from loguru import logger
 
-from jenny.agent.diary import DiaryTurn, diary_turn
+from jenny.agent.diary import DiaryTurn, diary_turn, upcoming_dates
 from jenny.agent.memory import (
     HISTORY_FLOOR_METADATA_KEY,
     MemoryStore,
@@ -22,7 +22,7 @@ from jenny.agent.skills import SkillsLoader
 from jenny.config.paths import get_output_path
 from jenny.runtime.user_text import current_bot_name
 from jenny.session.goal_state import goal_state_runtime_lines, plan_running_in_session
-from jenny.session.keys import is_project_session_key
+from jenny.session.keys import is_personal_session_key, is_project_session_key
 from jenny.utils.android_assets import (
     _RETIRED_TEMPLATE_DIGESTS,
     normalized_template_text,
@@ -637,6 +637,7 @@ class ContextBuilder:
         available_tools: Callable[[], list[str]] | None = None,
         wikis_dir_name: str = "wikis",
         wikis_enabled: bool = True,
+        cron_service: Any = None,
     ):
         self.workspace = workspace
         self.timezone = timezone
@@ -656,6 +657,10 @@ class ContextBuilder:
         # descrive tool assenti non e solo contesto sprecato: invita il modello a
         # chiamarli.
         self.orchestrator = orchestrator
+        # Lo scheduler vivo, per le date in arrivo nei quaderni del diario della
+        # chat personale: passato da ``AgentLoop``, ``None`` senza scheduler
+        # (test, comandi) — e allora quel blocco non c'è.
+        self.cron_service = cron_service
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills) if disabled_skills else None)
 
@@ -1737,7 +1742,11 @@ class ContextBuilder:
         try:
             now = datetime.now()
             entries = self.memory.read_unprocessed_history(since_cursor=0)
-            return diary_turn(entries, session_key, holder, history, now=now)
+            dates = upcoming_dates(
+                self.cron_service, discover_wiki_roots(self.workspace / self.wikis_dir_name),
+                now=now, tz_name=self.timezone,
+            ) if self.cron_service is not None and is_personal_session_key(session_key) else []
+            return diary_turn(entries, session_key, holder, history, now=now, dates=dates)
         except Exception as exc:  # noqa: BLE001 — v. la docstring
             logger.warning("diary: cannot build the view for {}: {}", session_key, exc)
             return None

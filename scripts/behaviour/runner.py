@@ -179,6 +179,8 @@ class Runner:
             }
             if scenario.archive_after:
                 extra["archive_entry"] = self._archive_now()
+            if scenario.monitor_after:
+                extra["monitor"] = self._first_monitor_run(jobs_before)
             if scenario.dream_after:
                 before_sessions = set(dev.listdir("sessions"))
                 extra.update(self._dream_now())
@@ -272,6 +274,60 @@ class Runner:
             time.sleep(5)
         return {"dream_cursor_before": before, "dream_cursor_after": after}
 
+    def _first_monitor_run(self, jobs_before: set[str], *, first: float = 300.0,
+                           verdict: float = 300.0) -> dict[str, Any] | None:
+        """Il primo giro del monitor nato in questo giro, e il suo esito finale.
+
+        Si legge ``jobs.json`` (stato e storico del job) e la sessione del
+        monitor, ``cron_<id>.jsonl``, subito dopo il giro: la sessione si sfoltisce
+        a ogni giro, e il primo e' quello che conta. Se il giro ha affidato il
+        controllo a un aiutante (``pendingSinceMs``), si aspetta anche il suo
+        verdetto, che riscrive l'esito del giro.
+        """
+        dev = self.device
+
+        def job() -> dict[str, Any] | None:
+            store = json.loads(dev.read("cron/jobs.json") or "{}")
+            return next((j for j in store.get("jobs", [])
+                         if j.get("id") not in jobs_before
+                         and (j.get("payload") or {}).get("mode") == "monitor"), None)
+
+        found = job()
+        if found is None:
+            return None
+        deadline = time.monotonic() + first
+        while time.monotonic() < deadline:
+            found = job() or found
+            if (found.get("state") or {}).get("runHistory"):
+                break
+            time.sleep(5)
+        state = found.get("state") or {}
+        runs = state.get("runHistory") or []
+        first_status = runs[0].get("status") if runs else None
+
+        def calls() -> list[str]:
+            rows = _rows(dev.read(f"sessions/cron_{found['id']}.jsonl") or "")
+            return [c.name for c in observation_from_rows(rows, []).tool_calls]
+
+        # Subito: il giro dopo sfoltisce la sessione e porterebbe via questo.
+        first_calls = calls()
+        if state.get("pendingSinceMs"):
+            deadline = time.monotonic() + verdict
+            while time.monotonic() < deadline and (state.get("pendingSinceMs")):
+                time.sleep(5)
+                found = job() or found
+                state = found.get("state") or {}
+        return {
+            "id": found["id"],
+            "message": (found.get("payload") or {}).get("message"),
+            "first_status": first_status,
+            "status": state.get("lastStatus"),
+            "error": state.get("lastError"),
+            "pending": bool(state.get("pendingSinceMs")),
+            "first_calls": first_calls,
+            "calls": first_calls if first_status == state.get("lastStatus") else calls(),
+        }
+
     def _reapply_calibration(self) -> None:
         for path, original in self.originals.items():
             current = self.device.read(path)
@@ -363,10 +419,16 @@ class Runner:
         meta["updated_at"] = datetime.now().isoformat()
         start = datetime.now() - timedelta(minutes=len(scenario.seed_session) + 1)
         lines = [json.dumps(meta, ensure_ascii=False)]
-        for i, (role, text) in enumerate(scenario.seed_session):
+        for i, item in enumerate(scenario.seed_session):
+            stamp = (start + timedelta(minutes=i)).isoformat()
+            if isinstance(item, dict):
+                # Una riga intera: i nonce si rendono anche dentro gli argomenti.
+                row = json.loads(scenario.render(json.dumps(item, ensure_ascii=False), nonces))
+                lines.append(json.dumps({**row, "timestamp": stamp}, ensure_ascii=False))
+                continue
+            role, text = item
             lines.append(json.dumps({
-                "role": role, "content": scenario.render(text, nonces),
-                "timestamp": (start + timedelta(minutes=i)).isoformat(),
+                "role": role, "content": scenario.render(text, nonces), "timestamp": stamp,
             }, ensure_ascii=False))
         dev.write(session_file, "\n".join(lines) + "\n")
 

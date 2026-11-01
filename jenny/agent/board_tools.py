@@ -207,7 +207,10 @@ class BoardWriteSummaryTool(_BoardTool):
     card=StringSchema("The card id the reminder is about. Leave it empty when it concerns the "
                       "whole notebook, several cards, or nothing on the board."),
     text=StringSchema("What to do, in a few words, in the user's language."),
-    date=StringSchema("When: YYYY-MM-DD. For something like 'around March', the first of the month."),
+    date=StringSchema("When: YYYY-MM-DD. For something like 'around March', the first of the "
+                      "month. A month or a day said without a year is the next one to come "
+                      "after the journal line's date: 'around March' written in November is "
+                      "next year's March. A date already past is refused."),
     precision=StringSchema("`day` for a precise date, `month` for 'in March'.", enum=["day", "month"]),
     why=StringSchema("The wiki page (relative to wiki/) that explains why, if there is one."),
     source=StringSchema("Where it was said: the journal line (`raw/journal/YYYYMMDD.md#HH:MM`) or page."),

@@ -755,6 +755,7 @@ class GatewayContainer:
         message_tool = agent.tools.get("message")
         if isinstance(message_tool, MessageTool):
             message_tool.set_send_callback(self._deliver_to_channel)
+        agent.mirror_delivery = self._deliverer.mirror
         # Lo stesso callback passato al ``CronDispatcher``, non un secondo: i due
         # percorsi di Dream — il job periodico e lo slash command ``/dream`` —
         # devono checkpointare la stessa cosa. Il cablaggio sta qui e non accanto

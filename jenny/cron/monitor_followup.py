@@ -28,8 +28,6 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from jenny.cron.could_not_check import (
-    COULD_NOT_CHECK_MARKER,
-    OK_MARKER,
     WARNED_MARKER,
     could_not_check_reason,
     parse_ok_marks,
@@ -79,12 +77,12 @@ _FOLLOWUP_BLOCK = (
     "handed that check to the helper whose result is above. Now judge it.\n"
     "The check: {message}\n"
     "If the user needs to know something, call the `message` tool; otherwise say nothing. "
-    "Your final text reaches nobody. End it with exactly one of these lines:\n"
-    f"{OK_MARKER} — the check ran (whatever it found).\n"
-    f"{COULD_NOT_CHECK_MARKER}: <one short line naming what stopped it> — the check did NOT "
-    "run (the helper failed, a host was unreachable, a value never arrived).\n"
+    "Your final text reaches nobody. Then call `nothing_to_report`: `checked=true` if the "
+    "check ran (whatever it found), `checked=false` with a `reason` if it did NOT run (the "
+    "helper failed, a host was unreachable, a value never arrived).\n"
     "{escalation}"
-    f"If you told the user that this check is not working, add one more line: {WARNED_MARKER}]"
+    f"If you told the user that this check is not working, end with one more line: "
+    f"{WARNED_MARKER}]"
 )
 
 _ESCALATE = (
@@ -146,7 +144,9 @@ class MonitorFollowup:
         if job is None:
             return
         reason = could_not_check_reason(final_text)
-        ok = bool(parse_ok_marks(final_text))
+        # Un risultato detto all'utente è un controllo che ha girato, anche senza
+        # dichiararlo: il guasto, se c'è, lo dice ``checked=false`` e vince sopra.
+        ok = bool(parse_ok_marks(final_text)) or spoke
         if reason is None and not ok:
             logger.debug("Monitor follow-up: no verdict for job {}", job.id)
             return

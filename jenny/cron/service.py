@@ -290,6 +290,33 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
         raise ValueError("an interval schedule needs a positive interval")
 
 
+# Quanto nel passato puo' cadere un singolo appena creato. Un giorno: un'ora
+# calcolata e poi arrivata tardi (un turno lungo) suona comunque, e cosi' un
+# giorno o un mese di adesso («il 1° novembre» detto il 1° alle 12, che e' gia'
+# oltre le 9); un mese o un giorno di prima no — quelli sono un anno sbagliato.
+_PAST_GRACE_MS = 24 * 60 * 60 * 1000
+
+
+def _refuse_past_one_time(schedule: CronSchedule, now_ms: int) -> None:
+    """Un singolo nuovo con la data gia' passata si rifiuta, invece di suonare subito.
+
+    Il 01/11/2026, su jenny_s22, la passata della bacheca ha scritto «verso
+    marzo» come ``2026-03``: il marzo gia' passato. Il job e' nato scaduto, e un
+    ``at`` scaduto suona al primo giro (e' il recupero di chi era spento): il
+    promemoria del rinvaso e' arrivato otto mesi in anticipo, ed e' sparito. Lo
+    dice l'errore, a chiunque scriva — tool, bacheca, giardiniere — cosi' il
+    modello riprova con l'anno giusto. Solo alla creazione: i job gia' salvati e
+    scaduti a telefono spento devono ancora recuperare.
+    """
+    if schedule.kind != "at" or not schedule.at_ms or schedule.at_ms >= now_ms - _PAST_GRACE_MS:
+        return
+    today = datetime.fromtimestamp(now_ms / 1000).date().isoformat()
+    raise ValueError(
+        f"that date is already past (today is {today}): a one-time job needs a future "
+        "date, and a month or a day said without a year is the next one to come"
+    )
+
+
 def _validate_cron_expr(schedule: CronSchedule) -> None:
     """Un'espressione che non si legge, o che non scatta mai, si rifiuta qui.
 
@@ -1326,6 +1353,7 @@ class CronService:
             ValueError: schedule non valido, o ``mode`` non riconosciuto.
         """
         _validate_schedule_for_add(schedule)
+        _refuse_past_one_time(schedule, _now_ms())
         mode = _validate_mode_for_add(mode)
         why, condition = _validate_label_for_add(schedule, why=why, condition=condition)
         # Un legame storto, qui, non torna ``None`` in silenzio come al caricamento:
@@ -1398,6 +1426,7 @@ class CronService:
         new_schedule = schedule or job.schedule
         if schedule is not None:
             _validate_schedule_for_add(schedule)
+            _refuse_past_one_time(schedule, _now_ms())
         new_why = job.payload.why if why is self._UNSET else why
         new_cond = job.payload.condition if condition is self._UNSET else condition
         new_why, new_cond = _validate_label_for_add(new_schedule, why=new_why, condition=new_cond)

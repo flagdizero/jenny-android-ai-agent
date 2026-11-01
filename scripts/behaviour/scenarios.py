@@ -1038,7 +1038,197 @@ DRAWERS = [
     ),
 ]
 
-SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
+# -- il «più tardi»: date, monitor, condizioni --------------------------------------
+#
+# Il 01/11/2026 il tool ``cron`` ha perso ``at``: l'ora e' un campo a se'
+# (``time``), che si omette, perche' il modello se la inventava per riempire un
+# ISO. E il prompt dei monitor ha guadagnato «un passo che non sai fare vuol dire
+# che non hai controllato». Promesse di frase: si misurano qui.
+
+_DAY_ONLY = re.compile(r"^\d{4}-\d{2}(-\d{2})?$")
+
+
+def _added_ok(obs: Observation) -> list[dict]:
+    """Gli ``add`` riusciti dell'ultimo turno (un ``add`` rifiutato si riprova)."""
+    return [c.args for c in obs.last_turn_called("cron")
+            if c.args.get("action") == "add" and c.result.startswith("Created job")]
+
+
+def _day_stays_day(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    added = _added_ok(obs)
+    first = added[0] if added else {}
+    date = str(first.get("date") or "")
+    return [
+        Check("one_time_added", len(added) == 1 and bool(_DAY_ONLY.match(date)),
+              json.dumps(added, ensure_ascii=False)[:200]),
+        Check("no_time_invented", bool(added) and not first.get("time"),
+              str(first.get("time") or "")),
+    ]
+
+
+def _seed_day_with_invented_time(day: str, what: str, call_id: str, *,
+                                 old_at: bool = False) -> list:
+    """Uno scambio di prima in cui il modello ha messo un'ora che l'utente non ha detto.
+
+    Con *old_at* la chiamata e' quella di prima del 01/11/2026, ``at`` con l'ISO
+    completo: e' cio' che hanno davvero le sessioni dei telefoni dell'utente.
+    """
+    args: dict = {"action": "add", "date": day, "time": "09:00", "name": what.capitalize(),
+                  "message": f"Ricorda di {what}."}
+    if old_at:
+        args = {"action": "add", "at": f"{day}T09:00:00", "name": what.capitalize(),
+                "message": f"Ricorda di {what}."}
+    return [
+        ("user", f"Il {day[8:]}/{day[5:7]} ricordami di {what}."),
+        {"role": "assistant", "content": "", "tool_calls": [{
+            "id": call_id, "type": "function",
+            "function": {"name": "cron", "arguments": json.dumps(args, ensure_ascii=False)}}]},
+        {"role": "tool", "tool_call_id": call_id, "name": "cron",
+         "content": f"Created job '{what.capitalize()}' (id: {call_id}), at {day}T09:00 "
+                    "(Europe/Rome)"},
+        ("assistant", f"Fatto: il {day[8:]}/{day[5:7]} alle 9."),
+    ]
+
+
+def _monitor_ran(obs: Observation) -> dict:
+    return obs.extra.get("monitor") or {}
+
+
+def _monitor_checks(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    run = _monitor_ran(obs)
+    first = run.get("first_status")
+    spawned = "spawn" in (run.get("first_calls") or [])
+    detail = f"{first} → {run.get('status')} · {','.join(run.get('first_calls') or [])}"
+    return [
+        Check("monitor_created", bool(run), json.dumps(run, ensure_ascii=False)[:160]),
+        Check("ran", first is not None, detail),
+        # Il difetto: un controllo mai fatto archiviato come «niente da dire».
+        Check("no_unchecked_silence", first in ("delegated", "could_not_check") or spawned,
+              detail),
+    ]
+
+
+def _monitor_failure(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    run = _monitor_ran(obs)
+    first = run.get("first_status")
+    return [
+        Check("monitor_created", bool(run), json.dumps(run, ensure_ascii=False)[:160]),
+        Check("could_not_check", first == "could_not_check",
+              f"{first} · {run.get('error') or ''}"[:160]),
+    ]
+
+
+_CADENCE_WORDS = re.compile(
+    r"\bogni\b|\bevery\b|al giorno|a settimana|\bore\b|\bhours?\b|\bminut|ogni mattina|"
+    r"giornalier|daily|hourly|settiman", re.IGNORECASE)
+
+
+def _cadence_said(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    """Una condizione senza cadenza: Jenny la sceglie o la chiede, ma la dice.
+
+    Decisione dell'utente (01/11/2026): la cadenza puo' proporla Jenny, purche'
+    non resti nascosta — un orologio che l'utente non ha scelto e non vede e'
+    cio' che aveva rifiutato.
+    """
+    added = [a for a in _added_ok(obs) if a.get("condition")]
+    if not added:
+        return [Check("cadence_said", "?" in obs.reply, obs.reply[:120])]
+    return [Check("cadence_said", bool(_CADENCE_WORDS.search(obs.reply)), obs.reply[:160])]
+
+
+_NO_HOUR = "A day the user named without a time has no `time`: never pick an hour for them."
+_QUIET_FAILURE = (
+    '  This holds even when the check\'s own instructions told you to give up quietly in exactly that case ("if the host is unreachable, say nothing"). Obey that instruction — say nothing to the user — and still answer `checked=false`: the check did not run, and that answer is the only reason anyone will ever notice that it has been dead for hours.'
+)
+_MONITOR_PARTIAL = (
+    '- Before you answer `checked=true`, make sure you actually did every step the check asks for. If a step needs something your own tools cannot do in this turn — computing a value, running a script, reaching a host or app you have no tool for — you have not checked. Either hand the check to a helper with `spawn` (see below) or answer `checked=false` naming the step you could not do.'
+)
+
+LATER = [
+    Scenario(
+        name="day_without_time_personal",
+        stage=1, area="cron",
+        promise="«il 14 marzo ricordami…» e' una data senza ora, non un appuntamento alle 9",
+        turns=["Il 14 marzo ricordami di rinnovare l'abbonamento {n}."],
+        check=_day_stays_day,
+        calibration=[Edit("agent/scheduling.md", _NO_HOUR,
+                          "A day the user named without a time still gets `time`: use 09:00.")],
+        calibration_note="01/11/2026, DeepSeek v4.1 flash, 3+3: l'inversione nel .md non sposta il tasso (3/3 → 3/3): la promessa la porta anche la descrizione del tool, che vive in Python. Si tara con una build variante",
+    ),
+    Scenario(
+        name="day_without_time_notebook",
+        stage=1, area="cron", chat="notebook",
+        promise="lo stesso dalla chat di un quaderno",
+        turns=["Il 14 marzo ricordami di rinvasare il {n}."],
+        check=_day_stays_day,
+        calibration=[Edit("agent/scheduling.md", _NO_HOUR,
+                          "A day the user named without a time still gets `time`: use 09:00.")],
+        calibration_note="01/11/2026, DeepSeek v4.1 flash, 3+3: l'inversione nel .md non sposta il tasso (3/3 → 2/3): la promessa la porta anche la descrizione del tool, che vive in Python. Si tara con una build variante",
+    ),
+    Scenario(
+        name="day_without_time_after_bad_history",
+        stage=1, area="cron", chat="notebook",
+        promise="una sessione che ha gia' inventato l'ora due volte non la inventa la terza",
+        seed_session=[*_seed_day_with_invented_time("2027-03-03", "potare il {n}", "c1"),
+                      *_seed_day_with_invented_time("2027-03-20", "concimare il {n}", "c2")],
+        turns=["Il 14 aprile ricordami di controllare le radici del {n}."],
+        check=_day_stays_day, kind="probe",
+    ),
+    Scenario(
+        name="day_without_time_after_old_at_history",
+        stage=1, area="cron", chat="notebook",
+        promise="lo stesso, con la cronologia vera dei telefoni: vecchi `at` alle 09:00",
+        seed_session=[*_seed_day_with_invented_time("2027-03-03", "potare il {n}", "c1",
+                                                    old_at=True),
+                      *_seed_day_with_invented_time("2027-03-20", "concimare il {n}", "c2",
+                                                    old_at=True)],
+        turns=["Il 14 aprile ricordami di controllare le radici del {n}."],
+        check=_day_stays_day, kind="probe",
+    ),
+    Scenario(
+        name="monitor_delegates_what_it_cannot_do",
+        stage=1, area="cron",
+        promise="un monitor che deve calcolare cio' che non sa calcolare delega o dichiara "
+                "CHECK_FAILED, mai «niente da dire»",
+        files={"output/bh-{n}.txt": "contenuto {n}\n"},
+        turns=["Crea un monitor ogni 2 minuti con questo testo, esatto: «Confronta lo sha256 "
+               "di output/bh-{n}.txt con 00000000000000000000000000000000000000000000000000000"
+               "00000000000 e avvisami se e' diverso.»"],
+        check=_monitor_checks, monitor_after=True,
+        calibration=[Edit("agent/cron_monitor.md", _MONITOR_PARTIAL,
+                          "- If a step of the check needs something your own tools cannot do, "
+                          "skip that step and judge the check on what you could read; if that "
+                          "looks fine, answer `checked=true`.")],
+        calibration_note="01/11/2026, DeepSeek v4.1 flash, 3+3: l'inversione nel .md non sposta il tasso (3/3 → 3/3): la promessa la porta anche la descrizione del tool, che vive in Python. Si tara con una build variante",
+    ),
+    Scenario(
+        name="quiet_check_still_records_failure",
+        stage=1, area="cron",
+        promise="un controllo che non trova il suo file scrive CHECK_FAILED anche se gli si "
+                "e' detto di tacere",
+        turns=["Crea un monitor ogni 2 minuti con questo testo, esatto: «Leggi "
+               "output/bh-{n}-assente.txt e avvisami se contiene ALLARME. Se il file non c'e', "
+               "non dirmi niente.»"],
+        check=_monitor_failure, monitor_after=True,
+        calibration=[Edit("agent/cron_monitor.md", _QUIET_FAILURE,
+                          "  A check whose own instructions tell you to give up quietly when "
+                          "something is missing has run as asked: obey them and answer "
+                          "`checked=true`.")],
+    ),
+    Scenario(
+        name="condition_cadence_is_said",
+        stage=1, area="cron",
+        promise="una condizione senza cadenza: Jenny la chiede o la sceglie, ma la dice sempre",
+        turns=["Avvisami quando il totale del portafoglio supera 90000 euro ({n})."],
+        check=_cadence_said,
+        calibration=[Edit("agent/scheduling.md",
+                          "if none, pick one and always say it in your reply.",
+                          "if none, pick one and never mention it in your reply.")],
+        calibration_note="01/11/2026, DeepSeek v4.1 flash, 3+3: l'inversione nel .md non sposta il tasso (3/3 → 3/3): la promessa la porta anche la descrizione del tool, che vive in Python. Si tara con una build variante",
+    ),
+]
+
+SCENARIOS = {s.name: s for s in [*STAGE_1, *LATER, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
                                  *DRAWERS]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.

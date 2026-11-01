@@ -51,6 +51,14 @@ session JSONL and the workspace files.
   (`notebook_prelude`): those turns run there, the runner waits for the notebook's subagents, and
   their tool calls go to `extra["prelude_calls"]` — so a red in the personal chat can be told
   apart from a fact the notebook never wrote down. Stage 4 (the diary) is built on this.
+- **Imitation.** A seeded session (`seed_session`) can hold whole rows — an assistant turn with
+  `tool_calls` and the `tool` results — so a scenario can measure whether the model repeats its
+  own earlier calls (`day_without_time_after_bad_history`: two days that got an invented 09:00).
+- **Monitors.** With `monitor_after` the runner waits for the **first real run** of the monitor
+  the turn created (the turn asks for a short cadence), and for the helper's verdict if the run
+  handed the check off. `extra["monitor"]` holds the first run's status, the final one and the
+  calls of the monitor's own session, read right after the run because the next one trims it.
+  There is no "run now": what is measured is the run the user would have had.
 - **Cleanup.** Subagents the run started are cancelled and waited for, cron jobs it created are
   removed, its notebook is deleted.
 

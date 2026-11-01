@@ -12,10 +12,12 @@ Use the `cron` tool to schedule work. Every scheduled job runs a full agent turn
 
 There are only two kinds of job:
 
-- **One-time**: `at` for an exact time, or `date` for a day (`"YYYY-MM-DD"`, rings
-  at 9:00) or just a month (`"YYYY-MM"`, "around March", rings at 9:00 on the 1st).
-  It disappears once it has fired. A day the user named without a time is `date`,
-  never `at` with an hour you picked: it is shown as a day, not as an appointment.
+- **One-time**: `date`, the day (`"YYYY-MM-DD"`) or just the month (`"YYYY-MM"`,
+  "around March"), and `time` (`"HH:MM"`) only when the user said a time or a delay
+  ("at 6pm", "in 20 minutes": compute the day and the time from the current time).
+  Without `time` a day rings at 9:00 and a month at 9:00 on the 1st, and the user sees
+  them as a day or a month: never pick an hour the user did not give.
+  It disappears once it has fired.
 - **Recurring**: `every_seconds` or `cron_expr`. It is a `reminder` or a `monitor`
   (below), and it may carry a `condition` on a mini app's value: the app is read in
   code at each run, at no cost, and the job speaks only when the condition has just
@@ -34,7 +36,7 @@ getting it wrong is what turns a check into chat spam.
 | `reminder` (default) | Every run, automatically | this conversation | the user wants to hear from it every time it fires |
 | `monitor` | **Only** if you call the `message` tool | its own isolated session | the run should stay silent unless it finds something |
 
-`monitor` requires `every_seconds` or `cron_expr`; it is never valid with `at` or `date`.
+`monitor` requires `every_seconds` or `cron_expr`; it is never valid with `date`.
 
 **Any request phrased as a condition is a `monitor`.** Listen for: "only tell me
 if…", "warn me when…", "let me know if it goes below…", "check every 10 minutes
@@ -64,9 +66,9 @@ Recurring check whose result the user always wants:
 cron(action="add", message="Check GitHub stars and report the count", every_seconds=600, mode="reminder")
 ```
 
-One-time scheduled task (compute ISO datetime from current time; auto-deletes):
+One-time at a time the user said (compute the day from the current time; auto-deletes):
 ```
-cron(action="add", message="Remind me about the meeting", at="<ISO datetime>")
+cron(action="add", message="Remind me about the meeting", date="2026-11-20", time="18:30")
 ```
 
 One-time, a day or a month without a time:
@@ -113,8 +115,8 @@ in its chat.
 | every day at 8am | cron_expr: "0 8 * * *" |
 | weekdays at 5pm | cron_expr: "0 17 * * 1-5" |
 | 9am Vancouver time daily | cron_expr: "0 9 * * *", tz: "America/Vancouver" |
-| at a specific time | at: ISO datetime string (compute from current time) |
-| on 3 March, no time | date: "2027-03-03" |
+| at 6pm today, in 20 minutes | date: "<today>", time: "18:00" (compute from current time) |
+| on 3 March, no time | date: "2027-03-03" (no time) |
 | around March | date: "2027-03" |
 
 ## Timezone

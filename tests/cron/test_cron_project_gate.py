@@ -63,7 +63,7 @@ def _tool(session_key: str, jobs: list[CronJob] | None = None) -> tuple[CronTool
 @pytest.mark.parametrize(
     "params",
     [
-        {"action": "add", "message": "ricordami la riunione", "at": "2026-09-01T09:00:00"},
+        {"action": "add", "message": "ricordami la riunione", "date": "2026-09-01", "time": "09:00"},
         {"action": "add", "message": "controlla ogni ora", "every_seconds": 3600},
         {"action": "list"},
         {"action": "remove", "job_id": "job-sveglia"},
@@ -107,7 +107,7 @@ async def test_everywhere_else_still_schedules(session_key: str) -> None:
     tool, service = _tool(session_key)
 
     result = await tool.execute(
-        action="add", message="ricordami la riunione", at="2026-09-01T09:00:00"
+        action="add", message="ricordami la riunione", date="2026-09-01", time="09:00"
     )
 
     assert "Not here" not in result
@@ -125,7 +125,7 @@ async def test_without_a_session_the_old_error_survives() -> None:
     tool, service = _tool("")
 
     result = await tool.execute(
-        action="add", message="ricordami la riunione", at="2026-09-01T09:00:00"
+        action="add", message="ricordami la riunione", date="2026-09-01", time="09:00"
     )
 
     assert "Not here" not in result

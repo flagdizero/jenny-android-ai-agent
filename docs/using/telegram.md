@@ -124,7 +124,9 @@ Any files Jenny attaches (via the `message` tool, or file responses) follow the 
 
 The WebUI is the single source of truth for the conversation. Every message you send from Telegram, and every reply, is mirrored live into the WebUI's chat view, marked as coming from Telegram — so opening the app later shows the full history regardless of where you actually chatted.
 
-The reverse is **not** true: messages you send from the WebUI are never delivered to Telegram. Telegram only ever receives replies to its own messages, plus proactive messages (reminders, monitor alerts). Service replies from the bot itself — pairing prompts, the welcome text, the attachment error replies — never appear in the WebUI either; they aren't part of the conversation.
+The reverse is **not** true: messages you send from the WebUI are never delivered to Telegram. Telegram only ever receives replies to its own messages, plus proactive messages: monitor alerts, a notebook's reminders, and anything else Jenny sends you on her own from background work. A reminder of the personal chat rings in the chat it was asked from, so one you asked for here comes here, while one asked for in the WebUI stays there. Service replies from the bot itself — pairing prompts, the welcome text, the attachment error replies — never appear in the WebUI either; they aren't part of the conversation.
+
+A proactive message that comes from a [notebook](projects.md) — one of its reminders, or its monitor's alert — starts with the notebook's name in brackets, `[plants] The basil is thirsty.`, because in Telegram everything lands in the one chat and the name is the only way to tell it from one of the personal chat's. In the notebook's own chat in the WebUI the same message appears without it, and the copy sent to Telegram is never added to the personal conversation.
 
 ## Shared session: `/new` resets both sides
 

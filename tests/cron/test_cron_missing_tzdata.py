@@ -40,7 +40,7 @@ def broken_tzdata(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_add_naive_at_job_without_tzdata(tmp_path, broken_tzdata: None) -> None:
     tool = _make_tool_with_tz(tmp_path, "Europe/Rome")
 
-    result = tool._add_job(None, "Reminder", None, None, None, "2030-03-25T08:00:00")
+    result = tool._add_job(None, "Reminder", None, None, None, "2030-03-25", time="08:00")
 
     assert result.startswith("Created job"), result
     job = tool._cron.list_jobs()[0]

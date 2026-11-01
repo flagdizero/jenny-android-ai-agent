@@ -57,14 +57,14 @@ def _registry(tool: CronTool) -> ToolRegistry:
 class TestMonitorCannotBeOneShot:
     """Un monitor che scatta una volta sola e tace non avvisa mai nessuno."""
 
-    def test_the_schema_layer_rejects_monitor_combined_with_at(self) -> None:
+    def test_the_schema_layer_rejects_monitor_combined_with_a_date(self) -> None:
         tool = _tool(_RecordingCronService())
 
         errors = tool.validate_params(
-            {"action": "add", "message": "controlla", "mode": "monitor", "at": "2030-01-01T00:00:00"}
+            {"action": "add", "message": "controlla", "mode": "monitor", "date": "2030-01-01", "time": "00:00"}
         )
 
-        assert any("cannot be used with at" in err for err in errors)
+        assert any("cannot be used with date" in err for err in errors)
 
     def test_the_call_is_refused_before_the_job_exists(self) -> None:
         service = _RecordingCronService()
@@ -76,7 +76,7 @@ class TestMonitorCannotBeOneShot:
                 "action": "add",
                 "message": "controlla",
                 "mode": "monitor",
-                "at": "2030-01-01T00:00:00",
+                "date": "2030-01-01", "time": "00:00",
             },
         )
 
@@ -89,7 +89,7 @@ class TestMonitorCannotBeOneShot:
         tool = _tool(service)
 
         out = await tool.execute(
-            action="add", message="controlla", mode="monitor", at="2030-01-01T00:00:00"
+            action="add", message="controlla", mode="monitor", date="2030-01-01", time="00:00"
         )
 
         assert out.startswith("Error:")
@@ -97,12 +97,12 @@ class TestMonitorCannotBeOneShot:
         assert service.added == []
 
     async def test_a_one_shot_reminder_is_still_allowed(self) -> None:
-        """Controprova: il divieto riguarda ``monitor``, non ``at``."""
+        """Controprova: il divieto riguarda ``monitor``, non il singolo."""
         service = _RecordingCronService()
         tool = _tool(service)
 
         out = await tool.execute(
-            action="add", message="ricordami", mode="reminder", at="2030-01-01T00:00:00"
+            action="add", message="ricordami", mode="reminder", date="2030-01-01", time="00:00"
         )
 
         assert out.startswith("Created job")
@@ -175,7 +175,7 @@ class TestModeIsDiscoverable:
         tool = _tool(_RecordingCronService())
 
         description = tool.parameters["properties"]["mode"]["description"]
-        assert "cannot be used with at" in description
+        assert "cannot be used with date" in description
 
     def test_mode_stays_out_of_the_top_level_required_list(self) -> None:
         """Renderlo obbligatorio spezzerebbe ``list``/``remove`` (cfr. #3113)."""

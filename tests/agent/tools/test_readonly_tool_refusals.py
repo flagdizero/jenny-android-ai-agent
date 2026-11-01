@@ -135,7 +135,7 @@ def _cron_tool(session_key: str) -> tuple[CronTool, _Cron]:
 @pytest.mark.parametrize(
     "params",
     [
-        {"action": "add", "message": "x", "at": "2026-09-01T09:00:00"},
+        {"action": "add", "message": "x", "date": "2026-09-01", "time": "09:00"},
         {"action": "list"},
         {"action": "remove", "job_id": "j1"},
     ],

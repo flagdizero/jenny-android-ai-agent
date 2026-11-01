@@ -7,14 +7,20 @@ rispecchia nella sessione del canale così la cronologia resta coerente.
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import INTERNAL_CHANNEL, OutboundMessage
-from jenny.session.keys import session_key_for_channel
+from jenny.bus.events import COORDINATION_FLAGS, INTERNAL_CHANNEL, OutboundMessage
+from jenny.cron.session_turns import CRON_MIRROR_META
+from jenny.session.keys import (
+    PROJECT_SESSION_PREFIX,
+    is_project_session_key,
+    session_key_for_channel,
+)
 from jenny.session.turn_visibility import is_silent_turn
 from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID, WEBUI_TURN_METADATA_KEY
 
@@ -27,6 +33,34 @@ if TYPE_CHECKING:
 RecordHook = Callable[..., Awaitable[None]]
 
 WEBSOCKET_CHANNEL = "websocket"
+
+# Un testo che apre con un blocco markdown (titolo, elenco, citazione, codice):
+# il prefisso sulla stessa riga lo romperebbe, quindi va sulla riga sopra.
+_BLOCK_START_RE = re.compile(r"\A(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>|```|~~~|\|)")
+
+
+def notebook_of_delivery(session_key: str) -> str | None:
+    """Il quaderno di una consegna (``project:<nome>`` → ``<nome>``), o ``None``.
+
+    Il nome è quello della cartella, cioè quello che l'utente ha scelto alla
+    creazione e che la casa mostra (``projectNameOf`` in ``home-pages.js``).
+    """
+    if not is_project_session_key(session_key):
+        return None
+    return session_key[len(PROJECT_SESSION_PREFIX):] or None
+
+
+def with_notebook_prefix(content: str, notebook: str | None, *, has_media: bool = False) -> str:
+    """*content* con davanti ``[<quaderno>]``, o intatto per una consegna personale."""
+    if not notebook:
+        return content
+    tag = f"[{notebook}]"
+    body = content.strip()
+    if not body:
+        # Un allegato senza testo: il nome diventa la didascalia.
+        return tag if has_media else content
+    separator = "\n" if _BLOCK_START_RE.match(body) else " "
+    return f"{tag}{separator}{body}"
 
 
 class ChannelDeliverer:
@@ -182,6 +216,11 @@ class ChannelDeliverer:
             await self._bus.publish_outbound(msg)
             if proactive and msg.channel == WEBSOCKET_CHANNEL:
                 await self._close_webui_turn(msg.chat_id, metadata)
+            # Un promemoria di quaderno che parla col tool ``message`` nella
+            # propria chat: non è un invio proattivo (stesso target, turno
+            # visibile), ma il suo turno chiede le copie (v. ``mirror``).
+            elif metadata.get(CRON_MIRROR_META):
+                await self.mirror(msg, session_key=session_key)
             return
 
         # Fan-out proattivo: il target websocket è SEMPRE incluso (è lui a
@@ -189,12 +228,8 @@ class ChannelDeliverer:
         # copie marcate ``_mirror`` che non ri-persistono nulla.
         targets: dict[str, str] = {msg.channel: msg.chat_id}
         targets.setdefault(WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID)
-        try:
-            for name, chat in self._extra_targets():
-                if name and chat:
-                    targets.setdefault(name, chat)
-        except Exception:  # pragma: no cover - difensivo sul callback
-            pass
+        for name, chat in self._paired_targets():
+            targets.setdefault(name, chat)
         primary = WEBSOCKET_CHANNEL if WEBSOCKET_CHANNEL in targets else msg.channel
         primary_chat = targets.pop(primary)
         await self._bus.publish_outbound(
@@ -209,14 +244,69 @@ class ChannelDeliverer:
         )
         if primary == WEBSOCKET_CHANNEL:
             await self._close_webui_turn(primary_chat, metadata)
+        await self._publish_mirrors(msg, targets, session_key=session_key)
+
+    async def mirror(self, msg: OutboundMessage, *, session_key: str | None = None) -> None:
+        """Le sole copie ``_mirror`` di *msg* verso gli ``extra_targets``.
+
+        Per un messaggio già consegnato da qualcun altro nella sua chat: la
+        risposta finale di un promemoria di quaderno, che il loop pubblica da sé
+        nella chat del quaderno — col suo ``turn_end`` dal coordinator del turno,
+        e registrata nella sessione dal turno stesso. Qui dunque niente primaria,
+        niente ``turn_end`` e niente registrazione: solo Telegram.
+
+        Una risposta d'errore (``metadata["error"]``, il provider che non ha
+        risposto) resta nella chat: in Telegram sarebbe un avviso senza
+        l'avviso.
+        """
+        if self._extra_targets is None or msg.channel == INTERNAL_CHANNEL:
+            return
+        if not msg.content.strip() and not msg.media:
+            return
+        if (msg.metadata or {}).get("error"):
+            return
+        targets = {
+            name: chat
+            for name, chat in self._paired_targets()
+            if name not in (msg.channel, WEBSOCKET_CHANNEL)
+        }
+        await self._publish_mirrors(msg, targets, session_key=session_key)
+
+    def _paired_targets(self) -> list[tuple[str, str]]:
+        if self._extra_targets is None:
+            return []
+        try:
+            return [(name, chat) for name, chat in self._extra_targets() if name and chat]
+        except Exception:  # pragma: no cover - difensivo sul callback
+            return []
+
+    async def _publish_mirrors(
+        self, msg: OutboundMessage, targets: dict[str, str], *, session_key: str | None
+    ) -> None:
+        # Fuori dalla WebUI un messaggio di quaderno dice da quale quaderno viene:
+        # in Telegram tutto arriva nella stessa chat personale, e senza il nome un
+        # avviso del quaderno delle piante è indistinguibile da uno personale. Solo
+        # le copie: la primaria sta già nella chat del quaderno.
+        content = with_notebook_prefix(
+            msg.content,
+            notebook_of_delivery(session_key or self._channel_session_key(msg.channel, msg.chat_id)),
+            has_media=bool(msg.media),
+        )
+        # Una copia è un messaggio finale: i flag di coordinamento della primaria
+        # non la riguardano, e ``_streamed`` (la risposta di un turno streammato
+        # nella WebUI) la farebbe scartare al dispatcher come «già vista».
+        metadata = {
+            k: v for k, v in (msg.metadata or {}).items() if k not in COORDINATION_FLAGS
+        }
+        metadata["_mirror"] = True
         for name, chat in targets.items():
             await self._bus.publish_outbound(
                 OutboundMessage(
                     channel=name,
                     chat_id=chat,
-                    content=msg.content,
+                    content=content,
                     media=msg.media,
-                    metadata={**metadata, "_mirror": True},
+                    metadata=dict(metadata),
                     buttons=msg.buttons,
                 )
             )

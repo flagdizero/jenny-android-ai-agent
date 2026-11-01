@@ -35,7 +35,7 @@ If reminders matter to you, the practical measures are unchanged:
 
 - Grant the battery-optimization exemption Jenny offers during first-run setup (or later from the workshop's **Brain → Background activity**, or from Android's own battery settings) so the OS is less likely to freeze the background service.
 - Keep the phone charged and connected when a reminder is close to due.
-- Treat "at" reminders as best-effort, not guaranteed alarms — for anything truly time-critical, use your phone's own alarm clock as a backup.
+- Treat one-time reminders as best-effort, not guaranteed alarms — for anything truly time-critical, use your phone's own alarm clock as a backup.
 
 ## What you can schedule (the `cron` tool)
 
@@ -52,7 +52,7 @@ Everything Jenny does for you later is one of **two kinds of job**, and both liv
 
 | Kind | How you'd phrase it | Behavior |
 |---|---|---|
-| One-time (`at`, or `date`) | "remind me at 6pm", "in 20 minutes", "on 3 March", "around March" | Fires once, then the job deletes itself. With a time, it fires at that time; with only a day it rings at **09:00** that day, and with only a month at 09:00 on the 1st. The workshop shows a day-only job as a date with no time, and a month-only one as "March 2027". Cannot be a monitor (see below). |
+| One-time (`date`, and `time` if you said one) | "remind me at 6pm", "in 20 minutes", "on 3 March", "around March" | Fires once, then the job deletes itself. With a time, it fires at that time; with only a day it rings at **09:00** that day, and with only a month at 09:00 on the 1st. The workshop shows a day-only job as a date with no time, and a month-only one as "March 2027". Cannot be a monitor (see below). |
 | Recurring, by interval (`every_seconds`) | "every 30 minutes", "every 6 hours" | Repeats forever at a fixed interval, counted from when the job was (re)armed — not from a fixed clock time. |
 | Recurring, by clock (`cron_expr`) | "every day at 9am", "every Monday at 8" | Standard 5-field cron syntax (e.g. `0 9 * * *`); accepts an optional IANA timezone (e.g. `America/Vancouver`) for that one job. |
 
@@ -84,7 +84,7 @@ A monitor runs in a private session of its own, kept apart from your conversatio
 - Your chat doesn't fill up with hourly "still down" replies you never asked to read.
 - The job remembers its own previous checks, and that memory is precisely what lets it tell you **when something changed** instead of repeating the same sentence every cycle. That private history is trimmed to the last handful of checks, so it can't grow without bound.
 
-When a monitor does decide to speak, the delivery is proactive: it reaches the WebUI chat and, if you've paired a Telegram bot, that chat too — not just whichever one you happen to be looking at.
+When a monitor does decide to speak, the delivery is proactive: it reaches the WebUI chat and, if you've paired a Telegram bot, that chat too — not just whichever one you happen to be looking at. A notebook's monitor speaks in that notebook's chat, and its Telegram copy starts with the notebook's name in brackets (`[plants] …`) so you can tell where it comes from.
 
 **A monitor may stay silent forever, and that is the feature working, not failing.** "I set up a check and never hear anything" is the expected outcome when nothing noteworthy ever happens. To confirm it's alive, ask Jenny to list your reminders: a run that had nothing to report is recorded as `Last run: … — silenced`. That is the healthy line to see; `error` is the unhealthy one. A monitor's run is silent by construction — what Jenny writes as its answer is delivered nowhere, and the only way it reaches you is Jenny sending you a message on purpose — and she has a `nothing_to_report` step to *declare* the silence, so that a small model doesn't express "nothing to say" by sending you a placeholder word.
 
@@ -102,7 +102,7 @@ When what you are waiting for is a number one of your [apps](board.md#app) alrea
 
 ### Notebook crons
 
-A job belongs either to the personal chat or to a [notebook](projects.md), and inside a notebook to **one card** or to the **whole notebook**. **Jenny decides which** from what you asked, without asking you: tied to the card it is about, or to the whole notebook when it concerns all of it, several cards or nothing on the board. You can ask for a notebook's job from any chat. It runs inside the notebook (it can write only there, like the notebook's chat), delivers in the notebook's chat with the usual notifications when it has something to say, and shows on the notebook's [board](board.md). It may also point to the notebook page that explains why it exists, and then the message says what is due *and why*, from that page. In a notebook, *list* and *remove* see only that notebook's jobs. However it is removed — from the board, from the workshop, from any chat — what it left on the board goes with it. The personal chat's own jobs stay where they are.
+A job belongs either to the personal chat or to a [notebook](projects.md), and inside a notebook to **one card** or to the **whole notebook**. **Jenny decides which** from what you asked, without asking you: tied to the card it is about, or to the whole notebook when it concerns all of it, several cards or nothing on the board. You can ask for a notebook's job from any chat. It runs inside the notebook (it can write only there, like the notebook's chat), delivers in the notebook's chat with the usual notifications when it has something to say — and, if you've paired a [Telegram](telegram.md) bot, a copy there too, starting with the notebook's name in brackets (`[plants] …`), reminders included — and shows on the notebook's [board](board.md). It may also point to the notebook page that explains why it exists, and then the message says what is due *and why*, from that page. In a notebook, *list* and *remove* see only that notebook's jobs. However it is removed — from the board, from the workshop, from any chat — what it left on the board goes with it. The personal chat's own jobs stay where they are.
 
 ### Protected system jobs
 

@@ -143,7 +143,7 @@ def test_the_label_survives_a_restart(tmp_path) -> None:
 async def test_a_one_time_job_disappears_once_it_has_fired(tmp_path) -> None:
     agent = _Agent()
     service = _service(tmp_path, agent)
-    job = _add(service, CronSchedule(kind="at", at_ms=1_000))
+    job = _add(service, CronSchedule(kind="at", at_ms=int(datetime.now().timestamp() * 1000) + 3_600_000))
     assert job.delete_after_run is True
 
     await service.run_job(job.id, force=True)
@@ -208,7 +208,7 @@ async def test_a_notebook_chat_cannot_schedule_for_another_notebook(tmp_path, ca
 async def test_a_condition_without_a_cadence_is_refused(tmp_path) -> None:
     tool = _tool(tmp_path)
     errors = tool.validate_params({"action": "add", "message": "x", "condition": _COND})
-    assert any("how often" in e for e in errors)
+    assert any("the cadence it is checked at" in e for e in errors)
 
 
 async def test_pause_and_resume_from_the_tool(tmp_path) -> None:
@@ -221,23 +221,65 @@ async def test_pause_and_resume_from_the_tool(tmp_path) -> None:
     assert (await tool.execute(action="resume", job_id=job.id)).startswith("Resumed")
 
 
-def test_a_day_without_a_time_is_steered_to_date(tmp_path) -> None:
-    """Il 01/11/2026, su jenny_s22, «il 5 novembre» è diventato `at` alle 09:00:
-    suona uguale, ma in officina e sulla bacheca si legge come un appuntamento.
-    La descrizione dei due parametri lo dice da entrambi i lati."""
+
+def test_the_hour_is_a_field_of_its_own(tmp_path) -> None:
+    """Il 01/11/2026, su jenny_s22, «il 20 novembre ricordami…» diventava
+    ``at="…T09:00:00"``: con l'ora dentro la data il modello doveva inventarla
+    per riempire un ISO. Ora l'ora è ``time``, che si omette; ``at`` non c'è."""
     tool = CronTool(CronService(tmp_path / "cron" / "jobs.json"), default_timezone=_TZ)
     props = tool.parameters["properties"]
-    assert "only when the user said the time" in props["at"]["description"]
-    assert "never `at` with an hour you picked" in props["date"]["description"]
+    assert "at" not in props
+    assert "never pick an hour" in props["time"]["description"]
 
 
-async def test_an_at_on_the_hour_of_a_day_reads_as_a_day(tmp_path) -> None:
-    """Il modello che ignora `date` e scrive `at` alle 09:00:00 in punto: suona
-    uguale, ma si mostra come il giorno che è. Un'altra ora resta esatta."""
+async def test_a_day_without_time_is_a_day_and_with_time_is_exact(tmp_path) -> None:
     tool = _tool(tmp_path)
-    await tool.execute(action="add", message="bici", at="2026-11-20T09:00:00")
-    await tool.execute(action="add", message="dentista", at="2026-11-20T09:30:00")
+    day = await tool.execute(action="add", message="bici", date="2026-11-20")
+    nine = await tool.execute(action="add", message="dentista", date="2026-11-20", time="09:00")
     by_msg = {j.payload.message: j.schedule for j in tool._cron.list_jobs()}
     assert by_msg["bici"].precision == "day"
-    assert schedule_date(by_msg["bici"], _TZ) == "2026-11-20"
+    # Chi dice davvero «alle 9» ha le 9: niente più tappo che le scambia per un giorno.
     assert by_msg["dentista"].precision == "exact"
+    assert by_msg["bici"].at_ms == by_msg["dentista"].at_ms
+    # La risposta dice quando, e che un giorno non ha un'ora.
+    assert "once, on 2026-11-20 (no time" in day
+    assert "at 2026-11-20T09:00" in nine
+
+
+@pytest.mark.parametrize(("params", "needle"), [
+    ({"at": "2026-11-20T09:00:00"}, "`at` does not exist"),
+    ({"time": "18:30"}, "time needs a date"),
+    ({"date": "2026-11-20", "every_seconds": 3600}, "not together with every_seconds"),
+])
+def test_the_old_and_the_mixed_shapes_are_refused(tmp_path, params, needle) -> None:
+    tool = _tool(tmp_path)
+    errors = tool.validate_params({"action": "add", "message": "x", **params})
+    assert any(needle in e for e in errors), errors
+
+
+@pytest.mark.parametrize(("date", "time_of_day", "needle"), [
+    ("2026-11-20T09:00", None, "put the hour in time"),
+    ("2027-03", "09:00", "not with a month"),
+    ("2026-11-20", "9", "use HH:MM"),
+])
+async def test_a_time_hidden_in_the_date_or_on_a_month_is_refused(tmp_path, date, time_of_day,
+                                                                  needle) -> None:
+    tool = _tool(tmp_path)
+    out = await tool.execute(action="add", message="x", date=date, time=time_of_day)
+    assert out.startswith("Error:") and needle in out, out
+    assert tool._cron.list_jobs() == []
+
+
+def test_a_one_time_date_already_past_is_refused_everywhere(tmp_path) -> None:
+    """Il 01/11/2026, su jenny_s22, la passata della bacheca ha scritto «verso
+    marzo» come ``2026-03``: il job è nato scaduto ed è suonato subito, otto mesi
+    prima. Ora ``CronService`` lo rifiuta, per chiunque scriva."""
+    service = CronService(tmp_path / "cron" / "jobs.json")
+    last_march = date_schedule(f"{datetime.now().year - 1}-03", _TZ)
+    with pytest.raises(ValueError, match="already past"):
+        _add(service, last_march)
+    today = date_schedule(datetime.now().strftime("%Y-%m-%d"), _TZ)
+    assert _add(service, today).enabled  # oggi, anche oltre le 9, suona
+    job = _add(service, date_schedule(f"{datetime.now().year + 1}-03", _TZ))
+    with pytest.raises(ValueError, match="already past"):
+        service.update_job(job.id, schedule=last_march)

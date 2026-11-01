@@ -72,15 +72,16 @@ _CRON_PARAMETERS = tool_parameters_schema(
         "Optional IANA timezone for cron expressions (e.g. 'America/Vancouver'). "
         "When omitted with cron_expr, the tool's default timezone applies."
     ),
-    at=StringSchema(
-        "ISO datetime for one-time execution at an exact time (e.g. '2026-02-12T10:30:00'), "
-        "only when the user said the time. Naive values use the tool's default timezone."
-    ),
     date=StringSchema(
-        "One-time execution on a day without a time: 'YYYY-MM-DD' (rings at 9:00 that day) or "
-        "'YYYY-MM' for 'around March' (rings at 9:00 on the 1st). 'On 5 November' with no "
-        "time is date='YYYY-11-05', never `at` with an hour you picked: the user sees it as a "
-        "day, not as an appointment. Use `at` only when the user gave a time."
+        "One-time job: the day, 'YYYY-MM-DD', or just the month, 'YYYY-MM' ('around March'). "
+        "Without `time` a day rings at 09:00 and a month at 09:00 on the 1st, and the user "
+        "sees them as a day or a month. For 'in 20 minutes' or 'tonight at 9', compute the "
+        "day from the current time and give `time` too."
+    ),
+    time=StringSchema(
+        "Only with a `date` day, and only when the user said a time (or a delay like 'in 20 "
+        "minutes'): 'HH:MM', 24-hour, in the tool's default timezone. Omit it when the user "
+        "named only a day: never pick an hour for them."
     ),
     condition=ObjectSchema(
         {
@@ -94,8 +95,9 @@ _CRON_PARAMETERS = tool_parameters_schema(
         description=(
             "Only with every_seconds or cron_expr: a filter on a mini app's latest value. At "
             "each run the app is read first, and the job speaks only when the condition has "
-            "just become true (once, until it goes back to false). If the user did not say how "
-            "often to check, ask them before adding it."
+            "just become true (once, until it goes back to false). Use the cadence the user "
+            "said; if they did not say one, pick the widest that does the job and tell them "
+            "which in your reply."
         ),
         required=["app", "field", "op", "value"],
     ),
@@ -113,13 +115,14 @@ _CRON_PARAMETERS = tool_parameters_schema(
         "Use 'monitor' whenever the request is CONDITIONAL — 'only tell me if...', 'warn me when...', "
         "'let me know if it drops below...': staying silent is then the expected outcome of most runs, "
         "and a 'reminder' would post filler like 'All clear.' every single time. "
-        "'monitor' requires every_seconds or cron_expr; it cannot be used with at or date.",
+        "'monitor' requires every_seconds or cron_expr; it cannot be used with date.",
         enum=["reminder", "monitor"],
     ),
     required=["action"],
     description=(
         "Action-specific parameters: add requires a non-empty message plus one schedule "
-        "(every_seconds, cron_expr, at, or date); remove, pause and resume require job_id; "
+        "(every_seconds, cron_expr, or date with an optional time); remove, pause and resume "
+        "require job_id; "
         "list only needs action. "
         "Per-action requirements are enforced at runtime (see field descriptions) so the "
         "top-level schema stays compatible with providers (e.g. OpenAI Codex/Responses) that "
@@ -207,15 +210,15 @@ class CronTool(Tool, ContextAware):
     def description(self) -> str:
         return (
             "Schedule reminders and recurring tasks. Actions: add, list, remove, pause, resume. "
-            "Two kinds only: one-time (at, or date for a day or a month) and recurring "
+            "Two kinds only: one-time (date, plus time only if the user said one) and recurring "
             "(every_seconds or cron_expr). A one-time job disappears once it has fired. "
             "mode='reminder' (default) always speaks when it fires; mode='monitor' is a recurring "
             "check that runs silently and speaks only when something changed or is worth "
-            "reporting (needs every_seconds or cron_expr, never at). A recurring job can carry a "
+            "reporting (needs every_seconds or cron_expr, never date). A recurring job can carry a "
             "`condition` on a mini app's value: it is checked in code at each run, at no cost, "
             "and the job speaks only when it becomes true. Pick the widest interval that does "
             "the job. "
-            f"If tz is omitted, cron expressions and naive ISO times default to {self._default_timezone}. "
+            f"If tz is omitted, cron expressions and a date's time use {self._default_timezone}. "
             + _NOTEBOOK_NOTE
         )
 
@@ -229,17 +232,29 @@ class CronTool(Tool, ContextAware):
         # Il valore ammesso lo controlla già l'enum dello schema; qui resta solo
         # la regola che lo schema non sa esprimere.
         mode = str(params.get("mode") or "").strip()
-        one_time = str(params.get("at") or "").strip() or str(params.get("date") or "").strip()
+        one_time = str(params.get("date") or "").strip()
+        recurring = params.get("every_seconds") or params.get("cron_expr")
+        # ``at`` non c'è più: una sessione che lo usava per abitudine lo rimanda.
+        # Si risponde con la forma nuova, così si corregge alla prima chiamata.
+        if "at" in params:
+            errors.append(
+                "`at` does not exist: use date='YYYY-MM-DD', and time='HH:MM' only if the "
+                "user said a time"
+            )
+        if str(params.get("time") or "").strip() and not one_time:
+            errors.append("time needs a date (the day it belongs to)")
+        if one_time and recurring:
+            errors.append("date is for a one-time job: not together with every_seconds or cron_expr")
         # Un one-shot che decide di tacere non avvisa mai nessuno: la
         # combinazione non ha un comportamento sensato, quindi si rifiuta invece
         # di crearla e lasciarla scattare a vuoto.
         if mode == "monitor" and one_time:
             errors.append(
-                "mode='monitor' cannot be used with at or date; use every_seconds or cron_expr"
+                "mode='monitor' cannot be used with date; use every_seconds or cron_expr"
             )
         if params.get("condition") and not (params.get("every_seconds") or params.get("cron_expr")):
             errors.append(
-                "a condition needs every_seconds or cron_expr: ask the user how often to check"
+                "a condition needs every_seconds or cron_expr: the cadence it is checked at"
             )
         return errors
 
@@ -251,7 +266,8 @@ class CronTool(Tool, ContextAware):
         every_seconds: int | None = None,
         cron_expr: str | None = None,
         tz: str | None = None,
-        at: str | None = None,
+        date: str | None = None,
+        time: str | None = None,
         job_id: str | None = None,
         mode: str | None = None,
         **kwargs: Any,
@@ -282,7 +298,7 @@ class CronTool(Tool, ContextAware):
         if self._in_cron_context.get():
             return "Error: cannot schedule new jobs from within a cron job execution"
         try:
-            schedule = self._schedule(every_seconds, cron_expr, tz, at, kwargs.get("date"), mode)
+            schedule = self._schedule(every_seconds, cron_expr, tz, date, time, mode)
         except ValueError as exc:
             return f"Error: {exc}"
         condition = kwargs.get("condition") or None
@@ -327,7 +343,7 @@ class CronTool(Tool, ContextAware):
         return name, root, None
 
     def _schedule(self, every_seconds: int | None, cron_expr: str | None, tz: str | None,
-                  at: str | None, date: Any, mode: str | None) -> CronSchedule:
+                  date: Any, time: Any, mode: str | None) -> CronSchedule:
         """Il quando di un job nuovo. Solleva ``ValueError`` col testo per il modello."""
         from jenny.cron.dates import date_schedule
 
@@ -342,21 +358,25 @@ class CronTool(Tool, ContextAware):
             if err := self._validate_timezone(effective_tz):
                 raise ValueError(err.removeprefix("Error: "))
             return CronSchedule(kind="cron", expr=cron_expr, tz=effective_tz)
-        when = str(at or "").strip() or str(date or "").strip()
+        when = str(date or "").strip()
         if not when:
-            raise ValueError("either every_seconds, cron_expr, at, or date is required")
+            raise ValueError("either every_seconds, cron_expr, or date is required")
+        # La data e' solo una data: l'ora, se c'e', sta in ``time``. Un ISO
+        # completo qui rimetterebbe l'ora inventata dove non si vede.
+        if "T" in when or " " in when:
+            raise ValueError("date is only the day (YYYY-MM-DD) or the month (YYYY-MM): "
+                             "put the hour in time='HH:MM', and only if the user said one")
         # Un monitor tace quando non c'è niente da dire: se scatta una volta
         # sola, quel silenzio è definitivo e il job non serve a nulla.
         if (mode or "").strip() == "monitor":
             raise ValueError(
-                "mode=\"monitor\" cannot be scheduled once (at or date), because a one-shot "
+                "mode=\"monitor\" cannot be scheduled once (date), because a one-shot "
                 "job that decides to stay silent never reports anything. Use every_seconds "
                 "or cron_expr for a monitor, or mode=\"reminder\" for a one-time reminder."
             )
         if err := self._validate_timezone(self._default_timezone):
             raise ValueError(err.removeprefix("Error: "))
-        schedule = date_schedule(when, self._default_timezone)
-        return _day_if_due_at(schedule, self._default_timezone)
+        return date_schedule(when, self._default_timezone, str(time or "").strip() or None)
 
     async def _add_notebook_job(self, notebook: str, root: Any, card_ref: Any, name: str | None,
                                 message: str, schedule: CronSchedule, mode: str | None, *,
@@ -392,7 +412,7 @@ class CronTool(Tool, ContextAware):
         except ValueError as exc:
             return f"Error: {exc}"
         await board_changed(notebook)
-        out = f"Created job '{job.name}' (id: {job.id})" if job.name else f"Created job (id: {job.id})"
+        out = self._created(job)
         where = (f"on the card «{card['title']}»" if card is not None
                  else "for the whole notebook")
         return f"{out} — in the notebook «{notebook}», {where}; it runs and delivers there."
@@ -418,15 +438,15 @@ class CronTool(Tool, ContextAware):
         every_seconds: int | None,
         cron_expr: str | None,
         tz: str | None,
-        at: str | None,
+        date: str | None = None,
         mode: str | None = None,
         *,
-        date: str | None = None,
+        time: str | None = None,
         condition: Any = None,
     ) -> str:
         """Un job personale dai parametri del tool (il quando ancora da costruire)."""
         try:
-            schedule = self._schedule(every_seconds, cron_expr, tz, at, date, mode)
+            schedule = self._schedule(every_seconds, cron_expr, tz, date, time, mode)
         except ValueError as exc:
             return f"Error: {exc}"
         return self._add_personal_job(name, message, schedule, mode, condition=condition)
@@ -483,9 +503,21 @@ class CronTool(Tool, ContextAware):
             # scatta mai) torna al modello come le altre risposte d'errore di
             # questo tool, da correggere e riprovare.
             return f"Error: {exc}"
-        if job.name:
-            return f"Created job '{job.name}' (id: {job.id})"
-        return f"Created job (id: {job.id})"
+        return self._created(job)
+
+    def _created(self, job: CronJob) -> str:
+        """La risposta a un ``add``: il job e **quando** suona, com'è stato detto.
+
+        Il modello riprende questa riga nella risposta all'utente: un singolo
+        senza ora detto «alle 09:00» diventerebbe un appuntamento che l'utente
+        non ha mai dato. Per questo un giorno dice che l'ora non c'è.
+        """
+        head = f"Created job '{job.name}' (id: {job.id})" if job.name else f"Created job (id: {job.id})"
+        if job.schedule.kind != "at":
+            return head
+        if job.schedule.precision in ("day", "month"):
+            return f"{head}, {self._format_timing(job.schedule)} (no time: it rings at 09:00)"
+        return f"{head}, {self._format_timing(job.schedule)}"
 
     def _format_timing(self, schedule: CronSchedule) -> str:
         """Format schedule as a human-readable timing string."""
@@ -642,24 +674,3 @@ def _where(link: dict[str, Any] | None) -> str:
 # tool va aggiunto qui esplicitamente.
 TOOLS = [CronTool]
 
-
-def _day_if_due_at(schedule: CronSchedule, tz_name: str) -> CronSchedule:
-    """Un ``at`` alle 9:00:00 in punto si mostra come un giorno.
-
-    È l'ora che ``date`` dà da sé a un giorno, ed è quella che il modello si
-    inventa quando l'utente non ne ha detta una: il 01/11/2026, su jenny_s22,
-    nella chat di un quaderno «il 20 novembre ricordami…» è diventato
-    ``at="…T09:00:00"`` tre volte su tre, nonostante la descrizione, perché la
-    sessione imitava la propria prima scelta. Suona comunque alle 9; cambia solo
-    come si legge, «20 nov 2026» invece di un appuntamento. Chi ha detto
-    davvero «alle 9» lo vede come giorno: è l'errore che costa meno.
-    """
-    from jenny.cron.dates import DUE_AT
-    from jenny.utils.helpers import safe_zoneinfo
-
-    if schedule.precision != "exact" or not schedule.at_ms:
-        return schedule
-    local = datetime.fromtimestamp(schedule.at_ms / 1000, tz=safe_zoneinfo(tz_name))
-    if local.time() != DUE_AT:
-        return schedule
-    return CronSchedule(kind="at", at_ms=schedule.at_ms, precision="day")

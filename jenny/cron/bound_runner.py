@@ -13,7 +13,7 @@ from loguru import logger
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
 from jenny.board.cron_link import last_message_text, link_alive, record_result, scope_of
-from jenny.bus.events import InboundMessage
+from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.cron.condition import describe as describe_condition
 from jenny.cron.condition import read_condition
 from jenny.cron.could_not_check import (
@@ -28,6 +28,7 @@ from jenny.cron.service import CronJobSkippedError
 from jenny.cron.session_delivery import origin_delivery_context
 from jenny.cron.session_turns import (
     CRON_DEFER_UNTIL_IDLE_META,
+    CRON_MIRROR_META,
     CRON_MONITOR_META,
     CRON_TRIGGER_META,
     monitor_session_key,
@@ -176,6 +177,25 @@ def _bound_session_delivery_context(
     return channel, chat_id, metadata
 
 
+async def _mirror_reply(agent: BoundCronAgent, message: OutboundMessage) -> None:
+    """La copia per Telegram della risposta finale di un promemoria di quaderno.
+
+    Il loop l'ha già consegnata nella chat del quaderno, col suo ``turn_end``, e
+    il turno l'ha registrata nella sessione del quaderno: qui partono solo le
+    copie ``_mirror`` (``ChannelDeliverer.mirror``). Se il tool ``message`` ha
+    parlato, quella consegna ha già fatto le sue e ``message`` qui è ``None``.
+    ``getattr``: un agente senza gateway (i test, la fase pre-onboarding) non ha
+    il gancio, e il promemoria resta nella sua chat.
+    """
+    mirror = getattr(agent, "mirror_delivery", None)
+    if mirror is None:
+        return
+    try:
+        await mirror(message)
+    except Exception:  # noqa: BLE001 — la consegna principale è già avvenuta
+        logger.exception("cron: Telegram copy of a notebook reminder failed")
+
+
 def _why_page(job: CronJob) -> str:
     """La pagina del perché (``payload.why``) dalla wiki del quaderno del job, o ``""``."""
     from jenny.board.cron_link import notebook_root
@@ -297,6 +317,11 @@ async def _run_bound_cron_job(
     )
     if monitor:
         metadata[CRON_MONITOR_META] = True
+    elif board_link is not None:
+        # Il promemoria di un quaderno arriva anche su Telegram, col nome del
+        # quaderno davanti: ci pensa il ``ChannelDeliverer`` (v. ``_mirror_reply``).
+        # Uno personale no: suona nella chat da cui è stato chiesto, e basta.
+        metadata[CRON_MIRROR_META] = True
     metadata[CRON_TRIGGER_META] = {
         "job_id": job.id,
         "job_name": job_display_name(job),
@@ -353,6 +378,9 @@ async def _run_bound_cron_job(
     finally:
         if isinstance(cron_tool, CronTool) and cron_token is not None:
             cron_tool.reset_cron_context(cron_token)
+
+    if metadata.get(CRON_MIRROR_META) and outcome.message is not None:
+        await _mirror_reply(agent, outcome.message)
 
     if job.payload.condition:
         # Il turno è partito per questa condizione: non riparte finché non torna falsa.
