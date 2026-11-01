@@ -25,8 +25,8 @@ from jenny.bus.queue import MessageBus
 from jenny.plan.driver import PLAN_STEP_TOOLS, PlanDriver
 from jenny.plan.store import PlanStore
 from jenny.providers.base import LLMResponse, ToolCallRequest
-from jenny.session.goal_state import set_plan_probe
 from jenny.session.history_meta import INJECTED_EVENT_META, PLAN_STEP_EVENT
+from jenny.session.plan_probe import set_plan_probe
 from tests.support.aio import stop_agent_loop, wait_until
 
 KEY = "project:piante"

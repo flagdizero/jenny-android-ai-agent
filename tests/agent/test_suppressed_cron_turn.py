@@ -446,26 +446,6 @@ class TestSpokeViaToolTravelsInTheOutcome:
         assert set(metadata) == before
         assert ctx.msg.metadata is metadata
 
-    async def test_a_goal_continuation_is_suppressed_without_being_silent(
-        self, loop: AgentLoop
-    ) -> None:
-        """Le goal continuation condividono ``suppress_response`` ma non sono
-        lavoro interno: restano turni visibili, e ``spoke_via_tool`` si limita a
-        riferire il fatto senza cambiare comportamento."""
-        self._message_tool(loop, sent=True)
-        ctx = _ctx(
-            loop,
-            metadata={},
-            suppress=False,
-            final_content="",
-            session_key=UNIFIED_SESSION_KEY,
-        )
-        ctx.suppress_response = True  # acceso a metà turno dalla continuation
-
-        await loop._state_respond(ctx)
-
-        assert ctx.silent is False
-        assert ctx.outbound is None
 
 
 class TestOutcomeMapping:

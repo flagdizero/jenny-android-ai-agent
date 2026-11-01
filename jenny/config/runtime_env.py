@@ -112,26 +112,6 @@ def ws_send_timeout_s(default: float = 12.0) -> float:
     return _positive_float_env("JENNY_WS_SEND_TIMEOUT_S", default)
 
 
-def goal_inactivity_ttl_h(default: float = 12.0) -> float:
-    """TTL (ore) di inattività oltre il quale un goal sostenuto ``active`` viene
-    fatto scadere in modo lazy all'inizio del turno.
-
-    Su Android il kill abrupto del processo è lo scenario normale: un goal lasciato
-    ``active`` da un crash resterebbe zombie per sempre, disabilitando in modo
-    permanente il wall-timeout LLM della sessione (vedi
-    ``jenny.session.goal_state.runner_wall_llm_timeout_s``). L'inattività si misura
-    sul più recente tra ``started_at`` e ``last_turn_at``: un goal che avanza davvero
-    aggiorna ``last_turn_at`` a ogni turno e non scade mai.
-
-    Un TTL ``<= 0`` non significa "non scadere mai": la soglia in
-    ``expire_stale_goal`` diventa vera per qualunque attività passata, quindi ogni
-    goal sostenuto morirebbe al primo turno utile. Vedi ``_positive_float_env``.
-
-    Env: ``JENNY_GOAL_INACTIVITY_TTL_H`` (default 12).
-    """
-    return _positive_float_env("JENNY_GOAL_INACTIVITY_TTL_H", default)
-
-
 def tool_timeout_s(default: float = 300.0) -> float:
     """Timeout wall-clock per singola esecuzione di un tool.
 

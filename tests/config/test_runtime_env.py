@@ -121,24 +121,6 @@ def test_ws_send_timeout_invalid_falls_back_to_default(monkeypatch):
     assert runtime_env.ws_send_timeout_s() == 12.0
 
 
-# ---------------------------------------------------------------------------
-# goal_inactivity_ttl_h — JENNY_GOAL_INACTIVITY_TTL_H (float, default 12.0)
-# ---------------------------------------------------------------------------
-
-
-def test_goal_inactivity_ttl_default_without_env(monkeypatch):
-    monkeypatch.delenv("JENNY_GOAL_INACTIVITY_TTL_H", raising=False)
-    assert runtime_env.goal_inactivity_ttl_h() == 12.0
-
-
-def test_goal_inactivity_ttl_env_override(monkeypatch):
-    monkeypatch.setenv("JENNY_GOAL_INACTIVITY_TTL_H", "24.5")
-    assert runtime_env.goal_inactivity_ttl_h() == 24.5
-
-
-def test_goal_inactivity_ttl_invalid_falls_back_to_default(monkeypatch):
-    monkeypatch.setenv("JENNY_GOAL_INACTIVITY_TTL_H", "")
-    assert runtime_env.goal_inactivity_ttl_h() == 12.0
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +186,6 @@ _KNOBS = [
     ("max_concurrent_requests", "JENNY_MAX_CONCURRENT_REQUESTS", 3),
     ("llm_timeout_s", "JENNY_LLM_TIMEOUT_S", 300.0),
     ("ws_send_timeout_s", "JENNY_WS_SEND_TIMEOUT_S", 12.0),
-    ("goal_inactivity_ttl_h", "JENNY_GOAL_INACTIVITY_TTL_H", 12.0),
     ("tool_timeout_s", "JENNY_TOOL_TIMEOUT_S", 300.0),
 ]
 
@@ -241,20 +222,12 @@ def test_ws_send_timeout_rejects_non_positive(monkeypatch, bad):
     assert runtime_env.ws_send_timeout_s() == 12.0
 
 
-@pytest.mark.parametrize("bad", ["0", "-3"])
-def test_goal_ttl_rejects_non_positive(monkeypatch, bad):
-    """Un TTL a zero non è "non scadere mai": scade ogni goal al primo turno."""
-    monkeypatch.setenv("JENNY_GOAL_INACTIVITY_TTL_H", bad)
-
-    assert runtime_env.goal_inactivity_ttl_h() == 12.0
 
 
-def test_a_positive_value_still_wins_on_both(monkeypatch):
+def test_a_positive_value_still_wins(monkeypatch):
     monkeypatch.setenv("JENNY_WS_SEND_TIMEOUT_S", "30")
-    monkeypatch.setenv("JENNY_GOAL_INACTIVITY_TTL_H", "48")
 
     assert runtime_env.ws_send_timeout_s() == 30.0
-    assert runtime_env.goal_inactivity_ttl_h() == 48.0
 
 
 def test_zero_still_means_disabled_where_it_is_a_choice(monkeypatch):

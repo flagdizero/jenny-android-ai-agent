@@ -66,7 +66,6 @@ _HARDCODED_TOOL_MODULES = [
     "download",
     "location",
     "screen",
-    "long_task",
     "spawn",
     "subagent_control",
     "cron",

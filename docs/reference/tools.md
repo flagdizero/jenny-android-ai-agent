@@ -12,7 +12,7 @@ There is no fixed tool count. What Jenny actually has available in a given conve
 
 - **The agent's scope** — the main agent loads either the `orchestrator` scope (default, see `agents.defaults.orchestratorMode`) or the historical `core` scope; a subagent loads the `subagent` scope, narrowed further by its agent type. The four SSH tools sit in a scope of their own, `remote`, which **no** agent loads by default — only the `sysadmin` subagent type asks for it. The same install therefore exposes different tools to the orchestrator, to a `sysadmin` subagent, and to every other subagent.
 
-A conversation agent can draw on **51** named built-in tools: 50 registered through the standard loader (53 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps), and [`notebook`](#notebook) two) (`jenny/agent/tools/loader.py`, which imports 28 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `AppActionTool` (`app_actions.py`), instantiated once per declared app action and re-synced every turn. No single agent sees all 51 at once — see the scope note above. Add to that N dynamic app tools. If you ask Jenny to list its tools, expect the number to vary between installs.
+A conversation agent can draw on **49** named built-in tools: 48 registered through the standard loader (51 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps), and [`notebook`](#notebook) two) (`jenny/agent/tools/loader.py`, which imports 27 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `AppActionTool` (`app_actions.py`), instantiated once per declared app action and re-synced every turn. No single agent sees all 49 at once — see the scope note above. Add to that N dynamic app tools. If you ask Jenny to list its tools, expect the number to vary between installs.
 
 Below, tools are grouped into ten categories. Each entry gives the exact tool name the model calls, what it does for you in practice, the parameters worth knowing, hard numeric limits, the config toggle that controls it, and any gotcha worth knowing before you rely on it.
 
@@ -388,7 +388,7 @@ Starts a subagent to work a task in the background and reports the result back i
 
 - Parameters: `task` (required), `label` (display name), `agent_type` (which kind of subagent — see below), `quick` (mark a short job), `temperature` (0.0–2.0, optional override).
 - **Concurrency defaults to 3** (`agents.defaults.maxConcurrentSubagents`), and **one slot is always kept free for short jobs**: an ordinary `spawn` may occupy at most `maxConcurrentSubagents - 1` slots. Past that the call is rejected outright with "concurrency limit reached" — there is no queue. A `quick=true` spawn may use the reserved slot.
-- A subagent only gets tools scoped `subagent`: file tools (including `apply_patch`), search, `python_exec` (plus its session tools `write_stdin`/`list_exec_sessions`), the web tools and the five `browser_*` tools, `download_file`, `get_location`, `journal_append`, introspection, and logs. It explicitly does **not** get `spawn` (no subagents spawning subagents), `cron`, `message`, `my`, `long_task`, or `ui_view`.
+- A subagent only gets tools scoped `subagent`: file tools (including `apply_patch`), search, `python_exec` (plus its session tools `write_stdin`/`list_exec_sessions`), the web tools and the five `browser_*` tools, `download_file`, `get_location`, `journal_append`, introspection, and logs. It explicitly does **not** get `spawn` (no subagents spawning subagents), `cron`, `message`, `my`, or `ui_view`.
 - The **agent type** narrows that scope further, and comes with its own role prompt plus sampling defaults:
 
 | `agent_type` | Tools | Temp. | Max iterations | Notes |
@@ -438,18 +438,6 @@ Available to the main agent only in orchestrator mode (`agents.defaults.orchestr
 Subagent conversations are kept as sessions under the key `subagent:<lineage_id>` — internal keys, never listed as user conversations. Retention is deliberately short: the **3 most recent finished jobs per conversation, for 6 hours**. Resuming re-sends the subagent's whole conversation to the model, so a long window would make every follow-up expensive; past the window the loss is small, because the real output is the artifact on disk, not the transcript. A resume occupies a concurrency slot like a spawn (`quick=true` may use the reserved one) but does **not** consume the 3-attempt automatic-relaunch budget — a directed continuation is not a retry of a failure.
 
 Gotcha: `subagent_status` **refuses a second consecutive call in the same turn** when no other tool ran in between, and `subagent_send` **refuses the same message to the same subagent twice in one turn**. Subagent results are announced to the agent on their own when they finish, so polling can only burn tokens — it cannot make a result arrive sooner, and a subagent never acknowledges a message, it just acts on it.
-
-### long_task / complete_goal
-
-A pair of tools for tracking a sustained objective across many turns of the same chat thread, without a separate orchestrator — the work still happens in ordinary turns.
-
-- `long_task(goal, ui_summary?)` registers the objective (`goal` up to 12,000 chars; optional `ui_summary` up to 120 chars for display). Only **one goal can be active at a time** — a second call while one is active is rejected.
-- The active goal is mirrored into the Runtime Context every turn, so context compaction can't make it disappear. The full objective is written once; while the message that carried it is still in the history being sent, later turns get a one-line `Goal (active): unchanged, as stated earlier in this conversation.` instead, so a long objective does not pile up in the conversation. When that message leaves the window, the full text comes back.
-- `complete_goal(recap?)` closes it out (recap up to 8,000 chars) — call it whether the goal succeeded, was cancelled, or was redirected; the recap should say what actually happened, not just claim success.
-
-Config: none — always registered whenever session management is available (i.e., always in the normal runtime).
-
-Gotcha: the goal survives app restarts, because it's stored in persisted session metadata. A goal you forgot about stays "active" until something explicitly completes it.
 
 ### message
 
@@ -700,7 +688,7 @@ The workshop's **Hands** drawer governs exactly two tool settings, and SSH gets 
 
 The SSH switch is **asymmetric**, which is worth knowing before you file a bug: turning it *off* takes effect immediately, mid-turn, because it is meant to work as an emergency stop; turning it back *on* (or adding the very first host) only takes effect after a gateway restart, because the tools are built at startup.
 
-`cron`, `spawn`, `long_task`/`complete_goal`, `message`, `nothing_to_report`, `download_file`, `get_source`, `ui_view`, and app tools have no on/off switch tied to a UI element at all — they're either always registered when their prerequisites exist, or controlled only from config.json.
+`cron`, `spawn`, `message`, `nothing_to_report`, `download_file`, `get_source`, `ui_view`, and app tools have no on/off switch tied to a UI element at all — they're either always registered when their prerequisites exist, or controlled only from config.json.
 
 ## Shared boundaries
 

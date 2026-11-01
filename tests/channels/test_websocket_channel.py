@@ -1035,7 +1035,7 @@ async def test_send_goal_status_idle_omits_started_at() -> None:
         metadata={
             "_goal_status": True,
             "goal_status": "idle",
-            "goal_started_at": 99.0,
+            "started_at": 99.0,
         },
     ))
 

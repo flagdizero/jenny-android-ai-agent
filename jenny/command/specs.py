@@ -41,7 +41,7 @@ class BuiltinCommandSpec:
     - ``personal`` — agisce sulla memoria personale o sull'installazione
       (``/dream``, ``/model``, ``/skill``);
     - ``any`` — agisce su *questa conversazione*, qualunque sia (``/new``,
-      ``/stop``, ``/status``, ``/history``, ``/goal``, ``/help``).
+      ``/stop``, ``/status``, ``/history``, ``/help``).
 
     Non e' solo cosmetica della tendina: :mod:`jenny.command.scope` lo applica
     **nel dispatch**, perche' non esiste autocomplete sullo ``/`` e un filtro che
@@ -129,13 +129,6 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "Print the last N persisted conversation messages.",
         "history",
         "[n]",
-    ),
-    BuiltinCommandSpec(
-        "/goal",
-        "Start long-running goal",
-        "Tell the agent to treat the request as a long-running goal.",
-        "activity",
-        "<goal>",
     ),
     BuiltinCommandSpec(
         "/dream",

@@ -185,10 +185,10 @@ Collected in one place rather than scattered, so you can judge before installing
   say so, but nothing updates itself behind you: Android still shows its own install prompt.
 - **Not a full launcher.** No widgets, folders, icon packs or wallpaper management.
 - **Web search is Bing-only.** A real CAPTCHA page fails rather than being solved.
-- **Goals and subagents are separate tools, not an orchestrator.** A registered objective
-  stays in context across turns, and the agent *can* delegate to background subagents, but
-  nothing guarantees a goal is automatically decomposed and driven to completion — delegation
-  is a per-turn decision by the model.
+- **Subagents are a tool, not an orchestrator.** The agent *can* delegate to background
+  subagents, but nothing decomposes a request and drives it to completion on its own —
+  delegation is a per-turn decision by the model. A big job in a notebook can become a
+  step-by-step plan, which the code drives one step at a time.
 - **Mini-apps can't reach authenticated servers.** Declaring `auth` in a manifest is refused
   outright until there's a credential store.
 - **Small models struggle.** The agent loop leans hard on instruction-following and

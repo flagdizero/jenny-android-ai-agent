@@ -1608,7 +1608,7 @@ class SubagentManager:
             # Non si assegna il passo da qui: durante un piano girano anche
             # turni che non sono suoi, e un aiutante attribuito per sbaglio
             # terrebbe fermo ``plan_step_done`` e finirebbe nella sua foto.
-            from jenny.session.goal_state import plan_running_in_session
+            from jenny.session.plan_probe import plan_running_in_session
 
             if plan_running_in_session(session_key):
                 logger.warning(

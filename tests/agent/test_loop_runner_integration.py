@@ -43,26 +43,36 @@ async def test_loop_max_iterations_message_stays_stable(tmp_path):
     )
 
 
+class _Probe:
+    def __init__(self, running: set[str]) -> None:
+        self.running = running
+
+    def plan_running(self, session_key: str) -> bool:
+        return session_key in self.running
+
+    def plan_open(self, session_key: str) -> bool:
+        return session_key in self.running
+
+
 @pytest.mark.asyncio
-async def test_loop_goal_turn_uses_standard_iteration_budget(tmp_path):
+@pytest.mark.parametrize("running, expected", [({"project:piante"}, 0.0), (set(), None)])
+async def test_a_running_plan_lifts_the_turn_wall_timeout(tmp_path, running, expected):
+    """Il passo di un piano non ha tetto sulla chiamata al modello; un turno qualsiasi sì."""
+    from jenny.agent.runner import AgentRunResult
+    from jenny.session.plan_probe import set_plan_probe
+
     loop = _make_loop(tmp_path)
-    loop.provider.chat_with_retry = AsyncMock(return_value=LLMResponse(
-        content="working",
-        tool_calls=[ToolCallRequest(id="call_1", name="list_dir", arguments={})],
-    ))
-    loop.tools.get_definitions = MagicMock(return_value=[])
-    loop.tools.execute = AsyncMock(return_value="ok")
-    loop.max_iterations = 2
-
-    final_content, _, _, stop_reason, _ = await loop._run_agent_loop(
-        [],
-        metadata={"original_command": "/goal"},
+    loop.runner.run = AsyncMock(
+        return_value=AgentRunResult(final_content="ok", messages=[], stop_reason="completed")
     )
+    set_plan_probe(_Probe(running))
+    try:
+        await loop._run_agent_loop([], session_key="project:piante")
+    finally:
+        set_plan_probe(None)
 
-    assert stop_reason == "max_iterations"
-    assert loop.provider.chat_with_retry.await_count == 3
-    assert loop.provider.chat_with_retry.await_args_list[-1].kwargs["tools"] is None
-    assert final_content == say("turn.max_iterations", max_iterations=2)
+    spec = loop.runner.run.await_args.args[0]
+    assert spec.llm_timeout_s == expected
 
 
 @pytest.mark.asyncio

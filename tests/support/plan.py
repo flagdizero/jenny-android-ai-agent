@@ -1,7 +1,7 @@
 """Il piano a lista nei test: un ospite e un bus finti, e un quaderno da fotografare.
 
 L'ospite finto risponde alle domande che il driver fa all'agente (turno in volo,
-aiutanti, cancellazione, goal, cartella del quaderno, note); il bus finto
+aiutanti, cancellazione, cartella del quaderno, note); il bus finto
 raccoglie quel che il driver pubblica. Lo usano i test del driver
 (``tests/plan``) e quelli delle RPC (``tests/webui``).
 """
@@ -35,7 +35,6 @@ class FakeHost:
         self.abandon = abandon
         self.busy: set[str] = set()
         self.helpers: dict[str, set[str]] = {}
-        self.goals: set[str] = set()
         self.cancelled: list[str] = []
         self.notes: list[tuple[str, str]] = []
         self.root_lookups = 0
@@ -58,9 +57,6 @@ class FakeHost:
             self.helpers.pop(session_key, None)
             self.busy.discard(session_key)
         return count
-
-    def goal_active(self, session_key: str) -> bool:
-        return session_key in self.goals
 
     def notebook_root(self, notebook: str) -> Path | None:
         self.root_lookups += 1

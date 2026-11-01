@@ -6,7 +6,7 @@ Typing a message that starts with `/` in the chat input can trigger a built-in c
 
 Commands are matched on the whole message (case-insensitive), either as an exact word (`/new`) or as a prefix followed by an argument (`/model fast`). If what you type doesn't match any known command, it is **not rejected** — it's forwarded to the agent as an ordinary chat message, exactly as if it had no leading slash.
 
-You can type them by hand — the only way in the home — or, in the workshop's Console, pick them from the **Commands** chip in the row above the composer, next to the scope chip and the write switch. That list is built from the same table that `/help` prints, so it can't drift out of date; a command that takes an argument (`/model`, `/history`, `/goal`, …) is written into the composer for you instead of being sent immediately, so you can finish the line. There is still no autocomplete on `/` itself. Typing `/help` works everywhere, and is the way to see the list from the home.
+You can type them by hand — the only way in the home — or, in the workshop's Console, pick them from the **Commands** chip in the row above the composer, next to the scope chip and the write switch. That list is built from the same table that `/help` prints, so it can't drift out of date; a command that takes an argument (`/model`, `/history`, …) is written into the composer for you instead of being sent immediately, so you can finish the line. There is still no autocomplete on `/` itself. Typing `/help` works everywhere, and is the way to see the list from the home.
 
 ## Where a command works
 
@@ -14,7 +14,7 @@ You can type them by hand — the only way in the home — or, in the workshop's
 
 | Acts on | Commands | Where |
 |---|---|---|
-| **this conversation** | `/new` `/stop` `/status` `/history` `/goal` `/help` | anywhere |
+| **this conversation** | `/new` `/stop` `/status` `/history` `/help` | anywhere |
 | **the personal memory, or the installation** | `/dream` `/model` `/skill` | the personal chat only |
 | **this notebook** | `/gardener` `/tidy` `/init` | inside a [notebook](./projects.md) only |
 
@@ -35,7 +35,6 @@ Server-side command responses follow the language set for Jenny (`agents.default
 | `/status` | none | Shows a runtime snapshot: version, model, token usage, context budget, session size, uptime, active tasks |
 | `/model` | `[preset]` | Shows the current model/preset, or switches the active preset |
 | `/history` | `[n]` | Prints the last `n` persisted user/assistant messages (default 10, max 50) |
-| `/goal` | `<description>` | Tells the agent to treat the request as a long-running goal |
 | `/dream` | none | Manually triggers a memory consolidation (Dream) run in the background |
 | `/gardener` | none | Runs one [gardener](./gardener.md) pass on the notebook you are in, now |
 | `/skill` | none | Lists the currently enabled skills with their descriptions |
@@ -67,9 +66,9 @@ If a conversation seems to keep dragging in an old topic — or to ignore a rule
 
 While a turn runs, the home's send button turns into **Stop** and sends this command for you. The workshop Console has no stop button, so there typing `/stop` (or picking it from the Commands chip) is the way to interrupt a turn that's in progress. It works specifically because it's on the priority fast path (it's processed even mid-turn, before the normal dispatch lock). The reply is a short sentence in the agent's language (`agents.defaults.language`): that it stopped, or that there was nothing to stop.
 
-`/stop` also cancels an active `/goal`. It does **not** stop the helpers (subagents) already working in the background for this chat: each one has its own bubble, and you stop it from there. When some are still running, the reply says how many keep going.
+`/stop` does **not** stop the helpers (subagents) already working in the background for this chat: each one has its own bubble, and you stop it from there. When some are still running, the reply says how many keep going.
 
-`/stop all` stops everything: the turn, the goal, and every mini-me (subagent) of this chat — one that finishes after being stopped has its result silently thrown away. It undoes nothing: a mini-me that had changed files offers to undo them from its bubble ([Helpers](helpers.md)).
+`/stop all` stops everything: the turn and every mini-me (subagent) of this chat — one that finishes after being stopped has its result silently thrown away. It undoes nothing: a mini-me that had changed files offers to undo them from its bubble ([Helpers](helpers.md)).
 
 In a notebook, `/stop` also ends a [plan](plans.md): during the planning it drops the planning (*I stopped preparing the plan.*), and while a plan runs it is the same as **Stop and keep what it did** (*I stopped the plan. The notebook stays as it is now.*). `/new` ends a planning too.
 
@@ -150,24 +149,6 @@ Usage: /history [count] — e.g. /history 5 (default: 10, max: 50)
 ```
 
 This reads the persisted session history, not the on-screen transcript: the two are separate, and `/new` resets the first without deleting the second.
-
-### `/goal <description>` — start a long-running goal
-
-Rewrites your message into a normal agent turn that instructs the model to register a sustained objective (via the internal `long_task` tool) instead of answering as a one-shot request. There's no separate "goal view" — it's the same chat, with normal turns, but the objective stays pinned in the agent's context (so it survives compaction) and the per-turn timeout is disabled until it's done. A banner with a running timer appears while a turn is in progress.
-
-Without a description:
-
-```text
-Usage: /goal <long-running task description>
-```
-
-If a task is already running in this chat:
-
-```text
-A task is already running for this chat. Use `/stop` first, then send `/goal <long-running task description>` again.
-```
-
-Only one goal can be active per chat at a time. The agent closes it itself (or you can cancel with `/stop`); an inactive goal also expires automatically after 12 hours.
 
 ### `/dream` — run memory consolidation now
 
@@ -260,7 +241,6 @@ In the personal chat:
 /status — Display runtime, provider, and channel status.
 /model [preset] — Show or switch the active model preset.
 /history [n] — Print the last N persisted conversation messages.
-/goal <goal> — Tell the agent to treat the request as a long-running goal.
 /dream — Manually trigger memory consolidation now. The budgets and the review cadence live in Settings → Workshop → Memory.
 /skill — List enabled skills and their descriptions.
 /help — List available slash commands.
@@ -287,6 +267,6 @@ If you want a conversation to actually go away, deleting it is a different opera
 
 - [Chat basics](./chat.md) for the message composer, streaming, and the "Agent running" banner referenced above.
 - [Memory and Dream](./memory.md) for what `/dream` actually processes, and why it can say there's nothing to do.
-- [Scheduling and proactivity](./scheduling.md) for `/goal`, reminders and monitors.
+- [Scheduling and proactivity](./scheduling.md) for reminders and monitors.
 - [Configuration reference](../reference/configuration.md) for `modelPresets` and other config-only settings.
 - [Troubleshooting](./troubleshooting.md) if a command's response looks wrong or the chat seems unresponsive.

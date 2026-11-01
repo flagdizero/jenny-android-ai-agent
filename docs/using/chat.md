@@ -52,7 +52,7 @@ A reply is built incrementally, not delivered all at once:
   - Reasoning is **never shown on Telegram** — it only ever appears in the WebUI, by design.
   - It is controlled by the config key `websocket.showReasoning` (default `true`), which has no toggle in the home's Settings or in the workshop — you can only change it by editing `config.json`. Turning it off doesn't just hide the block: it stops the reasoning from being recorded in history at all, so there is nothing to look back at later. See [Configuration reference](../reference/configuration.md).
 - **Final latency and Copy.** Once a turn completes, the response time in seconds is shown under the bubble, next to a **Copy** button that copies the reply's text. A turn made only of tool calls has nothing to copy and gets no button.
-- **"Agent running" banner.** While a turn of the conversation runs — an ordinary message, a turn started from Telegram, or a long-running goal (see [Scheduling and proactivity](scheduling.md)) — a banner reading **"Agent running"** appears with a live timer counting seconds.
+- **"Agent running" banner.** While a turn of the conversation runs — an ordinary message, a turn started from Telegram, or a step of a plan — a banner reading **"Agent running"** appears with a live timer counting seconds.
 
 ## The Subagents panel
 

@@ -28,7 +28,7 @@ Start here if you just want to install and use the app.
 | [Notebook board](using/board.md) | The board a notebook opens on: a card per subject, drawers written from the wiki, corrections, your own sections, Jenny's proposals in the envelope, and reminders — scheduler jobs that ring in the notebook's chat. |
 | [Plans](using/plans.md) | A big job in a notebook as a list of steps: planning read-only, approving, the steps the app runs one at a time, pausing, stopping, and going back to before the plan. |
 | [The gardener](using/gardener.md) | The background pass that turns a notebook's journal lines into pages, keeps its map true and its board current: when it runs, what it refuses to touch, and how to turn it off. |
-| [Scheduling and proactivity](using/scheduling.md) | One-time and recurring jobs (reminders and monitors, conditions on an app's value), goals/long tasks, and subagents — and what silently breaks when the app is killed. |
+| [Scheduling and proactivity](using/scheduling.md) | One-time and recurring jobs (reminders and monitors, conditions on an app's value) and subagents — and what silently breaks when the app is killed. |
 | [Helpers: stop, undo, continue](using/helpers.md) | Jenny's mini-mes in the chat: stopping one, putting back the files it changed, and letting it continue after a restart or a provider failure. |
 | [Mini-apps (Jenny Apps)](using/mini-apps.md) | Chat-authored mini web apps backed by native tools, how they differ from skills, and their sandboxing limits. |
 | [Skills](using/skills.md) | Markdown-based skill folders that extend agent behavior in chat, where to see and switch them, and why built-in ones can't be switched off. |

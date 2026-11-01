@@ -304,11 +304,6 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.history.usage": "Usage: /history [count] — e.g. /history 5 (default: 10, max: 50)",
         "cmd.history.empty": "No conversation history yet.",
         "cmd.history.header": "Last {count} message(s):",
-        "cmd.goal.usage": "Usage: /goal <long-running task description>",
-        "cmd.goal.busy": (
-            "A task is already running for this chat. Use `/stop` first, then send "
-            "`/goal <long-running task description>` again."
-        ),
         "cmd.skill.none": "No skills available.",
         "cmd.skill.header": "Available skills ({count}):",
         "cmd.help.header": "✿ jenny commands:",
@@ -330,7 +325,6 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.help.status": "Display runtime, provider, and channel status.",
         "cmd.help.model": "Show or switch the active model preset.",
         "cmd.help.history": "Print the last N persisted conversation messages.",
-        "cmd.help.goal": "Tell the agent to treat the request as a long-running goal.",
         "cmd.help.dream": (
             "Manually trigger memory consolidation now. The budgets and the review cadence live "
             "in Settings → Workshop → Memory."
@@ -669,11 +663,6 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "cmd.history.empty": "Non c'è ancora una cronologia.",
         "cmd.history.header": "Ultimi {count} messaggi:",
-        "cmd.goal.usage": "Uso: /goal <descrizione del lavoro lungo>",
-        "cmd.goal.busy": (
-            "Sto già lavorando a qualcosa in questa chat. Usa prima `/stop`, poi rimanda "
-            "`/goal <descrizione del lavoro lungo>`."
-        ),
         "cmd.skill.none": "Nessuna skill disponibile.",
         "cmd.skill.header": "Skill disponibili ({count}):",
         "cmd.help.header": "✿ comandi di jenny:",
@@ -696,7 +685,6 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.help.status": "Mostra lo stato di runtime, provider e canali.",
         "cmd.help.model": "Mostra o cambia il preset del modello attivo.",
         "cmd.help.history": "Stampa gli ultimi N messaggi salvati della conversazione.",
-        "cmd.help.goal": "Chiede all'agente di trattare la richiesta come un obiettivo lungo.",
         "cmd.help.dream": (
             "Fa partire subito il riordino della memoria. I limiti e la cadenza della "
             "revisione stanno in Impostazioni → Officina → Memoria."

@@ -33,7 +33,7 @@ class _Agent:
 
 def test_the_plan_driver_sets_the_helper_limit(tmp_path: Path, monkeypatch) -> None:
     # Gli agganci globali del driver restano fuori: questo test guarda solo il limite.
-    monkeypatch.setattr("jenny.session.goal_state.set_plan_probe", lambda _probe: None)
+    monkeypatch.setattr("jenny.session.plan_probe.set_plan_probe", lambda _probe: None)
     monkeypatch.setattr(
         "jenny.security.workspace_access.set_held_notebook_probe", lambda _probe: None,
     )

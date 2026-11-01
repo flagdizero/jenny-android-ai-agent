@@ -12,9 +12,7 @@ from __future__ import annotations
 from typing import Any, Iterator
 from unittest.mock import MagicMock
 
-from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.loader import ToolLoader
-from jenny.agent.tools.long_task import CompleteGoalTool, LongTaskTool
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.tools.schema import WIRE_STRING_LIMIT
 
@@ -64,27 +62,3 @@ def test_registered_tool_schemas_stay_under_the_grammar_cap():
         + "\n  ".join(violations)
     )
 
-
-def test_goal_tools_declare_no_wire_length_bound():
-    """Regressione puntuale della issue #2: `goal` era 12000, `recap` 8000.
-
-    Verificato contro llama-server b10210: `long_task` da solo passa con `goal` a
-    1000 e fallisce a 2000, quindi qui il vincolo non va abbassato, va assente —
-    il tetto vive in ``execute()``.
-    """
-    goal = LongTaskTool(sessions=MagicMock()).parameters["properties"]["goal"]
-    recap = CompleteGoalTool(sessions=MagicMock()).parameters["properties"]["recap"]
-
-    assert "maxLength" not in goal
-    assert "maxLength" not in recap
-
-
-async def test_goal_length_is_enforced_in_execute():
-    """Il tetto tolto dallo schema deve restare applicato a runtime."""
-    tool = LongTaskTool(sessions=MagicMock())
-    tool.set_context(
-        RequestContext(channel="websocket", chat_id="c1", session_key="ws:c1", metadata={})
-    )
-
-    out = await tool.execute(goal="x" * 12_001)
-    assert "at most 12000 characters" in out

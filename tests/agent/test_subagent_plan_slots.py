@@ -255,7 +255,7 @@ async def test_a_spawn_without_the_step_while_the_plan_runs_is_logged(tmp_path, 
 
     from loguru import logger as loguru_logger
 
-    from jenny.session.goal_state import set_plan_probe
+    from jenny.session.plan_probe import set_plan_probe
 
     class _Probe:
         def plan_running(self, session_key: str) -> bool:

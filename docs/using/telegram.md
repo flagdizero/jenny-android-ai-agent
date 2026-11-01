@@ -105,7 +105,7 @@ A caption is read as your message text. Each attachment is downloaded into the s
 - `/new` — starts a new conversation. **This affects the WebUI too** — see [below](#shared-session-new-resets-both-sides).
 - `/stop` — stops the currently running turn, wherever it was started.
 
-The bot's own command menu (the `/` button in Telegram) lists only `/start` and `/new`, but that is only the menu: every other [slash command](slash-commands.md) goes through the same router as in the WebUI, so typing `/status`, `/model`, `/history`, `/goal`, `/dream` or `/skill` works from Telegram too. `/help` lists what the personal conversation can do — Telegram is always the personal conversation, so the notebook commands (`/gardener`, `/tidy`, `/init`) are neither listed nor available there.
+The bot's own command menu (the `/` button in Telegram) lists only `/start` and `/new`, but that is only the menu: every other [slash command](slash-commands.md) goes through the same router as in the WebUI, so typing `/status`, `/model`, `/history`, `/dream` or `/skill` works from Telegram too. `/help` lists what the personal conversation can do — Telegram is always the personal conversation, so the notebook commands (`/gardener`, `/tidy`, `/init`) are neither listed nor available there.
 
 Messages from anyone other than the paired chat are ignored completely and silently — the bot never confirms or denies that it exists to a stranger. Inside the paired chat, a message is accepted only if its sender is the paired person (see [above](#a-pairing-made-with-a-group-has-to-be-redone)).
 

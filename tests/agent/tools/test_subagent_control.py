@@ -32,7 +32,7 @@ from jenny.config.schema import ToolsConfig
 ORCHESTRATOR_KEEPS = {
     "spawn", "subagent_status", "subagent_cancel", "subagent_restart",
     "subagent_send",
-    "cron", "message", "ui_view", "long_task", "complete_goal",
+    "cron", "message", "ui_view",
     "get_source", "get_recent_logs", "read_file", "list_dir",
 }
 # Tutto cio che produce output grosso, o che scrive. ``grep`` non e piu qui:

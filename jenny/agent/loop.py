@@ -86,15 +86,6 @@ from jenny.security.workspace_access import (
     reset_workspace_scope,
 )
 from jenny.session import turn_continuation
-from jenny.session.goal_state import (
-    clear_goal_awaiting_input,
-    expire_stale_goal,
-    goal_awaiting_input,
-    goal_state_runtime_lines,
-    mark_goal_awaiting_input,
-    runner_wall_llm_timeout_s,
-    sustained_goal_active,
-)
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     MID_TURN_META,
@@ -110,6 +101,7 @@ from jenny.session.keys import (
     session_key_for_channel,
 )
 from jenny.session.manager import Session, SessionManager, scrub_lone_surrogates
+from jenny.session.plan_probe import plan_wall_llm_timeout_s
 from jenny.session.project_rename import (
     follow_renamed_project,
     pending_project_renames,
@@ -117,7 +109,6 @@ from jenny.session.project_rename import (
 from jenny.session.project_traces import PROJECT_WIKI_ID_KEY
 from jenny.session.turn_visibility import (
     TurnVisibility,
-    is_silent_turn,
     mark_silent_turn,
     resolve_turn_visibility,
 )
@@ -421,7 +412,7 @@ class AgentLoop(
             max_concurrent_subagents=max_concurrent_subagents,
             stall_threshold_s=subagent_stall_threshold_seconds,
             tool_error_budget=subagent_tool_error_budget,
-            llm_wall_timeout_for_session=lambda sk: runner_wall_llm_timeout_s(self.sessions, sk),
+            llm_wall_timeout_for_session=plan_wall_llm_timeout_s,
             # LO STESSO SessionManager del loop, non uno nuovo: la storia Tier-2
             # dei subagent (``subagent:<lineage_id>``) vive nella stessa
             # directory delle sessioni, e due istanze avrebbero due cache
@@ -1631,38 +1622,6 @@ class AgentLoop(
         turn_taint_token = bind_turn_taint(
             turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META, TOOL_TAINT_META)
         )
-        # Compute lazily because long_task may create goal metadata during this run.
-
-        def _goal_continue() -> str | None:
-            _goal_lines = goal_state_runtime_lines(session.metadata if session is not None else None)
-            if not _goal_lines:
-                return None
-            return (
-                "You have an active sustained goal:\n\n"
-                + "\n".join(_goal_lines)
-                + "\n\nPlease continue working toward the objective using your tools, "
-                "or call complete_goal if the work is truly finished."
-            )
-
-        # Lazy repair: a goal left ``active`` by a process kill (normal on Android)
-        # would otherwise stay zombie forever and permanently disable the LLM
-        # wall-timeout for the session. Expire only when idle past the TTL, so a goal
-        # that keeps advancing (it stamps ``last_turn_at`` each turn) is never touched.
-        if session is not None:
-            from jenny.config.runtime_env import goal_inactivity_ttl_h
-
-            expire_stale_goal(session.metadata, ttl_h=goal_inactivity_ttl_h())
-            # Un messaggio vero dell'utente *è* la fine dell'attesa: il goal
-            # parcheggiato torna spronabile da questo turno in poi. Le
-            # continuazioni interne e i turni che non persistono input utente
-            # (monitor, lavoro di sistema) non contano come risposta.
-            if (
-                turn_continuation.should_persist_user_message(metadata)
-                and not is_silent_turn(metadata)
-            ):
-                clear_goal_awaiting_input(session.metadata)
-        session_metadata = session.metadata if session is not None else None
-
         async def _on_context_overflow(new_window: int) -> None:
             """Called by the runner when a context_length error occurs.
 
@@ -1716,33 +1675,12 @@ class AgentLoop(
                 retry_wait_callback=on_retry_wait,
                 checkpoint_callback=_checkpoint,
                 injection_callback=_drain_pending,
-                # Sustained goals may legitimately exceed JENNY_LLM_TIMEOUT_S; idle stall
-                # is still capped by JENNY_STREAM_IDLE_TIMEOUT_S in streaming providers.
-                llm_timeout_s=runner_wall_llm_timeout_s(
-                    self.sessions,
+                # Il passo di un piano può superare JENNY_LLM_TIMEOUT_S; lo stallo resta
+                # coperto da JENNY_STREAM_IDLE_TIMEOUT_S nei provider in streaming.
+                llm_timeout_s=plan_wall_llm_timeout_s(
                     session.key if session is not None else session_key,
-                    metadata=session_metadata,
-                    message_metadata=metadata,
                 ),
                 tool_choice=self.tool_choice if self.tool_choice != "auto" else None,
-                # Un goal parcheggiato in attesa dell'utente resta ``active`` ma
-                # non va spronato: finché aspetta, nessun turno (nemmeno interno)
-                # spende una chiamata per ripetergli «continua».
-                goal_active_predicate=lambda: (
-                    session is not None
-                    and sustained_goal_active(session.metadata)
-                    and not goal_awaiting_input(session.metadata)
-                ),
-                goal_continue_message=_goal_continue,
-                delegated_work_pending=lambda: (
-                    session is not None
-                    and bool(self.subagents.get_running_ids_by_session(session.key))
-                ),
-                finalize_on_max_iterations=turn_continuation.should_finalize_on_max_iterations(
-                    pending_queue_available=pending_queue is not None and session is not None,
-                    session_metadata=session_metadata,
-                    message_metadata=metadata,
-                ),
                 on_context_overflow=_on_context_overflow,
                 closed_reasoning_flagged=session is not None,
             ))
@@ -1757,17 +1695,6 @@ class AgentLoop(
         # passo): questo turno li ha avuti davanti.
         self._release_held_subagent_results(active_session_key, session)
         self._last_usage = result.usage
-        if result.goal_stalled and session is not None:
-            # Il runner ha rifiutato di spronare il goal: sta aspettando una
-            # risposta. Marcarlo tiene il goal vivo e onesto — l'alternativa che
-            # il modello trovava da solo era chiuderlo con un recap falso. La
-            # scrittura su disco arriva dal salvataggio di fine turno
-            # (``_finalize_turn_save``), come per ``note_goal_turn``.
-            if mark_goal_awaiting_input(session.metadata) is not None:
-                logger.info(
-                    "Sustained goal parked waiting for the user ({})",
-                    session.key,
-                )
         if result.images_stripped and result.final_content:
             # Il fallback in providers/base.py ha tolto le immagini in silenzio
             # dopo un rifiuto non transitorio del provider (modello senza
@@ -1783,15 +1710,9 @@ class AgentLoop(
                 await on_stream(notice)
         if result.stop_reason == "max_iterations":
             logger.warning("Max iterations ({}) reached", self.max_iterations)
-            should_stream = turn_continuation.should_stream_budget_response(
-                stop_reason=result.stop_reason,
-                pending_queue_available=pending_queue is not None and session is not None,
-                session_metadata=session_metadata,
-                message_metadata=metadata,
-            )
             # Push final content through stream so streaming channels
             # update the card instead of leaving it empty.
-            if on_stream and on_stream_end and should_stream:
+            if on_stream and on_stream_end:
                 await on_stream(result.final_content or "")
                 await on_stream_end(resuming=False)
         # ``getattr``: i runner finti dei test tornano oggetti senza questi campi.
@@ -2079,24 +2000,22 @@ class AgentLoop(
                             # solo la chat personale: in un quaderno il ``turn_end``
                             # non arrivava e la mascotte restava a pensare.
                             completed_channel, completed_chat_id = msg.chat_id.split(":", 1)
-                        continuing = turn_continuation.internal_continuation_pending(msg.metadata)
-                        if not continuing:
-                            await self._runtime_events().turn_completed(
-                                channel=completed_channel,
-                                chat_id=completed_chat_id,
-                                session_key=session_key,
-                                metadata=msg.metadata,
-                            )
-                            # Il piano a lista guarda il turno appena chiuso: passo
-                            # chiuso → il seguente; aperto senza aiutanti → il
-                            # promemoria, poi il blocco. Dopo la consegna, cosi'
-                            # la risposta del passo arriva prima del passo dopo.
-                            # ``getattr``: un ``_process_message`` finto nei test
-                            # torna esiti senza il campo.
-                            await self._plan_turn_ended(
-                                msg, session_key,
-                                stop_reason=getattr(outcome, "stop_reason", ""),
-                            )
+                        await self._runtime_events().turn_completed(
+                            channel=completed_channel,
+                            chat_id=completed_chat_id,
+                            session_key=session_key,
+                            metadata=msg.metadata,
+                        )
+                        # Il piano a lista guarda il turno appena chiuso: passo
+                        # chiuso → il seguente; aperto senza aiutanti → il
+                        # promemoria, poi il blocco. Dopo la consegna, cosi'
+                        # la risposta del passo arriva prima del passo dopo.
+                        # ``getattr``: un ``_process_message`` finto nei test
+                        # torna esiti senza il campo.
+                        await self._plan_turn_ended(
+                            msg, session_key,
+                            stop_reason=getattr(outcome, "stop_reason", ""),
+                        )
                     self._cron_turns.complete(msg, outcome=outcome)
                 except asyncio.CancelledError:
                     self._cron_turns.complete(
@@ -2149,16 +2068,15 @@ class AgentLoop(
                                 content=say("error.internal"),
                                 metadata={"error": {"kind": "generic"}},
                             ))
-                        if not turn_continuation.internal_continuation_pending(msg.metadata):
-                            await self._runtime_events().turn_completed(
-                                channel=msg.channel,
-                                chat_id=msg.chat_id,
-                                session_key=session_key,
-                                metadata=msg.metadata,
-                            )
-                            # Un turno caduto lascia il passo aperto come uno
-                            # finito senza chiuderlo: stesso giudizio.
-                            await self._plan_turn_ended(msg, session_key)
+                        await self._runtime_events().turn_completed(
+                            channel=msg.channel,
+                            chat_id=msg.chat_id,
+                            session_key=session_key,
+                            metadata=msg.metadata,
+                        )
+                        # Un turno caduto lascia il passo aperto come uno
+                        # finito senza chiuderlo: stesso giudizio.
+                        await self._plan_turn_ended(msg, session_key)
                     self._cron_turns.complete(msg, error=exc)
                 finally:
                     # Drain any messages still in the pending queue and re-publish
@@ -2189,11 +2107,10 @@ class AgentLoop(
                     # stato del turno corrente: un turno più nuovo potrebbe già
                     # essere in esecuzione (/stop compensa via _emit_stop_turn_end).
                     if self._turn_epochs.is_current(turn_token):
-                        if not turn_continuation.internal_continuation_pending(msg.metadata):
-                            await self._runtime_events().run_status_changed(
-                                msg, session_key, "idle"
-                            )
-                            self._runtime_events().clear_turn(session_key)
+                        await self._runtime_events().run_status_changed(
+                            msg, session_key, "idle"
+                        )
+                        self._runtime_events().clear_turn(session_key)
                         await self._cron_turns.publish_next_deferred(session_key)
         finally:
             reset_turn_id(turn_id_token)
@@ -2815,9 +2732,6 @@ class AgentLoop(
             # chiamanti diretti (test), che non passano da _dispatch.
             turn_id=current_turn_id() or _new_turn_id(key),
             turn_wall_started_at=t0,
-            visible_run_started_at=turn_continuation.internal_continuation_run_started_at(
-                msg.metadata,
-            ),
             on_progress=on_progress,
             on_retry_wait=on_retry_wait,
             on_stream=on_stream,
@@ -2828,9 +2742,7 @@ class AgentLoop(
             # lavoro interno) ha l'outbound finale soppresso SEMPRE, e l'unico
             # modo che il modello ha di parlare e chiamare il tool ``message``
             # durante il turno. Non c'e un token sentinella da parsare ne una
-            # chiamata LLM in piu. ``silent`` e ``suppress_response`` partono
-            # uguali e poi divergono: una goal continuation accende il secondo a
-            # meta turno restando comunque un turno visibile.
+            # chiamata LLM in piu.
             silent=silent,
             suppress_response=silent,
             # Risolto QUI, una volta, non piu in basso: il registry di questo

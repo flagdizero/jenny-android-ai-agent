@@ -24,7 +24,6 @@ from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
 from jenny.runtime.user_text import say
 from jenny.session import turn_continuation
-from jenny.session.goal_state import note_goal_turn
 from jenny.utils.document import extract_documents, prepare_attachments
 
 if TYPE_CHECKING:
@@ -275,10 +274,7 @@ class StateHandlersMixin:
         """Persistenza di fine turno condivisa da SAVE (FSM) e path di sistema.
 
         Scrive il turno, registra la latenza, applica file-cap + consolidazione
-        (salvo turni effimeri), pulisce checkpoint (ed eventuale pending) e —
-        punto critico — chiama ``note_goal_turn`` prima del salvataggio così un
-        goal sostenuto mantiene ``last_turn_at`` fresco anche quando il turno è
-        innescato da un subagent, evitando l'expire prematuro.
+        (salvo turni effimeri), pulisce checkpoint (ed eventuale pending) e salva.
         """
         self._save_turn(
             session, all_messages, save_skip, turn_latency_ms=turn_latency_ms,
@@ -297,7 +293,6 @@ class StateHandlersMixin:
         if clear_pending:
             self._clear_pending_user_turn(session)
         self._clear_runtime_checkpoint(session)
-        note_goal_turn(session.metadata)
         self.sessions.save(session)
 
     async def _state_build(self, ctx: TurnContext) -> str:
@@ -419,7 +414,6 @@ class StateHandlersMixin:
         # Re-sync app tools after execution: tools may have created/deleted
         # apps (e.g. python_exec + shutil.rmtree) during this turn.
         await self._sync_apps_and_notify()
-        await turn_continuation.maybe_continue_turn(ctx)
         return "ok"
 
     async def _state_save(self, ctx: TurnContext) -> str:
@@ -431,13 +425,7 @@ class StateHandlersMixin:
         ):
             ctx.final_content = say("turn.empty")
 
-        latency_started_at = (
-            ctx.visible_run_started_at
-            if turn_continuation.internal_continuation_inbound(ctx.msg.metadata)
-            and ctx.visible_run_started_at is not None
-            else ctx.turn_wall_started_at
-        )
-        ctx.turn_latency_ms = max(0, int((time.time() - latency_started_at) * 1000))
+        ctx.turn_latency_ms = max(0, int((time.time() - ctx.turn_wall_started_at) * 1000))
         self._finalize_turn_save(
             ctx.session,
             ctx.all_messages,

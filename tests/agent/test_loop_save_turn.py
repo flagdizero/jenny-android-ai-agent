@@ -13,7 +13,6 @@ from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import CRON_HISTORY_META, CRON_TRIGGER_META
 from jenny.providers.base import LLMResponse
 from jenny.runtime.user_text import say
-from jenny.session.goal_state import GOAL_STATE_KEY
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     SUBAGENT_RESULT_EVENT,
@@ -21,14 +20,10 @@ from jenny.session.history_meta import (
 )
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.manager import Session
-from jenny.session.turn_continuation import (
-    INTERNAL_CONTINUATION_META,
-    INTERNAL_CONTINUATION_RUN_STARTED_AT_META,
-)
 from jenny.session.webui_turns import WebuiTurnCoordinator
 
 # La chiave esplicita del turno, diversa da quella della chat: serve a un solo
-# test, che controlla che il goal di una chat non finisca nel contesto di
+# test, che controlla che i metadati di una chat non finiscano nel contesto di
 # un'altra sessione. Era ``"system"`` — un prefisso che nessun vocabolario
 # registra, quindi da T4.10 ``session_kind`` la classifica ``internal`` e
 # ``resolve_turn_visibility`` rende il turno SILENT su un canale utente: il
@@ -559,238 +554,6 @@ async def test_process_message_does_not_duplicate_early_persisted_user_message(t
     assert AgentLoop._PENDING_USER_TURN_KEY not in session.metadata
 
 
-@pytest.mark.asyncio
-async def test_internal_continuation_queues_turn_without_fake_user_history(
-    tmp_path: Path,
-) -> None:
-    loop = _make_full_loop(tmp_path)
-    loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
-    session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
-    session.metadata[GOAL_STATE_KEY] = {
-        "status": "active",
-        "objective": "Finish the long goal.",
-    }
-    loop.sessions.save(session)
-
-    calls: list[dict] = []
-
-    async def fake_run_agent_loop(initial_messages, *, metadata=None, **_kwargs):
-        calls.append({"initial_messages": initial_messages, "metadata": metadata})
-        if len(calls) == 1:
-            return (
-                "paused",
-                [],
-                [*initial_messages, {"role": "assistant", "content": "paused"}],
-                    "max_iterations",
-                    False,
-                )
-        return (
-            "done",
-            [],
-            [*initial_messages, {"role": "assistant", "content": "done"}],
-                "completed",
-                False,
-            )
-
-    loop._run_agent_loop = fake_run_agent_loop  # type: ignore[method-assign]
-    pending: asyncio.Queue[InboundMessage] = asyncio.Queue()
-
-    first = await loop._process_message(
-        InboundMessage(
-            channel="websocket",
-            sender_id="u1",
-            chat_id="c-auto",
-            content="start the goal",
-        ),
-        pending_queue=pending,
-    )
-
-    assert first.message is None
-    queued = pending.get_nowait()
-    assert queued.sender_id == "system:continuation"
-    assert queued.metadata[INTERNAL_CONTINUATION_META] is True
-    assert "Finish the long goal." in queued.content
-
-    session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
-    assert [
-        {k: v for k, v in m.items() if k in {"role", "content"}}
-        for m in session.messages
-    ] == [{"role": "user", "content": "start the goal"}]
-
-    second = await loop._process_message(queued, pending_queue=asyncio.Queue())
-
-    assert second.message is not None
-    assert second.text == "done"
-    session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
-    assert [
-        {k: v for k, v in m.items() if k in {"role", "content"}}
-        for m in session.messages
-    ] == [
-        {"role": "user", "content": "start the goal"},
-        {"role": "assistant", "content": "done"},
-    ]
-
-
-@pytest.mark.asyncio
-async def test_internal_continuation_preserves_streaming_route_metadata(
-    tmp_path: Path,
-) -> None:
-    loop = _make_full_loop(tmp_path)
-    loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
-    session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
-    session.metadata[GOAL_STATE_KEY] = {
-        "status": "active",
-        "objective": "Finish the streamed long goal.",
-    }
-    loop.sessions.save(session)
-
-    calls = 0
-
-    async def fake_run_agent_loop(initial_messages, *, on_stream=None, on_stream_end=None, **_kwargs):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            return (
-                "paused",
-                [],
-                [*initial_messages, {"role": "assistant", "content": "paused"}],
-                    "max_iterations",
-                    False,
-                )
-        assert on_stream is not None
-        assert on_stream_end is not None
-        await on_stream("done")
-        await on_stream_end(resuming=False)
-        return (
-            "done",
-            [],
-            [*initial_messages, {"role": "assistant", "content": "done"}],
-            "completed",
-            False,
-        )
-
-    loop._run_agent_loop = fake_run_agent_loop  # type: ignore[method-assign]
-
-    await loop._dispatch(InboundMessage(
-        channel="other-channel",
-        sender_id="u1",
-        chat_id="c-stream",
-        content="start the goal",
-        metadata={
-            "_wants_stream": True,
-            "message_id": "om_001",
-            "origin_message_id": "root_001",
-            "_stream_id": "old-stream",
-        },
-    ))
-
-    # Il canale esterno sulla sessione unificata proietta eventi di vista WebUI
-    # (eco utente, run status), ma nessuna risposta finale finché il turno è in
-    # pausa per la continuation.
-    projected = []
-    while loop.bus.outbound_size:
-        projected.append(await loop.bus.consume_outbound())
-    assert all(
-        m.metadata.get("_user_echo") or m.metadata.get("_goal_status")
-        for m in projected
-    )
-    queued = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=0.5)
-    assert queued.metadata[INTERNAL_CONTINUATION_META] is True
-    assert queued.metadata["_wants_stream"] is True
-    assert queued.metadata["message_id"] == "om_001"
-    assert queued.metadata["origin_message_id"] == "root_001"
-    assert "_stream_id" not in queued.metadata
-
-    await loop._dispatch(queued)
-
-    outbound = []
-    while loop.bus.outbound_size:
-        outbound.append(await loop.bus.consume_outbound())
-    # Gli eventi di proiezione della vista non interessano questo test.
-    outbound = [
-        m for m in outbound
-        if not (m.metadata.get("_user_echo") or m.metadata.get("_goal_status"))
-    ]
-    deltas = [m for m in outbound if m.metadata.get("_stream_delta")]
-    ends = [m for m in outbound if m.metadata.get("_stream_end")]
-    streamed_markers = [m for m in outbound if m.metadata.get("_streamed")]
-
-    assert [m.content for m in deltas] == ["done"]
-    assert len(ends) == 1
-    assert ends[0].metadata["_resuming"] is False
-    assert ends[0].metadata["message_id"] == "om_001"
-    assert ends[0].metadata["origin_message_id"] == "root_001"
-    assert isinstance(ends[0].metadata.get("_stream_id"), str)
-    assert streamed_markers and streamed_markers[-1].content == "done"
-
-
-@pytest.mark.asyncio
-async def test_websocket_internal_continuation_keeps_single_visible_run(
-    tmp_path: Path,
-) -> None:
-    loop = _make_full_loop(tmp_path)
-    loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
-    session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
-    session.metadata[GOAL_STATE_KEY] = {
-        "status": "active",
-        "objective": "Finish the long goal.",
-    }
-    loop.sessions.save(session)
-
-    calls = 0
-
-    async def fake_run_agent_loop(initial_messages, **_kwargs):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            return (
-                "paused",
-                [],
-                [*initial_messages, {"role": "assistant", "content": "paused"}],
-                    "max_iterations",
-                    False,
-                )
-        return (
-            "done",
-            [],
-            [*initial_messages, {"role": "assistant", "content": "done"}],
-            "completed",
-            False,
-        )
-
-    loop._run_agent_loop = fake_run_agent_loop  # type: ignore[method-assign]
-
-    await loop._dispatch(InboundMessage(
-        channel="websocket",
-        sender_id="u1",
-        chat_id="c-auto",
-        content="start the goal",
-        metadata={"webui": True},
-    ))
-
-    first_outbound = []
-    while loop.bus.outbound_size:
-        first_outbound.append(await loop.bus.consume_outbound())
-    first_statuses = [m.metadata for m in first_outbound if m.metadata.get("_goal_status")]
-    assert [m["goal_status"] for m in first_statuses] == ["running"]
-    assert not [m for m in first_outbound if m.metadata.get("_turn_end")]
-    started_at = first_statuses[0]["started_at"]
-
-    queued = await asyncio.wait_for(loop.bus.consume_inbound(), timeout=0.5)
-    assert queued.metadata[INTERNAL_CONTINUATION_META] is True
-    assert queued.metadata[INTERNAL_CONTINUATION_RUN_STARTED_AT_META] == started_at
-
-    await loop._dispatch(queued)
-
-    second_outbound = []
-    while loop.bus.outbound_size:
-        second_outbound.append(await loop.bus.consume_outbound())
-    second_statuses = [m.metadata for m in second_outbound if m.metadata.get("_goal_status")]
-    assert [m["goal_status"] for m in second_statuses] == ["running", "idle"]
-    assert second_statuses[0]["started_at"] == started_at
-    turn_end = [m for m in second_outbound if m.metadata.get("_turn_end")]
-    assert len(turn_end) == 1
-    assert isinstance(turn_end[0].metadata.get("latency_ms"), int)
 
 
 @pytest.mark.asyncio
@@ -832,17 +595,17 @@ async def test_process_message_uses_context_chat_id_for_runtime_prompt(tmp_path:
     assert loop._run_agent_loop.call_args.kwargs["chat_id"] == "thread-777"
 
 
+_CHAT_ONLY_KEY = "chat_only_state"
+
+
 @pytest.mark.asyncio
-async def test_process_message_uses_explicit_session_metadata_for_goal_context(
+async def test_process_message_uses_explicit_session_metadata(
     tmp_path: Path,
 ) -> None:
     loop = _make_full_loop(tmp_path)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
-    chat_session = loop.sessions.get_or_create("websocket:chat-with-goal")
-    chat_session.metadata[GOAL_STATE_KEY] = {
-        "status": "active",
-        "objective": "This chat goal must not leak into system.",
-    }
+    chat_session = loop.sessions.get_or_create("websocket:chat-a")
+    chat_session.metadata[_CHAT_ONLY_KEY] = "this chat's state must not leak into another session"
     loop.sessions.save(chat_session)
     system_session = loop.sessions.get_or_create(_OTHER_KEY)
     system_session.metadata = {}
@@ -870,7 +633,7 @@ async def test_process_message_uses_explicit_session_metadata_for_goal_context(
         InboundMessage(
             channel="websocket",
             sender_id="system",
-            chat_id="chat-with-goal",
+            chat_id="chat-a",
             content="system work",
         ),
         session_key=_OTHER_KEY,
@@ -879,44 +642,11 @@ async def test_process_message_uses_explicit_session_metadata_for_goal_context(
     assert result.message is not None
     assert result.text == "ok"
     kwargs = loop.context.build_messages.call_args.kwargs
-    assert kwargs["chat_id"] == "chat-with-goal"
+    assert kwargs["chat_id"] == "chat-a"
     assert kwargs["session_metadata"] is system_session.metadata
-    assert GOAL_STATE_KEY not in kwargs["session_metadata"]
+    assert _CHAT_ONLY_KEY not in kwargs["session_metadata"]
 
 
-@pytest.mark.asyncio
-async def test_run_agent_loop_goal_continue_message_reads_latest_metadata(
-    tmp_path: Path,
-) -> None:
-    from jenny.agent.runner import AgentRunResult
-
-    loop = _make_full_loop(tmp_path)
-    session = loop.sessions.get_or_create("websocket:late-goal")
-    seen: dict[str, str | None] = {}
-
-    async def fake_run(spec):
-        assert callable(spec.goal_continue_message)
-        session.metadata[GOAL_STATE_KEY] = {
-            "status": "active",
-            "objective": "Goal created during this runner call.",
-        }
-        seen["goal_continue"] = spec.goal_continue_message()
-        return AgentRunResult(
-            final_content="ok",
-            messages=[{"role": "assistant", "content": "ok"}],
-        )
-
-    loop.runner.run = fake_run  # type: ignore[method-assign]
-
-    await loop._run_agent_loop(
-        [],
-        session=session,
-        channel="websocket",
-        chat_id="late-goal",
-        session_key=session.key,
-    )
-
-    assert "Goal created during this runner call." in (seen["goal_continue"] or "")
 
 
 @pytest.mark.asyncio
@@ -1240,40 +970,6 @@ async def test_system_subagent_followup_is_persisted_before_prompt_assembly(tmp_
     ]
 
 
-@pytest.mark.asyncio
-async def test_system_turn_stamps_goal_last_turn_at(tmp_path: Path) -> None:
-    """Un turno di sistema (subagent) deve confluire nella stessa persistenza
-    della FSM e stampare ``last_turn_at`` sul goal sostenuto attivo, così un
-    turno di background non fa scadere prematuramente il goal."""
-    loop = _make_full_loop(tmp_path)
-    loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
-
-    session = loop.sessions.get_or_create("internal:goal")
-    session.metadata[GOAL_STATE_KEY] = {"status": "active", "objective": "keep going"}
-    session.add_message("user", "start the goal")
-    loop.sessions.save(session)
-    assert "last_turn_at" not in session.metadata[GOAL_STATE_KEY]
-
-    async def fake_run_agent_loop(initial_messages, **_kwargs):
-        return ("ack", [], [*initial_messages, {"role": "assistant", "content": "ack"}], "stop", False)
-
-    loop._run_agent_loop = fake_run_agent_loop  # type: ignore[method-assign]
-
-    await loop._process_message(
-        InboundMessage(
-            channel="system",
-            sender_id="subagent",
-            chat_id="internal:goal",
-            content="subagent result",
-            metadata={"subagent_task_id": "sub-1"},
-        )
-    )
-
-    loop.sessions.invalidate("internal:goal")
-    persisted = loop.sessions.get_or_create("internal:goal")
-    goal = persisted.metadata[GOAL_STATE_KEY]
-    assert goal["status"] == "active"
-    assert goal.get("last_turn_at"), "il turno di sistema deve stampare last_turn_at"
 
 
 @pytest.mark.asyncio

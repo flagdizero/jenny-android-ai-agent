@@ -43,8 +43,8 @@ def _moved_to_settings(command: str, still: str) -> str:
 async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
     """Ferma il turno in corso; gli aiutanti in background continuano.
 
-    ``/stop`` ferma quel che Jenny sta facendo adesso nella chat (e il goal
-    sostenuto, se c'e'), ma **non** i subagent lanciati prima: sono lavori che
+    ``/stop`` ferma quel che Jenny sta facendo adesso nella chat, ma **non** i
+    subagent lanciati prima: sono lavori che
     l'utente vede ciascuno nella propria bolla, e da li' li ferma uno per uno.
     Fino al 10/10/2026 li cancellava tutti, e un «basta» detto alla risposta
     corrente buttava via anche un lavoro lungo che non c'entrava. ``/stop all``
@@ -54,7 +54,7 @@ async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
 
 
 async def cmd_stop_all(ctx: CommandContext) -> OutboundMessage:
-    """Ferma tutto: il turno, il goal e ogni aiutante della sessione."""
+    """Ferma tutto: il turno e ogni aiutante della sessione."""
     return await _stop(ctx, spare_subagents=False)
 
 
@@ -907,46 +907,6 @@ async def cmd_history(ctx: CommandContext) -> OutboundMessage:
     )
 
 
-_GOAL_PROMPT_TEMPLATE = """The user declared a sustained objective for this thread.
-
-Inspect or clarify if needed, then call `long_task` with the refined objective (and optional short ui_summary). Work proceeds as normal assistant turns using your usual tools. When the objective is fully done and verified, call `complete_goal` with a brief recap. If the user later cancels or changes direction, still call `complete_goal` with an honest recap (then `long_task` again only after there is no active goal). Do not use `long_task` / `complete_goal` for trivial one-shot answers.
-
-Goal:
-{goal}
-"""
-
-
-async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
-    """Rewrite /goal into a normal agent turn that nudges long_task use."""
-    goal = ctx.args.strip()
-    if not goal:
-        return OutboundMessage(
-            channel=ctx.msg.channel,
-            chat_id=ctx.msg.chat_id,
-            content=say("cmd.goal.usage"),
-            metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
-        )
-    current_task = asyncio.current_task()
-    active_tasks = ctx.loop._active_tasks.get(ctx.key, [])
-    running = sum(1 for t in active_tasks if t is not current_task and not t.done())
-    running += ctx.loop.subagents.get_running_count_by_session(ctx.key)
-    if running > 0:
-        return OutboundMessage(
-            channel=ctx.msg.channel,
-            chat_id=ctx.msg.chat_id,
-            content=say("cmd.goal.busy"),
-            metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
-        )
-
-    ctx.msg.metadata = {
-        **dict(ctx.msg.metadata or {}),
-        "original_command": "/goal",
-        "goal_started_at": time.time(),
-    }
-    ctx.msg.content = _GOAL_PROMPT_TEMPLATE.format(goal=goal)
-    return None
-
-
 async def cmd_skill(ctx: CommandContext) -> OutboundMessage:
     """List all enabled skills (name and description only)."""
     loop = ctx.loop
@@ -1026,8 +986,6 @@ def register_builtin_commands(router: CommandRouter) -> None:
     router.prefix("/model ", cmd_model)
     router.exact("/history", cmd_history)
     router.prefix("/history ", cmd_history)
-    router.exact("/goal", cmd_goal)
-    router.prefix("/goal ", cmd_goal)
     router.exact("/dream", cmd_dream)
     router.prefix("/dream ", cmd_dream)
     router.exact("/gardener", cmd_gardener)

@@ -12,7 +12,6 @@ registra le richieste.
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -22,7 +21,6 @@ from jenny.agent.tools.base import Tool
 from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse, ToolCallRequest
-from jenny.session.goal_state import GOAL_STATE_KEY
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 # Le chiavi che un provider mette sul filo: il resto dei dict (metadati di
@@ -166,27 +164,6 @@ async def test_a_subagent_announce_is_resent_as_it_was_sent(tmp_path: Path) -> N
     _assert_prefix(announce, "noted", seen[-1])
 
 
-async def test_an_active_goal_is_stated_in_full_once(tmp_path: Path) -> None:
-    """Il blocco del goal resta in storia con il messaggio: ripeterlo pieno a
-    ogni turno gonfierebbe la cronologia di quattro kB a turno."""
-    loop = _loop(tmp_path)
-    session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
-    objective = "Plan the trip to Lisbon, step by step, checking every booking. " * 10
-    session.metadata[GOAL_STATE_KEY] = {"status": "active", "objective": objective,
-                                        "started_at": datetime.now().isoformat()}
-    loop.sessions.save(session)
-    seen = _script(loop, [LLMResponse(content="a", tool_calls=[]),
-                          LLMResponse(content="b", tool_calls=[]),
-                          LLMResponse(content="c", tool_calls=[])])
-
-    for text in ("one", "two", "three"):
-        await loop._dispatch(_user(text))
-
-    last = seen[-1]
-    full = sum(str(m.get("content")).count(objective.strip()) for m in last)
-    assert full == 1, f"the objective appears {full} times"
-    assert "unchanged" in last[-1]["content"]
-    _assert_prefix(seen[-2], "b", last)
 
 
 def test_a_mid_turn_message_is_resent_with_its_label() -> None:
@@ -217,15 +194,6 @@ def test_a_mid_turn_message_is_resent_with_its_label() -> None:
     assert replayed["content"] == f"{MID_TURN_LABEL}\nalso this"
 
 
-def test_a_lengthened_objective_is_stated_again() -> None:
-    from jenny.agent.context import GOAL_UNCHANGED_LINE, _goal_lines_once
-
-    history = [{"role": "user", "content": "x\n[Runtime Context]\nGoal (active):\nPlan the trip\n"
-                                           "[/Runtime Context]"}]
-    assert _goal_lines_once(["Goal (active):", "Plan the trip"], history) == [
-        GOAL_UNCHANGED_LINE]
-    assert _goal_lines_once(["Goal (active):", "Plan the trip to Lisbon"], history) == [
-        "Goal (active):", "Plan the trip to Lisbon"]
 
 
 def _deepseek_loop(tmp_path: Path) -> AgentLoop:

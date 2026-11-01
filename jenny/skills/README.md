@@ -27,5 +27,4 @@ The skill format and metadata structure follow nanobot's conventions.
 | `data-processing` | Process data with Python — JSON, CSV, regex, hashing |
 | `skill-creator` | Create new skills |
 | `app-creator` | Create Jenny Apps (typed-actions manifest + HTML UI in `workspace/apps/`) |
-| `long-goal` | Sustained objectives: `long_task`, `complete_goal`, idempotent goals, modular project work, early research |
 | `llm-wiki` | Karpathy-style knowledge base — scaffold, ingest, compile, query, lint, audit |

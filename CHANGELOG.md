@@ -9,6 +9,15 @@ Releases before 1.0 are described only on their
 
 ## [Unreleased]
 
+### Removed
+
+- `/goal` and the long-running goal behind it. Jenny could start one on her own and then keep
+  going turn after turn with nothing on screen to say so, and the only way to stop it was
+  typing `/stop`. Long work now goes through the two ways you can see: a step-by-step plan in a
+  notebook, and helpers, each with its bubble and its Stop. A `/goal` typed now reaches Jenny
+  as an ordinary message. On a phone that had it, the old `long-goal` skill is removed at the
+  first start, unless you had changed it.
+
 ### Fixed
 
 - After undoing a helper with one file, the chat says "1 file put back as it was", not

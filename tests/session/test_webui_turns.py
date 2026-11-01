@@ -456,15 +456,6 @@ async def test_external_turn_start_skips_stop_and_empty(tmp_path):
     bus.publish_outbound.assert_not_awaited()
 
 
-async def test_external_turn_start_skips_internal_continuation(tmp_path):
-    coordinator, bus, _scheduled = _coordinator(tmp_path)
-    await coordinator._handle_session_turn_started(
-        SessionTurnStarted(
-            context=_telegram_ctx({"_internal_continuation": True}),
-            content="continua il lavoro",
-        )
-    )
-    bus.publish_outbound.assert_not_awaited()
 
 
 async def test_external_turn_start_skips_internal_and_non_unified(tmp_path):

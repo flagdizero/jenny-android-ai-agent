@@ -107,7 +107,7 @@ Tools are **not** discovered by scanning the filesystem — they are registered 
 - Android web search and web fetch (via a hidden WebView) with SSRF checks on outbound network tools;
 - location (last-known injected into context, or an on-demand fresh GPS fix);
 - cron reminders and monitors;
-- long-running goals and subagent spawning;
+- subagent spawning;
 - dynamic per-mini-app tools, registered and unregistered as apps are created or removed.
 
 Tool behavior is part of the model contract: names, schemas, and error messages are effectively an interface the model has learned to use, so changing them is a compatibility-affecting change, not just a refactor. See [Architecture — Tools](./architecture.md#tools) for the full module table and [Tool reference](../reference/tools.md) for per-tool behavior and limits.

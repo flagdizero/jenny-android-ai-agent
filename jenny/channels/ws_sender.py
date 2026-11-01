@@ -313,7 +313,7 @@ class OutboundSenderMixin:
             if conns:
                 status = msg.metadata.get("goal_status")
                 if status in ("running", "idle"):
-                    started_raw = msg.metadata.get("started_at", msg.metadata.get("goal_started_at"))
+                    started_raw = msg.metadata.get("started_at")
                     await self.send_goal_status(
                         msg.chat_id,
                         status,
