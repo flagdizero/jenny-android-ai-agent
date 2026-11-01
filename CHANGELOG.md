@@ -19,6 +19,10 @@ Releases before 1.0 are described only on their
 - Notebook reminders written before 2.0.0's successor (`board/reminders.json`) are moved
   into the scheduler on the first pass of the notebook clock, so the open ones keep
   ringing; the file is kept beside them as `reminders.json.migrated`.
+- The periodic checks written in `HEARTBEAT.md` no longer stop in silence: the first time
+  a scheduled job runs after the update, Jenny tells you in chat which of them no longer
+  run and asks which ones you want back as recurring checks, and how often. The file is
+  kept as `HEARTBEAT.md.retired`.
 - A paused reminder is shown as paused on its post-it and in the care calendar, and no
   longer lights a card up as "coming up".
 - Reminders written from the board (the notebook editor, the board pass) carry the turn's

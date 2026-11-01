@@ -3171,17 +3171,15 @@ class AgentLoop(
         interno del proprio run e non come consegna all'utente. Il tipo di esito
         vive dove si prende la decisione di consegna, cioe' in ``_dispatch``.
 
-        Chi l'esito lo vuole davvero (l'heartbeat: gli serve ``final_text``, in
-        cui il modello dichiara quali task non ha potuto eseguire) chiama
-        :meth:`process_direct_outcome`, che e' lo stesso turno senza la perdita
-        di informazione. Un fratello additivo invece di un tipo di ritorno piu'
-        largo: questa firma e' condivisa da Dream, dal giardiniere e dai comandi, e
-        cambiarla per un solo chiamante li toccherebbe tutti.
+        Chi l'esito lo vuole davvero chiama :meth:`process_direct_outcome`, che
+        e' lo stesso turno senza la perdita di informazione. Lo chiamava
+        l'heartbeat (ritirato il 31/10/2026), a cui serviva ``final_text``; oggi
+        lo usano solo i test che leggono l'esito di un turno silenzioso.
 
         ``visibility`` dichiara esplicitamente se il turno puo' raggiungere
-        l'utente: serve a chi gira lavoro interno su un canale *utente* (e' il
-        caso dell'heartbeat, che tiene ``websocket:default`` come target cosi il
-        tool ``message`` ha dove consegnare quando la condizione scatta).
+        l'utente: serve a chi gira lavoro interno su un canale *utente* (il
+        controllo aggiornamenti, che tiene ``websocket:default`` come target cosi
+        il tool ``message`` ha dove consegnare).
         """
         outcome = await self.process_direct_outcome(
             content,
@@ -3224,8 +3222,7 @@ class AgentLoop(
         e ha comunque bisogno di sapere cosa e' successo dentro. Su un turno
         silenzioso il payload e' ``None`` per costruzione, quindi
         ``process_direct`` non puo' dire ne se l'agente ha parlato col tool
-        ``message`` ne cosa ha scritto come risposta finale — ed e' li che
-        l'heartbeat dichiara i task che non ha potuto eseguire.
+        ``message`` ne cosa ha scritto come risposta finale.
 
         ``on_retry_wait`` riceve le righe d'attesa del retry del provider (v.
         ``providers/retry_notice.py``). Senza, un turno interno le pubblica sul

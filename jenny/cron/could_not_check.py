@@ -153,9 +153,9 @@ class CouldNotCheckMark:
     """Una riga di marcatore, letta.
 
     Attributes:
-        ref: il riferimento al task, quando c'è (l'heartbeat numera i suoi
-            task nel prompt). ``None`` su un monitor, che ha un controllo solo
-            e quindi non ha niente da distinguere.
+        ref: il numero scritto dopo il marcatore, quando c'è. Lo usava
+            l'heartbeat, che numerava i suoi task (ritirato il 31/10/2026); un
+            monitor ha un controllo solo e non lo guarda.
         reason: riga breve scritta dal modello su cosa lo ha bloccato. Può
             essere vuota: il marcatore senza motivo resta un marcatore.
     """
@@ -167,9 +167,8 @@ class CouldNotCheckMark:
 def parse_could_not_check_marks(final_text: str | None) -> list[CouldNotCheckMark]:
     """Legge TUTTE le righe di marcatore nel testo finale di un turno.
 
-    Una lista e non un singolo esito perché un turno di heartbeat copre N task
-    e può fallirne più d'uno: il monitor, che ne ha uno solo, guarda la prima e
-    ignora il resto.
+    Una lista perché un turno di heartbeat copriva N task e poteva fallirne più
+    d'uno; il monitor, che ne ha uno solo, guarda la prima e ignora il resto.
     """
     return _parse_marks(final_text, COULD_NOT_CHECK_MARKER)
 

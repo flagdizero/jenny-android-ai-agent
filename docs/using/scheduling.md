@@ -117,7 +117,7 @@ When you ask Jenny to list reminders, you'll also see jobs you didn't create: **
 
 `dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md).
 
-Earlier versions also had a **heartbeat**: a checklist in `HEARTBEAT.md` that one built-in job went through every 30 minutes. It is gone. Each of those checks is now a recurring job of its own, usually a monitor, with its own interval — ask Jenny to set one up for each line you still want. A `HEARTBEAT.md` left in your workspace is no longer read.
+Earlier versions also had a **heartbeat**: a checklist in `HEARTBEAT.md` that one built-in job went through every 30 minutes. It is gone. Each of those checks is now a recurring job of its own, usually a monitor, with its own interval — ask Jenny to set one up for each line you still want. A `HEARTBEAT.md` left in your workspace is no longer run: the first time a scheduled job runs after the update, Jenny tells you once in chat which checks it held and asks which ones you want back, and the file is renamed `HEARTBEAT.md.retired`.
 
 ### If the reminder list itself gets damaged
 

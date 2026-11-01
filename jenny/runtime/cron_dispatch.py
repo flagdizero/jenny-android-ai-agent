@@ -262,6 +262,9 @@ class CronDispatcher:
         # arriva dal bus e non passa mai di qui. Il servizio cron è l'aggancio
         # che i due condividono: v. ``jenny/cron/monitor_followup.py``.
         cron.monitor_followup = MonitorFollowup(cron=cron, now_ms=self._now_ms)
+        # Un ``HEARTBEAT.md`` rimasto dalla 2.0.0 si guarda al primo job con un
+        # agente, una volta per processo: v. ``jenny/cron/retired_heartbeat.py``.
+        self._heartbeat_retirement_checked = False
 
     async def dispatch(self, job: "CronJob") -> str | None:
         """Execute a cron job through the agent.
@@ -301,6 +304,10 @@ class CronDispatcher:
             logger.warning("Cron: skipped job '{}' - no provider configured", job.name)
             raise CronJobSkippedError("no provider configured")
 
+        if not self._heartbeat_retirement_checked:
+            self._heartbeat_retirement_checked = True
+            await self._announce_retired_heartbeat(agent)
+
         # Per id e solo sui ``system_event``, mai per nome: il nome di un job
         # dell'utente lo sceglie lui (o il modello), e un promemoria chiamato
         # «dream» faceva partire un ciclo di Dream al posto del promemoria. I job
@@ -324,6 +331,25 @@ class CronDispatcher:
             "Cron: skipped unbound agent job '{}' ({}): {}", job.name, job.id, reason
         )
         raise CronJobSkippedError(reason)
+
+    async def _announce_retired_heartbeat(self, agent: "CronCapableAgent") -> None:
+        """L'avviso una tantum sui controlli di ``HEARTBEAT.md`` che non girano più.
+
+        Prima del job e non al suo posto: il job che l'ha fatto partire gira lo
+        stesso. Un guasto qui non deve fermarlo, quindi si logga e si va avanti;
+        il file resta e si riprova al prossimo avvio.
+        """
+        from pathlib import Path
+
+        from jenny.cron.retired_heartbeat import announce_retired_heartbeat
+
+        workspace = getattr(self._config, "workspace_path", None)
+        if not isinstance(workspace, Path):
+            return
+        try:
+            await announce_retired_heartbeat(agent, workspace)
+        except Exception:
+            logger.exception("heartbeat: retirement notice failed, retried at the next start")
 
     async def _run_gardener(self, agent: "CronCapableAgent") -> str | None:
         """Il giardiniere: una passata su un progetto, se uno è pronto.
