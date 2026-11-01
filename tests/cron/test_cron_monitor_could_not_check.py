@@ -361,6 +361,15 @@ class TestAnInstructedSilenceIsAboutTheMessage:
         prompt = _base_prompt()
         assert "ran and found nothing is a success" in prompt
 
+    async def test_a_partial_check_is_not_a_quiet_one(self) -> None:
+        """Il 01/11/2026, su jenny_s22: un monitor che doveva confrontare lo
+        sha256 di un file ha letto il file, non ha calcolato niente (il main
+        agent non ha `python_exec`) e ha chiamato `nothing_to_report`. Un
+        controllo fatto a metà va a un aiutante o è un CHECK_FAILED."""
+        prompt = _base_prompt()
+        assert "you have not checked" in prompt
+        assert "spawn" in prompt and "CHECK_FAILED line naming the step" in prompt
+
 
 class _RepeatsItsOwnWarning(_FakeMonitorAgent):
     """Parla quando glielo si chiede, e poi ne riparla da sola.

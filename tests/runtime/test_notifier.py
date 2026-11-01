@@ -62,11 +62,6 @@ class TestAlertFields:
         assert title == "Jenny · ⏰ Promemoria"
         assert tag == "cron"
 
-    def test_heartbeat(self):
-        title, _, tag = notifier.alert_fields("evento X accaduto", _meta("heartbeat"))
-        assert title == "Jenny · Monitoraggio"
-        assert tag == "heartbeat"
-
     def test_update(self):
         # Tag dedicato: l'annuncio in chat e l'alert esplicito di un update
         # critico coalizzano invece di suonare due volte.
@@ -101,7 +96,6 @@ class TestAlertFields:
     def test_english_titles_follow_the_language(self, monkeypatch):
         monkeypatch.setattr(user_text, "current_language", lambda: "en")
         assert notifier.alert_fields("x", _meta("cron"))[0] == "Jenny · ⏰ Reminder"
-        assert notifier.alert_fields("x", _meta("heartbeat"))[0] == "Jenny · Monitoring"
         assert notifier.alert_fields("x", _meta("update"))[0] == "Jenny · Update"
         assert notifier.alert_fields("   ", None)[1] == "New message"
 
@@ -161,8 +155,8 @@ class TestPostAlert:
             return bridge
 
         monkeypatch.setattr(notifier, "_get_bridge", fake_get_bridge)
-        await notifier.post_alert("ecco", _meta("heartbeat"), thread=None)
-        assert bridge.calls[0][2] == "heartbeat"
+        await notifier.post_alert("ecco", _meta("update"), thread=None)
+        assert bridge.calls[0][2] == "update"
 
     async def test_a_reply_to_the_webui_goes_through_post_reply(self, monkeypatch):
         """Una risposta a quel che l'utente ha scritto nell'app tace con l'app
@@ -211,10 +205,10 @@ class TestNotifyDelivery:
             return bridge
 
         monkeypatch.setattr(notifier, "_get_bridge", fake_get_bridge)
-        notifier.notify_delivery("evento X", _meta("heartbeat"))
+        notifier.notify_delivery("evento X", _meta("cron", "pioggia"))
         assert notifier._TASKS
         await asyncio.gather(*notifier._TASKS)
-        assert bridge.calls == [("Jenny · Monitoraggio", "evento X", "heartbeat")]
+        assert bridge.calls == [("Jenny · ⏰ Promemoria · pioggia", "evento X", "cron:pioggia")]
         assert not notifier._TASKS
 
 

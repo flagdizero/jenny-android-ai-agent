@@ -111,7 +111,7 @@ class ChannelDeliverer:
 
         Il fan-out cross-canale (verso gli ``extra_targets``, es. la chat
         Telegram accoppiata) avviene SOLO su intento proattivo esplicito
-        (``proactive=True`` dai chiamanti cron/heartbeat, oppure il flag
+        (``proactive=True`` dai chiamanti cron, oppure il flag
         ``_proactive_fanout`` nei metadata impostato dal tool ``message`` per
         gli invii davvero cross-canale). Una consegna nella conversazione
         corrente (risposta con allegato) resta sul solo canale d'origine e non
@@ -128,7 +128,7 @@ class ChannelDeliverer:
         record = record or bool(metadata.pop("_record_channel_delivery", False))
         proactive = proactive or bool(metadata.pop("_proactive_fanout", False))
         # Ogni consegna proattiva è un turno a sé, e deve dirlo. Il turno che la
-        # produce è interno (heartbeat, cron, Dream) e i suoi metadata non
+        # produce è interno (cron, Dream) e i suoi metadata non
         # portano la chiave del turno WebUI, quindi
         # ``TranscriptRecorder._annotate_turn`` esce senza stampare né
         # ``turn_id`` né ``turn_phase``/``turn_seq`` sul record — e nel replay

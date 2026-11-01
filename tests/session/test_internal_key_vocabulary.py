@@ -12,13 +12,13 @@ Questo test fa uno sweep ``ast`` su ``jenny/`` e ``tests/`` e conta i membri
 
 - elemento di un letterale tupla/set/lista, o chiave di un letterale dict;
 - argomento di ``.startswith()`` / ``.endswith()``;
-- operando di un ``Compare`` (``key == "heartbeat"``).
+- operando di un ``Compare`` (``key == "unified:default"``).
 
 Perché proprio questa forma, e non "qualunque occorrenza": il vocabolario
 compare legittimamente in una ventina di punti che non classificano niente —
 ``jenny/runtime/notifier.py`` costruisce ``f"cron:{label}"`` come *tag* di una
-notifica, ``jenny/runtime/container.py`` usa ``"heartbeat"`` come id di un job
-cron. Sono usi produttori o di etichettatura, non decisioni sul confine, e una
+notifica, ``jenny/cron/session_turns.py`` conia ``f"cron:{job_id}"`` come chiave
+di un monitor. Sono usi produttori o di etichettatura, non decisioni sul confine, e una
 versione ingenua li segnalerebbe tutti. Filtrando sulla posizione sintattica
 restano solo i punti che davvero *decidono*.
 
@@ -58,7 +58,6 @@ VOCABULARY = frozenset(
         "dream:",
         "gardener:",
         "internal:",
-        "heartbeat",
         "project:",
         "unified:default",
         "websocket:",
@@ -152,11 +151,11 @@ class TestInternalKeyVocabulary:
             "def f(key):\n"
             "    if key.startswith('dream:'):\n"
             "        return 'dream'\n"
-            "    if key == 'heartbeat':\n"
-            "        return 'cron'\n"
-            "    return 'user'\n"
+            "    if key == 'unified:default':\n"
+            "        return 'user'\n"
+            "    return 'internal'\n"
         )
-        assert _classification_literals(tree) & VOCABULARY == {"dream:", "heartbeat"}
+        assert _classification_literals(tree) & VOCABULARY == {"dream:", "unified:default"}
 
     def test_the_project_prefix_is_in_the_swept_vocabulary(self):
         """La terza categoria è difesa come le altre, non solo documentata.
@@ -182,7 +181,7 @@ class TestInternalKeyVocabulary:
             "def f(job_id, label):\n"
             "    key = f'cron:{job_id}'\n"
             "    tag = f'cron:{label}'\n"
-            "    job = dict(id='heartbeat')\n"
+            "    job = dict(id='dream')\n"
             "    return key, tag, job\n"
         )
         assert _classification_literals(tree) & VOCABULARY == set()
@@ -210,7 +209,6 @@ class TestInternalKeyVocabulary:
 
         registered = (
             {prefix for prefix, _ in keys._INTERNAL_KIND_BY_PREFIX}
-            | set(keys._INTERNAL_KIND_BY_KEY)
             | set(keys._PERSONAL_SESSION_KEYS)
             | set(keys._LEGACY_CHANNEL_KEY_PREFIXES)
             | {keys.PROJECT_SESSION_PREFIX}

@@ -12,11 +12,8 @@ from jenny.board.store import (
     BoardOwnershipError,
     board_path,
     mutate_board,
-    mutate_reminders,
     read_board,
     read_card_summary,
-    read_reminders,
-    reminders_path,
     write_card_summary,
 )
 
@@ -179,49 +176,15 @@ def test_a_page_belongs_to_one_card_at_most(tmp_path):
     assert model.page_owners(board) == {"vasi": "acero", "monstera": "monstera"}
 
 
-def test_reminders_of_the_user_are_off_limits_to_jenny(tmp_path):
-    def seed(rems):
-        rems["reminders"].append({
-            "id": "r-mine", "card": "acero", "text": "Potatura", "by": "user",
-            "when": {"kind": "date", "date": "2027-02-15"},
-        })
-        rems["reminders"].append({
-            "id": "r-jenny", "card": "acero", "text": "Travaso", "by": "jenny",
-            "when": {"kind": "date", "date": "2027-03-01", "precision": "month"},
-            "pos": {"x": 25, "y": 37, "by": "jenny"},
-        })
+def test_reminders_json_is_gone(tmp_path):
+    """Un promemoria è un job dello scheduler: la bacheca non ha più un file suo."""
+    import jenny.board.store as store
 
-    mutate_reminders(tmp_path, seed)
-    with pytest.raises(BoardOwnershipError):
-        mutate_reminders(
-            tmp_path, lambda r: r["reminders"][0].__setitem__("state", "done"), actor="jenny"
-        )
-    with pytest.raises(BoardOwnershipError):
-        mutate_reminders(tmp_path, lambda r: r["reminders"].pop(), actor="jenny")
-    with pytest.raises(BoardOwnershipError):
-        mutate_reminders(
-            tmp_path, lambda r: r["reminders"][1]["pos"].__setitem__("x", 80), actor="jenny"
-        )
-    mutate_reminders(
-        tmp_path, lambda r: r["reminders"][1].__setitem__("state", "done"), actor="jenny"
-    )
-    assert read_reminders(tmp_path)["reminders"][1]["state"] == "done"
-    assert reminders_path(tmp_path).exists()
-
-
-def test_bad_reminders_are_dropped_not_fatal(tmp_path):
-    path = reminders_path(tmp_path)
-    path.parent.mkdir(parents=True)
-    path.write_text(json.dumps({"reminders": [
-        {"id": "ok", "text": "Concime", "when": {"kind": "date", "date": "2026-10-10"}},
-        {"id": "no-date", "text": "x", "when": {"kind": "date", "date": "presto"}},
-        {"id": "bad op", "text": "x", "when": {"kind": "date", "date": "2026-10-10"}},
-        {"id": "cond", "text": "Annaffia", "when": {
-            "kind": "condition", "app": "waterbot", "field": "moisture", "op": "<", "value": 30,
-        }},
-    ]}))
-    ids = [r["id"] for r in read_reminders(tmp_path)["reminders"]]
-    assert ids == ["ok", "cond"]
+    mutate_board(tmp_path, lambda b: b["cards"].append(_card("acero")))
+    assert not (tmp_path / "board" / "reminders.json").exists()
+    for name in ("read_reminders", "mutate_reminders", "reminders_path"):
+        assert not hasattr(store, name)
+    assert not hasattr(model, "REMINDERS_FILE")
 
 
 def test_card_summaries_round_trip_and_reject_bad_ids(tmp_path):
@@ -243,8 +206,29 @@ def test_card_summaries_round_trip_and_reject_bad_ids(tmp_path):
 
 
 def test_month_precision_is_due_at_the_start_of_the_month():
-    rem = {"when": {"kind": "date", "date": "2027-03-20", "precision": "month"}}
-    assert model.reminder_due(rem).isoformat() == "2027-03-01"
+    note = {"when": {"kind": "date", "date": "2027-03-20", "precision": "month"}}
+    assert model.note_due(note).isoformat() == "2027-03-01"
+
+
+def test_notes_sort_by_day_then_time_and_conditions_last():
+    notes = [
+        {"id": "c", "card": "acero", "when": {"kind": "condition", "field": "x", "op": "<",
+                                              "value": 1}},
+        {"id": "b", "card": "acero", "when": {"kind": "date", "date": "2027-03-01",
+                                              "precision": "day", "time": "10:00"}},
+        {"id": "a", "card": "acero", "when": {"kind": "date", "date": "2027-03-01",
+                                              "precision": "day", "time": "08:00"}},
+        {"id": "m", "card": "", "when": {"kind": "date", "date": "2027-02-01",
+                                         "precision": "month"}},
+    ]
+    assert [n["id"] for n in model.sorted_notes(notes)] == ["m", "a", "b", "c"]
+    assert model.next_note(notes, "acero")["id"] == "a"
+    assert model.next_note(notes, "ginkgo") is None
+    from datetime import date
+
+    assert model.note_is_soon(notes[1], today=date(2027, 2, 20))
+    assert not model.note_is_soon(notes[1], today=date(2026, 12, 1))
+    assert not model.note_is_soon(notes[0], today=date(2027, 2, 20))
 
 
 def test_free_slot_avoids_what_is_already_there():
@@ -254,13 +238,12 @@ def test_free_slot_avoids_what_is_already_there():
     spots = [(5, 6), (47, 4), (76, 9), (35, 59), (64, 56)]
     board["cards"] = [model._normalize_card(_card(f"c{i}", pos={"x": x, "y": y}))
                       for i, (x, y) in enumerate(spots)]
-    reminders = model.normalize_reminders({"reminders": [
-        {"id": "r1", "card": "c0", "text": "a", "when": {"kind": "date", "date": "2027-03-01"},
-         "pos": {"x": 25, "y": 37}},
-    ]})
-    x, y = model.free_slot(board, reminders)
+    board["cards"][0]["postitPos"] = {"x": 25, "y": 37, "by": "user"}
+    notes = [{"id": "r1", "card": "c0", "text": "a",
+              "when": {"kind": "date", "date": "2027-03-01", "precision": "day"}}]
+    x, y = model.free_slot(board, notes)
     rect = (x, y, x + model.CARD_BOX[0], y + model.CARD_BOX[1])
     # Al piu' una striscia sul bordo di un post-it: niente che si copre davvero.
-    assert sum(model._overlap(rect, b) for b in model._boxes(board, reminders)) < 100
+    assert sum(model._overlap(rect, b) for b in model._boxes(board, notes)) < 100
     for corner in model._RESERVED:
         assert model._overlap(rect, corner) == 0

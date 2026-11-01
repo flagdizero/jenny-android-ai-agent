@@ -101,7 +101,7 @@ class WorkspaceScope:
     # messaggi e ``ssh_exec``, che sono un altro asse (deciso il 22/08).
     #
     # **Il default e' scrivibile, e deve restarlo.** Il flag arriva da un
-    # messaggio dell'utente; le sessioni interne (cron, Dream, heartbeat) non ne
+    # messaggio dell'utente; le sessioni interne (cron, Dream) non ne
     # hanno uno, e un default a ``False`` le spegnerebbe tutte in silenzio.
     writable: bool = True
 

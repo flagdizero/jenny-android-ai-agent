@@ -6,10 +6,10 @@ sezione nel cassetto. Adesso è un'app come le altre — con un ``reader`` e un
 ``summary`` — che vive in ``workspace/apps`` ed è **posata** nel cassetto da
 cui veniva. Per l'utente non cambia niente di quel che vede: stessa sezione
 (stesso id, quindi stessi eventi e stesse righe «dall'ultima volta»), stesse
-letture, stesso stato, stesse attese a condizione.
+letture, stesso stato.
 
 L'ordine dei passi è quello che rende sicuro ripartire a metà: prima l'app
-(cartella e dati), poi la bacheca e le attese, e solo alla fine la cartella
+(cartella e dati), poi la bacheca, e solo alla fine la cartella
 vecchia va in ``board/micro/.migrated/`` — da lì in poi
 :func:`jenny.board.micro.list_micros` non la vede più, e una seconda passata
 non trova niente da fare.
@@ -110,7 +110,7 @@ def migrate_notebook(workspace: Path, root: Path) -> int:
     from jenny.apps import drafts
     from jenny.board import micro as mc
     from jenny.board import model
-    from jenny.board.store import mutate_board, mutate_reminders
+    from jenny.board.store import mutate_board
 
     ids = mc.list_micros(root)
     drafts_dir = mc.micros_dir(root) / mc.DRAFTS_DIRNAME
@@ -153,15 +153,6 @@ def migrate_notebook(workspace: Path, root: Path) -> int:
                     }
 
     mutate_board(root, apply)
-
-    def apply_rems(rems: dict[str, Any]) -> None:
-        for rem in rems["reminders"]:
-            when = rem.get("when") or {}
-            if when.get("kind") == "condition" and when.get("micro") in renamed:
-                when["app"] = renamed[when.pop("micro")]
-                when.setdefault("params", {})
-
-    mutate_reminders(root, apply_rems)
     gone = mc.micros_dir(root) / MIGRATED_DIRNAME
     gone.mkdir(parents=True, exist_ok=True)
     for micro_id in renamed:

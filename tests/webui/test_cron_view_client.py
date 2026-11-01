@@ -65,6 +65,14 @@ def test_a_silent_monitor_is_not_a_failure() -> None:
     assert tones["could_not_check"] != tones["error"]
 
 
+def test_a_check_handed_to_a_helper_is_waiting_not_failing() -> None:
+    """``delegated``: il monitor ha passato il controllo a un aiutante e ne aspetta
+    il verdetto. Non e' finito e non e' fallito."""
+    out = _run_js("console.log(statusTone('delegated'));")
+
+    assert out.strip() == "neutral"
+
+
 def test_an_outcome_this_version_does_not_know_is_neutral_not_broken() -> None:
     """Uno store scritto da una versione piu' nuova non deve sembrare un guasto."""
     out = _run_js("console.log(statusTone('qualcosa_di_domani'));")
@@ -170,6 +178,51 @@ def test_each_schedule_kind_gets_its_own_sentence() -> None:
     assert said["expr"] == 'cron.schedule.expr:{"expr":"0 9 * * *"}'
     assert said["at"].startswith("cron.schedule.at")
     assert said["junk"] == "cron.schedule.unknown", "una schedulazione incompleta non inventa"
+
+
+def test_a_one_time_job_says_only_as_much_as_its_precision() -> None:
+    """«Il 2 mar 2027» senza ora, «a marzo 2027» senza giorno: l'``at_ms`` c'e'
+    sempre, ma mostrarlo intero direbbe una precisione che l'utente non ha chiesto."""
+    out = _run_js("""
+      const AT = Date.UTC(2027, 2, 2, 8, 0);  // 09:00 a Roma
+      const say = (precision) => describeSchedule(
+        { kind: 'at', at_ms: AT, precision }, { tr, locale: 'it', timeZone: 'Europe/Rome' });
+      const next = (precision) => formatWhen(
+        AT, { nowMs: AT - 86_400_000, tr, locale: 'it', timeZone: 'Europe/Rome', precision });
+      console.log(JSON.stringify({
+        exact: say(undefined), day: say('day'), month: say('month'),
+        nextDay: next('day').absolute, nextMonth: next('month').absolute,
+      }));
+    """)
+    said = json.loads(out)
+
+    assert said["exact"].startswith("cron.schedule.at:") and "09:00" in said["exact"]
+    assert said["day"].startswith("cron.schedule.at:")
+    assert "2027" in said["day"] and "09:00" not in said["day"]
+    assert said["month"] == 'cron.schedule.atMonth:{"when":"marzo 2027"}'
+    assert "09:00" not in said["nextDay"]
+    assert said["nextMonth"] == "marzo 2027"
+
+
+def test_a_condition_reads_in_front_of_the_schedule() -> None:
+    """«umidita ≤ 15,5 · ogni 6 ore»: il filtro prima della cadenza."""
+    out = _run_js("""
+      const view = buildCronView({
+        available: true, now_ms: NOW, default_timezone: 'Europe/Rome',
+        jobs: [{
+          id: 'b', name: 'basilico', kind: 'user', effective: 'active',
+          schedule: { kind: 'every', every_ms: 21_600_000 },
+          condition: { app: 'orto', params: {}, field: 'umidita', op: '<=', value: 15.5 },
+          next_run_at_ms: NOW + 60_000, last_run_at_ms: null, runs: [],
+        }],
+      }, { nowMs: NOW, tr, locale: 'it' });
+      console.log(JSON.stringify({ condition: view.rows[0].condition,
+                                   schedule: view.rows[0].schedule }));
+    """)
+    row = json.loads(out)
+
+    assert row["condition"] == "umidita ≤ 15,5"
+    assert row["schedule"].startswith("umidita ≤ 15,5 · cron.schedule.every")
 
 
 def test_a_common_cron_expression_is_said_in_words() -> None:
@@ -309,7 +362,7 @@ def test_the_banner_prefers_the_explanation_that_covers_the_whole_list() -> None
     """Uno scheduler fermo spiega da solo ogni «in ritardo» della lista: senza di
     lui la stessa spiegazione andrebbe ripetuta su ogni riga."""
     out = _run_js("""
-      const inert = [{ name: 'heartbeat', effective: 'inert' }];
+      const inert = [{ name: 'dream', effective: 'inert' }];
       console.log(JSON.stringify({
         unavailable: pickBanner({ available: false }),
         recovered: pickBanner({ available: true, recovery: { restored_from: 'empty' } }),
@@ -324,46 +377,8 @@ def test_the_banner_prefers_the_explanation_that_covers_the_whole_list() -> None
     assert banners["recovered"]["kind"] == "recovered"
     assert banners["recovered"]["restoredFrom"] == "empty"
     assert banners["stopped"] == {"kind": "stopped"}
-    assert banners["inert"] == {"kind": "inert", "jobs": ["heartbeat"]}
+    assert banners["inert"] == {"kind": "inert", "jobs": ["dream"]}
     assert banners["fine"] is None
-
-
-# ── §5.8 / §4.2: l'heartbeat che non controlla niente ───────────────────────
-
-def test_a_heartbeat_with_no_tasks_is_flagged_even_though_it_says_ok() -> None:
-    out = _run_js("""
-      const view = heartbeatView({
-        file_present: false, file_readable: true, active_task_count: 0,
-        tasks: [], orphan_checks: [],
-      });
-      console.log(JSON.stringify(view));
-    """)
-    view = json.loads(out)
-
-    assert view["checkingNothing"] is True
-    assert view["filePresent"] is False
-    assert view["counts"] == {"total": 0, "broken": 0, "pending": 0}
-
-
-def test_the_three_task_states_are_counted_apart_and_orphans_are_separate() -> None:
-    out = _run_js("""
-      const view = heartbeatView({
-        file_present: true, file_readable: true, active_task_count: 3,
-        tasks: [
-          { id: 'a', state: 'ok' },
-          { id: 'b', state: 'broken', consecutive: 4 },
-          { id: 'c', state: 'pending' },
-        ],
-        orphan_checks: [{ id: 'z', label: 'tolto', consecutive: 9 }],
-      });
-      console.log(JSON.stringify({ counts: view.counts, orphans: view.orphans.length,
-                                   checkingNothing: view.checkingNothing }));
-    """)
-    data = json.loads(out)
-
-    assert data["counts"] == {"total": 3, "broken": 1, "pending": 1}
-    assert data["orphans"] == 1
-    assert data["checkingNothing"] is False
 
 
 # ── il modello completo ─────────────────────────────────────────────────────
@@ -376,7 +391,7 @@ def test_the_whole_view_comes_together_for_a_realistic_payload() -> None:
         counts: { total: 2, enabled: 2, system: 1, user: 1, inert: 1, broken: 0 },
         jobs: [
           {
-            id: 'heartbeat', name: 'heartbeat', kind: 'system', purpose: 'Heartbeat: ...',
+            id: 'dream', name: 'dream', kind: 'system', purpose: 'Dream: ...',
             protected: true, enabled: true, effective: 'inert', mode: 'reminder',
             one_shot: false, message: null, message_preview: null,
             display_timezone: 'Europe/Rome',
@@ -385,8 +400,6 @@ def test_the_whole_view_comes_together_for_a_realistic_payload() -> None:
             last_status: 'ok', last_error: null,
             health: { consecutive_could_not_check: 0, since_ms: null, escalated: false },
             runs: [{ run_at_ms: NOW - 60_000, status: 'ok', duration_ms: 900, error: null }],
-            heartbeat: { file_present: true, file_readable: true, active_task_count: 0,
-                         tasks: [], orphan_checks: [] },
           },
           {
             id: 'ab12', name: 'gocce', kind: 'user', purpose: null, protected: false,
@@ -397,7 +410,7 @@ def test_the_whole_view_comes_together_for_a_realistic_payload() -> None:
             next_run_at_ms: NOW + 600_000, last_run_at_ms: null,
             last_status: 'silenced', last_error: null,
             health: { consecutive_could_not_check: 0, since_ms: null, escalated: false },
-            runs: [], heartbeat: null,
+            runs: [],
           },
         ],
       };
@@ -405,9 +418,8 @@ def test_the_whole_view_comes_together_for_a_realistic_payload() -> None:
       console.log(JSON.stringify({
         banner: view.banner,
         order: view.rows.map((r) => r.name),
-        heartbeatRow: {
+        systemRow: {
           health: view.rows[0].health,
-          checkingNothing: view.rows[0].heartbeat.checkingNothing,
           tzNote: view.rows[0].next.timeZoneNote,
         },
         userRow: {
@@ -421,11 +433,10 @@ def test_the_whole_view_comes_together_for_a_realistic_payload() -> None:
     """)
     view = json.loads(out)
 
-    assert view["banner"] == {"kind": "inert", "jobs": ["heartbeat"]}
-    assert view["order"] == ["heartbeat", "gocce"], "l'inerte viene prima del sano"
-    assert view["heartbeatRow"]["health"] == "inert"
-    assert view["heartbeatRow"]["checkingNothing"] is True
-    assert view["heartbeatRow"]["tzNote"] is None, "Roma su un telefono a Roma e' rumore"
+    assert view["banner"] == {"kind": "inert", "jobs": ["dream"]}
+    assert view["order"] == ["dream", "gocce"], "l'inerte viene prima del sano"
+    assert view["systemRow"]["health"] == "inert"
+    assert view["systemRow"]["tzNote"] is None, "Roma su un telefono a Roma e' rumore"
     assert view["userRow"]["monitor"] is True
     assert view["userRow"]["tone"] == "neutral", "silenced non e' un fallimento"
     assert view["userRow"]["tzNote"] == "Asia/Tokyo"
@@ -470,19 +481,19 @@ def test_a_drawer_shows_only_its_own_jobs() -> None:
     out = _run_js(f"""
       const all = buildCronView({_payload(jobs=', '.join([
           _job('dream', 'system'), _job('gardener', 'system'),
-          _job('heartbeat', 'system'), _job('pioggia-oslo', 'user')]))}, {{ tr }});
+          _job('update_check', 'system'), _job('pioggia-oslo', 'user')]))}, {{ tr }});
       const hands = buildCronView({_payload(jobs=', '.join([
           _job('dream', 'system'), _job('gardener', 'system'),
-          _job('heartbeat', 'system'), _job('pioggia-oslo', 'user')]))},
-        {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+          _job('update_check', 'system'), _job('pioggia-oslo', 'user')]))},
+        {{ tr, keep: (j) => j.kind !== 'system' }});
       console.log(JSON.stringify({{
         all: all.rows.map((r) => r.id),
         hands: hands.rows.map((r) => r.id),
       }}));
     """)
     visto = json.loads(out)
-    assert sorted(visto["all"]) == ["dream", "gardener", "heartbeat", "pioggia-oslo"]
-    assert sorted(visto["hands"]) == ["heartbeat", "pioggia-oslo"], (
+    assert sorted(visto["all"]) == ["dream", "gardener", "pioggia-oslo", "update_check"]
+    assert sorted(visto["hands"]) == ["pioggia-oslo"], (
         "il cassetto Mani mostra lavori che appartengono a un altro cassetto"
     )
 
@@ -494,13 +505,13 @@ def test_the_banner_talks_about_the_jobs_you_can_see() -> None:
     off = ', '.join([
         _job('dream', 'system', effective='inert', next_ms='null'),
         _job('gardener', 'system', effective='inert', next_ms='null'),
-        _job('heartbeat', 'system'),
+        _job('update_check', 'system'),
         _job('pioggia-oslo', 'user'),
     ])
     out = _run_js(f"""
       const all = buildCronView({_payload(jobs=off)}, {{ tr }});
       const hands = buildCronView({_payload(jobs=off)},
-        {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+        {{ tr, keep: (j) => j.kind !== 'system' }});
       console.log(JSON.stringify({{
         all: all.banner, hands: hands.banner,
       }}));
@@ -518,17 +529,17 @@ def test_the_count_describes_what_is_on_screen() -> None:
     lavori» sopra due righe si legge come un guasto."""
     jobs = ', '.join([
         _job('dream', 'system'), _job('gardener', 'system'),
-        _job('heartbeat', 'system'), _job('pioggia-oslo', 'user'),
+        _job('update_check', 'system'), _job('pioggia-oslo', 'user'),
     ])
     out = _run_js(f"""
       const all = buildCronView({_payload(jobs=jobs)}, {{ tr }});
       const hands = buildCronView({_payload(jobs=jobs)},
-        {{ tr, keep: (j) => j.kind !== 'system' || j.id === 'heartbeat' }});
+        {{ tr, keep: (j) => j.kind !== 'system' }});
       console.log(JSON.stringify({{ all: all.counts, hands: hands.counts }}));
     """)
     visto = json.loads(out)
     assert visto["all"] == {"system": 4, "user": 2}, "senza filtro i conti restano quelli del server"
-    assert visto["hands"] == {"system": 1, "user": 1}, visto["hands"]
+    assert visto["hands"] == {"system": 0, "user": 1}, visto["hands"]
 
 
 def test_without_a_filter_nothing_changes() -> None:
@@ -567,8 +578,7 @@ def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
     """I quattro lavori di sistema vanno in tre posti diversi.
 
     In Mani resta cio' che Jenny fa **per te** quando non glielo stai
-    chiedendo: i tuoi promemoria, e l'heartbeat — che legge le cose che le hai
-    lasciato in `HEARTBEAT.md`. `dream` e `gardener` riempiono la memoria e
+    chiedendo: i tuoi promemoria e i tuoi controlli. `dream` e `gardener` riempiono la memoria e
     stanno accanto a quel che riempiono; `update_check` e' dell'app, e il suo
     giro e' in casa.
     """
@@ -578,12 +588,12 @@ def test_the_hands_drawer_keeps_what_she_does_for_you() -> None:
         {{ id: 'dream', kind: 'system' }},
         {{ id: 'gardener', kind: 'system' }},
         {{ id: 'update_check', kind: 'system' }},
-        {{ id: 'heartbeat', kind: 'system' }},
+        {{ id: 'reminders', kind: 'system' }},
         {{ id: 'pioggia-oslo', kind: 'user' }},
       ];
       console.log(JSON.stringify(jobs.filter(keep).map((j) => j.id)));
     """)
-    assert sorted(json.loads(out)) == ["heartbeat", "pioggia-oslo"], json.loads(out)
+    assert sorted(json.loads(out)) == ["pioggia-oslo"], json.loads(out)
 
 
 # ── un payload senza `jobs`, con un filtro attivo ───────────────────────────

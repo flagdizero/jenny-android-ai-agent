@@ -964,11 +964,6 @@ def settings_payload(
             "workspace_path": str(config.workspace_path),
             "gateway_host": config.gateway.host,
             "gateway_port": config.gateway.port,
-            "heartbeat": {
-                "enabled": config.gateway.heartbeat.enabled,
-                "interval_s": config.gateway.heartbeat.interval_s,
-                "keep_recent_messages": config.gateway.heartbeat.keep_recent_messages,
-            },
         },
         # Le manopole dei tre lavoratori periodici. Import locale: quel modulo
         # importa ``WebUISettingsError`` e ``settings_payload`` da qui, quindi a

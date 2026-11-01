@@ -17,22 +17,17 @@ Come si innesta senza toccare nessun lettore a valle. Il turno registra le
 dichiarazioni in un dict per-turno; ``AgentLoop`` le trascrive in righe
 ``CHECK_OK <n>`` accodate al solo ``TurnOutcome.final_text`` — mai a
 ``ctx.final_content``, quindi la history della sessione resta pulita. Da lì in
-poi ``parse_ok_marks`` e ``record_followup_outcomes`` leggono ciò che leggevano
-prima, e non cambia un byte in tutto il pipeline dei marcatori.
+poi ``parse_ok_marks`` legge ciò che leggeva prima, e non cambia un byte in
+tutto il pipeline dei marcatori.
 
 **Solo con un numero esplicito**, e non è pedanteria. ``CHECK_OK`` non dice
 "non ho niente da dire", dice "il controllo ha prodotto la sua risposta"
-(v. ``heartbeat_tasks.followup_block``). Un marcatore anonimo viene attribuito
-al task in sospeso quando ce n'è uno solo (``attribute_marks``, parametro
-``default``), e ``record_followup_outcomes`` su un verdetto positivo fa
-``del state.task_checks[task.id]`` — che cancella la sequenza dei guasti, il
-loro inizio **e** ``escalated``. Sintetizzare un ``CHECK_OK`` nudo su ogni
-astensione vorrebbe dire chiudere come sano un controllo delegato di cui questo
-turno non ha detto niente: l'unico errore che, dice ``followup_block``, niente a
-valle può più intercettare. Vorrebbe anche dire rendere codice morto il ramo "il
-verdetto non è arrivato affatto" di ``resolve_pending_delegations``, che
-``escalated`` lo conserva di proposito — e da lì l'utente riavvisato dello
-stesso guasto ogni ciclo, cioè il bug che ``CHECK_WARNED`` esiste per uccidere.
+(v. ``cron/monitor_followup.py``), e su un monitor in attesa di verdetto azzera
+la sequenza dei guasti **e** il ricordo di aver già avvisato l'utente.
+Sintetizzare un ``CHECK_OK`` nudo su ogni astensione vorrebbe dire chiudere come
+sano un controllo delegato di cui questo turno non ha detto niente, e rendere
+codice morto il ramo "il verdetto non è arrivato affatto"
+(``resolve_pending_delegation``), che quel ricordo lo conserva di proposito.
 Con la regola "solo numerato" un'astensione nuda lascia lo stato esattamente
 com'era: nessuna regressione possibile.
 """
@@ -105,8 +100,7 @@ class NothingToReportTool(Tool, ContextAware):
         return (
             "On a silent scheduled run, declare that there is nothing the user needs to "
             "see. Use it instead of sending an empty, one-word or placeholder message: it "
-            "delivers nothing and reaches nobody. Pass the number of each check it covers, "
-            "one call per number. Not for a normal turn (there, just answer), and not for a "
+            "delivers nothing and reaches nobody. Not for a normal turn (there, just answer), and not for a "
             "check that could not be carried out — that is a CHECK_FAILED line in your "
             "answer text, which this does not replace."
         )

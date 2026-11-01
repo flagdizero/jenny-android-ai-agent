@@ -46,7 +46,7 @@ OUTBOUND_META_WORK_ID = "_work_id"
 # il lavoro e' ancora una bolla, o il resoconto c'e' gia'.
 OUTBOUND_META_WORK_START = "_work_start"
 
-# Channel name for messages that stay inside the agent (cron, Dream, heartbeat,
+# Channel name for messages that stay inside the agent (cron, Dream,
 # subagents) and are never delivered to a real chat channel. Defined here — a
 # leaf module with no internal deps — so core (loop/cron/delivery) can import it
 # without depending on the gateway entry-point.

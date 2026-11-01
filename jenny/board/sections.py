@@ -1,4 +1,4 @@
-"""Le sezioni che l'utente aggiunge a un cassetto: nota, promemoria, mini app, foto.
+"""Le sezioni che l'utente aggiunge a un cassetto: nota, mini app, foto.
 
 Le sezioni dello scheletro (Vaso, Acqua…) le scrive il giardiniere dalla wiki;
 queste sono dell'utente, e ognuna ha la sua verità altrove:
@@ -6,7 +6,8 @@ queste sono dell'utente, e ognuna ha la sua verità altrove:
 - **nota** — resta sulla scheda come l'hai scritta, e diventa anche una riga di
   diario ``[said]``: il giardiniere la promuove come ogni altra riga. Quando il
   suo cursore l'ha passata, la nota è «nella wiki».
-- **promemoria** — un rimando a un'attesa di ``reminders.json``.
+- (un **promemoria** non è più una sezione: è un job dello scheduler, e il
+  cassetto lo mostra nel suo calendario di cura, v. ``jenny/board/cron_link.py``.)
 - **mini app** — un rimando a una Jenny App con la sua vista compatta (il blocco
   ``section`` del manifest). **L'app produce, la bacheca trattiene**: la sezione
   legge l'ultimo valore che l'app ha lasciato nei suoi dati, con la sua firma
@@ -228,13 +229,6 @@ def section_resolver(
 
         if kind == "note":
             return {"status": journal_status()}
-        if kind == "reminder":
-            reminders = ctx.get("reminders") or {}
-            rem = next(
-                (r for r in reminders.get("reminders") or [] if r["id"] == section.get("reminder")),
-                None,
-            )
-            return {"reminderData": rem}
         if kind == "app":
             slug, params = str(section.get("app")), section.get("params") or {}
             out: dict[str, Any] = {"view": app_section_view(workspace, slug, params)}

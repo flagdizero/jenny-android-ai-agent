@@ -20,7 +20,7 @@ _HEAD = """
 import assert from 'node:assert/strict';
 import { boot, tick, frame, sent, rpcAnswers, rpcFailed, toasts, locales } from './boot.mjs';
 const S = locales.en.home.staged;
-const draft = (over = {}) => ({ id: 'd1', target: 'HEARTBEAT.md', sources: ['web_fetch:evil.example'],
+const draft = (over = {}) => ({ id: 'd1', target: 'USER.md', sources: ['web_fetch:evil.example'],
   created_ms: 1, new_file: false, target_sha256: 'abc', diff: '--- a\\n+++ b\\n+- check x\\n',
   truncated: false, ...over });
 let pending = [draft()];
@@ -36,7 +36,7 @@ def test_the_card_appears_and_nothing_installs_without_a_tap() -> None:
 await boot();
 await tick(30);
 assert.ok(card(), 'la scheda compare all\\'apertura');
-assert.match(text(card()), /HEARTBEAT\\.md/);
+assert.match(text(card()), /USER\\.md/);
 assert.match(text(card()), /evil\\.example/);
 assert.equal(rpcs('staged.install').length, 0, 'niente si installa da solo');
 assert.equal(card().querySelector('.home-staged-diff'), null, 'la diff parte chiusa');
@@ -56,7 +56,7 @@ await tick(30);
 const call = rpcs('staged.install')[0];
 assert.deepEqual(call.params, { id: 'd1', target_sha256: 'abc' });
 assert.equal(card(), null, 'senza bozze la scheda sparisce');
-assert.ok(toasts().some((t) => t.includes('HEARTBEAT.md')));
+assert.ok(toasts().some((t) => t.includes('USER.md')));
 """)
 
 

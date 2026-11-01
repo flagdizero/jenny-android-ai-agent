@@ -16,7 +16,6 @@ import json
 import random
 import re
 from collections.abc import Mapping
-from datetime import datetime, timedelta
 
 from .model import Check, Edit, Observation, Scenario, finished, language_of, no_unknown_tool
 
@@ -49,17 +48,10 @@ def _cron_added(obs: Observation) -> list[dict]:
     return [c.args for c in obs.called("cron") if c.args.get("action") == "add"]
 
 
-def _heartbeat_edit(obs: Observation) -> bool:
-    for c in obs.tool_calls:
-        if c.name in ("write_file", "edit_file", "apply_patch") and "HEARTBEAT" in c.arg_text():
-            return True
-    return False
-
-
 def _monitor(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     added = _cron_added(obs)
     modes = [str(a.get("mode") or "reminder") for a in added]
-    routed = "monitor" in modes or _heartbeat_edit(obs) or bool(obs.called("spawn"))
+    routed = "monitor" in modes or bool(obs.called("spawn"))
     return [
         Check("not_a_reminder", "reminder" not in modes, ",".join(modes)),
         Check("scheduled_somewhere", routed, ",".join(c.name for c in obs.tool_calls)),
@@ -71,7 +63,6 @@ def _reminder(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     modes = [str(a.get("mode") or "reminder") for a in added]
     return [
         Check("one_reminder", modes == ["reminder"], ",".join(modes) or "no cron add"),
-        Check("no_heartbeat_edit", not _heartbeat_edit(obs), ""),
     ]
 
 
@@ -179,13 +170,12 @@ STAGE_1 = [
     Scenario(
         name="conditional_check_is_a_monitor",
         stage=1, area="cron",
-        promise="«avvisami solo se…» diventa monitor o HEARTBEAT, mai un reminder che parla sempre",
+        promise="«avvisami solo se…» diventa un monitor, mai un reminder che parla sempre",
         turns=["Ogni ora controlla se il sito {n}.example.org risponde, e scrivimi solo se è giù."],
         check=_monitor,
         calibration=[Edit("agent/scheduling.md",
-                          "is a `monitor` or a `HEARTBEAT.md` line, never a plain\nreminder.",
-                          "is a plain `cron` reminder (`mode='reminder'`), never a monitor or a "
-                          "`HEARTBEAT.md` line.")],
+                          "is a `monitor`, never a plain reminder.",
+                          "is a plain reminder (`mode='reminder'`), never a monitor.")],
     ),
     Scenario(
         name="plain_reminder",
@@ -199,10 +189,9 @@ STAGE_1 = [
                          "scheduling.md): one_reminder 3/3 → 2/3. Il controllo legge giusto, "
                          "la promessa regge anche contro la frase: monitor vuol dire silenzio",
         calibration=[Edit("agent/scheduling.md",
-                          "- Must reach the user every time, or needs its own schedule → `cron` "
-                          "with `mode='reminder'`.",
-                          "- Anything recurring, reminders included → a line in `HEARTBEAT.md`, "
-                          "never `cron`.")],
+                          "  - `mode='reminder'`: speaks every time it fires.",
+                          "  - `mode='reminder'`: never use it for anything recurring; "
+                          "use `mode='monitor'`.")],
     ),
     Scenario(
         name="web_task_goes_to_researcher",
@@ -793,33 +782,6 @@ COMPACTION = [
 
 # -- stadio 3: giri silenziosi e a piu' turni --------------------------------------
 
-_HEARTBEAT = ("# Heartbeat Tasks\n\n## Active Tasks\n\n"
-              "- Read output/hb-{n}.txt. If it contains the word ALARM, tell the user what it "
-              "says; otherwise there is nothing to report.\n")
-
-
-def _heartbeat_quiet(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    ran = bool(obs.extra.get("heartbeat_ran"))
-    return [
-        Check("heartbeat_ran", ran, ""),
-        Check("no_message", ran and not obs.called("message"),
-              str(len(obs.called("message")))),
-        Check("read_the_file", any(n["n"] in c.arg_text() for c in obs.called("read_file")),
-              ",".join(c.name for c in obs.tool_calls)),
-    ]
-
-
-def _heartbeat_alarm(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    ran = bool(obs.extra.get("heartbeat_ran"))
-    sent = obs.called("message")
-    text = " ".join(c.arg_text() for c in sent)
-    return [
-        Check("heartbeat_ran", ran, ""),
-        Check("one_message", len(sent) == 1, str(len(sent))),
-        Check("no_template_leak", "<" not in text and "CHECK_" not in text, text[:120]),
-    ]
-
-
 def _goal_asks(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     return [
         Check("goal_registered", bool(obs.called("long_task")),
@@ -841,25 +803,6 @@ def _follow_up(obs: Observation, n: Mapping[str, str]) -> list[Check]:
 
 
 STAGE_3 = [
-    Scenario(
-        name="heartbeat_quiet_run_stays_silent",
-        stage=3, area="heartbeat",
-        promise="un giro dell'heartbeat senza novita' non manda messaggi all'utente",
-        files={"HEARTBEAT.md": _HEARTBEAT,
-               "output/hb-{n}.txt": "status: green, all quiet ({n})\n"},
-        turns=[], check=_heartbeat_quiet, heartbeat_after=True,
-        calibration_note="la regola sta nel preambolo dell'heartbeat, in Python "
-                         "(cron_dispatch.py). Build variante (12/10/2026, «chiama sempre "
-                         "message»): no_message 3/3 → 0/3",
-    ),
-    Scenario(
-        name="heartbeat_alarm_speaks_once",
-        stage=3, area="heartbeat",
-        promise="il controllo dell'heartbeat: un allarme vero produce un messaggio, uno solo",
-        files={"HEARTBEAT.md": _HEARTBEAT,
-               "output/hb-{n}.txt": "ALARM: the backup {n} failed at 03:00\n"},
-        turns=[], check=_heartbeat_alarm, heartbeat_after=True,
-    ),
     Scenario(
         name="goal_that_must_ask_stays_open",
         stage=3, area="goal", chat="notebook",
@@ -966,100 +909,6 @@ DIARY = [
                           "perde più. Segnatelo."],
         turns=["Ciao Jenny!"],
         check=_stays_out, kind="probe",
-    ),
-]
-
-# -- stadio 4, seconda tappa: le cose in sospeso --------------------------------------
-#
-# Un'attesa della bacheca scattata e non chiusa e' un filo aperto: la chat personale
-# lo vede, lo chiede una volta in un'apertura, non lo tira fuori a meta' discorso, e
-# non ricorda come da fare una cosa di cui l'utente ha gia' parlato nel quaderno.
-# I quaderni sono finti (``bh-<nonce>``, solo bacheca e attese) e il giro li toglie.
-
-
-def _ago(**delta: float) -> datetime:
-    return datetime.now() - timedelta(**delta)
-
-
-def _board_files(notebook: str, reminders: list[tuple[str, str]]) -> dict[str, str]:
-    """Un quaderno con una scheda e le sue attese gia' scattate (ieri mattina)."""
-    fired = _ago(days=1).replace(hour=9, minute=0, second=0, microsecond=0)
-    board = {"version": 1, "cards": [{"id": "c1", "title": "Cose", "pos": {"x": 5, "y": 5}}]}
-    rems = {"version": 1, "reminders": [
-        {"id": rid, "card": "c1", "text": text, "by": "jenny", "state": "open",
-         "when": {"kind": "date", "date": fired.date().isoformat(), "precision": "day"},
-         "notifiedAt": fired.isoformat(timespec="seconds")}
-        for rid, text in reminders]}
-    root = f"wikis/{notebook}"
-    return {f"{root}/wiki/index.md": "# Index\n",
-            f"{root}/board/board.json": json.dumps(board),
-            f"{root}/board/reminders.json": json.dumps(rems)}
-
-
-# Le parole che una persona ripete di un'attesa: il nome inventato del
-# commercialista o dell'officina il modello lo lascia cadere, e giustamente
-# («hai chiamato il commercialista per il 730?»). Misurato il 12/10/2026: contare
-# i nonce dava 0/3 a risposte che chiedevano proprio di una cosa sola.
-_TAX, _CAR = "commercialista", "tagliando"
-_DONE = re.compile(r"\bvist[oa]\b|\bfatt[oa]\b|chius[oa]|non (lo )?conto|non .{0,20}da fare|"
-                   r"non .{0,12}in sospeso|piaciut", re.IGNORECASE)
-
-
-def _asks_one(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    reply = obs.reply.lower()
-    named = [word for word in (_TAX, _CAR) if word in reply]
-    return [Check("asks_about_one", len(named) == 1, obs.reply[:200]),
-            Check("not_a_list", len(named) < 2, ",".join(named))]
-
-
-def _maybe_done(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    # Il film puo' essere nominato, ma solo come fatto: ogni riga che lo cita
-    # deve dirlo visto, fatto, chiuso.
-    film = [line for line in obs.reply.splitlines() if n["n"].lower() in line.lower()]
-    return [Check("open_one_listed", _CAR in obs.reply.lower(), obs.reply[:200]),
-            Check("maybe_done_not_a_todo", all(_DONE.search(line) for line in film),
-                  " | ".join(film)[:200])]
-
-
-def _thread_stays_out(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    return [Check("thread_stays_out", _TAX not in obs.reply.lower(), obs.reply[:200])]
-
-
-THREADS = [
-    Scenario(
-        name="greeting_asks_one_pending_thing",
-        stage=4, area="diary", nonces=("p", "n", "m"),
-        promise="al buongiorno, con due cose in sospeso, ne chiede una sola",
-        files=_board_files("bh-{p}", [("r1", "Chiamare il commercialista {n} per il 730"),
-                                       ("r2", "Prenotare il tagliando dell'auto da {m}")]),
-        # Fuori da questo scenario nessuna delle due parole: la persona inventata
-        # dell'emulatore non ha ne' un commercialista ne' un'auto.
-        turns=["Buongiorno Jenny!"],
-        check=_asks_one, kind="probe",
-    ),
-    Scenario(
-        name="maybe_done_is_not_reminded",
-        stage=4, area="diary", nonces=("p", "n", "m"),
-        promise="un'attesa di cui l'utente ha poi parlato nel quaderno non torna come da fare",
-        files={**_board_files("bh-{p}", [("r1", "Stasera: vedere il film {n}")]),
-               **_board_files("bh-{p}x", [("r2", "Prenotare il tagliando dell'auto da {m}")])},
-        append={"memory/history.jsonl": history_line(
-            1, _ago(hours=3).strftime("%Y-%m-%d %H:%M"),
-            "Ha visto il film {n}: gli è piaciuto molto", kind="said", about="bh-{p}",
-            session_key="project:bh-{p}")},
-        turns=["Dai quaderni, cosa mi resta ancora da fare? Elenca solo quello che è davvero "
-               "ancora da fare."],
-        check=_maybe_done, kind="probe",
-    ),
-    Scenario(
-        name="pending_thread_stays_out_mid_topic",
-        stage=4, area="diary", nonces=("p", "n"),
-        promise="una cosa in sospeso non salta fuori in mezzo a un altro discorso",
-        files=_board_files("bh-{p}", [("r1", "Chiamare il commercialista {n} per il 730")]),
-        seed_session=[("user", "Sto pensando a cosa cucinare stasera."),
-                      ("assistant", "Hai già qualcosa in frigo o parto da zero?")],
-        turns=["Ho zucchine e uova. Idea veloce? Due righe."],
-        check=_thread_stays_out, kind="probe",
     ),
 ]
 
@@ -1190,7 +1039,7 @@ DRAWERS = [
 ]
 
 SCENARIOS = {s.name: s for s in [*STAGE_1, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
-                                 *THREADS, *DRAWERS]}
+                                 *DRAWERS]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

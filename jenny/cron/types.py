@@ -36,12 +36,6 @@ class CronMonitorCouldNotCheckError(CronJobSilencedError):
     anche qui. Chi vuole distinguere lo fa mettendo il proprio ``except`` per
     primo — è ciò che fa ``CronService._execute_job``.
 
-    La solleva anche l'heartbeat, che di suo esegue N task in un turno solo: lì
-    è il **riassunto** del run ("almeno un task non è partito", col motivo di
-    ciascuno in ``reason``), mentre quale task sia sta in
-    ``CronJobState.task_checks``. Il nome dice "monitor" perché è dove il terzo
-    esito è nato; rinominarla costerebbe più di quanto chiarisca.
-
     Attributes:
         reason: riga breve scritta dal modello su cosa lo ha bloccato.
         escalated: il turno **dichiara** di aver avvisato l'utente di questo
@@ -63,10 +57,28 @@ class CronMonitorCouldNotCheckError(CronJobSilencedError):
         self.escalated = escalated
 
 
+class CronMonitorDelegatedError(CronJobSilencedError):
+    """Il monitor ha passato il controllo a un aiutante (``spawn``): l'esito arriva dopo.
+
+    Muto come il silenzio, ma **non** è la prova che il controllo sia avvenuto:
+    ``spawn`` ritorna subito, e il turno finisce prima che l'aiutante cominci.
+    Leggerlo come ``silenced`` azzerava la sequenza dei controlli mancati e
+    perdeva l'esito. Il verdetto lo scrive il turno d'annuncio dell'aiutante
+    (:mod:`jenny.cron.monitor_followup`); se non arriva mai, lo chiude il run
+    dopo (``resolve_pending_delegation``).
+    """
+
+
 # Vocabolario degli esiti registrati per un run. ``silenced`` è il "ho
 # controllato e non c'era niente da dire" del piano (``no_finding``); il nome
-# resta quello già scritto negli store esistenti e nella WebUI.
-CronRunStatus = Literal["ok", "error", "skipped", "silenced", "could_not_check"]
+# resta quello già scritto negli store esistenti e nella WebUI. ``delegated``:
+# il controllo è nelle mani di un aiutante, l'esito arriva col suo annuncio.
+CronRunStatus = Literal["ok", "error", "skipped", "silenced", "could_not_check", "delegated"]
+
+# Quanto è precisa la data di un singolo: ``exact`` (giorno e ora), ``day`` (un
+# giorno, suona alle 9), ``month`` («verso marzo», suona il primo alle 9). Serve
+# solo a mostrarla: l'``at_ms`` è già calcolato.
+CronPrecision = Literal["exact", "day", "month"]
 
 
 @dataclass
@@ -81,6 +93,9 @@ class CronSchedule:
     expr: str | None = None
     # Timezone for cron expressions
     tz: str | None = None
+    # Solo per un ``at``: come mostrare la data (v. ``CronPrecision``). ``None``
+    # vale ``exact``.
+    precision: CronPrecision | None = None
 
 
 @dataclass
@@ -101,6 +116,14 @@ class CronPayload:
     # (v. ``jenny/agent/tools/cron.py`` e ``bound_runner``). ``None`` per i cron
     # della chat personale.
     board: dict[str, Any] | None = None
+    # La pagina della wiki del quaderno che spiega il perché del job (percorso
+    # relativo a ``wiki/``). Il turno la legge e la usa per dire «cosa e perché».
+    why: str | None = None
+    # Il filtro di un ricorrente su un dato di un'app: ``{app, params, field, op,
+    # value}``. A ogni scadenza il codice fa girare il lettore dell'app e
+    # confronta; il turno parte solo quando la condizione diventa vera (v.
+    # :mod:`jenny.cron.condition`). Mai su un ``at``.
+    condition: dict[str, Any] | None = None
 
 
 @dataclass
@@ -110,59 +133,6 @@ class CronRunRecord:
     status: CronRunStatus
     duration_ms: int = 0
     error: str | None = None
-
-
-@dataclass
-class CronTaskCheckState:
-    """Sequenza di controlli mancati di UN task dell'heartbeat.
-
-    Un run dell'heartbeat copre N task scritti a mano in ``HEARTBEAT.md``: un
-    contatore solo per tutto il file oscillerebbe per un task rotto su quattro
-    sani, e all'utente arriverebbe "l'heartbeat è rotto" invece del nome del
-    controllo che non parte. La chiave è l'id del task (v.
-    ``jenny/cron/heartbeat_tasks.py``), e una voce esiste **solo** finché quel
-    task è rotto: assente vuol dire sano.
-
-    Attributes:
-        consecutive_could_not_check: run consecutivi in cui il task non è stato
-            eseguito.
-        since_ms: inizio della sequenza in corso — "da quando è rotto?", che il
-            conteggio da solo non dice.
-        escalated: l'utente è già stato avvisato. **Non** è un'affermazione
-            sulla sequenza qui accanto, ed è la ragione per cui sopravvive al
-            suo azzeramento: è il verbale di aver parlato, un fatto su di noi e
-            non sul controllo. Si cancella insieme alla voce, cioè quando il
-            controllo torna a funzionare — dichiarandolo (``CHECK_OK`` da un
-            turno d'annuncio) o semplicemente girando senza marcatori in un run
-            — oppure quando l'utente si rifà vivo (v. ``escalated_at_ms``).
-            Finché resta ``True`` nessun avviso parte per questo task, che è il
-            punto: un guasto, un avviso.
-        escalated_at_ms: *quando* gli si è parlato. Esiste per una domanda sola:
-            l'utente ha scritto **dopo** l'avviso? Se sì l'avviso l'ha letto, e
-            un guasto ancora aperto torna a essere una notizia (v.
-            ``rearm_after_user_message``). ``None`` vuol dire "gli si è parlato,
-            non si sa quando", ed è ciò che leggono le voci scritte prima che
-            questo campo esistesse: non riarmabili, apposta — l'alternativa
-            sarebbe un avviso su un guasto vecchio di ore nel momento esatto in
-            cui l'aggiornamento atterra sul telefono.
-        label: prima riga del task, per nominarlo in un log o nella WebUI senza
-            dover rileggere il file.
-        pending_since_ms: il run che ha appena girato ha **delegato** questo
-            task a un subagent, e l'esito non si sa ancora. Serve a una cosa
-            sola: impedire che quel silenzio venga letto come "eseguito" e
-            azzeri la sequenza prima che il verdetto arrivi. Vive al massimo
-            un ciclo — il turno d'annuncio lo chiude col verdetto, e se un
-            verdetto non arriva affatto lo risolve il run successivo in modo
-            ottimistico (v. ``resolve_pending_delegations``), quindi una voce
-            "in sospeso" non può restare appesa per sempre.
-    """
-
-    consecutive_could_not_check: int = 0
-    since_ms: int | None = None
-    escalated: bool = False
-    escalated_at_ms: int | None = None
-    label: str = ""
-    pending_since_ms: int | None = None
 
 
 @dataclass
@@ -189,11 +159,16 @@ class CronJobState:
     # uno solo per guasto invece di uno per ciclo.
     could_not_check_escalated: bool = False
 
-    # ── heartbeat: lo stesso terzo stato, ma per singolo task ──
-    # Solo il job ``heartbeat`` la popola: è l'unico che esegue N controlli in
-    # un turno solo. I tre campi qui sopra restano il riassunto del run intero
-    # ("almeno un task non è partito"), questa mappa dice quale.
-    task_checks: dict[str, CronTaskCheckState] = field(default_factory=dict)
+    # Il run precedente ha **delegato** il controllo a un aiutante e il verdetto
+    # non è ancora tornato. Impedisce che quel silenzio azzeri la sequenza; vive
+    # al massimo un ciclo (v. :mod:`jenny.cron.monitor_followup`).
+    pending_since_ms: int | None = None
+
+    # ── condizione: già avvisato ──
+    # Un ricorrente con ``payload.condition`` ha parlato perché la condizione è
+    # diventata vera, e non riparla finché non torna falsa. Una lettura falsa
+    # lo riarma.
+    condition_notified: bool = False
 
 
 @dataclass
@@ -223,10 +198,7 @@ class CronJob:
             record if isinstance(record, CronRunRecord) else CronRunRecord(**record)
             for record in state_kwargs.get("run_history", [])
         ]
-        state_kwargs["task_checks"] = {
-            task_id: entry if isinstance(entry, CronTaskCheckState) else CronTaskCheckState(**entry)
-            for task_id, entry in (state_kwargs.get("task_checks") or {}).items()
-        }
+        state_kwargs.pop("task_checks", None)
         kwargs["schedule"] = CronSchedule(**kwargs.get("schedule", {"kind": "every"}))
         kwargs["payload"] = CronPayload(**kwargs.get("payload", {}))
         kwargs["state"] = CronJobState(**state_kwargs)

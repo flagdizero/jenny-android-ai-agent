@@ -147,13 +147,16 @@ class _NotebookTool(Tool):
     _max_chars = 12000
 
     def __init__(self, origin_session_key: str | None = None,
-                 file_states: FileStates | None = None, timezone: str | None = None) -> None:
+                 file_states: FileStates | None = None, timezone: str | None = None,
+                 cron: Any = None) -> None:
         # Dentro il giro dell'editore la sessione di richiesta è la sua, non
         # quella del quaderno: come ``BoardTool``.
         self._origin = origin_session_key
         self._explicit_file_states = file_states
         self._fallback_file_states = FileStates()
         self._timezone = timezone
+        # Il servizio cron: ``remove_pages`` stacca il ``why`` dei promemoria (job).
+        self._cron = cron
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:
@@ -162,7 +165,8 @@ class _NotebookTool(Tool):
         tz = getattr(ctx, "timezone", None)
         return cls(origin_session_key=origin if isinstance(origin, str) else None,
                    file_states=states if isinstance(states, FileStates) else None,
-                   timezone=tz if isinstance(tz, str) else None)
+                   timezone=tz if isinstance(tz, str) else None,
+                   cron=getattr(ctx, "cron_service", None))
 
     @property
     def name(self) -> str:
@@ -259,17 +263,37 @@ class _NotebookTool(Tool):
             return f"Error: nothing was removed — {exc}"
         if not targets:
             return f"None of those pages exists: nothing was removed ({', '.join(missing)})."
-        out = await asyncio.to_thread(self._remove, root, targets, reason, missing)
-        if out.startswith("Error"):
+        out, removed = await asyncio.to_thread(self._remove, root, targets, reason, missing)
+        if out.startswith("Error") or not removed:
             return out
+        out = f"{out}\n{await self._clear_whys(root, removed)}"
         from jenny.board.notify import board_changed
 
         await board_changed(root.name)
-        return out
+        return out if len(out) <= self._max_chars else out[: self._max_chars - 40] + "\n(cut)"
+
+    async def _clear_whys(self, root: Path, removed: list[str]) -> str:
+        """Dopo le pagine, i promemoria: il ``why`` che puntava a una pagina tolta si stacca.
+
+        Sono job dello scheduler, quindi sul loop (``cron_link.clear_job_whys``).
+        """
+        from jenny.board.cron_link import clear_job_whys
+
+        try:
+            cleared = await clear_job_whys(self._cron, root.name, removed)
+        except Exception as exc:  # noqa: BLE001 — la risposta lo dice, con il rimedio
+            return (f"Reminders not updated: {str(exc) or type(exc).__name__}; run notebook "
+                    "action=check and fix their why with board update_reminder.")
+        if not cleared:
+            return "Reminders cleared: 0."
+        return (f"Reminders cleared: {len(cleared)} — their why pointed to a removed page; "
+                "give them another with board update_reminder if one explains them: "
+                + "; ".join(f"`{c['id']}` «{c['text']}» (was {c['why']})" for c in cleared))
 
     def _remove(self, root: Path, targets: list[tuple[str, Path]], reason: str,
-                missing: list[str]) -> str:
-        """Traccia, cancellazione, bacheca, promemoria: in quest'ordine.
+                missing: list[str]) -> tuple[str, list[str]]:
+        """Traccia, cancellazione, bacheca: in quest'ordine. Restituisce la risposta
+        e le pagine tolte; i promemoria li fa dopo :meth:`_clear_whys`, sul loop.
 
         La bacheca **dopo** i file: ``edit.remove_pages`` segna come «già viste»
         le pagine vere tolte da ogni scheda (``orphansSeen``), e una pagina già
@@ -283,7 +307,7 @@ class _NotebookTool(Tool):
         try:
             trace, trace_path = self._write_trace(root, targets, reason)
         except OSError as exc:  # anche un recinto (PermissionError) sulla traccia
-            return f"Error: nothing was removed — the trace could not be written: {exc}"
+            return f"Error: nothing was removed — the trace could not be written: {exc}", []
         removed: list[str] = []
         failed: list[str] = []
         for rel, path in targets:
@@ -299,7 +323,7 @@ class _NotebookTool(Tool):
             # ancora al loro posto.
             _append(trace_path, f"\nNot removed (still in place): {'; '.join(failed)}\n")
         if not removed:
-            return "Nothing was removed: " + "; ".join(failed)
+            return "Nothing was removed: " + "; ".join(failed), []
         emptied = _prune_empty_folders(root, [p for rel, p in targets if rel in removed])
         if emptied:
             _append(trace_path, f"\nEmpty folders removed: {', '.join(emptied)}\n")
@@ -307,16 +331,11 @@ class _NotebookTool(Tool):
         # il contrario, né lasciare il resto della risposta per strada.
         taken: dict[str, list[str]] = {}
         redraw: list[str] = []
-        cleared: list[dict[str, str]] = []
-        board_error = reminders_error = ""
+        board_error = ""
         try:
             taken, redraw = edit.remove_pages(root, removed)
         except Exception as exc:  # noqa: BLE001 — la risposta lo dice, con il rimedio
             board_error = str(exc) or type(exc).__name__
-        try:
-            cleared = edit.clear_reminder_whys(root, removed)
-        except Exception as exc:  # noqa: BLE001
-            reminders_error = str(exc) or type(exc).__name__
 
         lines = [f"Removed {len(removed)} page(s): {', '.join(f'wiki/{r}' for r in removed)}. "
                  f"Trace (path, first lines, reason): {trace}."]
@@ -334,16 +353,6 @@ class _NotebookTool(Tool):
         redraw_note = _redraw(root, redraw)
         if redraw_note:
             lines.append(redraw_note.strip())
-        if reminders_error:
-            lines.append(f"Reminders not updated: {reminders_error}; run notebook action=check "
-                         "and fix their why with board update_reminder.")
-        elif cleared:
-            lines.append(f"Reminders cleared: {len(cleared)} — their why pointed to a removed "
-                         "page; give them another with board update_reminder if one explains "
-                         "them: " + "; ".join(f"`{c['id']}` «{c['text']}» (was {c['why']})"
-                                              for c in cleared))
-        else:
-            lines.append("Reminders cleared: 0.")
         if linked:
             shown = linked[:20]
             lines.append(f"Links that now point nowhere ({len(linked)}; fix them with edit_file):")
@@ -354,8 +363,7 @@ class _NotebookTool(Tool):
             lines.append(f"Not found, nothing to remove: {', '.join(missing)}.")
         if failed:
             lines.append(f"Not removed: {'; '.join(failed)}.")
-        out = "\n".join(lines)
-        return out if len(out) <= self._max_chars else out[: self._max_chars - 40] + "\n(cut)"
+        return "\n".join(lines), removed
 
     def _write_trace(self, root: Path, targets: list[tuple[str, Path]],
                      reason: str) -> tuple[str, Path]:

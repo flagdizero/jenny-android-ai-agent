@@ -1,26 +1,10 @@
-"""Dentro un progetto non si programma niente, e il tool è l'unico a dirlo.
+"""Dalla chat di un quaderno si tocca solo quel quaderno.
 
-Passo **3** del piano dei progetti.
-
-Il guasto che questo cancello previene non è un errore: oggi un promemoria
-creato dentro un progetto **funziona**. Il job si porta dietro
-``session_key=project:foo`` e i metadati d'origine, quindi scatta in quella
-sessione, con la cartella giusta, e consegna in *quel* thread — che è la stanza
-in cui entri quando decidi di lavorare a quell'argomento. L'avviso arriva dove
-non c'è nessuno, e sembra riuscito.
-
-**Non c'è nessuna riga nel prompt di sistema** (deciso il 22/08). Una riga nel
-blocco se la guadagna la regola che sbatteresti addosso di continuo e che ti
-costringe a ripianificare — è il caso del confine di scrittura; un promemoria è
-raro e sta in piedi da solo. Quindi questo rifiuto è *l'unico* posto in cui
-Jenny lo viene a sapere, ed è il motivo per cui
-``test_the_refusal_says_where_reminders_do_live`` non è un test sul wording:
-senza quella frase, il turno finisce in un "non posso" che manda via a mani
-vuote invece che nella chat personale.
-
-Il cancello copre tutte e tre le azioni, non solo ``add``: ``list`` mostrerebbe
-la sveglia personale a una conversazione di lavoro, e ``remove`` la
-cancellerebbe da lì dentro.
+Fino al 31/10/2026 un progetto non poteva programmare niente. Ora un job ha un
+«dove» (personale, quaderno, scheda) che decide solo recinto e chat di consegna:
+dalla chat di un quaderno si creano job di quel quaderno, e la sveglia personale
+resta invisibile e intoccabile da lì. Un nome di chat che non è un quaderno vero
+non crea niente.
 """
 
 from __future__ import annotations
@@ -89,9 +73,8 @@ def _tool(session_key: str, jobs: list[CronJob] | None = None) -> tuple[CronTool
 async def test_no_action_gets_through_from_a_project(params: dict[str, Any]) -> None:
     tool, service = _tool("project:palestra", jobs=[_PERSONAL_JOB])
 
-    result = await tool.execute(**params)
+    await tool.execute(**params)
 
-    assert "Not here" in result
     assert service.added == [], "un job creato da qui scatterebbe in un thread che nessuno guarda"
     assert service.removed == [], "la sveglia personale non si cancella da una chat di lavoro"
 
@@ -104,17 +87,6 @@ async def test_list_does_not_leak_the_personal_schedule() -> None:
 
     assert _PERSONAL_JOB.name not in result
     assert _PERSONAL_JOB.id not in result
-
-
-def test_the_refusal_says_where_reminders_do_live() -> None:
-    """Nessuna riga nel prompt lo dice: se non lo dice qui, non lo dice nessuno."""
-    from jenny.agent.tools.cron import _PROJECT_REFUSAL
-
-    lowered = _PROJECT_REFUSAL.lower()
-    assert "personal chat" in lowered, (
-        "il rifiuto deve indirizzare, non solo negare: è l'unico posto in cui Jenny impara "
-        "dove i promemoria si fanno, e da cui lo ridice all'utente"
-    )
 
 
 # ── E non tocca nient'altro ───────────────────────────────────────────────

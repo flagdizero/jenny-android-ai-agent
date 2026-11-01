@@ -1,8 +1,8 @@
 """Quel che la bacheca e un cassetto mostrano, calcolato dal server.
 
 Il client non legge mai ``board.json``: riceve una vista già risolta — i
-segnali di ogni scheda, i post-it delle attese aperte, le righe di «dall'ultima
-volta» successive all'ultima apertura, quante pagine stanno fuori bacheca. Così
+segnali di ogni scheda, i post-it dei promemoria (i job del quaderno, v.
+``jenny/board/cron_link.py::note_of``), le righe di «dall'ultima volta» successive all'ultima apertura, quante pagine stanno fuori bacheca. Così
 le regole (un segnale per scheda, e in quale ordine) stanno in un posto solo, e
 la WebView disegna e basta.
 
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
-from jenny.board.store import read_board, read_card_summary, read_reminders
+from jenny.board.store import read_board, read_card_summary
 from jenny.utils.wiki_paths import iter_wiki_pages
 
 # Una sezione mini app che dice «allarme» o «dato vecchio» per una scheda.
@@ -68,7 +68,7 @@ def card_last_change(card: Mapping[str, Any], summary: Mapping[str, Any] | None)
 def card_signal(
     card: Mapping[str, Any],
     summary: Mapping[str, Any] | None,
-    reminders: Mapping[str, Any],
+    notes: list[dict[str, Any]],
     *,
     today: date | None = None,
     alert: bool = False,
@@ -76,7 +76,7 @@ def card_signal(
     """L'unico segnale di una scheda, nell'ordine di priorità del disegno.
 
     1. ``alert`` — un problema (una sezione mini app in allarme o ferma);
-    2. ``soon`` — un'attesa a data vicina, o già passata e ancora aperta;
+    2. ``soon`` — un promemoria a data vicino (*notes* sono le righe dei post-it);
     3. ``new`` — il cassetto è cambiato dopo l'ultima volta che l'hai aperto.
 
     Nessun segnale vuol dire «tutto tranquillo». Uno solo, al massimo: se
@@ -84,8 +84,8 @@ def card_signal(
     """
     if alert:
         return "alert"
-    nxt = model.next_reminder(reminders, card["id"])
-    if nxt is not None and model.reminder_is_soon(nxt, today):
+    nxt = model.next_note(notes, card["id"])
+    if nxt is not None and model.note_is_soon(nxt, today):
         return "soon"
     if summary and card_last_change(card, summary) > _stamp(card.get("lastOpened")):
         return "new"
@@ -94,7 +94,7 @@ def card_signal(
 
 def _place_near(
     board: Mapping[str, Any],
-    reminders: Mapping[str, Any],
+    notes: list[dict[str, Any]],
     near: tuple[float, float],
     box: tuple[float, float],
     placed: list[tuple[float, float, float, float]],
@@ -108,26 +108,26 @@ def _place_near(
     della scheda) «vicino» si misura dal bordo della scheda: vedi
     :func:`model.free_slot`.
     """
-    x, y = model.free_slot(board, reminders, box=box, near=near, extra=placed, anchor=anchor)
+    x, y = model.free_slot(board, notes, box=box, near=near, extra=placed, anchor=anchor)
     placed.append((x, y, x + box[0], y + box[1]))
     return {"x": x, "y": y, "by": model.JENNY}
 
 
 def _place_free(
     board: Mapping[str, Any],
-    reminders: Mapping[str, Any],
+    notes: list[dict[str, Any]],
     box: tuple[float, float],
     placed: list[tuple[float, float, float, float]],
 ) -> dict[str, Any]:
     """Il primo posto libero del muro per un oggetto senza scheda (di tutto il quaderno)."""
-    x, y = model.free_slot(board, reminders, box=box, extra=placed)
+    x, y = model.free_slot(board, notes, box=box, extra=placed)
     placed.append((x, y, x + box[0], y + box[1]))
     return {"x": x, "y": y, "by": model.JENNY}
 
 
 def _postit_pos(
     board: Mapping[str, Any],
-    reminders: Mapping[str, Any],
+    notes: list[dict[str, Any]],
     card: Mapping[str, Any],
     placed: list[tuple[float, float, float, float]],
 ) -> dict[str, Any]:
@@ -135,7 +135,7 @@ def _postit_pos(
     all'angolo in basso a destra della sua polaroid."""
     w, h = model.card_box(card)
     near = (float(card["pos"]["x"]) + w * 0.6, float(card["pos"]["y"]) + h * 0.75)
-    return _place_near(board, reminders, near, model.POSTIT_BOX, placed)
+    return _place_near(board, notes, near, model.POSTIT_BOX, placed)
 
 
 def _card_notes(card: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -211,40 +211,34 @@ def automations(
     return out
 
 
-def _dated_crons(board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None) -> list[dict[str, Any]]:
-    """I cron «una volta sola» ancora da fare, come righe dei post-it."""
-    out = []
-    for job_id, snap in (cron_jobs or {}).items():
-        sched = snap.get("schedule") or {}
-        if sched.get("kind") != "at" or not sched.get("at_ms") or not snap.get("enabled"):
-            continue
-        scope = snap.get("scope")
-        if model.scope_state(board, scope) == model.SCOPE_HIDDEN:
-            continue
-        at = datetime.fromtimestamp(sched["at_ms"] / 1000).astimezone()
-        out.append({
-            "id": f"cron-{job_id}", "job": job_id, "card": scope, "text": snap.get("name") or "",
-            "when": {"kind": "date", "date": at.strftime("%Y-%m-%d"), "precision": "day",
-                     "time": at.strftime("%H:%M")},
-        })
-    return out
+def board_notes(
+    board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None,
+    timezone_name: str | None = None,
+) -> list[dict[str, Any]]:
+    """Le righe dei post-it: i promemoria del quaderno che stanno sulla bacheca.
 
+    Un promemoria è un job (``cron_link.notes_from_jobs``): un singolo a data o
+    un ricorrente con un filtro. Quelli di una scheda nel cestino non si vedono,
+    finché la scheda non torna.
+    """
+    from jenny.board.cron_link import notes_from_jobs
 
-def _sorted_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Le righe dei post-it dalla più vicina (l'ordine di ``model.sorted_reminders``),
-    e a parità di giorno per ora; quelle a condizione in fondo."""
-    def key(note: Mapping[str, Any]) -> tuple[date, str, str]:
-        due = model.reminder_due(note) or date.max
-        return (due, str((note.get("when") or {}).get("time") or ""), str(note.get("id") or ""))
-    return sorted(notes, key=key)
+    return [n for n in notes_from_jobs(cron_jobs, timezone_name)
+            if model.scope_state(board, n["card"]) != model.SCOPE_HIDDEN]
 
 
 def _recurring(
     board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None, scope: str,
 ) -> list[dict[str, Any]]:
-    """I cron che si ripetono dell'ambito *scope*: le righe della sua etichetta."""
+    """I cron che si ripetono dell'ambito *scope*: le righe della sua etichetta.
+
+    Un singolo e un ricorrente con un filtro sono promemoria, e stanno sul post-it
+    (:func:`board_notes`): mai due volte.
+    """
+    from jenny.board.cron_link import is_note
+
     return [a for a in automations(board, cron_jobs, scope)
-            if (a.get("schedule") or {}).get("kind") != "at"]
+            if not is_note((a.get("schedule") or {}).get("kind"), a.get("condition"))]
 
 
 def build_board_view(
@@ -254,16 +248,19 @@ def build_board_view(
     alert_probe: AlertProbe | None = None,
     workspace: Path | None = None,
     cron_jobs: Mapping[str, Any] | None = None,
+    timezone_name: str | None = None,
 ) -> dict[str, Any]:
     """La risposta di ``GET /api/board``.
 
     Con *workspace*, una scheda che e' un'app porta anche la sua **striscia**
     (``slip``: la forma compatta dell'app, coi suoi blocchi) e l'ingombro vero.
     *cron_jobs* sono i job legati al quaderno (``{id: istantanea}``), presi sul
-    loop da chi chiama.
+    loop da chi chiama: da loro vengono anche i promemoria dei post-it, nel fuso
+    *timezone_name* (quello dell'utente, se non lo si dà).
     """
+    from jenny.board.cron_link import user_timezone
+
     board = read_board(project_root)
-    reminders = read_reminders(project_root)
     titles = wiki_titles(project_root)
     if board is None:
         return {
@@ -280,6 +277,9 @@ def build_board_view(
             "offboard": len(titles),
             "pages": len(titles),
         }
+    # I promemoria, dalla più vicina: un post-it per ogni scheda che ne ha, con le
+    # sue prime righe e un filo verso la scheda, e quello libero del quaderno.
+    notes = board_notes(board, cron_jobs, timezone_name or user_timezone())
     cards_out: list[dict[str, Any]] = []
     on_board: dict[str, dict[str, Any]] = {}
     for card in board["cards"]:
@@ -307,24 +307,15 @@ def build_board_view(
             "box": list(model.card_box(card)),
             "pinned": card.get("pinned", False),
             "pages": len(card.get("pages") or []),
-            "signal": card_signal(card, summary, reminders, today=today, alert=alert),
+            "signal": card_signal(card, summary, notes, today=today, alert=alert),
             "auto": auto,
             **(_app_card(workspace, card) if workspace is not None else {}),
         })
-    # Le attese aperte, dalla più vicina; e un post-it per ogni scheda che ne
-    # ha, con le sue prime righe e un filo verso la scheda.
-    notes = [
-        {"id": rem["id"], "card": rem["card"], "text": rem["text"], "when": rem["when"]}
-        for rem in model.board_reminders(board, reminders)
-    ]
-    # Un cron «una volta sola» è una data: sta sul post-it del suo ambito, fra i
-    # promemoria, con la sua ora. Lo tiene lo scheduler, quindi porta il suo job.
-    notes = _sorted_notes([*notes, *_dated_crons(board, cron_jobs)])
     with_notes = {n["card"] for n in notes}
     placed: list[tuple[float, float, float, float]] = []
     postits = [
         {"card": card["id"],
-         "pos": card.get("postitPos") or _postit_pos(board, reminders, card, placed)}
+         "pos": card.get("postitPos") or _postit_pos(board, notes, card, placed)}
         for card in board["cards"] if card["id"] in with_notes
     ]
     # Il post-it libero dei promemoria di tutto il quaderno: senza filo, dopo
@@ -333,7 +324,7 @@ def build_board_view(
         postits.append({
             "card": model.NOTEBOOK,
             "pos": board.get("notebookPostitPos")
-            or _place_free(board, reminders, model.POSTIT_BOX, placed),
+            or _place_free(board, notes, model.POSTIT_BOX, placed),
         })
     # Le note dell'utente, accorpate in un post-it lilla per scheda (sotto la
     # polaroid), e le sue foto in un mazzetto (a destra). Dopo i gialli, così i
@@ -348,7 +339,7 @@ def build_board_view(
         note_postits.append({
             "card": card["id"],
             "pos": card.get("notesPos")
-            or _place_near(board, reminders, near, model.NOTES_BOX, placed),
+            or _place_near(board, notes, near, model.NOTES_BOX, placed),
             "count": len(jots),
             "rows": [{"text": n.get("text") or "", "created": n.get("created") or ""}
                      for n in jots[:model.NOTE_ROWS]],
@@ -363,7 +354,7 @@ def build_board_view(
         galleries.append({
             "card": card["id"],
             "pos": card.get("photosPos")
-            or _place_near(board, reminders, near, model.GALLERY_BOX, placed),
+            or _place_near(board, notes, near, model.GALLERY_BOX, placed),
             "count": len(photos),
             "photos": [{"id": p["id"], "path": p["path"], "caption": p.get("caption") or ""}
                        for p in photos[:model.GALLERY_SHOWN]],
@@ -383,7 +374,7 @@ def build_board_view(
         auto_labels.append({
             "card": card["id"],
             "pos": card.get("autoPos")
-            or _place_near(board, reminders, near, box, placed, anchor=(cx, cy, cx + w, cy + h)),
+            or _place_near(board, notes, near, box, placed, anchor=(cx, cy, cx + w, cy + h)),
             "rows": rows,
         })
     # L'etichetta di tutto il quaderno: libera, senza filo, e c'è anche su una
@@ -393,7 +384,7 @@ def build_board_view(
         auto_labels.append({
             "card": model.NOTEBOOK,
             "pos": board.get("notebookAutoPos")
-            or _place_free(board, reminders, model.auto_box(len(rows)), placed),
+            or _place_free(board, notes, model.auto_box(len(rows)), placed),
             "rows": rows,
         })
     last_seen = _stamp(board.get("lastSeen"))
@@ -424,7 +415,7 @@ def build_board_view(
         # A quale cassetto appartiene ogni pagina: la ricerca lo scrive accanto a
         # ogni risultato («in Acero», «fuori bacheca»).
         "pageOwners": model.page_owners(board),
-        "full": model.is_full(board, reminders),
+        "full": model.is_full(board, notes),
     }
 
 
@@ -436,19 +427,22 @@ def build_card_view(
     | None = None,
     corrections: list[dict[str, Any]] | None = None,
     cron_jobs: Mapping[str, Any] | None = None,
+    timezone_name: str | None = None,
 ) -> dict[str, Any] | None:
     """La risposta di ``GET /api/board/card``, o ``None`` se la scheda non c'è.
 
     *cron_jobs* sono i job dello scheduler legati a questo quaderno (``{id:
-    istantanea}``): la sezione di un cron mostra il suo prossimo giro e l'esito.
+    istantanea}``): i promemoria della scheda sono il suo calendario di cura, gli
+    altri cron le sue ``automations``, col prossimo giro e l'esito.
     """
+    from jenny.board.cron_link import notes_from_jobs, user_timezone
+
     board = read_board(project_root)
     if board is None:
         return None
     card = model.card_by_id(board, card_id)
     if card is None:
         return None
-    reminders = read_reminders(project_root)
     titles = wiki_titles(project_root)
     summary = read_card_summary(project_root, card_id) or {}
     opened = _stamp(card.get("lastOpened"))
@@ -489,14 +483,13 @@ def build_card_view(
            if isinstance(card.get("app"), dict) else [])
     for section in [*own, *(card.get("userSections") or [])]:
         # Un promemoria o un cron scritti prima del 20/10/2026 hanno ancora una
-        # sezione, ma si mostrano una volta sola: il promemoria nel calendario di
-        # cura, il cron fra le ``automations`` (derivate dai job).
+        # sezione, ma un promemoria è un job e un cron anche: si mostrano dal job,
+        # nel calendario di cura o fra le ``automations``.
         if section.get("kind") in ("reminder", "cron"):
             continue
         resolved = dict(section)
         if sections_resolver is not None:
             resolved.update(sections_resolver(section, {
-                "reminders": reminders,
                 "card": card["id"],
                 "cronJobs": cron_jobs or {},
                 "cronResults": board.get("cronResults") or {},
@@ -526,12 +519,12 @@ def build_card_view(
         "generated": summary.get("generated") or "",
         "brief": summary.get("brief") or "",
         "sections": sections,
-        # Il calendario di cura: le attese aperte della scheda, dalla più vicina.
-        "reminders": model.sorted_reminders(
-            r for r in model.open_reminders(reminders) if r.get("card") == card_id
-        ),
-        # I cron della scheda, dal prossimo giro.
-        "automations": automations(board, cron_jobs, card_id),
+        # Il calendario di cura: i promemoria della scheda, dal più vicino. Il nome
+        # sul filo resta ``reminders``.
+        "reminders": [n for n in notes_from_jobs(cron_jobs, timezone_name or user_timezone())
+                      if n["card"] == card_id],
+        # I cron della scheda che si ripetono, dal prossimo giro.
+        "automations": _recurring(board, cron_jobs, card_id),
         # Le note e le foto dell'utente, dalla più recente.
         "notes": notes,
         "photos": photos,

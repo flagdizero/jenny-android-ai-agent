@@ -116,7 +116,7 @@ def test_subagent_prompt_names_the_output_dir_and_forbids_the_root(tmp_path):
     assert str(get_output_path(tmp_path)) in prompt
     assert "Never create a new file in the workspace root" in prompt
     # I documenti di bootstrap restano modificabili: senza questa clausola un
-    # subagent smetterebbe di aggiornare HEARTBEAT.md, che deve continuare a fare.
+    # subagent smetterebbe di aggiornare AGENTS.md e USER.md, che deve continuare a fare.
     assert "you may edit but never add to" in prompt
 
 

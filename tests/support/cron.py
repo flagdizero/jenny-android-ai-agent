@@ -19,7 +19,10 @@ come un upsert: la riga si accoda come ``add``, lo stesso verbo di
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 
@@ -55,3 +58,21 @@ def reschedule_job(service: Any, job_id: str, schedule: Any, next_run_at_ms: int
     job.state.next_run_at_ms = next_run_at_ms
     _persist(service, job)
     return job
+
+
+@asynccontextmanager
+async def running_cron(workspace: Path) -> AsyncIterator[Any]:
+    """Un ``CronService`` avviato su ``<workspace>/cron/jobs.json``, fermato all'uscita.
+
+    Avviato, e non solo costruito: chi legge i job dal file (``cron_link.
+    notebook_jobs_on_disk``, i prompt, la bacheca fuori dal loop) trova
+    ``jobs.json`` scritto, come in produzione.
+    """
+    from jenny.cron.service import CronService
+
+    service = CronService(Path(workspace) / "cron" / "jobs.json")
+    await service.start()
+    try:
+        yield service
+    finally:
+        service.stop()

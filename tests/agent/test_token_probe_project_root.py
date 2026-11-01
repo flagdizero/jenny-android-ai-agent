@@ -235,7 +235,7 @@ def test_a_project_growing_does_not_move_the_personal_estimate(tmp_path) -> None
 
 
 def test_an_internal_session_keeps_the_installation_root(tmp_path) -> None:
-    """Cron, Dream e heartbeat non sono sessioni di progetto: la chiave non ha il
+    """Cron e Dream non sono sessioni di progetto: la chiave non ha il
     prefisso e la sonda non deve inventarne uno."""
     consolidator, _builder, _sessions = _consolidator(tmp_path)
 

@@ -22,7 +22,6 @@ from jenny.board.store import (
     mutate_board,
     read_board,
     read_card_summary,
-    read_reminders,
     write_card_summary,
 )
 
@@ -65,8 +64,18 @@ def _state(root: Path, ws: Path) -> BoardPassState:
     return BoardPass(root, ws).build_state()
 
 
-def _tools(state: BoardPassState) -> dict[str, Any]:
+def _tools(state: BoardPassState, cron: Any = None) -> dict[str, Any]:
+    state.cron = cron
     return {t.name: t for t in build_board_tools(state)}
+
+
+def _cron(ws: Path, monkeypatch):
+    """Lo scheduler del workspace: un promemoria del giardiniere è un suo job."""
+    from jenny.runtime.context import get_runtime_context
+    from tests.support.cron import running_cron
+
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", ws)
+    return running_cron(ws)
 
 
 # ── Quando gira ─────────────────────────────────────────────────────────────
@@ -173,33 +182,60 @@ async def test_an_unchanged_section_keeps_its_moment(tmp_path) -> None:
     assert state.summaries["acero"] == 1
 
 
-async def test_reminders_are_not_added_twice(tmp_path) -> None:
+async def test_reminders_are_not_added_twice(tmp_path, monkeypatch) -> None:
+    from jenny.board.cron_link import notebook_jobs, scope_of
+
+    ws, root = _notebook(tmp_path)
+    _seed_board(root)
+    async with _cron(ws, monkeypatch) as cron:
+        tool = _tools(_state(root, ws), cron)["board_add_reminder"]
+        out = await tool.execute(card="acero", text="Travaso nel vaso 20", date="2027-03-01",
+                                 precision="month", why="travaso-acero.md",
+                                 source="raw/journal/20261010.md#18:46")
+        assert out.startswith("Reminder `")
+        again = await tool.execute(card="acero", text="travaso nel vaso 20 ", date="2027-03-01")
+        assert again.startswith("Already")
+        [job] = [cron.get_job(i) for i in notebook_jobs(cron, root.name)]
+        assert job.name == "Travaso nel vaso 20" and scope_of(job.payload.board) == "acero"
+        assert job.schedule.kind == "at" and job.schedule.precision == "month"
+        assert job.payload.why == "travaso-acero.md"
+        assert "raw/journal/20261010.md#18:46" in job.payload.message
+        assert job.payload.session_key == f"project:{root.name}"
+        bad = await tool.execute(card="acero", text="Potatura", date="a marzo")
+        assert bad.startswith("Refused")
+        # Una pagina che non c'è non diventa un ``why`` morto.
+        await tool.execute(card="acero", text="Concime", date="2027-04-01", why="sparita.md")
+        concime = next(cron.get_job(i) for i, j in notebook_jobs(cron, root.name).items()
+                       if j["name"] == "Concime")
+        assert concime.payload.why is None
+    assert not (root / "board" / "reminders.json").exists()
+
+
+async def test_the_gardener_can_give_a_reminder_to_the_whole_notebook(tmp_path,
+                                                                     monkeypatch) -> None:
+    from jenny.board.cron_link import notebook_jobs
+
+    ws, root = _notebook(tmp_path)
+    _seed_board(root)
+    async with _cron(ws, monkeypatch) as cron:
+        tool = _tools(_state(root, ws), cron)["board_add_reminder"]
+        out = await tool.execute(text="Porta dentro tutte le piante", date="2099-12-01")
+        assert "the whole notebook" in out
+        [snap] = notebook_jobs(cron, root.name).values()
+        assert snap["scope"] == model.NOTEBOOK
+        again = await tool.execute(card="", text="porta dentro tutte le piante",
+                                   date="2099-12-01")
+        assert again.startswith("Already")
+        nope = await tool.execute(card="cantina", text="x", date="2099-12-01")
+        assert nope.startswith("Refused") and "whole notebook" in nope
+
+
+async def test_without_the_scheduler_the_gardener_adds_no_reminder(tmp_path) -> None:
     ws, root = _notebook(tmp_path)
     _seed_board(root)
     tool = _tools(_state(root, ws))["board_add_reminder"]
-    await tool.execute(card="acero", text="Travaso nel vaso 20", date="2027-03-01",
-                       precision="month", why="travaso-acero.md")
-    out = await tool.execute(card="acero", text="travaso nel vaso 20 ", date="2027-03-01")
-    assert out.startswith("Already")
-    rems = read_reminders(root)["reminders"]
-    assert len(rems) == 1 and rems[0]["by"] == "jenny"
-    assert rems[0]["when"] == {"kind": "date", "date": "2027-03-01", "precision": "month"}
-    bad = await tool.execute(card="acero", text="Potatura", date="a marzo")
-    assert bad.startswith("Refused")
-
-
-async def test_the_gardener_can_give_a_reminder_to_the_whole_notebook(tmp_path) -> None:
-    ws, root = _notebook(tmp_path)
-    _seed_board(root)
-    tool = _tools(_state(root, ws))["board_add_reminder"]
-    out = await tool.execute(text="Porta dentro tutte le piante", date="2026-12-01")
-    assert "the whole notebook" in out
-    [rem] = read_reminders(root)["reminders"]
-    assert rem["card"] == "" and rem["by"] == "jenny"
-    again = await tool.execute(card="", text="porta dentro tutte le piante", date="2026-12-01")
-    assert again.startswith("Already")
-    nope = await tool.execute(card="cantina", text="x", date="2026-12-01")
-    assert nope.startswith("Refused") and "whole notebook" in nope
+    out = await tool.execute(card="acero", text="Travaso", date="2099-03-01")
+    assert out.startswith("Refused") and "scheduler" in out
 
 
 def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
@@ -224,12 +260,18 @@ def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
                      "board": {"notebook": root.name, "card": "@notebook", "section": "@auto"}}},
         {"id": "aa11bb22", "name": "Altrove", "enabled": True,
          "payload": {"board": {"notebook": "altro", "card": "acero", "section": "@auto"}}},
+        {"id": "cc33dd44", "name": "Rinvaso", "enabled": True,
+         "schedule": {"kind": "at", "atMs": 4_070_908_800_000, "precision": "day"},
+         "payload": {"message": "Rinvaso",
+                     "board": {"notebook": root.name, "card": "acero", "section": "@auto"}}},
     ]}), encoding="utf-8")
     bp = BoardPass(root, ws)
     prompt = bp.build_prompt(bp.build_state(), journal="- 18:46 — promemoria per marzo: travaso.")
     block = prompt.split("## Already scheduled", 1)[1].split("\n## ", 1)[0]
     assert "- cron «Travaso» in the drawer of `acero`: Ricorda il travaso dell'acero. (next 2027-" in block
     assert "- cron «Gelo» for the whole notebook: avvisa se gela" in block
+    # Un promemoria è un job anche lui, e si dice per quel che è.
+    assert "- reminder «Rinvaso» in the drawer of `acero`" in block
     assert "Altrove" not in block
     assert "Reminders already on the list" not in prompt
     # Uno store illeggibile non rompe la passata.
@@ -307,14 +349,16 @@ async def test_a_correction_is_resolved_by_the_code(tmp_path) -> None:
 class _Agent:
     """Un modello finto: chiama gli strumenti che il caso gli dice, in ordine."""
 
-    def __init__(self, script):
+    def __init__(self, script, cron_service: Any = None):
         self.script = script
         self.prompts: list[str] = []
+        self.results: list[str] = []
+        self.cron_service = cron_service
 
     async def process_direct(self, prompt, *, tools, **_):
         self.prompts.append(prompt)
         for name, args in self.script:
-            await tools.get(name).execute(**args)
+            self.results.append(await tools.get(name).execute(**args))
         return SimpleNamespace(metadata={"_stop_reason": "completed"})
 
 
@@ -331,7 +375,17 @@ class _Store:
 
 
 async def test_the_first_board_is_proposed_with_its_drawers_written(tmp_path, monkeypatch) -> None:
+    from jenny.board.cron_link import notebook_jobs
+
     ws, root = _notebook(tmp_path)
+    async with _cron(ws, monkeypatch) as cron:
+        await _first_board(ws, root, cron)
+        # Il promemoria sulla scheda proposta è un job dello scheduler, dall'agente.
+        [snap] = notebook_jobs(cron, root.name).values()
+        assert snap["name"] == "Travaso" and snap["scope"] == "acero"
+
+
+async def _first_board(ws: Path, root: Path, cron: Any) -> None:
     agent = _Agent([
         ("board_propose_board", {
             "skeleton": ["Vaso e travaso", "Acqua"],
@@ -348,7 +402,7 @@ async def test_the_first_board_is_proposed_with_its_drawers_written(tmp_path, mo
         ]}),
         ("board_add_reminder", {"card": "acero", "text": "Travaso", "date": "2027-03-01",
                                 "precision": "month", "source": "dormienza.md"}),
-    ])
+    ], cron_service=cron)
     outcome = await run_board_pass(agent, _Store(root, ws), session_key="gardener:piante-x-board")
     assert outcome.status == "done"
     assert "has no board yet" in agent.prompts[0]
@@ -367,7 +421,7 @@ async def test_the_first_board_is_proposed_with_its_drawers_written(tmp_path, mo
     from jenny.board.edit import accept_suggestion
 
     def accept(b):
-        accept_suggestion(b, b["suggestions"][0], read_reminders(root))
+        accept_suggestion(b, b["suggestions"][0], [])
         b["suggestions"] = []
 
     mutate_board(root, accept)

@@ -71,7 +71,7 @@ Saving a token, unpairing, and flipping the toggle all take effect immediately �
 
 Telegram delivery uses long polling — the app keeps an open request to Telegram's servers waiting for new messages. Android's Doze mode can throttle or suspend that when the screen is off and the phone isn't charging, which delays replies. If Jenny detects it isn't already exempt from battery optimization, the paired view still shows a hint ("For instant replies even when the phone is not charging, exempt Jenny from battery optimization.") and an **Exempt from battery** button that opens the Android system prompt directly.
 
-The same request is now offered in two better places — during first-run setup, and in the workshop under **Brain → Background activity**, which also shows whether the exemption is currently in force and re-offers it after a system update silently reset it (Samsung and Xiaomi updates do this). The exemption was never Telegram-specific: reminders, cron jobs, Dream, the gardener and Heartbeat are throttled by Doze in exactly the same way. It lived here only because Telegram was the first place the delay became obvious.
+The same request is now offered in two better places — during first-run setup, and in the workshop under **Brain → Background activity**, which also shows whether the exemption is currently in force and re-offers it after a system update silently reset it (Samsung and Xiaomi updates do this). The exemption was never Telegram-specific: reminders, monitors, Dream and the gardener are throttled by Doze in exactly the same way. It lived here only because Telegram was the first place the delay became obvious.
 
 **An inbound Telegram message can still wait for the phone to wake up, and this one is not fixed.** Jenny holds the CPU awake while she *processes* an update, but not while the long-poll sits waiting for one — that wait is idle by construction and lasts up to `telegram.pollTimeoutS` (50 seconds by default), so a wake lock covering it would be held essentially all the time. That isn't the "only while working" mode you chose, it's `always` wearing a disguise. The honest consequence: with the screen off and the phone suspended, a message you send can sit in Telegram's queue until something else wakes the device. Nothing is lost — Telegram holds the update and it's processed when the phone comes back — but "instant" is not a promise anyone can make here. Setting `power.keepAwake` to `always` does remove this wait, at the cost of real battery; that is the trade, and it's the reason the setting exists. You can change it in the workshop under **Brain → Background activity → Keep the CPU awake** (**Never**, **While working**, **Always**), which also shows whether the CPU is held awake right now; it takes effect at the next Jenny restart. See [Configuration](../reference/configuration.md#power).
 
@@ -124,7 +124,7 @@ Any files Jenny attaches (via the `message` tool, or file responses) follow the 
 
 The WebUI is the single source of truth for the conversation. Every message you send from Telegram, and every reply, is mirrored live into the WebUI's chat view, marked as coming from Telegram — so opening the app later shows the full history regardless of where you actually chatted.
 
-The reverse is **not** true: messages you send from the WebUI are never delivered to Telegram. Telegram only ever receives replies to its own messages, plus proactive messages (reminders, heartbeat notifications). Service replies from the bot itself — pairing prompts, the welcome text, the attachment error replies — never appear in the WebUI either; they aren't part of the conversation.
+The reverse is **not** true: messages you send from the WebUI are never delivered to Telegram. Telegram only ever receives replies to its own messages, plus proactive messages (reminders, monitor alerts). Service replies from the bot itself — pairing prompts, the welcome text, the attachment error replies — never appear in the WebUI either; they aren't part of the conversation.
 
 ## Shared session: `/new` resets both sides
 
@@ -152,5 +152,5 @@ When the app comes back, it resumes long polling from scratch (Telegram's intern
 
 - [Chat basics](chat.md) for how the WebUI side of the same conversation behaves.
 - [Location](location.md) for the two-tier location model and the privacy implications of leaving it on.
-- [Scheduling and proactivity](scheduling.md) for reminders and heartbeat messages that also get delivered to Telegram.
+- [Scheduling and proactivity](scheduling.md) for reminders and monitor alerts that also get delivered to Telegram.
 - [Troubleshooting](troubleshooting.md) if the bot has gone quiet and you're not sure why.

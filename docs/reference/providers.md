@@ -139,7 +139,7 @@ When the configured base URL contains `openrouter` (case-insensitive), Jenny aut
 
 [OpenCode Go](https://opencode.ai/docs/go/) is a subscription that fronts a curated set of open coding models behind one API key. Its docs ask third-party clients to identify themselves with their own user agent and to send a stable per-conversation ID in `x-opencode-session`, which the gateway uses for routing and prompt-cache affinity. Jenny does both automatically whenever the configured base URL contains `opencode.ai` — there's no setting to flip, and no effect on any other endpoint.
 
-The conversation ID is a SHA-256 hash of Jenny's internal session key, truncated to 32 characters: opaque, stable for the life of a conversation, and distinct across conversations. The raw session key names a channel and a chat (`telegram:123456789`), so it is never sent as-is. Internal sessions — cron, Dream, heartbeat — each get their own ID, as does the unified user conversation. The model-catalog probe sends the user agent but no session header: a catalog listing is not a conversation.
+The conversation ID is a SHA-256 hash of Jenny's internal session key, truncated to 32 characters: opaque, stable for the life of a conversation, and distinct across conversations. The raw session key names a channel and a chat (`telegram:123456789`), so it is never sent as-is. Internal sessions — cron, Dream — each get their own ID, as does the unified user conversation. The model-catalog probe sends the user agent but no session header: a catalog listing is not a conversation.
 
 ### One base URL, three endpoints, picked per model
 

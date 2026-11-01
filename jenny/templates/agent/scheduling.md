@@ -1,24 +1,14 @@
-# Recurring Work
+# Work for Later
 
-Three destinations. Picking the wrong one is what turns a check into chat spam.
+Anything for later is a `cron` job: one-time or recurring. Picking the wrong kind is what turns a check into chat spam.
 
-- Ambient check, fine on the shared heartbeat beat → add a line to `HEARTBEAT.md`,
-  **under its `## Active Tasks` heading**: only that section is read, so a line put
-  anywhere else — above it, or under a later `## Notes` — never runs, and nothing says so.
-  A protected cron job registered by the gateway already reads that file; never create
-  a second heartbeat job — unless the user disabled the built-in one and wants their own
-  schedule for it.
-- Must reach the user every time, or needs its own schedule → `cron` with `mode='reminder'`.
-- Needs its own schedule *and* should speak only when there is something to report →
-  `cron` with `mode='monitor'`.
+- One-time → `at` only for a time the user said, or `date` for a day (`YYYY-MM-DD`) or just a month (`YYYY-MM`): a day without a time is never `at` with an hour you picked. It disappears once it has fired.
+- Recurring → `every_seconds` or `cron_expr`, and one of two modes:
+  - `mode='reminder'`: speaks every time it fires.
+  - `mode='monitor'`: runs silently and speaks only when there is something to report. The only way its runs reach the user is the `message` tool, so an uneventful run produces no message at all.
 
-Any request phrased as a condition — "only tell me if…", "warn me when…", "check every
-10 minutes whether it's back up" — is a `monitor` or a `HEARTBEAT.md` line, never a plain
-reminder.
+Any request phrased as a condition — "only tell me if…", "warn me when…", "check every 10 minutes whether it's back up" — is a `monitor`, never a plain reminder. When the condition is a mini app's value, give the recurring job a `condition` instead: it is checked in code at each run, and the job speaks only when it becomes true.
 
-`HEARTBEAT.md` has one interval for the whole file, and its runs are silent: the only way
-they reach the user is the `message` tool. So a conditional check written there must state
-its condition in the line itself, and an uneventful run must produce no message at all.
+Every run costs a full turn: pick the widest interval that does the job.
 
-Writing a reminder into `memory/MEMORY.md` schedules nothing. Before scheduling, read
-`skills/cron/SKILL.md`: syntax, timezones, examples and `list` semantics live there.
+Writing a reminder into `memory/MEMORY.md` schedules nothing. Before scheduling, read `skills/cron/SKILL.md`: syntax, timezones, examples and `list` semantics live there.

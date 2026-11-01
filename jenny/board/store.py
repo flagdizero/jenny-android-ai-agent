@@ -4,7 +4,7 @@
 una risposta alla busta) e il giardiniere. È il problema che ``config.json`` ha
 risolto con ``config/store.py::mutate``, e la soluzione è la stessa:
 
-- **un imbuto unico** (:func:`mutate_board`, :func:`mutate_reminders`) che
+- **un imbuto unico** (:func:`mutate_board`) che
   **rilegge il file dentro il lock** con cui scrive, così nessuno può tenere in
   mano una copia vecchia e salvarla sopra una nuova;
 - **scrittura atomica**, con un ``.bak`` dell'ultimo contenuto valido;
@@ -48,14 +48,11 @@ from jenny.board.model import (
     BOARD_FILE,
     CARDS_DIR,
     JENNY,
-    REMINDERS_FILE,
     USER,
     is_valid_id,
     normalize_board,
     normalize_card_summary,
-    normalize_reminders,
     ownership_violations,
-    reminder_violations,
 )
 from jenny.security.subagent_policy import journal_touch
 from jenny.utils.path import atomic_write
@@ -85,10 +82,6 @@ def board_dir(project_root: Path) -> Path:
 
 def board_path(project_root: Path) -> Path:
     return board_dir(project_root) / BOARD_FILE
-
-
-def reminders_path(project_root: Path) -> Path:
-    return board_dir(project_root) / REMINDERS_FILE
 
 
 def card_summary_path(project_root: Path, card_id: str) -> Path:
@@ -170,11 +163,6 @@ def read_board(project_root: Path) -> dict[str, Any] | None:
     return None if raw is None else normalize_board(raw)
 
 
-def read_reminders(project_root: Path) -> dict[str, Any]:
-    """Le attese del quaderno; un file assente è un elenco vuoto."""
-    return normalize_reminders(_read_with_recovery(reminders_path(project_root)))
-
-
 def _mutate(
     path: Path,
     normalize: Callable[[Any], dict[str, Any]],
@@ -217,18 +205,6 @@ def mutate_board(
     Restituisce la bacheca risultante.
     """
     return _mutate(board_path(project_root), normalize_board, ownership_violations, apply, actor)
-
-
-def mutate_reminders(
-    project_root: Path,
-    apply: Callable[[dict[str, Any]], bool | None],
-    *,
-    actor: str = USER,
-) -> dict[str, Any]:
-    """Come :func:`mutate_board`, per ``reminders.json``."""
-    return _mutate(
-        reminders_path(project_root), normalize_reminders, reminder_violations, apply, actor
-    )
 
 
 def read_card_summary(project_root: Path, card_id: str) -> dict[str, Any] | None:

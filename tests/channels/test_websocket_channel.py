@@ -852,7 +852,7 @@ async def test_stream_transcript_persists_without_subscribers() -> None:
 async def test_proactive_delivery_frames_form_one_closed_turn() -> None:
     """I due frame che ``ChannelDeliverer`` pubblica per un avviso proattivo.
 
-    Un turno silenzioso (heartbeat, cron, Dream) non ha vista WebUI, quindi il
+    Un turno silenzioso (cron, Dream) non ha vista WebUI, quindi il
     coordinator non emette nessun ``turn_end``: lo emette il deliverer, con lo
     stesso ``webui_turn_id`` del messaggio. È quell'id a far annotare al
     recorder il record di chiusura come ``complete`` dello stesso turno — senza,

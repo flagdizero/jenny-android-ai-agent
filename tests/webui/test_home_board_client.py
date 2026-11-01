@@ -1606,24 +1606,76 @@ def test_the_list_view_has_a_row_for_the_whole_notebook() -> None:
 
 @requires_jsdom
 def test_a_once_cron_is_a_dated_row_and_done_removes_its_job() -> None:
+    """Un promemoria è un job: la riga porta l'id del job, e «Fatto» lo toglie."""
     board = _notebook_postit_board()
-    board["notes"].append({"id": "cron-ab12cd34", "job": "ab12cd34", "card": "",
-                           "text": "Chiama il vivaio",
+    board["notes"].append({"id": "ab12cd34", "card": "", "text": "Chiama il vivaio",
                            "when": {"kind": "date", "date": "2099-11-02", "precision": "day",
                                     "time": "09:00"}})
     _run_wall("""
       routes['/api/board'] = __BOARD__;
-      rpcAnswers['board.cron.remove'] = () => ({ ok: true });
+      rpcAnswers['board.reminder.done'] = () => ({ ok: true });
       await B.load('altro');
       const free = document.querySelector('.home-board-postit.is-notebook');
       assert.match(free.textContent, /09:00/);
       free.click();
       await tick(20);
-      const row = document.querySelector('#home-board-sheet [data-reminder="cron-ab12cd34"]');
+      const row = document.querySelector('#home-board-sheet [data-reminder="ab12cd34"]');
       [...row.querySelectorAll('.home-drawer-link')].find((b) => /^(Fatto|Done)$/.test(b.textContent)).click();
       await tick(40);
-      assert.equal(rpcs('board.cron.remove').at(-1).params.job, 'ab12cd34');
+      assert.equal(rpcs('board.reminder.done').at(-1).params.id, 'ab12cd34');
+      assert.equal(rpcs('board.cron.remove').length, 0);
     """.replace("__BOARD__", json.dumps(board)))
+
+
+@requires_jsdom
+def test_remind_me_when_asks_how_often_to_check() -> None:
+    """«Avvisami quando…» sceglie anche la cadenza: diventa l'``every`` del job."""
+    card = json.loads(json.dumps(CARD))
+    card["userSections"] = [_reader_section({**_READER, "state": "ok"})]
+    head = _SETUP.replace("__BOARD__", json.dumps(BOARD)).replace("__CARD__", json.dumps(card))
+    run_home(head + """
+      rpcAnswers['board.reminder.add'] = () => ({ ok: true, id: 'ab12cd34' });
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const drawer = $('home-board-drawer');
+      [...drawer.querySelectorAll('.home-drawer-link')]
+        .find((b) => b.textContent === 'Remind me when…').click();
+      const form = $('home-board-sheet-body').querySelector('form');
+      const every = form.querySelector('select.is-every');
+      assert.deepEqual([...every.options].map((o) => [o.value, o.textContent]),
+        [['3600000', '1 hour'], ['21600000', '6 hours'], ['86400000', '1 day']]);
+      assert.match(form.textContent, /Check every/);
+      every.value = '21600000';
+      form.querySelector('.is-value').value = '25';
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
+      await tick(40);
+      assert.equal(rpcs('board.section.add').length, 0);
+      const add = rpcs('board.reminder.add').at(-1).params;
+      assert.equal(add.card, 'acero');
+      assert.equal(add.every_ms, 21600000);
+      assert.deepEqual(add.when, { kind: 'condition', app: 'acerello', params: {},
+        field: 'moisture', op: '<', value: 25 });
+    """)
+
+
+@requires_jsdom
+def test_the_calendar_says_how_often_a_condition_is_checked() -> None:
+    card = json.loads(json.dumps(CARD))
+    card["reminders"] = [
+        {"id": "r-a", "card": "acero", "text": "Poltiglia",
+         "when": {"kind": "date", "date": "2099-02-01", "precision": "day"}},
+        {"id": "r-d", "card": "acero", "text": "Annaffia",
+         "when": {"kind": "condition", "app": "acerello", "params": {}, "field": "moisture",
+                  "op": "<", "value": 30, "every_ms": 21600000}},
+    ]
+    _run("""
+      routes['/api/board/card'] = __CARD2__;
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const row = [...document.querySelectorAll('.home-drawer-cal-row')]
+        .find((r) => /Annaffia/.test(r.textContent));
+      assert.match(row.textContent, /Annaffia · checked every 6 hours/);
+    """.replace("__CARD2__", json.dumps(card)))
 
 
 def test_the_mint_label_reads_in_every_theme() -> None:

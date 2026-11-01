@@ -1,6 +1,6 @@
 # Scheduling and proactivity
 
-Jenny can remind you of things, watch a checklist in the background, work a long task across many turns, and delegate side work to a helper agent — all set up by asking in chat. The workshop shows your reminders and the heartbeat, and lets you pause, resume or delete the reminders you created.
+Jenny can remind you of things once or on a schedule, keep an eye on something in the background and speak only when it matters, work a long task across many turns, and delegate side work to a helper agent — all set up by asking in chat. The workshop shows your scheduled jobs, and lets you pause, resume or delete the ones you created.
 
 ## The one thing to know before you rely on this
 
@@ -37,43 +37,44 @@ If reminders matter to you, the practical measures are unchanged:
 - Keep the phone charged and connected when a reminder is close to due.
 - Treat "at" reminders as best-effort, not guaranteed alarms — for anything truly time-critical, use your phone's own alarm clock as a backup.
 
-## Reminders (the `cron` tool)
+## What you can schedule (the `cron` tool)
 
 You don't create these from a screen — you just ask, in plain language, and Jenny translates it into a scheduled job:
 
 - "Remind me to take the pizza out in 20 minutes."
+- "Remind me to renew the passport in March."
 - "Every day at 9am, ask me how I slept."
-- "Every 2 hours, check if it's raining and tell me if so."
+- "Every 2 hours, check if my site is up and tell me only if it's down."
 - "List my reminders."
 - "Cancel the pizza reminder."
 
-Under the hood there are three schedule kinds:
+Everything Jenny does for you later is one of **two kinds of job**, and both live in the same list (`cron/jobs.json` in the workspace):
 
 | Kind | How you'd phrase it | Behavior |
 |---|---|---|
-| One-shot (`at`) | "remind me at 6pm", "in 20 minutes" | Fires once, then the job deletes itself automatically. Cannot be combined with monitor mode (see below). |
-| Interval (`every`) | "every 30 minutes", "every 2 hours" | Repeats forever at a fixed interval, counted from when the job was (re)armed — not from a fixed clock time. |
-| Cron expression (`cron_expr`) | "every day at 9am", "every Monday at 8" | Standard 5-field cron syntax (e.g. `0 9 * * *`); accepts an optional IANA timezone (e.g. `America/Vancouver`) for that one job. |
+| One-time (`at`, or `date`) | "remind me at 6pm", "in 20 minutes", "on 3 March", "around March" | Fires once, then the job deletes itself. With a time, it fires at that time; with only a day it rings at **09:00** that day, and with only a month at 09:00 on the 1st. The workshop shows a day-only job as a date with no time, and a month-only one as "March 2027". Cannot be a monitor (see below). |
+| Recurring, by interval (`every_seconds`) | "every 30 minutes", "every 6 hours" | Repeats forever at a fixed interval, counted from when the job was (re)armed — not from a fixed clock time. |
+| Recurring, by clock (`cron_expr`) | "every day at 9am", "every Monday at 8" | Standard 5-field cron syntax (e.g. `0 9 * * *`); accepts an optional IANA timezone (e.g. `America/Vancouver`) for that one job. |
 
-The timezone used when you don't specify one is your **device's timezone**, resolved once when the app starts (falls back to UTC if the device timezone can't be determined). A timezone override only applies to cron-expression schedules — one-shot and interval schedules always use the device timezone.
+The timezone used when you don't specify one is your **device's timezone**, resolved once when the app starts (falls back to UTC if the device timezone can't be determined). A timezone override only applies to cron-expression schedules — one-time and interval schedules always use the device timezone.
 
-When a reminder fires — a plain reminder, that is, the default mode described in [Two modes](#two-modes-one-that-always-speaks-one-that-speaks-only-if-it-has-to) below — it runs as a completely normal agent turn in the same chat you created it from, seeded with an instruction along the lines of "the scheduled time has arrived, execute this job and report the result." The reply lands in your chat exactly like any other message from Jenny — and, if the app isn't in the foreground at that moment, it also rings as an Android notification titled with Jenny's name, "⏰ Reminder" and the job's name (see [Notifications](#android-notifications) below). If a reminder fires while you're already mid-conversation with Jenny on that same chat, it politely waits and delivers once your current turn is idle, rather than interrupting it.
+When a reminder fires — a plain reminder, that is, the default mode described in [Two modes](#two-modes-one-that-always-speaks-one-that-speaks-only-if-it-has-to) below — it runs as a completely normal agent turn in the chat it belongs to, seeded with an instruction along the lines of "the scheduled time has arrived, execute this job and report the result." The reply lands in your chat exactly like any other message from Jenny — and, if the app isn't in the foreground at that moment, it also rings as an Android notification titled with Jenny's name, "⏰ Reminder" and the job's name (see [Notifications](#android-notifications) below). If a reminder fires while you're already mid-conversation with Jenny on that same chat, it politely waits and delivers once your current turn is idle, rather than interrupting it.
 
 A few smaller things worth knowing:
 
 - A reminder job cannot schedule further jobs from inside its own execution — this only matters if you ask Jenny to "set up a reminder that then sets another reminder" in one step.
 - Jenny gives the job a short name in your language when she creates it (it is what the notification title shows). A job without a name has none: its notification title is just "⏰ Reminder".
-- You can list and remove reminders by asking (e.g. "what reminders do I have?", "remove job xyz"). You create them only by asking.
-- In the workshop, **Hands → When she acts on her own** lists them too, and tapping one opens its detail with **Pause** and **Delete**. On a paused one the buttons are **Resume** and **Delete**. Pausing needs no confirmation because resuming undoes it. Deleting asks first. A resumed reminder counts from the moment you resume it and does not catch up on the runs it missed: an hourly one runs an hour later, a daily 8:00 one at the next 8:00. A one-time reminder whose time passed while it was paused can only be deleted, because resuming it would fire it at once, late. System jobs have no buttons, since their switch lives in their own settings. There is no "run now": that would start an agent turn, which costs tokens and may message you.
-- Jenny still sees a paused reminder when she lists them, marked as paused, so she won't set it up again thinking it's gone.
+- You can list, pause, resume and remove jobs by asking (e.g. "what reminders do I have?", "pause the rain check", "remove job xyz"). You create them only by asking.
+- In the workshop, **Hands → When she acts on her own** lists them too, and tapping one opens its detail with **Pause** and **Delete**. On a paused one the buttons are **Resume** and **Delete**. Pausing needs no confirmation because resuming undoes it. Deleting asks first. A resumed job counts from the moment you resume it and does not catch up on the runs it missed: an hourly one runs an hour later, a daily 8:00 one at the next 8:00. A one-time job whose time passed while it was paused can only be deleted, because resuming it would fire it at once, late. System jobs have no buttons, since their switch lives in their own settings. There is no "run now": that would start an agent turn, which costs tokens and may message you.
+- Jenny still sees a paused job when she lists them, marked as paused, so she won't set it up again thinking it's gone.
 
 ### Two modes: one that always speaks, one that speaks only if it has to
 
-Every job also has a **mode**, and it isn't something you type — you describe what you want and Jenny picks it. The difference is whether a run that has nothing to say still writes into your chat.
+Every recurring job also has a **mode**, and it isn't something you type — you describe what you want and Jenny picks it. The difference is whether a run that has nothing to say still writes into your chat.
 
 | Mode | How you'd ask for it | What each run does |
 |---|---|---|
-| Reminder (default) | "Remind me to take the pizza out in 20 minutes", "Every day at 9am, ask me how I slept", "Every 2 hours, check if it's raining and tell me if so" | Runs in the chat you created it from and **always** replies — even when the answer amounts to "nothing to report". |
+| Reminder (default) | "Remind me to take the pizza out in 20 minutes", "Every day at 9am, ask me how I slept", "Every 2 hours, tell me the temperature" | Runs in the chat it belongs to and **always** replies — even when the answer amounts to "nothing to report". |
 | Monitor | "Every 10 minutes check if my site is back up and tell me when it is", "Keep an eye on that page every hour and only ping me if the price drops", "Check the backup job each morning and only tell me if it failed" | Runs out of sight and stays quiet, unless the check actually turns up something worth your attention. When it does, it messages you deliberately. |
 
 The wording that tips Jenny toward a monitor is *only* / *just if* / *let me know when it changes*; the wording that keeps it an ordinary reminder is asking to be told something at a time, full stop. If she guesses wrong, say so ("no, only write to me if it's actually down") and she can recreate the job the other way.
@@ -83,29 +84,40 @@ A monitor runs in a private session of its own, kept apart from your conversatio
 - Your chat doesn't fill up with hourly "still down" replies you never asked to read.
 - The job remembers its own previous checks, and that memory is precisely what lets it tell you **when something changed** instead of repeating the same sentence every cycle. That private history is trimmed to the last handful of checks, so it can't grow without bound.
 
-When a monitor does decide to speak, the delivery is proactive in the same way Heartbeat's is: it reaches the WebUI chat and, if you've paired a Telegram bot, that chat too — not just whichever one you happen to be looking at.
+When a monitor does decide to speak, the delivery is proactive: it reaches the WebUI chat and, if you've paired a Telegram bot, that chat too — not just whichever one you happen to be looking at.
 
-**A monitor may stay silent forever, and that is the feature working, not failing.** Exactly as with Heartbeat below, "I set up a check and never hear anything" is the expected outcome when nothing noteworthy ever happens. To confirm it's alive, ask Jenny to list your reminders: a run that had nothing to report is recorded as `Last run: … — silenced`. That is the healthy line to see; `error` is the unhealthy one.
+**A monitor may stay silent forever, and that is the feature working, not failing.** "I set up a check and never hear anything" is the expected outcome when nothing noteworthy ever happens. To confirm it's alive, ask Jenny to list your reminders: a run that had nothing to report is recorded as `Last run: … — silenced`. That is the healthy line to see; `error` is the unhealthy one. A monitor's run is silent by construction — what Jenny writes as its answer is delivered nowhere, and the only way it reaches you is Jenny sending you a message on purpose — and she has a `nothing_to_report` step to *declare* the silence, so that a small model doesn't express "nothing to say" by sending you a placeholder word.
 
 **A check that couldn't run is not the same as a check that found nothing**, and Jenny keeps them apart. When a cycle can't actually perform its check — a script is missing, a device is unreachable, a tool broke — the run is recorded as `could_not_check` rather than `silenced`, and the listing adds a line like `Could not check: 3 consecutive run(s), since …`. She still says nothing the first couple of times, because a check that fails once is usually just a network blip. After **three cycles in a row** with no check at all she writes to you once, in plain terms, and then goes quiet again until something changes. So a monitor that has quietly broken can no longer look exactly like a healthy one, and a healthy one still costs you nothing.
 
-**Silence saves you the notification, not the tokens.** Every monitor cycle is still a real agent turn against your provider — the check has to actually run before anything can conclude there's nothing to say. A monitor every 10 minutes is ~144 turns a day whether or not it ever speaks a word, so pick the loosest interval that still catches what you care about, and remove the job once the thing you were watching is settled. This is the same warning as the Heartbeat one below, for the same reason.
+**A check handed to a helper waits for the helper.** Jenny can't run code or read the web herself, so a monitor that needs to often hands its check to a [subagent](#subagents-spawn). That run is recorded as `delegated` (in the workshop, "handed to a mini-me") until the helper's result comes back; Jenny judges it then, and the run becomes `silenced`, `ok` or `could_not_check` like any other. A verdict that never comes back is closed by the next run.
 
-Monitor mode only makes sense on a repeating schedule, so **it cannot be combined with a one-shot ("remind me at 6pm") job**: a single firing that might decide to say nothing would simply never reach you. Jenny refuses that combination outright rather than schedule something that can silently do nothing.
+**Silence saves you the notification, not the tokens.** Every monitor cycle is still a real agent turn against your provider — the check has to actually run before anything can conclude there's nothing to say. A monitor every 10 minutes is ~144 turns a day whether or not it ever speaks a word, so pick the widest interval that still catches what you care about, and remove the job once the thing you were watching is settled.
+
+Monitor mode only makes sense on a repeating schedule, so **it cannot be combined with a one-time job** ("remind me at 6pm"): a single firing that might decide to say nothing would simply never reach you. Jenny refuses that combination outright rather than schedule something that can silently do nothing.
+
+### Conditions on an app's value
+
+When what you are waiting for is a number one of your [apps](board.md#app) already reads — the soil humidity of a plant, a price, a sensor — a recurring job can carry a **condition** on it: "every 6 hours, check whether the basil's humidity is below 15 and tell me". At each run the app is read and compared **in code**, before any model call: while the condition is false the run ends there and costs nothing. When it becomes true, one turn starts with the value just read, and the job then stays quiet until the condition goes back to false — you are told once, not every six hours. The cadence is yours: if you don't say how often to check, Jenny asks. The workshop shows the condition in front of the schedule, like "humidity < 15 · every 6 hours".
+
+### Notebook crons
+
+A job belongs either to the personal chat or to a [notebook](projects.md), and inside a notebook to **one card** or to the **whole notebook**. **Jenny decides which** from what you asked, without asking you: tied to the card it is about, or to the whole notebook when it concerns all of it, several cards or nothing on the board. You can ask for a notebook's job from any chat. It runs inside the notebook (it can write only there, like the notebook's chat), delivers in the notebook's chat with the usual notifications when it has something to say, and shows on the notebook's [board](board.md). It may also point to the notebook page that explains why it exists, and then the message says what is due *and why*, from that page. In a notebook, *list* and *remove* see only that notebook's jobs. However it is removed — from the board, from the workshop, from any chat — what it left on the board goes with it. The personal chat's own jobs stay where they are.
 
 ### Protected system jobs
 
-When you ask Jenny to list reminders, you'll also see jobs you didn't create: **`dream`**, **`heartbeat`**, and — when they are on — the [gardener](gardener.md), the notebook clock (`reminders`) and the update check. These are system-managed and will show up as protected — visible for inspection, but Jenny will refuse to remove them if asked (a removal attempt gets a reply along the lines of "this is a protected system-managed cron job" and cannot be removed). The way to stop one is its config switch, not the reminder list: Dream's and the gardener's are in the workshop's **Memory** drawer, the heartbeat's, the notebook clock's and the update check's are in `config.json`.
+When you ask Jenny to list reminders, you'll also see jobs you didn't create: **`dream`** and — when they are on — the [gardener](gardener.md), the notebook clock (`reminders`) and the update check. These are system-managed and will show up as protected — visible for inspection, but Jenny will refuse to remove them if asked (a removal attempt gets a reply along the lines of "this is a protected system-managed cron job" and cannot be removed). The way to stop one is its config switch, not the reminder list: Dream's and the gardener's are in the workshop's **Memory** drawer, the notebook clock's and the update check's are in `config.json`.
 
 | Job | Runs | Config | What it costs you |
 |---|---|---|---|
 | `dream` | every **2 hours** | `agents.defaults.dream.enabled` (default on), `agents.defaults.dream.intervalH` (default `2`) | One agent run — a real turn against your provider, several calls if it uses tools — whenever there is new conversation to consolidate. Takes a snapshot first, so a bad run is undoable. |
-| `heartbeat` | every **30 minutes** | `gateway.heartbeat.enabled` (default on), `gateway.heartbeat.intervalS` (default `1800`) | Nothing when `## Active Tasks` is empty; one real turn when it isn't. See below. |
 | `gardener` | every **30 minutes** (how often it *looks*) | `agents.defaults.gardener.enabled` (default on), `agents.defaults.gardener.intervalMin` (default `30`) | Nothing when no notebook has new journal lines, or none has been quiet long enough; otherwise one pass on that notebook, which is a real turn against your provider. See [The gardener](gardener.md). |
-| `reminders` | every **15 minutes** | registered when `wiki.enabled` is on (default on) | Nothing in a round when no notebook reminder is due; app readers run without the model; one real turn per reminder announced. See [Notebook reminders](#notebook-reminders). |
+| `reminders` | every **15 minutes** | registered when `wiki.enabled` is on (default on) | Nothing from your provider: it runs the apps' readers, notes when an app placed on a board changes state, and clears cards removed more than a week ago. Despite the name it announces nothing — a notebook's reminders are ordinary jobs in the list above. See [Reminders and the notebook clock](board.md#reminders-and-the-notebook-clock). |
 | `update_check` | every **24 hours** | `updates.enabled` (default on), `updates.checkIntervalH` (default `24`) | One small HTTP request to the update manifest; a real turn only on the day a new version is first announced in chat (`updates.notifyInChat`). See [Updates](webui-tour.md#updates). |
 
-`dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md); `reminders` in [Notebook reminders](#notebook-reminders) below; `heartbeat` is described next.
+`dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md).
+
+Earlier versions also had a **heartbeat**: a checklist in `HEARTBEAT.md` that one built-in job went through every 30 minutes. It is gone. Each of those checks is now a recurring job of its own, usually a monitor, with its own interval — ask Jenny to set one up for each line you still want. A `HEARTBEAT.md` left in your workspace is no longer read.
 
 ### If the reminder list itself gets damaged
 
@@ -115,39 +127,9 @@ Since 0.6.6 that file is handled the same way as `config.json`. Jenny keeps the 
 
 That notice matters more here than it does for settings. A reminder that has stopped existing looks exactly like a reminder that hasn't come due yet, so without being told, you'd find out when it didn't go off. If you see the "started with none" version, your own reminders need recreating — the system jobs above come back on their own.
 
-The workshop's **Hands → When she acts on her own** is where you check the outcome: it lists your reminders and the heartbeat, and repeats the recovery notice above the list itself, because further down the screen a short list of reminders looks exactly like a correct one. See [Settings → When she acts on her own](../reference/settings.md#when-she-acts-on-her-own).
+The workshop's **Hands → When she acts on her own** is where you check the outcome: it lists your jobs, and repeats the recovery notice above the list itself, because further down the screen a short list of reminders looks exactly like a correct one. See [Settings → When she acts on her own](../reference/settings.md#when-she-acts-on-her-own).
 
 The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
-
-### Notebook reminders
-
-A [notebook](projects.md) has dated reminders of its own, on its [board](board.md): the ones you add in a card's drawer, and the ones the [gardener](gardener.md) takes from the notebook's journal when a line plans something with a date. A reminder belongs to a card or to the whole notebook. They are stored in the notebook's `board/reminders.json`, not in the reminder list above, and they show as yellow sticky notes on the board: one per card, and a free one for the whole notebook.
-
-The protected system job **`reminders`** — the notebook clock — runs every 15 minutes over every notebook. A dated reminder is announced from **09:00** in your time zone on its day (on the first of the month when only the month is known), once, in a silent turn that must say what is due and why, taken from the page the reminder points to. The message arrives in the personal chat like any other proactive message, with the notifications described below. The same round runs the apps' readers (see [App](board.md#app)) and notes when an app placed on a board changes state. See [Reminders and the notebook clock](board.md#reminders-and-the-notebook-clock).
-
-### Notebook crons
-
-Inside a notebook, the `cron` tool works once the notebook has a [board](board.md) (one with no cards is enough). Every job it creates belongs to **one card** or to the **whole notebook**, and **Jenny decides which** from what you asked, without asking you: tied to the card it is about, or to the whole notebook when it concerns all of it, several cards or nothing on the board. A job that repeats is a row of a mint label on the board (the card's, or the free one); a job that fires once is a dated line of a sticky note. A notebook cron runs inside the notebook (it can write only there, like the notebook's chat), delivers in the notebook's chat with the usual notifications when it has something to say, and leaves its last result on the board. In a notebook, *list* and *remove* see only that notebook's jobs. However it is removed — from the board, from the workshop, from any chat — what it left on the board goes with it. A notebook without a board still refuses the tool and points to the personal chat. The personal chat's own jobs stay where they are.
-
-## Heartbeat: a periodic checklist
-
-Heartbeat is Jenny's own background watchdog, driven entirely by one file: `workspace/HEARTBEAT.md` in your workspace. You can edit it directly from the workshop's file manager (**Memory → The real files**), or just ask Jenny to add something to it.
-
-Only the section literally named `## Active Tasks` is read — anything you write under a different heading, or outside any heading, is ignored. The file ships with a comment reminding you of this and to delete tasks once they're done rather than leaving them checked off.
-
-Every **30 minutes** by default (`gateway.heartbeat.intervalS`, default `1800` seconds), Jenny reads that section. If it's empty (only headers, blank lines, or HTML comments), the cycle is skipped entirely before any model call happens — so an empty Heartbeat costs you nothing. If there's at least one task line, Jenny runs a real turn to check on it.
-
-**That turn is silent by construction.** Whatever Jenny writes as its answer is not delivered anywhere and nobody reads it; the only way a Heartbeat cycle reaches you is Jenny deciding, during the turn, to send you a message explicitly. So "I set a task and never hear anything" is a real, expected outcome if nothing noteworthy ever comes up, not a bug — and the flip side matters too: a check written as a condition ("…and warn me only if the chance of rain goes above 70%") will not report the uneventful case at all. Before 0.6.6 that same restraint was attempted the other way around: the turn was told to answer "All clear." when it had nothing to say, and a second LLM call then guessed whether to hide it. That guess ran with a small token ceiling and, with a reasoning model, routinely ran out of budget before deciding — falling back to its default instead of judging. It's gone; silence is now a property of the turn, not an opinion about its text. Since 0.9.6 Jenny also has a way to *declare* that silence — a `nothing_to_report` step that delivers nothing and reaches nobody. It exists because "say nothing" is an instruction with nothing to do, and a small model was expressing it by sending you a message containing a placeholder word instead.
-
-When Heartbeat does decide to speak, the message is delivered proactively to **both** the WebUI chat and, if you've paired a Telegram bot, that chat too — it's not confined to whichever channel you're currently looking at.
-
-The practical rule of thumb: **write tasks under `## Active Tasks`, and delete them once they're done.** Every cycle where that section has content triggers one real LLM call — a forgotten task left in the file keeps costing tokens every 30 minutes indefinitely, even if Heartbeat never finds anything worth reporting.
-
-Example of something reasonable to put there: "Check the weather forecast around 7am and warn me if it looks like rain."
-
-**An empty checklist is free, and now it is also visible.** Skipping the cycle costs nothing, but the job still records a normal `ok` on every beat — so from the outside a heartbeat that is checking nothing is indistinguishable from a healthy one, and the only trace was a debug log line. The workshop's **Hands → When she acts on her own** says it in words: tap the heartbeat and it lists the tasks it can actually see in `HEARTBEAT.md`, or a notice that there are none. The same detail names a task that has not been carried out for several cycles, and whether Jenny has already told you about it.
-
-**Heartbeat has one schedule for the whole file.** Every line under `## Active Tasks` is looked at on the same 30-minute beat; there's no per-task cadence, and adding a second heartbeat job isn't the way to get one. If a particular check needs its own rhythm — every 10 minutes, or only on weekday mornings — that's a monitor job ([Two modes](#two-modes-one-that-always-speaks-one-that-speaks-only-if-it-has-to) above), which gives you an independent schedule and the same "only speaks if it's worth it" behavior. Heartbeat stays the right home for the shared, ambient checklist.
 
 ## `/goal` and long-running tasks
 
@@ -193,7 +175,7 @@ Full tool lists and sampling defaults are in the [Tool reference](../reference/t
 
 ### Changes waiting for your approval
 
-A helper that has read something from outside — a web page, a search, a download — does not change on its own the files Jenny uses by herself: a skill, `HEARTBEAT.md`, a reminder, `USER.md`, her memory. The change is kept as a draft, Jenny tells you there is something to approve, and a card in the home chat shows which file, where the content came from and what would change, with **Install** and **Discard**. Nothing is written until you tap **Install**. If the same helper has also read your personal files, it can send data only to the sites you named in the request. Why, and what this does not cover: [Security model](../internals/security-model.md#subagents-and-untrusted-content).
+A helper that has read something from outside — a web page, a search, a download — does not change on its own the files Jenny uses by herself: a skill, a reminder, `USER.md`, her memory. The change is kept as a draft, Jenny tells you there is something to approve, and a card in the home chat shows which file, where the content came from and what would change, with **Install** and **Discard**. Nothing is written until you tap **Install**. If the same helper has also read your personal files, it can send data only to the sites you named in the request. Why, and what this does not cover: [Security model](../internals/security-model.md#subagents-and-untrusted-content).
 
 ### Watching and steering the work
 
@@ -218,21 +200,21 @@ Jenny has the same controls from her side: she can check on a subagent's status,
 None of the proactive messages above are guaranteed to make a sound — whether a notification fires depends entirely on whether the app is in the foreground at the moment the message is delivered:
 
 - **App in the foreground:** no notification at all — you're already looking at the message as it streams in.
-- **App in the background or closed:** a system notification is posted on a dedicated channel named **"Alerts"** (**"Avvisi"** on a phone set to Italian: the channel name is an Android string resource and follows the phone's language, not Jenny's). The title starts with the name you gave Jenny (Settings → the bot name; `Jenny` by default) and, after it, what kind of notice it is, in Jenny's language (`agents.defaults.language`): reminders show `Jenny · ⏰ Reminder · <job name>` (no job name when the job has none), Heartbeat shows `Jenny · Monitoring`, an announcement of a new version shows `Jenny · Update`, a reply delivered in a notebook's chat shows `Jenny · <notebook>`, and anything else uses the plain name. The notification body is the message as plain text — Markdown marks (bold, headings, list bullets, link targets) are removed — collapsed to a single line and capped at **200 characters** (cut off with an ellipsis beyond that).
+- **App in the background or closed:** a system notification is posted on a dedicated channel named **"Alerts"** (**"Avvisi"** on a phone set to Italian: the channel name is an Android string resource and follows the phone's language, not Jenny's). The title starts with the name you gave Jenny (Settings → the bot name; `Jenny` by default) and, after it, what kind of notice it is, in Jenny's language (`agents.defaults.language`): reminders and monitors show `Jenny · ⏰ Reminder · <job name>` (no job name when the job has none), an announcement of a new version shows `Jenny · Update`, a reply delivered in a notebook's chat shows `Jenny · <notebook>`, and anything else uses the plain name. The notification body is the message as plain text — Markdown marks (bold, headings, list bullets, link targets) are removed — collapsed to a single line and capped at **200 characters** (cut off with an ellipsis beyond that).
 - Notifications on this channel use high importance (sound and vibration by default), and you can customize or silence that from Android's own per-app notification settings — there is no volume/sound toggle inside Jenny itself. This channel is separate from the silent, persistent "Jenny is running" notification (*"Jenny è attiva"* in Italian) the foreground service keeps up at all times.
 - **You can answer from the notification.** An alert carries a **Reply** field — except one from a notebook, whose answer would land in the personal chat instead: what you type there goes to Jenny as an ordinary message in the one conversation, and her answer comes back as a system alert. If she was not running and the reply could not be delivered, a second notification, "Jenny didn't get your message", offers **Send again** with your text kept. The floating mascot has its own bubble; when it already holds a conversation its button reads **Continue in the app** and opens the app on it.
 - Two notifications from the same source (e.g. the same reminder firing twice in a row) replace each other rather than stacking — you'll only ever see the latest one for that job. Each notebook has its own notifications, separate from the personal chat's and from the other notebooks'.
 - Tapping a notification opens the chat where the message is, even if the workshop was the last thing you had open: the personal conversation, raised over the page you were on, or — for a message delivered in a notebook, a reply or a notebook cron — that notebook, with its board underneath and its chat on top. A notebook deleted in the meantime falls back to the personal chat. Pending Jenny alerts are cleared when their own conversation is actually on screen: tapping one, or coming back to the app while that chat is showing. Opening the app on another page, or on another conversation, leaves them in place.
-- **The chat message is always there regardless.** Whether or not a notification actually rang, the reply from a reminder, Heartbeat, or a completed subagent is written into the chat exactly the same way — the notification is only ever an added ping layered on top of a delivery that already happened.
+- **The chat message is always there regardless.** Whether or not a notification actually rang, the reply from a reminder, a monitor, or a completed subagent is written into the chat exactly the same way — the notification is only ever an added ping layered on top of a delivery that already happened.
 - On Android 13 and newer, posting notifications requires the runtime `POST_NOTIFICATIONS` permission, which the app requests automatically the first time it starts. If you deny it, everything above still happens in chat — you simply never get the ringing/vibrating notification for it.
 
 ## Related pages
 
 - [Memory and Dream](memory.md) — what the `dream` system job (visible in your reminders list) actually does.
-- [Notebook board](board.md) — a notebook's own reminders, and the `reminders` job that announces them.
-- [Telegram bridge](telegram.md) — how proactive deliveries (Heartbeat, reminders, monitors) reach a paired Telegram chat.
+- [Notebook board](board.md) — where a notebook's jobs show, and the `reminders` job that keeps its apps fresh.
+- [Telegram bridge](telegram.md) — how proactive deliveries (reminders, monitors) reach a paired Telegram chat.
 - [Troubleshooting](troubleshooting.md) — what to check when a reminder never arrives, and how to tell a silent monitor apart from a broken one.
 - [Slash commands](slash-commands.md) — full reference for `/goal`, `/stop`, and the rest.
 - [Android permissions](../reference/android-permissions.md) — the full permission table, including `POST_NOTIFICATIONS` and battery-optimization exemption.
-- [Configuration reference](../reference/configuration.md) — `gateway.heartbeat.*`, `agents.defaults.timezone`, `agents.defaults.maxConcurrentSubagents`, and related keys; the anti-doze knobs are under [`power`](../reference/configuration.md#power).
+- [Configuration reference](../reference/configuration.md) — `agents.defaults.timezone`, `agents.defaults.maxConcurrentSubagents`, and related keys; the anti-doze knobs are under [`power`](../reference/configuration.md#power).
 - [Environment variables](../reference/environment-variables.md) — `JENNY_GOAL_INACTIVITY_TTL_H` and other `JENNY_*` knobs.

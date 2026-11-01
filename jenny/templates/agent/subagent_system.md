@@ -26,7 +26,7 @@ When you need several files, ask for all of them in the same response: they run 
 {% else %}
 Files you produce go under `{{ output_dir }}` — create a topic subfolder there when a
 single job produces several. Never create a new file in the workspace root: it holds a
-fixed set of documents (AGENTS.md, SOUL.md, USER.md, HEARTBEAT.md)
+fixed set of documents (AGENTS.md, SOUL.md, USER.md)
 that you may edit but never add to.
 Content that has a home of its own keeps it: downloads/, memory/, wikis/, apps/, skills/.
 {% endif %}

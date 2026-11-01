@@ -1,4 +1,4 @@
-"""Il passo della bacheca nel lint della wiki: cassetti stantii, fonti sparite, fili, attese."""
+"""Il passo della bacheca nel lint della wiki: cassetti stantii, fonti sparite, fili."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from jenny.board import model
-from jenny.board.store import mutate_board, mutate_reminders, write_card_summary
+from jenny.board.store import mutate_board, write_card_summary
 
 _SCRIPTS = Path(__file__).resolve().parents[3] / "jenny" / "skills" / "llm-wiki" / "scripts"
 
@@ -51,7 +51,7 @@ def test_a_clean_board_has_no_issues(tmp_path, lint_wiki, capsys) -> None:
     assert "dormienza.md (4)" in out
 
 
-def test_stale_drawers_missing_sources_threads_and_overdue(tmp_path, lint_wiki, capsys) -> None:
+def test_stale_drawers_missing_sources_and_threads(tmp_path, lint_wiki, capsys) -> None:
     root = _notebook(tmp_path)
     write_card_summary(root, "acero", {
         "fingerprint": "sha1:old",
@@ -62,16 +62,17 @@ def test_stale_drawers_missing_sources_threads_and_overdue(tmp_path, lint_wiki, 
         board["connections"].append({"a": "acero", "b": "fico", "label": "x"})
 
     mutate_board(root, threads)
-    mutate_reminders(root, lambda r: r["reminders"].append({
-        "id": "r-1", "card": "acero", "text": "Concime",
-        "when": {"kind": "date", "date": "2026-09-01"},
-    }))
-    assert lint_wiki.lint_board(root, today="2026-10-04") == 4
+    # Un ``reminders.json`` rimasto sul disco non conta più: i promemoria sono job,
+    # e un job a data se ne va quando suona.
+    (root / "board" / "reminders.json").write_text(
+        '{"reminders": [{"id": "r-1", "card": "acero", "text": "Concime", '
+        '"when": {"kind": "date", "date": "2026-09-01"}}]}')
+    assert lint_wiki.lint_board(root, today="2026-10-04") == 3
     out = capsys.readouterr().out
     assert "stale drawer: `acero`" in out
     assert "cites missing pages: sparita.md" in out
     assert "no longer on the board" in out
-    assert "past their date and still open: Concime" in out
+    assert "Concime" not in out
 
 
 def test_a_notebook_without_a_board_is_not_linted_for_one(tmp_path, lint_wiki) -> None:

@@ -51,10 +51,9 @@ riscrivere il proprio registro.
 se nessuno ci è passato fra due sue scritture. Altrimenti il file resta com'è e
 il resoconto dice quale e perché: mai sovrascrivere il lavoro di altri.
 
-**La bacheca si annulla per pezzi.** ``board.json`` e ``reminders.json`` di un
-quaderno sono file unici che scrivono in tanti: la casa ci timbra ``lastSeen``
-ogni volta che ridisegna la bacheca, l'orologio dei promemoria gli stati delle
-app. Annullati a file intero risultavano quasi sempre «cambiati da altri» (prova
+**La bacheca si annulla per pezzi.** ``board.json`` di un quaderno è un file
+unico che scrivono in tanti: la casa ci timbra ``lastSeen`` ogni volta che
+ridisegna la bacheca, l'orologio dei quaderni gli stati delle app. Annullati a file intero risultavano quasi sempre «cambiati da altri» (prova
 su jenny_s22 del 26/10/2026: la bacheca ridisegnata dopo la mini-me). Per loro il
 registro tiene anche il «dopo» di ogni scrittura, e l'annulla toglie dal
 contenuto di adesso solo il cambiamento dell'aiutante, chiave per chiave e
@@ -135,10 +134,10 @@ class _ConflictError(Exception):
 
 
 def _mergeable(rel: str) -> bool:
-    """La bacheca o le attese di un quaderno: JSON che si annulla per pezzi."""
+    """La bacheca di un quaderno: JSON che si annulla per pezzi."""
     parts = rel.split("/")
     return (len(parts) == 4 and parts[0] == "wikis" and parts[2] == "board"
-            and parts[3] in ("board.json", "reminders.json"))
+            and parts[3] == "board.json")
 
 
 def _id_list(value: Any) -> bool:

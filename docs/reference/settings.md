@@ -238,19 +238,19 @@ One row, **What she knows**, counts the skills that come with the app and the on
 
 ### When she acts on her own
 
-Your own scheduled jobs and the heartbeat, with what each one did last time and when it runs next. Dream and the gardener are not listed here: their switches and schedules are in [Memory](#memory).
+Your own scheduled jobs, with what each one did last time and when it runs next. Dream and the gardener are not listed here: their switches and schedules are in [Memory](#memory).
 
 | What it shows | Why |
 |---|---|
 | **One row per job**, with its name, how the last run ended and when it runs next | The outcomes are not coloured alike: "looked, nothing to report" means a monitor looked and had nothing to say, which is success, not a warning. "could not check" is its own state (it ran, but the check did not happen) and stays distinct from "error". |
 | **Tags on the row** | *system*, *speaks only if it has something to report*, *once only*, *paused*, *off*, *does nothing*. They change what the row means: a job that is off with "in 4 minutes" beside it would be a lie. |
 | **Overdue instead of a past date** | Next-run times are stored, not computed on the fly: they are recalculated at startup and after each run. With the scheduler stopped, or right after the phone comes back from a long doze, the stored time is in the past, so the row shows how long ago it was due ("5 min ago"), in the warning colour, instead of a date that looks like the future. |
-| **Armed but does nothing** | A system job survives the setting behind it: switch the heartbeat off, or leave `HEARTBEAT.md` with no active tasks, and its job stays scheduled and records `ok`. A notice above the list tells you. |
+| **Armed but does nothing** | A system job survives the setting behind it: switch it off and its job stays scheduled and records `ok`. A notice above the list tells you. |
 | **A rebuilt list** | If `cron/jobs.json` was recovered at startup, the group says so above the list, not just in the notice at the top of the screen: a short list looks like a correct list. |
 | **Times in the job's own timezone** | A job created with an explicit timezone is shown in it, named only when it differs from the phone's, so the panel and what Jenny says in chat never disagree. |
 | **"As of HH:MM", with a Refresh button** | The panel does not poll. On a phone where scheduled work is kept punctual through deep doze, a screen that woke the gateway every few seconds would undo that, so it reads once when you open the drawer and the timestamp says it is a snapshot. |
 
-Tapping a job opens its details: what a system job is for, the reminder's full text, the recent runs with their errors, and, for the heartbeat, the checks it can see in `HEARTBEAT.md`.
+Tapping a job opens its details: what a system job is for, the reminder's full text, and the recent runs with their errors.
 
 Your own jobs can be managed from there. An active job has **Pause** and **Delete**, and a paused one has **Resume** and **Delete**. Pausing doesn't ask, because resuming undoes it. **Delete** asks first, and a deleted job only comes back if you ask Jenny again. A one-time reminder whose time passed while it was paused can only be deleted. System jobs have no buttons: their switches are in their own settings. There is no "run now", because that would start an agent turn, which costs tokens and may message you. Creating or changing a job is still done by asking Jenny. See [Scheduling and proactivity](../using/scheduling.md).
 
@@ -288,7 +288,6 @@ Settings intentionally does not expose everything the backend supports. The foll
 - `agents.defaults.tool_hint_max_length`: has a working update endpoint but no field in the UI (default 40, range 20–500)
 - `agents.defaults.language`: written once by onboarding, from the phone's language at that moment
 - `agents.defaults.reasoning_effort` = `adaptive`: the Parameters select saves the effort (see above), but `adaptive` is not one of the values the endpoint accepts
-- `gateway.heartbeat.*`: the proactive Heartbeat cadence and behaviour
 - `websocket.show_reasoning`: whether the "reasoning" pill is shown/recorded at all for the WebUI channel (default true)
 - `tools.*.enable` toggles for individual tools (file tools, `python_exec`, `my`, introspection, diagnostics, etc.): only Location and SSH have a switch in the workshop
 - `tools.location.telegram_ttl_s`, `tools.location.fresh_timeout_s`: see Location above

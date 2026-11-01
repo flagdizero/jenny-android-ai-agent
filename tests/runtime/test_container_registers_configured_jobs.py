@@ -79,13 +79,6 @@ _CONDITIONAL_JOBS = [
         17 * _MINUTE_MS,
         id="gardener",
     ),
-    pytest.param(
-        "heartbeat",
-        lambda c, on: setattr(c.gateway.heartbeat, "enabled", on),
-        lambda c: setattr(c.gateway.heartbeat, "interval_s", 111),
-        111 * 1000,
-        id="heartbeat",
-    ),
     # L'orologio dei quaderni non ha un intervallo configurabile: un giro ogni
     # quarto d'ora, che e' anche il passo minimo di una micro app. Lo accende la wiki.
     pytest.param(
@@ -204,3 +197,21 @@ def test_an_orphan_system_job_is_retired(workspace: Path, no_extensions) -> None
 
     assert "cloud_backup" not in jobs
     assert "update_check" in jobs
+
+
+def test_the_retired_heartbeat_job_leaves_the_store(workspace: Path) -> None:
+    """L'heartbeat non c'è più (31/10/2026): il suo job, scritto da una build
+    precedente, va via all'avvio invece di scattare nel vuoto ogni mezz'ora."""
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronPayload, CronSchedule
+
+    seed = GatewayContainer(Config())
+    seed.build()
+    seed.cron.register_system_job(CronJob(
+        id="heartbeat", name="heartbeat",
+        schedule=CronSchedule(kind="every", every_ms=30 * _MINUTE_MS),
+        payload=CronPayload(kind="system_event"),
+    ))
+    assert isinstance(seed.cron, CronService)
+
+    assert "heartbeat" not in _jobs(Config())

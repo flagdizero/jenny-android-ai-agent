@@ -81,7 +81,6 @@ def _make_dispatcher(agent, snapshot_cb) -> CronDispatcher:
         get_agent=lambda: agent,
         config=Config(),
         cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
         snapshot_before_dream=snapshot_cb,
     )
 

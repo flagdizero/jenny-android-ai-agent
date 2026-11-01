@@ -36,7 +36,7 @@ from jenny.agent.context import ContextBuilder
 # l'utente ci ha scritto.
 BOOTSTRAP_MARKER = "## AGENTS.md"
 PROJECT_MARKER = "# Project Folder"
-SCHEDULING_MARKER = "# Recurring Work"
+SCHEDULING_MARKER = "# Work for Later"
 
 
 def _project_prompt(root: pathlib.Path, *, instructions: str) -> str:

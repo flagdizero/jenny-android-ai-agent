@@ -61,9 +61,9 @@ _COULD_NOT_CHECK_DEFAULTS: dict[str, Any] = {
     "consecutiveCouldNotCheck": 0,
     "couldNotCheckSinceMs": None,
     "couldNotCheckEscalated": False,
-    # Lo stesso terzo esito per singolo task dell'heartbeat: vuoto per ogni job
-    # che non sia l'heartbeat, e vuoto anche per un heartbeat sano.
-    "taskChecks": {},
+    # La delega in sospeso di un monitor, e il «già avvisato» di una condizione.
+    "pendingSinceMs": None,
+    "conditionNotified": False,
 }
 
 

@@ -101,7 +101,7 @@ def test_no_new_module_fails_a_cold_import() -> None:
         + "\n\nQuasi sempre un ciclo di import a livello di modulo. È verde in una "
         "raccolta completa e fatale a freddo — il gateway non parte — e la "
         "correzione più piccola è spostare uno dei due import dentro la funzione "
-        "che lo usa (v. `jenny/session/manager.py::last_user_message_ms`)."
+        "che lo usa."
     )
 
 

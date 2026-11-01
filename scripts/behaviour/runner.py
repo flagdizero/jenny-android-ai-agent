@@ -32,7 +32,7 @@ from .model import Check, Scenario, make_nonce, observation_from_rows
 from .scenarios import CROSS_CUTTING
 
 #: Riscritti com'erano prima di ogni giro: i giri non si passano niente.
-RESET_FILES = ("memory/MEMORY.md", "USER.md", "HEARTBEAT.md", "memory/history.jsonl",
+RESET_FILES = ("memory/MEMORY.md", "USER.md", "memory/history.jsonl",
                "memory/.cursor", "memory/.dream_cursor")
 
 _FILLER_FACTS = (
@@ -103,7 +103,7 @@ class Runner:
             raise DeviceError("a snapshot from an earlier run is still there: "
                               "run `behaviour_check.py --restore` first")
         dev.snapshot()
-        # I job di sistema (Dream, giardiniere, heartbeat, promemoria) girerebbero
+        # I job di sistema (Dream, giardiniere, orologio dei quaderni) girerebbero
         # in mezzo agli scenari: un Dream a meta' giro riscrive MEMORY.md. Si
         # spostano di un giorno ad app ferma; la fotografia rimette lo store.
         dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
@@ -188,10 +188,6 @@ class Runner:
                 dream_rows = [r for f in new for r in _rows(dev.read(f"sessions/{f}") or "")]
                 rows = rows + dream_rows
                 extra["dream_sessions"] = new
-            if scenario.heartbeat_after:
-                hb_rows, ran = self._heartbeat_now()
-                extra["heartbeat_ran"] = ran
-                rows = hb_rows
             files: dict[str, str | None] = {}
             for raw in scenario.read_after:
                 path = scenario.render(raw, nonces)
@@ -275,35 +271,6 @@ class Runner:
                 break
             time.sleep(5)
         return {"dream_cursor_before": before, "dream_cursor_after": after}
-
-    def _heartbeat_now(self, timeout: float = 420.0) -> tuple[list[dict[str, Any]], bool]:
-        """Un giro dell'heartbeat, forzato dallo store, e le sue righe di sessione.
-
-        Lo store si tocca ad app ferma, e il riavvio riestrae i template: una
-        taratura in corso si riapplica subito dopo.
-        """
-        dev = self.device
-        started = time.strftime("%Y-%m-%dT%H:%M:%S")
-        dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
-        before = dev.shift_system_jobs(only=("heartbeat",)).get("heartbeat", 0)
-        dev.restart_app()
-        self._reapply_calibration()
-        deadline = time.monotonic() + timeout
-        ran = False
-        while time.monotonic() < deadline:
-            if dev.job_last_run("heartbeat") > before:
-                ran = True
-                time.sleep(3)
-                break
-            time.sleep(5)
-        # Rimesso lontano, o tornerebbe a girare fra mezz'ora in mezzo a un altro scenario.
-        dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
-        rows = [r for r in _rows(dev.read("sessions/heartbeat.jsonl") or "")
-                if str(r.get("timestamp") or "") >= started]
-        dev.shift_system_jobs(delay_ms=24 * 3600 * 1000, only=("heartbeat",))
-        dev.restart_app()
-        self._reapply_calibration()
-        return rows, ran
 
     def _reapply_calibration(self) -> None:
         for path, original in self.originals.items():

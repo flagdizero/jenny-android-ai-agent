@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
-from jenny.board.store import mutate_board, read_reminders
+from jenny.board.store import mutate_board
 
 
 def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
@@ -73,6 +73,7 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
     filo, e nasce accanto. ``ValueError`` con un messaggio che si legge se non
     si puo'.
     """
+    from jenny.board.cron_link import notes_on_disk
     from jenny.config.paths import get_workspace_path
 
     try:
@@ -83,7 +84,7 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
     name = title or app_title(ws, slug)
     size = app_size(ws, slug)
     box = model.card_box({"size": size})
-    reminders = read_reminders(root)
+    notes = notes_on_disk(root.name, ws)
     done: dict[str, Any] = {}
 
     def apply(board: dict[str, Any]) -> None:
@@ -94,7 +95,7 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
             if other is None:
                 titles = ", ".join(f"«{c['title']}»" for c in board["cards"]) or "none"
                 raise ValueError(f"No card {link!r} on this board (cards: {titles}).")
-        if model.is_full(board, reminders):
+        if model.is_full(board, notes):
             raise ValueError("The board is full: the user has to remove a card first.")
         taken = {c["id"] for c in board["cards"]} | model.removed_card_ids(board)
         card_id = model.unique_id(model.slugify(name), taken)
@@ -102,7 +103,7 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
             ow, oh = model.card_box(other)
             near = (other["pos"]["x"] + ow + box[0] / 2, other["pos"]["y"] + oh / 2)
         target = (near[0] - box[0] / 2, near[1] - box[1] / 2) if near is not None else None
-        x, y = model.free_slot(board, reminders, box=box, near=target)
+        x, y = model.free_slot(board, notes, box=box, near=target)
         card = model.normalize_board({"cards": [{
             "id": card_id, "title": name, "titleBy": model.USER, "pages": [],
             "pos": {"x": x, "y": y, "by": model.USER}, "glyph": "",

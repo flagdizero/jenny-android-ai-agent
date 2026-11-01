@@ -294,9 +294,9 @@ class TestDelivery:
 
     async def test_the_tag_is_cleaned(self):
         bus = await _bound()
-        ni.on_native_text("ok", ni.SOURCE_NOTIFICATION, "  heartbeat \n")
+        ni.on_native_text("ok", ni.SOURCE_NOTIFICATION, "  update \n")
         await asyncio.wait_for(bus.arrived.wait(), 2)
-        assert bus.inbound[0].metadata[ni.NATIVE_THREAD_KEY] == "heartbeat"
+        assert bus.inbound[0].metadata[ni.NATIVE_THREAD_KEY] == "update"
 
     async def test_two_messages_in_a_row_stay_two(self):
         bus = await _bound()

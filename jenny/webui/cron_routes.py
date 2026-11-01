@@ -47,7 +47,7 @@ from jenny.webui.cron_api import snapshot_cron, webui_cron_payload
 _PATH = "/api/webui/cron"
 _ACTION_RE = re.compile(r"^/api/webui/cron/([^/]+)/(pause|resume|remove)$")
 # Gli id dei job: otto caratteri di uuid per quelli dell'utente, un nome per
-# quelli di sistema (``heartbeat``, ``update_check``). Niente punti ne' percento:
+# quelli di sistema (``dream``, ``update_check``). Niente punti ne' percento:
 # l'id arriva da un path, e non deve poterne comporre un altro.
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 # Cosa risponde il servizio → codice HTTP. 200 anche per ``unchanged``: la cosa
@@ -141,7 +141,7 @@ class CronRoutes:
             # ``CronService._store`` sotto di loro, e un giro del timer salvava
             # poi la copia vecchia (il job appena eseguito ripartiva).
             snapshot = snapshot_cron(cron)
-            # Il resto in un thread: la config da disco e ``HEARTBEAT.md``.
+            # Il resto in un thread: la config da disco.
             payload = await asyncio.to_thread(webui_cron_payload, snapshot)
         except Exception:
             self._log.exception("Cron status failed")

@@ -24,8 +24,15 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
-from jenny.board.cron_link import notebook_jobs_on_disk, result_of
-from jenny.board.store import read_board, read_card_summary, read_reminders
+from jenny.board.cron_link import (
+    is_note,
+    note_words,
+    notebook_jobs_on_disk,
+    notes_on_disk,
+    result_of,
+    user_timezone,
+)
+from jenny.board.store import read_board, read_card_summary
 from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
 # Il tetto del blocco. È lo stesso numero della mappa che sostituisce
@@ -51,12 +58,18 @@ MAX_RECENT = 3
 TITLE_WORD_MIN = 4
 
 
-def _when(rem: Mapping[str, Any]) -> str:
-    when = rem.get("when") or {}
-    if when.get("kind") == "date":
-        day = str(when.get("date", ""))
-        return day[:7] if when.get("precision") == "month" else day
-    return f"when {when.get('field')} {when.get('op')} {when.get('value')}"
+def _notes(root: Path) -> list[dict[str, Any]]:
+    """I promemoria del quaderno (job dello scheduler), dal più vicino."""
+    return notes_on_disk(root.name, tz_name=user_timezone())
+
+
+def _next_tag(notes: list[dict[str, Any]], scope: str) -> str:
+    """``[next: Rinvaso, 2026-03 — coming up]``: il promemoria più vicino di *scope*."""
+    nxt = model.next_note(notes, scope)
+    if nxt is None:
+        return ""
+    soon = " — coming up" if model.note_is_soon(nxt) else ""
+    return f"[next: {nxt['text']}, {note_words(nxt)}{soon}]"
 
 
 # Le intestazioni della sezione «aperto» della mappa, nelle lingue in cui il
@@ -132,13 +145,12 @@ def notebook_line(root: Path) -> str:
         return ""
     tags = []
     names = [job["name"] or job["id"] for job in notebook_jobs_on_disk(root.name)
-             if job["scope"] == model.NOTEBOOK]
+             if job["scope"] == model.NOTEBOOK and not is_note(job["kind"], job["condition"])]
     if names:
         tags.append(f"[auto: {' · '.join(f'cron {n}' for n in names)}]")
-    nxt = model.next_reminder(read_reminders(root), model.NOTEBOOK)
-    if nxt is not None:
-        soon = " — coming up" if model.reminder_is_soon(nxt) else ""
-        tags.append(f"[next: {nxt['text']}, {_when(nxt)}{soon}]")
+    nxt = _next_tag(_notes(root), model.NOTEBOOK)
+    if nxt:
+        tags.append(nxt)
     return " ".join(tags)
 
 
@@ -149,7 +161,7 @@ def board_block(
     board = read_board(root)
     if board is None or not board["cards"]:
         return ""
-    reminders = read_reminders(root)
+    notes = _notes(root)
     titles = dict(iter_wiki_pages(root / "wiki"))
     owners = model.page_owners(board)
     offboard = sum(1 for p in titles if p not in owners)
@@ -166,10 +178,9 @@ def board_block(
         auto = _auto_tag(root, card)
         if auto:
             tags.append(auto)
-        nxt = model.next_reminder(reminders, card["id"])
-        if nxt is not None:
-            soon = " — coming up" if model.reminder_is_soon(nxt) else ""
-            tags.append(f"[next: {nxt['text']}, {_when(nxt)}{soon}]")
+        nxt = _next_tag(notes, card["id"])
+        if nxt:
+            tags.append(nxt)
         brief = summary.get("brief") or ""
         lines.append((card["title"], " ".join(brief.split()), " ".join(tags)))
     footer = (
@@ -235,7 +246,8 @@ def _auto_tag(root: Path, card: Mapping[str, Any]) -> str:
     quando la scheda viene nominata.
     """
     bits = [f"cron {job['name'] or job['id']}"
-            for job in notebook_jobs_on_disk(root.name) if job["scope"] == card["id"]]
+            for job in notebook_jobs_on_disk(root.name)
+            if job["scope"] == card["id"] and not is_note(job["kind"], job["condition"])]
     for view in _app_views(root, card):
         bits.append(str(view.get("name")))
     return f"[auto: {' · '.join(bits)}]" if bits else ""
@@ -316,7 +328,8 @@ def _cron_lines(root: Path, scope: str) -> list[str]:
     results = (read_board(root) or {}).get("cronResults") or {}
     lines = []
     for job in notebook_jobs_on_disk(root.name):
-        if job["scope"] != scope:
+        # Un promemoria ha la sua riga («Reminder: …»): qui solo i cron che si ripetono.
+        if job["scope"] != scope or is_note(job["kind"], job["condition"]):
             continue
         last = result_of(results, job["id"], job["link"])
         # Una citazione datata, non una frase di Jenny al presente: il testo
@@ -332,7 +345,6 @@ def _cron_lines(root: Path, scope: str) -> list[str]:
 def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     """Il cassetto di una scheda come testo per il contesto del turno."""
     summary = read_card_summary(root, card["id"]) or {}
-    reminders = read_reminders(root)
     parts = [f"Drawer of the card «{card['title']}» (written from the wiki pages it cites):"]
     if summary.get("brief"):
         parts.append(summary["brief"])
@@ -345,9 +357,9 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     parts.extend(_cron_lines(root, card["id"]))
     for view in _app_views(root, card):
         parts.append(_app_line(view))
-    for rem in model.open_reminders(reminders):
-        if rem.get("card") == card["id"]:
-            parts.append(f"- Reminder: {rem['text']}, {_when(rem)}")
+    for note in _notes(root):
+        if note["card"] == card["id"]:
+            parts.append(f"- Reminder: {note['text']}, {note_words(note)} (`{note['id']}`)")
     photos = _photos_line(root, card)
     if photos:
         parts.append(photos)

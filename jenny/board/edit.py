@@ -14,7 +14,8 @@ Jenny. Per questo il giardiniere, che scrive come ``jenny``, non può disfarlo
 Quasi tutte sono funzioni sincrone (I/O su disco, da chiamare fuori dal loop).
 Fanno eccezione quelle che fermano, riprendono o tolgono quel che una scheda fa
 da sé — :func:`remove_card`, :func:`restore_card`, :func:`remove_section`,
-:func:`respond_suggestion` — che sono ``async``: il servizio cron riarma il suo
+:func:`respond_suggestion` — e quelle dei promemoria, che sono job dello
+scheduler (:func:`add_reminder` e le sue sorelle): sono ``async``: il servizio cron riarma il suo
 timer sul loop, e chiamato da un thread solleva «no running event loop». Il
 09/10/2026, sull'emulatore, una «Togli» col dito vero ha messo in pausa il cron e
 poi è fallita: la scheda era nel cestino, l'interfaccia diceva di riprovare.
@@ -39,10 +40,8 @@ from jenny.board.store import (
     board_dir,
     delete_card_summary,
     mutate_board,
-    mutate_reminders,
     read_board,
     read_card_summary,
-    read_reminders,
 )
 
 
@@ -53,6 +52,13 @@ class BoardEditError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+def _notes(root: Path) -> list[dict[str, Any]]:
+    """Le righe dei promemoria del quaderno, dal file dei job: occupano un post-it."""
+    from jenny.board.cron_link import notes_on_disk
+
+    return notes_on_disk(root.name)
 
 
 def need_card(board: Mapping[str, Any], ref: str) -> dict[str, Any]:
@@ -148,12 +154,12 @@ def add_card(
     title = _title(title)
     glyph = glyph if isinstance(glyph, str) else ""
     wanted = _check_pages(root, pages)
-    reminders = read_reminders(root)
+    notes = _notes(root)
     made: dict[str, Any] = {}
     sources: list[str] = []
 
     def apply(board: dict[str, Any]) -> None:
-        if model.is_full(board, reminders):
+        if model.is_full(board, notes):
             raise BoardEditError("conflict", "the board is full")
         target = near
         if near_card:
@@ -162,7 +168,7 @@ def add_card(
             target = (near[0] - model.CARD_BOX[0] / 2, near[1] - model.CARD_BOX[1] / 2)
         taken = {c["id"] for c in board["cards"]} | model.removed_card_ids(board)
         card_id = model.unique_id(model.slugify(title), taken)
-        x, y = model.free_slot(board, reminders, near=target)
+        x, y = model.free_slot(board, notes, near=target)
         sources.extend(_take_pages(board, wanted, card_id))
         card = model.normalize_board({"cards": [{
             "id": card_id, "title": title, "titleBy": model.USER, "pages": wanted,
@@ -192,7 +198,7 @@ def rename_card(root: Path, ref: str, title: Any) -> None:
 
 def move_card(root: Path, ref: str, near_card: str) -> None:
     """Una scheda accanto a un'altra. Le coordinate esatte restano dell'interfaccia."""
-    reminders = read_reminders(root)
+    notes = _notes(root)
 
     def apply(board: dict[str, Any]) -> None:
         card = need_card(board, ref)
@@ -200,7 +206,7 @@ def move_card(root: Path, ref: str, near_card: str) -> None:
         if other["id"] == card["id"]:
             raise BoardEditError("bad_request", "a card cannot go next to itself")
         rest = {**board, "cards": [c for c in board["cards"] if c["id"] != card["id"]]}
-        x, y = model.free_slot(rest, reminders, box=model.card_box(card), near=beside(other))
+        x, y = model.free_slot(rest, notes, box=model.card_box(card), near=beside(other))
         card["pos"] = {"x": x, "y": y, "by": model.USER}
 
     mutate_board(root, apply)
@@ -319,8 +325,9 @@ async def remove_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, An
 
     La scheda, i suoi fili e il suo posto vanno in ``removedCards`` per
     :data:`model.REMOVED_KEEP_DAYS` giorni. Quel che faceva da sé si ferma — i
-    cron del suo cassetto in pausa, le attese non si annunciano — e riparte con :func:`restore_card`. La wiki non cambia: le
-    pagine restano, e la ricerca le trova.
+    suoi cron e i suoi promemoria (job anche loro) in pausa — e riparte con
+    :func:`restore_card`. La wiki non cambia: le pagine restano, e la ricerca le
+    trova.
 
     Una scheda senza pagine, senza cassetto o senza attese si toglie come le
     altre. Un **cassetto orfano** — ``board/cards/<id>.json`` senza la scheda in
@@ -430,7 +437,7 @@ async def restore_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, A
     quel che riparte: ``jobs``.
     """
     def untrash() -> dict[str, Any]:
-        reminders = read_reminders(root)
+        notes = _notes(root)
         back: dict[str, Any] = {}
 
         def apply(board: dict[str, Any]) -> None:
@@ -442,7 +449,7 @@ async def restore_card(root: Path, ref: str, *, cron: Any = None) -> dict[str, A
             card = entry["card"]
             if model.card_by_id(board, card["id"]) is not None:
                 raise BoardEditError("conflict", "a card with that id is on the board")
-            if model.is_full(board, reminders):
+            if model.is_full(board, notes):
                 raise BoardEditError("conflict", "the board is full")
             owners = model.page_owners(board)
             card["pages"] = [p for p in card["pages"] if p not in owners]
@@ -545,100 +552,6 @@ def add_note(root: Path, ref: str, text: Any, *, timezone_name: str | None = Non
     return _append_section(root, ref, section, "s-note")
 
 
-def parse_when(raw: Any) -> dict[str, Any]:
-    when = model._normalize_when(raw)
-    if when is None:
-        raise BoardEditError("bad_request", "invalid when")
-    return when
-
-
-def add_reminder(root: Path, ref: str, text: Any, when: Any) -> str:
-    """Un'attesa dell'utente: di una scheda (*ref*) o di tutto il quaderno (*ref* vuoto).
-
-    Sulla bacheca è una riga del post-it della sua scheda, o di quello libero del
-    quaderno. Restituisce l'id dell'attesa. Dal 20/10/2026 non scrive più una
-    sezione nel cassetto: il calendario di cura la deriva da ``reminders.json``.
-    """
-    body = model.clean_text(text, model.MAX_TITLE * 2)
-    if not body:
-        raise BoardEditError("bad_request", "text required")
-    parsed = parse_when(when)
-    scope = card_id_of(root, ref) if str(ref or "").strip() else model.NOTEBOOK
-    stamp = model.now_iso()
-    rid_holder: list[str] = []
-
-    def add_rem(rems: dict[str, Any]) -> None:
-        rid = model.unique_id(f"r-{model.slugify(body, fallback='reminder')}"[:40],
-                              [r["id"] for r in rems["reminders"]])
-        rid_holder.append(rid)
-        rems["reminders"].append({
-            "id": rid, "card": scope, "text": body, "when": parsed, "by": model.USER,
-            "state": "open", "created": stamp, "source": "board",
-        })
-
-    mutate_reminders(root, add_rem)
-    return rid_holder[0]
-
-
-def attach_reminder(root: Path, ref: str, rid: str) -> dict[str, Any]:
-    """Un'attesa aperta che c'è già, sulla scheda *ref* (o, *ref* vuoto, sul quaderno).
-
-    Un'attesa ha un ambito solo — il campo ``card`` di ``reminders.json``, lo
-    stesso che scrive :func:`add_reminder` — quindi sta su una scheda sola:
-    attaccarla altrove la **sposta**, e attaccarla dove sta già non scrive
-    niente. Serve a quella rimasta senza post-it perché la sua scheda è nel
-    cestino o non c'è più: il 25/10/2026, sul telefono, l'editore non poteva né
-    attaccarla né rifarla senza un doppione. Vale come dell'utente (``by``),
-    come :func:`update_reminder_fields`. Un'attesa chiusa (``done``/``dropped``)
-    è storia e si rifiuta, come lì.
-
-    Restituisce ``{"reminder", "from", "changed"}``: l'attesa scritta, l'ambito
-    di prima e se qualcosa è cambiato.
-    """
-    scope = card_id_of(root, ref) if str(ref or "").strip() else model.NOTEBOOK
-    rid = str(rid or "").strip()
-    if not rid:
-        raise BoardEditError("bad_request", "reminder id required")
-    out: dict[str, Any] = {}
-
-    def apply_rem(rems: dict[str, Any]) -> bool | None:
-        rem = next((r for r in rems["reminders"] if r["id"] == rid), None)
-        if rem is None:
-            raise BoardEditError("not_found", f"no reminder `{rid}`: show lists the open ones")
-        if rem["state"] != "open":
-            raise BoardEditError("conflict", f"reminder `{rid}` is {rem['state']}: closed "
-                                             "reminders are history and do not change")
-        out.update({"from": rem["card"], "changed": rem["card"] != scope})
-        if not out["changed"]:
-            out["reminder"] = dict(rem)
-            return False
-        rem["card"] = scope
-        rem["by"] = model.USER
-        out["reminder"] = dict(rem)
-        return None
-
-    mutate_reminders(root, apply_rem)
-
-    # Un'attesa di prima del 20/10/2026 può avere ancora la sua sezione nel cassetto
-    # della scheda vecchia (anche nel cestino): non si vede, ma ``remove_section`` lì
-    # la chiuderebbe dopo che è passata altrove. Se ne va, come in :func:`drop_reminder`.
-    def apply(board: dict[str, Any]) -> bool | None:
-        changed = False
-        for card in [*board["cards"], *(r["card"] for r in board["removedCards"])]:
-            if card["id"] == scope:
-                continue
-            keep = [s for s in card["userSections"]
-                    if not (s.get("kind") == "reminder" and s.get("reminder") == rid)]
-            if len(keep) != len(card["userSections"]):
-                card["userSections"] = keep
-                changed = True
-        return None if changed else False
-
-    if out["changed"]:
-        mutate_board(root, apply)
-    return out
-
-
 def _section(root: Path, ref: str, sid: str) -> tuple[str, dict[str, Any]]:
     board = read_board(root) or {"cards": []}
     card = need_card(board, ref)
@@ -656,7 +569,7 @@ def update_note(root: Path, ref: str, sid: str, text: Any, *,
 
     card_id, section = _section(root, ref, sid)
     if section["kind"] != "note":
-        raise BoardEditError("bad_request", "only notes, photos and reminders can be edited")
+        raise BoardEditError("bad_request", "only notes and photos can be edited here")
     body = model.clean_block(text, model.MAX_NOTE)
     if not body:
         raise BoardEditError("bad_request", "text required")
@@ -686,7 +599,7 @@ def update_photo_caption(root: Path, ref: str, sid: str, text: Any, *,
 
     card_id, section = _section(root, ref, sid)
     if section["kind"] != "photo":
-        raise BoardEditError("bad_request", "only notes, photos and reminders can be edited")
+        raise BoardEditError("bad_request", "only notes and photos can be edited here")
     body = model.clean_text(text, model.MAX_TEXT)
     line = None
     if body:
@@ -703,142 +616,6 @@ def update_photo_caption(root: Path, ref: str, sid: str, text: Any, *,
                     s["journalLine"] = line
                 elif not body:
                     s.pop("journalLine", None)
-
-    mutate_board(root, apply)
-
-
-def update_reminder(root: Path, ref: str, sid: str, text: Any, when: Any = None) -> None:
-    _card, section = _section(root, ref, sid)
-    if section["kind"] != "reminder":
-        raise BoardEditError("bad_request", "only notes, photos and reminders can be edited")
-    update_reminder_by_id(root, section["reminder"], text, when)
-
-
-def update_reminder_by_id(root: Path, rid: str, text: Any, when: Any = None) -> None:
-    """Correggi un'attesa aperta dal calendario di cura: anche una di Jenny, che diventa tua."""
-    body = model.clean_text(text, model.MAX_TITLE * 2)
-    parsed = parse_when(when) if when is not None else None
-
-    def apply_rem(rems: dict[str, Any]) -> None:
-        for rem in rems["reminders"]:
-            if rem["id"] == rid and rem["state"] == "open":
-                if body:
-                    rem["text"] = body
-                if parsed:
-                    rem["when"] = parsed
-                    rem.pop("notifiedAt", None)
-                rem["by"] = model.USER
-                return
-        raise BoardEditError("not_found", "reminder not found")
-
-    mutate_reminders(root, apply_rem)
-
-
-def set_reminder_why(root: Path, rid: str, why: str | None) -> str:
-    """La pagina che spiega un'attesa aperta: una pagina vera di ``wiki/``, o niente.
-
-    ``why`` è il percorso relativo a ``wiki/`` che l'orologio legge quando
-    l'attesa scade (``board/clock.py``); ``None`` o vuoto lo toglie. Una pagina
-    che non c'è si rifiuta: un ``why`` morto è quel che un riordino del
-    23/10/2026 ha lasciato su tre promemoria, e l'avviso poi parla senza la sua
-    ragione. Vale come dell'utente, come :func:`update_reminder_by_id`.
-    Restituisce il valore scritto.
-    """
-    value = str(why or "").strip()
-    return update_reminder_fields(root, rid, why=value or None, clear_why=not value)["why"]
-
-
-def update_reminder_fields(root: Path, rid: str, *, text: Any = None, when: Any = None,
-                           why: str | None = None, clear_why: bool = False) -> dict[str, Any]:
-    """Testo, data e ``why`` di un'attesa aperta, **in una scrittura sola**.
-
-    Tutto quel che può essere rifiutato — la data, la pagina — si controlla
-    prima di prendere il lock: un rifiuto non lascia l'attesa cambiata a metà.
-    ``why`` assente non tocca la pagina; ``clear_why`` la stacca. Restituisce
-    l'attesa scritta.
-    """
-    body = model.clean_text(text, model.MAX_TITLE * 2) if text else ""
-    parsed = parse_when(when) if when is not None else None
-    page = str(why or "").strip().removeprefix("wiki/")
-    if page:
-        page = _check_pages(root, [page])[0]
-    if not (body or parsed or page or clear_why):
-        raise BoardEditError("bad_request", "nothing to change")
-    done: list[dict[str, Any]] = []
-
-    def apply_rem(rems: dict[str, Any]) -> None:
-        for rem in rems["reminders"]:
-            if rem["id"] == rid and rem["state"] == "open":
-                if body:
-                    rem["text"] = body
-                if parsed:
-                    rem["when"] = parsed
-                    rem.pop("notifiedAt", None)
-                if page:
-                    rem["why"] = page
-                elif clear_why:
-                    rem["why"] = ""
-                rem["by"] = model.USER
-                done.append(rem)
-                return
-        raise BoardEditError("not_found", "reminder not found")
-
-    mutate_reminders(root, apply_rem)
-    return dict(done[0])
-
-
-def clear_reminder_whys(root: Path, pages: Iterable[str]) -> list[dict[str, str]]:
-    """Toglie il ``why`` delle attese aperte che puntavano a *pages* (relative a
-    ``wiki/``); restituisce ``[{id, text, why}]`` di quelle toccate.
-
-    La chiama ``notebook remove_pages`` dopo aver cancellato le pagine. **Non**
-    cambia ``by``: togliere il rimando a una pagina che non c'è più non è una
-    decisione sull'attesa, e un'attesa del giardiniere resta sua. Le chiuse
-    restano come sono: sono storia, e il check non le guarda
-    (``notebook_ops._check_board``).
-    """
-    gone = {p.removeprefix("wiki/") for p in pages if isinstance(p, str) and p}
-    touched: list[dict[str, str]] = []
-
-    def apply_rem(rems: dict[str, Any]) -> bool | None:
-        for rem in rems["reminders"]:
-            why = str(rem.get("why") or "").removeprefix("wiki/")
-            if rem["state"] == "open" and why in gone:
-                touched.append({"id": rem["id"], "text": rem["text"], "why": why})
-                rem["why"] = ""
-        return None if touched else False
-
-    if gone:
-        mutate_reminders(root, apply_rem)
-    return touched
-
-
-def drop_reminder(root: Path, rid: str) -> None:
-    """Togli un'attesa: resta nel file come ``dropped`` (nessuna attesa sparisce).
-
-    Se è nata da un cassetto, se ne va anche la sua sezione: altrimenti
-    resterebbe una sezione che punta a un'attesa chiusa.
-    """
-    def apply_rem(rems: dict[str, Any]) -> None:
-        for rem in rems["reminders"]:
-            if rem["id"] == rid and rem["state"] == "open":
-                rem["state"] = "dropped"
-                rem["closedAt"] = model.now_iso()
-                rem["by"] = model.USER
-                return
-        raise BoardEditError("not_found", "reminder not found")
-
-    mutate_reminders(root, apply_rem)
-
-    def apply(board: dict[str, Any]) -> bool | None:
-        changed = False
-        for card in board["cards"]:
-            keep = [s for s in card["userSections"]
-                    if not (s.get("kind") == "reminder" and s.get("reminder") == rid)]
-            if len(keep) != len(card["userSections"]):
-                card["userSections"] = keep
-                changed = True
-        return None if changed else False
 
     mutate_board(root, apply)
 
@@ -865,39 +642,238 @@ async def remove_section(root: Path, ref: str, sid: str, *, cron: Any = None) ->
         if section.get("kind") == "cron" and cron is not None:
             # Togliere il cron dal cassetto toglie il job: nessun cron orfano.
             cron.remove_job(str(section.get("job")))
-        if section.get("kind") == "reminder":
-            def drop(rems: dict[str, Any], rid: str = section["reminder"]) -> None:
-                for rem in rems["reminders"]:
-                    if rem["id"] == rid and rem["state"] == "open":
-                        rem["state"] = "dropped"
-                        rem["closedAt"] = model.now_iso()
-
-            await asyncio.to_thread(mutate_reminders, root, drop)
     return bool(gone)
 
 
-def close_reminder(root: Path, rid: str, *, timezone_name: str | None = None) -> str:
-    """Un'attesa fatta: non si cancella, diventa un fatto (una riga di diario) e lascia la bacheca."""
+# ── I promemoria: job dello scheduler ────────────────────────────────────────
+#
+# Dal 31/10/2026 un promemoria del quaderno è un job di ``cron/jobs.json``
+# (``cron_link.add_notebook_job``), e ``board/reminders.json`` non c'è più. Un
+# promemoria a data è un singolo: quando suona se ne va, quindi non ci sono
+# attese «fatte», «tolte» o «scadute» da tenere. Uno a condizione è un
+# ricorrente con un filtro (``payload.condition``), alla cadenza che sceglie
+# l'utente. Tutto sul loop, come ogni gesto sullo scheduler; l'id di un
+# promemoria è quello del suo job.
+
+# La cadenza più fitta di un promemoria a condizione: il passo dell'orologio dei
+# quaderni, che fa girare i lettori delle app.
+MIN_CONDITION_EVERY_MS = 15 * 60 * 1000
+
+
+def _need_cron(cron: Any) -> Any:
+    if cron is None:
+        raise BoardEditError("unavailable", "scheduler not running")
+    return cron
+
+
+def _reminder_text(text: Any) -> str:
+    return model.clean_text(text, model.MAX_TITLE * 2)
+
+
+def _when_schedule(when: Any, every_ms: Any, timezone_name: str | None) -> tuple[Any, Any]:
+    """Lo ``schedule`` e la ``condition`` del job di un promemoria, da quel che arriva.
+
+    *when* è ``{kind: "date", date, precision}`` o ``{kind: "condition", app,
+    params, field, op, value}``; una condizione vuole *every_ms*, la cadenza
+    con cui guardarla, che sceglie l'utente.
+    """
+    from jenny.cron.dates import date_schedule
+    from jenny.cron.types import CronSchedule
+
+    if not isinstance(when, Mapping):
+        raise BoardEditError("bad_request", "invalid when")
+    if when.get("kind") == "date":
+        day = str(when.get("date") or "").strip()
+        value = day[:7] if when.get("precision") == "month" else day[:10]
+        if len(value) not in (7, 10):
+            raise BoardEditError("bad_request", "invalid when: a date is YYYY-MM-DD")
+        try:
+            return date_schedule(value, timezone_name), None
+        except ValueError as exc:
+            raise BoardEditError("bad_request", f"invalid when: {exc}") from exc
+    if when.get("kind") == "condition":
+        condition = {key: when.get(key) for key in ("app", "params", "field", "op", "value")}
+        condition["params"] = dict(when.get("params") or {}) \
+            if isinstance(when.get("params"), Mapping) else {}
+        if (not model.is_valid_id(condition["app"]) or not isinstance(condition["field"], str)
+                or not condition["field"] or condition["op"] not in model.CONDITION_OPS
+                or isinstance(condition["value"], bool)
+                or not isinstance(condition["value"], (int, float, str))):
+            raise BoardEditError("bad_request", "invalid when: a condition needs app, field, "
+                                                "op and value")
+        return CronSchedule(kind="every", every_ms=_every(every_ms)), condition
+    raise BoardEditError("bad_request", "invalid when")
+
+
+def _every(every_ms: Any) -> int:
+    if isinstance(every_ms, bool) or not isinstance(every_ms, (int, float)):
+        raise BoardEditError("bad_request", "a condition needs every_ms: how often to check it")
+    if every_ms < MIN_CONDITION_EVERY_MS:
+        raise BoardEditError("bad_request", "every_ms must be at least 15 minutes")
+    return int(every_ms)
+
+
+def _why_page(root: Path, why: Any) -> str | None:
+    """La pagina che spiega un promemoria, se c'è davvero sotto ``wiki/``."""
+    page = str(why or "").strip().removeprefix("wiki/")
+    return _check_pages(root, [page])[0] if page else None
+
+
+def reminder_job(cron: Any, root: Path, rid: str) -> Any:
+    """Il job del promemoria *rid* di questo quaderno, o un ``not_found``.
+
+    Solo un promemoria (un singolo, o un ricorrente con un filtro) legato a
+    questo quaderno: la bacheca non tocca la sveglia della chat personale, né
+    un cron che si ripete (quello lo cambia il tool ``cron``).
+    """
+    from jenny.board.cron_link import is_note
+
+    job = _need_cron(cron).get_job(str(rid or "").strip())
+    if (job is None or (job.payload.board or {}).get("notebook") != root.name
+            or not is_note(job.schedule.kind, job.payload.condition)):
+        raise BoardEditError("not_found", f"no reminder `{rid}` in this notebook")
+    return job
+
+
+async def add_reminder(root: Path, ref: str, text: Any, when: Any, *, cron: Any,
+                       every_ms: Any = None, why: Any = None,
+                       timezone_name: str | None = None) -> str:
+    """Un promemoria nuovo: di una scheda (*ref*) o di tutto il quaderno (*ref* vuoto).
+
+    Diventa un job del quaderno (v. :func:`jenny.board.cron_link.add_notebook_job`):
+    suona nella chat del quaderno, e sulla bacheca è una riga del post-it della
+    sua scheda, o di quello libero. Restituisce l'id del job.
+    """
+    from jenny.board.cron_link import add_notebook_job
+
+    _need_cron(cron)
+    body = _reminder_text(text)
+    if not body:
+        raise BoardEditError("bad_request", "text required")
+    schedule, condition = _when_schedule(when, every_ms, timezone_name)
+    scope = (await asyncio.to_thread(card_id_of, root, ref) if str(ref or "").strip()
+             else model.NOTEBOOK)
+    page = await asyncio.to_thread(_why_page, root, why)
+    try:
+        job = add_notebook_job(cron, root.name, scope, name=body, message=body,
+                               schedule=schedule, why=page, condition=condition)
+    except ValueError as exc:
+        raise BoardEditError("bad_request", str(exc)) from exc
+    return str(job.id)
+
+
+async def update_reminder(root: Path, rid: str, *, cron: Any, text: Any = None,
+                          when: Any = None, every_ms: Any = None, why: Any = None,
+                          clear_why: bool = False,
+                          timezone_name: str | None = None) -> dict[str, Any]:
+    """Testo, data, cadenza e ``why`` di un promemoria, in una scrittura sola.
+
+    Tutto quel che può essere rifiutato si controlla prima di scrivere. Una data
+    uguale a quella che ha già non lo sposta: un singolo a un'ora esatta resta a
+    quell'ora quando si corregge solo il testo. Una data su un promemoria a
+    condizione lo fa diventare un singolo. Restituisce ``{id, text, why}``.
+    """
+    from jenny.board.cron_link import job_snapshot, note_of
+
+    job = reminder_job(cron, root, rid)
+    body = _reminder_text(text) if text else ""
+    page = await asyncio.to_thread(_why_page, root, why)
+    if not (body or when is not None or every_ms is not None or page or clear_why):
+        raise BoardEditError("bad_request", "nothing to change")
+    changes: dict[str, Any] = {}
+    if body:
+        changes.update(name=body, message=body)
+    if page:
+        changes["why"] = page
+    elif clear_why:
+        changes["why"] = None
+    if when is not None:
+        if every_ms is None and job.schedule.kind == "every":
+            every_ms = job.schedule.every_ms
+        schedule, condition = _when_schedule(when, every_ms, timezone_name)
+        snap = job_snapshot(job)
+        sched = snap["schedule"]
+        now = note_of(job_id=job.id, scope="", text="", kind=sched.get("kind"),
+                      at_ms=sched.get("at_ms"), precision=sched.get("precision"),
+                      condition=job.payload.condition, every_ms=sched.get("every_ms"),
+                      tz_name=timezone_name)
+        new = note_of(job_id=job.id, scope="", text="", kind=schedule.kind,
+                      at_ms=schedule.at_ms, precision=schedule.precision, condition=condition,
+                      every_ms=schedule.every_ms, tz_name=timezone_name)
+        same = (now is not None and new is not None
+                and {k: v for k, v in now["when"].items() if k != "time"} == new["when"])
+        if not same:
+            changes.update(schedule=schedule, condition=condition)
+    elif every_ms is not None:
+        from jenny.cron.types import CronSchedule
+
+        if not job.payload.condition:
+            raise BoardEditError("bad_request", "every_ms is only for a condition reminder")
+        changes["schedule"] = CronSchedule(kind="every", every_ms=_every(every_ms))
+    try:
+        done = cron.update_job(job.id, **changes) if changes else job
+    except ValueError as exc:
+        raise BoardEditError("bad_request", str(exc)) from exc
+    if done is None:
+        raise BoardEditError("not_found", f"no reminder `{rid}` in this notebook")
+    return {"id": done.id, "text": done.name, "why": done.payload.why or ""}
+
+
+async def close_reminder(root: Path, rid: str, *, cron: Any,
+                         timezone_name: str | None = None) -> str:
+    """Un promemoria fatto: il job se ne va, e resta un fatto (una riga di diario)."""
+    from jenny.board.cron_link import detach_job
     from jenny.board.sections import journal_note
 
-    done: list[dict[str, Any]] = []
-
-    def apply(rems: dict[str, Any]) -> None:
-        for rem in rems["reminders"]:
-            if rem["id"] == rid and rem["state"] == "open":
-                rem["state"] = "done"
-                rem["closedAt"] = model.now_iso()
-                rem["by"] = model.USER
-                done.append(rem)
-                return
-        raise BoardEditError("not_found", "reminder not found")
-
-    mutate_reminders(root, apply)
+    job = reminder_job(cron, root, rid)
+    text = job.name or job.payload.message
+    await detach_job(cron, job.id)
     try:
-        journal_note(root, f"Done: {done[0]['text']}", timezone_name=timezone_name)
+        await asyncio.to_thread(journal_note, root, f"Done: {text}",
+                                timezone_name=timezone_name)
     except OSError as exc:
         logger.warning("board: done reminder not journaled in {}: {}", root.name, exc)
-    return done[0]["text"]
+    return text
+
+
+async def drop_reminder(root: Path, rid: str, *, cron: Any) -> None:
+    """Togli un promemoria: il job se ne va, e nient'altro."""
+    from jenny.board.cron_link import detach_job
+
+    job = reminder_job(cron, root, rid)
+    await detach_job(cron, job.id)
+
+
+async def attach_reminder(root: Path, ref: str, rid: str, *, cron: Any) -> dict[str, Any]:
+    """Un promemoria che c'è già, sulla scheda *ref* (o, *ref* vuoto, sul quaderno).
+
+    Un promemoria ha un ambito solo, quindi attaccarlo altrove lo **sposta**, e
+    attaccarlo dove sta già non cambia niente. Serve a quello rimasto senza
+    post-it perché la sua scheda è nel cestino o non c'è più. Lo scheduler non
+    cambia il legame di un job: se ne fa uno nuovo uguale, sul nuovo ambito (e
+    acceso: se era fermo per la scheda nel cestino, riparte), e il vecchio se ne
+    va. Restituisce ``{"reminder": {id, card, text}, "from", "changed"}``.
+    """
+    from jenny.board.cron_link import add_notebook_job, detach_job, scope_of
+
+    job = reminder_job(cron, root, rid)
+    scope = (await asyncio.to_thread(card_id_of, root, ref) if str(ref or "").strip()
+             else model.NOTEBOOK)
+    before = scope_of(job.payload.board or {})
+    text = job.name or job.payload.message
+    if before == scope:
+        return {"reminder": {"id": job.id, "card": scope, "text": text}, "from": before,
+                "changed": False}
+    try:
+        moved = add_notebook_job(cron, root.name, scope, name=job.name,
+                                 message=job.payload.message, schedule=job.schedule,
+                                 mode=job.payload.mode, why=job.payload.why,
+                                 condition=job.payload.condition)
+    except ValueError as exc:
+        raise BoardEditError("bad_request", str(exc)) from exc
+    await detach_job(cron, job.id)
+    return {"reminder": {"id": moved.id, "card": scope, "text": text}, "from": before,
+            "changed": True}
 
 
 # ── Lo scheletro ─────────────────────────────────────────────────────────────
@@ -930,7 +906,8 @@ def set_skeleton(root: Path, raw: Any) -> list[str]:
 
 
 def accept_suggestion(board: dict[str, Any], suggestion: Mapping[str, Any],
-                      reminders: Mapping[str, Any], near: tuple[float, float] | None = None,
+                      notes: Iterable[Mapping[str, Any]],
+                      near: tuple[float, float] | None = None,
                       workspace: Path | None = None) -> list[dict[str, Any]]:
     """Dentro un *apply*: applica una proposta accettata. Il posto lo sceglie il codice.
 
@@ -956,7 +933,7 @@ def accept_suggestion(board: dict[str, Any], suggestion: Mapping[str, Any],
         taken.add(card_id)
         box = model.card_box({"size": size})
         target = (near[0] - box[0] / 2, near[1] - box[1] / 2) if near is not None else None
-        x, y = model.free_slot(board, reminders, box=box, near=target)
+        x, y = model.free_slot(board, notes, box=box, near=target)
         card = {
             "id": card_id, "title": model.clean_text(title, model.MAX_TITLE) or card_id,
             "titleBy": model.JENNY,
@@ -977,13 +954,13 @@ def accept_suggestion(board: dict[str, Any], suggestion: Mapping[str, Any],
                             for x in suggestion.get("skeleton") or []) if s
             ][:model.MAX_SKELETON]
         for spec in (suggestion.get("cards") or [])[:model.MAX_INITIAL_CARDS]:
-            if isinstance(spec, Mapping) and model.items_on_board(board, reminders) < model.MAX_ITEMS:
+            if isinstance(spec, Mapping) and model.items_on_board(board, notes) < model.MAX_ITEMS:
                 new_card(str(spec.get("title") or ""), str(spec.get("glyph") or ""),
                          [p for p in spec.get("pages") or [] if isinstance(p, str)],
                          str(spec.get("id") or ""))
         model.add_since(board, "board_created", cards=len(board["cards"]))
     elif kind == "add_card":
-        if model.is_full(board, reminders):
+        if model.is_full(board, notes):
             raise BoardEditError("conflict", "the board is full")
         card = new_card(suggestion.get("subject") or "", str(suggestion.get("glyph") or ""),
                         list(suggestion.get("pages") or []))
@@ -1014,7 +991,7 @@ def accept_suggestion(board: dict[str, Any], suggestion: Mapping[str, Any],
             model.add_since(board, "page_attached", card=card["id"], page=page)
         board["offboardWants"] = [w for w in board["offboardWants"] if w.get("page") != page]
     elif kind == "add_app_card":
-        if model.is_full(board, reminders):
+        if model.is_full(board, notes):
             raise BoardEditError("conflict", "the board is full")
         app = str(suggestion.get("app") or "")
         if model.is_valid_id(app):
@@ -1030,7 +1007,7 @@ def accept_suggestion(board: dict[str, Any], suggestion: Mapping[str, Any],
     elif kind == "add_section":
         # Una proposta di prima (un'app nel cassetto di una scheda): diventa
         # la polaroid dell'app, legata a quella scheda.
-        if model.is_full(board, reminders):
+        if model.is_full(board, notes):
             raise BoardEditError("conflict", "the board is full")
         other = model.card_by_id(board, str(suggestion.get("card") or ""))
         app = str(suggestion.get("app") or "")
@@ -1061,7 +1038,7 @@ async def respond_suggestion(root: Path, sid: str, answer: str, *,
     answered: dict[str, Any] = {}
 
     def respond() -> None:
-        reminders = read_reminders(root)
+        notes = _notes(root)
 
         def apply(board: dict[str, Any]) -> None:
             suggestion = next((s for s in board["suggestions"] if s["id"] == sid), None)
@@ -1069,7 +1046,7 @@ async def respond_suggestion(root: Path, sid: str, answer: str, *,
                 raise BoardEditError("not_found", "suggestion not found")
             answered.update(suggestion)
             if answer == "yes":
-                trashed.extend(accept_suggestion(board, suggestion, reminders, near, workspace))
+                trashed.extend(accept_suggestion(board, suggestion, notes, near, workspace))
             elif answer == "no":
                 board["declined"].append({
                     "kind": suggestion["kind"], "subject": suggestion.get("subject", ""),

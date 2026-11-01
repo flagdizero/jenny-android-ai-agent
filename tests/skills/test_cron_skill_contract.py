@@ -8,8 +8,8 @@ proprio così: la skill descriveva ancora "Three Modes" (una tassonomia che prec
 il parametro ``mode``) e portava come esempio l'anti-pattern esatto, mentre la
 guida corretta viveva in un file mai aggiornato sul telefono dell'utente.
 
-Quel rimedio non serve più. La regola di *instradamento* — quale delle tre
-destinazioni — sta in ``jenny/templates/agent/scheduling.md``, che è codice e si
+Quel rimedio non serve più. La regola di *instradamento* — un singolo o un
+ricorrente, `reminder` o `monitor` — sta in ``jenny/templates/agent/scheduling.md``, che è codice e si
 riscrive a ogni boot; ``AGENTS.md`` non la contiene più affatto. Le asserzioni qui
 sotto restano, ma cambiano di mestiere: non presidiano più una scorciatoia, tengono
 fermo il posto della skill nel confine fra prompt di sistema e manuale.
@@ -84,11 +84,15 @@ def test_it_calls_silence_a_success() -> None:
     assert "silenced" in text, "action='list' riporta 'silenced': va spiegato"
 
 
-def test_it_covers_the_heartbeat_alternative() -> None:
-    """Il caso reale dell'utente era una riga di HEARTBEAT.md, non un cron job."""
+def test_it_covers_both_kinds_and_the_new_parameters() -> None:
+    """Due tipi soli: un singolo (``at`` o ``date``) o un ricorrente, che può
+    portare una ``condition``. L'heartbeat non c'è più (31/10/2026): un manuale
+    che lo nominasse manderebbe a scrivere in un file che nessuno legge."""
     text = _skill()
-    assert "HEARTBEAT.md" in text
-    assert "message" in text
+    assert "HEARTBEAT.md" not in text
+    assert 'date="' in text, "manca un esempio di singolo senza ora"
+    assert "condition=" in text, "manca un esempio di ricorrente con condizione"
+    assert "disappears once it has fired" in text
 
 
 def test_agents_md_is_not_the_only_home_of_the_rule() -> None:

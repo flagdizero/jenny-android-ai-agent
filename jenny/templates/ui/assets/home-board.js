@@ -138,7 +138,7 @@ export function localDay(d = new Date()) {
  *  passate e ancora aperte («in ritardo»), poi un gruppo per mese, poi quelle a
  *  condizione, che un giorno non ce l'hanno («quando succede»).
  *
- *  Arrivano gia' ordinate dal gateway (`model.sorted_reminders`), quindi ogni
+ *  Arrivano gia' ordinate dal gateway (`model.sorted_notes`), quindi ogni
  *  gruppo e' una corsa di righe vicine. Un'attesa «a marzo» non e' in ritardo
  *  finche' marzo non e' finito. Il nome del mese porta l'anno solo se non e'
  *  quello in corso. */
@@ -1865,15 +1865,12 @@ export class HomeBoard {
     const body = document.createElement('div');
     body.appendChild(agendaList(rems, {
       when: (rem) => whenLabel(rem.when),
-      /* Un cron «una volta sola» è una data come le altre, ma lo tiene lo
-         scheduler: «Fatto» e «Togli» lo tolgono. */
-      onDone: (rem) => (rem.job
-        ? this._cronAct('cron.remove', { job: rem.job })
-        : this._cronAct('reminder.done', { id: rem.id })),
+      /* Un promemoria è un job dello scheduler, e il suo id è quello del job:
+         «Fatto» e «Togli» lo tolgono. */
+      onDone: (rem) => this._cronAct('reminder.done', { id: rem.id }),
       onDrop: async (rem) => {
         if (!(await confirmDialog(i18n.t('board.reminder.dropConfirm', { text: rem.text })))) return;
-        await (rem.job ? this._cronAct('cron.remove', { job: rem.job })
-          : this._cronAct('reminder.drop', { id: rem.id }));
+        await this._cronAct('reminder.drop', { id: rem.id });
       },
     }));
     const add = document.createElement('button');

@@ -16,10 +16,11 @@
  *     controllo non è avvenuto». Confonderli cancella la distinzione per cui
  *     quello stato esiste — un monitor rotto sembrava un giardino sano.
  *  3. `skipped` non è né l'uno né l'altro: non è partito, e va detto senza
- *     allarme.
+ *     allarme. E `delegated` nemmeno: un monitor che ha passato il controllo a
+ *     un aiutante e ne aspetta il verdetto — non è finito, non è fallito.
  */
 
-/* Come si rende ciascuno dei cinque esiti. `tone` è la sola cosa che il CSS
+/* Come si rende ciascuno dei sei esiti. `tone` è la sola cosa che il CSS
    guarda; il testo passa da `tr`. */
 const STATUS_TONE = {
   ok: 'ok',
@@ -27,6 +28,7 @@ const STATUS_TONE = {
   skipped: 'neutral',
   could_not_check: 'warn',
   error: 'bad',
+  delegated: 'neutral',
 };
 
 /* Sotto questa distanza si dice «adesso» invece di «fra 0 minuti». */
@@ -117,9 +119,14 @@ function unit(tr, locale, name, n) {
 
 /** La schedulazione in una frase, dalla struttura e non da una stringa inglese.
  *
- *  Il server manda `{kind, every_ms, expr, at_ms, tz}` proprio perché questa
- *  frase la deve comporre chi conosce la lingua dell'utente. Il tool `cron`
- *  compone la sua, in inglese, per il modello: sono due lettori diversi. */
+ *  Il server manda `{kind, every_ms, expr, at_ms, tz, precision}` proprio perché
+ *  questa frase la deve comporre chi conosce la lingua dell'utente. Il tool
+ *  `cron` compone la sua, in inglese, per il modello: sono due lettori diversi.
+ *
+ *  Un `at` con `precision` non ha un'ora da dire: `day` è un giorno («il 3 mar
+ *  2027»), `month` un mese («a marzo 2027»). L'`at_ms` c'è comunque — il job
+ *  suona a un'ora precisa — ma mostrarla direbbe una precisione che l'utente
+ *  non ha chiesto. */
 export function describeSchedule(schedule, { tr, locale, timeZone } = {}) {
   const kind = schedule?.kind;
   if (kind === 'every' && schedule.every_ms) {
@@ -131,9 +138,8 @@ export function describeSchedule(schedule, { tr, locale, timeZone } = {}) {
     return describeShape(schedule.shape, { tr, locale }) || tr('cron.schedule.expr', { expr: schedule.expr });
   }
   if (kind === 'at' && schedule.at_ms) {
-    return tr('cron.schedule.at', {
-      when: formatAbsolute(schedule.at_ms, { locale, timeZone }),
-    });
+    const when = formatAbsolute(schedule.at_ms, { locale, timeZone, precision: schedule.precision });
+    return tr(schedule.precision === 'month' ? 'cron.schedule.atMonth' : 'cron.schedule.at', { when });
   }
   return tr('cron.schedule.unknown');
 }
@@ -197,17 +203,26 @@ function listOf(items, locale) {
  *
  *  Un `timeZone` che `Intl` rifiuta non deve portarsi via la riga: si ricade sul
  *  fuso del dispositivo. Capita con uno store scritto a mano, o su una
- *  piattaforma senza il database dei fusi. */
-export function formatAbsolute(ms, { locale, timeZone } = {}) {
+ *  piattaforma senza il database dei fusi.
+ *
+ *  `precision` (solo per un `at`): `day` toglie l'ora e mette l'anno, `month`
+ *  dice solo mese e anno («marzo 2027»). Assente vale l'ora esatta. */
+export function formatAbsolute(ms, { locale, timeZone, precision } = {}) {
   if (!Number.isFinite(ms)) return '';
   const date = new Date(ms);
-  const opts = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+  const opts = PRECISION_FORMAT[precision] ?? PRECISION_FORMAT.exact;
   try {
     return new Intl.DateTimeFormat(locale, timeZone ? { ...opts, timeZone } : opts).format(date);
   } catch {
     return new Intl.DateTimeFormat(locale, opts).format(date);
   }
 }
+
+const PRECISION_FORMAT = {
+  exact: { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+  day: { day: 'numeric', month: 'short', year: 'numeric' },
+  month: { month: 'long', year: 'numeric' },
+};
 
 /** Il fuso va nominato **solo quando dice qualcosa**, cioè quando diverge da
  *  quello del dispositivo: `09:00 (Asia/Tokyo)` è utile, `09:00 (Europe/Rome)`
@@ -230,7 +245,7 @@ export function timeZoneNote(timeZone) {
  *  servizio fermo — o col processo appena riesumato dopo ore di doze — il valore
  *  nello store è nel passato. Un pannello che lo formattasse e basta scriverebbe
  *  «prossima esecuzione: ieri alle 22:30» e sembrerebbe rotto lui. */
-export function formatWhen(ms, { nowMs, tr, locale, timeZone } = {}) {
+export function formatWhen(ms, { nowMs, tr, locale, timeZone, precision } = {}) {
   if (!Number.isFinite(ms)) return null;
   const delta = ms - nowMs;
   const overdue = delta < -NOW_WINDOW_MS;
@@ -242,7 +257,7 @@ export function formatWhen(ms, { nowMs, tr, locale, timeZone } = {}) {
     relative = tr('cron.when.ago', { d: humanizeDuration(-delta, { tr, locale }) });
   }
   return {
-    absolute: formatAbsolute(ms, { locale, timeZone }),
+    absolute: formatAbsolute(ms, { locale, timeZone, precision }),
     relative,
     overdue,
     timeZoneNote: timeZoneNote(timeZone),
@@ -265,26 +280,25 @@ export function pickBanner(payload) {
   return null;
 }
 
-/** I task dell'heartbeat, divisi per quel che chiedono a chi legge.
+/* Gli operatori di una condizione come si leggono, non come si scrivono. */
+const CONDITION_OP = { '<': '<', '<=': '≤', '>': '>', '>=': '≥', '==': '=', '!=': '≠' };
+
+/** Il filtro di un ricorrente su un'app in una riga: «umidità < 15».
  *
- *  `checkingNothing` è il caso che questo pannello esiste per dire: il job gira,
- *  registra `ok` a ogni run, e non c'è niente da controllare. Lo store da solo
- *  lo renderebbe come salute perfetta. */
-export function heartbeatView(block) {
-  if (!block) return null;
-  const tasks = block.tasks ?? [];
-  return {
-    filePresent: block.file_present,
-    fileReadable: block.file_readable,
-    checkingNothing: block.active_task_count === 0,
-    counts: {
-      total: tasks.length,
-      broken: tasks.filter((t) => t.state === 'broken').length,
-      pending: tasks.filter((t) => t.state === 'pending').length,
-    },
-    tasks,
-    orphans: block.orphan_checks ?? [],
-  };
+ *  Il campo è un nome dell'app, non una parola dell'interfaccia: si mostra com'è.
+ *  Un numero passa da `Intl.NumberFormat`, per la stessa virgola di `unit`. */
+export function conditionText(condition, { locale } = {}) {
+  if (!condition?.field || !condition.op) return null;
+  const op = CONDITION_OP[condition.op] ?? condition.op;
+  let value = condition.value;
+  if (typeof value === 'number') {
+    try {
+      value = new Intl.NumberFormat(locale).format(value);
+    } catch {
+      value = String(value);
+    }
+  }
+  return `${condition.field} ${op} ${value ?? ''}`.trim();
 }
 
 /** Dove sta un cron di un quaderno: «Piante › Acero», o «Piante» se è di tutto il quaderno. */
@@ -314,6 +328,9 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
   }
   const rows = [...(shown.jobs ?? [])].sort(compareJobs).map((job) => {
     const tz = job.display_timezone || shown.default_timezone;
+    const precision = job.schedule?.kind === 'at' ? job.schedule.precision : undefined;
+    const condition = conditionText(job.condition, { locale });
+    const schedule = describeSchedule(job.schedule, { tr, locale, timeZone: tz });
     return {
       id: job.id,
       name: job.name,
@@ -327,8 +344,11 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
       place: placeText(job.place),
       messagePreview: job.message_preview,
       message: job.message,
-      schedule: describeSchedule(job.schedule, { tr, locale, timeZone: tz }),
-      next: formatWhen(job.next_run_at_ms, { nowMs: stamp, tr, locale, timeZone: tz }),
+      /* Un ricorrente con un filtro lo dice davanti alla cadenza: «umidità < 15 ·
+         ogni 6 ore». */
+      condition,
+      schedule: condition ? `${condition} · ${schedule}` : schedule,
+      next: formatWhen(job.next_run_at_ms, { nowMs: stamp, tr, locale, timeZone: tz, precision }),
       last: formatWhen(job.last_run_at_ms, { nowMs: stamp, tr, locale, timeZone: tz }),
       lastStatus: job.last_status,
       lastTone: statusTone(job.last_status),
@@ -341,7 +361,6 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
         durationMs: run.duration_ms,
         error: run.error,
       })),
-      heartbeat: heartbeatView(job.heartbeat),
       /* Cosa l'officina puo' farne: la lista la decide il server (`_job_actions`
          in `webui/cron_api.py`), con la stessa regola che poi applica. Il client
          non la ricalcola: un bottone che il server rifiuterebbe non compare. */

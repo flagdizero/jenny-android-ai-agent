@@ -817,7 +817,7 @@ class MemoryStore:
         - **giardiniere**: le proprie voci, e **non** la conversazione personale
           (T7.8). Vedi sotto: e' l'unico ramo interno con questa restrizione.
         - **interna**: le proprie voci *piu'* la conversazione personale. Il primo
-          ramo e' la cura dell'amnesia dell'heartbeat — un job rilegge i propri run
+          ramo e' la cura dell'amnesia dei job ricorrenti — un job rilegge i propri run
           — e ha un test che lo nomina
           (``test_cron_recent_history_can_see_own_history_and_unified_context``).
         - **personale**: la conversazione personale.
@@ -906,7 +906,7 @@ class MemoryStore:
         (``dream_cycle._alert_stuck``), mentre la storia persa in silenzio non ne
         aveva nessuno. Le voci interne invece si tagliano come prima: Dream non le
         legge, e trattenerle vorrebbe dire non tagliarle mai su un'installazione
-        dove parla solo l'heartbeat.
+        dove parlano solo i job del cron.
 
         **E quel che esce non si cancella**: va in ``memory/history-archive/
         <AAAA-MM>.jsonl`` (v. :meth:`_archive_history_entries`), dove

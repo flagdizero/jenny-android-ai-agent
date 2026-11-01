@@ -784,14 +784,6 @@ class HomeConfig(Base):
         return self
 
 
-class HeartbeatConfig(Base):
-    """Heartbeat service configuration (now backed by cron)."""
-
-    enabled: bool = True
-    interval_s: int = Field(default=30 * 60, ge=1)  # 30 minutes
-    keep_recent_messages: int = 8
-
-
 class RemoteAccessConfig(Base):
     """Jenny raggiungibile dagli altri dispositivi del tailnet (``gateway.remoteAccess``).
 
@@ -811,7 +803,6 @@ class GatewayConfig(Base):
 
     host: str = "127.0.0.1"  # Safer default: local-only bind.
     port: int = 18790
-    heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
     remote_access: RemoteAccessConfig = Field(default_factory=RemoteAccessConfig)
 
 

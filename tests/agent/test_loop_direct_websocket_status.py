@@ -7,10 +7,14 @@ from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_types import TurnOutcome
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
+from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import GenerationSettings, LLMResponse
-from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
+from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import TurnVisibility
 from jenny.session.webui_turns import WebuiTurnCoordinator
+
+# Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
+MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _make_loop(tmp_path):
@@ -73,7 +77,7 @@ async def test_process_direct_websocket_clears_run_status(tmp_path) -> None:
 async def test_a_silent_turn_projects_no_run_status_into_the_chat(tmp_path) -> None:
     """Lavoro interno su un canale utente: nessuno spinner nella conversazione.
 
-    È il caso dell'heartbeat, che gira *su* ``websocket:default`` perché è il
+    È il caso di un monitor, che gira *su* ``websocket:default`` perché è il
     target a cui consegnerà se una condizione scatta. Lo spinner "in esecuzione"
     e il marcatore di fine turno appartengono alla conversazione dell'utente,
     non a un controllo che non ha chiesto.
@@ -82,7 +86,7 @@ async def test_a_silent_turn_projects_no_run_status_into_the_chat(tmp_path) -> N
 
     response = await loop.process_direct(
         "controlla la pioggia",
-        session_key=HEARTBEAT_SESSION_KEY,
+        session_key=MONITOR_SESSION_KEY,
         channel="websocket",
         chat_id="default",
         visibility=TurnVisibility.SILENT,
@@ -102,7 +106,7 @@ async def test_an_internal_session_on_a_user_channel_is_silent_without_asking(
 
     response = await loop.process_direct(
         "annuncio di un subagent interno",
-        session_key=HEARTBEAT_SESSION_KEY,
+        session_key=MONITOR_SESSION_KEY,
         channel="websocket",
         chat_id="default",
     )

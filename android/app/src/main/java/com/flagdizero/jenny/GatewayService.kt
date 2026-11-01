@@ -543,8 +543,8 @@ class GatewayService : Service() {
         // `apply_service_lock`, che gira solo all'avvio di un `run_gateway`
         // fresco, e alla ricreazione del service `startGateway` corto-circuita
         // proprio perché il thread è sopravvissuto. Sintomo: una riga
-        // "Service wakelock off (was held=true)" e poi più niente, con cron e
-        // heartbeat che ricominciano a slittare in doze profondo — cioè
+        // "Service wakelock off (was held=true)" e poi più niente, con i job
+        // del cron che ricominciano a slittare in doze profondo — cioè
         // l'esatta proprietà misurata e rilasciata in 0.6.6.
         //
         // A rilasciarlo, nel caso saltato qui, è chi resta: l'uscita del thread

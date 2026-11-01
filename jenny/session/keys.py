@@ -10,7 +10,6 @@ __all__ = [
     "CRON_SESSION_PREFIX",
     "DREAM_SESSION_PREFIX",
     "GARDENER_SESSION_PREFIX",
-    "HEARTBEAT_SESSION_KEY",
     "INTERNAL_SESSION_PREFIX",
     "NOTEBOOK_CRON_SESSION_PREFIX",
     "PROJECT_SESSION_PREFIX",
@@ -109,11 +108,6 @@ GARDENER_SESSION_PREFIX = "gardener:"
 # scoperto — tutti passano una chiave esplicita.
 INTERNAL_SESSION_PREFIX = "internal:"
 
-# Sessione dell'heartbeat: chiave *nuda*, senza suffisso, perche ce n'e una sola
-# (``cron_dispatch._run_heartbeat``). Sta qui e non inline nel dispatcher perche
-# e' anche il discriminante di :func:`is_internal_session_key`.
-HEARTBEAT_SESSION_KEY = "heartbeat"
-
 # Vocabolario delle sessioni interne (lavoro del sistema, non conversazione con
 # l'utente): prefisso -> *kind*. Elencare le sessioni e per definizione
 # un'operazione user-facing: chi lo fa deve filtrare con
@@ -129,11 +123,6 @@ _INTERNAL_KIND_BY_PREFIX: tuple[tuple[str, str], ...] = (
     (GARDENER_SESSION_PREFIX, "gardener"),
     (INTERNAL_SESSION_PREFIX, "internal"),
 )
-
-# Chiavi interne senza suffisso: vanno confrontate per uguaglianza, non per
-# prefisso, altrimenti non matchano (era il caso di ``heartbeat``, che il
-# prefisso ``"heartbeat:"`` non ha mai intercettato).
-_INTERNAL_KIND_BY_KEY: dict[str, str] = {HEARTBEAT_SESSION_KEY: "heartbeat"}
 
 # Chiavi utente nella forma vecchia ``<canale>:<chat_id>``. Non esistono piu' come
 # sessioni: le scriveva ``CronTool.set_context`` nei payload dei job, quindi si
@@ -181,16 +170,13 @@ def internal_session_kind(key: str) -> str | None:
     """Il *kind* di lavoro interno a cui appartiene la session key, o ``None``.
 
     Ritorna una delle etichette del vocabolario (``"subagent"``, ``"cron"``,
-    ``"dream"``, ``"gardener"``, ``"internal"``, ``"heartbeat"``) quando la chiave
+    ``"dream"``, ``"gardener"``, ``"internal"``) quando la chiave
     e' di una sessione interna, ``None`` quando e' una conversazione utente.
 
     Serve a chi non ha bisogno solo del si/no di
     :func:`is_internal_session_key` ma anche di *quale* interno sia — per
     esempio per instradare la contabilita dei token su un bucket diverso.
     """
-    kind = _INTERNAL_KIND_BY_KEY.get(key)
-    if kind is not None:
-        return kind
     for prefix, prefix_kind in _INTERNAL_KIND_BY_PREFIX:
         if key.startswith(prefix):
             return prefix_kind
@@ -204,8 +190,7 @@ def session_kind(key: str) -> str:
     categorie non sono una tassonomia per bellezza: rispondono a domande diverse
     e vengono trattate diversamente da chi tiene la memoria.
 
-    - ``internal`` — lavoro del sistema (cron, Dream, il giardiniere, subagent,
-      heartbeat). Non e' conversazione, non compare negli elenchi user-facing, e
+    - ``internal`` — lavoro del sistema (cron, Dream, il giardiniere, subagent). Non e' conversazione, non compare negli elenchi user-facing, e
       rilegge le *proprie* voci in coda di lavoro perche' e' cosi che un job si
       ricorda dei suoi run passati.
     - ``project`` — conversazione con l'utente dentro un progetto. Non alimenta

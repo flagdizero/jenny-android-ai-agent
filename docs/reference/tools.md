@@ -356,29 +356,32 @@ Config: `tools.ssh.maxTransferBytes`, `security.restrictToWorkspace` (the local 
 
 ### cron
 
-Schedules reminders and recurring work. Actions: `add`, `list`, `remove`.
+Schedules everything Jenny does later. Actions: `add`, `list`, `remove`, `pause`, `resume`. There are two kinds of job only, one-time and recurring.
 
-- `add` requires a `message` (the instruction Jenny executes when the job fires) plus **exactly one** of three schedule kinds:
+- `add` requires a `message` (the instruction Jenny executes when the job fires) plus **exactly one** schedule:
   - `every_seconds` — recurring interval.
   - `cron_expr` — a cron expression (`"0 9 * * *"`), optionally with an explicit `tz` (IANA name). `tz` is **only** accepted alongside `cron_expr` — passing it with `every_seconds` or `at` is an error.
-  - `at` — a one-shot ISO datetime; the job auto-deletes itself after it fires.
+  - `at` — a one-time ISO datetime; the job auto-deletes itself after it fires.
+  - `date` — a one-time day without a time: `"YYYY-MM-DD"` rings at 09:00 that day, `"YYYY-MM"` ("around March") at 09:00 on the 1st. Auto-deletes like `at`.
+- A recurring job may carry a `condition` — `{app, params, field, op, value}` — on a mini app's latest value. At each run the app's reader runs and the value is compared in code, before any model call: the turn starts only when the condition has just become true, and not again until it goes back to false. Refused on a one-time job.
+- `notebook` and `card` place the job in a notebook (on one card, or on the whole notebook when `card` is empty); in a notebook chat the notebook is the default. A notebook job runs inside that notebook and delivers in its chat, wherever it was asked. `why` names the notebook's wiki page that explains the job, which the run reads to say what is due and why.
 - `add` also takes an optional `name`, a short human label for the job in the user's language: it is what the notification title shows. Without one the job has no name (lists fall back to the start of the `message`, the notification title never does).
 - Naive (timezone-less) `cron_expr`/`at` values fall back to the device's configured timezone.
 - `add` also takes an optional `mode`, which decides whether the job is allowed to stay quiet:
   - `reminder` (default) — the job **always** messages you when it fires. This is every job created before this option existed, and every job that omits `mode`.
   - `monitor` — a recurring check that runs in its own private session and **says nothing unless it has something to report**. Its reply is suppressed by default; the only way it reaches you is by explicitly sending a message, and its private session keeps the previous runs so it can speak only when the state actually *changed* rather than repeating the same alert every cycle. A run that stayed quiet is recorded as `silenced` and shows up that way in `list` — that is a healthy outcome, not a failure.
-  - `monitor` requires `every_seconds` or `cron_expr` and is **refused with `at`**: a one-shot job that decides to stay silent would never report anything at all.
+  - `monitor` requires `every_seconds` or `cron_expr` and is **refused with `at` or `date`**: a one-time job that decides to stay silent would never report anything at all.
   - A monitor still costs a full turn every cycle even when it says nothing. Silence saves the notification, not the tokens.
   - The mode is fixed at creation: to change it, remove the job and create it again.
-- `remove` needs a `job_id` from `list`.
+- `remove`, `pause` and `resume` need a `job_id` from `list`.
 - `list` also shows a job the user paused from the workshop (Hands), marked as paused since a given time, so Jenny does not recreate it; a job that simply ran out (a fired `at`) is left out.
-- System-managed jobs show up in `list` for transparency but are **protected** — removal is refused with an explanation, not silently ignored. `list` prints the purpose of each next to it: `dream` (memory consolidation), `heartbeat` (checks `HEARTBEAT.md` for tasks you left), the [gardener](../using/gardener.md) and the update check. Each is registered only if its own config enables it — `agents.defaults.dream.enabled`, `agents.defaults.gardener.enabled`, `gateway.heartbeat.enabled`, `updates.enabled` — so a disabled one is absent from `list` rather than present and idle.
+- System-managed jobs show up in `list` for transparency but are **protected** — removal is refused with an explanation, not silently ignored. `list` prints the purpose of each next to it: `dream` (memory consolidation), the [gardener](../using/gardener.md), the notebook clock (`reminders`) and the update check. Each is registered only if its own config enables it — `agents.defaults.dream.enabled`, `agents.defaults.gardener.enabled`, `wiki.enabled`, `updates.enabled` — so a disabled one is absent from `list` rather than present and idle.
 - Jobs cannot be created from inside another cron job's own execution (no self-scheduling chains).
-- **`cron` is closed inside a notebook conversation, in all three directions** — `add`, `list` and `remove` all return a refusal that tells Jenny to ask again in the personal chat, where reminders are also delivered. It is closed on a read-only turn too, wherever that turn happens.
+- In a notebook conversation, `list` and `remove` see only that notebook's jobs. `cron` is closed on a read-only turn, wherever that turn happens.
 
 Config: no direct user toggle; the default timezone comes from the device/config, not a tool setting.
 
-Gotcha: seeing `dream`, `gardener` and `heartbeat` in the list is expected, not a sign of something wrong — they are Jenny's own periodic jobs, meant to be visible but not removable. To stop one, turn it off in config; there is no way to delete it from the job list.
+Gotcha: seeing `dream`, `gardener` and `reminders` in the list is expected, not a sign of something wrong — they are Jenny's own periodic jobs, meant to be visible but not removable. To stop one, turn it off in config; there is no way to delete it from the job list.
 
 ### spawn
 
@@ -464,11 +467,11 @@ Gotcha: if the model uses `message` instead of a normal reply for the current co
 
 ### nothing_to_report
 
-The counterpart to `message` on a silent scheduled run (Heartbeat, a monitor reminder, or the turn where a subagent's result comes back to one of them). On those turns Jenny's written answer is delivered nowhere, so `message` is the only way to reach you — which made "I have nothing to say" the *absence* of an action, and small models express that by sending a message with a placeholder in it. Real examples that reached the chat before this tool existed: `silent`, `noop`, `placeholder`, an Italian "all fine" line, and two empty bubbles.
+The counterpart to `message` on a silent scheduled run (a monitor, or the turn where a subagent's result comes back to one). On those turns Jenny's written answer is delivered nowhere, so `message` is the only way to reach you — which made "I have nothing to say" the *absence* of an action, and small models express that by sending a message with a placeholder in it. Real examples that reached the chat before this tool existed: `silent`, `noop`, `placeholder`, an Italian "all fine" line, and two empty bubbles.
 
-- `task` is optional: the number of the check being declared, as listed in that run's prompt. One call per number.
+- `task` is optional: the number of the check being declared, when the run's prompt lists numbered checks.
 - Nothing is delivered and no notification is raised. A run that calls it is still recorded as `silenced`, exactly like one that said nothing at all.
-- Passing a number also records that check as having produced its answer (the `CHECK_OK` verdict described under [Heartbeat](../using/scheduling.md#heartbeat-a-periodic-checklist)), which is what lets a check that had been failing be remembered as working again. Calling it *without* a number deliberately records no verdict — "I have nothing to say" is not the same claim as "the check ran fine", and treating them as one would let a broken check be filed as healthy.
+- Passing a number also records that check as having produced its answer (the `CHECK_OK` verdict of a monitor that [handed its check to a helper](../using/scheduling.md#two-modes-one-that-always-speaks-one-that-speaks-only-if-it-has-to)), which is what lets a check that had been failing be remembered as working again. Calling it *without* a number deliberately records no verdict — "I have nothing to say" is not the same claim as "the check ran fine", and treating them as one would let a broken check be filed as healthy.
 - On a normal conversation turn it declines and tells the model to just answer.
 
 Config: none — always registered.

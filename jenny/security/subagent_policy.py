@@ -77,11 +77,11 @@ _SECRET_DIRS = (
 
 _SYSTEM_CODE_DIRS = ("agent", "ui")
 
-# CONTROL: file che Jenny carica o esegue da sola, senza nessuno davanti — il
-# battito, i promemoria, le skill, l'identità, la memoria, le conversazioni.
+# CONTROL: file che Jenny carica o esegue da sola, senza nessuno davanti — i
+# promemoria, le skill, l'identità, la memoria, le conversazioni.
 # Un lavoro non fidato non li scrive direttamente: la scrittura va in bozza e
 # serve un tocco dell'utente (``agent.staged_writes``).
-_CONTROL_FILES = ("HEARTBEAT.md", "AGENTS.md", "SOUL.md", "USER.md")
+_CONTROL_FILES = ("AGENTS.md", "SOUL.md", "USER.md")
 _CONTROL_DIRS = (
     ("cron",),
     ("skills",),

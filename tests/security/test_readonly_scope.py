@@ -146,7 +146,7 @@ def test_a_malformed_metadata_leaves_the_turn_writable(meta) -> None:
 
 
 def test_the_default_is_writable_so_internal_sessions_keep_working() -> None:
-    """Cron, Dream e heartbeat non hanno un messaggio da cui leggere il flag.
+    """Cron e Dream non hanno un messaggio da cui leggere il flag.
 
     Un default chiuso li avrebbe spenti tutti — e in silenzio, perché nessuno
     di loro riferisce di non aver scritto.

@@ -26,7 +26,6 @@ const FILE_HELP_KEYS = {
   'AGENTS.md': 'workspace.fileHelp.agents',
   'USER.md': 'workspace.fileHelp.user',
   'SOUL.md': 'workspace.fileHelp.soul',
-  'HEARTBEAT.md': 'workspace.fileHelp.heartbeat',
   'memory/MEMORY.md': 'workspace.fileHelp.memory',
 };
 

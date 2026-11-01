@@ -13,13 +13,50 @@ from jenny.board.corrections import list_corrections, open_corrections, resolve_
 from jenny.board.links import page_membership
 from jenny.board.store import (
     mutate_board,
-    mutate_reminders,
     read_board,
-    read_reminders,
     write_card_summary,
 )
 from jenny.board.view import build_board_view, build_card_view
 from jenny.webui.commands import CommandError, dispatch_command
+
+TZ = "Europe/Rome"
+
+
+def _jobs(cron) -> dict:
+    from jenny.board.cron_link import notebook_jobs
+
+    return notebook_jobs(cron, "piante")
+
+
+def _board(notebook: Path, cron, **kw) -> dict:
+    """La vista della bacheca coi job dello scheduler, come la chiede la rotta."""
+    return build_board_view(notebook, cron_jobs=_jobs(cron), timezone_name=TZ, **kw)
+
+
+def _card_view(notebook: Path, cron, card: str) -> dict:
+    return build_card_view(notebook, card, cron_jobs=_jobs(cron), timezone_name=TZ)
+
+
+def _notes(notebook: Path, cron) -> list:
+    from jenny.board.cron_link import notes_from_jobs
+
+    return notes_from_jobs(_jobs(cron), TZ)
+
+
+def _remind(cron, card: str, text: str, when: dict, every_ms: int = 3_600_000) -> str:
+    """Un promemoria del quaderno come lo scrive ``edit.add_reminder``: un job."""
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.dates import date_schedule
+    from jenny.cron.types import CronSchedule
+
+    if when["kind"] == "date":
+        day = when["date"][:7] if when.get("precision") == "month" else when["date"]
+        schedule, condition = date_schedule(day, TZ), None
+    else:
+        schedule = CronSchedule(kind="every", every_ms=every_ms)
+        condition = {k: when.get(k) for k in ("app", "params", "field", "op", "value")}
+    return add_notebook_job(cron, "piante", card, name=text, message=text, schedule=schedule,
+                            condition=condition).id
 
 
 def _seed(notebook: Path) -> None:
@@ -60,17 +97,16 @@ def test_board_view_without_a_board(notebook: Path) -> None:
     assert view["offboard"] == len(list((notebook / "wiki").glob("*.md"))) - 1
 
 
-def test_board_view_signals_and_offboard(notebook: Path) -> None:
+async def test_board_view_signals_and_offboard(notebook: Path, cron) -> None:
     _seed(notebook)
-    mutate_reminders(notebook, lambda r: r["reminders"].append({
-        "id": "r-concime", "card": "monstera", "text": "Concime",
-        "when": {"kind": "date", "date": "2026-10-10"},
-    }))
-    view = build_board_view(notebook, today=date(2026, 10, 4))
+    rid = _remind(cron, "monstera", "Concime", {"kind": "date", "date": "2099-10-10"})
+    view = _board(notebook, cron, today=date(2099, 10, 4))
     signals = {c["id"]: c["signal"] for c in view["cards"]}
     # L'acero ha un cassetto cambiato dopo un'apertura mai avvenuta: puntino.
     assert signals == {"acero": "new", "monstera": "soon"}
-    assert [n["id"] for n in view["notes"]] == ["r-concime"]
+    assert view["notes"] == [{"id": rid, "card": "monstera", "text": "Concime",
+                              "when": {"kind": "date", "date": "2099-10-10",
+                                       "precision": "day"}}]
     # Fuori bacheca: dormienza e le tre del ginkgo.
     assert view["offboard"] == 4
     assert view["connections"][0]["label"] == "vasi dello stesso ordine"
@@ -214,37 +250,60 @@ async def test_note_section_is_journaled_as_said(ctx, notebook: Path) -> None:
     assert note["journalLine"].startswith("raw/journal/")
 
 
-async def test_reminder_section_creates_a_user_reminder(ctx, notebook: Path) -> None:
+async def test_reminder_section_creates_a_notebook_job(cron_ctx, cron, notebook: Path) -> None:
     _seed(notebook)
-    await dispatch_command(ctx, "board.section.add", {
+    out = await dispatch_command(cron_ctx, "board.section.add", {
         "wiki": "piante", "card": "acero", "kind": "reminder", "text": "Potatura leggera",
-        "when": {"kind": "date", "date": "2027-02-15"},
+        "when": {"kind": "date", "date": "2099-02-15"},
     })
-    rem = read_reminders(notebook)["reminders"][0]
-    assert rem["by"] == "user" and rem["card"] == "acero"
-    # Niente sezione nel cassetto: il calendario di cura la deriva da ``reminders.json``.
+    job = cron.get_job(out["id"])
+    assert job.name == "Potatura leggera" and job.schedule.kind == "at"
+    assert job.payload.board["notebook"] == "piante" and job.payload.board["card"] == "acero"
+    # Niente sezione nel cassetto, niente file: il calendario di cura la deriva dal job.
     assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
-    await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": rem["id"]})
-    assert read_reminders(notebook)["reminders"][0]["state"] == "dropped"
+    assert not (notebook / "board" / "reminders.json").exists()
+    await dispatch_command(cron_ctx, "board.reminder.drop", {"wiki": "piante", "id": job.id})
+    assert cron.get_job(job.id) is None
 
 
-async def test_a_reminder_can_be_for_the_whole_notebook(ctx, notebook: Path) -> None:
+async def test_a_reminder_can_be_for_the_whole_notebook(cron_ctx, cron, notebook: Path) -> None:
     """Dal post-it libero, o dal «+» della bacheca: niente scheda, tutto il quaderno."""
     _seed(notebook)
-    out = await dispatch_command(ctx, "board.reminder.add", {
+    out = await dispatch_command(cron_ctx, "board.reminder.add", {
         "wiki": "piante", "card": "", "text": "Porta dentro tutte le piante",
-        "when": {"kind": "date", "date": "2026-12-01"},
+        "when": {"kind": "date", "date": "2099-12-01"},
     })
-    rem = read_reminders(notebook)["reminders"][0]
-    assert out["id"] == rem["id"] and rem["card"] == "" and rem["by"] == "user"
-    view = build_board_view(notebook)
-    assert [n["id"] for n in view["notes"] if n["card"] == ""] == [rem["id"]]
+    view = _board(notebook, cron)
+    assert [n["id"] for n in view["notes"] if n["card"] == ""] == [out["id"]]
     # Un post-it libero, senza scheda, dopo quelli delle schede.
     assert view["postits"][-1]["card"] == "" and view["postits"][-1]["pos"]["by"] == "jenny"
     with pytest.raises(CommandError):
-        await dispatch_command(ctx, "board.reminder.add", {
+        await dispatch_command(cron_ctx, "board.reminder.add", {
             "wiki": "piante", "card": "Fico!", "text": "x",
-            "when": {"kind": "date", "date": "2026-12-01"}})
+            "when": {"kind": "date", "date": "2099-12-01"}})
+
+
+async def test_a_reminder_from_the_board_keeps_its_why(cron_ctx, cron, notebook: Path) -> None:
+    """Il perché arriva fino al job; una pagina che non c'è si rifiuta, col modo giusto di nominarla."""
+    _seed(notebook)
+    (notebook / "wiki" / "acero.md").write_text("# Acero\n", encoding="utf-8")
+    kept = await dispatch_command(cron_ctx, "board.reminder.add", {
+        "wiki": "piante", "card": "acero", "text": "Travaso", "why": "acero.md",
+        "when": {"kind": "date", "date": "2099-03", "precision": "month"}})
+    assert cron.get_job(kept["id"]).payload.why == "acero.md"
+    with pytest.raises(CommandError, match="no such page"):
+        await dispatch_command(cron_ctx, "board.reminder.add", {
+            "wiki": "piante", "card": "acero", "text": "Potatura", "why": "non-ce.md",
+            "when": {"kind": "date", "date": "2099-03-01"}})
+
+
+async def test_reminder_rpcs_without_the_scheduler_are_unavailable(ctx, notebook: Path) -> None:
+    _seed(notebook)
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(ctx, "board.reminder.add", {
+            "wiki": "piante", "card": "", "text": "x",
+            "when": {"kind": "date", "date": "2099-12-01"}})
+    assert exc.value.code == "unavailable"
 
 
 async def test_photo_section_lands_in_raw_photos(ctx, notebook: Path) -> None:
@@ -258,14 +317,11 @@ async def test_photo_section_lands_in_raw_photos(ctx, notebook: Path) -> None:
     assert (notebook / section["path"]).read_bytes() == b"\x89PNG fake"
 
 
-async def test_reminder_done_becomes_a_journal_fact(ctx, notebook: Path) -> None:
+async def test_reminder_done_becomes_a_journal_fact(cron_ctx, cron, notebook: Path) -> None:
     _seed(notebook)
-    mutate_reminders(notebook, lambda r: r["reminders"].append({
-        "id": "r-concime", "card": "monstera", "text": "Concime",
-        "when": {"kind": "date", "date": "2026-10-10"},
-    }))
-    await dispatch_command(ctx, "board.reminder.done", {"wiki": "piante", "id": "r-concime"})
-    assert read_reminders(notebook)["reminders"][0]["state"] == "done"
+    rid = _remind(cron, "monstera", "Concime", {"kind": "date", "date": "2099-10-10"})
+    await dispatch_command(cron_ctx, "board.reminder.done", {"wiki": "piante", "id": rid})
+    assert cron.get_job(rid) is None
     journal = next((notebook / "raw" / "journal").glob("*.md")).read_text()
     assert "Done: Concime" in journal
 
@@ -299,15 +355,31 @@ async def test_a_removed_thread_is_a_no_to_that_thread(ctx, notebook: Path) -> N
     assert subjects == {"Acero — Monstera", "Monstera — Acero"}
 
 
-async def test_a_condition_reminder_from_a_drawer(ctx, notebook: Path) -> None:
+async def test_a_condition_reminder_from_a_drawer(cron_ctx, cron, notebook: Path) -> None:
+    """«Avvisami quando…» col suo «controlla ogni»: un ricorrente col filtro."""
     _seed(notebook)
-    await dispatch_command(ctx, "board.section.add", {
-        "wiki": "piante", "card": "acero", "kind": "reminder", "text": "Annaffia",
-        "when": {"kind": "condition", "app": "waterbot", "params": {"sensor": "albinella"},
-                 "field": "moisture", "op": "<", "value": 30},
-    })
-    rem = read_reminders(notebook)["reminders"][0]
-    assert rem["when"]["kind"] == "condition" and rem["when"]["value"] == 30
+    when = {"kind": "condition", "app": "waterbot", "params": {"sensor": "albinella"},
+            "field": "moisture", "op": "<", "value": 30}
+    with pytest.raises(CommandError) as exc:
+        await dispatch_command(cron_ctx, "board.reminder.add", {
+            "wiki": "piante", "card": "acero", "text": "Annaffia", "when": when})
+    assert exc.value.code == "bad_request"
+    out = await dispatch_command(cron_ctx, "board.reminder.add", {
+        "wiki": "piante", "card": "acero", "text": "Annaffia", "when": when,
+        "every_ms": 21_600_000})
+    job = cron.get_job(out["id"])
+    assert job.schedule.kind == "every" and job.schedule.every_ms == 21_600_000
+    assert job.payload.condition["value"] == 30
+    view = _board(notebook, cron)
+    # Una riga del post-it, con la sua cadenza; non anche un'etichetta menta.
+    assert view["notes"] == [{"id": job.id, "card": "acero", "text": "Annaffia", "when": {
+        "kind": "condition", "app": "waterbot", "params": {"sensor": "albinella"},
+        "field": "moisture", "op": "<", "value": 30, "every_ms": 21_600_000}}]
+    assert view["autoLabels"] == []
+    assert next(c for c in view["cards"] if c["id"] == "acero")["auto"] is False
+    await dispatch_command(cron_ctx, "board.reminder.update", {
+        "wiki": "piante", "id": job.id, "every_ms": 86_400_000})
+    assert cron.get_job(job.id).schedule.every_ms == 86_400_000
 
 
 async def test_previews_are_counted_by_real_page(ctx, notebook: Path) -> None:
@@ -373,30 +445,29 @@ async def test_an_accepted_card_lands_near_the_view(ctx, notebook) -> None:
 # ── L'agenda delle attese e il calendario di cura ────────────────────────────
 
 
-def _three_reminders(notebook: Path) -> None:
-    def apply(rems):
-        rems["reminders"] += [
-            {"id": "r-poltiglia", "card": "acero", "text": "Poltiglia",
-             "when": {"kind": "date", "date": "2026-11-02"}},
-            {"id": "r-umido", "card": "acero", "text": "Annaffia",
-             "when": {"kind": "condition", "app": "waterbot", "params": {},
-                      "field": "moisture", "op": "<", "value": 30}},
-            {"id": "r-concime", "card": "monstera", "text": "Concime",
-             "when": {"kind": "date", "date": "2026-10-10"}},
-            {"id": "r-marzo", "card": "acero", "text": "Rinvaso",
-             "when": {"kind": "date", "date": "2027-03-01", "precision": "month"}},
-        ]
-
-    mutate_reminders(notebook, apply)
+def _three_reminders(cron) -> dict:
+    ids = {
+        "poltiglia": _remind(cron, "acero", "Poltiglia", {"kind": "date", "date": "2099-11-02"}),
+        "umido": _remind(cron, "acero", "Annaffia", {
+            "kind": "condition", "app": "waterbot", "params": {}, "field": "moisture",
+            "op": "<", "value": 30}),
+        "concime": _remind(cron, "monstera", "Concime", {"kind": "date", "date": "2099-10-10"}),
+        "marzo": _remind(cron, "acero", "Rinvaso", {"kind": "date", "date": "2100-03-01",
+                                                   "precision": "month"}),
+    }
+    return ids
 
 
-def test_each_card_with_reminders_has_its_own_postit(notebook: Path) -> None:
+async def test_each_card_with_reminders_has_its_own_postit(notebook: Path, cron) -> None:
     _seed(notebook)
-    _three_reminders(notebook)
-    view = build_board_view(notebook, today=date(2026, 10, 4))
+    ids = _three_reminders(cron)
+    view = _board(notebook, cron, today=date(2099, 10, 4))
     # Dalla più vicina; quelle a condizione, senza giorno, in fondo.
-    assert [n["id"] for n in view["notes"]] == ["r-concime", "r-poltiglia", "r-marzo", "r-umido"]
-    assert all("pos" not in n for n in view["notes"])
+    assert [n["id"] for n in view["notes"]] == [
+        ids["concime"], ids["poltiglia"], ids["marzo"], ids["umido"]]
+    assert all(set(n) == {"id", "card", "text", "when"} for n in view["notes"])
+    assert view["notes"][2]["when"] == {"kind": "date", "date": "2100-03-01",
+                                        "precision": "month"}
     # Un post-it per scheda, non uno per attesa: due schede, due post-it.
     assert [p["card"] for p in view["postits"]] == ["acero", "monstera"]
     assert view["postitRows"] == model.POSTIT_ROWS
@@ -412,24 +483,50 @@ def test_each_card_with_reminders_has_its_own_postit(notebook: Path) -> None:
             assert model._overlap(rect, box) == 0
 
 
-def test_no_open_reminders_no_postit(notebook: Path) -> None:
+async def test_no_reminders_no_postit(notebook: Path, cron) -> None:
+    from jenny.board.cron_link import notes_on_disk
+
     _seed(notebook)
-    assert build_board_view(notebook)["postits"] == []
-    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 2
-    _three_reminders(notebook)
-    # Quattro attese su due schede: due post-it.
-    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 4
+    assert _board(notebook, cron)["postits"] == []
+    assert model.items_on_board(read_board(notebook), notes_on_disk("piante")) == 2
+    _three_reminders(cron)
+    # Quattro promemoria su due schede: due post-it, letti anche dal file dei job.
+    assert model.items_on_board(read_board(notebook), notes_on_disk("piante")) == 4
+    assert model.items_on_board(read_board(notebook), _notes(notebook, cron)) == 4
 
 
-async def test_moving_a_postit_makes_its_place_the_users(ctx, notebook: Path) -> None:
+async def test_a_one_time_cron_is_a_note_and_a_recurring_one_a_label(notebook: Path,
+                                                                      cron) -> None:
+    """Un singolo dal tool ``cron`` (a un'ora esatta) sta sul post-it con la sua ora;
+    un ricorrente senza filtro sta sull'etichetta menta. Mai tutti e due."""
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.dates import date_schedule
+    from jenny.cron.types import CronSchedule
+
     _seed(notebook)
-    _three_reminders(notebook)
+    once = add_notebook_job(cron, "piante", "acero", name="Chiama il vivaio", message="m",
+                            schedule=date_schedule("2099-10-21T09:30", TZ))
+    add_notebook_job(cron, "piante", "acero", name="Meteo", message="m",
+                     schedule=CronSchedule(kind="every", every_ms=3_600_000))
+    view = _board(notebook, cron)
+    assert view["notes"] == [{"id": once.id, "card": "acero", "text": "Chiama il vivaio",
+                              "when": {"kind": "date", "date": "2099-10-21",
+                                       "precision": "day", "time": "09:30"}}]
+    assert [r["name"] for r in view["autoLabels"][0]["rows"]] == ["Meteo"]
+    drawer = _card_view(notebook, cron, "acero")
+    assert [r["id"] for r in drawer["reminders"]] == [once.id]
+    assert [a["name"] for a in drawer["automations"]] == ["Meteo"]
+
+
+async def test_moving_a_postit_makes_its_place_the_users(ctx, notebook: Path, cron) -> None:
+    _seed(notebook)
+    _three_reminders(cron)
     await dispatch_command(ctx, "board.move", {
         "wiki": "piante", "kind": "postit", "id": "acero", "x": 70, "y": 12.5,
     })
     card = model.card_by_id(read_board(notebook), "acero")
     assert card["postitPos"] == {"x": 70.0, "y": 12.5, "by": "user"}
-    view = build_board_view(notebook)
+    view = _board(notebook, cron)
     assert next(p for p in view["postits"] if p["card"] == "acero")["pos"]["by"] == "user"
     with pytest.raises(CommandError) as exc:
         await dispatch_command(ctx, "board.move", {
@@ -482,61 +579,65 @@ def test_the_notebook_postit_counts_and_its_place_is_kept_free() -> None:
                                               "pos": {"x": 2, "y": 3}}],
                                    "notebookPostitPos": {"x": 40, "y": 3},
                                    "notebookAutoPos": {"x": 70, "y": 3}})
-    reminders = {"reminders": [{"id": "r-1", "card": "", "text": "Porta dentro le piante",
-                                "state": "open", "when": {"kind": "date", "date": "2026-12-01"}}]}
-    assert model.items_on_board(board, reminders) == 2
-    boxes = model._boxes(board, reminders)
+    notes = [{"id": "r-1", "card": "", "text": "Porta dentro le piante",
+              "when": {"kind": "date", "date": "2026-12-01", "precision": "day"}}]
+    assert model.items_on_board(board, notes) == 2
+    boxes = model._boxes(board, notes)
     assert (40.0, 3.0, 40.0 + model.POSTIT_BOX[0], 3.0 + model.POSTIT_BOX[1]) in boxes
     assert (70.0, 3.0, 70.0 + model.AUTO_BOX[0], 3.0 + model.AUTO_BOX[1]) in boxes
     # Una posizione storta resta com'è sul disco (le chiavi si conservano), ma non
     # occupa il muro: ``free_slot`` non la vede.
     junk = model.normalize_board({"notebookAutoPos": "qui"})
-    assert model._boxes(junk, {}) == []
+    assert model._boxes(junk, []) == []
 
 
-async def test_a_reminder_of_jenny_is_edited_and_dropped_by_id(ctx, notebook: Path) -> None:
+async def test_a_reminder_is_edited_and_dropped_by_id(cron_ctx, cron, notebook: Path) -> None:
     _seed(notebook)
-    _three_reminders(notebook)
-    await dispatch_command(ctx, "board.reminder.update", {
-        "wiki": "piante", "id": "r-poltiglia", "text": "Poltiglia bordolese",
-        "when": {"kind": "date", "date": "2026-11-05"},
+    ids = _three_reminders(cron)
+    rid = ids["poltiglia"]
+    await dispatch_command(cron_ctx, "board.reminder.update", {
+        "wiki": "piante", "id": rid, "text": "Poltiglia bordolese",
+        "when": {"kind": "date", "date": "2099-11-05", "precision": "day"},
     })
-    rem = next(r for r in read_reminders(notebook)["reminders"] if r["id"] == "r-poltiglia")
-    assert rem["text"] == "Poltiglia bordolese" and rem["when"]["date"] == "2026-11-05"
-    assert rem["by"] == "user"
-    await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": "r-poltiglia"})
-    rem = next(r for r in read_reminders(notebook)["reminders"] if r["id"] == "r-poltiglia")
-    assert rem["state"] == "dropped"
+    note = next(n for n in _notes(notebook, cron) if n["id"] == rid)
+    assert note["text"] == "Poltiglia bordolese" and note["when"]["date"] == "2099-11-05"
+    await dispatch_command(cron_ctx, "board.reminder.drop", {"wiki": "piante", "id": rid})
+    assert cron.get_job(rid) is None
     with pytest.raises(CommandError) as exc:
-        await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": "r-poltiglia"})
+        await dispatch_command(cron_ctx, "board.reminder.drop", {"wiki": "piante", "id": rid})
     assert exc.value.code == "not_found"
 
 
-async def test_dropping_a_drawer_reminder_takes_its_section_too(ctx, notebook: Path) -> None:
+async def test_a_reminder_of_another_notebook_is_not_found(cron_ctx, cron,
+                                                           notebook: Path) -> None:
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.dates import date_schedule
+
     _seed(notebook)
-    await dispatch_command(ctx, "board.section.add", {
-        "wiki": "piante", "card": "acero", "kind": "reminder", "text": "Potatura",
-        "when": {"kind": "date", "date": "2027-02-15"},
-    })
-    rid = read_reminders(notebook)["reminders"][0]["id"]
-    await dispatch_command(ctx, "board.reminder.drop", {"wiki": "piante", "id": rid})
-    assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
+    other = add_notebook_job(cron, "altrove", "acero", name="x", message="x",
+                             schedule=date_schedule("2099-01-01", TZ))
+    for method in ("board.reminder.done", "board.reminder.drop"):
+        with pytest.raises(CommandError) as exc:
+            await dispatch_command(cron_ctx, method, {"wiki": "piante", "id": other.id})
+        assert exc.value.code == "not_found"
+    assert cron.get_job(other.id) is not None
 
 
-async def test_the_drawer_shows_a_reminder_once(ctx, notebook: Path) -> None:
+async def test_the_drawer_shows_a_reminder_once(cron_ctx, cron, notebook: Path) -> None:
     _seed(notebook)
-    _three_reminders(notebook)
-    await dispatch_command(ctx, "board.section.add", {
+    _three_reminders(cron)
+    await dispatch_command(cron_ctx, "board.section.add", {
         "wiki": "piante", "card": "acero", "kind": "reminder", "text": "Potatura",
-        "when": {"kind": "date", "date": "2027-02-15"},
+        "when": {"kind": "date", "date": "2100-02-15"},
     })
-    view = build_card_view(notebook, "acero")
+    view = _card_view(notebook, cron, "acero")
     assert "next" not in view
-    # Nel calendario, in ordine; non anche come sezione dell'utente.
+    # Nel calendario, in ordine; non anche come sezione dell'utente né fra i cron.
     assert [r["text"] for r in view["reminders"]] == [
         "Poltiglia", "Potatura", "Rinvaso", "Annaffia",
     ]
     assert all(s["kind"] != "reminder" for s in view["userSections"])
+    assert view["automations"] == []
 
 
 def test_the_drawer_takes_the_notes_out_of_the_sections(notebook: Path) -> None:
@@ -661,11 +762,12 @@ def _notes_and_photos(notebook: Path) -> None:
     mutate_board(notebook, apply)
 
 
-def test_the_board_has_a_lilac_postit_and_a_gallery_per_card(notebook: Path) -> None:
+async def test_the_board_has_a_lilac_postit_and_a_gallery_per_card(notebook: Path,
+                                                                      cron) -> None:
     _seed(notebook)
-    _three_reminders(notebook)
+    _three_reminders(cron)
     _notes_and_photos(notebook)
-    view = build_board_view(notebook, today=date(2026, 10, 14))
+    view = _board(notebook, cron, today=date(2026, 10, 14))
     # Solo l'acero ha note e foto.
     assert [n["card"] for n in view["notePostits"]] == ["acero"]
     lilac = view["notePostits"][0]
@@ -695,10 +797,10 @@ def test_the_board_has_a_lilac_postit_and_a_gallery_per_card(notebook: Path) -> 
         for b in rects[i + 1:]:
             assert model._overlap(a, b) == 0, (a, b)
     # I gialli restano dove nascevano prima che il lilla e la galleria esistessero.
-    plain = build_board_view(notebook, today=date(2026, 10, 14))
+    plain = _board(notebook, cron, today=date(2026, 10, 14))
     assert [p["pos"] for p in plain["postits"]] == [p["pos"] for p in view["postits"]]
     # Il lilla e la galleria non contano nei 40 oggetti.
-    assert model.items_on_board(read_board(notebook), read_reminders(notebook)) == 4
+    assert model.items_on_board(read_board(notebook), _notes(notebook, cron)) == 4
 
 
 def test_a_card_without_notes_or_photos_has_neither(notebook: Path) -> None:
@@ -725,8 +827,7 @@ async def test_moving_the_lilac_and_the_gallery_makes_their_place_the_users(
     assert view["notePostits"][0]["pos"] == card["notesPos"]
     assert view["galleries"][0]["pos"] == card["photosPos"]
     # Dove li ha messi l'utente, occupano il muro: una scheda nuova non ci va sopra.
-    x, y = model.free_slot(read_board(notebook), read_reminders(notebook),
-                           near=(70.0, 5.5))
+    x, y = model.free_slot(read_board(notebook), [], near=(70.0, 5.5))
     assert model._overlap((x, y, x + model.CARD_BOX[0], y + model.CARD_BOX[1]),
                           (70.0, 5.5, 70.0 + model.GALLERY_BOX[0],
                            5.5 + model.GALLERY_BOX[1])) == 0

@@ -9,7 +9,8 @@ turno di annuncio di un subagent, che è proprio quello che finiva in chat.
 from __future__ import annotations
 
 from jenny.bus.events import INTERNAL_CHANNEL
-from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
+from jenny.cron.session_turns import monitor_session_key
+from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import (
     TURN_VISIBILITY_META,
     TurnVisibility,
@@ -18,6 +19,9 @@ from jenny.session.turn_visibility import (
     resolve_turn_visibility,
     silent_turn_metadata,
 )
+
+# Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
+MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _resolve(metadata=None, *, channel="websocket", session_key=UNIFIED_SESSION_KEY):
@@ -30,7 +34,7 @@ class TestTheDefaultIsTheProvenance:
 
     def test_internal_work_on_a_user_channel_is_silent(self) -> None:
         """Il caso che rompeva tutto: l'heartbeat gira su ``websocket:default``."""
-        assert _resolve({}, session_key=HEARTBEAT_SESSION_KEY) is TurnVisibility.SILENT
+        assert _resolve({}, session_key=MONITOR_SESSION_KEY) is TurnVisibility.SILENT
 
     def test_a_monitor_session_is_silent_by_provenance_alone(self) -> None:
         assert _resolve({}, session_key="cron:job-1") is TurnVisibility.SILENT
@@ -48,7 +52,7 @@ class TestTheDefaultIsTheProvenance:
 
     def test_absent_metadata_behaves_like_empty(self) -> None:
         assert _resolve(None) is TurnVisibility.VISIBLE
-        assert _resolve(None, session_key=HEARTBEAT_SESSION_KEY) is TurnVisibility.SILENT
+        assert _resolve(None, session_key=MONITOR_SESSION_KEY) is TurnVisibility.SILENT
 
 
 class TestAnExplicitMarkWins:
@@ -57,7 +61,7 @@ class TestAnExplicitMarkWins:
 
     def test_a_marked_visible_turn_beats_the_provenance(self) -> None:
         assert (
-            _resolve({TURN_VISIBILITY_META: "visible"}, session_key=HEARTBEAT_SESSION_KEY)
+            _resolve({TURN_VISIBILITY_META: "visible"}, session_key=MONITOR_SESSION_KEY)
             is TurnVisibility.VISIBLE
         )
 
@@ -65,7 +69,7 @@ class TestAnExplicitMarkWins:
         """Nel dubbio decide la provenienza, non un valore che nessuno riconosce."""
         assert _resolve({TURN_VISIBILITY_META: "maybe"}) is TurnVisibility.VISIBLE
         assert (
-            _resolve({TURN_VISIBILITY_META: "maybe"}, session_key=HEARTBEAT_SESSION_KEY)
+            _resolve({TURN_VISIBILITY_META: "maybe"}, session_key=MONITOR_SESSION_KEY)
             is TurnVisibility.SILENT
         )
         assert _resolve({TURN_VISIBILITY_META: True}) is TurnVisibility.VISIBLE

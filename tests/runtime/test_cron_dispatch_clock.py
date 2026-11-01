@@ -7,7 +7,6 @@ sua, come default del parametro ``now_ms``.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from jenny.config.schema import Config
@@ -17,8 +16,7 @@ from jenny.utils import clock
 
 def _dispatcher(**kwargs) -> CronDispatcher:
     return CronDispatcher(
-        get_agent=lambda: None, config=Config(), cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(), **kwargs,
+        get_agent=lambda: None, config=Config(), cron=MagicMock(), **kwargs,
     )
 
 

@@ -878,7 +878,6 @@ async def _run_cron(
         get_agent=lambda: agent,
         config=Config(),
         cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
         snapshot_before_dream=agent.snapshot_before_dream,
     )
 
@@ -1125,7 +1124,7 @@ class TestTheAlarmLeavesTheLog:
 
     ``notify_delivery`` è la primitiva che il canale WS usa già per gli alert di
     consegna: fire-and-forget, zero token, no-op fuori da Android. Non il tool
-    ``message`` dell'heartbeat, che costa un turno LLM e dipende dal modello che
+    ``message`` di un monitor, che costa un turno LLM e dipende dal modello che
     sceglie di chiamarlo — e il modello, qui, è la parte che non funziona.
     """
 

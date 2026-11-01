@@ -231,9 +231,9 @@ class LoopTasksMixin:
         qui il tetto e' quello che il chiamante ha gia' scelto (``keep=10``).
 
         Chi conia una chiave per esecuzione **e** non puo' aspettare la potatura
-        se la dimentica da se' alla fine del run: v. ``gardener._prune_sessions``. Il cron (``cron:<job_id>``) e l'heartbeat
-        (chiave nuda) non entrano in questo discorso: le loro chiavi sono
-        **stabili**, quindi il loro spazio e' finito da se'.
+        se la dimentica da se' alla fine del run: v. ``gardener._prune_sessions``. Il cron (``cron:<job_id>``)
+        non entra in questo discorso: le sue chiavi sono
+        **stabili**, quindi il suo spazio e' finito da se'.
         """
         for key in keys:
             tasks = self._active_tasks.get(key)

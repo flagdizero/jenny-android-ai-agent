@@ -74,10 +74,8 @@ async def test_a_job_that_ran_is_on_disk_before_the_next_one_starts(tmp_path) ->
     finally:
         service.stop()
 
-    reminder = disk_while_b_runs["A"]
-    assert reminder["enabled"] is False
-    assert reminder["state"]["nextRunAtMs"] is None
-    assert reminder["state"]["lastStatus"] == "ok"
+    # Un singolo, dopo che è suonato, sparisce: e su disco è già sparito.
+    assert "A" not in disk_while_b_runs
 
 
 async def test_a_delivered_reminder_does_not_run_again_after_a_kill(tmp_path) -> None:

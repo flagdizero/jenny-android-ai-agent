@@ -19,7 +19,7 @@ Back from the board returns to the notebook's chat. Back from a drawer returns t
 | Thing | What it is |
 |---|---|
 | **Cards** | Polaroids, one per subject — *Maple*, *Monstera* — with an icon and the subject's name. Tap one to open its drawer. A card can also **be an app** (*Portfolio*, *WaterBot*): its live value takes the place of the photo, and tapping it opens the app — see [App cards](#app-cards). |
-| **Sticky notes** | One yellow note per card that has open reminders: its next three, each with its date, and *+N more* for the rest. A thread runs from the note's pin to its card's pin. Tapping it opens that card's drawer, where the [care calendar](#the-drawer) lists them all. Reminders that belong to the **whole notebook** gather on one more yellow note, free on the cork and without a thread; tapping it opens their list in a sheet, with **+ Reminder**. A cron that fires once (*remind me tomorrow at 9*) is a date too: it is a line of the note of its card, or of the free one, with its time. |
+| **Sticky notes** | One yellow note per card that has reminders: its next three, each with its date, and *+N more* for the rest. A thread runs from the note's pin to its card's pin. Tapping it opens that card's drawer, where the [care calendar](#the-drawer) lists them all. Reminders that belong to the **whole notebook** gather on one more yellow note, free on the cork and without a thread; tapping it opens their list in a sheet, with **+ Reminder**. A reminder is a job of the scheduler: one with a date fires once and then it is gone; one that waits on an app's value is a line too, and says how often it is checked. |
 | **Labels** | One mint label per card that has [automations](#cron) — notebook crons that repeat: one row each, with how often in big (*Every Sunday at 18:30*), its name and its last run, and *+N more* after three. Tied to its card by a mint thread, beside the card's sticky note: two branches from the same card. The automations of the **whole notebook** are on one free label, without a thread. Tapping a card's label opens its drawer; tapping the free one opens its automations in a sheet, with **Pause**, **Change** and **Remove**. |
 | **Lilac notes** | One lilac note per card that has [your notes](#note), gathered: the two newest, each with its date, and *+N notes* for the rest; with more than one, the edge of a second sheet shows under it. Tied to its card by a thread, like the yellow one. Tapping it opens all the card's notes in a sheet, right there on the board. |
 | **Galleries** | A card's [photos](#photo): the three newest fanned out as small polaroids, the front one with its note, and how many there are. Tied to its card by a thread. Tapping it opens the card's gallery in a sheet, right there on the board. |
@@ -38,7 +38,7 @@ A card shows at most one signal, so that when something lights up it means somet
 | Signal | Meaning |
 |---|---|
 | Red corner — *problem* | An app on this card (in its drawer, or the card itself) is in alarm, or its data has stopped arriving. |
-| Yellow corner — *coming up* | The card's nearest dated reminder is due within **14 days**, or is overdue and still open. |
+| Yellow corner — *coming up* | The card's nearest dated reminder is due within **14 days**. |
 | Blue dot — *new* | The drawer was rewritten since you last opened it. |
 
 No signal means nothing needs you.
@@ -56,7 +56,7 @@ The board's shape is yours, and you can change it directly — or [ask Jenny](#a
 
 - **New card**: the **+** in the header, or a press and hold on the empty wall. You give it a name; it is born empty, in the free spot nearest to where you asked, and fills as the gardener attaches pages to it, as Jenny puts pages in it when you ask, or as you add sections.
 - **Rename**: from the bar of a held card, or at the bottom of its drawer. The name becomes yours, and Jenny no longer rewrites it.
-- **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons pause, its reminders stay quiet — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons. The wiki is never touched: its pages stay, and search finds them. Accepting **Put it away** from the envelope removes a card the same way, with the same undo.
+- **Remove from the board**: from the same two places. There is no question first: the card goes, and **Undo** appears for a few seconds. Undo puts it back where it was, with its threads. Meanwhile what the card did by itself stops — its notebook crons and its reminders pause — and resumes with the undo. A removed card can be put back for **7 days** (the last 5 removed); after that it is gone for good, together with its crons and reminders. The wiki is never touched: its pages stay, and search finds them. Accepting **Put it away** from the envelope removes a card the same way, with the same undo.
 
 ### Asking Jenny
 
@@ -87,7 +87,7 @@ Tap a card and its drawer opens. From the top:
 1. **The title**, the number of wiki pages the drawer covers and when it was last updated.
 2. **The brief**: one or two sentences on the state of this subject now. Under it, in a row, **your photos** and **your notes**, if the card has any: a small deck of polaroids on the left (see [Photo](#photo)) and one of lilac sticky notes on the right (see [Note](#note)); on a narrow screen one goes under the other.
 3. A warning when a mini-app section in this drawer is in alarm or stalled, saying that the data comes from the app, not from the wiki.
-4. **The care calendar**: the card's open reminders, each shown once, on a timeline — the overdue ones first, in red, then **Today**, then one group per month, then the ones that wait for an app's value (**When it happens**). The nearest is a yellow card with a **Done** button; every reminder has a **⋯** with **Edit**, **Done** and **Remove**. The brief and the sections do not repeat the dates: the calendar is where they are.
+4. **The care calendar**: the card's reminders, each shown once, on a timeline — **Today**, then one group per month, then the ones that wait for an app's value (**When it happens**), with how often each is checked. The nearest is a yellow card with a **Done** button; every reminder has a **⋯** with **Edit**, **Done** and **Remove**. The brief and the sections do not repeat the dates: the calendar is where they are.
 5. **The sections.** Every notebook has a *skeleton*, the list of sections every drawer has, in the same order on every card — for a plant notebook, *Pot and repotting, Water, Feeding, Light, History*. Each section is two short sentences, with chips that open the pages it was written from. Sections are folded: a row with the title and the first line; tap it to read the rest, the pages and **Correct**. A section the pages have nothing on is left out rather than filled with "no data". A blue dot beside a section's title means its text changed since you last opened the drawer.
 6. **Your sections**, if you added any (see below).
 7. **Threads**, if the card has any.
@@ -122,7 +122,7 @@ The note stays on the card as you wrote it, and it is also written to the notebo
 
 #### Reminder
 
-Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder goes into the card's care calendar and, when it is among the card's next three, onto its sticky note on the board. A reminder that concerns the whole notebook — *bring all the plants indoors on 1 December* — has no card: add it from the board's **+** or from the free note's sheet, or ask Jenny, who decides where it belongs. **Done** closes it — it is not deleted, it is marked done and a `[said]` journal line records that it was done. **Remove**, from its **⋯**, drops it; **Edit** changes its text or date, and makes a reminder Jenny wrote yours. See [Reminders and the notebook clock](#reminders-and-the-notebook-clock) for when you are told.
+Something to do, with a date: **What?** and **When?**, and a **Month only** box for something like "around March". The reminder goes into the card's care calendar and, when it is among the card's next three, onto its sticky note on the board. A reminder that concerns the whole notebook — *bring all the plants indoors on 1 December* — has no card: add it from the board's **+** or from the free note's sheet, or ask Jenny, who decides where it belongs. **Done** takes it away, and a `[said]` journal line records that it was done. **Remove**, from its **⋯**, takes it away; **Edit** changes its text or date. See [Reminders](#reminders) for when you are told.
 
 #### App
 
@@ -204,7 +204,7 @@ The board's shape — which cards, where, which threads — is yours: you change
 | Proposal | When the gardener may make it |
 |---|---|
 | **Add a card** | A subject off the board has at least **3** pages of its own. Not when the board is full: then it proposes putting a card away first. |
-| **Put a card away** | A card whose drawer and pages have not changed for **90 days**, with no open reminders. Its pages stay, and search finds them. |
+| **Put a card away** | A card whose drawer and pages have not changed for **90 days**, with no reminders. Its pages stay, and search finds them. |
 | **Add a thread** | A page clearly ties two cards that are not tied yet. |
 | **Attach a page** | A page off the board belongs in a drawer — typically one you asked for. |
 | **Add an app as a card** | An app you kept could be a strip of its own — tied by a thread to the card it belongs with. |
@@ -227,23 +227,21 @@ Close the chat and you find the empty board. *The board is empty* comes with an 
 
 ## Since you last looked
 
-The row at the top counts what happened since you last opened the board: cards added or put away, threads added, pages put into drawers, drawers rewritten, reminders taken from the journal, corrections applied, a reminder that came due, a mini-app section that changed state — plus one line when proposals are waiting in the envelope. Tap it for the list.
+The row at the top counts what happened since you last opened the board: cards added or put away, threads added, pages put into drawers, drawers rewritten, reminders taken from the journal, corrections applied, what a notebook cron or reminder said when it ran, a mini-app section that changed state — plus one line when proposals are waiting in the envelope. Tap it for the list.
 
 Every line is written by the code, from what was actually done, not by the model. Opening the board marks them as seen.
 
-## Reminders and the notebook clock
+## Reminders
 
-A notebook's reminders live in its own `board/reminders.json`, not in the [reminder list](./scheduling.md) of the personal chat. They come from two places: the ones you add (in a drawer, or for the whole notebook from the board's **+**), and the ones the gardener or Jenny take from what you say — a line that decides or plans something with a date (*repot it around March*) becomes a reminder on the card it is about, or on the whole notebook when it concerns no card in particular, pointing at the page that explains why.
+A notebook's reminders are jobs of the [scheduler](./scheduling.md), like everything that happens "later": they live in `cron/jobs.json` next to the personal chat's, and carry a label that says where they belong — the notebook, and the card when they have one. They come from two places: the ones you add (in a drawer, or for the whole notebook from the board's **+**), and the ones the gardener or Jenny take from what you say — a line that decides or plans something with a date (*repot it around March*) becomes a reminder on the card it is about, or on the whole notebook when it concerns no card in particular, pointing at the page that explains why. You can also ask for one from the personal chat: *remind me to repot the maple in March, in the plants notebook*.
 
-A system job, **`reminders`** — the notebook clock — runs **every 15 minutes** over every notebook. It first runs the app readers that are due, then reads every notebook's reminders:
+- A **dated** reminder is a job that fires once: at **09:00** (your time zone) on its day, or on the first of the month when only the month is known — or at the exact time you asked for. If the app was not running then, it fires as soon as it is back.
+- It rings in the **notebook's chat**, whichever chat it was asked from, with a notification, and Jenny says **why**: what is due and the reason, taken from the page the reminder points to.
+- Once it has fired it is **gone** — from the sticky note, from the calendar, from the list. Before that, **Done** takes it away and writes a `[said]` journal line that it was done; **Remove** just takes it away.
 
-- A **dated** reminder is announced from **09:00** (your time zone) on its day, or on the first of the month when only the month is known. If the app was not running at nine, it is announced at the next round.
-- The announcement is written by Jenny in a silent turn whose only way to reach you is a message, and it has to say **why**: what is due, the reason taken from the page the reminder points to, and a short question about when you will do it. It arrives in the personal chat like her other proactive messages (see [Android notifications](./scheduling.md#android-notifications)), and a *since you last looked* row is added on the board.
-- Each reminder is announced **once**. It stays on its sticky note (and, for a card, in its calendar) until you tap **Done** or **Remove** it.
+A reminder can also wait on an app's value instead of a date — *when moisture is below 20*. That is a job that **repeats**, at the pace you choose: **Remind me when…**, on an app section in a drawer, asks what to do, whether the value should drop below or rise above a threshold, and **Check every** — 1 hour, 6 hours or 1 day. At each check the code runs the app's reader and compares the fresh value: while the condition is false nothing else happens, and the model is not involved, so a check costs nothing. When it becomes true Jenny tells you, once; it is armed again only after a check finds it false. It stays on the sticky note, with its pace, until you mark it **Done** or **Remove** it.
 
-The reminder format also allows a trigger on an app's data instead of a date — *when moisture is below 20* — which the clock checks against the latest value recorded, and only if that value is fresh: stale data triggers nothing. It is announced once when the condition becomes true, re-armed only after it has been false at **two checks in a row** (a sensor hovering on the threshold does not fire at every round), and never announced twice within **12 hours**. You set one from the section in a drawer: **Remind me when…** asks what to do and whether the value should drop below or rise above a threshold.
-
-The same round is the one that notices when an app section changes state. The job is registered when the wiki is enabled (`wiki.enabled`), is listed among the protected [system jobs](./scheduling.md#protected-system-jobs), and costs nothing in a round with nothing due: an app's reading never involves the model.
+The system job **`reminders`** — the notebook clock — no longer looks at reminders: every **15 minutes** it runs the app readers that are due, notices when an app section changes state, and clears the cards removed more than a week ago. It is registered when the wiki is enabled (`wiki.enabled`), is listed among the protected [system jobs](./scheduling.md#protected-system-jobs), and costs nothing: an app's reading never involves the model.
 
 ## What Jenny sees in a notebook with a board
 
@@ -266,12 +264,11 @@ workspace/wikis/<notebook>/
                        the cards that are apps, threads, the envelope,
                        the "no" and "later" answers, since rows, the cards removed
                        in the last week (for Undo)
-    reminders.json     the reminders, open and closed
     cards/<id>.json    each drawer's written summary — derived from the wiki, regenerable
   raw/photos/          photos added to drawers
 ```
 
-The files under `board/cards/` are summaries of the wiki, and the next board pass rewrites any that are missing or out of date. `board.json` and `reminders.json` are yours: losing them loses your layout, sections and reminders. The apps placed on a board are not in the notebook: they live in `workspace/apps/`, with their data, and a notebook only points at them.
+The files under `board/cards/` are summaries of the wiki, and the next board pass rewrites any that are missing or out of date. `board.json` is yours: losing it loses your layout and sections. The notebook's reminders and crons are not in the notebook: they are jobs in `workspace/cron/jobs.json`. The apps placed on a board are not in the notebook: they live in `workspace/apps/`, with their data, and a notebook only points at them.
 
 ## See also
 
@@ -280,4 +277,4 @@ The files under `board/cards/` are summaries of the wiki, and the next board pas
 - [Plans](./plans.md) — reorganising a whole notebook, step by step, with a way back.
 - [Wiki](./wiki.md) — reading, editing and reporting a page.
 - [Mini-apps](./mini-apps.md) — the apps whose data can sit in a drawer.
-- [Scheduling and proactivity](./scheduling.md) — the system jobs, the notebook clock among them.
+- [Scheduling and proactivity](./scheduling.md) — the jobs a reminder is made of, and the system jobs, the notebook clock among them.

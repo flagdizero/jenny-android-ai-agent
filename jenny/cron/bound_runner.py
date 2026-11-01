@@ -8,16 +8,23 @@ import time
 import uuid
 from typing import Any, Protocol
 
+from loguru import logger
+
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
 from jenny.board.cron_link import last_message_text, link_alive, record_result, scope_of
 from jenny.bus.events import InboundMessage
+from jenny.cron.condition import describe as describe_condition
+from jenny.cron.condition import read_condition
 from jenny.cron.could_not_check import (
     ESCALATE_AFTER_FAILURES,
     ESCALATION_ASK_LIMIT,
     could_not_check_reason,
+    parse_delegated_marks,
     parse_warned_marks,
 )
+from jenny.cron.monitor_followup import resolve_pending_delegation
+from jenny.cron.service import CronJobSkippedError
 from jenny.cron.session_delivery import origin_delivery_context
 from jenny.cron.session_turns import (
     CRON_DEFER_UNTIL_IDLE_META,
@@ -30,6 +37,7 @@ from jenny.cron.types import (
     CronJobSilencedError,
     CronJobState,
     CronMonitorCouldNotCheckError,
+    CronMonitorDelegatedError,
     job_display_name,
     job_user_label,
 )
@@ -39,10 +47,12 @@ from jenny.session.keys import notebook_cron_session_key
 from jenny.session.turn_visibility import mark_silent_turn
 from jenny.utils.prompt_templates import render_template
 
-# Coda di storico tenuta nella sessione isolata di un monitor. Stesso valore del
-# default di ``heartbeat.keep_recent_messages``: un monitor gira all'infinito e
-# senza potatura la sua sessione cresce senza limite.
+# Coda di storico tenuta nella sessione isolata di un monitor: un monitor gira
+# all'infinito e senza potatura la sua sessione cresce senza limite.
 MONITOR_KEEP_RECENT_MESSAGES = 8
+
+# Quanto della pagina del perché entra nel prompt di un job.
+WHY_PAGE_CHARS = 1500
 
 # Scadenza del wakelock che copre l'esecuzione di un job cron. Tag distinto da
 # quello del turno perché il job può essere DIFFERITO (``CRON_DEFER_UNTIL_IDLE``)
@@ -52,10 +62,10 @@ MONITOR_KEEP_RECENT_MESSAGES = 8
 # cron da mezz'ora.
 CRON_WAKELOCK_TIMEOUT_S = 1800.0
 
-# Marcatore, soglia e parser vivono in :mod:`jenny.cron.could_not_check`: da
-# quando l'heartbeat ha lo stesso terzo esito (per-task), i lettori sono due e
-# la forma che il modello scrive deve restare una sola. Ri-esportati qui coi
-# nomi con cui il monitor li conosce.
+# Marcatore, soglia e parser vivono in :mod:`jenny.cron.could_not_check`: i
+# lettori sono due (il run del monitor e l'annuncio dell'aiutante a cui l'ha
+# delegato) e la forma che il modello scrive deve restare una sola. Ri-esportati
+# qui coi nomi con cui il monitor li conosce.
 MONITOR_ESCALATE_AFTER_FAILURES = ESCALATE_AFTER_FAILURES
 
 
@@ -66,9 +76,7 @@ def has_already_warned_could_not_check(state: CronJobState) -> bool:
     finché c'era il solo ramo di escalation, un monitor già annunciato tornava
     a ricevere il prompt di sempre con il proprio avviso di due ore prima ancora
     in coda alla sessione e il guasto ancora davanti — ed è la situazione in cui
-    il modello, misurato sul device, ha richiamato ``message`` di testa sua
-    (v. la docstring di ``already_warned_block`` in
-    :mod:`jenny.cron.heartbeat_tasks`, dove il caso è documentato per esteso).
+    il modello, misurato sul device, ha richiamato ``message`` di testa sua.
 
     Unica lettura di ``could_not_check_escalated``, e :func:`should_escalate_could_not_check`
     la nega: i due rami finiscono nello stesso prompt e se divergessero di un
@@ -168,6 +176,25 @@ def _bound_session_delivery_context(
     return channel, chat_id, metadata
 
 
+def _why_page(job: CronJob) -> str:
+    """La pagina del perché (``payload.why``) dalla wiki del quaderno del job, o ``""``."""
+    from jenny.board.cron_link import notebook_root
+
+    if not job.payload.why or not job.payload.board:
+        return ""
+    root = notebook_root(str(job.payload.board.get("notebook")))
+    if root is None:
+        return ""
+    wiki = (root / "wiki").resolve()
+    page = (wiki / job.payload.why).resolve()
+    if not page.is_relative_to(wiki):
+        return ""
+    try:
+        return page.read_text(encoding="utf-8")[:WHY_PAGE_CHARS]
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
 def _prune_monitor_session(agent: BoundCronAgent, session_key: str) -> None:
     """Tiene limitata la sessione isolata di un monitor, che gira all'infinito."""
     session = agent.sessions.get_or_create(session_key)
@@ -220,6 +247,25 @@ async def _run_bound_cron_job(
     else:
         turn_session_key = monitor_session_key(job.id) if monitor else session_key
 
+    # Una delega del run prima di cui non è tornato nessun verdetto: si chiude
+    # adesso, PRIMA di decidere l'escalation (v. ``resolve_pending_delegation``).
+    if monitor and resolve_pending_delegation(job.state):
+        logger.debug("cron: job {} delegated last time and never heard back", job.id)
+
+    # Il filtro, nel codice e prima del modello: falsa, il giro finisce qui senza
+    # spendere un token (v. :mod:`jenny.cron.condition`).
+    observed: Any = None
+    if job.payload.condition:
+        reading = await read_condition(job.payload.condition)
+        if reading.error is not None:
+            raise CronJobSkippedError(reading.error)
+        if not reading.holds:
+            job.state.condition_notified = False
+            raise CronJobSilencedError(f"cron job {job.id}: condition is false")
+        if job.state.condition_notified:
+            raise CronJobSilencedError(f"cron job {job.id}: condition still true, already told")
+        observed = reading.value
+
     # L'escalation si decide PRIMA del turno, perché è una riga di prompt: solo
     # il modello, dentro il turno, sa se il controllo è riuscito adesso, ed è
     # anche l'unico che possa consegnare (tool ``message``).
@@ -228,6 +274,10 @@ async def _run_bound_cron_job(
         "agent/cron_monitor.md" if monitor else "agent/cron_reminder.md",
         strip=True,
         message=job.payload.message,
+        # Assenti per un job senza filtro e senza perché: il prompt resta quello.
+        condition=describe_condition(job.payload.condition) if job.payload.condition else "",
+        observed=observed,
+        why_page=_why_page(job),
         # Assenti dal template del reminder e falsi sul monitor normale: il
         # prompt reso resta byte-identico a prima finché non c'è un guasto.
         escalate=escalate,
@@ -304,6 +354,9 @@ async def _run_bound_cron_job(
         if isinstance(cron_tool, CronTool) and cron_token is not None:
             cron_tool.reset_cron_context(cron_token)
 
+    if job.payload.condition:
+        # Il turno è partito per questa condizione: non riparte finché non torna falsa.
+        job.state.condition_notified = True
     response = outcome.text
 
     if board_link is not None:
@@ -376,6 +429,14 @@ async def _run_bound_cron_job(
                 # silenzio.
                 escalated=bool(parse_warned_marks(outcome.final_text)),
             )
+        # Il controllo è nelle mani di un aiutante: il silenzio non prova niente,
+        # il verdetto arriva col suo annuncio (:mod:`jenny.cron.monitor_followup`).
+        if parse_delegated_marks(outcome.final_text) and not outcome.spoke:
+            cron.write_run_record(
+                run_id,
+                {**run_record_base, "status": "delegated", "delivery": "suppressed"},
+            )
+            raise CronMonitorDelegatedError(f"cron monitor job {job.id} delegated its check")
         # L'esito lo dice da sé: per un monitor l'outbound finale è sempre None,
         # e ``spoke`` distingue "ho parlato col tool ``message``" da "non avevo
         # nulla da riferire" — che è un successo, non un fallimento.

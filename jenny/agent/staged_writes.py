@@ -2,7 +2,7 @@
 
 Un subagent che ha letto contenuto non fidato (``security.subagent_policy``)
 può ancora voler cambiare un file che Jenny carica o esegue da sola: una skill,
-``HEARTBEAT.md``, un promemoria in ``cron/``, ``USER.md``. Rifiutarlo
+un promemoria in ``cron/``, ``USER.md``. Rifiutarlo
 toglierebbe una funzione («installa questa skill da GitHub»); scriverlo darebbe
 a una pagina ostile un posto da cui agire più tardi senza nessuno davanti. La
 via di mezzo è questa: la scrittura va in bozza, e solo un tocco dell'utente in

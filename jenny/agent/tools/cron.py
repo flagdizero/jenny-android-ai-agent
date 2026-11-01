@@ -10,6 +10,7 @@ from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import ContextAware, RequestContext
 from jenny.agent.tools.schema import (
     IntegerSchema,
+    ObjectSchema,
     StringSchema,
     tool_parameters_schema,
 )
@@ -21,7 +22,7 @@ from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
 )
-from jenny.session.keys import is_project_session_key
+from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
 from jenny.utils.helpers import safe_zoneinfo, validate_timezone_name
 
 # Modi accettati da action='add'. Vive qui e non in cron/types.py perché è la
@@ -29,44 +30,29 @@ from jenny.utils.helpers import safe_zoneinfo, validate_timezone_name
 _JOB_MODES = ("reminder", "monitor")
 _DEFAULT_JOB_MODE = "reminder"
 
-# Dentro un progetto non si programma niente, e questo e' l'unico posto in cui
-# Jenny lo viene a sapere: nessuna riga lo dice nel prompt (deciso il 22/08,
-# passo 3 del piano dei progetti). Il blocco di sistema si paga a
-# ogni turno di ogni progetto, un promemoria capita una volta al mese, e
-# scoprirlo cosi' costa una chiamata e niente da ripianificare.
-#
-# Il testo dice **dove si fa**, non solo che qui non si fa: e' la parte che
-# Jenny ridice all'utente, ed e' la differenza fra "chiedimelo nella chat
-# personale" e un "non posso" che manderebbe via a mani vuote.
-_PROJECT_REFUSAL = (
-    "Not here: this is a project conversation, and a project cannot schedule anything — "
-    "not add, not list, not remove. Reminders, monitors and recurring checks all live in "
-    "the personal chat, which is also the only place they are delivered where you will "
-    "actually see them. Tell the user to switch to the personal chat (the chip at the top "
-    "of the screen) and ask for it there; do not try another way of scheduling it from here."
-)
-
-# Un quaderno senza bacheca non ha un posto in cui mostrare un cron: resta la
-# regola di prima, con la stessa indicazione di dove si fa. Una bacheca senza
-# schede invece basta: il cron sta sul quaderno intero.
-_NO_BOARD_REFUSAL = _PROJECT_REFUSAL
-
-# La scelta è di Jenny, e il testo lo dice: dal 20/10/2026 un cron di quaderno sta
-# su una scheda **o** sul quaderno intero, e chiedere all'utente «su quale scheda?»
-# era proprio il difetto («si appende a una scheda a caso»).
+# Il «dove» di un job decide solo il recinto e la chat in cui consegna, non come
+# funziona (decisione del 31/10/2026): un job per un quaderno si crea da
+# qualunque chat, e un quaderno senza bacheca lo accetta sul quaderno intero.
 _NOTEBOOK_NOTE = (
-    "In a notebook chat a job belongs to the card it is about (`card`), or to the whole "
-    "notebook when `card` is left empty; you decide, do not ask. It runs inside this "
-    "notebook and delivers here; list and remove see only this notebook's jobs."
+    "A job belongs to the personal chat, or to a notebook (`notebook`; in a notebook chat it "
+    "is that notebook by default) and then to the card it is about (`card`), or to the whole "
+    "notebook when `card` is empty; you decide, do not ask. A notebook job runs inside that "
+    "notebook and delivers in its chat, wherever it was asked."
 )
 
 _CRON_PARAMETERS = tool_parameters_schema(
+    notebook=StringSchema(
+        "The notebook this job belongs to, by name. In a notebook chat it defaults to that "
+        "notebook; leave it empty in the personal chat for a personal job."
+    ),
     card=StringSchema(
-        "Only in a notebook chat: the card (title or id) this job is about — it hangs from "
+        "Only for a notebook job: the card (title or id) this job is about — it hangs from "
         "that card on the board. Leave it empty when the job concerns the whole notebook, "
         "several cards, or nothing on the board. Decide; do not ask the user."
     ),
-    action=StringSchema("Action to perform", enum=["add", "list", "remove"]),
+    action=StringSchema(
+        "Action to perform", enum=["add", "list", "remove", "pause", "resume"],
+    ),
     name=StringSchema(
         "Short human label for the job, in the user's language, as the user would name it "
         "(e.g. 'Annaffiare le piante', 'Weekly report'). It is the title of the phone "
@@ -76,7 +62,7 @@ _CRON_PARAMETERS = tool_parameters_schema(
     message=StringSchema(
         "REQUIRED when action='add'. Instruction for the agent to execute when the job triggers "
         "(e.g., 'Send a reminder at 9am' or 'Check system status and report'). "
-        "Not used for action='list' or action='remove'."
+        "Not used for the other actions."
     ),
     every_seconds=IntegerSchema(
         description="Interval in seconds (for recurring tasks)", minimum=1
@@ -87,23 +73,54 @@ _CRON_PARAMETERS = tool_parameters_schema(
         "When omitted with cron_expr, the tool's default timezone applies."
     ),
     at=StringSchema(
-        "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00'). "
-        "Naive values use the tool's default timezone."
+        "ISO datetime for one-time execution at an exact time (e.g. '2026-02-12T10:30:00'), "
+        "only when the user said the time. Naive values use the tool's default timezone."
     ),
-    job_id=StringSchema("REQUIRED when action='remove'. Job ID to remove (obtain via action='list')."),
+    date=StringSchema(
+        "One-time execution on a day without a time: 'YYYY-MM-DD' (rings at 9:00 that day) or "
+        "'YYYY-MM' for 'around March' (rings at 9:00 on the 1st). 'On 5 November' with no "
+        "time is date='YYYY-11-05', never `at` with an hour you picked: the user sees it as a "
+        "day, not as an appointment. Use `at` only when the user gave a time."
+    ),
+    condition=ObjectSchema(
+        {
+            "app": StringSchema("The mini app's slug."),
+            "params": ObjectSchema(description="Which series of the app (e.g. which sensor).",
+                                   additional_properties=True),
+            "field": StringSchema("The field of the app's data to watch."),
+            "op": StringSchema("Comparison.", enum=["<", "<=", ">", ">=", "==", "!="]),
+            "value": {"type": ["number", "string"], "description": "The threshold."},
+        },
+        description=(
+            "Only with every_seconds or cron_expr: a filter on a mini app's latest value. At "
+            "each run the app is read first, and the job speaks only when the condition has "
+            "just become true (once, until it goes back to false). If the user did not say how "
+            "often to check, ask them before adding it."
+        ),
+        required=["app", "field", "op", "value"],
+    ),
+    why=StringSchema(
+        "Only for a notebook job: the wiki page (path under wiki/) that explains why this "
+        "matters. The job reads it when it fires, to say what and why."
+    ),
+    job_id=StringSchema(
+        "REQUIRED when action='remove', action='pause' or action='resume'. Job ID (obtain via "
+        "action='list')."
+    ),
     mode=StringSchema(
         "Optional for action='add'. 'reminder' (default) always messages the user when it fires; "
         "'monitor' runs silently and speaks only when the check finds something worth reporting. "
         "Use 'monitor' whenever the request is CONDITIONAL — 'only tell me if...', 'warn me when...', "
         "'let me know if it drops below...': staying silent is then the expected outcome of most runs, "
         "and a 'reminder' would post filler like 'All clear.' every single time. "
-        "'monitor' requires every_seconds or cron_expr; it cannot be used with at.",
+        "'monitor' requires every_seconds or cron_expr; it cannot be used with at or date.",
         enum=["reminder", "monitor"],
     ),
     required=["action"],
     description=(
         "Action-specific parameters: add requires a non-empty message plus one schedule "
-        "(every_seconds, cron_expr, or at); remove requires job_id; list only needs action. "
+        "(every_seconds, cron_expr, at, or date); remove, pause and resume require job_id; "
+        "list only needs action. "
         "Per-action requirements are enforced at runtime (see field descriptions) so the "
         "top-level schema stays compatible with providers (e.g. OpenAI Codex/Responses) that "
         "reject oneOf/anyOf/allOf/enum/not at the root of function parameters."
@@ -189,10 +206,15 @@ class CronTool(Tool, ContextAware):
     @property
     def description(self) -> str:
         return (
-            "Schedule reminders and recurring tasks. Actions: add, list, remove. "
+            "Schedule reminders and recurring tasks. Actions: add, list, remove, pause, resume. "
+            "Two kinds only: one-time (at, or date for a day or a month) and recurring "
+            "(every_seconds or cron_expr). A one-time job disappears once it has fired. "
             "mode='reminder' (default) always speaks when it fires; mode='monitor' is a recurring "
             "check that runs silently and speaks only when something changed or is worth "
-            "reporting (needs every_seconds or cron_expr, never at). "
+            "reporting (needs every_seconds or cron_expr, never at). A recurring job can carry a "
+            "`condition` on a mini app's value: it is checked in code at each run, at no cost, "
+            "and the job speaks only when it becomes true. Pick the widest interval that does "
+            "the job. "
             f"If tz is omitted, cron expressions and naive ISO times default to {self._default_timezone}. "
             + _NOTEBOOK_NOTE
         )
@@ -202,16 +224,23 @@ class CronTool(Tool, ContextAware):
         action = params.get("action")
         if action == "add" and not str(params.get("message") or "").strip():
             errors.append("message is required when action='add'")
-        if action == "remove" and not str(params.get("job_id") or "").strip():
-            errors.append("job_id is required when action='remove'")
+        if action in ("remove", "pause", "resume") and not str(params.get("job_id") or "").strip():
+            errors.append(f"job_id is required when action='{action}'")
         # Il valore ammesso lo controlla già l'enum dello schema; qui resta solo
         # la regola che lo schema non sa esprimere.
         mode = str(params.get("mode") or "").strip()
+        one_time = str(params.get("at") or "").strip() or str(params.get("date") or "").strip()
         # Un one-shot che decide di tacere non avvisa mai nessuno: la
         # combinazione non ha un comportamento sensato, quindi si rifiuta invece
         # di crearla e lasciarla scattare a vuoto.
-        if mode == "monitor" and str(params.get("at") or "").strip():
-            errors.append("mode='monitor' cannot be used with at; use every_seconds or cron_expr")
+        if mode == "monitor" and one_time:
+            errors.append(
+                "mode='monitor' cannot be used with at or date; use every_seconds or cron_expr"
+            )
+        if params.get("condition") and not (params.get("every_seconds") or params.get("cron_expr")):
+            errors.append(
+                "a condition needs every_seconds or cron_expr: ask the user how often to check"
+            )
         return errors
 
     async def execute(
@@ -227,100 +256,160 @@ class CronTool(Tool, ContextAware):
         mode: str | None = None,
         **kwargs: Any,
     ) -> str:
-        # Prima di ogni azione, ``add`` compresa: dentro un progetto il tool e'
-        # chiuso in tutte e tre le direzioni. ``list`` mostrerebbe la sveglia
-        # personale a una conversazione di lavoro ("chi sei viaggia, dove altro
-        # lavori no"), e ``remove`` la cancellerebbe da li' dentro.
-        if is_project_session_key(self._session_key.get()):
-            return await self._notebook(action, kwargs.get("card"), name, message,
-                                        every_seconds, cron_expr, tz, at, job_id, mode)
-        # Seconda chiusura, e regola diversa: quella sopra dice *dove* si
-        # programma, questa dice *se questo turno* puo' cambiare qualcosa. Vale
-        # anche nella chat personale, ed e' la sola lettura del passo 4. Un job
-        # e' fra le cose piu' durature che Jenny possa creare: sopravvive al
-        # turno, alla conversazione e al riavvio.
-        if current_turn_is_readonly():
+        in_notebook_chat = is_project_session_key(self._session_key.get())
+        # Un job e' fra le cose piu' durature che Jenny possa creare: sopravvive
+        # al turno, alla conversazione e al riavvio. In sola lettura non si tocca
+        # niente; dalla chat di un quaderno resta la lettura dei suoi job.
+        if current_turn_is_readonly() and not (action == "list" and in_notebook_chat):
             return READONLY_TOOL_REFUSAL
-        if action == "add":
-            if self._in_cron_context.get():
-                return "Error: cannot schedule new jobs from within a cron job execution"
-            return self._add_job(name, message, every_seconds, cron_expr, tz, at, mode)
-        elif action == "list":
-            return self._list_jobs()
-        elif action == "remove":
-            return await self._remove_job(job_id)
-        return f"Unknown action: {action}"
-
-    # -- i cron del quaderno ---------------------------------------------------
-
-    def _notebook_root(self) -> Any:
-        from jenny.board.store import read_board
-        from jenny.security.workspace_access import current_workspace_scope
-        from jenny.utils.wiki_paths import is_wiki_root
-
-        scope = current_workspace_scope()
-        root = scope.write_root() if scope is not None else None
-        if root is None or not is_wiki_root(root):
-            return None
-        board = read_board(root)
-        return (root, board) if board is not None else None
-
-    async def _notebook(self, action: str, card_ref: Any, name: str | None, message: str,
-                        every_seconds: int | None, cron_expr: str | None, tz: str | None,
-                        at: str | None, job_id: str | None, mode: str | None) -> str:
-        """Il cron in un quaderno: **nel cassetto di una scheda**, e solo di questo quaderno.
-
-        Chiuso finche' il quaderno non ha una bacheca (dove lo vedrebbe l'utente?).
-        Con la bacheca, ``add`` vuole la scheda: il job nasce legato a quaderno,
-        scheda e sezione, gira col recinto del quaderno e consegna nella sua chat;
-        la sezione ``cron`` nel cassetto lo mostra e lo toglie.
-        """
-        from jenny.board.cron_link import detach_job, make_link
-        from jenny.board.micro import find_card
-        from jenny.board.model import NOTEBOOK
-        from jenny.board.notify import board_changed
-
-        found = self._notebook_root()
-        if found is None:
-            return _NO_BOARD_REFUSAL
-        root, board = found
-        notebook = self._session_key.get()[len("project:"):]
-        mine = [j for j in self._cron.list_jobs(include_disabled=True)
-                if (j.payload.board or {}).get("notebook") == notebook
-                and (j.enabled or j.paused_at_ms is not None)]
+        notebook, root, err = self._target_notebook(kwargs.get("notebook"))
+        if err:
+            return err
         if action == "list":
-            if not mine:
-                return "No scheduled jobs in this notebook."
-            return "Scheduled jobs in this notebook:\n" + "\n".join(
-                f"- {job_display_name(j)} (id: {j.id}, {self._format_timing(j.schedule)}, "
-                f"{_where(j.payload.board)})" for j in mine)
-        if current_turn_is_readonly():
-            return READONLY_TOOL_REFUSAL
-        if action == "remove":
-            if not any(j.id == job_id for j in mine):
-                return f"No job `{job_id}` in this notebook (action='list' shows them)."
-            return self._remove_message(job_id, await detach_job(self._cron, str(job_id)))
+            return self._list_jobs(notebook if in_notebook_chat else None)
+        if action in ("remove", "pause", "resume"):
+            job = self._cron.get_job(str(job_id or ""))
+            # Dalla chat di un quaderno si toccano solo i job di quel quaderno.
+            if job is None or (in_notebook_chat
+                               and (job.payload.board or {}).get("notebook") != notebook):
+                where = "in this notebook" if in_notebook_chat else ""
+                return f"No job `{job_id}` {where} (action='list' shows them).".replace("  ", " ")
+            if action == "remove":
+                return await self._remove_job(job_id)
+            return await self._pause_job(job, paused=action == "pause")
         if action != "add":
             return f"Unknown action: {action}"
         if self._in_cron_context.get():
             return "Error: cannot schedule new jobs from within a cron job execution"
+        try:
+            schedule = self._schedule(every_seconds, cron_expr, tz, at, kwargs.get("date"), mode)
+        except ValueError as exc:
+            return f"Error: {exc}"
+        condition = kwargs.get("condition") or None
+        why = str(kwargs.get("why") or "").strip() or None
+        if notebook is None:
+            if why:
+                return "Error: `why` is a page of a notebook's wiki; it needs `notebook`."
+            return self._add_personal_job(name, message, schedule, mode, condition=condition)
+        return await self._add_notebook_job(notebook, root, kwargs.get("card"), name, message,
+                                            schedule, mode, condition=condition, why=why)
+
+    def _target_notebook(self, requested: Any) -> tuple[str | None, Any, str | None]:
+        """Il quaderno del job: ``(nome, cartella, errore)``; tutto ``None`` = personale.
+
+        Dalla chat di un quaderno la cartella è la radice scrivibile del turno
+        (``WorkspaceScope.write_root``): lo stesso confine di ogni altra scrittura,
+        e da lì non si programma per un altro quaderno. Dalla chat personale il
+        quaderno si cerca per nome.
+        """
+        from jenny.board.cron_link import notebook_root
+        from jenny.security.workspace_access import current_workspace_scope
+        from jenny.utils.wiki_paths import is_wiki_root
+
+        session = self._session_key.get()
+        here = session[len(PROJECT_SESSION_PREFIX):] if is_project_session_key(session) else None
+        name = str(requested or "").strip() or here
+        if name is None:
+            return None, None, None
+        if here is not None:
+            if name != here:
+                return None, None, (
+                    f"Not from here: this chat is the notebook «{here}». Ask in the personal "
+                    f"chat or in «{name}» for a job of that notebook.")
+            scope = current_workspace_scope()
+            root = scope.write_root() if scope is not None else None
+            if root is None or not is_wiki_root(root):
+                return None, None, f"No notebook «{name}» behind this chat."
+            return name, root, None
+        root = notebook_root(name)
+        if root is None:
+            return None, None, f"No notebook «{name}»."
+        return name, root, None
+
+    def _schedule(self, every_seconds: int | None, cron_expr: str | None, tz: str | None,
+                  at: str | None, date: Any, mode: str | None) -> CronSchedule:
+        """Il quando di un job nuovo. Solleva ``ValueError`` col testo per il modello."""
+        from jenny.cron.dates import date_schedule
+
+        if tz and not cron_expr:
+            raise ValueError("tz can only be used with cron_expr")
+        if tz and (err := self._validate_timezone(tz)):
+            raise ValueError(err.removeprefix("Error: "))
+        if every_seconds:
+            return CronSchedule(kind="every", every_ms=every_seconds * 1000)
+        if cron_expr:
+            effective_tz = tz or self._default_timezone
+            if err := self._validate_timezone(effective_tz):
+                raise ValueError(err.removeprefix("Error: "))
+            return CronSchedule(kind="cron", expr=cron_expr, tz=effective_tz)
+        when = str(at or "").strip() or str(date or "").strip()
+        if not when:
+            raise ValueError("either every_seconds, cron_expr, at, or date is required")
+        # Un monitor tace quando non c'è niente da dire: se scatta una volta
+        # sola, quel silenzio è definitivo e il job non serve a nulla.
+        if (mode or "").strip() == "monitor":
+            raise ValueError(
+                "mode=\"monitor\" cannot be scheduled once (at or date), because a one-shot "
+                "job that decides to stay silent never reports anything. Use every_seconds "
+                "or cron_expr for a monitor, or mode=\"reminder\" for a one-time reminder."
+            )
+        if err := self._validate_timezone(self._default_timezone):
+            raise ValueError(err.removeprefix("Error: "))
+        schedule = date_schedule(when, self._default_timezone)
+        return _day_if_due_at(schedule, self._default_timezone)
+
+    async def _add_notebook_job(self, notebook: str, root: Any, card_ref: Any, name: str | None,
+                                message: str, schedule: CronSchedule, mode: str | None, *,
+                                condition: Any, why: str | None) -> str:
+        """Un job del quaderno: su una scheda o sul quaderno intero, da qualunque chat."""
+        from jenny.board.cron_link import add_notebook_job
+        from jenny.board.micro import find_card
+        from jenny.board.model import NOTEBOOK
+        from jenny.board.notify import board_changed
+        from jenny.board.store import read_board
+
+        if not message:
+            return "Error: cron action='add' requires a non-empty 'message' parameter."
+        job_mode = (mode or _DEFAULT_JOB_MODE).strip() or _DEFAULT_JOB_MODE
+        if job_mode not in _JOB_MODES:
+            return f"Error: invalid mode '{mode}'. Use \"reminder\" or \"monitor\"."
+        board = read_board(root)
         ref = str(card_ref or "").strip()
-        card = find_card(board, ref) if ref else None
+        card = find_card(board, ref) if ref and board is not None else None
         if ref and card is None:
-            titles = ", ".join(f"«{c['title']}»" for c in board["cards"]) or "none"
-            return (f"No card «{ref}» on this board. Cards: {titles}. Use one of them, or leave "
-                    "`card` empty if the job is for the whole notebook.")
-        # Il job è la sola cosa che dice se il cron esiste: la bacheca e il cassetto
-        # lo derivano dal suo legame, senza una sezione da tenere allineata.
-        link = make_link(notebook, card["id"] if card else NOTEBOOK)
-        out = self._add_job(name, message, every_seconds, cron_expr, tz, at, mode, board=link)
-        if not out.startswith("Created job"):
-            return out
+            titles = ", ".join(f"«{c['title']}»" for c in (board or {}).get("cards") or [])
+            return (f"No card «{ref}» on the board of «{notebook}». Cards: {titles or 'none'}. "
+                    "Use one of them, or leave `card` empty if the job is for the whole notebook.")
+        origin_metadata: dict[str, Any] = {}
+        if turn_taint := current_turn_taint():
+            origin_metadata["_taint"] = list(turn_taint)
+        try:
+            job = add_notebook_job(
+                self._cron, notebook, card["id"] if card else NOTEBOOK,
+                name=(name or "").strip(), message=message, schedule=schedule, mode=job_mode,
+                why=why, condition=condition, origin_metadata=origin_metadata,
+            )
+        except ValueError as exc:
+            return f"Error: {exc}"
         await board_changed(notebook)
-        if card is None:
-            return f"{out} — it is on the board for the whole notebook, and delivers here."
-        return (f"{out} — it hangs from «{card['title']}» on the board (its drawer shows it), "
-                "and delivers in this notebook.")
+        out = f"Created job '{job.name}' (id: {job.id})" if job.name else f"Created job (id: {job.id})"
+        where = (f"on the card «{card['title']}»" if card is not None
+                 else "for the whole notebook")
+        return f"{out} — in the notebook «{notebook}», {where}; it runs and delivers there."
+
+    async def _pause_job(self, job: CronJob, *, paused: bool) -> str:
+        from jenny.board.notify import board_changed
+
+        result = self._cron.set_paused(job.id, paused)
+        if job.payload.board:
+            await board_changed(str(job.payload.board.get("notebook")))
+        return {
+            "paused": f"Paused job {job.id}.",
+            "resumed": f"Resumed job {job.id}.",
+            "unchanged": f"Job {job.id} was already {'paused' if paused else 'running'}.",
+            "expired": f"Job {job.id} cannot resume: its time passed while it was paused.",
+            "protected": f"Job {job.id} is a protected system job.",
+        }.get(result, f"Job {job.id} not found")
 
     def _add_job(
         self,
@@ -332,7 +421,24 @@ class CronTool(Tool, ContextAware):
         at: str | None,
         mode: str | None = None,
         *,
-        board: dict[str, Any] | None = None,
+        date: str | None = None,
+        condition: Any = None,
+    ) -> str:
+        """Un job personale dai parametri del tool (il quando ancora da costruire)."""
+        try:
+            schedule = self._schedule(every_seconds, cron_expr, tz, at, date, mode)
+        except ValueError as exc:
+            return f"Error: {exc}"
+        return self._add_personal_job(name, message, schedule, mode, condition=condition)
+
+    def _add_personal_job(
+        self,
+        name: str | None,
+        message: str,
+        schedule: CronSchedule,
+        mode: str | None = None,
+        *,
+        condition: Any = None,
     ) -> str:
         if not message:
             return (
@@ -354,44 +460,6 @@ class CronTool(Tool, ContextAware):
                 "messages the user, or mode=\"monitor\" for a recurring check that stays silent "
                 "unless it finds something worth reporting."
             )
-        if tz and not cron_expr:
-            return "Error: tz can only be used with cron_expr"
-        if tz:
-            if err := self._validate_timezone(tz):
-                return err
-
-        # Build schedule
-        delete_after = False
-        if every_seconds:
-            schedule = CronSchedule(kind="every", every_ms=every_seconds * 1000)
-        elif cron_expr:
-            effective_tz = tz or self._default_timezone
-            if err := self._validate_timezone(effective_tz):
-                return err
-            schedule = CronSchedule(kind="cron", expr=cron_expr, tz=effective_tz)
-        elif at:
-            # Un monitor tace quando non c'è niente da dire: se scatta una volta
-            # sola, quel silenzio è definitivo e il job non serve a nulla.
-            if job_mode == "monitor":
-                return (
-                    "Error: mode=\"monitor\" cannot be scheduled with 'at', because a one-shot "
-                    "job that decides to stay silent never reports anything. Use every_seconds "
-                    "or cron_expr for a monitor, or mode=\"reminder\" for a one-time reminder."
-                )
-            try:
-                dt = datetime.fromisoformat(at)
-            except ValueError:
-                return f"Error: invalid ISO datetime format '{at}'. Expected format: YYYY-MM-DDTHH:MM:SS"
-            if dt.tzinfo is None:
-                if err := self._validate_timezone(self._default_timezone):
-                    return err
-                dt = dt.replace(tzinfo=safe_zoneinfo(self._default_timezone))
-            at_ms = int(dt.timestamp() * 1000)
-            schedule = CronSchedule(kind="at", at_ms=at_ms)
-            delete_after = True
-        else:
-            return "Error: either every_seconds, cron_expr, or at is required"
-
         origin_metadata = dict(self._origin_metadata.get() or {})
         if turn_taint := current_turn_taint():
             # Un promemoria scritto con contenuto non fidato in vista: il suo testo
@@ -404,12 +472,11 @@ class CronTool(Tool, ContextAware):
                 schedule=schedule,
                 message=message,
                 mode=job_mode,
-                delete_after_run=delete_after,
                 session_key=session_key,
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
                 origin_metadata=origin_metadata,
-                board=board,
+                condition=condition,
             )
         except ValueError as exc:
             # Il rifiuto del servizio (un'espressione che non si legge o non
@@ -435,6 +502,10 @@ class CronTool(Tool, ContextAware):
                 return f"every {ms // 1000}s"
             return f"every {ms}ms"
         if schedule.kind == "at" and schedule.at_ms:
+            if schedule.precision in ("day", "month"):
+                from jenny.cron.dates import schedule_date
+
+                return f"once, on {schedule_date(schedule, self._default_timezone)}"
             return f"at {self._format_timestamp(schedule.at_ms, self._display_timezone(schedule))}"
         return schedule.kind
 
@@ -459,53 +530,10 @@ class CronTool(Tool, ContextAware):
             if state.could_not_check_escalated:
                 note += "; the user has been warned"
             lines.append(note)
-        lines.extend(self._format_task_checks(state, display_tz))
+        if state.pending_since_ms:
+            lines.append("  The last check was handed to a helper; waiting for its result")
         if state.next_run_at_ms:
             lines.append(f"  Next run: {self._format_timestamp(state.next_run_at_ms, display_tz)}")
-        return lines
-
-    def _format_task_checks(self, state: CronJobState, display_tz: str) -> list[str]:
-        """I singoli controlli dell'heartbeat, uno per riga. Vuoto per tutto il resto.
-
-        Il job ``heartbeat`` esegue N controlli scritti a mano in ``HEARTBEAT.md``,
-        e i tre contatori del job qui sopra ne sono soltanto il riassunto ("almeno
-        un controllo non è partito"). Quale sia stava in ``state.task_checks``, che
-        lo store salva e ricarica da commit e che **non raggiungeva nessuna
-        superficie**: né questa, né la WebUI. "Il controllo della pioggia sta
-        funzionando?" si rispondeva solo leggendo logcat sul telefono.
-
-        Le voci esistono solo per i controlli rotti (assente = sano), quindi su un
-        heartbeat in salute questo blocco è vuoto e la risposta all'elenco resta
-        identica a prima.
-
-        Dice anche se all'utente è già stato detto, ed è la metà che serve di più:
-        un controllo rotto da giorni di cui nessuno ha parlato è un guasto diverso
-        da uno rotto da giorni e annunciato, e sono i due che il difetto del
-        timbro dedotto rendeva indistinguibili.
-        """
-        lines: list[str] = []
-        for entry in state.task_checks.values():
-            if entry.pending_since_ms is not None and not entry.consecutive_could_not_check:
-                lines.append(
-                    f"  - {entry.label or 'unnamed check'}: handed to a subagent, "
-                    "waiting for its result"
-                )
-                continue
-            if not entry.consecutive_could_not_check:
-                continue
-            detail = (
-                f"  - {entry.label or 'unnamed check'}: "
-                f"{entry.consecutive_could_not_check} consecutive run(s) not carried out"
-            )
-            if entry.since_ms:
-                detail += f", since {self._format_timestamp(entry.since_ms, display_tz)}"
-            if entry.escalated:
-                detail += "; the user has been warned"
-                if entry.escalated_at_ms:
-                    detail += f" on {self._format_timestamp(entry.escalated_at_ms, display_tz)}"
-            else:
-                detail += "; not reported to the user yet"
-            lines.append(detail)
         return lines
 
     @staticmethod
@@ -524,16 +552,18 @@ class CronTool(Tool, ContextAware):
         """
         return system_job_purpose(job.id)
 
-    def _list_jobs(self) -> str:
-        # I job spenti restano fuori (un ``at`` eseguito, un job senza sessione),
-        # tranne quelli **in pausa**: l'utente li ha fermati dall'officina e
-        # torneranno. Senza, Jenny non li vedrebbe e ne creerebbe un doppione.
+    def _list_jobs(self, notebook: str | None = None) -> str:
+        """Tutti i job, o — dalla chat di un quaderno — solo quelli di *notebook*."""
+        # I job spenti restano fuori (un job senza sessione), tranne quelli **in
+        # pausa**: l'utente li ha fermati e torneranno. Senza, Jenny non li
+        # vedrebbe e ne creerebbe un doppione.
         jobs = [
             j for j in self._cron.list_jobs(include_disabled=True)
-            if j.enabled or j.paused_at_ms is not None
+            if (j.enabled or j.paused_at_ms is not None)
+            and (notebook is None or (j.payload.board or {}).get("notebook") == notebook)
         ]
         if not jobs:
-            return "No scheduled jobs."
+            return "No scheduled jobs in this notebook." if notebook else "No scheduled jobs."
         lines = []
         for j in jobs:
             timing = self._format_timing(j.schedule)
@@ -551,14 +581,21 @@ class CronTool(Tool, ContextAware):
                     f"  In the notebook {j.payload.board.get('notebook')}, "
                     f"{_where(j.payload.board)}: it belongs there."
                 )
+                if j.payload.why:
+                    parts.append(f"  Why: wiki/{j.payload.why}")
+            if j.payload.condition:
+                from jenny.cron.condition import describe
+
+                parts.append(f"  Only when {describe(j.payload.condition)} "
+                             f"(app {j.payload.condition.get('app')})")
             if j.payload.kind == "system_event":
                 parts.append(f"  Purpose: {self._system_job_purpose(j)}")
                 parts.append("  Protected: visible for inspection, but cannot be removed.")
             if j.paused_at_ms is not None:
                 since = self._format_timestamp(j.paused_at_ms, self._display_timezone(j.schedule))
                 parts.append(
-                    f"  Paused by the user from the workshop since {since}: it does not run "
-                    "until they resume it there (Workshop > Hands). Do not recreate it; "
+                    f"  Paused since {since}: it does not run until it is resumed "
+                    "(action='resume', or the workshop). Do not recreate it; "
                     "remove it only if they ask to drop it for good."
                 )
             parts.extend(self._format_state(j.state, j.schedule))
@@ -604,3 +641,25 @@ def _where(link: dict[str, Any] | None) -> str:
 # ToolLoader legge questa lista invece della reflection dir(). Un nuovo
 # tool va aggiunto qui esplicitamente.
 TOOLS = [CronTool]
+
+
+def _day_if_due_at(schedule: CronSchedule, tz_name: str) -> CronSchedule:
+    """Un ``at`` alle 9:00:00 in punto si mostra come un giorno.
+
+    È l'ora che ``date`` dà da sé a un giorno, ed è quella che il modello si
+    inventa quando l'utente non ne ha detta una: il 01/11/2026, su jenny_s22,
+    nella chat di un quaderno «il 20 novembre ricordami…» è diventato
+    ``at="…T09:00:00"`` tre volte su tre, nonostante la descrizione, perché la
+    sessione imitava la propria prima scelta. Suona comunque alle 9; cambia solo
+    come si legge, «20 nov 2026» invece di un appuntamento. Chi ha detto
+    davvero «alle 9» lo vede come giorno: è l'errore che costa meno.
+    """
+    from jenny.cron.dates import DUE_AT
+    from jenny.utils.helpers import safe_zoneinfo
+
+    if schedule.precision != "exact" or not schedule.at_ms:
+        return schedule
+    local = datetime.fromtimestamp(schedule.at_ms / 1000, tz=safe_zoneinfo(tz_name))
+    if local.time() != DUE_AT:
+        return schedule
+    return CronSchedule(kind="at", at_ms=schedule.at_ms, precision="day")

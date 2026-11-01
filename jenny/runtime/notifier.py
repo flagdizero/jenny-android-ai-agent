@@ -101,11 +101,11 @@ def alert_fields(
 
     Il titolo è il nome che l'utente ha dato all'agente (``bot_name``, di
     default «Jenny») seguito dal tipo dell'avviso nella sua lingua
-    (``user_text``: «⏰ Promemoria», «Monitoraggio», «Aggiornamento»), e per un
+    (``user_text``: «⏰ Promemoria», «Aggiornamento»), e per un
     cron dall'etichetta del job quando ne ha una — un nome per l'utente, mai
     l'istruzione inglese che il job esegue (v. ``jenny/agent/tools/cron.py``).
     Il tipo viene dal metadata di sorgente proattiva (``_webui_message_source``:
-    cron/heartbeat/update); il tag coalizza gli alert della stessa sorgente
+    cron/update); il tag coalizza gli alert della stessa sorgente
     (stesso tag → il nuovo sostituisce il vecchio).
 
     Il corpo è testo semplice: il markdown della risposta (asterischi, URL dei
@@ -129,9 +129,6 @@ def alert_fields(
         if label:
             title = f"{title} · {label}"
         tag = f"cron:{label}" if label else "cron"
-    elif kind == "heartbeat":
-        title = f"{bot} · {say('notify.monitor')}"
-        tag = "heartbeat"
     elif kind == "update":
         # Tag dedicato: l'annuncio in chat e l'alert esplicito di un update
         # critico partono entrambi da qui e devono coalizzare, non sommarsi.
@@ -159,7 +156,7 @@ def is_app_reply(metadata: dict[str, Any] | None) -> bool:
     ``webui: True`` lo mette il canale WebSocket sul messaggio in ingresso
     (``WebSocketChannel``), e la risposta finale e gli invii del tool
     ``message`` sullo stesso target ereditano i metadata del turno. Un avviso
-    proattivo (cron, heartbeat, Dream, update) nasce su una sessione interna e
+    proattivo (cron, Dream, update) nasce su una sessione interna e
     non lo porta.
 
     La distinzione decide chi zittisce l'alert (``NotifierBridge``): una
@@ -187,7 +184,7 @@ async def post_alert(
     ed è il canale della tendina (``channels/notification.py``): le risposte
     dell'agente devono coalizzare tutte su un thread unico invece di impilarsi
     una per messaggio, mentre gli avvisi proattivi tengono i loro tag distinti
-    (``cron:<label>``, ``heartbeat``, ``update``) perché sono avvisi diversi. Il
+    (``cron:<label>``, ``update``) perché sono avvisi diversi. Il
     titolo resta quello che ``alert_fields`` deriva dai metadata: il tag dice
     *dove* va la notifica, il titolo dice *di cosa parla*.
 

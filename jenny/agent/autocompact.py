@@ -33,7 +33,7 @@ class AutoCompact:
     # Sottoinsieme *deliberatamente stretto* del vocabolario di
     # :mod:`jenny.session.keys`: qui "interna" non vuol dire "non e' l'utente",
     # vuol dire "non deve avere ne archiviazione per inattivita ne reiniezione
-    # di ``_last_summary``". Allargarlo a ``cron:``/``heartbeat``/``internal:``/
+    # di ``_last_summary``". Allargarlo a ``cron:``/``internal:``/
     # ``subagent:`` toglierebbe a quelle sessioni il summary che oggi
     # ``prepare_session`` ricarica quando superano il budget di token: sarebbe
     # una regressione, non un allineamento. Se l'insieme debba coincidere con
@@ -541,7 +541,7 @@ class AutoCompact:
         if key in self._archiving or self._is_expired(session.updated_at):
             # Il log sta *dentro* il confronto e non prima della chiamata: se la
             # sessione e' gia in ``SessionManager._cache`` — il caso normale, ed
-            # e' l'unico che l'heartbeat incontra a ogni giro — ``get_or_create``
+            # e' l'unico che un job ricorrente incontra a ogni giro — ``get_or_create``
             # restituisce lo stesso oggetto e non ha ricaricato niente. Loggare
             # "reloading" li faceva credere a un ricaricamento a ogni battito.
             reloaded = self.sessions.get_or_create(key)

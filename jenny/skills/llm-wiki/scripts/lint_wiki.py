@@ -1926,16 +1926,14 @@ def lint_board(root_path: Path, today: str | None = None) -> int:
       sue pagine (la passata della bacheca lo riscrivera', ma fino ad allora mente);
     - **fonte mancante**: una sezione che cita una pagina che non esiste piu';
     - **pagine sparite** da un cassetto, **fili** oltre il tetto o verso schede
-      che non ci sono, **attese scadute** ancora aperte;
+      che non ci sono;
     - e, come misura e non come problema, quante pagine stanno fuori bacheca e
       quali sono state aperte piu' spesso in anteprima.
     """
     board = _read_json(root_path / "board" / "board.json")
     if not isinstance(board, dict):
         return 0
-    from datetime import date as _date
-
-    day = today or _date.today().isoformat()
+    del today  # i promemoria sono job dello scheduler: nessuno «scade» aperto
     wiki_dir = root_path / "wiki"
     issues = 0
     print("\n📌 Board:")
@@ -1969,17 +1967,6 @@ def lint_board(root_path: Path, today: str | None = None) -> int:
     dangling = [c for c in connections if c.get("a") not in ids or c.get("b") not in ids]
     if dangling:
         print(f"🟡 {len(dangling)} thread(s) tie a card that is no longer on the board")
-        issues += 1
-    reminders = _read_json(root_path / "board" / "reminders.json") or {}
-    overdue = [
-        r for r in reminders.get("reminders") or []
-        if isinstance(r, dict) and r.get("state", "open") == "open"
-        and (r.get("when") or {}).get("kind") == "date"
-        and str((r.get("when") or {}).get("date", "9999")) < day
-    ]
-    if overdue:
-        print(f"🟡 {len(overdue)} reminder(s) past their date and still open: "
-              + ", ".join(str(r.get("text")) for r in overdue[:5]))
         issues += 1
     all_pages = {
         f.relative_to(wiki_dir).as_posix() for f in wiki_dir.rglob("*.md")

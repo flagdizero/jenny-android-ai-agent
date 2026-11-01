@@ -21,7 +21,7 @@ il vocabolario delle sessioni; qui si traduce nella domanda dei comandi:
 - ``any`` — vale in entrambe: agisce su *questa* conversazione.
 
 Il residuo cade su «disponibile», e non e' distrazione: una chiave che non e' ne'
-progetto ne' personale e' interna (cron, Dream, heartbeat), e i comandi che
+progetto ne' personale e' interna (cron, Dream), e i comandi che
 passano da la' sono lavoro del sistema — rifiutarli trasformerebbe una domanda di
 classificazione in un job che non gira.
 """

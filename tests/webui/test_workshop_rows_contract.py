@@ -687,6 +687,20 @@ def test_the_work_row_keeps_what_changes_the_meaning() -> None:
     )
 
 
+def test_the_work_row_says_when() -> None:
+    """«Fra 120 giorni» da solo non dice né la data né che è un mese e non
+    un'ora: il 01/11/2026, su jenny_s22, un promemoria «verso marzo» si leggeva
+    così e basta. La riga e il dettaglio portano `row.schedule` per esteso
+    («una volta, a marzo 2027», «umidità < 15 · ogni 6 ore»)."""
+    assert "row.schedule" in _body("_renderCronJob")
+    detail = _body("_showCronJobDialog")
+    assert "cron.job.when" in detail and "row.schedule" in detail
+    for language in ("it", "en"):
+        d = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+        assert "{schedule}" in d["cron"]["job"]["when"]
+        assert "{when}" in d["cron"]["job"]["nextAt"]
+
+
 # ── Le skill in Mani ─────────────────────────────────────────────────────────
 #
 # Dal 21/09/2026 al 24/09/2026 non si vedevano da nessuna parte: la schermata

@@ -12,7 +12,7 @@ from jenny.apps.manifest import find_app
 from jenny.apps.migrate_micro import migrate_micro_apps
 from jenny.board import micro as mc
 from jenny.board.sections import app_field_value, app_section_view
-from jenny.board.store import mutate_board, mutate_reminders, read_board, read_reminders
+from jenny.board.store import mutate_board, read_board
 
 FIELDS = {"moisture": {"label": "Umidità", "unit": "%", "type": "number"},
           "online": {"label": "Sensore", "type": "bool"}}
@@ -59,10 +59,6 @@ def _micro(ws: Path, root: Path, micro_id: str, *, approved: bool, pending: bool
 def test_an_approved_micro_app_becomes_a_live_placed_app(notebook) -> None:
     ws, root = notebook
     _micro(ws, root, "m-acerello", approved=True)
-    mutate_reminders(root, lambda r: r["reminders"].append({
-        "id": "r-secca", "card": "acero", "text": "Annaffia",
-        "when": {"kind": "condition", "micro": "m-acerello", "field": "moisture",
-                 "op": "<", "value": 30}}))
     assert migrate_micro_apps(ws) == 1
 
     app = find_app(ws, "acerello")
@@ -74,8 +70,8 @@ def test_an_approved_micro_app_becomes_a_live_placed_app(notebook) -> None:
                        "by": "jenny-on-request"}
     view = app_section_view(ws, "acerello", {})
     assert (view["value"], view["unit"], view["every"]) == (41, "%", 30)
-    when = read_reminders(root)["reminders"][0]["when"]
-    assert when["app"] == "acerello" and "micro" not in when
+    # I promemoria non stanno più nel quaderno: la migrazione non ne scrive.
+    assert not (root / "board" / "reminders.json").exists()
     assert app_field_value(ws, "acerello", {}, "moisture")[0] == 41
     # La cartella vecchia e' messa da parte, e una seconda passata non fa niente.
     assert mc.list_micros(root) == []

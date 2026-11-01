@@ -18,6 +18,8 @@ _FENCE_RE = re.compile(r"```[^\n`]*\n?(.*?)```", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
 _IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)\s]*(?:\s+\"[^\"]*\")?\)")
 _LINK_RE = re.compile(r"\[([^\]]+)\]\([^)\s]*(?:\s+\"[^\"]*\")?\)")
+# Un link del wiki: ``[[pagina]]``, ``[[cartella/pagina#sezione]]``, ``[[pagina|testo]]``.
+_WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|([^\[\]]*))?\]\]")
 _HEADING_RE = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 _QUOTE_RE = re.compile(r"^[ \t]{0,3}>[ \t]?", re.MULTILINE)
 _BULLET_RE = re.compile(r"^([ \t]*)(?:[-*+]|\d+[.)])[ \t]+", re.MULTILINE)
@@ -34,7 +36,9 @@ def plain_text(md: str) -> str:
 
     Tolti: titoli (``#``), enfasi (``**``, ``*``, ``_``, ``~~``), citazioni
     (``>``), punti elenco e numeri di lista, righe di separazione, le
-    destinazioni dei link e delle immagini (resta il testo). Il codice — a
+    destinazioni dei link e delle immagini (resta il testo). Un link del wiki
+    (``[[piano-concordato]]``) diventa il suo testo, o il nome della pagina a
+    parole («piano concordato»). Il codice — a
     blocchi o in riga — resta come testo, senza i backtick. Non comprime gli
     spazi: è compito di chi impagina.
     """
@@ -50,6 +54,7 @@ def plain_text(md: str) -> str:
     out = _INLINE_CODE_RE.sub(lambda m: _stash(m.group(1)), out)
     out = _IMAGE_RE.sub(lambda m: m.group(1), out)
     out = _LINK_RE.sub(lambda m: m.group(1), out)
+    out = _WIKILINK_RE.sub(_wikilink_text, out)
     out = _RULE_RE.sub("", out)
     out = _HEADING_RE.sub("", out)
     out = _QUOTE_RE.sub("", out)
@@ -61,3 +66,12 @@ def plain_text(md: str) -> str:
     for i, block in enumerate(blocks):
         out = out.replace(_PLACEHOLDER.format(i), block)
     return out.strip()
+
+
+def _wikilink_text(m: re.Match[str]) -> str:
+    """Il testo di un ``[[…]]``: quello dopo ``|``, se c'è; se no il nome della
+    pagina senza cartelle né ``.md``, coi trattini come spazi."""
+    if m.group(2) and m.group(2).strip():
+        return m.group(2).strip()
+    name = m.group(1).strip().rsplit("/", 1)[-1].removesuffix(".md")
+    return re.sub(r"[-_]+", " ", name).strip() or m.group(0)

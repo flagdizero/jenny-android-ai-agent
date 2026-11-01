@@ -148,7 +148,7 @@ async def test_drafts_from_before_the_plan_and_outside_the_notebook_do_not_hold_
     meta["created_ms"] -= 5_000
     meta_path.write_text(json.dumps(meta), encoding="utf-8")
     plan = await _running(driver)
-    _stage(workspace, rel="HEARTBEAT.md")  # fuori dal quaderno
+    _stage(workspace, rel="USER.md")  # fuori dal quaderno
     await driver.step_done(KEY, "fatto")
     assert driver.store.load(plan.id).status == "running"
     await driver.on_turn_end(KEY, {})
@@ -383,7 +383,7 @@ async def test_rollback_throws_away_the_plans_pending_drafts(
     plan = await _running(driver)
     draft = _stage(workspace)
     await driver.step_done(KEY, "fatto")
-    unrelated = _stage(workspace, rel="HEARTBEAT.md")
+    unrelated = _stage(workspace, rel="USER.md")
     result = await driver.stop(plan.id, "rollback")
     assert result is not None
     assert result["discarded_drafts"] == [{"id": draft, "target": TARGET}]
@@ -443,7 +443,7 @@ async def test_the_real_host_finds_the_notebooks_drafts(workspace: Path) -> None
     )
     host = LoopPlanHost(loop)  # type: ignore[arg-type]
     mine = _stage(workspace)
-    _stage(workspace, rel="HEARTBEAT.md")
+    _stage(workspace, rel="USER.md")
     _stage(workspace, rel="wikis/altro/AGENTS.md")
     found = host.notebook_drafts("piante")
     assert [(d["id"], d["target"]) for d in found] == [(mine, TARGET)]

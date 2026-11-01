@@ -39,8 +39,9 @@ from loguru import logger
 from jenny.agent.board_tools import BoardPassState, build_board_tools, next_drawer
 from jenny.board import model
 from jenny.board.corrections import open_corrections
+from jenny.board.cron_link import notes_on_disk
 from jenny.board.drawers import pages_fingerprint
-from jenny.board.store import mutate_board, read_board, read_card_summary, read_reminders
+from jenny.board.store import mutate_board, read_board, read_card_summary
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
@@ -91,7 +92,8 @@ class BoardPass:
         self.workspace = workspace
         self.now = now or datetime.now().astimezone()
         self.board = read_board(root)
-        self.reminders = read_reminders(root)
+        # I promemoria del quaderno (job dello scheduler), letti dal file dei job.
+        self.notes = notes_on_disk(root.name, workspace)
         self.titles: dict[str, str] = dict(iter_wiki_pages(root / "wiki"))
         self._texts: dict[str, str] = {}
 
@@ -142,11 +144,11 @@ class BoardPass:
         return out
 
     def remove_candidates(self) -> list[str]:
-        """Le schede ferme da :data:`model.REMOVE_AFTER_DAYS` giorni e senza attese aperte."""
+        """Le schede ferme da :data:`model.REMOVE_AFTER_DAYS` giorni e senza promemoria."""
         if not self.board:
             return []
         limit = self.now - timedelta(days=model.REMOVE_AFTER_DAYS)
-        busy = {r.get("card") for r in model.open_reminders(self.reminders)}
+        busy = {n.get("card") for n in self.notes}
         out = []
         for card in self.board["cards"]:
             if card["id"] in busy or card.get("pinned"):
@@ -233,7 +235,7 @@ class BoardPass:
         return f"## {title}\n\n{body}"
 
     def _scheduled_crons(self) -> list[str]:
-        """I cron del quaderno, una riga ciascuno: anche loro sono «gia' in agenda».
+        """I job del quaderno — promemoria e cron — una riga ciascuno: «gia' in agenda».
 
         L'11/10/2026 sull'emulatore la passata ha letto «promemoria per novembre:
         dividere il prunus» nel diario, non l'ha trovato fra le attese — era un
@@ -243,13 +245,15 @@ class BoardPass:
         restano il nome e la scheda, che bastano a non aggiungerlo due volte.
         """
         from jenny.board import model
-        from jenny.board.cron_link import notebook_jobs_on_disk
+        from jenny.board.cron_link import is_note, notebook_jobs_on_disk
 
         rows = []
         for job in notebook_jobs_on_disk(self.root.name, self.workspace):
             where = ("for the whole notebook" if job["scope"] == model.NOTEBOOK
                      else f"in the drawer of `{job['scope']}`")
-            row = f"- cron «{job['name'] or job['id']}» {where}"
+            # Un promemoria è un job anche lui (un singolo, o un ricorrente con un filtro).
+            what = "reminder" if is_note(job["kind"], job["condition"]) else "cron"
+            row = f"- {what} «{job['name'] or job['id']}» {where}"
             if job["message"]:
                 row += f": {job['message'][:200]}"
             next_ms = job["nextRunAtMs"]
@@ -277,7 +281,7 @@ class BoardPass:
         board = self.board or model.empty_board()
         corrections = open_corrections(self.root)
         new = set(self.new_orphans())
-        full = model.is_full(board, self.reminders)
+        full = model.is_full(board, self.notes)
         parts = [render_template(
             "agent/board_pass.md",
             strip=True,
@@ -313,7 +317,7 @@ class BoardPass:
             f"Skeleton of every drawer: {', '.join(board['skeleton']) or '_(none)_'}\n\n"
             + ("\n".join(cards) or "_(no cards)_")
             + f"\n\nThreads: {len(board['connections'])} of at most {model.MAX_CONNECTIONS}; "
-            f"items on the board: {model.items_on_board(board, self.reminders)} of at most "
+            f"items on the board: {model.items_on_board(board, self.notes)} of at most "
             f"{model.MAX_ITEMS}.",
         ))
         if corrections:
@@ -351,12 +355,8 @@ class BoardPass:
             parts.append(self._section("Pages the user wants on the board", "\n".join(rows)))
         if journal.strip():
             parts.append(self._section("New journal lines", f"````markdown\n{journal}\n````"))
-        rems = [f"- reminder `{r['id']}` "
-                + ("for the whole notebook" if r['card'] == model.NOTEBOOK else f"on `{r['card']}`")
-                + f": {r['text']} ({r['when'].get('date', '')})"
-                for r in model.open_reminders(self.reminders)]
         parts.append(self._section("Already scheduled",
-                                   "\n".join([*rems, *self._scheduled_crons()]) or "_(none)_"))
+                                   "\n".join(self._scheduled_crons()) or "_(none)_"))
         if state.remove_candidates:
             parts.append(self._section(
                 "Cards still for a long time",
@@ -469,6 +469,8 @@ async def run_board_pass(
     if reason is None:
         return BoardOutcome(status="skipped")
     state = bp.build_state()
+    # Un promemoria del giardiniere è un job: il servizio cron lo prende dall'agente.
+    state.cron = getattr(agent, "cron_service", None)
     tools = store.build_tools(write_guard=write_guard)
     for tool in build_board_tools(state):
         tools.register(tool)

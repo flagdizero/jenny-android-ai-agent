@@ -28,7 +28,7 @@ PERSONAL_CHAT = "default"
 #: Quel che uno scenario puo' cambiare, fotografato a inizio suite e rimesso a
 #: fine suite. Le sessioni si rimettono a app ferma: il gateway le tiene in
 #: memoria e un file riscritto sotto i suoi piedi verrebbe sovrascritto.
-SNAPSHOT_PATHS = ("memory", "USER.md", "SOUL.md", "HEARTBEAT.md", "AGENTS.md", "skills", "cron",
+SNAPSHOT_PATHS = ("memory", "USER.md", "SOUL.md", "AGENTS.md", "skills", "cron",
                   "sessions", "wikis", ".jenny/staged")
 SNAPSHOT_FILE = "files/behaviour_snapshot.tar"
 

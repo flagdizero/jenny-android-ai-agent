@@ -13,7 +13,7 @@ from jenny.board.context_block import (
     named_cards,
     turn_lines,
 )
-from jenny.board.store import mutate_board, mutate_reminders, read_board, write_card_summary
+from jenny.board.store import mutate_board, read_board, write_card_summary
 
 
 def _notebook(tmp_path: Path) -> Path:
@@ -42,13 +42,23 @@ def _cards(root: Path, n: int, brief: str = "In vaso 14, sano. " * 20) -> None:
         ]})
 
 
-def test_a_full_wall_stays_under_the_ceiling(tmp_path) -> None:
+def _at_ms(day: str) -> int:
+    """Mezzogiorno UTC di *day*: lo stesso giorno in ogni fuso del test."""
+    from datetime import datetime, timezone
+
+    return int(datetime.fromisoformat(f"{day}T12:00:00").replace(
+        tzinfo=timezone.utc).timestamp() * 1000)
+
+
+def test_a_full_wall_stays_under_the_ceiling(tmp_path, monkeypatch) -> None:
     root = _notebook(tmp_path)
     _cards(root, model.MAX_ITEMS)
-    mutate_reminders(root, lambda r: r["reminders"].append({
-        "id": "r-1", "card": "pianta-0", "text": "Travaso nel vaso 20",
-        "when": {"kind": "date", "date": "2027-03-01", "precision": "month"},
-    }))
+    _jobs(tmp_path, monkeypatch, [
+        {"id": "aa11bb22", "name": "Travaso nel vaso 20", "enabled": True,
+         "schedule": {"kind": "at", "atMs": _at_ms("2027-03-01"), "precision": "month"},
+         "payload": {"message": "Travaso nel vaso 20",
+                     "board": {"notebook": "piante", "card": "pianta-0", "section": "@auto"}}},
+    ])
     block = board_block(root, alert=lambda s: False)
     assert len(block) <= BOARD_BLOCK_MAX_CHARS
     # Quaranta schede non ci stanno tutte coi riassunti: le ultime diventano «e altre N».
@@ -139,6 +149,31 @@ def test_a_cron_reaches_the_block_and_the_drawer(tmp_path, monkeypatch) -> None:
     # Una citazione datata, non una frase al presente da eseguire.
     assert ("its last result (2026-10-05T09:00:00+02:00, its own words, may be out of date): "
             "«Oggi piove.»") in drawer
+
+
+def test_a_reminder_is_a_reminder_line_not_a_cron(tmp_path, monkeypatch) -> None:
+    """Un promemoria è un job, ma nel blocco e nel cassetto è un promemoria: una
+    volta sola, col suo «quando», e non anche fra i cron che girano."""
+    root = _notebook(tmp_path)
+    _cards(root, 1, brief="In vaso 14.")
+    link = {"notebook": "piante", "card": "pianta-0", "section": "@auto"}
+    _jobs(tmp_path, monkeypatch, [
+        {"id": "aa11bb22", "name": "Travaso", "enabled": True,
+         "schedule": {"kind": "at", "atMs": _at_ms("2099-03-01"), "precision": "day"},
+         "payload": {"message": "Travaso", "board": link}},
+        {"id": "cc33dd44", "name": "Annaffia", "enabled": True,
+         "schedule": {"kind": "every", "everyMs": 21_600_000},
+         "payload": {"message": "Annaffia", "board": link,
+                     "condition": {"app": "waterbot", "params": {}, "field": "moisture",
+                                   "op": "<", "value": 20}}},
+    ])
+    block = board_block(root)
+    assert "[auto:" not in block and "[next: Travaso, 2099-03-01]" in block
+    drawer = turn_lines(root, "come sta pianta 0?")[0]
+    assert "- Reminder: Travaso, 2099-03-01 (`aa11bb22`)" in drawer
+    assert ("- Reminder: Annaffia, when moisture < 20 (checked every 6 h) (`cc33dd44`)"
+            in drawer)
+    assert "Notebook cron" not in drawer
 
 
 def _research_archive(tmp_path: Path) -> tuple[Path, Path]:
@@ -370,9 +405,10 @@ def test_the_whole_notebook_line_has_its_crons_and_its_next_reminder(tmp_path, m
     _jobs(tmp_path, monkeypatch, [
         {"id": "ef56ab78", "name": "Gelo", "enabled": True,
          "payload": {"board": {"notebook": "piante", "card": "@notebook", "section": "@auto"}}},
+        {"id": "cd34ef56", "name": "Porta dentro le piante", "enabled": True,
+         "schedule": {"kind": "at", "atMs": _at_ms("2099-12-01"), "precision": "day"},
+         "payload": {"board": {"notebook": "piante", "card": "@notebook", "section": "@auto"}}},
     ])
-    mutate_reminders(root, lambda r: r["reminders"].append({
-        "id": "r-1", "card": "", "text": "Porta dentro le piante", "state": "open",
-        "when": {"kind": "date", "date": "2099-12-01", "precision": "day"}}))
     line = notebook_line(root)
-    assert "[auto: cron Gelo]" in line and "[next: Porta dentro le piante" in line
+    # Il promemoria è un job, ma non è un cron che gira: sta in «next», non in «auto».
+    assert "[auto: cron Gelo]" in line and "[next: Porta dentro le piante, 2099-12-01]" in line

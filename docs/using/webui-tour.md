@@ -135,7 +135,7 @@ Close it with the X in its corner, by tapping anywhere outside it, or with back 
 
 **Access.** The badge reflects the `security.restrictToWorkspace` config setting (default `true`): **Restricted** means the file tools are confined inside the Notebook folder, **Full access** that they can also reach outside it. **Default** is a transient placeholder shown only until the chat history has loaded. There is no toggle for this in the app — it is set only in `config.json` — and the restriction is enforced by Jenny's own code, not by an Android sandbox. See [Security model](../internals/security-model.md). Notebook and Access are read when the chat history loads, so a config change shows after a reload.
 
-**Status.** While a turn runs, Status shows **Running** with a spinner and an elapsed-time counter. The timer is backed by the turn's start time on the gateway, so it survives reloading the page mid-turn. It reflects every turn of the personal conversation, a turn started from Telegram included, since its messages appear in the same unified chat. Internal work (a reminder, Dream, the heartbeat) does not turn it on.
+**Status.** While a turn runs, Status shows **Running** with a spinner and an elapsed-time counter. The timer is backed by the turn's start time on the gateway, so it survives reloading the page mid-turn. It reflects every turn of the personal conversation, a turn started from Telegram included, since its messages appear in the same unified chat. Internal work (a reminder, a monitor, Dream) does not turn it on.
 
 ### The Subagents strip
 

@@ -36,8 +36,8 @@ the cron and subagent routes, `project.create`/`project.delete` — and reads th
 session JSONL and the workspace files.
 
 - **Snapshot.** At the start it `tar`s the mutable part of the workspace (`memory/`, `USER.md`,
-  `SOUL.md`, `HEARTBEAT.md`, `skills/`, `cron/`, `sessions/`, `wikis/`) and moves the system jobs
-  (Dream, gardener, heartbeat, reminders) a day ahead, so none of them fires in the middle of a
+  `SOUL.md`, `skills/`, `cron/`, `sessions/`, `wikis/`) and moves the system jobs
+  (Dream, gardener, notebook clock) a day ahead, so none of them fires in the middle of a
   scenario. At the end — also after an error or Ctrl-C — it puts the snapshot back and restarts
   the app. If a run died without restoring, `--restore` does it.
 - **A fresh session per run.** A session that has seen a behaviour imitates it, so every run
@@ -96,8 +96,7 @@ python scripts/behaviour_check.py --restore                # after a run that di
 ```
 
 Run it after editing anything under `jenny/templates/agent/` or a tool description, and after
-changing model. Stage 3 forces a heartbeat run through the cron store, which takes up to six
-minutes per run.
+changing model.
 
 ## Adding a scenario
 

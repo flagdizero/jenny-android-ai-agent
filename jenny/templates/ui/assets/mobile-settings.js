@@ -58,12 +58,11 @@ const KEEP_AWAKE_CHOICES = ['off', 'turns', 'always'];
  * in tre posti diversi. `dream` e `gardener` riempiono la memoria e stanno
  * accanto a quel che riempiono (Memoria, passo 2); `update_check` e'
  * dell'app, e il suo giro e' in casa. Qui resta cio' che Jenny fa **per te**
- * quando non glielo stai chiedendo: i tuoi promemoria, e l'heartbeat, che
- * legge le cose che le hai lasciato in `HEARTBEAT.md`.
+ * quando non glielo stai chiedendo: i tuoi promemoria e i tuoi controlli.
  *
  * Il payload porta gia' `kind: system|user` per riga, quindi e' un filtro e
  * non un giro di codice nuovo. */
-export const HANDS_JOBS = (job) => job.kind !== 'system' || job.id === 'heartbeat';
+export const HANDS_JOBS = (job) => job.kind !== 'system';
 
 /* I gruppi di ogni cassetto, nell'ordine in cui si scorrono.
  *
@@ -518,8 +517,8 @@ export class SettingsController {
 
   // ── Attività in background (doze) ──────────────────────────────────
 
-  /* Sezione a sé, non annidata sotto Telegram: il doze differisce cron, Dream,
-     promemoria e heartbeat esattamente come rallenta il long-poll, ma
+  /* Sezione a sé, non annidata sotto Telegram: il doze differisce cron, Dream
+     e promemoria esattamente come rallenta il long-poll, ma
      finché la richiesta viveva solo nella card di pairing chi Telegram non lo
      usa non se la vedeva chiedere mai.
 
@@ -2891,9 +2890,7 @@ export class SettingsController {
   }
 
   /* Un banner solo, il più utile: la scelta sta in `pickBanner` (modulo puro),
-     qui c'è soltanto il testo. Il caso `inert` cerca prima di tutto l'heartbeat,
-     perché per lui la frase può dire *cosa* manca — un file senza task — mentre
-     per gli altri tre può solo dire che l'interruttore è giù. */
+     qui c'è soltanto il testo. */
   _renderCronBanner(view) {
     const b = view.banner;
     if (!b) return '';
@@ -2907,10 +2904,7 @@ export class SettingsController {
       text = i18n.t(empty ? 'cron.banner.recoveredEmpty' : 'cron.banner.recoveredBackup');
       strong = empty;
     } else if (b.kind === 'inert') {
-      const hb = view.rows.find(r => r.id === 'heartbeat' && r.heartbeat?.checkingNothing);
-      if (hb) {
-        text = i18n.t('cron.banner.heartbeatEmpty', { every: hb.schedule });
-      } else if (b.jobs.length === 1) {
+      if (b.jobs.length === 1) {
         text = i18n.t('cron.banner.inertOne', { name: b.jobs[0] });
       } else {
         text = i18n.t('cron.banner.inertMany', { names: b.jobs.join(', ') });
@@ -2926,7 +2920,7 @@ export class SettingsController {
 
   /* Una card per job. In chiaro ci sta quel che si legge di sfuggita — nome,
      schedulazione, prossima e ultima esecuzione — e il resto (storico, testo del
-     promemoria, controlli dell'heartbeat) sta nel dettaglio: una riga d'elenco
+     promemoria) sta nel dettaglio: una riga d'elenco
      che porta tutto smette di essere un elenco. */
   /** Un lavoro, in una riga.
    *
@@ -2942,12 +2936,16 @@ export class SettingsController {
    *  targhette che cambiano il significato della riga (spento, inerte), che non
    *  sono decorazione: un lavoro spento con su scritto «fra 4 minuti» sarebbe
    *  una bugia.
+   *
+   *  Sotto il nome sta anche **quando**, per esteso («una volta, a marzo 2027»,
+   *  «umidità < 15 · ogni 6 ore»): «fra 120 giorni» da solo non dice ne' la data
+   *  ne' che e' un mese e non un'ora.
    */
   _renderCronJob(row) {
     const badges = [];
     if (row.kind === 'system') badges.push(i18n.t('cron.job.protected'));
     if (row.monitor) badges.push(i18n.t('cron.job.monitor'));
-    if (row.oneShot) badges.push(i18n.t('cron.job.oneShot'));
+    // «Una volta sola» non e' piu' una targhetta: lo dice la riga del quando.
     // In pausa e' uno «spento» che torna: si dice per quel che e'.
     if (row.pausedAtMs) badges.push(i18n.t('cron.job.paused'));
     else if (row.health === 'off') badges.push(i18n.t('cron.job.disabled'));
@@ -2970,6 +2968,7 @@ export class SettingsController {
       <button class="cron-row cron-card-${row.health}" type="button" data-cron-job="${escapeHtml(row.id)}">
         <span class="cron-row-text">
           <span class="cron-row-name">${escapeHtml(row.name)}${badgeHtml}</span>
+          <span class="cron-row-sched">${escapeHtml(row.schedule)}</span>
           <span class="cron-row-under">${last}</span>
           ${cnc}
         </span>
@@ -3012,7 +3011,7 @@ export class SettingsController {
     });
   }
 
-  /* Il dettaglio è **piatto**: storico e controlli dell'heartbeat stanno dentro
+  /* Il dettaglio è **piatto**: testo e storico stanno dentro
      la stessa modale. `detailDialog` ha una sola istanza (`#oc-detail-dialog`) e
      si rifiuta di aprirsi se è già aperta, quindi un secondo livello job→run non
      esisterebbe comunque — meglio progettarlo piatto che scoprirlo dopo. */
@@ -3024,6 +3023,13 @@ export class SettingsController {
       }))}</p>`);
     }
     if (row.purpose) parts.push(`<p class="oc-detail-lead">${escapeHtml(row.purpose)}</p>`);
+    /* Quando, per esteso: la riga dice «fra 120 giorni», qui si legge «una
+       volta, a marzo 2027» o «umidità < 15 · ogni 6 ore». Un ricorrente aggiunge
+       la prossima data; per un singolo la data e' gia' quella. */
+    parts.push(`<p class="oc-detail-lead">${escapeHtml(i18n.t('cron.job.when', { schedule: row.schedule }))}</p>`);
+    if (row.next && !row.oneShot) {
+      parts.push(`<p class="oc-detail-lead">${escapeHtml(i18n.t('cron.job.nextAt', { when: row.next.absolute }))}${this._cronTz(row.next)}</p>`);
+    }
     if (row.place) {
       parts.push(`<p class="oc-detail-lead">${escapeHtml(i18n.t('cron.job.inNotebook', { place: row.place }))}</p>`);
     }
@@ -3031,7 +3037,6 @@ export class SettingsController {
       parts.push(`<div class="settings-subheading">${i18n.t('cron.job.text')}</div>
         <p class="cron-detail-text">${escapeHtml(row.message)}</p>`);
     }
-    if (row.heartbeat) parts.push(this._renderCronHeartbeat(row.heartbeat));
     parts.push(`<div class="settings-subheading">${i18n.t('cron.job.runs')}</div>`);
     if (row.runs.length) {
       parts.push(`<div class="cron-runs">${row.runs.map(run => `
@@ -3083,50 +3088,6 @@ export class SettingsController {
       showToast(i18n.t(expired ? 'cron.action.expired' : 'cron.action.failed'), 'error');
     }
     await this._loadCron();
-  }
-
-  /* I controlli di HEARTBEAT.md. Il blocco esiste solo per il job `heartbeat`, e
-     dice due cose che lo store da solo non sa dire: quali controlli **esistono**
-     (il file), e quali di quelli sono rotti (lo stato). Senza la prima metà, un
-     heartbeat che gira a vuoto è indistinguibile da uno sano — registra `ok` a
-     ogni giro. */
-  _renderCronHeartbeat(hb) {
-    const head = `<div class="settings-subheading">${i18n.t('cron.heartbeat.title')}</div>`;
-    if (!hb.fileReadable) {
-      return `${head}<div class="settings-notice settings-notice-strong">
-        <i class="ti ti-alert-triangle"></i>
-        <div>${escapeHtml(i18n.t('cron.heartbeat.fileUnreadable'))}</div></div>`;
-    }
-    if (!hb.filePresent) {
-      return `${head}<div class="settings-empty-state">${i18n.t('cron.heartbeat.fileMissing')}</div>`;
-    }
-    if (hb.checkingNothing) {
-      return `${head}<div class="settings-notice settings-notice-strong">
-        <i class="ti ti-alert-triangle"></i>
-        <div>${escapeHtml(i18n.t('cron.heartbeat.checkingNothing'))}</div></div>`;
-    }
-    const tasks = hb.tasks.map(t => {
-      let note;
-      if (t.state === 'broken') note = i18n.t('cron.heartbeat.taskBroken', { n: t.consecutive });
-      else if (t.state === 'pending') note = i18n.t('cron.heartbeat.taskPending');
-      else note = i18n.t('cron.heartbeat.taskOk');
-      const warned = t.state === 'broken'
-        ? ` · ${i18n.t(t.escalated ? 'cron.health.warned' : 'cron.health.notWarned')}`
-        : '';
-      return `<div class="cron-task cron-task-${t.state}">
-        <span class="cron-task-label">${escapeHtml(t.label || String(t.index))}</span>
-        <span class="cron-task-note">${escapeHtml(note + warned)}</span>
-      </div>`;
-    }).join('');
-    const orphans = hb.orphans.length
-      ? `<div class="settings-subheading">${i18n.t('cron.heartbeat.orphans')}</div>
-         <p class="settings-field-hint">${escapeHtml(i18n.t('cron.heartbeat.orphansHint'))}</p>
-         ${hb.orphans.map(o => `<div class="cron-task cron-task-orphan">
-            <span class="cron-task-label">${escapeHtml(o.label || o.id)}</span>
-            <span class="cron-task-note">${escapeHtml(i18n.t('cron.heartbeat.taskBroken', { n: o.consecutive }))}</span>
-          </div>`).join('')}`
-      : '';
-    return `${head}<div class="cron-tasks">${tasks}</div>${orphans}`;
   }
 
   _wireSections() {

@@ -5105,6 +5105,18 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-board-row { display: flex; gap: 8px; }
 .home-board-input.is-op { flex: 1; }
 .home-board-input.is-value { width: 90px; flex: none; }
+/* «Controlla ogni» accanto alla sua tendina, su una riga: e' una parola del
+   modulo, non l'etichetta di una scheda (`.home-board-label`, in inchiostro e
+   a mano, centrata e in `cqw`, sul foglio del modulo si leggeva appena e andava
+   a capo — jenny_s22, 01/11/2026). */
+.home-board-row.is-every { align-items: center; }
+.home-board-form-label {
+  flex: none;
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.home-board-input.is-every { flex: 1; min-width: 0; }
 .home-drawer-thread-mark { color: var(--board-thread); }
 .home-drawer-thread-to { font-weight: 500; }
 .home-drawer-thread-why { color: var(--text-muted); font-size: 13px; }

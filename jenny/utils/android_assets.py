@@ -15,11 +15,11 @@ if TYPE_CHECKING:
 
 # File del workspace che appartengono all'utente o a Dream. Si creano al primo
 # avvio e non si toccano mai più: `SOUL.md` e `USER.md` li riscrive Dream,
-# `AGENTS.md` e `HEARTBEAT.md` li scrive l'utente. Sovrascriverli con la copia
+# `AGENTS.md` lo scrive l'utente. Sovrascriverli con la copia
 # del pacchetto cancellerebbe la personalità del bot e le istruzioni scritte a
 # mano.
 _USER_OWNED_TEMPLATES = [
-    "AGENTS.md", "SOUL.md", "USER.md", "HEARTBEAT.md",
+    "AGENTS.md", "SOUL.md", "USER.md",
     "memory/MEMORY.md",
 ]
 

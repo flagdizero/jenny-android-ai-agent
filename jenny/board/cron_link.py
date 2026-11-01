@@ -40,6 +40,50 @@ def make_link(notebook: str, scope: str) -> dict[str, str]:
     return {"notebook": notebook, "card": card, "section": NO_SECTION}
 
 
+def notebook_delivery(notebook: str) -> dict[str, str]:
+    """Dove gira e consegna un job del quaderno: la sua chat, da qualunque chat sia nato.
+
+    Il «dove» decide solo il recinto e la chat di consegna: un promemoria chiesto
+    dalla chat personale per un quaderno suona nel quaderno, come uno chiesto lì.
+    """
+    from jenny.session.keys import project_session_key
+
+    key = project_session_key(notebook)
+    return {"session_key": key, "origin_channel": "websocket", "origin_chat_id": key}
+
+
+def add_notebook_job(
+    cron: Any,
+    notebook: str,
+    scope: str,
+    *,
+    name: str,
+    message: str,
+    schedule: Any,
+    mode: str = "reminder",
+    why: str | None = None,
+    condition: dict[str, Any] | None = None,
+    origin_metadata: dict[str, Any] | None = None,
+) -> Any:
+    """Un job nuovo del quaderno *notebook*, su una scheda (*scope*) o sul quaderno intero.
+
+    L'unica porta per crearne uno: il tool ``cron``, la bacheca (RPC), il tool
+    ``board`` e il giardiniere passano tutti di qui. Solleva ``ValueError`` come
+    ``CronService.add_job``. Va chiamata sul loop.
+    """
+    return cron.add_job(
+        name=name,
+        schedule=schedule,
+        message=message,
+        mode=mode,
+        board=make_link(notebook, scope),
+        why=why,
+        condition=condition,
+        origin_metadata=origin_metadata or {},
+        **notebook_delivery(notebook),
+    )
+
+
 def scope_of(link: dict[str, Any]) -> str:
     """L'ambito di un legame: l'id della scheda, o ``model.NOTEBOOK``."""
     card = link.get("card")
@@ -309,6 +353,12 @@ def notebook_jobs_on_disk(notebook: str, workspace: Path | None = None) -> list[
             "name": str(job.get("name") or ""),
             "message": " ".join(str(payload.get("message") or "").split()),
             "kind": (job.get("schedule") or {}).get("kind"),
+            "atMs": (job.get("schedule") or {}).get("atMs"),
+            "everyMs": (job.get("schedule") or {}).get("everyMs"),
+            "precision": (job.get("schedule") or {}).get("precision"),
+            "mode": payload.get("mode") or "reminder",
+            "why": payload.get("why"),
+            "condition": payload.get("condition"),
             "scope": scope_of(link),
             "nextRunAtMs": state.get("nextRunAtMs") if isinstance(state, dict) else None,
             "paused": paused,
@@ -333,6 +383,8 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         when.update({"expr": sched.expr, "tz": sched.tz, "shape": shape(sched.expr or "")})
     elif sched.kind == "at":
         when["at_ms"] = sched.at_ms
+        if sched.precision:
+            when["precision"] = sched.precision
     return {
         "id": job.id,
         # Mai vuoto per il cassetto (v. ``cron.types.job_display_name``).
@@ -350,4 +402,157 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         "scope": scope_of(job.payload.board) if job.payload.board else None,
         # Solo per ritrovare l'esito scritto da un legame vecchio (v. ``result_of``).
         "legacySection": legacy_section(job.payload.board) if job.payload.board else None,
+        "why": job.payload.why,
+        "condition": job.payload.condition,
     }
+
+
+# ── I promemoria: le righe dei post-it ───────────────────────────────────────
+#
+# Dal 31/10/2026 un promemoria del quaderno è un job come gli altri: un singolo a
+# data (sparisce quando scatta) o un ricorrente con un filtro ``condition`` (la
+# cadenza è dell'utente). Sulla bacheca è una riga del post-it giallo della sua
+# scheda, o di quello libero del quaderno, e nel calendario di cura del cassetto;
+# un ricorrente **senza** filtro è invece una riga dell'etichetta menta. Qui
+# c'è l'unica traduzione da job a riga, per la vista (dall'istantanea, sul loop)
+# e per chi scrive un prompt (dal file, fuori dal loop).
+
+
+def user_timezone() -> str | None:
+    """Il fuso dell'utente (``agents.defaults.timezone``), o ``None`` per quello di sistema."""
+    try:
+        from jenny.config.loader import load_config
+
+        return load_config().agents.defaults.timezone or None
+    except Exception:  # noqa: BLE001 — l'ora locale del sistema è il ripiego
+        return None
+
+
+def is_note(kind: Any, condition: Any) -> bool:
+    """Se un job è una riga del post-it: un singolo, o un ricorrente con un filtro."""
+    return kind == "at" or (isinstance(condition, dict) and bool(condition))
+
+
+def note_of(
+    *,
+    job_id: str,
+    scope: str,
+    text: str,
+    kind: Any,
+    at_ms: Any = None,
+    precision: Any = None,
+    condition: Any = None,
+    every_ms: Any = None,
+    tz_name: str | None = None,
+) -> dict[str, Any] | None:
+    """La riga ``{id, card, text, when}`` di un job, o ``None`` se non è un promemoria.
+
+    ``when`` è ``{kind: "date", date, precision}`` (con ``time`` per un singolo
+    a un'ora esatta) o ``{kind: "condition", app, params, field, op, value,
+    every_ms}``. ``date`` è sempre ``AAAA-MM-GG`` nel fuso dell'utente, anche per
+    un mese (il primo): il client la mette in un ``<input type=date>``.
+    """
+    from datetime import datetime
+
+    if isinstance(condition, dict) and condition:
+        when: dict[str, Any] = {"kind": "condition", "app": condition.get("app"),
+                                "params": dict(condition.get("params") or {}),
+                                "field": condition.get("field"), "op": condition.get("op"),
+                                "value": condition.get("value"), "every_ms": every_ms}
+    elif kind == "at" and isinstance(at_ms, (int, float)) and at_ms:
+        from jenny.utils.helpers import safe_zoneinfo
+
+        tz = safe_zoneinfo(tz_name) if tz_name else None
+        at = (datetime.fromtimestamp(at_ms / 1000, tz=tz) if tz
+              else datetime.fromtimestamp(at_ms / 1000).astimezone())
+        when = {"kind": "date", "date": at.strftime("%Y-%m-%d"),
+                "precision": "month" if precision == "month" else "day"}
+        if precision not in ("day", "month"):
+            # Un singolo a un'ora esatta (dal tool ``cron``) la porta: «21 ott, 09:00».
+            when["time"] = at.strftime("%H:%M")
+    else:
+        return None
+    return {"id": job_id, "card": scope, "text": text, "when": when}
+
+
+def notes_from_jobs(cron_jobs: Any, tz_name: str | None = None) -> list[dict[str, Any]]:
+    """Le righe dei promemoria dalle istantanee di :func:`notebook_jobs`, dalla più vicina.
+
+    Solo i job vivi: un singolo già scattato non c'è più, e uno spento resta fuori.
+    """
+    out = []
+    for job_id, snap in (cron_jobs or {}).items():
+        if not (snap.get("enabled") or snap.get("paused")):
+            continue
+        sched = snap.get("schedule") or {}
+        note = note_of(job_id=job_id, scope=snap.get("scope") or model.NOTEBOOK,
+                       text=snap.get("name") or "", kind=sched.get("kind"),
+                       at_ms=sched.get("at_ms"), precision=sched.get("precision"),
+                       condition=snap.get("condition"), every_ms=sched.get("every_ms"),
+                       tz_name=tz_name)
+        if note is not None:
+            out.append(note)
+    return model.sorted_notes(out)
+
+
+def notes_on_disk(notebook: str, workspace: Path | None = None,
+                  tz_name: str | None = None) -> list[dict[str, Any]]:
+    """Le righe dei promemoria del quaderno lette da ``cron/jobs.json``, dalla più vicina.
+
+    Per chi non ha lo scheduler in mano (un prompt, una scrittura della bacheca
+    in un thread): come :func:`notebook_jobs_on_disk`. Senza workspace
+    configurato non c'è niente da leggere, e l'elenco è vuoto.
+    """
+    if workspace is None:
+        try:
+            from jenny.config.paths import get_workspace_path
+
+            workspace = get_workspace_path()
+        except RuntimeError:
+            return []
+    out = []
+    for job in notebook_jobs_on_disk(notebook, workspace):
+        note = note_of(job_id=job["id"], scope=job["scope"],
+                       text=job["name"] or job["message"][:60] or job["id"], kind=job["kind"],
+                       at_ms=job["atMs"], precision=job["precision"],
+                       condition=job["condition"], every_ms=job["everyMs"], tz_name=tz_name)
+        if note is not None:
+            out.append(note)
+    return model.sorted_notes(out)
+
+
+def note_words(note: dict[str, Any]) -> str:
+    """Il «quando» di una riga in parole, per un prompt: ``2026-11-12``, ``2026-03``,
+    ``2026-10-21 09:00``, o ``when umidita < 15 (checked every 6 h)``."""
+    when = note.get("when") or {}
+    if when.get("kind") == "date":
+        day = str(when.get("date") or "")
+        if when.get("precision") == "month":
+            return day[:7]
+        return f"{day} {when['time']}" if when.get("time") else day
+    every = when.get("every_ms")
+    cadence = ""
+    if isinstance(every, (int, float)) and every > 0:
+        hours = every / 3_600_000
+        cadence = (f" (checked every {hours:g} h)" if hours < 24
+                   else f" (checked every {hours / 24:g} day(s))")
+    return f"when {when.get('field')} {when.get('op')} {when.get('value')}{cadence}"
+
+
+async def clear_job_whys(cron: Any, notebook: str, pages: Any) -> list[dict[str, str]]:
+    """Toglie il ``why`` dei job del quaderno che puntavano a *pages* (relative a
+    ``wiki/``); restituisce ``[{id, text, why}]`` di quelli toccati.
+
+    La chiama ``notebook remove_pages`` dopo aver cancellato le pagine: un
+    ``why`` morto è un promemoria che, quando suona, parla senza la sua ragione.
+    Va chiamata sul loop.
+    """
+    gone = {str(p).removeprefix("wiki/") for p in pages or () if isinstance(p, str) and p}
+    touched: list[dict[str, str]] = []
+    if cron is None or not gone:
+        return touched
+    for job_id, snap in notebook_jobs(cron, notebook).items():
+        why = str(snap.get("why") or "").removeprefix("wiki/")
+        if why in gone and cron.update_job(job_id, why=None) is not None:
+            touched.append({"id": job_id, "text": str(snap.get("name") or ""), "why": why})
+    return touched

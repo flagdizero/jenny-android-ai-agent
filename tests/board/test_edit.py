@@ -19,7 +19,6 @@ from jenny.board.store import (
     mutate_board,
     read_board,
     read_card_summary,
-    read_reminders,
     write_card_summary,
 )
 
@@ -249,20 +248,87 @@ def test_a_card_next_to_another(notebook: Path) -> None:
     assert abs(moved["x"] - other["x"]) <= model.NEAR_SPAN_X
 
 
-def test_a_reminder_is_the_users_and_sits_in_the_drawer(notebook: Path) -> None:
+async def test_a_reminder_is_a_notebook_job_and_done_takes_it_away(notebook: Path, cron) -> None:
+    """Un promemoria è un singolo dello scheduler, legato al quaderno e alla scheda."""
+    from jenny.board.cron_link import scope_of
+
     _seed(notebook)
-    rid = edit.add_reminder(notebook, "acero", "Travaso",
-                            {"kind": "date", "date": "2027-03-01", "precision": "month"})
-    rem = read_reminders(notebook)["reminders"][0]
-    assert rid == rem["id"] and rem["by"] == "user" and rem["card"] == "acero"
-    # Niente sezione: il calendario di cura e il post-it la derivano dall'attesa.
+    rid = await edit.add_reminder(notebook, "acero", "Travaso",
+                                  {"kind": "date", "date": "2027-03-01", "precision": "month"},
+                                  cron=cron, timezone_name="Europe/Rome")
+    job = cron.get_job(rid)
+    assert job.name == "Travaso" and job.payload.message == "Travaso"
+    assert job.schedule.kind == "at" and job.schedule.precision == "month"
+    assert job.payload.board["notebook"] == "piante" and scope_of(job.payload.board) == "acero"
+    assert job.payload.session_key == "project:piante"
+    # Niente sezione: il calendario di cura e il post-it la derivano dal job.
     sections = model.card_by_id(read_board(notebook), "acero")["userSections"]
     assert not any(s.get("kind") == "reminder" for s in sections)
-    whole = edit.add_reminder(notebook, "", "Porta dentro le piante",
-                              {"kind": "date", "date": "2026-12-01", "precision": "day"})
-    assert next(r for r in read_reminders(notebook)["reminders"] if r["id"] == whole)["card"] == ""
-    edit.close_reminder(notebook, rem["id"])
-    assert read_reminders(notebook)["reminders"][0]["state"] == "done"
+    assert not (notebook / "board" / "reminders.json").exists()
+    whole = await edit.add_reminder(notebook, "", "Porta dentro le piante",
+                                    {"kind": "date", "date": "2026-12-01", "precision": "day"},
+                                    cron=cron)
+    assert scope_of(cron.get_job(whole).payload.board) == model.NOTEBOOK
+    assert await edit.close_reminder(notebook, rid, cron=cron) == "Travaso"
+    assert cron.get_job(rid) is None
+    journal = "".join(p.read_text() for p in (notebook / "raw" / "journal").glob("*.md"))
+    assert "Done: Travaso" in journal
+    await edit.drop_reminder(notebook, whole, cron=cron)
+    assert cron.get_job(whole) is None
+
+
+async def test_a_condition_reminder_repeats_at_the_users_pace(notebook: Path, cron) -> None:
+    _seed(notebook)
+    when = {"kind": "condition", "app": "waterbot", "params": {"sensor": "a"},
+            "field": "moisture", "op": "<", "value": 20}
+    with pytest.raises(edit.BoardEditError) as err:
+        await edit.add_reminder(notebook, "acero", "Annaffia", when, cron=cron)
+    assert "every_ms" in err.value.message
+    with pytest.raises(edit.BoardEditError):
+        await edit.add_reminder(notebook, "acero", "Annaffia", when, cron=cron, every_ms=60_000)
+    rid = await edit.add_reminder(notebook, "acero", "Annaffia", when, cron=cron,
+                                  every_ms=6 * 3_600_000)
+    job = cron.get_job(rid)
+    assert job.schedule.kind == "every" and job.schedule.every_ms == 6 * 3_600_000
+    assert job.payload.condition == {"app": "waterbot", "params": {"sensor": "a"},
+                                     "field": "moisture", "op": "<", "value": 20}
+    await edit.update_reminder(notebook, rid, cron=cron, every_ms=3_600_000)
+    assert cron.get_job(rid).schedule.every_ms == 3_600_000
+    assert cron.get_job(rid).payload.condition["value"] == 20
+
+
+async def test_the_same_date_keeps_an_exact_time(notebook: Path, cron) -> None:
+    """Correggere solo il testo dal calendario rimanda la stessa data: l'ora resta."""
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.dates import date_schedule
+
+    _seed(notebook)
+    job = add_notebook_job(cron, "piante", "acero", name="Concime", message="Concime",
+                           schedule=date_schedule("2027-03-10T18:30", "Europe/Rome"))
+    at = job.schedule.at_ms
+    await edit.update_reminder(notebook, job.id, cron=cron, text="Concime liquido",
+                               when={"kind": "date", "date": "2027-03-10", "precision": "day"},
+                               timezone_name="Europe/Rome")
+    assert cron.get_job(job.id).schedule.at_ms == at
+    assert cron.get_job(job.id).name == "Concime liquido"
+    await edit.update_reminder(notebook, job.id, cron=cron,
+                               when={"kind": "date", "date": "2027-03-11", "precision": "day"},
+                               timezone_name="Europe/Rome")
+    moved = cron.get_job(job.id).schedule
+    assert moved.at_ms != at and moved.precision == "day"
+
+
+async def test_a_cron_that_repeats_is_not_a_reminder(notebook: Path, cron) -> None:
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.types import CronSchedule
+
+    _seed(notebook)
+    job = add_notebook_job(cron, "piante", "acero", name="Meteo", message="m",
+                           schedule=CronSchedule(kind="every", every_ms=3_600_000))
+    with pytest.raises(edit.BoardEditError) as err:
+        await edit.drop_reminder(notebook, job.id, cron=cron)
+    assert err.value.code == "not_found"
+    assert cron.get_job(job.id) is not None
 
 
 def test_an_unknown_card_names_the_ones_there_are(notebook: Path) -> None:
@@ -291,59 +357,68 @@ async def test_removing_a_cron_section_removes_its_job_on_the_loop(notebook: Pat
     assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
 
 
-# ── Il «perché» di un'attesa (contratto del 24/10/2026) ─────────────────────
+# ── Il «perché» di un promemoria (contratto del 24/10/2026) ─────────────────
 
 
-def _reminder(notebook: Path, why: str = "", by: str = "jenny") -> None:
-    from jenny.board.store import mutate_reminders
-
-    def apply(rems):
-        rems["reminders"].append({"id": "r-rinvaso", "card": "acero", "text": "Rinvaso",
-                                  "when": {"kind": "date", "date": "2099-03-01"},
-                                  "why": why, "by": by, "state": "open"})
-
-    mutate_reminders(notebook, apply)
+async def _reminder(notebook: Path, cron, why: str | None = None) -> str:
+    return await edit.add_reminder(notebook, "acero", "Rinvaso",
+                                   {"kind": "date", "date": "2099-03-01", "precision": "day"},
+                                   cron=cron, why=why)
 
 
-def test_set_reminder_why_points_to_a_real_page_or_to_nothing(notebook: Path) -> None:
+async def test_why_points_to_a_real_page_or_to_nothing(notebook: Path, cron) -> None:
     _seed(notebook)
-    _reminder(notebook)
-    assert edit.set_reminder_why(notebook, "r-rinvaso", "wiki/travaso-acero.md") == \
-        "travaso-acero.md"
-    rem = read_reminders(notebook)["reminders"][0]
-    assert rem["why"] == "travaso-acero.md" and rem["by"] == "user"
+    rid = await _reminder(notebook, cron)
+    done = await edit.update_reminder(notebook, rid, cron=cron, why="wiki/travaso-acero.md")
+    assert done["why"] == "travaso-acero.md"
+    assert cron.get_job(rid).payload.why == "travaso-acero.md"
     with pytest.raises(edit.BoardEditError) as err:
-        edit.set_reminder_why(notebook, "r-rinvaso", "sparita.md")
+        await edit.update_reminder(notebook, rid, cron=cron, why="sparita.md")
     assert err.value.code == "not_found"
-    assert read_reminders(notebook)["reminders"][0]["why"] == "travaso-acero.md"
-    assert edit.set_reminder_why(notebook, "r-rinvaso", None) == ""
-    assert read_reminders(notebook)["reminders"][0]["why"] == ""
+    assert cron.get_job(rid).payload.why == "travaso-acero.md"
+    assert (await edit.update_reminder(notebook, rid, cron=cron, clear_why=True))["why"] == ""
+    assert cron.get_job(rid).payload.why is None
     with pytest.raises(edit.BoardEditError):
-        edit.set_reminder_why(notebook, "r-nessuno", "")
+        await edit.update_reminder(notebook, "nessuno", cron=cron, text="x")
+    with pytest.raises(edit.BoardEditError):
+        await _reminder(notebook, cron, why="sparita.md")
 
 
-def test_clear_reminder_whys_leaves_the_owner_alone(notebook: Path) -> None:
+async def test_clear_job_whys_after_removed_pages(notebook: Path, cron) -> None:
+    from jenny.board.cron_link import clear_job_whys
+
     _seed(notebook)
-    _reminder(notebook, why="dormienza.md")
-    touched = edit.clear_reminder_whys(notebook, ["dormienza.md", "altra.md"])
-    assert touched == [{"id": "r-rinvaso", "text": "Rinvaso", "why": "dormienza.md"}]
-    rem = read_reminders(notebook)["reminders"][0]
-    assert rem["why"] == "" and rem["by"] == "jenny"
-    assert edit.clear_reminder_whys(notebook, ["dormienza.md"]) == []
+    rid = await _reminder(notebook, cron, why="dormienza.md")
+    touched = await clear_job_whys(cron, "piante", ["dormienza.md", "altra.md"])
+    assert touched == [{"id": rid, "text": "Rinvaso", "why": "dormienza.md"}]
+    assert cron.get_job(rid).payload.why is None
+    assert await clear_job_whys(cron, "piante", ["dormienza.md"]) == []
 
 
-def test_attach_reminder_moves_one_reminder_and_refuses_closed_ones(notebook: Path) -> None:
-    """Un'attesa sta su una scheda sola (``card``): attaccarla altrove la sposta,
-    rifarlo non scrive, e una chiusa è storia."""
+async def test_attach_reminder_moves_it_to_another_card(notebook: Path, cron) -> None:
+    """Un promemoria sta su una scheda sola: attaccarlo altrove lo sposta (con un
+    id nuovo: lo scheduler non cambia il legame di un job), rifarlo non scrive."""
+    from jenny.board.cron_link import scope_of
+
     _seed(notebook)
-    _reminder(notebook)
-    done = edit.attach_reminder(notebook, "Nuove piante", "r-rinvaso")
+    rid = await _reminder(notebook, cron, why="dormienza.md")
+    done = await edit.attach_reminder(notebook, "Nuove piante", rid, cron=cron)
     assert done["changed"] and done["from"] == "acero"
-    rem = read_reminders(notebook)["reminders"][0]
-    assert rem["card"] == "nuove" and rem["by"] == "user"
-    assert edit.attach_reminder(notebook, "nuove", "r-rinvaso")["changed"] is False
-    edit.close_reminder(notebook, "r-rinvaso")
+    new = done["reminder"]["id"]
+    assert cron.get_job(rid) is None
+    job = cron.get_job(new)
+    assert scope_of(job.payload.board) == "nuove" and job.payload.why == "dormienza.md"
+    assert job.name == "Rinvaso" and job.schedule.kind == "at"
+    again = await edit.attach_reminder(notebook, "nuove", new, cron=cron)
+    assert again["changed"] is False and cron.get_job(new) is not None
     with pytest.raises(edit.BoardEditError) as err:
-        edit.attach_reminder(notebook, "acero", "r-rinvaso")
-    assert err.value.code == "conflict"
-    assert read_reminders(notebook)["reminders"][0]["card"] == "nuove"
+        await edit.attach_reminder(notebook, "acero", rid, cron=cron)
+    assert err.value.code == "not_found"
+
+
+async def test_without_the_scheduler_a_reminder_is_refused(notebook: Path) -> None:
+    _seed(notebook)
+    with pytest.raises(edit.BoardEditError) as err:
+        await edit.add_reminder(notebook, "acero", "x",
+                                {"kind": "date", "date": "2099-03-01"}, cron=None)
+    assert err.value.code == "unavailable"

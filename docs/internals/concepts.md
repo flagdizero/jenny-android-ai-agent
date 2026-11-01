@@ -24,7 +24,7 @@ Jenny is Android-only. The gateway's workspace lives inside the app's own privat
 | Path | Meaning |
 |---|---|
 | `<filesDir>/workspace/config.json` | Instance configuration: providers, model defaults, tools, gateway, and runtime options |
-| `<filesDir>/workspace/` | Agent workspace: memory, sessions, uploads, heartbeat tasks, cron jobs, skills, mini-apps, and generated artifacts |
+| `<filesDir>/workspace/` | Agent workspace: memory, sessions, uploads, cron jobs, skills, mini-apps, and generated artifacts |
 
 Because the workspace is app-private storage, nothing outside the Jenny app can read or write it directly — not even other apps on the same phone — and it disappears if the app is uninstalled (see [Backup and restore](../using/backup.md) for how to get data out before that happens). The config file controls what Jenny may use; the workspace is where Jenny keeps state for that install.
 
@@ -46,7 +46,7 @@ A normal turn follows this flow:
 
 ## Gateway and WebUI
 
-There is one entry point and one process: `jenny.android_entry.run_gateway()`, started by the Android app and never invoked as a separate desktop process in normal use. It serves the embedded WebUI, the heartbeat, Dream, and every channel out of the same asyncio event loop.
+There is one entry point and one process: `jenny.android_entry.run_gateway()`, started by the Android app and never invoked as a separate desktop process in normal use. It serves the embedded WebUI, the scheduled jobs, Dream, and every channel out of the same asyncio event loop.
 
 **There is no `/health` endpoint.** On the device, the WebSocket handshake and the HTTP API behind the WebUI (`/api/...`) share one port — `gateway.port`, `18790` by default — so the WebView can reach both from a single origin without a CORS story. That sharing is enforced by the Android entry point itself (`run_gateway(..., port=18790)` forces both the gateway port and the WebSocket port to the same value at startup), not by anything you configure. The production UI is served over that same WebSocket channel, rendered inside the Android app's WebView; nothing about it assumes a desktop browser.
 
@@ -80,7 +80,7 @@ See [Providers and models](../reference/providers.md) for practical setup and [C
 
 Jenny has four channels: the built-in WebSocket channel (always active — it's how the in-app WebUI talks to the gateway), an optional Telegram bot paired from Settings, and two that exist only on Android — a reply typed into one of Jenny's notifications, and the floating mascot's bubble. All four are owned by the same outbound dispatcher, which fans replies out to whichever channels are active.
 
-Every inbound message from any channel routes into the same single unified conversation session (`unified:default`) — Jenny is a single-user assistant with one continuous thread, not a per-channel or per-device conversation. This has a sharp edge worth knowing up front: because there is only one session, `/new` issued from Telegram resets the WebUI's conversation too, and vice versa — whoever has access to the paired bot can reset the chat on the phone. Internal work (cron, Dream, heartbeat) runs under separate internal session keys so it never pollutes the user-visible conversation.
+Every inbound message from any channel routes into the same single unified conversation session (`unified:default`) — Jenny is a single-user assistant with one continuous thread, not a per-channel or per-device conversation. This has a sharp edge worth knowing up front: because there is only one session, `/new` issued from Telegram resets the WebUI's conversation too, and vice versa — whoever has access to the paired bot can reset the chat on the phone. Internal work (cron, Dream) runs under separate internal session keys so it never pollutes the user-visible conversation.
 
 There is one user-visible exception to "a single session": a **project** conversation (`project:<name>`), opened from the scope chip and bound to one folder under `<workspace>/wikis/`. It has its own session file, its own transcript, and its own memory rules — it is archived into `history.jsonl` under its own key, never enters the personal chat's prompt, and Dream digests it in a separate batch that can write only to `USER.md` (identity facts about you), never to `MEMORY.md` or `SOUL.md`. Only the WebSocket channel can name a project; a Telegram message stays personal whatever it contains. Session keys are therefore classified three ways, not two — `personal`, `project`, `internal` — and anything unrecognised is treated as internal rather than personal, so an unregistered kind can never reach the memory files. See [Projects](../using/projects.md) for the user-facing design.
 
@@ -106,7 +106,7 @@ Tools are **not** discovered by scanning the filesystem — they are registered 
 - Python code execution (`python_exec`), in-process, with a module allowlist that is explicitly not a security sandbox;
 - Android web search and web fetch (via a hidden WebView) with SSRF checks on outbound network tools;
 - location (last-known injected into context, or an on-demand fresh GPS fix);
-- cron reminders and heartbeat-driven proactive tasks;
+- cron reminders and monitors;
 - long-running goals and subagent spawning;
 - dynamic per-mini-app tools, registered and unregistered as apps are created or removed.
 

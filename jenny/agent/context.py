@@ -12,7 +12,7 @@ from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
 from loguru import logger
 
-from jenny.agent.diary import DiaryTurn, diary_turn, waiting_threads
+from jenny.agent.diary import DiaryTurn, diary_turn
 from jenny.agent.memory import (
     HISTORY_FLOOR_METADATA_KEY,
     MemoryStore,
@@ -22,7 +22,7 @@ from jenny.agent.skills import SkillsLoader
 from jenny.config.paths import get_output_path
 from jenny.runtime.user_text import current_bot_name
 from jenny.session.goal_state import goal_state_runtime_lines, plan_running_in_session
-from jenny.session.keys import is_personal_session_key, is_project_session_key
+from jenny.session.keys import is_project_session_key
 from jenny.utils.android_assets import (
     _RETIRED_TEMPLATE_DIGESTS,
     normalized_template_text,
@@ -817,7 +817,7 @@ class ContextBuilder:
             project=in_project or is_gardener_pass,
         ))
 
-        # Dove va un lavoro ricorrente: heartbeat, `reminder` o `monitor`. Era
+        # Dove va un lavoro per dopo: un job del cron, `reminder` o `monitor`. Era
         # nel template di ``AGENTS.md``, cioè in un file che si crea al primo
         # avvio e non si aggiorna mai più — su un telefono aggiornato da mesi
         # restava il testo della versione in cui era stato installato.
@@ -1737,10 +1737,7 @@ class ContextBuilder:
         try:
             now = datetime.now()
             entries = self.memory.read_unprocessed_history(since_cursor=0)
-            threads = waiting_threads(
-                discover_wiki_roots(self.workspace / self.wikis_dir_name), now=now,
-            ) if is_personal_session_key(session_key) else []
-            return diary_turn(entries, session_key, holder, history, now=now, threads=threads)
+            return diary_turn(entries, session_key, holder, history, now=now)
         except Exception as exc:  # noqa: BLE001 — v. la docstring
             logger.warning("diary: cannot build the view for {}: {}", session_key, exc)
             return None

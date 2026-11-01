@@ -24,7 +24,7 @@ from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.board import model, notify
-from jenny.board.store import mutate_board, read_board, read_card_summary, read_reminders
+from jenny.board.store import mutate_board, read_board, read_card_summary
 from jenny.config.schema import ToolsConfig
 from jenny.security.workspace_access import (
     bind_workspace_scope,
@@ -63,6 +63,24 @@ def notebook_chat(root: Path):
     finally:
         reset_request_context(req)
         reset_workspace_scope(scope)
+
+
+@pytest.fixture
+async def cron(root: Path, monkeypatch):
+    """Lo scheduler del workspace del quaderno: un promemoria è un suo job."""
+    from jenny.runtime.context import get_runtime_context
+    from tests.support.cron import running_cron
+
+    workspace = root.parents[1]
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", workspace)
+    async with running_cron(workspace) as service:
+        yield service
+
+
+def _notes(cron) -> list[dict]:
+    from jenny.board.cron_link import notebook_jobs, notes_from_jobs
+
+    return notes_from_jobs(notebook_jobs(cron, "piante"), "Europe/Rome")
 
 
 @pytest.fixture
@@ -286,67 +304,69 @@ async def test_show_lists_the_automations_of_cards_and_of_the_notebook(notebook_
 
 
 async def test_the_editor_can_add_a_reminder_for_the_whole_notebook(notebook_chat: Path,
-                                                                     announced) -> None:
-    out = await BoardTool().execute(action="add_reminder", text="Porta dentro le piante",
-                                    date="2026-12-01")
+                                                                     announced, cron) -> None:
+    from jenny.board.cron_link import scope_of
+
+    out = await BoardTool(cron=cron).execute(action="add_reminder", text="Porta dentro le piante",
+                                             date="2099-12-01")
     assert "for the whole notebook" in out
-    rem = read_reminders(notebook_chat)["reminders"][-1]
-    assert rem["card"] == "" and rem["by"] == "user"
-    assert "on the whole notebook: Porta dentro le piante" in await BoardTool().execute(
-        action="show")
+    rid = out.split("`")[1]
+    job = cron.get_job(rid)
+    assert scope_of(job.payload.board) == model.NOTEBOOK and job.schedule.kind == "at"
+    assert job.payload.session_key == "project:piante"
+    assert f"`{rid}` on the whole notebook: Porta dentro le piante (2099-12-01)" in \
+        await BoardTool(cron=cron).execute(action="show")
+    assert announced == ["piante"]
 
 
-async def test_update_reminder_sets_text_date_and_why(notebook_chat: Path, announced) -> None:
-    """Il contratto del 24/10/2026: un'attesa corretta dall'editore porta anche la
-    pagina che la spiega, e un ``why`` vuoto la stacca."""
-    root = notebook_chat
-    tool = BoardTool()
+async def test_a_reminder_without_the_scheduler_is_not_done(notebook_chat: Path) -> None:
+    out = await BoardTool().execute(action="add_reminder", text="x", date="2099-12-01")
+    assert out == "Not done: scheduler not running"
+
+
+async def test_update_reminder_sets_text_date_and_why(notebook_chat: Path, announced,
+                                                      cron) -> None:
+    """Il contratto del 24/10/2026: un promemoria corretto dall'editore porta anche la
+    pagina che lo spiega, e un ``why`` vuoto non lo stacca."""
+    tool = BoardTool(cron=cron)
     added = await tool.execute(action="add_reminder", card="nuove", text="Rinvaso",
                                date="2099-03-01")
     rid = added.split("`")[1]
     out = await tool.execute(action="update_reminder", id=rid, why="entities/Fico.md",
                              date="2099-04-01")
     assert out == f"Reminder `{rid}` updated; why: entities/Fico.md."
-    rem = read_reminders(root)["reminders"][0]
-    assert rem["why"] == "entities/Fico.md" and rem["when"]["date"] == "2099-04-01"
+    [note] = _notes(cron)
+    assert cron.get_job(rid).payload.why == "entities/Fico.md"
+    assert note["when"]["date"] == "2099-04-01"
     out = await tool.execute(action="update_reminder", id=rid, why="entities/Nessuno.md",
                              text="Non deve cambiare")
     assert out.startswith("Not done: no such page under wiki/"), out
-    assert read_reminders(root)["reminders"][0]["text"] == "Rinvaso"
+    assert cron.get_job(rid).name == "Rinvaso"
     # Un ``why`` vuoto non stacca niente: per togliere la pagina c'è clear_why.
     out = await tool.execute(action="update_reminder", id=rid, why="", text="Rinvaso grande")
     assert out == f"Reminder `{rid}` updated."
-    rem = read_reminders(root)["reminders"][0]
-    assert rem["why"] == "entities/Fico.md" and rem["text"] == "Rinvaso grande"
+    job = cron.get_job(rid)
+    assert job.payload.why == "entities/Fico.md" and job.name == "Rinvaso grande"
     out = await tool.execute(action="update_reminder", id=rid, clear_why=True)
     assert "no longer points to a page" in out
-    assert read_reminders(root)["reminders"][0]["why"] == ""
+    assert cron.get_job(rid).payload.why is None
     assert (await tool.execute(action="update_reminder", id=rid, why="")).startswith(
         "Not done: give")
 
 
-async def test_update_reminder_writes_once(notebook_chat: Path, announced, monkeypatch) -> None:
-    """Testo, data e pagina in una scrittura sola: due scritture lasciavano
-    l'attesa a metà se la seconda falliva."""
-    import jenny.board.edit as edit_mod
-
-    tool = BoardTool()
-    rid = (await tool.execute(action="add_reminder", card="nuove", text="Rinvaso",
-                              date="2099-03-01")).split("`")[1]
-    calls: list[int] = []
-    real = edit_mod.mutate_reminders
-
-    def counting(root, apply, **kw):
-        calls.append(1)
-        return real(root, apply, **kw)
-
-    monkeypatch.setattr(edit_mod, "mutate_reminders", counting)
-    await tool.execute(action="update_reminder", id=rid, text="Nuovo", date="2099-05-01",
-                       why="entities/Fico.md")
-    assert calls == [1]
-    rem = read_reminders(notebook_chat)["reminders"][0]
-    assert (rem["text"], rem["when"]["date"], rem["why"]) == (
-        "Nuovo", "2099-05-01", "entities/Fico.md")
+async def test_close_and_drop_reminder(notebook_chat: Path, announced, cron) -> None:
+    tool = BoardTool(cron=cron)
+    first = (await tool.execute(action="add_reminder", card="nuove", text="Rinvaso",
+                                date="2099-03-01")).split("`")[1]
+    second = (await tool.execute(action="add_reminder", text="Gelo", date="2099-11",
+                                 precision="month")).split("`")[1]
+    assert cron.get_job(second).schedule.precision == "month"
+    out = await tool.execute(action="close_reminder", id=first)
+    assert out == "Done: «Rinvaso» (it is now a line in the journal)."
+    assert cron.get_job(first) is None
+    assert await tool.execute(action="drop_reminder", id=second) == \
+        f"Reminder `{second}` removed."
+    assert cron.get_job(second) is None and _notes(cron) == []
 
 
 # ── Le schede orfane (25/10/2026) ────────────────────────────────────────────
@@ -428,92 +448,69 @@ async def test_drawers_that_are_not_orphans_stay(notebook_chat: Path) -> None:
     assert read_card_summary(root, "proposta") is not None
 
 
-# ── attach_reminder: un'attesa che c'è già, su una scheda ───────────────────
+# ── attach_reminder: un promemoria che c'è già, su una scheda ───────────────
 
 
-def _orphan_reminder(root: Path, rid: str = "r-rinvaso", card: str = "sparita",
-                     state: str = "open") -> None:
-    """Un'attesa la cui scheda non c'è più: il caso del 25/10/2026 sul telefono."""
-    from jenny.board.store import mutate_reminders
+def _orphan_reminder(cron, card: str = "sparita") -> str:
+    """Un promemoria la cui scheda non c'è più: il caso del 25/10/2026 sul telefono."""
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.dates import date_schedule
 
-    def apply(rems):
-        rems["reminders"].append({"id": rid, "card": card, "text": "Rinvaso",
-                                  "when": {"kind": "date", "date": "2099-03-01"},
-                                  "by": "jenny", "state": state})
-
-    mutate_reminders(root, apply)
+    return add_notebook_job(cron, "piante", card, name="Rinvaso", message="Rinvaso",
+                            schedule=date_schedule("2099-03-01", "Europe/Rome")).id
 
 
 async def test_attach_reminder_puts_an_orphan_on_a_card_like_add_reminder(
-    notebook_chat: Path, announced,
+    notebook_chat: Path, announced, cron,
 ) -> None:
-    root = notebook_chat
-    _orphan_reminder(root)
-    tool = BoardTool()
+    rid = _orphan_reminder(cron)
+    tool = BoardTool(cron=cron)
     shown = await tool.execute(action="show")
-    assert "`r-rinvaso` on `sparita`: Rinvaso (2099-03-01) — NOT ON THE BOARD" in shown, shown
+    assert f"`{rid}` on `sparita`: Rinvaso (2099-03-01) — NOT ON THE BOARD" in shown, shown
 
-    out = await tool.execute(action="attach_reminder", card="Nuove piante del balcone",
-                             id="r-rinvaso")
-    assert out.startswith("Reminder `r-rinvaso` «Rinvaso» is now on `nuove`"), out
-    rems = read_reminders(root)["reminders"]
-    assert len(rems) == 1, "attaccare non fa un doppione"
-    # Come ``add_reminder(card=…)``: l'ambito è la scheda, e l'attesa è dell'utente.
-    assert rems[0]["card"] == "nuove" and rems[0]["by"] == "user"
-    assert model.next_reminder(read_reminders(root), "nuove")["id"] == "r-rinvaso"
+    out = await tool.execute(action="attach_reminder", card="Nuove piante del balcone", id=rid)
+    assert out.startswith("Reminder «Rinvaso» is now on `nuove`"), out
+    [note] = _notes(cron)
+    assert note["card"] == "nuove" and note["id"] != rid, "un job nuovo, nessun doppione"
+    assert f"Its id is now `{note['id']}` (it was `{rid}`)." in out
+    assert cron.get_job(rid) is None
     assert "NOT ON THE BOARD" not in await tool.execute(action="show")
-    assert announced == ["piante"]
+    # Il tool avvisa la bacheca, e lo smontaggio del job vecchio anche.
+    assert set(announced) == {"piante"}
 
 
-async def test_attach_reminder_twice_changes_nothing(notebook_chat: Path, announced) -> None:
-    root = notebook_chat
-    _orphan_reminder(root, card="nuove")
-    before = (root / "board" / "reminders.json").read_bytes()
-    out = await BoardTool().execute(action="attach_reminder", card="nuove", id="r-rinvaso")
-    assert out == "Reminder `r-rinvaso` is already on `nuove`: nothing changed.", out
-    assert (root / "board" / "reminders.json").read_bytes() == before
-    assert read_reminders(root)["reminders"][0]["by"] == "jenny", "nessuna scrittura"
+async def test_attach_reminder_twice_changes_nothing(notebook_chat: Path, announced,
+                                                     cron) -> None:
+    rid = _orphan_reminder(cron, card="nuove")
+    out = await BoardTool(cron=cron).execute(action="attach_reminder", card="nuove", id=rid)
+    assert out == f"Reminder `{rid}` is already on `nuove`: nothing changed.", out
+    assert cron.get_job(rid) is not None
 
 
-async def test_attach_reminder_to_another_card_moves_it(notebook_chat: Path) -> None:
-    """Un'attesa ha un ambito solo: su un'altra scheda si sposta. E la sezione di
-    prima del 20/10/2026 sulla scheda vecchia se ne va, o ``remove_section`` lì la
-    chiuderebbe dopo il trasloco."""
-    root = notebook_chat
-    tool = BoardTool()
+async def test_attach_reminder_to_another_card_moves_it(notebook_chat: Path, cron) -> None:
+    tool = BoardTool(cron=cron)
     await tool.execute(action="add_card", title="Ginkgo", pages=["entities/Ginkgo.md"])
-    _orphan_reminder(root, card="nuove")
-
-    def legacy(board):
-        model.card_by_id(board, "nuove")["userSections"].append(
-            {"id": "s-rem", "kind": "reminder", "reminder": "r-rinvaso"})
-
-    mutate_board(root, legacy)
-    out = await tool.execute(action="attach_reminder", card="ginkgo", id="r-rinvaso")
+    rid = _orphan_reminder(cron, card="nuove")
+    out = await tool.execute(action="attach_reminder", card="ginkgo", id=rid)
     assert "is now on `ginkgo`" in out and "it was on `nuove`" in out, out
-    rems = read_reminders(root)["reminders"]
-    assert [r["card"] for r in rems] == ["ginkgo"]
-    assert model.card_by_id(read_board(root), "nuove")["userSections"] == []
-
-    out = await tool.execute(action="attach_reminder", id="r-rinvaso")
+    [note] = _notes(cron)
+    assert note["card"] == "ginkgo"
+    out = await tool.execute(action="attach_reminder", id=note["id"])
     assert "is now on the whole notebook" in out and "free sticky note" in out, out
-    assert read_reminders(root)["reminders"][0]["card"] == ""
+    assert [n["card"] for n in _notes(cron)] == [""]
 
 
-@pytest.mark.parametrize(("card", "rid", "state", "said"), [
-    ("Fico", "r-rinvaso", "open", "Not done: card not found: Fico. On the board: «Nuove"),
-    ("nuove", "r-nessuno", "open", "Not done: no reminder `r-nessuno`"),
-    ("nuove", "r-rinvaso", "done", "Not done: reminder `r-rinvaso` is done: closed"),
-    ("nuove", "r-rinvaso", "dropped", "Not done: reminder `r-rinvaso` is dropped: closed"),
+@pytest.mark.parametrize(("card", "rid", "said"), [
+    ("Fico", None, "Not done: card not found: Fico. On the board: «Nuove"),
+    ("nuove", "nessuno", "Not done: no reminder `nessuno`"),
 ])
-async def test_attach_reminder_refuses(notebook_chat: Path, card: str, rid: str, state: str,
+async def test_attach_reminder_refuses(notebook_chat: Path, cron, card: str, rid: str | None,
                                        said: str) -> None:
-    root = notebook_chat
-    _orphan_reminder(root, state=state)
-    before = (root / "board" / "reminders.json").read_bytes()
-    out = await BoardTool().execute(action="attach_reminder", card=card, id=rid)
+    orphan = _orphan_reminder(cron)
+    out = await BoardTool(cron=cron).execute(action="attach_reminder", card=card,
+                                             id=rid or orphan)
     assert out.startswith(said) and "\n" not in out, out
-    assert (root / "board" / "reminders.json").read_bytes() == before
+    assert [n["id"] for n in _notes(cron)] == [orphan]
 
 
 def test_the_tool_and_the_editor_know_attach_reminder() -> None:

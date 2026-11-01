@@ -71,7 +71,6 @@ def _dispatcher(agent, config: Config | None = None) -> CronDispatcher:
         get_agent=lambda: agent,
         config=config or Config(),
         cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
     )
 
 

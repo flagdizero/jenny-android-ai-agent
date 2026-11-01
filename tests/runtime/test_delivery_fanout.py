@@ -243,7 +243,7 @@ async def test_non_proactive_delivery_gets_no_turn_id() -> None:
 async def test_proactive_delivery_closes_its_own_webui_turn() -> None:
     """Il turno aperto da un avviso proattivo si chiude da sé.
 
-    Il turno che lo produce è silenzioso (heartbeat, cron, Dream), quindi
+    Il turno che lo produce è silenzioso (cron, Dream), quindi
     ``webui_view_target`` non gli dà nessuna vista WebUI e
     ``WebuiTurnCoordinator.handle_turn_end`` non emette niente: senza questo
     frame il client resta con un turno aperto per sempre — mascotte incantata

@@ -103,7 +103,7 @@ The gateway (started by the Android runtime via `jenny.android_entry.run_gateway
 
 - the WebSocket channel, the Telegram channel if configured, and — when an Android context is present — the notification and floating channels (all via `WebSocketDispatcher`);
 - the workspace-scoped cron service;
-- system jobs such as Dream and the heartbeat;
+- system jobs such as Dream and the gardener;
 - the HTTP API routes under `/api/` (settings, apps, media, skills, wiki, transcript, backup...) served from the same asyncio process.
 
 **There is no `/health` endpoint.** No route named `health` exists anywhere in `jenny/channels/` or `jenny/webui/`. On Android, `run_gateway()` forces `host="127.0.0.1"` and `port=18790` for both the WebSocket handshake and the HTTP API (`_apply_gateway_overrides()` in `jenny/gateway_runtime.py` sets `config.gateway.port`, `config.websocket["port"]`, and defaults `config.websocket["enabled"]` to `true`) — WebSocket and HTTP genuinely share one origin so the WebView can reach both without CORS. `gateway.port` defaults to `18790` in the schema. `config.websocket` is a free-form dict in the schema (`websocket: dict = {}`); the `8765` port and `enabled = false` defaults live on `WebSocketConfig` in `jenny/channels/websocket.py`, the model the channel validates that dict against. Those are the desktop-testing defaults, and the Android entry point always overrides them at startup.

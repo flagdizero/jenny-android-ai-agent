@@ -121,8 +121,6 @@ class Scenario:
     archive_after: bool = False
     #: ``/dream`` dopo i turni.
     dream_after: bool = False
-    #: Un giro dell'heartbeat forzato dopo i file di prova (fino a ~6 minuti).
-    heartbeat_after: bool = False
     #: ``guard``: una promessa con una taratura che ha fatto crollare il tasso, o
     #: una che vive in Python e si tara con una build (``calibration_note``).
     #: ``probe``: un comportamento misurato senza una frase da togliere — dice

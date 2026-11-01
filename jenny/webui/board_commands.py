@@ -2,9 +2,10 @@
 
 Sono comandi RPC e non rotte per la ragione di ``webui/commands.py``: una nota o
 una correzione sono testo libero, e una foto sono byte. Tutte le scritture di
-``board.json`` e ``reminders.json`` passano dall'imbuto
-(:func:`jenny.board.store.mutate_board`) come ``user``: è l'utente che sposta,
-risponde alla busta, aggiunge e toglie sezioni.
+``board.json`` passano dall'imbuto (:func:`jenny.board.store.mutate_board`)
+come ``user``: è l'utente che sposta, risponde alla busta, aggiunge e toglie
+sezioni. Un promemoria non sta nella bacheca: è un job dello scheduler
+(``board.reminder.*``, v. :mod:`jenny.board.edit`).
 
 Ogni comando prende ``wiki`` (il nome del quaderno) e risolve la cartella lato
 server; nessun percorso arriva dal client, tranne il nome di una pagina che si
@@ -416,8 +417,8 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
         sid = await _run(edit.add_note, root, card_id, params.get("text"),
                          timezone_name=_timezone())
     elif kind == "reminder":
-        # Come ``board.reminder.add`` con la scheda: dal cassetto, l'attesa è sua.
-        sid = await _run(edit.add_reminder, root, card_id, params.get("text"), params.get("when"))
+        # Come ``board.reminder.add`` con la scheda: dal cassetto, il promemoria è suo.
+        sid = await _add_reminder(ctx, root, card_id, params)
     else:
         sid = await _add_photo(root, card_id, params)
     return {"ok": True, "id": sid}
@@ -466,7 +467,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
 
 
 async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Modifica una nota, la nota di una foto o un promemoria dell'utente."""
+    """Modifica una nota o la nota di una foto."""
     root = _project(ctx, params)
     card_id = _card_id(params)
     sid = _card_id(params, "id")
@@ -480,14 +481,12 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
     if section["kind"] == "note":
         await _run(edit.update_note, root, card_id, sid, params.get("text"),
                    timezone_name=_timezone())
-    elif section["kind"] == "reminder":
-        await _run(edit.update_reminder, root, card_id, sid, params.get("text"),
-                   params.get("when"))
     elif section["kind"] == "photo":
         await _run(edit.update_photo_caption, root, card_id, sid, params.get("text"),
                    timezone_name=_timezone())
     else:
-        raise CommandError("bad_request", "only notes, photos and reminders can be edited")
+        # Un promemoria si corregge per id (``board.reminder.update``): è un job.
+        raise CommandError("bad_request", "only notes and photos can be edited here")
     return {"ok": True}
 
 
@@ -516,37 +515,64 @@ async def board_section_reorder(ctx: CommandContext, params: Mapping[str, Any]) 
     return {"ok": True}
 
 
-async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Un'attesa fatta: v. :func:`jenny.board.edit.close_reminder`."""
-    root = _project(ctx, params)
-    await _run(edit.close_reminder, root, _card_id(params, "id"), timezone_name=_timezone())
-    return {"ok": True}
+# ── I promemoria: job dello scheduler ────────────────────────────────────────
+#
+# I nomi sul filo sono quelli di quando un promemoria era un'attesa di
+# ``reminders.json``; dal 31/10/2026 è un job (v. :mod:`jenny.board.edit`), e
+# l'id che il client manda è quello del job. «Fatto» e «Togli» tolgono il job
+# (fatto lascia anche una riga di diario); un promemoria a data se ne va da sé
+# quando suona.
 
 
-async def board_reminder_update(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Correggi un'attesa dal calendario di cura, per id: anche le attese di Jenny
-    non hanno una sezione da cui passare."""
-    root = _project(ctx, params)
-    await _run(edit.update_reminder_by_id, root, _card_id(params, "id"), params.get("text"),
-               params.get("when"))
-    return {"ok": True}
+def _every_ms(params: Mapping[str, Any]) -> Any:
+    """La cadenza di un promemoria a condizione, come arriva (``every_ms``)."""
+    return params.get("every_ms")
 
 
-async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Togli un'attesa dal calendario di cura: v. :func:`jenny.board.edit.drop_reminder`."""
-    root = _project(ctx, params)
-    await _run(edit.drop_reminder, root, _card_id(params, "id"))
-    return {"ok": True}
+async def _add_reminder(ctx: CommandContext, root: Path, card: str,
+                        params: Mapping[str, Any]) -> str:
+    return await _edit(edit.add_reminder(
+        root, card, params.get("text"), params.get("when"), cron=_cron(ctx),
+        every_ms=_every_ms(params), why=params.get("why"), timezone_name=_timezone()))
 
 
 async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Un'attesa nuova: di una scheda (``card``) o di tutto il quaderno (``card`` vuoto)."""
+    """Un promemoria nuovo: di una scheda (``card``) o di tutto il quaderno (``card`` vuoto).
+
+    ``when`` è ``{kind: "date", date, precision}`` (un singolo) o ``{kind:
+    "condition", app, params, field, op, value}`` con ``every_ms``, la cadenza
+    scelta dall'utente (un ricorrente col filtro). Risponde con l'id del job.
+    """
     root = _project(ctx, params)
     card = params.get("card") or model.NOTEBOOK
     if card != model.NOTEBOOK:
         card = _card_id(params)
-    rid = await _run(edit.add_reminder, root, card, params.get("text"), params.get("when"))
-    return {"ok": True, "id": rid}
+    return {"ok": True, "id": await _add_reminder(ctx, root, card, params)}
+
+
+async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Un promemoria fatto: v. :func:`jenny.board.edit.close_reminder`."""
+    root = _project(ctx, params)
+    await _edit(edit.close_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+                                    timezone_name=_timezone()))
+    return {"ok": True}
+
+
+async def board_reminder_update(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Correggi un promemoria dal calendario di cura, per id: ``text``, ``when``,
+    ``every_ms`` (solo per uno a condizione)."""
+    root = _project(ctx, params)
+    await _edit(edit.update_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+                                     text=params.get("text"), when=params.get("when"),
+                                     every_ms=_every_ms(params), timezone_name=_timezone()))
+    return {"ok": True}
+
+
+async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Togli un promemoria dal calendario di cura: v. :func:`jenny.board.edit.drop_reminder`."""
+    root = _project(ctx, params)
+    await _edit(edit.drop_reminder(root, _card_id(params, "id"), cron=_cron(ctx)))
+    return {"ok": True}
 
 
 async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:

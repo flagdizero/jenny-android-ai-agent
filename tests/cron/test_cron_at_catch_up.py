@@ -108,10 +108,8 @@ async def test_deadline_missed_while_the_app_was_down_runs_at_the_next_start(tmp
         await second._on_timer()
         assert fired == [job.id]
 
-        # E finisce nello stato terminale normale di un one-shot.
-        done = second.get_job(job.id)
-        assert done.enabled is False
-        assert done.state.next_run_at_ms is None
+        # E finisce come ogni singolo: sparisce.
+        assert second.get_job(job.id) is None
     finally:
         second.stop()
 

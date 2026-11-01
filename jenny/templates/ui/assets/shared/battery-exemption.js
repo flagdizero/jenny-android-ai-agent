@@ -2,7 +2,7 @@
  *
  * Il doze di Android sospende rete e differisce le sveglie di ogni app che non
  * è nella whitelist della batteria: non è un problema del solo long-poll
- * Telegram — cron, Dream, promemoria e heartbeat slittano esattamente
+ * Telegram — cron, Dream e promemoria slittano esattamente
  * allo stesso modo. La richiesta viveva solo dentro la card di pairing
  * Telegram, quindi chi Telegram non lo usa non se la vedeva chiedere mai: da
  * qui la stessa card si monta su tre superfici (onboarding, impostazioni,

@@ -5,7 +5,7 @@ ventiquattro ore e che ogni volta ricorda la stessa versione non è una notifica
 è un assillo — e l'utente che ha detto "dopo" la prima volta non ha modo di
 farlo tacere. Chi decide è ``notified_code`` nello stato dell'updater.
 
-Il resto ricalca il contratto dell'heartbeat: turno silenzioso, chat WebUI come
+Il resto ricalca il contratto dei monitor: turno silenzioso, chat WebUI come
 indirizzo, consegna solo tramite il tool ``message`` dentro il turno.
 """
 
@@ -84,7 +84,7 @@ def config_file(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """Scrive ``config.json`` dentro ``tmp_path`` e ci punta il runtime.
 
     Il ramo ``update_check`` rilegge la config **da disco** a ogni tick, come
-    Dream, il giardiniere e l'heartbeat: la sezione la si spegne nel file, non
+    Dream e il giardiniere: la sezione la si spegne nel file, non
     nell'oggetto che il dispatcher tiene in mano. L'override del ``config_path``
     è obbligatorio — senza, questi test leggerebbero il ``config.json`` di chi
     esegue la suite.
@@ -138,7 +138,6 @@ def setup(config_file, monkeypatch: pytest.MonkeyPatch):
             # lettura è fresca.
             config=Config(),
             cron=MagicMock(),
-            heartbeat_cfg=SimpleNamespace(keep_recent_messages=8),
         )
         return dispatcher, agent, updater
 

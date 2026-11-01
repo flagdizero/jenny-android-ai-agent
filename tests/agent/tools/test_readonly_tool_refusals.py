@@ -153,18 +153,6 @@ async def test_cron_is_closed_in_the_personal_chat_too(readonly: Path, params: d
     assert service.added == []
 
 
-async def test_inside_a_project_the_project_rule_speaks_first(readonly: Path) -> None:
-    """Due regole, e la spiegazione giusta è quella che risolve *anche* con la scrittura accesa.
-
-    Dire "sola lettura" dentro un progetto manderebbe l'utente ad accendere
-    l'interruttore per poi trovarsi rifiutato di nuovo.
-    """
-    tool, _ = _cron_tool("project:palestra")
-    result = await tool.execute(action="add", message="x", at="2026-09-01T09:00:00")
-    assert "project" in result.lower()
-    assert result != READONLY_TOOL_REFUSAL
-
-
 # ── il goal sostenuto: la stessa famiglia di un job ──────────────────────
 #
 # Passo **T4.6**. ``long_task`` non scrive un file: scrive

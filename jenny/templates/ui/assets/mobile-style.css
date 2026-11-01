@@ -5086,7 +5086,7 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .cron-row:first-of-type, .brand-row:first-of-type, .ssh-row:first-of-type { border-top: 0; }
 .cron-row:active, .brand-row:active, .ssh-row:active,
 .settings-summary:active { opacity: .6; }
-/* Il lavoro periodico ha due righe di testo, e un filo d'aria in più. */
+/* Il lavoro periodico ha tre righe di testo (nome, quando, ultimo giro), e un filo d'aria in più. */
 .cron-row { min-height: 52px; padding: 6px 0; }
 .cron-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .cron-row-name {
@@ -5097,6 +5097,13 @@ dialog.image-lightbox::backdrop { background: transparent; }
   font-size: 13px;
   font-weight: 500;
   color: var(--text);
+}
+.cron-row-sched {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cron-row-under {
   display: flex;
@@ -7094,34 +7101,6 @@ dialog.image-lightbox::backdrop { background: transparent; }
   color: var(--error);
   overflow-wrap: anywhere;
 }
-
-.cron-tasks { display: flex; flex-direction: column; gap: 5px; }
-
-.cron-task {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 7px 9px;
-  border-left: 2px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.cron-task-broken { border-left-color: var(--warning); }
-.cron-task-pending { border-left-color: var(--accent); }
-.cron-task-orphan { border-left-color: var(--border); opacity: 0.7; }
-
-.cron-task-label {
-  font-size: 12.5px;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-
-.cron-task-note {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
 
 /* ── Un diagramma disegnato (shared/rich-content.js) ── */
 

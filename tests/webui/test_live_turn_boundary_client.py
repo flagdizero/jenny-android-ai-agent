@@ -4,7 +4,7 @@ Ogni frame live porta il proprio ``turn_id`` — il recorder lo stampa sul paylo
 prima che parta sul filo, quindi ``delta``, ``message``, ``stream_end`` e
 ``turn_end`` ce l'hanno tutti — ma il client lo leggeva **solo** nella
 cronologia (``_buildTurns``). Nel live tutto finiva nella bolla corrente, e un
-turno può atterrare dentro un altro: un avviso proattivo (heartbeat, cron,
+turno può atterrare dentro un altro: un avviso proattivo (cron,
 Dream) è un turno a sé e non aspetta che la risposta in corso finisca. Da lì i
 due sintomi con una causa sola — l'avviso riusava la bolla della risposta
 sovrascrivendone il testo, e il suo ``turn_end`` chiudeva un turno che non era

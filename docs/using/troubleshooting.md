@@ -63,7 +63,6 @@ If you asked Jenny to remind you about something and nothing arrived, this is al
 - A **one-time reminder** whose time passed while the app was dead is not lost: it fires late, as soon as the app is running again (the device log records how overdue it was). Late is still late — a "remind me at 3pm" can arrive at 5pm if that's when Jenny came back.
 - A **recurring reminder on an interval** (e.g. "every 2 hours") keeps its deadline across a restart, so one that came due while the app was dead fires shortly after it comes back rather than waiting a full interval. What you don't get is a replay — the cycles that fell inside the dead window are gone, not queued up one by one.
 - A **recurring reminder on a clock time** (e.g. "every day at 8:00") is recomputed from the clock at startup: an occurrence missed while the app was dead is skipped, and the next one arrives on time.
-- The built-in periodic "heartbeat" check (which reads `workspace/HEARTBEAT.md` every 30 minutes by default) is an interval job, so it behaves like the interval reminders: one overdue check runs shortly after the app is back, the rest are not replayed.
 - Doze can stretch things even while the app is alive — treat every interval as a floor, not a promise. Since 0.6.6 Jenny asks Android to wake the phone at each job's real deadline and holds the CPU awake for the length of the run, which is aimed exactly at that stretching; it doesn't make an interval a guarantee.
 
 **Start at the workshop's Brain → Background activity.** This is the page that tells you which of the two problems you have — an app that was killed, or an app that was merely slowed down — instead of leaving you to guess:
@@ -84,8 +83,8 @@ Ask Jenny to **list your reminders** and look at the job's `Last run:` line:
 
 | What you see | What it means | What to do |
 |---|---|---|
-| `Last run: <recent time> — silenced` | It ran, it looked, there was nothing worth reporting. This is the normal outcome of a healthy monitor, exactly like Heartbeat's "I set a task and never hear anything". | Nothing. If you'd rather hear from it every time, ask for a plain reminder instead ("tell me the result every hour, even if nothing changed"). |
-| `Last run:` far in the past, or no `Last run:` at all | The app was killed and the cycles in that window simply didn't run — there's no catch-up replay, same as for Heartbeat above. | Check the workshop's **Brain → Background activity**: if the window shows up under "Recorded outages", the phone shut Jenny down. Exempt her from battery optimization from that same page and keep the app from being swiped away. |
+| `Last run: <recent time> — silenced` | It ran, it looked, there was nothing worth reporting. This is the normal outcome of a healthy monitor: "I set up a check and never hear anything" is the feature working. | Nothing. If you'd rather hear from it every time, ask for a plain reminder instead ("tell me the result every hour, even if nothing changed"). |
+| `Last run:` far in the past, or no `Last run:` at all | The app was killed and the cycles in that window simply didn't run — there's no catch-up replay, as described above. | Check the workshop's **Brain → Background activity**: if the window shows up under "Recorded outages", the phone shut Jenny down. Exempt her from battery optimization from that same page and keep the app from being swiped away. |
 | `Last run: <time> — could_not_check` (usually with the reason in parentheses), plus a `Could not check: N consecutive run(s), since …` line | The cycle ran, but the check itself never happened — a helper script is missing, a device or host is unreachable, a tool broke. This is the case that used to be invisible: it produced the same silence as a healthy run. | Nothing for the first two cycles; a blip is normal. After three in a row Jenny writes to you once by herself. The reason in parentheses is the fix to chase — most often a script that was moved or a device that is off. |
 | `Last run: <time> — error` (usually with the reason in parentheses) | The job genuinely failed — a provider error, a tool that couldn't reach the target. | Ask Jenny to check her logs (first section of this page); fix the underlying cause, or recreate the job. |
 
@@ -144,7 +143,7 @@ If none of the above resolves it, gather this before reporting the problem:
 ## See also
 
 - [Chat basics](./chat.md) for what the online/offline indicator and error banners look like in context.
-- [Scheduling and proactivity](./scheduling.md) for the full reminders/heartbeat model, the two reminder modes, and their limits.
+- [Scheduling and proactivity](./scheduling.md) for the full model of one-time and recurring jobs, the two modes, and their limits.
 - [Telegram bridge](./telegram.md) for pairing, throttling, and what does and doesn't work over Telegram.
 - [Jenny from your other devices](./remote-access.md) for what to check when another device can't reach the phone.
 - [Files and attachments](./attachments.md) for exact attachment limits.

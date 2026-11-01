@@ -3246,6 +3246,6 @@ object FloatingOverlayController {
 // già: la risposta a una domanda fatta dal fumetto viaggia sul canale
 // `floating`, e il mirror sulla vista WebUI la marca con `origin_channel` —
 // `ws_sender` non squilla sui messaggi con origin. La seconda è che gli alert
-// che arriverebbero in quel momento sono **proattivi** (cron, heartbeat,
+// che arriverebbero in quel momento sono **proattivi** (cron, monitor,
 // aggiornamenti), cioè parole che la mascotte non mostra: sopprimerli
 // significherebbe farli sparire del tutto, non evitare di ripeterli.

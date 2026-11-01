@@ -397,7 +397,7 @@ def test_the_pass_still_reads_its_own_entries(tmp_path) -> None:
 def test_the_other_internal_sessions_are_untouched(tmp_path) -> None:
     """Il controllo negativo: cambia **un** ramo, non la regola.
 
-    ``cron`` è il ramo che esiste per la cura dell'amnesia dell'heartbeat, e la
+    ``cron`` è il ramo che esiste per la cura dell'amnesia dei job ricorrenti, e la
     metà personale gli serve — gira nella chat personale. Se questo cade insieme
     al test sopra, la modifica ha preso tutti gli interni invece di uno.
     """

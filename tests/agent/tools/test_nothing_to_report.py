@@ -30,9 +30,12 @@ from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.tools.nothing_to_report import NothingToReportTool, declared_marker_lines
 from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import LLMResponse, ToolCallRequest
-from jenny.session.keys import HEARTBEAT_SESSION_KEY
 from jenny.session.turn_visibility import TurnVisibility, silent_turn_metadata
+
+# Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
+MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _tool(*, silent: bool) -> NothingToReportTool:
@@ -41,7 +44,7 @@ def _tool(*, silent: bool) -> NothingToReportTool:
         RequestContext(
             channel="websocket",
             chat_id="default",
-            session_key=HEARTBEAT_SESSION_KEY if silent else "unified:default",
+            session_key=MONITOR_SESSION_KEY if silent else "unified:default",
             metadata=silent_turn_metadata() if silent else {},
         )
     )
@@ -146,7 +149,7 @@ class TestThePerTurnState:
             RequestContext(
                 channel="websocket",
                 chat_id="default",
-                session_key=HEARTBEAT_SESSION_KEY,
+                session_key=MONITOR_SESSION_KEY,
                 metadata=silent_turn_metadata(),
             )
         )
@@ -165,13 +168,13 @@ class TestThePerTurnState:
 
     async def test_two_concurrent_turns_do_not_see_each_other(self) -> None:
         """Lo stato vive in un dict *dentro* una ContextVar, non in un attributo:
-        l'agente principale gira un heartbeat e una chat nello stesso processo."""
+        l'agente principale gira un monitor e una chat nello stesso processo."""
         tool = NothingToReportTool()
         tool.set_context(
             RequestContext(
                 channel="websocket",
                 chat_id="default",
-                session_key=HEARTBEAT_SESSION_KEY,
+                session_key=MONITOR_SESSION_KEY,
                 metadata=silent_turn_metadata(),
             )
         )
@@ -222,7 +225,7 @@ class TestTheWholeTurn:
         )
         return await loop.process_direct_outcome(
             "controlla la pioggia",
-            session_key=HEARTBEAT_SESSION_KEY,
+            session_key=MONITOR_SESSION_KEY,
             channel="websocket",
             chat_id="default",
             visibility=TurnVisibility.SILENT,
@@ -259,7 +262,7 @@ class TestTheWholeTurn:
 
         await self._run(loop, [])
 
-        session = loop.sessions.get_or_create(HEARTBEAT_SESSION_KEY)
+        session = loop.sessions.get_or_create(MONITOR_SESSION_KEY)
         assert not any("CHECK_OK" in str(m.get("content")) for m in session.messages)
 
     async def test_a_visible_turn_gets_no_synthetic_marker(self, tmp_path: Path) -> None:
@@ -324,7 +327,7 @@ class TestTheToolIsWhereTheTurnCanSeeIt:
                 chat_id="websocket:default",
                 content="[Subagent 'x' completed successfully]",
                 metadata={"subagent_task_id": "sub-1"},
-                session_key_override=HEARTBEAT_SESSION_KEY,
+                session_key_override=MONITOR_SESSION_KEY,
             )
         )
 

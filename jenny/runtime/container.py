@@ -29,7 +29,7 @@ from jenny.config.schema import Config
 # esegue piu'. ``build`` li ritira dallo store prima di registrare i vivi (v. il
 # commento sul posto e ``CronService.retire_system_job``). Per id e non per
 # nome: un promemoria dell'utente puo' chiamarsi come vuole.
-_RETIRED_SYSTEM_JOBS: tuple[str, ...] = ("atlas",)
+_RETIRED_SYSTEM_JOBS: tuple[str, ...] = ("atlas", "heartbeat")
 
 
 class GatewayContainer:
@@ -609,12 +609,6 @@ class GatewayContainer:
         if cron_status["jobs"] > 0:
             logger.info("Cron: {} scheduled jobs", cron_status["jobs"])
 
-        hb_cfg = config.gateway.heartbeat
-        if hb_cfg.enabled:
-            logger.info("Heartbeat: every {}s", hb_cfg.interval_s)
-        else:
-            logger.info("Heartbeat: disabled")
-
         # Cron dispatch: getter late-binding per l'agent (riassegnato
         # dall'onboarding), stesso contratto del vecchio closure on_cron_job.
         # Non riceve più il ``message_tool`` né ``deliver_to_channel``: nessun job
@@ -624,7 +618,6 @@ class GatewayContainer:
             get_agent=lambda: self._agent,
             config=config,
             cron=self.cron,
-            heartbeat_cfg=hb_cfg,
             snapshot_before_dream=self._snapshot_before_dream,
             extension_jobs=self._extension_job_runners(),
         ).dispatch
@@ -668,19 +661,6 @@ class GatewayContainer:
             logger.info("Gardener: {}", gardener_cfg.describe_schedule())
         else:
             logger.info("Gardener: disabled")
-
-        # Register Heartbeat system job (idempotent on restart).
-        if hb_cfg.enabled:
-            self.cron.register_system_job(CronJob(
-                id="heartbeat",
-                name="heartbeat",
-                schedule=CronSchedule(
-                    kind="every",
-                    every_ms=hb_cfg.interval_s * 1000,
-                    tz=config.agents.defaults.timezone,
-                ),
-                payload=CronPayload(kind="system_event"),
-            ))
 
         # L'orologio dei quaderni: le micro app dei cassetti, le attese delle
         # bacheche e gli eventi delle sezioni, un giro ogni quarto d'ora su tutti
@@ -889,7 +869,7 @@ class GatewayContainer:
                 # prossimo boot.
                 logger.opt(exception=True).warning("Could not persist config schema version")
             # Wakelock di servizio (solo con power.keepAwake = "always"): va
-            # chiesto qui, a config caricato e prima che cron/heartbeat comincino
+            # chiesto qui, a config caricato e prima che i job del cron comincino
             # a contare sui propri timer. Fuori da Android è un no-op silenzioso.
             from jenny.runtime.power import (
                 apply_alarm_clock_config,

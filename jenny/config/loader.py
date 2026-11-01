@@ -292,6 +292,9 @@ RETIRED_KEY_PATHS: frozenset[str] = frozenset({
     # 25/09/2026: ``casa: {schermate, ordine}``. Lo traduce in ``home`` lo schema
     # (``Config._migrate_casa_to_home``); qui smette di esistere nel file.
     "casa",
+    # L'heartbeat, ritirato il 31/10/2026: un controllo periodico ora è un job
+    # ``monitor`` del cron con la sua cadenza (``jenny/cron/``).
+    "gateway.heartbeat",
 })
 
 

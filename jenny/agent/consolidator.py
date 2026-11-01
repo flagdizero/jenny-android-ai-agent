@@ -515,7 +515,7 @@ class Consolidator:
         ``for_turn`` ricadrebbe sulla radice di default, cioe' sul difetto.
 
         ``None`` fuori dai progetti, che e' il default di ``build_messages``:
-        sessione personale e sessioni interne (cron, Dream, heartbeat) sono
+        sessione personale e sessioni interne (cron, Dream) sono
         misurate esattamente come prima.
         """
         if not is_project_session_key(session_key):
