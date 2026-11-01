@@ -133,8 +133,7 @@ MAX_ASSUMPTION = 300
 MAX_EXPECT_FILES = 40
 MAX_EXPECT_PATTERN = 200
 
-# Quanto dura una pianificazione senza turni (``drafting``): come
-# ``goal_inactivity_ttl_h``, mezza giornata. Oltre, il prossimo messaggio è una
+# Quanto dura una pianificazione senza turni (``drafting``): mezza giornata. Oltre, il prossimo messaggio è una
 # chat normale: una domanda di ieri sera non tiene il quaderno in sola lettura
 # per sempre.
 DRAFTING_TTL_HOURS = 12

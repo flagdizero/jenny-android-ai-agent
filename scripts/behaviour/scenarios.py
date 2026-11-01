@@ -782,15 +782,6 @@ COMPACTION = [
 
 # -- stadio 3: giri silenziosi e a piu' turni --------------------------------------
 
-def _goal_asks(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    return [
-        Check("goal_registered", bool(obs.called("long_task")),
-              ",".join(c.name for c in obs.tool_calls)),
-        Check("asks", "?" in obs.reply, obs.reply[:120]),
-        Check("no_false_close", not obs.called("complete_goal"), ""),
-    ]
-
-
 def _follow_up(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     last = ",".join(c.name for c in obs.extra.get("last_turn_calls") or [])
     respawned = obs.last_turn_called("spawn")
@@ -802,20 +793,7 @@ def _follow_up(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     ]
 
 
-STAGE_3 = [
-    Scenario(
-        name="goal_that_must_ask_stays_open",
-        stage=3, area="goal", chat="notebook",
-        promise="un goal che ha bisogno di una risposta chiede e resta aperto, senza recap finto",
-        turns=["/goal Organizza la cena di classe {n}: per prima cosa chiedimi quante persone "
-               "verranno e in che zona, poi prepara una proposta di ristoranti."],
-        check=_goal_asks,
-        calibration_note="la skill long-goal non e' sempre caricata e il goal si parcheggia nel "
-                         "codice quando chiede: l'inversione della skill non sposta niente "
-                         "(11/10/2026). Build variante (12/10/2026, «chiudi il goal quando "
-                         "chiedi» in complete_goal e nella skill): no_false_close 3/3 → 0/3",
-    ),
-]
+STAGE_3: list[Scenario] = []
 
 STAGE_3.append(Scenario(
     name="follow_up_goes_back_to_the_subagent",

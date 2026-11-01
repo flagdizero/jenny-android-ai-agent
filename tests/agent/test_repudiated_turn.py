@@ -131,7 +131,7 @@ async def test_repudiated_turn_drops_stream_deltas_and_checkpoint(tmp_path):
         return SimpleNamespace(
             final_content="done", tools_used=[], messages=[],
             stop_reason="end_turn", usage={}, had_injections=False,
-            images_stripped=False, goal_stalled=False,
+            images_stripped=False,
         )
 
     loop.runner.run = _fake_run

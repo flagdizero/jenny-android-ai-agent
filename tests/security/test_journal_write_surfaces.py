@@ -60,7 +60,6 @@ _NOT_JOURNALED: dict[str, str] = {
         "non è nello scope di un aiutante; e cron/jobs.json lo riscrive lo scheduler: un job "
         "si annulla togliendolo, non rimettendo il file"
     ),
-    "agent/tools/long_task.py": "non è nello scope di un aiutante; scrive i metadati di sessione",
     "agent/tools/app_update.py": "non è nello scope di un aiutante; installa un APK",
     "agent/tools/memory_entries.py": "ci scrive solo Dream, che non è un aiutante",
     "agent/tools/ssh_jobs.py": "stato locale dei job SSH, non un file del lavoro",

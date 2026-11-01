@@ -37,8 +37,9 @@ sarebbe leggere una risposta scritta per un'altra domanda.
   portano la destinazione da sole. Prima erano cinque nomi e la famiglia è molto
   più larga: ``open(..., 'w')``, ``shutil``, i mutatori di ``os``, ``rename``,
   ``unlink``, ``touch``.
-* ``_INDIRECT_WRITES`` — le facciate di persistenza. ``long_task`` non tocca un
-  path: scrive ``metadata[goal_state]`` e chiama ``sessions.save``. Nessuna
+* ``_INDIRECT_WRITES`` — le facciate di persistenza. Il caso che le ha
+  insegnate era ``long_task`` (tolto il 01/11/2026): non toccava un path,
+  scriveva i metadati di sessione e chiamava ``sessions.save``. Nessuna
   primitiva lo vedeva, e per questo è stato invisibile a questo file fino a
   T4.6.
 * ``_GATE_MENTIONS`` — chi nomina l'interruttore. Serve al caso opposto: un
@@ -75,7 +76,6 @@ from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.tools.download import DownloadFileTool
 from jenny.agent.tools.journal import JournalAppendTool
-from jenny.agent.tools.long_task import LongTaskTool
 from jenny.agent.tools.python_exec import PythonNamespace
 from jenny.apps.manifest import STORAGE_OPS, AppAction
 from jenny.apps.storage import _MUTATING_OPS, execute_storage_action
@@ -85,20 +85,16 @@ from jenny.security.workspace_access import (
     enter_workspace_scope,
 )
 from jenny.security.workspace_policy import ReadOnlyTurnError
-from jenny.session.manager import SessionManager
 
 ROOT = Path(__file__).resolve().parents[2] / "jenny"
 TOOLS_DIR = ROOT / "agent" / "tools"
 
 # Oltre ai tool, i moduli che scrivono e che vale la pena **dichiarare** fuori
 # scopo invece di lasciarlo implicito: il silenzio su di loro somiglia troppo a
-# una dimenticanza. ``session/goal_state.py`` è qui di proposito e non compare in
-# nessuno dei due elenchi: scansionato, non scrive niente — serializza un blob
-# che salva ``long_task``. È l'unico modo di registrare "l'ho guardato".
+# una dimenticanza.
 _EXTRA_SCANNED = (
     "apps/storage.py",
     "session/manager.py",
-    "session/goal_state.py",
     "webui/transcript_store.py",
     "agent/subagent_records.py",
     "config/store.py",
@@ -136,8 +132,8 @@ _WRITE_PRIMITIVES = re.compile(
 )
 
 # Le facciate: la scrittura la fa qualcun altro, la **decisione** è qui.
-# ``long_task`` è il caso che ha insegnato la categoria — nessuna primitiva, e
-# uno stato che sopravvive al riavvio. Non è un insieme chiuso: è l'elenco delle
+# ``long_task`` (tolto il 01/11/2026) è il caso che ha insegnato la categoria —
+# nessuna primitiva, e uno stato che sopravvive al riavvio. Non è un insieme chiuso: è l'elenco delle
 # facciate che conosciamo, e va allungato quando ne nasce una.
 _INDIRECT_WRITES = re.compile(r"sessions\.save\(|\bsave_config\(|\bconfig_store\.mutate\(")
 
@@ -169,11 +165,6 @@ _ASKS_FOR_ITSELF = {
         "scrive il codice delle app in apps/.drafts, che i tool file non possono "
         "scrivere, e le pose sulla bacheca: ha il suo gate"
     ),
-    # T4.6/T4.7: nessuna primitiva di scrittura, e per questo è stato invisibile
-    # a questo file. Scrive ``metadata[goal_state]`` e chiama ``sessions.save``:
-    # stato che sopravvive al turno, alla conversazione e al riavvio, e che cambia
-    # il comportamento futuro (wall timeout, chip del goal, iniezione «keep
-    # working»). Stessa famiglia di un job cron, stesso rifiuto.
     "agent/tools/board.py": (
         "la bacheca di un quaderno passa dal suo imbuto (board/store.py), che i tool file "
         "non possono scrivere: ha il suo gate"
@@ -182,7 +173,6 @@ _ASKS_FOR_ITSELF = {
         "remove_pages cancella pagine e scrive la traccia in raw/removed/ senza passare dai tool "
         "file: ha il suo gate, prima di ogni recinto"
     ),
-    "agent/tools/long_task.py": "registra un goal sostenuto via sessions.save, non un path",
     # Stava in ``_OUT_OF_SCOPE`` con «scrive su una
     # macchina remota», ma ``ssh_transfer direction=down`` scrive **sul
     # telefono**: un subagent nato in sola lettura riscriveva ``SOUL.md`` da un
@@ -562,19 +552,6 @@ async def _probe_notebook(root: Path, readonly: bool) -> str:
     return out
 
 
-async def _probe_long_task(root: Path, readonly: bool) -> str:
-    from jenny.session.goal_state import GOAL_STATE_KEY
-
-    sessions = SessionManager(root)
-    tool = LongTaskTool(sessions=sessions)
-    _context(tool)
-    with _turn(root, readonly):
-        out = await tool.execute(goal="Track the whole migration")
-    if readonly:
-        assert GOAL_STATE_KEY not in sessions.get_or_create("unified:default").metadata, (
-            "in sola lettura nessun goal deve restare registrato"
-        )
-    return out
 
 
 class _NoNetworkTransfer:
@@ -615,7 +592,6 @@ _PROBES: dict[str, Probe] = {
     "agent/tools/app_tool.py": _probe_app_tool,
     "agent/tools/board.py": _probe_board,
     "agent/tools/notebook.py": _probe_notebook,
-    "agent/tools/long_task.py": _probe_long_task,
     "agent/tools/ssh.py": _probe_ssh,
 }
 

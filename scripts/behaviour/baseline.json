@@ -612,56 +612,6 @@
    },
    "runs": 4
   },
-  "goal_that_must_ask_stays_open|claude-haiku-5-5|normal": {
-   "checks": {
-    "asks": [
-     3,
-     3
-    ],
-    "goal_registered": [
-     3,
-     3
-    ],
-    "no_false_close": [
-     3,
-     3
-    ],
-    "no_unknown_tool": [
-     3,
-     3
-    ],
-    "turn_finished": [
-     3,
-     3
-    ]
-   },
-   "runs": 3
-  },
-  "goal_that_must_ask_stays_open|deepseek-v4.1-flash|normal": {
-   "checks": {
-    "asks": [
-     3,
-     3
-    ],
-    "goal_registered": [
-     3,
-     3
-    ],
-    "no_false_close": [
-     3,
-     3
-    ],
-    "no_unknown_tool": [
-     3,
-     3
-    ],
-    "turn_finished": [
-     3,
-     3
-    ]
-   },
-   "runs": 3
-  },
   "greeting_after_notebook_no_recap|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [

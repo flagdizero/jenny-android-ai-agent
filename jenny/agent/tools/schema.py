@@ -42,7 +42,7 @@ from jenny.agent.tools.base import Schema
 # Il limite è un vincolo di interoperabilità, non un'opinione di design:
 # ``tests/agent/tools/test_schema_wire_limits.py`` lo verifica su tutti i tool
 # registrati. Serve un campo più capiente? Va tolto il vincolo dallo schema e
-# controllato in ``execute()`` (v. ``long_task``), non alzato oltre la soglia.
+# controllato in ``execute()``, non alzato oltre la soglia.
 WIRE_STRING_LIMIT = 1000
 
 

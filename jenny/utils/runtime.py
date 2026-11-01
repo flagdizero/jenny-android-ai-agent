@@ -9,7 +9,6 @@ from loguru import logger
 
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.history_meta import (
-    GOAL_CONTINUE_EVENT,
     INJECTED_EVENT_META,
     LENGTH_RECOVERY_EVENT,
 )
@@ -101,12 +100,6 @@ LENGTH_RECOVERY_PROMPT = (
     "— no recap, no apology. Break remaining work into smaller steps if needed."
 )
 
-SUSTAINED_GOAL_CONTINUE_PROMPT = (
-    "You have an active sustained goal. Please continue working toward the "
-    "objective using your tools, or call complete_goal if the work is truly finished."
-)
-
-
 def empty_tool_result_message(tool_name: str) -> str:
     """Short prompt-safe marker for tools that completed without visible output."""
     return f"({tool_name} completed with no output)"
@@ -132,38 +125,11 @@ def is_blank_text(content: str | None) -> bool:
     return content is None or not content.strip()
 
 
-# Sia ASCII sia fullwidth: il modello scrive in italiano/inglese, ma il segnale
-# non deve dipendere dalla lingua.
-_QUESTION_MARKS = ("?", "？")
-
-
-def looks_like_user_question(content: str | None) -> bool:
-    """Euristica: questa risposta finale sta chiedendo qualcosa all'utente.
-
-    Serve a distinguere «ho finito di parlare e aspetto una risposta» da «ho
-    finito un pezzo di lavoro»: nel primo caso spronare un goal sostenuto a
-    continuare (vedi ``_goal_continue_allowed`` in ``agent/runner.py``) non può
-    che produrre la stessa domanda un'altra volta, ed è il loop che ha bruciato
-    9 chiamate LLM di fila il 2026-08-12.
-
-    Deliberatamente larga — un ``?`` in qualunque punto del testo finale — per
-    due motivi. Primo: la forma reale è «domanda + invito di chiusura» ("cosa
-    deve fare l'app? … dammi un'idea anche vaga"), quindi guardare solo l'ultima
-    riga la manca. Secondo: la direzione dell'errore è benigna. Falso positivo =
-    il goal si mette in attesa invece di insistere, e riprende al primo
-    messaggio dell'utente; falso negativo = una chiamata LLM sprecata. Meglio
-    sbagliare verso il silenzio.
-    """
-    if content is None:
-        return False
-    return any(mark in content for mark in _QUESTION_MARKS)
-
-
 def build_finalization_retry_message() -> dict[str, str]:
     """A short no-tools-allowed prompt for final answer recovery.
 
-    Senza marcatore ``injected_event``, a differenza di ``build_goal_continue_message``
-    e ``build_length_recovery_message``: questo prompt e quello di budget esaurito
+    Senza marcatore ``injected_event``, a differenza di
+    ``build_length_recovery_message``: questo prompt e quello di budget esaurito
     finiscono in una *copia* della lista (``_finalization_retry_messages``,
     ``_budget_exhausted_finalization_messages``) che serve solo alla richiesta e al
     conteggio token, e non arriva mai alla storia di sessione. Marcarli direbbe il
@@ -192,15 +158,6 @@ def build_length_recovery_message() -> dict[str, str]:
         "role": "user",
         "content": LENGTH_RECOVERY_PROMPT,
         INJECTED_EVENT_META: LENGTH_RECOVERY_EVENT,
-    }
-
-
-def build_goal_continue_message(custom: str | None = None) -> dict[str, str]:
-    """Prompt the model to continue when a sustained goal is still active."""
-    return {
-        "role": "user",
-        "content": custom or SUSTAINED_GOAL_CONTINUE_PROMPT,
-        INJECTED_EVENT_META: GOAL_CONTINUE_EVENT,
     }
 
 

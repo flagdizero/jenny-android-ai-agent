@@ -178,9 +178,9 @@ class WebuiTurnCoordinator:
         if target is None:
             return
         metadata = dict(ctx.metadata or {})
-        # Le continuation interne mantengono il canale d'origine ma il loro
-        # contenuto è un prompt sintetico, non un messaggio dell'utente.
-        if metadata.get("_internal_continuation") or metadata.get("_skip_user_persist"):
+        # Un turno che non persiste l'input (``process_direct`` interno) ha come
+        # contenuto un prompt sintetico, non un messaggio dell'utente.
+        if metadata.get("_skip_user_persist"):
             return
         text = (event.content or "").strip()
         # Un allegato senza didascalia e' un messaggio: la bolla e' l'immagine.

@@ -2,7 +2,7 @@
 
 `LoopTasksMixin` raccoglie la gestione dei task in volo e il drain di shutdown:
 cancellazione dei task attivi per sessione, eviction del bookkeeping delle
-sessioni pruned, reset del goal su hard-cancel, e il drain ordinato allo
+sessioni pruned, e il drain ordinato allo
 shutdown (turni → subagent → background) che garantisce l'invariante Fase 1
 "nessun writer di session.messages attivo durante flush_all". Mixato in
 ``AgentLoop`` verbatim: `self` risolve via MRO. Il cuore FSM/scheduling
@@ -17,8 +17,6 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from loguru import logger
-
-from jenny.session.goal_state import cancel_active_goal
 
 if TYPE_CHECKING:
     from jenny.agent.cron_turns import CronTurnCoordinator
@@ -71,8 +69,6 @@ class LoopTasksMixin:
 
         ``spare_subagents=True`` (il ``/stop`` semplice) lascia lavorare i
         subagent della sessione: si fermano dalla loro bolla o con ``/stop all``.
-        Il goal sostenuto si cancella comunque, perche' e' il turno stesso che
-        continua, non un aiutante.
 
         Bumpa l'epoch della sessione (ripudiando i turni in volo), cancella,
         attende al massimo ``grace_s`` e ABBANDONA i sopravvissuti: grazie al
@@ -133,7 +129,6 @@ class LoopTasksMixin:
         sub_cancelled = 0
         if not spare_subagents:
             sub_cancelled = await self.subagents.cancel_by_session(key, grace_s=grace_s)
-        await self._cancel_active_goal_if_any(key)
         return cancelled + sub_cancelled
 
     def _restore_cancelled_turn(self, key: str) -> bool:
@@ -245,29 +240,6 @@ class LoopTasksMixin:
             self._session_locks.evict(key)
             self.sessions.invalidate(key)
             self._file_state_store.drop(key)
-
-    async def _cancel_active_goal_if_any(self, key: str) -> None:
-        """Reset a hard-cancelled turn's sustained goal so it stops being ``active``.
-
-        A user-initiated ``/stop`` (or ``/new``, which also cancels) must not leave
-        ``goal_state`` stuck ``active`` forever — that would permanently disable the
-        LLM wall-clock timeout for this session (see
-        ``jenny.session.goal_state.runner_wall_llm_timeout_s``), even for later,
-        unrelated turns. A goal that is genuinely still running normally is untouched,
-        since this only runs from the hard-cancel path.
-        """
-        session = self.sessions.get_or_create(key)
-        updated = cancel_active_goal(session.metadata)
-        if updated is None:
-            return
-        self.sessions.save(session)
-        # Detto a voce: la risposta di ``/stop`` conta solo task e subagent, così
-        # un goal cancellato qui non lasciava traccia da nessuna parte e non
-        # c'era modo di sapere se l'obiettivo fosse ancora vivo o no.
-        logger.info(
-            "Sustained goal cancelled by hard-stop on session {} ({})",
-            key, updated.get("ui_summary") or "no summary",
-        )
 
     async def close_background_tasks(self, *, timeout_s: float | None = None) -> None:
         """Drain pending background archives.

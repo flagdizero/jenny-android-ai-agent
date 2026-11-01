@@ -285,8 +285,6 @@ class PlanHost(Protocol):
 
     async def cancel(self, session_key: str) -> int: ...
 
-    def goal_active(self, session_key: str) -> bool: ...
-
     def notebook_root(self, notebook: str) -> Path | None: ...
 
     def append_note(self, session_key: str, text: str) -> None: ...
@@ -519,7 +517,7 @@ class PlanDriver:
         return session_key in self._index
 
     def plan_running(self, session_key: str) -> bool:
-        """La sessione ha un piano che gira: il turno usa i limiti di un goal sostenuto."""
+        """La sessione ha un piano che gira: il turno non ha tetto sulla chiamata al modello."""
         live = self._index.get(session_key)
         return live is not None and live.status in _RUNNING
 
@@ -984,11 +982,6 @@ class PlanDriver:
         notebook = notebook_of(session_key)
         if notebook is None or session_key is None:
             return "Error: a plan can only be proposed inside a notebook chat."
-        if self.host.goal_active(session_key):
-            return (
-                "Not now: this notebook has an active sustained goal, and a plan cannot run "
-                "next to it. Finish it or close it with complete_goal first, or tell the user."
-            )
         held = self.held_status(session_key)
         if held is not None:
             return (
@@ -2068,10 +2061,6 @@ class PlanDriver:
             if plan.status != "proposed":
                 raise PlanCommandError("bad_state", f"the plan is {plan.status}, not proposed")
             self._require_idle(plan.session_key)
-            if self.host.goal_active(plan.session_key):
-                raise PlanCommandError(
-                    "bad_state", "this notebook has an active sustained goal"
-                )
             photos = self._photos(plan)
             start = await asyncio.to_thread(photos.take, "start")
             baseline, empty = await asyncio.to_thread(self._audit_baseline, plan)

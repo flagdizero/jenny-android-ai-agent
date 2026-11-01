@@ -24,11 +24,17 @@ class TestIsDispatchableCommand:
         assert router.is_dispatchable_command("/help")
         assert router.is_dispatchable_command("/model")
         assert router.is_dispatchable_command("/dream")
-        assert router.is_dispatchable_command("/goal")
+        assert router.is_dispatchable_command("/history")
 
     def test_prefix_commands_match(self, router: CommandRouter) -> None:
         assert router.is_dispatchable_command("/model fast")
-        assert router.is_dispatchable_command("/goal migrate the database")
+        assert router.is_dispatchable_command("/history 20")
+
+    def test_the_retired_goal_command_is_just_a_message(self, router: CommandRouter) -> None:
+        # ``/goal`` e' stato tolto il 01/11/2026: scritto adesso arriva al modello
+        # come un messaggio qualsiasi, invece di un comando che non c'e' piu'.
+        assert not router.is_dispatchable_command("/goal")
+        assert not router.is_dispatchable_command("/goal migrate the database")
 
     def test_priority_commands_not_matched(self, router: CommandRouter) -> None:
         # Priority commands are NOT in the dispatchable tiers — they are

@@ -321,8 +321,8 @@ class TestToolEventProgress:
         assert outbound.metadata["_file_edit_events"] == edit_events
 
     @pytest.mark.asyncio
-    async def test_goal_turn_keeps_live_file_edit_progress_for_webui(self, tmp_path: Path) -> None:
-        """The /goal command rewrites the prompt but must not bypass WebUI file-edit progress."""
+    async def test_a_dispatched_turn_keeps_live_file_edit_progress_for_webui(self, tmp_path: Path) -> None:
+        """A turn through ``_dispatch`` streams the WebUI file-edit progress of its tool calls."""
         bus = MessageBus()
         provider = MagicMock()
         provider.supports_progress_deltas = True
@@ -387,7 +387,7 @@ class TestToolEventProgress:
             channel="websocket",
             sender_id="u1",
             chat_id="chat1",
-            content="/goal create goal file",
+            content="create the note file",
             metadata={"_wants_stream": True},
         ))
 

@@ -9,8 +9,8 @@ Una riga ``role: "user"`` nel JSONL di sessione è l'unico segno che Jenny ha di
   ``AgentLoop._drain_pending`` normalizza a ``{"role": "user", ...}`` per darlo
   al modello, o arrivato a turno chiuso, che il turno d'annuncio scrive con lo
   stesso ruolo (``TurnPersistenceMixin._persist_subagent_followup``);
-- la continuazione sintetica di un sustained goal
-  (``jenny/utils/runtime.py::build_goal_continue_message``);
+- la continuazione sintetica del goal sostenuto, tolto il 01/11/2026: le sue
+  righe restano nelle sessioni scritte prima;
 - il turno con cui il driver di un piano apre un passo, o lo sollecita
   (``jenny/plan/driver.py``).
 
@@ -52,7 +52,9 @@ SUBAGENT_TAINT_META = "subagent_taint_sources"
 #: turni dopo, non solo in quello del tool.
 TOOL_TAINT_META = "tool_taint_sources"
 
-#: Sprone sintetico a un sustained goal ancora attivo.
+#: Sprone sintetico del goal sostenuto. Il goal non c'è più (01/11/2026), ma le
+#: sessioni scritte prima ne hanno le righe: senza il marcatore la WebUI e la
+#: mascotte le leggerebbero come parole dell'utente.
 GOAL_CONTINUE_EVENT = "goal_continue"
 
 #: Ripresa dopo un output troncato dal tetto di token.

@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from jenny.agent.context import ContextBuilder
-from jenny.session.goal_state import GOAL_STATE_KEY
 from jenny.utils.android_assets import _RETIRED_TEMPLATE_DIGESTS, _USER_OWNED_TEMPLATES
 from jenny.utils.helpers import load_bundled_template, merge_message_content
 
@@ -969,46 +968,6 @@ class TestBuildMessages:
         assert "[Runtime Context" in user_msg
         assert "hello" in user_msg
 
-    def test_session_metadata_injects_active_goal_state(self, tmp_path):
-        builder = _builder(tmp_path)
-        meta = {
-            GOAL_STATE_KEY: {"status": "active", "objective": "Finish docs migration."},
-        }
-        messages = builder.build_messages(
-            [],
-            "hi",
-            channel="internal",
-            chat_id="x",
-            session_metadata=meta,
-        )
-        user_msg = str(messages[-1]["content"])
-        assert "Goal (active):" in user_msg
-        assert "Finish docs migration." in user_msg
-
-    def test_goal_state_does_not_leak_without_session_metadata(self, tmp_path):
-        builder = _builder(tmp_path)
-        other_session_meta = {
-            GOAL_STATE_KEY: {"status": "active", "objective": "Other chat goal."},
-        }
-
-        with_goal = builder.build_messages(
-            [],
-            "hi",
-            channel="websocket",
-            chat_id="chat-a",
-            session_metadata=other_session_meta,
-        )
-        without_goal = builder.build_messages(
-            [],
-            "hi",
-            channel="websocket",
-            chat_id="chat-b",
-            session_metadata={},
-        )
-
-        assert "Other chat goal." in str(with_goal[-1]["content"])
-        assert "Other chat goal." not in str(without_goal[-1]["content"])
-        assert "Goal (active):" not in str(without_goal[-1]["content"])
 
     def test_current_runtime_lines_are_injected(self, tmp_path):
         builder = _builder(tmp_path)

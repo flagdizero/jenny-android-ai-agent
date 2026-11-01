@@ -104,31 +104,6 @@ class TestTheMetadataOnlyReading:
         assert _resolve(metadata) is TurnVisibility.SILENT
 
 
-class TestInheritanceAcrossDerivedTurns:
-    """La visibilità deve sopravvivere ai turni che nascono da un altro turno."""
-
-    def test_a_goal_continuation_of_a_silent_turn_stays_silent(self) -> None:
-        """La continuation copia il dict metadata: se il marchio non passasse, la
-        seconda metà di un controllo silenzioso parlerebbe in chat.
-
-        (È il gemello del bug che il vecchio segnale ``_cron_monitor_spoke`` aveva
-        proprio qui: viaggiava in un dict che la continuation copiava.)
-        """
-        from jenny.session.turn_continuation import _internal_continuation_metadata
-
-        inherited = _internal_continuation_metadata(silent_turn_metadata({"webui": True}))
-
-        assert is_silent_turn(inherited) is True
-        assert resolve_turn_visibility(
-            inherited, channel="websocket", session_key=UNIFIED_SESSION_KEY
-        ) is TurnVisibility.SILENT
-
-    def test_a_continuation_of_a_visible_turn_stays_visible(self) -> None:
-        from jenny.session.turn_continuation import _internal_continuation_metadata
-
-        inherited = _internal_continuation_metadata({"webui": True})
-
-        assert is_silent_turn(inherited) is False
 
 
 class TestTheEnum:

@@ -117,8 +117,8 @@ class WebUITranscriptRecorder:
         # riga utente sta nello **stesso** turno del confine (i turni si spezzano
         # su `turn_end`, e un comando non ne apre uno), quindi non finisce sotto
         # il pavimento — e la chat appena azzerata si riapriva con un `/new`
-        # appeso in cima. Gli altri comandi restano: `/model fast` o
-        # `/goal <cosa>` sono decisioni, e rileggerle serve.
+        # appeso in cima. Gli altri comandi restano: `/model fast` e' una
+        # decisione, e rileggerla serve.
         if text.strip() in ("/stop", "/stop all", "/new") and not media_paths:
             return None
         payload = _build_user_transcript_event(

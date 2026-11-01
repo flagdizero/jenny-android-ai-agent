@@ -62,7 +62,7 @@ export const FAMILY_BY_TOOL = {
   install_update: 'out',
   // Esegue: fa girare qualcosa.
   python_exec: 'run', write_stdin: 'run',
-  // Delega: manda una mini-me. Solo i subagent: cron, long_task e message non
+  // Delega: manda una mini-me. Solo i subagent: cron e message non
   // mettono al lavoro nessuno, e qui dicevano «chiamo una mini-me» mentre Jenny
   // fissava un promemoria; cadono sul vocabolario generico.
   spawn: 'delegate', subagent_send: 'delegate', subagent_cancel: 'delegate',

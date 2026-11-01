@@ -27,7 +27,6 @@ from jenny.session.manager import Session
 from jenny.utils.runtime import (
     build_budget_exhausted_finalization_message,
     build_finalization_retry_message,
-    build_goal_continue_message,
     build_length_recovery_message,
 )
 
@@ -78,9 +77,9 @@ def test_an_unknown_injected_event_is_not_swallowed() -> None:
 
 
 def test_the_synthetic_builders_carry_their_marker() -> None:
-    assert build_goal_continue_message()[INJECTED_EVENT_META] == GOAL_CONTINUE_EVENT
-    assert build_goal_continue_message("spronalo")[INJECTED_EVENT_META] == GOAL_CONTINUE_EVENT
     assert build_length_recovery_message()[INJECTED_EVENT_META] == LENGTH_RECOVERY_EVENT
+
+
 
 
 def test_the_finalization_builders_stay_unmarked() -> None:
@@ -100,7 +99,7 @@ def test_the_marker_never_reaches_the_provider() -> None:
     È quel che rende lecito appendere il marcatore a un dict che è anche il
     payload della richiesta in corso — il turno lo persiste, l'API non lo vede.
     """
-    marked = build_goal_continue_message()
+    marked = build_length_recovery_message()
     sanitized = LLMProvider._sanitize_request_messages([marked], _ALLOWABLE_MSG_KEYS)
 
     assert sanitized == [{"role": "user", "content": marked["content"]}]

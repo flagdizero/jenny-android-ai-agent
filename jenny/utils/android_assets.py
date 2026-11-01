@@ -179,7 +179,6 @@ def template_digest(content: str) -> str:
 
 _SKILLS_MANIFEST = [
     "cron/SKILL.md",
-    "long-goal/SKILL.md",
     # llm-wiki
     "llm-wiki/SKILL.md",
     "llm-wiki/scripts/audit_review.py",

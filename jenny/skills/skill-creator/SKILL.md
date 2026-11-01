@@ -17,10 +17,6 @@ This skill provides guidance for creating effective skills.
 **When a user wants to create a new skill, ALWAYS follow the Guided Conversation Flow below.**
 Do NOT create skills directly. Do NOT skip the conversation phases.
 Only proceed to file creation AFTER the user has confirmed name and description in Phase 3.
-
-**This conversation is not a sustained goal: do not call `long_task` for it.** Every phase
-ends by asking the user something and waiting, which is the one thing a goal cannot do for
-you. Ask the question of the current phase and end the turn.
 </rule>
 
 ## Where a Skill's Code Lives, and How It Runs

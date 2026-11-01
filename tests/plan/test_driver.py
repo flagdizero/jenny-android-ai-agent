@@ -1,7 +1,7 @@
 """Il driver dei piani a lista, con un ospite finto: il ciclo intero senza il loop.
 
 L'ospite finto risponde alle domande che il driver fa all'agente (turno in volo,
-aiutanti, cancellazione, goal, cartella del quaderno, note); il bus finto
+aiutanti, cancellazione, cartella del quaderno, note); il bus finto
 raccoglie quel che il driver pubblica. Lo store e le foto sono veri, su un
 quaderno vero in una cartella temporanea: le foto sono il punto del piano, e
 fingerle vorrebbe dire provare un'altra cosa.
@@ -112,12 +112,8 @@ async def test_a_second_proposal_supersedes_the_first(driver: PlanDriver) -> Non
     assert [s.tag for s in second.steps] == [None, None, "new"]
 
 
-async def test_propose_refuses_outside_a_notebook_and_next_to_a_goal(
-    driver: PlanDriver, host: FakeHost
-) -> None:
+async def test_propose_refuses_outside_a_notebook(driver: PlanDriver) -> None:
     assert (await driver.propose("unified:default", "x", STEPS)).startswith("Error")
-    host.goals.add(KEY)
-    assert "sustained goal" in await propose(driver, "x", STEPS)
     assert driver.store.open_plan_for("piante") is None
 
 
@@ -661,27 +657,6 @@ async def test_a_running_plan_lifts_the_wall_timeout(driver: PlanDriver) -> None
     assert plan_wall_llm_timeout_s(KEY) is None
 
 
-async def test_long_task_refuses_next_to_an_open_plan(driver: PlanDriver, tmp_path: Path) -> None:
-    from jenny.agent.tools.context import (
-        RequestContext,
-        bind_request_context,
-        reset_request_context,
-    )
-    from jenny.agent.tools.long_task import LongTaskTool
-    from jenny.session.manager import SessionManager
-    from jenny.session.plan_probe import set_plan_probe
-
-    tool = LongTaskTool(SessionManager(tmp_path / "ws2"))
-    tool.set_context(RequestContext(channel="websocket", chat_id=KEY, session_key=KEY))
-    token = bind_request_context(RequestContext(channel="websocket", chat_id=KEY, session_key=KEY))
-    set_plan_probe(driver)
-    try:
-        await _propose(driver)
-        text = await tool.execute(goal="Rifai tutto")
-        assert text.startswith("Error: this notebook has an open plan")
-    finally:
-        set_plan_probe(None)
-        reset_request_context(token)
 
 
 async def test_notebook_rename_and_delete_follow_the_index(driver: PlanDriver) -> None:

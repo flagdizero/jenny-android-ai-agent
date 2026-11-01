@@ -123,11 +123,6 @@ AFTER the user has confirmed name and actions in Phase 3 — unless the request 
 the flow: what the app shows, where the data comes from (or that it is kept locally) and how
 often it reads. Then say the plan in one line and build it, without asking for confirmation.
 Never write real secrets into app.json or index.html, and never declare `server.auth` at all (see Secrets below).
-
-**This conversation is not a sustained goal: do not call `long_task` for it.** Each phase
-ends by asking the user something and waiting, which is the one thing a goal cannot do for
-you — registering one only makes the runtime prod you to keep going while you have nothing to
-go on. Ask the question of the current phase and end the turn.
 </rule>
 
 ## Guided Conversation Flow

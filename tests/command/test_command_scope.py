@@ -46,7 +46,7 @@ def _spec(command: str):
 # ── La regola ───────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("command", ["/new", "/stop", "/status", "/history", "/goal", "/help"])
+@pytest.mark.parametrize("command", ["/new", "/stop", "/status", "/history", "/help"])
 def test_a_command_about_this_conversation_works_in_both(command: str) -> None:
     assert available(_spec(command), UNIFIED_SESSION_KEY)
     assert available(_spec(command), _PROJECT)

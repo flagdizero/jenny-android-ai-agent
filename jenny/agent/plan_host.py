@@ -17,7 +17,6 @@ from loguru import logger
 
 from jenny.bus.events import InboundMessage
 from jenny.plan.driver import PLAN_NOTES_META
-from jenny.session.goal_state import sustained_goal_active
 from jenny.session.keys import project_session_key
 
 if TYPE_CHECKING:
@@ -183,9 +182,6 @@ class LoopPlanHost:
             except Exception:  # noqa: BLE001 — il piano si ferma comunque
                 logger.opt(exception=True).warning("Plan stop: turn end not emitted")
         return total
-
-    def goal_active(self, session_key: str) -> bool:
-        return sustained_goal_active(self._loop.sessions.get_or_create(session_key).metadata)
 
     def notebook_root(self, notebook: str) -> Path | None:
         try:

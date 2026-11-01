@@ -279,8 +279,8 @@ def diary_turn(entries: Sequence[Mapping[str, Any]], session_key: str | None,
 
     *entries* sono le voci di ``history.jsonl``; *history* la cronologia che il
     turno sta per mandare, da cui si capisce quali righe nuove sono già partite
-    (stesso controllo di ``_goal_lines_once``: niente cursore da tenere in pari,
-    e una riga uscita dalla finestra torna da sé). ``None`` se la sessione non
+    (niente cursore da tenere in pari, e una riga uscita dalla finestra torna da
+    sé). ``None`` se la sessione non
     vede il diario.
 
     Fino al 31/10/2026 c'era anche «in sospeso»: le attese dei quaderni scattate

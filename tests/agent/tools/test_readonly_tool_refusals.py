@@ -31,7 +31,6 @@ import pytest
 from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.tools.download import DownloadFileTool
-from jenny.agent.tools.long_task import CompleteGoalTool, LongTaskTool
 from jenny.apps.manifest import AppAction
 from jenny.apps.storage import StorageError, execute_storage_action
 from jenny.security.workspace_access import (
@@ -39,8 +38,6 @@ from jenny.security.workspace_access import (
     build_workspace_scope,
     enter_workspace_scope,
 )
-from jenny.session.goal_state import GOAL_STATE_KEY
-from jenny.session.manager import SessionManager
 
 _MARK = "read-only"
 
@@ -151,95 +148,6 @@ async def test_cron_is_closed_in_the_personal_chat_too(readonly: Path, params: d
     result = await tool.execute(**params)
     assert _MARK in result
     assert service.added == []
-
-
-# ── il goal sostenuto: la stessa famiglia di un job ──────────────────────
-#
-# Passo **T4.6**. ``long_task`` non scrive un file: scrive
-# ``metadata[goal_state]`` e salva la sessione. Il cancello di percorso non lo
-# vede, quindi deve chiedere da se' — come ``cron``, e per la stessa ragione: lo
-# stato sopravvive al turno, alla conversazione e al riavvio, e cambia il
-# comportamento futuro (wall timeout LLM, chip del goal, iniezione «keep
-# working»).
-#
-# Rifiuto e non assenza dal registry: il registry dell'agente principale si
-# costruisce **una volta** (``AgentLoop._register_default_tools``) e la sola
-# lettura e' un flag **per messaggio**, quindi «assente in sola lettura» non e'
-# una lista diversa ma un filtro per turno che non esiste. Anche ``CronTool``,
-# che l'audit citava come esempio della forma forte, in realta' si rifiuta
-# dentro ``execute``.
-
-
-def _goal_tools(sessions: SessionManager) -> tuple[LongTaskTool, CompleteGoalTool]:
-    lt, cg = LongTaskTool(sessions=sessions), CompleteGoalTool(sessions=sessions)
-    rc = RequestContext(channel="websocket", chat_id="default", session_key="unified:default")
-    lt.set_context(rc)
-    cg.set_context(rc)
-    return lt, cg
-
-
-async def test_no_sustained_goal_is_born_in_a_read_only_turn(readonly: Path) -> None:
-    """Il difetto: nessun controllo, e lo stato sopravviveva al riavvio."""
-    sessions = SessionManager(readonly)
-    lt, _cg = _goal_tools(sessions)
-
-    result = await lt.execute(goal="Track the whole migration", ui_summary="migration")
-
-    assert _MARK in result
-    assert GOAL_STATE_KEY not in sessions.get_or_create("unified:default").metadata
-
-
-async def test_the_refusal_comes_before_the_advice_to_shorten(readonly: Path) -> None:
-    """Ordine dei controlli: un «accorcia e richiama» qui e' un giro a vuoto.
-
-    In sola lettura *nessuna* chiamata puo' andare a buon fine, quindi il tetto
-    di lunghezza non deve parlare per primo: manderebbe il modello a riscrivere
-    l'obiettivo per poi trovarsi rifiutato uguale.
-    """
-    lt, _cg = _goal_tools(SessionManager(readonly))
-    result = await lt.execute(goal="x" * 20_000)
-    assert _MARK in result
-    assert "characters" not in result
-
-
-async def test_with_writing_on_the_goal_is_recorded(writable: Path) -> None:
-    """Il cancello non deve toccare il caso normale."""
-    sessions = SessionManager(writable)
-    lt, _cg = _goal_tools(sessions)
-
-    assert "Goal recorded" in await lt.execute(goal="Track the whole migration")
-    blob = sessions.get_or_create("unified:default").metadata[GOAL_STATE_KEY]
-    assert blob["status"] == "active"
-
-
-async def test_closing_a_goal_stays_open_in_read_only(readonly: Path) -> None:
-    """Decisione, non dimenticanza: si chiude la creazione, non la chiusura.
-
-    ``complete_goal`` non puo' creare nessuna obbligazione — riscrive un blob
-    che esiste gia', e la sola transizione possibile e' ``active -> completed``.
-    Chiuderlo lascerebbe senza uscita il turno in sola lettura che ha davvero
-    soddisfatto un obiettivo di sola lettura («scopri X e dimmelo»): l'iniezione
-    «keep working» (v. ``_goal_continue`` in ``loop.py``) tornerebbe a spronarlo
-    a ogni turno successivo verso qualcosa di gia' fatto.
-    """
-    sessions = SessionManager(readonly)
-    lt, cg = _goal_tools(sessions)
-    # Il goal nasce con la scrittura accesa, cioe' fuori dallo scope legato.
-    sessions.get_or_create("unified:default").metadata[GOAL_STATE_KEY] = {
-        "status": "active",
-        "objective": "Find out X and tell me",
-        "ui_summary": "",
-        "started_at": "2026-08-23T09:00:00",
-    }
-
-    result = await cg.execute(recap="Found X, reported in chat.")
-
-    assert "marked complete" in result
-    assert sessions.get_or_create("unified:default").metadata[GOAL_STATE_KEY]["status"] == (
-        "completed"
-    )
-    # ...e resta l'unica direzione possibile: rinascere, no.
-    assert _MARK in await lt.execute(goal="And now track Y")
 
 
 # ── il rifiuto, come frase ───────────────────────────────────────────────
