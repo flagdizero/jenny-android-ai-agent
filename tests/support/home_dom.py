@@ -238,6 +238,33 @@ globalThis.clearTimeout = function (id) {
 };
 
 export const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+
+/* Aspetta che `pred()` sia vero, ricontrollando a ogni macrotask; oltre
+   `timeout` ms fallisce, sempre (come `support.aio.wait_until`). Da usare al
+   posto di `await tick(n)` quando dopo viene un assert su un effetto: sotto
+   carico (`-n auto`) i 10 ms di un tick passano prima che la pagina abbia
+   finito, e la prova diventa rossa a caso. Un `pred` che lancia conta come
+   «non ancora»: alla scadenza si rilancia il suo ultimo errore, cosi' dentro
+   ci puo' stare un `assert` col suo messaggio. Orologio e timer sono quelli
+   veri, presi qui: alcune prove li fingono. */
+const realNow = performance.now.bind(performance);
+export async function until(pred, { timeout = 5000, msg } = {}) {
+  const deadline = realNow() + timeout;
+  for (;;) {
+    let last;
+    try {
+      const v = await pred();
+      if (v) return v;
+    } catch (e) {
+      last = e;
+    }
+    if (realNow() >= deadline) {
+      if (last) throw last;
+      throw new Error(msg || `until: condizione non raggiunta in ${timeout} ms: ${pred}`);
+    }
+    await new Promise((r) => realSetTimeout(r, 0));
+  }
+}
 export const $ = (id) => document.getElementById(id);
 /* I testi degli avvisi a schermo (`showToast`). */
 export const toasts = () => [...document.querySelectorAll('.mobile-toast')].map((t) => t.textContent);
@@ -256,6 +283,11 @@ export function thread() {
 
 export async function boot() {
   await import(UI + '/assets/home-app.js');
+  /* La casa si apre col socket aperto: prima, `_send` rifiuta il messaggio e
+     lo lascia nel campo (`sendToChat` torna falso). Sotto carico i 50 ms
+     sotto non bastavano, e una prova che mandava subito non mandava niente. */
+  await until(() => FakeWS.last?.readyState === FakeWS.OPEN,
+    { msg: 'boot: il socket della casa non si e’ aperto' });
   await tick(50);
   return w.mobileApp;
 }

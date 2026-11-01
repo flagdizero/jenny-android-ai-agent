@@ -64,7 +64,7 @@ CARD = {
 
 _SETUP = """
 import assert from 'node:assert/strict';
-import { boot, tick, routes, sent, rpcAnswers, hooks, $ } from './boot.mjs';
+import { boot, tick, until, routes, sent, rpcAnswers, hooks, $ } from './boot.mjs';
 routes['/api/board'] = __BOARD__;
 routes['/api/board/card'] = __CARD__;
 routes['/api/page'] = { wiki: 'orto', page: 'travaso-acero.md', title: 'travaso acero',
@@ -2261,16 +2261,16 @@ def test_an_opened_photo_goes_full_screen_whole_and_back_closes_it_first() -> No
       let revoked = 0;
       URL.revokeObjectURL = () => { revoked += 1; };
       document.querySelector('.home-photos .home-notes-all').click();
-      await tick(20);
-      sheetBody().querySelectorAll('.home-photos-tile')[1].click();
-      await tick(20);
-      const shot = sheetBody().querySelector('button.home-photos-pol-img');
+      (await until(() => sheetBody().querySelectorAll('.home-photos-tile')[1])).click();
+      const shot = await until(() => sheetBody().querySelector('button.home-photos-pol-img'));
       assert.equal(shot.getAttribute('aria-label'), 'See the whole photo, full screen');
       shot.click();
-      await tick(20);
       // Un dialog nel top layer, sopra il foglio, con la foto intera.
-      const box = document.querySelector('dialog.home-photo-viewer');
-      assert.ok(box && box.open, 'la foto a tutto schermo e\u2019 un dialog aperto');
+      const box = await until(() => {
+        const b = document.querySelector('dialog.home-photo-viewer');
+        return b?.open && b;
+      },
+        { msg: 'la foto a tutto schermo e\u2019 un dialog aperto' });
       assert.ok(box.classList.contains('image-lightbox'), 'per la catena di Indietro');
       assert.equal(box.querySelector('.home-photo-viewer-count').textContent, 'Acero · 2 of 5');
       assert.equal(box.querySelector('.home-photo-viewer-note').textContent, 'Foto numero 1');
@@ -2290,18 +2290,16 @@ def test_an_opened_photo_goes_full_screen_whole_and_back_closes_it_first() -> No
       touch('touchmove', 250);
       touch('touchmove', 150);
       touch('touchend', 120);
-      await tick(10);
-      assert.equal(box.querySelector('.home-photo-viewer-count').textContent, 'Acero · 3 of 5');
-      assert.equal(sheetBody().querySelector('.home-photos-pager-at').textContent, '3 of 5');
+      await until(() => box.querySelector('.home-photo-viewer-count').textContent === 'Acero · 3 of 5'
+        && sheetBody().querySelector('.home-photos-pager-at').textContent === '3 of 5',
+        { msg: 'lo scorrimento non ha portato alla foto dopo' });
       // Indietro chiude prima la foto, e il foglio resta.
       app.handleHardwareBack();
-      await tick(10);
-      assert.equal(document.querySelector('.image-lightbox'), null);
+      await until(() => document.querySelector('.image-lightbox') === null);
       assert.ok($('home-board-sheet').open, 'il foglio e\u2019 ancora aperto');
       assert.equal(revoked, 0, 'i blob: della galleria non si revocano');
       app.handleHardwareBack();
-      await tick(10);
-      assert.ok(!$('home-board-sheet').open);
+      await until(() => !$('home-board-sheet').open);
     """)
 
 
