@@ -15,7 +15,6 @@ from jenny.session.history_meta import (
     COMPACTED_META,
     REASONING_DROPPED_META,
     SENT_CONTENT_META,
-    is_synthetic_history_row,
 )
 from jenny.utils.helpers import (
     channel_delivery_aware_user_start,
@@ -392,47 +391,6 @@ class Session:
             len(archive_chunk),
             len(self.messages),
         )
-
-
-def last_user_message_ms(session: Session | None) -> int | None:
-    """Epoch ms dell'ultima riga scritta **dall'utente**. ``None`` se non ce n'è.
-
-    Serve a rispondere a "l'utente si è fatto vivo dopo che gli abbiamo parlato?"
-    (v. ``jenny/cron/heartbeat_tasks.py::rearm_after_user_message``), e le tre
-    scelte che la rendono affidabile sono tutte scelte su cosa NON contare:
-
-    - **non** ``session.updated_at``: si muove anche quando è Jenny a scrivere,
-      compreso il momento in cui scrive l'avviso stesso che si sta cercando di
-      ricordare (``loop.py``, ``record_channel_delivery``). Serve una riga
-      ``role == "user"``, non l'ultima attività della sessione.
-    - **non** le righe che l'utente non ha scritto pur portandone il ruolo. Un
-      job ``reminder`` si persiste nella storia esattamente come un messaggio
-      dell'utente — stessa riga, stesso ruolo (``cron_history_overrides``) — e
-      contarlo vorrebbe dire che un promemoria delle 09:00 "risponde" ogni
-      mattina al posto di chi dorme. Lo stesso vale per il rientro di un
-      subagent e per lo sprone a un sustained goal: l'elenco completo, e il
-      perché, stanno in ``jenny.session.history_meta``.
-    - **non** ``timestamp`` presi per buoni: la riga potrebbe non averlo, o
-      averlo illeggibile. Si scorre indietro fino alla prima utilizzabile, che
-      è la direzione sicura — un timbro più vecchio riarma di meno, mai di più.
-
-    Il timbro è una ISO **naive in ora locale** (v. ``Session.add_message``):
-    ``fromisoformat`` + ``timestamp()`` lo interpretano nello stesso fuso in cui
-    è stato scritto, che è l'unica lettura corretta di una stringa senza offset.
-    """
-    if session is None:
-        return None
-    for message in reversed(session.messages):
-        if message.get("role") != "user" or is_synthetic_history_row(message):
-            continue
-        raw = message.get("timestamp")
-        if not isinstance(raw, str):
-            continue
-        try:
-            return int(datetime.fromisoformat(raw).timestamp() * 1000)
-        except (ValueError, OSError, OverflowError):
-            continue
-    return None
 
 
 @dataclass

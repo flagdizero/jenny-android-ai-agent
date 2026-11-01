@@ -14,9 +14,8 @@ morta per la vita del processo.
 | Dream | ``dream:<timestamp>`` | ogni 2 h (``DreamConfig.interval_h``) |
 | giardiniere | ``gardener:<progetto>-<timestamp>`` | fino a una per progetto ogni 6 h |
 | cron | ``cron:<job_id>`` | **una sola, stabile** |
-| heartbeat | ``heartbeat`` | **una sola, nuda** |
 
-Le ultime due righe sono la correzione: le loro chiavi non portano timestamp, quindi
+L'ultima riga è la correzione: le sue chiavi non portano timestamp, quindi
 il loro spazio è finito per costruzione e non entrano in questo discorso.
 
 **Due rimedi, e non uno**, perché la potatura sgombera le chiavi *potate*:

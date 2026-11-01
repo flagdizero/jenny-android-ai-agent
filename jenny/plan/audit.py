@@ -313,7 +313,7 @@ def summary_line(audit: Audit) -> str:
     labels = _labels()
     counts = audit.counts()
     head = (f"Machine check: {audit.pages} pages, {audit.cards} cards, "
-            f"{audit.open_reminders} open reminders")
+            f"{audit.open_reminders} reminders")
     if counts:
         head += "; to repair: " + ", ".join(f"{labels.get(k, k)} {n}"
                                            for k, n in sorted(counts.items()))

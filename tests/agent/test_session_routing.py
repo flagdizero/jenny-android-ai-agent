@@ -3,7 +3,7 @@
 Covers:
 - AgentLoop._dispatch() rewrites every session_key to "unified:default"
 - Existing session_key_override is respected (not overwritten) — the contract
-  internal keys (dream:/cron:/heartbeat) rely on
+  internal keys (dream:/cron:) rely on
 - /new command correctly clears the shared session
 - /new is NOT a priority command (goes through _dispatch, key rewrite applies)
 - Context window consolidation is unaffected by the key rewrite

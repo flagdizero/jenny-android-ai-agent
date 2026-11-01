@@ -82,7 +82,6 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         # Notifiche di sistema: il tipo nel titolo, e il corpo di ripiego.
         "notify.reminder": "⏰ Reminder",
-        "notify.monitor": "Monitoring",
         "notify.update": "Update",
         "notify.new_message": "New message",
         # Allarmi di sistema: dicono dove guardare nell'interfaccia.
@@ -442,7 +441,6 @@ _TEXT: dict[str, dict[str, str]] = {
             "immagini."
         ),
         "notify.reminder": "⏰ Promemoria",
-        "notify.monitor": "Monitoraggio",
         "notify.update": "Aggiornamento",
         "notify.new_message": "Nuovo messaggio",
         "alarm.gardener_label": "Giardiniere · {name}",

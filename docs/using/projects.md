@@ -31,7 +31,6 @@ Once the notebook has a [board](./board.md), its files sit beside the rest (`raw
 ```text
   board/
     board.json           the board: skeleton, cards and positions, your sections, threads, proposals
-    reminders.json       the notebook's reminders
     cards/<id>.json      each drawer's summary, written from the wiki and regenerable
   raw/
     photos/              photos added to drawers

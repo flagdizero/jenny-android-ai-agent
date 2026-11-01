@@ -23,7 +23,6 @@ from jenny.cron.could_not_check import ESCALATE_AFTER_FAILURES
 from jenny.cron.service import CronService
 from jenny.cron.silence_watchdog import (
     WATCHDOG_AFTER_FAILURES,
-    WATCHDOG_QUIET_MS,
     alert_silently_broken_checks,
     silently_broken_checks,
 )
@@ -31,7 +30,6 @@ from jenny.cron.types import (
     CronJobState,
     CronMonitorCouldNotCheckError,
     CronSchedule,
-    CronTaskCheckState,
 )
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
@@ -70,101 +68,6 @@ class TestTheThresholdIsAboveTheModelsOwn:
         assert silently_broken_checks(state, now_ms=_NOW) == [("", WATCHDOG_AFTER_FAILURES)]
 
 
-class TestAStampDoesNotBuySilenceForever:
-    """``escalated`` dice che l'avviso è uscito una volta, non che sia bastato."""
-
-    def _entry(self, *, escalated_at_ms: int | None) -> CronJobState:
-        return CronJobState(
-            task_checks={
-                "abc": CronTaskCheckState(
-                    consecutive_could_not_check=WATCHDOG_AFTER_FAILURES,
-                    escalated=True,
-                    escalated_at_ms=escalated_at_ms,
-                    label="RainCheck: pioggia nelle città",
-                )
-            }
-        )
-
-    def test_inside_the_quiet_window_nothing_is_repeated(self) -> None:
-        state = self._entry(escalated_at_ms=_NOW - WATCHDOG_QUIET_MS + 1)
-
-        assert silently_broken_checks(state, now_ms=_NOW) == []
-
-    def test_a_check_still_dead_a_day_later_is_news_again(self) -> None:
-        state = self._entry(escalated_at_ms=_NOW - WATCHDOG_QUIET_MS)
-
-        assert silently_broken_checks(state, now_ms=_NOW) == [
-            ("RainCheck: pioggia nelle città", WATCHDOG_AFTER_FAILURES)
-        ]
-
-    def test_a_stamp_without_a_date_does_not_buy_anything(self) -> None:
-        """Voce scritta prima che ``escalated_at_ms`` esistesse.
-
-        ``rearm_after_user_message`` la considera apposta non riarmabile, per non
-        avvisare di un guasto vecchio di ore nel momento in cui l'aggiornamento
-        atterra. Qui la scelta è l'opposta e non è una contraddizione: un
-        controllo morto da sei run con un timbro di data ignota è esattamente il
-        silenzio che questo modulo esiste per rompere.
-        """
-        state = self._entry(escalated_at_ms=None)
-
-        assert silently_broken_checks(state, now_ms=_NOW) != []
-
-
-class TestOneAlarmPerFailureNotTwo:
-    def test_the_per_task_map_wins_over_the_job_summary(self) -> None:
-        """I contatori del job sono il riassunto della stessa cosa.
-
-        Un heartbeat con un task rotto ha ENTRAMBE le letture sopra soglia:
-        sommarle darebbe due allarmi per un guasto, e il secondo non saprebbe
-        nemmeno dire di quale task parla.
-        """
-        state = CronJobState(
-            consecutive_could_not_check=WATCHDOG_AFTER_FAILURES,
-            task_checks={
-                "abc": CronTaskCheckState(
-                    consecutive_could_not_check=WATCHDOG_AFTER_FAILURES, label="pioggia"
-                )
-            },
-        )
-
-        assert silently_broken_checks(state, now_ms=_NOW) == [("pioggia", WATCHDOG_AFTER_FAILURES)]
-
-    def test_a_healthy_task_next_to_a_broken_one_is_not_named(self) -> None:
-        state = CronJobState(
-            task_checks={
-                "dead": CronTaskCheckState(
-                    consecutive_could_not_check=WATCHDOG_AFTER_FAILURES, label="pioggia"
-                ),
-                "young": CronTaskCheckState(consecutive_could_not_check=1, label="backup"),
-            }
-        )
-
-        assert silently_broken_checks(state, now_ms=_NOW) == [("pioggia", WATCHDOG_AFTER_FAILURES)]
-
-    def test_several_dead_checks_produce_one_alarm_that_counts_them(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        sent = _spy(monkeypatch)
-        state = CronJobState(
-            task_checks={
-                "a": CronTaskCheckState(
-                    consecutive_could_not_check=WATCHDOG_AFTER_FAILURES, label="pioggia"
-                ),
-                "b": CronTaskCheckState(
-                    consecutive_could_not_check=WATCHDOG_AFTER_FAILURES + 3, label="backup"
-                ),
-            }
-        )
-
-        alert_silently_broken_checks("heartbeat", state, now_ms=_NOW)
-
-        assert len(sent) == 1
-        content, _metadata = sent[0]
-        assert "2 checks" in content
-        assert str(WATCHDOG_AFTER_FAILURES + 3) in content
-
-
 class TestTheAlertItself:
     def test_it_names_the_check_and_where_to_look(
         self, monkeypatch: pytest.MonkeyPatch
@@ -178,16 +81,9 @@ class TestTheAlertItself:
         digitare (dalla tendina delle notifiche non si digita niente).
         """
         sent = _spy(monkeypatch)
-        state = CronJobState(
-            task_checks={
-                "abc": CronTaskCheckState(
-                    consecutive_could_not_check=WATCHDOG_AFTER_FAILURES,
-                    label="RainCheck: pioggia nelle città",
-                )
-            }
-        )
+        state = CronJobState(consecutive_could_not_check=WATCHDOG_AFTER_FAILURES)
 
-        alert_silently_broken_checks("heartbeat", state, now_ms=_NOW)
+        alert_silently_broken_checks("RainCheck: pioggia nelle città", state, now_ms=_NOW)
 
         content, _metadata = sent[0]
         assert "RainCheck: pioggia nelle città" in content
@@ -225,11 +121,7 @@ class TestTheAlertItself:
 
 
 class TestTheServiceCallsIt:
-    """Un solo punto di aggancio, e copre monitor e heartbeat insieme.
-
-    ``CronService._execute_job`` è l'unico posto che vede sia i contatori del job
-    appena incrementati sia la mappa per-task che il dispatcher ha già riscritto.
-    """
+    """Un solo punto di aggancio: ``CronService._execute_job``, coi contatori appena aggiornati."""
 
     @staticmethod
     def _service(tmp_path: Path, *, escalated: bool = False) -> tuple[CronService, str]:
@@ -307,3 +199,29 @@ class TestTheServiceCallsIt:
         await service.run_job(job_id)
 
         assert len(sent) == 1
+
+
+class TestAWarnedMonitorIsLeftAlone:
+    """Il 01/11/2026, su jenny_s22: un monitor con il file sparito ha avvisato in
+    chat al terzo giro (CHECK_WARNED) e, dal sesto, la sentinella ha aggiunto a
+    ogni giro «non ha completato il controllo da 6 giri»: un secondo avviso per
+    lo stesso guasto, a chi lo sapeva già. L'avviso ora ha la sua ora, e la
+    sentinella aspetta 24 ore come per ogni altro avviso datato."""
+
+    def test_a_dated_warning_keeps_the_watchdog_quiet_for_a_day(self) -> None:
+        from jenny.cron.silence_watchdog import WATCHDOG_QUIET_MS
+
+        state = CronJobState(
+            consecutive_could_not_check=WATCHDOG_AFTER_FAILURES,
+            could_not_check_escalated=True,
+            could_not_check_escalated_at_ms=_NOW - 60_000,
+        )
+        assert silently_broken_checks(state, now_ms=_NOW) == []
+        later = _NOW - 60_000 + WATCHDOG_QUIET_MS
+        assert silently_broken_checks(state, now_ms=later) == [("", WATCHDOG_AFTER_FAILURES)]
+
+    def test_an_undated_warning_still_counts_as_unknown(self) -> None:
+        state = CronJobState(
+            consecutive_could_not_check=WATCHDOG_AFTER_FAILURES, could_not_check_escalated=True
+        )
+        assert silently_broken_checks(state, now_ms=_NOW) == [("", WATCHDOG_AFTER_FAILURES)]

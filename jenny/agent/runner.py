@@ -531,7 +531,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         Lo scope sta **qui** e non sui singoli ``provider.chat*`` perché questo è
         il punto d'ingresso unico del turno: ci passano le quattro chiamate di
         ``request_execution`` e tutto ciò che il turno innesca. Ne segue che
-        cron, Dream e heartbeat — che arrivano di qui con il loro
+        cron e Dream — che arrivano di qui con il loro
         ``session_key_override`` — ottengono da soli un ID stabile e distinto,
         che è esattamente ciò che OpenCode chiede. Un subagent costruisce un
         ``AgentRunner`` proprio e apre quindi il suo, senza ereditare questo.

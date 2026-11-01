@@ -2328,7 +2328,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         /** Apre la richiesta di esenzione batteria: senza, il doze differisce
-         *  cron, promemoria e heartbeat e rallenta il long-poll Telegram. */
+         *  cron e promemoria e rallenta il long-poll Telegram. */
         fun requestBatteryExemption() {
             runOnUiThread {
                 try {

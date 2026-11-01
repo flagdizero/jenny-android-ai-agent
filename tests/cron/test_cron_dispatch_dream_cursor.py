@@ -110,7 +110,6 @@ def _dispatch(
         get_agent=lambda: _FakeAgent(tmp_path, memory, stop_reason),
         config=Config(),
         cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
     )
     return memory, dispatcher
 

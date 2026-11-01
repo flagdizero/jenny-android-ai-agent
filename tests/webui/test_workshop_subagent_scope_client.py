@@ -3,7 +3,7 @@
 Lo alimentavano due strade che non si accordavano: il frame ``subagent_status``,
 già filtrato sulla sessione che ha lanciato i subagent, e un poll ogni 5 s su
 ``GET /api/subagents`` **senza** ``session_key`` — cioè i subagent di tutte le
-sessioni, heartbeat, Dream, giardiniere e gli altri quaderni compresi. Il pannello
+sessioni, cron, Dream, giardiniere e gli altri quaderni compresi. Il pannello
 oscillava fra le due viste, e un subagent estraneo che finiva lasciava il suo
 blocco «cosa ha fatto davvero» nella chat aperta, dentro una bolla vuota creata
 apposta (il ripiego di ``_appendSubagentDigest``).

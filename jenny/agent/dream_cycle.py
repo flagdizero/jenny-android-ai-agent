@@ -356,7 +356,7 @@ def _alert_stuck(stuck: int) -> None:
     ``notify_delivery`` è la stessa primitiva con cui il canale WS posta gli
     alert di consegna: fire-and-forget, zero token, e no-op fuori da Android o
     senza event loop — quindi anche nei test. Non è il tool ``message``
-    dell'escalation dell'heartbeat, di proposito: quello costa un turno LLM e
+    dell'escalation dei monitor, di proposito: quello costa un turno LLM e
     dipende dal modello che sceglie di chiamarlo, e il modello è esattamente la
     parte che in questo scenario non sta funzionando.
 

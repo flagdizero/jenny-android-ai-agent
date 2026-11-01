@@ -817,7 +817,7 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
 
     # I template si dividono per proprietario, e ogni metà ha la sua politica.
     #
-    # Quelli dell'utente (AGENTS.md, SOUL.md, USER.md, HEARTBEAT.md, MEMORY.md)
+    # Quelli dell'utente (AGENTS.md, SOUL.md, USER.md, MEMORY.md)
     # si creano una volta e non si toccano più: SOUL e USER li riscrive Dream,
     # gli altri l'utente, e la copia del pacchetto è solo un punto di partenza.
     #

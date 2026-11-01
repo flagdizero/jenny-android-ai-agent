@@ -14,27 +14,29 @@ vincere contro l'insieme infinito dei modi di dire niente. Qui l'astensione
 diventa una cosa che il modello **fa**.
 
 Come si innesta senza toccare nessun lettore a valle. Il turno registra le
-dichiarazioni in un dict per-turno; ``AgentLoop`` le trascrive in righe
-``CHECK_OK <n>`` accodate al solo ``TurnOutcome.final_text`` — mai a
+dichiarazioni in un dict per-turno; ``AgentLoop`` le trascrive in una riga di
+marcatore accodata al solo ``TurnOutcome.final_text`` — mai a
 ``ctx.final_content``, quindi la history della sessione resta pulita. Da lì in
-poi ``parse_ok_marks`` e ``record_followup_outcomes`` leggono ciò che leggevano
-prima, e non cambia un byte in tutto il pipeline dei marcatori.
+poi i parser di ``cron/could_not_check.py`` leggono ciò che leggevano prima.
 
-**Solo con un numero esplicito**, e non è pedanteria. ``CHECK_OK`` non dice
-"non ho niente da dire", dice "il controllo ha prodotto la sua risposta"
-(v. ``heartbeat_tasks.followup_block``). Un marcatore anonimo viene attribuito
-al task in sospeso quando ce n'è uno solo (``attribute_marks``, parametro
-``default``), e ``record_followup_outcomes`` su un verdetto positivo fa
-``del state.task_checks[task.id]`` — che cancella la sequenza dei guasti, il
-loro inizio **e** ``escalated``. Sintetizzare un ``CHECK_OK`` nudo su ogni
-astensione vorrebbe dire chiudere come sano un controllo delegato di cui questo
-turno non ha detto niente: l'unico errore che, dice ``followup_block``, niente a
-valle può più intercettare. Vorrebbe anche dire rendere codice morto il ramo "il
-verdetto non è arrivato affatto" di ``resolve_pending_delegations``, che
-``escalated`` lo conserva di proposito — e da lì l'utente riavvisato dello
-stesso guasto ogni ciclo, cioè il bug che ``CHECK_WARNED`` esiste per uccidere.
-Con la regola "solo numerato" un'astensione nuda lascia lo stato esattamente
-com'era: nessuna regressione possibile.
+**L'esito è un argomento obbligatorio** (``checked``), dal 01/11/2026. Prima il
+tool diceva solo «niente da dire», e un controllo *non eseguito* doveva
+ricordarsi di scrivere a parte una riga ``CHECK_FAILED`` nel testo. La domanda
+ora arriva nel momento in cui il modello chiude il turno: ``checked=false`` con
+il motivo diventa ``CHECK_FAILED: <motivo>``, ``checked=true`` diventa
+``CHECK_OK``. Un controllo il cui testo dice cosa vuol dire una cosa mancante
+(«se il file non c'è, non dirmi niente») ha previsto quell'esito: vale il testo,
+per decisione dell'utente — è lo stesso caso di «avvisami quando torna su».
+
+``CHECK_OK`` nudo, e non è più un rischio. Su un monitor in attesa di verdetto
+azzera la sequenza dei guasti e il ricordo di aver avvisato (v.
+``cron/monitor_followup.py``): finché il tool voleva dire solo «non parlo», un
+``CHECK_OK`` sintetizzato da ogni astensione avrebbe chiuso come sano un
+controllo di cui il turno non aveva detto niente. Ora il modello lo **afferma**
+(«ho fatto ogni passo»). Il turno che delega non chiama questo tool (scrive
+``CHECK_DELEGATED``), e se lo facesse ``bound_runner`` legge la delega prima.
+Il numero di controllo che il tool accettava (``task``) serviva all'heartbeat,
+che ne aveva tanti in un turno: non c'è più.
 """
 
 from __future__ import annotations
@@ -46,8 +48,8 @@ from loguru import logger
 
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import ContextAware, RequestContext
-from jenny.agent.tools.schema import IntegerSchema, tool_parameters_schema
-from jenny.cron.could_not_check import OK_MARKER
+from jenny.agent.tools.schema import BooleanSchema, StringSchema, tool_parameters_schema
+from jenny.cron.could_not_check import COULD_NOT_CHECK_MARKER, OK_MARKER
 from jenny.session.turn_visibility import is_silent_turn
 
 # Sentinella condivisa, mai mutata. Stesso idioma — e stessa trappola — di
@@ -58,23 +60,28 @@ from jenny.session.turn_visibility import is_silent_turn
 # esso ``start_turn()``, pur arrivando poi a ``TurnOutcome.of``.
 _NO_TURN_STATE: dict[str, Any] = {}
 
-# Tetto difensivo sulle dichiarazioni numerate di un turno: un modello in loop
-# non deve poter far crescere ``final_text`` senza limite. Dodici è oltre
-# qualunque elenco di task plausibile.
-_MAX_DECLARATIONS = 12
+# Il motivo di un controllo non eseguito finisce in ``last_error`` e nell'officina:
+# una riga, non un paragrafo.
+_REASON_MAX = 200
 
 
 @tool_parameters(
     tool_parameters_schema(
-        task=IntegerSchema(
+        checked=BooleanSchema(
             description=(
-                "The number of the check this covers, as listed in this run's prompt. "
-                "Omit it when the run listed no numbers."
+                "true: you did every step the check asks for, and nothing is worth telling "
+                "the user. false: something stopped you — a missing file, a tool you do not "
+                "have, a host you cannot reach, a value you could not compute. When the "
+                "check's own text says what a missing thing means, it is an outcome it "
+                "foresaw: follow it."
             ),
-            minimum=1,
-            maximum=999,
+        ),
+        reason=StringSchema(
+            "Only with checked=false: what stopped you, in one short line. It reaches "
+            "nobody; it is what the workshop shows next to the failed run.",
             nullable=True,
         ),
+        required=["checked"],
     )
 )
 class NothingToReportTool(Tool, ContextAware):
@@ -103,12 +110,11 @@ class NothingToReportTool(Tool, ContextAware):
     @property
     def description(self) -> str:
         return (
-            "On a silent scheduled run, declare that there is nothing the user needs to "
-            "see. Use it instead of sending an empty, one-word or placeholder message: it "
-            "delivers nothing and reaches nobody. Pass the number of each check it covers, "
-            "one call per number. Not for a normal turn (there, just answer), and not for a "
-            "check that could not be carried out — that is a CHECK_FAILED line in your "
-            "answer text, which this does not replace."
+            "On a silent scheduled run, end it without telling the user anything, and say "
+            "how the check went: checked=true if you did every step and there is nothing "
+            "worth telling; checked=false with a reason if anything stopped you. It delivers "
+            "nothing and reaches nobody. Use it instead of sending an empty, one-word or "
+            "placeholder message. Not for a normal turn: there, just answer."
         )
 
     def set_context(self, ctx: RequestContext) -> None:
@@ -121,28 +127,23 @@ class NothingToReportTool(Tool, ContextAware):
         task figli mutano *questo* oggetto e restano visibili al turno che l'ha
         creato.
         """
-        self._turn_state.set({"tasks": [], "bare": 0})
+        self._turn_state.set({"verdicts": []})
 
-    def declared_tasks(self) -> list[int]:
-        """I numeri di task dichiarati in questo turno, in ordine e senza doppioni."""
-        return list(self._turn_state.get().get("tasks", ()))
+    def verdicts(self) -> list[tuple[bool, str]]:
+        """Le dichiarazioni del turno, ``(checked, motivo)``, in ordine."""
+        return list(self._turn_state.get().get("verdicts", ()))
 
-    def _record(self, task: int | None) -> int:
+    def _record(self, checked: bool, reason: str) -> None:
         state = self._turn_state.get()
         if state is _NO_TURN_STATE:
             # Nessuno ``start_turn()`` per questo context (uso diretto del tool,
             # o un percorso di turno che salta BUILD): la scrittura resta locale
             # invece di mutare la sentinella condivisa da tutte le istanze.
-            state = {"tasks": [], "bare": 0}
+            state = {"verdicts": []}
             self._turn_state.set(state)
-        tasks: list[int] = state.setdefault("tasks", [])
-        if task is None:
-            state["bare"] = state.get("bare", 0) + 1
-        elif task not in tasks and len(tasks) < _MAX_DECLARATIONS:
-            tasks.append(task)
-        return len(tasks) + state.get("bare", 0)
+        state.setdefault("verdicts", []).append((checked, reason))
 
-    async def execute(self, task: Any = None, **kwargs: Any) -> str:
+    async def execute(self, checked: Any = None, reason: Any = None, **kwargs: Any) -> str:
         # Un turno visibile consegna la propria risposta finale da sé: qui non
         # c'è niente da cui astenersi, e lasciar passare la chiamata insegnerebbe
         # al modello che è un modo di chiudere una conversazione. La stringa NON
@@ -155,48 +156,53 @@ class NothingToReportTool(Tool, ContextAware):
                 "the user. Just write it. This tool exists only for a silent scheduled "
                 "run, where nothing you write is delivered."
             )
-
-        number: int | None = None
-        if task is not None:
-            try:
-                number = int(str(task).strip().lstrip("#[").rstrip("].)"))
-            except (TypeError, ValueError):
-                return (
-                    f"Ignored the value {task!r}: `task` must be the plain number of a "
-                    "check as listed in this run's prompt. Nothing was delivered to the "
-                    "user either way; end the turn."
-                )
-
-        count = self._record(number)
-        logger.info(
-            "NothingToReportTool: silent run declared nothing to report (task={}, {} so far)",
-            number,
-            count,
-        )
+        if not isinstance(checked, bool):
+            return (
+                "Say how the check went: checked=true if you did every step it asks for, "
+                "checked=false with a reason if anything stopped you. Nothing was delivered "
+                "to the user either way."
+            )
+        # Il motivo vale solo per un controllo che non ha girato.
+        why = "" if checked else (" ".join(str(reason or "").split())[:_REASON_MAX]
+                                  or "no reason given")
+        self._record(checked, why)
+        logger.info("NothingToReportTool: silent run ended, checked={} {}", checked, why)
         # Nessuna richiesta di "chiudere con una riga". La prima versione la
         # faceva, e il 2026-09-03 alle 11:25 il modello ha chiuso rigurgitando
         # 4.883 caratteri di preambolo, segnaposto dei marcatori compresi (v.
         # ``could_not_check._is_specimen``). Qui il turno non deve scrivere altro:
         # la risposta finale di un turno silenzioso non la legge nessuno.
+        if checked:
+            return (
+                "Recorded. Nothing was delivered to the user, and that is the right outcome. "
+                "End the turn now; nothing more is needed."
+            )
         return (
-            "Recorded. Nothing was delivered to the user, and that is the right outcome. "
-            "End the turn now; nothing more is needed."
+            "Recorded as a check that could not run. Nothing was delivered to the user. "
+            "End the turn now."
         )
 
 
 def declared_marker_lines(tool: Tool | None) -> str:
-    """Le righe di marcatore equivalenti alle astensioni dichiarate nel turno.
+    """La riga di marcatore equivalente all'esito dichiarato nel turno.
 
     Vive qui e non in ``loop.py`` perché la traduzione fra l'azione e il
     marcatore è una proprietà di questo tool: il loop ne chiama una funzione, e
     la regola "core stays small" del progetto resta rispettata.
 
-    Solo le dichiarazioni **numerate**: v. la nota nel docstring del modulo sul
-    perché un ``CHECK_OK`` anonimo non si sintetizza.
+    Un turno che ha dichiarato un guasto e poi un «tutto bene» non è sano: vince
+    il guasto, perché un guasto perso non lo rivede nessuno, un guasto in più si
+    smentisce al giro dopo.
     """
     if not isinstance(tool, NothingToReportTool):
         return ""
-    return "".join(f"\n{OK_MARKER} {n}" for n in tool.declared_tasks())
+    verdicts = tool.verdicts()
+    failed = [reason for checked, reason in verdicts if not checked]
+    if failed:
+        return f"\n{COULD_NOT_CHECK_MARKER}: {failed[0]}"
+    if verdicts:
+        return f"\n{OK_MARKER}"
+    return ""
 
 
 # Registrazione esplicita: il ToolLoader legge questa lista. Il modulo va anche

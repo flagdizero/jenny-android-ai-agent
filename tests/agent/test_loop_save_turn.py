@@ -119,8 +119,8 @@ async def test_injected_subagent_result_is_marked_in_history(tmp_path: Path) -> 
     messaggio in coda a ``{"role": "user", ...}`` — è la forma che il modello
     deve vedere — e il turno si persiste con quella forma. Senza riportare la
     metadata, il rientro di un subagent finiva in storia indistinguibile da una
-    frase digitata: bolla in chat, titolo della conversazione, riarmo
-    dell'heartbeat (v. ``jenny.session.history_meta``).
+    frase digitata: bolla in chat, titolo della conversazione
+    (v. ``jenny.session.history_meta``).
     """
     loop = _make_full_loop(tmp_path)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]

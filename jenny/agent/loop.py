@@ -132,7 +132,7 @@ if TYPE_CHECKING:
     from jenny.config.schema import (
         ToolsConfig,
     )
-    from jenny.cron.heartbeat_followup import HeartbeatFollowup
+    from jenny.cron.monitor_followup import MonitorFollowup
     from jenny.cron.service import CronService
 
 
@@ -365,6 +365,11 @@ class AgentLoop(
         # contratto di Dream. Lo collega il container; ``None`` fuori dal
         # gateway, e chi lo usa deve trattarlo come rete assente e proseguire.
         self.take_snapshot: Callable[[str], Awaitable[bool]] | None = None
+        # Le copie per i canali accoppiati (Telegram) di un messaggio già
+        # consegnato nella sua chat: ``ChannelDeliverer.mirror``, collegato dal
+        # container. Lo usa la risposta di un promemoria di quaderno
+        # (``cron/bound_runner.py``); ``None`` fuori dal gateway.
+        self.mirror_delivery: Callable[[OutboundMessage], Awaitable[None]] | None = None
         self.restrict_to_workspace = restrict_to_workspace
         self.extract_document_text = extract_document_text
         self.workspace_scopes = WorkspaceScopeResolver(
@@ -390,6 +395,7 @@ class AgentLoop(
             # e il picker devono elencare le stesse cartelle.
             wikis_dir_name=projects_subdir,
             wikis_enabled=wikis_enabled,
+            cron_service=self.cron_service,
         )
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
@@ -673,16 +679,15 @@ class AgentLoop(
         # Costruito esplicitamente in __init__ (self.runtime_event_publisher).
         return self.runtime_event_publisher
 
-    def _heartbeat_followup(self) -> "HeartbeatFollowup | None":
-        """Il registratore dell'esito di un controllo dell'heartbeat delegato.
+    def _monitor_followup(self) -> "MonitorFollowup | None":
+        """Il registratore dell'esito di un monitor che ha delegato il controllo.
 
-        Registrato sul servizio cron dal ``CronDispatcher``, che è chi conosce
-        l'heartbeat; qui si legge soltanto. ``None`` per un ``AgentLoop`` senza
-        servizio cron (test, comandi) e finché il dispatcher non è stato
-        costruito — in entrambi i casi non c'è nessun heartbeat che possa avere
-        delegato qualcosa.
+        Registrato sul servizio cron dal ``CronDispatcher``; qui si legge
+        soltanto. ``None`` per un ``AgentLoop`` senza servizio cron (test,
+        comandi) e finché il dispatcher non è stato costruito — in entrambi i
+        casi non c'è nessun monitor che possa avere delegato qualcosa.
         """
-        return getattr(self.cron_service, "heartbeat_followup", None)
+        return getattr(self.cron_service, "monitor_followup", None)
 
     async def submit_cron_turn(self, msg: InboundMessage) -> TurnOutcome:
         return await self._cron_turns.submit(msg)
@@ -1650,7 +1655,7 @@ class AgentLoop(
             # Un messaggio vero dell'utente *è* la fine dell'attesa: il goal
             # parcheggiato torna spronabile da questo turno in poi. Le
             # continuazioni interne e i turni che non persistono input utente
-            # (heartbeat, lavoro di sistema) non contano come risposta.
+            # (monitor, lavoro di sistema) non contano come risposta.
             if (
                 turn_continuation.should_persist_user_message(metadata)
                 and not is_silent_turn(metadata)
@@ -2369,7 +2374,7 @@ class AgentLoop(
         # Il rientro si rimandera' com'e' partito (``SENT_CONTENT_META``): scritto
         # qui sopra, il messaggio costruito e' lui solo se in coda non c'era gia'
         # una riga ``user``; scritto da un turno interrotto, e' lui la coda su cui
-        # il contesto runtime si e' unito. Prima del blocco dell'heartbeat, che
+        # il contesto runtime si e' unito. Prima del blocco del monitor, che
         # non si salva.
         announce_row = self._subagent_followup_row(session, msg) if is_subagent else None
         if announce_row is not None and (
@@ -2390,22 +2395,22 @@ class AgentLoop(
             # non cambia, e il provider il marcatore non lo vede.
             messages[-1] = {**messages[-1], INJECTED_EVENT_META: SUBAGENT_RESULT_EVENT}
         self._settle_closed_reasoning(session, messages)
-        # Un controllo dell'heartbeat delegato con ``spawn`` non ha un esito nel
+        # Un monitor che delega il controllo con ``spawn`` non ha un esito nel
         # turno che lo delega: `spawn` ritorna subito. QUESTO turno è l'unico che
-        # il risultato ce l'ha, ed è già quello a cui il preambolo dell'heartbeat
+        # il risultato ce l'ha, ed è già quello a cui il prompt del monitor
         # affida la decisione di parlare; qui riceve anche il modo di registrare
-        # l'esito. Il blocco è vuoto per ogni altra sessione e per un heartbeat
+        # l'esito. Il blocco è vuoto per ogni altra sessione e per un monitor
         # che non ha delegato niente, quindi nessun altro annuncio cambia di un
         # byte. Aggiunto DOPO ``build_messages`` e fuori dal salvataggio
         # (``save_skip``): è un'istruzione per questo turno, non un messaggio
         # della conversazione.
-        followup = self._heartbeat_followup() if is_subagent else None
+        followup = self._monitor_followup() if is_subagent else None
         followup_block = ""
         if followup is not None:
             try:
                 followup_block = followup.prompt_block(key)
             except Exception:
-                logger.exception("Heartbeat follow-up: could not build the prompt block")
+                logger.exception("Monitor follow-up: could not build the prompt block")
         if followup_block:
             messages.append({"role": "user", "content": followup_block})
         # Il rientro di un subagent e' gia' in storia (scritto qui sopra, o dal
@@ -2420,7 +2425,7 @@ class AgentLoop(
         # bolla per un lavoro di sottofondo; ma un annuncio visibile finisce
         # comunque in chat, e l'utente che ci scrive dentro viene iniettato qui.
         # Sul Titan: 453 s di lavoro su un «metti il tasto», e a schermo niente.
-        # Il turno silenzioso (heartbeat, lavori interni) resta invisibile.
+        # Il turno silenzioso (monitor, lavori interni) resta invisibile.
         origin = None if silent else InboundMessage(
             channel=channel, sender_id=msg.sender_id, chat_id=chat_id, content="",
             metadata=dict(msg.metadata or {}),
@@ -2495,9 +2500,9 @@ class AgentLoop(
                 # registrarlo. Isolato: un registratore rotto non deve poter
                 # far fallire un turno di background.
                 try:
-                    followup.record(key, final_text=text)
+                    followup.record(key, final_text=text, spoke=spoke_via_tool)
                 except Exception:
-                    logger.exception("Heartbeat follow-up: could not record the outcome")
+                    logger.exception("Monitor follow-up: could not record the outcome")
             return (
                 TurnOutcome.spoke_via_tool(final_text=text, stop_reason=stop_reason)
                 if spoke_via_tool
@@ -2819,7 +2824,7 @@ class AgentLoop(
             on_stream_end=on_stream_end,
             pending_queue=pending_queue,
             ephemeral=ephemeral,
-            # Un turno silenzioso (cron monitor, heartbeat, annuncio nato da
+            # Un turno silenzioso (cron monitor, annuncio nato da
             # lavoro interno) ha l'outbound finale soppresso SEMPRE, e l'unico
             # modo che il modello ha di parlare e chiamare il tool ``message``
             # durante il turno. Non c'e un token sentinella da parsare ne una
@@ -3023,7 +3028,7 @@ class AgentLoop(
         """Register a proactive delivery as an ``assistant`` message in the session.
 
         Chiamato dal ``ChannelDeliverer`` quando il tool ``message`` consegna un
-        avviso proattivo: gira su una sessione interna (heartbeat, cron, Dream)
+        avviso proattivo: gira su una sessione interna (cron, Dream)
         ma l'utente lo legge nella conversazione unificata, quindi la riga deve
         finire *lì* o il turno successivo non ne ha traccia.
 
@@ -3166,17 +3171,15 @@ class AgentLoop(
         interno del proprio run e non come consegna all'utente. Il tipo di esito
         vive dove si prende la decisione di consegna, cioe' in ``_dispatch``.
 
-        Chi l'esito lo vuole davvero (l'heartbeat: gli serve ``final_text``, in
-        cui il modello dichiara quali task non ha potuto eseguire) chiama
-        :meth:`process_direct_outcome`, che e' lo stesso turno senza la perdita
-        di informazione. Un fratello additivo invece di un tipo di ritorno piu'
-        largo: questa firma e' condivisa da Dream, dal giardiniere e dai comandi, e
-        cambiarla per un solo chiamante li toccherebbe tutti.
+        Chi l'esito lo vuole davvero chiama :meth:`process_direct_outcome`, che
+        e' lo stesso turno senza la perdita di informazione. Lo chiamava
+        l'heartbeat (ritirato il 31/10/2026), a cui serviva ``final_text``; oggi
+        lo usano solo i test che leggono l'esito di un turno silenzioso.
 
         ``visibility`` dichiara esplicitamente se il turno puo' raggiungere
-        l'utente: serve a chi gira lavoro interno su un canale *utente* (e' il
-        caso dell'heartbeat, che tiene ``websocket:default`` come target cosi il
-        tool ``message`` ha dove consegnare quando la condizione scatta).
+        l'utente: serve a chi gira lavoro interno su un canale *utente* (il
+        controllo aggiornamenti, che tiene ``websocket:default`` come target cosi
+        il tool ``message`` ha dove consegnare).
         """
         outcome = await self.process_direct_outcome(
             content,
@@ -3219,8 +3222,7 @@ class AgentLoop(
         e ha comunque bisogno di sapere cosa e' successo dentro. Su un turno
         silenzioso il payload e' ``None`` per costruzione, quindi
         ``process_direct`` non puo' dire ne se l'agente ha parlato col tool
-        ``message`` ne cosa ha scritto come risposta finale — ed e' li che
-        l'heartbeat dichiara i task che non ha potuto eseguire.
+        ``message`` ne cosa ha scritto come risposta finale.
 
         ``on_retry_wait`` riceve le righe d'attesa del retry del provider (v.
         ``providers/retry_notice.py``). Senza, un turno interno le pubblica sul

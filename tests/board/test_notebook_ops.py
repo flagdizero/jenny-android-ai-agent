@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 from jenny.board import notebook_ops as ops
-from jenny.board.store import mutate_board, mutate_reminders, write_card_summary
+from jenny.board.store import mutate_board, write_card_summary
 
 _LINT = Path(__file__).resolve().parents[2] / "jenny" / "skills" / "llm-wiki" / "scripts"
 
@@ -50,8 +50,27 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _jobs(tmp_path: Path, monkeypatch, jobs: list[dict]) -> None:
+    """I promemoria del quaderno sono job: ``cron/jobs.json`` del workspace."""
+    import json
+
+    from jenny.runtime.context import get_runtime_context
+
+    _write(tmp_path / "cron" / "jobs.json", json.dumps({"jobs": jobs}))
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", tmp_path)
+
+
+def _reminder(rid: str, notebook: str, why: str, *, card: str = "acero",
+              kind: str = "at") -> dict:
+    schedule = ({"kind": "at", "atMs": 4_070_908_800_000, "precision": "day"} if kind == "at"
+                else {"kind": "every", "everyMs": 3_600_000})
+    return {"id": rid, "name": rid, "enabled": True, "schedule": schedule,
+            "payload": {"message": rid, "why": why,
+                        "board": {"notebook": notebook, "card": card, "section": "@auto"}}}
+
+
 @pytest.fixture
-def broken(tmp_path: Path) -> Path:
+def broken(tmp_path: Path, monkeypatch) -> Path:
     """Un quaderno (layout piatto) con un esempio di ogni difetto in comune col lint."""
     root = tmp_path / "wikis" / "orto"
     _write(root / "raw" / "journal" / "20261001.md", "# 2026-10-01\n- 10:00 — [said] ok\n")
@@ -79,12 +98,7 @@ def broken(tmp_path: Path) -> Path:
     write_card_summary(root, "acero", {"card": "acero", "sections": [
         {"title": "Identità", "text": "Un acero.", "sources": ["acero.md", "sparita.md"]}]})
 
-    def rems(r):
-        r["reminders"].append({"id": "r-rinvaso", "card": "acero", "text": "Rinvaso",
-                               "when": {"kind": "date", "date": "2099-03-01"},
-                               "why": "sparita.md", "by": "user", "state": "open"})
-
-    mutate_reminders(root, rems)
+    _jobs(tmp_path, monkeypatch, [_reminder("r-rinvaso", "orto", "sparita.md")])
     return root
 
 
@@ -153,47 +167,28 @@ def test_check_finds_what_lint_wiki_finds(lint_wiki, broken: Path) -> None:
     assert len(_kinds(report, "drawer_missing_source")) == 1
     # Il lint non guarda il ``why``: questo è in più, e serve a ``remove_pages``.
     assert [d.detail for d in _kinds(report, "reminder_dead_why")] == [
-        "open reminder `r-rinvaso`: why sparita.md does not exist"]
+        "reminder `r-rinvaso` «r-rinvaso»: why sparita.md does not exist"]
 
 
-def test_a_closed_reminder_with_a_dead_why_is_not_a_defect(broken: Path) -> None:
-    """Un promemoria chiuso è storia: ``clear_reminder_whys`` e ``update_reminder``
-    non lo toccano, e il check non lo chiede. Una nota lo dice, perché chi rilegge
-    ``reminders.json`` non ci giri intorno (prove del 24-25/10/2026)."""
-    def rems(r):
-        for rid, state in (("r-fatto", "done"), ("r-lasciato", "dropped"), ("r-aperto", "open")):
-            r["reminders"].append({"id": rid, "card": "acero", "text": rid,
-                                   "when": {"kind": "date", "date": "2026-03-01"},
-                                   "why": "wiki/sparita.md", "by": "user", "state": state,
-                                   **({"closedAt": "2026-03-02T10:00:00+01:00"}
-                                      if state != "open" else {})})
-
-    mutate_reminders(broken, rems)
+def test_every_job_of_the_notebook_with_a_dead_why_is_a_defect(broken: Path, tmp_path,
+                                                                monkeypatch) -> None:
+    """I promemoria sono job: si contano i vivi del quaderno, e un ``why`` morto è un
+    difetto anche su un cron che si ripete. Quelli di un altro quaderno non contano."""
+    _jobs(tmp_path, monkeypatch, [
+        _reminder("r-rinvaso", "orto", "sparita.md"),
+        _reminder("r-aperto", "orto", "wiki/sparita.md", card="@notebook"),
+        _reminder("c-meteo", "orto", "sparita.md", kind="every"),
+        _reminder("r-buono", "orto", "acero.md"),
+        _reminder("r-altrove", "piante", "sparita.md"),
+    ])
     report = ops.check_notebook(broken)
     assert sorted(d.detail for d in _kinds(report, "reminder_dead_why")) == [
-        "open reminder `r-aperto`: why wiki/sparita.md does not exist",
-        "open reminder `r-rinvaso`: why sparita.md does not exist"]
-    assert report.open_reminders == 2
+        "reminder `c-meteo` «c-meteo»: why sparita.md does not exist",
+        "reminder `r-aperto` «r-aperto»: why wiki/sparita.md does not exist",
+        "reminder `r-rinvaso` «r-rinvaso»: why sparita.md does not exist"]
+    assert report.open_reminders == 3
     out = ops.render_check(report, limit=40, max_chars=12000)
-    assert "open reminders whose why is missing 2" in out
-    assert "2 closed reminder(s) have a why that no longer exists" in out
-    assert "r-fatto" not in out and "r-lasciato" not in out
-
-
-def test_closed_reminders_alone_leave_the_check_clean(tmp_path: Path) -> None:
-    root = tmp_path / "wikis" / "orto"
-    _write(root / "wiki" / "index.md", "# Mappa\n")
-
-    def rems(r):
-        r["reminders"].append({"id": "r-fatto", "card": "", "text": "Fatto",
-                               "when": {"kind": "date", "date": "2026-03-01"},
-                               "why": "sparita.md", "by": "user", "state": "done"})
-
-    mutate_reminders(root, rems)
-    report = ops.check_notebook(root)
-    assert not _kinds(report, "reminder_dead_why")
-    out = ops.render_check(report, limit=40, max_chars=12000)
-    assert "No defects found." in out and "1 closed reminder(s)" in out
+    assert "reminders whose why is missing 3" in out and "3 reminders." in out
 
 
 def test_the_shared_constants_stay_equal(lint_wiki) -> None:
@@ -381,4 +376,4 @@ def test_quoted_page_text_counts_as_read(broken: Path, monkeypatch) -> None:
     monkeypatch.setattr(ops, "_shown", lambda path: shown.append(path.name) or True)
     ops.check_notebook(broken)
     assert "pino.md" in shown  # state: forse è testo della pagina
-    assert {"board.json", "acero.json", "reminders.json"} <= set(shown)
+    assert {"board.json", "acero.json"} <= set(shown)

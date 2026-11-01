@@ -17,7 +17,7 @@ pytestmark = requires_jsdom
 
 _HEAD = """
 import assert from 'node:assert/strict';
-import { boot, tick, frame, threads, sent, $ } from './boot.mjs';
+import { boot, tick, until, frame, threads, sent, $ } from './boot.mjs';
 const retries = () => [...$('home-thread').querySelectorAll('.home-retry')];
 const sentTexts = () => sent.filter((m) => m.type === 'message').map((m) => m.content);
 """
@@ -28,18 +28,18 @@ def test_a_live_model_error_offers_retry_and_resends_the_question() -> None:
 const app = await boot();
 app.input.value = 'che tempo fa?';
 app._send();
-await tick(10);
+await until(() => sentTexts().includes('che tempo fa?'));
 frame({ event: 'message', chat_id: 'default', text: 'Non riesco a raggiungere il modello.',
         error: { kind: 'connection' } });
 frame({ event: 'turn_end', chat_id: 'default' });
-await tick(10);
-assert.equal(retries().length, 1, 'nessun Riprova sotto l\\u2019errore');
+await until(() => retries().length, { msg: 'nessun Riprova sotto l\\u2019errore' });
+assert.equal(retries().length, 1);
 const before = sentTexts().length;
 retries()[0].click();
-await tick(10);
-assert.equal(sentTexts().length, before + 1, 'Riprova non ha rimandato niente');
+await until(() => sentTexts().length > before, { msg: 'Riprova non ha rimandato niente' });
+await until(() => retries().length === 0, { msg: 'il Riprova usato e\\u2019 rimasto' });
+assert.equal(sentTexts().length, before + 1);
 assert.equal(sentTexts().at(-1), 'che tempo fa?');
-assert.equal(retries().length, 0, 'il Riprova usato e\\u2019 rimasto');
 """)
 
 

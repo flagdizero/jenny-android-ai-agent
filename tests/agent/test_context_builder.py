@@ -530,12 +530,12 @@ class TestEmptiedBootstrapFile:
 
 
 # ---------------------------------------------------------------------------
-# agent/scheduling.md — dove va un lavoro ricorrente
+# agent/scheduling.md — dove va un lavoro per dopo
 # ---------------------------------------------------------------------------
 
 # Il titolo del template. Cercarlo nel prompt è come si distingue "il blocco c'è"
 # da "il prompt nomina cron da qualche altra parte".
-_SCHEDULING_HEADING = "# Recurring Work"
+_SCHEDULING_HEADING = "# Work for Later"
 
 # Il registry che ``build_dream_tools`` costruisce davvero (``memory.py``):
 # lettura e scrittura, nient'altro. Nessun ``cron``.
@@ -543,7 +543,7 @@ _DREAM_TOOLS = ["read_file", "write_file", "edit_file", "apply_patch"]
 
 
 class TestSchedulingBlock:
-    """La guida su cron/heartbeat va solo a chi il tool ce l'ha.
+    """La guida sul cron va solo a chi il tool ce l'ha.
 
     Stava nel template di ``AGENTS.md``, cioè in un file che si crea al primo
     avvio e non si aggiorna mai più, e ci andava *sempre*: anche a Dream,
@@ -600,11 +600,9 @@ class TestSchedulingBlock:
         # 40% di margine non dice mai di no — cioè non fa il suo mestiere. Chi ha
         # bisogno di sforarlo ha quasi sempre bisogno della skill.
         #
-        # Alzato da 1300 il 2026-08-17, e vale dire per cosa: la riga che dice
-        # **dove** va scritto un task nell'heartbeat (sotto ``## Active Tasks``).
-        # Non è profondità da manuale — è l'unica cosa che separa un task che gira
-        # da uno che non gira senza che nessuno lo dica, perché il parser legge
-        # solo quella sezione e appendere a fine file è la mossa naturale.
+        # Alzato da 1300 il 2026-08-17 per la riga sulle ``## Active Tasks``
+        # dell'heartbeat, che non c'è più (31/10/2026); il tetto resta, e lo
+        # spazio è andato al singolo con ``date`` e alla ``condition``.
         rendered = render_template("agent/scheduling.md")
         assert len(rendered) <= 1450, (
             f"agent/scheduling.md è {len(rendered)} caratteri: sta tornando un manuale. "
@@ -639,9 +637,8 @@ class TestSchedulingBlock:
         from jenny.utils.android_assets import _SYSTEM_PROMPT_TEMPLATES
         from jenny.utils.helpers import load_bundled_template
 
-        # Frasi che *insegnano a schedulare*. Nominare `HEARTBEAT.md` come file
-        # del workspace resta legittimo (lo fa "Where Produced Files Go"), quindi
-        # si cercano le istruzioni, non il nome.
+        # Frasi che *insegnano a schedulare*: si cercano le istruzioni, non i
+        # nomi dei file.
         teaching = ("use the cron tool", "mode='reminder'", "mode='monitor'",
                     "for heartbeat tasks", "recurring jobs")
         for name in _SYSTEM_PROMPT_TEMPLATES:
@@ -690,16 +687,15 @@ class TestUserOwnedTemplatesCarryNoSystemGuidance:
 
     @pytest.mark.parametrize("name", _USER_OWNED_TEMPLATES)
     def test_no_user_owned_template_documents_the_tools(self, name):
-        """Tre dei cinque template ora sono vuoti e passano per costruzione.
+        """Tre dei quattro template ora sono vuoti e passano per costruzione.
 
-        La guardia resta viva sui due che del testo ce l'hanno ancora —
-        ``SOUL.md`` (la personalità di serie) e ``HEARTBEAT.md`` (le due
-        intestazioni che il parser cerca) — ed è su quelli che serve, perché
-        sono gli unici in cui si può ancora essere tentati di scrivere una
+        La guardia resta viva su quello che del testo ce l'ha ancora —
+        ``SOUL.md`` (la personalità di serie) — ed è lì che serve, perché è
+        l'unico in cui si può ancora essere tentati di scrivere una
         istruzione. Sui tre vuoti il pin è
         ``test_the_user_owned_templates_ship_no_prose`` in
         ``tests/utils/test_template_refresh.py``: finché quello tiene, qui non
-        c'è niente da coprire; se cede, questo torna a coprire cinque file.
+        c'è niente da coprire; se cede, questo torna a coprire quattro file.
         """
         text = _bundled(name).lower()
         for token in ("cron", "mode=", "every_seconds", "apply_patch"):
@@ -824,7 +820,7 @@ class TestOutputDestinationRule:
         assert expected in prompt
         assert "Never create a new file in the workspace root" in prompt
         # Senza "you may edit but never add to" l'agente smette di aggiornare
-        # HEARTBEAT.md, che invece deve continuare a fare.
+        # AGENTS.md e USER.md, che invece deve continuare a fare.
         assert "you may edit but never add to" in prompt
 
     def test_rule_sits_at_the_end_of_the_tool_contract(self, tmp_path):

@@ -111,7 +111,6 @@ def test_a_real_service_comes_back_as_json(workspace, monkeypatch):
             timezone="Europe/Rome", dream=SimpleNamespace(enabled=True),
             gardener=SimpleNamespace(enabled=True),
         )),
-        gateway=SimpleNamespace(heartbeat=SimpleNamespace(enabled=True)),
         updates=SimpleNamespace(enabled=True),
     ))
 
@@ -299,25 +298,3 @@ def test_the_logs_of_a_failing_getter_are_in_english(workspace):
 
     messages = [c.args[0] for c in log.exception.call_args_list]
     assert messages == ["Cron routes: the service getter raised"] * 2
-
-
-def test_an_unreadable_heartbeat_file_is_logged_in_english(tmp_path, monkeypatch):
-    from loguru import logger as loguru_logger
-
-    from jenny.webui import cron_api
-
-    (tmp_path / "HEARTBEAT.md").write_text("x", encoding="utf-8")
-
-    def _refuse(*_a, **_k):
-        raise PermissionError("denied")
-
-    monkeypatch.setattr(Path, "read_text", _refuse)
-    records: list[str] = []
-    handler = loguru_logger.add(lambda m: records.append(m.record["message"]), level="WARNING")
-    try:
-        state = cron_api._heartbeat_tasks(tmp_path)
-    finally:
-        loguru_logger.remove(handler)
-
-    assert state["file_readable"] is False
-    assert records == ["HEARTBEAT.md is unreadable: denied"]

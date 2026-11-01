@@ -465,7 +465,7 @@ export class WorkBubbles {
     const keptCount = Number(undo.kept_count) || 0;
     if (!restored && !keptCount) return i18n.t('home.work.undone.nothing');
     const who = undo.by === 'jenny' ? 'jenny' : 'you';
-    return i18n.t(`home.work.undone.${who}`, { count: restored });
+    return i18n.t(`home.work.undone.${who}${restored === 1 ? 'One' : ''}`, { count: restored });
   }
 
   _undoneNote(undo) {
@@ -476,7 +476,7 @@ export class WorkBubbles {
     const more = keptCount > names.length ? '…' : '';
     const why = kept.every((k) => k.reason === 'changed_after' || k.reason === 'changed_during')
       ? 'home.work.undone.keptOthers' : 'home.work.undone.keptOther';
-    return i18n.t(why, { count: keptCount, files: names.join(', ') + more });
+    return i18n.t(why + (keptCount === 1 ? 'One' : ''), { count: keptCount, files: names.join(', ') + more });
   }
 
   _openSheet(title, note, rows) {

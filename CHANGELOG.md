@@ -7,6 +7,30 @@ breaks something you rely on gets a new major number.
 Releases before 1.0 are described only on their
 [GitHub release pages](https://github.com/flagdizero/jenny-android-ai-agent/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- After undoing a helper with one file, the chat says "1 file put back as it was", not
+  "1 files put back as they were"; the same for the file it left alone.
+- A one-time reminder that could not ring — the provider failed, or Jenny was not set up
+  yet when its time came — is no longer dropped: it is retried every five minutes for up to
+  a day past its time, and only then given up, with an error in the log.
+- Notebook reminders written before 2.0.0's successor (`board/reminders.json`) are moved
+  into the scheduler on the first pass of the notebook clock, so the open ones keep
+  ringing; the file is kept beside them as `reminders.json.migrated`.
+- The periodic checks written in `HEARTBEAT.md` no longer stop in silence: the first time
+  a scheduled job runs after the update, Jenny tells you in chat which of them no longer
+  run and asks which ones you want back as recurring checks, and how often. The file is
+  kept as `HEARTBEAT.md.retired`.
+- A paused reminder is shown as paused on its post-it and in the care calendar, and no
+  longer lights a card up as "coming up".
+- Reminders written from the board (the notebook editor, the board pass) carry the turn's
+  taint like the ones written with the `cron` tool; moving a reminder to another card
+  keeps who wrote it.
+- The workshop's job list tells a one-time job from its schedule, so one-time jobs from
+  an older store no longer show a "next time".
+
 ## [2.0.0] — 2026-10-30
 
 Four weeks and about 300 changes since 1.0. A notebook becomes a board you arrange, a big job

@@ -189,7 +189,7 @@ def get_output_path(workspace: Path | None = None, *, create: bool = False) -> P
 
     Esiste per togliere di mezzo l'unica destinazione che l'agente sceglieva
     quando non ne aveva una: la radice del workspace. Lì vivono i documenti di
-    bootstrap (``AGENTS.md``, ``SOUL.md``, ``USER.md``, ``HEARTBEAT.md``), che
+    bootstrap (``AGENTS.md``, ``SOUL.md``, ``USER.md``), che
     l'agente deve poter *modificare* ma mai affiancare — un risultato di lavoro
     lasciato accanto a loro non si distingue più da un file di sistema, e
     l'unico modo di riconoscerlo diventa aprirlo.

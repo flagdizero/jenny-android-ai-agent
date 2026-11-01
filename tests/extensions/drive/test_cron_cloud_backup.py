@@ -36,7 +36,7 @@ class _FakeAgent:
 
 
 class _FakeCron:
-    heartbeat_followup = None
+    monitor_followup = None
 
 
 @pytest.fixture
@@ -54,7 +54,6 @@ def make_dispatcher(monkeypatch):
             get_agent=lambda: agent,
             config=SimpleNamespace(workspace_path=None),
             cron=_FakeCron(),
-            heartbeat_cfg=None,
             extension_jobs={CLOUD_BACKUP_JOB_ID: lambda: cron.run(host)},
         )
         return dispatcher, ticks

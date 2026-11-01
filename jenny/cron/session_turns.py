@@ -16,6 +16,11 @@ CRON_HISTORY_META = "_cron_turn"
 # "questo job è un monitor", che decide prompt, sessione isolata, semantica della
 # run record e fan-out proattivo del tool ``message``.
 CRON_MONITOR_META = "_cron_monitor"
+# Quello che il turno dice nella sua chat arriva anche ai canali accoppiati
+# (Telegram), come copia ``_mirror``: lo mette ``bound_runner`` sul promemoria di
+# un quaderno, e lo leggono il ``ChannelDeliverer`` (il tool ``message``) e lo
+# stesso ``bound_runner`` (la risposta finale, v. ``AgentLoop.mirror_delivery``).
+CRON_MIRROR_META = "_cron_mirror"
 
 
 def cron_trigger(metadata: Mapping[str, Any] | None) -> dict[str, Any] | None:

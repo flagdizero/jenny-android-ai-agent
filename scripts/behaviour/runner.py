@@ -32,7 +32,7 @@ from .model import Check, Scenario, make_nonce, observation_from_rows
 from .scenarios import CROSS_CUTTING
 
 #: Riscritti com'erano prima di ogni giro: i giri non si passano niente.
-RESET_FILES = ("memory/MEMORY.md", "USER.md", "HEARTBEAT.md", "memory/history.jsonl",
+RESET_FILES = ("memory/MEMORY.md", "USER.md", "memory/history.jsonl",
                "memory/.cursor", "memory/.dream_cursor")
 
 _FILLER_FACTS = (
@@ -103,7 +103,7 @@ class Runner:
             raise DeviceError("a snapshot from an earlier run is still there: "
                               "run `behaviour_check.py --restore` first")
         dev.snapshot()
-        # I job di sistema (Dream, giardiniere, heartbeat, promemoria) girerebbero
+        # I job di sistema (Dream, giardiniere, orologio dei quaderni) girerebbero
         # in mezzo agli scenari: un Dream a meta' giro riscrive MEMORY.md. Si
         # spostano di un giorno ad app ferma; la fotografia rimette lo store.
         dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
@@ -179,6 +179,8 @@ class Runner:
             }
             if scenario.archive_after:
                 extra["archive_entry"] = self._archive_now()
+            if scenario.monitor_after:
+                extra["monitor"] = self._first_monitor_run(jobs_before)
             if scenario.dream_after:
                 before_sessions = set(dev.listdir("sessions"))
                 extra.update(self._dream_now())
@@ -188,10 +190,6 @@ class Runner:
                 dream_rows = [r for f in new for r in _rows(dev.read(f"sessions/{f}") or "")]
                 rows = rows + dream_rows
                 extra["dream_sessions"] = new
-            if scenario.heartbeat_after:
-                hb_rows, ran = self._heartbeat_now()
-                extra["heartbeat_ran"] = ran
-                rows = hb_rows
             files: dict[str, str | None] = {}
             for raw in scenario.read_after:
                 path = scenario.render(raw, nonces)
@@ -276,34 +274,59 @@ class Runner:
             time.sleep(5)
         return {"dream_cursor_before": before, "dream_cursor_after": after}
 
-    def _heartbeat_now(self, timeout: float = 420.0) -> tuple[list[dict[str, Any]], bool]:
-        """Un giro dell'heartbeat, forzato dallo store, e le sue righe di sessione.
+    def _first_monitor_run(self, jobs_before: set[str], *, first: float = 300.0,
+                           verdict: float = 300.0) -> dict[str, Any] | None:
+        """Il primo giro del monitor nato in questo giro, e il suo esito finale.
 
-        Lo store si tocca ad app ferma, e il riavvio riestrae i template: una
-        taratura in corso si riapplica subito dopo.
+        Si legge ``jobs.json`` (stato e storico del job) e la sessione del
+        monitor, ``cron_<id>.jsonl``, subito dopo il giro: la sessione si sfoltisce
+        a ogni giro, e il primo e' quello che conta. Se il giro ha affidato il
+        controllo a un aiutante (``pendingSinceMs``), si aspetta anche il suo
+        verdetto, che riscrive l'esito del giro.
         """
         dev = self.device
-        started = time.strftime("%Y-%m-%dT%H:%M:%S")
-        dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
-        before = dev.shift_system_jobs(only=("heartbeat",)).get("heartbeat", 0)
-        dev.restart_app()
-        self._reapply_calibration()
-        deadline = time.monotonic() + timeout
-        ran = False
+
+        def job() -> dict[str, Any] | None:
+            store = json.loads(dev.read("cron/jobs.json") or "{}")
+            return next((j for j in store.get("jobs", [])
+                         if j.get("id") not in jobs_before
+                         and (j.get("payload") or {}).get("mode") == "monitor"), None)
+
+        found = job()
+        if found is None:
+            return None
+        deadline = time.monotonic() + first
         while time.monotonic() < deadline:
-            if dev.job_last_run("heartbeat") > before:
-                ran = True
-                time.sleep(3)
+            found = job() or found
+            if (found.get("state") or {}).get("runHistory"):
                 break
             time.sleep(5)
-        # Rimesso lontano, o tornerebbe a girare fra mezz'ora in mezzo a un altro scenario.
-        dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
-        rows = [r for r in _rows(dev.read("sessions/heartbeat.jsonl") or "")
-                if str(r.get("timestamp") or "") >= started]
-        dev.shift_system_jobs(delay_ms=24 * 3600 * 1000, only=("heartbeat",))
-        dev.restart_app()
-        self._reapply_calibration()
-        return rows, ran
+        state = found.get("state") or {}
+        runs = state.get("runHistory") or []
+        first_status = runs[0].get("status") if runs else None
+
+        def calls() -> list[str]:
+            rows = _rows(dev.read(f"sessions/cron_{found['id']}.jsonl") or "")
+            return [c.name for c in observation_from_rows(rows, []).tool_calls]
+
+        # Subito: il giro dopo sfoltisce la sessione e porterebbe via questo.
+        first_calls = calls()
+        if state.get("pendingSinceMs"):
+            deadline = time.monotonic() + verdict
+            while time.monotonic() < deadline and (state.get("pendingSinceMs")):
+                time.sleep(5)
+                found = job() or found
+                state = found.get("state") or {}
+        return {
+            "id": found["id"],
+            "message": (found.get("payload") or {}).get("message"),
+            "first_status": first_status,
+            "status": state.get("lastStatus"),
+            "error": state.get("lastError"),
+            "pending": bool(state.get("pendingSinceMs")),
+            "first_calls": first_calls,
+            "calls": first_calls if first_status == state.get("lastStatus") else calls(),
+        }
 
     def _reapply_calibration(self) -> None:
         for path, original in self.originals.items():
@@ -396,10 +419,16 @@ class Runner:
         meta["updated_at"] = datetime.now().isoformat()
         start = datetime.now() - timedelta(minutes=len(scenario.seed_session) + 1)
         lines = [json.dumps(meta, ensure_ascii=False)]
-        for i, (role, text) in enumerate(scenario.seed_session):
+        for i, item in enumerate(scenario.seed_session):
+            stamp = (start + timedelta(minutes=i)).isoformat()
+            if isinstance(item, dict):
+                # Una riga intera: i nonce si rendono anche dentro gli argomenti.
+                row = json.loads(scenario.render(json.dumps(item, ensure_ascii=False), nonces))
+                lines.append(json.dumps({**row, "timestamp": stamp}, ensure_ascii=False))
+                continue
+            role, text = item
             lines.append(json.dumps({
-                "role": role, "content": scenario.render(text, nonces),
-                "timestamp": (start + timedelta(minutes=i)).isoformat(),
+                "role": role, "content": scenario.render(text, nonces), "timestamp": stamp,
             }, ensure_ascii=False))
         dev.write(session_file, "\n".join(lines) + "\n")
 

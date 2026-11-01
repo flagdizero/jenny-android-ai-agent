@@ -86,7 +86,6 @@ class TestTheClassificationIsTernary:
             ("subagent:abc", "internal"),
             ("gardener:orto-20260821", "internal"),
             ("internal:direct", "internal"),
-            ("heartbeat", "internal"),
         ],
     )
     def test_every_key_falls_in_exactly_one_category(self, key, kind):
@@ -245,7 +244,7 @@ class TestTheWritePassesWithItsKey:
 
         Un job cron rilegge le proprie voci in questa coda — e' cosi che si
         ricorda dei run passati. Chiudere anche questa scrittura romperebbe la
-        cura dell'amnesia dell'heartbeat.
+        cura dell'amnesia dei job ricorrenti.
         """
         cursor = store.append_history("il job ha girato", session_key=CRON)
 

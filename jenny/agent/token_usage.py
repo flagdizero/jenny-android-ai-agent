@@ -57,7 +57,6 @@ _SOURCE_KEYS = ("user", "api", "cron", "dream", "atlas", "gardener", "mascot", "
 _INTERNAL_KIND_TO_SOURCE = {
     "dream": "dream",
     "cron": "cron",
-    "heartbeat": "cron",
     # Un bucket suo e non ``cron``, benche' sia il cron a farlo partire: il
     # giardiniere gira **una volta per progetto**, quindi il suo costo cresce con
     # il numero di wiki e non con il numero di job. Nel secchio del cron quella

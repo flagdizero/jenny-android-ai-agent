@@ -21,6 +21,10 @@ from jenny.utils.plain_text import plain_text
         ("usa `a*b*c` qui", "usa a*b*c qui"),
         ("```python\nx = **2**\n```\ndopo", "x = **2**\ndopo"),
         ("snake_case_name resta", "snake_case_name resta"),
+        ("Segui [[piano-concordato]] stasera", "Segui piano concordato stasera"),
+        ("Vedi [[salute/wiki/visite.md#ottobre]]", "Vedi visite"),
+        ("Vedi [[piano-concordato|il piano]]", "Vedi il piano"),
+        ("in codice `[[resta]]`", "in codice [[resta]]"),
         ("", ""),
     ],
 )

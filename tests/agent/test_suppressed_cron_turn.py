@@ -1,4 +1,4 @@
-"""Il turno silenzioso della FSM: la meccanica su cui poggiano monitor e heartbeat.
+"""Il turno silenzioso della FSM: la meccanica su cui poggiano i monitor.
 
 Prima di questa feature il silenzio da un lavoro schedulato era **impossibile**:
 un turno che finiva senza contenuto veniva sostituito con
@@ -167,13 +167,13 @@ class TestSuppressionComesFromTheTurnVisibility:
     async def test_internal_work_on_a_user_channel_is_silent_without_a_flag(
         self, loop: AgentLoop, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Il caso dell'annuncio di un subagent nato dentro l'heartbeat.
+        """Il caso dell'annuncio di un subagent nato dentro un monitor.
 
         Nessun flag nei metadata: la provenienza (session key interna su un canale
         utente) basta da sola. È ciò che impedisce a quel turno di consegnare in
         chat come faceva prima.
         """
-        ctx = await self._captured_ctx(loop, monkeypatch, {}, session_key="heartbeat")
+        ctx = await self._captured_ctx(loop, monkeypatch, {}, session_key="cron:rain-check")
 
         assert ctx.silent is True
 
@@ -181,7 +181,7 @@ class TestSuppressionComesFromTheTurnVisibility:
         self, loop: AgentLoop, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Il marchio serve ai consumatori che hanno solo i metadata."""
-        ctx = await self._captured_ctx(loop, monkeypatch, {}, session_key="heartbeat")
+        ctx = await self._captured_ctx(loop, monkeypatch, {}, session_key="cron:rain-check")
 
         assert ctx.msg.metadata[TURN_VISIBILITY_META] == "silent"
 

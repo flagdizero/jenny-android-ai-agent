@@ -1,9 +1,8 @@
-"""Sessioni finte per i test del dispatch di cron e heartbeat.
+"""Sessioni finte per i test del dispatch di cron.
 
 Sette file ne avevano una coppia sua (sessione + store), con le stesse tre
 cose in combinazioni diverse: la chiave, le potature chieste
-(``retain_recent_legal_suffix``) e i messaggi, che il ramo heartbeat legge
-per sapere se l'utente si è fatto vivo dopo un avviso. Qui tutte e tre, e due
+(``retain_recent_legal_suffix``) e i messaggi. Qui tutte e tre, e due
 modi di rispondere a ``get_or_create``:
 
 - di norma **una sessione per chiave, la stessa a ogni richiesta**: chi scrive
@@ -14,8 +13,6 @@ modi di rispondere a ``get_or_create``:
   il dispatch tocca.
 
 ``saved`` elenca le chiavi salvate, in ordine; ``save_count`` le conta.
-``test_heartbeat_user_rearm.py`` resta fuori: usa ``Session`` vere, perché il
-lettore del timbro utente è ciò che prova.
 """
 
 from __future__ import annotations

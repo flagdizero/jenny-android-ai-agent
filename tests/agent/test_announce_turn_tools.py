@@ -17,8 +17,12 @@ from unittest.mock import AsyncMock, MagicMock
 from jenny.agent.loop import AgentLoop
 from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
+from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import LLMResponse
-from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
+from jenny.session.keys import UNIFIED_SESSION_KEY
+
+# Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
+MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
@@ -76,7 +80,7 @@ async def test_a_silent_announce_keeps_nothing_to_report(tmp_path: Path) -> None
     """Un controllo silenzioso decide qui se parlare: ``nothing_to_report`` e' la sua uscita."""
     loop = _make_loop(tmp_path)
 
-    tools, system = await _announce_turn(loop, HEARTBEAT_SESSION_KEY)
+    tools, system = await _announce_turn(loop, MONITOR_SESSION_KEY)
 
     assert "nothing_to_report" in tools
     assert "nothing_to_report" in system

@@ -228,7 +228,6 @@ def _dispatcher(
         get_agent=lambda: agent,
         config=config,
         cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
         snapshot_before_dream=snapshot_cb,
     )
 

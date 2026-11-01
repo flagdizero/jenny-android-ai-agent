@@ -11,8 +11,8 @@ pre-analisi di un'immagine — che partono fuori dal contesto del turno e restan
 senza header. Il sintomo non è un errore: è un degrado silenzioso, cache mancata
 e nei casi peggiori un 400 che fa ripiegare la richiesta altrove.
 
-In Jenny i percorsi sono due: ``AgentRunner.run`` (il turno, e con lui cron,
-Dream e heartbeat) e ``Consolidator.archive`` (la compattazione). Il terzo era
+In Jenny i percorsi sono due: ``AgentRunner.run`` (il turno, e con lui cron
+e Dream) e ``Consolidator.archive`` (la compattazione). Il terzo era
 ``classify_mood``, l'umore della mascotte: dal 24/09/2026 l'umore si legge dagli
 emoji e non chiama piu' nessun provider.
 """
@@ -75,12 +75,12 @@ class TestTheTurn:
         assert seen and seen[0] != "NESSUNO-SCOPE"
 
     async def test_different_conversations_give_different_ids(self) -> None:
-        # È il caso vero: cron, Dream e heartbeat arrivano qui con il loro
+        # È il caso vero: cron e Dream arrivano qui con il loro
         # ``session_key_override`` e devono restare conversazioni distinte.
         user = await self._run("unified:default")
         dream = await self._run("internal:dream")
-        heartbeat = await self._run("internal:heartbeat")
-        assert len({user[0], dream[0], heartbeat[0]}) == 3
+        monitor = await self._run("cron:rain-check")
+        assert len({user[0], dream[0], monitor[0]}) == 3
 
     async def test_the_same_session_gives_the_same_id_across_turns(self) -> None:
         first = await self._run("unified:default")

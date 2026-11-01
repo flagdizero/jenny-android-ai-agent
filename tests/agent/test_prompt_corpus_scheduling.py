@@ -7,10 +7,9 @@ banale: nessuno aveva guardato in quel file. Aveva però due buchi, entrambi
 verificati, ed entrambi la stessa forma del difetto che doveva chiudere.
 
 **(a) Non vedeva le stringhe Python.** Setacciava ``_SYSTEM_PROMPT_TEMPLATES``,
-ma il prompt di sistema non è fatto solo di template: ``_HEARTBEAT_PREAMBLE`` e
-``_UPDATE_PREAMBLE`` stanno in ``jenny/runtime/cron_dispatch.py``,
-``task_index_block`` / ``already_warned_block`` / ``escalation_block`` /
-``followup_block`` in ``jenny/cron/heartbeat_tasks.py``, e ogni
+ma il prompt di sistema non è fatto solo di template: ``_UPDATE_PREAMBLE`` sta
+in ``jenny/runtime/cron_dispatch.py``, il blocco del seguito di un monitor
+delegato in ``jenny/cron/monitor_followup.py``, e ogni
 ``Tool.description`` con le description del proprio schema di parametri sta nei
 moduli di ``jenny/agent/tools/`` — dove ``cron.py`` da solo tiene quattro copie
 della regola sui modi. Tutto questo raggiunge il modello, e la guardia non
@@ -192,15 +191,9 @@ _TEACHING = {
         rf"{_Q}cron(?![_\w]){_Q}\s*(tool|job)\b",
         re.I,
     ),
-    # `HEARTBEAT.md` come destinazione. Nominarlo come file del workspace resta
-    # legittimo — lo fanno ``tool_contract.md`` e ``subagent_system.md`` — quindi
-    # serve il verbo che ci scrive dentro.
-    "HEARTBEAT.md come destinazione": re.compile(
-        rf"\b(add|write|put|append)\b[^.\n]{{0,40}}{_Q}HEARTBEAT\.md", re.I
-    ),
     # Sostituisce il letterale "recurring jobs": qui conta il verbo di
-    # creazione, non il sostantivo. "these recurring checks are not working"
-    # (``heartbeat_tasks.py``) parla di guasti, non di come si crea un job.
+    # creazione, non il sostantivo. "this recurring check has not been working"
+    # (``cron_monitor.md``) parla di guasti, non di come si crea un job.
     "creare lavoro ricorrente": re.compile(
         r"\b(schedul\w+|creat\w+|add|set up|register)\b[^.\n]{0,60}\b(recurring|repeating)\b"
         r"[^.\n]{0,25}\b(job|task|check|work)s?\b",
@@ -211,7 +204,7 @@ _TEACHING = {
     # che una copia parziale copia per prima.
     "condizionale → destinazione": re.compile(
         r"(only tell me if|warn me when|let me know if)[\s\S]{0,240}?"
-        r"(['\"`](monitor|reminder)['\"`]|HEARTBEAT\.md)",
+        r"['\"`](monitor|reminder)['\"`]",
         re.I,
     ),
 }
@@ -225,14 +218,14 @@ _ALLOWED: dict[str, str] = {
     # Il consolidamento fra `skills/cron/SKILL.md` e la description del tool.
     #
     # Attenzione: è una deroga sulla *descrizione dei parametri*, non sulla
-    # regola di instradamento. Oggi quelle stringhe conoscono due destinazioni
-    # (`reminder`/`monitor`) e non nominano `HEARTBEAT.md`, il che è una
-    # divergenza reale da `agent/scheduling.md` — nota, non sanata qui perché vive in
-    # `jenny/agent/tools/cron.py`.
+    # regola di instradamento, che resta nelle due case.
     "tool cron.description": "lo schema del tool: il modello lo legge mentre compone la chiamata",
     "tool cron.parameters": "idem — description del blocco parametri",
     "tool cron.parameters.properties.mode": "idem — i valori ammessi di `mode`",
     "tool cron.parameters.properties.tz": "idem — nomina `cron_expr` come campo, non come regola",
+    "tool cron.parameters.properties.condition": (
+        "idem — dice con quali schedulazioni vale il filtro, non dove va un lavoro"
+    ),
 }
 
 
@@ -261,7 +254,7 @@ def test_the_routing_rule_lives_nowhere_else() -> None:
         "tool `cron` esiste nel turno — e `jenny/skills/cron/SKILL.md`, che si legge su "
         "richiesta invece che a ogni turno. Una terza copia non resta allineata: è già "
         "successo con `agent/tool_contract.md`. Se il match è un uso innocuo di `cron` o "
-        "`HEARTBEAT.md` come parole comuni, la strada giusta è restringere il pattern; "
+        "`monitor` come parole comuni, la strada giusta è restringere il pattern; "
         "`_ALLOWED` solo quando il testo la regola la dice davvero e ha una ragione per farlo."
     )
 
@@ -301,105 +294,36 @@ def test_the_sweep_reaches_every_kind_of_source() -> None:
     assert counts["py "] >= 30, counts
     # Le stringhe Python che il roadmap nomina una per una devono essere dentro.
     assert any(source.startswith("py jenny/runtime/cron_dispatch.py") for source in sources)
-    assert any(source.startswith("py jenny/cron/heartbeat_tasks.py") for source in sources)
+    assert any(source.startswith("py jenny/cron/monitor_followup.py") for source in sources)
 
 
 # ---------------------------------------------------------------------------
-# Le due metà di un contratto solo, in due file
+# I marcatori del prompt di un monitor
 # ---------------------------------------------------------------------------
 
-# Le affermazioni che ``_HEARTBEAT_PREAMBLE`` e ``followup_block`` devono fare
-# **entrambe**, perché entrambe chiedono la stessa cosa — classificare l'esito di
-# un controllo schedulato — a due turni diversi.
-#
-# Le regex sono volutamente larghe: qui non si presidia il testo, si presidia che
-# le due metà dicano le stesse cose. Riscriverne una e non l'altra è il guasto,
-# ed è già successo: `ebafa02` ha corretto `followup_block` — un bersaglio
-# irraggiungibile è un guasto anche se il task dice di tacere — lasciando indietro
-# il preambolo, misurato sul Titan 2 con Tailscale spento.
-#
-# `OK_MARKER` non è qui apposta: nel run dell'heartbeat il successo non ha un
-# marcatore, è l'assenza di `CHECK_FAILED`; solo il turno d'annuncio lo dichiara.
-# È un'asimmetria voluta, non una divergenza.
-_SHARED_CLAIMS = {
-    "riga che non raggiunge nessuno": re.compile(
-        r"reach(es)? nobody|reaches no one|not a message to the user", re.I
-    ),
-    "irraggiungibile resta un guasto": re.compile(
-        r"(told (it|you) to give up quietly|give up quietly|skip the cycle silently)", re.I
-    ),
-    "niente da fare non è un guasto": re.compile(
-        r"(nothing to do this time|had nothing to do)", re.I
-    ),
-    "la condizione è del task stesso": re.compile(
-        r"its own (schedule or condition|condition or schedule)", re.I
-    ),
-}
 
+def test_the_monitor_prompt_uses_the_real_marker_values() -> None:
+    """``cron_monitor.md`` scrive i marcatori a mano, il parser li legge dalle
+    costanti di ``jenny/cron/could_not_check.py``. Cambiare il valore di una
+    costante lascerebbe il prompt a chiedere al modello una riga che il parser
+    non riconosce più.
 
-def _heartbeat_halves() -> dict[str, str]:
-    from jenny.cron.heartbeat_tasks import HeartbeatTask, followup_block
-    from jenny.runtime.cron_dispatch import _HEARTBEAT_PREAMBLE
-
-    pending = [HeartbeatTask(id="t1", index=1, label="controlla la pioggia", text="…")]
-    return {
-        "_HEARTBEAT_PREAMBLE (jenny/runtime/cron_dispatch.py)": _HEARTBEAT_PREAMBLE,
-        "followup_block (jenny/cron/heartbeat_tasks.py)": followup_block(pending, []),
-    }
-
-
-class TestTheHeartbeatContractIsStatedTwice:
-    """Il run dell'heartbeat e il turno d'annuncio di un subagent devono concordare.
-
-    Sono due prompt in due file, scritti da due meccanismi diversi, e pongono al
-    modello la stessa domanda: questo controllo ha prodotto la sua risposta, o
-    non è proprio avvenuto? Una risposta diversa a seconda di chi chiede
-    significa che un controllo rotto viene archiviato come sano — l'unico errore
-    qui che niente a valle può più intercettare.
+    ``CHECK_FAILED`` non c'è più dal 01/11/2026: un controllo che non ha girato
+    lo dice ``nothing_to_report(checked=false)``, e la riga la scrive il tool
+    (``declared_marker_lines``) con la costante stessa.
     """
+    from jenny.cron.could_not_check import (
+        COULD_NOT_CHECK_MARKER,
+        DELEGATED_MARKER,
+        WARNED_MARKER,
+    )
 
-    def test_both_halves_state_the_same_claims(self) -> None:
-        halves = _heartbeat_halves()
-        stated = {
-            name: {claim for claim, p in _SHARED_CLAIMS.items() if p.search(text)}
-            for name, text in halves.items()
-        }
-        (name_a, claims_a), (name_b, claims_b) = stated.items()
-        assert claims_a == claims_b, (
-            "Le due metà del contratto non dicono più le stesse cose.\n"
-            f"  solo in {name_a}: {sorted(claims_a - claims_b)}\n"
-            f"  solo in {name_b}: {sorted(claims_b - claims_a)}\n"
-            "Vivono in due file e valgono per lo stesso giudizio: chi ne riscrive una "
-            "riscrive l'altra. Se la riscrittura è legittima e cambia le parole, va "
-            "allargata la regex corrispondente in `_SHARED_CLAIMS` — una volta, per "
-            "entrambe."
+    text = load_bundled_template("agent/cron_monitor.md") or ""
+    assert COULD_NOT_CHECK_MARKER not in text, "il prompt chiede ancora la riga a mano"
+    assert "`checked=false`" in text
+    for marker in (DELEGATED_MARKER, WARNED_MARKER):
+        assert marker in text, (
+            f"il prompt del monitor non chiede più una riga `{marker}`: il valore della "
+            "costante in `jenny/cron/could_not_check.py` è cambiato e la copia scritta a "
+            "mano è rimasta indietro."
         )
-
-    def test_neither_half_drops_the_core_of_the_contract(self) -> None:
-        """Il pavimento sotto il test simmetrico.
-
-        Due metà riscritte insieme in modo che nessuna regex faccia più match
-        sarebbero d'accordo su un insieme vuoto, e passerebbero.
-        """
-        from jenny.cron.could_not_check import COULD_NOT_CHECK_MARKER
-
-        for name, text in _heartbeat_halves().items():
-            assert COULD_NOT_CHECK_MARKER in text, f"{name} non nomina più il marcatore di guasto"
-            for claim in ("irraggiungibile resta un guasto", "niente da fare non è un guasto"):
-                assert _SHARED_CLAIMS[claim].search(text), f"{name} non dice più: {claim}"
-
-    def test_the_preamble_uses_the_real_marker_values(self) -> None:
-        """``_HEARTBEAT_PREAMBLE`` scrive i marcatori a mano, ``heartbeat_tasks``
-        li interpola dalle costanti: la stessa forma di divergenza, un file più
-        in là. Cambiare il valore di una costante lascerebbe il preambolo a
-        chiedere al modello una riga che il parser non riconosce più.
-        """
-        from jenny.cron.could_not_check import COULD_NOT_CHECK_MARKER, DELEGATED_MARKER
-        from jenny.runtime.cron_dispatch import _HEARTBEAT_PREAMBLE
-
-        for marker in (COULD_NOT_CHECK_MARKER, DELEGATED_MARKER):
-            assert f"{marker} <task number>" in _HEARTBEAT_PREAMBLE, (
-                f"il preambolo non chiede più una riga `{marker}`: il valore della costante "
-                "in `jenny/cron/could_not_check.py` è cambiato e la copia scritta a mano è "
-                "rimasta indietro."
-            )

@@ -67,23 +67,97 @@ def _day(when: datetime) -> str:
     return f"{_DAYS[when.weekday()]} {when.strftime('%d/%m')}"
 
 
-#: Quanto resta in vista un'attesa scattata e mai chiusa.
-THREAD_DAYS = timedelta(days=14)
+#: Quanto avanti guarda «in arrivo nei quaderni», e quante righe al massimo.
+COMING_UP = timedelta(days=7)
+MAX_COMING_UP = 8
+
+_MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
+           "September", "October", "November", "December")
 
 
 @dataclass(frozen=True)
-class Thread:
-    """Un'attesa di un quaderno scattata e non ancora chiusa: una cosa in sospeso.
+class Upcoming:
+    """Un singolo di un quaderno che suona presto: una data in arrivo.
 
-    La verita' sta in ``board/reminders.json`` del quaderno (``state`` aperta,
-    ``notifiedAt`` scritto dall'orologio): qui se ne fa solo una riga. Niente
-    righe «aperto/chiuso» nel diario che la ripetano — due verita' divergono.
+    La verità sta nello scheduler (``CronService``): qui se ne fa solo una riga.
+    ``card`` è il titolo della scheda, ``None`` per tutto il quaderno; ``date``
+    e ``time`` sono quelli della riga del post-it (``cron_link.note_of``), nel
+    fuso dell'utente.
     """
 
     id: str
     notebook: str
+    card: str | None
     text: str
-    since: datetime
+    at_ms: int
+    date: str
+    precision: str
+    time: str | None = None
+
+
+def upcoming_dates(cron: Any, roots: Mapping[str, Any], *, now: datetime,
+                   tz_name: str | None) -> list[Upcoming]:
+    """I singoli dei quaderni che suonano entro :data:`COMING_UP`, dal più vicino.
+
+    Dallo scheduler vivo, mai da ``jobs.json``: va chiamata sul loop, come
+    ``cron_link.notebook_jobs``. Un ricorrente (anche a filtro) non è una data e
+    resta fuori; uno in pausa non suona — è anche il caso dei job di una scheda
+    tolta (``board/removed.py``) — e nemmeno uno di una scheda che non è più
+    sulla bacheca. *roots* sono le cartelle dei quaderni, per il titolo della scheda.
+    """
+    from jenny.board import model
+    from jenny.board.cron_link import job_snapshot, notes_from_jobs
+    from jenny.board.store import read_board
+
+    if cron is None:
+        return []
+    start = int(now.timestamp() * 1000)
+    end = int((now + COMING_UP).timestamp() * 1000)
+    by_notebook: dict[str, dict[str, dict[str, Any]]] = {}
+    for job in cron.list_jobs(include_disabled=False):
+        notebook = (job.payload.board or {}).get("notebook")
+        if not isinstance(notebook, str) or job.paused_at_ms is not None:
+            continue
+        snap = job_snapshot(job)
+        at_ms = snap["schedule"].get("at_ms")
+        if isinstance(at_ms, (int, float)) and start <= at_ms <= end:
+            by_notebook.setdefault(notebook, {})[job.id] = snap
+    out: list[Upcoming] = []
+    for notebook, snaps in sorted(by_notebook.items()):
+        root = roots.get(notebook)
+        board = read_board(root) if root is not None else None
+        if board is None:
+            continue
+        for note in notes_from_jobs(snaps, tz_name):
+            when = note["when"]
+            if when.get("kind") != "date":
+                continue
+            scope = note["card"]
+            if model.scope_state(board, scope) == model.SCOPE_HIDDEN:
+                continue
+            card = model.card_by_id(board, scope) if scope != model.NOTEBOOK else None
+            out.append(Upcoming(
+                note["id"], notebook, str(card.get("title") or "untitled") if card else None,
+                note["text"], int(snaps[note["id"]]["schedule"]["at_ms"]),
+                str(when["date"]), str(when["precision"]), when.get("time")))
+    return sorted(out, key=lambda u: (u.at_ms, u.id))
+
+
+def _date_line(item: Upcoming) -> str:
+    """La riga di una data, con la sua precisione: un mese resta un mese.
+
+    Mai «domani»: la riga si congela con il resto del diario, e una parola
+    relativa diventerebbe falsa a mezzanotte. L'ora corrente il modello ce l'ha.
+    """
+    day = datetime.strptime(item.date, "%Y-%m-%d")
+    if item.precision == "month":
+        when = f"sometime in {_MONTHS[day.month - 1]} {day.year}"
+    elif item.time:
+        when = f"{_day(day)} {item.time}"
+    else:
+        when = f"{_day(day)} (no set time)"
+    where = f"notebook {item.notebook}" + (f", card {item.card}" if item.card else "")
+    return f"- {when} · {where} · {item.text}"
 
 
 @dataclass(frozen=True)
@@ -185,54 +259,6 @@ def render_section(rows: Sequence[Mapping[str, Any]], *, until_cursor: int,
     return [_line(r) for r in sharp[-MAX_SHARP_LINES:]], _trace_lines(trace)
 
 
-def waiting_threads(roots: Mapping[str, Any], *, now: datetime) -> list[Thread]:
-    """Le attese scattate e aperte di tutti i quaderni, le più vecchie prima.
-
-    Quelle di una scheda tolta tacciono, come per l'orologio che le annuncia;
-    oltre :data:`THREAD_DAYS` escono dalla vista (restano sulla bacheca).
-    """
-    from jenny.board import model
-    from jenny.board.store import read_board, read_reminders
-
-    out: list[Thread] = []
-    for name, root in sorted(roots.items()):
-        board = read_board(root)
-        if board is None:
-            continue
-        gone = model.removed_card_ids(board)
-        for rem in model.open_reminders(read_reminders(root)):
-            if rem.get("card") in gone or not isinstance(rem.get("notifiedAt"), str):
-                continue
-            try:
-                since = datetime.fromisoformat(rem["notifiedAt"]).replace(tzinfo=None)
-            except ValueError:
-                continue
-            if now - since <= THREAD_DAYS:
-                out.append(Thread(f"{name}/{rem['id']}", name, str(rem["text"]), since))
-    return sorted(out, key=lambda t: t.since)
-
-
-def _thread_lines(threads: Sequence[Thread],
-                  rows: Sequence[Mapping[str, Any]]) -> dict[str, str]:
-    """Una riga per attesa; «forse fatta» se l'utente ha poi detto qualcosa in quel quaderno.
-
-    La chiusura morbida: chi dice «l'ho visto» nel quaderno dei film di rado
-    torna a spuntare l'attesa, e senza questo la chat personale chiederebbe di
-    una cosa già fatta. Non la chiude: dice al modello di non darla per da fare.
-    """
-    lines: dict[str, str] = {}
-    for t in threads:
-        later = any(
-            r.get("kind") == "said" and r.get("about") == t.notebook
-            and (when := _parse(r.get("timestamp"))) is not None and when > t.since
-            for r in rows
-        )
-        line = f"- since {_day(t.since)} · notebook {t.notebook} · {t.text}"
-        lines[t.id] = line + (" — the user has talked in that notebook since: maybe done"
-                              if later else "")
-    return lines
-
-
 def _in_history(line: str, history: Sequence[Mapping[str, Any]]) -> bool:
     for message in history:
         content = message.get("content")
@@ -248,7 +274,7 @@ def _in_history(line: str, history: Sequence[Mapping[str, Any]]) -> bool:
 def diary_turn(entries: Sequence[Mapping[str, Any]], session_key: str | None,
                state_holder: MutableMapping[str, Any] | None,
                history: Sequence[Mapping[str, Any]], *, now: datetime,
-               threads: Sequence[Thread] = ()) -> DiaryTurn | None:
+               dates: Sequence[Upcoming] = ()) -> DiaryTurn | None:
     """Il diario di un turno, e lo stato della vista aggiornato in *state_holder*.
 
     *entries* sono le voci di ``history.jsonl``; *history* la cronologia che il
@@ -257,44 +283,53 @@ def diary_turn(entries: Sequence[Mapping[str, Any]], session_key: str | None,
     e una riga uscita dalla finestra torna da sé). ``None`` se la sessione non
     vede il diario.
 
-    *threads* sono le attese in sospeso (:func:`waiting_threads`): le vede solo
-    la chat personale (un quaderno ha già la sua bacheca), congelate con il
-    resto; un'attesa che scatta, si chiude o diventa «forse fatta» dopo arriva
-    come le righe nuove.
+    Fino al 31/10/2026 c'era anche «in sospeso»: le attese dei quaderni scattate
+    e non chiuse. Un promemoria del quaderno ora è un job che, scattato, se ne va
+    (e parla nella chat del suo quaderno): non resta niente in sospeso da dire.
+    Al suo posto *dates*, le date in arrivo (:func:`upcoming_dates`): le vede solo
+    la chat personale (un quaderno ha già la sua bacheca), le prime
+    :data:`MAX_COMING_UP`, congelate con il resto; una che arriva, cambia o se ne
+    va dopo arriva come le righe nuove.
     """
     if not session_key or session_kind(session_key) not in ("personal", "project"):
         return None
     rows = visible_rows(entries, session_key)
-    current = _thread_lines(threads, rows) if session_kind(session_key) == "personal" else {}
+    personal = session_kind(session_key) == "personal"
+    window = {d.id: _date_line(d) for d in dates} if personal else {}
+    current = dict(list(window.items())[:MAX_COMING_UP])
     top = max((r["cursor"] for r in entries if isinstance(r.get("cursor"), int)), default=0)
     state = state_holder.get(DIARY_STATE_KEY) if state_holder is not None else None
     state = state if isinstance(state, dict) else {}
     cursor = state.get("cursor")
     at, seen = _parse(state.get("at")), _parse(state.get("seen"))
-    stored = state.get("threads")
+    stored = state.get("dates")
     frozen: dict[str, str] = stored if isinstance(stored, dict) else {}
     fresh = [r for r in rows if isinstance(cursor, int) and isinstance(r.get("cursor"), int)
              and r["cursor"] > cursor]
-    changed = [line for tid, line in current.items() if frozen.get(tid) != line]
-    closed = [f"- no longer waiting (done or dropped): {line[2:]}"
-              for tid, line in frozen.items() if tid not in current]
+    # Una data oltre il tetto non è «nuova», e una congelata spinta oltre il
+    # tetto da una più vicina non «se ne va»: suona ancora.
+    changed = [f"- coming up in a notebook: {line[2:]}" for jid, line in current.items()
+               if frozen.get(jid) != line]
+    gone = [f"- no longer coming up (it rang, or was moved or removed): {line[2:]}"
+            for jid, line in frozen.items() if jid not in window]
     if (not isinstance(cursor, int) or at is None or seen is None
             or now - seen > REFREEZE_AFTER_IDLE
-            or len(fresh) + len(changed) + len(closed) > REFREEZE_AFTER_NEW):
-        cursor, at, fresh, frozen, changed, closed = top, now, [], dict(current), [], []
+            or len(fresh) + len(changed) + len(gone) > REFREEZE_AFTER_NEW):
+        cursor, at, fresh, frozen, changed, gone = top, now, [], dict(current), [], []
     sharp, trace = render_section(rows, until_cursor=cursor, anchor=at)
-    waiting = list(frozen.values())
-    news = [*(_line(r) for r in fresh), *changed, *closed]
+    coming = list(frozen.values())
+    news = [*(_line(r) for r in fresh), *changed, *gone]
     new_lines = [line for line in news if not _in_history(line, history)]
     if state_holder is not None:
         state_holder[DIARY_STATE_KEY] = {
-            "cursor": cursor, "at": at.strftime(_TS), "seen": now.strftime(_TS),
-            "threads": frozen}
-    if not (sharp or trace or waiting or new_lines):
+            "cursor": cursor, "at": at.strftime(_TS), "seen": now.strftime(_TS)}
+        if frozen:
+            state_holder[DIARY_STATE_KEY]["dates"] = frozen
+    if not (sharp or trace or coming or new_lines):
         return DiaryTurn("", [])
     from jenny.utils.prompt_templates import render_template
 
     section = render_template("agent/diary_section.md", sharp=sharp, trace=trace,
-                              waiting=waiting, strip=True) if (sharp or trace or waiting) else ""
+                              coming=coming, strip=True) if (sharp or trace or coming) else ""
     lines = ["Diary, new since this conversation's diary section:", *new_lines] if new_lines else []
     return DiaryTurn(section, lines)

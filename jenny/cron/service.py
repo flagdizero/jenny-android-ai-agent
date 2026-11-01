@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine, Literal, NamedTuple
 from filelock import SoftFileLock, Timeout
 from loguru import logger
 
+from jenny.board.model import CONDITION_OPS
 from jenny.cron.session_turns import is_bound_cron_job
 from jenny.cron.silence_watchdog import alert_silently_broken_checks
 from jenny.cron.types import (
@@ -20,11 +21,11 @@ from jenny.cron.types import (
     CronJobSilencedError,
     CronJobState,
     CronMonitorCouldNotCheckError,
+    CronMonitorDelegatedError,
     CronPayload,
     CronRunRecord,
     CronSchedule,
     CronStore,
-    CronTaskCheckState,
 )
 
 # Modulo, non simboli: i test sostituiscono ``power.schedule_wake`` &co. per
@@ -36,7 +37,7 @@ from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write
 
 if TYPE_CHECKING:
-    from jenny.cron.heartbeat_followup import HeartbeatFollowup
+    from jenny.cron.monitor_followup import MonitorFollowup
 
 _LockClass = SoftFileLock
 # Quanto aspettare il file lock del giornale prima di considerarlo stantio.
@@ -110,6 +111,42 @@ def _load_board_link(raw: Any) -> dict[str, str] | None:
     if not all(isinstance(v, str) and v for v in link.values()):
         return None
     return link  # type: ignore[return-value]
+
+
+def _load_precision(raw: Any) -> Any:
+    """``exact``/``day``/``month``, o ``None`` per qualunque altro valore."""
+    return raw if raw in ("exact", "day", "month") else None
+
+
+def _load_condition(raw: Any) -> dict[str, Any] | None:
+    """Il filtro di un ricorrente, o ``None``: ``{app, params, field, op, value}``."""
+    if not isinstance(raw, dict):
+        return None
+    app, field, op = raw.get("app"), raw.get("field"), raw.get("op")
+    if not (isinstance(app, str) and app and isinstance(field, str) and field
+            and op in CONDITION_OPS and "value" in raw):
+        return None
+    params = raw.get("params")
+    return {"app": app, "params": params if isinstance(params, dict) else {},
+            "field": field, "op": op, "value": raw.get("value")}
+
+
+def _validate_label_for_add(
+    schedule: CronSchedule, *, why: Any, condition: Any,
+) -> tuple[str | None, dict[str, Any] | None]:
+    """Il perché e la condizione che arrivano da un chiamante vivo: solleva se storti."""
+    if why is not None and not (isinstance(why, str) and why.strip()):
+        raise ValueError("why must be the path of a wiki page")
+    cond = _load_condition(condition)
+    if condition is not None and cond is None:
+        raise ValueError(f"invalid condition: {condition!r}")
+    if cond is not None and schedule.kind == "at":
+        # Un singolo scatta una volta: con un filtro falso in quel momento non
+        # direbbe mai niente. La condizione si guarda a una cadenza.
+        raise ValueError("a condition needs a recurring schedule (every or cron), not at")
+    if schedule.precision is not None and schedule.kind != "at":
+        raise ValueError("precision is only for a one-time date")
+    return (why.strip() if isinstance(why, str) else None), cond
 
 
 def _parse_mode(raw: Any) -> Literal["reminder", "monitor"]:
@@ -249,6 +286,58 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
         raise ValueError("an interval schedule needs a positive interval")
 
 
+# Quanto nel passato puo' cadere un singolo appena creato. Un giorno: un'ora
+# calcolata e poi arrivata tardi (un turno lungo) suona comunque, e cosi' un
+# giorno o un mese di adesso («il 1° novembre» detto il 1° alle 12, che e' gia'
+# oltre le 9); un mese o un giorno di prima no — quelli sono un anno sbagliato.
+_PAST_GRACE_MS = 24 * 60 * 60 * 1000
+
+# Fra un tentativo e l'altro di un singolo che non ha suonato (``_settle_one_shot``).
+_ONE_SHOT_RETRY_MS = 5 * 60 * 1000
+
+
+def _refuse_past_one_time(schedule: CronSchedule, now_ms: int) -> None:
+    """Un singolo nuovo con la data gia' passata si rifiuta, invece di suonare subito.
+
+    Il 01/11/2026, su jenny_s22, la passata della bacheca ha scritto «verso
+    marzo» come ``2026-03``: il marzo gia' passato. Il job e' nato scaduto, e un
+    ``at`` scaduto suona al primo giro (e' il recupero di chi era spento): il
+    promemoria del rinvaso e' arrivato otto mesi in anticipo, ed e' sparito. Lo
+    dice l'errore, a chiunque scriva — tool, bacheca, giardiniere — cosi' il
+    modello riprova con l'anno giusto. Solo alla creazione: i job gia' salvati e
+    scaduti a telefono spento devono ancora recuperare.
+    """
+    if schedule.kind != "at" or not schedule.at_ms or schedule.at_ms >= now_ms - _PAST_GRACE_MS:
+        return
+    today = datetime.fromtimestamp(now_ms / 1000).date().isoformat()
+    raise ValueError(
+        f"that date is already past (today is {today}): a one-time job needs a future "
+        "date, and a month or a day said without a year is the next one to come"
+    )
+
+
+def _with_turn_taint(origin_metadata: dict | None) -> dict:
+    """I metadati d'origine di un job, col taint del turno che lo scrive.
+
+    Un job scritto con contenuto non fidato in vista (una pagina ostile letta da
+    un aiutante, il risultato di un tool) può portarne il testo, e girerà da
+    solo: i lavori che i suoi turni avvieranno nascono contaminati
+    (``security.subagent_policy``). Sta qui, e non in chi chiama, perché le porte
+    sono tante — il tool ``cron``, la bacheca, il tool ``board``, il giardiniere —
+    e fino al 01/11/2026 solo la prima lo faceva: un promemoria scritto dalla
+    bacheca girava pulito. Fuori da un turno il taint è vuoto e non si tocca
+    niente; un ``_taint`` già scritto resta, e il nuovo gli si somma.
+    """
+    from jenny.security.subagent_policy import current_turn_taint
+
+    out = dict(origin_metadata or {})
+    turn_taint = current_turn_taint()
+    if turn_taint:
+        known = [str(x) for x in out.get("_taint") or () if isinstance(x, str)]
+        out["_taint"] = known + [x for x in turn_taint if x not in known]
+    return out
+
+
 def _validate_cron_expr(schedule: CronSchedule) -> None:
     """Un'espressione che non si legge, o che non scatta mai, si rifiuta qui.
 
@@ -306,13 +395,12 @@ class CronService:
         self._alarm_armed_ms: int | None = None
         self._alarm_lock = asyncio.Lock()
         self._alarm_tasks: set[asyncio.Task] = set()
-        # Registrato dal ``CronDispatcher`` (che è chi conosce l'heartbeat) e
-        # letto dall'``AgentLoop`` sul turno di ritorno di un subagent. Sta qui
-        # perché il servizio cron è l'unico oggetto che entrambi hanno già in
-        # mano: il turno d'annuncio non passa dal dispatcher — arriva dal bus —
-        # e senza questo aggancio l'esito di un controllo delegato non avrebbe
-        # nessuna strada per tornare nello stato del job.
-        self.heartbeat_followup: "HeartbeatFollowup | None" = None
+        # Registrato dal ``CronDispatcher`` e letto dall'``AgentLoop`` sul turno
+        # di ritorno di un subagent. Sta qui perché il servizio cron è l'unico
+        # oggetto che entrambi hanno già in mano: il turno d'annuncio non passa
+        # dal dispatcher — arriva dal bus — e senza questo aggancio l'esito di un
+        # monitor delegato non avrebbe nessuna strada per tornare nel suo job.
+        self.monitor_followup: "MonitorFollowup | None" = None
 
     def _is_unbound_agent_job(self, job: CronJob) -> bool:
         return job.payload.kind == "agent_turn" and not is_bound_cron_job(job)
@@ -390,6 +478,7 @@ class CronService:
                     every_ms=j["schedule"].get("everyMs"),
                     expr=j["schedule"].get("expr"),
                     tz=j["schedule"].get("tz"),
+                    precision=_load_precision(j["schedule"].get("precision")),
                 ),
                 payload=CronPayload(
                     kind=j["payload"].get("kind", "agent_turn"),
@@ -400,6 +489,8 @@ class CronService:
                     origin_chat_id=j["payload"].get("originChatId"),
                     origin_metadata=j["payload"].get("originMetadata") or {},
                     board=_load_board_link(j["payload"].get("board")),
+                    why=j["payload"].get("why") or None,
+                    condition=_load_condition(j["payload"].get("condition")),
                 ),
                 state=CronJobState(
                     next_run_at_ms=j.get("state", {}).get("nextRunAtMs"),
@@ -414,27 +505,14 @@ class CronService:
                         j.get("state", {}).get("consecutiveCouldNotCheck") or 0
                     ),
                     could_not_check_since_ms=j.get("state", {}).get("couldNotCheckSinceMs"),
+                    could_not_check_escalated_at_ms=j.get("state", {}).get(
+                        "couldNotCheckEscalatedAtMs"
+                    ),
                     could_not_check_escalated=bool(
                         j.get("state", {}).get("couldNotCheckEscalated")
                     ),
-                    task_checks={
-                        task_id: CronTaskCheckState(
-                            consecutive_could_not_check=entry.get(
-                                "consecutiveCouldNotCheck"
-                            ) or 0,
-                            since_ms=entry.get("sinceMs"),
-                            escalated=bool(entry.get("escalated")),
-                            # Assente nelle voci scritte prima di questo campo:
-                            # ``None`` significa "gli si è parlato, non si sa
-                            # quando", cioè non riarmabile. V. ``CronTaskCheckState``.
-                            escalated_at_ms=entry.get("escalatedAtMs"),
-                            label=entry.get("label") or "",
-                            pending_since_ms=entry.get("pendingSinceMs"),
-                        )
-                        for task_id, entry in (
-                            j.get("state", {}).get("taskChecks") or {}
-                        ).items()
-                    },
+                    pending_since_ms=j.get("state", {}).get("pendingSinceMs"),
+                    condition_notified=bool(j.get("state", {}).get("conditionNotified")),
                     run_history=[
                         CronRunRecord(
                             run_at_ms=r["runAtMs"],
@@ -682,6 +760,7 @@ class CronService:
                         "everyMs": j.schedule.every_ms,
                         "expr": j.schedule.expr,
                         "tz": j.schedule.tz,
+                        **({"precision": j.schedule.precision} if j.schedule.precision else {}),
                     },
                     "payload": {
                         "kind": j.payload.kind,
@@ -694,6 +773,8 @@ class CronService:
                         # Solo per i cron del quaderno: uno store senza quaderni
                         # resta identico a prima, byte per byte.
                         **({"board": j.payload.board} if j.payload.board else {}),
+                        **({"why": j.payload.why} if j.payload.why else {}),
+                        **({"condition": j.payload.condition} if j.payload.condition else {}),
                     },
                     "state": {
                         "nextRunAtMs": j.state.next_run_at_ms,
@@ -703,17 +784,9 @@ class CronService:
                         "consecutiveCouldNotCheck": j.state.consecutive_could_not_check,
                         "couldNotCheckSinceMs": j.state.could_not_check_since_ms,
                         "couldNotCheckEscalated": j.state.could_not_check_escalated,
-                        "taskChecks": {
-                            task_id: {
-                                "consecutiveCouldNotCheck": e.consecutive_could_not_check,
-                                "sinceMs": e.since_ms,
-                                "escalated": e.escalated,
-                                "escalatedAtMs": e.escalated_at_ms,
-                                "label": e.label,
-                                "pendingSinceMs": e.pending_since_ms,
-                            }
-                            for task_id, e in j.state.task_checks.items()
-                        },
+                        "couldNotCheckEscalatedAtMs": j.state.could_not_check_escalated_at_ms,
+                        "pendingSinceMs": j.state.pending_since_ms,
+                        "conditionNotified": j.state.condition_notified,
                         "runHistory": [
                             {
                                 "runAtMs": r.run_at_ms,
@@ -1152,6 +1225,7 @@ class CronService:
         state.consecutive_could_not_check = 0
         state.could_not_check_since_ms = None
         state.could_not_check_escalated = False
+        state.could_not_check_escalated_at_ms = None
 
     async def _execute_job(self, job: CronJob) -> None:
         """Execute a single job."""
@@ -1180,21 +1254,26 @@ class CronService:
                 job.state.could_not_check_since_ms = start_ms
             if e.escalated:
                 job.state.could_not_check_escalated = True
+                job.state.could_not_check_escalated_at_ms = start_ms
             logger.warning(
                 "Cron: job '{}' could not run its check ({} in a row): {}",
                 job.name,
                 job.state.consecutive_could_not_check,
                 e.reason or "no reason given",
             )
-            # Ultimo, e dopo che lo stato è completo: è l'unico punto del sistema
-            # che vede sia i contatori del job aggiornati sia la mappa per-task
-            # che il dispatcher ha appena riscritto, ed è quindi l'unico da cui
-            # una sola chiamata copre monitor e heartbeat insieme.
-            #
             # Il presupposto di ogni altro avviso è che il modello faccia la sua
             # parte; questa riga è ciò che accade quando non la fa. V.
             # ``jenny/cron/silence_watchdog.py``.
             alert_silently_broken_checks(job.name, job.state, now_ms=start_ms)
+        except CronMonitorDelegatedError:
+            # PRIMA di ``CronJobSilencedError``: il controllo è nelle mani di un
+            # aiutante e non è ancora una prova di niente. La sequenza resta
+            # com'è; il verdetto lo scrive il turno d'annuncio
+            # (``monitor_followup``), o il run dopo se non arriva.
+            job.state.last_status = "delegated"
+            job.state.last_error = None
+            job.state.pending_since_ms = start_ms
+            logger.info("Cron: job '{}' handed its check to a helper", job.name)
         except CronJobSilencedError:
             # Esito riuscito, non mancato: il job monitor ha girato fino in
             # fondo e ha deciso che non c'era niente da dire. Nessun
@@ -1232,19 +1311,55 @@ class CronService:
         ))
         job.state.run_history = job.state.run_history[-self._MAX_RUN_HISTORY:]
 
-        # Handle one-shot jobs
         if job.schedule.kind == "at":
-            if job.delete_after_run:
-                self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
-            else:
-                job.enabled = False
-                job.state.next_run_at_ms = None
+            await self._settle_one_shot(job, now_ms=end_ms)
         elif job.paused_at_ms is None:
             # Compute next run
             job.state.next_run_at_ms = _compute_next_run(job.schedule, _now_ms())
         # Altrimenti la pausa e' arrivata mentre il job stesso girava:
         # ``set_paused`` ha gia' tolto la prossima esecuzione, e ricalcolarla qui
         # lasciava un job «in pausa» con una scadenza armata nello store.
+
+    async def _settle_one_shot(self, job: CronJob, *, now_ms: int) -> None:
+        """Cosa resta di un singolo dopo un giro: niente, se ha suonato.
+
+        Un singolo che ha suonato sparisce sempre (decisione del 31/10/2026):
+        niente job spenti che restano nello store, niente esito orfano sulla
+        bacheca. Ma ``skipped`` ed ``error`` non sono un giro: il primo è l'agente
+        che ancora non c'è (il boot, l'onboarding), il secondo un provider che non
+        ha risposto — in entrambi il promemoria non è arrivato a nessuno, e
+        cancellarlo lo perdeva con un WARNING nel log per tutta traccia
+        (review del 01/11/2026). Resta nello store e riprova fra
+        ``_ONE_SHOT_RETRY_MS``, finché non suona o finché la sua ora non è
+        passata da più di ``_PAST_GRACE_MS``: dopo, suonerebbe a un giorno di
+        distanza, e se ne va con un ERROR che dice cosa si è perso. È lo stesso
+        «in ritardo ma suona» del recupero a telefono spento.
+        """
+        at_ms = job.schedule.at_ms or 0
+        rang = job.state.last_status not in ("skipped", "error")
+        if not rang and now_ms - at_ms <= _PAST_GRACE_MS:
+            # Messo in pausa mentre girava: ``set_paused`` ha già tolto la
+            # scadenza, e la ripresa decide se è ancora in tempo.
+            if job.paused_at_ms is None:
+                job.state.next_run_at_ms = now_ms + _ONE_SHOT_RETRY_MS
+            logger.warning(
+                "Cron: one-shot job '{}' ({}) did not ring ({}): retrying in {}s",
+                job.name, job.id, job.state.last_status, _ONE_SHOT_RETRY_MS // 1000,
+            )
+            return
+        if not rang:
+            logger.error(
+                "Cron: one-shot job '{}' ({}) never rang: its time passed more than a day "
+                "ago ({}), giving up", job.name, job.id, job.state.last_error or "",
+            )
+        self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
+        if job.payload.board:
+            from jenny.board.cron_link import forget_job
+
+            try:
+                await forget_job(dict(job.payload.board), job.id)
+            except Exception:  # noqa: BLE001 — il job è già andato, la bacheca è contorno
+                logger.exception("Cron: board not cleaned after one-shot {}", job.id)
 
     def _append_action(self, action: Literal["add", "del"], params: dict):
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1275,6 +1390,8 @@ class CronService:
         *,
         mode: Literal["reminder", "monitor"] = "reminder",
         board: dict | None = None,
+        why: str | None = None,
+        condition: dict | None = None,
     ) -> CronJob:
         """Add a new job.
 
@@ -1287,7 +1404,9 @@ class CronService:
             ValueError: schedule non valido, o ``mode`` non riconosciuto.
         """
         _validate_schedule_for_add(schedule)
+        _refuse_past_one_time(schedule, _now_ms())
         mode = _validate_mode_for_add(mode)
+        why, condition = _validate_label_for_add(schedule, why=why, condition=condition)
         # Un legame storto, qui, non torna ``None`` in silenzio come al caricamento:
         # un cron del quaderno diventerebbe personale, e un monitor perderebbe il
         # recinto del quaderno. Chi chiama sbaglia, e lo deve sapere.
@@ -1308,13 +1427,15 @@ class CronService:
                 session_key=session_key,
                 origin_channel=origin_channel,
                 origin_chat_id=origin_chat_id,
-                origin_metadata=origin_metadata or {},
+                origin_metadata=_with_turn_taint(origin_metadata),
                 board=link,
+                why=why,
+                condition=condition,
             ),
             state=CronJobState(next_run_at_ms=_next_run_with_catch_up(schedule, now)),
             created_at_ms=now,
             updated_at_ms=now,
-            delete_after_run=delete_after_run,
+            delete_after_run=delete_after_run or schedule.kind == "at",
         )
         self._enforce_agent_binding(job)
         if self._running:
@@ -1326,6 +1447,62 @@ class CronService:
             self._append_action("add", asdict(job))
 
         logger.info("Cron: added job '{}' ({})", name, job.id)
+        return job
+
+    _UNSET: Any = object()
+
+    def update_job(
+        self,
+        job_id: str,
+        *,
+        name: str | None = None,
+        message: str | None = None,
+        schedule: CronSchedule | None = None,
+        why: Any = _UNSET,
+        condition: Any = _UNSET,
+    ) -> CronJob | None:
+        """Cambia testo, quando, perché o condizione di un job dell'utente.
+
+        ``None`` se il job non c'è o è di sistema. Un nuovo ``schedule`` riarma
+        il job da adesso (con recupero, come all'aggiunta); un job in pausa resta
+        in pausa e riparte col nuovo quando lo si riprende.
+
+        Raises:
+            ValueError: schedule, perché o condizione non validi.
+        """
+        store = self._load_store()
+        job = next((j for j in store.jobs if j.id == job_id), None) if store else None
+        if job is None or job.payload.kind == "system_event":
+            return None
+        new_schedule = schedule or job.schedule
+        if schedule is not None:
+            _validate_schedule_for_add(schedule)
+            _refuse_past_one_time(schedule, _now_ms())
+        new_why = job.payload.why if why is self._UNSET else why
+        new_cond = job.payload.condition if condition is self._UNSET else condition
+        new_why, new_cond = _validate_label_for_add(new_schedule, why=new_why, condition=new_cond)
+        now = _now_ms()
+        if name is not None:
+            job.name = name.strip()
+        if message is not None:
+            job.payload.message = message
+        job.payload.origin_metadata = _with_turn_taint(job.payload.origin_metadata)
+        job.payload.why = new_why
+        if new_cond != job.payload.condition:
+            job.payload.condition = new_cond
+            job.state.condition_notified = False
+        if schedule is not None:
+            job.schedule = schedule
+            job.delete_after_run = job.delete_after_run or schedule.kind == "at"
+            if job.paused_at_ms is None:
+                job.state.next_run_at_ms = _next_run_with_catch_up(schedule, now)
+        job.updated_at_ms = now
+        if self._running:
+            self._save_store()
+            self._arm_timer()
+        else:
+            self._append_action("add", asdict(job))
+        logger.info("Cron: updated job '{}' ({})", job.name, job.id)
         return job
 
     def register_system_job(self, job: CronJob) -> CronJob:
@@ -1577,7 +1754,7 @@ class CronService:
         """Scrive su disco lo stato dei job mutato da un chiamante esterno.
 
         Serve al solo caso in cui uno stato cambia **fuori** da un run: il
-        verdetto di un controllo delegato arriva col turno d'annuncio del
+        verdetto di un monitor delegato arriva col turno d'annuncio del
         subagent, che non passa da ``_execute_job`` e quindi non incontra il
         salvataggio di fine ciclo. Il chiamante muta il job restituito da
         ``get_job`` — che è l'oggetto vivo dello store, non una copia — e poi

@@ -16,7 +16,7 @@ pytestmark = requires_jsdom
 
 _HEAD = """
 import assert from 'node:assert/strict';
-import { boot, tick } from './boot.mjs';
+import { boot, tick, until } from './boot.mjs';
 const app = await boot();
 /* Quel che Chromium risponde per un campo stretto col segnaposto a capo. */
 Object.defineProperty(app.input, 'scrollHeight', { configurable: true, get: () => 140 });
@@ -47,7 +47,6 @@ def test_sending_leaves_a_one_line_field() -> None:
     run_home(_HEAD + """
 type('una\\ndue\\ntre');
 app._send();
-await tick(10);
-assert.equal(app.input.value, '');
-assert.equal(app.input.style.height, '', 'dopo l\\u2019invio il campo e\\u2019 rimasto alto');
+await until(() => app.input.value === '' && app.input.style.height === '',
+  { msg: 'dopo l\\u2019invio il campo e\\u2019 rimasto alto' });
 """)

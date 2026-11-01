@@ -9,7 +9,7 @@ falla e proponeva di chiudere la scrittura. Non lo e', ed e' il contrario:
   che un job cron rilegge i propri run precedenti
   (``read_recent_history_for_prompt``, e i test in
   ``test_context_prompt_cache.py``), cioe' la cura dell'amnesia
-  dell'escalation dell'heartbeat;
+  dell'escalation dei monitor;
 - l'unico consumatore che trasforma quel file in memoria permanente e' Dream,
   che scriveva ``MEMORY.md`` leggendo **tutto**.
 
@@ -26,8 +26,7 @@ import pytest
 from jenny.agent.memory import MemoryStore
 
 # Chiavi di comodo. La forma con suffisso e' quella vera in produzione
-# (``cron:<job_id>``, ``dream:<timestamp>``); ``heartbeat`` e' nuda perche' ce
-# n'e' una sola.
+# (``cron:<job_id>``, ``dream:<timestamp>``).
 PERSONAL = "unified:default"
 CRON = "cron:job-1"
 DREAM = "dream:20260821-1200"
@@ -52,7 +51,7 @@ class TestDreamReadsOnlyThePersonalConversation:
         store.append_history("l'utente ha detto una cosa su di se'", session_key=PERSONAL)
         store.append_history("il job ha girato e non ha trovato niente", session_key=CRON)
         store.append_history("il run di Dream si e' loggato da solo", session_key=DREAM)
-        store.append_history("l'heartbeat ha escalato", session_key="heartbeat")
+        store.append_history("il turno interno ha escalato", session_key="internal:direct")
 
         batch = _dream_batch(store)
         assert "una cosa su di se'" in batch

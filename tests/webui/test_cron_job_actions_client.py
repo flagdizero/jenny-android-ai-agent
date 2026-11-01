@@ -42,7 +42,6 @@ const api = {{
 }};
 
 class Fake {{
-  _renderCronHeartbeat() {{ return ''; }}
   _cronStatusText(s) {{ return s; }}
   async _loadCron() {{ log.push(['reload']); }}
 {member(_SETTINGS, "_showCronJobDialog", prefixes=("async ",))}
@@ -51,7 +50,7 @@ class Fake {{
 
 const row = (over = {{}}) => ({{
   id: 'ab12cd34', name: 'Pioggia a Oslo', purpose: null, message: 'controlla la pioggia',
-  heartbeat: null, runs: [], actions: ['pause', 'remove'], pausedAtMs: null, ...over,
+  runs: [], actions: ['pause', 'remove'], pausedAtMs: null, ...over,
 }});
 const s = new Fake();
 {scenario}

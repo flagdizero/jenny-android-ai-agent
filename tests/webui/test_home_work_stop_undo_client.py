@@ -154,6 +154,31 @@ assert.equal(card.querySelector('.home-work-action2').hidden, true, 'gia’ annu
 """)
 
 
+def test_one_file_put_back_and_one_left_read_in_the_singular() -> None:
+    """«Undone: 1 files put back as they were» si e' visto sul telefono il
+    31/10/2026: con un file solo la riga e la nota vanno al singolare, come
+    gia' facevano il tasto («Undo her change (1 file)») e il foglio."""
+    run_home(_HEAD + """
+const app = await boot();
+await app.showConversation('project:orto');
+await tick(20);
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [stopped()] });
+const card = settled()[0];
+card.querySelector('.home-work-action2').click();
+row('undo').click();
+await tick(10);
+assert.ok(text(card).includes(W.undone.youOne), text(card));
+assert.equal(text(card.querySelector('.home-work-note')),
+             W.undone.keptOthersOne.replace('{files}', 'b.md'));
+frame({ event: 'subagent_status', chat_id: 'project:orto', running: [], recent: [stopped({
+  changes: 0, undo: { restored: 1, kept: [{ path: 'x/c.md', reason: 'missing' }],
+                      kept_count: 1, by: 'jenny', at: 6 } })] });
+assert.ok(text(card).includes(W.undone.jennyOne), text(card));
+assert.equal(text(card.querySelector('.home-work-note')),
+             W.undone.keptOtherOne.replace('{files}', 'c.md'));
+""")
+
+
 def test_a_helper_out_of_breath_offers_continue_and_undo() -> None:
     run_home(_HEAD + """
 const app = await boot();

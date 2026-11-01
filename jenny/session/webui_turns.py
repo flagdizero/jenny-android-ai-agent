@@ -51,10 +51,10 @@ def webui_view_target(ctx: RuntimeEventContext) -> tuple[str, str] | None:
     La WebUI è la vista canonica della conversazione unificata: i turni
     websocket la aggiornano direttamente, quelli di altri canali utente
     (es. Telegram) vengono proiettati sul thread ``default``. I turni
-    interni (cron, dream, heartbeat) e le sessioni non unificate non hanno
+    interni (cron, dream) e le sessioni non unificate non hanno
     proiezione.
     """
-    # Il canale d'origine non basta a decidere: un heartbeat o un cron monitor
+    # Il canale d'origine non basta a decidere: un cron monitor
     # gira *su* ``websocket:default`` — è il target a cui potrà consegnare se la
     # condizione scatta — ma nessuno dei suoi marcatori di turno (spinner,
     # ``_turn_end``) appartiene alla conversazione dell'utente. Il discrimine è

@@ -64,8 +64,8 @@ def test_a_system_prompt_is_restored_on_the_next_sync(workspace: Path) -> None:
 def test_a_user_file_is_never_overwritten(workspace: Path, name: str) -> None:
     """L'altra metà, e il motivo per cui il difetto esisteva.
 
-    ``SOUL.md`` e ``USER.md`` li riscrive Dream, ``AGENTS.md`` e
-    ``HEARTBEAT.md`` l'utente: la copia del pacchetto è un punto di partenza,
+    ``SOUL.md`` e ``USER.md`` li riscrive Dream, ``AGENTS.md``
+    l'utente: la copia del pacchetto è un punto di partenza,
     non la verità. Riscriverli cancellerebbe la personalità del bot.
     """
     target = workspace / name
@@ -504,16 +504,9 @@ def test_the_user_owned_templates_ship_no_prose() -> None:
 
     Il lettore è la persona, e la persona sta nella WebUI.
 
-    Le due eccezioni sono esplicite:
-
-    * ``SOUL.md`` è la personalità di serie, cioè contenuto che *deve* stare nel
-      prompt — è l'unico che riceve ``_BOOTSTRAP_TEMPLATE_NOTICE``.
-    * ``HEARTBEAT.md`` tiene ``## Active Tasks`` perché non è prosa ma il
-      delimitatore su cui si orienta il parser (``jenny/cron/heartbeat_tasks.py``:
-      la scansione parte con ``in_active_section = False``). Svuotato il file, il
-      primo task dell'utente non verrebbe letto e ``_run_heartbeat`` uscirebbe in
-      silenzio dicendo "no active tasks": un controllo schedulato che non gira e
-      non alza niente da nessuna parte.
+    L'eccezione è esplicita: ``SOUL.md`` è la personalità di serie, cioè
+    contenuto che *deve* stare nel prompt — è l'unico che riceve
+    ``_BOOTSTRAP_TEMPLATE_NOTICE``.
     """
     for name in ("AGENTS.md", "USER.md", "memory/MEMORY.md"):
         assert (load_bundled_template(name) or "") == "", (
@@ -521,14 +514,6 @@ def test_the_user_owned_templates_ship_no_prose() -> None:
             "un'installazione esistente, e su una nuova si paga in ogni turno. "
             "Va sotto `jenny/templates/agent/`, in una skill, o nella WebUI."
         )
-
-    heartbeat = [
-        line for line in (load_bundled_template("HEARTBEAT.md") or "").splitlines() if line.strip()
-    ]
-    assert heartbeat == ["# Heartbeat Tasks", "## Active Tasks"], (
-        "HEARTBEAT.md deve restare le due sole intestazioni: `## Active Tasks` è il "
-        f"delimitatore del parser, il resto è prosa. Trovato: {heartbeat}"
-    )
 
 
 def test_dream_is_told_not_to_write_runtime_facts_and_why() -> None:

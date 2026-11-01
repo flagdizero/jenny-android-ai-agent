@@ -135,7 +135,7 @@ def _cron_tool(session_key: str) -> tuple[CronTool, _Cron]:
 @pytest.mark.parametrize(
     "params",
     [
-        {"action": "add", "message": "x", "at": "2026-09-01T09:00:00"},
+        {"action": "add", "message": "x", "date": "2026-09-01", "time": "09:00"},
         {"action": "list"},
         {"action": "remove", "job_id": "j1"},
     ],
@@ -151,18 +151,6 @@ async def test_cron_is_closed_in_the_personal_chat_too(readonly: Path, params: d
     result = await tool.execute(**params)
     assert _MARK in result
     assert service.added == []
-
-
-async def test_inside_a_project_the_project_rule_speaks_first(readonly: Path) -> None:
-    """Due regole, e la spiegazione giusta è quella che risolve *anche* con la scrittura accesa.
-
-    Dire "sola lettura" dentro un progetto manderebbe l'utente ad accendere
-    l'interruttore per poi trovarsi rifiutato di nuovo.
-    """
-    tool, _ = _cron_tool("project:palestra")
-    result = await tool.execute(action="add", message="x", at="2026-09-01T09:00:00")
-    assert "project" in result.lower()
-    assert result != READONLY_TOOL_REFUSAL
 
 
 # ── il goal sostenuto: la stessa famiglia di un job ──────────────────────

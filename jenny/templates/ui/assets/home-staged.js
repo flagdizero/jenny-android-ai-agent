@@ -2,7 +2,7 @@
  *
  *  Un subagent che ha letto qualcosa da fuori (una pagina, un download) non
  *  scrive da solo i file che Jenny carica senza nessuno davanti: una skill,
- *  `HEARTBEAT.md`, un promemoria, `USER.md`, la memoria. La modifica resta in
+ *  un promemoria, `USER.md`, la memoria. La modifica resta in
  *  bozza (`jenny/agent/staged_writes.py`) e qui compare una scheda nel posto
  *  live della chat: quale file, da dove viene il lavoro, le modifiche, e
  *  **Installa** / **Scarta**. Il tocco e' la conferma: nessun tool del modello

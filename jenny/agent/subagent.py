@@ -2404,8 +2404,7 @@ class SubagentManager:
         # session key d'origine e' cio da cui
         # ``jenny.session.turn_visibility.resolve_turn_visibility`` deduce se il
         # turno appartiene a lavoro interno. Un subagent lanciato dentro
-        # l'heartbeat (sessione ``heartbeat``) o dentro un cron monitor
-        # (``cron:<job_id>``) termina molto dopo la fine del turno che lo ha
+        # un cron monitor (``cron:<job_id>``) termina molto dopo la fine del turno che lo ha
         # lanciato, e prima il suo annuncio apriva un turno nuovo che consegnava
         # in chat senza passare da alcun gate. Cambiare questo override in un
         # ``f"{channel}:{chat_id}"` "piu semplice" rimetterebbe quel messaggio in
@@ -2955,7 +2954,7 @@ class SubagentManager:
     def _origin_is_silent(self, spec: SubagentSpec) -> bool:
         """True se questo subagent lavora per un turno che non parla all'utente.
 
-        Un subagent lanciato da un heartbeat o da un cron monitor e' lavoro
+        Un subagent lanciato da un cron monitor e' lavoro
         interno tanto quanto il turno che lo ha lanciato: il pannello e il digest
         in chat lo annuncerebbero all'utente, che non ha chiesto quel controllo.
         La provenienza si legge dalla session key d'origine, la stessa da cui

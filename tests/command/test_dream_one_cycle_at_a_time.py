@@ -105,8 +105,12 @@ class _GatedLoop:
     def _schedule_background(self, coro: Any) -> None:
         # Come ``AgentLoop._schedule_background``: il task nasce da
         # ``asyncio.create_task``, cosi' i test che lo sostituiscono vedono
-        # ancora la stessa chiamata.
-        self._background_tasks.append(asyncio.create_task(coro))
+        # ancora la stessa chiamata. E come quello raccoglie l'eccezione di un
+        # task fallito: senza, un ciclo che solleva («disk on fire») sporcava
+        # l'uscita della suite con «Task exception was never retrieved».
+        task = asyncio.create_task(coro)
+        self._background_tasks.append(task)
+        task.add_done_callback(lambda t: t.cancelled() or t.exception())
 
     def evict_pruned_sessions(self, _keys: Any) -> None:
         pass

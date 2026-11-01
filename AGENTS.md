@@ -19,20 +19,25 @@ The gateway is started by the Android runtime via `jenny.android_entry.run_gatew
 
 The Android project lives in the `android/` directory.
 
-**Every on-device test runs on the Android emulator `jenny_square`** (AVD: 1440×1440 @ 480 dpi,
-arm64, android-37), and only there. Do not install on, uninstall from or test against any
-other device, even when one shows up in `adb devices`: pin the emulator with
-`ANDROID_SERIAL=emulator-5554` on every `adb`/Gradle command.
+**Every on-device test runs on the Android emulator `jenny_s22`** (AVD: 1080×1920 @ 420 dpi,
+arm64, android-37, a phone-shaped screen), and only there. Do not install on, uninstall from or
+test against any other device, even when one shows up in `adb devices`. The serial does not say
+which AVD it is — `emulator-5554` goes to whichever emulator started first — so check the name,
+then pin it with `ANDROID_SERIAL` on every `adb`/Gradle command.
 
 ```bash
-~/Library/Android/sdk/emulator/emulator -avd jenny_square -no-snapshot-save &
-adb devices -l   # emulator-5554 must be listed
-cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installFossDebug
+~/Library/Android/sdk/emulator/emulator -avd jenny_s22 -no-snapshot-load &
+adb -s emulator-5554 emu avd name   # must say jenny_s22
+cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installPlayDebug
 ```
 
+`-no-snapshot-load` boots cold: loading the default snapshot would also bring the emulator's disk
+back to the day it was saved.
+
 Two flavors build from the same code: `foss` (GitHub, no Google library) and `play` (Play Store,
-adds the copy on Google Drive). `installPlayDebug` installs the second; the two debug builds share
-the debug key, so they replace each other in place.
+adds the copy on Google Drive). The emulator runs `play`; `installFossDebug` installs the other one
+to try the build without the Drive. The two debug builds share the debug key, so they replace each
+other in place.
 
 Debug and release APKs are signed differently: switching between them on the emulator needs
 `adb uninstall com.flagdizero.jenny` first, which wipes the emulator's workspace — and brings
@@ -58,13 +63,13 @@ Messages flow through an async `MessageBus` (`jenny/bus/queue.py`) that decouple
 - **Step-by-step plans** (`jenny/plan/`): a big job in a notebook split into steps the **code** drives one at a time. `plan.json` (under `<runtime_root>/plans/`, outside the workspace) is the only source of a plan's state; `driver.py::PlanDriver` (built in the composition root) is the only thing that moves it — it opens each step with an injected turn, the model closes it with a tool, and the end-of-turn hook (`agent/loop_plan.py`) takes the photos and opens the next step. The user's decisions (approve, pause, stop, rollback) are the `plan.*` RPCs in `webui/plan_commands.py`, which no tool reaches. While a plan holds a notebook the user's writes to it answer `plan_running`. Before a plan there is a **planning** (`drafting`, one per notebook, in `plans/drafting.json`): the Plan button opens it, every turn of that chat stays a read-only planning turn until `plan_propose` (or a cancel, `/stop`, 12 h idle), and `plan_propose` refuses a planning that has not read the notebook. A step that leaves drafts (`agent/staged_writes.py`) does not close: the plan waits on them (`blocked.kind = "drafts"`) and goes on by itself once the user installs or discards them.
 - **Undoing a helper** (`jenny/agent/subagent_journal.py`): every file a subagent changes is noted per lineage (the content before its first write, then before/after hashes) under `subagents/journal/`, by the write fences it already passes (`subagent_policy.check_write`, `journal_touch` for the board, app drafts, downloads, the notebook journal and `ssh_transfer`) and by the runner after each tool. `SubagentManager.undo` puts back only the files still as that helper left them; the home's «Fermala» sheet, `/api/subagents/{id}/undo`, `.../cancel?undo=1` and `subagent_cancel undo=true` reach it. `tests/security/test_journal_write_surfaces.py` fails on a writer that is neither hooked nor declared out of it.
 - **Memory** (`jenny/agent/memory.py`): Session history persistence with Dream two-phase memory consolidation. Uses atomic writes with fsync for durability.
-- **Session Management** (`jenny/session/`): History persistence, context compaction, and sustained goal state tracking (`goal_state.py`); TTL-based auto-compaction lives in `jenny/agent/autocompact.py` (`AutoCompact`). The user conversation is a **single unified session** (`unified:default`, see `keys.py`), except that a project chat on the WebSocket channel gets its own `project:<name>` session (`session_key_for_channel`); internal work (cron, Dream, heartbeat) uses separate internal keys via `session_key_override`.
+- **Session Management** (`jenny/session/`): History persistence, context compaction, and sustained goal state tracking (`goal_state.py`); TTL-based auto-compaction lives in `jenny/agent/autocompact.py` (`AutoCompact`). The user conversation is a **single unified session** (`unified:default`, see `keys.py`), except that a project chat on the WebSocket channel gets its own `project:<name>` session (`session_key_for_channel`); internal work (cron, Dream, gardener) uses separate internal keys via `session_key_override`.
 - **Config** (`jenny/config/schema.py`, `loader.py`, `store.py`): Pydantic-*style* configuration (`jenny/pydantic_compat/`, stdlib-only — see [`FORK_BOUNDARY.md`](./FORK_BOUNDARY.md)) loaded from `workspace/config.json` inside the project root. Supports camelCase aliases for JSON compatibility. **Every write goes through `store.mutate()`** — see the rule under [Config & security](#config--security); calling `save_config()` directly reintroduces a silent data-loss bug that no test will catch for you.
 - **WebUI** (`jenny/templates/ui/`): Mobile-first HTML/JS served by the gateway, in two shells that share `assets/shared/`: the home (`index.html` + `home-*.js`, the default) and the workshop (`workshop.html` + `mobile-*.js`), reached from the home's Settings page; `onboarding.html` is a third, first-run document. Both shells talk to the gateway over the same WebSocket used for chat, plus HTTP routes under `/api/`.
 - **WebUI HTTP API** (`jenny/webui/`): The `/api/` route handlers backing the SPA (apps, settings, media, skills, transcript, token usage, workspaces, file preview, etc.), plus gateway service/token wiring.
 - **Jenny Apps** (`jenny/apps/`): Runtime for user-authored mini-apps — `manifest.py`, `executor.py`, `storage.py`, `summary.py`, `http.py`, `proxy.py`, `token.py`. See [Write a mini-app](docs/contribute/write-a-mini-app.md).
 - **Command Router** (`jenny/command/`): Slash command routing and built-in command handlers.
-- **Heartbeat** (`jenny/templates/HEARTBEAT.md`): Periodic task list checked via `cron` jobs.
+- **Scheduler** (`jenny/cron/`): everything Jenny does later is a job in `cron/jobs.json`, one-time or recurring, each labelled with where, when, what and why; a periodic check is a recurring `monitor` job. The heartbeat (`HEARTBEAT.md`) was retired on 31/10/2026: `cron/retired_heartbeat.py` tells a user upgrading from 2.0.0, once, which of its checks stopped.
 - **Skills** (`jenny/skills/`): Built-in skill definitions loaded into agent context.
 - **Security** (`jenny/security/`): Workspace policy/access + network SSRF protections.
 
@@ -107,8 +112,10 @@ reason in the comment itself. The public references are
 
 ## Branches and flavors
 
-Two long-lived branches: **`main`** for releases and **`next`**, where every change lands.
-Short-lived ones are deleted as soon as they land.
+One long-lived branch, **`main`**: releases are cut from it, and every change reaches it through
+a short-lived branch and a pull request (CI runs its pull-request checks only for `main`). A branch
+is deleted once it lands. A change that needs another one still in review can open its pull
+request against that branch, and moves to `main` when the first lands.
 
 The Play Store and GitHub builds come from the same commit as two Gradle flavors, `play` and
 `foss`. The one thing only `play` has — the encrypted copy on Google Drive — lives where the

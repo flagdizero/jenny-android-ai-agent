@@ -13,7 +13,6 @@ from jenny.cron.types import (
     CronJobState,
     CronPayload,
     CronSchedule,
-    CronTaskCheckState,
 )
 
 
@@ -231,12 +230,12 @@ def test_list_at_job_shows_iso_timestamp(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
     tool._cron.add_job(
         name="One-shot",
-        schedule=CronSchedule(kind="at", at_ms=1773684000000),
+        schedule=CronSchedule(kind="at", at_ms=1899914400000),  # 16/03/2030
         message="fire",
         **_bound_chat(),
     )
     result = tool._list_jobs()
-    assert "at 2026-" in result
+    assert "at 2030-" in result
     assert "Asia/Shanghai" in result
 
 
@@ -328,40 +327,40 @@ def test_remove_protected_dream_job_returns_clear_feedback(tmp_path) -> None:
     assert tool._cron.get_job("dream") is not None
 
 
-def test_add_cron_job_defaults_to_tool_timezone(tmp_path) -> None:
+async def test_add_cron_job_defaults_to_tool_timezone(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Morning standup", None, "0 8 * * *", None, None)
+    result = await tool.execute(action="add", message="Morning standup", cron_expr="0 8 * * *")
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
     assert job.schedule.tz == "Asia/Shanghai"
 
 
-def test_add_at_job_uses_default_timezone_for_naive_datetime(tmp_path) -> None:
+async def test_add_at_job_uses_default_timezone_for_naive_datetime(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Morning reminder", None, None, None, "2026-03-25T08:00:00")
+    result = await tool.execute(action="add", message="Morning reminder", date="2030-03-25", time="08:00")
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
-    expected = int(datetime(2026, 3, 25, 0, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
+    expected = int(datetime(2030, 3, 25, 0, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
     assert job.schedule.at_ms == expected
 
 
-def test_add_job_binds_current_session_key(tmp_path) -> None:
+async def test_add_job_binds_current_session_key(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "Morning standup", 60, None, None, None)
+    result = await tool.execute(action="add", message="Morning standup", every_seconds=60)
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
@@ -371,11 +370,11 @@ def test_add_job_binds_current_session_key(tmp_path) -> None:
     assert job.payload.origin_metadata == {}
 
 
-def test_add_job_requires_session_key(tmp_path) -> None:
+async def test_add_job_requires_session_key(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context(RequestContext(channel="websocket", chat_id="chat-1"))
 
-    result = tool._add_job(None, "Background refresh", 60, None, None, None)
+    result = await tool.execute(action="add", message="Background refresh", every_seconds=60)
 
     assert result == "Error: scheduled cron jobs must be created from a chat session"
     assert tool._cron.list_jobs() == []
@@ -408,19 +407,19 @@ def test_validate_params_requires_message_only_for_add(tmp_path) -> None:
     assert "job_id is required when action='remove'" in tool.validate_params({"action": "remove"})
 
 
-def test_add_job_empty_message_returns_actionable_error(tmp_path) -> None:
+async def test_add_job_empty_message_returns_actionable_error(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
 
-    result = tool._add_job(None, "", 60, None, None, None)
+    result = await tool.execute(action="add", message="", every_seconds=60)
 
     assert "action='add' requires a non-empty 'message'" in result
     assert "Retry including message=" in result
 
 
-def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(tmp_path) -> None:
+async def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(tmp_path) -> None:
     """CronTool stores owner/session identity separately from origin delivery context."""
     tool = _make_tool(tmp_path)
     meta = {"thread": {"id": "111.222", "kind": "channel"}}
@@ -428,7 +427,7 @@ def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(tmp_pa
         channel="websocket", chat_id="C99", metadata=meta, session_key="websocket:C99:111.222"
     ))
 
-    result = tool._add_job("test", "say hi", 60, None, None, None)
+    result = await tool.execute(action="add", name="test", message="say hi", every_seconds=60)
     assert "Created job" in result
 
     jobs = tool._cron.list_jobs()
@@ -473,72 +472,18 @@ async def test_list_shows_a_job_paused_from_the_workshop(tmp_path) -> None:
         service.stop()
 
     assert "Acqua" in result
-    assert "Paused by the user from the workshop" in result
+    assert "Paused since" in result
     assert "Next run" not in result
 
 
-# -- lo stato per-controllo dell'heartbeat --
+# -- un monitor che ha delegato --
 
 
-class TestThePerCheckStateIsReadable:
-    """Il job ``heartbeat`` esegue N controlli, e quale sia rotto era invisibile.
+def test_a_delegated_check_says_it_is_waiting(tmp_path) -> None:
+    """Non è né rotto né sano: il verdetto arriva dal turno d'annuncio dell'aiutante."""
+    tool = _make_tool(tmp_path)
+    state = CronJobState(pending_since_ms=11)
 
-    ``state.task_checks`` è indicizzato per task, viene salvato e ricaricato dallo
-    store da commit, e non raggiungeva **nessuna** superficie: non questo elenco,
-    non la WebUI. "Il controllo della pioggia sta funzionando?" si rispondeva solo
-    leggendo logcat sul telefono — che su Android vuol dire non rispondere.
+    lines = tool._format_state(state, CronSchedule(kind="every", every_ms=1_800_000))
 
-    I tre contatori del job sono soltanto il riassunto ("almeno un controllo non è
-    partito"), quindi non sostituiscono questa lettura: dicono che qualcosa è
-    rotto, mai cosa.
-    """
-
-    def test_a_healthy_heartbeat_adds_nothing(self, tmp_path) -> None:
-        """Le voci esistono solo per i controlli rotti: assente vuol dire sano."""
-        tool = _make_tool(tmp_path)
-
-        assert tool._format_state(CronJobState(), CronSchedule(kind="every")) == []
-
-    def test_a_broken_check_is_named_with_its_streak(self, tmp_path) -> None:
-        tool = _make_tool(tmp_path)
-        state = CronJobState(
-            task_checks={
-                "abc": CronTaskCheckState(
-                    consecutive_could_not_check=4, label="RainCheck: pioggia nelle città"
-                )
-            }
-        )
-
-        lines = tool._format_state(state, CronSchedule(kind="every", every_ms=1_800_000))
-
-        assert any("RainCheck: pioggia nelle città" in line and "4 consecutive" in line for line in lines)
-
-    def test_it_says_whether_the_user_has_been_told(self, tmp_path) -> None:
-        """La metà che serve di più: rotto e annunciato è un guasto diverso da
-        rotto e mai annunciato, ed erano indistinguibili."""
-        tool = _make_tool(tmp_path)
-        schedule = CronSchedule(kind="every", every_ms=1_800_000)
-        quiet = CronJobState(
-            task_checks={"a": CronTaskCheckState(consecutive_could_not_check=4, label="pioggia")}
-        )
-        warned = CronJobState(
-            task_checks={
-                "a": CronTaskCheckState(
-                    consecutive_could_not_check=4, label="pioggia", escalated=True
-                )
-            }
-        )
-
-        assert "not reported to the user yet" in "\n".join(tool._format_state(quiet, schedule))
-        assert "has been warned" in "\n".join(tool._format_state(warned, schedule))
-
-    def test_a_delegated_check_says_it_is_waiting(self, tmp_path) -> None:
-        """Non è né rotto né sano: il verdetto arriva dal turno d'annuncio."""
-        tool = _make_tool(tmp_path)
-        state = CronJobState(
-            task_checks={"a": CronTaskCheckState(pending_since_ms=11, label="backup")}
-        )
-
-        lines = tool._format_state(state, CronSchedule(kind="every", every_ms=1_800_000))
-
-        assert any("backup" in line and "waiting for its result" in line for line in lines)
+    assert any("waiting for its result" in line for line in lines)

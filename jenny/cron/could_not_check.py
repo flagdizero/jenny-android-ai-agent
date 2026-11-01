@@ -32,9 +32,11 @@ quello il tool ``message`` è e resta l'unica strada. Qui il modello non consegn
 niente, dichiara un fatto su di sé.
 
 Il modulo sta a parte — e non dentro ``bound_runner`` dove è nato con B8 —
-perché ha due lettori: il monitor cron (un controllo per turno, marcatore senza
-riferimento) e l'heartbeat (N task in un turno solo, marcatore con il numero del
-task). Un parser solo, due chiamanti: la forma che il modello scrive resta una.
+perché ha due lettori: il run del monitor e il turno d'annuncio dell'aiutante a
+cui il monitor ha passato il controllo (:mod:`jenny.cron.monitor_followup`). Un
+parser solo, due chiamanti: la forma che il modello scrive resta una. Il numero
+dopo il marcatore (``CHECK_FAILED 2: …``) veniva dall'heartbeat, che numerava i
+suoi task; il parser lo legge ancora e nessuno lo guarda.
 """
 
 from __future__ import annotations
@@ -50,12 +52,11 @@ COULD_NOT_CHECK_MARKER = "CHECK_FAILED"
 # Il secondo marcatore, e il motivo per cui ce n'è un secondo: l'agente
 # principale gira in ``orchestrator_mode`` e non ha ``python_exec``, quindi un
 # task che deve *fare* qualcosa viene delegato con ``spawn`` — che ritorna
-# subito. Il turno dell'heartbeat finisce prima che il subagent abbia iniziato,
-# e la regola "nessun marcatore = il task è stato eseguito" leggerebbe quel
+# subito. Il turno del monitor finisce prima che il subagent abbia iniziato, e
+# la regola "nessun marcatore = il controllo è avvenuto" leggerebbe quel
 # silenzio come un successo. Con questa riga il turno dichiara invece "l'esito
-# non lo so ancora", la sequenza di guasti del task non viene azzerata, e a
-# scriverne il verdetto è il turno che riceve il risultato
-# (:mod:`jenny.cron.heartbeat_followup`).
+# non lo so ancora", la sequenza di guasti non viene azzerata, e a scriverne il
+# verdetto è il turno che riceve il risultato (:mod:`jenny.cron.monitor_followup`).
 DELEGATED_MARKER = "CHECK_DELEGATED"
 
 # Il verdetto positivo, e l'unico posto in cui questo modulo dice che qualcosa
@@ -152,9 +153,9 @@ class CouldNotCheckMark:
     """Una riga di marcatore, letta.
 
     Attributes:
-        ref: il riferimento al task, quando c'è (l'heartbeat numera i suoi
-            task nel prompt). ``None`` su un monitor, che ha un controllo solo
-            e quindi non ha niente da distinguere.
+        ref: il numero scritto dopo il marcatore, quando c'è. Lo usava
+            l'heartbeat, che numerava i suoi task (ritirato il 31/10/2026); un
+            monitor ha un controllo solo e non lo guarda.
         reason: riga breve scritta dal modello su cosa lo ha bloccato. Può
             essere vuota: il marcatore senza motivo resta un marcatore.
     """
@@ -166,9 +167,8 @@ class CouldNotCheckMark:
 def parse_could_not_check_marks(final_text: str | None) -> list[CouldNotCheckMark]:
     """Legge TUTTE le righe di marcatore nel testo finale di un turno.
 
-    Una lista e non un singolo esito perché un turno di heartbeat copre N task
-    e può fallirne più d'uno: il monitor, che ne ha uno solo, guarda la prima e
-    ignora il resto.
+    Una lista perché un turno di heartbeat copriva N task e poteva fallirne più
+    d'uno; il monitor, che ne ha uno solo, guarda la prima e ignora il resto.
     """
     return _parse_marks(final_text, COULD_NOT_CHECK_MARKER)
 

@@ -123,7 +123,7 @@ Each control says what the value changes, and the numbers carry the ranges the s
 
 The **Periodic pass** switch in **Memory** → **Gardener**, and it applies live: the periodic pass stops looking. `/gardener` still works by hand from inside a notebook, so turning it off is not the same as losing the feature; turning it back on re-arms the job without a restart, even if the gateway started with it off.
 
-Turning it off also stops the [board pass](#the-board-pass): drawers are no longer rewritten, corrections made from a drawer wait, and no proposals arrive. The notebook clock that announces reminders is a separate job (`reminders`, see [Notebook board](./board.md#reminders-and-the-notebook-clock)) and keeps running.
+Turning it off also stops the [board pass](#the-board-pass): drawers are no longer rewritten, corrections made from a drawer wait, and no proposals arrive. A notebook's reminders are scheduler jobs of their own (see [Notebook board](./board.md#reminders)), and the notebook clock (`reminders`) is a separate job: both keep running.
 
 Turning the gardener off does **not** turn off capture: journal lines keep being written by the conversation itself, and they simply wait until a pass — periodic or manual — reads them. Capture is governed by the Writes/Read-only switch, not by this.
 

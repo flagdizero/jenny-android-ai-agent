@@ -610,8 +610,7 @@
       "agents": "The working conventions of this workspace: project preferences and the ways of doing things that keep coming back. Sections show up as you agree them with Jenny; a heading with nothing under it does not belong here.\n\nNot here: facts about you (USER.md), personality and behaviour rules (SOUL.md), project context (memory/MEMORY.md), procedures with concrete steps and output formats (Skills, in the Apps section).",
       "user": "What Jenny knows about you: identity, language, communication style, habits and interests. It fills in as she learns, so there is nothing to pre-write.\n\nNot here: project context (memory/MEMORY.md), behaviour rules (SOUL.md), repeatable procedures (Skills). Nor the time, the timezone or where you are: the runtime measures those on its own every turn, while a copy written here has nobody to refresh it and is out of date the moment it is saved.",
       "soul": "Who Jenny is and how she behaves: her character, the way she talks, what she does and what she will never do. Plus the standing rules you have given her — how to address you, what to steer clear of, where to tread carefully.\n\nDream, the consolidation pass that runs after conversations, is what maintains it: a correction you make in passing ends up here. You can read it and fix it, but you rarely need to write here by hand.\n\nNot here: facts about you (USER.md), working conventions (AGENTS.md), repeatable procedures (Skills). Nor how the app itself behaves: what a tool accepts, what the sandbox refuses, where a limit sits — that is the same on every install, and the system prompt already tells her.",
-      "memory": "Long-term memory: what has to survive from one session to the next — project context, useful facts, notes worth keeping.\n\nDream, the consolidation pass that runs after conversations, is what maintains it. You can read it and correct it, but you rarely need to write here by hand.\n\nNot here: facts about you (USER.md), working conventions (AGENTS.md), repeatable procedures (Skills).",
-      "heartbeat": "The recurring checks Jenny goes through on every heartbeat.\n\nWrite them under \"## Active Tasks\": that is the only section that gets read. When a task is done, delete it instead of leaving it there — a list of finished work is re-read on every beat.\n\nNot here: one-off requests (just ask in chat) and repeatable procedures (Skills)."
+      "memory": "Long-term memory: what has to survive from one session to the next — project context, useful facts, notes worth keeping.\n\nDream, the consolidation pass that runs after conversations, is what maintains it. You can read it and correct it, but you rarely need to write here by hand.\n\nNot here: facts about you (USER.md), working conventions (AGENTS.md), repeatable procedures (Skills)."
     },
     "deleteProjectConfirm": "Delete the notebook “{name}” for good? Its pages, board, reminders and conversation go with it, and it can't be undone.",
     "deleteProjectConfirmWithChat": "Delete the notebook “{name}” for good? Its pages, board, reminders and conversation ({count} messages) go with it, and it can't be undone.",
@@ -793,6 +792,7 @@
       "every": "every {every}",
       "expr": "schedule: {expr}",
       "at": "once, on {when}",
+      "atMonth": "once, in {when}",
       "unknown": "schedule not recognised",
       "daily": "every day at {time}",
       "weekly": "every {days} at {time}",
@@ -810,20 +810,19 @@
       "skipped": "did not start",
       "could_not_check": "could not check",
       "error": "error",
+      "delegated": "handed to a mini-me, waiting for her verdict",
       "unknown": "unknown outcome"
     },
     "banner": {
       "stopped": "The scheduler is stopped: the times below have not been recomputed, and past ones stay in the past.",
       "inertOne": "{name} is armed but does nothing: your settings have it switched off.",
       "inertMany": "{names} are armed but do nothing: your settings have them switched off.",
-      "heartbeatEmpty": "The heartbeat runs {every} but HEARTBEAT.md has no active tasks: it is checking nothing.",
       "recoveredBackup": "This list was rebuilt from the last good backup at startup. Check that everything is here.",
       "recoveredEmpty": "At startup the list was unreadable and there was no usable backup: the reminders you had created are gone."
     },
     "job": {
       "protected": "system",
       "monitor": "speaks only if it has something to report",
-      "oneShot": "once only",
       "disabled": "off",
       "inert": "does nothing",
       "neverRun": "never ran",
@@ -833,24 +832,15 @@
       "text": "Reminder text",
       "paused": "paused",
       "pausedSince": "Paused since {when}: it does not run until you resume it.",
-      "inNotebook": "It lives in the notebook {place}: you find it on its board too."
+      "inNotebook": "It lives in the notebook {place}: you find it on its board too.",
+      "when": "When: {schedule}",
+      "nextAt": "Next time: {when}"
     },
     "health": {
       "couldNotCheck": "Could not check {n} times in a row",
       "since": "since {when}",
       "warned": "you have been told",
       "notWarned": "you have not been told yet"
-    },
-    "heartbeat": {
-      "title": "Checks in HEARTBEAT.md",
-      "checkingNothing": "No active tasks: the heartbeat runs and checks nothing.",
-      "fileMissing": "HEARTBEAT.md does not exist yet.",
-      "fileUnreadable": "HEARTBEAT.md is there but cannot be read: check the file permissions.",
-      "taskOk": "fine",
-      "taskBroken": "has not run for {n} cycles",
-      "taskPending": "handed to a mini-me, waiting for her verdict",
-      "orphans": "Entries with no task",
-      "orphansHint": "Checks left in the state after their line was removed from HEARTBEAT.md. They explain the counters above and need nothing."
     },
     "byHerself": "When she acts on her own",
     "action": {
@@ -1303,10 +1293,14 @@
       "sheetClose": "Close",
       "undone": {
         "you": "Undone: {count} files put back as they were before her.",
+        "youOne": "Undone: 1 file put back as it was before her.",
         "jenny": "I undid her changes: {count} files put back as they were.",
+        "jennyOne": "I undid her change: 1 file put back as it was.",
         "nothing": "Undone: she hadn't changed anything.",
         "keptOthers": "{count} left as they are, because someone else changed them too: {files}",
-        "keptOther": "{count} left as they are: {files}"
+        "keptOthersOne": "1 left as it is, because someone else changed it too: {files}",
+        "keptOther": "{count} left as they are: {files}",
+        "keptOtherOne": "1 left as it is: {files}"
       },
       "result": {
         "pagesOne": "1 page updated.",
@@ -1777,6 +1771,13 @@
       "below": "{label} drops below",
       "above": "{label} rises above",
       "threshold": "Threshold",
+      "checkEvery": "Check every",
+      "every": {
+        "hour": "1 hour",
+        "sixHours": "6 hours",
+        "day": "1 day"
+      },
+      "checkedEvery": "checked every {every}",
       "restore": "Put the app back"
     },
     "section": {

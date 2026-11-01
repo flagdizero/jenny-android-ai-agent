@@ -283,14 +283,10 @@ If you want a conversation to actually go away, deleting it is a different opera
 
 > **A note for anyone upgrading.** There used to be a `/clear` command, undocumented in `/help` and handled entirely inside the WebUI: it wiped the screen, printed `Chat cleared.` and left the model's context completely intact. It gave a convincing confirmation for something it had not done — the model went on remembering everything — and it was the first thing most people tried. It has been removed. Typing `/clear` now just sends an ordinary message to the agent; the command you want is `/new`.
 
-## Periodic tasks (HEARTBEAT.md)
-
-This is unrelated to slash commands but shares the same "plain files, no terminal" spirit: Jenny also runs a periodic check every 30 minutes (`gateway.heartbeat.intervalS`, default 1800) driven by `workspace/HEARTBEAT.md`. It only acts on lines under a `## Active Tasks` heading; everything else in the file is ignored. You can edit that file directly from the workshop's **Memory** drawer (**The real files**), or just ask Jenny in chat to "add a periodic task" and she'll update it for you. This job shows up in the agent's internal job list as `heartbeat`, but it's system-managed and can't be removed the way a normal reminder can; to disable it you'd set `gateway.heartbeat.enabled` to `false` in `config.json` and restart the app (there is no in-app toggle for it). See [Scheduling and proactivity](./scheduling.md) for the full picture, including the cost-per-cycle caveat and reliability limits.
-
 ## See also
 
 - [Chat basics](./chat.md) for the message composer, streaming, and the "Agent running" banner referenced above.
 - [Memory and Dream](./memory.md) for what `/dream` actually processes, and why it can say there's nothing to do.
-- [Scheduling and proactivity](./scheduling.md) for `/goal`, reminders, and the heartbeat.
+- [Scheduling and proactivity](./scheduling.md) for `/goal`, reminders and monitors.
 - [Configuration reference](../reference/configuration.md) for `modelPresets` and other config-only settings.
 - [Troubleshooting](./troubleshooting.md) if a command's response looks wrong or the chat seems unresponsive.

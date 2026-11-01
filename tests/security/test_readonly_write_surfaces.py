@@ -471,7 +471,7 @@ async def _probe_cron(root: Path, readonly: bool) -> str:
     # regola del progetto, e la sonda misurerebbe quel rifiuto invece di questo.
     _context(tool)
     with _turn(root, readonly):
-        out = await tool.execute(action="add", message="x", at="2026-09-01T09:00:00")
+        out = await tool.execute(action="add", message="x", date="2026-09-01", time="09:00")
     if readonly:
         assert service.added == [], "in sola lettura nessun job deve nascere"
     return out

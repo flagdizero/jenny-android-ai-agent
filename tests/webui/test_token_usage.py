@@ -100,7 +100,7 @@ async def test_token_usage_hook_classifies_source_from_session_key(tmp_path, mon
     assert payload["total_tokens_30d"] == 15
 
 
-from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY  # noqa: E402
+from jenny.session.keys import UNIFIED_SESSION_KEY  # noqa: E402
 
 # ── A chi si addebita il lavoro interno ─────────────────────────────────────
 #
@@ -119,13 +119,11 @@ from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY  # noq
         ("dream:review-20260825-060415", "dream"),
         ("gardener:viaggio-lento-20260824-195702", "gardener"),
         ("cron:update_check", "cron"),
-        # Le due chiavi senza suffisso vengono dalle **costanti**, non da un
-        # letterale: sono confronti per uguaglianza (v. ``_INTERNAL_KIND_BY_KEY``),
-        # quindi una scritta a mano resterebbe verde il giorno in cui la costante
-        # cambia, provando una cosa su una chiave che non esiste più. È anche la
+        # La chiave senza suffisso viene dalla **costante**, non da un letterale:
+        # una scritta a mano resterebbe verde il giorno in cui la costante
+        # cambia, provando una cosa su una chiave che non esiste più. È la
         # regola che ``tests/session/test_internal_key_vocabulary.py`` fa
-        # rispettare — e che questo file aveva violato.
-        (HEARTBEAT_SESSION_KEY, "cron"),
+        # rispettare.
         (UNIFIED_SESSION_KEY, "user"),
     ],
 )

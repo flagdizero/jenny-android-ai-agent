@@ -1,6 +1,6 @@
 """Regression tests for the cron tool's JSON-schema / runtime contract (#3113).
 
-The schema advertised ``required=["action"]`` while ``_add_job`` rejected empty
+The schema advertised ``required=["action"]`` while ``add`` rejected an empty
 ``message``; LLMs rationally omitted ``message`` and looped on the runtime
 error. The fix keeps ``required=["action"]`` (so ``list``/``remove`` stay
 callable) but states the per-action requirement in each field's description
@@ -68,7 +68,7 @@ class TestSchemaContract:
 
     def test_add_with_message_accepted(self, registry: ToolRegistry) -> None:
         _, _, err = registry.prepare_call(
-            "cron", {"action": "add", "message": "ping", "at": "2030-01-01T00:00:00"}
+            "cron", {"action": "add", "message": "ping", "date": "2030-01-01", "time": "00:00"}
         )
         assert err is None
 
@@ -81,7 +81,7 @@ class TestSchemaContract:
         import asyncio
 
         tool = registry._tools["cron"]  # type: ignore[attr-defined]
-        out = asyncio.run(tool.execute(action="add", at="2030-01-01T00:00:00"))
+        out = asyncio.run(tool.execute(action="add", date="2030-01-01", time="00:00"))
         assert "message" in out
         assert "add" in out
         assert "Retry" in out or "retry" in out

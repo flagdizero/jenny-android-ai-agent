@@ -610,8 +610,7 @@
       "agents": "Le convenzioni di lavoro di questo workspace: preferenze di progetto e modi di procedere che si ripetono. Le sezioni compaiono man mano che le concordi con Jenny; un titolo senza niente sotto non ci sta bene.\n\nNon qui: i fatti su di te (USER.md), il carattere e le regole di comportamento (SOUL.md), il contesto dei progetti (memory/MEMORY.md), le procedure con passi e formati precisi (le Skill, nella sezione App).",
       "user": "Quello che Jenny sa di te: identità, lingua, stile di comunicazione, abitudini e interessi. Si riempie man mano che ti conosce, non c'è niente da precompilare.\n\nNon qui: il contesto dei progetti (memory/MEMORY.md), le regole di comportamento (SOUL.md), le procedure ripetibili (le Skill). E nemmeno ora, fuso orario o posizione: il runtime li misura da sé a ogni turno, mentre una copia scritta qui non la aggiorna nessuno ed è già vecchia appena salvata.",
       "soul": "Chi è Jenny e come si comporta: il carattere, il modo di parlare, quello che fa e quello che non fa mai. E le regole fisse che le hai dato tu — come rivolgersi a te, cosa evitare, dove andarci piano.\n\nLo mantiene Dream, la consolidazione che gira dopo le conversazioni: una correzione che le fai a voce finisce qui. Puoi leggerlo e sistemarlo, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill). E nemmeno come si comporta l'app: cosa accetta uno strumento, cosa rifiuta la sandbox, dov'è un limite — è uguale su ogni installazione e glielo dice già il prompt di sistema.",
-      "memory": "La memoria a lungo termine: quello che deve restare da una sessione all'altra — contesto dei progetti, fatti utili, note da ricordare.\n\nLa mantiene Dream, la consolidazione che gira dopo le conversazioni. Puoi leggerla e correggerla, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill).",
-      "heartbeat": "I controlli ricorrenti che Jenny ripassa a ogni battito.\n\nVanno scritti sotto «## Active Tasks»: è l'unica sezione che viene letta. Quando un'attività è finita, cancellala invece di lasciarla lì — un elenco di cose già fatte viene riletto a ogni battito.\n\nNon qui: le richieste una tantum (basta chiederle in chat) e le procedure ripetibili (le Skill)."
+      "memory": "La memoria a lungo termine: quello che deve restare da una sessione all'altra — contesto dei progetti, fatti utili, note da ricordare.\n\nLa mantiene Dream, la consolidazione che gira dopo le conversazioni. Puoi leggerla e correggerla, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill)."
     },
     "deleteProjectConfirm": "Eliminare per sempre il quaderno «{name}»? Spariscono pagine, bacheca, promemoria e conversazione, e non si potrà annullare.",
     "deleteProjectConfirmWithChat": "Eliminare per sempre il quaderno «{name}»? Spariscono pagine, bacheca, promemoria e conversazione ({count} messaggi), e non si potrà annullare.",
@@ -793,6 +792,7 @@
       "every": "ogni {every}",
       "expr": "orario: {expr}",
       "at": "una volta, il {when}",
+      "atMonth": "una volta, a {when}",
       "unknown": "schedulazione non riconosciuta",
       "daily": "ogni giorno alle {time}",
       "weekly": "ogni {days} alle {time}",
@@ -810,20 +810,19 @@
       "skipped": "non è partito",
       "could_not_check": "non ha potuto controllare",
       "error": "errore",
+      "delegated": "affidato a una mini-me, aspetta il suo verdetto",
       "unknown": "esito sconosciuto"
     },
     "banner": {
       "stopped": "Lo scheduler è fermo: le scadenze qui sotto non sono state rimesse, e quelle passate restano nel passato.",
       "inertOne": "{name} è armato ma non fa niente: la configurazione lo dice spento.",
       "inertMany": "{names} sono armati ma non fanno niente: la configurazione li dice spenti.",
-      "heartbeatEmpty": "L'heartbeat gira {every} ma HEARTBEAT.md non ha task attivi: non sta controllando niente.",
       "recoveredBackup": "Questo elenco è stato ricostruito dall'ultimo backup valido all'avvio. Controlla che ci siano tutti.",
       "recoveredEmpty": "All'avvio l'elenco non era leggibile e non c'era un backup utilizzabile: i promemoria che avevi creato non ci sono più."
     },
     "job": {
       "protected": "di sistema",
       "monitor": "parla solo se ha qualcosa da dire",
-      "oneShot": "una volta sola",
       "disabled": "spento",
       "inert": "non fa niente",
       "neverRun": "mai eseguito",
@@ -833,24 +832,15 @@
       "text": "Testo del promemoria",
       "paused": "in pausa",
       "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi.",
-      "inNotebook": "Sta nel quaderno {place}: lo trovi anche sulla sua bacheca."
+      "inNotebook": "Sta nel quaderno {place}: lo trovi anche sulla sua bacheca.",
+      "when": "Quando: {schedule}",
+      "nextAt": "Prossima volta: {when}"
     },
     "health": {
       "couldNotCheck": "Non ha potuto controllare {n} volte di fila",
       "since": "da {when}",
       "warned": "te l'ha già detto",
       "notWarned": "non te l'ha ancora detto"
-    },
-    "heartbeat": {
-      "title": "Controlli in HEARTBEAT.md",
-      "checkingNothing": "Nessun task attivo: l'heartbeat gira e non controlla niente.",
-      "fileMissing": "HEARTBEAT.md non esiste ancora.",
-      "fileUnreadable": "HEARTBEAT.md c'è ma non si legge: controlla i permessi del file.",
-      "taskOk": "regolare",
-      "taskBroken": "non parte da {n} giri",
-      "taskPending": "affidato a una mini-me, aspetto il suo verdetto",
-      "orphans": "Voci senza task",
-      "orphansHint": "Controlli rimasti nello stato dopo che la riga è stata tolta da HEARTBEAT.md. Spiegano i contatori qui sopra e non richiedono niente."
     },
     "byHerself": "Quando agisce da sola",
     "action": {
@@ -1303,10 +1293,14 @@
       "sheetClose": "Chiudi",
       "undone": {
         "you": "Annullato: {count} file rimessi com'erano prima di lei.",
+        "youOne": "Annullato: 1 file rimesso com'era prima di lei.",
         "jenny": "Ho annullato le sue modifiche: {count} file rimessi com'erano.",
+        "jennyOne": "Ho annullato la sua modifica: 1 file rimesso com'era.",
         "nothing": "Annullato: non aveva cambiato niente.",
         "keptOthers": "{count} lasciati come sono, perché li ha cambiati anche qualcun altro: {files}",
-        "keptOther": "{count} lasciati come sono: {files}"
+        "keptOthersOne": "1 lasciato com'è, perché l'ha cambiato anche qualcun altro: {files}",
+        "keptOther": "{count} lasciati come sono: {files}",
+        "keptOtherOne": "1 lasciato com'è: {files}"
       },
       "result": {
         "pagesOne": "1 pagina aggiornata.",
@@ -1777,6 +1771,13 @@
       "below": "{label} scende sotto",
       "above": "{label} sale sopra",
       "threshold": "Soglia",
+      "checkEvery": "Controlla ogni",
+      "every": {
+        "hour": "1 ora",
+        "sixHours": "6 ore",
+        "day": "1 giorno"
+      },
+      "checkedEvery": "controllo ogni {every}",
       "restore": "Rimetti l'app"
     },
     "section": {

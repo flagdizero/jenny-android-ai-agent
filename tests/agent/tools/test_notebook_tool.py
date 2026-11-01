@@ -33,9 +33,7 @@ from jenny.agent.tools.registry import ToolRegistry
 from jenny.board import notify
 from jenny.board.store import (
     mutate_board,
-    mutate_reminders,
     read_board,
-    read_reminders,
     write_card_summary,
 )
 from jenny.config.schema import ToolsConfig
@@ -71,13 +69,24 @@ def root(tmp_path: Path) -> Path:
                                         "sections": [{"title": "Identità", "text": "Due alberi.",
                                                       "sources": ["acero.md", "fico.md"]}]})
 
-    def rems(r):
-        r["reminders"].append({"id": "r-rinvaso", "card": "alberi", "text": "Rinvaso",
-                               "when": {"kind": "date", "date": "2099-03-01"},
-                               "why": "acero.md", "by": "jenny", "state": "open"})
-
-    mutate_reminders(root, rems)
     return root
+
+
+@pytest.fixture
+async def cron(root: Path, monkeypatch):
+    """Lo scheduler, con un promemoria dell'albero il cui ``why`` è ``acero.md``."""
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.dates import date_schedule
+    from jenny.runtime.context import get_runtime_context
+    from tests.support.cron import running_cron
+
+    workspace = root.parents[1]
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", workspace)
+    async with running_cron(workspace) as service:
+        service.test_rinvaso = add_notebook_job(
+            service, "piante", "alberi", name="Rinvaso", message="Rinvaso",
+            schedule=date_schedule("2099-03-01", "Europe/Rome"), why="acero.md").id
+        yield service
 
 
 @pytest.fixture
@@ -209,18 +218,19 @@ async def test_read_many_records_reads_without_dedup(notebook_chat: Path) -> Non
 
 
 async def test_remove_pages_deletes_traces_and_updates_board_and_reminders(
-    notebook_chat: Path, announced: list[str]
+    notebook_chat: Path, announced: list[str], cron
 ) -> None:
     root = notebook_chat
+    rid = cron.test_rinvaso
     first_lines = (root / "wiki" / "acero.md").read_text(encoding="utf-8")
-    out = await NotebookEditTool(timezone="Europe/Rome").execute(
+    out = await NotebookEditTool(timezone="Europe/Rome", cron=cron).execute(
         action="remove_pages", pages=["wiki/acero.md", "nessuna.md"],
         reason="doppione di fico")
     assert not (root / "wiki" / "acero.md").exists()
     assert "Removed 1 page(s): wiki/acero.md." in out
     assert "Cards touched: 1 — `alberi`: acero.md" in out
     assert "Drawers to rewrite: 1." in out and "`alberi` «Alberi»: fico.md" in out
-    assert "Reminders cleared: 1" in out and "`r-rinvaso` «Rinvaso» (was acero.md)" in out
+    assert "Reminders cleared: 1" in out and f"`{rid}` «Rinvaso» (was acero.md)" in out
     assert "Links that now point nowhere (2" in out
     assert "- wiki/index.md:3 [[acero]]" in out and "- wiki/fico.md:6 [[acero]]" in out
     assert "Not found, nothing to remove: nessuna.md." in out
@@ -240,8 +250,7 @@ async def test_remove_pages_deletes_traces_and_updates_board_and_reminders(
     assert board is not None and board["cards"][0]["pages"] == ["fico.md"]
     # Cancellata prima della bacheca: non è un orfano «già visto».
     assert "acero.md" not in board["orphansSeen"]
-    rem = read_reminders(root)["reminders"][0]
-    assert rem["why"] == "" and rem["by"] == "jenny"
+    assert cron.get_job(rid).payload.why is None
     assert announced == ["piante"]
 
     # Una seconda rimozione lo stesso giorno appende alla stessa traccia.
@@ -387,7 +396,7 @@ async def test_a_link_is_not_followed_to_delete(notebook_chat: Path) -> None:
 
 
 async def test_a_board_failure_after_deleting_still_answers(
-    notebook_chat: Path, announced: list[str], monkeypatch
+    notebook_chat: Path, announced: list[str], monkeypatch, cron
 ) -> None:
     import jenny.board.edit as edit_mod
 
@@ -395,7 +404,8 @@ async def test_a_board_failure_after_deleting_still_answers(
         raise OSError(28, "No space left on device")
 
     monkeypatch.setattr(edit_mod, "remove_pages", boom)
-    out = await NotebookEditTool().execute(action="remove_pages", pages=["acero.md"], reason="x")
+    out = await NotebookEditTool(cron=cron).execute(action="remove_pages", pages=["acero.md"],
+                                                    reason="x")
     assert out.startswith("Removed 1 page(s): wiki/acero.md.")
     assert "Board not updated: [Errno 28] No space left on device" in out
     assert "board action=remove_pages (acero.md)" in out

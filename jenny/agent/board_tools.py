@@ -34,10 +34,8 @@ from jenny.board.drawers import DrawerError, as_dict, as_list, page_text, write_
 from jenny.board.store import (
     BoardOwnershipError,
     mutate_board,
-    mutate_reminders,
     read_board,
     read_card_summary,
-    read_reminders,
 )
 
 
@@ -63,6 +61,9 @@ class BoardPassState:
     # I cassetti ancora da scrivere, in ordine: ``(id, titolo, pagine)``. Si
     # scrivono **uno alla volta** — v. :func:`next_drawer`.
     queue: list[tuple[str, str, list[str]]] = field(default_factory=list)
+    # Il servizio cron: un promemoria è un job (``board_add_reminder``). Lo mette
+    # ``run_board_pass``, dall'agente; senza, i promemoria non si aggiungono.
+    cron: Any = None
 
     assigned: list[tuple[str, str]] = field(default_factory=list)
     summaries: dict[str, int] = field(default_factory=dict)
@@ -206,7 +207,10 @@ class BoardWriteSummaryTool(_BoardTool):
     card=StringSchema("The card id the reminder is about. Leave it empty when it concerns the "
                       "whole notebook, several cards, or nothing on the board."),
     text=StringSchema("What to do, in a few words, in the user's language."),
-    date=StringSchema("When: YYYY-MM-DD. For something like 'around March', the first of the month."),
+    date=StringSchema("When: YYYY-MM-DD. For something like 'around March', the first of the "
+                      "month. A month or a day said without a year is the next one to come "
+                      "after the journal line's date: 'around March' written in November is "
+                      "next year's March. A date already past is refused."),
     precision=StringSchema("`day` for a precise date, `month` for 'in March'.", enum=["day", "month"]),
     why=StringSchema("The wiki page (relative to wiki/) that explains why, if there is one."),
     source=StringSchema("Where it was said: the journal line (`raw/journal/YYYYMMDD.md#HH:MM`) or page."),
@@ -226,47 +230,56 @@ class BoardAddReminderTool(_BoardTool):
             "fertiliser 'on the 10th' — as a reminder on a card. Only for things that were "
             "decided or planned and have a date; never for something already done. A reminder "
             "already on the list is not added twice. Tie it to the card it is about, or leave "
-            "`card` empty for the whole notebook."
+            "`card` empty for the whole notebook. It rings once, on its date, in the notebook's "
+            "chat, and then it is gone."
         )
 
     async def execute(self, card: str = "", text: str = "", date: str = "",
                       precision: str = "day", why: str = "", source: str = "", **_: Any) -> str:
+        from jenny.board.cron_link import add_notebook_job, notebook_jobs, user_timezone
+        from jenny.board.edit import BoardEditError, _when_schedule, _why_page
+
         st = self.state
+        if st.cron is None:
+            return st.refuse("the scheduler is not running: no reminder can be added now")
         board = read_board(st.root) or model.empty_board()
         card = (card or "").strip()
         if (card != model.NOTEBOOK and model.card_by_id(board, card) is None
                 and card not in st.proposed_cards):
             return st.refuse(f"there is no card `{card}` (leave `card` empty for the whole notebook)")
-        when = model._normalize_when({"kind": "date", "date": date, "precision": precision})
         clean = model.clean_text(text, model.MAX_TITLE * 2)
-        if when is None or not clean:
-            return st.refuse("a reminder needs a text and a date written YYYY-MM-DD")
-        rid_out: list[str] = []
-        dup: list[str] = []
-
-        def apply(rems: dict[str, Any]) -> bool | None:
-            key = (card, " ".join(clean.lower().split()))
-            for rem in rems["reminders"]:
-                if (rem["card"], " ".join(rem["text"].lower().split())) == key:
-                    dup.append(rem["id"])
-                    return False
-            rid = model.unique_id(f"r-{model.slugify(clean, fallback='reminder')}"[:40],
-                                  [r["id"] for r in rems["reminders"]])
-            rems["reminders"].append({
-                "id": rid, "card": card, "text": clean, "when": when,
-                "why": why if isinstance(why, str) else "",
-                "source": source if isinstance(source, str) else "",
-                "by": model.JENNY, "state": "open", "created": model.now_iso(),
-            })
-            rid_out.append(rid)
-            return None
-
-        mutate_reminders(st.root, apply, actor=model.JENNY)
-        if dup:
-            return f"Already on the list (`{dup[0]}`): not added again."
-        st.reminders.append(rid_out[0])
+        if not clean:
+            return st.refuse("a reminder needs a text")
+        # La stessa lettura della data della bacheca (RPC): il rifiuto dice cosa
+        # non va, non un generico «scrivi YYYY-MM-DD» che copriva una data
+        # illeggibile e un mese già passato allo stesso modo.
+        try:
+            schedule, _ = _when_schedule(
+                {"kind": "date", "date": str(date or "").strip(), "precision": precision},
+                None, user_timezone())
+        except BoardEditError as exc:
+            return st.refuse(exc.message)
+        key = " ".join(clean.lower().split())
+        for job_id, snap in notebook_jobs(st.cron, st.root.name).items():
+            if (snap.get("scope") == card
+                    and " ".join(str(snap.get("name") or "").lower().split()) == key):
+                return f"Already on the list (`{job_id}`): not added again."
+        # Una pagina che non c'è non è un errore del promemoria: si lascia senza.
+        try:
+            page = _why_page(st.root, why) or ""
+        except BoardEditError:
+            page = ""
+        said = str(source or "").strip()
+        message = f"{clean}\n\n(Noted from {said}.)" if said else clean
+        try:
+            job = add_notebook_job(st.cron, st.root.name, card, name=clean, message=message,
+                                   schedule=schedule, why=page or None,
+                                   origin_metadata={"by": model.JENNY})
+        except ValueError as exc:
+            return st.refuse(f"the reminder was not added: {exc}")
+        st.reminders.append(job.id)
         where = "the whole notebook" if card == model.NOTEBOOK else f"`{card}`"
-        return f"Reminder `{rid_out[0]}` added to {where}."
+        return f"Reminder `{job.id}` added to {where}."
 
 
 @tool_parameters(tool_parameters_schema(
@@ -313,7 +326,9 @@ class BoardSuggestTool(_BoardTool):
         board = read_board(st.root)
         if board is None:
             return st.refuse("this notebook has no board yet")
-        reminders = read_reminders(st.root)
+        from jenny.board.cron_link import notes_on_disk
+
+        notes = notes_on_disk(st.root.name)
         if len(board["suggestions"]) >= model.MAX_PENDING_SUGGESTIONS:
             return st.refuse("the envelope is already full")
         clean_text = model.clean_block(text, model.MAX_TEXT)
@@ -324,7 +339,7 @@ class BoardSuggestTool(_BoardTool):
         if kind == "add_card":
             subject = model.clean_text(kw.get("subject"), model.MAX_TITLE)
             pages = [p for p in as_list(kw.get("pages")) if isinstance(p, str)]
-            if model.is_full(board, reminders):
+            if model.is_full(board, notes):
                 return st.refuse("the board is full: propose putting a card away first")
             if not subject or len(pages) < model.NEW_CARD_MIN_PAGES:
                 return st.refuse(f"a new card needs a subject and at least "
@@ -361,7 +376,7 @@ class BoardSuggestTool(_BoardTool):
             app = str(kw.get("app") or "")
             if app not in st.apps_with_section:
                 return st.refuse("an app card needs an approved app with a summary")
-            if model.is_full(board, reminders):
+            if model.is_full(board, notes):
                 return st.refuse("the board is full")
             if any((c.get("app") or {}).get("slug") == app for c in board["cards"]):
                 return st.refuse("that app is already a card on this board")

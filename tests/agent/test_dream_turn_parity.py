@@ -192,7 +192,6 @@ async def _via_cron(tmp: Path, scenario: dict[str, Any]) -> _Memory:
     )
     dispatcher = CronDispatcher(
         get_agent=lambda: agent, config=Config(), cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
     )
     await dispatcher.dispatch(_DREAM_JOB)
     return memory

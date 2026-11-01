@@ -24,8 +24,15 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
-from jenny.board.cron_link import notebook_jobs_on_disk, result_of
-from jenny.board.store import read_board, read_card_summary, read_reminders
+from jenny.board.cron_link import (
+    is_note,
+    note_words,
+    notebook_jobs_on_disk,
+    notes_of_disk_jobs,
+    result_of,
+    user_timezone,
+)
+from jenny.board.store import read_board, read_card_summary
 from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
 
 # Il tetto del blocco. È lo stesso numero della mappa che sostituisce
@@ -51,12 +58,38 @@ MAX_RECENT = 3
 TITLE_WORD_MIN = 4
 
 
-def _when(rem: Mapping[str, Any]) -> str:
-    when = rem.get("when") or {}
-    if when.get("kind") == "date":
-        day = str(when.get("date", ""))
-        return day[:7] if when.get("precision") == "month" else day
-    return f"when {when.get('field')} {when.get('op')} {when.get('value')}"
+# «Il fuso non l'ha detto nessuno»: si legge dalla config. Un ``None`` esplicito
+# e' invece il fuso di sistema, e non costa una lettura.
+_FROM_CONFIG: Any = object()
+
+
+class _Scheduled:
+    """I job del quaderno per un pezzo di prompt: **una** lettura di ``cron/jobs.json``.
+
+    Fino al 01/11/2026 ogni domanda rileggeva il file (e il fuso dalla config):
+    il blocco della bacheca lo apriva una volta per scheda, il cassetto tre
+    volte — a ogni turno della chat personale, per ogni quaderno.
+    """
+
+    def __init__(self, root: Path, tz_name: Any = _FROM_CONFIG) -> None:
+        self.jobs = notebook_jobs_on_disk(root.name)
+        tz = user_timezone() if tz_name is _FROM_CONFIG else tz_name
+        # I promemoria (job dello scheduler), dal più vicino.
+        self.notes = notes_of_disk_jobs(self.jobs, tz)
+
+    def crons(self, scope: str) -> list[dict[str, Any]]:
+        """I cron che si ripetono con ambito *scope*: non i promemoria."""
+        return [job for job in self.jobs
+                if job["scope"] == scope and not is_note(job["kind"], job["condition"])]
+
+
+def _next_tag(notes: list[dict[str, Any]], scope: str) -> str:
+    """``[next: Rinvaso, 2026-03 — coming up]``: il promemoria più vicino di *scope*."""
+    nxt = model.next_note(notes, scope)
+    if nxt is None:
+        return ""
+    soon = " — coming up" if model.note_is_soon(nxt) else ""
+    return f"[next: {nxt['text']}, {note_words(nxt)}{soon}]"
 
 
 # Le intestazioni della sezione «aperto» della mappa, nelle lingue in cui il
@@ -120,7 +153,7 @@ def board_absence(root: Path) -> str:
     return "next_pass"
 
 
-def notebook_line(root: Path) -> str:
+def notebook_line(root: Path, *, tz_name: Any = _FROM_CONFIG) -> str:
     """Le cose di tutto il quaderno, non legate a una scheda, in una riga per il prompt.
 
     ``[auto: cron Gelo] [next: Porta dentro le piante, 2026-12-01]``, o ``""``. Solo
@@ -130,26 +163,27 @@ def notebook_line(root: Path) -> str:
     """
     if read_board(root) is None:
         return ""
+    sched = _Scheduled(root, tz_name)
     tags = []
-    names = [job["name"] or job["id"] for job in notebook_jobs_on_disk(root.name)
-             if job["scope"] == model.NOTEBOOK]
+    names = [job["name"] or job["id"] for job in sched.crons(model.NOTEBOOK)]
     if names:
         tags.append(f"[auto: {' · '.join(f'cron {n}' for n in names)}]")
-    nxt = model.next_reminder(read_reminders(root), model.NOTEBOOK)
-    if nxt is not None:
-        soon = " — coming up" if model.reminder_is_soon(nxt) else ""
-        tags.append(f"[next: {nxt['text']}, {_when(nxt)}{soon}]")
+    nxt = _next_tag(sched.notes, model.NOTEBOOK)
+    if nxt:
+        tags.append(nxt)
     return " ".join(tags)
 
 
 def board_block(
-    root: Path, *, alert: Callable[[Mapping[str, Any]], bool] | None = None
+    root: Path, *, alert: Callable[[Mapping[str, Any]], bool] | None = None,
+    tz_name: Any = _FROM_CONFIG,
 ) -> str:
     """Il blocco della bacheca per il prompt, o ``""`` se il quaderno non ne ha una con schede."""
     board = read_board(root)
     if board is None or not board["cards"]:
         return ""
-    reminders = read_reminders(root)
+    sched = _Scheduled(root, tz_name)
+    notes = sched.notes
     titles = dict(iter_wiki_pages(root / "wiki"))
     owners = model.page_owners(board)
     offboard = sum(1 for p in titles if p not in owners)
@@ -163,13 +197,12 @@ def board_block(
         )
         if problem:
             tags.append("[PROBLEM: an app in its drawer is in alarm, stalled or broken]")
-        auto = _auto_tag(root, card)
+        auto = _auto_tag(root, card, sched)
         if auto:
             tags.append(auto)
-        nxt = model.next_reminder(reminders, card["id"])
-        if nxt is not None:
-            soon = " — coming up" if model.reminder_is_soon(nxt) else ""
-            tags.append(f"[next: {nxt['text']}, {_when(nxt)}{soon}]")
+        nxt = _next_tag(notes, card["id"])
+        if nxt:
+            tags.append(nxt)
         brief = summary.get("brief") or ""
         lines.append((card["title"], " ".join(brief.split()), " ".join(tags)))
     footer = (
@@ -224,7 +257,7 @@ def _envelope(board: Mapping[str, Any]) -> str:
     return f"In the envelope, waiting for the user: {'; '.join(items)}." if items else ""
 
 
-def _auto_tag(root: Path, card: Mapping[str, Any]) -> str:
+def _auto_tag(root: Path, card: Mapping[str, Any], sched: _Scheduled) -> str:
     """``[auto: Acerello · cron Meteo]``: cio' che nel cassetto gira da solo.
 
     **Solo i nomi.** Fino al 07/10/2026 c'era anche l'ultimo valore
@@ -234,8 +267,7 @@ def _auto_tag(root: Path, card: Mapping[str, Any]) -> str:
     portafoglio. Il valore vero arriva col cassetto, nel contesto del turno,
     quando la scheda viene nominata.
     """
-    bits = [f"cron {job['name'] or job['id']}"
-            for job in notebook_jobs_on_disk(root.name) if job["scope"] == card["id"]]
+    bits = [f"cron {job['name'] or job['id']}" for job in sched.crons(card["id"])]
     for view in _app_views(root, card):
         bits.append(str(view.get("name")))
     return f"[auto: {' · '.join(bits)}]" if bits else ""
@@ -311,13 +343,12 @@ def named_cards(root: Path, message: str) -> list[dict[str, Any]]:
     return out[:MAX_DRAWERS_PER_TURN]
 
 
-def _cron_lines(root: Path, scope: str) -> list[str]:
+def _cron_lines(root: Path, scope: str, sched: _Scheduled) -> list[str]:
     """I cron del quaderno con ambito *scope*, una riga ciascuno, col loro ultimo esito."""
     results = (read_board(root) or {}).get("cronResults") or {}
     lines = []
-    for job in notebook_jobs_on_disk(root.name):
-        if job["scope"] != scope:
-            continue
+    # Un promemoria ha la sua riga («Reminder: …»): qui solo i cron che si ripetono.
+    for job in sched.crons(scope):
         last = result_of(results, job["id"], job["link"])
         # Una citazione datata, non una frase di Jenny al presente: il testo
         # di un giro vecchio («al prossimo messaggio ci guardo») arrivava
@@ -329,10 +360,10 @@ def _cron_lines(root: Path, scope: str) -> list[str]:
     return lines
 
 
-def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
+def drawer_text(root: Path, card: Mapping[str, Any], sched: _Scheduled | None = None) -> str:
     """Il cassetto di una scheda come testo per il contesto del turno."""
+    sched = sched or _Scheduled(root)
     summary = read_card_summary(root, card["id"]) or {}
-    reminders = read_reminders(root)
     parts = [f"Drawer of the card «{card['title']}» (written from the wiki pages it cites):"]
     if summary.get("brief"):
         parts.append(summary["brief"])
@@ -342,12 +373,14 @@ def drawer_text(root: Path, card: Mapping[str, Any]) -> str:
     for section in card.get("userSections") or []:
         if section.get("kind") == "note":
             parts.append(f"- The user's note: {section.get('text')}")
-    parts.extend(_cron_lines(root, card["id"]))
+    parts.extend(_cron_lines(root, card["id"], sched))
     for view in _app_views(root, card):
         parts.append(_app_line(view))
-    for rem in model.open_reminders(reminders):
-        if rem.get("card") == card["id"]:
-            parts.append(f"- Reminder: {rem['text']}, {_when(rem)}")
+    for note in sched.notes:
+        if note["card"] == card["id"]:
+            paused = " (paused: it will not ring until resumed)" if note.get("paused") else ""
+            parts.append(f"- Reminder: {note['text']}, {note_words(note)}{paused} "
+                         f"(`{note['id']}`)")
     photos = _photos_line(root, card)
     if photos:
         parts.append(photos)
@@ -447,10 +480,13 @@ def _app_line(view: Mapping[str, Any]) -> str:
             f"{view.get('at') or '—'}; {status}")
 
 
-def turn_lines(root: Path, message: str, *, since: Any = None) -> list[str]:
+def turn_lines(root: Path, message: str, *, since: Any = None,
+               tz_name: Any = _FROM_CONFIG) -> list[str]:
     """Le righe da aggiungere al contesto del turno: quel che l'utente ha
     appuntato sulla bacheca dall'ultimo messaggio, e i cassetti delle schede
     nominate."""
     recent = recent_line(root, since) if since else ""
+    cards = named_cards(root, message)
+    sched = _Scheduled(root, tz_name) if cards else None
     return [*([recent] if recent else []),
-            *(drawer_text(root, card) for card in named_cards(root, message))]
+            *(drawer_text(root, card, sched) for card in cards)]

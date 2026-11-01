@@ -2,8 +2,7 @@
 
 Le asserzioni che contano non sono «il dizionario ha le chiavi giuste»: sono i
 casi in cui lo store da solo racconterebbe una bugia con la formattazione giusta
-— un job disabilitato che sparisce, un lavoratore spento che risulta sano, un
-heartbeat che non controlla niente e registra ``ok`` a ogni giro.
+— un job disabilitato che sparisce, un lavoratore spento che risulta sano.
 
 I promemoria delle fixture sono **inventati**. Il repo e' pubblico e un test e'
 un documento come un altro: nessun testo vero copiato dal telefono.
@@ -18,21 +17,16 @@ import pytest
 from support.cron import disable_job
 
 from jenny.cron.service import CronService
-from jenny.cron.types import CronJob, CronPayload, CronSchedule, CronTaskCheckState
+from jenny.cron.types import CronJob, CronPayload, CronSchedule
 from jenny.webui.cron_api import webui_cron_payload
 
 _RAIN = "- Ogni ciclo guarda la pioggia in citta' e avvisami solo sopra il 70%."
 _PILLS = "- Alle 9 ricordami le gocce."
 
 
-def _heartbeat_file(*tasks: str) -> str:
-    body = "\n".join(tasks)
-    return f"# Heartbeat Tasks\n\n<!-- nota -->\n\n## Active Tasks\n\n{body}\n"
-
-
 def _config(tmp_path, **flags):
-    """Un ``Config`` finto con i quattro interruttori ai percorsi veri."""
-    on = {"dream": True, "gardener": True, "heartbeat": True, "updates": True, **flags}
+    """Un ``Config`` finto con i tre interruttori ai percorsi veri."""
+    on = {"dream": True, "gardener": True, "updates": True, **flags}
     return SimpleNamespace(
         workspace_path=tmp_path,
         agents=SimpleNamespace(
@@ -42,7 +36,6 @@ def _config(tmp_path, **flags):
                 gardener=SimpleNamespace(enabled=on["gardener"]),
             )
         ),
-        gateway=SimpleNamespace(heartbeat=SimpleNamespace(enabled=on["heartbeat"])),
         updates=SimpleNamespace(enabled=on["updates"]),
     )
 
@@ -143,127 +136,6 @@ def test_an_unresolvable_flag_path_does_not_invent_inert(cron, tmp_path):
     assert row["effective"] == "active"
 
 
-# ── §4.2: l'heartbeat e i suoi task ─────────────────────────────────────────
-
-def test_a_heartbeat_with_no_task_file_is_checking_nothing(cron, tmp_path):
-    """Il caso peggiore: gira ogni mezz'ora, registra ``ok``, non controlla niente."""
-    cron.register_system_job(_system("heartbeat"))
-    job = cron.get_job("heartbeat")
-    job.state.last_status = "ok"
-    cron.persist_job_state()
-
-    row = webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]
-
-    assert row["last_status"] == "ok"
-    assert row["heartbeat"]["file_present"] is False
-    assert row["heartbeat"]["active_task_count"] == 0
-    assert row["effective"] == "inert"
-
-
-def test_a_task_file_with_only_headings_is_also_checking_nothing(cron, tmp_path):
-    (tmp_path / "HEARTBEAT.md").write_text(_heartbeat_file(""), encoding="utf-8")
-    cron.register_system_job(_system("heartbeat"))
-
-    row = webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]
-
-    assert row["heartbeat"]["file_present"] is True
-    assert row["heartbeat"]["file_readable"] is True
-    assert row["heartbeat"]["active_task_count"] == 0
-    assert row["effective"] == "inert"
-
-
-def test_an_unreadable_task_file_is_a_third_state(cron, tmp_path, monkeypatch):
-    """Il file che c'e' e non si legge e' un guasto, non un file mai creato."""
-    path = tmp_path / "HEARTBEAT.md"
-    path.write_text(_heartbeat_file(_RAIN), encoding="utf-8")
-    original = type(path).read_text
-
-    def _boom(self, *a, **kw):
-        if self.name == "HEARTBEAT.md":
-            raise OSError("permessi")
-        return original(self, *a, **kw)
-
-    monkeypatch.setattr(type(path), "read_text", _boom)
-    cron.register_system_job(_system("heartbeat"))
-
-    row = webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]
-
-    assert row["heartbeat"]["file_present"] is True
-    assert row["heartbeat"]["file_readable"] is False
-
-
-def test_healthy_tasks_are_listed_with_no_check_entries(cron, tmp_path):
-    (tmp_path / "HEARTBEAT.md").write_text(
-        _heartbeat_file(_RAIN, _PILLS), encoding="utf-8"
-    )
-    cron.register_system_job(_system("heartbeat"))
-
-    row = webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]
-
-    assert row["heartbeat"]["active_task_count"] == 2
-    assert [t["state"] for t in row["heartbeat"]["tasks"]] == ["ok", "ok"]
-    assert row["heartbeat"]["orphan_checks"] == []
-    assert row["effective"] == "active"
-
-
-def test_the_join_marks_broken_and_pending_and_leaves_the_rest_ok(cron, tmp_path):
-    """Le tre specie in una volta: il file dice quali esistono, lo store quali no."""
-    from jenny.cron.heartbeat_tasks import parse_heartbeat_tasks
-
-    content = _heartbeat_file(_RAIN, _PILLS)
-    (tmp_path / "HEARTBEAT.md").write_text(content, encoding="utf-8")
-    tasks = parse_heartbeat_tasks(content)
-
-    cron.register_system_job(_system("heartbeat"))
-    job = cron.get_job("heartbeat")
-    job.state.task_checks[tasks[0].id] = CronTaskCheckState(
-        consecutive_could_not_check=3, since_ms=1_000, label=tasks[0].label, escalated=True,
-        escalated_at_ms=2_000,
-    )
-    job.state.task_checks[tasks[1].id] = CronTaskCheckState(
-        pending_since_ms=3_000, label=tasks[1].label
-    )
-    cron.persist_job_state()
-
-    hb = webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]["heartbeat"]
-    by_id = {t["id"]: t for t in hb["tasks"]}
-
-    assert by_id[tasks[0].id]["state"] == "broken"
-    assert by_id[tasks[0].id]["consecutive"] == 3
-    assert by_id[tasks[0].id]["escalated"] is True
-    assert by_id[tasks[0].id]["escalated_at_ms"] == 2_000
-    assert by_id[tasks[1].id]["state"] == "pending"
-    assert by_id[tasks[1].id]["consecutive"] == 0
-    assert hb["orphan_checks"] == []
-
-
-def test_a_check_without_a_task_becomes_an_orphan_not_a_broken_check(cron, tmp_path):
-    """L'utente ha cancellato la riga mentre era rotta: niente ripulisce la voce.
-
-    Mostrarla fra i controlli rotti lo accuserebbe di un controllo che ha tolto;
-    nasconderla lascerebbe i contatori del job senza causa visibile.
-    """
-    (tmp_path / "HEARTBEAT.md").write_text(_heartbeat_file(_RAIN), encoding="utf-8")
-    cron.register_system_job(_system("heartbeat"))
-    job = cron.get_job("heartbeat")
-    job.state.task_checks["un-id-che-non-e-piu-nel-file"] = CronTaskCheckState(
-        consecutive_could_not_check=5, since_ms=1_000, label="un controllo tolto"
-    )
-    cron.persist_job_state()
-
-    hb = webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]["heartbeat"]
-
-    assert [t["state"] for t in hb["tasks"]] == ["ok"]
-    assert len(hb["orphan_checks"]) == 1
-    assert hb["orphan_checks"][0]["consecutive"] == 5
-
-
-def test_only_the_heartbeat_carries_the_heartbeat_block(cron, tmp_path):
-    cron.register_system_job(_system("dream"))
-
-    assert webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]["heartbeat"] is None
-
-
 # ── identita', vocabolario, fusi ────────────────────────────────────────────
 
 def test_a_system_job_presents_itself_and_cannot_be_removed(cron, tmp_path):
@@ -303,10 +175,57 @@ def test_the_schedule_travels_structured_not_as_an_english_sentence(cron, tmp_pa
         "at_ms": None, "tz": "Europe/Rome",
         # La forma è struttura, non una frase: la frase la compone ancora il client.
         "shape": {"pattern": "daily", "hour": 9, "minute": 0},
+        "precision": None,
     }
     # Nessun campo pre-formattato: se un giorno ne comparisse uno, il client
     # smetterebbe di essere l'unico a decidere in che lingua si legge.
-    assert set(row["schedule"]) == {"kind", "every_ms", "expr", "at_ms", "tz", "shape"}
+    assert set(row["schedule"]) == {
+        "kind", "every_ms", "expr", "at_ms", "tz", "shape", "precision",
+    }
+
+
+@pytest.mark.parametrize("precision", ["day", "month"])
+def test_the_precision_of_a_one_time_job_travels(cron, tmp_path, precision):
+    """«Il 3 marzo» o «a marzo»: l'ora c'è, ma mostrarla direbbe una precisione
+    che l'utente non ha chiesto. Il client sceglie la forma dalla precisione."""
+    cron.add_job(
+        "passaporto",
+        CronSchedule(kind="at", at_ms=1_803_970_800_000, precision=precision),
+        "Rinnova il passaporto",
+        delete_after_run=True,
+    )
+
+    row = webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]
+
+    assert row["schedule"]["kind"] == "at"
+    assert row["schedule"]["precision"] == precision
+
+
+def test_an_exact_one_time_job_has_no_precision(cron, tmp_path):
+    cron.add_job(
+        "riunione", CronSchedule(kind="at", at_ms=1_803_970_800_000), _PILLS,
+        delete_after_run=True,
+    )
+
+    assert webui_cron_payload(cron, config=_config(tmp_path))["jobs"][0]["schedule"][
+        "precision"
+    ] is None
+
+
+def test_the_condition_of_a_recurring_job_travels(cron, tmp_path):
+    """«umidità < 15 · ogni 6 ore»: la condizione la dice il client, qui viaggia com'è."""
+    condition = {"app": "orto", "params": {"pianta": "basilico"}, "field": "umidita",
+                 "op": "<", "value": 15}
+    cron.add_job(
+        "basilico", CronSchedule(kind="every", every_ms=6 * 3_600_000),
+        "Ricordami di annaffiare il basilico", condition=condition,
+    )
+    cron.add_job("gocce", CronSchedule(kind="every", every_ms=60_000), _PILLS)
+
+    rows = {j["name"]: j for j in webui_cron_payload(cron, config=_config(tmp_path))["jobs"]}
+
+    assert rows["basilico"]["condition"] == condition
+    assert rows["gocce"]["condition"] is None
 
 
 def test_the_display_timezone_is_the_job_s_own_then_the_default(cron, tmp_path):
@@ -331,12 +250,12 @@ def test_the_monitor_mode_travels(cron, tmp_path):
 
 
 def test_the_job_level_health_has_no_invented_escalated_at(cron, tmp_path):
-    """A livello di job quel campo non esiste: ce l'ha la voce di ``task_checks``.
+    """A livello di job un ``escalated_at_ms`` non esiste: il payload non lo inventa.
 
     Una simmetria falsa e' una bugia che il client poi renderizza.
     """
-    cron.register_system_job(_system("heartbeat"))
-    job = cron.get_job("heartbeat")
+    cron.register_system_job(_system("dream"))
+    job = cron.get_job("dream")
     job.state.consecutive_could_not_check = 2
     job.state.could_not_check_since_ms = 1_000
     job.state.could_not_check_escalated = True

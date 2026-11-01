@@ -185,8 +185,8 @@ def test_a_turn_with_no_bound_scope_is_writable() -> None:
     """Test, ispezione e sessioni interne costruiscono il prompt fuori da un turno.
 
     Là non c'è nessuno scope legato — che vuol dire scrivibile, non il
-    contrario: un default chiuso avrebbe messo il blocco nel prompt di cron,
-    Dream e heartbeat.
+    contrario: un default chiuso avrebbe messo il blocco nel prompt di cron
+    e Dream.
     """
     from jenny.agent.context import _turn_is_writable
 

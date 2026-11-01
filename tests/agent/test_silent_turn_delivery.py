@@ -27,11 +27,15 @@ from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_types import TurnDisposition
 from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.bus.queue import MessageBus
+from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import LLMResponse
 from jenny.runtime.user_text import say
-from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
+from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import silent_turn_metadata
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+
+# Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
+MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
@@ -87,7 +91,7 @@ class TestTheSubagentAnnounceInheritsTheOriginVisibility:
         loop = _make_loop(tmp_path)
         _stub_run(loop)
 
-        outcome = await loop._process_message(_announce(HEARTBEAT_SESSION_KEY))
+        outcome = await loop._process_message(_announce(MONITOR_SESSION_KEY))
 
         assert outcome.disposition is TurnDisposition.SILENT
         assert outcome.message is None
@@ -124,7 +128,7 @@ class TestTheSubagentAnnounceInheritsTheOriginVisibility:
         loop = _make_loop(tmp_path)
         _stub_run(loop, final_content="")
 
-        outcome = await loop._process_message(_announce(HEARTBEAT_SESSION_KEY))
+        outcome = await loop._process_message(_announce(MONITOR_SESSION_KEY))
 
         assert outcome.message is None
 
@@ -156,7 +160,7 @@ class TestTheErrorBranchRespectsTheContract:
             chat_id="default",
             content="controlla la pioggia",
             metadata=silent_turn_metadata(),
-            session_key_override=HEARTBEAT_SESSION_KEY,
+            session_key_override=MONITOR_SESSION_KEY,
         )
 
         await self._dispatch_failing(loop, msg)
@@ -216,7 +220,7 @@ class TestSilentTurnsDoNotStream:
 
     async def test_internal_work_gets_no_stream_callback(self, tmp_path: Path) -> None:
         assert await self._captured_stream_flag(
-            tmp_path, session_key=HEARTBEAT_SESSION_KEY
+            tmp_path, session_key=MONITOR_SESSION_KEY
         ) is False
 
     async def test_a_user_turn_keeps_streaming(self, tmp_path: Path) -> None:
@@ -256,7 +260,7 @@ class TestTheOnlyWayOutIsTheMessageTool:
                 content="controlla la pioggia",
                 metadata=silent_turn_metadata(),
             ),
-            session_key=HEARTBEAT_SESSION_KEY,
+            session_key=MONITOR_SESSION_KEY,
         )
 
         assert outcome.disposition is TurnDisposition.SPOKE_VIA_TOOL
@@ -277,7 +281,7 @@ class TestTheOnlyWayOutIsTheMessageTool:
         precedente invece di aprirne una nuova.
 
         Le due parametrizzazioni sono i due modi in cui l'avviso può partire:
-        stesso target del turno, o cross-channel (l'heartbeat gira sul canale
+        stesso target del turno, o cross-channel (un lavoro interno gira sul canale
         interno e consegna alla WebUI). Nel secondo il tool non eredita i
         metadata del turno d'origine, e la visibilità deve arrivare comunque.
         """
@@ -291,7 +295,7 @@ class TestTheOnlyWayOutIsTheMessageTool:
         tool.set_context(
             RequestContext(
                 channel=origin_channel,
-                chat_id="default" if origin_channel == "websocket" else "heartbeat",
+                chat_id="default" if origin_channel == "websocket" else "rain-check",
                 metadata=silent_turn_metadata(),
             )
         )
@@ -456,7 +460,7 @@ class TestAVisibleAnnounceShowsItIsWorking:
         _stub_run(loop)
         statuses, seen = self._spy(loop)
 
-        await loop._process_message(_announce(HEARTBEAT_SESSION_KEY))
+        await loop._process_message(_announce(MONITOR_SESSION_KEY))
 
         assert statuses == [] and seen["on_progress"] is None
 
@@ -617,7 +621,7 @@ class TestAVisibleAnnounceHasATurnId:
 
         loop = _make_loop(tmp_path)
         _stub_run(loop)
-        msg = _announce(HEARTBEAT_SESSION_KEY)
+        msg = _announce(MONITOR_SESSION_KEY)
 
         await loop._process_message(msg)
 

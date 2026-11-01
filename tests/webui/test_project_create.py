@@ -658,7 +658,7 @@ class TestTheProjectThread:
 
     async def test_an_internal_session_stays_unreadable(self, handler):
         """Il lato del confine che non doveva allargarsi."""
-        for key in ("cron:job-1", "subagent:L1", "heartbeat", "dream:20260821"):
+        for key in ("cron:job-1", "subagent:L1", "internal:direct", "dream:20260821"):
             response = await _get_thread(handler, key)
             assert response.status_code == 404, key
 

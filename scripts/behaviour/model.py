@@ -100,8 +100,11 @@ class Scenario:
     #: Messaggi gia' in sessione prima del primo turno, ``(role, testo)``: una
     #: conversazione lunga senza pagarla turno per turno. Si scrive sul file di
     #: sessione, che il gateway rilegge perche' non l'ha ancora in cache (un
-    #: quaderno appena creato, o la chat personale dopo ``/new``).
-    seed_session: list[tuple[str, str]] = field(default_factory=list)
+    #: quaderno appena creato, o la chat personale dopo ``/new``). Una voce puo'
+    #: essere anche una riga di sessione intera (un ``dict``): un assistente con
+    #: ``tool_calls`` e le risposte ``tool``, per misurare quanto il modello
+    #: imita le proprie chiamate di prima.
+    seed_session: list[tuple[str, str] | dict[str, Any]] = field(default_factory=list)
     #: ``personal`` (la chat unificata, sessione nuova) o ``notebook`` (un
     #: quaderno usa e getta, creato e cancellato attorno al giro).
     chat: str = "personal"
@@ -121,8 +124,12 @@ class Scenario:
     archive_after: bool = False
     #: ``/dream`` dopo i turni.
     dream_after: bool = False
-    #: Un giro dell'heartbeat forzato dopo i file di prova (fino a ~6 minuti).
-    heartbeat_after: bool = False
+    #: Dopo i turni si aspetta il **primo giro vero** del monitor che il turno ha
+    #: creato (cadenza di un minuto, detta nel turno), e il suo esito finale se
+    #: lo ha affidato a un aiutante: in ``extra["monitor"]`` lo stato, l'esito
+    #: del primo giro e le chiamate della sua sessione. Nessun «esegui adesso»:
+    #: si misura il giro che l'utente avrebbe avuto.
+    monitor_after: bool = False
     #: ``guard``: una promessa con una taratura che ha fatto crollare il tasso, o
     #: una che vive in Python e si tara con una build (``calibration_note``).
     #: ``probe``: un comportamento misurato senza una frase da togliere — dice

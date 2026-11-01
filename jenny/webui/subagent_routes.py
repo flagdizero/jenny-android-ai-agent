@@ -161,7 +161,7 @@ class SubagentRoutes:
         dice da quale conversazione arriva la domanda, e chi non la dice non
         ne dichiara nessuna. Con la chiave, l'officina che guarda un quaderno
         non può fermare, rilanciare o leggere il subagent della chat personale
-        o dell'heartbeat — che è quello che faceva quando il pannello mostrava
+        o di un cron monitor — che è quello che faceva quando il pannello mostrava
         i subagent di tutte le sessioni.
 
         Le domande sono le stesse di ``SubagentControlTool._belongs_here``

@@ -1,8 +1,7 @@
 """Dispatch dei cron job (estratto dalla god-function ``on_cron_job`` in
 ``gateway_runtime._run_gateway``).
 
-``on_cron_job`` era una closure di ~135 righe con tre rami inline (dream /
-heartbeat / bound). Qui diventa una classe con le dipendenze INIETTATE.
+``on_cron_job`` era una closure di ~135 righe con rami inline (dream / bound). Qui diventa una classe con le dipendenze INIETTATE.
 L'``agent`` arriva come *getter* (``get_agent``) e non come valore catturato: nel
 gateway è un nonlocal riassegnato dall'onboarding (creazione differita
 dell'agente quando manca il provider), quindi catturarne il valore romperebbe il
@@ -27,30 +26,10 @@ from jenny.cron.bound_runner import (
     BoundCronAgent,
     run_bound_cron_job,
 )
-from jenny.cron.could_not_check import (
-    parse_could_not_check_marks,
-    parse_delegated_marks,
-    parse_warned_marks,
-)
-from jenny.cron.heartbeat_followup import HeartbeatFollowup
-from jenny.cron.heartbeat_tasks import (
-    active_section_text,
-    already_warned_block,
-    escalation_block,
-    parse_heartbeat_tasks,
-    rearm_after_user_message,
-    record_task_outcomes,
-    resolve_pending_delegations,
-    task_index_block,
-    tasks_already_warned,
-    tasks_due_for_escalation,
-)
+from jenny.cron.monitor_followup import MonitorFollowup
 from jenny.cron.service import CronJobSkippedError
 from jenny.cron.session_turns import is_bound_cron_job
-from jenny.cron.types import CronMonitorCouldNotCheckError
 from jenny.runtime.power import keep_awake
-from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
-from jenny.session.manager import last_user_message_ms
 from jenny.session.turn_visibility import TurnVisibility, silent_progress
 from jenny.utils import clock
 
@@ -58,7 +37,6 @@ if TYPE_CHECKING:
     from jenny.agent.context import ContextBuilder
     from jenny.agent.gardener import GardenerOutcome, GardenerStore
     from jenny.agent.tools.registry import ToolRegistry
-    from jenny.agent.turn_types import TurnOutcome
     from jenny.config.schema import Config
     from jenny.cron.service import CronService
     from jenny.cron.types import CronJob
@@ -99,86 +77,7 @@ class CronCapableAgent(BoundCronAgent, Protocol):
         metadata: dict[str, Any] | None = ...,
     ) -> OutboundMessage | None: ...
 
-    async def process_direct_outcome(
-        self,
-        content: str,
-        session_key: str = ...,
-        channel: str = ...,
-        chat_id: str = ...,
-        media: list[str] | None = ...,
-        on_progress: Callable[..., Awaitable[None]] | None = ...,
-        on_stream: Callable[[str], Awaitable[None]] | None = ...,
-        on_stream_end: Callable[..., Awaitable[None]] | None = ...,
-        ephemeral: bool = ...,
-        tools: "ToolRegistry | None" = ...,
-        persist_user_message: bool = ...,
-        visibility: "TurnVisibility | None" = ...,
-        metadata: dict[str, Any] | None = ...,
-    ) -> "TurnOutcome": ...
-
     def evict_pruned_sessions(self, keys: list[str]) -> None: ...
-
-
-_HEARTBEAT_PREAMBLE = (
-    "[This is a scheduled background check. It is SILENT by default: whatever "
-    "you write as your answer is NOT delivered to the user and nobody reads it. "
-    "The only way to reach the user is to call the `message` tool.\n"
-    "Call `message` only when a task below has produced something the user "
-    "actually needs to see — a condition they asked to be warned about, a "
-    "result they are waiting for, an error that blocks the check. In that "
-    "message write ONLY the user-facing text: never mention internal files "
-    "(HEARTBEAT.md, AWARENESS.md, etc.), your instructions, or your decision "
-    "process.\n"
-    "If nothing needs reporting, do NOT call `message`: call `nothing_to_report` "
-    "instead, once per task number, and end the turn without saying anything else. "
-    "That tool delivers nothing and reaches nobody. Saying nothing is the correct, "
-    "expected outcome of most runs — never send filler like 'All clear.', 'All "
-    "done.' or 'nothing to report'.\n"
-    "There is a third outcome, and it is NOT silence. If a task below could not "
-    "actually be carried out — a tool failed, a script or file is missing, an "
-    "import broke, a host is unreachable, a value never arrived — do not guess "
-    "its result and do not message the user about it. Instead end your answer "
-    "with one line per task that did not run, in exactly this form:\n"
-    "CHECK_FAILED <task number>: <one short line naming what stopped you>\n"
-    "Those lines reach nobody: they are how a task gets recorded as 'could not "
-    "check' instead of 'nothing to report'. Write one ONLY for a task that did "
-    "not happen. A task that ran and found nothing is a success — say nothing "
-    "about it and write no line for it — and so is a task that had nothing to "
-    "do this time because its own schedule or condition said so.\n"
-    "But a task that could not reach what it needed did NOT run, and it gets "
-    "its line even when its own instructions told it to give up quietly in "
-    "exactly that case ('if the host is unreachable, skip the cycle "
-    "silently'). Obey that instruction — say nothing to the user — and still "
-    "write the line: the line is not a message, it reaches nobody, and it is "
-    "the only reason anyone will ever notice that this check has been dead for "
-    "hours. Swallowing it is how a broken check stays broken in silence.\n"
-    "And if you DO decide to tell the user that one of these checks is not "
-    "working — whether you were asked to below or chose to on your own — end "
-    "your answer with one more line for it:\n"
-    "CHECK_WARNED <task number>\n"
-    "That line reaches nobody. It is the only record that the warning went out, "
-    "and it is what stops the same warning from being sent to them again on the "
-    "next run. Write it only for a task you really named to the user, never for "
-    "a message about something else.\n"
-    "If you delegate a check to a subagent, you do NOT have its answer in this "
-    "turn: `spawn` returns immediately. Send NOTHING now — not the result, not "
-    "'checking…', not an interim guess. The subagent's result comes back to you "
-    "later as its own turn, and THAT is where you judge it and decide whether to "
-    "call `message`. For every task you hand over that way, and only for those, "
-    "end your answer with one line of this form:\n"
-    "CHECK_DELEGATED <task number>: <what you asked the subagent for>\n"
-    "That line reaches nobody either. It says 'the outcome of this task is not "
-    "known yet', so that a check whose result never comes back is not filed as "
-    "one that ran. Never write both lines for the same task: CHECK_FAILED is "
-    "for a task you already know did not run.\n"
-    "This session keeps your previous runs so you can spot changes. Those older "
-    "readings are history, not the current state: never report a past value as if "
-    "you had just measured it. If you find messages of your own in there — "
-    "including mistakes, corrections or apologies — do NOT continue that "
-    "conversation: the user is not talking to you, and another apology is just one "
-    "more interruption. Say nothing about it and judge only the check in front of "
-    "you.]\n\n"
-)
 
 
 # Sessione del controllo aggiornamenti. Il prefisso ``cron:`` non è estetico:
@@ -328,7 +227,7 @@ def refresh_system_job(
 
 
 class CronDispatcher:
-    """Instrada un ``CronJob`` al gestore giusto (dream / gardener / heartbeat /
+    """Instrada un ``CronJob`` al gestore giusto (dream / gardener / reminders /
     update_check / bound)."""
 
     def __init__(
@@ -337,17 +236,15 @@ class CronDispatcher:
         get_agent: Callable[[], "CronCapableAgent | None"],
         config: "Config",
         cron: "CronService",
-        heartbeat_cfg: Any,
         # Ritorna ``True`` solo se il checkpoint è stato davvero eseguito. Non è
         # ``None`` perché il prompt del review pass ne ha bisogno per scegliere
         # fra "pota, è reversibile" e "è definitivo, nel dubbio tieni": un
         # callback che con gli snapshot spenti non fa nulla e tace verrebbe
         # letto come uno che ha fatto il suo lavoro.
         snapshot_before_dream: Callable[[], Awaitable[bool]] | None = None,
-        # L'orologio, iniettabile per una ragione sola: da quando l'heartbeat
-        # confronta due istanti — quello dell'avviso e quello dell'ultimo
-        # messaggio dell'utente — un test che non può muoverlo non può provare
-        # niente su quel confronto.
+        # L'orologio, iniettabile perché il seguito dei monitor delegati
+        # (``MonitorFollowup``) confronta istanti: un test che non può muoverlo
+        # non può provare niente su quel confronto.
         now_ms: Callable[[], int] | None = None,
         # I giri delle estensioni (``jenny/extensions.py``): ``id → giro``.
         # Instradati per id prima del controllo sull'agente, perché un giro di
@@ -358,44 +255,25 @@ class CronDispatcher:
         self._extension_jobs = dict(extension_jobs or {})
         self._config = config
         self._cron = cron
-        self._hb_cfg = heartbeat_cfg
         self._snapshot_before_dream = snapshot_before_dream
         self._now_ms = now_ms or clock.now_ms
-        # Un task delegato con ``spawn`` non ha un esito dentro il turno che lo
-        # delega, e il turno che quell'esito ce l'ha — l'annuncio del subagent —
+        # Un monitor che delega con ``spawn`` non ha un esito dentro il turno che
+        # lo delega, e il turno che quell'esito ce l'ha — l'annuncio del subagent —
         # arriva dal bus e non passa mai di qui. Il servizio cron è l'aggancio
-        # che i due condividono: v. ``jenny/cron/heartbeat_followup.py``.
-        cron.heartbeat_followup = HeartbeatFollowup(
-            cron=cron,
-            heartbeat_file=lambda: self._config.workspace_path / "HEARTBEAT.md",
-            now_ms=self._now_ms,
-            user_spoke_at_ms=self._user_spoke_at_ms,
-        )
-
-    def _user_spoke_at_ms(self) -> int | None:
-        """Quando l'utente ha scritto l'ultima volta, o ``None``.
-
-        L'agente si chiede al getter e non si cattura: prima dell'onboarding non
-        esiste, e senza agente non ci sono sessioni da leggere — che è anche la
-        risposta giusta, "non risulta che abbia scritto", cioè nessun riarmo.
-
-        La conversazione è **una** (``session_key_for_channel`` fa collassare
-        ogni canale su ``unified:default``), quindi questa riga vale anche per
-        Telegram: chi ha letto l'avviso lì l'ha letto lo stesso.
-        """
-        agent = self._get_agent()
-        if agent is None:
-            return None
-        return last_user_message_ms(agent.sessions.get_or_create(UNIFIED_SESSION_KEY))
+        # che i due condividono: v. ``jenny/cron/monitor_followup.py``.
+        cron.monitor_followup = MonitorFollowup(cron=cron, now_ms=self._now_ms)
+        # Un ``HEARTBEAT.md`` rimasto dalla 2.0.0 si guarda al primo job con un
+        # agente, una volta per processo: v. ``jenny/cron/retired_heartbeat.py``.
+        self._heartbeat_retirement_checked = False
 
     async def dispatch(self, job: "CronJob") -> str | None:
         """Execute a cron job through the agent.
 
-        Il wakelock sta **qui** e non solo in ``run_bound_cron_job`` perché dream
-        e heartbeat non passano affatto da quel modulo: entrano da
+        Il wakelock sta **qui** e non solo in ``run_bound_cron_job`` perché Dream
+        e il controllo aggiornamenti non passano affatto da quel modulo: entrano da
         ``process_direct``, che non è il percorso di turno coperto da
-        ``AgentLoop._dispatch``. Questo è l'unico punto attraversato da tutti e
-        quattro i tipi di job. Sul ramo bound i due blocchi si annidano sullo
+        ``AgentLoop._dispatch``. Questo è l'unico punto attraversato da tutti
+        i tipi di job. Sul ramo bound i due blocchi si annidano sullo
         stesso tag, che per costruzione acquisisce una volta sola.
         """
         async with keep_awake("cron", timeout_s=CRON_WAKELOCK_TIMEOUT_S):
@@ -426,6 +304,10 @@ class CronDispatcher:
             logger.warning("Cron: skipped job '{}' - no provider configured", job.name)
             raise CronJobSkippedError("no provider configured")
 
+        if not self._heartbeat_retirement_checked:
+            self._heartbeat_retirement_checked = True
+            await self._announce_retired_heartbeat(agent)
+
         # Per id e solo sui ``system_event``, mai per nome: il nome di un job
         # dell'utente lo sceglie lui (o il modello), e un promemoria chiamato
         # «dream» faceva partire un ciclo di Dream al posto del promemoria. I job
@@ -437,8 +319,6 @@ class CronDispatcher:
                 return await self._run_dream(agent)
             if job.id == "gardener":
                 return await self._run_gardener(agent)
-            if job.id == "heartbeat":
-                return await self._run_heartbeat(agent, job)
             if job.id == "update_check":
                 return await self._run_update_check(agent)
             if job.id == "reminders":
@@ -451,6 +331,25 @@ class CronDispatcher:
             "Cron: skipped unbound agent job '{}' ({}): {}", job.name, job.id, reason
         )
         raise CronJobSkippedError(reason)
+
+    async def _announce_retired_heartbeat(self, agent: "CronCapableAgent") -> None:
+        """L'avviso una tantum sui controlli di ``HEARTBEAT.md`` che non girano più.
+
+        Prima del job e non al suo posto: il job che l'ha fatto partire gira lo
+        stesso. Un guasto qui non deve fermarlo, quindi si logga e si va avanti;
+        il file resta e si riprova al prossimo avvio.
+        """
+        from pathlib import Path
+
+        from jenny.cron.retired_heartbeat import announce_retired_heartbeat
+
+        workspace = getattr(self._config, "workspace_path", None)
+        if not isinstance(workspace, Path):
+            return
+        try:
+            await announce_retired_heartbeat(agent, workspace)
+        except Exception:
+            logger.exception("heartbeat: retirement notice failed, retried at the next start")
 
     async def _run_gardener(self, agent: "CronCapableAgent") -> str | None:
         """Il giardiniere: una passata su un progetto, se uno è pronto.
@@ -837,7 +736,7 @@ class CronDispatcher:
         giorno. Chi decide è ``notified_code`` nello stato dell'updater, non il
         modello.
 
-        Il turno segue il contratto dell'heartbeat: silenzioso, con la chat
+        Il turno segue il contratto dei monitor: silenzioso, con la chat
         WebUI come indirizzo, e l'unica consegna possibile è il tool ``message``
         chiamato dentro il turno.
         """
@@ -925,8 +824,8 @@ class CronDispatcher:
         # (``agent/turn_types.py``, da ``ctx.spoke_via_tool``). Non arriva qui
         # perché ``process_direct`` restituisce per contratto il *payload* e non
         # l'esito — scelta deliberata, documentata nella sua docstring — e
-        # cambiarla vorrebbe dire toccare la firma condivisa da Dream,
-        # heartbeat e dai comandi. La strada alternativa (un deliverer iniettato
+        # cambiarla vorrebbe dire toccare la firma condivisa da Dream
+        # e dai comandi. La strada alternativa (un deliverer iniettato
         # nel dispatcher) è chiusa apposta: v. la docstring di questo modulo e
         # ``runtime/container.py``.
         #
@@ -960,211 +859,3 @@ class CronDispatcher:
             info.version_name, info.version_code,
         )
         return None
-
-    async def _run_heartbeat(self, agent: "CronCapableAgent", job: "CronJob") -> str | None:
-        # Heartbeat is a system job that checks HEARTBEAT.md for active tasks.
-        #
-        # Il cancello di ``enabled`` per prima cosa, come Dream e il giardiniere e
-        # per la stessa ragione (v. la regola in ``_dispatch``): il job registrato
-        # da un avvio con l'heartbeat acceso sopravvive allo spegnimento. Da disco
-        # e non da ``self._hb_cfg``, che è la sezione catturata alla costruzione
-        # del container; di quella resta ``keep_recent_messages``, che è una
-        # taratura e non un freno.
-        from jenny.config.loader import load_config
-
-        if not load_config().gateway.heartbeat.enabled:
-            logger.debug("Heartbeat: disabled")
-            return None
-
-        heartbeat_file = self._config.workspace_path / "HEARTBEAT.md"
-        try:
-            content = heartbeat_file.read_text(encoding="utf-8")
-        except OSError:
-            logger.debug("Heartbeat: HEARTBEAT.md missing")
-            return None
-        tasks = parse_heartbeat_tasks(content)
-        if not tasks:
-            logger.debug("Heartbeat: HEARTBEAT.md has no active tasks")
-            return None
-
-        # Target unico e routable dei messaggi heartbeat: la chat WebUI condivisa.
-        # Resta il canale del turno anche se il turno è silenzioso — è dove il
-        # tool ``message`` consegna quando una condizione scatta davvero.
-        channel, chat_id = "websocket", "default"
-
-        # Prima di tutto il resto: le deleghe del ciclo precedente di cui non è
-        # mai arrivato un verdetto si chiudono qui, e si chiudono in favore del
-        # task. Va fatto prima di leggere lo stato — un controllo delegato che si
-        # è ripreso lascia dietro di sé il conteggio vecchio, e leggerlo prima di
-        # risolverlo metterebbe nel prompt la richiesta di avvisare l'utente di un
-        # guasto che non c'è più.
-        #
-        # Da qui passa ormai solo il verdetto mai arrivato: il recupero lo
-        # dichiara il turno d'annuncio con ``CHECK_OK``. Il conteggio si azzera
-        # comunque, ma il ricordo di aver già avvisato l'utente sopravvive — è la
-        # differenza fra un avviso per guasto e uno ogni due ore.
-        unresolved = resolve_pending_delegations(job.state)
-        if unresolved:
-            still_remembered = [
-                e.label for e in job.state.task_checks.values() if e.escalated
-            ]
-            logger.debug(
-                "Heartbeat: {} delegated check(s) never reported back, counted as run: {}"
-                "{}",
-                len(unresolved),
-                "; ".join(unresolved),
-                (
-                    f" (user already warned about: {'; '.join(still_remembered)})"
-                    if still_remembered
-                    else ""
-                ),
-            )
-
-        # E l'altra cosa successa fra un run e l'altro: l'utente si è fatto vivo.
-        # Se ha scritto dopo che gli abbiamo parlato, l'avviso l'ha letto, e un
-        # guasto ancora aperto torna a essere una notizia. Prima di leggere lo
-        # stato per gli stessi motivi della riga sopra — dopo, il prompt
-        # porterebbe la domanda di ieri.
-        rearmed = rearm_after_user_message(
-            job.state, user_spoke_at_ms=self._user_spoke_at_ms()
-        )
-        if rearmed:
-            logger.info(
-                "Heartbeat: the user has written since being warned, {} check(s) can be "
-                "reported again: {}",
-                len(rearmed),
-                "; ".join(rearmed),
-            )
-
-        # L'escalation si decide PRIMA del turno, perché è una riga di prompt:
-        # solo il modello, dentro il turno, sa se il controllo è riuscito adesso,
-        # ed è anche l'unico che possa consegnare (tool ``message``). Con nessun
-        # task in sequenza di guasto il blocco è vuoto e il prompt di un run sano
-        # resta byte-identico a quello del run precedente.
-        escalating = tasks_due_for_escalation(job.state, tasks)
-        # E il suo complemento: i task di cui l'utente è già stato avvisato. Non
-        # chiedere di parlare non basta a far tacere — v. ``already_warned_block``.
-        already_warned = tasks_already_warned(job.state, tasks)
-
-        # Nel prompt entra la sezione dei task, non il file. ``HEARTBEAT.md`` ha
-        # due proprietari — l'elenco è dell'utente, i commenti HTML che lo
-        # spiegano sono nostri — e finché ci finiva grezzo il modello si
-        # rileggeva la nostra spiegazione a ogni run, per sempre, su ogni
-        # installazione. La macchina a stati che salta quei commenti esiste già
-        # ed è già usata da questo stesso ramo (``parse_heartbeat_tasks``, poco
-        # sopra, per ``task_index_block``): qui guadagna un secondo chiamante
-        # invece di una seconda copia.
-        #
-        # Sparisce più dei commenti, e va detto: se ne va anche tutto ciò che sta
-        # **fuori** dalla sezione ``## Active Tasks``, intestazioni comprese —
-        # nella sezione, invece, un ``### RainCheck`` dell'utente resta, perché è
-        # ciò che dice di cosa parlano le righe sotto.
-        #
-        # Cosa NON cambia, e sono due cose. Che cosa conta come task: lo decide
-        # ``parse_heartbeat_tasks``, invariata, la stessa che poche righe sopra
-        # decide se il run parte — cambia ciò che il modello vede, non ciò che il
-        # sistema conta, e l'identità dei task (l'hash del testo, con cui è
-        # indicizzato lo stato dell'escalation già sul dispositivo) resta quella
-        # di prima. E il determinismo: con nessun task in sequenza di guasto il
-        # prompt di un run sano è byte-identico a quello del run precedente, che
-        # è ciò su cui si regge la cache di prefisso del provider.
-        #
-        # Il path passa perché è l'unico posto che ce l'ha: un commento HTML mai
-        # chiuso nasconde tutto ciò che gli sta sotto, e un avviso che non nomina
-        # il file non serve a nessuno.
-        listed_tasks = active_section_text(content, str(heartbeat_file))
-
-        prompt = (
-            _HEARTBEAT_PREAMBLE
-            + (already_warned_block(already_warned) if already_warned else "")
-            + (escalation_block(escalating) if escalating else "")
-            + f"Review the following HEARTBEAT.md and report any active tasks:\n\n{listed_tasks}\n"
-            + task_index_block(tasks)
-        )
-
-        from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
-
-        outcome = await agent.process_direct_outcome(
-            prompt,
-            session_key=HEARTBEAT_SESSION_KEY,
-            channel=channel,
-            chat_id=chat_id,
-            on_progress=silent_progress,
-            # Il contratto dell'heartbeat, dichiarato una volta e fatto valere
-            # dal turno: niente consegna implicita. Prima si diceva al modello di
-            # produrre un riempitivo ("All clear.") e poi si pagava una seconda
-            # chiamata LLM per indovinare se nasconderlo — un giudice che con un
-            # modello reasoning finiva in ``finish_reason='length'`` e non
-            # decideva mai. Ora l'unica consegna possibile è il tool ``message``.
-            visibility=TurnVisibility.SILENT,
-            # Sorgente proattiva: dà titolo/tag all'alert di sistema
-            # (jenny/runtime/notifier.py) e origine al transcript. Viaggia nei
-            # metadata del turno perché è da lì che il tool ``message`` li
-            # eredita per il proprio invio.
-            metadata={WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "heartbeat"}},
-        )
-
-        # Keep a small tail of heartbeat history so the loop stays bounded.
-        session = agent.sessions.get_or_create(HEARTBEAT_SESSION_KEY)
-        session.retain_recent_legal_suffix(self._hb_cfg.keep_recent_messages)
-        agent.sessions.save(session)
-
-        # Il payload del turno è ``None`` per costruzione (turno silenzioso): il
-        # testo del modello non è mai stato la consegna. Quello che serve qui è
-        # ``final_text``, dove il modello dichiara i task che non ha potuto
-        # eseguire, e ``spoke``, che dice se l'avviso è davvero uscito.
-        check = record_task_outcomes(
-            job.state,
-            tasks,
-            parse_could_not_check_marks(outcome.final_text),
-            now_ms=self._now_ms(),
-            escalating=escalating,
-            # Non ``outcome.spoke``: quello dice che in questo turno è uscito un
-            # messaggio, non di che cosa parlava. V. ``WARNED_MARKER``.
-            warned=parse_warned_marks(outcome.final_text),
-            delegated=parse_delegated_marks(outcome.final_text),
-        )
-        if check.pending:
-            # Detto per intero, perché la riga di prima ("check completed") su un
-            # turno che aveva solo delegato è esattamente il genere di
-            # affermazione sicura e falsa che rende lento un debug: il turno è
-            # finito, il controllo no. Il verdetto arriverà col turno d'annuncio
-            # del subagent (``jenny/cron/heartbeat_followup.py``).
-            logger.info(
-                "Heartbeat: turn finished, {} task(s) delegated and still pending: {}",
-                len(check.pending),
-                "; ".join(t.label for t in check.pending),
-            )
-        if not check.any_failure:
-            if not check.pending:
-                logger.debug("Heartbeat: check completed")
-            return None
-
-        for task in check.failed:
-            entry = job.state.task_checks[task.id]
-            logger.warning(
-                "Heartbeat: task '{}' could not run ({} in a row): {}",
-                task.label,
-                entry.consecutive_could_not_check,
-                check.reasons.get(task.id) or "no reason given",
-            )
-        if check.unattributed:
-            # Un marcatore che non si riesce ad attribuire non incolpa nessuno:
-            # sarebbe un avviso su un controllo sano. Resta nel riassunto del
-            # run, che è il posto giusto per un fatto che non sappiamo assegnare.
-            logger.warning(
-                "Heartbeat: {} unattributed CHECK_FAILED line(s): {}",
-                len(check.unattributed),
-                "; ".join(r or "no reason given" for r in check.unattributed),
-            )
-
-        # Riassunto a livello di job: ``last_status='could_not_check'`` e il
-        # motivo, così "il controllo della pioggia sta funzionando?" si risponde
-        # dallo stato del cron invece che da logcat. La mappa per-task, appena
-        # aggiornata su ``job.state``, dice *quale*; il ``CronService`` la salva
-        # insieme al resto dello store.
-        raise CronMonitorCouldNotCheckError(
-            f"heartbeat: {len(check.failed) + len(check.unattributed)} task(s) could not run",
-            reason=check.summary() or None,
-            escalated=check.escalated,
-        )

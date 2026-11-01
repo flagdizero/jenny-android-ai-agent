@@ -29,10 +29,9 @@ SYSTEM_JOB_PURPOSES: dict[str, str] = {
         "Gardener: turns what you told Jenny into pages under the project wikis, "
         "and promotes what it learns."
     ),
-    "heartbeat": "Heartbeat: checks HEARTBEAT.md for tasks you left for Jenny.",
     "reminders": (
-        "Notebook clock: tells you when a reminder on a notebook's board is due, and notes "
-        "when a mini app in a drawer changes state."
+        "Notebook clock: refreshes the mini apps' data on the boards, and notes when a "
+        "mini app in a drawer changes state."
     ),
     "update_check": (
         "Update check: looks for a newer Jenny app release and tells you once per version."

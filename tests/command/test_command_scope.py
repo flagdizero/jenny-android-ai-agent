@@ -73,8 +73,8 @@ def test_a_command_about_this_project_needs_one(command: str) -> None:
 def test_an_internal_key_is_not_refused_anything() -> None:
     """Il residuo cade su «disponibile», e non e' distrazione.
 
-    Una chiave che non e' progetto ne' personale e' interna (cron, Dream,
-    heartbeat): rifiutare li' trasformerebbe una domanda di classificazione in un
+    Una chiave che non e' progetto ne' personale e' interna (cron,
+    Dream): rifiutare li' trasformerebbe una domanda di classificazione in un
     job che non gira.
     """
     for spec in BUILTIN_COMMAND_SPECS:

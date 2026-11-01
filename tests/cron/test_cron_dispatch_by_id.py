@@ -1,8 +1,8 @@
 """Il dispatcher sceglie il gestore dal job di sistema, non dal nome.
 
 Il nome di un job dell'utente lo sceglie l'utente (o il modello, dal tool
-``cron``): un promemoria chiamato «dream» o «heartbeat» faceva partire un ciclo
-di Dream o un giro dell'heartbeat al posto del promemoria. I job di sistema sono
+``cron``): un promemoria chiamato «dream» faceva partire un ciclo
+di Dream al posto del promemoria. I job di sistema sono
 ``system_event`` con l'id del lavoratore (``GatewayContainer.build``,
 ``refresh_system_job``); un job dell'utente non e' mai ``system_event`` e il suo
 id e' un uuid troncato.
@@ -19,7 +19,7 @@ from jenny.cron.types import CronJob, CronPayload
 from jenny.runtime import cron_dispatch
 from jenny.runtime.cron_dispatch import CronDispatcher
 
-_WORKERS = ("dream", "gardener", "heartbeat", "update_check")
+_WORKERS = ("dream", "gardener", "reminders", "update_check")
 
 
 @pytest.fixture
@@ -29,7 +29,6 @@ def routed(monkeypatch: pytest.MonkeyPatch) -> tuple[CronDispatcher, list[str]]:
         get_agent=lambda: SimpleNamespace(),
         config=MagicMock(),
         cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
     )
 
     def spy(label):
@@ -40,7 +39,7 @@ def routed(monkeypatch: pytest.MonkeyPatch) -> tuple[CronDispatcher, list[str]]:
 
     monkeypatch.setattr(dispatcher, "_run_dream", spy("dream"))
     monkeypatch.setattr(dispatcher, "_run_gardener", spy("gardener"))
-    monkeypatch.setattr(dispatcher, "_run_heartbeat", spy("heartbeat"))
+    monkeypatch.setattr(dispatcher, "_run_reminders", spy("reminders"))
     monkeypatch.setattr(dispatcher, "_run_update_check", spy("update_check"))
     monkeypatch.setattr(cron_dispatch, "run_bound_cron_job", spy("bound"))
     return dispatcher, calls

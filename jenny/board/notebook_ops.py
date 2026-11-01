@@ -254,7 +254,7 @@ CATEGORIES: dict[str, str] = {
     "map_over": "map over its ceiling",
     "card_missing_page": "card pages that do not exist",
     "drawer_missing_source": "drawer sections citing missing pages",
-    "reminder_dead_why": "open reminders whose why is missing",
+    "reminder_dead_why": "reminders whose why is missing",
     "expect_missing": "expected files missing",
     "expect_extra": "files not in expect",
 }
@@ -423,21 +423,17 @@ def _check_summaries(root: Path, report: CheckReport) -> None:
 
 def _check_board(root: Path, report: CheckReport, pages: set[str]) -> None:
     """Schede con pagine che non ci sono, cassetti che citano pagine che non ci
-    sono, promemoria aperti il cui ``why`` non c'è più.
+    sono, promemoria il cui ``why`` non c'è più.
 
-    **Solo gli aperti**, come :func:`jenny.board.edit.clear_reminder_whys` e
-    ``update_reminder``: un promemoria chiuso (``done``/``dropped``) è storia,
-    nessuno lo legge più per agire, e nessuno strumento lo cambia. Nelle prove
-    del 24-25/10/2026 i ``why`` morti dei chiusi chiudevano ogni piano con «6
-    why che lo strumento non lascia toccare», e un aiutante ha scritto un file in
-    ``outputs/`` per aggirarlo: qui si contano in una nota, come non-difetto.
+    I promemoria sono job dello scheduler (``cron/jobs.json``): si contano quelli
+    vivi del quaderno, e uno già scattato non c'è più. Il ``why`` lo corregge il
+    tool ``board`` (``update_reminder``).
     """
-    from jenny.board import model
-    from jenny.board.store import read_board, read_card_summary, read_reminders
+    from jenny.board.cron_link import notebook_jobs_on_disk, notes_on_disk
+    from jenny.board.store import read_board, read_card_summary
     from jenny.board.view import missing_pages
 
     board = read_board(root)
-    reminders = read_reminders(root)
     if board is not None:
         report.cards = len(board["cards"])
         titles = dict.fromkeys(pages, "")
@@ -459,23 +455,23 @@ def _check_board(root: Path, report: CheckReport, pages: set[str]) -> None:
                         "drawer_missing_source", f"board/cards/{card['id']}.json", 0,
                         f"drawer `{card['id']}`, section «{section.get('title')}» cites "
                         f"missing {', '.join(gone)}"))
-    open_rems = model.open_reminders(reminders)
-    report.open_reminders = len(open_rems)
-    closed_dead = 0
-    for rem in reminders["reminders"]:
-        # Il ``why`` si legge da ``wiki/`` (``board/clock.py``): conta il file.
-        why = str(rem.get("why") or "").strip()
+    try:
+        from jenny.config.paths import get_workspace_path
+
+        workspace: Path | None = get_workspace_path()
+    except RuntimeError:
+        workspace = None
+    if workspace is None:
+        return
+    report.open_reminders = len(notes_on_disk(root.name, workspace))
+    for job in notebook_jobs_on_disk(root.name, workspace):
+        # Il ``why`` si legge da ``wiki/`` quando il job suona: conta il file.
+        why = str(job.get("why") or "").strip()
         if not why or (root / "wiki" / why.removeprefix("wiki/")).is_file():
             continue
-        if rem["state"] != "open":
-            closed_dead += 1
-            continue
-        _shown(root / "board" / "reminders.json")
-        report.defects.append(Defect("reminder_dead_why", "board/reminders.json", 0,
-                                     f"open reminder `{rem['id']}`: why {why} does not exist"))
-    if closed_dead:
-        report.notes.append(f"{closed_dead} closed reminder(s) have a why that no longer exists: "
-                            "closed reminders are history, not a defect — leave them as they are.")
+        report.defects.append(Defect(
+            "reminder_dead_why", "board", 0,
+            f"reminder `{job['id']}` «{job['name']}»: why {why} does not exist"))
 
 
 def _safe_pattern(pattern: str) -> str | None:
@@ -540,7 +536,7 @@ NOT_CHECKED = ("Not checked here (the llm-wiki lint does): orphans and pages mis
 def render_check(report: CheckReport, *, limit: int, max_chars: int) -> str:
     layout = "research" if report.research else "notebook"
     head = [f"Notebook check: {report.pages} pages (layout: {layout}), "
-            f"{report.cards} cards, {report.open_reminders} open reminders."]
+            f"{report.cards} cards, {report.open_reminders} reminders."]
     counts = report.counts()
     if counts:
         head.append(f"Defects: {len(report.defects)} — " + ", ".join(

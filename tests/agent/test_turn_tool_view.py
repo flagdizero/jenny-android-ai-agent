@@ -17,7 +17,8 @@ import pytest
 
 from jenny.agent.tools.registry import ToolRegistry, ToolRegistryView
 from jenny.bus.events import InboundMessage
-from jenny.session.keys import HEARTBEAT_SESSION_KEY, UNIFIED_SESSION_KEY
+from jenny.cron.session_turns import monitor_session_key
+from jenny.session.keys import UNIFIED_SESSION_KEY
 from tests.agent.test_prompt_matches_offered_tools import (  # noqa: F401
     _loop_with_capture,
     _NamedTool,
@@ -25,6 +26,9 @@ from tests.agent.test_prompt_matches_offered_tools import (  # noqa: F401
     _system_prompt,
     workspace,
 )
+
+# Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
+MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _app(ws: Path, slug: str) -> None:
@@ -134,7 +138,7 @@ async def test_the_move_offer_is_only_for_the_personal_chat_in_the_app(notebook:
         ("websocket", "project:codice", "project:codice", False),  # progetto, non quaderno
         ("websocket", "default", UNIFIED_SESSION_KEY, False),
         ("telegram", "42", UNIFIED_SESSION_KEY, False),
-        ("websocket", "default", HEARTBEAT_SESSION_KEY, True),
+        ("websocket", "default", MONITOR_SESSION_KEY, True),
     ],
 )
 def test_a_system_turn_offers_the_tools_of_a_user_turn_in_that_chat(

@@ -29,7 +29,7 @@ pytestmark = requires_jsdom
 _HEAD = """
 import assert from 'node:assert/strict';
 import {
-  boot, tick, frame, threads, hooks, failed, thread, unhandled, FakeWS, locales, $,
+  boot, tick, until, frame, threads, hooks, failed, thread, unhandled, FakeWS, locales, $,
 } from './boot.mjs';
 threads['websocket:default'] = { messages: [
   { role: 'user', text: 'hello' },
@@ -43,6 +43,22 @@ threads['project:orto'] = { messages: [
 /* La storia arriva tardi: il tempo in cui il socket porta i frame vivi. */
 const slowThread = (ms) => {
   hooks.fetch = async (u) => { if (u.pathname.endsWith('/webui-thread')) await tick(ms); };
+};
+/* Come `slowThread`, ma ogni lettura della storia resta in volo finche' la
+   prova non la libera (`reads[i].open()`). Dove conta che un frame arrivi
+   *durante* la lettura, un tempo non lo garantisce: sotto carico un `tick(30)`
+   torna dopo i 120 ms della lettura, e la prova misura un'altra corsa. */
+const gatedThread = () => {
+  const reads = [];
+  hooks.fetch = async (u) => {
+    if (!u.pathname.endsWith('/webui-thread')) return undefined;
+    const read = {};
+    const passed = new Promise((r) => { read.open = r; });
+    reads.push(read);
+    await passed;
+    return undefined;
+  };
+  return reads;
 };
 const reconnect = async () => {
   FakeWS.last.onclose();
@@ -65,17 +81,20 @@ def test_a_live_answer_stays_below_the_history_when_you_enter_its_conversation()
     """Entri nel quaderno mentre Jenny ci sta rispondendo."""
     _run("""
 const app = await boot();
-slowThread(120);
+const reads = gatedThread();
 const opening = app.switchConversation('project:orto');
-await tick(30);
+await until(() => reads.length === 1, { msg: 'il quaderno non ha chiesto la sua storia' });
 frame({ event: 'delta', chat_id: 'project:orto', turn_id: 'b', text: 'Here is the answer' });
 await tick(40);
 frame({ event: 'delta', chat_id: 'project:orto', turn_id: 'b', text: ' to Q2' });
+reads[0].open();
 await opening;
-await tick(150);
-assert.deepEqual(thread(), [
-  'you: Q1', 'jenny: A1', 'you: Q2 in progress', 'jenny: Here is the answer to Q2',
-]);
+await until(() => {
+  assert.deepEqual(thread(), [
+    'you: Q1', 'jenny: A1', 'you: Q2 in progress', 'jenny: Here is the answer to Q2',
+  ]);
+  return true;
+});
 """)
 
 
@@ -86,12 +105,16 @@ def test_a_live_answer_stays_below_the_history_across_a_resync() -> None:
 const app = await boot();
 assert.deepEqual(thread(), ['you: hello', 'jenny: hello to you']);
 threads['websocket:default'].messages.push({ role: 'user', text: 'and now?' });
-slowThread(120);
+const reads = gatedThread();
 await reconnect();
-await tick(30);
+await until(() => reads.length, { msg: 'il resync non ha riletto la storia' });
 frame({ event: 'delta', chat_id: 'default', turn_id: 'n', text: 'now this' });
-await tick(200);
-assert.deepEqual(thread(), ['you: hello', 'jenny: hello to you', 'you: and now?', 'jenny: now this']);
+reads.forEach((r) => r.open());
+await until(() => {
+  assert.deepEqual(thread(),
+    ['you: hello', 'jenny: hello to you', 'you: and now?', 'jenny: now this']);
+  return true;
+});
 """)
 
 
@@ -230,6 +253,27 @@ const slowPaging = (pageMs, threadMs) => {
     return undefined;
   };
 };
+/* Come `slowPaging`, ma l'ordine lo decide la prova: ogni risposta parte quando
+   la prova la libera (`open()`), non dopo un tempo. Sotto carico (`-n auto`) un
+   `tick(5)` puo' tornare con 80 ms di ritardo, e allora la storia da 100 ms
+   arrivava prima della pagina da 20: un'altra corsa, con un'altra risposta
+   giusta. `asked` conta le richieste arrivate al cancello. */
+const gatedPaging = () => {
+  const gate = () => {
+    const g = { asked: 0 };
+    g.passed = new Promise((r) => { g.open = r; });
+    return g;
+  };
+  const gates = { page: gate(), thread: gate() };
+  hooks.fetch = async (u) => {
+    if (!u.pathname.endsWith('/webui-thread')) return undefined;
+    const g = u.searchParams.get('before') ? gates.page : gates.thread;
+    g.asked += 1;
+    await g.passed;
+    return g === gates.page ? olderPage() : undefined;
+  };
+  return gates;
+};
 """
 
 
@@ -240,19 +284,27 @@ def test_an_older_page_loaded_during_a_reload_does_not_end_up_below_the_history(
     _run(_PAGED + """
 const app = await boot();
 assert.deepEqual(thread(), ['you: Q3', 'jenny: A3']);
-slowPaging(20, 100);
+const gates = gatedPaging();
 const reading = app.chat.reload();
-await tick(5);
-await app.chat.pager.loadMore();
+await until(() => gates.thread.asked, { msg: 'la rilettura non ha chiesto la storia' });
+const paging = app.chat.pager.loadMore();
+await until(() => gates.page.asked, { msg: 'lo scorrimento non ha chiesto la pagina' });
+gates.page.open();
+await paging;
 assert.deepEqual(thread(), ['you: Q1', 'jenny: A1', 'you: Q3', 'jenny: A3']);
+gates.thread.open();
 await reading;
-await tick(30);
-assert.deepEqual(thread(), ['you: Q3', 'jenny: A3'], 'la storia e\\u2019 entrata sopra la pagina');
+await until(() => {
+  assert.deepEqual(thread(), ['you: Q3', 'jenny: A3'], 'la storia e\\u2019 entrata sopra la pagina');
+  return true;
+});
 assert.equal(app.chat.pager.cursor, 'c1');
 assert.equal(app.chat.pager.hasMore, true);
 await app.chat.pager.loadMore();
-await tick(50);
-assert.deepEqual(thread(), ['you: Q1', 'jenny: A1', 'you: Q3', 'jenny: A3']);
+await until(() => {
+  assert.deepEqual(thread(), ['you: Q1', 'jenny: A1', 'you: Q3', 'jenny: A3']);
+  return true;
+});
 """)
 
 
@@ -282,17 +334,23 @@ def test_a_live_answer_survives_two_overlapping_reloads() -> None:
     nodo quando nasce la distingue dalla storia che se ne va."""
     _run("""
 const app = await boot();
-slowThread(120);
+const reads = gatedThread();
 const first = app.chat.reload();
-await tick(30);
+await until(() => reads.length === 1);
 frame({ event: 'delta', chat_id: 'default', turn_id: 'n', text: 'live' });
-await tick(20);
+await until(() => thread().includes('jenny: live'), { msg: 'la bolla viva non e\\u2019 nata' });
 const second = app.chat.reload();
-await Promise.all([first, second]);
-await tick(50);
-const rows = thread();
-assert.deepEqual(rows.slice(0, 2), ['you: hello', 'jenny: hello to you']);
-assert.ok(rows.slice(2).includes('jenny: live'), `la bolla viva e\\u2019 sparita: ${JSON.stringify(rows)}`);
+await until(() => reads.length === 2);
+reads[0].open();
+await first;
+reads[1].open();
+await second;
+await until(() => {
+  const rows = thread();
+  assert.deepEqual(rows.slice(0, 2), ['you: hello', 'jenny: hello to you']);
+  assert.ok(rows.slice(2).includes('jenny: live'), `la bolla viva e\\u2019 sparita: ${JSON.stringify(rows)}`);
+  return true;
+});
 """)
 
 

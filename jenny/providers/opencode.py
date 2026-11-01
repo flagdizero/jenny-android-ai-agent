@@ -60,7 +60,7 @@ UNSUPPORTED_MESSAGE_KEYS = frozenset({"name"})
 # La conversazione in corso, non il suo contenuto: la scrive chi sta per
 # chiamare il provider, la legge il provider al momento di firmare la richiesta.
 # ContextVar e non attributo sull'istanza perché il provider è **uno solo** ed è
-# condiviso: cron, Dream e heartbeat girano in task propri e possono
+# condiviso: cron e Dream girano in task propri e possono
 # sovrapporsi al turno dell'utente, e un attributo mutabile darebbe a una
 # richiesta l'ID di un'altra conversazione. Ogni task porta la sua copia.
 _current_session_key: ContextVar[str | None] = ContextVar(

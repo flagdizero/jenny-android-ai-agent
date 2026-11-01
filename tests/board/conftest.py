@@ -60,3 +60,26 @@ def ctx(workspace_root: Path, config_path: Path) -> CommandContext:
         invalidate_session=lambda _key: None,
         busy_session_keys=lambda: (),
     )
+
+
+@pytest.fixture()
+async def cron(workspace_root: Path, monkeypatch: pytest.MonkeyPatch):
+    """Lo scheduler avviato sul workspace del quaderno: i promemoria sono suoi job.
+
+    Il workspace del runtime punta qui, così chi legge i job dal file
+    (``cron_link.notes_on_disk``) o ritrova il quaderno (``notebook_root``) vede
+    gli stessi.
+    """
+    from tests.support.cron import running_cron
+
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", workspace_root)
+    async with running_cron(workspace_root) as service:
+        yield service
+
+
+@pytest.fixture()
+def cron_ctx(ctx: CommandContext, cron) -> CommandContext:
+    """Il contesto dei comandi con lo scheduler: ``board.reminder.*`` ne ha bisogno."""
+    import dataclasses
+
+    return dataclasses.replace(ctx, get_cron_service=lambda: cron)

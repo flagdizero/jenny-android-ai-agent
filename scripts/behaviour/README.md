@@ -36,8 +36,8 @@ the cron and subagent routes, `project.create`/`project.delete` — and reads th
 session JSONL and the workspace files.
 
 - **Snapshot.** At the start it `tar`s the mutable part of the workspace (`memory/`, `USER.md`,
-  `SOUL.md`, `HEARTBEAT.md`, `skills/`, `cron/`, `sessions/`, `wikis/`) and moves the system jobs
-  (Dream, gardener, heartbeat, reminders) a day ahead, so none of them fires in the middle of a
+  `SOUL.md`, `skills/`, `cron/`, `sessions/`, `wikis/`) and moves the system jobs
+  (Dream, gardener, notebook clock) a day ahead, so none of them fires in the middle of a
   scenario. At the end — also after an error or Ctrl-C — it puts the snapshot back and restarts
   the app. If a run died without restoring, `--restore` does it.
 - **A fresh session per run.** A session that has seen a behaviour imitates it, so every run
@@ -51,6 +51,14 @@ session JSONL and the workspace files.
   (`notebook_prelude`): those turns run there, the runner waits for the notebook's subagents, and
   their tool calls go to `extra["prelude_calls"]` — so a red in the personal chat can be told
   apart from a fact the notebook never wrote down. Stage 4 (the diary) is built on this.
+- **Imitation.** A seeded session (`seed_session`) can hold whole rows — an assistant turn with
+  `tool_calls` and the `tool` results — so a scenario can measure whether the model repeats its
+  own earlier calls (`day_without_time_after_bad_history`: two days that got an invented 09:00).
+- **Monitors.** With `monitor_after` the runner waits for the **first real run** of the monitor
+  the turn created (the turn asks for a short cadence), and for the helper's verdict if the run
+  handed the check off. `extra["monitor"]` holds the first run's status, the final one and the
+  calls of the monitor's own session, read right after the run because the next one trims it.
+  There is no "run now": what is measured is the run the user would have had.
 - **Cleanup.** Subagents the run started are cancelled and waited for, cron jobs it created are
   removed, its notebook is deleted.
 
@@ -96,8 +104,7 @@ python scripts/behaviour_check.py --restore                # after a run that di
 ```
 
 Run it after editing anything under `jenny/templates/agent/` or a tool description, and after
-changing model. Stage 3 forces a heartbeat run through the cron store, which takes up to six
-minutes per run.
+changing model.
 
 ## Adding a scenario
 

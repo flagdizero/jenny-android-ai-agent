@@ -17,15 +17,14 @@ What happened lately in your other conversations with the user — mostly their 
 
 {{ trace | join("\n") }}
 {% endif %}
-{% if waiting %}
+{% if coming %}
 
-## Waiting on
+## Coming up in your notebooks
 
-Things from the user's notebooks that came due and are not marked done yet, oldest first.
+Dates from the user's notebooks that ring in the next days, nearest first. Each one will ring in its own notebook by itself: nothing to do about it here.
 
-- At an opening — the user's first message after a pause, a greeting, the start of a day — you may ask about one of them, the one that matters most, in a single sentence. Never more than one, never as a list, never in the middle of another topic.
-- Never ask again about one you already asked about in this conversation: if the user let it drop, leave it.
-- One marked "maybe done" is not a thing to do: do not remind the user of it; if it comes up, ask how it went.
+- You may mention one of them when the conversation is about the same thing or the same days — "the copper treatment is tomorrow" — in a single sentence. Never more than one, never as a list, never off topic, never just to fill a reply.
+- A date "sometime in" a month has no day: do not invent one.
 
-{{ waiting | join("\n") }}
+{{ coming | join("\n") }}
 {% endif %}

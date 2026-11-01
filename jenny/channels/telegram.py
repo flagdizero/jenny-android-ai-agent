@@ -597,8 +597,8 @@ class TelegramChannel(NonStreamingChannelMixin):
     async def _on_run_status(self, event: TurnRunStatusChanged) -> None:
         """Accende o spegne il battito seguendo lo stato del turno.
 
-        Il filtro sul canale esclude da solo i turni interni (cron, Dream,
-        heartbeat: ``channel="internal"``) e quelli della WebUI. Le consegne
+        Il filtro sul canale esclude da solo i turni interni (cron, Dream:
+        ``channel="internal"``) e quelli della WebUI. Le consegne
         proattive non passano di qui affatto — non hanno un turno Telegram —
         ed è giusto: Jenny che "sta scrivendo" senza che tu abbia scritto
         niente sarebbe inquietante, non utile.

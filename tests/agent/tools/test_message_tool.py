@@ -192,7 +192,7 @@ async def test_cross_target_send_keeps_the_turn_visibility() -> None:
     tool.set_context(
         RequestContext(
             channel=INTERNAL_CHANNEL,
-            chat_id="heartbeat",
+            chat_id="rain-check",
             metadata=silent_turn_metadata({"message_id": "m-1"}),
         ),
     )
@@ -543,7 +543,7 @@ def _silent_tool(sent: list[OutboundMessage]) -> MessageTool:
         RequestContext(
             channel="websocket",
             chat_id="default",
-            session_key="heartbeat",
+            session_key="cron:rain-check",
             metadata=silent_turn_metadata(),
         )
     )

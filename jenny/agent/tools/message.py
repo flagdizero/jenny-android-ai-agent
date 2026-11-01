@@ -53,7 +53,7 @@ def _unusable_silent_alert(content: str, *, has_media: bool) -> str | None:
 
     Perché il prompt non basta: il contratto dell'annuncio di un subagent dice
     "l'unico modo di raggiungere l'utente è il tool ``message``" e quello
-    dell'heartbeat dice "chiudi la risposta con ``CHECK_OK <n>``". Le due
+    del seguito di un monitor delegato dice "chiudi la risposta con ``CHECK_OK``". Le due
     istruzioni collidono, e un modello che vuole far *contare* il proprio
     verdetto lo manda col tool. Stessa scelta del tetto di un avviso per ciclo
     qui sotto: il prompt lo vieta, questo lo rende impossibile.
@@ -64,7 +64,7 @@ def _unusable_silent_alert(content: str, *, has_media: bool) -> str | None:
     subito, perché rifiutava ``"primo"``. Il punto non è quel test — è che una
     forma è un indizio pessimo di ciò che una parola *dice*, e i due errori non
     si pagano allo stesso prezzo: una parola nuda che passa è rumore in chat,
-    un avviso vero che viene rifiutato è l'heartbeat che tace proprio quando
+    un avviso vero che viene rifiutato è un monitor che tace proprio quando
     aveva qualcosa da dire. Quindi qui si blocca solo ciò che non può essere un
     avviso in nessun caso — un carattere solo (``x``, ``.``, ``🙄``) e le parole
     meta di :data:`_NOT_AN_ALERT` — e tutto il resto passa. Copre le cinque
@@ -413,7 +413,7 @@ class MessageTool(Tool, ContextAware):
         if message_id:
             metadata["message_id"] = message_id
         # Un invio proattivo è l'unica cosa che il modello dice all'utente da
-        # FUORI la conversazione: gira su una sessione interna (heartbeat, cron,
+        # FUORI la conversazione: gira su una sessione interna (cron,
         # Dream), quindi il suo testo finisce nella history di *quella* sessione
         # e non in quella unificata. Senza questa registrazione l'utente vede
         # l'avviso (transcript WebUI + notifica Android) e al turno dopo il
@@ -431,8 +431,8 @@ class MessageTool(Tool, ContextAware):
         # Un allegato o messaggio nella conversazione corrente (``same_target``)
         # resta sul canale d'origine e non viene diffuso agli altri canali
         # accoppiati (es. Telegram): il ChannelDeliverer diffonde solo con
-        # questo flag (o con ``proactive=True`` dai chiamanti cron/heartbeat).
-        # Eccezione: un turno SILENZIOSO (cron monitor, heartbeat, lavoro interno
+        # questo flag (o con ``proactive=True`` dai chiamanti cron).
+        # Eccezione: un turno SILENZIOSO (cron monitor, lavoro interno
         # in genere). Li ``same_target`` e vero (canale/chat d'origine) ma
         # l'utente NON e in conversazione: sta arrivando un avviso, non una
         # risposta, e deve raggiungere anche i canali accoppiati (WebUI +

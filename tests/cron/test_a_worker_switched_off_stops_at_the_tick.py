@@ -11,7 +11,7 @@ Dream non ce l'aveva. Spegnerlo dalle impostazioni non lo spegneva: il ciclo
 continuava a girare ogni due ore — snapshot, turno LLM, riscritture di memoria,
 potatura delle sessioni — e sopravviveva al riavvio. Il difetto è del 09/09/2026
 e il gemello per il giardiniere esisteva già; scritto quel giorno, questo file
-sarebbe stato **rosso** su Dream e sull'heartbeat.
+sarebbe stato **rosso** su Dream.
 
 Il caso del giardiniere resta dov'è nato, in
 ``test_gardener_settings_reach_the_dispatcher.py``, insieme all'altra metà che
@@ -30,28 +30,11 @@ import pytest
 from jenny.agent import dream_cycle
 from jenny.config.loader import get_config_path, save_config
 from jenny.config.schema import Config
-from jenny.cron.types import CronJob, CronPayload
 from jenny.runtime.cron_dispatch import CronDispatcher
 
 _DREAM_JOB = SimpleNamespace(
     name="dream", id="dream", payload=SimpleNamespace(kind="system_event")
 )
-
-
-def _heartbeat_job() -> CronJob:
-    """Il job vero e non un doppio: il ramo heartbeat legge e scrive
-    ``job.state``, quindi un ``SimpleNamespace`` senza stato darebbe un rosso
-    che parla d'altro il giorno in cui il cancello sparisse."""
-    return CronJob(
-        id="heartbeat", name="heartbeat", payload=CronPayload(kind="system_event")
-    )
-
-_HEARTBEAT_MD = """# Heartbeat
-
-## Active Tasks
-
-- Ogni ciclo, controlla la probabilità di pioggia e avvertimi solo sopra il 70%.
-"""
 
 
 @pytest.fixture(autouse=True)
@@ -135,7 +118,6 @@ def _dream_dispatcher(startup: Config) -> CronDispatcher:
         get_agent=lambda: _FakeDreamAgent(),
         config=startup,
         cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(),
     )
 
 
@@ -191,63 +173,3 @@ async def test_dream_on_reaches_the_claim(dream_spies) -> None:
 
     assert dream_spies["claims"] == ["claim"]
     assert dream_spies["starts"] == []
-
-
-# -- Heartbeat -----------------------------------------------------------------
-
-
-class _FakeHeartbeatSession:
-    def __init__(self) -> None:
-        self.messages: list[dict] = []
-
-    def retain_recent_legal_suffix(self, keep: int) -> None:  # pragma: no cover
-        pass
-
-
-class _FakeHeartbeatAgent:
-    def __init__(self) -> None:
-        self.calls: list[dict] = []
-        self.sessions = SimpleNamespace(
-            get_or_create=lambda _key: _FakeHeartbeatSession(),
-            save=lambda _session: None,
-        )
-
-    async def process_direct_outcome(self, prompt: str, **kwargs):  # pragma: no cover
-        self.calls.append({"prompt": prompt, **kwargs})
-        raise AssertionError("il turno dell'heartbeat è partito con la sezione spenta")
-
-    def evict_pruned_sessions(self, keys) -> None:  # pragma: no cover - non raggiunto
-        pass
-
-
-async def test_heartbeat_off_written_after_startup_stops_the_next_tick(
-    tmp_path: Path,
-) -> None:
-    """Stessa storia dell'heartbeat, che il cancello non ce l'aveva affatto.
-
-    Nella WebUI la sezione è oggi in sola lettura, quindi il ``false`` lo si
-    scrive nel file — ed è proprio il caso peggiore: il job registrato da un
-    avvio precedente sopravvive al riavvio che dovrebbe applicarlo, perché il
-    ramo che *non* lo registra non ha nessun modo di toglierlo.
-
-    Il controllo negativo qui non serve scriverlo: ``test_cron_dispatch_heartbeat.py``
-    è per intero un heartbeat **acceso** che deve arrivare al turno, e un cancello
-    sempre chiuso lo spegnerebbe tutto.
-    """
-    (tmp_path / "HEARTBEAT.md").write_text(_HEARTBEAT_MD, encoding="utf-8")
-    agent = _FakeHeartbeatAgent()
-    dispatcher = CronDispatcher(
-        get_agent=lambda: agent,
-        # ``workspace_path`` è una property su ``Config``: il ramo heartbeat legge
-        # solo quello da ``self._config``, quindi un doppio esplicito è più onesto
-        # (stessa scelta di ``test_cron_dispatch_heartbeat.py``). Il cancello,
-        # invece, legge il ``config.json`` scritto qui sotto.
-        config=SimpleNamespace(workspace_path=tmp_path),
-        cron=MagicMock(),
-        heartbeat_cfg=SimpleNamespace(enabled=True, keep_recent_messages=8),
-    )
-
-    _write(gateway__heartbeat__enabled=False)
-    assert await dispatcher.dispatch(_heartbeat_job()) is None
-
-    assert agent.calls == []

@@ -96,10 +96,10 @@ def test_subagent_panel_strings_exist_in_both_locales() -> None:
 def test_workspace_file_help_strings_exist_in_both_locales() -> None:
     """La spiegazione dei file del workspace non vive più dentro i file.
 
-    ``AGENTS.md``, ``USER.md``, ``memory/MEMORY.md`` e ``HEARTBEAT.md`` nascono
+    ``AGENTS.md``, ``USER.md`` e ``memory/MEMORY.md`` nascono
     vuoti: a cosa servono — e cosa *non* ci va scritto — lo dice lo sheet della
-    WebUI. ``SOUL.md`` nasce pieno, ma è la destinazione indicata da tre di
-    quei quattro testi, quindi la sua voce non è meno obbligatoria delle altre.
+    WebUI. ``SOUL.md`` nasce pieno, ma è la destinazione indicata dagli
+    altri testi, quindi la sua voce non è meno obbligatoria delle altre.
     La parità fra le due lingue non basta a proteggerlo: una chiave
     cancellata in tutt'e due resta simmetrica, e l'unico segno sarebbe uno
     sheet che non compare più. Qui l'elenco è esplicito.
@@ -111,7 +111,6 @@ def test_workspace_file_help_strings_exist_in_both_locales() -> None:
         "workspace.fileHelp.user",
         "workspace.fileHelp.soul",
         "workspace.fileHelp.memory",
-        "workspace.fileHelp.heartbeat",
     }
     for locale in ("it", "en"):
         keys = _flatten(_load(locale))
@@ -132,7 +131,7 @@ def test_workspace_file_help_map_points_at_existing_keys() -> None:
     assert block is not None, "FILE_HELP_KEYS non trovato in mobile-workspace.js"
     mapping = dict(re.findall(r"'([^']+)':\s*'([^']+)'", block.group(1)))
 
-    assert set(mapping) == {"AGENTS.md", "USER.md", "SOUL.md", "HEARTBEAT.md", "memory/MEMORY.md"}
+    assert set(mapping) == {"AGENTS.md", "USER.md", "SOUL.md", "memory/MEMORY.md"}
     for locale in ("it", "en"):
         keys = _flatten(_load(locale))
         missing = set(mapping.values()) - keys

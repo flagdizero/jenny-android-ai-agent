@@ -15,12 +15,11 @@ Una riga ``role: "user"`` nel JSONL di sessione è l'unico segno che Jenny ha di
   (``jenny/plan/driver.py``).
 
 Chi legge la storia per rispondere a una domanda **sull'utente** — quale bolla
-mostrare in chat, come titolare la conversazione, «si è fatto vivo dopo che gli
-abbiamo scritto?» — deve saltarle tutte. Prima ne esisteva il marcatore
+mostrare in chat, come titolare la conversazione — deve saltarle tutte. Prima ne esisteva il marcatore
 per una sola (cron), e le altre due passavano: da qui la bolla con dentro il
 prompt di un subagent, un promemoria che si spacciava per una risposta e un
 riarmo di heartbeat davanti a uno schermo vuoto. Questo modulo è il posto unico
-dove si dice quali righe sono, così i tre lettori non divergono.
+dove si dice quali righe sono, così i lettori non divergono.
 
 Il marcatore vive **solo** nel JSONL: ``SessionManager.get_history`` ricostruisce
 i messaggi per il modello con una whitelist di chiavi, e i provider ne fanno

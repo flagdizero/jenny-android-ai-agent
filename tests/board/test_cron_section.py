@@ -106,7 +106,7 @@ async def test_a_cron_section_from_before_still_shows_once_and_goes_with_it(
 def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, tmp_path) -> None:
     """Un'etichetta per scheda coi suoi cron che si ripetono; un «una volta sola» è una data."""
     from jenny.board.cron_link import job_snapshot, make_link
-    from jenny.board.store import mutate_reminders
+    from jenny.cron.dates import date_schedule
     from jenny.cron.service import CronService
     from jenny.cron.types import CronSchedule
 
@@ -118,11 +118,10 @@ def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, 
                              "guarda se gela", board=make_link("piante", "acero"), **origin)
     once = service.add_job("Vivaio", CronSchedule(kind="at", at_ms=4_102_444_800_000), "chiama",
                            board=make_link("piante", "acero"), **origin)
-    mutate_reminders(notebook, lambda r: r["reminders"].append({
-        "id": "r-1", "card": "acero", "text": "Rinvaso", "state": "open", "by": "user",
-        "when": {"kind": "date", "date": "2099-03-01", "precision": "day"}}))
-    before = build_board_view(notebook)
-    jobs = {j.id: job_snapshot(j) for j in (first, second, once)}
+    rinvaso = service.add_job("Rinvaso", date_schedule("2099-03-01", "Europe/Rome"), "rinvaso",
+                              board=make_link("piante", "acero"), **origin)
+    before = build_board_view(notebook, cron_jobs={rinvaso.id: job_snapshot(rinvaso)})
+    jobs = {j.id: job_snapshot(j) for j in (first, second, once, rinvaso)}
     view = build_board_view(notebook, cron_jobs=jobs)
     [label] = view["autoLabels"]
     assert label["card"] == "acero" and label["pos"]["by"] == "jenny"
@@ -131,7 +130,7 @@ def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, 
     # L'etichetta arriva dopo: il post-it resta dov'era.
     assert view["postits"] == before["postits"]
     # Il cron «una volta sola» è una riga del post-it della scheda, con la sua ora.
-    dated = [n for n in view["notes"] if n.get("job") == once.id]
+    dated = [n for n in view["notes"] if n["id"] == once.id]
     assert dated and dated[0]["card"] == "acero" and dated[0]["when"]["time"]
     # Una scheda che non è più sulla bacheca non ha etichetta.
     mutate_board(notebook, lambda b: b.__setitem__("cards", []))
@@ -173,7 +172,7 @@ def test_a_whole_notebook_once_cron_is_a_row_of_the_free_postit(notebook, tmp_pa
                            board=make_link("piante", model.NOTEBOOK))
     view = build_board_view(notebook, cron_jobs={once.id: job_snapshot(once)})
     assert view["autoLabels"] == []
-    [row] = [n for n in view["notes"] if n.get("job") == once.id]
+    [row] = [n for n in view["notes"] if n["id"] == once.id]
     assert row["card"] == "" and row["text"] == "Chiama il vivaio"
     assert view["postits"][-1]["card"] == ""
 
@@ -187,26 +186,27 @@ def test_a_label_that_does_not_fit_hangs_beside_its_card(notebook, tmp_path) -> 
     """
     from jenny.board import model
     from jenny.board.cron_link import job_snapshot, make_link
-    from jenny.board.store import mutate_reminders
+    from jenny.cron.dates import date_schedule
     from jenny.cron.service import CronService
     from jenny.cron.types import CronSchedule
 
     mutate_board(notebook, lambda b: b.__setitem__("cards", [
         {"id": "salvia", "title": "Salvia", "pages": [], "pos": {"x": 10, "y": 20}},
         {"id": "fico", "title": "Fico", "pages": [], "pos": {"x": 55, "y": 20}}]))
-    mutate_reminders(notebook, lambda r: r["reminders"].extend(
-        {"id": f"r-{card}", "card": card, "text": "Concime", "state": "open", "by": "user",
-         "when": {"kind": "date", "date": "2099-03-01", "precision": "day"}}
-        for card in ("salvia", "fico")))
     service = CronService(tmp_path / "jobs.json")
     origin = {"session_key": "project:piante", "origin_channel": "websocket",
               "origin_chat_id": "project:piante"}
-    jobs = {}
+    notes = {}
+    for card in ("salvia", "fico"):
+        rem = service.add_job("Concime", date_schedule("2099-03-01", "Europe/Rome"), "concime",
+                              board=make_link("piante", card), **origin)
+        notes[rem.id] = job_snapshot(rem)
+    jobs = dict(notes)
     for card in ("salvia", "fico"):
         job = service.add_job(f"Acqua {card}", CronSchedule(kind="every", every_ms=86_400_000),
                               "annaffia", board=make_link("piante", card), **origin)
         jobs[job.id] = job_snapshot(job)
-    before = build_board_view(notebook)
+    before = build_board_view(notebook, cron_jobs=notes)
     view = build_board_view(notebook, cron_jobs=jobs)
     assert view["postits"] == before["postits"]
     postits = [(p["pos"]["x"], p["pos"]["y"], p["pos"]["x"] + model.POSTIT_BOX[0],

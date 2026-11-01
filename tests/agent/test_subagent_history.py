@@ -240,7 +240,7 @@ class TestKeys:
 
         assert _is_webui_readable_session_key(subagent_session_key("L1")) is False
         assert _is_webui_readable_session_key("cron:job-1") is False
-        assert _is_webui_readable_session_key("heartbeat") is False
+        assert _is_webui_readable_session_key("internal:direct") is False
         assert _is_webui_readable_session_key("websocket:default") is True
         assert _is_webui_readable_session_key("project:palestra") is True
 

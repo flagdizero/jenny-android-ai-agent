@@ -32,9 +32,9 @@ from jenny.agent.tools.schema import (
     tool_parameters_schema,
 )
 from jenny.board import edit, model
-from jenny.board.cron_link import notebook_jobs_on_disk
+from jenny.board.cron_link import is_note, note_words, notebook_jobs_on_disk, notes_on_disk
 from jenny.board.drawers import DrawerError, as_list, page_text, pages_fingerprint, write_drawer
-from jenny.board.store import read_board, read_card_summary, read_reminders
+from jenny.board.store import read_board, read_card_summary
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
@@ -44,13 +44,16 @@ from jenny.security.workspace_access import (
 _WRITES = (
     "add_card", "rename_card", "move_card", "remove_card", "restore_card", "move_pages",
     "remove_pages", "connect", "disconnect", "add_note", "add_reminder", "attach_reminder",
-    "update_reminder", "close_reminder", "remove_section",
+    "update_reminder", "close_reminder", "drop_reminder", "remove_section",
     "set_skeleton", "answer_proposal", "write_drawer",
 )
 _ACTIONS = ("show", *_WRITES)
-# Quelle che fermano, riprendono o tolgono un cron: il servizio cron vuole il loop
-# (v. :mod:`jenny.board.edit`), quindi non passano da ``asyncio.to_thread``.
-_ON_THE_LOOP = ("remove_card", "restore_card", "remove_section", "answer_proposal")
+# Quelle che toccano lo scheduler — fermano, riprendono o tolgono un cron, o
+# scrivono un promemoria, che è un job — vogliono il loop (v.
+# :mod:`jenny.board.edit`), quindi non passano da ``asyncio.to_thread``.
+_ON_THE_LOOP = ("remove_card", "restore_card", "remove_section", "answer_proposal",
+                "add_reminder", "attach_reminder", "update_reminder", "close_reminder",
+                "drop_reminder")
 
 _SECTION = ObjectSchema(
     title=StringSchema("One of the board's skeleton sections, spelled exactly as `show` lists it."),
@@ -74,13 +77,15 @@ _SECTION = ObjectSchema(
         "also for pages that no longer exist. The files stay in the wiki (to delete them, "
         "`notebook action=remove_pages`). "
         "connect (card, other, label?) / disconnect (card, other): a thread. "
-        "add_note (card, text). add_reminder (card?, text, date, precision?): tie it to the "
-        "card it is about, or leave card empty for the whole notebook — you decide. "
-        "attach_reminder (card?, id): put an existing open reminder on that card (empty: the "
-        "whole notebook); a reminder sits on one card only, so this moves it. "
-        "update_reminder (id, text?, date?, precision?, why?, clear_why?): correct an open "
+        "add_note (card, text). add_reminder (card?, text, date, precision?, why?): tie it to "
+        "the card it is about, or leave card empty for the whole notebook — you decide; it "
+        "rings once, on its date, in this notebook's chat, and then it is gone. "
+        "attach_reminder (card?, id): put an existing reminder on that card (empty: the "
+        "whole notebook); a reminder sits on one card only, so this moves it (and gives it a "
+        "new id). update_reminder (id, text?, date?, precision?, why?, clear_why?): correct a "
         "reminder; why is the wiki page that explains it, clear_why=true removes it. "
-        "close_reminder (id): done. remove_section (card, id). "
+        "close_reminder (id): done, noted in the journal. drop_reminder (id): remove it. "
+        "remove_section (card, id). "
         "set_skeleton (skeleton): the drawer sections, only while the board has no cards. "
         "answer_proposal (id, answer): yes / no / later to a proposal in the envelope. "
         "write_drawer (card, brief, sections): rewrite a drawer from its pages.",
@@ -100,10 +105,11 @@ _SECTION = ObjectSchema(
                       "of the month."),
     precision=StringSchema("add_reminder / update_reminder: `day`, or `month` for 'in March'.",
                            enum=["day", "month"]),
-    why=StringSchema("update_reminder: the page that explains the reminder, relative to wiki/ "
-                     "(it must exist). Omitted or empty: unchanged."),
+    why=StringSchema("add_reminder / update_reminder: the page that explains the reminder, "
+                     "relative to wiki/ (it must exist). Omitted or empty: unchanged."),
     clear_why=BooleanSchema(description="update_reminder: true removes the reminder's page."),
-    id=StringSchema("attach_reminder / close_reminder / update_reminder: the reminder id. "
+    id=StringSchema("attach_reminder / close_reminder / drop_reminder / update_reminder: the "
+                    "reminder id. "
                     "remove_section: the section id. answer_proposal: the proposal id."),
     answer=StringSchema("answer_proposal.", enum=list(edit.ANSWERS)),
     skeleton=ArraySchema(StringSchema("A section title."),
@@ -214,23 +220,6 @@ class BoardTool(Tool):
         if action == "add_note":
             sid = edit.add_note(root, card, kw.get("text"), timezone_name=self._timezone)
             return f"Note `{sid}` added (it is also a [said] line in the journal)."
-        if action == "add_reminder":
-            when = {"kind": "date", "date": kw.get("date"),
-                    "precision": kw.get("precision") or "day"}
-            rid = edit.add_reminder(root, card, kw.get("text"), when)
-            if not card:
-                return (f"Reminder `{rid}` added for the whole notebook: a line on the board's "
-                        "free sticky note.")
-            return (f"Reminder `{rid}` added: a line on the card's sticky note and in its care "
-                    "calendar.")
-        if action == "attach_reminder":
-            return _attach_reminder(root, card, str(kw.get("id") or ""))
-        if action == "update_reminder":
-            return _update_reminder(root, str(kw.get("id") or ""), kw)
-        if action == "close_reminder":
-            text = edit.close_reminder(root, str(kw.get("id") or ""),
-                                       timezone_name=self._timezone)
-            return f"Done: «{text}» (it is now a line in the journal)."
         if action == "set_skeleton":
             board = read_board(root)
             if board is not None and board["cards"]:
@@ -242,6 +231,8 @@ class BoardTool(Tool):
 
     async def _write_on_the_loop(self, root: Path, action: str, kw: dict[str, Any]) -> str:
         card = str(kw.get("card") or "")
+        if action.endswith("_reminder"):
+            return await self._reminder(root, action, card, kw)
         if action == "remove_card":
             entry = await edit.remove_card(root, card, cron=self._cron)
             if entry.get("orphan"):
@@ -269,6 +260,30 @@ class BoardTool(Tool):
                                              workspace=_workspace())
         return f"Answered {kw.get('answer')} to «{done.get('subject') or done['kind']}»."
 
+    async def _reminder(self, root: Path, action: str, card: str, kw: dict[str, Any]) -> str:
+        """I promemoria: job dello scheduler, scritti sul loop."""
+        rid = str(kw.get("id") or "")
+        if action == "add_reminder":
+            when = {"kind": "date", "date": kw.get("date"),
+                    "precision": kw.get("precision") or "day"}
+            rid = await edit.add_reminder(root, card, kw.get("text"), when, cron=self._cron,
+                                          why=kw.get("why"), timezone_name=self._timezone)
+            if not card:
+                return (f"Reminder `{rid}` added for the whole notebook: a line on the board's "
+                        "free sticky note.")
+            return (f"Reminder `{rid}` added: a line on the card's sticky note and in its care "
+                    "calendar.")
+        if action == "attach_reminder":
+            return await _attach_reminder(root, card, rid, self._cron)
+        if action == "update_reminder":
+            return await _update_reminder(root, rid, kw, self._cron, self._timezone)
+        if action == "close_reminder":
+            text = await edit.close_reminder(root, rid, cron=self._cron,
+                                             timezone_name=self._timezone)
+            return f"Done: «{text}» (it is now a line in the journal)."
+        await edit.drop_reminder(root, rid, cron=self._cron)
+        return f"Reminder `{rid}` removed."
+
     @staticmethod
     def _write_drawer(root: Path, ref: str, kw: dict[str, Any]) -> str:
         board = read_board(root) or model.empty_board()
@@ -283,8 +298,9 @@ class BoardTool(Tool):
         return f"Drawer of «{card['title']}» written: {len(sections)} sections, {changed} changed.{note}"
 
 
-def _update_reminder(root: Path, rid: str, kw: dict[str, Any]) -> str:
-    """Testo, data e ``why`` di un'attesa aperta, in una scrittura sola.
+async def _update_reminder(root: Path, rid: str, kw: dict[str, Any], cron: Any,
+                           timezone_name: str | None) -> str:
+    """Testo, data e ``why`` di un promemoria, in una scrittura sola.
 
     ``why`` assente o vuoto lascia la pagina com'è: un campo vuoto non deve
     staccarla in silenzio. Per toglierla c'è ``clear_why``.
@@ -296,8 +312,9 @@ def _update_reminder(root: Path, rid: str, kw: dict[str, Any]) -> str:
         raise edit.BoardEditError("bad_request", "give text, date, why or clear_why to change")
     when = ({"kind": "date", "date": date, "precision": kw.get("precision") or "day"}
             if date else None)
-    rem = edit.update_reminder_fields(root, rid, text=text, when=when, why=why or None,
-                                      clear_why=clear and not why)
+    rem = await edit.update_reminder(root, rid, cron=cron, text=text, when=when,
+                                     why=why or None, clear_why=clear and not why,
+                                     timezone_name=timezone_name)
     if why:
         return f"Reminder `{rid}` updated; why: {rem['why']}."
     if clear:
@@ -305,17 +322,17 @@ def _update_reminder(root: Path, rid: str, kw: dict[str, Any]) -> str:
     return f"Reminder `{rid}` updated."
 
 
-def _attach_reminder(root: Path, card: str, rid: str) -> str:
-    """La risposta di ``attach_reminder``: dove sta ora, e da dove è venuta."""
-    done = edit.attach_reminder(root, card, rid)
+async def _attach_reminder(root: Path, card: str, rid: str, cron: Any) -> str:
+    """La risposta di ``attach_reminder``: dove sta ora, e da dove è venuto."""
+    done = await edit.attach_reminder(root, card, rid, cron=cron)
     rem = done["reminder"]
     where = _where(rem["card"])
     if not done["changed"]:
         return f"Reminder `{rem['id']}` is already {where}: nothing changed."
     tail = ("a line on the board's free sticky note" if rem["card"] == model.NOTEBOOK
             else "a line on the card's sticky note and in its care calendar")
-    return (f"Reminder `{rem['id']}` «{rem['text']}» is now {where} "
-            f"(it was {_where(done['from'])}): {tail}.")
+    return (f"Reminder «{rem['text']}» is now {where} (it was {_where(done['from'])}): {tail}. "
+            f"Its id is now `{rem['id']}` (it was `{rid}`).")
 
 
 def _jobs_note(what: dict[str, Any], state: str) -> str:
@@ -390,11 +407,11 @@ def show(root: Path) -> str:
         pages = ", ".join(sorted(titles)) or "none"
         return (f"This notebook has no board yet. Set the skeleton (set_skeleton), then add cards "
                 f"with their pages. Pages: {pages}")
-    reminders = read_reminders(root)
+    notes = notes_on_disk(root.name)
     gone = missing_pages(board, titles)
     lines = [
         f"Skeleton: {' · '.join(board['skeleton']) or '(none yet)'}",
-        f"Items on the board: {model.items_on_board(board, reminders)} of {model.MAX_ITEMS}",
+        f"Items on the board: {model.items_on_board(board, notes)} of {model.MAX_ITEMS}",
         "",
         "Cards:",
     ]
@@ -418,13 +435,14 @@ def show(root: Path) -> str:
         lines += ["", "Threads:"]
         lines += [f"- `{c['a']}` — `{c['b']}`" + (f": {c['label']}" if c["label"] else "")
                   for c in board["connections"]]
-    open_rems = model.open_reminders(reminders)
-    if open_rems:
-        lines += ["", "Open reminders:"]
-        lines += [f"- `{r['id']}` {_where(r['card'])}: {r['text']} ({_when(r)})"
-                  + _off_board(board, r["card"]) for r in open_rems]
-    # I cron li tiene lo scheduler: qui si vedono, li cambia il tool ``cron``.
-    jobs = notebook_jobs_on_disk(root.name)
+    if notes:
+        lines += ["", "Reminders:"]
+        lines += [f"- `{n['id']}` {_where(n['card'])}: {n['text']} ({note_words(n)})"
+                  + _off_board(board, n["card"]) for n in notes]
+    # I cron che si ripetono li tiene lo scheduler: qui si vedono, li cambia il
+    # tool ``cron``. I promemoria sono job anche loro, ma stanno qui sopra.
+    jobs = [j for j in notebook_jobs_on_disk(root.name)
+            if not is_note(j["kind"], j["condition"])]
     if jobs:
         lines += ["", "Automations (the cron tool changes them):"]
         lines += [f"- `{j['id']}` {_where(j['scope'])}: {j['name']}"
@@ -474,13 +492,6 @@ def _drawer_state(root: Path, card: dict[str, Any], titles: dict[str, str]) -> s
         return "never written"
     now = pages_fingerprint(card["pages"], titles, lambda p: page_text(root, p))
     return "up to date" if summary.get("fingerprint") == now else "out of date"
-
-
-def _when(rem: dict[str, Any]) -> str:
-    when = rem.get("when") or {}
-    if when.get("kind") == "date":
-        return str(when.get("date", ""))[:7 if when.get("precision") == "month" else 10]
-    return "when a value changes"
 
 
 TOOLS = [BoardTool]

@@ -3613,6 +3613,7 @@ body.home {
 }
 .home-board-postit-when { font-size: 2.3cqw; font-weight: 700; line-height: 1.1; }
 .home-board-postit-row.is-late .home-board-postit-when { color: var(--board-alert); }
+.home-board-postit-row.is-paused { opacity: 0.55; }
 /* Il testo su due righe al massimo: su una sola si leggeva «Rinvaso e inci…». */
 .home-board-postit-text {
   display: -webkit-box;
@@ -4779,7 +4780,16 @@ dialog.home-photo-viewer[open] { display: flex; }
 }
 .home-drawer-cal-day { color: var(--board-soon); font-size: 14px; font-weight: 700; }
 .home-drawer-cal-row.is-late .home-drawer-cal-day { color: var(--board-alert); }
+.home-drawer-cal-row.is-paused, .home-drawer-cal-next.is-paused { opacity: 0.6; }
 .home-drawer-cal-text { font-size: 15px; line-height: 1.35; }
+/* Al posto del giorno, una condizione («umidita < 5»): nei 52 px di un giorno
+   andava a capo e toccava il testo (jenny_s22, 01/11/2026). La colonna si fa
+   larga quanto serve, fino a meta' riga. */
+.home-drawer-cal-row.is-condition {
+  grid-template-columns: fit-content(50%) minmax(0, 1fr) 44px;
+  column-gap: 12px;
+}
+.home-drawer-cal-row.is-condition .home-drawer-cal-day { overflow-wrap: anywhere; }
 .home-drawer-cal-more {
   width: 44px;
   height: 44px;
@@ -5105,6 +5115,18 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-board-row { display: flex; gap: 8px; }
 .home-board-input.is-op { flex: 1; }
 .home-board-input.is-value { width: 90px; flex: none; }
+/* «Controlla ogni» accanto alla sua tendina, su una riga: e' una parola del
+   modulo, non l'etichetta di una scheda (`.home-board-label`, in inchiostro e
+   a mano, centrata e in `cqw`, sul foglio del modulo si leggeva appena e andava
+   a capo — jenny_s22, 01/11/2026). */
+.home-board-row.is-every { align-items: center; }
+.home-board-form-label {
+  flex: none;
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.home-board-input.is-every { flex: 1; min-width: 0; }
 .home-drawer-thread-mark { color: var(--board-thread); }
 .home-drawer-thread-to { font-weight: 500; }
 .home-drawer-thread-why { color: var(--text-muted); font-size: 13px; }

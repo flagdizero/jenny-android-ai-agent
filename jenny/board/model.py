@@ -5,7 +5,7 @@ letto da disco, trovare a quale scheda appartiene una pagina, scegliere un posto
 libero, e — la più importante — dire se una scrittura di Jenny ha toccato
 qualcosa che è dell'utente (:func:`ownership_violations`).
 
-**I nomi su disco sono un contratto.** ``board.json``, ``reminders.json``,
+**I nomi su disco sono un contratto.** ``board.json``,
 ``cards/`` e i campi qui sotto sono persistiti nel quaderno dell'utente (e nel
 suo backup): una rinomina vuole una migrazione, come ``Config._migrate_casa_to_home``.
 
@@ -30,11 +30,9 @@ from typing import Any
 
 BOARD_DIR = "board"
 BOARD_FILE = "board.json"
-REMINDERS_FILE = "reminders.json"
 CARDS_DIR = "cards"
 
 BOARD_VERSION = 1
-REMINDERS_VERSION = 1
 
 # Chi possiede un pezzo. Il giardiniere scrive come ``jenny``; l'interfaccia
 # come ``user``.
@@ -125,8 +123,6 @@ SUGGESTION_KINDS = (
 # all'avvio (``jenny/apps/migrate_micro.py``) la trovi e la faccia diventare
 # una sezione ``app``.
 SECTION_KINDS = ("note", "reminder", "app", "photo", "micro", "cron")
-REMINDER_STATES = ("open", "done", "dropped")
-WHEN_KINDS = ("date", "condition")
 PRECISIONS = ("day", "month")
 CONDITION_OPS = ("<", "<=", ">", ">=", "==", "!=")
 
@@ -156,7 +152,6 @@ APP_CARD = "@card"
 # validato come forma, non contro l'elenco — un nome che non esiste non disegna
 # niente, e la scheda mostra l'iniziale.
 _GLYPH_RE = re.compile(r"^[a-z0-9-]{1,40}$")
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # Tetti sulle stringhe che arrivano da fuori (il modello o l'interfaccia).
 MAX_TITLE = 60
@@ -529,7 +524,7 @@ def removed_card_ids(board: Mapping[str, Any]) -> set[str]:
 #
 # Un promemoria o un cron del quaderno appartiene a una scheda oppure a tutto il
 # quaderno, e decide Jenny quando lo crea. L'ambito è l'id della scheda, o la
-# stringa vuota per il quaderno: la convenzione che ``reminder.card`` aveva già.
+# stringa vuota per il quaderno.
 # Sul disco dei cron il quaderno ha un segnaposto suo (``cron_link``): qui, sul
 # filo e nella vista resta la stringa vuota.
 
@@ -592,19 +587,11 @@ def first_board_hold(board: Mapping[str, Any]) -> str | None:
     return None
 
 
-def open_reminders(reminders: Mapping[str, Any]) -> list[dict[str, Any]]:
-    return [r for r in reminders.get("reminders") or [] if r.get("state") == "open"]
-
-
-def board_reminders(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Le attese aperte che stanno sulla bacheca, dalla più vicina (v. :func:`sorted_reminders`):
-    quelle delle schede che ci sono e quelle di tutto il quaderno."""
-    return sorted_reminders([r for r in open_reminders(reminders)
-                             if scope_state(board, r.get("card")) != SCOPE_HIDDEN])
-
-
-def items_on_board(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> int:
+def items_on_board(board: Mapping[str, Any], notes: Iterable[Mapping[str, Any]] = ()) -> int:
     """Quanti oggetti sono sulla bacheca: le schede, e un post-it per scheda con attese.
+
+    *notes* sono le righe dei promemoria del quaderno (v. :func:`next_note`):
+    qui conta solo il loro ambito (``card``).
 
     Le attese non sono più un post-it ciascuna: quelle di una scheda stanno
     tutte sul suo, che è un oggetto solo. Così la seconda attesa di una scheda
@@ -618,15 +605,15 @@ def items_on_board(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> in
     poter impedire la scheda successiva.
     """
     cards = {c["id"] for c in board.get("cards") or []}
-    scopes = {r.get("card") for r in open_reminders(reminders)}
+    scopes = {n.get("card") for n in notes}
     with_notes = scopes & cards
     # Il post-it libero dei promemoria di tutto il quaderno è un oggetto anche lui.
     notebook = 1 if NOTEBOOK in scopes else 0
     return len(cards) + len(with_notes) + notebook
 
 
-def is_full(board: Mapping[str, Any], reminders: Mapping[str, Any]) -> bool:
-    return items_on_board(board, reminders) >= MAX_ITEMS
+def is_full(board: Mapping[str, Any], notes: Iterable[Mapping[str, Any]] = ()) -> bool:
+    return items_on_board(board, notes) >= MAX_ITEMS
 
 
 # L'ingombro degli oggetti, in percentuale della bacheca. La larghezza viene dal
@@ -694,7 +681,8 @@ NEAR_SPAN_Y = 100.0
 _RESERVED = ((0.0, 76.0, 20.0, 100.0), (80.0, 62.0, 100.0, 100.0))
 
 
-def _boxes(board: Mapping[str, Any], reminders: Mapping[str, Any] | None) -> list[tuple[float, float, float, float]]:
+def _boxes(board: Mapping[str, Any],
+           notes: Iterable[Mapping[str, Any]] | None) -> list[tuple[float, float, float, float]]:
     out = []
     for card in board.get("cards") or []:
         x, y = float(card["pos"]["x"]), float(card["pos"]["y"])
@@ -702,7 +690,7 @@ def _boxes(board: Mapping[str, Any], reminders: Mapping[str, Any] | None) -> lis
         out.append((x, y, x + w, y + h))
     # Un post-it c'è solo con delle attese, e occupa il muro solo dove l'ha messo
     # l'utente: il posto calcolato lo sceglie la vista *dopo* le schede.
-    with_notes = {r.get("card") for r in open_reminders(reminders or {})}
+    with_notes = {n.get("card") for n in notes or ()}
 
     def put(pos: Any, box: tuple[float, float]) -> None:
         if isinstance(pos, Mapping):
@@ -743,7 +731,7 @@ def _gap(a: tuple[float, float, float, float], b: tuple[float, float, float, flo
 
 def free_slot(
     board: Mapping[str, Any],
-    reminders: Mapping[str, Any] | None = None,
+    notes: Iterable[Mapping[str, Any]] | None = None,
     *,
     box: tuple[float, float] = CARD_BOX,
     near: tuple[float, float] | None = None,
@@ -765,7 +753,7 @@ def free_slot(
     della scheda, finché c'è un altro posto libero: l'oggetto *pende* da lei, e il
     filo, che arriva al chiodino in cima, gli passerebbe sopra le righe.
     """
-    taken = _boxes(board, reminders) + list(extra or [])
+    taken = _boxes(board, notes) + list(extra or [])
     best: tuple[float, float, float, float] | None = None
     if near is not None:
         # **Vicino a dove si guarda** (o alla sua scheda, per un post-it): una finestra
@@ -888,164 +876,57 @@ def ownership_violations(
     return problems
 
 
-# ── reminders.json ───────────────────────────────────────────────────────────
+# ── I promemoria della bacheca ───────────────────────────────────────────────
+#
+# Dal 31/10/2026 un promemoria del quaderno è un job dello scheduler
+# (``cron/jobs.json``), come ogni cosa «più tardi»: un singolo a data, o un
+# ricorrente con un filtro ``condition``. Il file ``reminders.json`` non c'è
+# più. La bacheca ne mostra una **riga** (``{id, card, text, when}``, v.
+# ``jenny/board/cron_link.py::note_of``), e qui stanno le funzioni pure su
+# quelle righe: l'ordine dei post-it, la più vicina, «a breve».
 
 
-def _normalize_when(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, Mapping) or raw.get("kind") not in WHEN_KINDS:
-        return None
-    if raw["kind"] == "date":
-        day = raw.get("date")
-        if not isinstance(day, str) or not _DATE_RE.match(day):
-            return None
-        try:
-            date.fromisoformat(day)
-        except ValueError:
-            return None
-        precision = raw.get("precision") if raw.get("precision") in PRECISIONS else "day"
-        return _keep_unknown(raw, {"kind": "date", "date": day, "precision": precision})
-    fld, op = raw.get("field"), raw.get("op")
-    value = raw.get("value")
-    if not isinstance(fld, str) or not fld or op not in CONDITION_OPS:
-        return None
-    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-        return None
-    # La sorgente del dato: una Jenny App, o (solo finche' la migrazione non la
-    # converte) una micro app di prima.
-    if is_valid_id(raw.get("micro")):
-        return _keep_unknown(raw, {
-            "kind": "condition", "micro": raw["micro"], "field": fld, "op": op, "value": value,
-        })
-    app = raw.get("app")
-    if not is_valid_id(app):
-        return None
-    params = raw.get("params")
-    return _keep_unknown(raw, {
-        "kind": "condition",
-        "app": app,
-        "params": dict(params) if isinstance(params, Mapping) else {},
-        "field": fld,
-        "op": op,
-        "value": value,
-    })
+def note_due(note: Mapping[str, Any]) -> date | None:
+    """Il giorno di una riga a data; ``None`` per una a condizione.
 
-
-def _normalize_reminder(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, Mapping) or not is_valid_id(raw.get("id")):
-        return None
-    when = _normalize_when(raw.get("when"))
-    text = clean_text(raw.get("text"), MAX_TITLE * 2)
-    if when is None or not text:
-        return None
-    known: dict[str, Any] = {
-        "id": raw["id"],
-        "card": raw["card"] if is_valid_id(raw.get("card")) else "",
-        "text": text,
-        "when": when,
-        "why": raw["why"] if isinstance(raw.get("why"), str) else "",
-        "source": raw["source"] if isinstance(raw.get("source"), str) else "",
-        "by": _owner(raw.get("by")),
-        "state": raw.get("state") if raw.get("state") in REMINDER_STATES else "open",
-    }
-    pos = _normalize_pos(raw.get("pos"))
-    if pos is not None:
-        known["pos"] = pos
-    for stamp in ("created", "notifiedAt", "closedAt"):
-        if isinstance(raw.get(stamp), str):
-            known[stamp] = raw[stamp]
-    return _keep_unknown(raw, known)
-
-
-def normalize_reminders(raw: Any) -> dict[str, Any]:
-    data: Mapping[str, Any] = raw if isinstance(raw, Mapping) else {}
-    seen: set[str] = set()
-    items: list[dict[str, Any]] = []
-    for item in data.get("reminders") or []:
-        rem = _normalize_reminder(item)
-        if rem is None or rem["id"] in seen:
-            continue
-        seen.add(rem["id"])
-        items.append(rem)
-    return _keep_unknown(data, {"version": REMINDERS_VERSION, "reminders": items})
-
-
-def _without(mapping: Mapping[str, Any], *keys: str) -> dict[str, Any]:
-    return {k: v for k, v in mapping.items() if k not in keys}
-
-
-# I timbri che l'orologio del quaderno scrive anche sulle attese dell'utente:
-# l'avviso partito, l'ultimo annuncio (il freno delle dodici ore) e quante volte
-# di fila la condizione e' risultata falsa (l'isteresi del riarmo). Non sono
-# modifiche dell'attesa.
-CLOCK_STAMPS = ("notifiedAt", "lastAnnouncedAt", "falseStreak")
-
-
-def reminder_violations(
-    before: Mapping[str, Any], after: Mapping[str, Any]
-) -> list[str]:
-    """Come :func:`ownership_violations`, per le attese.
-
-    Jenny ne aggiunge, e chiude o corregge le sue; un'attesa dell'utente non la
-    tocca, e nessuna attesa sparisce dal file (un'attesa fatta diventa ``done``,
-    non si cancella). Le posizioni le sceglie il codice quando l'attesa nasce:
-    da lì in poi Jenny non le sposta.
+    Con ``precision: month`` («verso marzo») è il primo del mese: è anche il
+    giorno in cui il job suona (``jenny/cron/dates.py``).
     """
-    problems: list[str] = []
-    after_by_id = {r["id"]: r for r in after.get("reminders") or []}
-    for rem in before.get("reminders") or []:
-        other = after_by_id.get(rem["id"])
-        if other is None:
-            problems.append(f"reminder {rem['id']} removed")
-            continue
-        # I timbri dell'orologio (``CLOCK_STAMPS``) li scrive il job ``reminders``
-        # anche sulle attese dell'utente: non sono una modifica dell'attesa.
-        if rem.get("by") == USER and (
-            _without(other, *CLOCK_STAMPS) != _without(rem, *CLOCK_STAMPS)
-        ):
-            problems.append(f"reminder {rem['id']} belongs to the user")
-            continue
-        if rem.get("pos") != other.get("pos") or rem.get("by") != other.get("by"):
-            problems.append(f"reminder {rem['id']}: position or owner changed")
-    return problems
-
-
-def reminder_due(rem: Mapping[str, Any]) -> date | None:
-    """Il giorno in cui un'attesa a data va ricordata.
-
-    Con ``precision: month`` («verso marzo») è il primo del mese: un mese non è
-    un giorno, e l'avviso deve arrivare all'inizio della finestra, non alla fine.
-    """
-    when = rem.get("when") or {}
+    when = note.get("when") or {}
     if when.get("kind") != "date":
         return None
     try:
-        day = date.fromisoformat(when["date"])
+        day = date.fromisoformat(str(when["date"])[:10])
     except (KeyError, TypeError, ValueError):
         return None
     return day.replace(day=1) if when.get("precision") == "month" else day
 
 
-def _reminder_key(rem: Mapping[str, Any]) -> tuple[date, str]:
-    # Quelle a data prima, per giorno; quelle a condizione (senza giorno) in fondo.
-    return (reminder_due(rem) or date.max, rem.get("id", ""))
+def _note_key(note: Mapping[str, Any]) -> tuple[date, str, str]:
+    # Quelle a data prima, per giorno e ora; quelle a condizione (senza giorno) in fondo.
+    when = note.get("when") or {}
+    return (note_due(note) or date.max, str(when.get("time") or ""), str(note.get("id") or ""))
 
 
-def sorted_reminders(rems: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Le attese dalla più vicina: l'ordine dei post-it e del calendario di cura."""
-    return [dict(r) for r in sorted(rems, key=_reminder_key)]
+def sorted_notes(notes: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Le righe dalla più vicina: l'ordine dei post-it e del calendario di cura."""
+    return [dict(n) for n in sorted(notes, key=_note_key)]
 
 
-def next_reminder(
-    reminders: Mapping[str, Any], card_id: str
-) -> dict[str, Any] | None:
-    """L'attesa aperta più vicina di una scheda (quelle a data prima, per giorno)."""
-    mine = [r for r in open_reminders(reminders) if r.get("card") == card_id]
-    return min(mine, key=_reminder_key) if mine else None
+def next_note(notes: Iterable[Mapping[str, Any]], scope: str) -> dict[str, Any] | None:
+    """La riga più vicina dell'ambito *scope* (una scheda, o ``NOTEBOOK``).
+
+    Una riga in pausa non è «la prossima»: il suo job non suonerà finché l'utente
+    non lo riprende, e il segnale «a breve» o il ``[next: …]`` del prompt
+    direbbero il contrario.
+    """
+    mine = [n for n in notes if n.get("card") == scope and not n.get("paused")]
+    return dict(min(mine, key=_note_key)) if mine else None
 
 
-def reminder_is_soon(rem: Mapping[str, Any], today: date | None = None) -> bool:
-    due = reminder_due(rem)
-    if due is None:
+def note_is_soon(note: Mapping[str, Any], today: date | None = None) -> bool:
+    due = note_due(note)
+    if due is None or note.get("paused"):
         return False
     return due - (today or date.today()) <= timedelta(days=SOON_DAYS)
 

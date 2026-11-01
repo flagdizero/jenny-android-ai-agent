@@ -13,9 +13,7 @@ from jenny.board.removed import purge_removed_cards
 from jenny.board.store import (
     BoardOwnershipError,
     mutate_board,
-    mutate_reminders,
     read_board,
-    read_reminders,
     write_card_summary,
 )
 from jenny.board.view import build_board_view
@@ -162,10 +160,11 @@ async def test_a_week_later_the_removed_card_is_gone_for_good(
     )
     mutate_board(notebook, lambda b: b["cards"][0]["userSections"].append(
         {"id": "s-cron", "kind": "cron", "job": job.id}))
-    mutate_reminders(notebook, lambda r: r["reminders"].append({
-        "id": "r-travaso", "card": "acero", "text": "Travaso",
-        "when": {"kind": "date", "date": "2027-03-01", "precision": "month"},
-    }))
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.dates import date_schedule
+
+    reminder = add_notebook_job(service, "piante", "acero", name="Travaso", message="Travaso",
+                                schedule=date_schedule("2099-03", "Europe/Rome"))
     write_card_summary(notebook, "acero", {"brief": "In vaso 14."})
     await dispatch_command(ctx, "board.card.remove", {"wiki": "piante", "id": "acero"})
 
@@ -175,30 +174,25 @@ async def test_a_week_later_the_removed_card_is_gone_for_good(
     assert purge_removed_cards(notebook, service, now=later) == 1
     assert read_board(notebook)["removedCards"] == []
     assert service.get_job(job.id) is None
-    assert read_reminders(notebook)["reminders"][0]["state"] == "dropped"
+    # Un promemoria è un job della scheda: se ne va con lei.
+    assert service.get_job(reminder.id) is None
     assert not (notebook / "board" / "cards" / "acero.json").exists()
 
 
-async def test_the_reminders_of_a_removed_card_stay_quiet(
-    ctx, notebook: Path, workspace_root: Path,
+async def test_the_reminders_of_a_removed_card_pause_and_come_back(
+    cron_ctx, cron, notebook: Path,
 ) -> None:
-    from jenny.board.clock import run_reminders
+    """«Togli» ferma quel che la scheda fa da sé: anche i suoi promemoria, che sono job."""
+    from jenny.board.cron_link import add_notebook_job, notebook_jobs
+    from jenny.cron.dates import date_schedule
 
     _seed(notebook)
-    mutate_reminders(notebook, lambda r: r["reminders"].append({
-        "id": "r-oggi", "card": "acero", "text": "Travaso",
-        "when": {"kind": "date", "date": "2026-10-06"},
-    }))
-    await dispatch_command(ctx, "board.card.remove", {"wiki": "piante", "id": "acero"})
+    job = add_notebook_job(cron, "piante", "acero", name="Travaso", message="Travaso",
+                           schedule=date_schedule("2099-10-06", "Europe/Rome"))
+    await dispatch_command(cron_ctx, "board.card.remove", {"wiki": "piante", "id": "acero"})
+    assert cron.get_job(job.id).paused_at_ms is not None
+    view = build_board_view(notebook, cron_jobs=notebook_jobs(cron, "piante"))
+    assert view["notes"] == [] and view["postits"] == []
+    await dispatch_command(cron_ctx, "board.card.restore", {"wiki": "piante", "id": "acero"})
+    assert cron.get_job(job.id).paused_at_ms is None
 
-    class Agent:
-        calls = 0
-
-        async def process_direct(self, *a, **k):
-            Agent.calls += 1
-            return None
-
-    await run_reminders(Agent(), workspace_root,
-                        now=datetime(2026, 10, 6, 10, 0).astimezone())
-    assert Agent.calls == 0
-    assert "notifiedAt" not in read_reminders(notebook)["reminders"][0]

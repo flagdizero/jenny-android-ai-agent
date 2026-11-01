@@ -119,12 +119,12 @@ async def test_recording_waits_for_a_turn_in_flight(loop_factory) -> None:
     assert session.messages[2]["tool_call_id"] == "c1"
 
 
-async def test_the_heartbeat_alert_reaches_the_unified_session_end_to_end(
+async def test_a_monitor_alert_reaches_the_unified_session_end_to_end(
     loop_factory,
 ) -> None:
     """Il giro completo: il tool ``message`` di un turno silenzioso marca la
     consegna, il deliverer la inoltra all'hook del loop, la riga finisce in
-    ``unified:default`` — non nella sessione ``heartbeat`` che l'ha prodotta."""
+    ``unified:default`` — non nella sessione del monitor che l'ha prodotta."""
     loop = loop_factory()
     published: list[OutboundMessage] = []
 
@@ -147,7 +147,7 @@ async def test_the_heartbeat_alert_reaches_the_unified_session_end_to_end(
         RequestContext(
             channel="websocket",
             chat_id="default",
-            session_key="heartbeat",
+            session_key="cron:rain-check",
             metadata=silent_turn_metadata(),
         )
     )
@@ -163,4 +163,4 @@ async def test_the_heartbeat_alert_reaches_the_unified_session_end_to_end(
     assert published[1].metadata.get("_turn_end") is True
     unified = loop.sessions.get_or_create(UNIFIED_SESSION_KEY).messages
     assert [m["content"] for m in unified] == [ALERT]
-    assert loop.sessions.get_or_create("heartbeat").messages == []
+    assert loop.sessions.get_or_create("cron:rain-check").messages == []

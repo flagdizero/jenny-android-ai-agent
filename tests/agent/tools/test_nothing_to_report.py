@@ -22,7 +22,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from support.agent import make_loop, make_provider
 
 from jenny.agent.tools import nothing_to_report as ntr
@@ -30,9 +29,12 @@ from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.tools.nothing_to_report import NothingToReportTool, declared_marker_lines
 from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import LLMResponse, ToolCallRequest
-from jenny.session.keys import HEARTBEAT_SESSION_KEY
 from jenny.session.turn_visibility import TurnVisibility, silent_turn_metadata
+
+# Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
+MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _tool(*, silent: bool) -> NothingToReportTool:
@@ -41,7 +43,7 @@ def _tool(*, silent: bool) -> NothingToReportTool:
         RequestContext(
             channel="websocket",
             chat_id="default",
-            session_key=HEARTBEAT_SESSION_KEY if silent else "unified:default",
+            session_key=MONITOR_SESSION_KEY if silent else "unified:default",
             metadata=silent_turn_metadata() if silent else {},
         )
     )
@@ -50,66 +52,61 @@ def _tool(*, silent: bool) -> NothingToReportTool:
 
 
 class TestTheDeclarationItself:
-    async def test_a_numbered_declaration_becomes_the_marker_line(self) -> None:
+    async def test_checked_becomes_the_ok_marker(self) -> None:
         tool = _tool(silent=True)
 
-        result = await tool.execute(task=2)
+        result = await tool.execute(checked=True)
 
         assert not result.startswith("Error")
-        assert tool.declared_tasks() == [2]
-        assert declared_marker_lines(tool) == "\nCHECK_OK 2"
+        assert tool.verdicts() == [(True, "")]
+        assert declared_marker_lines(tool) == "\nCHECK_OK"
 
-    async def test_a_bare_declaration_writes_no_marker(self) -> None:
-        """Il cuore della correzione, e la ragione per cui il tool ha un numero.
-
-        ``CHECK_OK`` non dice "non ho niente da dire": dice "il controllo ha
-        prodotto la sua risposta". Un marcatore anonimo viene attribuito al task
-        in sospeso quando ce n'è uno solo, e ``record_followup_outcomes`` su un
-        verdetto positivo cancella la voce — sequenza dei guasti ed ``escalated``
-        compresi. Sintetizzarlo su un'astensione nuda chiuderebbe come sano un
-        controllo di cui il turno non ha detto niente.
-        """
+    async def test_not_checked_becomes_the_failure_with_its_reason(self) -> None:
+        """Un controllo che non ha girato lo dice al tool, invece di ricordarsi
+        una riga a parte nel testo."""
         tool = _tool(silent=True)
 
-        await tool.execute()
+        await tool.execute(checked=False, reason="  il file\n output/x.txt non esiste ")
 
-        assert tool.declared_tasks() == []
+        assert declared_marker_lines(tool) == "\nCHECK_FAILED: il file output/x.txt non esiste"
+
+    async def test_a_failure_without_a_reason_still_counts(self) -> None:
+        tool = _tool(silent=True)
+
+        await tool.execute(checked=False)
+
+        assert declared_marker_lines(tool) == "\nCHECK_FAILED: no reason given"
+
+    async def test_a_call_without_a_verdict_records_nothing(self) -> None:
+        """Senza ``checked`` non si indovina: né un «tutto bene» che chiuderebbe
+        come sano un controllo delegato, né un guasto inventato."""
+        tool = _tool(silent=True)
+
+        result = await tool.execute()
+
+        assert "checked=true" in result and not result.startswith("Error")
         assert declared_marker_lines(tool) == ""
 
-    async def test_the_numbers_are_ordered_and_deduplicated(self) -> None:
+    async def test_a_failure_wins_over_an_ok_in_the_same_turn(self) -> None:
         tool = _tool(silent=True)
 
-        await tool.execute(task=3)
-        await tool.execute(task=1)
-        await tool.execute(task=3)
+        await tool.execute(checked=True)
+        await tool.execute(checked=False, reason="host giù")
 
-        assert declared_marker_lines(tool) == "\nCHECK_OK 3\nCHECK_OK 1"
+        assert declared_marker_lines(tool) == "\nCHECK_FAILED: host giù"
 
-    @pytest.mark.parametrize("written", ["2", " #2 ", "[2]", "2)"])
-    async def test_the_shapes_a_model_writes_without_thinking_are_read(
-        self, written: str
-    ) -> None:
+    async def test_the_reason_is_one_short_line(self) -> None:
         tool = _tool(silent=True)
 
-        await tool.execute(task=written)
+        await tool.execute(checked=False, reason="x" * 1000)
 
-        assert tool.declared_tasks() == [2]
+        assert len(tool.verdicts()[0][1]) == ntr._REASON_MAX
 
-    async def test_a_number_that_is_not_one_is_not_guessed(self) -> None:
-        tool = _tool(silent=True)
-
-        result = await tool.execute(task="the raincheck one")
-
-        assert not result.startswith("Error")
-        assert tool.declared_tasks() == []
-
-    async def test_declarations_are_capped(self) -> None:
-        tool = _tool(silent=True)
-
-        for n in range(1, ntr._MAX_DECLARATIONS + 5):
-            await tool.execute(task=n)
-
-        assert len(tool.declared_tasks()) == ntr._MAX_DECLARATIONS
+    def test_the_verdict_is_required_by_the_schema(self) -> None:
+        params = NothingToReportTool().parameters
+        assert params["required"] == ["checked"]
+        assert "task" not in params["properties"]
+        assert "you could not compute" in params["properties"]["checked"]["description"]
 
 
 class TestWhereItDoesNotApply:
@@ -146,50 +143,50 @@ class TestThePerTurnState:
             RequestContext(
                 channel="websocket",
                 chat_id="default",
-                session_key=HEARTBEAT_SESSION_KEY,
+                session_key=MONITOR_SESSION_KEY,
                 metadata=silent_turn_metadata(),
             )
         )
 
-        await tool.execute(task=1)
+        await tool.execute(checked=True)
 
         assert ntr._NO_TURN_STATE == {}
 
     async def test_start_turn_resets(self) -> None:
         tool = _tool(silent=True)
-        await tool.execute(task=1)
+        await tool.execute(checked=True)
 
         tool.start_turn()
 
-        assert tool.declared_tasks() == []
+        assert tool.verdicts() == []
 
     async def test_two_concurrent_turns_do_not_see_each_other(self) -> None:
         """Lo stato vive in un dict *dentro* una ContextVar, non in un attributo:
-        l'agente principale gira un heartbeat e una chat nello stesso processo."""
+        l'agente principale gira un monitor e una chat nello stesso processo."""
         tool = NothingToReportTool()
         tool.set_context(
             RequestContext(
                 channel="websocket",
                 chat_id="default",
-                session_key=HEARTBEAT_SESSION_KEY,
+                session_key=MONITOR_SESSION_KEY,
                 metadata=silent_turn_metadata(),
             )
         )
 
-        async def turn(number: int) -> list[int]:
+        async def turn(checked: bool) -> list[tuple[bool, str]]:
             tool.start_turn()
             await asyncio.sleep(0)
-            await tool.execute(task=number)
+            await tool.execute(checked=checked, reason="giù")
             await asyncio.sleep(0)
-            return tool.declared_tasks()
+            return tool.verdicts()
 
         first, second = await asyncio.gather(
-            asyncio.create_task(turn(1)),
-            asyncio.create_task(turn(2)),
+            asyncio.create_task(turn(True)),
+            asyncio.create_task(turn(False)),
         )
 
-        assert first == [1]
-        assert second == [2]
+        assert first == [(True, "")]
+        assert second == [(False, "giù")]
 
 
 class TestTheWholeTurn:
@@ -222,7 +219,7 @@ class TestTheWholeTurn:
         )
         return await loop.process_direct_outcome(
             "controlla la pioggia",
-            session_key=HEARTBEAT_SESSION_KEY,
+            session_key=MONITOR_SESSION_KEY,
             channel="websocket",
             chat_id="default",
             visibility=TurnVisibility.SILENT,
@@ -230,7 +227,7 @@ class TestTheWholeTurn:
 
     async def test_a_silent_run_that_abstains_delivers_nothing(self, tmp_path: Path) -> None:
         loop = self._loop(
-            tmp_path, [self._abstain({"task": 1}), LLMResponse(content="fatto")]
+            tmp_path, [self._abstain({"checked": True}), LLMResponse(content="fatto")]
         )
         delivered: list[OutboundMessage] = []
 
@@ -241,12 +238,12 @@ class TestTheWholeTurn:
 
     async def test_the_declaration_reaches_the_outcome(self, tmp_path: Path) -> None:
         loop = self._loop(
-            tmp_path, [self._abstain({"task": 1}), LLMResponse(content="fatto")]
+            tmp_path, [self._abstain({"checked": True}), LLMResponse(content="fatto")]
         )
 
         outcome = await self._run(loop, [])
 
-        assert outcome.final_text.endswith("\nCHECK_OK 1")
+        assert outcome.final_text.endswith("\nCHECK_OK")
 
     async def test_the_declaration_never_reaches_the_session_history(
         self, tmp_path: Path
@@ -254,17 +251,17 @@ class TestTheWholeTurn:
         """Il marcatore è per il registratore, non per il prompt del run dopo:
         rigiocarlo insegnerebbe al modello a scriverlo da sé."""
         loop = self._loop(
-            tmp_path, [self._abstain({"task": 1}), LLMResponse(content="fatto")]
+            tmp_path, [self._abstain({"checked": True}), LLMResponse(content="fatto")]
         )
 
         await self._run(loop, [])
 
-        session = loop.sessions.get_or_create(HEARTBEAT_SESSION_KEY)
+        session = loop.sessions.get_or_create(MONITOR_SESSION_KEY)
         assert not any("CHECK_OK" in str(m.get("content")) for m in session.messages)
 
     async def test_a_visible_turn_gets_no_synthetic_marker(self, tmp_path: Path) -> None:
         loop = self._loop(
-            tmp_path, [self._abstain({"task": 1}), LLMResponse(content="ciao")]
+            tmp_path, [self._abstain({"checked": True}), LLMResponse(content="ciao")]
         )
         loop.bus.publish_outbound = AsyncMock()  # type: ignore[method-assign]
 
@@ -285,7 +282,7 @@ class TestTheWholeTurn:
         archiviato come un ciclo che ha parlato.
         """
         loop = self._loop(
-            tmp_path, [self._abstain({"task": 1}), LLMResponse(content="fatto")]
+            tmp_path, [self._abstain({"checked": True}), LLMResponse(content="fatto")]
         )
 
         await self._run(loop, [])
@@ -312,7 +309,7 @@ class TestTheToolIsWhereTheTurnCanSeeIt:
         tool = loop.tools.get("nothing_to_report")
         assert isinstance(tool, NothingToReportTool)
         tool.start_turn()
-        await tool.execute(task=9)
+        await tool.execute(checked=True)
 
         loop._run_agent_loop = AsyncMock(  # type: ignore[method-assign]
             return_value=("", [], [], "stop", False)
@@ -324,7 +321,7 @@ class TestTheToolIsWhereTheTurnCanSeeIt:
                 chat_id="websocket:default",
                 content="[Subagent 'x' completed successfully]",
                 metadata={"subagent_task_id": "sub-1"},
-                session_key_override=HEARTBEAT_SESSION_KEY,
+                session_key_override=MONITOR_SESSION_KEY,
             )
         )
 

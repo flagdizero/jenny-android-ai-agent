@@ -1051,7 +1051,7 @@ def _is_webui_readable_session_key(key: str) -> bool:
     """Le chiavi che la WebUI puo' chiedere: la conversazione, e i progetti.
 
     Non e' un filtro estetico, e' cio' che tiene fuori dalle route HTTP le
-    sessioni interne (``cron:``, ``dream:``, ``subagent:``, ``heartbeat``): sono
+    sessioni interne (``cron:``, ``dream:``, ``subagent:``): sono
     lavoro del sistema, non conversazioni, e non devono essere leggibili da qui.
 
     Si chiamava ``_is_websocket_channel_session_key`` e guardava il solo prefisso

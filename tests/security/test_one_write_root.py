@@ -334,7 +334,7 @@ async def _root_cron(env: Env) -> Path:
     class _Cron:
         def add_job(self, **kw: Any) -> Any:
             added.append(kw["board"])
-            return SimpleNamespace(id="j1", name="probe")
+            return SimpleNamespace(id="j1", name="probe", schedule=kw["schedule"])
 
         def list_jobs(self, include_disabled: bool = False) -> list[Any]:
             return []

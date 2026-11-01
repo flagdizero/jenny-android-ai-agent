@@ -211,71 +211,16 @@ def test_a_diary_row_is_not_repeated_in_recent_history(tmp_path: Path) -> None:
     assert contents == ["- [durable] nota del consolidatore"]
 
 
-# -- le cose in sospeso: le attese scattate e non chiuse ----------------------------
+# -- niente più «in sospeso» (31/10/2026) ------------------------------------------
 
 
-def _notebook_with_reminders(workspace: Path, name: str, reminders: list[dict]) -> Path:
-    from jenny.board.store import mutate_board, mutate_reminders
+def test_the_diary_has_no_waiting_part_any_more() -> None:
+    """Un promemoria del quaderno è un job che, scattato, se ne va: non resta niente
+    di «scattato e non chiuso» da far vedere alla chat personale."""
+    import jenny.agent.diary as diary
 
-    root = workspace / "wikis" / name
-    (root / "wiki").mkdir(parents=True)
-    mutate_board(root, lambda b: b["cards"].append(
-        {"id": "c1", "title": "Scheda", "pos": {"x": 5, "y": 5}}))
-    mutate_reminders(root, lambda r: r["reminders"].extend(reminders))
-    return root
-
-
-def _rem(rid: str, text: str, *, notified: datetime | None, state: str = "open") -> dict:
-    rem = {"id": rid, "card": "c1", "text": text, "by": "jenny", "state": state,
-           "when": {"kind": "date", "date": "2026-10-10", "precision": "day"}}
-    if notified is not None:
-        rem["notifiedAt"] = notified.isoformat(timespec="seconds")
-    return rem
-
-
-def test_only_fired_open_and_recent_reminders_are_waiting(tmp_path: Path) -> None:
-    from jenny.agent.diary import waiting_threads
-
-    root = _notebook_with_reminders(tmp_path, "film", [
-        _rem("r1", "Stasera: Lady Vendetta", notified=NOW - timedelta(hours=10)),
-        _rem("r2", "Non ancora scattata", notified=None),
-        _rem("r3", "Gia' fatta", notified=NOW - timedelta(hours=5), state="done"),
-        _rem("r4", "Troppo vecchia", notified=NOW - timedelta(days=20)),
-    ])
-    threads = waiting_threads({"film": root}, now=NOW)
-    assert [t.text for t in threads] == ["Stasera: Lady Vendetta"]
-    assert threads[0].id == "film/r1"
-
-
-def test_a_thread_the_user_talked_about_since_is_maybe_done() -> None:
-    from jenny.agent.diary import Thread
-
-    thread = Thread("film/r1", "film", "Stasera: Lady Vendetta", NOW - timedelta(hours=10))
-    rows = [_row(1, 2, "Lady Vendetta visto")]
-    turn = diary_turn(rows, PERSONAL, {}, [], now=NOW, threads=[thread])
-    assert turn is not None
-    assert "notebook film · Stasera: Lady Vendetta — the user has talked in that notebook " \
-           "since: maybe done" in turn.section
-    quiet = diary_turn([], PERSONAL, {}, [], now=NOW, threads=[thread])
-    assert quiet is not None and "since: maybe done" not in quiet.section
-    assert "## Waiting on" in quiet.section
-
-
-def test_a_notebook_does_not_get_the_personal_threads() -> None:
-    from jenny.agent.diary import Thread
-
-    thread = Thread("film/r1", "film", "Stasera: Lady Vendetta", NOW - timedelta(hours=10))
-    turn = diary_turn([], "project:film", {}, [], now=NOW, threads=[thread])
-    assert turn is not None and "Waiting on" not in turn.section
-
-
-def test_a_thread_closed_after_the_freeze_arrives_as_news() -> None:
-    from jenny.agent.diary import Thread
-
-    thread = Thread("film/r1", "film", "Stasera: Lady Vendetta", NOW - timedelta(hours=10))
+    assert not hasattr(diary, "waiting_threads") and not hasattr(diary, "Thread")
     meta: dict = {}
-    first = diary_turn([], PERSONAL, meta, [], now=NOW, threads=[thread])
-    later = diary_turn([], PERSONAL, meta, [], now=NOW + timedelta(minutes=5), threads=[])
-    assert later is not None and later.section == first.section
-    assert any(line.startswith("- no longer waiting") and "Lady Vendetta" in line
-               for line in later.new_lines)
+    turn = diary_turn([_row(1, 2, "Lady Vendetta visto")], PERSONAL, meta, [], now=NOW)
+    assert turn is not None and "Waiting on" not in turn.section
+    assert "threads" not in meta[DIARY_STATE_KEY]

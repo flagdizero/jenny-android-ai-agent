@@ -31,6 +31,7 @@ import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { reminderGroups, whenLabel } from './home-board.js';
+import { humanizeDuration } from './shared/cron-view.js';
 import { DrawerNotes } from './home-board-notes.js';
 import { DrawerPhotos } from './home-board-photos.js';
 import { automationRow } from './home-board-automation.js';
@@ -46,6 +47,17 @@ export function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
   if (diff === 0) return i18n.t('board.drawer.today', { time });
   if (diff === 1) return i18n.t('board.drawer.yesterday', { time });
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
+}
+
+/** Le cadenze di un promemoria a condizione («controlla ogni»), la prima e' la
+ *  proposta: la sceglie l'utente, e diventa l'`every` del suo cron. */
+export const CONDITION_EVERY = [['hour', 3_600_000], ['sixHours', 21_600_000], ['day', 86_400_000]];
+
+/** «controllo ogni 6 ore»: la cadenza di un promemoria a condizione, o `''`. */
+export function everyLabel(when) {
+  if (when?.kind !== 'condition' || !(when.every_ms > 0)) return '';
+  const tr = (key, vars) => i18n.t(key, vars);
+  return i18n.t('board.app.checkedEvery', { every: humanizeDuration(when.every_ms, { tr, locale: i18n.locale }) });
 }
 
 /** Quanto manca a *date* (`AAAA-MM-GG`), a parole: «tra 3 settimane», «ieri».
@@ -467,9 +479,12 @@ export class BoardDrawer {
 
   /** La prossima attesa: la carta gialla, col tasto «Fatto» a portata. */
   _calNext(rem, kind) {
-    const card = el('div', `home-drawer-cal-next${kind === 'overdue' ? ' is-late' : ''}`);
+    const card = el('div', `home-drawer-cal-next${kind === 'overdue' && !rem.paused ? ' is-late' : ''}${rem.paused ? ' is-paused' : ''}`);
     const key = [whenLabel(rem.when)];
     if (rem.when?.kind === 'date' && rem.when.precision !== 'month') key.push(untilLabel(rem.when.date));
+    key.push(everyLabel(rem.when));
+    /* In pausa: il job non suona finché l'utente non lo riprende (dall'officina). */
+    if (rem.paused) key.push(i18n.t('board.cron.paused'));
     card.append(el('div', 'home-drawer-cal-next-key', key.filter(Boolean).join(' · ')),
       el('p', 'home-drawer-cal-next-text', rem.text));
     const bar = el('div', 'home-drawer-cal-next-bar');
@@ -481,11 +496,13 @@ export class BoardDrawer {
 
   /** Un'altra attesa: il giorno (il mese lo dice il gruppo), il testo, ⋯. */
   _calRow(rem, kind) {
-    const row = el('div', `home-drawer-cal-row${kind === 'overdue' ? ' is-late' : ''}`);
     const when = rem.when || {};
+    const row = el('div', `home-drawer-cal-row${kind === 'overdue' && !rem.paused ? ' is-late' : ''}${when.kind === 'condition' ? ' is-condition' : ''}${rem.paused ? ' is-paused' : ''}`);
     let day = whenLabel(when);
     if (kind === 'month') day = when.precision === 'month' ? '—' : String(Number(String(when.date).slice(8, 10)));
-    row.append(el('span', 'home-drawer-cal-day', day), el('span', 'home-drawer-cal-text', rem.text),
+    const tail = [everyLabel(when), rem.paused ? i18n.t('board.cron.paused') : ''].filter(Boolean).join(' · ');
+    row.append(el('span', 'home-drawer-cal-day', day),
+      el('span', 'home-drawer-cal-text', tail ? `${rem.text} · ${tail}` : rem.text),
       this._remMore(rem));
     return row;
   }
@@ -522,7 +539,7 @@ export class BoardDrawer {
     this.sheet.open(rem.text, menu);
   }
 
-  /** Il modulo di un'attesa: nuova (`section.add`) o da correggere
+  /** Il modulo di un'attesa: nuova (`reminder.add`) o da correggere
    *  (`reminder.update`). Una a condizione si corregge solo nel testo: la
    *  soglia si cambia dalla sua app, dove il dato c'e'. */
   _reminderForm(rem = null) {
@@ -556,7 +573,7 @@ export class BoardDrawer {
       if (rem) {
         await this._write('reminder.update', { id: rem.id, text: what.value, ...(date ? { when: date } : {}) });
       } else {
-        await this._write('section.add', { card: this.card, kind: 'reminder', text: what.value, when: date });
+        await this._write('reminder.add', { card: this.card, text: what.value, when: date });
       }
     });
     this.sheet.open(rem ? i18n.t('board.reminder.edit') : i18n.t('board.section.kind.reminder'), form);
@@ -945,8 +962,10 @@ export class BoardDrawer {
     await this._write('connection.remove', { a: this.card, b: conn.to });
   }
 
-  /** «Avvisami quando…»: un'attesa a condizione sul dato di una mini app. La
-   *  controlla l'orologio del quaderno ogni ora, sul dato fresco. */
+  /** «Avvisami quando…»: un promemoria a condizione sul dato di una mini app.
+   *  E' un cron che si ripete alla cadenza scelta qui («controlla ogni»): a ogni
+   *  giro il codice legge il dato fresco, e solo quando la condizione diventa
+   *  vera parla Jenny. */
   _addCondition(section, view) {
     const form = el('form', 'home-board-form');
     const what = el('input', 'home-board-input');
@@ -965,17 +984,26 @@ export class BoardDrawer {
     value.setAttribute('aria-label', i18n.t('board.app.threshold'));
     if (typeof view.value === 'number') value.value = String(view.value);
     row.append(op, value);
+    const cadence = el('label', 'home-board-row is-every');
+    const every = el('select', 'home-board-input is-every');
+    for (const [key, ms] of CONDITION_EVERY) {
+      const option = el('option', '', i18n.t(`board.app.every.${key}`));
+      option.value = String(ms);
+      every.appendChild(option);
+    }
+    every.setAttribute('aria-label', i18n.t('board.app.checkEvery'));
+    cadence.append(el('span', 'home-board-form-label', i18n.t('board.app.checkEvery')), every);
     const actions = el('div', 'home-board-actions');
     const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
     save.type = 'submit';
     actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
-    form.append(what, row, actions);
+    form.append(what, row, cadence, actions);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!what.value.trim() || value.value === '') return;
       this.sheet.close();
-      await this._write('section.add', {
-        card: this.card, kind: 'reminder', text: what.value,
+      await this._write('reminder.add', {
+        card: this.card, text: what.value, every_ms: Number(every.value),
         when: { kind: 'condition', app: section.app, params: section.params || {},
           field: view.field, op: op.value, value: Number(value.value) },
       });

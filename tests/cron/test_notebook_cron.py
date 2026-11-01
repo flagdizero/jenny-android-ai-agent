@@ -60,7 +60,7 @@ async def test_a_cron_asked_in_a_notebook_lands_in_a_drawer(notebook, tmp_path) 
     tool = _tool(store)
     out = await tool.execute(action="add", card="annunci", message="cerca annunci nuovi",
                              cron_expr="0 9 * * 1", mode="monitor")
-    assert "it hangs from «Annunci» on the board" in out
+    assert "on the card «Annunci»" in out
     job = CronService(store).list_jobs()[0]
     # Nessuna sezione nel cassetto: la bacheca lo deriva dal legame del job.
     assert read_board(root)["cards"][0]["userSections"] == []
@@ -116,16 +116,22 @@ async def test_a_notebook_sees_and_removes_only_its_own_jobs(notebook, tmp_path)
     assert [j.id for j in CronService(store).list_jobs()] == [jobs[True].id]
 
 
-async def test_a_notebook_without_a_board_still_refuses(tmp_path) -> None:
+async def test_a_notebook_without_a_board_takes_a_job_for_the_whole_notebook(
+    tmp_path, monkeypatch,
+) -> None:
     root = tmp_path / "workspace" / "wikis" / "vuoto"
     (root / "wiki").mkdir(parents=True)
+    monkeypatch.setattr("jenny.board.cron_link.notebook_root",
+                        lambda name: root if name == "vuoto" else None)
+    tool = _tool(tmp_path / "jobs.json", "project:vuoto")
     token = bind_workspace_scope(build_workspace_scope(root, "restricted"))
     try:
-        out = await _tool(tmp_path / "jobs.json", "project:vuoto").execute(
-            action="add", message="x", every_seconds=60)
+        out = await tool.execute(action="add", message="x", every_seconds=60)
     finally:
         reset_workspace_scope(token)
-    assert out.startswith("Not here")
+    assert out.startswith("Created job"), out
+    job = tool._cron.list_jobs()[0]
+    assert job.payload.board["notebook"] == "vuoto"
 
 
 def test_the_monitor_turn_gets_the_notebook_fence(tmp_path) -> None:

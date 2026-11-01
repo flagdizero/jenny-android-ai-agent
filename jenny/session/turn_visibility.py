@@ -4,7 +4,7 @@ Prima di questo modulo la consegna all'utente era una proprieta della coppia
 ``(channel, chat_id)`` trasportata sul messaggio: qualunque turno con
 ``chat_id`` = la chat WebUI parlava all'utente, indipendentemente dal fatto che
 appartenesse a lavoro interno. Da qui i tre meccanismi incompatibili incollati
-sopra — il gate LLM post-run dell'heartbeat, ``suppress_response`` per i cron
+sopra — un gate LLM post-run, ``suppress_response`` per i cron
 monitor, e *niente* per il turno di annuncio di un subagent, che e' proprio
 quello che finiva in chat.
 
@@ -73,11 +73,11 @@ def resolve_turn_visibility(
 ) -> TurnVisibility:
     """Risolve la visibilita di un turno da marchio esplicito o provenienza.
 
-    Il marchio esplicito vince sempre (lo scrivono i cron monitor e l'heartbeat,
-    che sanno di essere lavoro interno). In sua assenza vale la regola
+    Il marchio esplicito vince sempre (lo scrivono i cron monitor e gli altri
+    lavori del sistema, che sanno di essere lavoro interno). In sua assenza vale la regola
     strutturale: **lavoro interno che gira su un canale utente e' silenzioso**.
     E' cio che rende muto il turno di annuncio di un subagent nato dentro
-    l'heartbeat — la sua ``session_key`` e' quella interna d'origine — senza
+    un cron monitor — la sua ``session_key`` e' quella interna d'origine — senza
     bisogno di un caso speciale.
 
     Un turno sul canale interno resta VISIBLE: non c'e nessun utente da
