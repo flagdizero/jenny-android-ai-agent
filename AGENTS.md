@@ -19,20 +19,25 @@ The gateway is started by the Android runtime via `jenny.android_entry.run_gatew
 
 The Android project lives in the `android/` directory.
 
-**Every on-device test runs on the Android emulator `jenny_square`** (AVD: 1440×1440 @ 480 dpi,
-arm64, android-37), and only there. Do not install on, uninstall from or test against any
-other device, even when one shows up in `adb devices`: pin the emulator with
-`ANDROID_SERIAL=emulator-5554` on every `adb`/Gradle command.
+**Every on-device test runs on the Android emulator `jenny_s22`** (AVD: 1080×1920 @ 420 dpi,
+arm64, android-37, a phone-shaped screen), and only there. Do not install on, uninstall from or
+test against any other device, even when one shows up in `adb devices`. The serial does not say
+which AVD it is — `emulator-5554` goes to whichever emulator started first — so check the name,
+then pin it with `ANDROID_SERIAL` on every `adb`/Gradle command.
 
 ```bash
-~/Library/Android/sdk/emulator/emulator -avd jenny_square -no-snapshot-save &
-adb devices -l   # emulator-5554 must be listed
-cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installFossDebug
+~/Library/Android/sdk/emulator/emulator -avd jenny_s22 -no-snapshot-load &
+adb -s emulator-5554 emu avd name   # must say jenny_s22
+cd android && ANDROID_SERIAL=emulator-5554 ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew app:installPlayDebug
 ```
 
+`-no-snapshot-load` boots cold: loading the default snapshot would also bring the emulator's disk
+back to the day it was saved.
+
 Two flavors build from the same code: `foss` (GitHub, no Google library) and `play` (Play Store,
-adds the copy on Google Drive). `installPlayDebug` installs the second; the two debug builds share
-the debug key, so they replace each other in place.
+adds the copy on Google Drive). The emulator runs `play`; `installFossDebug` installs the other one
+to try the build without the Drive. The two debug builds share the debug key, so they replace each
+other in place.
 
 Debug and release APKs are signed differently: switching between them on the emulator needs
 `adb uninstall com.flagdizero.jenny` first, which wipes the emulator's workspace — and brings
@@ -107,8 +112,10 @@ reason in the comment itself. The public references are
 
 ## Branches and flavors
 
-Two long-lived branches: **`main`** for releases and **`next`**, where every change lands.
-Short-lived ones are deleted as soon as they land.
+One long-lived branch, **`main`**: releases are cut from it, and every change reaches it through
+a short-lived branch and a pull request (CI runs its pull-request checks only for `main`). A branch
+is deleted once it lands. A change that needs another one still in review can open its pull
+request against that branch, and moves to `main` when the first lands.
 
 The Play Store and GitHub builds come from the same commit as two Gradle flavors, `play` and
 `foss`. The one thing only `play` has — the encrypted copy on Google Drive — lives where the

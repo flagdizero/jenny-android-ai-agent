@@ -14,7 +14,8 @@ a few simple rules keep things sane for everyone.
 
 ## Branches
 
-Pull requests target **`next`**, where all work lands; `main` is for releases. The code builds
+Pull requests target **`main`**, from a short-lived branch of your own; releases are cut from
+`main`. The code builds
 two Gradle flavors: `foss` (GitHub and F-Droid, no Google library) and `play` (the Play Store,
 which adds the encrypted copy on Google Drive). Code only `play` needs lives outside the core —
 `jenny_extensions/` for Python and its WebUI files, `android/app/src/play/` for Kotlin — so the
