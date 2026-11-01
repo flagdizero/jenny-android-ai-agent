@@ -894,6 +894,14 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     skills_dest = workspace / "skills"
     n = extract_package_dir("jenny.skills", skills_dest)
     added.append(f"skills/ ({n} files)")
+    # Le skill nostre che il package non spedisce piu' (una skill tolta resta
+    # nel workspace, e il modello la vedrebbe ancora).
+    from jenny.utils.android_assets import retire_withdrawn_skills
+
+    try:
+        retire_withdrawn_skills(skills_dest)
+    except Exception:  # noqa: BLE001 — una pulizia mancata non ferma la sync
+        logger.opt(exception=True).error("Could not remove withdrawn skills")
 
     # Ensure memory/history.jsonl exists
     mem_dir = workspace / "memory"

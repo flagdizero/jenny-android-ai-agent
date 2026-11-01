@@ -863,6 +863,64 @@ def retire_withdrawn_ui_files(ui_dir: Path) -> list[str]:
     return removed
 
 
+# Le skill che il package non spedisce piu', con le versioni che ha spedito: il
+# digest (``template_digest``) di ogni ``SKILL.md`` uscito, e da dove. Una copia
+# nel workspace identica a una di queste e' nostra e si toglie; una copia che
+# l'utente ha cambiato e' sua, e resta.
+_RETIRED_SKILL_DIGESTS: dict[str, dict[str, str]] = {
+    # Il goal sostenuto, tolto il 01/11/2026: senza, la skill continuava a
+    # dire al modello di chiamare ``long_task``, un tool che non esiste piu'.
+    "long-goal/SKILL.md": {
+        "59da54b6a6bd9d50eea96f1359c06e33a102413c5f0d4b67626ab0659613df10":
+            "v0.3.0 (8833b94)",
+        "102fe8f7e1d4d23961d6e674e55233cbb58c2acc958eff43dc8391f83218be31":
+            "from b5499bf",
+        "aafad35e144ff85e463e808ad5a78a689ab2db94b19fba5268669ef795b1c40c":
+            "from f5888a1 to v2.0.0",
+    },
+}
+
+
+def retire_withdrawn_skills(skills_dir: Path) -> list[str]:
+    """Toglie da ``workspace/skills`` le skill nostre che il package non spedisce piu'.
+
+    ``extract_package_dir`` scrive e non cancella mai: una skill tolta dal
+    package restava nel workspace, e il caricatore delle skill legge solo da li',
+    quindi il modello continuava a vederla. ``skills/`` pero' e' anche dell'utente
+    (le skill che scrive lui), quindi la stessa regola di
+    :func:`retire_withdrawn_templates`: si toglie solo un file **identico** a una
+    versione spedita, per digest esatto. Niente match approssimati; un symlink non
+    si segue e non si toglie. La cartella se ne va solo se resta vuota.
+    """
+    removed: list[str] = []
+    for rel, shipped in _RETIRED_SKILL_DIGESTS.items():
+        target = skills_dir / rel
+        if target.is_symlink() or not target.is_file():
+            continue
+        try:
+            content = target.read_text(encoding="utf-8")
+        except (OSError, ValueError):
+            continue
+        label = shipped.get(template_digest(content))
+        if label is None:
+            logger.info("Withdrawn skill {} kept: it differs from every shipped version", rel)
+            continue
+        try:
+            target.unlink()
+        except OSError:
+            logger.opt(exception=True).warning("Withdrawn skill not removed: {}", rel)
+            continue
+        removed.append(rel)
+        logger.info("Removed withdrawn skill {} ({})", rel, label)
+        folder = target.parent
+        if folder != skills_dir and not folder.is_symlink():
+            try:
+                folder.rmdir()
+            except OSError:
+                pass  # non vuota: dentro c'e' qualcosa dell'utente
+    return removed
+
+
 _JENNY_SRC_KEY = "jenny_src"
 
 
