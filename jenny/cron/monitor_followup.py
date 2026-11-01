@@ -160,6 +160,7 @@ class MonitorFollowup:
                 state.could_not_check_since_ms = self._now_ms()
             if parse_warned_marks(final_text):
                 state.could_not_check_escalated = True
+                state.could_not_check_escalated_at_ms = self._now_ms()
             logger.warning(
                 "Cron: delegated check of job '{}' could not run ({} in a row): {}",
                 job.name, state.consecutive_could_not_check, reason or "no reason given",
@@ -170,6 +171,7 @@ class MonitorFollowup:
             state.consecutive_could_not_check = 0
             state.could_not_check_since_ms = None
             state.could_not_check_escalated = False
+            state.could_not_check_escalated_at_ms = None
         if state.run_history and state.run_history[-1].status == "delegated":
             state.run_history[-1].status = state.last_status
             state.run_history[-1].error = state.last_error

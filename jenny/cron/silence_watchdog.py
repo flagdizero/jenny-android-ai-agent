@@ -86,14 +86,13 @@ def silently_broken_checks(state: CronJobState, *, now_ms: int) -> list[tuple[st
     if _is_silently_broken(
         consecutive=state.consecutive_could_not_check,
         escalated=state.could_not_check_escalated,
-        # Il monitor non ha un'ora dell'avviso: il suo ``escalated`` è un
-        # booleano solo. Vale quindi come timbro senza data (v.
-        # ``_is_silently_broken``), e la finestra di quiete su questo ramo non si
-        # applica: oltre soglia l'allarme vale a ogni run. Non è più rumoroso di
-        # quanto suoni — il tag coalizza, quindi resta una notifica sola sempre
-        # aggiornata — e l'alternativa sarebbe un campo nuovo nello store per
-        # datare un avviso di cui il monitor non registra l'ora.
-        escalated_at_ms=None,
+        # Dal 01/11/2026 il monitor data il suo avviso, e la finestra di quiete
+        # vale anche qui. Prima era un booleano solo, e su jenny_s22 un monitor
+        # morto avvisava in chat al terzo giro e poi, dal sesto, con questa
+        # notifica a ogni giro: «non te l'ha detto nessuno», detto a chi lo
+        # sapeva da tre giri. Un avviso scritto prima di quel campo resta senza
+        # ora, e vale come prima.
+        escalated_at_ms=state.could_not_check_escalated_at_ms,
         now_ms=now_ms,
     ):
         return [("", state.consecutive_could_not_check)]

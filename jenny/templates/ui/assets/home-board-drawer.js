@@ -494,8 +494,8 @@ export class BoardDrawer {
 
   /** Un'altra attesa: il giorno (il mese lo dice il gruppo), il testo, ⋯. */
   _calRow(rem, kind) {
-    const row = el('div', `home-drawer-cal-row${kind === 'overdue' ? ' is-late' : ''}`);
     const when = rem.when || {};
+    const row = el('div', `home-drawer-cal-row${kind === 'overdue' ? ' is-late' : ''}${when.kind === 'condition' ? ' is-condition' : ''}`);
     let day = whenLabel(when);
     if (kind === 'month') day = when.precision === 'month' ? '—' : String(Number(String(when.date).slice(8, 10)));
     const every = everyLabel(when);

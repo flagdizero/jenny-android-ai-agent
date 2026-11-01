@@ -1675,6 +1675,8 @@ def test_the_calendar_says_how_often_a_condition_is_checked() -> None:
       const row = [...document.querySelectorAll('.home-drawer-cal-row')]
         .find((r) => /Annaffia/.test(r.textContent));
       assert.match(row.textContent, /Annaffia · checked every 6 hours/);
+      // La condizione sta dove sta il giorno, ma in una colonna larga quanto serve.
+      assert.ok(row.classList.contains('is-condition'));
     """.replace("__CARD2__", json.dumps(card)))
 
 

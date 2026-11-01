@@ -457,6 +457,9 @@ class CronService:
                         j.get("state", {}).get("consecutiveCouldNotCheck") or 0
                     ),
                     could_not_check_since_ms=j.get("state", {}).get("couldNotCheckSinceMs"),
+                    could_not_check_escalated_at_ms=j.get("state", {}).get(
+                        "couldNotCheckEscalatedAtMs"
+                    ),
                     could_not_check_escalated=bool(
                         j.get("state", {}).get("couldNotCheckEscalated")
                     ),
@@ -733,6 +736,7 @@ class CronService:
                         "consecutiveCouldNotCheck": j.state.consecutive_could_not_check,
                         "couldNotCheckSinceMs": j.state.could_not_check_since_ms,
                         "couldNotCheckEscalated": j.state.could_not_check_escalated,
+                        "couldNotCheckEscalatedAtMs": j.state.could_not_check_escalated_at_ms,
                         "pendingSinceMs": j.state.pending_since_ms,
                         "conditionNotified": j.state.condition_notified,
                         "runHistory": [
@@ -1173,6 +1177,7 @@ class CronService:
         state.consecutive_could_not_check = 0
         state.could_not_check_since_ms = None
         state.could_not_check_escalated = False
+        state.could_not_check_escalated_at_ms = None
 
     async def _execute_job(self, job: CronJob) -> None:
         """Execute a single job."""
@@ -1201,6 +1206,7 @@ class CronService:
                 job.state.could_not_check_since_ms = start_ms
             if e.escalated:
                 job.state.could_not_check_escalated = True
+                job.state.could_not_check_escalated_at_ms = start_ms
             logger.warning(
                 "Cron: job '{}' could not run its check ({} in a row): {}",
                 job.name,

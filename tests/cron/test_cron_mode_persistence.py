@@ -61,6 +61,7 @@ _COULD_NOT_CHECK_DEFAULTS: dict[str, Any] = {
     "consecutiveCouldNotCheck": 0,
     "couldNotCheckSinceMs": None,
     "couldNotCheckEscalated": False,
+    "couldNotCheckEscalatedAtMs": None,
     # La delega in sospeso di un monitor, e il «già avvisato» di una condizione.
     "pendingSinceMs": None,
     "conditionNotified": False,

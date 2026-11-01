@@ -199,3 +199,29 @@ class TestTheServiceCallsIt:
         await service.run_job(job_id)
 
         assert len(sent) == 1
+
+
+class TestAWarnedMonitorIsLeftAlone:
+    """Il 01/11/2026, su jenny_s22: un monitor con il file sparito ha avvisato in
+    chat al terzo giro (CHECK_WARNED) e, dal sesto, la sentinella ha aggiunto a
+    ogni giro «non ha completato il controllo da 6 giri»: un secondo avviso per
+    lo stesso guasto, a chi lo sapeva già. L'avviso ora ha la sua ora, e la
+    sentinella aspetta 24 ore come per ogni altro avviso datato."""
+
+    def test_a_dated_warning_keeps_the_watchdog_quiet_for_a_day(self) -> None:
+        from jenny.cron.silence_watchdog import WATCHDOG_QUIET_MS
+
+        state = CronJobState(
+            consecutive_could_not_check=WATCHDOG_AFTER_FAILURES,
+            could_not_check_escalated=True,
+            could_not_check_escalated_at_ms=_NOW - 60_000,
+        )
+        assert silently_broken_checks(state, now_ms=_NOW) == []
+        later = _NOW - 60_000 + WATCHDOG_QUIET_MS
+        assert silently_broken_checks(state, now_ms=later) == [("", WATCHDOG_AFTER_FAILURES)]
+
+    def test_an_undated_warning_still_counts_as_unknown(self) -> None:
+        state = CronJobState(
+            consecutive_could_not_check=WATCHDOG_AFTER_FAILURES, could_not_check_escalated=True
+        )
+        assert silently_broken_checks(state, now_ms=_NOW) == [("", WATCHDOG_AFTER_FAILURES)]

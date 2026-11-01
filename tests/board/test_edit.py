@@ -327,7 +327,8 @@ async def test_a_cron_that_repeats_is_not_a_reminder(notebook: Path, cron) -> No
                            schedule=CronSchedule(kind="every", every_ms=3_600_000))
     with pytest.raises(edit.BoardEditError) as err:
         await edit.drop_reminder(notebook, job.id, cron=cron)
-    assert err.value.code == "not_found"
+    assert err.value.code == "bad_request"
+    assert "recurring job, not a reminder" in err.value.message
     assert cron.get_job(job.id) is not None
 
 

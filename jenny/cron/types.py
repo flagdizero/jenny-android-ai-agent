@@ -158,6 +158,10 @@ class CronJobState:
     # L'utente è già stato avvisato di QUESTA sequenza. Ciò che rende l'avviso
     # uno solo per guasto invece di uno per ciclo.
     could_not_check_escalated: bool = False
+    # *Quando* glielo si è detto. Senza, la sentinella dei controlli morti
+    # (``silence_watchdog``) non sa se l'avviso è di adesso o di ieri, e
+    # dalla sesta mancata riavvisava a ogni giro chi era già stato avvisato.
+    could_not_check_escalated_at_ms: int | None = None
 
     # Il run precedente ha **delegato** il controllo a un aiutante e il verdetto
     # non è ancora tornato. Impedisce che quel silenzio azzeri la sequenza; vive

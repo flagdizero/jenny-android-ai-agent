@@ -4780,6 +4780,14 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-drawer-cal-day { color: var(--board-soon); font-size: 14px; font-weight: 700; }
 .home-drawer-cal-row.is-late .home-drawer-cal-day { color: var(--board-alert); }
 .home-drawer-cal-text { font-size: 15px; line-height: 1.35; }
+/* Al posto del giorno, una condizione («umidita < 5»): nei 52 px di un giorno
+   andava a capo e toccava il testo (jenny_s22, 01/11/2026). La colonna si fa
+   larga quanto serve, fino a meta' riga. */
+.home-drawer-cal-row.is-condition {
+  grid-template-columns: fit-content(50%) minmax(0, 1fr) 44px;
+  column-gap: 12px;
+}
+.home-drawer-cal-row.is-condition .home-drawer-cal-day { overflow-wrap: anywhere; }
 .home-drawer-cal-more {
   width: 44px;
   height: 44px;

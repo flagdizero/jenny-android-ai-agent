@@ -839,3 +839,21 @@ def test_jenny_does_not_move_the_lilac_or_the_gallery() -> None:
         before = model.normalize_board({"cards": [{**card, key: {"x": 70, "y": 10}}]})
         after = model.normalize_board({"cards": [{**card, key: {"x": 10, "y": 10}}]})
         assert f"card acero: {key} changed" in model.ownership_violations(before, after)
+
+
+async def test_a_recurring_job_is_refused_as_recurring_not_as_missing(cron_ctx, notebook: Path,
+                                                                      cron) -> None:
+    """Un ricorrente senza filtro non si corregge dalla bacheca, ma c'è: il rifiuto
+    lo dice («change it with the cron tool»), invece di «non esiste», che
+    manda a cercarlo in un altro quaderno."""
+    from jenny.board.cron_link import add_notebook_job
+    from jenny.cron.types import CronSchedule
+
+    _seed(notebook)
+    job = add_notebook_job(cron, "piante", "acero", name="Meteo", message="m",
+                           schedule=CronSchedule(kind="every", every_ms=3_600_000))
+    with pytest.raises(CommandError, match="recurring job, not a reminder"):
+        await dispatch_command(cron_ctx, "board.reminder.update", {
+            "wiki": "piante", "id": job.id, "text": "x"})
+    with pytest.raises(CommandError, match="no reminder `nessuno`"):
+        await dispatch_command(cron_ctx, "board.reminder.drop", {"wiki": "piante", "id": "nessuno"})
