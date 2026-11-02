@@ -820,11 +820,9 @@ class AppTool(Tool):
                 return "This notebook has no folder I can find."
         else:
             name = kw.get("notebook")
-            from jenny.board.placements import _wikis_dirs
+            from jenny.config.paths import get_wikis_path
 
-            roots: dict[str, Path] = {}
-            for wikis in _wikis_dirs(workspace):
-                roots.update(discover_wiki_roots(wikis))
+            roots = discover_wiki_roots(get_wikis_path(workspace))
             if not isinstance(name, str) or name not in roots:
                 names = ", ".join(sorted(roots)) or "none"
                 return f"Say which notebook (`notebook`): {names}."

@@ -43,14 +43,14 @@ _PHOTO_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
 
 def _project(ctx: CommandContext, params: Mapping[str, Any]) -> Path:
-    from jenny.utils.wiki_paths import discover_wiki_roots
+    from jenny.utils.wiki_paths import is_wiki_root, notebook_dir
 
     _require_wiki_enabled()
     name = params.get("wiki")
-    roots = discover_wiki_roots(_wikis_dir(ctx))
-    if not isinstance(name, str) or name not in roots:
+    root = notebook_dir(_wikis_dir(ctx), name) if isinstance(name, str) else None
+    if root is None or not is_wiki_root(root):
         raise CommandError("bad_request", "wiki required")
-    return roots[name]
+    return root
 
 
 def _card_id(params: Mapping[str, Any], key: str = "card") -> str:

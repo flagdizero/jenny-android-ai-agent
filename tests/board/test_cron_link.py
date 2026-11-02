@@ -109,3 +109,19 @@ def test_a_paused_reminder_is_a_marked_row_and_nobody_s_next() -> None:
     assert model.next_note(notes, "acero")["id"] == "r2"
     # Senza la riga in pausa non c'è un prossimo.
     assert model.next_note([by_id["p1"]], "acero") is None
+
+
+@pytest.mark.parametrize("name", ["../fuori", "casa/../../fuori", "", ".", "casa/wiki"])
+def test_a_notebook_name_never_leaves_the_notebooks_folder(tmp_path: Path, monkeypatch,
+                                                           name: str) -> None:
+    """Il nome arriva dal modello (``cron`` dalla chat personale): un ``..`` non
+    deve attaccare un job, e le scritture della sua bacheca, fuori da ``wikis/``."""
+    from jenny.runtime.context import get_runtime_context
+
+    workspace = tmp_path / "workspace"
+    (workspace / "wikis" / "casa" / "wiki").mkdir(parents=True)
+    (workspace / "fuori" / "wiki").mkdir(parents=True)
+    (workspace / "wikis" / "casa" / "wiki" / "wiki").mkdir()
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", workspace)
+    assert cron_link.notebook_root(name) is None
+    assert cron_link.notebook_root("casa") == (workspace / "wikis" / "casa").resolve()

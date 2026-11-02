@@ -738,6 +738,20 @@ def is_wiki_root(path: Path) -> bool:
     return (path / "wiki").is_dir()
 
 
+def notebook_dir(wikis_dir: Path, name: str) -> Path | None:
+    """La cartella (risolta) del quaderno *name* in *wikis_dir*, o ``None`` se ne esce.
+
+    Il nome arriva da una chiave di sessione, da un argomento del modello o da
+    un client: un ``..``, un separatore o il nome vuoto non devono portare fuori
+    dalla cartella dei quaderni, né in una sottocartella di un quaderno. Un
+    quaderno è un figlio diretto di ``wikis/`` (come in :func:`discover_wikis`).
+    Non guarda se esiste: chi vuole un quaderno vero aggiunge :func:`is_wiki_root`.
+    """
+    wikis = wikis_dir.resolve(strict=False)
+    root = (wikis / name).resolve(strict=False)
+    return root if root.parent == wikis and root != wikis else None
+
+
 def discover_wikis(wikis_dir: Path) -> dict[str, Path]:
     """Scan wikis_dir for subdirectories containing a wiki/ folder.
 

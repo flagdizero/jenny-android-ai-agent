@@ -24,6 +24,7 @@ from jenny.session.keys import (
     notebook_of_cron_session,
     project_name,
 )
+from jenny.utils.wiki_paths import notebook_dir
 
 WorkspaceAccessMode = Literal["restricted", "full"]
 WORKSPACE_SCOPE_METADATA_KEY = "workspace_scope"
@@ -295,12 +296,11 @@ class WorkspaceScopeResolver:
         personale. Trasformarlo in un rifiuto detto a voce e' il passo 6.
         """
         name = project_name(session_key)
-        root = _safe_expanduser(self.default_workspace).resolve(strict=False)
-        project = (root / self.projects_subdir / name).resolve(strict=False)
+        projects_root = _safe_expanduser(self.default_workspace) / self.projects_subdir
         # Il nome arriva da una session key, che a sua volta arriva da un client:
         # un ``..`` non deve poter far uscire lo scope dalla cartella dei progetti.
-        projects_root = (root / self.projects_subdir).resolve(strict=False)
-        if project == projects_root or projects_root not in project.parents:
+        project = notebook_dir(projects_root, name)
+        if project is None:
             logger.warning(
                 "project session {} resolves outside {}; falling back to the default scope",
                 session_key,

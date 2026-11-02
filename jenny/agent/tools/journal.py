@@ -327,15 +327,13 @@ class JournalAppendTool(Tool):
         return roots[notebook], ""
 
     def _notebooks(self) -> dict[str, Path]:
-        from jenny.board.placements import _wikis_dirs
+        from jenny.config.paths import get_wikis_path
         from jenny.utils.wiki_paths import discover_wiki_roots
 
         workspace = Path(getattr(self._memory, "workspace", "") or ".")
-        roots: dict[str, Path] = {}
-        for wikis in _wikis_dirs(workspace):
-            with suppress(OSError):
-                roots.update(discover_wiki_roots(wikis))
-        return roots
+        with suppress(OSError):
+            return discover_wiki_roots(get_wikis_path(workspace))
+        return {}
 
     async def _personal(self, fact: str, attribution: str) -> str:
         """Una riga del diario personale: un fatto che non e' di nessun quaderno."""

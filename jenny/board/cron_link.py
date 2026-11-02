@@ -109,10 +109,10 @@ def legacy_result_key(link: dict[str, Any]) -> str | None:
 def notebook_root(name: str) -> Path | None:
     """La cartella del quaderno *name*, o ``None`` se non c'e' (piu')."""
     from jenny.config.paths import get_wikis_path
-    from jenny.utils.wiki_paths import is_wiki_root
+    from jenny.utils.wiki_paths import is_wiki_root, notebook_dir
 
-    root = get_wikis_path() / name
-    return root if is_wiki_root(root) else None
+    root = notebook_dir(get_wikis_path(), name)
+    return root if root is not None and is_wiki_root(root) else None
 
 
 def link_alive(link: dict[str, Any]) -> bool:
