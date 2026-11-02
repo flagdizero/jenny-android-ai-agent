@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import json
 import re
-import time
 import uuid
 from typing import Any
 
 from loguru import logger
 
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 from jenny.webui.transcript_store import append_transcript_object, transcript_revision
 
@@ -141,7 +141,7 @@ class WebUITranscriptRecorder:
             # il proprio orologio, che per un messaggio appena arrivato dice la
             # stessa cosa. Qui e non in `prepare_and_append` perche' e' l'unico
             # punto da cui passano tutte le righe.
-            dup.setdefault("at", int(time.time() * 1000))
+            dup.setdefault("at", _now_ms())
             append_transcript_object(f"websocket:{chat_id}", dup)
         except (OSError, ValueError, TypeError) as e:
             self._log.warning("webui transcript append failed: {}", e)

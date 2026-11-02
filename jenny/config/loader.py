@@ -24,7 +24,7 @@ from jenny.pydantic_compat import (
     field_for_input_key,
     lenient_literals,
 )
-from jenny.utils.path import quarantine, rotate_valid_json_backup
+from jenny.utils.path import load_with_recovery, rotate_valid_json_backup
 
 
 def get_config_path() -> Path:
@@ -55,17 +55,31 @@ def load_config(config_path: Path | None = None) -> Config:
     return load_config_with_raw(config_path)[0]
 
 
+class ConfigWriteRefusedError(RuntimeError):
+    """`config.json` è illeggibile e non si è potuto spostare di lato.
+
+    Si parte lo stesso (sui default, o sul ``.bak`` in memoria): un'app che non si
+    avvia l'utente non la ripara. Ma nessuna scrittura passa, perché il file
+    rotto è ancora al suo posto ed è l'unica copia delle sue impostazioni — la
+    scelta del cron, che in quel caso rifiuta (``CronService._corrupt_store_error``),
+    spostata sulle scritture invece che sull'avvio.
+    """
+
+
 def load_config_with_raw(
     config_path: Path | None = None,
+    *,
+    for_write: bool = False,
 ) -> tuple[Config, dict[str, Any]]:
     """Come :func:`load_config`, ma restituisce anche il JSON grezzo letto.
 
     Il grezzo serve a :func:`save_config` per non cancellare le chiavi che lo
     schema non conosce (vedi ``preserve_unknown_from``). Chi deve solo leggere
-    usa ``load_config``.
+    usa ``load_config``. Con *for_write* (``store.mutate``) solleva
+    :class:`ConfigWriteRefusedError` se il file rotto è rimasto al suo posto.
     """
     path = config_path or get_config_path()
-    raw, config = _load_with_recovery(path)
+    raw, config = _load_with_recovery(path, for_write=for_write)
 
     unknown = _unknown_key_paths(raw, config.model_dump(mode="json", by_alias=True))
     if unknown:
@@ -89,45 +103,35 @@ def load_config_with_raw(
     return config, raw
 
 
-def _load_with_recovery(path: Path) -> tuple[dict[str, Any], Config]:
+def _load_with_recovery(path: Path, *, for_write: bool = False) -> tuple[dict[str, Any], Config]:
     """Legge e valida *path*, ripiegando su backup o default se è illeggibile.
 
     Su Android un `config.json` illeggibile bloccava l'avvio del gateway, e
     l'utente non ha modo di ripararlo: preferiamo partire sempre, dicendolo.
+    La rete è ``utils.path.load_with_recovery``, la stessa di cron e bacheca;
+    il backup promosso si riscrive in ``600``, come il file che sostituisce.
     """
-    if not path.exists():
-        return {}, Config()
 
-    try:
-        raw = _read_raw(path)
-        return raw, _validate(raw, path)
-    except (json.JSONDecodeError, ValueError, ValidationError) as primary_error:
-        logger.error("Config at {} is unusable: {}", path, primary_error)
+    def _parse(candidate: Path) -> tuple[dict[str, Any], Config]:
+        raw = _read_raw(candidate)
+        return raw, _validate(raw, candidate)
 
-    backup = _backup_path(path)
-    if backup.exists():
-        try:
-            raw = _read_raw(backup)
-            config = _validate(raw, backup)
-        except (json.JSONDecodeError, ValueError, ValidationError) as backup_error:
-            logger.error("Config backup at {} is unusable too: {}", backup, backup_error)
-        else:
-            quarantined = _quarantine(path)
-            # Promuoviamo il backup a file vivo: senza questo passo ogni avvio
-            # rifarebbe il recupero, e la prima scrittura riuscita partirebbe
-            # da un grezzo rotto.
-            write_private_file(path, json.dumps(raw, indent=2, ensure_ascii=False))
-            _record_recovery("backup", quarantined)
-            logger.warning("Config recovered from {}; broken file kept at {}", backup, quarantined)
-            return raw, config
-
-    quarantined = _quarantine(path)
-    _record_recovery("defaults", quarantined)
-    logger.warning(
-        "Config could not be recovered; starting on defaults. Broken file kept at {}",
-        quarantined,
+    got = load_with_recovery(
+        path, _parse, errors=(ValueError, ValidationError), write=write_private_file
     )
-    return {}, Config()
+    if got.recovered_from is None:
+        return got.value or ({}, Config())
+    if got.stuck and for_write:
+        raise ConfigWriteRefusedError(
+            f"{path} is unreadable and could not be set aside; refusing to write over it"
+        )
+    # «defaults» e non «empty»: è il nome che la WebUI legge da 0.3.2. Bloccato,
+    # il file rotto è ancora lì: è quello che la UI indica.
+    _record_recovery(
+        "backup" if got.recovered_from == "backup" else "defaults",
+        got.quarantined or path,
+    )
+    return got.value or ({}, Config())
 
 
 def _validate(raw: dict[str, Any], path: Path) -> Config:
@@ -155,19 +159,6 @@ def _read_raw(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"config root must be a JSON object, got {type(data).__name__}")
     return data
-
-
-def _backup_path(path: Path) -> Path:
-    return path.with_name(path.name + ".bak")
-
-
-def _quarantine(path: Path) -> Path:
-    """Sposta di lato il file rotto (``utils.path.quarantine``); se non ci riesce, *path*."""
-    target = quarantine(path)
-    if target is None:
-        logger.error("Could not set aside the broken config at {}", path)
-        return path
-    return target
 
 
 def _record_recovery(kind: str, quarantined: Path) -> None:

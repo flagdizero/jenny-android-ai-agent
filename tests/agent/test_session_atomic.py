@@ -227,3 +227,45 @@ class TestRepairCorruptFile:
         assert session is not None
         assert session.messages == []
         assert session.key == "test:fallback"
+
+    def test_repair_skips_a_line_that_is_not_an_object(self, tmp_path: Path):
+        """Una riga JSON valida ma non oggetto non fa fallire la riparazione."""
+        mgr = SessionManager(tmp_path)
+        path = mgr._get_session_path("test:nondict")
+        self._write_corrupt_jsonl(path, [
+            json.dumps({"role": "user", "content": "kept"}),
+            "[1, 2, 3]",
+            json.dumps({"role": "assistant", "content": "also kept"}),
+        ])
+
+        session = mgr._load("test:nondict")
+        assert session is not None
+        assert [m["content"] for m in session.messages] == ["kept", "also kept"]
+
+    def test_repair_survives_a_byte_that_is_not_utf8(self, tmp_path: Path):
+        mgr = SessionManager(tmp_path)
+        path = mgr._get_session_path("test:latin1")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(
+            json.dumps({"role": "user", "content": "kept"}).encode() + b"\n"
+            + b'{"role": "user", "content": "caf\xe9"}\n'
+        )
+
+        session = mgr._load("test:latin1")
+        assert session is not None
+        assert session.messages[0]["content"] == "kept"
+
+    def test_unrepairable_file_is_set_aside_before_a_save(self, tmp_path: Path):
+        """Se la riparazione non salva niente, il file va di lato prima che la
+        sessione vuota lo sovrascriva."""
+        mgr = SessionManager(tmp_path)
+        path = mgr._get_session_path("test:lost")
+        self._write_corrupt_jsonl(path, ["garbage", "{{{{"])
+
+        session = mgr.get_or_create("test:lost")
+        session.add_message("user", "new")
+        mgr.save(session)
+
+        aside = list(path.parent.glob(f"{path.stem}.corrupt-*{path.suffix}"))
+        assert len(aside) == 1
+        assert aside[0].read_text(encoding="utf-8") == "garbage\n{{{{\n"

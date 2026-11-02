@@ -12,7 +12,6 @@ import hashlib
 import json
 import os
 import threading
-import time
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -27,7 +26,8 @@ from jenny.snapshot.types import (
     entry_target,
     is_snapshot_id,
 )
-from jenny.utils.path import atomic_write
+from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.path import atomic_write, read_json_dict
 
 # Esclusioni di default (path POSIX relativi alla radice del workspace).
 # Le directory runtime reali (store snapshot, staging) vengono escluse anche
@@ -220,7 +220,7 @@ class SnapshotEngine:
         rispetto a un hash sbagliato. Lo accendono le foto dei piani, che ne
         fanno una per passo: senza, ogni foto rilegge tutto il quaderno.
         """
-        created_at_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+        created_at_ms = now_ms if now_ms is not None else _now_ms()
         parent = self.head_id()
         parent_manifest: SnapshotManifest | None = None
         if parent is not None:
@@ -396,7 +396,7 @@ class SnapshotEngine:
         ``max_age_days`` giorni (se impostato; 0/None = per sempre) vengono
         eliminati del tutto.
         """
-        now = now_ms if now_ms is not None else int(time.time() * 1000)
+        now = now_ms if now_ms is not None else _now_ms()
         snapshots = self.list_snapshots()
         keep_ids = {s["id"] for s in snapshots[:keep_recent]}
         threshold_ms = now - thin_after_days * 86_400_000
@@ -433,10 +433,7 @@ class SnapshotEngine:
         referenced: set[str] = set()
         if self.manifests_dir.is_dir():
             for manifest_path in self.manifests_dir.glob("*.json"):
-                try:
-                    data = json.loads(manifest_path.read_text("utf-8"))
-                except (OSError, ValueError):
-                    continue
+                data = read_json_dict(manifest_path)
                 for entry in data.get("files", []):
                     referenced.add(str(entry.get("hash", "")))
 

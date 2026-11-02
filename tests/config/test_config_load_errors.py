@@ -9,9 +9,13 @@ backup, poi si mette da parte il file rotto e si riparte dai default.
 
 import json
 
-from jenny.config.loader import _backup_path, load_config, save_config
+import pytest
+
+from jenny.config import store
+from jenny.config.loader import ConfigWriteRefusedError, load_config, save_config
 from jenny.config.schema import Config, ProviderConfig
 from jenny.runtime.context import get_runtime_context
+from jenny.utils.path import backup_path as _backup_path
 
 
 def _reset_recovery_flags() -> None:
@@ -107,4 +111,48 @@ def test_the_file_promoted_from_the_backup_is_private(tmp_path) -> None:
 
     assert get_runtime_context().config_recovered_from == "backup"
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+    _reset_recovery_flags()
+
+
+def _stuck_quarantine(monkeypatch) -> None:
+    """Il rename di lato fallisce (filesystem in sola lettura, nome occupato...)."""
+    monkeypatch.setattr("jenny.utils.path.quarantine", lambda _path: None)
+    monkeypatch.setattr("jenny.config.loader.quarantine", lambda _path: None, raising=False)
+
+
+async def test_a_broken_config_that_cannot_be_set_aside_is_never_written_over(
+    tmp_path, monkeypatch
+) -> None:
+    """Si parte sui default in memoria, ma nessuna scrittura passa: il file
+    rotto è ancora al suo posto, ed è l'unica copia delle impostazioni."""
+    _reset_recovery_flags()
+    _stuck_quarantine(monkeypatch)
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{troncato", encoding="utf-8")
+
+    config = load_config(config_path)
+    assert config.agents.defaults.max_tokens == 32000
+    assert get_runtime_context().config_recovered_from == "defaults"
+
+    with pytest.raises(ConfigWriteRefusedError):
+        await store.mutate(lambda _c: None, config_path=config_path)
+    assert config_path.read_text(encoding="utf-8") == "{troncato"
+    _reset_recovery_flags()
+
+
+def test_a_good_backup_is_used_in_memory_when_the_broken_file_cannot_move(
+    tmp_path, monkeypatch
+) -> None:
+    _reset_recovery_flags()
+    _stuck_quarantine(monkeypatch)
+    config_path = tmp_path / "config.json"
+    _backup_path(config_path).write_text(
+        json.dumps({"agents": {"defaults": {"maxTokens": 1234}}}), encoding="utf-8"
+    )
+    config_path.write_text("{troncato", encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.agents.defaults.max_tokens == 1234
+    assert config_path.read_text(encoding="utf-8") == "{troncato"
     _reset_recovery_flags()

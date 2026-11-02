@@ -73,6 +73,7 @@ from jenny.agent.wiki_provenance import _provenance_guard
 from jenny.session.keys import GARDENER_SESSION_PREFIX
 from jenny.session.turn_visibility import silent_progress
 from jenny.utils.clock import local_now
+from jenny.utils.path import append_with_header
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import (
     WIKI_INDEX_FILENAME,
@@ -976,12 +977,7 @@ class GardenerStore:
         if flag:
             entry += f"- flagged: {flag}\n"
         try:
-            page.parent.mkdir(parents=True, exist_ok=True)
-            fresh = not page.exists()
-            with page.open("a", encoding="utf-8") as fh:
-                if fresh:
-                    fh.write(f"# {day.isoformat()}\n\n")
-                fh.write(entry)
+            append_with_header(page, entry, header=f"# {day.isoformat()}\n\n")
         except OSError as exc:
             # Il log è una traccia, non il lavoro: se non si scrive, la passata
             # resta valida e il cursore avanza comunque.

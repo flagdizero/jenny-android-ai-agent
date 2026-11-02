@@ -55,6 +55,7 @@ from jenny.security.workspace_access import (
 from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
 from jenny.utils.clock import local_now
 from jenny.utils.helpers import clip
+from jenny.utils.path import append_with_header
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
 
 # Non c'e' un progetto: il rifiuto dice **dove** vive il diario invece di dire
@@ -442,12 +443,7 @@ def append_journal_entry(page: Path, day: date, entry: str) -> int:
     vale anche contro se stessi, e una riscrittura potrebbe perdere quel che un
     altro scrittore ha appeso nel frattempo.
     """
-    page.parent.mkdir(parents=True, exist_ok=True)
-    fresh = not page.exists()
-    with page.open("a", encoding="utf-8") as fh:
-        if fresh:
-            fh.write(f"# {day.isoformat()}\n\n")
-        fh.write(entry)
+    append_with_header(page, entry, header=f"# {day.isoformat()}\n\n")
     with page.open(encoding="utf-8") as fh:
         return sum(1 for _ in fh)
 

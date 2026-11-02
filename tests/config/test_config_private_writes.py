@@ -17,8 +17,9 @@ import pytest
 
 from jenny.config import store
 from jenny.config.bootstrap import ensure_minimal_config
-from jenny.config.loader import _backup_path, load_config
+from jenny.config.loader import load_config
 from jenny.runtime.context import get_runtime_context
+from jenny.utils.path import backup_path as _backup_path
 
 
 @pytest.fixture

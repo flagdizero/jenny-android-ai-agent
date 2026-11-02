@@ -13,21 +13,20 @@ Contratto che ogni destinazione deve rispettare:
   lo stesso nome: la sua implementazione deve cercare prima di creare).
 - ``get_*``/``delete`` su una chiave assente alzano :class:`RemoteNotFoundError`.
 
-``MemorySink`` esiste per i test; ``LocalDirSink`` per provare tutto sul Mac
-contro una cartella vera, e come base per una cartella sincronizzata.
+``LocalDirSink`` serve a provare tutto sul Mac contro una cartella vera, e a
+``scripts/restore_drive_copy.py`` per riaprire una copia scaricata. Quella in
+memoria è dei test (``tests/extensions/drive/memory_sink.py``): qui finiva nell'APK.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
-import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_copy, atomic_write
 
 
 class RemoteNotFoundError(Exception):
@@ -68,45 +67,6 @@ def split_key(key: str) -> tuple[str, str]:
     return ("", parts[0]) if len(parts) == 1 else (parts[0], parts[1])
 
 
-class MemorySink:
-    """Destinazione in memoria, per i test. ``puts`` conta i caricamenti."""
-
-    def __init__(self) -> None:
-        self.files: dict[str, bytes] = {}
-        self.puts: list[str] = []
-
-    async def list(self, folder: str) -> list[str]:
-        out = []
-        for key in self.files:
-            parent, name = split_key(key)
-            if parent == folder:
-                out.append(name)
-        return sorted(out)
-
-    async def put_bytes(self, key: str, data: bytes) -> None:
-        split_key(key)
-        self.files[key] = bytes(data)
-        self.puts.append(key)
-
-    async def put_file(
-        self, key: str, source: Path, on_progress: Callable[[int, int], None] | None = None
-    ) -> None:
-        await self.put_bytes(key, Path(source).read_bytes())
-
-    async def get_bytes(self, key: str) -> bytes:
-        try:
-            return self.files[key]
-        except KeyError:
-            raise RemoteNotFoundError(key) from None
-
-    async def get_file(self, key: str, dest: Path) -> None:
-        Path(dest).write_bytes(await self.get_bytes(key))
-
-    async def delete(self, key: str) -> None:
-        if self.files.pop(key, None) is None:
-            raise RemoteNotFoundError(key)
-
-
 class LocalDirSink:
     """Destinazione su una cartella del disco locale."""
 
@@ -137,20 +97,7 @@ class LocalDirSink:
     async def put_file(
         self, key: str, source: Path, on_progress: Callable[[int, int], None] | None = None
     ) -> None:
-        dest = self._path(key)
-
-        def _copy() -> None:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            # Un temporaneo per copia, come ``atomic_write`` (che qui non si usa
-            # per non tenere in memoria un archivio intero): col solo pid due
-            # copie della stessa chiave nello stesso processo si pestavano.
-            tmp = dest.with_name(f"{dest.name}.{uuid.uuid4().hex[:8]}.tmp")
-            # ``copyfile``, non ``copy2``: sul telefono gli xattr SELinux fanno
-            # fallire la copia dei metadati dopo che i byte sono già passati.
-            shutil.copyfile(source, tmp)
-            os.replace(tmp, dest)
-
-        await asyncio.to_thread(_copy)
+        await asyncio.to_thread(atomic_copy, source, self._path(key))
 
     async def get_bytes(self, key: str) -> bytes:
         path = self._path(key)

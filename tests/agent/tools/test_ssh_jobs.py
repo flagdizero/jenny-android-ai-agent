@@ -382,6 +382,12 @@ def test_a_corrupt_registry_starts_empty_instead_of_blocking_new_jobs(tmp_path):
     assert SshJobStore(path=path).jobs() == []
 
 
+def test_a_registry_that_is_not_utf8_starts_empty_too(tmp_path):
+    path = tmp_path / "registry.json"
+    path.write_bytes(b'[{"id": "caf\xe9"}]')
+    assert SshJobStore(path=path).jobs() == []
+
+
 def test_the_registry_is_written_as_a_list_of_objects(tmp_path):
     store = SshJobStore(path=tmp_path / "registry.json")
     store._load()["a-1"] = SshJob(

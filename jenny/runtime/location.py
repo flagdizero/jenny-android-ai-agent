@@ -32,6 +32,7 @@ from loguru import logger
 
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
+from jenny.utils.clock import now_ms as _now_ms
 
 _BRIDGE = BridgeCache("com.flagdizero.jenny.LocationBridge")
 
@@ -251,7 +252,7 @@ def record_telegram_location(chat_id: str, fix: LocationFix) -> None:
 async def build_telegram_fix(cfg: Any, lat: float, lng: float) -> LocationFix:
     """Costruisce un ``LocationFix`` da coordinate Telegram, reverse-geocodando
     se possibile. Timestamp = adesso (l'utente l'ha appena condivisa)."""
-    now_ms = int(time.time() * 1000)
+    now_ms = _now_ms()
     place: str | None = None
     context = get_android_context()
     if context is not None and cfg is not None and getattr(cfg, "enable", True):

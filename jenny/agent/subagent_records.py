@@ -46,7 +46,7 @@ from jenny.security.workspace_access import (
     workspace_sandbox_status,
 )
 from jenny.utils.helpers import safe_filename, truncate_text
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, iter_jsonl
 
 # Stati coarse-grained del ciclo di vita di un subagent. Restano distinti da
 # ``SubagentStatus.phase`` (fine-grained, già consumato altrove): il phase dice
@@ -673,26 +673,23 @@ class SubagentRecordStore:
             if path.stat().st_size > _MAX_RECORD_FILE_BYTES:
                 logger.warning("Subagent record file too large, ignoring: {}", path)
                 return []
-            raw = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
+            raw = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
             logger.warning("Subagent record file unreadable {}: {}", path, e)
             return []
 
+        # Riga troncata da un kill a meta scrittura o record di una versione
+        # incompatibile: la si salta, il resto dello storico resta valido e il
+        # gateway boota comunque.
         records: list[SubagentRecord] = []
-        skipped = 0
-        for line in raw.splitlines():
-            line = line.strip()
-            if not line:
-                continue
+        bad: list[str] = []
+        for data in iter_jsonl(raw.splitlines(), on_bad=bad.append):
             try:
-                records.append(SubagentRecord.from_dict(json.loads(line)))
-            except (json.JSONDecodeError, ValueError, TypeError):
-                # Riga troncata da un kill a meta scrittura o record di una
-                # versione incompatibile: la si salta, il resto dello storico
-                # resta valido e il gateway boota comunque.
-                skipped += 1
-        if skipped:
-            logger.warning("Skipped {} corrupt subagent record(s) in {}", skipped, path)
+                records.append(SubagentRecord.from_dict(data))
+            except (ValueError, TypeError):
+                bad.append("")
+        if bad:
+            logger.warning("Skipped {} corrupt subagent record(s) in {}", len(bad), path)
         return records
 
     # -- write ---------------------------------------------------------------

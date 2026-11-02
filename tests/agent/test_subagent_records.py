@@ -196,6 +196,14 @@ class TestRecordStoreCorruption:
         loaded = store.load("s1")
         assert [r.task_id for r in loaded] == ["good"]
 
+    def test_a_bad_byte_costs_only_its_line(self, tmp_path: Path):
+        """Prima la decodifica del file intero falliva, e lo storico era vuoto."""
+        store = SubagentRecordStore(tmp_path)
+        good = json.dumps(_record("good").to_dict(), ensure_ascii=False)
+        path = self._path(store)
+        path.write_bytes(b'{"task_id": "caf\xe9"}\n' + good.encode() + b"\n")
+        assert [r.task_id for r in store.load("s1")] == ["good"]
+
     def test_garbage_and_wrong_shape_lines_are_skipped(self, tmp_path: Path):
         store = SubagentRecordStore(tmp_path)
         good = json.dumps(_record("good").to_dict(), ensure_ascii=False)

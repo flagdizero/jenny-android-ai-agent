@@ -52,7 +52,7 @@ from jenny.board.model import (
     ownership_violations,
 )
 from jenny.security.subagent_policy import journal_touch
-from jenny.utils.path import atomic_write, path_lock, quarantine, rotate_valid_json_backup
+from jenny.utils.path import atomic_write, load_with_recovery, path_lock, rotate_valid_json_backup
 
 
 class BoardOwnershipError(Exception):
@@ -77,10 +77,6 @@ def card_summary_path(project_root: Path, card_id: str) -> Path:
     return board_dir(project_root) / CARDS_DIR / f"{card_id}.json"
 
 
-def _backup(path: Path) -> Path:
-    return path.with_name(path.name + ".bak")
-
-
 def _read_json(path: Path) -> Any:
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
@@ -89,21 +85,17 @@ def _read_json(path: Path) -> Any:
 def _read_with_recovery(path: Path) -> Any | None:
     """Il JSON di *path*; se è rotto, quello del ``.bak``; se manca, ``None``.
 
-    Un file rotto non si cancella: si mette da parte con un nome che dice quando
-    (``board.corrupt-<istante>.json``), come fa la config — serve a capire cosa
-    è successo, e la prossima scrittura ripartirà dal ``.bak``.
+    La rete di config e cron (``utils.path.load_with_recovery``): il file rotto
+    si mette da parte con un nome che dice quando (``board.corrupt-<istante>.json``)
+    e il ``.bak`` torna al suo posto. Prima non tornava, e dalla seconda lettura
+    il quaderno risultava senza bacheca. Se il file rotto non si sposta, niente
+    lo deve sovrascrivere: si rifiuta con un ``OSError``, lettura compresa,
+    perché la lettura qui è il primo passo di ogni scrittura.
     """
-    if not path.exists():
-        return None
-    try:
-        return _read_json(path)
-    except (OSError, ValueError) as exc:
-        logger.error("board: {} is unreadable ({}); falling back to the backup", path, exc)
-        quarantine(path)
-    try:
-        return _read_json(_backup(path))
-    except (OSError, ValueError):
-        return None
+    got = load_with_recovery(path, _read_json)
+    if got.stuck:
+        raise OSError(f"board: {path} is unreadable and could not be set aside")
+    return got.value
 
 
 def _write(path: Path, data: Any) -> None:

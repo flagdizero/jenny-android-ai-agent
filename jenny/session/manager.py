@@ -26,7 +26,7 @@ from jenny.utils.helpers import (
     recent_message_start_index,
     safe_filename,
 )
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, iter_jsonl, quarantine
 
 FILE_MAX_MESSAGES = 2000
 
@@ -420,19 +420,21 @@ def _parse_session_file(
     """
     result = _ParsedSessionFile()
     seen_record = False
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            if tolerant:
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    result.skipped += 1
-                    continue
-            else:
-                data = json.loads(line)
+
+    def _skip(_line: str) -> None:
+        result.skipped += 1
+
+    # In riparazione un byte non UTF-8 diventa U+FFFD invece di far fallire
+    # tutta la lettura, e ``iter_jsonl`` salta anche le righe che sono JSON ma
+    # non un oggetto: prima l'una e l'altra facevano fallire la riparazione, e
+    # ``get_or_create`` ripartiva da una sessione vuota sopra la storia.
+    with open(path, encoding="utf-8", errors="replace" if tolerant else "strict") as f:
+        records = (
+            iter_jsonl(f, on_bad=_skip)
+            if tolerant
+            else (json.loads(line) for line in f if line.strip())
+        )
+        for data in records:
             is_metadata = data.get("_type") == "metadata"
             if not seen_record:
                 seen_record = True
@@ -491,10 +493,28 @@ class SessionManager:
 
         session = self._load(key)
         if session is None:
+            self._set_aside_unreadable(key)
             session = Session(key=key)
 
         self._cache[key] = session
         return session
+
+    def _set_aside_unreadable(self, key: str) -> None:
+        """Sposta di lato il file di *key* se c'è ma non se n'è salvato niente.
+
+        ``_load`` torna ``None`` sia per un file che non esiste sia per uno che
+        nemmeno la riparazione legge: nel secondo caso la sessione vuota che
+        ``get_or_create`` inventa lo sovrascriverebbe al primo salvataggio, e
+        quel file era l'unica copia della storia.
+        """
+        path = self._get_session_path(key)
+        if not path.exists():
+            return
+        target = quarantine(path)
+        if target is None:
+            logger.error("Unreadable session {} could not be set aside: the next save overwrites it", key)
+        else:
+            logger.warning("Unreadable session {} set aside as {}", key, target.name)
 
     def _load(self, key: str) -> Session | None:
         """Load a session from disk."""

@@ -9,8 +9,6 @@ import hmac
 import mimetypes
 import os
 import re
-import shutil
-import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -33,6 +31,7 @@ from jenny.channels.http_utils import (
 from jenny.config.paths import get_media_dir
 from jenny.security.workspace_policy import is_path_within
 from jenny.utils.helpers import safe_filename
+from jenny.utils.path import atomic_copy
 
 MediaDirProvider = Callable[[str | None], Path]
 SignedMediaPath = Callable[[Path], dict[str, str] | None]
@@ -185,7 +184,6 @@ def sign_or_stage_media_path(
     signed = sign_media_path(path, secret=secret, media_dir=media_dir)
     if signed is not None:
         return {"url": signed, "name": path.name}
-    tmp: Path | None = None
     try:
         if not path.is_file():
             return None
@@ -198,20 +196,12 @@ def sign_or_stage_media_path(
             # Riusata: è «usata di recente» per il budget LRU.
             os.utime(staged)
         else:
-            # Copia su un temporaneo e rename: una copia a metà (disco pieno,
-            # processo ucciso) non deve mai sembrare quella buona.
-            tmp = target_dir / f".{uuid.uuid4().hex[:12]}.tmp"
-            shutil.copyfile(path, tmp)
-            os.replace(tmp, staged)
-            tmp = None
+            # Una copia a metà (disco pieno, processo ucciso) non deve mai
+            # sembrare quella buona; il temporaneo il budget lo salta.
+            atomic_copy(path, staged)
             _enforce_staged_budget(target_dir, keep=staged, logger=logger)
     except (OSError, RuntimeError) as exc:
         # ``RuntimeError``: un loop di symlink in ``resolve``, su Python 3.11.
-        if tmp is not None:
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
         if logger is not None:
             logger.warning("failed to stage outbound media {}: {}", path, exc)
         return None

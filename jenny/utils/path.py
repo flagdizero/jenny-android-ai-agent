@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import re
+import shutil
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Generic, TypeVar
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -150,6 +153,28 @@ def atomic_write(
         raise
 
 
+def atomic_copy(source: Path, dest: Path) -> None:
+    """Copia *source* in *dest* passando da un temporaneo accanto e da un rename.
+
+    Una copia a metà (disco pieno, processo ucciso) non prende mai il nome buono,
+    come con :func:`atomic_write`, ma a flusso: un archivio intero non passa in
+    memoria. Il temporaneo finisce in ``.tmp`` con un suffisso unico, così due
+    copie sulla stessa destinazione non si pestano e chi elenca la cartella lo
+    riconosce. ``copyfile``, non ``copy2``: sul telefono gli xattr SELinux fanno
+    fallire la copia dei metadati dopo che i byte sono già passati.
+    """
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{uuid.uuid4().hex[:12]}.tmp")
+    try:
+        shutil.copyfile(source, tmp)
+        os.replace(tmp, dest)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
+        raise
+
+
 def _fsync_dir(directory: Path) -> None:
     """Best-effort directory fsync (tolerates Android FUSE quirks)."""
     try:
@@ -214,16 +239,42 @@ def append_lines_durable(
     sono comunque nel file, solo non ancora garantite su disco): è la scelta del
     transcript, che non deve far fallire un turno per questo. Gli altri due no,
     perché il loro chiamante cancella qualcosa subito dopo.
+
+    Un append interrotto (processo ucciso) lascia l'ultima riga senza a capo, e
+    la prima riga nuova le si attaccava: la riga unita non si legge più, e
+    :func:`iter_jsonl` buttava via tutte e due. Qui la si chiude prima con un a
+    capo: resta rotta solo lei, che la lettura salta. Era la guardia di
+    ``apps/storage``, l'unico chiamante che l'aveva.
     """
-    with open(path, "a", encoding="utf-8") as f:
-        for line in lines:
-            f.write(line + "\n")
+    with open(path, "ab+") as f:
+        f.seek(0, os.SEEK_END)
+        torn = False
+        if f.tell() > 0:
+            f.seek(-1, os.SEEK_END)
+            torn = f.read(1) != b"\n"
+        payload = ("\n" if torn else "") + "".join(line + "\n" for line in lines)
+        f.write(payload.encode("utf-8"))
         f.flush()
         try:
             os.fsync(f.fileno())
         except OSError:
             if not tolerate_fsync_error:
                 raise
+
+
+def append_with_header(path: Path, text: str, *, header: str = "") -> bool:
+    """Accoda *text* a *path* in una scrittura sola; *header* solo se il file è vuoto.
+
+    Restituisce se il file era vuoto (cioè nasceva adesso). Il «vuoto» si chiede
+    al file aperto (``tell`` in append è la sua fine), non a ``exists()`` prima di
+    aprirlo: due scrittori che vedevano entrambi «non c'è» mettevano entrambi il
+    titolo, e un file creato vuoto da altri restava senza.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as fh:
+        created = fh.tell() == 0
+        fh.write((header if created else "") + text)
+    return created
 
 
 def iter_jsonl(
@@ -237,8 +288,6 @@ def iter_jsonl(
     scartate passano a *on_bad*, per chi le conta o le dice nel log. L'I/O resta
     a chi chiama (un file aperto, ``read_text().splitlines()``).
     """
-    import json
-
     for line in lines:
         line = line.strip()
         if not line:
@@ -253,6 +302,35 @@ def iter_jsonl(
             on_bad(line)
 
 
+def read_json(path: Path) -> Any:
+    """Il JSON di *path*; ``None`` se manca, non si legge o non è JSON.
+
+    Per i file di stato di cui un difetto vale «niente»: chi chiama controlla il
+    tipo. ``ValueError`` prende sia ``JSONDecodeError`` sia ``UnicodeDecodeError``:
+    i lettori scritti a mano che prendevano solo il primo cadevano su un byte non
+    UTF-8.
+    """
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def read_json_dict(path: Path) -> dict[str, Any]:
+    """Come :func:`read_json`, ma ``{}`` per tutto quel che non è un oggetto."""
+    data = read_json(path)
+    return data if isinstance(data, dict) else {}
+
+
+def write_json(path: Path, data: Any, *, indent: int | None = None, **kwargs: Any) -> None:
+    """Scrive *data* come JSON con :func:`atomic_write` (*kwargs* vanno a lei).
+
+    Con *indent* il file finisce con un a capo, come lo lascerebbe un editor.
+    """
+    text = json.dumps(data, ensure_ascii=False, indent=indent)
+    atomic_write(path, text + "\n" if indent is not None else text, **kwargs)
+
+
 def rotate_valid_json_backup(
     path: Path, write: Callable[[Path, str], None] | None = None
 ) -> None:
@@ -265,8 +343,6 @@ def rotate_valid_json_backup(
     senza fsync della cartella; la config la vuole in ``600``); un suo
     ``OSError`` si propaga, e chi chiama decide se il salvataggio vero procede.
     """
-    import json
-
     if not path.exists():
         return
     try:
@@ -274,11 +350,16 @@ def rotate_valid_json_backup(
         json.loads(content)
     except (OSError, ValueError):
         return
-    backup = path.with_name(path.name + ".bak")
+    backup = backup_path(path)
     if write is None:
         atomic_write(backup, content, fsync_dir=False)
     else:
         write(backup, content)
+
+
+def backup_path(path: Path) -> Path:
+    """``<nome>.bak``, la copia che :func:`rotate_valid_json_backup` tiene accanto."""
+    return path.with_name(path.name + ".bak")
 
 
 def quarantine(path: Path) -> Path | None:
@@ -307,6 +388,81 @@ def quarantine(path: Path) -> Path | None:
         logger.warning("could not set aside %s: %s", path, exc)
         return None
     return target
+
+
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class Recovered(Generic[_T]):
+    """Quel che :func:`load_with_recovery` ha letto, e da dove.
+
+    *recovered_from* è ``None`` per un file buono o assente (*value* ``None``),
+    ``"backup"`` quando *value* viene dal ``.bak``, ``"empty"`` quando non si è
+    letto niente. *quarantined* è dove è finito il file rotto. *stuck* vuol dire
+    che il file rotto **non** si è potuto spostare: è ancora al suo posto, ed è
+    l'unica copia di quel che c'era, quindi niente ci deve scrivere sopra.
+    """
+
+    value: _T | None = None
+    recovered_from: str | None = None
+    quarantined: Path | None = None
+    stuck: bool = False
+
+
+def load_with_recovery(
+    path: Path,
+    parse: Callable[[Path], _T],
+    *,
+    errors: tuple[type[BaseException], ...] = (OSError, ValueError),
+    write: Callable[[Path, str], None] | None = None,
+) -> Recovered[_T]:
+    """Legge un file di stato con la sua rete: il file, poi il ``.bak``, poi niente.
+
+    La stessa politica per config, cron e bacheca, che la scrivevano tre volte
+    (e divergevano proprio sul caso difficile). *parse* legge un percorso e
+    solleva uno di *errors* se non è usabile. Un file rotto non si cancella: va
+    di lato con :func:`quarantine`, e se il ``.bak`` si legge lo si rimette al
+    posto del vivo (con *write*, di serie ``atomic_write``), altrimenti ogni
+    lettura rifarebbe il recupero — e la bacheca, che non lo faceva, alla seconda
+    lettura trovava il quaderno vuoto.
+
+    Se lo spostamento fallisce, non si promuove niente e il risultato è
+    ``stuck``: il valore del ``.bak`` (se c'è) vale in memoria, ma chi chiama
+    deve rifiutare le scritture finché il file rotto è lì. Cosa vuol dire
+    rifiutare lo decide lui: il cron non parte, la config parte e non salva.
+    """
+    if not path.exists():
+        return Recovered()
+    try:
+        return Recovered(parse(path))
+    except errors as exc:
+        logger.error("%s is unusable: %s", path, exc)
+
+    backup = backup_path(path)
+    from_backup = False
+    value: _T | None = None
+    if backup.exists():
+        try:
+            value = parse(backup)
+            from_backup = True
+        except errors as exc:
+            logger.error("backup %s is unusable too: %s", backup, exc)
+    kind = "backup" if from_backup else "empty"
+
+    target = quarantine(path)
+    if target is None:
+        logger.error("could not set aside %s: it stays in place, and is not written over", path)
+        return Recovered(value, kind, None, stuck=True)
+    if from_backup:
+        try:
+            (write or atomic_write)(path, backup.read_text(encoding="utf-8"))
+        except OSError as exc:
+            logger.warning("could not put %s back in place of %s: %s", backup.name, path, exc)
+        logger.warning("%s recovered from %s; broken file kept as %s", path, backup.name, target)
+    else:
+        logger.warning("%s could not be recovered; starting empty. Broken file kept as %s", path, target)
+    return Recovered(value, kind, target)
 
 
 _PATH_LOCKS: dict[str, threading.Lock] = {}

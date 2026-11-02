@@ -23,7 +23,7 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import is_project_session_key
-from jenny.utils.path import atomic_write, iter_jsonl
+from jenny.utils.path import append_lines_durable, atomic_write, iter_jsonl
 from jenny.utils.wiki_paths import is_wiki_root
 
 DEFAULT_QUERY_LIMIT = 200
@@ -94,19 +94,6 @@ def _check_size(path: Path, max_bytes: int) -> None:
         raise StorageError(
             f"collection '{path.stem}' exceeds the {max_bytes} byte limit", status=413
         )
-
-
-def _ends_without_newline(path: Path) -> bool:
-    """Il file esiste, non e' vuoto e l'ultimo byte non e' un a capo."""
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, 2)
-            if f.tell() == 0:
-                return False
-            f.seek(-1, 2)
-            return f.read(1) != b"\n"
-    except FileNotFoundError:
-        return False
 
 
 def _new_record(params: dict) -> dict:
@@ -205,9 +192,9 @@ async def edit_collection(
         if not grown:
             _rewrite(path, after)
         elif len(after) > before:
-            lead = "\n" if _ends_without_newline(path) else ""
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(lead + "".join(_dump(r) + "\n" for r in after[before:]))
+            append_lines_durable(
+                path, [_dump(r) for r in after[before:]], tolerate_fsync_error=True
+            )
         return after
 
 
@@ -256,14 +243,9 @@ async def execute_storage_action(
             _check_size(path, max_bytes)
             record = _new_record(params)
             path.parent.mkdir(parents=True, exist_ok=True)
-            # Un append interrotto (processo ucciso) lascia l'ultima riga senza a
-            # capo, e il record nuovo le si attaccava: la riga unita non si legge
-            # piu', e spariva anche lui. L'a capo la chiude; resta una riga rotta
-            # che la lettura salta e segnala, come prima.
-            lead = "\n" if _ends_without_newline(path) else ""
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(lead + _dump(record) + "\n")
-                f.flush()
+            # La coda rotta di un append interrotto la chiude
+            # ``append_lines_durable``; un fsync fallito non fa fallire l'azione.
+            append_lines_durable(path, [_dump(record)], tolerate_fsync_error=True)
             return {"ok": True, "record": record}
 
         if action.op == "query":
