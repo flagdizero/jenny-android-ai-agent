@@ -62,6 +62,7 @@ def _harness() -> str:
     return f"""
 import assert from 'node:assert/strict';
 
+{(ASSETS / 'shared' / 'turns.js').read_text(encoding='utf-8').replace('export ', '')}
 const ChatController = {{ TURN_SCOPED_EVENTS: {_static_set(chat, "TURN_SCOPED_EVENTS")} }};
 ChatController.CHAT_SCOPED_EVENTS = {_static_set(chat, "CHAT_SCOPED_EVENTS")};
 

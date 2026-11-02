@@ -58,6 +58,7 @@ import {
 import { mediaKind, openMediaFile } from './shared/media.js';
 import { originBadgeHtml } from './shared/origin.js';
 import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 const TOOL_ICONS = {
   start: 'ti-loader-2',
@@ -918,81 +919,35 @@ export class ChatController {
     this.chatArea.querySelectorAll('.chat-history-error').forEach((el) => el.remove());
   }
 
-  // Ricostruisce l'array di turni normalizzati dai messaggi persistiti.
-  // Voce user: {user:true, text, origin}; turno assistant:
-  // {turnId, toolEvents, reasoning, content, fileEdits, media, latencyMs?}.
+  // Ricostruisce l'array di turni normalizzati dai messaggi persistiti, sulla
+  // spina dorsale comune con la casa (`shared/turns.js`: chi chiude un turno,
+  // e che senza id non si accorpa mai). Voce user: {user:true, text, origin};
+  // turno assistant: {turnId, toolEvents, reasoning, content, fileEdits,
+  // media, latencyMs}. L'officina tiene tutto: strumenti, pensieri, modifiche.
   _buildTurns(messages) {
-    const turns = [];
-    let currentTurn = null;
-    for (const msg of messages) {
-      if (msg.session_boundary) {
-        // Confine di contesto (/new): chiude il turno in corso e si rende da
-        // sé, senza diventare una bolla dell'assistente.
-        if (currentTurn) turns.push(currentTurn);
-        currentTurn = null;
-        turns.push({ boundary: true, text: msg.text || msg.content || '' });
-        continue;
-      }
-      const role = msg.role || (msg.kind === 'user' ? 'user' : 'assistant');
-      if (role === 'user') {
-        if (currentTurn) turns.push(currentTurn);
-        currentTurn = null;
-        turns.push({
-          user: true,
-          text: msg.text || msg.content || '',
-          origin: msg.origin,
-          media: Array.isArray(msg.media) ? msg.media : [],
-          at: msg.sentAt ?? null,
-        });
-        continue;
-      }
-      const turnId = msg.turnId || msg.turn_id;
-      // Un messaggio senza turno non entra MAI nel turno precedente. Prima la
-      // condizione era `currentTurn.turnId !== turnId`, e con due id assenti
-      // `undefined !== undefined` è falso: ogni messaggio assistant privo di id
-      // veniva concatenato al precedente in un'unica bolla. Misurato sul
-      // dispositivo il 2026-08-13: quattro avvisi heartbeat scritti fra 01:31 e
-      // 05:02 (righe 17720-17723 del transcript, tutte con `turn_id: None`)
-      // resi come una bolla sola da quattro paragrafi. La causa a monte è
-      // corretta nel deliverer, che ora conia un id per ogni consegna
-      // proattiva; questa guardia serve alla cronologia **già scritta**, che
-      // quell'id non l'avrà mai. Dentro un turno vero tutte le parti portano lo
-      // stesso id (ogni append al transcript passa una `phase` non nulla),
-      // quindi qui non si spezza niente che fosse legittimamente unito.
-      if (!currentTurn || !turnId || currentTurn.turnId !== turnId) {
-        if (currentTurn) turns.push(currentTurn);
-        currentTurn = { turnId, toolEvents: [], reasoning: '', content: '', fileEdits: [], media: [], at: null };
-      }
-      // L'ora del turno e' quella del suo ultimo pezzo: quando si e' chiuso.
-      if (msg.sentAt != null) currentTurn.at = msg.sentAt;
-      if (msg.toolEvents || msg.tool_events) {
-        currentTurn.toolEvents.push(...(msg.toolEvents || msg.tool_events));
-      }
-      if (msg.fileEdits || msg.file_edits) {
-        currentTurn.fileEdits.push(...(msg.fileEdits || msg.file_edits));
-      }
-      if (Array.isArray(msg.media) && msg.media.length) {
-        currentTurn.media.push(...msg.media);
-      }
-      const text = msg.text || msg.content || '';
-      if (text) {
-        if (msg.kind === 'trace' || msg.role === 'tool') {
-          if (!currentTurn.toolEvents.length) {
-            currentTurn.content += (currentTurn.content ? '\n\n' : '') + text;
-          }
-        } else {
-          currentTurn.content += (currentTurn.content ? '\n\n' : '') + text;
+    return groupTurns(messages, {
+      absorb: (turn, msg) => {
+        turn.toolEvents ??= [];
+        turn.reasoning ??= '';
+        turn.fileEdits ??= [];
+        if (msg.toolEvents || msg.tool_events) {
+          turn.toolEvents.push(...(msg.toolEvents || msg.tool_events));
         }
-      }
-      if (msg.reasoning) {
-        currentTurn.reasoning += (currentTurn.reasoning ? '\n\n' : '') + msg.reasoning;
-      }
-      if (msg.latencyMs != null) {
-        currentTurn.latencyMs = msg.latencyMs;
-      }
-    }
-    if (currentTurn) turns.push(currentTurn);
-    return turns;
+        if (msg.fileEdits || msg.file_edits) {
+          turn.fileEdits.push(...(msg.fileEdits || msg.file_edits));
+        }
+        const text = msg.text || msg.content || '';
+        /* Il resoconto di uno strumento (`kind: 'trace'`) e' il testo del
+           turno solo se il turno non ha i suoi tool event strutturati. */
+        const trace = msg.kind === 'trace' || msg.role === 'tool';
+        if (text && (!trace || !turn.toolEvents.length)) {
+          turn.content += (turn.content ? '\n\n' : '') + text;
+        }
+        if (msg.reasoning) {
+          turn.reasoning += (turn.reasoning ? '\n\n' : '') + msg.reasoning;
+        }
+      },
+    });
   }
 
   _renderThreadMessages(messages) {
@@ -1488,16 +1443,10 @@ export class ChatController {
        interrotta a metà riprende nella propria: due bolle separate dall'avviso
        sono l'ordine in cui le cose sono davvero successe. */
   _applyTurnBoundary(msg) {
-    if (!ChatController.TURN_SCOPED_EVENTS.has(msg.event)) return true;
-    const turnId = msg.turn_id || msg.turnId || null;
-    if (!turnId || turnId === this._currentTurnId) return true;
-    if (this._currentTurnId === null) {
-      this._currentTurnId = turnId;
-      return true;
-    }
-    if (msg.event === 'turn_end') return false;
-    this._resetStreamState();
-    this._currentTurnId = turnId;
+    const step = turnBoundary(this._currentTurnId, msg, ChatController.TURN_SCOPED_EVENTS);
+    if (step === 'ignore') return false;
+    if (step === 'new') this._resetStreamState();
+    if (step !== 'same') this._currentTurnId = turnIdOf(msg);
     return true;
   }
 

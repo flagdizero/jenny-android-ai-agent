@@ -55,11 +55,17 @@ import { chatTime, chatTimeIso } from './shared/chat-time.js';
 import { mediaKind, openMediaFile } from './shared/media.js';
 import { originBadgeHtml } from './shared/origin.js';
 import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
    Sotto questa soglia il filo insegue i messaggi nuovi; sopra, no — chi sta
    rileggendo qualcosa piu' su non va strappato via da una risposta che arriva. */
 const STICK_PX = 24;
+
+/* Gli eventi che appartengono a un turno, per il suo confine dal vivo: quelli
+   che la casa disegna. L'officina ne ha di piu' (i pensieri, le modifiche ai
+   file), che qui non arrivano a schermo. */
+const HOME_TURN_SCOPED = new Set(['delta', 'stream_end', 'message', 'turn_end']);
 
 /* Quante ancore chiedere per pagina. L'officina ne chiede 160 all'apertura; la
    casa molte meno, e la ragione e' il costo, non il contenuto: il budget conta
@@ -484,78 +490,41 @@ export class HomeChat {
     }
   }
 
-  /* I messaggi persistiti diventano turni. E' la versione di casa di
-     `_buildTurns`: stessa spina dorsale, ma di un turno dell'assistente
-     sopravvivono solo il testo e gli allegati. Pensieri, strumenti e modifiche
-     ai file vengono letti e buttati qui, una volta sola, invece di essere
-     filtrati in dieci posti piu' in la'. */
+  /* I messaggi persistiti diventano turni (`shared/turns.js`, la spina dorsale
+     comune con l'officina). Di un turno dell'assistente la casa tiene solo il
+     testo e gli allegati — i secondi, l'ora e l'errore li tiene la spina.
+     Pensieri, strumenti e modifiche ai file vengono letti e buttati qui, una
+     volta sola, invece di essere filtrati in dieci posti piu' in la'. */
   _buildTurns(messages) {
-    const turns = [];
-    let current = null;
-    const flush = () => { if (current) turns.push(current); current = null; };
-    for (const msg of messages) {
+    const turns = groupTurns(messages, {
       /* Di un lavoro lungo (`/gardener`, `/dream`) la storia tiene due testi:
          l'annuncio («Gardening…») e il resoconto. L'annuncio non si mostra mai:
          o il lavoro e' ancora in corso, e allora e' la bolla a dirlo, o e'
          finito, e allora c'e' il resoconto. */
-      if (msg.workStart) continue;
-      if (msg.session_boundary) {
-        flush();
-        turns.push({ boundary: true });
-        continue;
-      }
-      const role = msg.role || (msg.kind === 'user' ? 'user' : 'assistant');
-      if (role === 'user') {
-        flush();
-        turns.push({
-          user: true,
-          text: msg.text || msg.content || '',
-          origin: msg.origin,
-          device: msg.device || null,
-          media: Array.isArray(msg.media) ? msg.media : [],
-          at: msg.sentAt ?? null,
-        });
-        continue;
-      }
-      const turnId = msg.turnId || msg.turn_id;
-      // Regola 4: senza id non si accorpa. Mai.
-      if (!current || !turnId || current.turnId !== turnId) {
-        flush();
-        current = { turnId, content: '', media: [], latencyMs: null, at: null };
-      }
-      /* L'ora di una risposta e' quella del suo ultimo pezzo: quando il turno
-         si e' chiuso, come dal vivo (v. `_resetTurn`). */
-      if (msg.sentAt != null) current.at = msg.sentAt;
-      if (Array.isArray(msg.media) && msg.media.length) current.media.push(...msg.media);
-      /* I secondi sono l'unica cosa che l'officina teneva e la casa buttava e
-         che adesso serve anche qui: sono meta' della riga che separa una
-         risposta dalla successiva. */
-      if (msg.latencyMs != null) current.latencyMs = msg.latencyMs;
-      /* Il turno e' finito in un errore del modello (`error: {kind}`, dal
-         gateway): la bolla avra' il suo «Riprova» anche dopo una ricarica. */
-      if (msg.error) current.error = msg.error;
-      /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto di
-         uno strumento, e in casa non e' niente: si butta, punto. L'officina la
-         tiene come ripiego quando il turno non ha altro testo, ma quel ripiego
-         qui sarebbe il difetto — un turno in cui Jenny ha solo lavorato senza
-         dire niente deve restare muto, non mostrare `read_file: sensori.json`.
-         E la condizione "solo se non c'e' altro testo" non si puo' nemmeno
-         valutare qui: il testo vero arriva *dopo*, in un frame successivo dello
-         stesso turno. */
-      if (msg.kind === 'trace' || msg.role === 'tool') {
-        /* Tranne una cosa: quel che il turno ha messo in un cassetto, che diventa
-           il segno sotto la risposta (v. `_journalMarkOf`). */
-        const events = msg.toolEvents || msg.tool_events;
-        const notes = journalNotes(events);
-        if (notes.length) (current.journal ||= []).push(...notes);
-        const moves = moveOffers(events);
-        if (moves.length) (current.moves ||= []).push(...moves);
-        continue;
-      }
-      const text = msg.text || msg.content || '';
-      if (text) current.content += (current.content ? '\n\n' : '') + text;
-    }
-    flush();
+      skip: (msg) => Boolean(msg.workStart),
+      absorb: (current, msg) => {
+        /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto
+           di uno strumento, e in casa non e' niente: si butta, punto. L'officina
+           la tiene come ripiego quando il turno non ha altro testo, ma quel
+           ripiego qui sarebbe il difetto — un turno in cui Jenny ha solo
+           lavorato senza dire niente deve restare muto, non mostrare
+           `read_file: sensori.json`. E la condizione "solo se non c'e' altro
+           testo" non si puo' nemmeno valutare qui: il testo vero arriva
+           *dopo*, in un frame successivo dello stesso turno. */
+        if (msg.kind === 'trace' || msg.role === 'tool') {
+          /* Tranne una cosa: quel che il turno ha messo in un cassetto, che
+             diventa il segno sotto la risposta (v. `_journalMarkOf`). */
+          const events = msg.toolEvents || msg.tool_events;
+          const notes = journalNotes(events);
+          if (notes.length) (current.journal ||= []).push(...notes);
+          const moves = moveOffers(events);
+          if (moves.length) (current.moves ||= []).push(...moves);
+          return;
+        }
+        const text = msg.text || msg.content || '';
+        if (text) current.content += (current.content ? '\n\n' : '') + text;
+      },
+    });
     // Un turno senza niente da mostrare non e' una bolla vuota: non e' niente.
     return turns.filter((t) => t.boundary || t.user || t.content || t.media.length);
   }
@@ -590,18 +559,14 @@ export class HomeChat {
     return !chatId || chatId === sessionManager.currentChatId;
   }
 
-  /* Regola 3 e 4: il confine di turno. Un `turn_end` di un altro turno non
-     riguarda quello aperto e va ignorato; qualunque altro frame di un turno
-     nuovo chiude quello in corso. */
+  /* Regola 3 e 4: il confine di turno (`shared/turns.js::turnBoundary`). Un
+     `turn_end` di un altro turno non riguarda quello aperto e va ignorato;
+     qualunque altro frame di un turno nuovo chiude quello in corso. */
   _crossesTurn(msg) {
-    const TURN_SCOPED = ['delta', 'stream_end', 'message', 'turn_end'];
-    if (!TURN_SCOPED.includes(msg.event)) return true;
-    const turnId = msg.turn_id || msg.turnId || null;
-    if (!turnId || turnId === this.turnId) return true;
-    if (this.turnId === null) { this.turnId = turnId; return true; }
-    if (msg.event === 'turn_end') return false;
-    this._resetTurn();
-    this.turnId = turnId;
+    const step = turnBoundary(this.turnId, msg, HOME_TURN_SCOPED);
+    if (step === 'ignore') return false;
+    if (step === 'new') this._resetTurn();
+    if (step !== 'same') this.turnId = turnIdOf(msg);
     return true;
   }
 

@@ -54,6 +54,7 @@ def _harness() -> str:
     return f"""
 import assert from 'node:assert/strict';
 
+{(ASSETS / 'shared' / 'turns.js').read_text(encoding='utf-8').replace('export ', '')}
 const ChatController = {{ TURN_SCOPED_EVENTS: {_turn_scoped_events(chat)} }};
 
 function makeChat() {{

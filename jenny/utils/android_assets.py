@@ -347,6 +347,7 @@ _UI_MANIFEST = [
     "assets/shared/subagent-policy.js",
     "assets/shared/telegram-pairing.js",
     "assets/shared/theme.js",
+    "assets/shared/turns.js",
     "assets/shared/update-flow.js",
     "assets/shared/update-watch.js",
     "assets/shared/when.js",

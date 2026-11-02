@@ -127,7 +127,7 @@ def _harness_src() -> str:
         .replace("__BELONGS__", member(src, "_belongsHere"))
         .replace("__CROSSES__", member(src, "_crossesTurn"))
         .replace("__HANDLE_FRAME__", member(src, "handleFrame"))
-    )
+    ) + "\n" + (ASSETS / "shared" / "turns.js").read_text(encoding="utf-8").replace("export ", "") + "\n" + re.search(r"(?m)^const HOME_TURN_SCOPED = .*;$", HOME_CHAT_JS.read_text(encoding="utf-8")).group(0)
 
 
 def _run_js(script: str) -> None:

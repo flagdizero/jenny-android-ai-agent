@@ -130,7 +130,8 @@ def _run(script: str) -> None:
     nodes = re.search(r"(?m)^const THREAD_NODES = .*;$", src)
     assert nodes, "const THREAD_NODES non trovata"
     harness = _HARNESS.replace("__METHODS__", methods).replace("__THREAD_NODES__", nodes.group(0))
-    run_js(harness + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers") + "\n" + script)
+    run_js(harness + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
+           + "\n" + (ASSETS / "shared" / "turns.js").read_text(encoding="utf-8").replace("export ", "") + "\n" + script)
 
 
 def test_a_history_page_measures_the_shape_once() -> None:

@@ -150,7 +150,7 @@ def _harness() -> str:
         .replace("__TEXT__", member(src, "_textOf"))
         .replace("__JOURNAL_MARK__", member(src, "_journalMarkOf"))
         .replace("__MOVE_OFFER__", member(src, "_moveOfferOf"))
-    ) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
+    ) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers") + "\n" + (ASSETS / "shared" / "turns.js").read_text(encoding="utf-8").replace("export ", "")
 
 
 def _run_js(script: str) -> None:

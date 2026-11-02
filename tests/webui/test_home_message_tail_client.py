@@ -398,6 +398,9 @@ def test_history_keeps_the_seconds() -> None:
     """La cronologia li ha: se `_buildTurns` li butta, riaprire l'app toglie il
     tempo a tutto quello che è già stato detto."""
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
-    assert "msg.latencyMs" in member(src, "_buildTurns"), (
+    # La spina dorsale dei turni e' comune con l'officina (`shared/turns.js`).
+    assert "groupTurns(messages" in member(src, "_buildTurns")
+    turns = (HOME_CHAT_JS.parent / "shared" / "turns.js").read_text(encoding="utf-8")
+    assert "current.latencyMs = msg.latencyMs" in turns, (
         "_buildTurns scarta i secondi: dopo una ricarica la coda resta muta"
     )
