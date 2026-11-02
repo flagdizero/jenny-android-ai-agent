@@ -33,12 +33,17 @@ from jenny.board.cron_link import (
     user_timezone,
 )
 from jenny.board.store import read_board, read_card_summary
-from jenny.utils.wiki_paths import is_research_wiki, iter_wiki_pages
+from jenny.utils.helpers import clip
+from jenny.utils.wiki_paths import (
+    WIKI_MAP_MAX_CHARS,
+    is_research_wiki,
+    iter_wiki_pages,
+    read_wiki_map,
+)
 
-# Il tetto del blocco. È lo stesso numero della mappa che sostituisce
-# (``_PROJECT_MAP_MAX_CHARS`` in ``jenny/agent/context.py``): il blocco si paga a
+# Il tetto del blocco: quello della mappa che sostituisce. Il blocco si paga a
 # ogni turno, e la bacheca non deve costare più di quel che costava la mappa.
-BOARD_BLOCK_MAX_CHARS = 2000
+BOARD_BLOCK_MAX_CHARS = WIKI_MAP_MAX_CHARS
 
 # Il tetto di un cassetto nel contesto del turno.
 DRAWER_MAX_CHARS = 2500
@@ -105,10 +110,7 @@ OPEN_MAX_CHARS = 400
 
 def open_questions(root: Path) -> str:
     """La sezione «Open» di ``wiki/index.md``, corta, o ``""``."""
-    try:
-        text = (root / "wiki" / "index.md").read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return ""
+    text = read_wiki_map(root)
     out: list[str] = []
     inside = False
     for line in text.splitlines():
@@ -120,7 +122,7 @@ def open_questions(root: Path) -> str:
         if inside and line.strip():
             out.append(line.strip())
     joined = " ".join(out)
-    return joined if len(joined) <= OPEN_MAX_CHARS else joined[: OPEN_MAX_CHARS - 1] + "…"
+    return clip(joined, OPEN_MAX_CHARS)
 
 
 def board_absence(root: Path) -> str:
@@ -230,7 +232,7 @@ def board_block(
     share = room // max(1, shown)
     rows = []
     for title, brief, tag in lines[:shown]:
-        cut = brief if len(brief) <= share else brief[: max(0, share - 1)].rstrip() + "…"
+        cut = clip(brief, share)
         if share < 8:
             cut = ""
         text = f"- **{title}**" + (f" — {cut}" if cut else "") + (f" {tag}" if tag else "")
@@ -420,7 +422,7 @@ def _photos_line(root: Path, card: Mapping[str, Any]) -> str:
     more = f"; +{len(photos) - DRAWER_PHOTOS} more" if len(photos) > DRAWER_PHOTOS else ""
     line = (f"- Photos the user pinned ({len(photos)}, newest first): {shown}{more}"
             f" — read_file a path to look at it.")
-    return line if len(line) <= PHOTOS_LINE_MAX_CHARS else line[:PHOTOS_LINE_MAX_CHARS - 1] + "…"
+    return clip(line, PHOTOS_LINE_MAX_CHARS)
 
 
 def recent_line(root: Path, since: Any) -> str:

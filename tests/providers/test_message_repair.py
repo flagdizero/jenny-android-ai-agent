@@ -129,8 +129,8 @@ def test_enforce_role_alternation_empty_list_is_noop() -> None:
 
 
 def test_enforce_role_alternation_importable_directly_from_module() -> None:
-    """La funzione è chiamabile direttamente dal modulo (non solo via il
-    wrapper ``LLMProvider._enforce_role_alternation`` già testato altrove)."""
+    """La funzione è chiamabile direttamente dal modulo: è l'unico ingresso,
+    il wrapper ``LLMProvider._enforce_role_alternation`` non c'è più."""
     msgs = [{"role": "user", "content": "ciao"}]
     result = enforce_role_alternation(msgs)
     assert result == msgs

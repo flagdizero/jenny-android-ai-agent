@@ -53,8 +53,7 @@ object AlarmClockFallback {
      *  9000, così una `cancel_wake` da Python non può smontare la rete. */
     const val REQUEST_CODE = 9003
 
-    /** Stesso file di preferenze di `Watchdog` e `MainActivity`: una sola
-     *  `SharedPreferences` per app, chiavi nuove e basta. */
+    /** Nel file di preferenze dell'app ([JennyPrefs]). */
     private const val KEY_ENABLED = "alarmClockFallbackEnabled"
 
     /** 8 ore ≈ 3 risvegli al giorno. Vedi il KDoc della classe per il perché

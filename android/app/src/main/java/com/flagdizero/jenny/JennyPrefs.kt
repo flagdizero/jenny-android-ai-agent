@@ -6,7 +6,9 @@ import android.content.SharedPreferences
 /**
  * Il file di preferenze dell'app: uno solo per tutti (attività, watchdog,
  * sveglie, rete d'emergenza), chiavi nuove e basta. Due file separati sarebbero
- * due lock e due punti da ricordare al momento di un wipe.
+ * due lock e due punti da ricordare al momento di un wipe. L'eccezione è la
+ * mascotte flottante (`FloatingOverlayController`, `jenny_floating`): solo la
+ * sua posizione, che nessun altro legge.
  *
  * Il nome lo legge anche Python, che vi trova la fotografia del battito
  * (`jenny/runtime/gap_history.py::PREFS_NAME`): prima stava scritto in quattro

@@ -37,11 +37,13 @@ from typing import Any
 from jenny.security.subagent_policy import SubagentSecretError
 from jenny.security.subagent_policy import check_read as check_subagent_read
 from jenny.security.workspace_policy import is_path_within
+from jenny.utils.helpers import clip
 from jenny.utils.wiki_paths import (
     WIKI_INDEX_FILENAME,
     is_research_layout,
     iter_wiki_pages,
     page_chars,
+    read_wiki_map,
 )
 
 # ── Le regole condivise con ``lint_wiki.py`` (copie: v. la docstring) ────────
@@ -383,10 +385,7 @@ def check_notebook(root: Path, *, expect: Mapping[str, Any] | None = None,
 
     index = wiki_dir / WIKI_INDEX_FILENAME
     if index.is_file():
-        try:
-            size = len(index.read_text(encoding="utf-8").strip())
-        except (OSError, UnicodeDecodeError):
-            size = 0
+        size = len(read_wiki_map(root))
         if size > MAP_TARGET_CHARS:
             found.append(Defect("map_over", _rel(root, index), 0,
                                 f"the map is {size} characters, over {MAP_TARGET_CHARS}: "
@@ -788,7 +787,7 @@ def _extract(text: str, mode: str, lines: int) -> tuple[str, int | None]:
 
 def _short(raw: str, limit: int = 80) -> str:
     """Un percorso ripetuto nella risposta, accorciato: è testo del modello, non del file."""
-    return raw if len(raw) <= limit else raw[: limit - 1] + "…"
+    return clip(raw, limit)
 
 
 def _read_capped(path: Path, max_bytes: int) -> tuple[str, bool]:

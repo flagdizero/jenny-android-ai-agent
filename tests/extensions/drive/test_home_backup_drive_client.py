@@ -40,7 +40,7 @@ def _harness() -> str:
     blocking = re.search(r"export const CLOUD_BLOCKING = (\[[^\]]+\]);", CLOUD_JS).group(1)
     pure = "\n".join(
         function(CLOUD_JS, name)
-        for name in ("_startOfDay", "calendarDays", "reasonKey", "cloudView", "nightStrip",
+        for name in ("_startOfDay", "reasonKey", "cloudView", "nightStrip",
                      "dayText", "sizeText", "progressSizes")
     )
     drive_value = function(DRIVE_JS, "backupValue").replace(
@@ -54,7 +54,6 @@ const i18n = { locale: 'it', translations: { it: __IT__ }, __T__ };
 __WHEN__
 const CLOUD_LATE_MS = __LATE__;
 const CLOUD_BLOCKING = __BLOCKING__;
-const DAY_MS = 86400000;
 __PURE__
 
 function makeEl(tag) {

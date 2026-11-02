@@ -83,7 +83,9 @@ def _read_transcript_file(path: Path) -> list[dict[str, Any]]:
     try:
         with open(path, encoding="utf-8") as f:
             lines_out = list(iter_jsonl(
-                f, on_bad=lambda line: logger.warning("bad jsonl at {}: {!r}", path, line[:80])))
+                # La lunghezza e non il testo: la riga è conversazione dell'utente.
+                f, on_bad=lambda line: logger.warning(
+                    "bad jsonl line at {} ({} chars)", path, len(line))))
     except OSError as e:
         logger.warning("read transcript failed {}: {}", path, e)
         return []

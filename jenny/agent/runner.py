@@ -1676,8 +1676,6 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
 
     # --- Context length error recovery helpers ---
 
-    # Pattern to extract the model's actual context limit from OpenAI-style error messages.
-    # e.g. "This model's maximum context length is 8192 tokens."
     def _snip_history(
         self,
         spec: AgentRunSpec,

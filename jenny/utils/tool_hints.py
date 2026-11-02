@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from jenny.utils.helpers import clip
 from jenny.utils.path import abbreviate_path
 
 # Registry: tool_name -> (key_args, template, is_path, is_command)
@@ -111,7 +112,7 @@ def _abbreviate_command(cmd: str, max_len: int = 40) -> str:
     abbreviated = _PATH_IN_CMD_RE.sub(_replace_path, cmd)
     if len(abbreviated) <= max_len:
         return abbreviated
-    return abbreviated[:max_len - 1] + "\u2026"
+    return clip(abbreviated, max_len)
 
 
 def _fmt_mcp(tc, max_length: int = 40) -> str:

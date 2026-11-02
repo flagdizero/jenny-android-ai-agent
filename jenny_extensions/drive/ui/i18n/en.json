@@ -45,8 +45,6 @@
       "aria": "Last 7 nights: {copies} with a copy, {missed} without."
     },
     "when": {
-      "today": "today at {time}",
-      "yesterday": "yesterday at {time}",
       "weekday": "{day} at {time}"
     },
     "safe": {

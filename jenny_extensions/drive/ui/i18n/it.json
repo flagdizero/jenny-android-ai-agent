@@ -45,8 +45,6 @@
       "aria": "Ultime 7 notti: {copies} con la copia, {missed} senza."
     },
     "when": {
-      "today": "oggi alle {time}",
-      "yesterday": "ieri alle {time}",
       "weekday": "{day} alle {time}"
     },
     "safe": {

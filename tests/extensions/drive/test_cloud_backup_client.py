@@ -34,7 +34,6 @@ const i18n = { locale: 'it', translations: { it: __IT__ }, __T__ };
 __WHEN__
 const CLOUD_LATE_MS = __LATE__;
 const CLOUD_BLOCKING = __BLOCKING__;
-const DAY_MS = 86400000;
 __PURE__
 
 /* Il gateway e il nativo, finti e scriptabili. */
@@ -81,7 +80,7 @@ __CHOOSE__
         .replace("__ERROR_TEXT__", function(CLOUD_JS, "cloudErrorText"))
         .replace("__BLOCKING__", re.search(r"export const CLOUD_BLOCKING = (\[[^\]]+\]);", CLOUD_JS).group(1))
         .replace("__PURE__", "\n".join(function(CLOUD_JS, n) for n in (
-            "_startOfDay", "calendarDays", "reasonKey", "cloudView", "nightStrip", "dayText",
+            "_startOfDay", "reasonKey", "cloudView", "nightStrip", "dayText",
             "sizeText", "progressSizes")))
         .replace("__RETRY__", re.search(r"export const PASSWORD_RETRY = (\[[^\]]+\]);", CLOUD_JS).group(1))
         .replace("__LIST__", function(CLOUD_JS, "_listWithPassword"))
@@ -240,7 +239,7 @@ def test_dates_like_a_person_says_them() -> None:
       assert.deepEqual(progressSizes(0, 20_000_000, 'it'), { done: '0 MB', total: '20 MB' });
       assert.deepEqual(progressSizes(5_100_000, 8_400_000, 'it'), { done: '5,1 MB', total: '8,4 MB' });
       assert.deepEqual(progressSizes(30, 20, 'it'), { done: '0 kB', total: '0 kB' });
-      assert.equal(calendarDays(Date.parse('2026-10-11T03:12:00'), now), 4);
+      assert.equal(dayOffset(Date.parse('2026-10-11T03:12:00'), now), 4);
     """)
 
 

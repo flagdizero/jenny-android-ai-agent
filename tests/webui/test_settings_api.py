@@ -559,7 +559,7 @@ def test_settings_payload_reports_a_recovered_cron_store(tmp_path) -> None:
     ctx = get_runtime_context()
     assert settings_payload()["cron_recovery"] is None
 
-    broken = tmp_path / "jobs.json.corrupt-123"
+    broken = tmp_path / "jobs.corrupt-20261102T101500Z.json"
     ctx.cron_recovered_from = "empty"
     ctx.cron_quarantine_path = broken
     try:

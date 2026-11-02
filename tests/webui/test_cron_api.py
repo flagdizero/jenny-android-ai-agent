@@ -317,7 +317,7 @@ def test_the_panel_says_the_list_was_rebuilt_at_startup(cron, tmp_path, monkeypa
     ricostruito.
     """
     ctx = SimpleNamespace(
-        cron_recovered_from="empty", cron_quarantine_path=tmp_path / "jobs.json.corrupt-1"
+        cron_recovered_from="empty", cron_quarantine_path=tmp_path / "jobs.corrupt-20261102T101500Z.json"
     )
     import jenny.runtime.context as context_mod
 
@@ -326,7 +326,7 @@ def test_the_panel_says_the_list_was_rebuilt_at_startup(cron, tmp_path, monkeypa
     payload = webui_cron_payload(cron, config=_config(tmp_path))
 
     assert payload["recovery"]["restored_from"] == "empty"
-    assert payload["recovery"]["broken_file"].endswith("jobs.json.corrupt-1")
+    assert payload["recovery"]["broken_file"].endswith("jobs.corrupt-20261102T101500Z.json")
 
 
 def test_a_healthy_start_reports_no_recovery(cron, tmp_path):

@@ -392,7 +392,7 @@ def _decided_cap_reason(
 # La copia è deliberata e non si può togliere: questo script gira anche fuori
 # dall'app e non importa ``jenny``. Quel che tiene i due numeri uguali è
 # ``tests/skills/llm_wiki/test_lint_wiki.py::test_the_ceiling_matches_the_one_the_prompt_uses``,
-# che legge ``context.py`` come testo (T3.12).
+# che legge ``utils/wiki_paths.py`` come testo (T3.12).
 MAP_MAX_CHARS = 2000
 
 # Tetto della **singola pagina**, in caratteri, e per la stessa ragione della

@@ -302,7 +302,9 @@ def quarantine(path: Path) -> Path | None:
         return None
     try:
         os.replace(path, target)
-    except OSError:
+    except OSError as exc:
+        # Il perché lo sa solo qui: il chiamante vede ``None`` e basta.
+        logger.warning("could not set aside %s: %s", path, exc)
         return None
     return target
 

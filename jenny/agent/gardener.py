@@ -72,7 +72,7 @@ from jenny.agent.internal_run import (
 from jenny.agent.wiki_provenance import _provenance_guard
 from jenny.session.keys import GARDENER_SESSION_PREFIX
 from jenny.session.turn_visibility import silent_progress
-from jenny.utils.helpers import safe_zoneinfo
+from jenny.utils.clock import local_now
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import (
     WIKI_INDEX_FILENAME,
@@ -128,7 +128,7 @@ def page_ceiling() -> int:
     prompt nomina, ed è il numero con cui questa passata decide **quali** pagine
     la regola riguarda.
 
-    **Importato e non copiato**, al contrario di :data:`MAP_TARGET_CHARS`: la
+    **Importato e non copiato**, come :data:`MAP_TARGET_CHARS`: la
     soglia è la stessa in tre posti — il blocco di progetto che la paga, il lint
     della wiki (``PAGE_MAX_CHARS``) e da qui il prompt — e una quarta copia
     sarebbe una quarta cosa da tenere allineata. **E' questa funzione il lettore
@@ -137,8 +137,7 @@ def page_ceiling() -> int:
     ``_FsTool._wiki_page_ceiling_note``, cosi' l'avviso che un tool di scrittura
     dà e l'annotazione che questa passata si mette nel prompt non possono parlare
     di due soglie diverse. L'import sta **dentro la
-    funzione** per la ragione scritta sopra a ``MAP_TARGET_CHARS``:
-    ``jenny/agent/context.py`` tira dentro mezzo repo, e questo modulo lo
+    funzione** perché ``jenny/agent/context.py`` tira dentro mezzo repo, e questo modulo lo
     caricherebbe all'import per un intero. Dentro la funzione si paga alla prima
     chiamata (poi è ``sys.modules``) e si legge l'attributo ogni volta, che è
     anche quel che rende la condivisione **provabile** invece che dichiarata.
@@ -859,14 +858,13 @@ class GardenerStore:
     def _stamp(self, timezone: str | None) -> datetime:
         """L'istante della passata, nel fuso in cui il modello legge l'ora.
 
-        Stessa forma di ``JournalAppendTool._stamp`` (passo B18), e per le stesse
-        due ragioni. ``safe_zoneinfo`` e non ``ZoneInfo``: su Android il database
-        tzdata può mancare, e non si perde una riga di registro per un fuso.
+        Come ``JournalAppendTool._stamp``: ``local_now``, che su Android regge
+        anche senza il database tzdata — non si perde una riga di registro per
+        un fuso.
         """
         if self._now is not None:
             return self._now()
-        tz = safe_zoneinfo(timezone) if timezone else None
-        return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+        return local_now(timezone)
 
     def log_pass(
         self,

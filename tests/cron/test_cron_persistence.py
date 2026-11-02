@@ -89,8 +89,8 @@ def test_load_jobs_preserves_corrupt_store_and_reports_the_fallback(
     """A corrupt ``jobs.json`` must not be silently treated as an empty list.
 
     Da 0.6.6 il ripiego non è più un ``None``: il loader riparte da una lista
-    vuota ma lo *dichiara*, e il file corrotto viene spostato di lato con un
-    suffisso ``.corrupt-<ts>`` perché resti recuperabile. Il ``None`` è
+    vuota ma lo *dichiara*, e il file corrotto viene spostato di lato come
+    ``jobs.corrupt-<ts>.json`` perché resti recuperabile. Il ``None`` è
     rimasto per il solo caso in cui lo spostamento fallisce
     (``test_cron_store_recovery.py``).
     """
@@ -105,7 +105,7 @@ def test_load_jobs_preserves_corrupt_store_and_reports_the_fallback(
     assert loaded.jobs == []
     assert loaded.recovered_from == "empty"
 
-    # Original path is gone; a ``.corrupt-<ts>`` backup exists alongside it.
+    # Original path is gone; a ``jobs.corrupt-<ts>.json`` backup exists alongside it.
     assert not store_path.exists()
     backups = list(store_path.parent.glob("jobs.corrupt-*.json"))
     assert len(backups) == 1

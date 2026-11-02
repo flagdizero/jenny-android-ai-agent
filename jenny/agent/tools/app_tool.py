@@ -810,8 +810,10 @@ class AppTool(Tool):
 
         if not (app_dir(workspace, slug) / "app.json").is_file():
             return f"No app `{slug}`: write it with action=draft first."
+        from jenny.session.keys import is_project_session_key
+
         root = None
-        if session.startswith("project:"):
+        if is_project_session_key(session):
             scope = current_workspace_scope()
             root = scope.write_root() if scope is not None else None
             if root is None or not is_wiki_root(root):
@@ -846,8 +848,9 @@ class AppTool(Tool):
 
     def _trash(self, workspace: Path, slug: str, session: str) -> str:
         from jenny.apps.trash import trash_app
+        from jenny.session.keys import is_project_session_key
 
-        if session.startswith("project:"):
+        if is_project_session_key(session):
             return ("Not from a notebook: deleting an app is the user's call, from the App page "
                     "or the personal chat. Nothing was deleted.")
         try:

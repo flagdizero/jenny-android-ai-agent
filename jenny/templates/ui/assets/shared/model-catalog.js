@@ -14,7 +14,7 @@
  *    puo' essere lenta fino al suo timeout, e ogni tocco altrove la rifaceva;
  *  - una lettura in volo non ne fa partire una seconda.
  *
- *  L'elenco lo va a chiedere al provider vero (`/api/providers/<name>/models`),
+ *  L'elenco lo va a chiedere al provider vero (`rpc.providerModels`),
  *  e passa dalla rete: per questo si tiene.
  */
 

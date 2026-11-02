@@ -13,7 +13,7 @@ from jenny import __version__
 from jenny.bus.events import OutboundMessage
 from jenny.command.router import CommandContext, CommandRouter
 from jenny.runtime.user_text import say
-from jenny.utils.helpers import build_status_content, clip
+from jenny.utils.helpers import build_status_content, clip, content_text
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -649,10 +649,11 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     async def _run():
         from jenny.agent.gardener import GardenerStore, report_gardener_outcome, run_gardener
         from jenny.config.loader import load_config
+        from jenny.config.paths import wikis_dir_name
 
         try:
             config = load_config()
-            wikis_dir = getattr(getattr(config, "wiki", None), "wikis_dir", "wikis") or "wikis"
+            wikis_dir = wikis_dir_name(config)
             store = GardenerStore.for_project(
                 config.workspace_path, target, wikis_dir_name=wikis_dir
             )
@@ -857,11 +858,7 @@ def _format_history_message(msg: dict) -> str | None:
     role = msg.get("role")
     if role not in ("user", "assistant"):
         return None
-    content = msg.get("content") or ""
-    if isinstance(content, list):
-        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
-        content = " ".join(parts)
-    content = str(content).strip()
+    content = content_text(msg.get("content")).strip()
     if not content:
         return None
     content = clip(content, _HISTORY_MAX_CONTENT_CHARS)

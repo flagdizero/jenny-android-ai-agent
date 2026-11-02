@@ -388,7 +388,7 @@ def wiki_page_rel(path: Path) -> str | None:
     **Le tre esclusioni sono quelle di :func:`iter_wiki_pages`, non altre**: il
     predicato :func:`is_wiki_page_rel` (niente nascosti, niente ``summaries/``),
     la mappa (``index.md``, che ha un tetto diverso — v.
-    ``context.py::_PROJECT_MAP_MAX_CHARS``) e l'estensione. Il confronto su
+    :data:`WIKI_MAP_MAX_CHARS`) e l'estensione. Il confronto su
     ``.md`` e' esatto e sensibile alle maiuscole come il ``rglob("*.md")`` di
     quella funzione, sul solo runtime che esiste.
 

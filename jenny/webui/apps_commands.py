@@ -37,6 +37,10 @@ async def apps_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict[st
     una superficie che accetta il token anche nell'indirizzo, dove un
     ``<img src>`` poteva raggiungerla. Qui come le cancellazioni del file
     manager. La pagina della casa che portava all'app si toglie insieme.
+
+    Non guarda ``apps.enabled``, come ``apps.restore`` e ``apps.purge``: quel
+    cancello tiene ferme le app (servirle, eseguirle), e mettere via un'app non
+    ne fa partire nessuna. La route GET lo guardava solo perché stava fra quelle.
     """
     from jenny.apps.trash import trash_app
     from jenny.webui.home_pages import detach_pages_quietly

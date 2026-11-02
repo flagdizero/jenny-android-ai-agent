@@ -1588,7 +1588,7 @@ _COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
     "plan": ("jenny.webui.plan_commands", "PLAN_COMMANDS"),
     # Le scritture della bacheca.
     "board": ("jenny.webui.board_commands", "BOARD_COMMANDS"),
-    # Il cestino delle app e le risposte alla prova.
+    # «Elimina» e il cestino delle app.
     "apps": ("jenny.webui.apps_commands", "APPS_COMMANDS"),
     # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
     "staged": ("jenny.webui.staged_commands", "STAGED_COMMANDS"),

@@ -103,7 +103,9 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
         if link:
             other = find_card(board, str(link))
             if other is None:
-                titles = ", ".join(f"«{c['title']}»" for c in board["cards"]) or "none"
+                titles = ", ".join(
+                    f"«{c['title']}» ({c['id']})" for c in board["cards"]
+                ) or "none"
                 raise ValueError(f"No card {link!r} on this board (cards: {titles}).")
         if model.is_full(board, notes):
             raise ValueError("The board is full: the user has to remove a card first.")

@@ -64,9 +64,9 @@ from jenny.channels.ws_parsing import (
 from jenny.channels.ws_remote import RemoteListener, auth_secret, server_listening
 from jenny.channels.ws_sender import OutboundSenderMixin
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
     is_project_chat_id,
     is_valid_project_name,
+    project_name,
 )
 from jenny.utils.media_decode import (
     FileSizeExceeded,
@@ -741,7 +741,7 @@ class WebSocketChannel(OutboundSenderMixin):
         raw = envelope.get("chat_id")
         if not isinstance(raw, str) or not is_project_chat_id(raw):
             return WEBUI_DEFAULT_CHAT_ID
-        if not is_valid_project_name(raw[len(PROJECT_SESSION_PREFIX):]):
+        if not is_valid_project_name(project_name(raw)):
             return None
         return raw
 

@@ -309,15 +309,6 @@ class WebUISettingsError(ValueError):
         self.status = status
 
 
-def _query_first_alias(query: QueryParams, *names: str) -> str | None:
-    """Il primo valore fra più nomi accettati (snake_case e camelCase)."""
-    for name in names:
-        value = query_first(query, name)
-        if value is not None:
-            return value
-    return None
-
-
 # ── Applicatori generici ─────────────────────────────────────────────────────
 # Vivevano in ``worker_settings``, che li aveva generalizzati per i suoi tre
 # lavoratori mentre qui sotto nove rami li riscrivevano a mano — e uno di quei
@@ -369,7 +360,7 @@ def _apply_int(
     *names: str,
 ) -> bool:
     """Scrive un intero su *target* se la query lo porta. ``True`` = cambiato."""
-    raw = _query_first_alias(query, *names)
+    raw = query_first(query, *names)
     if raw is None:
         return False
     value = _parse_int(raw, names[0], model, attr)
@@ -380,7 +371,7 @@ def _apply_int(
 
 
 def _apply_bool(query: QueryParams, target: Any, attr: str, *names: str) -> bool:
-    raw = _query_first_alias(query, *names)
+    raw = query_first(query, *names)
     if raw is None:
         return False
     value = _parse_bool(raw, names[0])
@@ -406,7 +397,7 @@ def _apply_str(
     valore va bene, ed è come timezone e nome del provider fanno il loro
     controllo senza che questa funzione li conosca.
     """
-    raw = _query_first_alias(query, *names)
+    raw = query_first(query, *names)
     if raw is None:
         return False
     value = raw.strip()
@@ -1057,7 +1048,7 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         changed = True
 
     context_window_tokens = _parse_context_window_tokens(
-        _query_first_alias(query, "context_window_tokens", "contextWindowTokens")
+        query_first(query, "context_window_tokens", "contextWindowTokens")
     )
     if (
         context_window_tokens is not None
@@ -1070,7 +1061,7 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
     # ma qui non c'era nessun ramo a raccoglierli: la richiesta arrivava,
     # ``changed`` restava False, e il client mostrava "Saved!" perché la risposta
     # è 200 comunque. Erano campi decorativi.
-    max_tokens = _parse_max_tokens(_query_first_alias(query, "max_tokens", "maxTokens"))
+    max_tokens = _parse_max_tokens(query_first(query, "max_tokens", "maxTokens"))
     if max_tokens is not None and defaults.max_tokens != max_tokens:
         defaults.max_tokens = max_tokens
         changed = True
@@ -1086,7 +1077,7 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         ("reasoning_effort", ("reasoning_effort", "reasoningEffort")),
         ("main_reasoning_effort", ("main_reasoning_effort", "mainReasoningEffort")),
     ):
-        effort = _parse_reasoning_effort(_query_first_alias(query, *aliases))
+        effort = _parse_reasoning_effort(query_first(query, *aliases))
         if not isinstance(effort, _Unset) and getattr(defaults, field) != effort:
             setattr(defaults, field, effort)
             changed = True
@@ -1355,7 +1346,7 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
             setattr(fetch_config, attr, value)
             changed = True
 
-    max_results = _query_first_alias(query, "max_results", "maxResults")
+    max_results = query_first(query, "max_results", "maxResults")
     if max_results is not None:
         set_search_value(
             "max_results",
@@ -1368,7 +1359,7 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
             "timeout", _parse_int(timeout, "timeout", AndroidWebSearchConfig, "timeout")
         )
 
-    fetch_max_chars = _query_first_alias(query, "fetch_max_chars", "fetchMaxChars")
+    fetch_max_chars = query_first(query, "fetch_max_chars", "fetchMaxChars")
     if fetch_max_chars is not None:
         try:
             parsed_fetch_max_chars = int(fetch_max_chars)
@@ -1480,7 +1471,7 @@ async def update_power_settings(query: QueryParams) -> dict[str, Any]:
     changed: dict[str, bool] = {}
 
     def _apply(config: Config) -> bool:
-        keep_awake = _parse_keep_awake(_query_first_alias(query, "keep_awake", "keepAwake"))
+        keep_awake = _parse_keep_awake(query_first(query, "keep_awake", "keepAwake"))
         if keep_awake is None or config.power.keep_awake == keep_awake:
             changed["required"] = False
             return False

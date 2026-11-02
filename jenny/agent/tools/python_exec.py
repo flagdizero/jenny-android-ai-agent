@@ -3558,10 +3558,10 @@ class PythonExecTool(PythonExecGateMixin, Tool):
         un file piccolo per progetto aperto in questo processo.
         """
         from jenny.security.workspace_access import current_workspace_scope
-        from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+        from jenny.session.keys import is_project_session_key, project_name
 
         current = (
-            session_key[len(PROJECT_SESSION_PREFIX):]
+            project_name(session_key)
             if session_key and is_project_session_key(session_key) else None
         )
         scope = current_workspace_scope()
@@ -3574,7 +3574,7 @@ class PythonExecTool(PythonExecGateMixin, Tool):
             if not is_project_session_key(key):
                 continue
             owner = self.namespace.session_owner(key)
-            identity = _project_identity(projects_dir / key[len(PROJECT_SESSION_PREFIX):])
+            identity = _project_identity(projects_dir / project_name(key))
             if identity is None or (owner is not None and owner != identity):
                 self.namespace.forget_session(key)
         if current and session_key:
