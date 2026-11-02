@@ -119,16 +119,10 @@ def reset_android_web_state() -> None:
     fresh event loop (e.g. after a gateway restart within the same process)
     raises "bound to a different event loop" the moment it's acquired again.
     """
-    global _BRIDGE_INSTANCE, _BRIDGE_LOCK, _SEARCH_STALLED_UNTIL
+    global _BRIDGE_LOCK, _SEARCH_STALLED_UNTIL
     _BRIDGE_LOCK = asyncio.Lock()
     _SEARCH_STALLED_UNTIL = 0.0
-    if _BRIDGE_INSTANCE is not None:
-        try:
-            _BRIDGE_INSTANCE.destroy()
-        except Exception:
-            logger.opt(exception=True).debug("Failed to destroy stale Android WebView bridge")
-        finally:
-            _BRIDGE_INSTANCE = None
+    destroy_bridge()
 
 
 def _normalize(text: str) -> str:
