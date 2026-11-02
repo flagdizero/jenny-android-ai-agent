@@ -192,9 +192,8 @@ def journal_event(
     non qualcosa che l'utente ha detto, quindi non potrà mai giustificare una
     pagina più forte di ``open``.
     """
-    from jenny.agent.tools.journal import INFERRED_MARKER, append_journal_entry
+    from jenny.agent.tools.journal import INFERRED_MARKER, append_journal_line
     from jenny.utils.helpers import safe_zoneinfo
-    from jenny.utils.wiki_paths import journal_page_name, wiki_journal_dir
 
     tz = safe_zoneinfo(timezone_name) if timezone_name else None
     stamp = datetime.now(tz=tz) if tz else datetime.now().astimezone()
@@ -202,9 +201,7 @@ def journal_event(
     reading = f", {view.get('label')} {value}{view.get('unit') or ''}" if value is not None else ""
     since = f", last data {view.get('at')}" if view.get("at") else ""
     text = f"{view.get('name') or view.get('slug')} on {card_title}: {view.get('state')}{reading}{since}"
-    page = wiki_journal_dir(project_root) / journal_page_name(stamp.date())
-    number = append_journal_entry(page, stamp.date(),
-                                  f"- {stamp:%H:%M} — {INFERRED_MARKER} {text[:400]}\n")
+    page, number = append_journal_line(project_root, stamp, f"{INFERRED_MARKER} {text[:400]}")
     return f"{page.relative_to(project_root).as_posix()}:{number}"
 
 
@@ -295,17 +292,14 @@ def journal_note(project_root: Path, text: str, *, photo: str | None = None,
     ``(photo: raw/photos/…)``: lo stesso in ogni lingua, perché il giardiniere
     la riconosce dalla forma e non dalle parole.
     """
-    from jenny.agent.tools.journal import SAID_MARKER, append_journal_entry
+    from jenny.agent.tools.journal import SAID_MARKER, append_journal_line
     from jenny.utils.helpers import safe_zoneinfo
-    from jenny.utils.wiki_paths import journal_page_name, wiki_journal_dir
 
     tz = safe_zoneinfo(timezone_name) if timezone_name else None
     stamp = datetime.now(tz=tz) if tz else datetime.now().astimezone()
-    day = stamp.date()
-    page = wiki_journal_dir(project_root) / journal_page_name(day)
     line = " ".join(text.split())[:500]
     if photo:
         line = f"{line} (photo: {photo})"
-    number = append_journal_entry(page, day, f"- {stamp:%H:%M} — {SAID_MARKER} {line}\n")
+    page, number = append_journal_line(project_root, stamp, f"{SAID_MARKER} {line}")
     return f"{page.relative_to(project_root).as_posix()}:{number}"
 
