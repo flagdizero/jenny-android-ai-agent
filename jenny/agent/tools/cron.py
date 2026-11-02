@@ -214,9 +214,7 @@ class CronTool(Tool, ContextAware):
             "mode='reminder' (default) always speaks when it fires; mode='monitor' is a recurring "
             "check that runs silently and speaks only when something changed or is worth "
             "reporting (needs every_seconds or cron_expr, never date). A recurring job can carry a "
-            "`condition` on a mini app's value: it is checked in code at each run, at no cost, "
-            "and the job speaks only when it becomes true. Pick the widest interval that does "
-            "the job. "
+            "`condition` on a mini app's value, checked in code at each run. "
             f"If tz is omitted, cron expressions and a date's time use {self._default_timezone}. "
             + _NOTEBOOK_NOTE
         )
