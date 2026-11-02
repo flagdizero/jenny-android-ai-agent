@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -91,6 +92,28 @@ def get_workspace_path() -> Path:
         "Workspace directory is not configured. "
         "Call set_workspace_dir() before get_workspace_path()."
     )
+
+
+def wikis_dir_name(config: Any = None) -> str:
+    """Il nome della cartella dei quaderni, ``config.wiki.wikis_dir``.
+
+    ``"wikis"`` se non è scritto o se la config non si legge: è il nome dello
+    scaffold. Con *config* non rilegge il file. L'unico posto che lo decide: era
+    scritto a mano in nove.
+    """
+    try:
+        if config is None:
+            from jenny.config.loader import load_config
+
+            config = load_config()
+        return getattr(config.wiki, "wikis_dir", "") or "wikis"
+    except Exception:  # noqa: BLE001 — senza config, il nome di serie
+        return "wikis"
+
+
+def get_wikis_path(workspace: Path | None = None, *, config: Any = None) -> Path:
+    """La cartella dei quaderni: ``<workspace>/<wikis_dir_name()>``."""
+    return (workspace if workspace is not None else get_workspace_path()) / wikis_dir_name(config)
 
 
 def get_runtime_subdir(name: str) -> Path:

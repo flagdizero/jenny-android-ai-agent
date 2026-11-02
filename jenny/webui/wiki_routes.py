@@ -182,13 +182,9 @@ class WikiRoutes:
         return self._search_service
 
     def _get_wikis_dir(self) -> Path:
-        from jenny.config.loader import load_config
+        from jenny.config.paths import get_wikis_path
 
-        try:
-            wikis_subdir = load_config().wiki.wikis_dir
-        except Exception:
-            wikis_subdir = "wikis"
-        return self._get_workspace_root() / wikis_subdir
+        return get_wikis_path(self._get_workspace_root())
 
     def _check_wiki_enabled(self) -> Response | None:
         """Il cancello «wiki attiva» (``commands.wiki_refusal``, fail-closed) come 503."""

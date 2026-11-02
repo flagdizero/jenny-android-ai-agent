@@ -108,16 +108,10 @@ def legacy_result_key(link: dict[str, Any]) -> str | None:
 
 def notebook_root(name: str) -> Path | None:
     """La cartella del quaderno *name*, o ``None`` se non c'e' (piu')."""
-    from jenny.config.paths import get_workspace_path
+    from jenny.config.paths import get_wikis_path
     from jenny.utils.wiki_paths import is_wiki_root
 
-    try:
-        from jenny.config.loader import load_config
-
-        wikis = load_config().wiki.wikis_dir or "wikis"
-    except Exception:  # noqa: BLE001 — il default e' quello dello scaffold
-        wikis = "wikis"
-    root = get_workspace_path() / wikis / name
+    root = get_wikis_path() / name
     return root if is_wiki_root(root) else None
 
 

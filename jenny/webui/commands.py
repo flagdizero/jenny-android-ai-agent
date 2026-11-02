@@ -191,13 +191,9 @@ def _skill_scripts_dir(ctx: CommandContext) -> Path:
 
 
 def _wikis_dir(ctx: CommandContext) -> Path:
-    from jenny.config.loader import load_config
+    from jenny.config.paths import get_wikis_path
 
-    try:
-        subdir = load_config().wiki.wikis_dir
-    except Exception:
-        subdir = "wikis"
-    return ctx.get_workspace_root() / subdir
+    return get_wikis_path(ctx.get_workspace_root())
 
 
 def _is_live_config(path: Path) -> bool:
@@ -394,13 +390,9 @@ def _notebooks_dir(workspace_root: Path) -> Path:
     cartella per due nomi, e un confronto testuale fra le due forme direbbe di
     no a ogni domanda.
     """
-    try:
-        from jenny.config.loader import load_config
+    from jenny.config.paths import get_wikis_path
 
-        subdir = load_config().wiki.wikis_dir or "wikis"
-    except Exception:  # noqa: BLE001 — senza config si usa il nome di default
-        subdir = "wikis"
-    return (workspace_root / subdir).resolve()
+    return get_wikis_path(workspace_root).resolve()
 
 
 def _delete_refusal(workspace_root: Path, target: Path) -> str | None:

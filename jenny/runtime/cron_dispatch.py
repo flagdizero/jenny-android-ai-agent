@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from loguru import logger
 
 from jenny.bus.events import OutboundMessage
+from jenny.config.paths import wikis_dir_name
 from jenny.cron.bound_runner import (
     CRON_WAKELOCK_TIMEOUT_S,
     BoundCronAgent,
@@ -422,7 +423,7 @@ class CronDispatcher:
             min_hours_between_passes=cfg.min_hours_between_passes,
             sessions=agent.sessions,
             active_session_keys=agent.active_session_keys(),
-            wikis_dir_name=getattr(self._config.wiki, "wikis_dir", "wikis") or "wikis",
+            wikis_dir_name=wikis_dir_name(self._config),
         )
         if pick is None:
             logger.debug("Gardener: no project ready")
@@ -739,7 +740,7 @@ class CronDispatcher:
         return await run_reminders(
             agent,
             self._config.workspace_path,
-            wikis_dir_name=getattr(self._config.wiki, "wikis_dir", "wikis") or "wikis",
+            wikis_dir_name=wikis_dir_name(self._config),
             timezone_name=config.agents.defaults.timezone or None,
             cron=self._cron,
         )

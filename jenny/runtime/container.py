@@ -327,11 +327,11 @@ class GatewayContainer:
         A regime costa zero scritture: la migrazione e' idempotente e a wiki
         gia' a posto non tocca niente. V. ``utils/wiki_migration.py``.
         """
+        from jenny.config.paths import get_wikis_path
         from jenny.utils.wiki_migration import migrate_wikis
 
-        wiki_cfg = getattr(self.config, "wiki", None)
-        wikis_dir = getattr(wiki_cfg, "wikis_dir", "wikis") or "wikis"
-        migrate_wikis(self.config.workspace_path / wikis_dir, self.config.workspace_path)
+        workspace = self.config.workspace_path
+        migrate_wikis(get_wikis_path(workspace, config=self.config), workspace)
 
     def _repair_pending_renames(self) -> None:
         """Finisce i rinomini di progetto interrotti a metà.

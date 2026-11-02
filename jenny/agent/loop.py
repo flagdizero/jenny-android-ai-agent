@@ -64,6 +64,7 @@ from jenny.bus.runtime_events import (
     RuntimeEventPublisher,
 )
 from jenny.command import CommandContext, CommandRouter, register_builtin_commands
+from jenny.config.paths import wikis_dir_name
 from jenny.config.schema import AgentDefaults
 from jenny.cron.session_turns import (
     cron_history_overrides,
@@ -533,7 +534,7 @@ class AgentLoop(
             extract_document_text=config.extract_document_text,
             timezone=defaults.timezone,
             disabled_skills=defaults.disabled_skills,
-            projects_subdir=config.wiki.wikis_dir,
+            projects_subdir=wikis_dir_name(config),
             wikis_enabled=config.wiki.enabled,
             session_ttl_minutes=defaults.session_ttl_minutes,
             compact_projects_when_idle=defaults.compact_projects_when_idle,
