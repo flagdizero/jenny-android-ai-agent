@@ -26,7 +26,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +38,7 @@ from jenny.runtime.context import get_android_context
 from jenny.runtime.update_manifest import DEFAULT_MANIFEST_URL
 from jenny.security.fetch import open_validated_stream, read_capped
 from jenny.security.network import validate_url_target
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write
 
 if TYPE_CHECKING:
@@ -555,7 +555,7 @@ async def _check_for_update(config: "Config") -> UpdateInfo | None:
 
     # Lo stato si aggiorna anche quando il fetch fallisce: "quando ho guardato
     # l'ultima volta" è proprio l'informazione che serve dopo un fallimento.
-    now_ms = int(time.time() * 1000)
+    now_ms = _now_ms()
     install = install_id()
     state = _read_state()
     state["install_id"] = install

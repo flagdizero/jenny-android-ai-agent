@@ -54,7 +54,6 @@ import hashlib
 import json
 import secrets
 import struct
-import time
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -74,6 +73,7 @@ from jenny.snapshot.crypto_backends.base import CryptoAuthError, CryptoBackend
 from jenny.snapshot.engine import SnapshotEngine
 from jenny.snapshot.store import hash_content, read_verified_blob
 from jenny.snapshot.types import SnapshotManifest, entry_problem, entry_target, is_snapshot_id
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud_sink import RemoteNotFoundError, RemoteSink
@@ -510,7 +510,7 @@ class CloudRepository:
         await self._sink.put_bytes(snapshot_key(manifest), sealed)
         sent += len(sealed)
         self._write_state(
-            last_success_ms=int(time.time() * 1000),
+            last_success_ms=_now_ms(),
             last_snapshot_id=snapshot_id,
             last_snapshot_created_at_ms=manifest.created_at_ms,
         )
@@ -557,7 +557,7 @@ class CloudRepository:
                 self._passphrase,
                 zlib.compress(json.dumps({
                     "pack": pack_id,
-                    "at": int(time.time() * 1000),
+                    "at": _now_ms(),
                     "blobs": writer.entries,
                 }).encode()),
                 iterations=_KDF_ITERATIONS,

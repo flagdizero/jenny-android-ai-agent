@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import time
 import uuid
 from typing import Any, Protocol
 
@@ -45,6 +44,7 @@ from jenny.cron.types import (
 from jenny.runtime.power import keep_awake
 from jenny.session.keys import notebook_cron_session_key
 from jenny.session.turn_visibility import mark_silent_turn
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.prompt_templates import render_template
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
@@ -337,7 +337,7 @@ async def _run_bound_cron_job(
         already_warned=monitor and has_already_warned_could_not_check(job.state),
     )
     prompt_ref = _cron_prompt_ref(prompt, monitor=monitor)
-    run_id = f"{job.id}:{int(time.time() * 1000)}:{uuid.uuid4().hex[:8]}"
+    run_id = f"{job.id}:{_now_ms()}:{uuid.uuid4().hex[:8]}"
     channel, chat_id, metadata = _bound_session_delivery_context(
         job,
         turn_seed=f"cron:{job.id}",

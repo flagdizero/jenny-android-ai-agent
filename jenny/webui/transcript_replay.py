@@ -8,10 +8,10 @@ da stdlib. Nessun import verso ``transcript`` → nessun ciclo.
 
 from __future__ import annotations
 
-import time
 import uuid
 from typing import Any, Callable
 
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.webui.transcript_tool_events import (
     _file_edit_key,
     _filter_covered_file_edit_tool_events,
@@ -52,7 +52,7 @@ def replay_transcript_to_ui_messages(
     active_activity_segment_id: str | None = None
     active_file_edit_segment_id: str | None = None
     activity_segment_counter = 0
-    _ts_base = int(time.time() * 1000)
+    _ts_base = _now_ms()
     closed_turn_ids: set[str] = set()
     replay_turn_aliases: dict[str, str] = {}
 

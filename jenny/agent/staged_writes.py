@@ -24,7 +24,6 @@ import hashlib
 import json
 import shutil
 import threading
-import time
 import uuid
 from collections.abc import Callable
 from contextlib import suppress
@@ -34,6 +33,7 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write, read_json
 
 STAGED_REL = (".jenny", "staged")
@@ -176,7 +176,7 @@ def stage(
             "size": len(content),
             "sources": list(sources),
             "task_id": task_id,
-            "created_ms": int(time.time() * 1000),
+            "created_ms": _now_ms(),
         }
         atomic_write(entry / "meta.json", json.dumps(meta, ensure_ascii=False), fsync_dir=False)
     _notify(root, "staged", staged_id, target_rel)

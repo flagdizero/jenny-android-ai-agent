@@ -34,6 +34,7 @@ from jenny.snapshot.crypto import DEFAULT_KDF_ITERATIONS
 from jenny.snapshot.locations import runtime_root_for
 from jenny.snapshot.store import hash_content
 from jenny.snapshot.types import entry_target
+from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud import (
@@ -229,7 +230,7 @@ class CloudBackupService:
                     sink, key, password,
                     iterations=self._password_iterations, backend=self._backend,
                 )
-                    self._write_status(password_set_ms=int(time.time() * 1000))
+                    self._write_status(password_set_ms=_now_ms())
                 elif not await has_sealed_key(sink):
                     self._write_status(password_set_ms=0)
             except DriveConsentError:
@@ -238,7 +239,7 @@ class CloudBackupService:
                 await _close(sink)
             await self._set_provider(PROVIDER_DRIVE)
             # Da qui conta l'attesa della prima copia, e l'avviso se non arriva.
-            self._write_status(enabled_at_ms=int(time.time() * 1000), alerted_ms=0)
+            self._write_status(enabled_at_ms=_now_ms(), alerted_ms=0)
             logger.info("Cloud backup enabled ({})", PROVIDER_DRIVE)
         return {"ok": True, **self.status()}
 
@@ -294,7 +295,7 @@ class CloudBackupService:
         except (DriveError, CloudBackupError, OSError) as exc:
             logger.warning("Cloud backup run failed: {}", exc)
             return self._fail(f"{type(exc).__name__}: {exc}")
-        now = int(time.time() * 1000)
+        now = _now_ms()
         copies = [
             t for t in self._read_status().get("recent_copies_ms") or []
             if isinstance(t, int) and now - t < COPIES_KEEP_MS
@@ -339,7 +340,7 @@ class CloudBackupService:
         riuscita (o dall'accensione, se non ce n'è mai stata una) e per questa
         serie non si è ancora avvisato: chi chiama lo porta all'utente.
         """
-        now = now_ms if now_ms is not None else int(time.time() * 1000)
+        now = now_ms if now_ms is not None else _now_ms()
         if self._get_provider() != PROVIDER_DRIVE:
             return {"action": "off", "alert": None}
         stored = self._read_status()
@@ -408,7 +409,7 @@ class CloudBackupService:
             if bad:
                 self._mark_damaged()
                 return {"ok": False, "error": "mismatch", "files": bad[:20]}
-            self._write_status(last_verified_ms=int(time.time() * 1000))
+            self._write_status(last_verified_ms=_now_ms())
             return {
                 "ok": True,
                 "snapshot_created_at_ms": snapshots[0].created_at_ms,
@@ -446,7 +447,7 @@ class CloudBackupService:
                 return {"ok": False, "error": "consent_needed"}
             finally:
                 await _close(sink)
-            self._write_status(password_set_ms=int(time.time() * 1000))
+            self._write_status(password_set_ms=_now_ms())
         logger.info("Cloud backup password set")
         return {"ok": True, **self.status()}
 
@@ -473,7 +474,7 @@ class CloudBackupService:
             finally:
                 await _close(sink)
             await asyncio.to_thread(self._write_key, key)
-            self._write_status(password_set_ms=int(time.time() * 1000))
+            self._write_status(password_set_ms=_now_ms())
         logger.info("Cloud backup key unlocked with the password")
         return {"ok": True}
 
@@ -546,12 +547,12 @@ class CloudBackupService:
         """La copia remota è rotta: lo stato lo dice, e la prossima la rifà da capo."""
         self._write_status(
             last_error="verify_mismatch",
-            last_failure_ms=int(time.time() * 1000),
+            last_failure_ms=_now_ms(),
             force_fresh=True,
         )
 
     def _fail(self, error: str) -> dict[str, Any]:
-        self._write_status(last_failure_ms=int(time.time() * 1000), last_error=error[:500])
+        self._write_status(last_failure_ms=_now_ms(), last_error=error[:500])
         return {"ok": False, "error": error}
 
 

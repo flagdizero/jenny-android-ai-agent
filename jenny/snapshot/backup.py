@@ -40,6 +40,7 @@ from jenny.snapshot.locations import (
     runtime_root_for,
 )
 from jenny.snapshot.types import SnapshotManifest, is_snapshot_id, unsafe_entry_reason
+from jenny.utils.clock import now_ms as _now_ms
 
 if TYPE_CHECKING:
     from jenny.snapshot.service import SnapshotService
@@ -167,7 +168,7 @@ class BackupManager:
         with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as archive:
             metadata = {
                 "format_version": BACKUP_FORMAT_VERSION,
-                "exported_at_ms": int(time.time() * 1000),
+                "exported_at_ms": _now_ms(),
                 "jenny_version": _jenny_version(),
             }
             archive.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False))
