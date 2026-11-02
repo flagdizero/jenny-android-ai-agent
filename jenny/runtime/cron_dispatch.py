@@ -174,7 +174,7 @@ GARDENER_JOB_ID = "gardener"
 # I due lavoratori periodici, col nome del loro job e il campo di config che li
 # tara. Elenco chiuso e non un getattr sul nome: chi aggiunge un lavoratore lo
 # registra qui, e chi legge vede in due righe quali sono.
-_SYSTEM_WORKERS: tuple[str, ...] = ("dream", "gardener")
+SYSTEM_WORKERS: tuple[str, ...] = ("dream", "gardener")
 
 
 def refresh_system_job(
@@ -212,8 +212,8 @@ def refresh_system_job(
     from jenny.config.loader import load_config
     from jenny.cron.types import CronJob, CronPayload
 
-    if worker not in _SYSTEM_WORKERS:
-        raise ValueError(f"unknown system worker {worker!r}; known: {_SYSTEM_WORKERS}")
+    if worker not in SYSTEM_WORKERS:
+        raise ValueError(f"unknown system worker {worker!r}; known: {SYSTEM_WORKERS}")
     cfg = getattr((config or load_config()).agents.defaults, worker)
     if not cfg.enabled:
         return None

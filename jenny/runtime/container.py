@@ -25,12 +25,6 @@ from loguru import logger
 from jenny import __logo__, __version__
 from jenny.config.schema import Config
 
-# Id dei job di sistema che una versione precedente registrava e questa non
-# esegue piu'. ``build`` li ritira dallo store prima di registrare i vivi (v. il
-# commento sul posto e ``CronService.retire_system_job``). Per id e non per
-# nome: un promemoria dell'utente puo' chiamarsi come vuole.
-_RETIRED_SYSTEM_JOBS: tuple[str, ...] = ("atlas", "heartbeat")
-
 
 class GatewayContainer:
     """Costruisce e avvia il grafo del gateway; possiede lo stato di runtime."""
@@ -622,45 +616,23 @@ class GatewayContainer:
             extension_jobs=self._extension_job_runners(),
         ).dispatch
 
-        # I lavoratori periodici che questa versione **non esegue piu'**. Il loro
-        # job e' ancora scritto nello store di chi aggiorna — e' cosi' che la
-        # registrazione sotto e' idempotente al riavvio — e senza il suo ramo nel
-        # dispatcher scatterebbe nel vuoto a ogni scadenza, per sempre. Si
-        # ritira per id, prima di registrare i vivi. Elenco chiuso: chi toglie un
-        # lavoratore aggiunge il suo id qui, e nessun altro punto lo conosce.
-        for retired in _RETIRED_SYSTEM_JOBS:
-            self.cron.retire_system_job(retired)
+        # I lavoratori periodici che questa versione **non esegue piu'** (``atlas``,
+        # ``heartbeat``) e quelli di un'estensione che questa build non ha: il loro
+        # job e' ancora scritto nello store, e senza un ramo nel dispatcher
+        # scatterebbe nel vuoto a ogni scadenza, per sempre. Si ritirano prima di
+        # registrare i vivi.
         self._retire_orphan_system_jobs()
 
-        # Register Dream system job (idempotent on restart).
-        dream_cfg = config.agents.defaults.dream
-        if dream_cfg.enabled:
-            self.cron.register_system_job(CronJob(
-                id="dream",
-                name="dream",
-                schedule=dream_cfg.build_schedule(),
-                payload=CronPayload(kind="system_event"),
-            ))
-            logger.info("Dream: {}", dream_cfg.describe_schedule())
-        else:
-            logger.info("Dream: disabled")
+        # Dream e il giardiniere (idempotente al riavvio): la stessa registrazione
+        # che li ri-arma da Impostazioni, ``refresh_system_job``. Nessuno snapshot
+        # prima del giardiniere: **aggiunge e promuove**, non riscrive, e non tocca
+        # né il diario (il suo input) né AGENTS.md — a differenza di Dream, che
+        # riscrive memoria irrecuperabile.
+        from jenny.runtime.cron_dispatch import SYSTEM_WORKERS, refresh_system_job
 
-        # Register the Gardener system job (idempotent on restart). Nessuno
-        # snapshot pre-run: il giardiniere **aggiunge e promuove**, non riscrive,
-        # e non tocca né il diario (il suo input) né AGENTS.md. Quel che scrive
-        # sono pagine nuove sotto wiki/, che l'utente può correggere leggendole —
-        # a differenza di Dream, che riscrive memoria irrecuperabile.
-        gardener_cfg = config.agents.defaults.gardener
-        if gardener_cfg.enabled:
-            self.cron.register_system_job(CronJob(
-                id="gardener",
-                name="gardener",
-                schedule=gardener_cfg.build_schedule(),
-                payload=CronPayload(kind="system_event"),
-            ))
-            logger.info("Gardener: {}", gardener_cfg.describe_schedule())
-        else:
-            logger.info("Gardener: disabled")
+        for worker in SYSTEM_WORKERS:
+            armed = refresh_system_job(self.cron, worker, config=config)
+            logger.info("{}: {}", worker.capitalize(), armed or "disabled")
 
         # L'orologio dei quaderni: le micro app dei cassetti, le attese delle
         # bacheche e gli eventi delle sezioni, un giro ogni quarto d'ora su tutti
