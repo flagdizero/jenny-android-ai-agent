@@ -44,6 +44,7 @@ import { setupLongPress } from './shared/longpress.js';
 import { saIsTerminal } from './shared/subagent-policy.js';
 import { FAMILY_BY_TOOL } from './home-activity.js';
 import { el, icon } from './shared/dom.js';
+import { closeActionSheet, openActionSheet, sheetHead, sheetRow } from './shared/sheet.js';
 
 /* Ogni quanto si riscrivono i minuti, e si guarda se una bolla e' ferma. */
 const TICK_MS = 30_000;
@@ -474,53 +475,31 @@ export class WorkBubbles {
     return i18n.t(why + (keptCount === 1 ? 'One' : ''), { count: keptCount, files: names.join(', ') + more });
   }
 
+  /* Il foglio d'azioni e' quello della casa (`shared/sheet.js`); qui ci si
+     mette la riga dell'errore, e il gettone di questa apertura. */
   _openSheet(title, note, rows) {
-    const sheet = this.sheet;
-    if (!sheet) return null;
-    const body = sheet.querySelector('.home-plan-sheet-inner') || sheet;
-    const grab = el('div', 'home-plan-sheet-grab');
-    const close = el('button', 'home-plan-sheet-close');
-    close.type = 'button';
-    close.setAttribute('aria-label', i18n.t('home.work.sheetClose'));
-    const x = icon('ti-x');
-    close.appendChild(x);
-    close.addEventListener('click', () => this._closeSheet());
-    const head = [el('h2', 'home-plan-sheet-title', title)];
-    if (note) head.push(el('p', 'home-plan-sheet-sub', note));
     const error = el('p', 'home-plan-sheet-note home-work-sheet-error');
     error.hidden = true;
-    body.replaceChildren(grab, close, ...head, ...rows, error);
+    const sheet = openActionSheet(this.sheet, {
+      children: [...sheetHead(title, note), ...rows, error],
+      closeLabel: i18n.t('home.work.sheetClose'),
+      onClose: () => this._closeSheet(),
+    });
+    if (!sheet) return null;
     /* Ogni apertura e' un foglio nuovo: una richiesta ancora in volo di quello
        di prima non lo chiude, e finche' non torna i suoi tasti restano spenti
        (due richieste insieme fermerebbero o annullerebbero due volte). */
     this._sheetToken = (this._sheetToken || 0) + 1;
     if (this._sheetBusy) this._sheetDisabled(true);
-    if (!sheet.open) {
-      if (typeof sheet.showModal === 'function') sheet.showModal();
-      else sheet.setAttribute('open', '');
-    }
     return sheet;
   }
 
   _closeSheet() {
-    const sheet = this.sheet;
-    if (!sheet?.open) return;
-    if (typeof sheet.close === 'function') sheet.close();
-    else sheet.removeAttribute('open');
+    closeActionSheet(this.sheet);
   }
 
   _sheetRow(glyph, label, sub, cls, action, run) {
-    const row = el('button', `home-plan-sheet-row ${cls || ''}`.trim());
-    row.type = 'button';
-    row.dataset.workAction = action;
-    const i = icon(glyph);
-    row.appendChild(i);
-    const text = el('span', 'home-plan-row-text');
-    text.append(el('span', null, label));
-    if (sub) text.appendChild(el('span', 'home-plan-row-sub', sub));
-    row.appendChild(text);
-    row.addEventListener('click', run);
-    return row;
+    return sheetRow(glyph, label, sub, cls, run, { workAction: action });
   }
 
   _sheetDisabled(disabled) {
