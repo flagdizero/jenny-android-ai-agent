@@ -577,10 +577,6 @@ class CloudRepository:
         await asyncio.to_thread(self._save_cache)
         return size
 
-    def record_failure(self, error: str) -> None:
-        """Annota un giro fallito: la spia conta da ``last_success_ms``, non da qui."""
-        self._write_state(last_failure_ms=int(time.time() * 1000), last_error=error[:500])
-
     # -- ripristino ---------------------------------------------------------------
 
     async def load_manifest(self, snapshot: RemoteSnapshot) -> SnapshotManifest:
