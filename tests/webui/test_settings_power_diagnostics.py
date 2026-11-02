@@ -22,7 +22,7 @@ from unittest.mock import MagicMock
 import pytest
 from support.gateway_http import make_request
 from support.js_harness import ASSETS
-from support.kotlin_source import ANDROID_SRC, read_source
+from support.kotlin_source import ANDROID_SRC, read_code, read_source
 from websockets.http11 import Request as WsRequest
 
 from jenny.channels.http_utils import check_api_secret, http_error, http_json_response, parse_query
@@ -337,7 +337,10 @@ def test_every_attempt_is_guarded() -> None:
     """Un component name morto solleva: un crash qui sarebbe peggio del guasto
     che stiamo segnalando."""
     body = _kotlin_fun("startFirstWorking")
+    assert "Intents.tryStart(this, it," in body, "un tentativo che non passa dal try comune"
+    assert "startActivity(" not in body
 
-    launch = body.index("startActivity(intent)")
-    assert body.index("try {") < launch
-    assert "catch (e: Exception)" in body[launch:]
+    intents = read_code("Intents")
+    start = intents[intents.index("fun tryStart(") : intents.index("fun appDetails(")]
+    launch = start.index("ctx.startActivity(intent)")
+    assert "catch (e: Exception)" in start[launch:]

@@ -488,16 +488,7 @@ class MainActivity : AppCompatActivity() {
     /** La scheda di Jenny nelle impostazioni di Android: dove si concede un
      *  permesso che l'app non può più chiedere. */
     private fun openAppDetailsSettings() {
-        try {
-            startActivity(
-                Intent(
-                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:$packageName")
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "App details settings could not be opened", e)
-        }
+        Intents.tryStart(this, Intents.appDetails(packageName), TAG, "app details settings")
     }
 
     // ── Launcher: la griglia app deve seguire i cambi di pacchetto ──
@@ -2370,15 +2361,11 @@ class MainActivity : AppCompatActivity() {
          *  cron e promemoria e rallenta il long-poll Telegram. */
         fun requestBatteryExemption() {
             runOnUiThread {
-                try {
-                    val intent = Intent(
-                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Uri.parse("package:$packageName")
-                    )
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Battery exemption request failed", e)
-                }
+                val intent = Intent(
+                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName")
+                )
+                Intents.tryStart(this@MainActivity, intent, TAG, "battery exemption request")
             }
         }
 
@@ -2407,11 +2394,7 @@ class MainActivity : AppCompatActivity() {
             )
             val reachable = canResolve(intent)
             runOnUiThread {
-                try {
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Exact alarm permission request failed", e)
-                }
+                Intents.tryStart(this@MainActivity, intent, TAG, "exact alarm permission request")
             }
             return reachable
         }
@@ -2514,19 +2497,10 @@ class MainActivity : AppCompatActivity() {
      * package che l'Activity ce l'ha eccome, e lanciarla resta permesso.
      */
     private fun startFirstWorking(candidates: List<Intent>) {
-        for (intent in candidates) {
-            try {
-                startActivity(intent)
-                return
-            } catch (e: Exception) {
-                Log.w(
-                    TAG,
-                    "Battery settings screen unavailable: " +
-                        "${intent.component ?: intent.action} (${e.javaClass.simpleName})"
-                )
-            }
+        val opened = candidates.any {
+            Intents.tryStart(this, it, TAG, "battery settings screen ${it.component ?: it.action}")
         }
-        Log.w(TAG, "No battery settings screen could be opened on this device")
+        if (!opened) Log.w(TAG, "No battery settings screen could be opened on this device")
     }
 
     // ── Backup: helper I/O (thread di background + callback JS) ──

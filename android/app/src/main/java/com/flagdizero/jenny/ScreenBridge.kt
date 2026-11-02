@@ -3,7 +3,6 @@ package com.flagdizero.jenny
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
-import android.util.Log
 
 /**
  * Bridge della lettura dello schermo, esposto a Python via Chaquopy
@@ -41,13 +40,10 @@ class ScreenBridge(context: Context) {
         ScreenSnapshots.writeImage(id, n, path)
 
     /** Apre la pagina di sistema in cui il servizio si accende. */
-    fun openSettings(): Boolean = try {
-        appContext.startActivity(
-            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
-        true
-    } catch (e: Exception) {
-        Log.w("ScreenBridge", "Cannot open accessibility settings", e)
-        false
-    }
+    fun openSettings(): Boolean = Intents.tryStart(
+        appContext,
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        "ScreenBridge",
+        "accessibility settings",
+    )
 }
