@@ -272,6 +272,60 @@ def _register_builtin_functions(
         except ValueError:
             return ""
 
+    # Il tetto del corpo di una risposta: si conta mentre arriva, come
+    # ``security.fetch.read_capped``, così un server che manda un file enorme
+    # non riempie la memoria del telefono prima che ce ne si accorga.
+    http_max_bytes = 10 * 1024 * 1024
+
+    def _http(method: str, url: str, *, headers: dict | None, timeout: int, **send: Any) -> str:
+        """La strada comune di ``http_get`` e ``http_post``.
+
+        Il rifiuto all'incrocio (J1) prima della risoluzione: anche chiedere il
+        nome al DNS fa uscire qualcosa (v. ``security.subagent_policy``). Poi
+        l'SSRF sull'URL, e la risposta segna il lavoro come non fidato appena la
+        si chiede. Ci si presenta come le altre richieste dell'agente
+        (``JENNY_USER_AGENT``): come ``python-httpx`` Wikimedia risponde 403.
+        """
+        from jenny.security.fetch import JENNY_USER_AGENT
+        from jenny.security.network import validate_url_target
+        from jenny.security.subagent_policy import (
+            approved_egress,
+            egress_refusal,
+            mark_untrusted,
+        )
+
+        if refusal := egress_refusal(url):
+            return refusal
+        ok, error = validate_url_target(url)
+        if not ok:
+            return f"Error: SSRF blocked: {error}"
+        import httpx
+
+        sent = dict(headers or {})
+        if not any(str(k).lower() == "user-agent" for k in sent):
+            sent["User-Agent"] = JENNY_USER_AGENT
+        mark_untrusted(f"http_{method.lower()}:{_url_host(url)}")
+        with approved_egress(), httpx.stream(
+            method, url, headers=sent, timeout=timeout, follow_redirects=False, **send
+        ) as resp:
+            if method == "GET" and resp.has_redirect_location:
+                location = resp.headers.get("location", "")
+                return (
+                    f"Error: server responded with a redirect ({resp.status_code}) to "
+                    f"'{location}'. Redirects are not followed automatically; call "
+                    "http_get again with the target URL if you trust it."
+                )
+            resp.raise_for_status()
+            body = bytearray()
+            for chunk in resp.iter_bytes():
+                body.extend(chunk)
+                if len(body) > http_max_bytes:
+                    return (
+                        f"Error: the response is larger than {http_max_bytes // 1048576} MB. "
+                        "Use download_file for a large file."
+                    )
+            return body.decode(resp.encoding or "utf-8", errors="replace")
+
     def http_get(url: str, headers: dict | None = None, timeout: int = 30) -> str:
         """Make an HTTP GET request and return the response body.
 
@@ -285,36 +339,7 @@ def _register_builtin_functions(
         redirect response is surfaced as a clear error instead of silently
         following it.
         """
-        from jenny.security.network import validate_url_target
-        from jenny.security.subagent_policy import (
-            approved_egress,
-            egress_refusal,
-            mark_untrusted,
-        )
-
-        # J1 prima della risoluzione: anche chiedere il nome al DNS fa uscire
-        # qualcosa (v. ``security.subagent_policy``).
-        if refusal := egress_refusal(url):
-            return refusal
-        ok, error = validate_url_target(url)
-        if not ok:
-            return f"Error: SSRF blocked: {error}"
-        import httpx
-
-        # La risposta è testo che non viene dall'utente: il lavoro diventa non
-        # fidato appena la si chiede.
-        mark_untrusted(f"http_get:{_url_host(url)}")
-        with approved_egress():
-            resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
-        if resp.has_redirect_location:
-            location = resp.headers.get("location", "")
-            return (
-                f"Error: server responded with a redirect ({resp.status_code}) to "
-                f"'{location}'. Redirects are not followed automatically; call "
-                "http_get again with the target URL if you trust it."
-            )
-        resp.raise_for_status()
-        return resp.text
+        return _http("GET", url, headers=headers, timeout=timeout)
 
     def http_post(
         url: str,
@@ -324,25 +349,7 @@ def _register_builtin_functions(
         timeout: int = 30,
     ) -> str:
         """Make an HTTP POST request and return the response body."""
-        from jenny.security.network import validate_url_target
-        from jenny.security.subagent_policy import (
-            approved_egress,
-            egress_refusal,
-            mark_untrusted,
-        )
-
-        if refusal := egress_refusal(url):
-            return refusal
-        ok, error = validate_url_target(url)
-        if not ok:
-            return f"Error: SSRF blocked: {error}"
-        import httpx
-
-        mark_untrusted(f"http_post:{_url_host(url)}")
-        with approved_egress():
-            resp = httpx.post(url, data=data, json=json_data, headers=headers, timeout=timeout)
-        resp.raise_for_status()
-        return resp.text
+        return _http("POST", url, headers=headers, timeout=timeout, data=data, json=json_data)
 
     # Data processing
     def json_parse(text: str) -> Any:

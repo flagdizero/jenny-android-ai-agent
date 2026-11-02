@@ -1,7 +1,7 @@
 """Tests for python_exec tool defaults."""
 
 import asyncio
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -58,23 +58,63 @@ def _fake_validate(allowed_ok: bool = True, blocked_substrings: tuple[str, ...] 
     return _validate
 
 
+def _fake_response(body: bytes = b"", *, redirect: bool = False) -> Mock:
+    resp = Mock()
+    resp.has_redirect_location = redirect
+    resp.encoding = "utf-8"
+    resp.raise_for_status = Mock()
+    resp.iter_bytes = Mock(return_value=iter([body[i : i + 4096] for i in range(0, len(body), 4096)]))
+    return resp
+
+
+def _streaming(resp: Mock) -> Mock:
+    """``httpx.stream`` finto: un context manager che dà *resp*."""
+    ctx = MagicMock()
+    ctx.__enter__.return_value = resp
+    ctx.__exit__.return_value = False
+    return Mock(return_value=ctx)
+
+
 class TestHttpGet:
     def test_allowed_host_returns_body_normally(self):
         """A request to a non-blocked host still succeeds and returns the body."""
         ns = _make_namespace()
-        fake_resp = Mock()
-        fake_resp.has_redirect_location = False
-        fake_resp.text = "hello world"
-        fake_resp.raise_for_status = Mock()
+        stream = _streaming(_fake_response(b"hello world"))
 
         with patch("jenny.security.network.validate_url_target", side_effect=_fake_validate()):
-            with patch("httpx.get", return_value=fake_resp) as mock_get:
+            with patch("httpx.stream", stream):
                 _, _, result = ns.call_function("http_get", args=["https://example.com/data"])
 
         assert result == "hello world"
-        mock_get.assert_called_once()
-        _, kwargs = mock_get.call_args
+        stream.assert_called_once()
+        _, kwargs = stream.call_args
         assert kwargs["follow_redirects"] is False
+
+    def test_it_introduces_itself_as_jenny(self):
+        """Come ``python-httpx`` Wikimedia risponde 403: si manda lo User-Agent
+        delle altre richieste dell'agente, a meno che il codice non ne dia uno."""
+        from jenny.security.fetch import JENNY_USER_AGENT
+
+        ns = _make_namespace()
+        stream = _streaming(_fake_response(b"ok"))
+        with patch("jenny.security.network.validate_url_target", side_effect=_fake_validate()):
+            with patch("httpx.stream", stream):
+                ns.call_function("http_get", args=["https://example.com/data"])
+                ns.call_function(
+                    "http_post", args=["https://example.com/data"],
+                    kwargs={"headers": {"user-agent": "mine"}},
+                )
+        first, second = stream.call_args_list
+        assert first.kwargs["headers"] == {"User-Agent": JENNY_USER_AGENT}
+        assert second.kwargs["headers"] == {"user-agent": "mine"}
+
+    def test_a_huge_response_is_refused_while_it_arrives(self):
+        ns = _make_namespace()
+        big = _fake_response(b"x" * (10 * 1024 * 1024 + 1))
+        with patch("jenny.security.network.validate_url_target", side_effect=_fake_validate()):
+            with patch("httpx.stream", _streaming(big)):
+                _, _, result = ns.call_function("http_get", args=["https://example.com/big"])
+        assert result.startswith("Error: the response is larger than 10 MB")
 
     def test_blocks_ssrf_on_initial_url(self):
         """The initial URL is still validated and blocked as before."""
@@ -89,18 +129,18 @@ class TestHttpGet:
         Previously httpx's own follow_redirects=True would resolve/connect to
         the Location target with no re-validation at all."""
         ns = _make_namespace()
-        fake_resp = Mock()
-        fake_resp.has_redirect_location = True
+        fake_resp = _fake_response(redirect=True)
         fake_resp.status_code = 302
         fake_resp.headers = {"location": "http://127.0.0.1:8765/internal-admin"}
+        stream = _streaming(fake_resp)
 
         with patch("jenny.security.network.validate_url_target", side_effect=_fake_validate()):
-            with patch("httpx.get", return_value=fake_resp) as mock_get:
+            with patch("httpx.stream", stream):
                 _, _, result = ns.call_function("http_get", args=["https://example.com/redirector"])
 
         # Only the original URL was ever fetched — the redirect target was
         # never requested.
-        mock_get.assert_called_once()
+        stream.assert_called_once()
         assert "redirect" in result.lower()
         assert "127.0.0.1:8765" in result
 
@@ -109,14 +149,13 @@ class TestHttpGet:
         import httpx
 
         ns = _make_namespace()
-        fake_resp = Mock()
-        fake_resp.has_redirect_location = False
+        fake_resp = _fake_response()
         fake_resp.raise_for_status = Mock(side_effect=httpx.HTTPStatusError(
             "500 error", request=Mock(), response=Mock(status_code=500)
         ))
 
         with patch("jenny.security.network.validate_url_target", side_effect=_fake_validate()):
-            with patch("httpx.get", return_value=fake_resp):
+            with patch("httpx.stream", _streaming(fake_resp)):
                 stdout, stderr, result = ns.call_function(
                     "http_get", args=["https://example.com/broken"]
                 )
