@@ -1,13 +1,11 @@
 package com.flagdizero.jenny
 
-import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
 import android.os.Build
@@ -15,7 +13,6 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -912,7 +909,7 @@ class GatewayService : Service() {
         }
     }
 
-    private fun hasLocationPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
+    // FINE o COARSE, come il tool: con la sola posizione approssimativa il tipo
+    // `location` serve lo stesso, e Android lo concede.
+    private fun hasLocationPermission(): Boolean = LocationBridge.hasPermission(this)
 }
