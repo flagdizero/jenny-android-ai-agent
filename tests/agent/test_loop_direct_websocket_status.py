@@ -2,11 +2,11 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_types import TurnOutcome
 from jenny.bus.events import OutboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import GenerationSettings, LLMResponse
 from jenny.session.keys import UNIFIED_SESSION_KEY
@@ -18,23 +18,16 @@ MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _make_loop(tmp_path):
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation = GenerationSettings(max_tokens=0)
     provider.estimate_prompt_tokens.return_value = (0, "test-counter")
     response = LLMResponse(content="done", tool_calls=[])
     provider.chat_with_retry = AsyncMock(return_value=response)
     provider.chat_stream_with_retry = AsyncMock(return_value=response)
 
-    loop = AgentLoop(
-        bus=bus,
-        provider=provider,
-        workspace=tmp_path,
-        model="test-model",
-    )
+    loop = make_loop(tmp_path, provider=provider, context_window_tokens=None)
     WebuiTurnCoordinator(
-        bus=bus,
+        bus=loop.bus,
         sessions=loop.sessions,
         schedule_background=lambda coro: loop._schedule_background(coro),
     ).subscribe(loop.runtime_events)

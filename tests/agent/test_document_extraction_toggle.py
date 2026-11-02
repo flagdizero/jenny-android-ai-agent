@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop, TurnContext, TurnState
 from jenny.bus.events import InboundMessage
@@ -11,14 +12,12 @@ from jenny.providers.base import LLMResponse
 
 
 def _make_loop(tmp_path: Path, extract_document_text: bool = True) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok"))
-    return AgentLoop(
-        bus=MessageBus(),
+    return make_loop(
+        tmp_path,
         provider=provider,
-        workspace=tmp_path,
-        model="test-model",
+        context_window_tokens=None,
         extract_document_text=extract_document_text,
     )
 

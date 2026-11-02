@@ -7,11 +7,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 from support.aio import settle_tasks
 
 from jenny.agent.loop import AgentLoop
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.command import CommandContext
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse
@@ -24,20 +24,11 @@ def _make_loop(
     session_ttl_minutes: int = 15,
 ) -> AgentLoop:
     """Create a minimal AgentLoop for testing."""
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.estimate_prompt_tokens.return_value = (10_000, "test")
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok", tool_calls=[]))
     provider.generation.max_tokens = 4096
-    loop = AgentLoop(
-        bus=bus,
-        provider=provider,
-        workspace=tmp_path,
-        model="test-model",
-        context_window_tokens=128_000,
-        session_ttl_minutes=session_ttl_minutes,
-    )
+    loop = make_loop(tmp_path, provider=provider, session_ttl_minutes=session_ttl_minutes)
     loop.tools.get_definitions = MagicMock(return_value=[])
     return loop
 
