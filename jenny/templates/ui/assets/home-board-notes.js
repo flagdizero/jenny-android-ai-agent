@@ -20,20 +20,9 @@
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { PinnedDeck } from './home-board-deck.js';
+import { button, el } from './shared/dom.js';
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
-function button(className, text, onClick) {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
 /** «12 ott»: il giorno in cui la nota e' nata. */
 function noteDate(iso, locale = i18n.locale) {

@@ -41,6 +41,7 @@ import {
   findContentAnchor,
   openOutsideWebView,
 } from './shared/content-link.js';
+import { writeFailedToast } from './shared/dom.js';
 
 /** Un link markdown relativo risolto contro la pagina che lo contiene.
  *
@@ -288,7 +289,7 @@ export class HomeReader {
       }
       /* Un piano ha preso il quaderno mentre scrivevi: il testo resta
          nell'editor, e la riga in cima dice perche' non si salva. */
-      showToast(i18n.t(err?.code === 'plan_running' ? 'home.plan.lock' : 'home.reader.saveFailed'), 'error');
+      writeFailedToast(err, 'home.reader.saveFailed');
       return;
     }
     this.editing = false;

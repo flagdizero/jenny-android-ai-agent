@@ -51,6 +51,7 @@ import { DrawerPhotos, PhotoUrls, photoDate } from './home-board-photos.js';
 import { automationRow, rhythmLabel } from './home-board-automation.js';
 import { agendaList, reminderForm } from './home-board-agenda.js';
 import { confirmDialog } from './shared/dialog.js';
+import { writeFailedToast } from './shared/dom.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
 export const LONG_PRESS_MS = 450;
@@ -891,7 +892,7 @@ export class HomeBoard {
       await api.runAppAction(slug, action, params || {});
     } catch (err) {
       console.warn('home.board: strip action failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.slip.failed'), 'error');
+      writeFailedToast(err, 'board.slip.failed');
     }
     this.refreshApp(slug);
   }
@@ -1101,7 +1102,7 @@ export class HomeBoard {
       data = await api.getBoardCard(this.notebook, cardId);
     } catch (err) {
       console.warn('home.board: card failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.failed'), 'error');
+      writeFailedToast(err, 'board.failed');
       return;
     }
     view.render(data);
@@ -1115,7 +1116,7 @@ export class HomeBoard {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.board: ${method} failed`, err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
+      writeFailedToast(err, 'board.section.failed');
       return false;
     }
     try {
@@ -1368,7 +1369,7 @@ export class HomeBoard {
         rpc.board('move', this.notebook, { kind, id: item.id, x: item.pos.x, y: item.pos.y })
           .catch((err) => {
             console.warn('home.board: move failed', err);
-            showToast(i18n.t(err?.code === 'plan_running' ? 'home.plan.lock' : 'board.moveFailed'), 'error');
+            writeFailedToast(err, 'board.moveFailed');
             this.load(this.notebook);
           });
       }
@@ -1695,7 +1696,7 @@ export class HomeBoard {
         this.sheet.close();
       } catch (err) {
         console.warn('home.board: card failed', err);
-        showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.failed'), 'error');
+        writeFailedToast(err, err?.code === 'conflict' ? 'board.card.full' : 'board.card.failed');
         ok.disabled = false;
       }
     };
@@ -1723,7 +1724,7 @@ export class HomeBoard {
       await rpc.board('card.remove', notebook, { id: cardId });
     } catch (err) {
       console.warn('home.board: remove failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.card.failed'), 'error');
+      writeFailedToast(err, 'board.card.failed');
       return;
     }
     if (this.focus === cardId) this.focus = null;
@@ -1920,7 +1921,7 @@ export class HomeBoard {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.board: ${method} failed`, err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
+      writeFailedToast(err, 'board.section.failed');
       return;
     }
     this.sheet.close();
@@ -1978,7 +1979,7 @@ export class HomeBoard {
       await rpc.board('suggestion.respond', this.notebook, { id: s.id, answer, near: this.viewCenter() });
     } catch (err) {
       console.warn('home.board: respond failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.envelope.full' : 'board.envelope.failed'), 'error');
+      writeFailedToast(err, err?.code === 'conflict' ? 'board.envelope.full' : 'board.envelope.failed');
       box.querySelectorAll('button').forEach((b) => { b.disabled = false; });
       return;
     }
@@ -2144,7 +2145,7 @@ export class HomeBoard {
       } catch (err) {
         console.warn('home.board: want failed', err);
         want.disabled = false;
-        showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.envelope.failed'), 'error');
+        writeFailedToast(err, 'board.envelope.failed');
       }
     });
     actions.append(close, want);

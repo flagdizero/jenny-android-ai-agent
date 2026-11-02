@@ -18,6 +18,7 @@ import { i18n } from '../../shared/i18n.js';
 import { whenText } from '../../shared/when.js';
 import { escapeHtml, showToast } from '../../shared/utils.js';
 import { confirmDialog } from '../../shared/dialog.js';
+import { iconHtml } from '../../shared/dom.js';
 import { rowHtml } from '../../home-backup.js';
 import {
   choosePassword, cloudAction, cloudErrorText, cloudNativeAvailable, cloudStatus, cloudView,
@@ -27,8 +28,6 @@ import {
 import { askCloudPassword, pickCloudCopy } from './cloud-backup-dialogs.js';
 
 const POLL_MS = 1500;
-
-const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 
 /** La riga di «Tu e Jenny»: lo stato della copia in tre parole, o — copia
  *  spenta — quando hai esportato l'ultimo file. */
@@ -245,11 +244,11 @@ export class DriveBackupCard {
     const t = (key, params) => escapeHtml(i18n.t(key, params));
     const hero = (iconName, title, sub) => `
       <div class="home-cloud-hero">
-        <div class="home-cloud-badge is-${view.tone}">${icon(iconName)}</div>
+        <div class="home-cloud-badge is-${view.tone}">${iconHtml(iconName)}</div>
         <div><div class="home-cloud-title">${title}</div>${sub ? `<div class="home-cloud-sub">${sub}</div>` : ''}</div>
       </div>`;
     const action = (name) => `<button class="home-save home-cloud-action" type="button" data-action="${name}">${t(`cloudBackup.actions.${name}`)}</button>`;
-    const note = (iconName, text) => `<div class="home-cloud-note">${icon(iconName)}<span>${text}</span></div>`;
+    const note = (iconName, text) => `<div class="home-cloud-note">${iconHtml(iconName)}<span>${text}</span></div>`;
     const box = (reason) => `<div class="home-cloud-box"><b>${t('cloudBackup.why')}</b> ${t(`cloudBackup.reasons.${reason}.why`)}<br><b>${t('cloudBackup.todo')}</b> ${t(`cloudBackup.reasons.${reason}.todo`)}</div>`;
 
     switch (view.kind) {
@@ -263,7 +262,7 @@ export class DriveBackupCard {
         }
         const icons = ['moon', 'lock', 'device-mobile'];
         const list = ['p1', 'p2', 'p3']
-          .map((k, i) => `<li>${icon(icons[i])}<span>${t(`cloudBackup.off.${k}`)}</span></li>`).join('');
+          .map((k, i) => `<li>${iconHtml(icons[i])}<span>${t(`cloudBackup.off.${k}`)}</span></li>`).join('');
         return hero('cloud-off', t('cloudBackup.off.title'), t('cloudBackup.off.sub'))
           + `<ul class="home-cloud-list">${list}</ul>`
           + action('turnOn')
@@ -322,7 +321,7 @@ export class DriveBackupCard {
         /* Il controllo settimanale non ha una riga sua: quando va bene non e'
            un'informazione («al sicuro» lo dice gia'), quando va male cambia lo
            stato intero (`damaged`). */
-        const fact = (iconName, label, value) => `<div class="home-cloud-fact">${icon(iconName)}<div><small>${label}</small>${value}</div></div>`;
+        const fact = (iconName, label, value) => `<div class="home-cloud-fact">${iconHtml(iconName)}<div><small>${label}</small>${value}</div></div>`;
         return hero('cloud-check', t('cloudBackup.safe.title'), t('cloudBackup.safe.sub', { when: dayText(view.last, now) }))
           + this._stripHtml(now)
           + '<div class="home-cloud-facts">'
@@ -340,7 +339,7 @@ export class DriveBackupCard {
     const aria = escapeHtml(i18n.t('cloudBackup.strip.aria', { copies: strip.copies, missed: strip.missed }));
     const cells = strip.cells.map((c) => `
       <div class="home-cloud-day${c.today ? ' is-today' : ''}">
-        <div class="home-cloud-dot is-${c.state}">${c.state === 'ok' ? icon('check') : ''}</div>${escapeHtml(c.label)}
+        <div class="home-cloud-dot is-${c.state}">${c.state === 'ok' ? iconHtml('check') : ''}</div>${escapeHtml(c.label)}
       </div>`).join('');
     return `<div class="home-cloud-strip" role="img" aria-label="${aria}">${cells}</div>`
       + `<div class="home-cloud-caption">${escapeHtml(i18n.t('cloudBackup.strip.caption'))}</div>`;

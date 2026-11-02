@@ -17,15 +17,10 @@
  */
 
 import { i18n } from './shared/i18n.js';
+import { el } from './shared/dom.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-function el(tag, cls, text) {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined && text !== null) node.textContent = text;
-  return node;
-}
 
 function locale() {
   return i18n.locale || undefined;

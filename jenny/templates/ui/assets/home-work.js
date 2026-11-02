@@ -43,6 +43,7 @@ import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
 import { saIsTerminal } from './shared/subagent-policy.js';
 import { FAMILY_BY_TOOL } from './home-activity.js';
+import { el, icon } from './shared/dom.js';
 
 /* Ogni quanto si riscrivono i minuti, e si guarda se una bolla e' ferma. */
 const TICK_MS = 30_000;
@@ -68,12 +69,6 @@ const ICON = {
   failed: 'ti-alert-circle',
 };
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 /* I tre puntini che saltano: le stesse classi della bolla di Jenny. */
 function dots() {
@@ -487,8 +482,7 @@ export class WorkBubbles {
     const close = el('button', 'home-plan-sheet-close');
     close.type = 'button';
     close.setAttribute('aria-label', i18n.t('home.work.sheetClose'));
-    const x = el('i', 'ti ti-x');
-    x.setAttribute('aria-hidden', 'true');
+    const x = icon('ti-x');
     close.appendChild(x);
     close.addEventListener('click', () => this._closeSheet());
     const head = [el('h2', 'home-plan-sheet-title', title)];
@@ -519,8 +513,7 @@ export class WorkBubbles {
     const row = el('button', `home-plan-sheet-row ${cls || ''}`.trim());
     row.type = 'button';
     row.dataset.workAction = action;
-    const i = el('i', `ti ${glyph}`);
-    i.setAttribute('aria-hidden', 'true');
+    const i = icon(glyph);
     row.appendChild(i);
     const text = el('span', 'home-plan-row-text');
     text.append(el('span', null, label));
@@ -973,8 +966,7 @@ export class WorkBubbles {
         const stop = el('button', 'home-work-row-stop');
         stop.type = 'button';
         stop.setAttribute('aria-label', i18n.t('home.work.helperStopNamed', { label: row.label }));
-        const i = el('i', 'ti ti-player-stop');
-        i.setAttribute('aria-hidden', 'true');
+        const i = icon('ti-player-stop');
         stop.appendChild(i);
         stop.addEventListener('click', row.stop);
         li.appendChild(stop);

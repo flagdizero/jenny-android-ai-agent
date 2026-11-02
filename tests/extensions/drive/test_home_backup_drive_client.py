@@ -98,7 +98,7 @@ async function confirmDialog(text) { flows.push('confirm'); CONFIRM.asked.push(t
 const POLL_MS = 1500;
 const HISTORY_FIRST = 8;
 __SNAPSHOT_WHEN__
-const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
+const iconHtml = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 __ROW_HTML__
 __BACKUP_VALUE__
 __DRIVE_VALUE__

@@ -30,6 +30,7 @@ import { whenText } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
 import { confirmDialog } from './shared/dialog.js';
+import { iconHtml } from './shared/dom.js';
 import {
   runExportFlow, runImportFlow, runSnapshotRestore, backupNativeAvailable,
 } from './shared/backup-flow.js';
@@ -38,8 +39,6 @@ import {
    stamattina», non tre settimane fa. Gli altri dietro «Mostra gli altri». */
 const HISTORY_FIRST = 8;
 const DAY_MS = 86400000;
-
-const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 
 /** Quando e' stato fatto uno snapshot: «oggi alle 9:40», «martedì alle 9:40»;
  *  piu' vecchio di una settimana, giorno e ora («3 ott, 9:40») — due snapshot
@@ -73,7 +72,7 @@ export function backupValue(backup) {
 /** Una riga della pagina: icona, titolo, sottotitolo, e il segno a destra.
  *  Esportata perche' le righe di un'estensione siano uguali alle nostre. */
 export function rowHtml(iconName, label, sub, go = 'chevron-right') {
-  return `${icon(iconName)}<span>${escapeHtml(label)}${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`
+  return `${iconHtml(iconName)}<span>${escapeHtml(label)}${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`
     + `<i class="ti ti-${go} home-backup-go" aria-hidden="true"></i>`;
 }
 
@@ -234,7 +233,7 @@ export class HomeBackup {
       const detail = `${trigger}${s.label ? ` · ${s.label}` : ''} · ${s.file_count} ${i18n.t('backup.files')}`;
       return `<button class="home-history-snap" type="button" data-snapshot="${escapeHtml(s.id)}" data-when="${escapeHtml(when)}">`
         + `<span>${escapeHtml(when)}<small>${escapeHtml(detail)}</small></span>`
-        + `${icon('restore')}</button>`;
+        + `${iconHtml('restore')}</button>`;
     }).join('');
     const more = !h.all && h.snapshots.length > HISTORY_FIRST
       ? `<button class="home-history-snap is-more" type="button" data-history-all>${escapeHtml(i18n.t('home.backup.history.showAll', { n: h.snapshots.length - HISTORY_FIRST }))}</button>`

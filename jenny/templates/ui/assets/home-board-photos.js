@@ -29,6 +29,7 @@ import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { PinnedDeck } from './home-board-deck.js';
 import { openPhotoViewer } from './home-photo-viewer.js';
+import { button, el } from './shared/dom.js';
 
 /* Il lato lungo di una foto mandata al server: il telefono ne fa di 4000 px, e
    in un cassetto largo 590 ne servono meno di un terzo. */
@@ -53,19 +54,7 @@ export async function shrinkPhoto(file) {
   return { mime: 'image/jpeg', data: btoa(binary) };
 }
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
-function button(className, text, onClick) {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
 /** «14 ottobre»: la data per esteso, nella pagina d'album e a tutto schermo. */
 export function photoDay(iso, locale = i18n.locale) {

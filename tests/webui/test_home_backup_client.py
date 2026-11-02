@@ -80,7 +80,7 @@ function runExportFlow() { actions.push('export'); return Promise.resolve(export
 function runImportFlow() { actions.push('import'); return Promise.resolve(importOutcome); }
 function backupNativeAvailable() { return nativePresent; }
 const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
+const iconHtml = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 const HISTORY_FIRST = 8;
 const DAY_MS = 86400000;
 const SNAPS = { list: [] };

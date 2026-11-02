@@ -302,6 +302,7 @@ _UI_MANIFEST = [
     "assets/shared/conversation-list.js",
     "assets/shared/cron-view.js",
     "assets/shared/dialog.js",
+    "assets/shared/dom.js",
     "assets/shared/editable-focus.js",
     "assets/shared/extensions.js",
     "assets/shared/first-run.js",
