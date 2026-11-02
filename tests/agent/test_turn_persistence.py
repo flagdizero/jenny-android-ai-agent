@@ -1,6 +1,6 @@
 """Copertura complementare per ``jenny.agent.turn_persistence``.
 
-``test_turn_continuation.py`` copre il confine di salvataggio
+``test_turn_persistence_save_skip.py`` copre il confine di salvataggio
 (``_save_skip_for_turn``); qui ``should_persist_user_message`` e
 ``prepare_save_boundary``. La continuazione interna del goal sostenuto, che il
 modulo ospitava, è stata tolta col goal il 01/11/2026.

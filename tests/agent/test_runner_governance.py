@@ -505,7 +505,7 @@ async def test_microcompact_skips_non_compactable_tools():
 
 def test_governance_repairs_orphans_after_snip():
     """After _snip_history clips an assistant+tool_calls, the second
-    _drop_orphan_tool_results pass must clean up the resulting orphans."""
+    drop_orphan_tool_results pass must clean up the resulting orphans."""
 
     # Simulate snipping that keeps only the tail: drop the assistant with
     # tool_calls but keep its tool result (orphan).
@@ -527,7 +527,7 @@ def test_governance_repairs_orphans_after_snip():
 
 def test_governance_fallback_still_repairs_orphans():
     """When full governance fails, the fallback must still run
-    _drop_orphan_tool_results and _backfill_missing_tool_results."""
+    drop_orphan_tool_results and backfill_missing_tool_results."""
 
     # Messages with an orphan tool result (no matching assistant tool_call).
     messages = [
@@ -651,7 +651,7 @@ def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
     assert isinstance(trimmed, list)
     # Must have at least system.
     assert any(m.get("role") == "system" for m in trimmed)
-    # The _enforce_role_alternation safety net must be able to fix whatever
+    # The enforce_role_alternation safety net must be able to fix whatever
     # _snip_history returns here — verify it produces a valid sequence.
     fixed = enforce_role_alternation(trimmed)
     non_system = [m for m in fixed if m["role"] != "system"]

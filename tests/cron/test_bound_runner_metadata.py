@@ -1,4 +1,4 @@
-"""Test per jenny/cron/webui_metadata.py.
+"""Test per ``cron_proactive_delivery_metadata`` (``jenny/cron/bound_runner.py``).
 
 Copre la derivazione dei metadata WebUI per le consegne cron proattive:
 turn id univoco e sorgente strutturata solo sul canale ``websocket``, pulizia

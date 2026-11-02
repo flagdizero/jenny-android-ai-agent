@@ -249,8 +249,8 @@ class AnthropicConversionMixin:
         3. The conversation cannot start with an ``assistant`` turn — the
            first message must be ``user``.
 
-        Rules 2 and 3 mirror ``LLMProvider._enforce_role_alternation`` in
-        ``base.py``, which applies the equivalent invariants to OpenAI-compat
+        Rules 2 and 3 mirror ``enforce_role_alternation`` in
+        ``message_repair.py``, which applies the equivalent invariants to OpenAI-compat
         providers.  The only Anthropic-specific wrinkle: ``tool_use`` blocks
         live inside ``content`` (not a separate ``tool_calls`` field) and are
         invalid inside ``user`` turns, so the recovery paths below must skip

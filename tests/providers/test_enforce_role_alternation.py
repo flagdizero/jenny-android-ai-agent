@@ -160,7 +160,7 @@ class TestEnforceRoleAlternation:
         """Subagent result injected as assistant message must not be silently dropped.
 
         When build_messages(current_role="assistant") produces [system, assistant],
-        _enforce_role_alternation would drop the assistant, leaving only [system].
+        enforce_role_alternation would drop the assistant, leaving only [system].
         Most providers (e.g. Zhipu/GLM error 1214) reject such requests.
         The trailing assistant should be recovered as a user message instead.
         """
