@@ -21,7 +21,7 @@ from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
 )
-from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+from jenny.session.keys import is_project_session_key, project_name
 from jenny.utils.helpers import safe_zoneinfo, validate_timezone_name
 
 # Modi accettati da action='add'. Vive qui e non in cron/types.py perché è la
@@ -321,7 +321,7 @@ class CronTool(Tool, ContextAware):
         from jenny.utils.wiki_paths import is_wiki_root
 
         session = self._session_key.get()
-        here = session[len(PROJECT_SESSION_PREFIX):] if is_project_session_key(session) else None
+        here = project_name(session) if is_project_session_key(session) else None
         name = str(requested or "").strip() or here
         if name is None:
             return None, None, None

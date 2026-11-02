@@ -29,9 +29,9 @@ from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
 from jenny.runtime.user_text import current_bot_name, say
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
     WEBUI_CHANNEL,
     is_project_session_key,
+    project_name,
     session_key_for_channel,
 )
 from jenny.utils.plain_text import plain_text
@@ -137,7 +137,7 @@ def alert_fields(
     else:
         title = bot
         if conversation:
-            title = f"{bot} · {conversation[len(PROJECT_SESSION_PREFIX):]}"
+            title = f"{bot} · {project_name(conversation)}"
         tag = "message"
     if conversation:
         tag = f"{conversation}{CONVERSATION_TAG_SEPARATOR}{tag}"

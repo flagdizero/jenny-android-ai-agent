@@ -594,14 +594,14 @@ def _valid_notebook(ref: Any) -> None:
     ``jenny.session`` tira dentro il gestore delle sessioni, che legge la
     configurazione.
     """
-    from jenny.session.keys import PROJECT_SESSION_PREFIX, is_valid_project_name
+    from jenny.session.keys import PROJECT_SESSION_PREFIX, is_valid_project_name, project_name
 
     if not isinstance(ref, str) or not ref.startswith(PROJECT_SESSION_PREFIX):
         raise ValueError(
             f"a conversation page needs a notebook ({PROJECT_SESSION_PREFIX}<name>), "
             f"not {ref!r}"
         )
-    name = ref[len(PROJECT_SESSION_PREFIX):]
+    name = project_name(ref)
     if not is_valid_project_name(name):
         raise ValueError(f"invalid notebook name: {name!r}")
 

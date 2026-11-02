@@ -22,6 +22,7 @@ from jenny.session.keys import (
     PROJECT_SESSION_PREFIX,
     is_project_session_key,
     notebook_of_cron_session,
+    project_name,
 )
 
 WorkspaceAccessMode = Literal["restricted", "full"]
@@ -293,7 +294,7 @@ class WorkspaceScopeResolver:
         fallback silenzioso metterebbe il lavoro di un progetto nel workspace
         personale. Trasformarlo in un rifiuto detto a voce e' il passo 6.
         """
-        name = session_key[len(PROJECT_SESSION_PREFIX):]
+        name = project_name(session_key)
         root = _safe_expanduser(self.default_workspace).resolve(strict=False)
         project = (root / self.projects_subdir / name).resolve(strict=False)
         # Il nome arriva da una session key, che a sua volta arriva da un client:

@@ -32,7 +32,7 @@ from jenny.agent.memory import (
 from jenny.providers.opencode import conversation_scope
 from jenny.security.workspace_access import WorkspaceScopeResolver
 from jenny.session.history_meta import COMPACTED_META
-from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+from jenny.session.keys import is_project_session_key, project_name
 from jenny.session.manager import DIARY_HARVEST_METADATA_KEY, Session
 from jenny.utils.helpers import (
     CHARS_PER_TOKEN,
@@ -1111,7 +1111,7 @@ class Consolidator:
         mai niente e la compattazione di un progetto verrebbe rifiutata per
         sempre — un difetto silenzioso travestito da prudenza.
         """
-        name = session_key[len(PROJECT_SESSION_PREFIX):]
+        name = project_name(session_key)
         roots = discover_wiki_roots(self.store.workspace / self._projects_subdir)
         root = roots.get(name)
         return None if root is None else root / _PROJECT_COMPACTED_SUBDIR

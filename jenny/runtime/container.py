@@ -351,7 +351,7 @@ class GatewayContainer:
         metà", è "un rinomino a metà contro **nessun gateway**". Un rinomino
         lasciato aperto lo riprova l'avvio dopo; un gateway che non parte no.
         """
-        from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+        from jenny.session.keys import is_project_session_key, project_name
         from jenny.session.project_rename import repair_pending_project_renames
 
         self._resumed_renames = []
@@ -364,8 +364,8 @@ class GatewayContainer:
                     old_key, new_key,
                 )
                 if is_project_session_key(old_key) and is_project_session_key(new_key):
-                    self._resumed_renames.append((old_key[len(PROJECT_SESSION_PREFIX):],
-                                                  new_key[len(PROJECT_SESSION_PREFIX):]))
+                    self._resumed_renames.append((project_name(old_key),
+                                                  project_name(new_key)))
         except Exception:
             logger.opt(exception=True).error(
                 "Ripresa dei rinomini di progetto in sospeso fallita; il gateway "
