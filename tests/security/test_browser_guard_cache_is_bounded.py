@@ -102,3 +102,15 @@ def test_the_security_model_puts_the_dns_cap_where_the_code_has_it() -> None:
     browser = " ".join(section.split())
     assert "On the page-side check a name that is not cached waits at most 2 seconds" in browser
     assert "an HTTP request waits for the system resolver" in browser
+
+
+def test_a_dns_failure_is_not_remembered() -> None:
+    """Un DNS che fallisce blocca la richiesta, ma non entra in cache.
+
+    Dal 02/11/2026 la cache è di processo e la usa anche la WebView della
+    ricerca: un verdetto «bloccato» scritto durante un calo di rete teneva
+    fuori ``www.bing.com`` finché una sessione di browser non si chiudeva.
+    """
+    resolve = function_body(_code(), "isBlockedHost")
+    catch = block_after(resolve, r"catch \(e: Exception\)")
+    assert "return true" in catch, "il fallimento esce prima di scrivere in cache"

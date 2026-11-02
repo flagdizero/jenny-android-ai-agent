@@ -83,8 +83,8 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         /**
          * Tetto della cache dei verdetti per host. I nomi li sceglie la pagina
          * (`JennyBrowserGuard.blocked` è visibile a ogni frame): senza tetto,
-         * una pagina che chiede nomi casuali in un ciclo la fa crescere fino
-         * alla fine della sessione. Oltre il tetto esce il meno usato di
+         * una pagina che chiede nomi casuali in un ciclo la fa crescere finché
+         * il processo vive. Oltre il tetto esce il meno usato di
          * recente: un verdetto perso si ricalcola, non si sbaglia.
          */
         private const val MAX_HOST_VERDICTS = 256
@@ -226,7 +226,9 @@ class JennyBrowserBridge(context: Context, slot: Int) {
                 // Il nome lo sceglie la pagina: un avviso per ogni nome nuovo
                 // sarebbe un log che la pagina scrive a piacere.
                 warnThrottled("DNS failed (${e.javaClass.simpleName}): host blocked")
-                true   // in dubbio si blocca
+                // In dubbio si blocca, ma non si ricorda: la cache è di processo,
+                // e un calo di rete terrebbe fuori la ricerca fino al riavvio.
+                return true
             }
             synchronized(hostVerdicts) { hostVerdicts[host] = verdict }
             return verdict
