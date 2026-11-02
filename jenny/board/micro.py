@@ -21,10 +21,8 @@ le scrive ``reader.py``, fuori dal codice guardato.
 from __future__ import annotations
 
 import json
-import os
 import re
 import threading
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -32,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
+from jenny.utils.path import atomic_write
 
 MICRO_DIRNAME = "micro"
 DRAFTS_DIRNAME = ".drafts"
@@ -265,9 +264,7 @@ def _read_json(path: Path) -> Any:
 
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex[:8]}.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
 @dataclass

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import threading
 import uuid
 from collections.abc import Mapping
@@ -36,6 +35,7 @@ from loguru import logger
 
 from jenny.apps.manifest import LoadedApp, find_app, load_app, scan_apps
 from jenny.apps.summary_view import LATEST_FILE, READINGS, STATE_FILE, reader_dir
+from jenny.utils.path import atomic_write
 
 # Le serie di un lettore a chiave: al piu' tante per giro.
 MAX_SERIES = 20
@@ -70,9 +70,7 @@ def _read_json(path: Path) -> Any:
 
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, path)
+    atomic_write(path, json.dumps(data, ensure_ascii=False))
 
 
 def read_state(app_dir: Path) -> dict[str, Any]:
@@ -106,8 +104,8 @@ def _same_data(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
             == {k: v for k, v in b.items() if k not in _NOT_DATA})
 
 
-def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | None,
-                    now: datetime) -> list[dict[str, Any]]:
+async def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | None,
+                          now: datetime) -> list[dict[str, Any]]:
     """Le letture di un giro: gli scalari nella collezione, le righe a parte.
 
     Di un campo ``rows`` la collezione tiene **quante** erano (l'andamento, le
@@ -119,7 +117,12 @@ def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | N
     «fermo») e la collezione non si riempie di copie — un sensore offline
     letto ogni 15 minuti faceva 96 righe identiche al giorno, che il cestino
     poi contava come dati.
+
+    La collezione si scrive da ``apps/storage`` (:func:`edit_collection`), sotto
+    lo stesso lock delle azioni dell'app: un ``append`` dello schermo nel mezzo
+    di un giro non va perso.
     """
+    from jenny.apps.storage import edit_collection
     from jenny.board import model
     from jenny.board.micro import _COMPACT_AFTER, _compact
 
@@ -143,46 +146,36 @@ def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: str | N
                 latest = {"ts": stamp, "rows": rows}
     if latest:
         _write_json(d / LATEST_FILE, latest)
-    path = d / f"{READINGS}.jsonl"
-    readings = read_readings(app_dir)
-    last: dict[str, dict[str, Any]] = {}
-    for record in readings:
-        last[_series_of(record, key)] = record
-    fresh: list[dict[str, Any]] = []
-    touched = False
-    for i, record in enumerate(records):
-        prev = last.get(_series_of(record, key))
-        if prev is not None and _same_data(prev, record):
-            prev["ts"] = stamp
-            if "_source" in record:
-                prev["_source"] = record["_source"]
-            records[i] = prev
-            touched = True
-        else:
-            fresh.append(record)
-    if touched:
-        readings.extend(fresh)
-        tmp = path.with_name(f".{path.name}.tmp")
-        tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in readings),
-                       encoding="utf-8")
-        os.replace(tmp, path)
-    else:
-        with path.open("a", encoding="utf-8") as fh:
-            for record in fresh:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-        readings.extend(fresh)
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for record in readings:
-        groups.setdefault(_series_of(record, key), []).append(record)
-    if len(readings) > _COMPACT_AFTER * max(1, len(groups)):
-        kept: list[dict[str, Any]] = []
-        for group in groups.values():
-            kept.extend(_compact(group, now))
-        kept.sort(key=lambda r: model.instant_order(r.get("ts")))
-        tmp = path.with_name(f".{path.name}.tmp")
-        tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept),
-                       encoding="utf-8")
-        os.replace(tmp, path)
+
+    def change(readings: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
+        last: dict[str, dict[str, Any]] = {}
+        for record in readings:
+            last[_series_of(record, key)] = record
+        fresh: list[dict[str, Any]] = []
+        touched = False
+        for i, record in enumerate(records):
+            prev = last.get(_series_of(record, key))
+            if prev is not None and _same_data(prev, record):
+                prev["ts"] = stamp
+                if "_source" in record:
+                    prev["_source"] = record["_source"]
+                records[i] = prev
+                touched = True
+            else:
+                fresh.append(record)
+        readings = [*readings, *fresh]
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for record in readings:
+            groups.setdefault(_series_of(record, key), []).append(record)
+        if len(readings) > _COMPACT_AFTER * max(1, len(groups)):
+            kept: list[dict[str, Any]] = []
+            for group in groups.values():
+                kept.extend(_compact(group, now))
+            kept.sort(key=lambda r: model.instant_order(r.get("ts")))
+            return kept, False
+        return readings, not touched
+
+    await edit_collection(app_dir, READINGS, change)
     return records
 
 
@@ -319,7 +312,7 @@ async def execute_reader(workspace: Path, app: LoadedApp, *,
     return mc.RunResult("ok", values=values, at=stamp)  # type: ignore[arg-type]
 
 
-def record_reader_run(app: LoadedApp, result: Any, *, now: datetime) -> dict[str, Any]:
+async def record_reader_run(app: LoadedApp, result: Any, *, now: datetime) -> dict[str, Any]:
     """Scrive l'esito di un giro: le letture, se ci sono, e lo stato."""
     from jenny.board.micro import BROKEN_AFTER
 
@@ -327,7 +320,8 @@ def record_reader_run(app: LoadedApp, result: Any, *, now: datetime) -> dict[str
     state["lastRunAt"] = result.at or now.isoformat(timespec="seconds")
     if result.status == "ok" and result.values is not None:
         assert app.manifest is not None
-        append_readings(app.dir, list(result.values), key=app.manifest.reader_key, now=now)
+        await append_readings(app.dir, list(result.values), key=app.manifest.reader_key,
+                              now=now)
         state.update({"status": "ok", "failures": 0, "lastError": "",
                       "lastOkAt": state["lastRunAt"]})
     elif result.status == "unreachable":
@@ -375,7 +369,7 @@ async def run_reader(workspace: Path, slug: str, *, now: datetime | None = None,
         live = find_app(workspace, slug)
         live_dir = live.dir if live is not None else None
     result = await execute_reader(workspace, app, now=current, data_dir=live_dir)
-    state = record_reader_run(app, result, now=current)
+    state = await record_reader_run(app, result, now=current)
     if app_dir is None:
         # Il valore della polaroid puo' essere cambiato: la WebUI si rilegge.
         from jenny.apps.notify import data_changed

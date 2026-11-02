@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -140,7 +141,10 @@ class LocalDirSink:
 
         def _copy() -> None:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            tmp = dest.with_name(f"{dest.name}.{os.getpid()}.tmp")
+            # Un temporaneo per copia, come ``atomic_write`` (che qui non si usa
+            # per non tenere in memoria un archivio intero): col solo pid due
+            # copie della stessa chiave nello stesso processo si pestavano.
+            tmp = dest.with_name(f"{dest.name}.{uuid.uuid4().hex[:8]}.tmp")
             # ``copyfile``, non ``copy2``: sul telefono gli xattr SELinux fanno
             # fallire la copia dei metadati dopo che i byte sono già passati.
             shutil.copyfile(source, tmp)

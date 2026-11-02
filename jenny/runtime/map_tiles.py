@@ -19,7 +19,6 @@ resta col disegno a curve di livello.
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from pathlib import Path
 
@@ -27,6 +26,7 @@ import httpx
 from loguru import logger
 
 from jenny import __version__
+from jenny.utils.path import atomic_write
 
 TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 USER_AGENT = f"Jenny/{__version__} (+https://github.com/flagdizero/jenny-android-ai-agent)"
@@ -66,9 +66,9 @@ def _read(path: Path) -> tuple[bytes, float] | None:
 
 def _write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    # Una tessera è una cache: niente fsync, ma il temporaneo è unico per
+    # scrittura, così due richieste della stessa tessera non si pestano.
+    atomic_write(path, data, fsync_file=False, fsync_dir=False)
 
 
 def _prune(cache_dir: Path, max_bytes: int) -> None:
