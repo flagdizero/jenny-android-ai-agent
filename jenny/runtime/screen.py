@@ -23,7 +23,6 @@ Fuori da Android ogni chiamata al bridge è un no-op che risponde «niente».
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any, Mapping
 
@@ -144,19 +143,10 @@ def _resolve_bridge_class() -> Any:
 
 
 async def _call(method: str, *args: Any) -> Any:
-    """Chiama un metodo del bridge su un thread, con timeout. Mai solleva:
+    """Chiama un metodo del bridge (:meth:`BridgeCache.call`). Mai solleva:
     ``None`` se Android non c'è o la chiamata fallisce."""
-    context = get_android_context()
-    if context is None:
-        return None
-    try:
-        bridge = await _BRIDGE.get(context, resolve=_resolve_bridge_class)
-        return await asyncio.wait_for(
-            asyncio.to_thread(getattr(bridge, method), *args), timeout=_BRIDGE_TIMEOUT_S
-        )
-    except Exception:
-        logger.opt(exception=True).warning("ScreenBridge.{} failed", method)
-        return None
+    return await _BRIDGE.call(lambda c: _BRIDGE.get(c, resolve=_resolve_bridge_class),
+                              get_android_context(), method, *args, timeout=_BRIDGE_TIMEOUT_S)
 
 
 async def screen_state() -> str:

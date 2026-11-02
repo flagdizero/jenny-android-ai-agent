@@ -23,8 +23,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from loguru import logger
-
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
 from jenny.runtime.user_text import current_bot_name, say
@@ -198,18 +196,11 @@ async def post_alert(
     )
     if thread:
         tag = thread
-    try:
-        bridge = await _get_bridge(context)
-        # La risposta a un messaggio scritto nella WebUI tace con l'app davanti,
-        # un avviso solo con la sua chat a schermo: v. ``is_app_reply``.
-        post = bridge.postReply if is_app_reply(metadata) else bridge.postAlert
-        posted = await asyncio.wait_for(
-            asyncio.to_thread(post, title, body, tag), timeout=_ALERT_TIMEOUT_S
-        )
-    except Exception:
-        logger.opt(exception=True).warning("Failed to post system alert (tag={})", tag)
-        return False
-    return bool(posted)
+    # La risposta a un messaggio scritto nella WebUI tace con l'app davanti,
+    # un avviso solo con la sua chat a schermo: v. ``is_app_reply``.
+    method = "postReply" if is_app_reply(metadata) else "postAlert"
+    return bool(await _BRIDGE.call(_get_bridge, context, method, title, body, tag,
+                                   timeout=_ALERT_TIMEOUT_S, default=False))
 
 
 def notify_delivery(
