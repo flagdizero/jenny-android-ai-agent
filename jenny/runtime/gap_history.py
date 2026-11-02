@@ -23,8 +23,9 @@ Kotlin (``Watchdog.noteAlive`` → ``SharedPreferences["gatewayHeartbeatMs"]``)
 esiste già ed è l'unico timestamp di liveness che sopravvive al processo, ma
 ``GatewayService.onCreate`` lo aggiorna *prima* di far partire Python: il
 gateway, quando finalmente gira, ci trova sempre "adesso" e non vedrebbe mai il
-buco che ha appena attraversato. Per questo la fotografia la scatta
-``MainActivity.onCreate``, che gira prima del service, e la lascia in due
+buco che ha appena attraversato. Per questo la fotografia la scatta lo stesso
+``GatewayService.onCreate`` un istante prima di rinfrescarlo
+(``Watchdog.takeGapProbe``), e la lascia in due
 chiavi separate dello stesso file di preferenze — ``gatewayGapProbeMs`` (il
 valore del battito) e ``gatewayGapProbeAtMs`` (quando l'ha letto). Il buco è la
 differenza fra le due, e resta corretto anche se il gateway la consuma molto
@@ -145,8 +146,8 @@ def _plausible(duration_ms: int) -> bool:
 def read_probe() -> tuple[int, int] | None:
     """La coppia (battito osservato, istante dell'osservazione) da Kotlin.
 
-    ``None`` fuori da Android, o quando ``MainActivity`` non ha ancora scattato
-    nessuna fotografia (prima installazione, dati cancellati). Legge le
+    ``None`` fuori da Android, o quando ``Watchdog.takeGapProbe`` non ha ancora
+    scattato nessuna fotografia (prima installazione, dati cancellati). Legge le
     ``SharedPreferences`` direttamente dal Context: nessun metodo nuovo sul
     ``PowerBridge``, perché non c'è niente da calcolare lato Kotlin — solo due
     long da leggere.

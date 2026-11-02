@@ -45,6 +45,10 @@ object Watchdog {
     private const val KEY_ENABLED = "watchdogEnabled"
     private const val KEY_INTERVAL_MIN = "watchdogIntervalMin"
     private const val KEY_HEARTBEAT_MS = "gatewayHeartbeatMs"
+    // La fotografia del battito per lo storico delle interruzioni
+    // (`jenny/runtime/gap_history.py`, che le legge con questi nomi).
+    private const val KEY_PROBE_VALUE = "gatewayGapProbeMs"
+    private const val KEY_PROBE_AT = "gatewayGapProbeAtMs"
 
     /** Default allineati a `PowerConfig` (schema.py). Valgono finché Python non
      *  ha spinto la sua configurazione almeno una volta — cioè al primissimo
@@ -106,6 +110,22 @@ object Watchdog {
     fun noteAlive(context: Context) {
         prefs(context.applicationContext).edit()
             .putLong(KEY_HEARTBEAT_MS, System.currentTimeMillis())
+            .apply()
+    }
+
+    /** Fotografa il battito com'è **prima** che questo avvio lo rinfreschi: il
+     *  valore e l'istante in cui lo si è letto. La differenza fra i due è il
+     *  tempo in cui il gateway non girava, e Python la registra all'avvio
+     *  (`gap_history.record_startup_gap`). Va chiamata prima di [noteAlive]:
+     *  dopo, il battito direbbe «adesso» e il buco sparirebbe. Un battito mai
+     *  scritto (prima installazione) non fotografa niente. */
+    fun takeGapProbe(context: Context) {
+        val prefs = prefs(context.applicationContext)
+        val heartbeat = prefs.getLong(KEY_HEARTBEAT_MS, 0L)
+        if (heartbeat <= 0L) return
+        prefs.edit()
+            .putLong(KEY_PROBE_VALUE, heartbeat)
+            .putLong(KEY_PROBE_AT, System.currentTimeMillis())
             .apply()
     }
 

@@ -897,7 +897,7 @@ class GatewayContainer:
             from jenny.runtime.floating import apply_floating_config
             await apply_floating_config()
             # Buco di attività attraversato prima di questo avvio. Va misurato
-            # adesso e non più tardi: la fotografia lasciata da MainActivity è
+            # adesso e non più tardi: la fotografia lasciata da GatewayService è
             # l'unico posto in cui il "prima" sopravvive alla morte del
             # processo, e nessun altro la consuma.
             from jenny.runtime.gap_history import record_startup_gap

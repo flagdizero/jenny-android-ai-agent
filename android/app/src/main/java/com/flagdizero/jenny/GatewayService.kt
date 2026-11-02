@@ -351,7 +351,10 @@ class GatewayService : Service() {
         // esistere anche se l'avvio del gateway fallisce a metà, perché è
         // proprio quello il guasto che deve saper riparare. `Watchdog.arm`
         // legge le impostazioni dalle prefs (default se Python non le ha mai
-        // spinte), quindi non ha bisogno che il runtime sia su.
+        // spinte), quindi non ha bisogno che il runtime sia su. La fotografia
+        // del battito va presa prima del battito nuovo: è il «prima» del buco
+        // che Python registra all'avvio.
+        Watchdog.takeGapProbe(this)
         Watchdog.noteAlive(this)
         Watchdog.arm(this)
         // Accanto al watchdog e per la stessa ragione: la rete deve esistere
