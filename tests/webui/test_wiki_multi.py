@@ -6,13 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from jenny.utils.wiki_paths import discover_wikis, resolve_wikilink
 from jenny.webui.wiki import (
     _split_wikilink,
     build_graph,
     create_audit,
     create_renderer,
-    discover_wikis,
-    resolve_wikilink,
 )
 
 # ── Fixtures ────────────────────────────────────────────────────────────────

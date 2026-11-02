@@ -214,7 +214,7 @@ class WikiRoutes:
         err = self._check_wiki_enabled()
         if err:
             return err
-        from jenny.webui.wiki import discover_wikis
+        from jenny.utils.wiki_paths import discover_wikis
 
         query = parse_query(request.path)
         wiki_name = query_first(query, "wiki") or ""
@@ -265,7 +265,8 @@ class WikiRoutes:
         err = self._check_wiki_enabled()
         if err:
             return err
-        from jenny.webui.wiki import create_renderer, discover_wikis, resolve_wikilink
+        from jenny.utils.wiki_paths import discover_wikis, resolve_wikilink
+        from jenny.webui.wiki import create_renderer
 
         query = parse_query(request.path)
         wiki_name = query_first(query, "wiki") or ""

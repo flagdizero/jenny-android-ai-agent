@@ -221,7 +221,7 @@ class _Links:
     def resolve(self, target: str) -> Path | None:
         target = target.strip()
         if target not in self._cache:
-            from jenny.webui.wiki import resolve_wikilink
+            from jenny.utils.wiki_paths import resolve_wikilink
 
             self._cache[target] = resolve_wikilink(self._root, target) if target else None
         return self._cache[target]

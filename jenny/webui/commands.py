@@ -713,7 +713,7 @@ def _wiki_page_file(ctx: CommandContext, wiki_name: str, page_path: str) -> Path
     ``resolve()``, che è il solo cancello che vede un link simbolico —
     ``safe_wiki_page_path`` guarda la stringa e un symlink non risale.
     """
-    from jenny.webui.wiki import discover_wikis
+    from jenny.utils.wiki_paths import discover_wikis
 
     wikis = discover_wikis(_wikis_dir(ctx))
     if wiki_name not in wikis:
@@ -862,7 +862,8 @@ async def audit_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict[s
     (503). ``sel_start``/``sel_end`` sono offset nel **markdown sorgente**: il
     file lo rilegge il server, come faceva la route.
     """
-    from jenny.webui.wiki import create_audit, discover_wikis
+    from jenny.utils.wiki_paths import discover_wikis
+    from jenny.webui.wiki import create_audit
 
     wiki_name = params.get("wiki")
     target = params.get("target", "")

@@ -333,7 +333,7 @@ async def _resolve_page(root: Path, page: Any) -> str:
 
     titles = await _run(wiki_titles, root)
     if isinstance(page, str) and page not in titles and ".." not in page:
-        from jenny.webui.wiki import resolve_wikilink
+        from jenny.utils.wiki_paths import resolve_wikilink
 
         resolved = await _run(resolve_wikilink, root, page)
         if resolved is not None:

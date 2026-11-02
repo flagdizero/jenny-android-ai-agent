@@ -1,10 +1,10 @@
-"""Discovery, frontmatter e fingerprint delle wiki del workspace.
+"""Discovery, frontmatter, wikilink e fingerprint delle wiki del workspace.
 
 Layer neutro, senza dipendenze su ``webui/`` o ``agent/``: entrambi devono
-sapere dove vivono le wiki e come leggerne l'intestazione, e farlo importare
-all'uno dall'altro sarebbe un'inversione di layer. ``webui/wiki.py`` re-importa
-questi nomi in cima al modulo, così la sua API pubblica (``discover_wikis``) e i
-suoi helper privati restano dove i chiamanti li hanno sempre trovati.
+sapere dove vivono le wiki, come leggerne l'intestazione e dove porta un
+``[[link]]``, e farlo importare all'uno dall'altro sarebbe un'inversione di
+layer. ``webui/wiki.py`` (il renderer, che tira dentro ``markdown``) importa da
+qui, non il contrario.
 """
 
 from __future__ import annotations
@@ -746,6 +746,132 @@ def find_wiki_by_id(wikis_dir: Path, target: str) -> Path | None:
             ", ".join(sorted(p.name for p in found)),
         )
     return None
+
+
+# ── Wikilink ─────────────────────────────────────────────────────────────────
+#
+# Qui e non in ``webui/wiki.py``: la bacheca e i comandi la chiedono senza
+# il renderer, che tira dentro il pacchetto ``markdown``.
+
+
+def slugify(name: str) -> str:
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    name = name.lower()
+    name = re.sub(r"[\s_]+", "-", name)
+    name = re.sub(r"[^a-z0-9.\-]", "", name)
+    return name.strip("-")
+
+
+def _normalize_page_path(path: str) -> str:
+    parts = path.split("/")
+    slugged = [slugify(p) for p in parts]
+    if not slugged[-1].endswith(".md"):
+        slugged[-1] += ".md"
+    return "/".join(slugged)
+
+
+def strip_wiki_prefix(page_ref: str) -> str:
+    """Remove a leading wiki/ prefix used when pages are stored under wiki/."""
+    if page_ref.startswith("wiki/"):
+        return page_ref[5:]
+    return page_ref
+
+
+def suffix_rank(path: Path) -> tuple[int, str]:
+    """Ordine di preferenza fra più pagine che finiscono per lo stesso path.
+
+    Vince la più vicina alla radice, a pari profondità la prima in ordine
+    alfabetico. Serve solo a rendere la scelta **deterministica**: senza una
+    regola, l'ordine di ``rglob`` è quello del filesystem, quindi lo stesso link
+    poteva aprire due pagine diverse su due telefoni. La stessa regola è copiata
+    in ``jenny/skills/llm-wiki/scripts/lint_wiki.py::page_for_link`` — il lint
+    non può importare il package — e i due test la confrontano.
+    """
+    return (len(path.parts), path.as_posix())
+
+
+def resolve_wikilink(wiki_root: Path, target: str) -> Path | None:
+    """Resolve a wikilink target to a file path.
+
+    Tries: exact path, with .md, case-insensitive, slug, path suffix, stem.
+    wiki_root is the wiki root directory (contains wiki/ and audit/).
+
+    Il ramo *path suffix* vale solo per un bersaglio a più segmenti, ed è la
+    generalizzazione di quello per stem: ``[[<aspect>]]`` trovava una pagina
+    ovunque sotto ``wiki/``, mentre ``[[<Topic>/<aspect>]]`` — più specifico, e
+    la forma che ``references/article-guide.md`` raccomanda dentro un
+    ``index.md`` diviso in cartella — non trovava niente, perché nessuno stem
+    contiene una barra. Il link più preciso moriva dove quello più vago apriva.
+    """
+    pages_dir = wiki_root / "wiki"
+    target = strip_wiki_prefix(target)
+    # Exact path
+    p = pages_dir / target
+    if p.is_file():
+        return p
+    # Directory with index.md
+    if p.is_dir():
+        index = p / "index.md"
+        if index.is_file():
+            return index
+    # With .md
+    p = pages_dir / f"{target}.md"
+    if p.is_file():
+        return p
+    # Case-insensitive on relative path
+    target_norm = _normalize_page_path(target)
+    # I candidati del ramo per suffisso si raccolgono nello stesso passaggio di
+    # ``rglob``: su una wiki vera sono centinaia di file su flash, e leggere due
+    # volte la stessa directory è l'unica parte davvero cara.
+    suffixes: tuple[str, ...] = ()
+    if "/" in target:
+        low = target.lower()
+        suffixes = (
+            f"/{target_norm.lower()}",  # <Topic>/<aspect>  → …/<topic>/<aspect>.md
+            f"/{low}/index.md",  # <Topic>/<sub>     → …/<topic>/<sub>/index.md
+            f"/{target_norm.lower().removesuffix('.md')}/index.md",
+        )
+    candidates: list[Path] = []
+    for f in pages_dir.rglob("*.md"):
+        rel = f.relative_to(pages_dir).as_posix()
+        if rel.lower() == target_norm.lower():
+            return f
+        if rel.lower().removesuffix(".md") == target.lower():
+            return f
+        if suffixes:
+            rel_low = rel.lower()
+            if rel_low.endswith(suffixes) or rel_low.removesuffix(".md").endswith(f"/{low}"):
+                candidates.append(f)
+    if candidates:
+        return min(candidates, key=suffix_rank)
+    # Stem search
+    return _find_by_stem(pages_dir, target)
+
+
+def _find_by_stem(dir_path: Path, target: str) -> Path | None:
+    """La pagina con questo stem, **scelta in modo deterministico**.
+
+    Due pagine con lo stesso nome in cartelle diverse (`a/nota.md`, `b/nota.md`)
+    esistono davvero, e qui vinceva quella che ``rglob`` restituiva per prima —
+    cioè l'ordine della directory sul filesystem. Lo stesso `[[nota]]` poteva
+    aprire due pagine diverse, e il lint (che indicizza per chiave, non per
+    ordine di lettura) non poteva concordare con nessuna delle due. Ora la regola
+    è scritta: ``suffix_rank``, la stessa del ramo per suffisso.
+
+    Un solo livello, insensibile alle maiuscole. Prima ce n'erano due — prima i
+    nomi identici carattere per carattere, poi quelli uguali a meno di
+    maiuscole — e il primo livello il lint non può esprimerlo, perché indicizza
+    per chiave minuscola. Serviva soltanto per due pagine che differiscono *solo*
+    per maiuscole nella stessa wiki, e in quel caso la regola di ordine sceglie
+    comunque la stessa delle due.
+    """
+    lowered = target.lower()
+    matches = [
+        f
+        for f in dir_path.rglob("*.md")
+        if f.stem.lower() in (lowered, lowered.removesuffix(".md"))
+    ]
+    return min(matches, key=suffix_rank) if matches else None
 
 
 # ── Discovery ────────────────────────────────────────────────────────────────

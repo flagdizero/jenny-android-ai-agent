@@ -97,7 +97,7 @@ def _plain_links(root: Path) -> Callable[[Any], Any]:
     scrittura il quaderno c'e', e il titolo si trova come lo trova il lettore.
     """
     from jenny.board.view import wiki_titles
-    from jenny.webui.wiki import resolve_wikilink
+    from jenny.utils.wiki_paths import resolve_wikilink
 
     pages_dir = root / "wiki"
     titles: dict[str, str] | None = None
