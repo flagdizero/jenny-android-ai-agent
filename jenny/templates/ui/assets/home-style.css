@@ -2009,7 +2009,15 @@ body.home {
   font-size: 15.5px;
   font-weight: 600;
 }
-.home-block a { color: var(--text-accent); }
+/* Quel che la chat e il lettore della casa dicono uguale del markdown: il
+   colore dei link, il codice dentro un blocco, il corpo della tabella e il
+   bordo delle celle. Il resto (margini, titoli, codice in riga) e' di ognuno:
+   una risposta in chat e una pagina di quaderno si leggono a misure diverse.
+   La scatola della tabella e' comune anche all'officina (`mobile-style.css`). */
+:is(.home-block, .home-reader-body) a { color: var(--text-accent); }
+:is(.home-block, .home-reader-body) pre code { padding: 0; background: none; }
+:is(.home-block, .home-reader-body) table { border-collapse: collapse; font-size: 13px; }
+:is(.home-block, .home-reader-body) :is(th, td) { border: 1px solid var(--border); }
 .home-block code {
   padding: 1px 5px;
   border-radius: var(--radius-sm);
@@ -2024,33 +2032,13 @@ body.home {
   background: var(--surface-2);
   overflow-x: auto;
 }
-.home-block pre code { padding: 0; background: none; }
 .home-block blockquote {
   margin: 0 0 8px;
   padding-left: 10px;
   border-left: 2px solid var(--border);
   color: var(--text-muted);
 }
-/* Una tabella non si stringe sotto il proprio contenuto: senza `display:block`
-   deborda dal messaggio come faceva il `<pre>`, e scorre il filo invece di lei.
-   Resa comune con il lettore e con l'officina: v. `.home-reader-body table`. */
-.home-block table {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.home-block th, .home-block td {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  text-align: left;
-  /* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
-     qui no, o la cella si stringe fino a una lettera per riga. */
-  overflow-wrap: break-word;
-  word-break: normal;
-}
+.home-block th, .home-block td { padding: 4px 8px; }
 
 /* ── Da dove e' entrato ── */
 
@@ -5339,7 +5327,6 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-reader-body ul,
 .home-reader-body ol { margin: 8px 0; padding-left: 22px; }
 .home-reader-body li { margin: 3px 0; }
-.home-reader-body a { color: var(--text-accent); }
 
 .home-reader-body code {
   padding: 1px 4px;
@@ -5355,8 +5342,6 @@ dialog.home-photo-viewer[open] { display: flex; }
   background: var(--overlay);
 }
 
-.home-reader-body pre code { padding: 0; background: none; }
-
 .home-reader-body blockquote {
   margin: 8px 0;
   padding-left: 12px;
@@ -5366,30 +5351,11 @@ dialog.home-photo-viewer[open] { display: flex; }
 
 .home-reader-body img { max-width: 100%; height: auto; border-radius: 8px; }
 
-/* Una tabella larga scorre **di lato da sola**, dentro la sua scatola, e non
-   si stringe sotto le parole che contiene: nessuna parola spezzata a meta'
-   in una cella, e la pagina resta ferma. La stessa resa in tre posti — la
-   chat e il lettore della casa, la chat dell'officina — perche' e' la stessa
-   tabella. `fit-content`: la scatola e'
-   larga quanto la tabella, cosi' il bordo non gira attorno a un vuoto. */
-.home-reader-body table {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  font-size: 13px;
-}
+/* La tabella del lettore: la scatola e il bordo sono quelli comuni (v.
+   `:is(.chat-content, .home-block, .home-reader-body) table` in
+   `mobile-style.css`, e qui sopra accanto a `.home-block`). */
 .home-reader-body th,
-.home-reader-body td {
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  text-align: left;
-  /* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
-     qui no, o la cella si stringe fino a una lettera per riga. */
-  overflow-wrap: break-word;
-  word-break: normal;
-}
+.home-reader-body td { padding: 5px 8px; }
 
 /* Il ripiego senza DOMPurify: il markdown scappato, che si legge male ma non
    mente. */

@@ -10,6 +10,7 @@ dentro senza dire niente.
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from pathlib import Path
@@ -269,10 +270,24 @@ def _rule(css: str, selector: str) -> str:
     """
     bodies = []
     for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        names = {s.strip().splitlines()[-1].strip() for s in selectors.split(",") if s.strip()}
+        names = set()
+        for s in re.split(r",(?![^(]*\))", selectors):
+            if not s.strip():
+                continue
+            names |= _expand_is(s.strip().splitlines()[-1].strip())
         if selector in names:
             bodies.append(body)
     return "\n".join(bodies)
+
+
+def _expand_is(selector: str) -> set[str]:
+    """`:is(.a, .b) a` vale `.a a` e `.b a`: le regole che casa e officina
+    dicono uguali stanno in una (v. la tipografia del markdown)."""
+    parts = []
+    for part in re.findall(r":is\([^)]*\)|\S+", " ".join(selector.split())):
+        inner = re.fullmatch(r":is\((.*)\)", part)
+        parts.append([x.strip() for x in inner.group(1).split(",")] if inner else [part])
+    return {" ".join(c) for c in itertools.product(*parts)}
 
 
 def test_she_is_on_top_of_everything_in_the_house() -> None:
