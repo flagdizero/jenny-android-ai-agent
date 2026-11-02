@@ -18,8 +18,6 @@ from loguru import logger
 from jenny.providers import retry_notice
 from jenny.providers.message_repair import (
     SYNTHETIC_USER_CONTENT,
-    enforce_role_alternation,
-    sanitize_empty_content,
     strip_image_content,
     strip_image_content_inplace,
 )
@@ -356,13 +354,6 @@ class LLMProvider(ABC):
         self.api_base = api_base
         self.generation: GenerationSettings = GenerationSettings()
 
-    # Normalizzazione messaggi estratta in ``providers/message_repair.py``.
-    # Delegatori statici sottili: preservano i call-site interni/provider e i
-    # test che invocano ``LLMProvider._enforce_role_alternation(...)`` ecc.
-    @staticmethod
-    def _sanitize_empty_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return sanitize_empty_content(messages)
-
     @staticmethod
     def _tool_name(tool: dict[str, Any]) -> str:
         """Extract tool name from either OpenAI or Anthropic-style tool schemas."""
@@ -542,18 +533,6 @@ class LLMProvider(ABC):
             "error_retry_after_s": cls._extract_retry_after_from_headers(headers),
             "error_should_retry": should_retry,
         }
-
-    @staticmethod
-    def _enforce_role_alternation(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return enforce_role_alternation(messages)
-
-    @staticmethod
-    def _strip_image_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
-        return strip_image_content(messages)
-
-    @staticmethod
-    def _strip_image_content_inplace(messages: list[dict[str, Any]]) -> bool:
-        return strip_image_content_inplace(messages)
 
     async def _safe_chat(self, **kwargs: Any) -> LLMResponse:
         """Call chat() and convert unexpected exceptions to error responses."""
@@ -971,7 +950,7 @@ class LLMProvider(ABC):
                 identical_error_count = 1 if error_key else 0
 
             if not self._is_transient_response(response):
-                stripped = self._strip_image_content(original_messages)
+                stripped = strip_image_content(original_messages)
                 if stripped is not None and stripped != kw["messages"]:
                     logger.warning(
                         "Non-transient LLM error with image content, retrying without images"
@@ -982,7 +961,7 @@ class LLMProvider(ABC):
                     # Permanently strip images from the original messages so
                     # subsequent iterations do not repeat the error-retry cycle.
                     if result.finish_reason != "error":
-                        self._strip_image_content_inplace(original_messages)
+                        strip_image_content_inplace(original_messages)
                         result.images_stripped = True
                     return result
                 return response

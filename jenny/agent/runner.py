@@ -23,8 +23,6 @@ from jenny.agent.context_governor import (
     snip_history,
 )
 from jenny.agent.history_repair import (
-    BACKFILL_CONTENT,
-    MICROCOMPACT_KEEP_RECENT,
     backfill_missing_tool_results,
     drop_orphan_tool_results,
     microcompact,
@@ -115,10 +113,6 @@ _MAX_INJECTION_CYCLES = 5
 # promises): offloaded, the page reached the model as a 1,200-character preview.
 _TOOL_RESULT_OFFLOAD_EXEMPT_TOOLS = frozenset({"read_file", "web_fetch"})
 
-# Retro-compat: costanti spostate in agent.history_repair, ri-esportate qui coi
-# vecchi nomi underscore così i call-site/test esistenti restano invariati.
-_BACKFILL_CONTENT = BACKFILL_CONTENT
-_MICROCOMPACT_KEEP_RECENT = MICROCOMPACT_KEEP_RECENT
 
 
 @dataclass(slots=True)
@@ -853,8 +847,8 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         """Lo snip e la riparazione che lo segue, su una richiesta gia' governata."""
         try:
             governed = self._snip_history(spec, governed)
-            governed = self._drop_orphan_tool_results(governed)
-            return self._backfill_missing_tool_results(governed)
+            governed = drop_orphan_tool_results(governed)
+            return backfill_missing_tool_results(governed)
         except Exception:
             logger.exception(
                 "Context governance failed on turn {} for {}; applying minimal repair",
@@ -862,8 +856,8 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                 spec.session_key or "default",
             )
             try:
-                repaired = self._drop_orphan_tool_results(view)
-                return self._backfill_missing_tool_results(repaired)
+                repaired = drop_orphan_tool_results(view)
+                return backfill_missing_tool_results(repaired)
             except Exception:
                 return view
 
@@ -880,21 +874,21 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             # may repair or compact historical messages for the model, but
             # those synthetic edits must not shift the append boundary used
             # later when the caller saves only the new turn.
-            messages_for_model = self._drop_orphan_tool_results(messages)
-            messages_for_model = self._backfill_missing_tool_results(messages_for_model)
+            messages_for_model = drop_orphan_tool_results(messages)
+            messages_for_model = backfill_missing_tool_results(messages_for_model)
             if closed_reasoning_can_be_blank(self.provider, spec.model):
                 messages_for_model = blank_closed_reasoning(
                     messages_for_model,
                     flagged_only=getattr(spec, "closed_reasoning_flagged", False),
                 )
             messages_for_model = label_mid_turn_messages(messages_for_model)
-            messages_for_model = self._microcompact(messages_for_model)
+            messages_for_model = microcompact(messages_for_model)
             messages_for_model = self._apply_tool_result_budget(spec, messages_for_model)
             if snip:
                 messages_for_model = self._snip_history(spec, messages_for_model)
                 # Snipping may have created new orphans; clean them up.
-                messages_for_model = self._drop_orphan_tool_results(messages_for_model)
-                messages_for_model = self._backfill_missing_tool_results(messages_for_model)
+                messages_for_model = drop_orphan_tool_results(messages_for_model)
+                messages_for_model = backfill_missing_tool_results(messages_for_model)
         except Exception:
             logger.exception(
                 "Context governance failed on turn {} for {}; applying minimal repair",
@@ -902,8 +896,8 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                 spec.session_key or "default",
             )
             try:
-                messages_for_model = self._drop_orphan_tool_results(messages)
-                messages_for_model = self._backfill_missing_tool_results(messages_for_model)
+                messages_for_model = drop_orphan_tool_results(messages)
+                messages_for_model = backfill_missing_tool_results(messages_for_model)
             except Exception:
                 messages_for_model = messages
         return messages_for_model
@@ -1337,13 +1331,13 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
     ) -> Literal["continue", "proceed"]:
         if (
             response.finish_reason == "error"
-            and self._is_context_length_error(response)
+            and is_context_length_error(response)
             and state.context_length_retries < _MAX_CONTEXT_LENGTH_RETRIES
         ):
             state.context_length_retries += 1
 
             # Try to extract the model's real limit from the error message
-            detected_limit = self._extract_context_limit(response)
+            detected_limit = extract_context_limit(response)
             current_window = spec.context_window_tokens
             if detected_limit and (current_window is None or detected_limit < current_window):
                 new_window = detected_limit
@@ -1659,22 +1653,6 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             return truncate_text(content, spec.max_tool_result_chars)
         return content
 
-    # Riparazione della history estratta in ``agent/history_repair.py`` (modulo
-    # leaf, casa unica condivisa con session/memory). Questi restano come
-    # delegatori sottili per non toccare i call-site interni né i test che
-    # invocano ``AgentRunner._drop_orphan_tool_results(...)`` ecc.
-    @staticmethod
-    def _drop_orphan_tool_results(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return drop_orphan_tool_results(messages)
-
-    @staticmethod
-    def _backfill_missing_tool_results(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return backfill_missing_tool_results(messages)
-
-    @staticmethod
-    def _microcompact(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return microcompact(messages)
-
     def _apply_tool_result_budget(
         self,
         spec: AgentRunSpec,
@@ -1700,17 +1678,6 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
 
     # Pattern to extract the model's actual context limit from OpenAI-style error messages.
     # e.g. "This model's maximum context length is 8192 tokens."
-    # Rilevamento context-limit estratto in ``agent/context_governor.py``; qui
-    # restano i delegatori, che i test di ``AgentRunner._is_context_*`` usano.
-
-    @staticmethod
-    def _is_context_length_error(response: LLMResponse) -> bool:
-        return is_context_length_error(response)
-
-    @staticmethod
-    def _extract_context_limit(response: LLMResponse) -> int | None:
-        return extract_context_limit(response)
-
     def _snip_history(
         self,
         spec: AgentRunSpec,

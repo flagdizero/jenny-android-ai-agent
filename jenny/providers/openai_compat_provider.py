@@ -28,6 +28,7 @@ from jenny.providers.base import (
     tool_arguments_json_for_replay,
 )
 from jenny.providers.endpoint_budget import read_timeout_s
+from jenny.providers.message_repair import enforce_role_alternation, sanitize_empty_content
 from jenny.providers.openai_compat_helpers import (
     _ALLOWABLE_MSG_KEYS,
     _DEFAULT_OPENROUTER_HEADERS,
@@ -394,7 +395,7 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
                     # Some OpenAI-compatible gateways reject assistant messages
                     # that mix non-empty content with tool_calls.
                     clean["content"] = None
-        return self._enforce_role_alternation(sanitized)
+        return enforce_role_alternation(sanitized)
 
     # ------------------------------------------------------------------
     # Build kwargs
@@ -459,7 +460,7 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
 
         kwargs: dict[str, Any] = {
             "model": model_name,
-            "messages": self._sanitize_messages(self._sanitize_empty_content(messages)),
+            "messages": self._sanitize_messages(sanitize_empty_content(messages)),
         }
 
         # GPT-5 and reasoning models (o1/o3/o4) reject temperature when
@@ -642,7 +643,7 @@ class OpenAICompatProvider(ResponseParsingMixin, LLMProvider):
         """Build a Responses API body for direct OpenAI requests."""
         model_name = model or self.default_model
         model_name = self._request_model_name(model_name)
-        sanitized_messages = self._sanitize_messages(self._sanitize_empty_content(messages))
+        sanitized_messages = self._sanitize_messages(sanitize_empty_content(messages))
         instructions, input_items = convert_messages(sanitized_messages)
 
         body: dict[str, Any] = {

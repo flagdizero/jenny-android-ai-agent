@@ -1,9 +1,7 @@
 """Test diretti per jenny/providers/message_repair.py.
 
 ``enforce_role_alternation`` è già coperta esaustivamente in
-``tests/providers/test_enforce_role_alternation.py`` (che la esercita tramite
-il wrapper ``LLMProvider._enforce_role_alternation``, una thin delegation
-verso questo stesso modulo): qui evitiamo di ripetere quei casi e ci
+``tests/providers/test_enforce_role_alternation.py``: qui evitiamo di ripetere quei casi e ci
 concentriamo su ``sanitize_empty_content``, ``strip_image_content`` e
 ``strip_image_content_inplace``, non coperte altrove, più un paio di casi
 edge di ``enforce_role_alternation`` non toccati dalla suite esistente.
