@@ -75,7 +75,7 @@ __TURN_ON__
 __CHOOSE__
 """.replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
-        .replace("__WHEN__", function(WHEN_JS, "whenText"))
+        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__LATE__", late)
         .replace("__EXCLUSIVE__", function(CLOUD_JS, "_exclusive"))
         .replace("__ERROR_TEXT__", function(CLOUD_JS, "cloudErrorText"))

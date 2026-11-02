@@ -144,7 +144,7 @@ def _harness() -> str:
         .replace("__POLL_MS__", _const(src, "POLL_MS"))
         .replace("__POLL_MAX__", _const(src, "POLL_MAX"))
         .replace("__PHASE_KEY__", function(src, "phaseKey"))
-        .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
+        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__CHECK_LINES__", function(src, "checkLines"))
         .replace("__CTOR__", member(src, "constructor"))
         .replace("__BUSY__", member(src, "busy"))

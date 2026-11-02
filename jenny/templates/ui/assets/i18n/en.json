@@ -363,8 +363,6 @@
       "neverChecked": "The first update check hasn't run yet.",
       "stale": "Since then the checks start but never reach the server: the last one that worked is still the one from {when}. While that lasts, you wouldn't hear about a new version.",
       "staleNever": "No successful check on record. If it stays that way after a \"Check now\", the mechanism isn't working and you wouldn't hear about a new version.",
-      "whenToday": "today at {time}",
-      "whenYesterday": "yesterday at {time}",
       "whenDays": "{days} days ago"
     },
     "usage": {
@@ -414,8 +412,6 @@
       "gapDays": "{days}d {hours}h",
       "gapHours": "{hours}h {minutes}m",
       "gapMinutes": "{minutes}m",
-      "gapToday": "today at {time}",
-      "gapYesterday": "yesterday at {time}",
       "gapOn": "{date} at {time}",
       "oemHint": "The outages above are not a Jenny fault: the phone's battery manager shuts her down while the screen is off. No line of app code can prevent it — the restriction has to be lifted by hand, in the manufacturer's own settings.",
       "oemButton": "Open the manufacturer's settings",
@@ -569,7 +565,9 @@
       "unknown": "Something went wrong",
       "unknown_type": "I didn't understand the request",
       "untyped_frame": "I didn't understand the request"
-    }
+    },
+    "todayAt": "today at {time}",
+    "yesterdayAt": "yesterday at {time}"
   },
   "dialog": {
     "confirm": "Confirm",
@@ -1204,7 +1202,7 @@
         "rollbackFailed": "Going back stopped halfway: the notebook may be only partly restored. Trying again is safe."
       }
     },
-    "empty":"Nothing here yet.\nGo ahead.",
+    "empty": "Nothing here yet.\nGo ahead.",
     "emptyNotebook": "The notebook is here, the conversation isn’t.\nWhat you write here stays here.",
     "placeholder": "Write to {name}",
     "placeholderNotebook": "Write to {name}, in the notebook",
@@ -1520,8 +1518,6 @@
         "off": "Off: the only safety net is the backup you export. Turn it back on in the workshop, Memory → Local history.",
         "loading": "One moment…",
         "showAll": "Show the others ({n})",
-        "today": "today at {time}",
-        "yesterday": "yesterday at {time}",
         "weekday": "{day} at {time}"
       }
     },
@@ -1704,8 +1700,6 @@
     "drawer": {
       "loading": "Looking…",
       "failed": "I couldn't open this drawer.",
-      "today": "today at {time}",
-      "yesterday": "yesterday at {time}",
       "pagesOne": "Drawer · 1 wiki page",
       "pagesMany": "Drawer · {count} wiki pages",
       "updated": "updated {when}",

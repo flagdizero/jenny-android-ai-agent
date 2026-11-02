@@ -143,7 +143,7 @@ def _harness() -> str:
         .replace("__POLL_MS__", _const(flow, "POLL_MS"))
         .replace("__POLL_MAX__", _const(flow, "POLL_MAX"))
         .replace("__PHASE_KEY__", function(flow, "phaseKey"))
-        .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
+        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__CHECK_LINES__", function(flow, "checkLines"))
         .replace("__FLOW_CTOR__", member(flow, "constructor"))
         .replace("__FLOW_BUSY__", member(flow, "busy"))

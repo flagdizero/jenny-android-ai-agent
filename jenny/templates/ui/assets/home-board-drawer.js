@@ -37,17 +37,14 @@ import { DrawerPhotos } from './home-board-photos.js';
 import { automationRow } from './home-board-automation.js';
 import { renderBlock } from './home-board-blocks.js';
 import { button, el, icon, writeFailedToast } from './shared/dom.js';
+import { dayAndTime } from './shared/when.js';
 
 /** «oggi alle 04:12», «ieri», «3 ott»: quando e' stato riscritto il cassetto. */
 export function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
-  const day = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diff = Math.round((day(now) - day(at)) / 86_400_000);
-  const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(at);
-  if (diff === 0) return i18n.t('board.drawer.today', { time });
-  if (diff === 1) return i18n.t('board.drawer.yesterday', { time });
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
+  return dayAndTime(at, { now, locale })
+    || new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
 }
 
 /** Le cadenze di un promemoria a condizione («controlla ogni»), la prima e' la

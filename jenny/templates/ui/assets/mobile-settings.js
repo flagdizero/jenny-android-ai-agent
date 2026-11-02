@@ -15,7 +15,7 @@ import {
   batteryExemptionSupported,
 } from './shared/battery-exemption.js';
 import { buildCronView } from './shared/cron-view.js';
-import { whenText } from './shared/when.js';
+import { dayAndTime, whenText } from './shared/when.js';
 import {
   controllable, splitSkill, blockReason, skillBlurb, skillsSummary,
 } from './shared/skills-view.js';
@@ -788,16 +788,9 @@ export class SettingsController {
    *  riconosce ("ah, quando metto il telefono in carica la notte"). */
   _formatGapWhen(startMs) {
     const at = new Date(Number(startMs) || 0);
+    const near = dayAndTime(at);
+    if (near) return near;
     const time = at.toLocaleTimeString(i18n.locale, { hour: '2-digit', minute: '2-digit' });
-    const midnight = new Date();
-    midnight.setHours(0, 0, 0, 0);
-    const dayMs = 86400000;
-    if (at.getTime() >= midnight.getTime()) {
-      return i18n.t('settings.battery.gapToday', { time });
-    }
-    if (at.getTime() >= midnight.getTime() - dayMs) {
-      return i18n.t('settings.battery.gapYesterday', { time });
-    }
     const date = at.toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short' });
     return i18n.t('settings.battery.gapOn', { date, time });
   }

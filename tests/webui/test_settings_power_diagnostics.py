@@ -219,8 +219,6 @@ _UI_KEYS = (
     "gapDays",
     "gapHours",
     "gapMinutes",
-    "gapToday",
-    "gapYesterday",
     "gapOn",
     "oemHint",
     "oemButton",
@@ -250,8 +248,7 @@ def test_the_time_formats_keep_their_placeholders(locale: str) -> None:
     assert "{days}" in battery["gapDays"] and "{hours}" in battery["gapDays"]
     assert "{hours}" in battery["gapHours"] and "{minutes}" in battery["gapHours"]
     assert "{minutes}" in battery["gapMinutes"]
-    for key in ("gapToday", "gapYesterday", "gapOn"):
-        assert "{time}" in battery[key]
+    assert "{time}" in battery["gapOn"]
     assert "{date}" in battery["gapOn"]
     assert "{minutes}" in battery["gapsHint"]
     assert "{brand}" in battery["oemLink"]

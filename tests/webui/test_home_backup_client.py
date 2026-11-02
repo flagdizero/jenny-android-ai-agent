@@ -140,7 +140,7 @@ def _harness() -> str:
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
+        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__BACKUP_VALUE__", function(room, "backupValue"))
         .replace("__ROW_HTML__", function(room, "rowHtml"))
         .replace("__CTOR__", member(room, "constructor"))

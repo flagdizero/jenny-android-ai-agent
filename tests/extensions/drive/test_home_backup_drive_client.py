@@ -132,7 +132,7 @@ const on = (extra = {}) => ({ available: true, provider: 'drive', enabled_at_ms:
 """
         .replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
-        .replace("__WHEN__", function(WHEN_JS, "whenText"))
+        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__LATE__", late)
         .replace("__BLOCKING__", blocking)
         .replace("__PURE__", pure)
