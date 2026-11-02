@@ -90,9 +90,8 @@ class PageSource:
     È la materia prima *condivisa* di grafo e indice full-text: entrambi
     partono dallo stesso testo, e leggerlo due volte significherebbe pagare due
     volte l'unica parte davvero cara della costruzione (l'I/O su flash, con
-    centinaia di file). Chi vuole solo il grafo usa :func:`build_graph`, che
-    incapsula la lettura; chi vuole entrambi legge una volta con
-    :func:`read_pages` e passa la lista a tutti i costruttori.
+    centinaia di file). Si legge una volta con :func:`read_pages` e si passa la
+    lista a tutti i costruttori.
     """
 
     rel: str  # path relativo alla pages-dir, es. "concepts/foo.md"
@@ -145,11 +144,6 @@ def read_pages(pages_dir: Path) -> list[PageSource]:
             )
         )
     return pages
-
-
-def build_graph(wiki_root: Path) -> GraphData:
-    """Build a graph of wiki pages and their wikilink connections for one wiki."""
-    return build_graph_from_pages(read_pages(wiki_root / "wiki"))
 
 
 def build_graph_from_pages(pages: list[PageSource]) -> GraphData:

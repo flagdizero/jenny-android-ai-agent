@@ -37,7 +37,7 @@ from jenny.channels.http_utils import (
     query_first,
 )
 from jenny.security.workspace_policy import is_path_within
-from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
+from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, WIKIS_REGISTRY_FILENAME, safe_wiki_page_path
 
 # Chiavi frontmatter esposte al client in ``/api/page``. Tutto il resto (URL
 # sorgente, provenance, slug/flag interni) resta lato server: il frontmatter
@@ -275,7 +275,7 @@ class WikiRoutes:
         wikis = discover_wikis(wikis_dir)
 
         if not wiki_name:
-            full = wikis_dir / "_index.md"
+            full = wikis_dir / WIKIS_REGISTRY_FILENAME
             current_wiki = None
             wiki_root_for_renderer = wikis_dir
             containment_root = wikis_dir
@@ -331,7 +331,7 @@ class WikiRoutes:
         if current_wiki:
             rel_page = str(full.relative_to(wikis[wiki_name])).replace(os.sep, "/")
         else:
-            rel_page = "_index.md"
+            rel_page = WIKIS_REGISTRY_FILENAME
 
         board_links = None
         if current_wiki:

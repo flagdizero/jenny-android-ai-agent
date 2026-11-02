@@ -33,7 +33,7 @@ FRONTMATTER_RE = re.compile(r"^\ufeff?\s*---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", 
 # e i due nomi distavano un underscore (T3.12). Sono due file diversi a due
 # livelli diversi dell'albero: qui "registry" e la' "index", cosi' che leggere
 # uno dei due non richieda di ricordarsi dell'altro.
-_WIKIS_REGISTRY_FILENAME = "_index.md"
+WIKIS_REGISTRY_FILENAME = "_index.md"
 # Il file di istruzioni di una wiki. **Uno solo**, da quando il passo 7 migra le
 # wiki esistenti a ogni avvio (``utils/wiki_migration.py``).
 #
@@ -265,7 +265,7 @@ def is_wiki_page_rel(
 # ``tests/utils/test_wiki_paths.py::TestTheIndexFilenameHasOneDefinition`` cade se
 # ne ricompare un secondo.
 #
-# Da non confondere con :data:`_WIKIS_REGISTRY_FILENAME` (``wikis/_index.md``),
+# Da non confondere con :data:`WIKIS_REGISTRY_FILENAME` (``wikis/_index.md``),
 # che e' il registro delle wiki e non la mappa di una.
 WIKI_INDEX_FILENAME = "index.md"
 

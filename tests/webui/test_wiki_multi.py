@@ -9,9 +9,10 @@ import pytest
 from jenny.utils.wiki_paths import discover_wikis, resolve_wikilink
 from jenny.webui.wiki import (
     _split_wikilink,
-    build_graph,
+    build_graph_from_pages,
     create_audit,
     create_renderer,
+    read_pages,
 )
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ class TestBuildGraph:
             "index.md": "# Home",
             "concepts/page.md": "# Concept",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         node_ids = {n.id for n in graph.nodes}
         assert "wiki/index.md" in node_ids
         assert "wiki/concepts/page.md" in node_ids
@@ -104,7 +105,7 @@ class TestBuildGraph:
             "index.md": "# Home\n\nVedi [[Target]].",
             "target.md": "# Target",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         edges = {(e.source, e.target) for e in graph.edges}
         assert ("wiki/index.md", "wiki/target.md") in edges
 
@@ -112,19 +113,19 @@ class TestBuildGraph:
         _make_wiki(wikis_dir, "main", {
             "index.md": "# Home\n\nVedi [[index]].",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         assert len(graph.edges) == 0
 
     def test_graph_anchor_link_ignored(self, wikis_dir: Path):
         _make_wiki(wikis_dir, "main", {
             "index.md": "# Home\n\nVedi [[#Anchor]].",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         assert len(graph.edges) == 0
 
     def test_graph_empty_wiki(self, wikis_dir: Path):
         (wikis_dir / "main" / "wiki").mkdir(parents=True)
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         assert graph.nodes == []
         assert graph.edges == []
 
@@ -134,7 +135,7 @@ class TestBuildGraph:
             "a.md": "# A\n\nVedi [[b]].",
             "b.md": "# B\n\nVedi [[a]].",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         assert len(graph.edges) == 1
         degrees = {n.id: n.degree for n in graph.nodes}
         assert degrees["wiki/a.md"] == 1
@@ -148,7 +149,7 @@ class TestBuildGraph:
             "entities/foo.md": "# Foo entity",
             "index.md": "# Home\n\nVedi [[foo]].",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         assert graph.edges == []
 
     def test_summaries_excluded_from_graph(self, wikis_dir: Path):
@@ -158,7 +159,7 @@ class TestBuildGraph:
             "concepts/foo.md": "# Foo\n\nFonte [[summaries/src]].",
             "summaries/src.md": "# Src summary",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         node_ids = {n.id for n in graph.nodes}
         assert "wiki/summaries/src.md" not in node_ids
         assert "wiki/concepts/foo.md" in node_ids
@@ -174,7 +175,7 @@ class TestBuildGraph:
             "entities/foo.md": "# Foo entity",
             "index.md": "# Home\n\nVedi [[concepts/foo]].",
         })
-        graph = build_graph(wikis_dir / "main")
+        graph = build_graph_from_pages(read_pages(wikis_dir / "main" / "wiki"))
         edges = {(e.source, e.target) for e in graph.edges}
         assert ("wiki/index.md", "wiki/concepts/foo.md") in edges
         assert len(graph.edges) == 1

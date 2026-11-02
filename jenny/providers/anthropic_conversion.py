@@ -386,8 +386,9 @@ class AnthropicConversionMixin:
 
         new_tools = tools
         if tools:
+            # Sull'ultimo tool: prima il segno andava anche al confine fra i tool
+            # propri e quelli MCP, che questo fork non ha piu'.
             new_tools = list(tools)
-            for idx in cls._tool_cache_marker_indices(new_tools):
-                new_tools[idx] = {**new_tools[idx], "cache_control": marker}
+            new_tools[-1] = {**new_tools[-1], "cache_control": marker}
 
         return system, new_msgs, new_tools

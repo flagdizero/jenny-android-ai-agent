@@ -1,7 +1,6 @@
 """Tests for message_repair.enforce_role_alternation."""
 
-from jenny.providers.base import _SYNTHETIC_USER_CONTENT
-from jenny.providers.message_repair import enforce_role_alternation
+from jenny.providers.message_repair import SYNTHETIC_USER_CONTENT, enforce_role_alternation
 
 
 class TestEnforceRoleAlternation:
@@ -214,7 +213,7 @@ class TestEnforceRoleAlternation:
         assert len(result) == 2
         assert result[1]["role"] == "user"
         assert "tool_calls" not in result[1]
-        assert result[1]["content"] == _SYNTHETIC_USER_CONTENT
+        assert result[1]["content"] == SYNTHETIC_USER_CONTENT
 
     def test_trailing_assistant_not_recovered_when_user_message_present(self):
         """Recovery should NOT happen when a user message already exists."""
@@ -275,7 +274,7 @@ class TestEnforceRoleAlternation:
         result = enforce_role_alternation(msgs)
         non_system = [m for m in result if m["role"] != "system"]
         assert non_system[0]["role"] == "user"
-        assert non_system[0]["content"] == _SYNTHETIC_USER_CONTENT
+        assert non_system[0]["content"] == SYNTHETIC_USER_CONTENT
         # The original assistant should follow.
         assert non_system[1]["role"] == "assistant"
 

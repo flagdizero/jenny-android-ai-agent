@@ -123,7 +123,6 @@ SUGGESTION_KINDS = (
 # all'avvio (``jenny/apps/migrate_micro.py``) la trovi e la faccia diventare
 # una sezione ``app``.
 SECTION_KINDS = ("note", "reminder", "app", "photo", "micro", "cron")
-PRECISIONS = ("day", "month")
 CONDITION_OPS = ("<", "<=", ">", ">=", "==", "!=")
 
 # I glifi che una scheda puo' portare: icone del set della casa (Tabler 3.19),

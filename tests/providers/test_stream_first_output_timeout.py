@@ -11,11 +11,8 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from jenny.providers.openai_compat_helpers import (
-    _LOCAL_REQUEST_TIMEOUT_S,
-    _OPENAI_COMPAT_REQUEST_TIMEOUT_S,
-    _openai_compat_timeout_s,
-)
+from jenny.providers.endpoint_budget import DEFAULT_REQUEST_TIMEOUT_S, LOCAL_REQUEST_TIMEOUT_S
+from jenny.providers.openai_compat_helpers import _openai_compat_timeout_s
 from jenny.providers.openai_compat_provider import OpenAICompatProvider
 
 CONTENT_CHUNK = {"choices": [{"delta": {"content": "hi"}}]}
@@ -104,10 +101,10 @@ async def test_loopback_endpoints_get_the_longer_request_timeout() -> None:
     await local._ensure_client()
     await remote._ensure_client()
 
-    assert local._http_client.timeout.connect == _LOCAL_REQUEST_TIMEOUT_S
-    assert remote._http_client.timeout.connect == _OPENAI_COMPAT_REQUEST_TIMEOUT_S
+    assert local._http_client.timeout.connect == LOCAL_REQUEST_TIMEOUT_S
+    assert remote._http_client.timeout.connect == DEFAULT_REQUEST_TIMEOUT_S
     assert local._http_client.timeout.read > remote._http_client.timeout.read
-    assert _LOCAL_REQUEST_TIMEOUT_S > _OPENAI_COMPAT_REQUEST_TIMEOUT_S
+    assert LOCAL_REQUEST_TIMEOUT_S > DEFAULT_REQUEST_TIMEOUT_S
 
 
 async def test_request_timeout_env_override_wins_for_both(monkeypatch) -> None:
