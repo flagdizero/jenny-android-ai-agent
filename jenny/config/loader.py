@@ -487,7 +487,7 @@ def resolve_config_env_vars(config: Config) -> Config:
 def _resolve_in_place(obj: Any) -> Any:
     if isinstance(obj, str):
         _check_nested_env_refs(obj)
-        new = _ENV_REF_PATTERN.sub(_env_replace, obj)
+        new = expand_env(obj)
         return new if new != obj else obj
     if isinstance(obj, BaseModel):
         updates: dict[str, Any] = {}
@@ -555,3 +555,16 @@ def _env_replace(match: re.Match[str]) -> str:
             f"Environment variable '{name}' referenced in config is not set"
         )
     return value
+
+
+def expand_env(value: str, *, strict: bool = True) -> str:
+    """*value* coi riferimenti ``${VAR}`` sostituiti dall'ambiente.
+
+    *strict*: una variabile che manca solleva ``ValueError`` (la config al
+    caricamento); senza, vale ``""`` (le impostazioni, che mostrano il provider
+    configurato anche quando la sua variabile non c'è). L'unica sostituzione:
+    era scritta due volte, con due espressioni uguali.
+    """
+    if strict:
+        return _ENV_REF_PATTERN.sub(_env_replace, value)
+    return _ENV_REF_PATTERN.sub(lambda m: os.environ.get(m.group(1), ""), value)

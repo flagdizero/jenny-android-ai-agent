@@ -7,8 +7,6 @@ settings payload shape and the allowlisted config mutations exposed to WebUI.
 from __future__ import annotations
 
 import asyncio
-import os
-import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -291,7 +289,6 @@ WELCOME_TEMPLATES: dict[str, str] = {
 # Tupla e non `set`: la UI ne fa un menu', e l'ordine di un `set` non e'
 # garantito fra due esecuzioni. Il controllo `in` costa uguale su due voci.
 _CONTEXT_WINDOW_TOKEN_OPTIONS = (65_536, 131_072, 262_144)
-_ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Vocabolario accettato dal layer provider (``openai_compat_provider._build_kwargs``
 # normalizza "minimum" in "minimal"). La select della WebUI ne espone un
 # sottoinsieme; l'API accetta tutto ciò che il provider sa gestire.
@@ -430,20 +427,9 @@ def _apply_str(
 def _resolve_env_placeholders(value: str | None) -> str | None:
     if not value:
         return None
-    missing = False
+    from jenny.config.loader import expand_env
 
-    def replace(match: re.Match[str]) -> str:
-        nonlocal missing
-        env_value = os.environ.get(match.group(1))
-        if env_value is None:
-            missing = True
-            return ""
-        return env_value
-
-    resolved = _ENV_REF_RE.sub(replace, value).strip()
-    if missing and not resolved:
-        return None
-    return resolved or None
+    return expand_env(value, strict=False).strip() or None
 
 
 def _model_id_from_row(row: Any) -> str | None:
