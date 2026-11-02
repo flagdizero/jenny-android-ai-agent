@@ -57,7 +57,7 @@ import {
 } from './shared/subagent-policy.js';
 import { mediaKind, openMediaFile } from './shared/media.js';
 import { originBadgeHtml } from './shared/origin.js';
-import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { copyWithToast, latencyText, renderReplyExtras } from './shared/reply.js';
 import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 const TOOL_ICONS = {
@@ -1172,7 +1172,7 @@ export class ChatController {
      azioni, che non c'e' piu': ne resta una, ed e' questa. */
   async _copyMessage(msg) {
     const text = this._messageText(msg);
-    await copyReplyText(text);
+    await copyWithToast(text);
   }
 
   _appendFileEdits(msg, edits) {

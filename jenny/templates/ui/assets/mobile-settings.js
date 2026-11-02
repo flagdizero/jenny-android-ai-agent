@@ -2,7 +2,8 @@
 
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
-import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
+import { escapeHtml, showToast } from './shared/utils.js';
+import { copyWithToast } from './shared/reply.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
@@ -1985,13 +1986,7 @@ export class SettingsController {
   async _sshCopyPublicKey(alias) {
     const host = (this._ssh?.hosts || []).find(h => h.alias === alias);
     if (!host?.public_key) return;
-    // Il fallback su `execCommand` viveva qui, ed è la ragione per cui esiste
-    // `copyToClipboard`: era l'unico punto della SPA che lo faceva bene.
-    if (await copyToClipboard(host.public_key)) {
-      showToast(i18n.t('settings.ssh.copied'));
-    } else {
-      showToast(i18n.t('settings.ssh.copyFailed'), 'error');
-    }
+    await copyWithToast(host.public_key, { okKey: 'settings.ssh.copied' });
   }
 
   /* Segno di attesa sul bottone che ha lanciato il probe.

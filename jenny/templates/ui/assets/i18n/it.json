@@ -289,7 +289,6 @@
       "publicKeyHint": "Incolla questa riga in ~/.ssh/authorized_keys sul server. La chiave privata resta sul telefono.",
       "copy": "Copia",
       "copied": "Chiave pubblica copiata",
-      "copyFailed": "Copia non riuscita",
       "verify": "Verifica impronta",
       "verifying": "Lettura dell'impronta…",
       "fingerprintTitle": "Impronta dell'host",

@@ -54,7 +54,7 @@ import { contentLinkOf, openContentLink } from './shared/content-link.js';
 import { chatTime, chatTimeIso } from './shared/chat-time.js';
 import { mediaKind, openMediaFile } from './shared/media.js';
 import { originBadgeHtml } from './shared/origin.js';
-import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { copyWithToast, latencyText, renderReplyExtras } from './shared/reply.js';
 import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
@@ -1136,7 +1136,7 @@ export class HomeChat {
 
   async _copy(node) {
     const text = this._textOf(node);
-    await copyReplyText(text);
+    await copyWithToast(text);
   }
 
   /* Il separatore di un azzeramento del contesto. Nessuna scritta: dire

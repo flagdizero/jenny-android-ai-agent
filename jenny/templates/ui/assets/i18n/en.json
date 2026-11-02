@@ -289,7 +289,6 @@
       "publicKeyHint": "Paste this line into ~/.ssh/authorized_keys on the server. The private key stays on the phone.",
       "copy": "Copy",
       "copied": "Public key copied",
-      "copyFailed": "Copy failed",
       "verify": "Verify fingerprint",
       "verifying": "Reading the fingerprint…",
       "fingerprintTitle": "Host fingerprint",

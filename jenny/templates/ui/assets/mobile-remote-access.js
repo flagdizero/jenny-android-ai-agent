@@ -16,7 +16,8 @@
 
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
-import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
+import { escapeHtml, showToast } from './shared/utils.js';
+import { copyWithToast } from './shared/reply.js';
 import { i18n } from './shared/i18n.js';
 import { detailDialog } from './shared/dialog.js';
 
@@ -248,8 +249,7 @@ export class RemoteAccessPanel {
   async _action(what) {
     const s = this.status;
     if (what === 'copy') {
-      const link = remoteLink(s);
-      if (link && await copyToClipboard(link)) showToast(t('copied'));
+      await copyWithToast(remoteLink(s), { okKey: 'settings.remote.copied' });
     } else if (what === 'qr') {
       this._qr = !this._qr;
       this.render();

@@ -18,15 +18,17 @@ export function renderReplyExtras(node) {
   renderPlacesIn(node);
 }
 
-/** Copia *text* e lo dice: «Copiato», o il fallimento — `copyToClipboard`
- *  non riesce in ogni WebView, e un Copia muto sembrerebbe aver funzionato. */
-export async function copyReplyText(text) {
+/** Copia *text* e lo dice: *okKey*, o il fallimento — `copyToClipboard`
+ *  non riesce in ogni WebView, e un Copia muto sembrerebbe aver funzionato.
+ *  Il Copia di una risposta, la chiave pubblica SSH, il link dell'accesso da
+ *  altri dispositivi: il fallimento e' la stessa frase per tutti. */
+export async function copyWithToast(text, { okKey = 'chat.copied', failKey = 'chat.copyFailed' } = {}) {
   if (!text) return;
   if (!(await copyToClipboard(text))) {
-    showToast(i18n.t('chat.copyFailed'), 'error');
+    showToast(i18n.t(failKey), 'error');
     return;
   }
-  showToast(i18n.t('chat.copied'), 'success');
+  showToast(i18n.t(okKey), 'success');
 }
 
 /** Quanto ha messo il turno: «2.4s». */
