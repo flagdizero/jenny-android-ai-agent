@@ -195,7 +195,9 @@ def test_the_shared_constants_stay_equal(lint_wiki) -> None:
     from jenny.agent.gardener import MAP_TARGET_CHARS, page_ceiling
 
     assert ops.PAGE_STATES == lint_wiki.PAGE_STATES
-    assert ops.RESEARCH_SUBDIRS == lint_wiki.RESEARCH_SUBDIRS
+    from jenny.utils.wiki_paths import RESEARCH_SUBDIRS
+
+    assert RESEARCH_SUBDIRS == lint_wiki.RESEARCH_SUBDIRS
     assert page_ceiling() == lint_wiki.PAGE_MAX_CHARS
     assert MAP_TARGET_CHARS == lint_wiki.MAP_MAX_CHARS
     assert ops._WIKILINK_RE.pattern == lint_wiki.WIKILINK_RE.pattern
