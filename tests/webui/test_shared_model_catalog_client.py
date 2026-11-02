@@ -8,11 +8,8 @@ visita dopo.
 
 from __future__ import annotations
 
-from pathlib import Path
+from support.js_harness import ASSETS, requires_node, run_js
 
-from support.js_harness import requires_node, run_js
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CATALOG_JS = (ASSETS / "shared" / "model-catalog.js").read_text(encoding="utf-8")
 
 pytestmark = requires_node

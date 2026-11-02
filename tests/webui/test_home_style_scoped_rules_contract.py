@@ -16,11 +16,10 @@ chi la scriveva non guardava:
 from __future__ import annotations
 
 import re
-from pathlib import Path
+
+from support.js_harness import ASSETS
 
 from tests.support.css_levels import rules
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 
 
 def _top_rules(selector: str) -> list[str]:
