@@ -12,6 +12,8 @@ from __future__ import annotations
 import html
 import re
 
+from jenny.utils.plain_text import wikilinks_as_text
+
 # Limite hard di Telegram per il testo di un messaggio.
 TELEGRAM_MAX_LEN = 4096
 
@@ -46,6 +48,9 @@ def markdown_to_telegram_html(text: str) -> str:
     # I blocchi verbatim vanno estratti PRIMA dell'escape globale.
     out = _FENCE_RE.sub(_stash_fence, text)
     out = _INLINE_CODE_RE.sub(_stash_inline, out)
+    # Un link del wiki non porta da nessuna parte in Telegram: diventa parole,
+    # con la stessa regola delle notifiche.
+    out = wikilinks_as_text(out)
     out = _LINK_RE.sub(_stash_link, out)
     out = html.escape(out)
     out = _HEADING_RE.sub(lambda m: f"<b>{m.group(1)}</b>", out)

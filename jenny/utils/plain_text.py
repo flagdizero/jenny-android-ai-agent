@@ -54,7 +54,7 @@ def plain_text(md: str) -> str:
     out = _INLINE_CODE_RE.sub(lambda m: _stash(m.group(1)), out)
     out = _IMAGE_RE.sub(lambda m: m.group(1), out)
     out = _LINK_RE.sub(lambda m: m.group(1), out)
-    out = _WIKILINK_RE.sub(_wikilink_text, out)
+    out = wikilinks_as_text(out)
     out = _RULE_RE.sub("", out)
     out = _HEADING_RE.sub("", out)
     out = _QUOTE_RE.sub("", out)
@@ -66,6 +66,16 @@ def plain_text(md: str) -> str:
     for i, block in enumerate(blocks):
         out = out.replace(_PLACEHOLDER.format(i), block)
     return out.strip()
+
+
+def wikilinks_as_text(text: str) -> str:
+    """Ogni ``[[…]]`` di *text* al posto del suo testo (v. :func:`_wikilink_text`).
+
+    La usano anche le superfici che rendono il resto del markdown ma non i link
+    del wiki, come Telegram (``channels/telegram_format.py``): lì un
+    ``[[pagina]]`` arrivava con le parentesi.
+    """
+    return _WIKILINK_RE.sub(_wikilink_text, text)
 
 
 def _wikilink_text(m: re.Match[str]) -> str:
