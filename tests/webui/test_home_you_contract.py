@@ -753,7 +753,12 @@ def test_the_update_round_has_exactly_one_view_now() -> None:
     for view, source in (("la casa", home), ("l'workshop", workshop)):
         routes = re.findall(r"/api/updates/\w+", source)
         assert not routes, f"{view} parla da sola con {sorted(set(routes))}"
-    assert re.findall(r"/api/updates/\w+", flow), "il flusso non chiama piu' nessuna rotta"
+    # Le chiama il client (`api-client.js`), per conto del flusso: via i suoi
+    # metodi, non `_fetch` da fuori.
+    assert all(f"api.{m}()" in flow for m in ("checkUpdates", "installUpdate", "getUpdateStatus")), (
+        "il flusso non chiama piu' nessuna rotta"
+    )
+    assert "api._fetch(" not in flow
 
     # E la tabella delle fasi resta una.
     assert flow.count("phaseDownloading") == 1

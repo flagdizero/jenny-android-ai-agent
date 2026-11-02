@@ -391,10 +391,13 @@ def _render_step1(fields: str) -> str:
     finto che accetta i listener."""
     source = _wizard()
     shared = (ASSETS / "shared" / "api-base.js").read_text(encoding="utf-8")
-    consts = "\n".join(
-        re.search(rf"^const {name} = .*?;$", source, re.S | re.M).group(0)
-        for name in ("DEFAULT_API_BASE", "PLACEHOLDER_SUFFIX")
-    ) + "\n" + re.search(r"^export (const NO_AUTOCORRECT = .*?;)$", shared, re.M).group(1)
+    # Gli indirizzi predefiniti stanno in `shared/api-base.js`, gli stessi
+    # dell'officina (dal 02/11/2026); si leggono di li' per nome.
+    consts = "\n".join([
+        re.search(r"^const PLACEHOLDER_SUFFIX = .*?;$", source, re.S | re.M).group(0),
+        re.search(r"^export (const DEFAULT_API_BASE = .*?;)$", shared, re.S | re.M).group(1),
+        re.search(r"^export (const NO_AUTOCORRECT = .*?;)$", shared, re.M).group(1),
+    ])
     return run_js(
         "const i18n = { t: (k) => k };\n"
         "const escapeHtml = (s) => String(s);\n"

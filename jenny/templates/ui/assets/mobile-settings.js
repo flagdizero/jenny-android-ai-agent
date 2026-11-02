@@ -9,7 +9,7 @@ import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairin
 import { RemoteAccessPanel, remoteSummary } from './mobile-remote-access.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { botName } from './shared/bot-name.js';
-import { NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
+import { DEFAULT_API_BASE, NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
 import {
   BatteryExemptionCard,
   batteryExemptionSupported,
@@ -156,7 +156,7 @@ export class SettingsController {
        casa per riprovarli (`shared/model-catalog.js`). La chiave e' fatta di
        cio' da cui l'elenco dipende: una Modifica che cambia chiave o
        indirizzo lo fa rileggere da se'. */
-    this._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
+    this._modelCatalogs = new ModelCatalogs((provider) => rpc.providerModels({ provider }));
     /* Lo stato dei gruppi di «Chi pensa» per la visita in corso: quali sono
        aperti, l'ordine dei modelli fissato all'ingresso, i filtri, chi mostra
        tutto. Sopravvive ai ridisegni; si azzera uscendo (`deactivate`) e
@@ -2253,7 +2253,7 @@ export class SettingsController {
         if (typed) params.password = typed;
       }
       try {
-        await api.saveSshHost(params);
+        await rpc.saveSshHost(params);
         close();
         showToast(i18n.t('settings.saved'));
         this._loadSsh();
@@ -3285,7 +3285,7 @@ export class SettingsController {
     buttons.forEach(b => { b.disabled = true; });
 
     try {
-      await api.updateProvider({
+      await rpc.updateProvider({
         name, format, api_key: apiKey, api_base: apiBase,
         ca_bundle: caBundle,
         ca_bundle_clear: clearCaBundle ? '1' : '',
@@ -3405,7 +3405,7 @@ export class SettingsController {
         </div>
         <div class="settings-field">
           <label class="settings-label">${i18n.t('settings.baseUrl')}</label>
-          <input type="url" inputmode="url" class="settings-input" id="dlg-api-base" ${NO_AUTOCORRECT} placeholder="https://api.openai.com/v1"
+          <input type="url" inputmode="url" class="settings-input" id="dlg-api-base" ${NO_AUTOCORRECT} placeholder="${DEFAULT_API_BASE.openai_compat}"
             value="${isEdit ? escapeHtml(existingProvider.api_base || '') : ''}" />
         </div>
         <div class="settings-field">
@@ -3454,11 +3454,7 @@ export class SettingsController {
     useNow?.addEventListener('change', syncFirstModel);
     syncFirstModel();
     formatSelect.addEventListener('change', () => {
-      const defaults = {
-        'openai_compat': 'https://api.openai.com/v1',
-        'anthropic': 'https://api.anthropic.com',
-      };
-      baseInput.placeholder = defaults[formatSelect.value] || '';
+      baseInput.placeholder = DEFAULT_API_BASE[formatSelect.value] || '';
     });
 
     // Anche Annulla passa dal `cancel` annullabile, come Esc e il tasto

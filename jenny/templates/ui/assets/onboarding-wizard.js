@@ -14,7 +14,7 @@ import { TelegramPairingWidget } from './shared/telegram-pairing.js';
 import { BatteryExemptionCard } from './shared/battery-exemption.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 // Con l'autocorrezione accesa «http://» diventava «Http:/» e partiva cosi'.
-import { NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
+import { DEFAULT_API_BASE, NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
 import { MOTIONS, MotionChannels } from './shared/mascot-motion.js';
 import { DEFAULT_BOT_NAME } from './shared/bot-name.js';
 
@@ -38,13 +38,6 @@ const REWAVE_EVERY_MS = 5000; // ogni tanto risaluta
    gambe sono cariche: il 35% del gesto, dove il keyframe `jenny-getup` passa
    dallo schiacciamento all'allungo. */
 const GETUP_SWAP_MS = Math.round(MOTIONS.squash.getup * 0.35);
-
-/* Base URL di default per formato: mostrata come placeholder nello step 1 e
-   usata davvero quando il campo resta vuoto (fetch modelli e salvataggio). */
-const DEFAULT_API_BASE = {
-  'openai_compat': 'https://api.openai.com/v1',
-  'anthropic': 'https://api.anthropic.com',
-};
 
 /* Il suffisso delle chiavi i18n dei segnaposto dello step 1, per formato: il
    nome e la chiave d'esempio erano quelli di Claude anche scegliendo OpenAI. */
@@ -339,7 +332,10 @@ export class OnboardingController {
 
     try {
       const apiBase = this.apiBase || DEFAULT_API_BASE[this.format] || '';
-      const resp = await api.getProviderModels(this.providerName || this.format, this.apiKey, apiBase, this.format);
+      const { rpc } = await import('./shared/rpc-client.js');
+      const resp = await rpc.providerModels({
+        provider: this.providerName || this.format, apiKey: this.apiKey, apiBase, format: this.format,
+      });
       if (token !== this._modelsToken) return;
       this.models = (resp.models || []).map(m => m.id || m);
       // Il backend risponde 200 anche quando la lista è vuota (credenziale
@@ -513,7 +509,8 @@ export class OnboardingController {
 
     this._showLoadingOverlay();
     try {
-      const result = await api.saveOnboarding({
+      const { rpc } = await import('./shared/rpc-client.js');
+      const result = await rpc.saveOnboarding({
         provider_name: this.providerName,
         format: this.format,
         api_key: this.apiKey,

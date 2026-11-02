@@ -3,8 +3,8 @@
 ``api.deleteWorkspace``/``renameWorkspace``/
 ``copyWorkspace`` mandavano una GET a ``/api/workspace/*`` che scriveva sul
 disco. Ora sono i comandi RPC ``workspace.delete``/``rename``/``copy``, con la
-stessa firma — ``mobile-workspace.js`` non cambia — e un errore lanciato col
-messaggio del server.
+stessa firma — ``mobile-workspace.js`` li chiama da ``rpc`` — e un errore
+lanciato col messaggio del server.
 
 Secondo pezzo: ``rpc-client.js`` apre il socket se nessuno l'ha ancora aperto.
 Nell'officina lo apre il controller della chat, che nasce pigro: nell'onboarding
@@ -47,7 +47,7 @@ export const wsManager = new (class extends EventTarget {
 
 _ENTRY = """
 import assert from 'node:assert/strict';
-import { api } from './api-client.js';
+import { rpc } from './rpc-client.js';
 import { wsManager, requests } from './ws-manager.js';
 
 let fetched = 0;
@@ -56,11 +56,11 @@ globalThis.fetch = async () => { fetched += 1; throw new Error('niente HTTP'); }
 wsManager.outcome = async (method, params) => ({ success: true, ...params });
 
 // Socket mai aperto: il comando lo apre e aspetta, invece di rifiutare.
-await api.deleteWorkspace('note/a.md');
+await rpc.deleteWorkspace('note/a.md');
 assert.equal(wsManager.connects, 1);
-await api.renameWorkspace('a.md', 'b.md');
-await api.copyWorkspace('b.md');
-await api.copyWorkspace('b.md', 'c.md');
+await rpc.renameWorkspace('a.md', 'b.md');
+await rpc.copyWorkspace('b.md');
+await rpc.copyWorkspace('b.md', 'c.md');
 assert.equal(wsManager.connects, 1, 'a socket aperto non si riconnette');
 assert.deepEqual(requests, [
   ['workspace.delete', { path: 'note/a.md' }],
@@ -76,7 +76,7 @@ wsManager.outcome = async () => {
   throw err;
 };
 await assert.rejects(
-  api.deleteWorkspace('x'),
+  rpc.deleteWorkspace('x'),
   (err) => err.code === 'forbidden' && err.message === 'workspace deletes are disabled',
 );
 console.log('ok');

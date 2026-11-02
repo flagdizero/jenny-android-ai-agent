@@ -114,6 +114,11 @@ const api = {
 };
 
 function showToast(msg, type) { toasts.push([msg, type]); }
+/* I due comandi della stanza sul filo, che qui passano per i finti di sopra. */
+const rpc = {
+  providerModels: ({ provider }) => api.getProviderModels(provider),
+  updateProvider: (params) => api.updateProvider(params),
+};
 
 __CATALOGS__
 __SHORT_BRAND__

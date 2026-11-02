@@ -140,7 +140,8 @@ export class TelegramPairingWidget {
     const btn = this.el.querySelector('#tg-connect');
     if (btn) { btn.disabled = true; btn.textContent = i18n.t('settings.telegram.validating'); }
     try {
-      this.status = await api.saveTelegramToken(token);
+      const { rpc } = await import('./rpc-client.js');
+      this.status = await rpc.saveTelegramToken(token);
       this.render();
     } catch (e) {
       showToast(e.message || i18n.t('settings.telegram.saveFailed'), 'error');

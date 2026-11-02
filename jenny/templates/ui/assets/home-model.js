@@ -28,6 +28,7 @@
  */
 
 import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { showToast } from './shared/utils.js';
@@ -99,7 +100,7 @@ export class HomeModel {
     this.viewing = null;
     /** Gli elenchi gia' chiesti, con la regola dell'officina per tenerli e
      *  riprovarli (`shared/model-catalog.js`): una visita e' un'apertura. */
-    this.catalogs = new ModelCatalogs((name) => api.getProviderModels(name));
+    this.catalogs = new ModelCatalogs((provider) => rpc.providerModels({ provider }));
     /** Per quale provider, e con quale chiave di cache, si e' chiesto
      *  l'ultimo elenco: v. `setSettings`. */
     this._askedFor = null;
@@ -227,7 +228,7 @@ export class HomeModel {
       /* Il formato va sempre con la chiave: senza, il server lo considerava
          assente e ci scriveva il suo predefinito, `openai_compat`. */
       const format = this._provider(provider)?.format;
-      const payload = await api.updateProvider({ name: provider, api_key: key, ...(format ? { format } : {}) });
+      const payload = await rpc.updateProvider({ name: provider, api_key: key, ...(format ? { format } : {}) });
       if (this.keyInput) this.keyInput.value = '';
       if (this.keyEdit) this.keyEdit.hidden = true;
       this._syncKeySave();

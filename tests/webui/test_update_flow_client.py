@@ -36,6 +36,7 @@ from support.js_harness import function, member, requires_node, run_js
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 FLOW_JS = ASSETS / "shared" / "update-flow.js"
+API_JS = ASSETS / "shared" / "api-client.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
@@ -84,6 +85,8 @@ const api = {
     if (r && r.http && !r.ok) return Promise.resolve({ ok: false, status: r.status || 500 });
     return Promise.resolve({ ok: true, json: () => Promise.resolve(r) });
   },
+  /* Le tre rotte come le chiama il flusso, vere: sopra `_fetch` finto. */
+  __API_METHODS__
 };
 
 const toasts = [];
@@ -144,6 +147,9 @@ def _harness() -> str:
         .replace("__POLL_MS__", _const(src, "POLL_MS"))
         .replace("__POLL_MAX__", _const(src, "POLL_MAX"))
         .replace("__PHASE_KEY__", function(src, "phaseKey"))
+        .replace("__API_METHODS__", ",\n  ".join(
+            member(API_JS.read_text(encoding="utf-8"), n).strip()
+            for n in ("_getJson", "checkUpdates", "installUpdate", "getUpdateStatus")))
         .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__CHECK_LINES__", function(src, "checkLines"))
         .replace("__CTOR__", member(src, "constructor"))

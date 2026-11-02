@@ -27,5 +27,14 @@ export function normalizeApiBase(text) {
   return { value };
 }
 
+/** L'indirizzo predefinito di ogni formato: il segnaposto del campo vuoto, e
+ *  quello che vale davvero quando il campo resta vuoto (l'elenco dei modelli
+ *  dell'onboarding, il salvataggio). Era scritto due volte, nel primo avvio e
+ *  nel dialogo «Aggiungi marca» dell'officina. */
+export const DEFAULT_API_BASE = Object.freeze({
+  openai_compat: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com',
+});
+
 /** Gli attributi che tengono la tastiera lontana da un campo tecnico. */
 export const NO_AUTOCORRECT = 'autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"';

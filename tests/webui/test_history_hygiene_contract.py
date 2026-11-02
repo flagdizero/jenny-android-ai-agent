@@ -386,6 +386,6 @@ def test_the_model_catalog_lives_in_the_controller_on_both_sides() -> None:
                   "this._brandShowAll = new Set()"):
         assert field in settings, f"lo stato della visita non e' piu' nel controller: {field}"
     home = (SETTINGS_JS.parent / "home-model.js").read_text(encoding="utf-8")
-    assert "getProviderModels" in home and "new ModelCatalogs(" in home, (
+    assert "rpc.providerModels(" in home and "new ModelCatalogs(" in home, (
         "la casa non ha piu' il catalogo"
     )

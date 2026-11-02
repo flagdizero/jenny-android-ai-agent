@@ -28,7 +28,7 @@ export const CATALOG_NOTE_KEYS = Object.freeze({
 });
 
 export class ModelCatalogs {
-  /** *fetchModels(name)*: la richiesta (`api.getProviderModels`). */
+  /** *fetchModels(name)*: la richiesta (`rpc.providerModels`). */
   constructor(fetchModels) {
     this._fetch = fetchModels;
     this._lists = new Map();

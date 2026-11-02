@@ -271,15 +271,12 @@ export class AppsActions {
     }
     let url;
     try {
-      const res = await fetch(`/api/webui/apps/${encodeURIComponent(slug)}/view`, {
-        headers: { 'Authorization': `Bearer ${api.getSecret()}` },
-      });
-      const body = await res.json().catch(() => ({}));
+      const { ok, status, body } = await api.getAppView(slug);
       if (body.error === 'phone_only') {
         showToast(i18n.t('apps.viewPhoneOnly', { name: app?.name || slug }));
         return;
       }
-      if (!res.ok || !body.url) throw new Error(body.error || `HTTP ${res.status}`);
+      if (!ok || !body.url) throw new Error(body.error || `HTTP ${status}`);
       url = body.url;
     } catch (e) {
       showToast(i18n.t('apps.viewProxyFailed', { error: String(e.message || e) }), 'error');
@@ -330,9 +327,7 @@ export class AppsActions {
        normale. Se questo fetch non arriva (processo ucciso, rete interna giù)
        ci pensa l'idle timeout lato Python — non resta aperto per sempre. */
     if (open.external) {
-      fetch(`/api/webui/apps/${encodeURIComponent(open.slug)}/view/close`, {
-        headers: { 'Authorization': `Bearer ${api.getSecret()}` },
-      }).catch(() => {});
+      api.closeAppView(open.slug).catch(() => {});
     }
   }
   handleBack() {

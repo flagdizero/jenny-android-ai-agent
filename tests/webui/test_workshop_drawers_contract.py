@@ -290,10 +290,10 @@ def test_choosing_the_model_saves_model_and_brand_together() -> None:
     assert pick.group(0).count("api.updateSettings(") == 1, (
         "modello e marca in due chiamate: fra l'una e l'altra la config non risponde"
     )
-    assert "getProviderModels" in workshop, "i gruppi di «Chi pensa» non chiedono l'elenco"
+    assert "rpc.providerModels(" in workshop, "i gruppi di «Chi pensa» non chiedono l'elenco"
 
     home = _home("home-model.js")
-    assert "getProviderModels" in home, "la casa non chiede piu' l'elenco dei modelli"
+    assert "rpc.providerModels(" in home, "la casa non chiede piu' l'elenco dei modelli"
     assert "default_provider: provider" in home, (
         "la casa non salva piu' modello e marca insieme: e' il punto del redesign"
     )
@@ -322,7 +322,7 @@ def test_adding_a_brand_finishes_the_job() -> None:
         "una marca in uso non deve poter cambiare chi risponde"
     )
     save = re.search(r"(?s)async _saveProvider\(.*?\n  \}", src).group(0)
-    i = save.index("api.updateProvider(")
+    i = save.index("rpc.updateProvider(")
     j = save.index("api.updateSettings(")
     assert i < j, (
         "la marca si attiva prima di esistere: se la prima scrittura fallisce, "
