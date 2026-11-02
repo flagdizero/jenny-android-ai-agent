@@ -177,3 +177,26 @@ def test_full_round_trip_survives_repeated_save_load(tmp_path: Path) -> None:
     s2._load_store()
     assert s2._store is not None
     assert [j.name for j in s2._store.jobs] == ["Daily Loving Message"]
+
+
+def test_a_bad_byte_in_the_action_journal_costs_only_its_line(tmp_path: Path) -> None:
+    """Una riga non UTF-8 nel giornale delle azioni non fa perdere le altre:
+    prima la decodifica falliva fuori dal ``try`` della riga, e con lei tutto
+    il merge."""
+    store_path = tmp_path / "cron" / "jobs.json"
+    service = CronService(store_path)
+    service.add_job(
+        name="tenuto",
+        schedule=CronSchedule(kind="cron", expr="0 10 * * *", tz="UTC"),
+        message="ciao",
+    )
+    journal = store_path.parent / "action.jsonl"
+    journal.write_bytes(b'{"action": "add", "params": {"name": "caf\xe9"}}\n' + journal.read_bytes())
+
+    service._running = True
+    try:
+        store = service._load_store()
+    finally:
+        service._running = False
+
+    assert [j.name for j in store.jobs] == ["tenuto"]

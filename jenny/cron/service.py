@@ -33,7 +33,12 @@ from jenny.cron.types import (
 from jenny.runtime import power
 from jenny.session.keys import normalize_user_session_key
 from jenny.utils.clock import now_ms as _now_ms
-from jenny.utils.path import atomic_write, load_with_recovery, rotate_valid_json_backup
+from jenny.utils.path import (
+    atomic_write,
+    iter_jsonl,
+    load_with_recovery,
+    rotate_valid_json_backup,
+)
 
 if TYPE_CHECKING:
     from jenny.cron.monitor_followup import MonitorFollowup
@@ -597,12 +602,15 @@ class CronService:
                 jobs_map.pop(job_id, None)
 
         with self._locked():
-            with open(self._action_path, "r", encoding="utf-8") as f:
+            # ``errors="replace"``: un byte non UTF-8 rompe solo la sua riga, che
+            # ``iter_jsonl`` salta; prima la decodifica falliva fuori dal ``try``
+            # e si perdeva tutto il merge.
+            with open(self._action_path, encoding="utf-8", errors="replace") as f:
                 changed = False
-                for line in f:
+                for action in iter_jsonl(
+                    f, on_bad=lambda line: logger.warning("Cron: unreadable action line {!r}", line[:200])
+                ):
                     try:
-                        line = line.strip()
-                        action = json.loads(line)
                         if "action" not in action:
                             continue
                         if action["action"] == "del":
