@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from support.gateway_http import make_request
+from support.js_harness import ASSETS
 from websockets.http11 import Request as WsRequest
 
 from jenny.channels.http_utils import check_api_secret, http_error, http_json_response, parse_query
@@ -155,7 +156,7 @@ async def test_the_write_goes_through_store_mutate(config_path, monkeypatch) -> 
 # -- copy della UI -----------------------------------------------------------
 
 
-_UI_ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+_UI_ASSETS = ASSETS
 
 
 @pytest.mark.parametrize("locale", ["it", "en"])

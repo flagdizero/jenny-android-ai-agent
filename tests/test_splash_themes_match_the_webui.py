@@ -15,13 +15,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from support.js_harness import ASSETS
 from support.kotlin_source import read_code
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "android/app/src/main/res"
 SPLASH_XML = RES / "values-v31/themes.xml"
-CSS = ROOT / "jenny/templates/ui/assets/mobile-style.css"
-THEME_JS = ROOT / "jenny/templates/ui/assets/shared/theme.js"
+CSS = ASSETS / "mobile-style.css"
+THEME_JS = ASSETS / "shared/theme.js"
 MAIN_ACTIVITY = ROOT / "android/app/src/main/java/com/flagdizero/jenny/MainActivity.kt"
 PREFIX = "Theme.Jenny.Splash."
 

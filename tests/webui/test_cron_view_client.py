@@ -16,13 +16,11 @@ niente si rompe, l'informazione si limita a diventare inutile.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 VIEW_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "cron-view.js"
+    ASSETS / "shared" / "cron-view.js"
 )
 
 
@@ -566,8 +564,7 @@ def _predicate_of_hands() -> str:
     import re
 
     src = (
-        Path(__file__).resolve().parents[2]
-        / "jenny" / "templates" / "ui" / "assets" / "mobile-settings.js"
+        ASSETS / "mobile-settings.js"
     ).read_text(encoding="utf-8")
     m = re.search(r"^export const HANDS_JOBS = (.+);$", src, re.M)
     assert m, "HANDS_JOBS non si trova piu' in mobile-settings.js"

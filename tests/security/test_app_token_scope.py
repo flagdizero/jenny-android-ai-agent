@@ -21,14 +21,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.gateway_http import AUTH_SECRET, make_handler, make_request
+from support.js_harness import ASSETS
 from support.ws_channel import make_ws_channel
 
 from jenny.apps.token import app_token
 from jenny.channels.http_utils import check_app_secret
 from jenny.webui.ws_http import GatewayHTTPHandler
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 MANIFEST = {
     "name": "Note",

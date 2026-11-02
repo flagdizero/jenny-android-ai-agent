@@ -20,13 +20,11 @@ mano, nemmeno la `t()` di `i18n.js`.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import FAKE_MENU_ELEMENT, locale, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, locale, member, requires_node, run_js
 
 from jenny.command.specs import BUILTIN_COMMAND_SPECS
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "commands-chip.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 

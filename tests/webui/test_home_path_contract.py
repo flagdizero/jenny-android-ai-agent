@@ -10,11 +10,11 @@ l'interruttore).
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS
 
-CSS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "home-style.css"
+CSS = ASSETS / "home-style.css"
 
 
 def _rules(selector: str):

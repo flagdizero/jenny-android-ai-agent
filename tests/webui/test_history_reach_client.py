@@ -23,11 +23,8 @@ sola, e il test la importa davvero invece di ritagliarne il testo da un guscio.
 
 from __future__ import annotations
 
-from pathlib import Path
+from support.js_harness import ASSETS, requires_node, run_js
 
-from support.js_harness import requires_node, run_js
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 PAGER_JS = ASSETS / "shared" / "history-pager.js"
 
 

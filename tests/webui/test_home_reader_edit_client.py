@@ -19,11 +19,9 @@ diverso di far sparire del lavoro senza che nessuno se ne accorga:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 READER_JS = ASSETS / "home-reader.js"
 APP_JS = ASSETS / "home-app.js"
 

@@ -18,14 +18,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 from jenny.webui.wiki import build_graph, read_pages
 from jenny.webui.wiki_search import SearchIndex, pack_index, tokenize
 
 SEARCH_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "wiki-search.js"
+    ASSETS / "shared" / "wiki-search.js"
 )
 
 

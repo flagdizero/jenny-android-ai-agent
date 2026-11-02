@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-_I18N_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "i18n"
+from support.js_harness import ASSETS
+
+_I18N_DIR = ASSETS / "i18n"
 
 
 def _flatten(value: dict, prefix: str = "") -> set[str]:

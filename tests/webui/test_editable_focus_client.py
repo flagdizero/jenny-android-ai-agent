@@ -15,13 +15,11 @@ anche lo stesso. Che il guscio poi rileghi lo dice il telefono.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "editable-focus.js"
+    ASSETS / "shared" / "editable-focus.js"
 )
 
 pytestmark = requires_node

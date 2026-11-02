@@ -11,9 +11,8 @@ spenta e il quaderno chiuso, e che il ritorno indietro mandi i gruppi tenuti.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from support.home_dom import requires_jsdom, run_home
+from support.js_harness import ASSETS
 
 pytestmark = requires_jsdom
 
@@ -55,7 +54,7 @@ const toNotebook = async () => {
 """
 
 
-_VENDOR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "vendor"
+_VENDOR = ASSETS / "vendor"
 # DOMPurify e marked veri: senza, `md()` esce col testo scappato e i backtick restano.
 _MARKDOWN_BOOT = f"""
 import {{ createRequire }} from 'node:module';

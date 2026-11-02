@@ -20,6 +20,7 @@ import re
 from pathlib import Path
 
 import pytest
+from support.js_harness import ASSETS
 from support.kotlin_source import read_source
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,7 +30,7 @@ MANIFEST = ANDROID / "AndroidManifest.xml"
 MAIN_ACTIVITY = JAVA / "MainActivity.kt"
 NOTIFIER = JAVA / "NotifierBridge.kt"
 LAYOUT = ANDROID / "res" / "layout" / "activity_main.xml"
-UI_ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+UI_ASSETS = ASSETS
 
 
 def _main_activity() -> str:

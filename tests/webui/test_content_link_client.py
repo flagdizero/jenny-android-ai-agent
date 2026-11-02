@@ -17,12 +17,10 @@ vero, e poi i tre posti che lo usano girando in node il loro codice vero.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from support.home_dom import requires_jsdom, run_home
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CONTENT_LINK_JS = ASSETS / "shared" / "content-link.js"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
 WORKSHOP_CHAT_JS = ASSETS / "mobile-chat.js"

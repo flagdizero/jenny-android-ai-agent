@@ -32,7 +32,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
+
 CSS = ASSETS / "mobile-style.css"
 
 

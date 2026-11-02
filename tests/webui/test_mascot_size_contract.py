@@ -12,9 +12,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from support.js_harness import ASSETS
 from support.kotlin_source import read_source
 
-UI_ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+UI_ASSETS = ASSETS
 
 
 def _sizes_from(source: str, pattern: str) -> dict[str, int]:

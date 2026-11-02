@@ -24,11 +24,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import FAKE_MENU_ELEMENT, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 CSS = ASSETS / "mobile-style.css"

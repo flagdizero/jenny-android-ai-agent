@@ -26,13 +26,10 @@ Le cinque che costa di più perdere, in ordine:
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 POLICY_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "subagent-policy.js"
+    ASSETS / "shared" / "subagent-policy.js"
 )
 
 

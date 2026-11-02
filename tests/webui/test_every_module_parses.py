@@ -26,11 +26,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from support.js_harness import NODE, requires_node
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-
+from support.js_harness import ASSETS, NODE, requires_node
 
 pytestmark = requires_node
 

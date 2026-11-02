@@ -17,12 +17,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import FAKE_ELEMENT, function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 ROOM_JS = ASSETS / "home-updates.js"
 FLOW_JS = ASSETS / "shared" / "update-flow.js"
 WHEN_JS = ASSETS / "shared" / "when.js"

@@ -10,10 +10,10 @@ argomento.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CHAT = ROOT / "jenny" / "templates" / "ui" / "assets" / "mobile-chat.js"
+from support.js_harness import ASSETS
+
+CHAT = ASSETS / "mobile-chat.js"
 
 
 def _calls(source: str) -> list[str]:

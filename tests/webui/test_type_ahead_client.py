@@ -20,13 +20,11 @@ Il modulo prende ``activeElement`` come argomento invece di leggerlo da
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 TYPE_AHEAD_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "type-ahead.js"
+    ASSETS / "shared" / "type-ahead.js"
 )
 
 

@@ -31,8 +31,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from support.js_harness import ASSETS
+
 ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 SDK_JS = ASSETS / "apps" / "jenny-sdk.js"
 APPS_JS = ASSETS / "shared" / "apps-actions.js"
 SKILL_DIR = ROOT / "jenny" / "skills" / "app-creator"

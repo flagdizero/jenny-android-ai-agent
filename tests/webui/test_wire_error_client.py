@@ -15,10 +15,9 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 WIRE_ERROR_JS = ASSETS / "shared" / "wire-error.js"
 I18N = ASSETS / "i18n"
 

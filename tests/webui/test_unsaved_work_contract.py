@@ -35,10 +35,9 @@ runner JS con DOM.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
+
 WORKSPACE_JS = ASSETS / "mobile-workspace.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 BACKUP_JS = ASSETS / "shared" / "backup-flow.js"

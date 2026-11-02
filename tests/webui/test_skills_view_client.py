@@ -11,13 +11,10 @@ avvio, quindi no — e un interruttore che mente è peggio di un lucchetto.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from support.js_harness import locale, requires_node, run_js
+from support.js_harness import ASSETS, locale, requires_node, run_js
 
 VIEW_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "skills-view.js"
+    ASSETS / "shared" / "skills-view.js"
 )
 
 

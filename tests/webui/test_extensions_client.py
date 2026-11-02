@@ -8,11 +8,8 @@ monta con i ganci della shell. Un'estensione rotta non ferma la shell.
 
 from __future__ import annotations
 
-from pathlib import Path
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
-from support.js_harness import function, member, requires_node, run_js
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 EXT_JS = (ASSETS / "shared" / "extensions.js").read_text(encoding="utf-8")
 I18N_JS = (ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8")
 

@@ -29,12 +29,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 FLOW_JS = ASSETS / "shared" / "update-flow.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"

@@ -27,8 +27,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from support.js_harness import ASSETS
+
 ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 VENDOR = ASSETS / "vendor"
 NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 

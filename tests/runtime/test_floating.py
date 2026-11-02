@@ -16,6 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from support.js_harness import ASSETS
 from support.kotlin_source import read_code, read_source
 
 from jenny.runtime import floating as fl
@@ -178,7 +179,7 @@ class TestBoundaryWithKotlin:
         import re
 
         source = read_source(CONTROLLER)
-        assets = REPO / "jenny/templates/ui/assets"
+        assets = ASSETS
         names = set(re.findall(r'"(jenny-[a-z0-9-]+)"', source))
         assert names, "nessuno sprite nominato nel controller: il parsing è da rivedere"
         # Le pose del bordo e del volo, non solo quelle frontali: una mascotte
@@ -213,7 +214,7 @@ class TestThePhysicsDoesNotDiverge:
     """
 
     FLIGHT_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingFlight.kt"
-    COMPANION_JS = REPO / "jenny/templates/ui/assets/shared/mascot-drag.js"
+    COMPANION_JS = ASSETS / "shared/mascot-drag.js"
 
     @staticmethod
     def _js_numbers(source: str) -> dict[str, float]:
@@ -292,7 +293,7 @@ class TestSquashParity:
     """
 
     SQUASH_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingSquash.kt"
-    SQUASH_JS = REPO / "jenny/templates/ui/assets/shared/mascot-squash.js"
+    SQUASH_JS = ASSETS / "shared/mascot-squash.js"
     FUNCTIONS = (
         "heldStretch", "airStretch", "impactSquash", "loadLegs", "walkStep", "walkStart", "stretch",
     )
@@ -358,7 +359,7 @@ def test_the_floating_mascot_breathes_like_the_css():
 
     from support.kotlin_source import function_body
 
-    css = (REPO / "jenny/templates/ui/assets/mobile-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
     body = function_body(read_code("FloatingOverlayController"), "startBreathing")
     assert re.search(r"animation: jenny-breath 3\.4s", css)
     assert re.search(r"animation: jenny-think 1\.6s", css)

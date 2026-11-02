@@ -20,13 +20,11 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-WORKSPACE_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "mobile-workspace.js"
-I18N_DIR = ROOT / "jenny" / "templates" / "ui" / "assets" / "i18n"
+WORKSPACE_JS = ASSETS / "mobile-workspace.js"
+I18N_DIR = ASSETS / "i18n"
 
 pytestmark = requires_node
 

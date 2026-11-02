@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 import pytest
+from support.js_harness import ASSETS
 from support.kotlin_source import read_source
 
 from jenny.snapshot.backup import IMPORT_STAGED_FILENAME
@@ -20,7 +21,7 @@ from jenny.webui.backup_routes import BACKUP_DATA_HEADER
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 KOTLIN_MAIN = REPO_ROOT / "android/app/src/main/java/com/flagdizero/jenny/MainActivity.kt"
-UI_ASSETS = REPO_ROOT / "jenny/templates/ui/assets"
+UI_ASSETS = ASSETS
 BACKUP_FLOW_JS = UI_ASSETS / "shared/backup-flow.js"
 API_CLIENT_JS = UI_ASSETS / "shared/api-client.js"
 

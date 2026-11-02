@@ -35,10 +35,8 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from support.js_harness import locale, member, requires_node, run_module
+from support.js_harness import ASSETS, locale, member, requires_node, run_module
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 WHO_JS = ASSETS / "home-who.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 

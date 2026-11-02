@@ -33,10 +33,10 @@ niente.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CHAT_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "mobile-chat.js"
+from support.js_harness import ASSETS
+
+CHAT_JS = ASSETS / "mobile-chat.js"
 
 
 def _activate(src: str) -> str:

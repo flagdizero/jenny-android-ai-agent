@@ -23,10 +23,8 @@ la seconda; la prima la misura `test_vendor_contract.py`.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
 
 # Le superfici, e come si riconosce in ognuna «ho appena scritto del contenuto».
 SURFACES = {

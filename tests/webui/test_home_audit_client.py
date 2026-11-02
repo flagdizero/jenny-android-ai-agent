@@ -17,9 +17,8 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import function, locale, member, requires_node, run_js, run_module
+from support.js_harness import ASSETS, function, locale, member, requires_node, run_js, run_module
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 AUDIT_JS = ASSETS / "home-audit.js"
 APP_JS = ASSETS / "home-app.js"
 API_JS = ASSETS / "shared" / "api-client.js"

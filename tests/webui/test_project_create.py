@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 from support.gateway_http import make_handler
+from support.js_harness import ASSETS
 from websockets.datastructures import Headers
 from websockets.http11 import Request as WsRequest
 
@@ -597,7 +598,7 @@ def test_the_chip_no_longer_reads_a_projects_folder():
     """Guardia contro il ritorno del difetto: il chip elencava
     `workspace/projects/` con `listWorkspace`, e quella cartella non esiste."""
     source = (
-        _REPO / "jenny" / "templates" / "ui" / "assets" / "shared" / "scope-chip.js"
+        ASSETS / "shared" / "scope-chip.js"
     ).read_text(encoding="utf-8")
 
     assert "listWorkspace" not in source
@@ -606,7 +607,7 @@ def test_the_chip_no_longer_reads_a_projects_folder():
     # La creazione non la fa più il chip: la fa il giro condiviso, che è anche
     # quello che usa il pannello della casa.
     flow = (
-        _REPO / "jenny" / "templates" / "ui" / "assets" / "shared" / "project-create.js"
+        ASSETS / "shared" / "project-create.js"
     ).read_text(encoding="utf-8")
     assert "rpc.createProject(" in flow
     assert "createProjectFlow(" in source

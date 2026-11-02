@@ -14,6 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from support.js_harness import ASSETS
+
 from jenny.agent.board_pass import BoardPass, board_needs_pass, run_board_pass
 from jenny.agent.board_tools import BoardPassState, build_board_tools
 from jenny.board import model
@@ -470,7 +472,7 @@ async def test_a_failing_model_still_stamps_the_pass(tmp_path) -> None:
 def test_glyphs_are_known_icon_names() -> None:
     """Il glifo di una scheda lo sceglie il modello da un elenco chiuso: ogni
     nome dell'elenco deve esistere nel set di icone che la casa porta con se'."""
-    css = (Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "vendor"
+    css = (ASSETS / "vendor"
            / "@tabler" / "icons-webfont@3.19.0" / "dist" / "tabler-icons.min.css").read_text()
     for name in model.GLYPHS:
         assert f".ti-{name}:before" in css, name

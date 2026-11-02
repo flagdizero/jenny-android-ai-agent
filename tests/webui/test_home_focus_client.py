@@ -16,13 +16,11 @@ WebView lo dice il telefono, non questo banco.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 FOCUS_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "home-focus.js"
+    ASSETS / "home-focus.js"
 )
 
 
