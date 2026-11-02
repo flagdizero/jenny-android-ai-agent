@@ -41,7 +41,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.channels.http_utils import QueryParams, parse_flag
+from jenny.channels.http_utils import QueryParams, parse_flag, query_first
 from jenny.config import store
 from jenny.config.loader import load_config
 from jenny.config.schema import Config, DreamConfig, GardenerConfig
@@ -187,18 +187,9 @@ def worker_settings_payload(config: Config | None = None) -> dict[str, Any]:
 # ── Scrittura ────────────────────────────────────────────────────────────────
 
 
-def _first(query: QueryParams, *names: str) -> str | None:
-    """Il primo valore fra piu' nomi accettati (snake_case e camelCase)."""
-    for name in names:
-        values = query.get(name)
-        if values:
-            return values[0]
-    return None
-
-
 def _flag(query: QueryParams, *names: str) -> bool:
     """Un flag di conferma: vero solo se dichiarato esplicitamente vero."""
-    return parse_flag(_first(query, *names))
+    return parse_flag(query_first(query, *names))
 
 
 # Le chiavi che, se presenti, chiedono un ri-armo del job di quel lavoratore.
@@ -235,7 +226,7 @@ async def update_memory_settings(query: QueryParams) -> dict[str, Any]:
     identico lascia ``config.json`` intatto e non fa ruotare il ``.bak`` — e'
     quel che il comando faceva, ed e' pinnato dai suoi test.
     """
-    review_raw = _first(query, "review_every_runs", "reviewEveryRuns")
+    review_raw = query_first(query, "review_every_runs", "reviewEveryRuns")
     if review_raw is not None:
         # Validato **prima** di ``mutate``: un valore rifiutato non deve toccare
         # il file ne' far ruotare il backup.

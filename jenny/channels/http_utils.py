@@ -154,9 +154,13 @@ def redact_query_secrets(path_or_url: str) -> str:
     return f"{head}?{'&'.join(redacted)}"
 
 
-def query_first(query: QueryParams, key: str) -> str | None:
-    values = query.get(key)
-    return values[0] if values else None
+def query_first(query: QueryParams, *keys: str) -> str | None:
+    """Il primo valore del primo fra *keys* che c'è (più nomi: snake_case e camelCase)."""
+    for key in keys:
+        values = query.get(key)
+        if values:
+            return values[0]
+    return None
 
 
 # I due insiemi vivono qui, accanto a ``query_first``, perché è dove finiscono a

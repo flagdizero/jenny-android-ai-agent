@@ -21,7 +21,7 @@ from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
 from jenny.bus.queue import MessageBus
-from jenny.channels.http_utils import QueryParams, parse_flag
+from jenny.channels.http_utils import QueryParams, parse_flag, query_first
 from jenny.webui.phone_only import refuse_if_remote
 from jenny.webui.settings_api import (
     WebUISettingsError,
@@ -481,5 +481,4 @@ class WebUISettingsRouter:
 
 
 def _query_param(query: QueryParams, key: str) -> str:
-    values = query.get(key)
-    return values[0] if values else ""
+    return query_first(query, key) or ""

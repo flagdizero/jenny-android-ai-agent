@@ -30,6 +30,7 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.channels.http_utils import query_first
 from jenny.security.workspace_policy import is_path_within
 from jenny.utils.errors import CodedError
 from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
@@ -1378,9 +1379,9 @@ async def settings_provider_update(
     )
     # Solo i campi valorizzati, come la rotta: ``ca_bundle_clear`` e' un segnale
     # a parte proprio perche' la stringa vuota qui vuol dire «non toccare».
-    data: dict[str, str] = {"name": (query.get("name") or [""])[0]}
+    data: dict[str, str] = {"name": query_first(query, "name") or ""}
     for key in ("format", "api_key", "api_base", "ca_bundle", "ca_bundle_clear"):
-        value = (query.get(key) or [""])[0]
+        value = query_first(query, key) or ""
         if value:
             data[key] = value
     try:
@@ -1445,7 +1446,7 @@ async def onboarding_save(ctx: CommandContext, params: Mapping[str, Any]) -> dic
     from jenny.webui import settings_api
 
     query = _as_query(params, _ONBOARDING_KEYS)
-    data = {key: (query.get(key) or [""])[0] for key in _ONBOARDING_KEYS}
+    data = {key: query_first(query, key) or "" for key in _ONBOARDING_KEYS}
     # La chiave non si logga: solo la sua lunghezza, come faceva la rotta.
     logger.info(
         "[onboarding] received: provider_name={!r} format={!r} model={!r} api_key_len={} "
