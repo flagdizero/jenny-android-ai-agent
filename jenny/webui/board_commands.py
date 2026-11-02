@@ -45,7 +45,7 @@ _PHOTO_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 def _project(ctx: CommandContext, params: Mapping[str, Any]) -> Path:
     from jenny.utils.wiki_paths import discover_wiki_roots
 
-    _require_wiki_enabled(fail_closed=True)
+    _require_wiki_enabled()
     name = params.get("wiki")
     roots = discover_wiki_roots(_wikis_dir(ctx))
     if not isinstance(name, str) or name not in roots:

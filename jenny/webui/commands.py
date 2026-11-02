@@ -161,29 +161,28 @@ def _require_workspace_flag(attr: str, code: str, message: str) -> None:
         raise CommandError(code, message)
 
 
-def _require_wiki_enabled(*, fail_closed: bool = False) -> None:
-    """``config.wiki.enabled``, con lo stesso fail-open storico della route.
+def wiki_refusal() -> str | None:
+    """Il cancello «wiki attiva», fail-**closed**: ``None`` se si passa, se no perché no.
 
-    A differenza del workspace, una config illeggibile qui non blocca: la route
-    HTTP si comportava così (``except Exception: pass``) e la wiki non è un gate
-    di sicurezza sul filesystem, è una feature che può essere spenta.
-
-    *fail_closed* è per ``audit.create``, che viene da una route
-    (``/api/audit/create``) il cui gate era già passato a fail-closed
-    (``WikiRoutes._check_wiki_enabled``): spostarla sul WebSocket non deve
-    riaprirlo.
+    L'unico, per la RPC (:func:`_require_wiki_enabled`) e per le route HTTP
+    (``WikiRoutes._check_wiki_enabled``). Fino al 02/11/2026 erano due, e la RPC
+    su una config illeggibile lasciava passare (salvo ``audit.create``) mentre
+    la route chiudeva. Illeggibile e spenta restano distinguibili.
     """
     from jenny.config.loader import load_config
 
     try:
         enabled = bool(load_config().wiki.enabled)
     except Exception:
-        if fail_closed:
-            logger.exception("wiki gate: could not read config; refusing")
-            raise CommandError("unavailable", "wiki is unavailable") from None
-        return
-    if not enabled:
-        raise CommandError("unavailable", "wiki is disabled")
+        logger.exception("wiki gate: could not read config; refusing")
+        return "wiki is unavailable"
+    return None if enabled else "wiki is disabled"
+
+
+def _require_wiki_enabled() -> None:
+    refusal = wiki_refusal()
+    if refusal is not None:
+        raise CommandError("unavailable", refusal)
 
 
 def _skill_scripts_dir(ctx: CommandContext) -> Path:
@@ -883,7 +882,7 @@ async def audit_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict[s
     if size > MAX_WRITE_BYTES:
         raise CommandError("too_large", f"comment too large ({size} > {MAX_WRITE_BYTES} bytes)")
 
-    _require_wiki_enabled(fail_closed=True)
+    _require_wiki_enabled()
 
     wikis = discover_wikis(_wikis_dir(ctx))
     if not isinstance(wiki_name, str) or not wiki_name or wiki_name not in wikis:
