@@ -39,10 +39,9 @@ CLOCK_EVERY_MS = 15 * 60 * 1000
 def _local_now(timezone_name: str | None, now: datetime | None) -> datetime:
     if now is not None:
         return now
-    from jenny.utils.helpers import safe_zoneinfo
+    from jenny.utils.clock import local_now
 
-    tz = safe_zoneinfo(timezone_name) if timezone_name else None
-    return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    return local_now(timezone_name)
 
 
 def watch_app_sections(workspace: Path, root: Path, *, timezone_name: str | None = None) -> int:

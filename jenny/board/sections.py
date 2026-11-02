@@ -193,10 +193,9 @@ def journal_event(
     pagina più forte di ``open``.
     """
     from jenny.agent.tools.journal import INFERRED_MARKER, append_journal_line
-    from jenny.utils.helpers import safe_zoneinfo
+    from jenny.utils.clock import local_now
 
-    tz = safe_zoneinfo(timezone_name) if timezone_name else None
-    stamp = datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    stamp = local_now(timezone_name)
     value = view.get("value")
     reading = f", {view.get('label')} {value}{view.get('unit') or ''}" if value is not None else ""
     since = f", last data {view.get('at')}" if view.get("at") else ""
@@ -293,10 +292,9 @@ def journal_note(project_root: Path, text: str, *, photo: str | None = None,
     la riconosce dalla forma e non dalle parole.
     """
     from jenny.agent.tools.journal import SAID_MARKER, append_journal_line
-    from jenny.utils.helpers import safe_zoneinfo
+    from jenny.utils.clock import local_now
 
-    tz = safe_zoneinfo(timezone_name) if timezone_name else None
-    stamp = datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    stamp = local_now(timezone_name)
     line = " ".join(text.split())[:500]
     if photo:
         line = f"{line} (photo: {photo})"

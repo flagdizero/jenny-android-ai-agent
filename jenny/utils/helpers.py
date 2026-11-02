@@ -264,8 +264,9 @@ def ensure_dir(path: Path) -> Path:
 
 def current_time_str(timezone: str | None = None) -> str:
     """Return the current time string."""
-    tz = safe_zoneinfo(timezone) if timezone else None
-    now = datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    from jenny.utils.clock import local_now
+
+    now = local_now(timezone)
     offset = now.strftime("%z")
     offset_fmt = f"{offset[:3]}:{offset[3:]}" if len(offset) == 5 else offset
     tz_name = timezone or (time.strftime("%Z") or "UTC")

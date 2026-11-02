@@ -97,12 +97,10 @@ def _cron(ctx: CommandContext) -> Any:
 
 
 def _timezone() -> str | None:
-    try:
-        from jenny.config.loader import load_config
+    """Il fuso dell'utente: ``cron_link.user_timezone``, l'unico che lo legge."""
+    from jenny.board.cron_link import user_timezone
 
-        return load_config().agents.defaults.timezone or None
-    except Exception:  # noqa: BLE001 — l'ora locale del sistema è il ripiego
-        return None
+    return user_timezone()
 
 
 # ── lastSeen / lastOpened ────────────────────────────────────────────────────

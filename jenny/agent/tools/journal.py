@@ -53,7 +53,7 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
-from jenny.utils.helpers import safe_zoneinfo
+from jenny.utils.clock import local_now
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
 
 # Non c'e' un progetto: il rifiuto dice **dove** vive il diario invece di dire
@@ -366,13 +366,12 @@ class JournalAppendTool(Tool):
         dal proprio fuso il fatto entrava nel diario con un'ora che non è quella
         in cui è stato detto.
 
-        ``safe_zoneinfo`` e non ``ZoneInfo``: su Android il database tzdata può
+        ``local_now`` (``safe_zoneinfo``) e non ``ZoneInfo``: su Android il database tzdata può
         mancare, e una cattura che solleva è un fatto perduto.
         """
         if self._now is not None:
             return self._now()
-        tz = safe_zoneinfo(self._timezone) if self._timezone else None
-        return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+        return local_now(self._timezone)
 
     async def _append(self, root: Path, line: str, *, text: str = "",
                       attribution: str = "") -> str:

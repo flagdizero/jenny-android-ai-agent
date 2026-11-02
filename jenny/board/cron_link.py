@@ -483,9 +483,9 @@ def note_of(
                                 "field": condition.get("field"), "op": condition.get("op"),
                                 "value": condition.get("value"), "every_ms": every_ms}
     elif kind == "at" and isinstance(at_ms, (int, float)) and at_ms:
-        from jenny.utils.helpers import safe_zoneinfo
+        from jenny.utils.clock import zone
 
-        tz = safe_zoneinfo(tz_name) if tz_name else None
+        tz = zone(tz_name)
         at = (datetime.fromtimestamp(at_ms / 1000, tz=tz) if tz
               else datetime.fromtimestamp(at_ms / 1000).astimezone())
         when = {"kind": "date", "date": at.strftime("%Y-%m-%d"),
