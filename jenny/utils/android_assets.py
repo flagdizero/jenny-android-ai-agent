@@ -318,6 +318,7 @@ _UI_MANIFEST = [
     "assets/shared/launcher-usage-store.js",
     "assets/shared/longpress.js",
     "assets/shared/markdown.js",
+    "assets/shared/media.js",
     "assets/shared/native-bridge.js",
     "assets/shared/mascot-drag.js",
     "assets/shared/mascot-motion.js",

@@ -6,7 +6,7 @@ verso l'URL firmato. Da ``a1b8b1e3`` ogni ``<a>`` del filo passa da
 poter navigare la casa — e un indirizzo della stessa origine li' e' «link non
 apribile»: la pastiglia non apriva piu' niente.
 
-Si apre come in officina (``mobile-chat.js``, ``_openMediaFile``): col ponte
+Si apre come in officina (``shared/media.js``, ``openMediaFile``): col ponte
 nativo, che lo passa al visore di sistema; se il ponte c'e' e fallisce lo si
 dice; fuori dal guscio nativo, una scheda nuova.
 """

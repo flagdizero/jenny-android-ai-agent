@@ -55,6 +55,7 @@ import {
   saIsTerminal,
   saVisibleCards,
 } from './shared/subagent-policy.js';
+import { mediaKind, openMediaFile } from './shared/media.js';
 
 const TOOL_ICONS = {
   start: 'ti-loader-2',
@@ -555,7 +556,7 @@ export class ChatController {
       const entry = typeof raw === 'string' ? { url: raw } : raw;
       if (!entry.url) continue;
       const name = entry.name || '';
-      const kind = entry.kind || this._mediaKindFromName(name);
+      const kind = mediaKind(entry);
       if (kind === 'image') {
         const img = document.createElement('img');
         img.src = entry.url;
@@ -577,44 +578,11 @@ export class ChatController {
         chip.innerHTML = '<span class="chat-file-chip-icon">📄</span>' +
           '<span class="chat-file-chip-name"></span>';
         chip.querySelector('.chat-file-chip-name').textContent = name || 'file';
-        chip.addEventListener('click', () => this._openMediaFile(entry));
+        chip.addEventListener('click', () => openMediaFile(entry));
         media.appendChild(chip);
       }
     }
     if (media.childElementCount) msgNode.appendChild(media);
-  }
-
-  _mediaKindFromName(name) {
-    const ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase() || '';
-    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) return 'image';
-    if (['mp4', 'mov', 'webm'].includes(ext)) return 'video';
-    return 'file';
-  }
-
-  /** Apre un allegato non renderizzabile inline: sul telefono il bridge nativo
-      (ACTION_VIEW con il viewer di sistema), fuori dalla WebView l'URL firmato
-      in una scheda nuova.
-   *
-   *  `window.open` era il ripiego di *entrambi* i casi, e sotto Android non è
-   *  un ripiego: la WebView non ha alcun `DownloadListener` e blocca
-   *  l'apertura in una scheda nuova, quindi quando il bridge falliva il tap
-   *  sul chip non produceva niente — nessun viewer, nessun errore, nessun
-   *  segno che fosse successo qualcosa. Con il bridge presente il fallimento è
-   *  un errore da dire, non da sostituire con un'apertura che non avverrà. */
-  async _openMediaFile(entry) {
-    const bridge = window.JennyNative;
-    if (bridge && typeof bridge.openFile === 'function') {
-      try {
-        // Asincrono: `openFile` sta sulla porta che solo la SPA raggiunge (v.
-        // `shared/native-bridge.js`) e risponde con una Promise.
-        if (entry.path && await bridge.openFile(entry.path)) return;
-      } catch (e) {
-        console.warn('Native openFile failed:', e);
-      }
-      showToast(i18n.t('chat.couldNotOpen', { path: entry.name || entry.path || '' }), 'error');
-      return;
-    }
-    window.open(entry.url, '_blank');
   }
 
   _autoResize() {

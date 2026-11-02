@@ -51,8 +51,12 @@ def _method(source: str, name: str) -> str:
 
 
 def test_a_failing_native_bridge_is_reported_not_papered_over() -> None:
-    source = CHAT_JS.read_text(encoding="utf-8")
-    body = _method(source, "_openMediaFile")
+    # Uno per casa e officina, dal 02/11/2026 (`shared/media.js`).
+    assert "openMediaFile(entry)" in CHAT_JS.read_text(encoding="utf-8")
+    source = (ASSETS / "shared" / "media.js").read_text(encoding="utf-8")
+    body = re.search(r"\nexport async function openMediaFile\(entry\) \{(.*?)\n\}", source, re.S)
+    assert body, "openMediaFile non trovato"
+    body = body.group(1)
 
     assert "const bridge = window.JennyNative;" in body
     assert "typeof bridge.openFile === 'function'" in body, (

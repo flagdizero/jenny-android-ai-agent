@@ -53,6 +53,7 @@ import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
 import { chatTime, chatTimeIso } from './shared/chat-time.js';
+import { mediaKind, openMediaFile } from './shared/media.js';
 
 /* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
    registro completo di tutte le superfici — l'app, Telegram, la tendina delle
@@ -132,14 +133,6 @@ export function moveOffers(events) {
   return out;
 }
 
-function mediaKind(entry) {
-  if (entry.kind) return entry.kind;
-  const name = (entry.name || entry.url || '').toLowerCase();
-  if (/\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(name)) return 'image';
-  if (/\.(mp4|webm|mov|m4v)(\?|$)/.test(name)) return 'video';
-  return 'file';
-}
-
 export class HomeChat {
   constructor(threadEl) {
     this.el = threadEl;
@@ -201,7 +194,7 @@ export class HomeChat {
     this._lastSegment = null;
     this._passing = [];
     /* L'allegato dietro ogni pastiglia di file: il percorso che il ponte
-       nativo sa aprire non sta nell'URL firmato (v. `_openMediaFile`). */
+       nativo sa aprire non sta nell'URL firmato (v. `shared/media.js::openMediaFile`). */
     this._files = new WeakMap();
     /* I secondi dell'ultimo `turn_end`, in attesa che la bolla si chiuda. */
     this._seconds = null;
@@ -326,7 +319,7 @@ export class HomeChat {
     const file = e.target.closest('a.home-file');
     if (file && this.el.contains(file)) {
       e.preventDefault();
-      this._openMediaFile(this._files.get(file) || { url: file.getAttribute('href') });
+      openMediaFile(this._files.get(file) || { url: file.getAttribute('href') });
       return;
     }
     /* Non solo `a[href]`: un `<area href>` o un link SVG sono link anche loro,
@@ -1262,29 +1255,6 @@ export class HomeChat {
       }
     }
     if (wrap.childElementCount) node.appendChild(wrap);
-  }
-
-  /** Apre un allegato che il filo non sa mostrare: col ponte nativo, che lo
-   *  passa al visore di sistema, come fa l'officina (`mobile-chat.js`,
-   *  `_openMediaFile`).
-   *
-   *  Col ponte presente un fallimento si dice e basta: la WebView non ha un
-   *  `DownloadListener` e blocca le schede nuove, quindi `window.open` li'
-   *  non sarebbe un ripiego ma un tocco che non fa niente. Fuori dal guscio
-   *  nativo (un browser) e' la strada giusta. */
-  async _openMediaFile(entry) {
-    const bridge = window.JennyNative;
-    if (bridge && typeof bridge.openFile === 'function') {
-      try {
-        // Asincrono: `openFile` risponde con una Promise (v. `shared/native-bridge.js`).
-        if (entry.path && await bridge.openFile(entry.path)) return;
-      } catch (err) {
-        console.warn('home: native openFile failed', err);
-      }
-      showToast(i18n.t('chat.couldNotOpen', { path: entry.name || entry.path || '' }), 'error');
-      return;
-    }
-    if (entry.url) window.open(entry.url, '_blank');
   }
 
   /** La bolla dell'assistente del turno, creata al primo frame che la riempie. */
