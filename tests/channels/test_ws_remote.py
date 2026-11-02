@@ -19,6 +19,7 @@ import pytest
 import websockets
 from port_alloc import free_port
 from support.aio import wait_until
+from support.ws_channel import make_ws_channel
 
 from jenny.channels import ws_remote
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
@@ -33,7 +34,6 @@ from jenny.channels.ws_remote import (
 )
 from jenny.config.loader import load_config
 from jenny.runtime.context import get_runtime_context
-from jenny.webui.gateway_services import build_gateway_services
 
 TS4 = "100.94.12.7"
 TS6 = "fd7a:115c:a1e0::1234"
@@ -308,15 +308,7 @@ def _channel(bus: Any, port: int) -> WebSocketChannel:
         "websocketRequiresToken": True,
     }
     parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(parsed, bus, gateway=gateway)
+    return make_ws_channel(parsed, bus)
 
 
 async def _start(ch: WebSocketChannel, remote_port: int) -> asyncio.Task[None]:

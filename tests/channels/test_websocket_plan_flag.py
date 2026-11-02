@@ -8,27 +8,16 @@ uno.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from support.ws_channel import make_ws_channel
+
+from jenny.channels.websocket import WebSocketChannel
 
 
 def _channel() -> WebSocketChannel:
-    bus = MagicMock()
-    bus.publish_inbound = AsyncMock()
-    cfg = {"enabled": True, "allowFrom": ["*"], "websocketRequiresToken": False}
-    gateway = build_gateway_services(
-        config=WebSocketConfig.model_validate(cfg),
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway)
+    channel = make_ws_channel()
     channel._handle_message = AsyncMock()  # type: ignore[method-assign]
     return channel
 

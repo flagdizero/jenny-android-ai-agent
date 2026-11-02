@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.gateway_http import AUTH_SECRET, make_handler, make_request
+from support.ws_channel import make_ws_channel
 
 from jenny.apps.token import app_token
 from jenny.channels.http_utils import check_app_secret
@@ -155,11 +156,9 @@ async def test_an_app_cannot_mint_a_token_for_another(gateway) -> None:
 
 
 def test_the_websocket_refuses_the_app_token(tmp_path, monkeypatch) -> None:
-    from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
     from jenny.config.loader import save_config
     from jenny.config.schema import Config
     from jenny.runtime.context import get_runtime_context
-    from jenny.webui.gateway_services import build_gateway_services
 
     workspace = tmp_path / "ws"
     workspace.mkdir()
@@ -172,12 +171,7 @@ def test_the_websocket_refuses_the_app_token(tmp_path, monkeypatch) -> None:
     for requires in (True, False):
         cfg = {"enabled": True, "allowFrom": ["*"], "websocketRequiresToken": requires,
                "tokenIssueSecret": "s3cr3t"}
-        gateway = build_gateway_services(
-            config=WebSocketConfig.model_validate(cfg), bus=bus, session_manager=None,
-            workspace_path=workspace, default_restrict_to_workspace=False,
-            runtime_model_name=None,
-        )
-        channel = WebSocketChannel(cfg, bus, gateway=gateway)
+        channel = make_ws_channel(cfg, bus, workspace_path=workspace)
         conn = MagicMock()
         conn.respond = MagicMock(return_value="401")
         verdict = channel._authorize_websocket_handshake(

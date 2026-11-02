@@ -13,16 +13,15 @@ import json
 import threading
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from support.ws_channel import make_ws_channel
 
 from jenny.channels.websocket import (
     WebSocketChannel,
-    WebSocketConfig,
     _extract_data_url_mime,
 )
-from jenny.webui.gateway_services import build_gateway_services
 
 
 def _tiny_png_data_url() -> str:
@@ -42,20 +41,7 @@ def _data_url(mime: str, payload: bytes) -> str:
 
 
 def _make_channel() -> WebSocketChannel:
-    bus = MagicMock()
-    bus.publish_inbound = AsyncMock()
-    cfg = {"enabled": True, "allowFrom": ["*"], "websocketRequiresToken": False}
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-
-    )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway)
+    channel = make_ws_channel()
     channel._handle_message = AsyncMock()  # type: ignore[method-assign]
     return channel
 

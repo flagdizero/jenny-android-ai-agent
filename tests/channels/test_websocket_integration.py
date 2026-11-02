@@ -7,18 +7,17 @@ multi-client scenarios, edge cases, and realistic usage patterns.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import websockets
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 from ws_test_client import WsTestClient
 
 from jenny.bus.events import OutboundMessage
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 
 
 def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:
@@ -31,16 +30,7 @@ def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:
         "websocketRequiresToken": False,
     }
     cfg.update(kw)
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 @pytest.fixture()

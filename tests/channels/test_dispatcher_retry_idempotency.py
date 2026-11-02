@@ -21,11 +21,11 @@ occurred: multi-connection fan-out through `_send_with_retry`.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import pytest
 from port_alloc import free_port
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
@@ -33,7 +33,6 @@ from jenny.channels import dispatcher as dispatcher_mod
 from jenny.channels.dispatcher import WebSocketDispatcher
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
 from jenny.config.schema import Config
-from jenny.webui.gateway_services import build_gateway_services
 from jenny.webui.transcript import read_transcript_lines
 
 
@@ -46,15 +45,7 @@ def _make_channel(bus: Any) -> WebSocketChannel:
         "path": "/ws",
         "websocketRequiresToken": False,
     })
-    gateway = build_gateway_services(
-        config=cfg,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 class _FlakyConn:

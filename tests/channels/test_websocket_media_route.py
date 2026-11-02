@@ -21,10 +21,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketChannel
 from jenny.session.manager import SessionManager
-from jenny.webui.gateway_services import build_gateway_services
 from jenny.webui.media_api import (
     b64url_decode,
     b64url_encode,
@@ -60,16 +60,7 @@ def _ch(
         "websocketRequiresToken": False,
         "tokenIssueSecret": _AUTH_SECRET,
     }
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=session_manager,
-        workspace_path=workspace_path or Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus, session_manager=session_manager, workspace_path=workspace_path)
 
 
 @pytest.fixture()

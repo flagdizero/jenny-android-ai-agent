@@ -10,15 +10,15 @@ turn id e la provenienza) e una storia servibile alla WebUI.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
+
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketChannel
 from jenny.config.paths import set_workspace_dir
 from jenny.runtime.context import get_runtime_context
-from jenny.webui.gateway_services import build_gateway_services
 from jenny.webui.transcript import build_webui_thread_response
 from jenny.webui.transcript_store import read_transcript_lines
 
@@ -32,16 +32,7 @@ def _ws_channel(bus: MessageBus) -> WebSocketChannel:
         "path": "/ws",
         "websocketRequiresToken": False,
     }
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 async def test_telegram_turn_projected_into_webui_thread(tmp_path, monkeypatch) -> None:

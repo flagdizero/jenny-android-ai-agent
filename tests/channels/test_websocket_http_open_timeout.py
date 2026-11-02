@@ -9,16 +9,15 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 
 import jenny.channels.websocket as websocket_module
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 
 
 def _channel(port: int) -> WebSocketChannel:
@@ -33,15 +32,7 @@ def _channel(port: int) -> WebSocketChannel:
     }
     bus = MagicMock()
     bus.publish_inbound = AsyncMock()
-    gateway = build_gateway_services(
-        config=WebSocketConfig.model_validate(cfg),
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway)
+    channel = make_ws_channel(cfg, bus)
 
     async def slow_route(connection, request):
         await asyncio.sleep(0.6)
