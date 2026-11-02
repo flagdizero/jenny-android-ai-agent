@@ -185,10 +185,10 @@ class TurnContext:
     # Il turno non raggiunge l'utente da se': ne risposta finale, ne progress,
     # ne reasoning, ne marcatori di turno. Risolto una volta al confine del
     # turno (:mod:`jenny.session.turn_visibility`) e mai piu' rimesso in
-    # discussione. ``suppress_response`` parte uguale; la continuazione del
-    # goal che lo accendeva a meta' turno non c'e' piu' (01/11/2026).
+    # discussione. Era affiancato da un ``suppress_response`` che partiva
+    # uguale e che solo il goal cambiava a meta' turno: tolto il goal
+    # (01/11/2026), e' rimasto lui solo.
     silent: bool = False
-    suppress_response: bool = False
     # Il turno ha parlato chiamando il tool ``message``. Scritto da RESPOND e
     # letto una volta sola, da ``_process_message``, per costruire il
     # ``TurnOutcome``: e' il segnale che prima viaggiava contrabbandato dentro il

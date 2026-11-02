@@ -18,12 +18,11 @@ from loguru import logger
 
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.tools.nothing_to_report import NothingToReportTool
-from jenny.agent.turn_persistence import record_sent_content
+from jenny.agent.turn_persistence import prepare_save_boundary, record_sent_content
 from jenny.agent.turn_types import TurnState
 from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
 from jenny.runtime.user_text import say
-from jenny.session import turn_continuation
 from jenny.utils.document import extract_documents, prepare_attachments
 
 if TYPE_CHECKING:
@@ -417,11 +416,11 @@ class StateHandlersMixin:
         return "ok"
 
     async def _state_save(self, ctx: TurnContext) -> str:
-        turn_continuation.prepare_save_boundary(ctx)
+        prepare_save_boundary(ctx)
 
         if (
             (ctx.final_content is None or not ctx.final_content.strip())
-            and not ctx.suppress_response
+            and not ctx.silent
         ):
             ctx.final_content = say("turn.empty")
 
@@ -446,7 +445,7 @@ class StateHandlersMixin:
         # cui ``_process_message`` costruisce il ``TurnOutcome``, e prima
         # viaggiava contrabbandato nei metadata inbound.
         ctx.spoke_via_tool = self._message_tool_spoke(ctx.tools)
-        if ctx.suppress_response:
+        if ctx.silent:
             ctx.outbound = None
             return "ok"
         ctx.outbound = self._assemble_outbound(

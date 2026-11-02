@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jenny.session.turn_continuation import _save_skip_for_turn
+from jenny.agent.turn_persistence import _save_skip_for_turn
 
 
 def test_save_skip_matches_prefix_when_current_message_merged():

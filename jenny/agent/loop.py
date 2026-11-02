@@ -42,9 +42,11 @@ from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.tools.self import MyTool
 from jenny.agent.turn_epochs import TurnEpochs, TurnToken
 from jenny.agent.turn_persistence import (
+    SKIP_USER_PERSIST_META,
     FollowupState,
     TurnPersistenceMixin,
     record_sent_content,
+    should_persist_user_message,
 )
 from jenny.agent.turn_states import StateHandlersMixin
 from jenny.agent.turn_types import (
@@ -85,7 +87,6 @@ from jenny.security.workspace_access import (
     bind_workspace_scope,
     reset_workspace_scope,
 )
-from jenny.session import turn_continuation
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     MID_TURN_META,
@@ -693,7 +694,7 @@ class AgentLoop(
 
         Returns True if the message was persisted.
         """
-        if not turn_continuation.should_persist_user_message(msg.metadata):
+        if not should_persist_user_message(msg.metadata):
             return False
         media_paths = [p for p in (msg.media or []) if isinstance(p, str) and p]
         has_text = isinstance(msg.content, str) and msg.content.strip()
@@ -2744,7 +2745,6 @@ class AgentLoop(
             # durante il turno. Non c'e un token sentinella da parsare ne una
             # chiamata LLM in piu.
             silent=silent,
-            suppress_response=silent,
             # Risolto QUI, una volta, non piu in basso: il registry di questo
             # turno decide due cose che devono coincidere — cosa il modello puo
             # chiamare e cosa il prompt gli dichiara di avere. Finche la
@@ -3143,7 +3143,7 @@ class AgentLoop(
         """
         metadata = dict(metadata or {})
         if not persist_user_message:
-            metadata[turn_continuation.SKIP_USER_PERSIST_META] = True
+            metadata[SKIP_USER_PERSIST_META] = True
         if visibility is TurnVisibility.SILENT:
             mark_silent_turn(metadata)
         msg = InboundMessage(

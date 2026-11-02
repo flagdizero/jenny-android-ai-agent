@@ -1,4 +1,4 @@
-"""Copertura complementare per ``jenny.session.turn_continuation``.
+"""Copertura complementare per ``jenny.agent.turn_persistence``.
 
 ``test_turn_continuation.py`` copre il confine di salvataggio
 (``_save_skip_for_turn``); qui ``should_persist_user_message`` e
@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from jenny.bus.events import InboundMessage
-from jenny.session.turn_continuation import (
+from jenny.agent.turn_persistence import (
     SKIP_USER_PERSIST_META,
     prepare_save_boundary,
     should_persist_user_message,
 )
+from jenny.bus.events import InboundMessage
 
 
 def test_should_persist_user_message_false_when_skip_flag_set():

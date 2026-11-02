@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 from loguru import logger
 
@@ -34,6 +34,48 @@ from jenny.utils.helpers import truncate_text as truncate_text_fn
 if TYPE_CHECKING:
     from jenny.bus.events import InboundMessage
     from jenny.session.manager import Session, SessionManager
+
+
+# ── cosa del turno diventa storia ──────────────────────────────────────────
+#
+# Stavano in ``session/turn_continuation.py``, che teneva la continuazione del
+# goal sostenuto; andato il goal (01/11/2026) erano rimasti loro due, sotto un
+# nome che non diceva piu' niente.
+
+SKIP_USER_PERSIST_META = "_skip_user_persist"
+
+
+def should_persist_user_message(metadata: Mapping[str, Any] | None) -> bool:
+    """Return whether this inbound message should be persisted as user input."""
+    return not (metadata and metadata.get(SKIP_USER_PERSIST_META) is True)
+
+
+def prepare_save_boundary(ctx: Any) -> None:
+    """Set the history append boundary for this turn."""
+    ctx.save_skip = _save_skip_for_turn(
+        message_metadata=ctx.msg.metadata,
+        initial_message_count=len(ctx.initial_messages),
+        history_count=len(ctx.history),
+        user_persisted_early=ctx.user_persisted_early,
+    )
+
+
+def _save_skip_for_turn(
+    *,
+    message_metadata: Mapping[str, Any] | None,
+    initial_message_count: int,
+    history_count: int,
+    user_persisted_early: bool,
+) -> int:
+    """Return the persisted-message append boundary for this turn."""
+    if message_metadata and message_metadata.get(SKIP_USER_PERSIST_META) is True:
+        return initial_message_count
+    # build_messages may merge the current message into a same-role history tail.
+    # Runner-appended messages start at initial_message_count in either shape.
+    has_standalone_current = initial_message_count > 1 + history_count
+    if has_standalone_current and not user_persisted_early:
+        return initial_message_count - 1
+    return initial_message_count
 
 
 def sent_user_content(message: dict[str, Any]) -> str:
