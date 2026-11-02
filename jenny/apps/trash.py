@@ -12,6 +12,7 @@ non compare nella griglia.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -57,6 +58,32 @@ def trash_app(workspace: Path, slug: str, *, now: datetime | None = None) -> str
     return entry
 
 
+def _trash_with_draft(workspace: Path, slug: str) -> str:
+    from jenny.apps.drafts import draft_dir
+
+    entry = trash_app(workspace, slug)
+    shutil.rmtree(draft_dir(workspace, slug), ignore_errors=True)
+    return entry
+
+
+async def delete_app(workspace: Path, slug: str) -> str:
+    """«Elimina» un'app, da qualunque parte arrivi: torna l'id della voce del cestino.
+
+    L'app va nel cestino (:func:`trash_app`, che solleva ``ValueError`` su uno
+    slug storto e ``FileNotFoundError`` su un'app che non c'e'), la sua bozza si
+    butta — una versione nuova di un'app che non c'e' piu' non ha dove andare — e
+    le pagine della casa che portavano a lei si tolgono. Il comando ``apps.delete``
+    e lo strumento ``app action=trash`` passano entrambi da qui.
+    """
+    # Import pigro: ``home_pages`` e' un modulo neutro (solo config), ma sta in
+    # ``webui/``, e le app non lo devono caricare per servire una pagina.
+    from jenny.webui.home_pages import detach_pages_quietly
+
+    entry = await asyncio.to_thread(_trash_with_draft, workspace, slug)
+    await detach_pages_quietly("app", slug)
+    return entry
+
+
 def _entry_dir(workspace: Path, trash_id: str) -> tuple[Path, str]:
     match = _ENTRY_RE.match(trash_id or "")
     if match is None:
@@ -78,7 +105,8 @@ def restore_app(workspace: Path, trash_id: str) -> str:
 
 
 def purge_app(workspace: Path, trash_id: str) -> str:
-    """Cancella per sempre una voce del cestino. È l'unico ``rmtree`` delle app."""
+    """Cancella per sempre una voce del cestino. Oltre alla bozza di un'app eliminata
+    (:func:`delete_app`), è l'unico ``rmtree`` delle app."""
     path, slug = _entry_dir(workspace, trash_id)
     shutil.rmtree(path)
     return slug

@@ -289,7 +289,7 @@ class AppTool(Tool):
         if action == "place":
             return await self._place(workspace, slug, session, kw)
         if action == "trash":
-            return self._trash(workspace, slug, session)
+            return await self._trash(workspace, slug, session)
         return "Unknown action: use draft, edit, show, run, place or trash."
 
     # -- scrivere -----------------------------------------------------------
@@ -844,20 +844,17 @@ class AppTool(Tool):
         return (f"Placed {where}. The notebook's chat can now use `{slug}`; a tap on the card "
                 "opens the app.")
 
-    def _trash(self, workspace: Path, slug: str, session: str) -> str:
-        from jenny.apps.trash import trash_app
+    async def _trash(self, workspace: Path, slug: str, session: str) -> str:
+        from jenny.apps.trash import delete_app
         from jenny.session.keys import is_project_session_key
 
         if is_project_session_key(session):
             return ("Not from a notebook: deleting an app is the user's call, from the App page "
                     "or the personal chat. Nothing was deleted.")
         try:
-            entry = trash_app(workspace, slug)
+            entry = await delete_app(workspace, slug)
         except (FileNotFoundError, ValueError) as exc:
             return f"Not deleted: {exc}"
-        drafts = workspace / "apps" / ".drafts" / slug
-        if drafts.exists():
-            shutil.rmtree(drafts)
         return (f"`{slug}` is in the trash ({entry}), data included. The user can put it back "
                 "from the Trash row at the bottom of the App page.")
 

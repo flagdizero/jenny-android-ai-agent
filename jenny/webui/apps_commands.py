@@ -12,8 +12,6 @@ import asyncio
 from collections.abc import Mapping
 from typing import Any
 
-from loguru import logger
-
 from jenny.webui.commands import CommandContext, CommandError
 
 
@@ -36,25 +34,24 @@ async def apps_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict[st
     02/11/2026 era un GET di ``/api/webui/apps/<slug>/delete``: una scrittura su
     una superficie che accetta il token anche nell'indirizzo, dove un
     ``<img src>`` poteva raggiungerla. Qui come le cancellazioni del file
-    manager. La pagina della casa che portava all'app si toglie insieme.
+    manager. La bozza e la pagina della casa che portava all'app si tolgono insieme
+    (:func:`jenny.apps.trash.delete_app`, la stessa dello strumento ``app``).
 
     Non guarda ``apps.enabled``, come ``apps.restore`` e ``apps.purge``: quel
     cancello tiene ferme le app (servirle, eseguirle), e mettere via un'app non
     ne fa partire nessuna. La route GET lo guardava solo perché stava fra quelle.
     """
-    from jenny.apps.trash import trash_app
-    from jenny.webui.home_pages import detach_pages_quietly
+    from jenny.apps.trash import delete_app
 
     slug = params.get("slug")
     if not isinstance(slug, str) or not slug:
         raise CommandError("bad_request", "slug required")
     try:
-        trashed = await _run(trash_app, ctx.get_workspace_root(), slug)
+        trashed = await delete_app(ctx.get_workspace_root(), slug)
     except ValueError as exc:
         raise CommandError("bad_request", "invalid app slug") from exc
     except FileNotFoundError as exc:
         raise CommandError("not_found", "app not found") from exc
-    await detach_pages_quietly("app", slug, log=logger)
     return {"ok": True, "deleted": True, "trashed": trashed}
 
 
