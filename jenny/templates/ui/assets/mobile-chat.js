@@ -3699,8 +3699,8 @@ export class ChatController {
       previewEl.innerHTML = `
         <div class="file-preview-header">
           <span class="file-preview-path">${escapeHtml(filePath)}</span>
-          <span class="file-preview-meta">${language} · ${sizeLabel}</span>
-          <button class="file-preview-close" title="${i18n.t('common.close')}"><i class="ti ti-x"></i></button>
+          <span class="file-preview-meta">${escapeHtml(language)} · ${sizeLabel}</span>
+          <button class="file-preview-close" title="${i18n.t('common.close')}" aria-label="${i18n.t('common.close')}"><i class="ti ti-x" aria-hidden="true"></i></button>
         </div>
         <div class="file-preview-content"><div class="file-preview-code">${numberedLines}</div></div>
         <div class="file-preview-actions">
