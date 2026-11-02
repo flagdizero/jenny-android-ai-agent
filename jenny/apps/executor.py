@@ -26,14 +26,11 @@ from jenny.apps.storage import (
     StorageError,
     execute_storage_action,
 )
+from jenny.utils.errors import StatusError
 
 
-class AppActionError(Exception):
+class AppActionError(StatusError):
     """Structured action failure; ``status`` maps to an HTTP-ish code."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 def resolve_action(app: LoadedApp, action_name: str) -> AppAction:

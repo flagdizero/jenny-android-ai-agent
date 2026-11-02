@@ -1278,23 +1278,6 @@ async def home_pages_set(ctx: CommandContext, params: Mapping[str, Any]) -> dict
 # dov'era (``settings_api``, ``telegram_api``, ``ssh_api``): qui si traduce solo
 # il trasporto.
 
-# ``WebUISettingsError.status`` → codice di ``CommandError``. Un 502 (Telegram o
-# il provider irraggiungibili) e un 503 dicono entrambi «adesso non si puo'».
-_SETTINGS_STATUS_CODES = {
-    400: "bad_request",
-    403: "forbidden",
-    404: "not_found",
-    409: "conflict",
-    413: "too_large",
-    502: "unavailable",
-    503: "unavailable",
-}
-
-
-def _settings_error(exc: Any) -> CommandError:
-    return CommandError(_SETTINGS_STATUS_CODES.get(exc.status, "bad_request"), exc.message)
-
-
 def _as_query(params: Mapping[str, Any], keys: Collection[str]) -> dict[str, list[str]]:
     """I parametri RPC nella forma ``QueryParams`` che le funzioni dei settings
     leggono (``{nome: [valore]}``). Solo *keys*; ``None`` diventa la stringa
@@ -1338,13 +1321,10 @@ async def settings_provider_models(
     scheda del provider chiedono i modelli con la chiave appena digitata,
     prima di salvarla. Sola lettura, e advisory: non tocca la config.
     """
-    from jenny.webui.settings_api import WebUISettingsError, provider_models_payload
+    from jenny.webui.settings_api import provider_models_payload
 
     query = _as_query(params, ("provider", "api_key", "api_base", "format"))
-    try:
-        payload = await asyncio.to_thread(provider_models_payload, query)
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    payload = await asyncio.to_thread(provider_models_payload, query)
     # Diagnostica: il fetch modelli non solleva sugli esiti applicativi
     # (not_configured/error/unsupported), e senza questa riga una lista vuota
     # resterebbe invisibile nel log (era nella rotta).
@@ -1368,7 +1348,7 @@ async def settings_provider_update(
     il fingerprint del provider attivo decide da se' se c'e' qualcosa da
     ricostruire.
     """
-    from jenny.webui.settings_api import WebUISettingsError, update_provider
+    from jenny.webui.settings_api import update_provider
 
     query = _as_query(
         params, ("name", "format", "api_key", "api_base", "ca_bundle", "ca_bundle_clear")
@@ -1380,10 +1360,7 @@ async def settings_provider_update(
         value = query_first(query, key) or ""
         if value:
             data[key] = value
-    try:
-        payload = await update_provider(data)
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    payload = await update_provider(data)
     _fire(ctx.on_settings_changed, "on_settings_changed")
     return payload
 
@@ -1391,16 +1368,12 @@ async def settings_provider_update(
 async def telegram_save(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Salva il token del bot Telegram (lo valida con ``getMe``) e riavvia il
     canale. Era ``GET /api/telegram/save?token=…``."""
-    from jenny.webui.settings_api import WebUISettingsError
     from jenny.webui.telegram_api import save_telegram_token
 
     token = params.get("token", "")
     if not isinstance(token, str):
         raise CommandError("bad_request", "token must be a string")
-    try:
-        payload = await save_telegram_token(token)
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    payload = await save_telegram_token(token)
     _fire(ctx.on_telegram_changed, "on_telegram_changed")
     return payload
 
@@ -1415,13 +1388,9 @@ async def ssh_host_save(ctx: CommandContext, params: Mapping[str, Any]) -> dict[
     """Crea o aggiorna un host SSH — con la sua password, se ne ha una. Era
     ``GET /api/settings/ssh/host/save?password=…``. ``password`` assente vuol
     dire «tieni quella salvata», come prima."""
-    from jenny.webui.settings_api import WebUISettingsError
     from jenny.webui.ssh_api import save_ssh_host
 
-    try:
-        return await save_ssh_host(_as_query(params, _SSH_HOST_KEYS))
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    return await save_ssh_host(_as_query(params, _SSH_HOST_KEYS))
 
 
 # I campi dell'onboarding, come li legge ``settings_api.save_onboarding``.
@@ -1461,7 +1430,7 @@ async def onboarding_save(ctx: CommandContext, params: Mapping[str, Any]) -> dic
         )
     except settings_api.WebUISettingsError as exc:
         logger.warning("[onboarding] settings error: {}", exc.message)
-        raise _settings_error(exc) from None
+        raise
     logger.info("[onboarding] success: chat_id={}", payload.get("chat_id"))
     return payload
 

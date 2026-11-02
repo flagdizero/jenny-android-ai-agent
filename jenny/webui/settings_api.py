@@ -33,6 +33,7 @@ from jenny.providers.tls import CaBundleError, build_ssl_context
 from jenny.security.workspace_access import workspace_sandbox_status
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.keys import UNIFIED_SESSION_KEY
+from jenny.utils.errors import StatusError
 from jenny.utils.helpers import validate_timezone_name
 
 # Fasi che il layer di installazione può dichiarare. Serve a non far arrivare
@@ -300,13 +301,8 @@ class _Unset:
 _UNSET = _Unset()
 
 
-class WebUISettingsError(ValueError):
+class WebUISettingsError(StatusError, ValueError):
     """User-facing settings validation failure."""
-
-    def __init__(self, message: str, *, status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status = status
 
 
 # ── Applicatori generici ─────────────────────────────────────────────────────

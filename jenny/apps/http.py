@@ -18,17 +18,14 @@ from loguru import logger
 from jenny.apps.manifest import PLACEHOLDER_RE, AppAction, AppManifest
 from jenny.security.fetch import JENNY_USER_AGENT, read_capped
 from jenny.security.network import validate_app_server_target
+from jenny.utils.errors import StatusError
 
 DEFAULT_TIMEOUT_S = 20.0
 MAX_RESPONSE_BYTES = 512 * 1024
 
 
-class HttpActionError(Exception):
+class HttpActionError(StatusError):
     """Structured http-action failure; ``status`` maps to an HTTP-ish code."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 def build_request(

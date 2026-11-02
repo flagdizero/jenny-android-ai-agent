@@ -23,6 +23,7 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import is_project_session_key
+from jenny.utils.errors import StatusError
 from jenny.utils.path import atomic_write, iter_jsonl
 from jenny.utils.wiki_paths import is_wiki_root
 
@@ -32,12 +33,8 @@ DEFAULT_MAX_COLLECTION_BYTES = 5_000_000
 _LOCKS: dict[str, asyncio.Lock] = {}
 
 
-class StorageError(Exception):
+class StorageError(StatusError):
     """Structured storage failure; ``status`` maps to an HTTP-ish code."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 def _lock_for(path: Path) -> asyncio.Lock:

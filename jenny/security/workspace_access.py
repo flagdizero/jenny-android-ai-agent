@@ -24,6 +24,7 @@ from jenny.session.keys import (
     notebook_of_cron_session,
     project_name,
 )
+from jenny.utils.errors import StatusError
 from jenny.utils.wiki_paths import notebook_dir
 
 WorkspaceAccessMode = Literal["restricted", "full"]
@@ -54,15 +55,8 @@ _CURRENT_WORKSPACE_SCOPE: ContextVar["WorkspaceScope | None"] = ContextVar(
 )
 
 
-class WorkspaceScopeError(ValueError):
+class WorkspaceScopeError(StatusError, ValueError):
     """Raised when a requested WebUI workspace scope is invalid."""
-
-    status = 400
-
-    def __init__(self, message: str, *, status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status = status
 
 
 @dataclass(frozen=True)
