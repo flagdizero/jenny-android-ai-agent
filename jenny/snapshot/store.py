@@ -53,8 +53,12 @@ def put_blob(objects_dir: Path, content: bytes) -> str:
     return hash_hex
 
 
-def get_blob(objects_dir: Path, hash_hex: str) -> bytes:
-    """Legge e decomprime un blob, verificandone l'integrità.
+def read_verified_blob(objects_dir: Path, hash_hex: str) -> tuple[bytes, bytes]:
+    """Il blob come sta su disco (zlib) e decompresso, verificato contro l'hash.
+
+    I byte grezzi servono a chi lo spedisce così com'è (la copia su Drive): un
+    blob corrotto spedito lo si scoprirebbe al ripristino, quando l'originale
+    non c'è più.
 
     Raises:
         FileNotFoundError: blob assente.
@@ -67,7 +71,12 @@ def get_blob(objects_dir: Path, hash_hex: str) -> bytes:
         raise BlobCorruptError(f"blob {hash_hex} is not valid zlib data") from exc
     if hash_content(content) != hash_hex:
         raise BlobCorruptError(f"blob {hash_hex} content does not match its hash")
-    return content
+    return raw, content
+
+
+def get_blob(objects_dir: Path, hash_hex: str) -> bytes:
+    """Legge e decomprime un blob, verificandone l'integrità (v. :func:`read_verified_blob`)."""
+    return read_verified_blob(objects_dir, hash_hex)[1]
 
 
 def iter_blob_hashes(objects_dir: Path):

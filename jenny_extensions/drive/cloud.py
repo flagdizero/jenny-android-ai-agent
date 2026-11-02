@@ -72,7 +72,7 @@ from jenny.snapshot.crypto import (
 )
 from jenny.snapshot.crypto_backends.base import CryptoAuthError, CryptoBackend
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.store import BlobCorruptError, hash_content, object_path
+from jenny.snapshot.store import hash_content, read_verified_blob
 from jenny.snapshot.types import SnapshotManifest, entry_problem, entry_target, is_snapshot_id
 from jenny.utils.path import atomic_write, read_json_dict
 
@@ -472,7 +472,7 @@ class CloudRepository:
         in_pack = 0
         try:
             for blob_hash in needed:
-                raw = await asyncio.to_thread(_read_verified_raw, engine.objects_dir, blob_hash)
+                raw, _ = await asyncio.to_thread(read_verified_blob, engine.objects_dir, blob_hash)
                 if writer is None:
                     writer = _PackWriter(self._tmp_dir())
                 await asyncio.to_thread(writer.add, blob_hash, raw)
@@ -668,22 +668,6 @@ class _PackWriter:
     def discard(self) -> None:
         self._handle.close()
         self.path.unlink(missing_ok=True)
-
-
-def _read_verified_raw(objects_dir: Path, blob_hash: str) -> bytes:
-    """I byte del blob così come sono nello store (zlib), verificati contro l'hash.
-
-    Spedire un blob corrotto vorrebbe dire scoprirlo al ripristino, cioè
-    quando non c'è più l'originale.
-    """
-    raw = object_path(objects_dir, blob_hash).read_bytes()
-    try:
-        content = zlib.decompress(raw)
-    except zlib.error as exc:
-        raise BlobCorruptError(f"blob {blob_hash} is not valid zlib data") from exc
-    if hash_content(content) != blob_hash:
-        raise BlobCorruptError(f"blob {blob_hash} content does not match its hash")
-    return raw
 
 
 def _sha256_file(path: Path) -> str:
