@@ -21,7 +21,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import locale, member, requires_node, run_js
+from support.js_harness import FAKE_MENU_ELEMENT, locale, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
@@ -49,17 +49,7 @@ const i18n = {
   __T__
 };
 
-function makeEl(tag) {
-  const el = {
-    tag, className: '', textContent: '', children: [], dataset: {}, attrs: {},
-    handlers: {},
-    appendChild(child) { el.children.push(child); return child; },
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type, fn) { el.handlers[type] = fn; },
-  };
-  el.classList = { add(c) { el.className = (el.className + ' ' + c).trim(); }, remove() {} };
-  return el;
-}
+__MAKE_EL__
 const document = { createElement: (tag) => makeEl(tag) };
 
 function byClass(el, cls) {
@@ -117,7 +107,8 @@ function row(chip, name) {
 
 def _harness() -> str:
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}))
+        _HARNESS.replace("__MAKE_EL__", FAKE_MENU_ELEMENT)
+        .replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}))
         .replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__LEAVE_IF_SELECTED__", member(_chip(), "leaveIfSelected"))
         .replace("__PROJECTS__", member(_chip(), "_projects"))

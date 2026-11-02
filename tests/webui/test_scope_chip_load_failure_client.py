@@ -26,7 +26,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import FAKE_MENU_ELEMENT, member, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
@@ -49,28 +49,7 @@ const i18n = { t: (key) => 'i18n:' + key };
 const { ConversationList, ago } = await import('__LIST_URL__');
 
 /* Un elemento è quel poco che `_renderMenu` e i suoi aiutanti toccano. */
-function makeEl(tag) {
-  const el = {
-    tag,
-    className: '',
-    textContent: '',
-    children: [],
-    dataset: {},
-    appendChild(child) { el.children.push(child); return child; },
-    setAttribute() {},
-    addEventListener() {},
-    scrollIntoView() {},
-    querySelector() { return makeEl('span'); },
-  };
-  el.classList = {
-    add(c) { el.className = (el.className + ' ' + c).trim(); },
-  };
-  Object.defineProperty(el, 'innerHTML', {
-    get() { return ''; },
-    set(v) { if (v === '') el.children.length = 0; },
-  });
-  return el;
-}
+__MAKE_EL__
 const document = { createElement: (tag) => makeEl(tag) };
 
 // Tutto il testo scritto nella tendina, in ordine di comparsa.
@@ -144,7 +123,8 @@ class Chip {
 def _harness() -> str:
     src = _chip()
     return (
-        _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
+        _HARNESS.replace("__MAKE_EL__", FAKE_MENU_ELEMENT)
+        .replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__PROJECTS__", member(src, "_projects"))
         .replace("__UNOPENABLE__", member(src, "_unopenable"))
         .replace("__LOAD_FAILED__", member(src, "_loadFailed"))

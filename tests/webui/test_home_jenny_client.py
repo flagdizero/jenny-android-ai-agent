@@ -26,7 +26,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import FAKE_ELEMENT, function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
@@ -56,32 +56,7 @@ const i18n = { locale: 'it', translations: TRANSLATIONS, __T__ };
 /* Il nome di lei (`shared/bot-name.js`): qui quello di partenza. */
 const botName = { get: () => 'Jenny', set() {}, onChange() { return () => {}; } };
 
-function makeEl(tag) {
-  const el = {
-    tag,
-    className: '',
-    textContent: '',
-    value: '',
-    placeholder: '',
-    hidden: false,
-    dataset: {},
-    attrs: {},
-    children: [],
-    listeners: {},
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type, fn) { (el.listeners[type] ||= []).push(fn); },
-    appendChild(child) { el.children.push(child); return child; },
-    classList: {
-      add(n) { if (!el.classList.contains(n)) el.className = (el.className + ' ' + n).trim(); },
-      remove(n) {
-        el.className = String(el.className).split(' ').filter((x) => x && x !== n).join(' ');
-      },
-      contains(n) { return String(el.className).split(' ').includes(n); },
-      toggle(n, on) { if (on) el.classList.add(n); else el.classList.remove(n); },
-    },
-  };
-  return el;
-}
+__MAKE_EL__
 
 const nodi = {};
 const docListeners = {};
@@ -237,7 +212,8 @@ def _harness() -> str:
     src = JENNY_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
+        _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
+        .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__SIZES__", _const(MASCOT_JS.read_text(encoding="utf-8"), "MASCOT_SIZES"))
         .replace("__JENNY_VALUE__", function(src, "jennyValue"))

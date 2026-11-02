@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from support.js_harness import locale, member, requires_node, run_js
+from support.js_harness import FAKE_MENU_ELEMENT, locale, member, requires_node, run_js
 
 from jenny.command.specs import BUILTIN_COMMAND_SPECS
 
@@ -55,31 +55,7 @@ const i18n = {
 
 /* Un elemento è quel poco che la tendina tocca. `listeners` registra i tipi
    montati: una riga che non ascolta niente non è una scelta. */
-function makeEl(tag) {
-  const el = {
-    tag,
-    className: '',
-    textContent: '',
-    children: [],
-    dataset: {},
-    attrs: {},
-    listeners: [],
-    handlers: {},
-    appendChild(child) { el.children.push(child); return child; },
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type, fn) { el.listeners.push(type); el.handlers[type] = fn; },
-    querySelector() { return makeEl('span'); },
-  };
-  el.classList = {
-    add(c) { el.className = (el.className + ' ' + c).trim(); },
-    remove() {},
-  };
-  Object.defineProperty(el, 'innerHTML', {
-    get() { return ''; },
-    set(v) { if (v === '') el.children.length = 0; },
-  });
-  return el;
-}
+__MAKE_EL__
 const document = { createElement: (tag) => makeEl(tag) };
 const console = { warn() {} };
 
@@ -211,7 +187,8 @@ def test_it_does_nothing_without_a_positioned_row() -> None:
 def _harness() -> str:
     src = _chip()
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}))
+        _HARNESS.replace("__MAKE_EL__", FAKE_MENU_ELEMENT)
+        .replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__SPECS__", _specs_json())
         .replace("__LOAD__", member(src, "_load"))
