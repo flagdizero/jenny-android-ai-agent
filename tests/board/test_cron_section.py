@@ -57,6 +57,34 @@ async def test_a_card_cron_is_shown_from_its_job_and_goes_with_it(ctx, workspace
     assert service.get_job(job.id) is None
 
 
+async def test_a_pause_from_the_drawer_tells_the_home_like_the_route_and_the_tool(
+        ctx, notebook, tmp_path) -> None:
+    """Fino al 02/11/2026 la RPC del cassetto metteva in pausa senza dirlo alla casa."""
+    import dataclasses
+
+    from jenny.board import notify
+    from jenny.board.cron_link import make_link
+    from jenny.cron.service import CronService
+
+    service = CronService(tmp_path / "jobs.json")
+    job = _meteo(service, notebook, make_link("piante", "acero"))
+    seen: list[str] = []
+
+    async def collect(name: str) -> None:
+        seen.append(name)
+
+    notify.set_notifier(collect)
+    try:
+        with_cron = dataclasses.replace(ctx, get_cron_service=lambda: service)
+        for paused in (True, True, False):
+            await dispatch_command(with_cron, "board.cron.pause",
+                                   {"wiki": "piante", "job": job.id, "paused": paused})
+    finally:
+        notify.set_notifier(None)
+    # La seconda pausa non cambia niente, e non lo dice.
+    assert seen == ["piante", "piante"]
+
+
 async def test_board_cron_remove_refuses_a_job_of_elsewhere(ctx, notebook, tmp_path) -> None:
     import dataclasses
 

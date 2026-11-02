@@ -414,11 +414,9 @@ class CronTool(Tool, ContextAware):
         return f"{out} — in the notebook «{notebook}», {where}; it runs and delivers there."
 
     async def _pause_job(self, job: CronJob, *, paused: bool) -> str:
-        from jenny.board.notify import board_changed
+        from jenny.board.cron_link import set_job_paused
 
-        result = self._cron.set_paused(job.id, paused)
-        if job.payload.board:
-            await board_changed(str(job.payload.board.get("notebook")))
+        result = await set_job_paused(self._cron, job.id, paused)
         return {
             "paused": f"Paused job {job.id}.",
             "resumed": f"Resumed job {job.id}.",

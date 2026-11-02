@@ -597,9 +597,11 @@ async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> di
     Solo un job legato a questo quaderno: il cassetto non mette in pausa la
     sveglia della chat personale.
     """
+    from jenny.board.cron_link import set_job_paused
+
     root = _project(ctx, params)
     cron, job_id = _notebook_job(ctx, root, params)
-    result = cron.set_paused(job_id, params.get("paused") is True)
+    result = await set_job_paused(cron, job_id, params.get("paused") is True)
     return {"ok": True, "result": result}
 
 

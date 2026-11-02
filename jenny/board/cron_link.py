@@ -200,6 +200,24 @@ def record_result(
         logger.warning("cron: result of {} not recorded in {}: {}", job_name, root.name, exc)
 
 
+async def set_job_paused(cron: Any, job_id: str, paused: bool) -> str:
+    """Pausa o ripresa di un job; se era di un quaderno e qualcosa è cambiato, lo dice alla casa.
+
+    L'unica pausa di un cron, come :func:`detach_job` è l'unico smontaggio: la
+    usano il tool ``cron``, l'officina e il cassetto della bacheca. Fino al
+    02/11/2026 il cassetto non avvisava, e la casa aperta altrove restava
+    indietro. Restituisce l'esito di ``CronService.set_paused``. Sul loop.
+    """
+    from jenny.board.notify import board_changed
+
+    job = cron.get_job(job_id)
+    notebook = job.notebook if job is not None else None
+    result = cron.set_paused(job_id, paused)
+    if notebook and result in ("paused", "resumed"):
+        await board_changed(notebook)
+    return result
+
+
 async def detach_job(cron: Any, job_id: str) -> str:
     """Toglie un job e, se era di un quaderno, quel che ne resta sulla bacheca.
 
