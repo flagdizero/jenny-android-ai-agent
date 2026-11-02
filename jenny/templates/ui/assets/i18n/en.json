@@ -10,6 +10,7 @@
     "launcher": "App drawer"
   },
   "chat": {
+    "file": "file",
     "placeholder": "Ask something…",
     "attach": "Attach",
     "send": "Send",

@@ -55,7 +55,7 @@ import {
   saIsTerminal,
   saVisibleCards,
 } from './shared/subagent-policy.js';
-import { mediaKind, openMediaFile } from './shared/media.js';
+import { renderMediaList } from './shared/media.js';
 import { originBadgeHtml } from './shared/origin.js';
 import { copyWithToast, latencyText, renderReplyExtras } from './shared/reply.js';
 import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
@@ -552,40 +552,8 @@ export class ChatController {
       image → <img> (lightbox via delegazione), video → <video>, altro → chip
       file che si apre col viewer di sistema via bridge nativo. */
   _renderMediaAttachments(msgNode, entries) {
-    if (!entries?.length) return;
-    const media = document.createElement('div');
-    media.className = 'chat-media';
-    for (const raw of entries) {
-      const entry = typeof raw === 'string' ? { url: raw } : raw;
-      if (!entry.url) continue;
-      const name = entry.name || '';
-      const kind = mediaKind(entry);
-      if (kind === 'image') {
-        const img = document.createElement('img');
-        img.src = entry.url;
-        img.loading = 'lazy';
-        img.alt = name;
-        img.title = name;
-        media.appendChild(img);
-      } else if (kind === 'video') {
-        const video = document.createElement('video');
-        video.src = entry.url;
-        video.controls = true;
-        video.preload = 'metadata';
-        video.title = name;
-        media.appendChild(video);
-      } else {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'chat-file-chip';
-        chip.innerHTML = '<span class="chat-file-chip-icon">📄</span>' +
-          '<span class="chat-file-chip-name"></span>';
-        chip.querySelector('.chat-file-chip-name').textContent = name || 'file';
-        chip.addEventListener('click', () => openMediaFile(entry));
-        media.appendChild(chip);
-      }
-    }
-    if (media.childElementCount) msgNode.appendChild(media);
+    const list = renderMediaList(entries, { cls: 'chat-media', fileCls: 'chat-file-chip' });
+    if (list) msgNode.appendChild(list);
   }
 
   _autoResize() {

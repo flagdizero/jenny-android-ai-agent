@@ -2072,13 +2072,20 @@ body.home {
 }
 
 .home-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
   font-size: 12.5px;
-  text-decoration: none;
+  cursor: pointer;
 }
+.home-file:active { background: var(--overlay); }
 
 /* ── Il confine di un contesto azzerato ── */
 

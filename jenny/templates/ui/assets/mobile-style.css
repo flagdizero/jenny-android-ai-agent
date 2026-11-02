@@ -2904,7 +2904,7 @@ body {
   cursor: pointer;
 }
 
-.chat-file-chip-name {
+.media-file-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -51,9 +51,11 @@ def _method(source: str, name: str) -> str:
 
 
 def test_a_failing_native_bridge_is_reported_not_papered_over() -> None:
-    # Uno per casa e officina, dal 02/11/2026 (`shared/media.js`).
-    assert "openMediaFile(entry)" in CHAT_JS.read_text(encoding="utf-8")
+    # Uno per casa e officina, dal 02/11/2026 (`shared/media.js`), e cosi' la
+    # pastiglia che lo chiama (`renderMediaList`).
+    assert "renderMediaList(" in CHAT_JS.read_text(encoding="utf-8")
     source = (ASSETS / "shared" / "media.js").read_text(encoding="utf-8")
+    assert "addEventListener('click', () => openMediaFile(entry))" in source
     body = re.search(r"\nexport async function openMediaFile\(entry\) \{(.*?)\n\}", source, re.S)
     assert body, "openMediaFile non trovato"
     body = body.group(1)
