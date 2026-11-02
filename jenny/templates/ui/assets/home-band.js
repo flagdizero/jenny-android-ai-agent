@@ -70,6 +70,8 @@ export const SHAPED = 'has-jenny-shape';
 export const AT_BAND = 'home-at-band';
 const PUSH = 'home-shape-push';
 const SHAPE = 'home-shape';
+/** Le schede dei posti: un blocco che le contiene non ha sagoma (v. `_lastBlock`). */
+const PLACE_BOXES = '.place-card, .place-list';
 
 export class HomeBand {
   /** @param band   la fascia (`HomeChat.bandEl`), ultimo figlio del filo
@@ -144,13 +146,21 @@ export class HomeBand {
   /** L'ultimo blocco di testo dell'ultima risposta, se e' subito sopra la
    *  fascia: un posto vivo acceso (qualcuno lavora) o una bolla tua in mezzo
    *  vogliono dire che la sua testa non e' accanto a una risposta. Un'immagine
-   *  in fondo non si avvolge: la scansa il CSS. */
+   *  in fondo non si avvolge: la scansa il CSS.
+   *
+   *  Nemmeno un blocco con dentro la scheda di un posto (`shared/place-card.js`):
+   *  e' una scatola larga 312 col suo `overflow: hidden`, che accanto ai float
+   *  non ci sta e non ci puo' passare sotto. Finiva *sotto* la sagoma, il
+   *  blocco si allungava, la sagoma scendeva con lui, e fra la scheda e l'ora
+   *  restava mezzo schermo vuoto (jenny_s22, 02/11/2026). Senza sagoma la
+   *  scheda puo' toccarla: lei sta sopra a tutto, e va bene cosi'. */
   _lastBlock() {
     const prev = this._aboveBand();
     if (!prev?.classList.contains('home-msg-jenny')) return null;
     const content = [...prev.children].filter((c) => !c.classList.contains('home-tail'));
     const last = content[content.length - 1];
-    return last?.classList.contains('home-block') ? last : null;
+    if (!last?.classList.contains('home-block')) return null;
+    return last.querySelectorAll(PLACE_BOXES).length ? null : last;
   }
 
   /** Il figlio del filo subito sopra la fascia, saltando il posto vivo se e'
