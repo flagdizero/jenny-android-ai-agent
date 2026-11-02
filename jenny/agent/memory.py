@@ -32,7 +32,7 @@ from jenny.utils.helpers import (
     strip_think,
     truncate_text,
 )
-from jenny.utils.path import append_lines_durable, atomic_write
+from jenny.utils.path import append_lines_durable, atomic_write, iter_jsonl
 from jenny.utils.prompt_templates import render_template
 
 # Separatore fra il template di Dream e il batch di storia, dentro il prompt che
@@ -995,13 +995,7 @@ class MemoryStore:
         entries: list[dict[str, Any]] = []
         with suppress(FileNotFoundError):
             with open(self.history_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            continue
+                entries = list(iter_jsonl(f))
 
         return entries
 

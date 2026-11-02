@@ -23,7 +23,7 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import is_project_session_key
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, iter_jsonl
 from jenny.utils.wiki_paths import is_wiki_root
 
 DEFAULT_QUERY_LIMIT = 200
@@ -70,24 +70,11 @@ def _collection_path(app_dir: Path, collection: str) -> Path:
 def _read_records(path: Path) -> list[dict]:
     if not path.is_file():
         return []
-    records: list[dict] = []
-    skipped = 0
+    bad: list[str] = []
     with open(path, encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                skipped += 1
-                continue
-            if isinstance(record, dict):
-                records.append(record)
-            else:
-                skipped += 1
-    if skipped:
-        logger.warning("Skipped {} corrupt line(s) in {}", skipped, path)
+        records = list(iter_jsonl(f, on_bad=bad.append))
+    if bad:
+        logger.warning("Skipped {} corrupt line(s) in {}", len(bad), path)
     return records
 
 

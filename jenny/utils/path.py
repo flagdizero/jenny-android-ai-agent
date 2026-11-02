@@ -8,9 +8,10 @@ import os
 import re
 import threading
 import uuid
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,33 @@ def append_lines_durable(
         except OSError:
             if not tolerate_fsync_error:
                 raise
+
+
+def iter_jsonl(
+    lines: Iterable[str], *, on_bad: Callable[[str], None] | None = None
+) -> Iterator[dict[str, Any]]:
+    """Gli oggetti JSON di un JSONL, una riga ciascuno, saltando quel che non lo è.
+
+    Il lettore tollerante dei file a cui :func:`append_lines_durable` accoda:
+    un'ultima riga tronca da un processo ucciso, o una riga che non è un oggetto,
+    non invalidano le altre. Le righe vuote si saltano in silenzio; le altre
+    scartate passano a *on_bad*, per chi le conta o le dice nel log. L'I/O resta
+    a chi chiama (un file aperto, ``read_text().splitlines()``).
+    """
+    import json
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            record = None
+        if isinstance(record, dict):
+            yield record
+        elif on_bad is not None:
+            on_bad(line)
 
 
 def rotate_valid_json_backup(

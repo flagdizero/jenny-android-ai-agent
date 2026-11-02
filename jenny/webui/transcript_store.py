@@ -19,7 +19,7 @@ from loguru import logger
 
 from jenny.config.paths import get_webui_dir
 from jenny.session.manager import SessionManager
-from jenny.utils.path import append_lines_durable, atomic_write
+from jenny.utils.path import append_lines_durable, atomic_write, iter_jsonl
 
 _MAX_TRANSCRIPT_FILE_BYTES = 8 * 1024 * 1024
 _TARGET_ACTIVE_TRANSCRIPT_BYTES = _MAX_TRANSCRIPT_FILE_BYTES // 2
@@ -80,20 +80,10 @@ def _record_json_line(record: dict[str, Any]) -> str:
 
 
 def _read_transcript_file(path: Path) -> list[dict[str, Any]]:
-    lines_out: list[dict[str, Any]] = []
     try:
         with open(path, encoding="utf-8") as f:
-            for line_no, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    logger.warning("bad jsonl at {} line {}", path, line_no)
-                    continue
-                if isinstance(obj, dict):
-                    lines_out.append(obj)
+            lines_out = list(iter_jsonl(
+                f, on_bad=lambda line: logger.warning("bad jsonl at {}: {!r}", path, line[:80])))
     except OSError as e:
         logger.warning("read transcript failed {}: {}", path, e)
         return []
