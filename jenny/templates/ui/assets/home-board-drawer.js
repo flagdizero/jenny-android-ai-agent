@@ -824,9 +824,9 @@ export class BoardDrawer {
       const tiles = shape === 'chips';
       const chips = el('div', tiles ? 'home-drawer-tiles' : 'home-drawer-micro-extras');
       for (const x of v.extras) {
-        const chip = el('div', tiles ? 'home-drawer-tile' : 'home-drawer-chip');
-        chip.appendChild(el('span', tiles ? 'home-drawer-tile-label' : 'home-drawer-chip-label', x.label));
-        const value = el('span', tiles ? 'home-drawer-tile-value' : 'home-drawer-chip-value',
+        const chip = el('div', tiles ? 'home-drawer-tile' : 'home-drawer-reading');
+        chip.appendChild(el('span', tiles ? 'home-drawer-tile-label' : 'home-drawer-reading-label', x.label));
+        const value = el('span', tiles ? 'home-drawer-tile-value' : 'home-drawer-reading-value',
           this._cell(x.value, x.type, x.unit));
         if (x.type === 'bool') value.classList.add(x.value ? 'is-yes' : 'is-no');
         chip.appendChild(value);

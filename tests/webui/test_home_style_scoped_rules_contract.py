@@ -15,6 +15,7 @@ chi la scriveva non guardava:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from tests.support.css_levels import rules
@@ -37,3 +38,9 @@ def test_the_form_label_is_defined_once_and_check_every_is_scoped() -> None:
     scoped = _top_rules(".home-board-row.is-every > .home-board-form-label")
     assert scoped and "nowrap" in scoped[0]
 
+
+def test_drawer_chip_means_only_the_page_link_button() -> None:
+    assert len(_top_rules(".home-drawer-chip")) == 1
+    js = (ASSETS / "home-board-drawer.js").read_text(encoding="utf-8")
+    users = re.findall(r"\(\s*'(?:div|span)'[^)]*'home-drawer-chip'", js)
+    assert users == [], "un chip di valore porta ancora la classe del bottone-link"
