@@ -229,7 +229,7 @@ def _why_page(job: CronJob) -> str:
 
     if not job.payload.why or not job.payload.board:
         return ""
-    root = notebook_root(str(job.payload.board.get("notebook")))
+    root = notebook_root(job.notebook)
     if root is None:
         return ""
     from jenny.security.workspace_policy import is_path_within

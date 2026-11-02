@@ -578,7 +578,7 @@ class CronTool(Tool, ContextAware):
             parts = [f"- {job_display_name(j)} (id: {j.id}, {timing}{mode_note})"]
             if j.payload.board:
                 parts.append(
-                    f"  In the notebook {j.payload.board.get('notebook')}, "
+                    f"  In the notebook {j.notebook}, "
                     f"{_where(j.payload.board)}: it belongs there."
                 )
                 if j.payload.why:
