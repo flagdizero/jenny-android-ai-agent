@@ -57,7 +57,8 @@ def test_the_quarantined_copy_of_a_broken_config_is_refused_too() -> None:
     src = read_source("MainActivity")
     secret = src[src.index("private fun isWorkspaceSecret(") :].split("\n\n", 1)[0]
     prefixes = re.findall(r'name\.startsWith\("([^"]+)"\)', secret)
-    loader = (Path(__file__).resolve().parents[2] / "jenny/config/loader.py").read_text(
+    # La quarantena della config è ``utils.path.quarantine``.
+    loader = (Path(__file__).resolve().parents[2] / "jenny/utils/path.py").read_text(
         encoding="utf-8"
     )
     assert '{path.stem}.corrupt-{stamp}{path.suffix}' in loader, "il nome della quarantena e' cambiato"

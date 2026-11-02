@@ -185,10 +185,11 @@ def test_refuses_to_start_only_when_the_broken_file_cannot_be_set_aside(
     path.parent.mkdir(parents=True)
     path.write_text(_BROKEN, encoding="utf-8")
 
-    def _no_rename(self, target):
+    def _no_rename(src, dst):
         raise OSError("read-only filesystem")
 
-    monkeypatch.setattr(Path, "rename", _no_rename)
+    # La quarantena è ``utils.path.quarantine``, che sposta con ``os.replace``.
+    monkeypatch.setattr("jenny.utils.path.os.replace", _no_rename)
 
     service = CronService(path)
 
@@ -226,5 +227,5 @@ def test_two_corruptions_do_not_overwrite_each_other(tmp_path) -> None:
     path.write_text(_BROKEN + "e ancora", encoding="utf-8")
     CronService(path).list_jobs()
 
-    kept = sorted(p.read_text(encoding="utf-8") for p in path.parent.glob("jobs.json.corrupt-*"))
+    kept = sorted(p.read_text(encoding="utf-8") for p in path.parent.glob("jobs.corrupt-*.json"))
     assert kept == [_BROKEN, _BROKEN + "e ancora"]

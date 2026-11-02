@@ -10,7 +10,6 @@ import json
 import os
 import re
 import types
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Union, get_args, get_origin
 
@@ -25,6 +24,7 @@ from jenny.pydantic_compat import (
     field_for_input_key,
     lenient_literals,
 )
+from jenny.utils.path import quarantine, rotate_valid_json_backup
 
 
 def get_config_path() -> Path:
@@ -162,13 +162,10 @@ def _backup_path(path: Path) -> Path:
 
 
 def _quarantine(path: Path) -> Path:
-    """Sposta di lato il file rotto, senza distruggerlo: serve per capire cosa è successo."""
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    target = path.with_name(f"{path.stem}.corrupt-{stamp}{path.suffix}")
-    try:
-        os.replace(path, target)
-    except OSError as e:
-        logger.error("Could not set aside the broken config at {}: {}", path, e)
+    """Sposta di lato il file rotto (``utils.path.quarantine``); se non ci riesce, *path*."""
+    target = quarantine(path)
+    if target is None:
+        logger.error("Could not set aside the broken config at {}", path)
         return path
     return target
 
@@ -246,21 +243,9 @@ def save_config(
 
 
 def _rotate_backup(path: Path) -> None:
-    """Conserva l'ultimo contenuto *valido* come ``<nome>.bak``.
-
-    Solo se il file attuale si legge come JSON: altrimenti un salvataggio
-    partito da una config già rotta distruggerebbe l'ultimo backup buono.
-    """
-    if not path.exists():
-        return
+    """Conserva l'ultimo contenuto *valido* come ``<nome>.bak``, in ``600``."""
     try:
-        content = path.read_text(encoding="utf-8")
-        json.loads(content)
-    except (OSError, json.JSONDecodeError):
-        return
-    try:
-        backup = _backup_path(path)
-        write_private_file(backup, content, fsync_dir=False)
+        rotate_valid_json_backup(path, lambda p, c: write_private_file(p, c, fsync_dir=False))
     except OSError as e:
         # Il backup è una rete di sicurezza, non un requisito: se non si può
         # scrivere, il salvataggio vero deve comunque procedere.

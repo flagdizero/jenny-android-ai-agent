@@ -1,4 +1,4 @@
-"""Path utilities: abbreviation and atomic writes."""
+"""Path utilities: abbreviation, atomic writes and the state files' safety nets."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import logging
 import os
 import re
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -222,3 +223,56 @@ def append_lines_durable(
             if not tolerate_fsync_error:
                 raise
 
+
+def rotate_valid_json_backup(
+    path: Path, write: Callable[[Path, str], None] | None = None
+) -> None:
+    """Copia *path* in ``<nome>.bak``, ma solo se si legge come JSON.
+
+    La rete di sicurezza dei file di stato (config, cron, bacheca), prima di ogni
+    salvataggio: un salvataggio partito da un file già rotto distruggerebbe
+    l'ultimo backup buono, che è esattamente quello che serve un istante dopo.
+    Senza *path* non fa niente. *write* scrive la copia (di serie ``atomic_write``
+    senza fsync della cartella; la config la vuole in ``600``); un suo
+    ``OSError`` si propaga, e chi chiama decide se il salvataggio vero procede.
+    """
+    import json
+
+    if not path.exists():
+        return
+    try:
+        content = path.read_text(encoding="utf-8")
+        json.loads(content)
+    except (OSError, ValueError):
+        return
+    backup = path.with_name(path.name + ".bak")
+    if write is None:
+        atomic_write(backup, content, fsync_dir=False)
+    else:
+        write(backup, content)
+
+
+def quarantine(path: Path) -> Path | None:
+    """Sposta di lato un file di stato illeggibile; ``None`` se non ci riesce.
+
+    Non lo cancella: serve a capire cosa è successo. Il nome dice quando,
+    ``<nome>.corrupt-<AAAAMMGGThhmmssZ><estensione>`` (``config.corrupt-…json``),
+    uguale per config, cron e bacheca; due nello stesso secondo prendono ``_1``,
+    ``_2``…, perché ``os.replace`` non chiede il permesso e la seconda
+    cancellerebbe in silenzio la prova della prima.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    target = path.with_name(f"{path.stem}.corrupt-{stamp}{path.suffix}")
+    # Un tetto ai tentativi: un filesystem che dice «c'è» a ogni nome non deve
+    # diventare un ciclo senza fine.
+    for n in range(1, 100):
+        if not target.exists():
+            break
+        target = path.with_name(f"{path.stem}.corrupt-{stamp}_{n}{path.suffix}")
+    else:
+        return None
+    try:
+        os.replace(path, target)
+    except OSError:
+        return None
+    return target

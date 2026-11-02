@@ -107,7 +107,7 @@ def test_load_jobs_preserves_corrupt_store_and_reports_the_fallback(
 
     # Original path is gone; a ``.corrupt-<ts>`` backup exists alongside it.
     assert not store_path.exists()
-    backups = list(store_path.parent.glob("jobs.json.corrupt-*"))
+    backups = list(store_path.parent.glob("jobs.corrupt-*.json"))
     assert len(backups) == 1
     assert backups[0].read_text(encoding="utf-8") == "{not valid json"
 
@@ -134,7 +134,7 @@ def test_start_survives_a_corrupt_store_without_overwriting_it(tmp_path: Path) -
     finally:
         service.stop()
 
-    backups = list(store_path.parent.glob("jobs.json.corrupt-*"))
+    backups = list(store_path.parent.glob("jobs.corrupt-*.json"))
     assert len(backups) == 1
     assert backups[0].read_text(encoding="utf-8") == "{still not json"
 
