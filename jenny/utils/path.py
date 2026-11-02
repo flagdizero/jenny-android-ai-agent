@@ -6,6 +6,7 @@ import contextlib
 import logging
 import os
 import re
+import threading
 import uuid
 from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
@@ -276,3 +277,20 @@ def quarantine(path: Path) -> Path | None:
     except OSError:
         return None
     return target
+
+
+_PATH_LOCKS: dict[str, threading.Lock] = {}
+_PATH_LOCKS_GUARD = threading.Lock()
+
+
+def path_lock(path: Path) -> threading.Lock:
+    """Il ``threading.Lock`` di *path*, lo stesso per ogni nome dello stesso file.
+
+    Per i file di stato scritti da funzioni sincrone, anche da un thread (la
+    bacheca): due chiamanti sullo stesso percorso si mettono in fila, su due
+    percorsi diversi no. La chiave è il percorso risolto, così due nomi della
+    stessa cartella non fanno due lock.
+    """
+    key = str(path.resolve(strict=False))
+    with _PATH_LOCKS_GUARD:
+        return _PATH_LOCKS.setdefault(key, threading.Lock())

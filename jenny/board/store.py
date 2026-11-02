@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import copy
 import json
-import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -53,7 +52,7 @@ from jenny.board.model import (
     ownership_violations,
 )
 from jenny.security.subagent_policy import journal_touch
-from jenny.utils.path import atomic_write, quarantine, rotate_valid_json_backup
+from jenny.utils.path import atomic_write, path_lock, quarantine, rotate_valid_json_backup
 
 
 class BoardOwnershipError(Exception):
@@ -62,16 +61,6 @@ class BoardOwnershipError(Exception):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("; ".join(problems))
         self.problems = problems
-
-
-_LOCKS: dict[str, threading.Lock] = {}
-_LOCKS_GUARD = threading.Lock()
-
-
-def _lock_for(path: Path) -> threading.Lock:
-    key = str(path.resolve(strict=False))
-    with _LOCKS_GUARD:
-        return _LOCKS.setdefault(key, threading.Lock())
 
 
 def board_dir(project_root: Path) -> Path:
@@ -139,7 +128,7 @@ def rewrite_json(path: Path, change: Callable[[Any], Any]) -> None:
     perso. Se *change* solleva non si scrive niente. Nessuna normalizzazione:
     il contenuto è già quello che uno scrittore normale aveva lasciato.
     """
-    with _lock_for(path):
+    with path_lock(path):
         current = _read_json(path) if path.exists() else None
         _write(path, change(current))
 
@@ -159,7 +148,7 @@ def _mutate(
 ) -> dict[str, Any]:
     if actor not in (USER, JENNY):
         raise ValueError(f"unknown actor {actor!r}")
-    with _lock_for(path):
+    with path_lock(path):
         current = normalize(_read_with_recovery(path))
         before = copy.deepcopy(current)
         if apply(current) is False:
@@ -216,7 +205,7 @@ def write_card_summary(project_root: Path, card_id: str, summary: dict[str, Any]
     path = card_summary_path(project_root, card_id)
     data = normalize_card_summary(summary, card_id) or {"card": card_id}
     journal_touch(path)
-    with _lock_for(path):
+    with path_lock(path):
         atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
     return data
 
