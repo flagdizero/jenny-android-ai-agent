@@ -270,7 +270,11 @@ def test_settings_payload_includes_token_usage_summary(
 
     from jenny.agent.token_usage import record_token_usage
 
-    record_token_usage({"prompt_tokens": 10, "completion_tokens": 5})
+    # Il fuso della config, come l'hook vero: senza, la riga va nel giorno del
+    # telefono e il riepilogo la cerca in quello di UTC — fra mezzanotte e
+    # l'una (ora italiana) non la trovava.
+    timezone_name = load_config(config_path).agents.defaults.timezone
+    record_token_usage({"prompt_tokens": 10, "completion_tokens": 5}, timezone_name=timezone_name)
 
     payload = settings_payload()
 

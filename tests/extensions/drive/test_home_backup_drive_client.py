@@ -151,7 +151,9 @@ def _run(script: str) -> None:
 def test_safe_says_it_and_answers_the_three_questions() -> None:
     _run("""
       const copies = [0, 1, 2, 3, 4, 5, 6].map(daysAgo);
-      const { page } = await room(on({ last_success_ms: NOW - H, recent_copies_ms: copies,
+      /* Un'ora fa, ma sempre oggi: fra mezzanotte e l'una «un'ora fa» è ieri. */
+      const earlier = Math.max(new Date(NOW).setHours(0, 0, 0, 0), NOW - H);
+      const { page } = await room(on({ last_success_ms: earlier, recent_copies_ms: copies,
                                        stored_bytes: 8_400_000, last_verified_ms: daysAgo(2) }));
       const html = card();
       assert.equal(nodi['home-backup-ext'].hidden, false);
