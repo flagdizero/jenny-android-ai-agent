@@ -9,6 +9,7 @@ import {
   isNetworkFailure, readStorage, removeStorage, showToast, writeStorage,
 } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
+import { dismissTopDialog } from './shared/dialog.js';
 import { api } from './shared/api-client.js';
 import { ViewTitleController } from './mobile-header.js';
 import { DrawerManager } from './mobile-drawer.js';
@@ -478,7 +479,7 @@ class MobileApp {
         // qualunque z-index.
         name: 'dialog',
         present: () => !!document.querySelector('dialog[open]'),
-        dismiss: () => this._dismissTopDialog(),
+        dismiss: () => dismissTopDialog(),
       },
       {
         // Lightbox immagini: overlay normale, ma si chiude solo col proprio
@@ -561,18 +562,6 @@ class MobileApp {
     const stop = belowLayer ? layers.findIndex((layer) => layer.name === belowLayer) : -1;
     const above = stop >= 0 ? layers.slice(0, stop) : layers;
     return above.some((layer) => layer.present());
-  }
-
-  /* Congeda il <dialog> più in alto con la semantica di Esc: evento `cancel`
-     annullabile, e close() solo se nessuno l'ha rifiutato. C'è chi lo rifiuta
-     apposta — il dialog di riavvio dopo un restore non deve essere chiudibile —
-     e chiamare close() diretto, come facevano goHome e la shortcut Escape,
-     scavalca quel rifiuto. */
-  _dismissTopDialog() {
-    const dialogs = document.querySelectorAll('dialog[open]');
-    if (!dialogs.length) return;
-    const top = dialogs[dialogs.length - 1];
-    if (top.dispatchEvent(new Event('cancel', { cancelable: true }))) top.close();
   }
 
   /* Tasto Indietro hardware (MainActivity lo inoltra sempre qui: il guscio

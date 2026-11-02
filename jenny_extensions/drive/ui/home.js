@@ -24,7 +24,7 @@ import {
   copyNow, dayText, findMyCopy, giveConsentBack, nightStrip, progressSizes, restoreCopy, sizeText,
   turnOnDrive, unlockHere,
 } from './cloud-backup.js';
-import { CLOUD_PASSWORD_DIALOG_ID, askCloudPassword, pickCloudCopy } from './cloud-backup-dialogs.js';
+import { askCloudPassword, pickCloudCopy } from './cloud-backup-dialogs.js';
 
 const POLL_MS = 1500;
 
@@ -347,12 +347,10 @@ export class DriveBackupCard {
   }
 }
 
-/** Il montaggio nella casa: la scheda sulla pagina Backup, il dialogo della
- *  password fra quelli che Indietro chiude, e lo stato letto subito — serve
- *  alla riga di «Tu e Jenny» anche a stanza chiusa. */
-export function mountHome({ homeBackup, registerSharedDialog }) {
+/** Il montaggio nella casa: la scheda sulla pagina Backup e lo stato letto
+ *  subito — serve alla riga di «Tu e Jenny» anche a stanza chiusa. */
+export function mountHome({ homeBackup }) {
   if (!homeBackup) return;
-  registerSharedDialog?.(CLOUD_PASSWORD_DIALOG_ID);
   const card = new DriveBackupCard(homeBackup);
   homeBackup.attachExtension(card);
   card.refreshCloud();

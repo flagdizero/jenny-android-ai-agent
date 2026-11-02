@@ -31,7 +31,7 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
 UI = ROOT / "jenny" / "templates" / "ui"
@@ -39,6 +39,7 @@ ASSETS = UI / "assets"
 WIZARD_JS = ASSETS / "onboarding-wizard.js"
 HOST_JS = ASSETS / "onboarding-app.js"
 FIRST_RUN_JS = ASSETS / "shared" / "first-run.js"
+DIALOG_JS = ASSETS / "shared" / "dialog.js"
 HOME_JS = ASSETS / "home-app.js"
 WORKSHOP_JS = ASSETS / "mobile-app.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
@@ -507,6 +508,7 @@ def test_back_closes_the_restore_passphrase_before_the_step() -> None:
         "}\n"
         "let open = [];\n"
         "globalThis.document = { querySelectorAll: () => open.filter((d) => d.open) };\n"
+        f"{function(DIALOG_JS.read_text(encoding='utf-8'), 'dismissTopDialog')}\n"
         "class H {\n"
         f"{member(_host(), 'handleHardwareBack')}\n"
         "}\n"

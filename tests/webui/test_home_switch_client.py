@@ -30,6 +30,7 @@ APP_JS = ASSETS / "home-app.js"
 SPINES_JS = ASSETS / "shared" / "spines.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
+DIALOG_JS = ASSETS / "shared" / "dialog.js"
 I18N_DIR = ASSETS / "i18n"
 
 
@@ -74,6 +75,8 @@ function makeEl(tag) {
     blur() {},
     /* Un dialogo condiviso si congeda con `cancel`: nessuno lo rifiuta. */
     dispatchEvent() { return true; },
+    /* Le domande (`isQuestionDialog`): i dialoghi condivisi, `oc-…`. */
+    matches(sel) { return sel.includes('.oc-dialog') && /^oc-/.test(this.id || ''); },
   };
 }
 
@@ -83,10 +86,19 @@ let lightbox = null;
    (`#home-who`) si spegne con `disabled`, e un finto che ne dava uno nuovo
    ogni volta non poteva dire se l'avevano spento. */
 const perId = new Map();
+/* I `<dialog>` aperti, nell'ordine in cui il banco li ha chiesti: e' il suo
+   ordine del documento. */
+const openDialogs = () => [...perId.values()].filter((node) => node.open === true);
 const document = {
-  querySelector: (sel) => (sel === '.image-lightbox' ? lightbox : null),
+  querySelector: (sel) => {
+    if (sel === '.image-lightbox') return lightbox;
+    if (sel === 'dialog[open]') return openDialogs()[0] || null;
+    if (sel === 'dialog[open], .image-lightbox') return openDialogs()[0] || lightbox;
+    return null;
+  },
+  querySelectorAll: (sel) => (sel === 'dialog[open]' ? openDialogs() : []),
   getElementById: (id) => {
-    if (!perId.has(id)) perId.set(id, makeEl('button'));
+    if (!perId.has(id)) perId.set(id, Object.assign(makeEl('button'), { id }));
     return perId.get(id);
   },
   /* `_setView` dichiara il pavimento di Jenny quando non c'è un composer: la
@@ -477,6 +489,7 @@ def _spines() -> str:
 
 def _harness() -> str:
     src = APP_JS.read_text(encoding="utf-8")
+    dialog_js = DIALOG_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
@@ -560,10 +573,8 @@ def _harness() -> str:
         .replace("__BACK_ONE_PAGE__", member(src, "_backOnePage", prefixes=("async ",)))
         .replace("__NOTEBOOK_ROOMS__", _const_block_scalar(src, "NOTEBOOK_ROOMS"))
         .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
-        .replace("__SHEETS__", _const_block_scalar(src, "LONG_PRESS_SHEETS") + "\n"
-                 + _const_block_scalar(src, "REPORT_SHEET") + "\n"
-                 + _const_block_scalar(src, "BOARD_SHEET") + "\n"
-                 + _const_block_scalar(src, "SHARED_DIALOGS"))
+        .replace("__SHEETS__", function(dialog_js, "dismissTopDialog") + "\n"
+                 + function(dialog_js, "isQuestionDialog"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))
         .replace("__BACK_TO__", _const_block(src, "BACK_TO"))
     )
@@ -2124,20 +2135,25 @@ def test_jenny_stands_on_the_real_composer_not_on_a_photo() -> None:
 
 
 def test_every_sheet_that_back_closes_counts_as_something_above() -> None:
-    """Chi chiede «c'e' qualcosa sopra?» e chi chiude gli strati leggono lo
-    stesso elenco di fogli: erano due elenchi scritti a mano, e un foglio
-    nuovo aggiunto a uno solo avrebbe lasciato la tastiera al campo sotto."""
-    _run_js("""
+    """Chi chiede «c'e' qualcosa sopra?» e chi chiude gli strati guardano la
+    stessa cosa, `dialog[open]`: erano elenchi scritti a mano, e un foglio
+    nuovo aggiunto a uno solo avrebbe lasciato la tastiera al campo sotto — o,
+    come «Fermala», Indietro che lo salta. Qui ogni `<dialog>` della casa."""
+    html = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    ids = re.findall(r'<dialog[^>]*\bid="([^"]+)"', html)
+    assert "home-work-sheet" in ids and len(ids) >= 8, ids
+    ids += ["oc-confirm-dialog", "oc-prompt-dialog", "oc-detail-dialog"]
+    _run_js(f"""
       const app = home();
-      for (const id of [...SHARED_DIALOGS, ...LONG_PRESS_SHEETS, REPORT_SHEET]) {
+      for (const id of {json.dumps(ids)}) {{
         const sheet = document.getElementById(id);
         sheet.open = true;
-        sheet.close = function () { this.open = false; };
+        sheet.close = function () {{ this.open = false; }};
         assert.equal(app.hasOverlayAbove(), true, id + ' sopra la chat non conta');
         assert.equal(app._closeOverlays(), true, id + ': Indietro non lo chiude');
         assert.equal(sheet.open, false);
         assert.equal(app.hasOverlayAbove(), false);
-      }
+      }}
     """)
 
 

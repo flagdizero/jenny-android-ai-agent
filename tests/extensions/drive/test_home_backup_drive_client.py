@@ -397,18 +397,16 @@ def test_the_local_history_names_the_copys_snapshots() -> None:
     assert locale("en")["backup"]["trigger"]["pre_cloud"]
 
 
-def test_mounting_registers_the_password_dialog_and_reads_the_state() -> None:
+def test_mounting_reads_the_state() -> None:
     mount = function(DRIVE_JS, "mountHome")
     _run(f"""
-      const CLOUD_PASSWORD_DIALOG_ID = 'oc-cloud-password-dialog';
       {mount}
       for (const k of Object.keys(nodi)) delete nodi[k];
       CLOUD.status = on({{ last_success_ms: NOW }});
       const page = new HomeBackup({{}});
-      const registered = [];
-      mountHome({{ homeBackup: page, registerSharedDialog: (id) => registered.push(id) }});
+      mountHome({{ homeBackup: page }});
       await new Promise((r) => setTimeout(r, 0));
-      assert.deepEqual(registered, ['oc-cloud-password-dialog']);
       assert.ok(page.value().startsWith('al sicuro'), page.value());
       assert.equal(nodi['home-backup-ext'].hidden, false);
     """)
+

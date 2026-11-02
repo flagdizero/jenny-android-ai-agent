@@ -13,6 +13,7 @@
 
 import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
+import { dismissTopDialog } from './shared/dialog.js';
 import { isFirstRun } from './shared/first-run.js';
 import { OnboardingController } from './onboarding-wizard.js';
 import { prepareExtensions, mountExtensions } from './shared/extensions.js';
@@ -103,15 +104,11 @@ class OnboardingApp {
    *  ripristino), poi risale di un passo; dal wizard non si esce (v.
    *  `handleBack`). Senza il primo gradino, col dialog aperto la pressione
    *  cambiava il passo sotto di lui. Il dialog si congeda con la semantica di
-   *  Esc, come nell'officina (`_dismissTopDialog`): un `cancel` annullabile, e
-   *  chi lo rifiuta — il «Restart now» dopo il ripristino — resta aperto. */
+   *  Esc, come nei due gusci (`shared/dialog.js::dismissTopDialog`): un `cancel`
+   *  annullabile, e chi lo rifiuta — il «Restart now» dopo il ripristino —
+   *  resta aperto. */
   handleHardwareBack() {
-    const dialogs = document.querySelectorAll('dialog[open]');
-    if (dialogs.length) {
-      const top = dialogs[dialogs.length - 1];
-      if (top.dispatchEvent(new Event('cancel', { cancelable: true }))) top.close();
-      return true;
-    }
+    if (dismissTopDialog()) return true;
     return this.controller ? this.controller.handleBack() : true;
   }
 

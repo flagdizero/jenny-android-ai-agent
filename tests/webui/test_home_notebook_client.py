@@ -14,7 +14,6 @@ divergerebbe al primo ritocco.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import tempfile
 import textwrap
@@ -286,9 +285,11 @@ def test_back_closes_the_notebook_sheet_before_anything_else() -> None:
     pagina."""
     app_js = (ASSETS / "home-app.js").read_text(encoding="utf-8")
     chain = app_js.split("_closeOverlays({ editor = true } = {}) {", 1)[1].split("\n  }\n", 1)[0]
-    sheets = re.search(r"(?m)^const LONG_PRESS_SHEETS = \[(.*)\];$", app_js)
-    assert sheets and "'home-notebook-sheet'" in sheets.group(1)
-    assert chain.index("LONG_PRESS_SHEETS") < chain.index("handleBack()")
+    html = (ASSETS.parent / "index.html").read_text(encoding="utf-8")
+    assert '<dialog class="oc-sheet" id="home-notebook-sheet">' in html, (
+        "la scheda non e' piu' un <dialog>: Indietro, che guarda dialog[open], non la vede"
+    )
+    assert chain.index("dismissTopDialog()") < chain.index("handleBack()")
 
 
 def test_the_sheet_is_in_the_page_and_shipped() -> None:
