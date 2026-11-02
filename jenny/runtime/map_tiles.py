@@ -25,11 +25,10 @@ from pathlib import Path
 import httpx
 from loguru import logger
 
-from jenny import __version__
+from jenny.security.fetch import JENNY_USER_AGENT
 from jenny.utils.path import atomic_write
 
 TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-USER_AGENT = f"Jenny/{__version__} (+https://github.com/flagdizero/jenny-android-ai-agent)"
 
 MIN_ZOOM = 2
 MAX_ZOOM = 18
@@ -98,7 +97,7 @@ def _prune(cache_dir: Path, max_bytes: int) -> None:
 async def _download(client: httpx.AsyncClient, z: int, x: int, y: int) -> bytes | None:
     url = TILE_URL.format(z=z, x=x, y=y)
     try:
-        response = await client.get(url, headers={"User-Agent": USER_AGENT})
+        response = await client.get(url, headers={"User-Agent": JENNY_USER_AGENT})
     except httpx.HTTPError as exc:
         logger.debug("Map tile {}/{}/{}: {}", z, x, y, exc)
         return None
