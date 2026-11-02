@@ -115,7 +115,7 @@ def upcoming_dates(cron: Any, roots: Mapping[str, Any], *, now: datetime,
     end = int((now + COMING_UP).timestamp() * 1000)
     by_notebook: dict[str, dict[str, dict[str, Any]]] = {}
     for job in cron.list_jobs(include_disabled=False):
-        notebook = (job.payload.board or {}).get("notebook")
+        notebook = job.notebook
         if not isinstance(notebook, str) or job.paused_at_ms is not None:
             continue
         snap = job_snapshot(job)

@@ -195,6 +195,17 @@ class CronJob:
     # pausa», e una versione vecchia che non lo conosce lascia il job spento.
     paused_at_ms: int | None = None
 
+    @property
+    def notebook(self) -> str | None:
+        """Il quaderno a cui il job è legato (``payload.board.notebook``), o ``None``.
+
+        L'unico posto che legge il legame: prima ogni filtro «i job di questo
+        quaderno» se lo scriveva a mano.
+        """
+        link = self.payload.board
+        name = link.get("notebook") if isinstance(link, dict) else None
+        return name if isinstance(name, str) else None
+
     @classmethod
     def from_dict(cls, kwargs: dict):
         state_kwargs = dict(kwargs.get("state", {}))

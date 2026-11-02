@@ -575,6 +575,22 @@ async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) ->
     return {"ok": True}
 
 
+def _notebook_job(ctx: CommandContext, root: Path, params: Mapping[str, Any]) -> tuple[Any, str]:
+    """Lo scheduler e l'id del job ``params["job"]``, se è legato a questo quaderno.
+
+    Il cassetto tocca solo i cron del suo quaderno, non la sveglia della chat
+    personale: ``not_found`` per tutti gli altri.
+    """
+    job_id = _card_id(params, "job")
+    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
+    if cron is None:
+        raise CommandError("unavailable", "scheduler not running")
+    job = cron.get_job(job_id)
+    if job is None or job.notebook != root.name:
+        raise CommandError("not_found", "job not found in this notebook")
+    return cron, job_id
+
+
 async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Pausa e ripresa di un cron del quaderno, dal suo cassetto: ``paused: true|false``.
 
@@ -582,13 +598,7 @@ async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> di
     sveglia della chat personale.
     """
     root = _project(ctx, params)
-    job_id = _card_id(params, "job")
-    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
-    if cron is None:
-        raise CommandError("unavailable", "scheduler not running")
-    job = cron.get_job(job_id)
-    if job is None or (job.payload.board or {}).get("notebook") != root.name:
-        raise CommandError("not_found", "job not found in this notebook")
+    cron, job_id = _notebook_job(ctx, root, params)
     result = cron.set_paused(job_id, params.get("paused") is True)
     return {"ok": True, "result": result}
 
@@ -602,13 +612,7 @@ async def board_cron_remove(ctx: CommandContext, params: Mapping[str, Any]) -> d
     from jenny.board.cron_link import detach_job
 
     root = _project(ctx, params)
-    job_id = _card_id(params, "job")
-    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
-    if cron is None:
-        raise CommandError("unavailable", "scheduler not running")
-    job = cron.get_job(job_id)
-    if job is None or (job.payload.board or {}).get("notebook") != root.name:
-        raise CommandError("not_found", "job not found in this notebook")
+    cron, job_id = _notebook_job(ctx, root, params)
     result = await detach_job(cron, job_id)
     if result != "removed":
         raise CommandError("conflict", f"cron not removed: {result}")

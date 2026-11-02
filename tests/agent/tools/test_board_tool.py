@@ -245,6 +245,9 @@ async def test_the_editor_is_told_what_a_removal_paused(notebook_chat: Path) -> 
             link = {"notebook": notebook_chat.name, "card": "nuove", "section": "@auto"}
             return [SimpleNamespace(id="j1", payload=SimpleNamespace(board=link))]
 
+        def jobs_of_notebook(self, notebook: str) -> list:
+            return [j for j in self.list_jobs() if j.payload.board["notebook"] == notebook]
+
     cron = _Cron()
     tool = BoardTool(cron=cron)
     out = await tool.execute(action="remove_card", card="nuove")

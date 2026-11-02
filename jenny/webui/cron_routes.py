@@ -110,7 +110,7 @@ class CronRoutes:
             return http_error(503, "scheduler not available")
         try:
             job = cron.get_job(job_id)
-            notebook = ((job.payload.board or {}).get("notebook") if job is not None else None)
+            notebook = job.notebook if job is not None else None
             if action == "remove":
                 result = await detach_job(cron, job_id)
             else:

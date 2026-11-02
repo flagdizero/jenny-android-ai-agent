@@ -70,6 +70,9 @@ class _Cron:
         link = {"notebook": "piante", "card": "acero", "section": "s-cron"}
         return [SimpleNamespace(id="j1", payload=SimpleNamespace(board=link))]
 
+    def jobs_of_notebook(self, notebook: str) -> list:
+        return [j for j in self.list_jobs() if j.payload.board["notebook"] == notebook]
+
 
 def test_a_card_born_with_pages_takes_them_from_the_card_that_had_them(notebook: Path) -> None:
     _seed(notebook)

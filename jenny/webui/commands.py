@@ -1052,12 +1052,9 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     e' **distruttiva**, e questa e' la superficie autenticata all'handshake che
     la WebView usa per le operazioni che cambiano il disco.
     """
+    from jenny.board.cron_link import remove_notebook_crons
     from jenny.session.keys import is_valid_project_name, project_session_key
-    from jenny.webui.project_delete import (
-        ProjectDeleteError,
-        delete_project,
-        remove_notebook_crons,
-    )
+    from jenny.webui.project_delete import ProjectDeleteError, delete_project
 
     name = _require_str(params, "name").strip()
     if not is_valid_project_name(name):

@@ -285,8 +285,7 @@ class CronTool(Tool, ContextAware):
         if action in ("remove", "pause", "resume"):
             job = self._cron.get_job(str(job_id or ""))
             # Dalla chat di un quaderno si toccano solo i job di quel quaderno.
-            if job is None or (in_notebook_chat
-                               and (job.payload.board or {}).get("notebook") != notebook):
+            if job is None or (in_notebook_chat and job.notebook != notebook):
                 where = "in this notebook" if in_notebook_chat else ""
                 return f"No job `{job_id}` {where} (action='list' shows them).".replace("  ", " ")
             if action == "remove":
@@ -565,7 +564,7 @@ class CronTool(Tool, ContextAware):
         jobs = [
             j for j in self._cron.list_jobs(include_disabled=True)
             if (j.enabled or j.paused_at_ms is not None)
-            and (notebook is None or (j.payload.board or {}).get("notebook") == notebook)
+            and (notebook is None or j.notebook == notebook)
         ]
         if not jobs:
             return "No scheduled jobs in this notebook." if notebook else "No scheduled jobs."

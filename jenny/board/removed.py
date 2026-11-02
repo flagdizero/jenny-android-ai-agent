@@ -29,11 +29,10 @@ def card_jobs(cron: Any, notebook: str, card_id: str) -> list[str]:
     if cron is None:
         return []
     try:
-        jobs = cron.list_jobs(include_disabled=True)
+        jobs = cron.jobs_of_notebook(notebook)
     except Exception:  # noqa: BLE001 — senza scheduler non c'è niente da fermare
         return []
-    return [j.id for j in jobs if (j.payload.board or {}).get("notebook") == notebook
-            and scope_of(j.payload.board) == card_id]
+    return [j.id for j in jobs if scope_of(j.payload.board) == card_id]
 
 
 def purge_removed_cards(root: Path, cron: Any = None, now: Any = None) -> int:

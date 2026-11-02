@@ -1377,6 +1377,10 @@ class CronService:
         jobs = store.jobs if include_disabled else [j for j in store.jobs if j.enabled]
         return sorted(jobs, key=lambda j: j.state.next_run_at_ms or float('inf'))
 
+    def jobs_of_notebook(self, notebook: str) -> list[CronJob]:
+        """I job legati al quaderno *notebook*, spenti e in pausa compresi."""
+        return [j for j in self.list_jobs(include_disabled=True) if j.notebook == notebook]
+
     def add_job(
         self,
         name: str,
@@ -1659,7 +1663,7 @@ class CronService:
                 continue
             payload = job.payload
             changed = False
-            if payload.board is not None and payload.board.get("notebook") == old:
+            if payload.board is not None and job.notebook == old:
                 payload.board = {**payload.board, "notebook": new}
                 changed = True
             if payload.session_key == old_session:
