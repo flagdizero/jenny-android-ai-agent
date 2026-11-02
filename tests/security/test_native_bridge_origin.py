@@ -199,8 +199,11 @@ def test_the_async_queries_are_awaited_by_their_callers() -> None:
     for call in ("await bridge.openFile(", "await bridge.shareFile(",
                  "await bridge.saveToDownloads("):
         assert call in workspace, call
-    chat = (assets / "mobile-chat.js").read_text(encoding="utf-8")
-    assert "await bridge.openFile(" in chat
+    # Il tocco su un allegato, per tutte e due le chat (`shared/media.js`).
+    media = (assets / "shared" / "media.js").read_text(encoding="utf-8")
+    assert "await bridge.openFile(" in media
+    for chat in ("mobile-chat.js", "home-chat.js"):
+        assert "openMediaFile(" in (assets / chat).read_text(encoding="utf-8"), chat
     settings = (assets / "mobile-settings.js").read_text(encoding="utf-8")
     assert "await native.requestExactAlarmPermission()" in settings
     assert "await native.openBatterySettings()" in settings

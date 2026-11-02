@@ -2388,13 +2388,25 @@ body {
    si stringe sotto le parole che contiene: nessuna parola spezzata a meta'
    in una cella, e la pagina resta ferma. La stessa resa in tre posti — la
    chat e il lettore della casa, la chat dell'officina — perche' e' la stessa
-   tabella. `fit-content`: la scatola e'
-   larga quanto la tabella, cosi' il bordo non gira attorno a un vuoto. */
-.chat-content table {
+   tabella: per questo e' **una regola**, qui, nel foglio che tutti e due i
+   gusci caricano (prima era scritta tre volte, uguale). `fit-content`: la
+   scatola e' larga quanto la tabella, cosi' il bordo non gira attorno a un
+   vuoto. Il resto — bordi, corpo, intestazioni — e' di ogni superficie. */
+:is(.chat-content, .home-block, .home-reader-body) table {
   display: block;
   width: fit-content;
   max-width: 100%;
   overflow-x: auto;
+}
+/* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
+   nelle celle no, o la cella si stringe fino a una lettera per riga. */
+:is(.chat-content, .home-block, .home-reader-body) :is(th, td) {
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.chat-content table {
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12px;
@@ -2405,12 +2417,7 @@ body {
 
 .chat-content th, .chat-content td {
   padding: 6px 8px;
-  text-align: left;
   border-bottom: 1px solid var(--border);
-  /* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
-     qui no, o la cella si stringe fino a una lettera per riga. */
-  overflow-wrap: break-word;
-  word-break: normal;
 }
 
 .chat-content th {

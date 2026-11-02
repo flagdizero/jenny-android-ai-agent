@@ -52,7 +52,7 @@ export function cloudWithPassword(name, password) {
   return api._backupPost(`/api/backup/cloud/${name}`, { password });
 }
 
-export function cloudRestore(snapshotId) {
+function cloudRestore(snapshotId) {
   return api._backupPost('/api/backup/cloud/restore', { snapshot_id: snapshotId });
 }
 

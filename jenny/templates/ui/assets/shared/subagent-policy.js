@@ -74,7 +74,7 @@ export function saLingerLeftMs(entry, now = Date.now()) {
    - done      → niente: rifare un lavoro riuscito non è mai giusto.
    - cancelled → niente: l'ha fermato l'utente, un bottone che lo riavvia
                  accanto alla scritta "annullato" è una trappola. */
-export const SA_ACTIONS = {
+const SA_ACTIONS = {
   running: { card: ['stop'], modal: ['stop'] },
   stalled: { card: ['stop', 'restart'], modal: ['stop', 'restart'] },
   failed: { card: [], modal: ['restart'] },

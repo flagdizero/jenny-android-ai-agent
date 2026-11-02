@@ -103,6 +103,8 @@ const renderMarkdown = (text) => text;
    `test_vendor_contract.py`, e come disegnano `test_rich_content_client.py`. */
 const renderRich = () => {};
 const renderPlacesIn = () => {};
+const renderReplyExtras = (n) => { renderRich(n); renderPlacesIn(n); };
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 
 function makeChat() {
   return {

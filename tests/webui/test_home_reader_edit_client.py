@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import re
 
-from support.js_harness import ASSETS, member, requires_node, run_js
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
 READER_JS = ASSETS / "home-reader.js"
 APP_JS = ASSETS / "home-app.js"
+DOM_JS = ASSETS / "shared" / "dom.js"
 
 
 pytestmark = requires_node
@@ -54,6 +55,7 @@ const rpc = {
 };
 const i18n = { t: (k) => k };
 function showToast(m, t) { toast.push([m, t]); }
+__WRITE_FAILED_TOAST__
 function confirmDialog() { return Promise.resolve(reply); }
 function element() {
   return {
@@ -87,7 +89,8 @@ class Reader {
 def _run(script: str) -> None:
     src = READER_JS.read_text(encoding="utf-8")
     body = "\n\n  ".join(_member(src, n) for n in _MEMBERS)
-    harness = _HARNESS.replace("__MEMBERS__", body)
+    harness = _HARNESS.replace("__MEMBERS__", body).replace(
+        "__WRITE_FAILED_TOAST__", function(DOM_JS.read_text(encoding="utf-8"), "writeFailedToast"))
     run_js(harness + "\n" + script)
 
 

@@ -60,7 +60,7 @@ function runExportFlow() { actions.push('export'); return Promise.resolve(export
 function runImportFlow() { actions.push('import'); return Promise.resolve(importOutcome); }
 function backupNativeAvailable() { return nativePresent; }
 const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
+const iconHtml = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 const HISTORY_FIRST = 8;
 const DAY_MS = 86400000;
 const SNAPS = { list: [] };
@@ -121,7 +121,7 @@ def _harness() -> str:
         _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
+        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__BACKUP_VALUE__", function(room, "backupValue"))
         .replace("__ROW_HTML__", function(room, "rowHtml"))
         .replace("__CTOR__", member(room, "constructor"))

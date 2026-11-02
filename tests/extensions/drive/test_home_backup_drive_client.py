@@ -98,7 +98,7 @@ async function confirmDialog(text) { flows.push('confirm'); CONFIRM.asked.push(t
 const POLL_MS = 1500;
 const HISTORY_FIRST = 8;
 __SNAPSHOT_WHEN__
-const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
+const iconHtml = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 __ROW_HTML__
 __BACKUP_VALUE__
 __DRIVE_VALUE__
@@ -132,7 +132,7 @@ const on = (extra = {}) => ({ available: true, provider: 'drive', enabled_at_ms:
 """
         .replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
-        .replace("__WHEN__", function(WHEN_JS, "whenText"))
+        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText")))
         .replace("__LATE__", late)
         .replace("__BLOCKING__", blocking)
         .replace("__PURE__", pure)
@@ -397,18 +397,16 @@ def test_the_local_history_names_the_copys_snapshots() -> None:
     assert locale("en")["backup"]["trigger"]["pre_cloud"]
 
 
-def test_mounting_registers_the_password_dialog_and_reads_the_state() -> None:
+def test_mounting_reads_the_state() -> None:
     mount = function(DRIVE_JS, "mountHome")
     _run(f"""
-      const CLOUD_PASSWORD_DIALOG_ID = 'oc-cloud-password-dialog';
       {mount}
       for (const k of Object.keys(nodi)) delete nodi[k];
       CLOUD.status = on({{ last_success_ms: NOW }});
       const page = new HomeBackup({{}});
-      const registered = [];
-      mountHome({{ homeBackup: page, registerSharedDialog: (id) => registered.push(id) }});
+      mountHome({{ homeBackup: page }});
       await new Promise((r) => setTimeout(r, 0));
-      assert.deepEqual(registered, ['oc-cloud-password-dialog']);
       assert.ok(page.value().startsWith('al sicuro'), page.value());
       assert.equal(nodi['home-backup-ext'].hidden, false);
     """)
+

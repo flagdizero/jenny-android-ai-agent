@@ -738,7 +738,7 @@ export class WorkspaceController {
         const base = parentPath(path);
         const newPath = base ? `${base}/${newName}` : newName;
         try {
-          await api.renameWorkspace(path, newPath);
+          await rpc.renameWorkspace(path, newPath);
           if (this.currentPath === path) {
             this.currentPath = newPath;
           }
@@ -750,7 +750,7 @@ export class WorkspaceController {
       }
       case 'clone': {
         try {
-          await api.copyWorkspace(path);
+          await rpc.copyWorkspace(path);
           await this.navigateTo(this.currentDir);
         } catch (err) {
           showToast(workspaceErrorText(err), 'error');
@@ -777,7 +777,7 @@ export class WorkspaceController {
         const confirmed = await confirmDialog(i18n.t('workspace.deleteConfirm', { name: info.name }));
         if (!confirmed) return;
         try {
-          await api.deleteWorkspace(path);
+          await rpc.deleteWorkspace(path);
           if (this.currentPath === path || this.currentPath.startsWith(path + '/')) {
             // Il file aperto è stato appena eliminato su richiesta esplicita:
             // non c'è più niente da salvare, quindi niente conferma di scarto

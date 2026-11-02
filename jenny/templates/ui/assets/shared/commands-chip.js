@@ -29,7 +29,7 @@ import { i18n } from './i18n.js';
 import { sessionManager } from './session-manager.js';
 import { armComposeMenu, claimComposeMenu } from './state.js';
 
-export class CommandsChip {
+class CommandsChip {
   constructor() {
     this.el = document.getElementById('commands-chip');
     this.menu = document.getElementById('commands-menu');

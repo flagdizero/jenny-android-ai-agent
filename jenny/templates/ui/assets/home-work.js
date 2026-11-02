@@ -42,14 +42,16 @@
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
 import { saIsTerminal } from './shared/subagent-policy.js';
-import { FAMILY_BY_TOOL } from './home-activity.js';
+import { familyOf } from './home-activity.js';
+import { el, icon } from './shared/dom.js';
+import { closeActionSheet, openActionSheet, sheetHead, sheetRow } from './shared/sheet.js';
 
 /* Ogni quanto si riscrivono i minuti, e si guarda se una bolla e' ferma. */
 const TICK_MS = 30_000;
 
 /* Senza progresso da tanto, la bolla lo dice. Prima no: una passata ha
    momenti di silenzio normali, e un avviso che scatta ogni volta e' rumore. */
-export const SLOW_AFTER_MS = 60_000;
+const SLOW_AFTER_MS = 60_000;
 
 /* Un aiutante fallito si racconta solo se e' finito da poco: lo snapshot porta
    anche i finiti di ore fa, e riaprire la chat non deve tirarli fuori. */
@@ -68,12 +70,6 @@ const ICON = {
   failed: 'ti-alert-circle',
 };
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 /* I tre puntini che saltano: le stesse classi della bolla di Jenny. */
 function dots() {
@@ -479,55 +475,31 @@ export class WorkBubbles {
     return i18n.t(why + (keptCount === 1 ? 'One' : ''), { count: keptCount, files: names.join(', ') + more });
   }
 
+  /* Il foglio d'azioni e' quello della casa (`shared/sheet.js`); qui ci si
+     mette la riga dell'errore, e il gettone di questa apertura. */
   _openSheet(title, note, rows) {
-    const sheet = this.sheet;
-    if (!sheet) return null;
-    const body = sheet.querySelector('.home-plan-sheet-inner') || sheet;
-    const grab = el('div', 'home-plan-sheet-grab');
-    const close = el('button', 'home-plan-sheet-close');
-    close.type = 'button';
-    close.setAttribute('aria-label', i18n.t('home.work.sheetClose'));
-    const x = el('i', 'ti ti-x');
-    x.setAttribute('aria-hidden', 'true');
-    close.appendChild(x);
-    close.addEventListener('click', () => this._closeSheet());
-    const head = [el('h2', 'home-plan-sheet-title', title)];
-    if (note) head.push(el('p', 'home-plan-sheet-sub', note));
     const error = el('p', 'home-plan-sheet-note home-work-sheet-error');
     error.hidden = true;
-    body.replaceChildren(grab, close, ...head, ...rows, error);
+    const sheet = openActionSheet(this.sheet, {
+      children: [...sheetHead(title, note), ...rows, error],
+      closeLabel: i18n.t('home.work.sheetClose'),
+      onClose: () => this._closeSheet(),
+    });
+    if (!sheet) return null;
     /* Ogni apertura e' un foglio nuovo: una richiesta ancora in volo di quello
        di prima non lo chiude, e finche' non torna i suoi tasti restano spenti
        (due richieste insieme fermerebbero o annullerebbero due volte). */
     this._sheetToken = (this._sheetToken || 0) + 1;
     if (this._sheetBusy) this._sheetDisabled(true);
-    if (!sheet.open) {
-      if (typeof sheet.showModal === 'function') sheet.showModal();
-      else sheet.setAttribute('open', '');
-    }
     return sheet;
   }
 
   _closeSheet() {
-    const sheet = this.sheet;
-    if (!sheet?.open) return;
-    if (typeof sheet.close === 'function') sheet.close();
-    else sheet.removeAttribute('open');
+    closeActionSheet(this.sheet);
   }
 
   _sheetRow(glyph, label, sub, cls, action, run) {
-    const row = el('button', `home-plan-sheet-row ${cls || ''}`.trim());
-    row.type = 'button';
-    row.dataset.workAction = action;
-    const i = el('i', `ti ${glyph}`);
-    i.setAttribute('aria-hidden', 'true');
-    row.appendChild(i);
-    const text = el('span', 'home-plan-row-text');
-    text.append(el('span', null, label));
-    if (sub) text.appendChild(el('span', 'home-plan-row-sub', sub));
-    row.appendChild(text);
-    row.addEventListener('click', run);
-    return row;
+    return sheetRow(glyph, label, sub, cls, run, { workAction: action });
   }
 
   _sheetDisabled(disabled) {
@@ -545,7 +517,10 @@ export class WorkBubbles {
      parole semplici («Legge», «Cerca»). La stessa tabella della bolla di
      Jenny, cosi' le due non si contraddicono. */
   _helperDoing(entry) {
-    const family = FAMILY_BY_TOOL[entry.last_tool] || (entry.last_tool ? 'busy' : 'think');
+    /* La famiglia la dice il server (`last_tool_family`); il nome solo e' il
+       ripiego per uno snapshot che non la porta. */
+    const family = entry.last_tool_family
+      || (entry.last_tool ? familyOf(entry.last_tool) : 'think');
     return i18n.t(`home.work.doing.${family}`);
   }
 
@@ -973,8 +948,7 @@ export class WorkBubbles {
         const stop = el('button', 'home-work-row-stop');
         stop.type = 'button';
         stop.setAttribute('aria-label', i18n.t('home.work.helperStopNamed', { label: row.label }));
-        const i = el('i', 'ti ti-player-stop');
-        i.setAttribute('aria-hidden', 'true');
+        const i = icon('ti-player-stop');
         stop.appendChild(i);
         stop.addEventListener('click', row.stop);
         li.appendChild(stop);

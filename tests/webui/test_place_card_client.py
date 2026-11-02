@@ -303,7 +303,9 @@ def test_both_chats_draw_places_and_route_their_taps() -> None:
     il tocco su una scheda viene prima della regola dei link."""
     for name, renders in (("home-chat.js", 3), ("mobile-chat.js", 4)):
         src = (ASSETS / name).read_text(encoding="utf-8")
-        assert len(re.findall(r"renderPlacesIn\(", src)) == renders, name
+        # Le schede passano da `renderReplyExtras` (`shared/reply.js`), che le
+        # disegna dopo il contenuto ricco.
+        assert len(re.findall(r"renderReplyExtras\(", src)) == renders, name
         place = src.index("openPlaceFromClick(e)")
         link = src.index("const link = contentLinkOf(e.target)")
         assert place < link, f"{name}: il tocco su una scheda deve venire prima dei link"

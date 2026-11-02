@@ -362,8 +362,6 @@
       "neverChecked": "Il primo controllo degli aggiornamenti non è ancora stato fatto.",
       "stale": "Da allora i controlli partono ma non arrivano al server: l'ultimo riuscito è ancora quello di {when}. Finché resta così, di una versione nuova non ti accorgeresti.",
       "staleNever": "Non risulta nessun controllo riuscito. Se resta così anche dopo un «Controlla ora», il meccanismo non sta funzionando e di una versione nuova non ti accorgeresti.",
-      "whenToday": "oggi alle {time}",
-      "whenYesterday": "ieri alle {time}",
       "whenDays": "{days} giorni fa"
     },
     "usage": {
@@ -413,8 +411,6 @@
       "gapDays": "{days}g {hours}h",
       "gapHours": "{hours}h {minutes}m",
       "gapMinutes": "{minutes}m",
-      "gapToday": "oggi alle {time}",
-      "gapYesterday": "ieri alle {time}",
       "gapOn": "{date} alle {time}",
       "oemHint": "Le interruzioni qui sopra non sono un guasto di Jenny: è il gestore energetico del telefono che la chiude quando lo schermo è spento. Nessuna riga di codice dell'app può impedirlo — la restrizione va tolta a mano, nelle impostazioni del produttore.",
       "oemButton": "Apri le impostazioni del produttore",
@@ -524,8 +520,6 @@
     "brandFormat": "Formato",
     "brandCaBundle": "Certificato CA",
     "brandCaBundleNone": "nessuno",
-    "brandModelsLoading": "Chiedo l'elenco…",
-    "brandModelsNeedKey": "Serve una chiave per farsi dare l'elenco.",
     "brandModelsNeedBase": "Manca l'indirizzo della marca: lo aggiunge Modifica.",
     "brandModelsFailed": "L'elenco non è arrivato.",
     "brandModelSaved": "Adesso risponde questo",
@@ -568,7 +562,11 @@
       "unknown": "Qualcosa non ha funzionato",
       "unknown_type": "Non ho capito la richiesta",
       "untyped_frame": "Non ho capito la richiesta"
-    }
+    },
+    "todayAt": "oggi alle {time}",
+    "yesterdayAt": "ieri alle {time}",
+    "modelsLoading": "Chiedo l'elenco…",
+    "modelsNeedKey": "Serve una chiave per farsi dare l'elenco."
   },
   "dialog": {
     "confirm": "Conferma",
@@ -1203,7 +1201,7 @@
         "rollbackFailed": "Il ritorno si è fermato a metà: il quaderno può essere tornato solo in parte. Riprovare è sicuro."
       }
     },
-    "empty":"Non c'è ancora niente qui.\nComincia tu.",
+    "empty": "Non c'è ancora niente qui.\nComincia tu.",
     "emptyNotebook": "Questo quaderno c’è, la conversazione no.\nQuello che scrivi qui resta qui.",
     "placeholder": "Scrivi a {name}",
     "placeholderNotebook": "Scrivi a {name}, nel quaderno",
@@ -1479,8 +1477,6 @@
       "models": "Modelli di {provider}",
       "saved": "Adesso risponde questo",
       "failed": "Non sono riuscita a cambiarlo.",
-      "loading": "Chiedo l'elenco…",
-      "needsKey": "Serve una chiave per farsi dare l'elenco.",
       "needsBase": "Manca l'indirizzo del provider: si mette in officina.",
       "listFailed": "L'elenco non è arrivato. Quello in uso resta quello che vedi sopra.",
       "key": "Chiave",
@@ -1519,8 +1515,6 @@
         "off": "Spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina, Memoria → Storia locale.",
         "loading": "Un attimo…",
         "showAll": "Mostra gli altri ({n})",
-        "today": "oggi alle {time}",
-        "yesterday": "ieri alle {time}",
         "weekday": "{day} alle {time}"
       }
     },
@@ -1703,8 +1697,6 @@
     "drawer": {
       "loading": "Sto guardando…",
       "failed": "Non sono riuscita ad aprire questo cassetto.",
-      "today": "oggi alle {time}",
-      "yesterday": "ieri alle {time}",
       "pagesOne": "Cassetto · 1 pagina della wiki",
       "pagesMany": "Cassetto · {count} pagine della wiki",
       "updated": "aggiornato {when}",

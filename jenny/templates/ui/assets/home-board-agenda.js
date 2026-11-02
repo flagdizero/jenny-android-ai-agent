@@ -10,20 +10,9 @@
  */
 
 import { i18n } from './shared/i18n.js';
+import { button, el } from './shared/dom.js';
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
-function button(className, text, onClick) {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
 /** Le attese, dalla più vicina: quando, cosa, «Fatto» e «Togli».
  *

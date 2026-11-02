@@ -35,7 +35,7 @@ import {
  *  garantiva un involucro, ora `test_chat_rich_has_no_inline_dollar.py`.
  */
 import { renderRich } from './shared/rich-content.js';
-import { openPlaceFromClick, renderPlacesIn } from './shared/places.js';
+import { openPlaceFromClick } from './shared/places.js';
 import { workspacePathIn } from './shared/conversation-list.js';
 import { MARKED_OPTIONS, renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
@@ -55,6 +55,10 @@ import {
   saIsTerminal,
   saVisibleCards,
 } from './shared/subagent-policy.js';
+import { mediaKind, openMediaFile } from './shared/media.js';
+import { originBadgeHtml } from './shared/origin.js';
+import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 const TOOL_ICONS = {
   start: 'ti-loader-2',
@@ -555,7 +559,7 @@ export class ChatController {
       const entry = typeof raw === 'string' ? { url: raw } : raw;
       if (!entry.url) continue;
       const name = entry.name || '';
-      const kind = entry.kind || this._mediaKindFromName(name);
+      const kind = mediaKind(entry);
       if (kind === 'image') {
         const img = document.createElement('img');
         img.src = entry.url;
@@ -577,44 +581,11 @@ export class ChatController {
         chip.innerHTML = '<span class="chat-file-chip-icon">📄</span>' +
           '<span class="chat-file-chip-name"></span>';
         chip.querySelector('.chat-file-chip-name').textContent = name || 'file';
-        chip.addEventListener('click', () => this._openMediaFile(entry));
+        chip.addEventListener('click', () => openMediaFile(entry));
         media.appendChild(chip);
       }
     }
     if (media.childElementCount) msgNode.appendChild(media);
-  }
-
-  _mediaKindFromName(name) {
-    const ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase() || '';
-    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) return 'image';
-    if (['mp4', 'mov', 'webm'].includes(ext)) return 'video';
-    return 'file';
-  }
-
-  /** Apre un allegato non renderizzabile inline: sul telefono il bridge nativo
-      (ACTION_VIEW con il viewer di sistema), fuori dalla WebView l'URL firmato
-      in una scheda nuova.
-   *
-   *  `window.open` era il ripiego di *entrambi* i casi, e sotto Android non è
-   *  un ripiego: la WebView non ha alcun `DownloadListener` e blocca
-   *  l'apertura in una scheda nuova, quindi quando il bridge falliva il tap
-   *  sul chip non produceva niente — nessun viewer, nessun errore, nessun
-   *  segno che fosse successo qualcosa. Con il bridge presente il fallimento è
-   *  un errore da dire, non da sostituire con un'apertura che non avverrà. */
-  async _openMediaFile(entry) {
-    const bridge = window.JennyNative;
-    if (bridge && typeof bridge.openFile === 'function') {
-      try {
-        // Asincrono: `openFile` sta sulla porta che solo la SPA raggiunge (v.
-        // `shared/native-bridge.js`) e risponde con una Promise.
-        if (entry.path && await bridge.openFile(entry.path)) return;
-      } catch (e) {
-        console.warn('Native openFile failed:', e);
-      }
-      showToast(i18n.t('chat.couldNotOpen', { path: entry.name || entry.path || '' }), 'error');
-      return;
-    }
-    window.open(entry.url, '_blank');
   }
 
   _autoResize() {
@@ -948,81 +919,35 @@ export class ChatController {
     this.chatArea.querySelectorAll('.chat-history-error').forEach((el) => el.remove());
   }
 
-  // Ricostruisce l'array di turni normalizzati dai messaggi persistiti.
-  // Voce user: {user:true, text, origin}; turno assistant:
-  // {turnId, toolEvents, reasoning, content, fileEdits, media, latencyMs?}.
+  // Ricostruisce l'array di turni normalizzati dai messaggi persistiti, sulla
+  // spina dorsale comune con la casa (`shared/turns.js`: chi chiude un turno,
+  // e che senza id non si accorpa mai). Voce user: {user:true, text, origin};
+  // turno assistant: {turnId, toolEvents, reasoning, content, fileEdits,
+  // media, latencyMs}. L'officina tiene tutto: strumenti, pensieri, modifiche.
   _buildTurns(messages) {
-    const turns = [];
-    let currentTurn = null;
-    for (const msg of messages) {
-      if (msg.session_boundary) {
-        // Confine di contesto (/new): chiude il turno in corso e si rende da
-        // sé, senza diventare una bolla dell'assistente.
-        if (currentTurn) turns.push(currentTurn);
-        currentTurn = null;
-        turns.push({ boundary: true, text: msg.text || msg.content || '' });
-        continue;
-      }
-      const role = msg.role || (msg.kind === 'user' ? 'user' : 'assistant');
-      if (role === 'user') {
-        if (currentTurn) turns.push(currentTurn);
-        currentTurn = null;
-        turns.push({
-          user: true,
-          text: msg.text || msg.content || '',
-          origin: msg.origin,
-          media: Array.isArray(msg.media) ? msg.media : [],
-          at: msg.sentAt ?? null,
-        });
-        continue;
-      }
-      const turnId = msg.turnId || msg.turn_id;
-      // Un messaggio senza turno non entra MAI nel turno precedente. Prima la
-      // condizione era `currentTurn.turnId !== turnId`, e con due id assenti
-      // `undefined !== undefined` è falso: ogni messaggio assistant privo di id
-      // veniva concatenato al precedente in un'unica bolla. Misurato sul
-      // dispositivo il 2026-08-13: quattro avvisi heartbeat scritti fra 01:31 e
-      // 05:02 (righe 17720-17723 del transcript, tutte con `turn_id: None`)
-      // resi come una bolla sola da quattro paragrafi. La causa a monte è
-      // corretta nel deliverer, che ora conia un id per ogni consegna
-      // proattiva; questa guardia serve alla cronologia **già scritta**, che
-      // quell'id non l'avrà mai. Dentro un turno vero tutte le parti portano lo
-      // stesso id (ogni append al transcript passa una `phase` non nulla),
-      // quindi qui non si spezza niente che fosse legittimamente unito.
-      if (!currentTurn || !turnId || currentTurn.turnId !== turnId) {
-        if (currentTurn) turns.push(currentTurn);
-        currentTurn = { turnId, toolEvents: [], reasoning: '', content: '', fileEdits: [], media: [], at: null };
-      }
-      // L'ora del turno e' quella del suo ultimo pezzo: quando si e' chiuso.
-      if (msg.sentAt != null) currentTurn.at = msg.sentAt;
-      if (msg.toolEvents || msg.tool_events) {
-        currentTurn.toolEvents.push(...(msg.toolEvents || msg.tool_events));
-      }
-      if (msg.fileEdits || msg.file_edits) {
-        currentTurn.fileEdits.push(...(msg.fileEdits || msg.file_edits));
-      }
-      if (Array.isArray(msg.media) && msg.media.length) {
-        currentTurn.media.push(...msg.media);
-      }
-      const text = msg.text || msg.content || '';
-      if (text) {
-        if (msg.kind === 'trace' || msg.role === 'tool') {
-          if (!currentTurn.toolEvents.length) {
-            currentTurn.content += (currentTurn.content ? '\n\n' : '') + text;
-          }
-        } else {
-          currentTurn.content += (currentTurn.content ? '\n\n' : '') + text;
+    return groupTurns(messages, {
+      absorb: (turn, msg) => {
+        turn.toolEvents ??= [];
+        turn.reasoning ??= '';
+        turn.fileEdits ??= [];
+        if (msg.toolEvents || msg.tool_events) {
+          turn.toolEvents.push(...(msg.toolEvents || msg.tool_events));
         }
-      }
-      if (msg.reasoning) {
-        currentTurn.reasoning += (currentTurn.reasoning ? '\n\n' : '') + msg.reasoning;
-      }
-      if (msg.latencyMs != null) {
-        currentTurn.latencyMs = msg.latencyMs;
-      }
-    }
-    if (currentTurn) turns.push(currentTurn);
-    return turns;
+        if (msg.fileEdits || msg.file_edits) {
+          turn.fileEdits.push(...(msg.fileEdits || msg.file_edits));
+        }
+        const text = msg.text || msg.content || '';
+        /* Il resoconto di uno strumento (`kind: 'trace'`) e' il testo del
+           turno solo se il turno non ha i suoi tool event strutturati. */
+        const trace = msg.kind === 'trace' || msg.role === 'tool';
+        if (text && (!trace || !turn.toolEvents.length)) {
+          turn.content += (turn.content ? '\n\n' : '') + text;
+        }
+        if (msg.reasoning) {
+          turn.reasoning += (turn.reasoning ? '\n\n' : '') + msg.reasoning;
+        }
+      },
+    });
   }
 
   _renderThreadMessages(messages) {
@@ -1090,8 +1015,7 @@ export class ChatController {
       const content = node.querySelector('.chat-content');
       if (content) {
         content.innerHTML = renderMarkdown(turn.content.trim());
-        renderRich(content);
-        renderPlacesIn(content);
+        renderReplyExtras(content);
         this._makeFilePathsClickable(content);
       }
       this._setMessageSource(node, turn.content.trim());
@@ -1180,7 +1104,7 @@ export class ChatController {
     if (!msg || latencyMs == null || msg.querySelector('.chat-meta')) return;
     const meta = document.createElement('span');
     meta.className = 'chat-meta';
-    meta.textContent = (latencyMs / 1000).toFixed(1) + 's';
+    meta.textContent = latencyText(latencyMs);
     this._ensureMsgActions(msg).appendChild(meta);
   }
 
@@ -1248,12 +1172,7 @@ export class ChatController {
      azioni, che non c'e' piu': ne resta una, ed e' questa. */
   async _copyMessage(msg) {
     const text = this._messageText(msg);
-    if (!text) return;
-    if (!(await copyToClipboard(text))) {
-      showToast(i18n.t('chat.copyFailed'), 'error');
-      return;
-    }
-    showToast(i18n.t('chat.copied'), 'success');
+    await copyReplyText(text);
   }
 
   _appendFileEdits(msg, edits) {
@@ -1292,15 +1211,14 @@ export class ChatController {
   }
 
   /* Badge di provenienza per i messaggi entrati da un altro canale
-     (es. Telegram): piccola etichetta sopra il contenuto della bolla. */
-  _appendOriginBadge(msg, origin) {
-    if (!origin || origin === 'websocket') return;
+     (es. Telegram): piccola etichetta sopra il contenuto della bolla, con le
+     parole della casa (`shared/origin.js`). */
+  _appendOriginBadge(msg, origin, device = null) {
+    const html = originBadgeHtml(origin, device);
+    if (!html) return;
     const badge = document.createElement('div');
     badge.className = 'chat-origin-badge';
-    const icon = origin === 'telegram' ? 'ti-brand-telegram'
-      : origin === 'remote' ? 'ti-device-laptop' : 'ti-arrows-exchange';
-    const label = origin.charAt(0).toUpperCase() + origin.slice(1);
-    badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
+    badge.innerHTML = html;
     msg.insertBefore(badge, msg.firstChild);
   }
 
@@ -1314,8 +1232,7 @@ export class ChatController {
       content.textContent = text;
     } else {
       content.innerHTML = renderMarkdown(String(text || ''));
-      renderRich(content);
-      renderPlacesIn(content);
+      renderReplyExtras(content);
       this._makeFilePathsClickable(content);
     }
     msg.appendChild(content);
@@ -1526,16 +1443,10 @@ export class ChatController {
        interrotta a metà riprende nella propria: due bolle separate dall'avviso
        sono l'ordine in cui le cose sono davvero successe. */
   _applyTurnBoundary(msg) {
-    if (!ChatController.TURN_SCOPED_EVENTS.has(msg.event)) return true;
-    const turnId = msg.turn_id || msg.turnId || null;
-    if (!turnId || turnId === this._currentTurnId) return true;
-    if (this._currentTurnId === null) {
-      this._currentTurnId = turnId;
-      return true;
-    }
-    if (msg.event === 'turn_end') return false;
-    this._resetStreamState();
-    this._currentTurnId = turnId;
+    const step = turnBoundary(this._currentTurnId, msg, ChatController.TURN_SCOPED_EVENTS);
+    if (step === 'ignore') return false;
+    if (step === 'new') this._resetStreamState();
+    if (step !== 'same') this._currentTurnId = turnIdOf(msg);
     return true;
   }
 
@@ -1895,8 +1806,7 @@ export class ChatController {
     if (!this._currentContent && fullText) this._openContent();
     if (this._currentContent && finalText) {
       this._currentContent.innerHTML = renderMarkdown(finalText);
-      renderRich(this._currentContent);
-      renderPlacesIn(this._currentContent);
+      renderReplyExtras(this._currentContent);
       this._makeFilePathsClickable(this._currentContent);
       this._setMessageSource(this._currentMsg, finalText);
     }
@@ -2027,8 +1937,7 @@ export class ChatController {
       content.className = 'chat-content';
       this._currentMsg.appendChild(content);
       content.innerHTML = renderMarkdown(msg.text);
-      renderRich(content);
-      renderPlacesIn(content);
+      renderReplyExtras(content);
       this._makeFilePathsClickable(content);
       this._setMessageSource(this._currentMsg, msg.text);
       /* Una consegna proattiva può non avere un `turn_end` dietro: la riga di

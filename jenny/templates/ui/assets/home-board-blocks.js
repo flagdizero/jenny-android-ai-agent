@@ -17,22 +17,17 @@
  */
 
 import { i18n } from './shared/i18n.js';
+import { el } from './shared/dom.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-function el(tag, cls, text) {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined && text !== null) node.textContent = text;
-  return node;
-}
 
 function locale() {
   return i18n.locale || undefined;
 }
 
 /** Un numero nel formato di chi guarda; il testo resta testo. */
-export function formatValue(value, { digits } = {}) {
+function formatValue(value, { digits } = {}) {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return i18n.t(value ? 'board.micro.yes' : 'board.micro.no');
   if (typeof value === 'number') {
@@ -48,7 +43,7 @@ function withUnit(value, unit) {
 }
 
 /** Un andamento come polyline: `width`×`height`, scala sui punti (e sulla soglia). */
-export function sparkSvg(points, { width = 100, height = 30, band = null, cls = 'home-board-block-spark' } = {}) {
+function sparkSvg(points, { width = 100, height = 30, band = null, cls = 'home-board-block-spark' } = {}) {
   const nums = (points || []).filter((p) => typeof p === 'number');
   if (nums.length < 2) return null;
   let lo = Math.min(...nums);
@@ -170,7 +165,7 @@ function statusText(state, at, now) {
   return '';
 }
 
-export function timeText(at, now = new Date()) {
+function timeText(at, now = new Date()) {
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return '';
   const sameDay = d.toDateString() === now.toDateString();
@@ -179,7 +174,7 @@ export function timeText(at, now = new Date()) {
     : d.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 }
 
-export function ageText(at, now = new Date()) {
+function ageText(at, now = new Date()) {
   const ms = now - new Date(at);
   if (!(ms >= 0)) return '';
   const h = Math.floor(ms / 3600000);

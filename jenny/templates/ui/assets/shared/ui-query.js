@@ -18,13 +18,13 @@
 import { wsManager } from './ws-manager.js';
 
 // Cap per blocco HTML (il backend rifiuta comunque payload oltre 256 KB).
-export const HTML_CAP = 48 * 1024;
+const HTML_CAP = 48 * 1024;
 // Elementi rimossi dalla potatura: rumore inutile al modello o troppo pesanti.
 const STRIP_SELECTOR = 'script, style, link, svg, template, noscript';
 
 /* Pota una stringa HTML: rimuove script/style/svg ecc. e commenti, tronca gli
    attributi lunghi (src/href, data-URI base64), comprime lo spazio, cappa. */
-export function pruneHtml(htmlString) {
+function pruneHtml(htmlString) {
   if (!htmlString) return '';
   let out;
   try {

@@ -21,6 +21,7 @@ from jenny.agent.hook import (
     CompositeHook,
     ToolResultHookContext,
 )
+from jenny.agent.progress_events import tool_family
 from jenny.agent.runner import AgentRunner, AgentRunSpec
 from jenny.agent.subagent_activity import (
     KIND_ERROR,
@@ -2850,6 +2851,10 @@ class SubagentManager:
                 "elapsed_s": round(max(0.0, now - st.started_at), 1),
                 "idle_s": round(max(0.0, now - st.last_progress_at), 1),
                 "last_tool": self._last_tool_name(st.tool_events),
+                # Cosa sta facendo, a parole della casa (``progress_events``).
+                "last_tool_family": (
+                    tool_family(last) if (last := self._last_tool_name(st.tool_events)) else None
+                ),
                 "tool_events": self._snapshot_tool_events(st.tool_events),
                 # Il passo del piano per cui lavora, se lavora per un piano: la
                 # casa raggruppa gli aiutanti per passo.

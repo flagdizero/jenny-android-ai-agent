@@ -25,7 +25,7 @@
  *  rotta lo ignorava: qui non si manda.
  */
 
-import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 import { showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { selectionInside, onSelectionChange } from './shared/selection.js';
@@ -181,7 +181,7 @@ export class HomeAudit {
     }
     let created;
     try {
-      created = await api.createAudit({
+      created = await rpc.createAudit({
         wiki: this.reader.notebook,
         target: this.reader.path,
         selStart: spot.start,

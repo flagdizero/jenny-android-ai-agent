@@ -14,7 +14,9 @@ stessa funzione che la fisica del dito chiama a fine gesto.
 
 from __future__ import annotations
 
-from support.home_dom import requires_jsdom, run_home
+import json
+
+from support.home_dom import UI, requires_jsdom, run_home
 
 pytestmark = requires_jsdom
 
@@ -348,3 +350,44 @@ const payload = await app.uiQuery._collect();
 assert.equal(payload.view, 'home:settings');
 assert.equal(payload.over, 'chat');
 """)
+
+
+def test_back_closes_the_stop_sheet_before_the_chat_under_it() -> None:
+    """Il foglio «Fermala» (`home-work-sheet`) si apre da una bolla della chat:
+    Indietro chiude lui, e la chat resta su. Mancava dagli elenchi scritti a
+    mano dei fogli, e Indietro lo saltava: via la chat, il foglio restava aperto
+    sopra la pagina. Dal 02/11/2026 la casa guarda `dialog[open]`, come
+    l'officina."""
+    run_home(_HEAD + """
+app.homePages.goToId('app', { animated: false });
+await tick(10);
+tap();
+await tick(30);
+const sheet = $('home-work-sheet');
+sheet.showModal();
+assert.equal(app.hasOverlayAbove(), true, 'il foglio non conta come qualcosa sopra');
+app.handleHardwareBack();
+await tick(10);
+assert.equal(sheet.open, false, 'Indietro ha lasciato il foglio aperto');
+assert.equal(app.chatOver, true, 'Indietro ha chiuso la chat sotto il foglio');
+""")
+
+
+def test_a_photo_opened_from_a_sheet_closes_before_the_sheet() -> None:
+    """La foto a tutto schermo (`home-photo-viewer.js`) si apre dal foglio della
+    bacheca, come `<dialog>` sopra di lui: Indietro chiude lei, il foglio resta."""
+    run_home(_HEAD + """
+const { openPhotoViewer } = await import(__VIEWER__);
+const sheet = $('home-board-sheet');
+sheet.showModal();
+openPhotoViewer({
+  photos: [{ path: 'a.jpg', caption: '', created: '', status: '' }],
+  urlOf: async () => '', title: 'Acero',
+  words: { count: () => '1', day: () => '', state: () => '', close: 'x' },
+});
+assert.ok(document.querySelector('dialog.home-photo-viewer[open]'));
+app.handleHardwareBack();
+await tick(10);
+assert.equal(document.querySelector('.home-photo-viewer'), null, 'la foto e\\u2019 rimasta aperta');
+assert.equal(sheet.open, true, 'Indietro ha chiuso il foglio sotto la foto');
+""".replace("__VIEWER__", json.dumps(str(UI / "assets" / "home-photo-viewer.js"))))

@@ -28,9 +28,11 @@
  */
 
 import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { showToast } from './shared/utils.js';
+import { CATALOG_NOTE_KEYS, ModelCatalogs } from './shared/model-catalog.js';
 
 /** Il nome di marca, per una pastiglia e per un titolo.
  *
@@ -96,10 +98,12 @@ export class HomeModel {
     /** Di quale provider si stanno guardando i modelli. Non e' quello attivo:
      *  si guarda un elenco prima di sceglierne uno. */
     this.viewing = null;
-    /** Cataloghi gia' chiesti, per nome di provider. Una richiesta per
-     *  provider e per apertura: l'elenco lo va a chiedere al provider vero,
-     *  e passa dalla rete. */
-    this._catalogs = new Map();
+    /** Gli elenchi gia' chiesti, con la regola dell'officina per tenerli e
+     *  riprovarli (`shared/model-catalog.js`): una visita e' un'apertura. */
+    this.catalogs = new ModelCatalogs((provider) => rpc.providerModels({ provider }));
+    /** Per quale provider, e con quale chiave di cache, si e' chiesto
+     *  l'ultimo elenco: v. `setSettings`. */
+    this._askedFor = null;
 
     this.brandsEl?.addEventListener('click', (e) => {
       const tile = e.target.closest('[data-provider]');
@@ -116,6 +120,7 @@ export class HomeModel {
 
   /** La stanza si apre. I dati sono gia' arrivati: li porta chi la apre. */
   open() {
+    this.catalogs.newVisit();
     this._paint();
     this._loadModels(this.viewing);
   }
@@ -132,16 +137,14 @@ export class HomeModel {
     /* Un elenco tenuto vale per il provider com'era quando lo si e' chiesto:
        formato, indirizzo o chiave cambiati (anche dall'officina) e la
        risposta di allora — «serve una chiave», «manca l'indirizzo» — non dice
-       piu' niente. Quello guardato si richiede subito, gli altri alla
-       prossima apertura. */
-    let staleViewed = false;
-    for (const [name, catalog] of this._catalogs) {
-      if (catalog.status === 'loading' || catalog.fingerprint === this._fingerprint(name)) continue;
-      this._catalogs.delete(name);
-      if (name === this.viewing) staleViewed = true;
-    }
+       piu' niente. La cache lo sa da se' (la chiave e' fatta di quelle cose);
+       qui si richiede subito quello guardato, gli altri alla prossima
+       apertura. */
+    const viewed = this._provider(this.viewing);
+    const stale = viewed && this._askedFor?.name === viewed.name
+      && this._askedFor.key !== ModelCatalogs.key(viewed);
     this._paint();
-    if (staleViewed) this._loadModels(this.viewing);
+    if (stale) this._loadModels(this.viewing);
   }
 
   /** Il nome della marca che stai **guardando**, per il titolo dell'elenco.
@@ -225,7 +228,7 @@ export class HomeModel {
       /* Il formato va sempre con la chiave: senza, il server lo considerava
          assente e ci scriveva il suo predefinito, `openai_compat`. */
       const format = this._provider(provider)?.format;
-      const payload = await api.updateProvider({ name: provider, api_key: key, ...(format ? { format } : {}) });
+      const payload = await rpc.updateProvider({ name: provider, api_key: key, ...(format ? { format } : {}) });
       if (this.keyInput) this.keyInput.value = '';
       if (this.keyEdit) this.keyEdit.hidden = true;
       this._syncKeySave();
@@ -233,10 +236,8 @@ export class HomeModel {
       /* Il catalogo si richiede: una chiave nuova puo' essere esattamente la
          ragione per cui l'elenco era vuoto. Di solito l'ha gia' richiesto
          `setSettings`, vedendo cambiare la chiave: allora non si raddoppia. */
-      if (this._catalogs.get(provider)?.status !== 'loading') {
-        this._catalogs.delete(provider);
-        this._loadModels(provider);
-      }
+      this.catalogs.forget(this._provider(provider));
+      this._loadModels(provider);
       showToast(i18n.t('home.model.keySaved'), 'success');
     } catch (err) {
       /* Il motivo nel log, e a schermo una frase nella lingua di chi legge:
@@ -253,11 +254,6 @@ export class HomeModel {
   }
 
   /** Quel che di un provider decide il suo elenco dei modelli. */
-  _fingerprint(name) {
-    const p = this._provider(name);
-    return p ? `${p.format || ''}|${p.api_base || ''}|${p.api_key_hint || ''}` : '';
-  }
-
   /* Il payload che torna da un salvataggio e' gia' quello di `/api/settings`:
      si usa qui e si passa al guscio, invece di chiederlo una seconda volta. */
   _apply(payload) {
@@ -267,43 +263,24 @@ export class HomeModel {
     this._onSettings?.(payload);
   }
 
+  /* La regola per tenere e riprovare un elenco e' quella di
+     `shared/model-catalog.js`: si tiene finche' il provider resta quello, e
+     uno non arrivato — l'eccezione della chiamata o lo stato `error` che il
+     server risponde con un 200 — si richiede alla prossima apertura. Tenuto,
+     la stanza diceva «non e' arrivato» fino al riavvio della casa, che e' il
+     launcher e vive per giorni. */
   async _loadModels(provider) {
     if (!provider || !this.modelsEl) return;
-    /* Un elenco che non e' arrivato non si tiene: si richiede alla prossima
-       apertura. Tenuto, la stanza diceva «non e' arrivato» fino al riavvio
-       della casa, che e' il launcher e vive per giorni. Vale per l'eccezione
-       della chiamata **e** per lo stato `error` che il server risponde con un
-       200 (rete giu', provider irraggiungibile): era questo il caso del
-       collaudo, e passava per una risposta definitiva.
-       Quel che il provider ha risposto — anche «serve una chiave» —
-       si tiene, finche' il provider resta quello (v. `setSettings`). */
-    const cached = this._catalogs.get(provider);
-    if (cached && cached.status !== 'error' && cached.fingerprint === this._fingerprint(provider)) {
-      this._paintModels();
-      return;
-    }
-    const fingerprint = this._fingerprint(provider);
-    this._catalogs.set(provider, { status: 'loading', models: [], fingerprint });
+    const p = this._provider(provider);
+    if (p) this._askedFor = { name: p.name, key: ModelCatalogs.key(p) };
+    const asked = this.catalogs.load(p);
     this._paintModels();
-    let outcome;
-    try {
-      const res = await api.getProviderModels(provider);
-      outcome = {
-        status: res?.status || 'available',
-        models: (res?.models || []).map((m) => m.id || m),
-        message: res?.message || '',
-        fingerprint,
-      };
-    } catch (err) {
-      console.warn('home.model: model list not read', err);
-      outcome = { status: 'error', models: [], message: '', fingerprint };
-    }
-    this._catalogs.set(provider, outcome);
-    /* Il catalogo si tiene comunque; il ridisegno si salta se nel frattempo
-       hai cambiato marca. Non e' quel che impedisce a una risposta in ritardo
-       di scavalcare l'elenco che stai leggendo — quello lo fa `_paintModels`,
-       che dipinge **il provider guardato** e non quello appena arrivato: e'
-       solo un ridisegno che non serve a nessuno. */
+    if (!(await asked)) return;
+    /* Il ridisegno si salta se nel frattempo hai cambiato marca. Non e' quel
+       che impedisce a una risposta in ritardo di scavalcare l'elenco che stai
+       leggendo — quello lo fa `_paintModels`, che dipinge **il provider
+       guardato** e non quello appena arrivato: e' solo un ridisegno che non
+       serve a nessuno. */
     if (this.viewing === provider) this._paintModels();
   }
 
@@ -383,7 +360,7 @@ export class HomeModel {
         ? i18n.t('home.model.models', { provider: this.viewName() })
         : i18n.t('home.model.none');
     }
-    const catalog = this._catalogs.get(this.viewing) || { status: 'loading', models: [] };
+    const catalog = this.catalogs.get(p);
     const current = this.data?.agent?.model || '';
     const active = this.viewing === this.data?.default_provider;
     /* Il modello in uso sta in cima **anche se il provider non lo elenca**:
@@ -427,8 +404,7 @@ export class HomeModel {
   _sayModels(catalog, howMany) {
     if (!this.modelsNote) return;
     const keys = {
-      loading: 'home.model.loading',
-      not_configured: 'home.model.needsKey',
+      ...CATALOG_NOTE_KEYS,
       missing_api_base: 'home.model.needsBase',
       error: 'home.model.listFailed',
     };

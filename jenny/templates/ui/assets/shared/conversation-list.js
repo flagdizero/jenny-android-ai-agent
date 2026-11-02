@@ -23,7 +23,7 @@
  *  vero arriva col payload (`config.wiki.wikis_dir` e' configurabile); questo
  *  e' il default della config, cioe' il valore mostrato nel frattempo.
  */
-export const DEFAULT_PROJECTS_DIR = 'wikis';
+const DEFAULT_PROJECTS_DIR = 'wikis';
 
 /** Il prefisso di una chiave di sessione-progetto.
  *

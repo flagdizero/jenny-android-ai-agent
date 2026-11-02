@@ -26,7 +26,7 @@
    `clientHeight` farebbero credere scorribile una pagina che non lo e'. */
 const OVERFLOW_SLOP = 4;
 
-export const HISTORY_MORE_CLASS = 'chat-history-more';
+const HISTORY_MORE_CLASS = 'chat-history-more';
 
 export class HistoryPager {
   /**

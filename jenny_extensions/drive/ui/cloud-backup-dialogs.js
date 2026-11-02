@@ -30,9 +30,9 @@ export function pickCloudCopy(snapshots) {
   });
 }
 
-/** L'id della finestra: la casa lo elenca fra i dialoghi che Indietro chiude
- *  (`SHARED_DIALOGS` in home-app.js), come quello della passphrase. */
-export const CLOUD_PASSWORD_DIALOG_ID = 'oc-cloud-password-dialog';
+/** L'id della finestra. Indietro la chiude come ogni `<dialog>` aperto
+ *  (`shared/dialog.js::dismissTopDialog`), senza che nessuno la elenchi. */
+const CLOUD_PASSWORD_DIALOG_ID = 'oc-cloud-password-dialog';
 
 /** Le regole che si controllano prima di mandare: lunghezza e, scegliendo, le
  *  due uguali. `null` se va, altrimenti la frase. Pura, per i test. */
@@ -53,7 +53,7 @@ export function passwordProblem(mode, first, second) {
  *  che si è scritto resta. Con ogni altra risposta si chiude e la restituisce;
  *  rinunciando risolve `null`. Mentre il gateway lavora (PBKDF2, Drive) i
  *  bottoni sono fermi: chiudere a metà lascerebbe un'accensione a metà. */
-export function promptCloudPassword({ mode = 'choose', submit }) {
+function promptCloudPassword({ mode = 'choose', submit }) {
   return new Promise((resolve) => {
     const two = mode !== 'type';
     const t = (key, params) => escapeHtml(i18n.t(`cloudBackup.password.${mode}.${key}`, params));

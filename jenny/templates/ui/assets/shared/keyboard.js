@@ -1,4 +1,4 @@
-export class KeyboardManager {
+class KeyboardManager {
   constructor() {
     this.shortcuts = new Map();
     this.init();

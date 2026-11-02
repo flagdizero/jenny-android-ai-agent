@@ -359,8 +359,9 @@ def test_the_model_catalog_lives_in_the_controller_on_both_sides() -> None:
     Questo banco difendeva lo stato «aperto + filtro» attraverso il
     ridisegno, perche' scegliere un modello *e'* un salvataggio e il
     salvataggio ridisegna. Il catalogo di allora teneva quello stato nel DOM
-    che `render()` riscrive. Adesso vive nel controller — `_catalogs` in casa;
-    in officina `_brandCatalogs` per gli elenchi, `_brandsOpen`,
+    che `render()` riscrive. Adesso vive nel controller — gli elenchi in un
+    `ModelCatalogs` (`shared/model-catalog.js`) per parte; in officina anche
+    `_brandsOpen`,
     `_modelOrder`, `_brandFilters` e `_brandShowAll` per la visita — e una
     scelta in officina non ridisegna la pagina: ridipinge solo le marche
     (`_repaintBrands`). Le promesse di casa sono in `test_home_model_client.py`;
@@ -370,12 +371,14 @@ def test_the_model_catalog_lives_in_the_controller_on_both_sides() -> None:
     resta in memoria.
     """
     settings = SETTINGS_JS.read_text(encoding="utf-8")
+    # L'import del modulo condiviso non e' la sotto-schermata di allora.
+    markup = settings.replace("./shared/model-catalog.js", "").replace("shared/model-catalog.js", "")
     for piece in ("model-catalog", "btn-change-model", "_loadModelCatalog", "_selectModel"):
-        assert piece not in settings, (
+        assert piece not in markup, (
             f"«{piece}» e' tornato in officina: era la sotto-schermata che il "
             "ridisegno buttava via"
         )
-    assert "this._brandCatalogs = new Map()" in settings, (
+    assert "this._modelCatalogs = new ModelCatalogs(" in settings, (
         "l'officina non tiene piu' gli elenchi nel controller: ogni salvataggio "
         "li richiederebbe"
     )
@@ -383,6 +386,6 @@ def test_the_model_catalog_lives_in_the_controller_on_both_sides() -> None:
                   "this._brandShowAll = new Set()"):
         assert field in settings, f"lo stato della visita non e' piu' nel controller: {field}"
     home = (SETTINGS_JS.parent / "home-model.js").read_text(encoding="utf-8")
-    assert "getProviderModels" in home and "default_provider" in home, (
+    assert "rpc.providerModels(" in home and "new ModelCatalogs(" in home, (
         "la casa non ha piu' il catalogo"
     )

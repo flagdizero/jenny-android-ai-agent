@@ -36,25 +36,23 @@ import { DrawerNotes } from './home-board-notes.js';
 import { DrawerPhotos } from './home-board-photos.js';
 import { automationRow } from './home-board-automation.js';
 import { renderBlock } from './home-board-blocks.js';
+import { button, el, icon, writeFailedToast } from './shared/dom.js';
+import { dayAndTime } from './shared/when.js';
 
 /** «oggi alle 04:12», «ieri», «3 ott»: quando e' stato riscritto il cassetto. */
-export function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
+function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
-  const day = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diff = Math.round((day(now) - day(at)) / 86_400_000);
-  const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(at);
-  if (diff === 0) return i18n.t('board.drawer.today', { time });
-  if (diff === 1) return i18n.t('board.drawer.yesterday', { time });
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
+  return dayAndTime(at, { now, locale })
+    || new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
 }
 
 /** Le cadenze di un promemoria a condizione («controlla ogni»), la prima e' la
  *  proposta: la sceglie l'utente, e diventa l'`every` del suo cron. */
-export const CONDITION_EVERY = [['hour', 3_600_000], ['sixHours', 21_600_000], ['day', 86_400_000]];
+const CONDITION_EVERY = [['hour', 3_600_000], ['sixHours', 21_600_000], ['day', 86_400_000]];
 
 /** «controllo ogni 6 ore»: la cadenza di un promemoria a condizione, o `''`. */
-export function everyLabel(when) {
+function everyLabel(when) {
   if (when?.kind !== 'condition' || !(when.every_ms > 0)) return '';
   const tr = (key, vars) => i18n.t(key, vars);
   return i18n.t('board.app.checkedEvery', { every: humanizeDuration(when.every_ms, { tr, locale: i18n.locale }) });
@@ -62,7 +60,7 @@ export function everyLabel(when) {
 
 /** Quanto manca a *date* (`AAAA-MM-GG`), a parole: «tra 3 settimane», «ieri».
  *  Giorni fino a due settimane, poi settimane fino a due mesi, poi mesi. */
-export function untilLabel(date, today = new Date(), locale = i18n.locale) {
+function untilLabel(date, today = new Date(), locale = i18n.locale) {
   const [y, m, d] = String(date || '').split('-').map(Number);
   if (!y || !m) return '';
   const from = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -91,19 +89,7 @@ export function sparkline(values, width = 84, height = 18) {
   return `<svg class="home-drawer-spark" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-hidden="true"><polyline points="${points}"/></svg>`;
 }
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
-function button(className, text, onClick) {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
 export class BoardDrawer {
   /**
@@ -430,8 +416,7 @@ export class BoardDrawer {
     if (this.locked) {
       /* La stessa riga della bacheca e del lettore, in cima al cassetto. */
       const lock = el('div', 'home-plan-lock');
-      const i = el('i', 'ti ti-lock');
-      i.setAttribute('aria-hidden', 'true');
+      const i = icon('ti-lock');
       lock.append(i, el('span', '', i18n.t('home.plan.lock')));
       root.insertBefore(lock, root.firstChild);
       this._disableEdits(root);
@@ -600,8 +585,7 @@ export class BoardDrawer {
     const name = el('span', 'home-drawer-fold-name');
     if (section.fresh) name.appendChild(el('span', 'home-drawer-fresh'));
     name.appendChild(document.createTextNode(section.title));
-    const chevron = el('i', 'ti ti-chevron-down home-drawer-fold-icon');
-    chevron.setAttribute('aria-hidden', 'true');
+    const chevron = icon('ti-chevron-down', 'home-drawer-fold-icon');
     toggle.append(name, el('span', 'home-drawer-fold-preview', open ? '' : section.text), chevron);
     h3.appendChild(toggle);
     row.appendChild(h3);
@@ -667,7 +651,7 @@ export class BoardDrawer {
       await rpc.board('fix', this.notebook, { card: this.card, section: section.title, text });
     } catch (err) {
       console.warn('home.drawer: fix failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.drawer.fixFailed'), 'error');
+      writeFailedToast(err, 'board.drawer.fixFailed');
       return;
     }
     this.editing = null;
@@ -824,9 +808,9 @@ export class BoardDrawer {
       const tiles = shape === 'chips';
       const chips = el('div', tiles ? 'home-drawer-tiles' : 'home-drawer-micro-extras');
       for (const x of v.extras) {
-        const chip = el('div', tiles ? 'home-drawer-tile' : 'home-drawer-chip');
-        chip.appendChild(el('span', tiles ? 'home-drawer-tile-label' : 'home-drawer-chip-label', x.label));
-        const value = el('span', tiles ? 'home-drawer-tile-value' : 'home-drawer-chip-value',
+        const chip = el('div', tiles ? 'home-drawer-tile' : 'home-drawer-reading');
+        chip.appendChild(el('span', tiles ? 'home-drawer-tile-label' : 'home-drawer-reading-label', x.label));
+        const value = el('span', tiles ? 'home-drawer-tile-value' : 'home-drawer-reading-value',
           this._cell(x.value, x.type, x.unit));
         if (x.type === 'bool') value.classList.add(x.value ? 'is-yes' : 'is-no');
         chip.appendChild(value);
@@ -940,7 +924,7 @@ export class BoardDrawer {
       await api.runAppAction(section.app, action, params || {});
     } catch (err) {
       console.warn('home.drawer: strip action failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.slip.failed'), 'error');
+      writeFailedToast(err, 'board.slip.failed');
     }
     await this.reload();
   }
@@ -1034,7 +1018,7 @@ export class BoardDrawer {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.drawer: ${method} failed`, err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
+      writeFailedToast(err, 'board.section.failed');
       return false;
     }
     await this.reload();
@@ -1084,8 +1068,7 @@ export class BoardDrawer {
     const menu = el('div', 'home-board-menu');
     for (const app of apps.filter((a) => a.section && !a.broken)) {
       const row = button('home-board-menu-row', '', () => this._attachApp(app));
-      const i = el('i', `ti ${app.icon || 'ti-apps'}`);
-      i.setAttribute('aria-hidden', 'true');
+      const i = icon(app.icon || 'ti-apps');
       row.append(i, el('span', 'home-board-menu-name', app.name), el('span', 'home-board-menu-hint', app.description || ''));
       menu.appendChild(row);
     }
@@ -1115,7 +1098,7 @@ export class BoardDrawer {
       });
     } catch (err) {
       console.warn('home.drawer: app card failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.section.failed'), 'error');
+      writeFailedToast(err, err?.code === 'conflict' ? 'board.card.full' : 'board.section.failed');
       return;
     }
     showToast(i18n.t('board.card.appPlaced', { name: app.name, card: this.data.title }), 'success');

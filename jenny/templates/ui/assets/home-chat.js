@@ -42,39 +42,30 @@
  */
 
 import { api } from './shared/api-client.js';
-import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
+import { showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
-import { renderRich } from './shared/rich-content.js';
-import { openPlaceFromClick, renderPlacesIn } from './shared/places.js';
+import { openPlaceFromClick } from './shared/places.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
 import { chatTime, chatTimeIso } from './shared/chat-time.js';
-
-/* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
-   registro completo di tutte le superfici — l'app, Telegram, la tendina delle
-   notifiche, il fumetto della mascotte — e la provenienza va detta, altrimenti
-   un messaggio scritto dal blocco schermo sembra comparso dal nulla.
-
-   Nomi e non identificatori: in officina l'etichetta e' il canale con
-   l'iniziale maiuscola ("Floating"), che e' il nome che ha nel codice. Qui e'
-   il nome che ha per chi lo legge. */
-const ORIGINS = {
-  telegram: { icon: 'ti-brand-telegram', key: 'home.origin.telegram' },
-  notification: { icon: 'ti-bell', key: 'home.origin.notification' },
-  floating: { icon: 'ti-message-circle', key: 'home.origin.floating' },
-  /* Scritto da un altro dispositivo del tailnet (il Mac, un secondo
-     telefono). Col nome che gli da' MagicDNS, quando c'e': «dal mac». */
-  remote: { icon: 'ti-device-laptop', key: 'home.origin.remote', named: 'home.origin.remoteNamed' },
-};
+import { mediaKind, openMediaFile } from './shared/media.js';
+import { originBadgeHtml } from './shared/origin.js';
+import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
    Sotto questa soglia il filo insegue i messaggi nuovi; sopra, no — chi sta
    rileggendo qualcosa piu' su non va strappato via da una risposta che arriva. */
 const STICK_PX = 24;
+
+/* Gli eventi che appartengono a un turno, per il suo confine dal vivo: quelli
+   che la casa disegna. L'officina ne ha di piu' (i pensieri, le modifiche ai
+   file), che qui non arrivano a schermo. */
+const HOME_TURN_SCOPED = new Set(['delta', 'stream_end', 'message', 'turn_end']);
 
 /* Quante ancore chiedere per pagina. L'officina ne chiede 160 all'apertura; la
    casa molte meno, e la ragione e' il costo, non il contenuto: il budget conta
@@ -130,14 +121,6 @@ export function moveOffers(events) {
         && !out.includes(notebook)) out.push(notebook);
   }
   return out;
-}
-
-function mediaKind(entry) {
-  if (entry.kind) return entry.kind;
-  const name = (entry.name || entry.url || '').toLowerCase();
-  if (/\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(name)) return 'image';
-  if (/\.(mp4|webm|mov|m4v)(\?|$)/.test(name)) return 'video';
-  return 'file';
 }
 
 export class HomeChat {
@@ -201,7 +184,7 @@ export class HomeChat {
     this._lastSegment = null;
     this._passing = [];
     /* L'allegato dietro ogni pastiglia di file: il percorso che il ponte
-       nativo sa aprire non sta nell'URL firmato (v. `_openMediaFile`). */
+       nativo sa aprire non sta nell'URL firmato (v. `shared/media.js::openMediaFile`). */
     this._files = new WeakMap();
     /* I secondi dell'ultimo `turn_end`, in attesa che la bolla si chiuda. */
     this._seconds = null;
@@ -326,7 +309,7 @@ export class HomeChat {
     const file = e.target.closest('a.home-file');
     if (file && this.el.contains(file)) {
       e.preventDefault();
-      this._openMediaFile(this._files.get(file) || { url: file.getAttribute('href') });
+      openMediaFile(this._files.get(file) || { url: file.getAttribute('href') });
       return;
     }
     /* Non solo `a[href]`: un `<area href>` o un link SVG sono link anche loro,
@@ -507,78 +490,41 @@ export class HomeChat {
     }
   }
 
-  /* I messaggi persistiti diventano turni. E' la versione di casa di
-     `_buildTurns`: stessa spina dorsale, ma di un turno dell'assistente
-     sopravvivono solo il testo e gli allegati. Pensieri, strumenti e modifiche
-     ai file vengono letti e buttati qui, una volta sola, invece di essere
-     filtrati in dieci posti piu' in la'. */
+  /* I messaggi persistiti diventano turni (`shared/turns.js`, la spina dorsale
+     comune con l'officina). Di un turno dell'assistente la casa tiene solo il
+     testo e gli allegati — i secondi, l'ora e l'errore li tiene la spina.
+     Pensieri, strumenti e modifiche ai file vengono letti e buttati qui, una
+     volta sola, invece di essere filtrati in dieci posti piu' in la'. */
   _buildTurns(messages) {
-    const turns = [];
-    let current = null;
-    const flush = () => { if (current) turns.push(current); current = null; };
-    for (const msg of messages) {
+    const turns = groupTurns(messages, {
       /* Di un lavoro lungo (`/gardener`, `/dream`) la storia tiene due testi:
          l'annuncio («Gardening…») e il resoconto. L'annuncio non si mostra mai:
          o il lavoro e' ancora in corso, e allora e' la bolla a dirlo, o e'
          finito, e allora c'e' il resoconto. */
-      if (msg.workStart) continue;
-      if (msg.session_boundary) {
-        flush();
-        turns.push({ boundary: true });
-        continue;
-      }
-      const role = msg.role || (msg.kind === 'user' ? 'user' : 'assistant');
-      if (role === 'user') {
-        flush();
-        turns.push({
-          user: true,
-          text: msg.text || msg.content || '',
-          origin: msg.origin,
-          device: msg.device || null,
-          media: Array.isArray(msg.media) ? msg.media : [],
-          at: msg.sentAt ?? null,
-        });
-        continue;
-      }
-      const turnId = msg.turnId || msg.turn_id;
-      // Regola 4: senza id non si accorpa. Mai.
-      if (!current || !turnId || current.turnId !== turnId) {
-        flush();
-        current = { turnId, content: '', media: [], latencyMs: null, at: null };
-      }
-      /* L'ora di una risposta e' quella del suo ultimo pezzo: quando il turno
-         si e' chiuso, come dal vivo (v. `_resetTurn`). */
-      if (msg.sentAt != null) current.at = msg.sentAt;
-      if (Array.isArray(msg.media) && msg.media.length) current.media.push(...msg.media);
-      /* I secondi sono l'unica cosa che l'officina teneva e la casa buttava e
-         che adesso serve anche qui: sono meta' della riga che separa una
-         risposta dalla successiva. */
-      if (msg.latencyMs != null) current.latencyMs = msg.latencyMs;
-      /* Il turno e' finito in un errore del modello (`error: {kind}`, dal
-         gateway): la bolla avra' il suo «Riprova» anche dopo una ricarica. */
-      if (msg.error) current.error = msg.error;
-      /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto di
-         uno strumento, e in casa non e' niente: si butta, punto. L'officina la
-         tiene come ripiego quando il turno non ha altro testo, ma quel ripiego
-         qui sarebbe il difetto — un turno in cui Jenny ha solo lavorato senza
-         dire niente deve restare muto, non mostrare `read_file: sensori.json`.
-         E la condizione "solo se non c'e' altro testo" non si puo' nemmeno
-         valutare qui: il testo vero arriva *dopo*, in un frame successivo dello
-         stesso turno. */
-      if (msg.kind === 'trace' || msg.role === 'tool') {
-        /* Tranne una cosa: quel che il turno ha messo in un cassetto, che diventa
-           il segno sotto la risposta (v. `_journalMarkOf`). */
-        const events = msg.toolEvents || msg.tool_events;
-        const notes = journalNotes(events);
-        if (notes.length) (current.journal ||= []).push(...notes);
-        const moves = moveOffers(events);
-        if (moves.length) (current.moves ||= []).push(...moves);
-        continue;
-      }
-      const text = msg.text || msg.content || '';
-      if (text) current.content += (current.content ? '\n\n' : '') + text;
-    }
-    flush();
+      skip: (msg) => Boolean(msg.workStart),
+      absorb: (current, msg) => {
+        /* Una riga di traccia (`kind: 'trace'`, `role: 'tool'`) e' il resoconto
+           di uno strumento, e in casa non e' niente: si butta, punto. L'officina
+           la tiene come ripiego quando il turno non ha altro testo, ma quel
+           ripiego qui sarebbe il difetto — un turno in cui Jenny ha solo
+           lavorato senza dire niente deve restare muto, non mostrare
+           `read_file: sensori.json`. E la condizione "solo se non c'e' altro
+           testo" non si puo' nemmeno valutare qui: il testo vero arriva
+           *dopo*, in un frame successivo dello stesso turno. */
+        if (msg.kind === 'trace' || msg.role === 'tool') {
+          /* Tranne una cosa: quel che il turno ha messo in un cassetto, che
+             diventa il segno sotto la risposta (v. `_journalMarkOf`). */
+          const events = msg.toolEvents || msg.tool_events;
+          const notes = journalNotes(events);
+          if (notes.length) (current.journal ||= []).push(...notes);
+          const moves = moveOffers(events);
+          if (moves.length) (current.moves ||= []).push(...moves);
+          return;
+        }
+        const text = msg.text || msg.content || '';
+        if (text) current.content += (current.content ? '\n\n' : '') + text;
+      },
+    });
     // Un turno senza niente da mostrare non e' una bolla vuota: non e' niente.
     return turns.filter((t) => t.boundary || t.user || t.content || t.media.length);
   }
@@ -613,18 +559,14 @@ export class HomeChat {
     return !chatId || chatId === sessionManager.currentChatId;
   }
 
-  /* Regola 3 e 4: il confine di turno. Un `turn_end` di un altro turno non
-     riguarda quello aperto e va ignorato; qualunque altro frame di un turno
-     nuovo chiude quello in corso. */
+  /* Regola 3 e 4: il confine di turno (`shared/turns.js::turnBoundary`). Un
+     `turn_end` di un altro turno non riguarda quello aperto e va ignorato;
+     qualunque altro frame di un turno nuovo chiude quello in corso. */
   _crossesTurn(msg) {
-    const TURN_SCOPED = ['delta', 'stream_end', 'message', 'turn_end'];
-    if (!TURN_SCOPED.includes(msg.event)) return true;
-    const turnId = msg.turn_id || msg.turnId || null;
-    if (!turnId || turnId === this.turnId) return true;
-    if (this.turnId === null) { this.turnId = turnId; return true; }
-    if (msg.event === 'turn_end') return false;
-    this._resetTurn();
-    this.turnId = turnId;
+    const step = turnBoundary(this.turnId, msg, HOME_TURN_SCOPED);
+    if (step === 'ignore') return false;
+    if (step === 'new') this._resetTurn();
+    if (step !== 'same') this.turnId = turnIdOf(msg);
     return true;
   }
 
@@ -679,8 +621,7 @@ export class HomeChat {
     const finalText = fullText || this.buffer;
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
-      renderRich(this.blockNode);
-      renderPlacesIn(this.blockNode);
+      renderReplyExtras(this.blockNode);
       this._register(this.turnNode, finalText, this.blockNode);
       this._lastSegment = this.blockNode;
       this.band?.refresh();
@@ -737,8 +678,7 @@ export class HomeChat {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
-      renderRich(block);
-      renderPlacesIn(block);
+      renderReplyExtras(block);
       this._ensureTurn().appendChild(block);
       this._register(this.turnNode, msg.text, block);
       if (step) this._markPassing(block);
@@ -966,8 +906,7 @@ export class HomeChat {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(content);
-      renderRich(block);
-      renderPlacesIn(block);
+      renderReplyExtras(block);
       node.appendChild(block);
       this._register(node, content);
     }
@@ -1135,7 +1074,7 @@ export class HomeChat {
       }
       const s = document.createElement('span');
       s.className = 'home-seconds';
-      s.textContent = (latencyMs / 1000).toFixed(1) + 's';
+      s.textContent = latencyText(latencyMs);
       row.appendChild(s);
     }
     node.appendChild(row);
@@ -1197,12 +1136,7 @@ export class HomeChat {
 
   async _copy(node) {
     const text = this._textOf(node);
-    if (!text) return;
-    if (!(await copyToClipboard(text))) {
-      showToast(i18n.t('chat.copyFailed'), 'error');
-      return;
-    }
-    showToast(i18n.t('chat.copied'), 'success');
+    await copyReplyText(text);
   }
 
   /* Il separatore di un azzeramento del contesto. Nessuna scritta: dire
@@ -1214,15 +1148,13 @@ export class HomeChat {
     this._append(hr, toTop);
   }
 
+  /* Da dove e' entrato il messaggio, se non da qui (`shared/origin.js`). */
   _originBadge(origin, device = null) {
-    if (!origin || origin === 'websocket') return null;
-    const known = ORIGINS[origin];
+    const html = originBadgeHtml(origin, device);
+    if (!html) return null;
     const badge = document.createElement('div');
     badge.className = 'home-origin';
-    const icon = known ? known.icon : 'ti-arrows-exchange';
-    const label = !known ? origin
-      : (device && known.named) ? i18n.t(known.named, { device }) : i18n.t(known.key);
-    badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
+    badge.innerHTML = html;
     return badge;
   }
 
@@ -1262,29 +1194,6 @@ export class HomeChat {
       }
     }
     if (wrap.childElementCount) node.appendChild(wrap);
-  }
-
-  /** Apre un allegato che il filo non sa mostrare: col ponte nativo, che lo
-   *  passa al visore di sistema, come fa l'officina (`mobile-chat.js`,
-   *  `_openMediaFile`).
-   *
-   *  Col ponte presente un fallimento si dice e basta: la WebView non ha un
-   *  `DownloadListener` e blocca le schede nuove, quindi `window.open` li'
-   *  non sarebbe un ripiego ma un tocco che non fa niente. Fuori dal guscio
-   *  nativo (un browser) e' la strada giusta. */
-  async _openMediaFile(entry) {
-    const bridge = window.JennyNative;
-    if (bridge && typeof bridge.openFile === 'function') {
-      try {
-        // Asincrono: `openFile` risponde con una Promise (v. `shared/native-bridge.js`).
-        if (entry.path && await bridge.openFile(entry.path)) return;
-      } catch (err) {
-        console.warn('home: native openFile failed', err);
-      }
-      showToast(i18n.t('chat.couldNotOpen', { path: entry.name || entry.path || '' }), 'error');
-      return;
-    }
-    if (entry.url) window.open(entry.url, '_blank');
   }
 
   /** La bolla dell'assistente del turno, creata al primo frame che la riempie. */

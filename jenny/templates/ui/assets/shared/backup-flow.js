@@ -107,8 +107,8 @@ export function promptPassphrase({ confirm = false } = {}) {
   return new Promise((resolve) => {
     const dialog = document.createElement('dialog');
     dialog.className = 'oc-dialog';
-    // L'id lo legge la casa (`SHARED_DIALOGS` in home-app.js): senza, Indietro
-    // non lo vedeva e portava via la stanza sotto, lasciando la domanda aperta.
+    // L'id lo cercano i banchi; Indietro lo trova da se', come ogni
+    // `<dialog>` aperto (`dialog.js::dismissTopDialog`).
     dialog.id = 'oc-backup-passphrase-dialog';
     dialog.innerHTML = `
       <div class="oc-dialog-inner">

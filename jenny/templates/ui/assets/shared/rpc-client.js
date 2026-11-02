@@ -161,7 +161,7 @@ export const rpc = {
 
   /** Cancella un progetto: l'albero della wiki **e** la sua conversazione.
    *
-   *  Non e' `api.deleteWorkspace` su `wikis/<name>`, ed e' il punto di tutto:
+   *  Non e' `deleteWorkspace` su `wikis/<name>`, ed e' il punto di tutto:
    *  quella toglie una cartella e non sa cosa sia un progetto, quindi lasciava
    *  la chat sotto un nome ormai libero e il progetto successivo con lo stesso
    *  nome se la riprendeva (difetto del 24/08/2026). Il server rifiuta ormai
@@ -188,9 +188,10 @@ export const rpc = {
     });
   },
 
-  /** Salva le pagine della casa: l'elenco intero e l'ordine di tutte. Lo chiama
-   *  `api.savePages`, gemella della lettura `api.getPages`
-   *  (v. `webui/commands.py::home_pages_set`). */
+  /** Salva le pagine della casa: l'elenco intero e l'ordine di tutte, che deve
+   *  nominare ogni pagina una volta sola, o il server lo rifiuta
+   *  (`bad_request`). Torna `{ok, pages, order}` com'e' stato salvato: la
+   *  gemella della lettura `api.getPages` (v. `webui/commands.py::home_pages_set`). */
   saveHomePages(pages, order) {
     return send('home.pages.set', { pages, order });
   },
@@ -198,8 +199,10 @@ export const rpc = {
   /* ── I segreti ──────────────────────────────────────────────────────────
      Chiave del provider, token Telegram, password SSH: viaggiavano nella
      query di una GET, cioe' nella riga di richiesta che log e traceback
-     vedono. Qui stanno nel frame. Li chiamano i
-     metodi omonimi di `api`, con la stessa firma di prima. */
+     vedono. Qui stanno nel frame. Fino al 02/11/2026 li chiamavano dei metodi
+     omonimi di `api` che non facevano che inoltrare: adesso i chiamanti
+     vengono qui, e qui sta anche la pulizia dei parametri che quegli inoltri
+     facevano. Il valore di un segreto non va mai loggato. */
 
   /** L'elenco dei modelli di un provider, anche con una chiave non salvata. */
   providerModels({ provider, apiKey, apiBase, format }) {
@@ -209,9 +212,16 @@ export const rpc = {
   },
 
   /** Crea o aggiorna un provider; `params` come la vecchia query
-   *  (`name`, `format`, `api_key`, `api_base`, `ca_bundle`, `ca_bundle_clear`). */
+   *  (`name`, `format`, `api_key`, `api_base`, `ca_bundle`, `ca_bundle_clear`).
+   *  I valori vuoti si scartano: la stringa vuota vuol dire «non toccare», e
+   *  `ca_bundle_clear` e' il segnale a parte per svuotare. L'errore porta il
+   *  messaggio del server (quale file CA non ha potuto leggere, e dove). */
   updateProvider(params) {
-    return send('settings.provider.update', params);
+    const clean = {};
+    for (const [k, v] of Object.entries(params || {})) {
+      if (v !== null && v !== undefined && v !== '') clean[k] = String(v);
+    }
+    return send('settings.provider.update', clean);
   },
 
   /** Salva il token del bot Telegram (il server lo valida con `getMe`). */
@@ -219,18 +229,32 @@ export const rpc = {
     return send('telegram.save', { token }, { timeoutMs: 30000 });
   },
 
-  /** Crea o aggiorna un host SSH. `password` va omessa, non mandata vuota,
-   *  quando l'utente non l'ha ridigitata: assente vuol dire «tieni quella
-   *  salvata». */
+  /** Crea o aggiorna un host SSH. `params` accetta anche `auth` ('key' |
+   *  'password') e, solo con `auth: 'password'`, la password in chiaro, che va
+   *  omessa — non mandata vuota — quando l'utente non l'ha ridigitata: assente
+   *  vuol dire «tieni quella salvata». La risposta non la rimanda indietro
+   *  (porta `has_password`). I `null` diventano stringa vuota: un campo
+   *  svuotato (la descrizione) deve arrivare vuoto, o non si cancella. */
   saveSshHost(params) {
-    return send('ssh.host.save', params);
+    const clean = {};
+    for (const [k, v] of Object.entries(params || {})) clean[k] = v == null ? '' : String(v);
+    return send('ssh.host.save', clean);
   },
 
   /** Il primo avvio: provider con la sua chiave, modello, nome di Jenny. Stava
    *  nella query di `/api/onboarding/save`; a salvataggio riuscito il server
    *  sveglia l'agente e risponde col saluto (`chat_id`, `welcome_message`). */
   saveOnboarding(params) {
-    return send('onboarding.save', params);
+    return send('onboarding.save', {
+      provider_name: params.provider_name || params.provider || '',
+      format: params.format || '',
+      api_key: params.api_key || '',
+      api_base: params.api_base || '',
+      model: params.model || '',
+      bot_name: params.bot_name || '',
+      bot_icon: params.bot_icon || '',
+      locale: params.locale || '',
+    });
   },
 
 };

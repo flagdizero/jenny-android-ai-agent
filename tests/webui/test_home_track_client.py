@@ -355,6 +355,13 @@ def _run(
             "}\n",
             encoding="utf-8",
         )
+        # La scrittura delle pagine viaggia sul filo (`rpc.saveHomePages`): il
+        # finto la passa al client finto qui sotto, che la ricorda.
+        (root / "shared" / "rpc-client.js").write_text(
+            "import { api } from './api-client.js';\n"
+            "export const rpc = { saveHomePages: (s, o) => api.savePages(s, o) };\n",
+            encoding="utf-8",
+        )
         # Gli avvisi: si ricordano, per dire se un guasto e' stato detto.
         (root / "shared" / "utils.js").write_text(
             "export function showToast(text, type) {\n"

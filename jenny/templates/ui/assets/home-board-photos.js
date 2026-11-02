@@ -29,6 +29,7 @@ import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { PinnedDeck } from './home-board-deck.js';
 import { openPhotoViewer } from './home-photo-viewer.js';
+import { button, el } from './shared/dom.js';
 
 /* Il lato lungo di una foto mandata al server: il telefono ne fa di 4000 px, e
    in un cassetto largo 590 ne servono meno di un terzo. */
@@ -37,7 +38,7 @@ const PHOTO_MAX_SIDE = 1600;
 const DECK_LOADED = 3;
 
 /** Riduce una foto prima di mandarla: JPEG, lato lungo `PHOTO_MAX_SIDE`. */
-export async function shrinkPhoto(file) {
+async function shrinkPhoto(file) {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
@@ -53,22 +54,10 @@ export async function shrinkPhoto(file) {
   return { mime: 'image/jpeg', data: btoa(binary) };
 }
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
-function button(className, text, onClick) {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
 /** «14 ottobre»: la data per esteso, nella pagina d'album e a tutto schermo. */
-export function photoDay(iso, locale = i18n.locale) {
+function photoDay(iso, locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(at);

@@ -308,3 +308,36 @@ export function promptDialog(message, {
     setTimeout(() => inputEl.focus(), 30);
   });
 }
+
+/** Congeda il `<dialog>` aperto più in alto, con la semantica di Esc. Vero se
+ *  ce n'era uno, anche quando ha rifiutato di chiudersi.
+ *
+ *  **Uno per tutti e due i gusci, guardando `dialog[open]`**, invece di elenchi
+ *  di id scritti a mano: la casa ne teneva cinque, e il foglio «Fermala»
+ *  (`home-work-sheet`), che in nessuno c'era, Indietro lo saltava e chiudeva la
+ *  chat sotto (02/11/2026). Fogli, dialoghi, la foto a tutto schermo, le
+ *  finestre delle estensioni: sono tutti `<dialog>` con `showModal()`.
+ *
+ *  «Più in alto» è l'ultimo nell'ordine del documento: i fogli fissi stanno
+ *  nell'HTML, i dialoghi condivisi si montano in coda al `body` all'import, e chi
+ *  si costruisce al volo (la foto della galleria, la passphrase del backup) si
+ *  appende quando si apre, cioè sopra il foglio da cui è partito.
+ *
+ *  L'evento `cancel`, annullabile, e `close()` solo se nessuno l'ha rifiutato:
+ *  chi aspettava una risposta riceve un no, e chi non vuole chiudersi (il
+ *  riavvio dopo un ripristino) consuma la pressione restando dov'è. */
+export function dismissTopDialog() {
+  const open = document.querySelectorAll('dialog[open]');
+  if (!open.length) return false;
+  const top = open[open.length - 1];
+  if (top.dispatchEvent(new Event('cancel', { cancelable: true }))) top.close();
+  return true;
+}
+
+/** Una domanda, non un foglio: i tre modali di questo file e chi ne prende la
+ *  forma (`.oc-dialog`: la passphrase e il riavvio del backup, la password del
+ *  Drive). Chi chiude «i fogli di un momento» le lascia aperte: qualcuno
+ *  aspetta la risposta. */
+export function isQuestionDialog(dialog) {
+  return Boolean(dialog?.matches?.('.oc-dialog, .oc-detail'));
+}

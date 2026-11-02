@@ -29,6 +29,7 @@ from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_
 
 MODEL_JS = ASSETS / "home-model.js"
 BRAND_JS = ASSETS / "shared" / "provider-brand.js"
+CATALOG_JS = ASSETS / "shared" / "model-catalog.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 
@@ -82,7 +83,13 @@ const api = {
 };
 
 function showToast(msg, type) { toasts.push([msg, type]); }
+/* I due comandi della stanza sul filo, che qui passano per i finti di sopra. */
+const rpc = {
+  providerModels: ({ provider }) => api.getProviderModels(provider),
+  updateProvider: (params) => api.updateProvider(params),
+};
 
+__CATALOGS__
 __SHORT_BRAND__
 __TILE_NAMES__
 __MODEL_VALUE__
@@ -99,7 +106,6 @@ class HomeModel {
   __TOGGLE_KEY_EDIT__
   __SAVE_KEY__
   __PROVIDER__
-  __FINGERPRINT__
   __APPLY__
   __LOAD_MODELS__
   __PAINT__
@@ -173,6 +179,7 @@ def _harness() -> str:
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__BRAND_URL__", BRAND_JS.as_uri())
+        .replace("__CATALOGS__", CATALOG_JS.read_text(encoding="utf-8").replace("export ", ""))
         .replace("__SHORT_BRAND__", function(src, "shortBrand"))
         .replace("__TILE_NAMES__", function(src, "tileNames"))
         .replace("__MODEL_VALUE__", function(src, "modelValue"))
@@ -187,7 +194,6 @@ def _harness() -> str:
         .replace("__TOGGLE_KEY_EDIT__", member(src, "toggleKeyEdit"))
         .replace("__SAVE_KEY__", member(src, "saveKey"))
         .replace("__PROVIDER__", member(src, "_provider"))
-        .replace("__FINGERPRINT__", member(src, "_fingerprint"))
         .replace("__APPLY__", member(src, "_apply"))
         .replace("__LOAD_MODELS__", member(src, "_loadModels"))
         .replace("__PAINT__", member(src, "_paint"))
@@ -408,7 +414,7 @@ def test_an_empty_list_says_why() -> None:
     _run_js("""
       const data = settings([{ name: 'groq' }], 'groq', '');
       await room(data, { groq: { status: 'not_configured', models: [], message: 'Configure this provider.' } });
-      assert.equal(nodi['home-models-note'].textContent, i18n.t('home.model.needsKey'));
+      assert.equal(nodi['home-models-note'].textContent, i18n.t('common.modelsNeedKey'));
       assert.equal(nodi['home-models-note'].hidden, false);
 
       await room(data, { groq: { status: 'missing_api_base', models: [] } });
