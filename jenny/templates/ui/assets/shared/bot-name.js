@@ -10,6 +10,10 @@
  *  e si iscrive ai cambi (`onChange`). Vuoto vuol dire il ripiego, come sul
  *  server (`agents.defaults.bot_name`). */
 
+/* Il nome di lei finche' le impostazioni non hanno detto il suo: lo stesso
+   ripiego del server (`settings_api`, `bot_name or "Jenny"`). E' un nome
+   proprio, non una frase da tradurre. Tutti i ripieghi della WebUI leggono
+   questo. */
 export const DEFAULT_BOT_NAME = 'Jenny';
 
 let current = DEFAULT_BOT_NAME;

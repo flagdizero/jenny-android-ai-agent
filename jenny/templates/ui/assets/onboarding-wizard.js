@@ -16,6 +16,7 @@ import { getProviderBrand } from './shared/provider-brand.js';
 // Con l'autocorrezione accesa «http://» diventava «Http:/» e partiva cosi'.
 import { NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
 import { MOTIONS, MotionChannels } from './shared/mascot-motion.js';
+import { DEFAULT_BOT_NAME } from './shared/bot-name.js';
 
 /* ── Mini Jenny sul footer ──
    Decorativa, fuori da #onboarding-content (che viene ri-renderizzato a ogni
@@ -64,7 +65,7 @@ export class OnboardingController {
     this.apiKey = '';
     this.apiBase = '';
     this.model = '';
-    this.botName = 'Jenny';
+    this.botName = DEFAULT_BOT_NAME;
     this.models = [];
     // Formato, chiave e indirizzo con cui e' stata chiesta la lista dello step
     // 2: se al ritorno sono cambiati, il modello scelto era di un altro
@@ -490,7 +491,7 @@ export class OnboardingController {
 
   _goBackToStep1() {
     const nameEl = this.contentEl?.querySelector('#bot-name');
-    if (nameEl) this.botName = nameEl.value.trim() || 'Jenny';
+    if (nameEl) this.botName = nameEl.value.trim() || DEFAULT_BOT_NAME;
     this._modelsToken++;
     this.step = 1;
     this.render();
@@ -502,7 +503,7 @@ export class OnboardingController {
     if (this.saving) return;
     this.saving = true;
 
-    this.botName = this.contentEl.querySelector('#bot-name').value.trim() || 'Jenny';
+    this.botName = this.contentEl.querySelector('#bot-name').value.trim() || DEFAULT_BOT_NAME;
     const model = this.model;
     if (!model) {
       showToast(i18n.t('onboarding.selectOrEnterModel'), 'error');

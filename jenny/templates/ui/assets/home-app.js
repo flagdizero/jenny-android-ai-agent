@@ -66,7 +66,7 @@ import { api } from './shared/api-client.js';
 import { isFirstRun } from './shared/first-run.js';
 import { ImageHandler } from './shared/image-handler.js';
 import { confirmDialog, dismissTopDialog, isQuestionDialog, promptDialog } from './shared/dialog.js';
-import { botName } from './shared/bot-name.js';
+import { DEFAULT_BOT_NAME, botName } from './shared/bot-name.js';
 import { rpc } from './shared/rpc-client.js';
 import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
 import { i18n } from './shared/i18n.js';
@@ -81,8 +81,6 @@ import './shared/theme.js';
    da se' e la maggior parte delle cadute dura meno di un battito: annunciarle
    tutte vorrebbe dire far lampeggiare una riga d'allarme mentre non e' successo
    niente. Si parla solo se il silenzio dura. */
-/* Lo stesso ripiego del server e di `shared/bot-name.js`. */
-const DEFAULT_BOT_NAME = 'Jenny';
 const WIRE_GRACE_MS = 2_500;
 
 /* Dove appoggia i piedi Jenny fuori dalla chat, in px dal fondo. Nella chat il
@@ -100,10 +98,6 @@ const FLOOR_NO_COMPOSER = 66;
 const PLACE_KEY = 'home-place';
 /* Oltre, il posto e' di un altro momento: si riparte dalla chat. */
 const PLACE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-
-/* Il nome di lei finche' le impostazioni non hanno detto il suo: lo stesso
-   ripiego del server (`settings_api`, `bot_name or "Jenny"`). E' un nome
-   proprio, non una frase da tradurre. */
 
 /* Le stanze oltre la conversazione, e dove si atterra premendo Indietro una
    volta. La catena e' lineare e sta **in un posto solo**: `_setView` la usa per
@@ -127,13 +121,6 @@ const BACK_TO = {
   updates: 'settings',
   backup: 'settings',
 };
-
-/* I fogli e i dialoghi che stanno sopra le pagine non hanno un elenco: sono
-   tutti `<dialog>` con `showModal()`, e chi chiede se c'e' qualcosa sopra
-   (`hasOverlayAbove`) o li chiude (`_closeOverlays`) guarda `dialog[open]`
-   (`shared/dialog.js::dismissTopDialog`). Gli elenchi scritti a mano
-   divergevano al primo foglio nuovo: il foglio «Fermala» non c'era, e Indietro
-   lo saltava (02/11/2026). */
 
 /* Le stanze di un quaderno: da qui Jenny apre la chat **del quaderno**, da
    ogni altro posto quella personale (v. `_summonKey`). */

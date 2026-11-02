@@ -20,6 +20,7 @@
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
 import { dotColor } from './shared/spines.js';
+import { DEFAULT_BOT_NAME } from './shared/bot-name.js';
 
 /** Quanto spazio lasciare accanto al nome acceso quando la fila lo riporta in
  *  vista: a filo del bordo sembrerebbe tagliato anche quando non lo e'. */
@@ -35,7 +36,7 @@ export class HomeStrip {
   constructor(el, { homePages, chatName, onChange } = {}) {
     this.el = el;
     this.homePages = homePages;
-    this._chatName = chatName || (() => ({ name: 'Jenny', color: null }));
+    this._chatName = chatName || (() => ({ name: DEFAULT_BOT_NAME, color: null }));
     this._onChange = onChange || null;
     /** In modalita' ordina: la bozza dell'ordine, finche' non si preme Fatto. */
     this._draft = null;

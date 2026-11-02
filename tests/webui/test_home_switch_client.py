@@ -572,7 +572,7 @@ def _harness() -> str:
         .replace("__FOLLOW_PAGE__", member(src, "_followPage", prefixes=("async ",)))
         .replace("__BACK_ONE_PAGE__", member(src, "_backOnePage", prefixes=("async ",)))
         .replace("__NOTEBOOK_ROOMS__", _const_block_scalar(src, "NOTEBOOK_ROOMS"))
-        .replace("__DEFAULT_BOT_NAME__", _const_block_scalar(src, "DEFAULT_BOT_NAME"))
+        .replace("__DEFAULT_BOT_NAME__", "const DEFAULT_BOT_NAME = 'Jenny';")
         .replace("__SHEETS__", function(dialog_js, "dismissTopDialog") + "\n"
                  + function(dialog_js, "isQuestionDialog"))
         .replace("__FLOOR__", _const_block_scalar(src, "FLOOR_NO_COMPOSER"))

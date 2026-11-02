@@ -114,11 +114,6 @@ export const DRAWERS = {
  * telefono il 20/09/2026). */
 export const VIEW_OF = { brain: 'settings', hands: 'settings', memory: 'settings' };
 
-/* Quanti modelli di una marca si vedono prima di «mostra tutti». Sei righe da
-   44 px stanno nel primo schermo del quadrato da 480 insieme all'intestazione;
-   il filtro compare dalla settima in su, dove serve. */
-const BRAND_MODELS_SHOWN = 6;
-
 /* E siccome averla in due copie e' costato un'intestazione, averla **senza una
  * funzione** e' costato lo scorrimento.
  *
@@ -144,6 +139,11 @@ export function viewElement(mode) {
 export function titleElement(mode) {
   return document.getElementById(`title-${VIEW_OF[mode] || mode}`);
 }
+
+/* Quanti modelli di una marca si vedono prima di «mostra tutti». Sei righe da
+   44 px stanno nel primo schermo del quadrato da 480 insieme all'intestazione;
+   il filtro compare dalla settima in su, dove serve. */
+const BRAND_MODELS_SHOWN = 6;
 
 export class SettingsController {
   constructor() {
