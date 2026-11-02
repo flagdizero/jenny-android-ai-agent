@@ -111,7 +111,9 @@ _OUTPUT_BUDGET_HEADROOM = 2048
 _MAX_INJECTIONS_PER_TURN = 3
 _MAX_INJECTION_CYCLES = 5
 # read_file is the recovery path for persisted results; exempting it prevents persist->read->persist loops.
-_TOOL_RESULT_OFFLOAD_EXEMPT_TOOLS = frozenset({"read_file"})
+# web_fetch bounds its own output (``max_chars``, 50,000 by default, as its description
+# promises): offloaded, the page reached the model as a 1,200-character preview.
+_TOOL_RESULT_OFFLOAD_EXEMPT_TOOLS = frozenset({"read_file", "web_fetch"})
 
 # Retro-compat: costanti spostate in agent.history_repair, ri-esportate qui coi
 # vecchi nomi underscore così i call-site/test esistenti restano invariati.
