@@ -61,6 +61,7 @@ from jenny.security.workspace_policy import (
     refuse_board_write,
     resolve_allowed_path,
 )
+from jenny.utils.path import append_with_header
 from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME
 
 _READS = ("check", "map", "read_many")
@@ -321,12 +322,12 @@ class _NotebookTool(Tool):
         if failed:
             # La traccia è scritta prima: chi la rilegge deve sapere quali sono
             # ancora al loro posto.
-            _append(trace_path, f"\nNot removed (still in place): {'; '.join(failed)}\n")
+            append_with_header(trace_path, f"\nNot removed (still in place): {'; '.join(failed)}\n")
         if not removed:
             return "Nothing was removed: " + "; ".join(failed), []
         emptied = _prune_empty_folders(root, [p for rel, p in targets if rel in removed])
         if emptied:
-            _append(trace_path, f"\nEmpty folders removed: {', '.join(emptied)}\n")
+            append_with_header(trace_path, f"\nEmpty folders removed: {', '.join(emptied)}\n")
         # Le pagine sono già sparite: un guasto della bacheca non deve far credere
         # il contrario, né lasciare il resto della risposta per strada.
         taken: dict[str, list[str]] = {}
@@ -383,7 +384,7 @@ class _NotebookTool(Tool):
         section = [f"\n## {now:%H:%M} — {len(targets)} page(s)\n", f"Reason: {reason}\n"]
         section.extend(ops.page_trace(root, p) for _, p in targets)
         path.parent.mkdir(parents=True, exist_ok=True)
-        created = _append(path, "\n".join(section),
+        created = append_with_header(path, "\n".join(section),
                           header=f"# Pages removed — {now:%Y-%m-%d}\n")
         # Un file nuovo è tutto di questo lavoro; un'aggiunta no (v. ``note_write``).
         note_subagent_write(path, full=created)
@@ -430,15 +431,6 @@ class NotebookEditTool(_NotebookTool):
             "in raw/removed/; the board, drawers and reminders follow). Delete only when the "
             "request or the plan step says so."
         )
-
-
-def _append(path: Path, text: str, *, header: str = "") -> bool:
-    """Appende *text* a *path* in una scrittura sola; *header* solo se il file
-    nasce adesso. Restituisce se l'ha creato."""
-    with open(path, "a", encoding="utf-8") as fh:
-        created = fh.tell() == 0
-        fh.write((header if created else "") + text)
-    return created
 
 
 def _forget_taint(path: Path) -> None:

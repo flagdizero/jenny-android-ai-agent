@@ -1,4 +1,4 @@
-"""``append_lines_durable``: accodare e portare su disco, come la chiedono tre chiamanti."""
+"""``append_lines_durable`` e ``append_with_header``: accodare a un file di testo."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from jenny.utils import path as path_mod
-from jenny.utils.path import append_lines_durable
+from jenny.utils.path import append_lines_durable, append_with_header
 
 
 def test_lines_are_appended_each_with_its_newline(tmp_path: Path) -> None:
@@ -57,3 +57,18 @@ def test_a_new_file_starts_without_a_blank_line(tmp_path: Path) -> None:
     target = tmp_path / "new.jsonl"
     append_lines_durable(target, ["riga"])
     assert target.read_text(encoding="utf-8") == "riga\n"
+
+
+def test_the_header_goes_only_on_an_empty_file(tmp_path: Path) -> None:
+    page = tmp_path / "journal" / "2026-11-02.md"
+    assert append_with_header(page, "- prima\n", header="# 2026-11-02\n\n") is True
+    assert append_with_header(page, "- seconda\n", header="# 2026-11-02\n\n") is False
+    assert page.read_text(encoding="utf-8") == "# 2026-11-02\n\n- prima\n- seconda\n"
+
+
+def test_a_file_that_exists_but_is_empty_still_gets_its_header(tmp_path: Path) -> None:
+    """Il vuoto lo dice il file aperto, non ``exists()`` chiesto prima."""
+    page = tmp_path / "page.md"
+    page.write_text("", encoding="utf-8")
+    assert append_with_header(page, "riga\n", header="# titolo\n") is True
+    assert page.read_text(encoding="utf-8") == "# titolo\nriga\n"

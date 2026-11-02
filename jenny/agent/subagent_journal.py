@@ -83,7 +83,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.utils.helpers import safe_filename
-from jenny.utils.path import atomic_write, iter_jsonl, read_json
+from jenny.utils.path import append_lines_durable, atomic_write, iter_jsonl, read_json
 
 #: Dove stanno i registri, relativo alla radice dell'installazione.
 JOURNAL_REL = ("subagents", "journal")
@@ -661,11 +661,7 @@ class WriteJournal:
         path = self.dir / _ENTRIES
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            payload = "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries)
-            with open(path, "a", encoding="utf-8") as fh:
-                fh.write(payload)
-                fh.flush()
-                os.fsync(fh.fileno())
+            append_lines_durable(path, [json.dumps(e, ensure_ascii=False) for e in entries])
         except OSError as e:
             logger.warning("Subagent journal could not write {}: {}", path, e)
 

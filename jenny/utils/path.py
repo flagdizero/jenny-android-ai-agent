@@ -262,6 +262,21 @@ def append_lines_durable(
                 raise
 
 
+def append_with_header(path: Path, text: str, *, header: str = "") -> bool:
+    """Accoda *text* a *path* in una scrittura sola; *header* solo se il file è vuoto.
+
+    Restituisce se il file era vuoto (cioè nasceva adesso). Il «vuoto» si chiede
+    al file aperto (``tell`` in append è la sua fine), non a ``exists()`` prima di
+    aprirlo: due scrittori che vedevano entrambi «non c'è» mettevano entrambi il
+    titolo, e un file creato vuoto da altri restava senza.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as fh:
+        created = fh.tell() == 0
+        fh.write((header if created else "") + text)
+    return created
+
+
 def iter_jsonl(
     lines: Iterable[str], *, on_bad: Callable[[str], None] | None = None
 ) -> Iterator[dict[str, Any]]:
