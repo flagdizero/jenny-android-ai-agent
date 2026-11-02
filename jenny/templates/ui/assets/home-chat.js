@@ -48,6 +48,7 @@ import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
 import { renderRich } from './shared/rich-content.js';
+import { openPlaceFromClick, renderPlacesIn } from './shared/places.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
@@ -330,6 +331,9 @@ export class HomeChat {
     }
     /* Non solo `a[href]`: un `<area href>` o un link SVG sono link anche loro,
        e un tocco lasciato passare navigava il frame principale. */
+    /* La scheda di un posto e' un `<a>` anche lei, ma apre Maps, non il
+       browser (`shared/places.js`). */
+    if (!e.defaultPrevented && this.el.contains(e.target) && openPlaceFromClick(e)) return;
     const link = contentLinkOf(e.target);
     if (link && this.el.contains(link)) {
       if (!e.defaultPrevented) this._openLink(e, link);
@@ -676,6 +680,7 @@ export class HomeChat {
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
       renderRich(this.blockNode);
+      renderPlacesIn(this.blockNode);
       this._register(this.turnNode, finalText, this.blockNode);
       this._lastSegment = this.blockNode;
       this.band?.refresh();
@@ -733,6 +738,7 @@ export class HomeChat {
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
       renderRich(block);
+      renderPlacesIn(block);
       this._ensureTurn().appendChild(block);
       this._register(this.turnNode, msg.text, block);
       if (step) this._markPassing(block);
@@ -961,6 +967,7 @@ export class HomeChat {
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(content);
       renderRich(block);
+      renderPlacesIn(block);
       node.appendChild(block);
       this._register(node, content);
     }

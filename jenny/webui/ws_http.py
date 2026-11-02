@@ -384,6 +384,16 @@ class GatewayHTTPHandler:
             log=self._log,
         )
 
+        from jenny.webui.place_routes import PlaceRoutes
+
+        # Le schede dei posti in chat: l'ultima posizione in cache e le tessere
+        # della mappa. Lambda per lo stesso motivo di ``wiki_routes``.
+        self.place_routes = PlaceRoutes(
+            check_api_token=self.check_api_secret,
+            get_workspace_root=lambda: self._get_workspace_root(),
+            log=self._log,
+        )
+
         from jenny.webui.work_routes import WorkRoutes
 
         # La bolla di lavoro della home (giardiniere, Dream): lo snapshot per
@@ -741,6 +751,10 @@ class GatewayHTTPHandler:
         subagent_response = await self.subagent_routes.dispatch(request, got)
         if subagent_response is not None:
             return subagent_response
+
+        place_response = await self.place_routes.dispatch(request, got)
+        if place_response is not None:
+            return place_response
 
         work_response = await self.work_routes.dispatch(request, got)
         if work_response is not None:

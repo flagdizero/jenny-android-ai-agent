@@ -118,7 +118,9 @@ UNTRUSTED_TOOLS = frozenset({
     "web_search", "web_fetch",
     "browser_open", "browser_snapshot", "browser_do", "browser_read",
 })
-PRIVATE_TOOLS = frozenset({"get_location", "get_recent_logs"})
+# ``find_place`` è qui perché il suo risultato dice quanto è lontano un posto
+# dall'utente, e cerca prima attorno a dove si trova.
+PRIVATE_TOOLS = frozenset({"get_location", "find_place", "get_recent_logs"})
 
 _MAX_SOURCES = 8
 

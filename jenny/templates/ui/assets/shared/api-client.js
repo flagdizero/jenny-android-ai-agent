@@ -362,6 +362,23 @@ class ApiClient {
     return URL.createObjectURL(await res.blob());
   }
 
+  /** L'ultima posizione nota del telefono, per «sei qui» e «1,2 km da te» nelle
+   *  schede dei posti: `{lat, lng, accuracyMeters, ageSeconds}`, o `null` se la
+   *  posizione e' spenta, non c'e' un fix o la pagina e' aperta da un altro
+   *  dispositivo (204). */
+  async getLastLocation() {
+    const res = await this._fetch('/api/location/last');
+    if (res.status === 204 || !res.ok) return null;
+    return res.json();
+  }
+
+  /** Una tessera della mappa delle schede dei posti, come `blob:`. */
+  async getMapTileUrl(z, x, y) {
+    const res = await this._fetch(`/api/map/tile/${Number(z)}/${Number(x)}/${Number(y)}`);
+    if (!res.ok) throw new Error(`Map tile failed: ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  }
+
   /** Un'immagine di una Jenny App (il blocco Foto della sua striscia), come
    *  `blob:`: la rotta vuole il segreto, che un `<img src>` non porterebbe. */
   async getAppMediaUrl(slug, name) {

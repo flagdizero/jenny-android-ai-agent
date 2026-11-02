@@ -1956,5 +1956,12 @@
       "automation": "An automation: ask Jenny",
       "automationPrompt": "An automation in this notebook: every "
     }
+  },
+  "place": {
+    "openInMaps": "Open in Maps",
+    "youAreHere": "You are here",
+    "hereWithin": "You are here · ± {m} m",
+    "fromYou": "{d} from you",
+    "unnamed": "Location"
   }
 }

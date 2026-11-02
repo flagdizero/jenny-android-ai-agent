@@ -35,6 +35,7 @@ import {
  *  garantiva un involucro, ora `test_chat_rich_has_no_inline_dollar.py`.
  */
 import { renderRich } from './shared/rich-content.js';
+import { openPlaceFromClick, renderPlacesIn } from './shared/places.js';
 import { workspacePathIn } from './shared/conversation-list.js';
 import { MARKED_OPTIONS, renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
@@ -482,6 +483,9 @@ export class ChatController {
       // link inerte, perché `#workspace` non è un'ancora della conversazione.
       // `contentLinkOf` e non `closest('a[href]')`: anche `<area href>` e il
       // `<a xlink:href>` di un `<svg>` sono link.
+      // La scheda di un posto e' un `<a>` anche lei, ma va in Maps, non nel
+      // browser: prima della regola dei link.
+      if (!e.defaultPrevented && openPlaceFromClick(e)) return;
       const link = contentLinkOf(e.target);
       if (link && this.chatArea.contains(link)) {
         if (!e.defaultPrevented) this._handleContentLink(e, link);
@@ -1087,6 +1091,7 @@ export class ChatController {
       if (content) {
         content.innerHTML = renderMarkdown(turn.content.trim());
         renderRich(content);
+        renderPlacesIn(content);
         this._makeFilePathsClickable(content);
       }
       this._setMessageSource(node, turn.content.trim());
@@ -1310,6 +1315,7 @@ export class ChatController {
     } else {
       content.innerHTML = renderMarkdown(String(text || ''));
       renderRich(content);
+      renderPlacesIn(content);
       this._makeFilePathsClickable(content);
     }
     msg.appendChild(content);
@@ -1890,6 +1896,7 @@ export class ChatController {
     if (this._currentContent && finalText) {
       this._currentContent.innerHTML = renderMarkdown(finalText);
       renderRich(this._currentContent);
+      renderPlacesIn(this._currentContent);
       this._makeFilePathsClickable(this._currentContent);
       this._setMessageSource(this._currentMsg, finalText);
     }
@@ -2021,6 +2028,7 @@ export class ChatController {
       this._currentMsg.appendChild(content);
       content.innerHTML = renderMarkdown(msg.text);
       renderRich(content);
+      renderPlacesIn(content);
       this._makeFilePathsClickable(content);
       this._setMessageSource(this._currentMsg, msg.text);
       /* Una consegna proattiva può non avere un `turn_end` dietro: la riga di

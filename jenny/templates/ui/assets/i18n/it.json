@@ -1956,5 +1956,12 @@
       "automation": "Un'automazione: chiedila a Jenny",
       "automationPrompt": "Un'automazione in questo quaderno: ogni "
     }
+  },
+  "place": {
+    "openInMaps": "Apri in Maps",
+    "youAreHere": "Sei qui",
+    "hereWithin": "Sei qui · ± {m} m",
+    "fromYou": "{d} da te",
+    "unnamed": "Posizione"
   }
 }

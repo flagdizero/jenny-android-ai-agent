@@ -57,6 +57,10 @@
     'restartApp',
     'requestBatteryExemption',
     'requestLocationPermission',
+    /* `openMap(lat, lng, etichetta, href)`: la scheda di un posto in chat
+       (`shared/places.js`). App Maps, poi qualunque app di mappe, poi il
+       browser. */
+    'openMap',
     /* `extensionCall(estensione, metodo, ...argomenti)`: il comando di
        un'estensione nativa (`NativeExtension.kt`). Uno solo e generico, così
        questo elenco non nomina le estensioni che una build non ha. */

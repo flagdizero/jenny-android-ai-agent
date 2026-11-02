@@ -9,6 +9,7 @@ directory che contiene il workspace (su Android è ``filesDir``, la stessa
       workspace/               ← l'albero versionato/scambiato al restore
       snapshots/               ← store content-addressed (storia)
       plans/                   ← i piani a lista: ``plan.json`` e le foto del quaderno
+      map_tiles/               ← le tessere delle schede dei posti in chat (cache)
       backup_staging/          ← file .jbk in export/import + albero staged
       restore_pending.json     ← marker del protocollo di restore al boot
       workspace_pre_restore_*  ← copie di sicurezza del workspace sostituito
@@ -47,3 +48,12 @@ def backup_staging_dir_for(workspace_path: Path) -> Path:
 
 def plans_dir_for(workspace_path: Path) -> Path:
     return runtime_root_for(workspace_path) / PLANS_DIR_NAME
+
+
+# Le tessere della mappa (``jenny/runtime/map_tiles.py``): una cache, fuori dal
+# workspace perché non è memoria — niente snapshot, niente backup.
+MAP_TILES_DIR_NAME = "map_tiles"
+
+
+def map_tiles_dir_for(workspace_path: Path) -> Path:
+    return runtime_root_for(workspace_path) / MAP_TILES_DIR_NAME

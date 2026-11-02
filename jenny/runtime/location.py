@@ -23,6 +23,7 @@ Telegram ricade sul GPS live.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -293,6 +294,118 @@ def location_runtime_line(channel: str | None, chat_id: str | None, cfg: Any) ->
     return None
 
 
+def cached_location(cfg: Any) -> LocationFix | None:
+    """L'ultimo fix in cache, senza chiedere niente al GPS: lo leggono le schede
+    dei posti in chat (``/api/location/last``) per «sei qui» e «1,2 km da te».
+
+    Col toggle spento non c'è, come per la riga del runtime context. Una cache
+    vuota pianifica un giro di last-known (gratis) per la lettura dopo.
+    """
+    if cfg is None or not getattr(cfg, "enable", True):
+        return None
+    if _CURRENT is None:
+        _schedule_refresh(cfg)
+    return _CURRENT
+
+
+@dataclass(frozen=True)
+class PlaceMatch:
+    """Un posto trovato per nome dal ``Geocoder`` di Android."""
+
+    name: str
+    address: str
+    latitude: float
+    longitude: float
+
+
+# Il riquadro attorno al telefono in cui si cerca per primo: ~50 km per lato,
+# che e' «qui vicino» per una città e il suo intorno. Fuori non si rinuncia: se
+# nel riquadro non c'è niente si cerca ovunque.
+_NEAR_BOX_DEG = 0.45
+_FIND_MAX_RESULTS = 5
+
+
+def _parse_matches(raw: Any) -> list[PlaceMatch]:
+    """Parsa la risposta di ``LocationBridge.findPlaces``: un JSON
+    ``[{"name","address","lat","lng"}]``. Qualunque formato inatteso è una
+    lista vuota, mai un'eccezione."""
+    if not raw:
+        return []
+    try:
+        items = json.loads(str(raw))
+    except (TypeError, ValueError):
+        return []
+    out: list[PlaceMatch] = []
+    for item in items if isinstance(items, list) else []:
+        try:
+            lat = float(item["lat"])
+            lng = float(item["lng"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            continue
+        out.append(
+            PlaceMatch(
+                name=str(item.get("name") or "").strip(),
+                address=str(item.get("address") or "").strip(),
+                latitude=lat,
+                longitude=lng,
+            )
+        )
+    return out
+
+
+def geocoder_available() -> bool:
+    """Se il telefono sa cercare un posto per nome (``Geocoder.isPresent()``).
+
+    Su un telefono senza i servizi Google può mancare: allora ``find_place``
+    non si registra e Jenny scrive il link con nome e indirizzo.
+    """
+    if get_android_context() is None:
+        return False
+    try:
+        return bool(_resolve_bridge_class().isGeocoderPresent())
+    except Exception:  # noqa: BLE001
+        logger.opt(exception=True).debug("Geocoder presence check failed")
+        return False
+
+
+async def find_places(query: str, near: LocationFix | None = None) -> list[PlaceMatch]:
+    """Cerca *query* (nome e indirizzo) col ``Geocoder`` nativo.
+
+    Con *near* cerca prima nel riquadro attorno a quel punto, e solo se lì non
+    trova niente ovunque. Non serve il permesso di posizione: cercare un
+    indirizzo non lo richiede.
+    """
+    context = get_android_context()
+    if context is None or not query.strip():
+        return []
+    bridge = await _get_bridge(context)
+    attempts: list[tuple[float, float, float, float]] = []
+    if near is not None:
+        attempts.append(
+            (
+                near.latitude - _NEAR_BOX_DEG,
+                near.longitude - _NEAR_BOX_DEG,
+                near.latitude + _NEAR_BOX_DEG,
+                near.longitude + _NEAR_BOX_DEG,
+            )
+        )
+    attempts.append((0.0, 0.0, 0.0, 0.0))  # tutto zero = nessun riquadro
+    for box in attempts:
+        try:
+            raw = await asyncio.to_thread(
+                bridge.findPlaces, query.strip(), _FIND_MAX_RESULTS, *box
+            )
+        except Exception:  # noqa: BLE001
+            logger.opt(exception=True).debug("findPlaces failed")
+            return []
+        matches = _parse_matches(raw)
+        if matches:
+            return matches
+    return []
+
+
 async def get_location(cfg: Any, *, precise: bool) -> LocationFix | None:
     """Punto d'ingresso del tool on-demand.
 
@@ -300,8 +413,15 @@ async def get_location(cfg: Any, *, precise: bool) -> LocationFix | None:
     refresh); ``precise=True`` → fix fresco (accende il GPS una volta)."""
     if cfg is None or not getattr(cfg, "enable", True):
         return None
+    global _CURRENT
     if precise:
-        return await _fetch_fix(cfg, precise=True)
+        fix = await _fetch_fix(cfg, precise=True)
+        # Un fix fresco è anche il migliore che si conosca: senza questo la riga
+        # del runtime context e la distanza delle schede in chat restavano sul
+        # last-known di prima (sull'emulatore, Mountain View di un'ora fa).
+        if fix is not None and (_CURRENT is None or fix.time_ms >= _CURRENT.time_ms):
+            _CURRENT = fix
+        return fix
     if _CURRENT is not None:
         return _CURRENT
     return await _fetch_fix(cfg, precise=False)
