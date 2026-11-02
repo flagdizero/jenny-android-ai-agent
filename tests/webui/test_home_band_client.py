@@ -196,6 +196,23 @@ console.log('ok');
     assert out.strip() == "ok"
 
 
+def test_no_shape_around_a_place_card() -> None:
+    """La scheda di un posto e' una scatola larga 312 che accanto alla sagoma
+    non sta: finiva sotto, e fra lei e l'ora restava mezzo schermo vuoto
+    (jenny_s22, 02/11/2026). Un blocco che la contiene non ha sagoma."""
+    out = _run_js("""
+for (const cls of ['place-card', 'place-list']) {
+  const { block, band, mascot } = thread({ text: 300 });
+  block.append(new El(cls));
+  new HomeBand(band, mascot).refresh();
+  assert.equal(shapeIn(block), undefined, cls);
+  assert.ok(!block.classList.contains('has-jenny-shape'), cls);
+}
+console.log('ok');
+""")
+    assert out.strip() == "ok"
+
+
 def test_the_shape_leaves_the_reply_that_is_no_longer_last() -> None:
     out = _run_js("""
 const { t, msg, block, band, mascot } = thread();
