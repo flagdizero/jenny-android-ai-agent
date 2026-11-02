@@ -39,7 +39,6 @@ from jenny.snapshot.locations import (
     backup_staging_dir_for,
     runtime_root_for,
 )
-from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
 from jenny.snapshot.types import SnapshotManifest, is_snapshot_id, unsafe_entry_reason
 
 if TYPE_CHECKING:
@@ -205,15 +204,15 @@ class BackupManager:
         async with self._lock:
             zip_part = self._staging / _IMPORT_ZIP_PART
             try:
+                # Fuori dallo staging: una password sbagliata non svuota l'albero
+                # di un ripristino già pronto.
                 await decrypt_file(passphrase, source, zip_part)
-                metadata = await asyncio.to_thread(self._extract_backup, zip_part)
+                metadata = await self._service.stage_restore(
+                    lambda _staged: asyncio.to_thread(self._extract_backup, zip_part),
+                    source="backup_file",
+                )
             finally:
                 zip_part.unlink(missing_ok=True)
-            # Fotografa lo stato corrente PRIMA di impegnare il restore.
-            await self._service.snapshot_now("pre_restore")
-            staged_dir = self._runtime_root / STAGED_WORKSPACE_DIR_NAME
-            await asyncio.to_thread(write_staging_sanity, staged_dir)
-            write_marker(self._runtime_root, source="backup_file")
             logger.info("Backup import staged; restart required to apply")
             return {"metadata": metadata}
 
@@ -305,13 +304,13 @@ class BackupManager:
         """
         async with self._lock:
             manifest = await asyncio.to_thread(self._engine.load_manifest, snapshot_id)
-            # Fotografa lo stato corrente: il restore resta sempre annullabile.
-            await self._service.snapshot_now("pre_restore")
-            staged_dir = self._runtime_root / STAGED_WORKSPACE_DIR_NAME
-            await asyncio.to_thread(shutil.rmtree, staged_dir, True)
-            await asyncio.to_thread(self._engine.restore_snapshot, snapshot_id, staged_dir)
-            await asyncio.to_thread(write_staging_sanity, staged_dir)
-            write_marker(self._runtime_root, source="snapshot", snapshot_id=snapshot_id)
+            await self._service.stage_restore(
+                lambda staged: asyncio.to_thread(
+                    self._engine.restore_snapshot, snapshot_id, staged
+                ),
+                source="snapshot",
+                snapshot_id=snapshot_id,
+            )
             logger.info(
                 "Snapshot restore staged ({}); restart required to apply", snapshot_id[:12]
             )

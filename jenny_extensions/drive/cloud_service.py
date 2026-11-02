@@ -508,19 +508,14 @@ class CloudBackupService:
     async def stage_restore(self, snapshot_id: str) -> dict[str, Any]:
         """Prepara il ripristino di una copia su Drive; lo scambio avviene al riavvio.
 
-        Stesso protocollo del ripristino da file o da snapshot locale: albero in
-        ``workspace_staged``, conteggio di controllo, marker per ultimo. Lo stato
-        di adesso viene fotografato prima (``pre_restore``): anche un ripristino
-        dal cloud resta annullabile dalla storia locale.
+        Lo stesso protocollo, e lo stesso lock, del ripristino da file o da
+        snapshot locale (``SnapshotService.stage_restore``): l'albero lo riempie
+        il download, la foto ``pre_restore`` lo rende annullabile dalla storia
+        locale, il marker viene per ultimo.
         """
-        from jenny.snapshot.locations import STAGED_WORKSPACE_DIR_NAME, runtime_root_for
-        from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
-
         key = self._read_key()
         if key is None:
             return {"ok": False, "error": "missing_key"}
-        runtime_root = runtime_root_for(self._snapshots.engine.root)
-        staged = runtime_root / STAGED_WORKSPACE_DIR_NAME
         async with self._lock:
             sink = await self._sink()
             try:
@@ -528,20 +523,18 @@ class CloudBackupService:
                 match = [s for s in await repo.list_snapshots() if s.id == snapshot_id]
                 if not match:
                     return {"ok": False, "error": "no_such_copy"}
-                await self._snapshots.snapshot_now("pre_restore")
-                await asyncio.to_thread(shutil.rmtree, staged, True)
-                manifest = await repo.restore(match[0], staged)
+                manifest = await self._snapshots.stage_restore(
+                    lambda staged: repo.restore(match[0], staged),
+                    source="cloud",
+                    snapshot_id=snapshot_id,
+                )
             except DriveConsentError:
-                await asyncio.to_thread(shutil.rmtree, staged, True)
                 return {"ok": False, "error": "consent_needed"}
             except (DriveError, CloudBackupError, OSError) as exc:
-                await asyncio.to_thread(shutil.rmtree, staged, True)
                 logger.warning("Cloud restore failed: {}", exc)
                 return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
             finally:
                 await _close(sink)
-            await asyncio.to_thread(write_staging_sanity, staged)
-            write_marker(runtime_root, source="cloud", snapshot_id=snapshot_id)
         logger.info("Cloud restore staged ({}); restart required", snapshot_id[:12])
         return {
             "ok": True,

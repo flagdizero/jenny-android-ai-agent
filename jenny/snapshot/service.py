@@ -16,7 +16,10 @@ Lifecycle modellato su ``jenny/cron/service.py::CronService``: timer
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+import shutil
+from collections.abc import Awaitable, Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, TypeVar
 
 from loguru import logger
 
@@ -28,6 +31,7 @@ if TYPE_CHECKING:
     from jenny.config.schema import SnapshotConfig
 
 _DAY_MS = 86_400_000
+_T = TypeVar("_T")
 
 
 class SnapshotService:
@@ -52,6 +56,8 @@ class SnapshotService:
         self._running = False
         self._timer_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
+        # Un ripristino alla volta, da qualunque strada arrivi: v. ``stage_restore``.
+        self._restore_lock = asyncio.Lock()
         self._last_fingerprint: dict[str, tuple[int, int]] | None = None
         self._last_change_at_ms: int | None = None
         self._pending_changes = False
@@ -135,6 +141,48 @@ class SnapshotService:
             if manifest is not None:
                 self._last_fingerprint = fingerprint
             return manifest
+
+    async def stage_restore(
+        self,
+        fill: Callable[[Path], Awaitable[_T]],
+        *,
+        source: str,
+        snapshot_id: str | None = None,
+    ) -> _T:
+        """Prepara un ripristino; lo scambio lo fa il prossimo avvio. Torna quel che *fill* torna.
+
+        Il protocollo di ogni strada (file di backup, storia locale, e quelle
+        delle estensioni, che passano *source*): ``workspace_staged`` svuotato e
+        riempito da *fill*, il conteggio di controllo, lo stato di adesso
+        fotografato (``pre_restore``, così il ripristino resta annullabile) e il
+        marker **per ultimo**. Le strade avevano un lock ciascuna, e due
+        ripristini partiti insieme riempivano lo stesso albero uno sotto l'altro;
+        qui ne passa uno alla volta.
+
+        La foto si scatta dopo il riempimento, non prima: fotografa lo stesso
+        workspace (l'albero sta fuori), ma un riempimento fallito — password
+        sbagliata, archivio rotto, Drive irraggiungibile — non lascia nella
+        storia un «prima del ripristino» per un ripristino mai avvenuto, e la
+        retention di quella foto non può più togliere i blob dello snapshot che
+        si sta ancora copiando. Se qualcosa fallisce prima del marker, l'albero
+        si toglie.
+        """
+        from jenny.snapshot.locations import STAGED_WORKSPACE_DIR_NAME, runtime_root_for
+        from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
+
+        runtime_root = runtime_root_for(self._engine.root)
+        staged = runtime_root / STAGED_WORKSPACE_DIR_NAME
+        async with self._restore_lock:
+            await asyncio.to_thread(shutil.rmtree, staged, True)
+            try:
+                result = await fill(staged)
+                await asyncio.to_thread(write_staging_sanity, staged)
+                await self.snapshot_now("pre_restore")
+            except BaseException:
+                await asyncio.to_thread(shutil.rmtree, staged, True)
+                raise
+            write_marker(runtime_root, source=source, snapshot_id=snapshot_id)
+            return result
 
     def _snapshot_blocking(
         self, trigger: str, label: str | None
