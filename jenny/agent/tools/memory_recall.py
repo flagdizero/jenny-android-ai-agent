@@ -162,6 +162,30 @@ def _page_number(page: Any) -> int:
         return 1
 
 
+class _RecallTool(Tool):
+    """Quel che ``recall`` e ``recall_history`` hanno in comune: dove leggono e chi li ha.
+
+    Solo l'agente principale. È lì che succede "ti ricordi quando…", e sono
+    tool di sola lettura. A Dream non vanno: il suo prompt si è già dimostrato
+    sensibile alla superficie che gli si aggiunge, e la cronologia ce l'ha in
+    ingresso.
+    """
+
+    _scopes = {"core", "orchestrator"}
+
+    def __init__(self, workspace: str | Path):
+        self._root = Path(workspace)
+        self._memory_dir = self._root / "memory"
+
+    @classmethod
+    def create(cls, ctx: Any) -> Tool:
+        return cls(workspace=ctx.workspace)
+
+    @property
+    def read_only(self) -> bool:
+        return True
+
+
 @tool_parameters(
     tool_parameters_schema(
         query=ArraySchema(StringSchema("A word to search for"), description=_QUERY_DESCRIPTION),
@@ -172,21 +196,8 @@ def _page_number(page: Any) -> int:
         page=IntegerSchema(description=_PAGE_DESCRIPTION, minimum=1),
     )
 )
-class MemoryRecallTool(Tool):
+class MemoryRecallTool(_RecallTool):
     """Cerca o sfoglia l'archivio, e apre le voci che il modello ha riconosciuto."""
-
-    # Solo l'agente principale. È lì che succede "ti ricordi quando…", ed è un
-    # tool di sola lettura. A Dream non va: il suo prompt si è già dimostrato
-    # sensibile alla superficie che gli si aggiunge.
-    _scopes = {"core", "orchestrator"}
-
-    def __init__(self, workspace: str | Path):
-        self._root = Path(workspace)
-        self._memory_dir = self._root / "memory"
-
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        return cls(workspace=ctx.workspace)
 
     @property
     def name(self) -> str:
@@ -208,10 +219,6 @@ class MemoryRecallTool(Tool):
             "This holds facts that were kept and later demoted; for details of a "
             "past conversation that Dream did not keep, use recall_history."
         )
-
-    @property
-    def read_only(self) -> bool:
-        return True
 
     async def execute(
         self,
@@ -458,21 +465,8 @@ def _source_excerpt(root: Path, ref: Any) -> str:
         page=IntegerSchema(description=_PAGE_DESCRIPTION, minimum=1),
     )
 )
-class HistoryRecallTool(Tool):
+class HistoryRecallTool(_RecallTool):
     """Elenca gli appunti della conversazione, e apre le voci che il modello ha riconosciuto."""
-
-    # Gli stessi di ``recall``, e per la stessa ragione: è lì che succede "ti
-    # ricordi quando…". A Dream non va — il suo prompt si è già dimostrato
-    # sensibile alla superficie aggiunta, e la cronologia ce l'ha in ingresso.
-    _scopes = {"core", "orchestrator"}
-
-    def __init__(self, workspace: str | Path):
-        self._root = Path(workspace)
-        self._memory_dir = self._root / "memory"
-
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        return cls(workspace=ctx.workspace)
 
     @property
     def name(self) -> str:
@@ -491,10 +485,6 @@ class HistoryRecallTool(Tool):
             "was tried before. recall holds facts that were kept and later demoted from the "
             "identity files; this holds the notes on everything, kept or not."
         )
-
-    @property
-    def read_only(self) -> bool:
-        return True
 
     async def execute(
         self,
