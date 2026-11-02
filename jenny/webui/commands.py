@@ -21,6 +21,7 @@ trasportare contenuto: framed, UTF-8, autenticato all'handshake.
 from __future__ import annotations
 
 import asyncio
+import importlib
 from collections.abc import Awaitable, Callable, Collection, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.security.workspace_policy import is_path_within
+from jenny.utils.errors import CodedError
 from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
 from jenny.webui.workspace_files import os_error_text
 
@@ -1104,7 +1106,7 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     verso il nome vecchio si disegna «non c'e' piu'».
     """
     from jenny.session.keys import is_valid_project_name, project_session_key
-    from jenny.webui.project_rename import ProjectRenameError, rename_project
+    from jenny.webui.project_rename import rename_project
 
     name = _require_str(params, "name").strip()
     new_name = _require_str(params, "new_name").strip()
@@ -1135,8 +1137,10 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
             new_name=new_name,
             invalidate_session=ctx.invalidate_session,
         )
-    except ProjectRenameError as exc:
-        raise CommandError(exc.code, str(exc)) from exc
+    except CodedError as exc:
+        # Qui e non solo in ``dispatch_command``: il comando si chiama anche da
+        # solo, e i suoi rifiuti attesi hanno un codice che il client dice.
+        raise CommandError(exc.code, exc.message) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
@@ -1575,6 +1579,21 @@ def _notebooks_of_paths(ctx: CommandContext, paths: list[Any]) -> list[str]:
     return names
 
 
+# Le famiglie di comandi che stanno in un modulo loro, che importa da questo:
+# caricate al primo uso, per non chiudere un cerchio d'import all'avvio.
+# Prefisso → (modulo, tabella).
+_COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
+    # La scheda del piano a lista: solo l'interfaccia approva, ferma e torna indietro.
+    "plan": ("jenny.webui.plan_commands", "PLAN_COMMANDS"),
+    # Le scritture della bacheca.
+    "board": ("jenny.webui.board_commands", "BOARD_COMMANDS"),
+    # Il cestino delle app e le risposte alla prova.
+    "apps": ("jenny.webui.apps_commands", "APPS_COMMANDS"),
+    # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
+    "staged": ("jenny.webui.staged_commands", "STAGED_COMMANDS"),
+}
+
+
 async def dispatch_command(
     ctx: CommandContext,
     method: str,
@@ -1586,29 +1605,10 @@ async def dispatch_command(
     traceback non deve mai raggiungere il client.
     """
     handler = COMMANDS.get(method)
-    if handler is None and method.startswith("plan."):
-        # La scheda del piano a lista: solo l'interfaccia approva, ferma e torna
-        # indietro (``plan_commands.py``).
-        from jenny.webui.plan_commands import PLAN_COMMANDS
-
-        handler = PLAN_COMMANDS.get(method)
-    if handler is None and method.startswith("board."):
-        # Le scritture della bacheca stanno in un modulo loro, che importa da
-        # questo: caricate qui, al primo uso, per non chiudere un cerchio
-        # d'import all'avvio.
-        from jenny.webui.board_commands import BOARD_COMMANDS
-
-        handler = BOARD_COMMANDS.get(method)
-    if handler is None and method.startswith("apps."):
-        # Il cestino delle app e le risposte alla prova: stesso motivo.
-        from jenny.webui.apps_commands import APPS_COMMANDS
-
-        handler = APPS_COMMANDS.get(method)
-    if handler is None and method.startswith("staged."):
-        # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
-        from jenny.webui.staged_commands import STAGED_COMMANDS
-
-        handler = STAGED_COMMANDS.get(method)
+    family = _COMMAND_FAMILIES.get(method.partition(".")[0])
+    if handler is None and family is not None:
+        module, table = family
+        handler = getattr(importlib.import_module(module), table).get(method)
     if handler is None:
         raise CommandError("bad_request", f"unknown method: {method}")
     _refuse_held_notebook(ctx, method, params)
@@ -1616,6 +1616,10 @@ async def dispatch_command(
         return await handler(ctx, params)
     except CommandError:
         raise
+    except CodedError as exc:
+        # Un rifiuto atteso di un modulo fuori dalla WebUI (la bacheca, il
+        # rinomino): il suo codice, tradotto qui una volta per tutti i comandi.
+        raise CommandError(exc.code, exc.message) from exc
     except Exception as exc:
         logger.exception("command {} failed", method)
         raise CommandError("internal", "command failed") from exc

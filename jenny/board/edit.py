@@ -44,15 +44,11 @@ from jenny.board.store import (
     read_board,
     read_card_summary,
 )
+from jenny.utils.errors import CodedError
 
 
-class BoardEditError(Exception):
+class BoardEditError(CodedError):
     """Una scrittura rifiutata: *code* è quello dei comandi RPC, *message* la ragione."""
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 def _notes(root: Path) -> list[dict[str, Any]]:

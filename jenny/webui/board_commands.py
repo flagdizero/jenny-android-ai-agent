@@ -75,21 +75,9 @@ def _need_card(board: dict[str, Any], card_id: str) -> dict[str, Any]:
 
 
 async def _run(fn: Any, *args: Any, **kwargs: Any) -> Any:
-    """Su disco, quindi fuori dal loop; un ``CommandError`` torna com'è, un
-    rifiuto di :mod:`jenny.board.edit` diventa il ``CommandError`` col suo codice."""
-    try:
-        return await asyncio.to_thread(fn, *args, **kwargs)
-    except edit.BoardEditError as exc:
-        raise CommandError(exc.code, exc.message) from exc
-
-
-async def _edit(pending: Any) -> Any:
-    """Una scrittura async di :mod:`jenny.board.edit` (quelle che toccano i cron):
-    il suo rifiuto diventa il ``CommandError`` col suo codice, come in :func:`_run`."""
-    try:
-        return await pending
-    except edit.BoardEditError as exc:
-        raise CommandError(exc.code, exc.message) from exc
+    """Su disco, quindi fuori dal loop. Un rifiuto di :mod:`jenny.board.edit`
+    (``BoardEditError``) lo traduce ``dispatch_command``, col suo codice."""
+    return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 def _cron(ctx: CommandContext) -> Any:
@@ -249,14 +237,14 @@ async def board_card_rename(ctx: CommandContext, params: Mapping[str, Any]) -> d
 async def board_card_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli una scheda, con un Annulla: v. :func:`jenny.board.edit.remove_card`."""
     root = _project(ctx, params)
-    entry = await _edit(edit.remove_card(root, _card_id(params, "id"), cron=_cron(ctx)))
+    entry = await edit.remove_card(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True, "title": entry["card"]["title"]}
 
 
 async def board_card_restore(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """L'Annulla di «Togli»: v. :func:`jenny.board.edit.restore_card`."""
     root = _project(ctx, params)
-    await _edit(edit.restore_card(root, _card_id(params, "id"), cron=_cron(ctx)))
+    await edit.restore_card(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -283,8 +271,8 @@ async def board_suggestion_respond(
     :func:`jenny.board.edit.respond_suggestion`."""
     root = _project(ctx, params)
     sid = _card_id(params, "id")
-    await _edit(edit.respond_suggestion(root, sid, str(params.get("answer")), near=_near(params),
-                                        workspace=ctx.get_workspace_root(), cron=_cron(ctx)))
+    await edit.respond_suggestion(root, sid, str(params.get("answer")), near=_near(params),
+                                        workspace=ctx.get_workspace_root(), cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -491,8 +479,8 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
 async def board_section_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli una sezione. La wiki non cambia: togliere è una scelta di forma."""
     root = _project(ctx, params)
-    await _edit(edit.remove_section(root, _card_id(params), _card_id(params, "id"),
-                                    cron=_cron(ctx)))
+    await edit.remove_section(root, _card_id(params), _card_id(params, "id"),
+                                    cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -529,9 +517,9 @@ def _every_ms(params: Mapping[str, Any]) -> Any:
 
 async def _add_reminder(ctx: CommandContext, root: Path, card: str,
                         params: Mapping[str, Any]) -> str:
-    return await _edit(edit.add_reminder(
+    return await edit.add_reminder(
         root, card, params.get("text"), params.get("when"), cron=_cron(ctx),
-        every_ms=_every_ms(params), why=params.get("why"), timezone_name=_timezone()))
+        every_ms=_every_ms(params), why=params.get("why"), timezone_name=_timezone())
 
 
 async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -551,8 +539,8 @@ async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> 
 async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Un promemoria fatto: v. :func:`jenny.board.edit.close_reminder`."""
     root = _project(ctx, params)
-    await _edit(edit.close_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
-                                    timezone_name=_timezone()))
+    await edit.close_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+                                    timezone_name=_timezone())
     return {"ok": True}
 
 
@@ -560,16 +548,16 @@ async def board_reminder_update(ctx: CommandContext, params: Mapping[str, Any]) 
     """Correggi un promemoria dal calendario di cura, per id: ``text``, ``when``,
     ``every_ms`` (solo per uno a condizione)."""
     root = _project(ctx, params)
-    await _edit(edit.update_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+    await edit.update_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
                                      text=params.get("text"), when=params.get("when"),
-                                     every_ms=_every_ms(params), timezone_name=_timezone()))
+                                     every_ms=_every_ms(params), timezone_name=_timezone())
     return {"ok": True}
 
 
 async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli un promemoria dal calendario di cura: v. :func:`jenny.board.edit.drop_reminder`."""
     root = _project(ctx, params)
-    await _edit(edit.drop_reminder(root, _card_id(params, "id"), cron=_cron(ctx)))
+    await edit.drop_reminder(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True}
 
 
