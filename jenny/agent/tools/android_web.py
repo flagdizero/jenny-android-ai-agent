@@ -1,9 +1,11 @@
 """Android-only web tools backed by a hidden WebView.
 
-These tools replace the HTTP-based ``web_search`` and ``web_fetch`` tools on
-Android. They use a real Chrome WebView instance so they bypass bot detection
-that blocks raw HTTP clients. They are enabled only when an Android Context is
-available; on any other platform they simply do not register.
+``web_search`` runs the search page in a hidden WebView, where a raw HTTP client
+would meet bot detection. ``web_fetch`` tries a plain GET first (an HTML page
+with real text needs nothing more), renders the page in the WebView when it
+does not, and reads a near-empty page or a cookie wall again in a browser
+session. They are enabled only when an Android Context is available; on any
+other platform they simply do not register.
 """
 
 from __future__ import annotations
@@ -619,7 +621,9 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
     description = (
         "Fetch a URL and extract readable content (HTML → markdown/text). "
         "Use this after web_search to read a specific result page in full. "
-        "Uses the native Android WebView for reliable access. "
+        "Tries a plain request first and renders the page in the Android WebView when it "
+        "needs scripting; a near-empty page or a cookie wall is read again in a browser "
+        "session by itself. "
         "Output is capped at maxChars (default 50 000)."
     )
 
