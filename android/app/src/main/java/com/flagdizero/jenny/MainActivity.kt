@@ -68,6 +68,8 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "Jenny"
+        // Chi apre per primo un posto toccato in chat ([NativeCommands.openMap]).
+        private const val GOOGLE_MAPS_PACKAGE = "com.google.android.apps.maps"
         private const val GATEWAY_HOST = "127.0.0.1"
         private const val GATEWAY_PORT = 18790
         // Il path — e SOLO quel path — che serve la SPA. Vedi isInternalGatewayUrl():
@@ -1845,6 +1847,7 @@ class MainActivity : AppCompatActivity() {
             "restartApp" -> restartApp().let { null }
             "requestBatteryExemption" -> requestBatteryExemption().let { null }
             "requestLocationPermission" -> requestLocationPermission().let { null }
+            "openMap" -> openMap(a.getString(0), a.getString(1), a.getString(2), a.getString(3)).let { null }
             "requestExactAlarmPermission" -> requestExactAlarmPermission()
             "openBatterySettings" -> openBatterySettings()
             "extensionCall" -> extensionCall(a).let { null }
@@ -2324,6 +2327,50 @@ class MainActivity : AppCompatActivity() {
                 if (hasLocationPermission()) return@runOnUiThread
                 locationAskedFromUiAt = SystemClock.elapsedRealtime()
                 launchLocationRequest()
+            }
+        }
+
+        /**
+         * Apre un posto toccato in chat (la scheda di `shared/place-card.js`).
+         *
+         * Tre tentativi, il primo che parte vince:
+         * 1. l'app Google Maps sul punto, col nome (`geo:` col pacchetto);
+         * 2. qualunque app di mappe (`geo:` senza pacchetto: Organic Maps,
+         *    OsmAnd…), che è la strada di chi ha la build `foss`;
+         * 3. il link `https://` in una Custom Tab, come ogni link esterno.
+         *
+         * Senza coordinate `geo:` cerca per nome e indirizzo. Si prova a
+         * lanciare invece di chiedere prima se qualcuno risponde: dal package
+         * visibility di Android 11 la domanda può dire no a un'app che c'è.
+         */
+        fun openMap(lat: String, lng: String, label: String, href: String) {
+            val la = lat.toDoubleOrNull()?.takeIf { it in -90.0..90.0 }
+            val ln = lng.toDoubleOrNull()?.takeIf { it in -180.0..180.0 }
+            val name = label.replace(Regex("[()]"), " ").trim()
+            val geo = when {
+                la != null && ln != null ->
+                    "geo:$la,$ln?q=$la,$ln" + if (name.isEmpty()) "" else "(" + Uri.encode(name) + ")"
+                name.isNotEmpty() -> "geo:0,0?q=" + Uri.encode(name)
+                else -> null
+            }
+            val web = Uri.parse(href).takeIf { it.scheme == "https" }
+            runOnUiThread {
+                if (geo != null) {
+                    val intents = listOf(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(geo)).setPackage(GOOGLE_MAPS_PACKAGE),
+                        Intent(Intent.ACTION_VIEW, Uri.parse(geo)),
+                    )
+                    for (intent in intents) {
+                        try {
+                            startActivity(intent)
+                            return@runOnUiThread
+                        } catch (e: Exception) {
+                            Log.i(TAG, "Map intent unavailable (${intent.`package` ?: "any app"})")
+                        }
+                    }
+                }
+                if (web != null) openExternalUrl(web)
+                else Log.w(TAG, "No way to open the place")
             }
         }
 

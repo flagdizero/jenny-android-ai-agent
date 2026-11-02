@@ -323,6 +323,8 @@ _UI_MANIFEST = [
     "assets/shared/mascot-squash.js",
     "assets/shared/mascot.js",
     "assets/shared/pinch-zoom.js",
+    "assets/shared/place-card.js",
+    "assets/shared/places.js",
     "assets/shared/project-create.js",
     "assets/shared/project-delete.js",
     "assets/shared/provider-brand.js",

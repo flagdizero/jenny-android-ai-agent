@@ -1009,6 +1009,19 @@ def _end_get_location(args: Mapping[str, Any], outcome: _Outcome) -> str:
     return "location resolved"
 
 
+def _start_find_place(args: Mapping[str, Any]) -> str:
+    query = _arg_text(args, "query", limit=60)
+    return f'looking up "{query}" on the map' if query else "looking up a place"
+
+
+def _end_find_place(args: Mapping[str, Any], outcome: _Outcome) -> str:
+    # Come per ``get_location``: niente coordinate né distanze, che direbbero
+    # dove si trova l'utente. Solo se un posto c'è.
+    if '"error"' in outcome.head:
+        return "no place found"
+    return "place found"
+
+
 # -- ssh_hosts / ssh_exec / ssh_job / ssh_transfer ---------------------------
 #
 # I quattro tool dello scope ``remote`` (tipo ``sysadmin``). Qui la regola 1 —
@@ -1187,6 +1200,7 @@ _FORMATTERS: dict[str, tuple[_StartFn, _EndFn]] = {
     "get_recent_logs": (_start_get_recent_logs, _end_get_recent_logs),
     "get_source": (_start_get_source, _end_get_source),
     "get_location": (_start_get_location, _end_get_location),
+    "find_place": (_start_find_place, _end_find_place),
     "ssh_hosts": (_start_ssh_hosts, _end_ssh_hosts),
     "ssh_exec": (_start_ssh_exec, _end_ssh_exec),
     "ssh_job": (_start_ssh_job, _end_ssh_job),

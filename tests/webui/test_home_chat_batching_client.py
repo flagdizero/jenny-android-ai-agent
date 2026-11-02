@@ -68,6 +68,7 @@ globalThis.document = { createElement: makeNode, getElementById: () => null };
 let renders = 0;
 const renderMarkdown = (t) => { renders += 1; return t; };
 const renderRich = () => {};
+const renderPlacesIn = () => {};
 
 /* I fotogrammi: si scaricano a mano, come farebbe il browser al suo giro. */
 const frames = new Map();

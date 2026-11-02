@@ -104,6 +104,7 @@ const renderMarkdown = (text) => text;
    cambiato niente. Che il chiamante e la libreria stiano insieme lo misura
    `test_vendor_contract.py`, e come disegnano `test_rich_content_client.py`. */
 const renderRich = () => {};
+const renderPlacesIn = () => {};
 
 function makeChat() {
   return {

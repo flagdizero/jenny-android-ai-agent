@@ -112,6 +112,8 @@ globalThis.CSS = { escape: (s) => s };
 const toasts = [];
 const showToast = (msg, kind) => toasts.push([msg, kind]);
 const i18n = { t: (key) => key };
+/* La scheda di un posto (`shared/places.js`) ha il suo banco: qui nessun tocco e' suo. */
+const openPlaceFromClick = () => false;
 
 /* Un link finto: risponde a `closest` come un elemento vero, cioe' a ogni
    selettore della lista che lo prende — `a[href]` di un tempo e quello di
