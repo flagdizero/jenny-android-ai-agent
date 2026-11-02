@@ -9,16 +9,16 @@ from __future__ import annotations
 import json
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
 
 from jenny.agent.hook import AgentHook, AgentHookContext
 from jenny.config.paths import get_webui_dir
 from jenny.session.keys import internal_session_kind
+from jenny.utils.helpers import safe_zoneinfo
 from jenny.utils.path import atomic_write
 
 TOKEN_USAGE_SCHEMA_VERSION = 1
@@ -84,13 +84,17 @@ def _utc_now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _zone(timezone_name: str | None) -> timezone | ZoneInfo:
+def _zone(timezone_name: str | None) -> tzinfo:
+    """Il fuso dei conti per giorno: quello dell'utente, se no quello del telefono.
+
+    Come l'ora che il modello legge (``helpers.current_time_str``): senza un
+    fuso in config il «giorno» è quello locale, non quello di UTC, che in
+    Italia girava all'una o alle due di notte. Un nome che non esiste non
+    solleva (``safe_zoneinfo``): prima un ``ValueError`` usciva da qui.
+    """
     if not timezone_name:
-        return timezone.utc
-    try:
-        return ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
-        return timezone.utc
+        return datetime.now().astimezone().tzinfo or timezone.utc
+    return safe_zoneinfo(timezone_name)
 
 
 def _local_day(now: datetime | None = None, *, timezone_name: str | None = None) -> str:
