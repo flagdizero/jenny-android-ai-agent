@@ -1603,7 +1603,7 @@ class AgentLoop(
                             replay_max_messages=self._max_messages,
                         )
                 except Exception:
-                    logger.debug("Post-overflow compaction failed", exc_info=True)
+                    logger.opt(exception=True).debug("Post-overflow compaction failed")
 
         try:
             result = await self.runner.run(AgentRunSpec(
@@ -2001,10 +2001,9 @@ class AgentLoop(
                                     key,
                                 )
                         except Exception:
-                            logger.debug(
+                            logger.opt(exception=True).debug(
                                 "Could not restore checkpoint for cancelled session {}",
                                 session_key,
-                                exc_info=True,
                             )
                     raise
                 except Exception as exc:
@@ -2955,7 +2954,7 @@ class AgentLoop(
             try:
                 forget(session_key)
             except Exception:  # noqa: BLE001 — la pulizia non deve rompere la chiusura del turno
-                logger.debug("python_exec globals of {} not released", session_key, exc_info=True)
+                logger.opt(exception=True).debug("python_exec globals of {} not released", session_key)
 
     def forget_file_reads(self, session_key: str) -> None:
         """Dichiara che *session_key* non contiene piu' il contenuto di nessun file.

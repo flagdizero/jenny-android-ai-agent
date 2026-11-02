@@ -237,7 +237,7 @@ class WebuiTurnCoordinator:
             try:
                 config = self.config_loader()
             except Exception:
-                logger.debug("mascot mood: config unreadable, skipping", exc_info=True)
+                logger.opt(exception=True).debug("mascot mood: config unreadable, skipping")
                 return
             if not config.agents.defaults.mascot_mood:
                 return

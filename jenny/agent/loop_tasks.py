@@ -147,10 +147,8 @@ class LoopTasksMixin:
                 logger.info("Restored partial context for stopped session {}", key)
                 return True
         except Exception:
-            logger.debug(
-                "Could not restore checkpoint for stopped session {}", key,
-                exc_info=True,
-            )
+            logger.opt(exception=True).debug(
+                "Could not restore checkpoint for stopped session {}", key)
         return False
 
     async def _emit_stop_turn_end(self, msg, key: str) -> None:

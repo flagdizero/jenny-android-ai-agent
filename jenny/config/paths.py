@@ -55,7 +55,7 @@ def get_data_dir() -> Path:
         legacy_dir = workspace / legacy_name
         if not data_dir.exists() and legacy_dir.exists():
             legacy_dir.rename(data_dir)
-            logger.info("Migrated runtime data directory %s -> .jenny", legacy_name)
+            logger.info("Migrated runtime data directory {} -> .jenny", legacy_name)
     return ensure_dir(data_dir)
 
 

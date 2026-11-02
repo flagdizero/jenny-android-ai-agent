@@ -598,7 +598,8 @@ class WebSocketChannel(OutboundSenderMixin):
                         detail="frame without a type", reason="untyped_frame",
                     )
         except Exception as e:
-            self.logger.warning("connection loop error (client={}): {}", client_id, e, exc_info=True)
+            self.logger.opt(exception=True).warning(
+                "connection loop error (client={}): {}", client_id, e)
         finally:
             self._cleanup_connection(connection)
 
