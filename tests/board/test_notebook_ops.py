@@ -202,7 +202,7 @@ def test_the_shared_constants_stay_equal(lint_wiki) -> None:
     assert MAP_TARGET_CHARS == lint_wiki.MAP_MAX_CHARS
     assert ops._WIKILINK_RE.pattern == lint_wiki.WIKILINK_RE.pattern
     for text in ("---\nstate: open\n---\n", "\ufeff\n---\nstate: open\n---", "# no\n"):
-        assert bool(ops._FRONTMATTER_RE.match(text)) == bool(lint_wiki.FRONTMATTER_RE.match(text))
+        assert bool(ops.FRONTMATTER_RE.match(text)) == bool(lint_wiki.FRONTMATTER_RE.match(text))
 
 
 def test_check_gives_the_line_and_writes_nothing(broken: Path) -> None:

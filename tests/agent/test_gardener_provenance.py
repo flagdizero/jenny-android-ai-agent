@@ -508,3 +508,13 @@ def test_the_anchor_the_prompt_teaches_is_the_anchor_the_code_accepts() -> None:
     assert len(taught) >= 2, "gli esempi non sono stati letti: l'asserzione sarebbe vuota"
     for anchor in sorted(taught):
         assert _ANCHOR_RE.match(anchor), anchor
+
+
+@pytest.mark.parametrize("lead", ["\n", "﻿", "  \n\n", "﻿\n"])
+def test_a_blank_line_or_a_bom_before_the_fence_does_not_hide_the_claim(
+    project, guard, lead
+) -> None:
+    """Il lint e ``notebook_ops`` leggono la frontmatter anche dopo un BOM o una
+    riga vuota: se la guardia non la vede, la pagina passa e si legge ``decided``."""
+    page = lead + _page("decided", "raw/journal/20260824.md#19:19")
+    assert guard(project / "wiki" / "telescopio.md", page) is not None

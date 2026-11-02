@@ -41,6 +41,7 @@ from jenny.session.project_traces import (
 )
 from jenny.utils.path import atomic_write
 from jenny.utils.wiki_paths import (
+    FRONTMATTER_RE,
     LEGACY_WIKI_SCHEMA_FILENAME,
     WIKI_INDEX_FILENAME,
     WIKI_SCHEMA_FILENAME,
@@ -51,13 +52,12 @@ from jenny.webui.wiki_registry import refresh_wiki_registry
 
 _TITLE_SPLIT_RE = re.compile(r"[-_.]+")
 
-# La frontmatter iniziale e la riga di scope dentro di essa. Regex e non YAML per
+# La riga di scope dentro la frontmatter (``wiki_paths.FRONTMATTER_RE``). Regex e non YAML per
 # la stessa ragione di ``wiki_paths.wiki_id``: un due punti nel testo libero rende
 # il blocco non parsabile, e ``yaml.safe_load`` non perde *quella* riga, perde
 # tutte le altre. Qui va toccata una riga sola e riscritto il resto byte per
 # byte, che un round-trip di ``yaml.dump`` non sa fare (riordina le chiavi,
 # normalizza le virgolette, perde i commenti).
-_FRONTMATTER_RE = re.compile(r"^---\n([\s\S]*?)\n---")
 _SUMMARY_LINE_RE = re.compile(r"^summary:[ \t]*(.*)$", re.M)
 
 
@@ -142,7 +142,7 @@ def _seed_scope_if_placeholder(root: Path, quoted_seed: str) -> bool:
         text = schema.read_text(encoding="utf-8")
     except OSError:
         return False
-    block = _FRONTMATTER_RE.match(text)
+    block = FRONTMATTER_RE.match(text)
     if block is None:
         return False
     raw = block.group(1)

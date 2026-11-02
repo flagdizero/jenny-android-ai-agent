@@ -19,7 +19,13 @@ if TYPE_CHECKING:
 
 from loguru import logger
 
-_FRONTMATTER_RE = re.compile(r"^---\n([\s\S]*?)\n---\n?")
+# La frontmatter di una pagina, letta come la legge il lint
+# (``lint_wiki.FRONTMATTER_RE``, una copia: il lint non importa ``jenny``): un BOM
+# o una riga vuota prima del ``---``, e il ``---`` finale senza a capo. Una sola
+# forma per tutti i lettori, guardia di provenienza compresa: se la guardia
+# leggesse «nessuna frontmatter» dove il lint legge ``state: decided``, una riga
+# vuota in cima basterebbe a passarla.
+FRONTMATTER_RE = re.compile(r"^\ufeff?\s*---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 
 # Il **registro delle wiki**: ``wikis/_index.md``, una riga per wiki. Non e' la
 # mappa di una wiki — quella e' :data:`WIKI_INDEX_FILENAME`, ``wiki/index.md``,
@@ -131,7 +137,7 @@ def wiki_schema_file(wiki_root: Path) -> Path | None:
 
 def extract_title(text: str) -> str | None:
     """Titolo di una pagina: ``title:`` nel frontmatter, altrimenti il primo H1."""
-    fm = _FRONTMATTER_RE.match(text)
+    fm = FRONTMATTER_RE.match(text)
     if fm:
         t = re.search(r"^title:\s*(.+)$", fm.group(1), re.M)
         if t:
@@ -147,7 +153,7 @@ def split_frontmatter(text: str) -> tuple[str, str]:
     pesca i tag — e non può permettersi un ``yaml.safe_load`` per pagina su
     centinaia di file. Senza frontmatter il primo elemento è la stringa vuota.
     """
-    m = _FRONTMATTER_RE.match(text)
+    m = FRONTMATTER_RE.match(text)
     if not m:
         return "", text
     return m.group(1), text[m.end() :]
@@ -155,7 +161,7 @@ def split_frontmatter(text: str) -> tuple[str, str]:
 
 def strip_frontmatter(text: str) -> tuple[dict[str, Any] | None, str, str | None]:
     """Return ``(frontmatter, body, title)`` for a page's raw markdown."""
-    m = _FRONTMATTER_RE.match(text)
+    m = FRONTMATTER_RE.match(text)
     frontmatter: dict[str, Any] | None = None
     body = text
     if m:
@@ -614,7 +620,7 @@ def settle_wiki_id_lines(text: str, value: str | None = None) -> str:
     torna identico, byte per byte — e' cosi' che la migrazione sa di non dover
     scrivere.
     """
-    match = _FRONTMATTER_RE.match(text)
+    match = FRONTMATTER_RE.match(text)
     if match is None:
         if value is None:
             return text
@@ -833,7 +839,7 @@ def _is_placeholder(value: str) -> bool:
 
 def _frontmatter_scalar(text: str, *keys: str) -> str | None:
     """Primo scalare non-placeholder fra *keys* nel frontmatter YAML iniziale."""
-    m = _FRONTMATTER_RE.match(text)
+    m = FRONTMATTER_RE.match(text)
     if not m:
         return None
     for line in m.group(1).split("\n"):
