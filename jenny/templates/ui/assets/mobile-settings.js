@@ -22,6 +22,7 @@ import {
 /* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
    e un import qui li rimetterebbe a portata di un bottone dimenticato. */
 import { runSnapshotRestore } from './shared/backup-flow.js';
+import { CATALOG_NOTE_KEYS, ModelCatalogs } from './shared/model-catalog.js';
 
 // Ripiego per `power.modes` quando il payload arriva da un gateway più vecchio
 // del client: stesso ordine di `KEEP_AWAKE_MODES` in config/schema.py, dal più
@@ -151,10 +152,11 @@ export class SettingsController {
     this.loadingEl = document.getElementById('settings-loading');
     this.data = null;
     this._debounceTimers = {};
-    /* I modelli di ogni marca, letti una volta e tenuti. La chiave e' fatta
-       di cio' da cui l'elenco dipende (v. `_brandCatalogKey`): una Modifica
-       che cambia chiave o indirizzo lo fa rileggere da se'. */
-    this._brandCatalogs = new Map();
+    /* I modelli di ogni marca, letti una volta e tenuti, con la regola della
+       casa per riprovarli (`shared/model-catalog.js`). La chiave e' fatta di
+       cio' da cui l'elenco dipende: una Modifica che cambia chiave o
+       indirizzo lo fa rileggere da se'. */
+    this._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
     /* Lo stato dei gruppi di «Chi pensa» per la visita in corso: quali sono
        aperti, l'ordine dei modelli fissato all'ingresso, i filtri, chi mostra
        tutto. Sopravvive ai ridisegni; si azzera uscendo (`deactivate`) e
@@ -319,7 +321,7 @@ export class SettingsController {
     this._modelOrder = new Map();
     this._brandFilters = new Map();
     this._brandShowAll = new Set();
-    this._brandTried = new Set();
+    this._modelCatalogs?.newVisit();
   }
   deactivate() {
     // Da qui in poi nessuna continuazione in volo tocca più niente: né il DOM
@@ -1084,7 +1086,7 @@ export class SettingsController {
    *  sta per la chiave, che al client non arriva: una chiave nuova ha un
    *  suggerimento nuovo, e l'elenco si rilegge. */
   _brandCatalogKey(p) {
-    return [p.name, p.format, p.api_base, p.api_key_hint].join('\n');
+    return ModelCatalogs.key(p);
   }
 
   /** Il provider di un gruppo, dal nome che il gruppo porta. */
@@ -1148,38 +1150,17 @@ export class SettingsController {
     this._paintBrandGroup(group);
   }
 
-  /** Legge i modelli di una marca. Un elenco arrivato si tiene finche' non
-   *  cambiano chiave o indirizzo (`_brandCatalogKey`). Un elenco che non e'
-   *  arrivato si riprova **alla visita dopo** (`_brandTried`), non a ogni
-   *  ridisegno: altrimenti ogni scelta in un'altra marca rifaceva la richiesta
-   *  a quella rotta, magari lenta fino al suo timeout. Una lettura in volo non
-   *  se ne fa partire una seconda. */
+  /** Legge i modelli di una marca, con la regola di `shared/model-catalog.js`:
+   *  un elenco arrivato si tiene finche' non cambiano chiave o indirizzo; uno
+   *  che non e' arrivato si riprova **alla visita dopo**, non a ogni
+   *  ridisegno — altrimenti ogni scelta in un'altra marca rifaceva la
+   *  richiesta a quella rotta, magari lenta fino al suo timeout. Una lettura
+   *  in volo non se ne fa partire una seconda. */
   async _loadBrandModels(p, group) {
-    const key = this._brandCatalogKey(p);
-    const known = this._brandCatalogs.get(key);
-    if (known && (known.status === 'available' || known.status === 'loading'
-        || this._brandTried.has(key))) {
-      this._paintBrandGroup(group);
-      return;
-    }
     const gen = this._gen;
-    this._brandTried.add(key);
-    this._brandCatalogs.set(key, { status: 'loading', models: [] });
+    const asked = this._modelCatalogs.load(p);
     this._paintBrandGroup(group);
-    let outcome;
-    try {
-      const res = await api.getProviderModels(p.name);
-      outcome = {
-        status: res?.status || 'available',
-        models: (res?.models || []).map((m) => m.id || m),
-        message: res?.message || '',
-      };
-    } catch (err) {
-      console.warn('settings: brand model list not read', err);
-      outcome = { status: 'error', models: [], message: '' };
-    }
-    this._brandCatalogs.set(key, outcome);
-    if (this._stale(gen)) return;
+    if (!(await asked) || this._stale(gen)) return;
     /* Il gruppo che c'e' adesso, non quello che ha chiesto: un ridisegno nel
        frattempo lo ha sostituito, e quello vecchio non e' piu' nel DOM. */
     const now = [...(this.contentEl?.querySelectorAll('.brand-group') || [])]
@@ -1218,8 +1199,7 @@ export class SettingsController {
     const p = this._groupProvider(group);
     const list = group?.querySelector('[data-brand-models]');
     if (!p || !list) return;
-    const catalog = this._brandCatalogs.get(this._brandCatalogKey(p))
-      || { status: 'loading', models: [] };
+    const catalog = this._modelCatalogs.get(p);
     const current = this.data?.agent?.model || '';
     const active = p.name === this.data?.default_provider;
     const all = this._brandRows(p, catalog);
@@ -1267,8 +1247,7 @@ export class SettingsController {
     const note = group.querySelector('[data-brand-note]');
     if (note) {
       const keys = {
-        loading: 'settings.brandModelsLoading',
-        not_configured: 'settings.brandModelsNeedKey',
+        ...CATALOG_NOTE_KEYS,
         missing_api_base: 'settings.brandModelsNeedBase',
         error: 'settings.brandModelsFailed',
       };
@@ -1342,7 +1321,7 @@ export class SettingsController {
   async _pickTypedModel(group, id) {
     const p = this._groupProvider(group);
     if (!p || !id) return;
-    const catalog = this._brandCatalogs.get(this._brandCatalogKey(p));
+    const catalog = this._modelCatalogs.get(p);
     const listed = catalog?.status === 'available' && catalog.models.includes(id);
     if (!listed) {
       const ok = await confirmDialog(i18n.t('settings.customModelConfirm', { model: id, name: p.name }));

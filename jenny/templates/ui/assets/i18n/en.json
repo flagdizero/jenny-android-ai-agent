@@ -521,8 +521,6 @@
     "brandFormat": "Format",
     "brandCaBundle": "CA certificate",
     "brandCaBundleNone": "none",
-    "brandModelsLoading": "Asking for the list…",
-    "brandModelsNeedKey": "A key is needed before the list can be fetched.",
     "brandModelsNeedBase": "This brand has no address yet: Edit adds it.",
     "brandModelsFailed": "The list did not arrive.",
     "brandModelSaved": "This one answers now",
@@ -567,7 +565,9 @@
       "untyped_frame": "I didn't understand the request"
     },
     "todayAt": "today at {time}",
-    "yesterdayAt": "yesterday at {time}"
+    "yesterdayAt": "yesterday at {time}",
+    "modelsLoading": "Asking for the list…",
+    "modelsNeedKey": "A key is needed before the list can be fetched."
   },
   "dialog": {
     "confirm": "Confirm",
@@ -1478,8 +1478,6 @@
       "models": "{provider} models",
       "saved": "This one answers now",
       "failed": "I could not change it.",
-      "loading": "Asking for the list…",
-      "needsKey": "A key is needed before the list can be fetched.",
       "needsBase": "This provider has no address yet: set it in the workshop.",
       "listFailed": "The list did not arrive. The one in use is still the one above.",
       "key": "Key",

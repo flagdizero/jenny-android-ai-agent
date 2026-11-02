@@ -26,6 +26,7 @@ from support.home_dom import requires_jsdom
 from support.js_harness import ASSETS, member, run_module
 
 SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
+CATALOG_JS = (ASSETS / "shared" / "model-catalog.js").read_text(encoding="utf-8")
 
 _REAL = (
     "_formatLabel",
@@ -108,11 +109,13 @@ const api = {{
   }},
 }};
 
+{CATALOG_JS.replace("export ", "")}
+
 class Settings {{
   constructor() {{
     this._gen = 0;
     this.contentEl = document.getElementById('content');
-    this._brandCatalogs = new Map();
+    this._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
     this._resetBrandVisit();
     this.data = {{
       default_provider: 'og',
@@ -324,7 +327,7 @@ def test_a_failed_list_says_why_and_is_asked_again() -> None:
     out = _run(
         """
 catalogs.sec = { status: 'error', models: [], message: 'TLS: unknown CA' };
-s._brandCatalogs.clear();
+s._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
 s._resetBrandVisit();
 api.asks.length = 0;
 s._paint();
@@ -358,7 +361,7 @@ def test_a_late_list_paints_the_group_that_is_there_now() -> None:
         """
 let release;
 catalogs.sec = () => new Promise((r) => { release = () => r({ status: 'available', models: [{ id: 'late' }] }); });
-s._brandCatalogs.clear();
+s._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
 s._resetBrandVisit();
 s._paint();
 s._paint();
@@ -395,8 +398,7 @@ def test_the_group_strings_exist_in_both_languages() -> None:
         "whoThinksHint", "answersWith", "manageBrand", "modelsCount", "brandModelsOf",
         "brandFilter", "brandFilterLabel", "brandFilterEmpty", "brandShowAll", "customModel",
         "customModelPlaceholder", "customModelLabel", "customModelUse", "customModelConfirm",
-        "brandModelsLoading",
-        "brandModelsNeedKey", "brandModelsNeedBase", "brandModelsFailed", "brandModelSaved",
+        "brandModelsNeedBase", "brandModelsFailed", "brandModelSaved",
         "brandModelSavedRestart", "brandModelFailed",
     )
     for language in ("it", "en"):

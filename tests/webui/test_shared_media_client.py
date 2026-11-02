@@ -10,11 +10,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from support.js_harness import function, requires_node, run_js
+
 from jenny.webui.transcript_markdown import (
     INLINE_MARKDOWN_IMAGE_EXTS,
     INLINE_MARKDOWN_VIDEO_EXTS,
 )
-from support.js_harness import function, requires_node, run_js
 
 ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MEDIA_JS = (ASSETS / "shared" / "media.js").read_text(encoding="utf-8")

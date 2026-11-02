@@ -521,8 +521,6 @@
     "brandFormat": "Formato",
     "brandCaBundle": "Certificato CA",
     "brandCaBundleNone": "nessuno",
-    "brandModelsLoading": "Chiedo l'elenco…",
-    "brandModelsNeedKey": "Serve una chiave per farsi dare l'elenco.",
     "brandModelsNeedBase": "Manca l'indirizzo della marca: lo aggiunge Modifica.",
     "brandModelsFailed": "L'elenco non è arrivato.",
     "brandModelSaved": "Adesso risponde questo",
@@ -567,7 +565,9 @@
       "untyped_frame": "Non ho capito la richiesta"
     },
     "todayAt": "oggi alle {time}",
-    "yesterdayAt": "ieri alle {time}"
+    "yesterdayAt": "ieri alle {time}",
+    "modelsLoading": "Chiedo l'elenco…",
+    "modelsNeedKey": "Serve una chiave per farsi dare l'elenco."
   },
   "dialog": {
     "confirm": "Conferma",
@@ -1478,8 +1478,6 @@
       "models": "Modelli di {provider}",
       "saved": "Adesso risponde questo",
       "failed": "Non sono riuscita a cambiarlo.",
-      "loading": "Chiedo l'elenco…",
-      "needsKey": "Serve una chiave per farsi dare l'elenco.",
       "needsBase": "Manca l'indirizzo del provider: si mette in officina.",
       "listFailed": "L'elenco non è arrivato. Quello in uso resta quello che vedi sopra.",
       "key": "Chiave",
