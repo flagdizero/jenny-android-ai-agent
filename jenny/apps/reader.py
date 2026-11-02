@@ -22,7 +22,6 @@ Quel che cambia:
 from __future__ import annotations
 
 import asyncio
-import json
 import threading
 import uuid
 from collections.abc import Mapping
@@ -34,8 +33,14 @@ from typing import Any, Callable
 from loguru import logger
 
 from jenny.apps.manifest import LoadedApp, find_app, load_app, scan_apps
-from jenny.apps.summary_view import LATEST_FILE, READINGS, STATE_FILE, reader_dir
-from jenny.utils.path import atomic_write
+from jenny.apps.summary_view import (
+    LATEST_FILE,
+    READINGS,
+    STATE_FILE,
+    read_reader_state,
+    reader_dir,
+)
+from jenny.utils.path import read_json_dict, write_json
 
 # Le serie di un lettore a chiave: al piu' tante per giro.
 MAX_SERIES = 20
@@ -61,25 +66,13 @@ class ReaderContext:
 # ── i file ──────────────────────────────────────────────────────────────────
 
 
-def _read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-
-
-def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write(path, json.dumps(data, ensure_ascii=False))
-
-
-def read_state(app_dir: Path) -> dict[str, Any]:
-    data = _read_json(reader_dir(app_dir) / STATE_FILE)
-    return data if isinstance(data, dict) else {}
+# Lo stato del lettore lo legge anche ``summary_view``, che non può importare
+# questo modulo (lo importa lui): la funzione vive là, qui c'è il nome di sempre.
+read_state = read_reader_state
 
 
 def write_state(app_dir: Path, state: dict[str, Any]) -> None:
-    _write_json(reader_dir(app_dir) / STATE_FILE, state)
+    write_json(reader_dir(app_dir) / STATE_FILE, state)
 
 
 def read_readings(app_dir: Path) -> list[dict[str, Any]]:
@@ -133,8 +126,7 @@ async def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: s
     d = reader_dir(app_dir)
     d.mkdir(parents=True, exist_ok=True)
     records = []
-    latest = _read_json(d / LATEST_FILE)
-    latest = latest if isinstance(latest, dict) else {}
+    latest = read_json_dict(d / LATEST_FILE)
     for item in values:
         rows = {k: v for k, v in item.items() if isinstance(v, list)}
         scalars = {k: (len(v) if isinstance(v, list) else v) for k, v in item.items()}
@@ -145,7 +137,7 @@ async def append_readings(app_dir: Path, values: list[dict[str, Any]], *, key: s
             else:
                 latest = {"ts": stamp, "rows": rows}
     if latest:
-        _write_json(d / LATEST_FILE, latest)
+        write_json(d / LATEST_FILE, latest)
 
     def change(readings: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
         last: dict[str, dict[str, Any]] = {}

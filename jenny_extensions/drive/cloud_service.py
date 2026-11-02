@@ -34,7 +34,7 @@ from jenny.snapshot.crypto import DEFAULT_KDF_ITERATIONS
 from jenny.snapshot.locations import runtime_root_for
 from jenny.snapshot.store import hash_content
 from jenny.snapshot.types import entry_target
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud import (
     MASTER_KEY_LEN,
@@ -148,11 +148,7 @@ class CloudBackupService:
     # -- stato ------------------------------------------------------------------
 
     def _read_status(self) -> dict[str, Any]:
-        try:
-            data = json.loads((self._state_dir / _STATUS_FILE).read_text("utf-8"))
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) else {}
+        return read_json_dict(self._state_dir / _STATUS_FILE)
 
     def _write_status(self, **changes: Any) -> None:
         status = self._read_status()

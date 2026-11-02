@@ -83,7 +83,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.utils.helpers import safe_filename
-from jenny.utils.path import atomic_write, iter_jsonl
+from jenny.utils.path import atomic_write, iter_jsonl, read_json
 
 #: Dove stanno i registri, relativo alla radice dell'installazione.
 JOURNAL_REL = ("subagents", "journal")
@@ -869,10 +869,7 @@ def live_journal(install_root: Path, lineage_id: str) -> WriteJournal | None:
 
 
 def read_undo_state(directory: Path) -> dict[str, Any] | None:
-    try:
-        raw = json.loads((directory / _UNDO).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+    raw = read_json(directory / _UNDO)
     return raw if isinstance(raw, dict) else None
 
 

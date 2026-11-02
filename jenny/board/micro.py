@@ -20,7 +20,6 @@ le scrive ``reader.py``, fuori dal codice guardato.
 
 from __future__ import annotations
 
-import json
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -30,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
-from jenny.utils.path import atomic_write
+from jenny.utils.path import read_json, write_json
 
 MICRO_DIRNAME = "micro"
 DRAFTS_DIRNAME = ".drafts"
@@ -255,18 +254,6 @@ def micro_dir(root: Path, micro_id: str, *, draft: bool = False) -> Path:
     return (base / DRAFTS_DIRNAME / micro_id) if draft else (base / micro_id)
 
 
-def _read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-
-
-def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
-
-
 @dataclass
 class Micro:
     id: str
@@ -281,7 +268,7 @@ def load_micro(root: Path, micro_id: str, *, draft: bool = False) -> Micro | Non
     if not model.is_valid_id(micro_id):
         return None
     d = micro_dir(root, micro_id, draft=draft)
-    raw = _read_json(d / SPEC_FILE)
+    raw = read_json(d / SPEC_FILE)
     try:
         code = (d / CODE_FILE).read_text(encoding="utf-8")
         spec = normalize_spec(raw, micro_id=micro_id)
@@ -432,9 +419,9 @@ def _approval_key(root: Path, micro_id: str) -> str:
 def drop_approval(workspace: Path, root: Path, micro_id: str) -> None:
     path = approvals_path(workspace)
     with _approvals_lock:
-        data = _read_json(path)
+        data = read_json(path)
         if isinstance(data, dict) and data.pop(_approval_key(root, micro_id), None) is not None:
-            _write_json(path, data)
+            write_json(path, data, indent=2)
 
 
 # ── la rete, solo verso gli host dichiarati ─────────────────────────────────

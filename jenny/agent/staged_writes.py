@@ -34,7 +34,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, read_json
 
 STAGED_REL = (".jenny", "staged")
 MAX_PENDING = 50
@@ -133,10 +133,7 @@ def sha256_of(path: Path) -> str | None:
 
 
 def _read_meta(entry: Path) -> dict[str, Any] | None:
-    try:
-        meta = json.loads((entry / "meta.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+    meta = read_json(entry / "meta.json")
     return meta if isinstance(meta, dict) and isinstance(meta.get("target"), str) else None
 
 

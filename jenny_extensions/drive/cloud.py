@@ -74,7 +74,7 @@ from jenny.snapshot.crypto_backends.base import CryptoAuthError, CryptoBackend
 from jenny.snapshot.engine import SnapshotEngine
 from jenny.snapshot.store import BlobCorruptError, hash_content, object_path
 from jenny.snapshot.types import SnapshotManifest, entry_problem, entry_target, is_snapshot_id
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud_sink import RemoteNotFoundError, RemoteSink
 
@@ -364,11 +364,8 @@ class CloudRepository:
 
     def read_state(self) -> dict[str, Any]:
         """L'esito degli ultimi giri, per la spia «Al sicuro»."""
-        try:
-            data = json.loads((self._state_dir / _STATE_FILE).read_text("utf-8"))
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) and data.get("repo_id") == self.repo_id else {}
+        data = read_json_dict(self._state_dir / _STATE_FILE)
+        return data if data.get("repo_id") == self.repo_id else {}
 
     def _write_state(self, **changes: Any) -> None:
         state = self.read_state()

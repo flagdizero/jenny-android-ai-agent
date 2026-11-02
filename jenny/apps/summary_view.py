@@ -13,7 +13,6 @@ il codice va; diventano quelli del codice (``broken``, ``quarantined``,
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,6 +21,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.apps.manifest import AppSection, LoadedApp
+from jenny.utils.path import read_json, read_json_dict
 
 # Le righe di una lista: le stesse di una micro app.
 MAX_ROWS = 20
@@ -64,10 +64,7 @@ def matching_records(app: LoadedApp, params: Mapping[str, Any]) -> list[dict[str
 
 
 def _latest_rows(app: LoadedApp, field: str, series: str | None) -> list[dict[str, Any]]:
-    try:
-        data = json.loads((reader_dir(app.dir) / LATEST_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
+    data = read_json(reader_dir(app.dir) / LATEST_FILE)
     if not isinstance(data, dict):
         return []
     if series is not None and isinstance(data.get("series"), dict):
@@ -77,11 +74,7 @@ def _latest_rows(app: LoadedApp, field: str, series: str | None) -> list[dict[st
 
 
 def read_reader_state(app_dir: Path) -> dict[str, Any]:
-    try:
-        data = json.loads((reader_dir(app_dir) / STATE_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    return read_json_dict(reader_dir(app_dir) / STATE_FILE)
 
 
 def _record_time(record: Mapping[str, Any]) -> datetime | None:

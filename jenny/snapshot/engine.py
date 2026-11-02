@@ -27,7 +27,7 @@ from jenny.snapshot.types import (
     entry_target,
     is_snapshot_id,
 )
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, read_json_dict
 
 # Esclusioni di default (path POSIX relativi alla radice del workspace).
 # Le directory runtime reali (store snapshot, staging) vengono escluse anche
@@ -433,10 +433,7 @@ class SnapshotEngine:
         referenced: set[str] = set()
         if self.manifests_dir.is_dir():
             for manifest_path in self.manifests_dir.glob("*.json"):
-                try:
-                    data = json.loads(manifest_path.read_text("utf-8"))
-                except (OSError, ValueError):
-                    continue
+                data = read_json_dict(manifest_path)
                 for entry in data.get("files", []):
                     referenced.add(str(entry.get("hash", "")))
 
