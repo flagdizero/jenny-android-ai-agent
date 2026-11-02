@@ -14,23 +14,12 @@ import pathlib
 
 import pytest
 from support.aio import wait_until
+from support.bus import FakeBus
 from support.kotlin_source import read_source
 
-from jenny.bus.events import NOTIFICATION_CHANNEL, InboundMessage
+from jenny.bus.events import NOTIFICATION_CHANNEL
 from jenny.runtime import native_input as ni
 from jenny.session.keys import UNIFIED_SESSION_KEY
-
-
-class _FakeBus:
-    """Bus minimo: registra gli inbound e segnala l'arrivo."""
-
-    def __init__(self) -> None:
-        self.inbound: list[InboundMessage] = []
-        self.arrived = asyncio.Event()
-
-    async def publish_inbound(self, msg: InboundMessage) -> None:
-        self.inbound.append(msg)
-        self.arrived.set()
 
 
 @pytest.fixture(autouse=True)
@@ -41,8 +30,8 @@ def _clean_state():
     ni.reset_native_input()
 
 
-async def _bound() -> _FakeBus:
-    bus = _FakeBus()
+async def _bound() -> FakeBus:
+    bus = FakeBus()
     assert ni.bind_native_input(bus) is True
     return bus
 
@@ -308,7 +297,7 @@ class TestDelivery:
     async def test_the_rebind_moves_the_bus(self):
         """Un gateway che riparte nello stesso processo non deve consegnare al vecchio."""
         old = await _bound()
-        fresh = _FakeBus()
+        fresh = FakeBus()
         ni.bind_native_input(fresh)
         ni.on_native_text("dopo il riavvio")
         await asyncio.wait_for(fresh.arrived.wait(), 2)

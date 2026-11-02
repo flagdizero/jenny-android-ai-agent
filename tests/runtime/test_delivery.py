@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from support.bus import FakeBus
 
 from jenny.bus.events import INTERNAL_CHANNEL, OutboundMessage
 from jenny.runtime.delivery import ChannelDeliverer
@@ -21,23 +22,10 @@ from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.manager import SessionManager
 
 
-class _FakeBus:
-    """Bus finto: registra i messaggi pubblicati, o simula un canale rotto."""
-
-    def __init__(self, *, raise_error: Exception | None = None) -> None:
-        self.published: list[OutboundMessage] = []
-        self._raise_error = raise_error
-
-    async def publish_outbound(self, msg: OutboundMessage) -> None:
-        if self._raise_error is not None:
-            raise self._raise_error
-        self.published.append(msg)
-
-
 def _deliverer(
-    tmp_path: Path, *, bus: _FakeBus | None = None
-) -> tuple[ChannelDeliverer, _FakeBus, SessionManager]:
-    bus = bus or _FakeBus()
+    tmp_path: Path, *, bus: FakeBus | None = None
+) -> tuple[ChannelDeliverer, FakeBus, SessionManager]:
+    bus = bus or FakeBus()
     session_manager = SessionManager(tmp_path)
     return ChannelDeliverer(bus=bus, session_manager=session_manager), bus, session_manager
 
@@ -48,7 +36,7 @@ async def test_deliver_without_record_only_publishes(tmp_path: Path) -> None:
 
     await deliverer.deliver(msg)
 
-    assert bus.published == [msg]
+    assert bus.outbound == [msg]
     session = sessions.get_or_create(UNIFIED_SESSION_KEY)
     assert session.messages == []
 
@@ -59,7 +47,7 @@ async def test_deliver_with_record_mirrors_into_unified_session(tmp_path: Path) 
 
     await deliverer.deliver(msg, record=True)
 
-    assert bus.published == [msg]
+    assert bus.outbound == [msg]
     session = sessions.get_or_create(UNIFIED_SESSION_KEY)
     assert len(session.messages) == 1
     recorded = session.messages[0]
@@ -88,7 +76,7 @@ async def test_deliver_skips_recording_for_internal_channel(tmp_path: Path) -> N
 
     await deliverer.deliver(msg, record=True)
 
-    assert bus.published == [msg]
+    assert bus.outbound == [msg]
     session = sessions.get_or_create(UNIFIED_SESSION_KEY)
     assert session.messages == []
 
@@ -117,7 +105,7 @@ async def test_deliver_reads_record_flag_from_metadata_and_strips_it(tmp_path: P
 
     session = sessions.get_or_create(UNIFIED_SESSION_KEY)
     assert len(session.messages) == 1
-    published = bus.published[0]
+    published = bus.outbound[0]
     assert published is not msg  # ricostruito perché i metadata sono cambiati
     assert published.metadata == {"other": "x"}
     assert published.buttons == [["ok"]]
@@ -131,7 +119,7 @@ async def test_deliver_without_marker_metadata_keeps_original_message_object(
 
     await deliverer.deliver(msg, record=True)
 
-    assert bus.published[0] is msg  # metadata invariati: nessuna ricostruzione
+    assert bus.outbound[0] is msg  # metadata invariati: nessuna ricostruzione
 
 
 async def test_deliver_uses_explicit_session_key_override(tmp_path: Path) -> None:
@@ -150,14 +138,14 @@ async def test_deliver_skips_recording_when_session_manager_lacks_hooks(tmp_path
     class _BareSessionManager:
         """Senza get_or_create/save: il duck-typing del modulo deve saltare il mirroring."""
 
-    bus = _FakeBus()
+    bus = FakeBus()
     deliverer = ChannelDeliverer(bus=bus, session_manager=_BareSessionManager())
     msg = OutboundMessage(channel="websocket", chat_id="1", content="ciao")
 
     # Non deve sollevare nonostante manchino i metodi di sessione.
     await deliverer.deliver(msg, record=True)
 
-    assert bus.published == [msg]
+    assert bus.outbound == [msg]
 
 
 async def test_deliver_routes_recording_through_the_hook_when_present(tmp_path: Path) -> None:
@@ -168,7 +156,7 @@ async def test_deliver_routes_recording_through_the_hook_when_present(tmp_path: 
     async def _hook(**kwargs: Any) -> None:
         calls.append(kwargs)
 
-    bus = _FakeBus()
+    bus = FakeBus()
     sessions = SessionManager(tmp_path)
     deliverer = ChannelDeliverer(
         bus=bus, session_manager=sessions, record_hook=lambda: _hook
@@ -182,7 +170,7 @@ async def test_deliver_routes_recording_through_the_hook_when_present(tmp_path: 
     ]
     # Nessuna scrittura diretta: l'hook è la sola via.
     assert sessions.get_or_create(UNIFIED_SESSION_KEY).messages == []
-    assert bus.published == [msg]
+    assert bus.outbound == [msg]
 
 
 async def test_deliver_falls_back_to_direct_write_when_hook_is_unset(tmp_path: Path) -> None:
@@ -203,7 +191,7 @@ async def test_deliver_survives_a_failing_record_hook(tmp_path: Path) -> None:
     async def _hook(**_kwargs: Any) -> None:
         raise RuntimeError("sessione illeggibile")
 
-    bus = _FakeBus()
+    bus = FakeBus()
     deliverer = ChannelDeliverer(
         bus=bus, session_manager=SessionManager(tmp_path), record_hook=lambda: _hook
     )
@@ -211,12 +199,12 @@ async def test_deliver_survives_a_failing_record_hook(tmp_path: Path) -> None:
 
     await deliverer.deliver(msg, record=True)
 
-    assert bus.published == [msg]
+    assert bus.outbound == [msg]
 
 
 async def test_deliver_propagates_bus_errors(tmp_path: Path) -> None:
     deliverer, _bus, sessions = _deliverer(
-        tmp_path, bus=_FakeBus(raise_error=RuntimeError("canale rotto"))
+        tmp_path, bus=FakeBus(raise_error=RuntimeError("canale rotto"))
     )
     msg = OutboundMessage(channel="websocket", chat_id="1", content="ciao")
 
