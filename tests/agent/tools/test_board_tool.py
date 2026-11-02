@@ -293,10 +293,11 @@ async def test_show_lists_the_automations_of_cards_and_of_the_notebook(notebook_
 
     (tmp_path / "cron").mkdir()
     (tmp_path / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
-        {"id": "ab12cd34", "name": "Meteo", "enabled": True,
+        {"id": "ab12cd34", "name": "Meteo", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": notebook_chat.name, "card": "nuove",
                                "section": "@auto"}}},
         {"id": "ef56ab78", "name": "Gelo", "pausedAtMs": 1, "enabled": False,
+         "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": notebook_chat.name, "card": "@notebook",
                                "section": "@auto"}}},
     ]}), encoding="utf-8")

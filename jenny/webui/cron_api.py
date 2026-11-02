@@ -33,7 +33,7 @@ from typing import Any
 
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import next_run_on_resume
-from jenny.cron.types import CronJob, job_display_name
+from jenny.cron.types import CronJob, job_display_name, schedule_payload
 from jenny.utils.clock import now_ms as _now_ms
 
 # Quanto testo di un promemoria entra nell'elenco. Il resto arriva col dettaglio:
@@ -94,31 +94,6 @@ def _place(link: dict[str, Any] | None) -> dict[str, Any] | None:
         card = model.card_by_id(read_board(root) or {}, scope) if root is not None else None
         title = card["title"] if card else ""
     return {"notebook": notebook, "card": scope, "cardTitle": title}
-
-
-def _schedule_payload(job: CronJob) -> dict[str, Any]:
-    """La schedulazione **strutturata**, non una frase.
-
-    Il tool ``cron`` la rende in inglese («every 30m») perche' il suo lettore e'
-    il modello. Questa esce su una UI bilingue, quindi la frase la compone il
-    client: `assets/shared/cron-view.js`, con le sue chiavi i18n.
-    """
-    from jenny.cron.cronexpr import shape
-
-    schedule = job.schedule
-    return {
-        "kind": schedule.kind,
-        "every_ms": schedule.every_ms,
-        "expr": schedule.expr,
-        "at_ms": schedule.at_ms,
-        "tz": schedule.tz,
-        # La forma di un'espressione comune, per dirla a parole («ogni domenica
-        # alle 18:30»); ``None`` quando non ce l'ha, e il client mostra l'espressione.
-        "shape": shape(schedule.expr) if schedule.kind == "cron" and schedule.expr else None,
-        # Solo su un ``at``: ``day`` (un giorno, senza ora) o ``month`` («marzo
-        # 2027»); ``None`` vale l'ora esatta. Il client la dice nella sua lingua.
-        "precision": schedule.precision if schedule.kind == "at" else None,
-    }
 
 
 def _condition_payload(job: CronJob) -> dict[str, Any] | None:
@@ -218,7 +193,7 @@ def _job_payload(
         # ``CronTool._display_timezone``, cosi' il pannello dice la stessa ora che
         # Jenny dice in chat.
         "display_timezone": job.schedule.tz or default_tz,
-        "schedule": _schedule_payload(job),
+        "schedule": schedule_payload(job.schedule),
         # Il filtro di un ricorrente su un'app: il turno parte solo quando e' vero.
         "condition": _condition_payload(job),
         "next_run_at_ms": job.state.next_run_at_ms,

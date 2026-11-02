@@ -32,7 +32,12 @@ from jenny.agent.tools.schema import (
     tool_parameters_schema,
 )
 from jenny.board import edit, model
-from jenny.board.cron_link import is_note, note_words, notebook_jobs_on_disk, notes_on_disk
+from jenny.board.cron_link import (
+    note_words,
+    notebook_jobs_on_disk,
+    notes_on_disk,
+    snapshot_is_note,
+)
 from jenny.board.drawers import DrawerError, as_list, page_text, pages_fingerprint, write_drawer
 from jenny.board.store import read_board, read_card_summary
 from jenny.security.workspace_access import (
@@ -442,7 +447,7 @@ def show(root: Path) -> str:
     # I cron che si ripetono li tiene lo scheduler: qui si vedono, li cambia il
     # tool ``cron``. I promemoria sono job anche loro, ma stanno qui sopra.
     jobs = [j for j in notebook_jobs_on_disk(root.name)
-            if not is_note(j["kind"], j["condition"])]
+            if not snapshot_is_note(j)]
     if jobs:
         lines += ["", "Automations (the cron tool changes them):"]
         lines += [f"- `{j['id']}` {_where(j['scope'])}: {j['name']}"

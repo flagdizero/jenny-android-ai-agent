@@ -357,6 +357,23 @@ def _validate_cron_expr(schedule: CronSchedule) -> None:
         raise ValueError(f"invalid cron expression {schedule.expr!r}: {exc}") from None
 
 
+def read_jobs_file(path: Path) -> list[CronJob]:
+    """I job di uno store letti col parser dello scheduler, senza avviarlo né toccarlo.
+
+    Per chi non ha lo scheduler in mano (un prompt, una scrittura della bacheca
+    in un thread). Solleva se il file non è JSON; un job che non si legge si salta
+    (lo scheduler, lui, mette da parte lo store intero).
+    """
+    data = json.loads(path.read_text(encoding="utf-8"))
+    jobs: list[CronJob] = []
+    for raw in data.get("jobs") or [] if isinstance(data, dict) else []:
+        try:
+            jobs.append(CronService._parse_job(raw))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+    return jobs
+
+
 class CronService:
     """Service for managing and executing scheduled jobs."""
 
@@ -462,74 +479,76 @@ class CronService:
             # Rete di sicurezza, non requisito: il salvataggio vero procede.
             logger.warning("Could not refresh the cron store backup: {}", e)
 
-    def _parse_jobs(self, path: Path) -> tuple[list[CronJob], int]:
+    @staticmethod
+    def _parse_jobs(path: Path) -> tuple[list[CronJob], int]:
         """Parse *path* into ``(jobs, version)``. Solleva se il file non è usabile."""
         data = json.loads(path.read_text(encoding="utf-8"))
-        jobs: list[CronJob] = []
         version = data.get("version", 1)
-        for j in data.get("jobs", []):
-            job = CronJob(
-                id=j["id"],
-                name=j["name"],
-                enabled=j.get("enabled", True),
-                schedule=CronSchedule(
-                    kind=j["schedule"]["kind"],
-                    at_ms=j["schedule"].get("atMs"),
-                    every_ms=j["schedule"].get("everyMs"),
-                    expr=j["schedule"].get("expr"),
-                    tz=j["schedule"].get("tz"),
-                    precision=_load_precision(j["schedule"].get("precision")),
+        return [CronService._parse_job(j) for j in data.get("jobs", [])], version
+
+    @staticmethod
+    def _parse_job(j: dict[str, Any]) -> CronJob:
+        """Un job dello store. Solleva se non è usabile."""
+        return CronJob(
+            id=j["id"],
+            name=j["name"],
+            enabled=j.get("enabled", True),
+            schedule=CronSchedule(
+                kind=j["schedule"]["kind"],
+                at_ms=j["schedule"].get("atMs"),
+                every_ms=j["schedule"].get("everyMs"),
+                expr=j["schedule"].get("expr"),
+                tz=j["schedule"].get("tz"),
+                precision=_load_precision(j["schedule"].get("precision")),
+            ),
+            payload=CronPayload(
+                kind=j["payload"].get("kind", "agent_turn"),
+                mode=_parse_mode(j["payload"].get("mode")),
+                message=j["payload"].get("message", ""),
+                session_key=_load_session_key(j["payload"].get("sessionKey")),
+                origin_channel=j["payload"].get("originChannel"),
+                origin_chat_id=j["payload"].get("originChatId"),
+                origin_metadata=j["payload"].get("originMetadata") or {},
+                board=_load_board_link(j["payload"].get("board")),
+                why=j["payload"].get("why") or None,
+                condition=_load_condition(j["payload"].get("condition")),
+            ),
+            state=CronJobState(
+                next_run_at_ms=j.get("state", {}).get("nextRunAtMs"),
+                last_run_at_ms=j.get("state", {}).get("lastRunAtMs"),
+                last_status=j.get("state", {}).get("lastStatus"),
+                last_error=j.get("state", {}).get("lastError"),
+                # Assenti negli store scritti prima del terzo stato: i
+                # default del dataclass valgono "monitor sano", che è il
+                # ripiego giusto — un contatore inventato farebbe partire
+                # un avviso per un guasto che non c'è.
+                consecutive_could_not_check=(
+                    j.get("state", {}).get("consecutiveCouldNotCheck") or 0
                 ),
-                payload=CronPayload(
-                    kind=j["payload"].get("kind", "agent_turn"),
-                    mode=_parse_mode(j["payload"].get("mode")),
-                    message=j["payload"].get("message", ""),
-                    session_key=_load_session_key(j["payload"].get("sessionKey")),
-                    origin_channel=j["payload"].get("originChannel"),
-                    origin_chat_id=j["payload"].get("originChatId"),
-                    origin_metadata=j["payload"].get("originMetadata") or {},
-                    board=_load_board_link(j["payload"].get("board")),
-                    why=j["payload"].get("why") or None,
-                    condition=_load_condition(j["payload"].get("condition")),
+                could_not_check_since_ms=j.get("state", {}).get("couldNotCheckSinceMs"),
+                could_not_check_escalated_at_ms=j.get("state", {}).get(
+                    "couldNotCheckEscalatedAtMs"
                 ),
-                state=CronJobState(
-                    next_run_at_ms=j.get("state", {}).get("nextRunAtMs"),
-                    last_run_at_ms=j.get("state", {}).get("lastRunAtMs"),
-                    last_status=j.get("state", {}).get("lastStatus"),
-                    last_error=j.get("state", {}).get("lastError"),
-                    # Assenti negli store scritti prima del terzo stato: i
-                    # default del dataclass valgono "monitor sano", che è il
-                    # ripiego giusto — un contatore inventato farebbe partire
-                    # un avviso per un guasto che non c'è.
-                    consecutive_could_not_check=(
-                        j.get("state", {}).get("consecutiveCouldNotCheck") or 0
-                    ),
-                    could_not_check_since_ms=j.get("state", {}).get("couldNotCheckSinceMs"),
-                    could_not_check_escalated_at_ms=j.get("state", {}).get(
-                        "couldNotCheckEscalatedAtMs"
-                    ),
-                    could_not_check_escalated=bool(
-                        j.get("state", {}).get("couldNotCheckEscalated")
-                    ),
-                    pending_since_ms=j.get("state", {}).get("pendingSinceMs"),
-                    condition_notified=bool(j.get("state", {}).get("conditionNotified")),
-                    run_history=[
-                        CronRunRecord(
-                            run_at_ms=r["runAtMs"],
-                            status=r["status"],
-                            duration_ms=r.get("durationMs", 0),
-                            error=r.get("error"),
-                        )
-                        for r in j.get("state", {}).get("runHistory", [])
-                    ],
+                could_not_check_escalated=bool(
+                    j.get("state", {}).get("couldNotCheckEscalated")
                 ),
-                created_at_ms=j.get("createdAtMs", 0),
-                updated_at_ms=j.get("updatedAtMs", 0),
-                delete_after_run=j.get("deleteAfterRun", False),
-                paused_at_ms=j.get("pausedAtMs"),
-            )
-            jobs.append(job)
-        return jobs, version
+                pending_since_ms=j.get("state", {}).get("pendingSinceMs"),
+                condition_notified=bool(j.get("state", {}).get("conditionNotified")),
+                run_history=[
+                    CronRunRecord(
+                        run_at_ms=r["runAtMs"],
+                        status=r["status"],
+                        duration_ms=r.get("durationMs", 0),
+                        error=r.get("error"),
+                    )
+                    for r in j.get("state", {}).get("runHistory", [])
+                ],
+            ),
+            created_at_ms=j.get("createdAtMs", 0),
+            updated_at_ms=j.get("updatedAtMs", 0),
+            delete_after_run=j.get("deleteAfterRun", False),
+            paused_at_ms=j.get("pausedAtMs"),
+        )
 
     def _quarantine_store(self) -> Path | None:
         """Sposta di lato lo store illeggibile. ``None`` se non ci è riuscita.

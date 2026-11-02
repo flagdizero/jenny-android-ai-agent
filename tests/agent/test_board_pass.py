@@ -251,14 +251,14 @@ def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
     _seed_board(root)
     (ws / "cron").mkdir()
     (ws / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
-        {"id": "ab12cd34", "name": "Travaso", "enabled": True,
+        {"id": "ab12cd34", "name": "Travaso", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"message": "Ricorda il travaso\n dell'acero.",
                      "board": {"notebook": root.name, "card": "acero", "section": "@auto"}},
          "state": {"nextRunAtMs": 1803974400000}},
-        {"id": "ef56ab78", "name": "Gelo", "enabled": True,
+        {"id": "ef56ab78", "name": "Gelo", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"message": "avvisa se gela",
                      "board": {"notebook": root.name, "card": "@notebook", "section": "@auto"}}},
-        {"id": "aa11bb22", "name": "Altrove", "enabled": True,
+        {"id": "aa11bb22", "name": "Altrove", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": "altro", "card": "acero", "section": "@auto"}}},
         {"id": "cc33dd44", "name": "Rinvaso", "enabled": True,
          "schedule": {"kind": "at", "atMs": 4_070_908_800_000, "precision": "day"},

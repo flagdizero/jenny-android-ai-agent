@@ -245,17 +245,17 @@ class BoardPass:
         restano il nome e la scheda, che bastano a non aggiungerlo due volte.
         """
         from jenny.board import model
-        from jenny.board.cron_link import is_note, notebook_jobs_on_disk
+        from jenny.board.cron_link import notebook_jobs_on_disk, snapshot_is_note
 
         rows = []
         for job in notebook_jobs_on_disk(self.root.name, self.workspace):
             where = ("for the whole notebook" if job["scope"] == model.NOTEBOOK
                      else f"in the drawer of `{job['scope']}`")
             # Un promemoria è un job anche lui (un singolo, o un ricorrente con un filtro).
-            what = "reminder" if is_note(job["kind"], job["condition"]) else "cron"
+            what = "reminder" if snapshot_is_note(job) else "cron"
             row = f"- {what} «{job['name'] or job['id']}» {where}"
-            if job["message"]:
-                row += f": {job['message'][:200]}"
+            if message := " ".join(job["message"].split()):
+                row += f": {message[:200]}"
             next_ms = job["nextRunAtMs"]
             if isinstance(next_ms, (int, float)):
                 when = datetime.fromtimestamp(next_ms / 1000).astimezone()
