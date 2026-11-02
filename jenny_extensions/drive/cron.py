@@ -83,7 +83,7 @@ async def run(host: ExtensionHost) -> str | None:
         + f"Reason code: {alert['error'] or 'unknown'}\n"
     )
     await run_silent_alert_turn(
-        agent, prompt, session_key=ALERT_SESSION_KEY, label="Backup"
+        agent, prompt, session_key=ALERT_SESSION_KEY, source={"kind": "cron", "label": "Backup"}
     )
     logger.info("Cloud backup: alerted after {} days without a copy", alert["days"])
     return None

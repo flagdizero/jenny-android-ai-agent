@@ -27,8 +27,6 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.session.turn_visibility import TurnVisibility, silent_progress
-
 HEARTBEAT_FILE = "HEARTBEAT.md"
 RETIRED_SUFFIX = ".retired"
 SESSION_KEY = "cron:heartbeat_retired"
@@ -101,14 +99,9 @@ async def announce_retired_heartbeat(agent: Any, workspace: Path) -> bool:
     spoke = False
     if section:
         prompt = _PREAMBLE + section + "\n"
-        await agent.process_direct(
-            prompt,
-            session_key=SESSION_KEY,
-            channel="websocket",
-            chat_id="default",
-            on_progress=silent_progress,
-            visibility=TurnVisibility.SILENT,
-        )
+        from jenny.runtime.cron_dispatch import run_silent_alert_turn
+
+        await run_silent_alert_turn(agent, prompt, session_key=SESSION_KEY)
         spoke = True
 
     path.replace(path.with_name(HEARTBEAT_FILE + RETIRED_SUFFIX))
