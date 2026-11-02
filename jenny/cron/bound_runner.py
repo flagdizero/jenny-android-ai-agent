@@ -17,11 +17,12 @@ from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.cron.condition import describe as describe_condition
 from jenny.cron.condition import read_condition
 from jenny.cron.could_not_check import (
+    DELEGATED_MARKER,
     ESCALATE_AFTER_FAILURES,
     ESCALATION_ASK_LIMIT,
+    WARNED_MARKER,
     could_not_check_reason,
-    parse_delegated_marks,
-    parse_warned_marks,
+    has_mark,
 )
 from jenny.cron.monitor_followup import resolve_pending_delegation
 from jenny.cron.service import CronJobSkippedError
@@ -413,7 +414,7 @@ async def _run_bound_cron_job(
         # guasto chiudeva il giro come «non controllato» e il verdetto
         # dell'aiutante, quando arrivava, non trovava nessuno in attesa (è
         # l'ordine che il cappello di ``tools/nothing_to_report.py`` promette).
-        if parse_delegated_marks(outcome.final_text) and not outcome.spoke:
+        if has_mark(outcome.final_text, DELEGATED_MARKER) and not outcome.spoke:
             cron.write_run_record(
                 run_id,
                 {**run_record_base, "status": "delegated", "delivery": "suppressed"},
@@ -468,7 +469,7 @@ async def _run_bound_cron_job(
                 # esattamente ciò che impedisce il doppione due giri dopo. Se il
                 # modello dimentica la riga il guasto si ripete: rumore, non
                 # silenzio.
-                escalated=bool(parse_warned_marks(outcome.final_text)),
+                escalated=has_mark(outcome.final_text, WARNED_MARKER),
             )
         # L'esito lo dice da sé: per un monitor l'outbound finale è sempre None,
         # e ``spoke`` distingue "ho parlato col tool ``message``" da "non avevo

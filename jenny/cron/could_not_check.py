@@ -36,13 +36,12 @@ perché ha due lettori: il run del monitor e il turno d'annuncio dell'aiutante a
 cui il monitor ha passato il controllo (:mod:`jenny.cron.monitor_followup`). Un
 parser solo, due chiamanti: la forma che il modello scrive resta una. Il numero
 dopo il marcatore (``CHECK_FAILED 2: …``) veniva dall'heartbeat, che numerava i
-suoi task; il parser lo legge ancora e nessuno lo guarda.
+suoi task; il parser lo salta ancora, per non farlo finire nel motivo.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
 from loguru import logger
 
@@ -148,59 +147,14 @@ _ALL_MARKERS = (COULD_NOT_CHECK_MARKER, DELEGATED_MARKER, OK_MARKER, WARNED_MARK
 _REF_RE = re.compile(r"^\[?\s*#?(\d{1,3})\s*[\])\.]?\s*[:\.\-–—]?\s*(.*)$")
 
 
-@dataclass(frozen=True)
-class CouldNotCheckMark:
-    """Una riga di marcatore, letta.
+def has_mark(final_text: str | None, marker: str) -> bool:
+    """Se il testo finale di un turno ha una riga che dichiara *marker*.
 
-    Attributes:
-        ref: il numero scritto dopo il marcatore, quando c'è. Lo usava
-            l'heartbeat, che numerava i suoi task (ritirato il 31/10/2026); un
-            monitor ha un controllo solo e non lo guarda.
-        reason: riga breve scritta dal modello su cosa lo ha bloccato. Può
-            essere vuota: il marcatore senza motivo resta un marcatore.
+    Per ``CHECK_DELEGATED``, ``CHECK_OK`` e ``CHECK_WARNED``: di loro conta solo
+    che ci siano (un monitor ha un controllo solo), e quel che il modello scrive
+    dopo la parola non lo legge nessuno.
     """
-
-    ref: str | None
-    reason: str
-
-
-def parse_could_not_check_marks(final_text: str | None) -> list[CouldNotCheckMark]:
-    """Legge TUTTE le righe di marcatore nel testo finale di un turno.
-
-    Una lista perché un turno di heartbeat copriva N task e poteva fallirne più
-    d'uno; il monitor, che ne ha uno solo, guarda la prima e ignora il resto.
-    """
-    return _parse_marks(final_text, COULD_NOT_CHECK_MARKER)
-
-
-def parse_delegated_marks(final_text: str | None) -> list[CouldNotCheckMark]:
-    """Legge le righe ``CHECK_DELEGATED``: task il cui esito non si sa ancora.
-
-    Stessa forma, stesso parser: la sintassi che il modello deve ricordare
-    resta una sola, cambia solo la parola iniziale. ``reason`` qui è ciò che è
-    stato delegato, e serve solo al log — a contare è quale task.
-    """
-    return _parse_marks(final_text, DELEGATED_MARKER)
-
-
-def parse_ok_marks(final_text: str | None) -> list[CouldNotCheckMark]:
-    """Legge le righe ``CHECK_OK``: controlli delegati che sono andati a buon fine.
-
-    Stessa forma e stesso parser degli altri due. ``reason`` qui è quasi sempre
-    vuota — non c'è niente da spiegare di un controllo riuscito — e non viene
-    letta da nessuno: a contare è quale task.
-    """
-    return _parse_marks(final_text, OK_MARKER)
-
-
-def parse_warned_marks(final_text: str | None) -> list[CouldNotCheckMark]:
-    """Legge le righe ``CHECK_WARNED``: guasti di cui il turno ha avvisato l'utente.
-
-    Stessa forma e stesso parser degli altri tre. ``reason`` non viene letta da
-    nessuno — a contare è quale task — e sul monitor, che ha un controllo solo,
-    conta la sola presenza di una riga.
-    """
-    return _parse_marks(final_text, WARNED_MARKER)
+    return _first_reason(final_text, marker) is not None
 
 
 def is_only_markers(text: str | None) -> bool:
@@ -252,9 +206,11 @@ def _is_specimen(head: str) -> bool:
     return head.startswith("<")
 
 
-def _parse_marks(final_text: str | None, marker: str) -> list[CouldNotCheckMark]:
-    """Corpo condiviso dai quattro marcatori. Nessuno è prefisso di un altro."""
-    marks: list[CouldNotCheckMark] = []
+def _first_reason(final_text: str | None, marker: str) -> str | None:
+    """Quel che segue la prima riga *marker* vera (non il suo modello), o ``None``.
+
+    Corpo condiviso dai quattro marcatori. Nessuno è prefisso di un altro.
+    """
     for line in (final_text or "").splitlines():
         stripped = line.strip().lstrip(_MARKER_DECORATION)
         if not stripped.startswith(marker):
@@ -268,18 +224,12 @@ def _parse_marks(final_text: str | None, marker: str) -> list[CouldNotCheckMark]
             # Forma B8: ``CHECK_FAILED: motivo``. Il motivo può contenere due
             # punti a sua volta, quindi qui non si va a cercare un separatore —
             # si toglie quello iniziale e basta.
-            marks.append(
-                CouldNotCheckMark(None, rest.lstrip(_SEPARATORS).strip()[:REASON_MAX_CHARS])
-            )
-            continue
+            return rest.lstrip(_SEPARATORS).strip()[:REASON_MAX_CHARS]
         match = _REF_RE.match(head)
         if match is not None:
-            marks.append(
-                CouldNotCheckMark(match.group(1), match.group(2).strip()[:REASON_MAX_CHARS])
-            )
-            continue
-        marks.append(CouldNotCheckMark(None, head.strip()[:REASON_MAX_CHARS]))
-    return marks
+            return match.group(2).strip()[:REASON_MAX_CHARS]
+        return head.strip()[:REASON_MAX_CHARS]
+    return None
 
 
 def could_not_check_reason(final_text: str | None) -> str | None:
@@ -291,5 +241,4 @@ def could_not_check_reason(final_text: str | None) -> str | None:
         vuota se non ne ha scritto uno: chi chiama deve distinguere con
         ``is not None``, non sulla verità della stringa.
     """
-    marks = parse_could_not_check_marks(final_text)
-    return marks[0].reason if marks else None
+    return _first_reason(final_text, COULD_NOT_CHECK_MARKER)

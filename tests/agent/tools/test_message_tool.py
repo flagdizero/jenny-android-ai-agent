@@ -671,7 +671,7 @@ async def test_a_protocol_marker_never_reaches_the_user(marker: str) -> None:
     """Misurato il 2026-08-24 sul transcript del dispositivo: ``CHECK_OK 1``
     consegnato in chat il 16, 17 e 23 agosto, ``CHECK_OK`` il 23. Sbaglia due
     volte — l'utente riceve una parola d'ordine interna e il verdetto non viene
-    registrato, perché ``parse_ok_marks`` legge il testo finale del turno e non
+    registrato, perché ``has_mark(…, CHECK_OK)`` legge il testo finale del turno e non
     l'argomento di un tool."""
     sent: list[OutboundMessage] = []
     tool = _silent_tool(sent)
