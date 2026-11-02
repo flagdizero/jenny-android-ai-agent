@@ -9,9 +9,10 @@ import re
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Generic, TypeVar
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -285,11 +286,16 @@ def rotate_valid_json_backup(
         json.loads(content)
     except (OSError, ValueError):
         return
-    backup = path.with_name(path.name + ".bak")
+    backup = backup_path(path)
     if write is None:
         atomic_write(backup, content, fsync_dir=False)
     else:
         write(backup, content)
+
+
+def backup_path(path: Path) -> Path:
+    """``<nome>.bak``, la copia che :func:`rotate_valid_json_backup` tiene accanto."""
+    return path.with_name(path.name + ".bak")
 
 
 def quarantine(path: Path) -> Path | None:
@@ -318,6 +324,81 @@ def quarantine(path: Path) -> Path | None:
         logger.warning("could not set aside %s: %s", path, exc)
         return None
     return target
+
+
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class Recovered(Generic[_T]):
+    """Quel che :func:`load_with_recovery` ha letto, e da dove.
+
+    *recovered_from* è ``None`` per un file buono o assente (*value* ``None``),
+    ``"backup"`` quando *value* viene dal ``.bak``, ``"empty"`` quando non si è
+    letto niente. *quarantined* è dove è finito il file rotto. *stuck* vuol dire
+    che il file rotto **non** si è potuto spostare: è ancora al suo posto, ed è
+    l'unica copia di quel che c'era, quindi niente ci deve scrivere sopra.
+    """
+
+    value: _T | None = None
+    recovered_from: str | None = None
+    quarantined: Path | None = None
+    stuck: bool = False
+
+
+def load_with_recovery(
+    path: Path,
+    parse: Callable[[Path], _T],
+    *,
+    errors: tuple[type[BaseException], ...] = (OSError, ValueError),
+    write: Callable[[Path, str], None] | None = None,
+) -> Recovered[_T]:
+    """Legge un file di stato con la sua rete: il file, poi il ``.bak``, poi niente.
+
+    La stessa politica per config, cron e bacheca, che la scrivevano tre volte
+    (e divergevano proprio sul caso difficile). *parse* legge un percorso e
+    solleva uno di *errors* se non è usabile. Un file rotto non si cancella: va
+    di lato con :func:`quarantine`, e se il ``.bak`` si legge lo si rimette al
+    posto del vivo (con *write*, di serie ``atomic_write``), altrimenti ogni
+    lettura rifarebbe il recupero — e la bacheca, che non lo faceva, alla seconda
+    lettura trovava il quaderno vuoto.
+
+    Se lo spostamento fallisce, non si promuove niente e il risultato è
+    ``stuck``: il valore del ``.bak`` (se c'è) vale in memoria, ma chi chiama
+    deve rifiutare le scritture finché il file rotto è lì. Cosa vuol dire
+    rifiutare lo decide lui: il cron non parte, la config parte e non salva.
+    """
+    if not path.exists():
+        return Recovered()
+    try:
+        return Recovered(parse(path))
+    except errors as exc:
+        logger.error("%s is unusable: %s", path, exc)
+
+    backup = backup_path(path)
+    from_backup = False
+    value: _T | None = None
+    if backup.exists():
+        try:
+            value = parse(backup)
+            from_backup = True
+        except errors as exc:
+            logger.error("backup %s is unusable too: %s", backup, exc)
+    kind = "backup" if from_backup else "empty"
+
+    target = quarantine(path)
+    if target is None:
+        logger.error("could not set aside %s: it stays in place, and is not written over", path)
+        return Recovered(value, kind, None, stuck=True)
+    if from_backup:
+        try:
+            (write or atomic_write)(path, backup.read_text(encoding="utf-8"))
+        except OSError as exc:
+            logger.warning("could not put %s back in place of %s: %s", backup.name, path, exc)
+        logger.warning("%s recovered from %s; broken file kept as %s", path, backup.name, target)
+    else:
+        logger.warning("%s could not be recovered; starting empty. Broken file kept as %s", path, target)
+    return Recovered(value, kind, target)
 
 
 _PATH_LOCKS: dict[str, threading.Lock] = {}

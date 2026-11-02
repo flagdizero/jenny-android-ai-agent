@@ -48,9 +48,11 @@ async def mutate(
     ruota il backup. Qualsiasi altro valore (incluso ``None``) salva.
 
     Restituisce la config risultante, già pronta per il payload di risposta.
+    Solleva ``loader.ConfigWriteRefusedError`` se il file è rotto e non si è potuto
+    spostare di lato: scriverci sopra cancellerebbe l'unica copia.
     """
     async with _LOCK:
-        config, raw = load_config_with_raw(config_path)
+        config, raw = load_config_with_raw(config_path, for_write=True)
         if apply(config) is False:
             return config
         save_config(config, config_path, preserve_unknown_from=raw)

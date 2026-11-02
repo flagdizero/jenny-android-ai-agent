@@ -33,7 +33,7 @@ from jenny.cron.types import (
 from jenny.runtime import power
 from jenny.session.keys import normalize_user_session_key
 from jenny.utils.clock import now_ms as _now_ms
-from jenny.utils.path import atomic_write, quarantine, rotate_valid_json_backup
+from jenny.utils.path import atomic_write, load_with_recovery, rotate_valid_json_backup
 
 if TYPE_CHECKING:
     from jenny.cron.monitor_followup import MonitorFollowup
@@ -454,10 +454,6 @@ class CronService:
             changed = self._enforce_agent_binding(job) or changed
         return changed
 
-    @property
-    def _backup_path(self) -> Path:
-        return self.store_path.with_name(self.store_path.name + ".bak")
-
     def _rotate_backup(self) -> None:
         """Conserva l'ultimo contenuto *valido* come ``jobs.json.bak``."""
         try:
@@ -537,26 +533,14 @@ class CronService:
             paused_at_ms=j.get("pausedAtMs"),
         )
 
-    def _quarantine_store(self) -> Path | None:
-        """Sposta di lato lo store illeggibile. ``None`` se non ci è riuscita.
-
-        La distinzione è tutto: finché il file rotto è ancora al suo posto, il
-        primo ``_save_store`` lo sovrascrive e i job dell'utente non esistono
-        più da nessuna parte. Una volta spostato, invece, ripartire da una
-        lista vuota è recuperabile — ed è la scelta che facciamo.
-        """
-        target = quarantine(self.store_path)
-        if target is None:
-            logger.error("Could not set aside the broken cron store at {}", self.store_path)
-        return target
-
     def _load_jobs(self) -> _LoadedStore | None:
         """Load jobs from disk, recovering from ``jobs.json.bak`` when needed.
 
-        Stessa politica di ``config.json`` (vedi ``config/loader.py``): un file
-        illeggibile non deve impedire l'avvio, ma non deve nemmeno sparire in
-        silenzio. Nell'ordine: il file vivo, poi il backup dell'ultimo
-        salvataggio buono, poi una lista vuota.
+        Stessa politica di ``config.json`` e della bacheca, e la stessa funzione
+        (``utils.path.load_with_recovery``): un file illeggibile non deve
+        impedire l'avvio, ma non deve nemmeno sparire in silenzio. Nell'ordine:
+        il file vivo, poi il backup dell'ultimo salvataggio buono (rimesso al
+        suo posto), poi una lista vuota.
 
         Il ripiego lo *riporta* soltanto: decidere se accettarlo — e quindi se
         avvisare l'utente — tocca a ``_load_store``, che è l'unico a sapere se
@@ -566,44 +550,11 @@ class CronService:
             ``None`` solo quando il file rotto **non** si è potuto spostare di
             lato, perché salvarci sopra distruggerebbe l'unica copia rimasta.
         """
-        if not self.store_path.exists():
-            return _LoadedStore([], 1, None, None)
-
-        try:
-            jobs, version = self._parse_jobs(self.store_path)
-        except Exception:
-            logger.exception("Failed to load cron store at {}", self.store_path)
-        else:
-            return _LoadedStore(jobs, version, None, None)
-
-        backup = self._backup_path
-        if backup.exists():
-            try:
-                jobs, version = self._parse_jobs(backup)
-            except Exception:
-                logger.exception("Cron store backup at {} is unusable too", backup)
-            else:
-                quarantined = self._quarantine_store()
-                if quarantined is None:
-                    return None
-                # Il backup diventa il file vivo, altrimenti ogni avvio
-                # rifarebbe il recupero e il primo salvataggio ripartirebbe da
-                # un grezzo rotto.
-                with suppress(OSError):
-                    atomic_write(self.store_path, backup.read_text(encoding="utf-8"))
-                logger.warning(
-                    "Cron store recovered from {}; broken file kept at {}", backup, quarantined
-                )
-                return _LoadedStore(jobs, version, "backup", quarantined)
-
-        quarantined = self._quarantine_store()
-        if quarantined is None:
+        got = load_with_recovery(self.store_path, self._parse_jobs, errors=(Exception,))
+        if got.stuck:
             return None
-        logger.warning(
-            "Cron store could not be recovered; starting with no jobs. Broken file kept at {}",
-            quarantined,
-        )
-        return _LoadedStore([], 1, "empty", quarantined)
+        jobs, version = got.value or ([], 1)
+        return _LoadedStore(jobs, version, got.recovered_from, got.quarantined)
 
     @staticmethod
     def _record_recovery(kind: str, quarantined: Path) -> None:

@@ -13,8 +13,9 @@ import pytest
 from loguru import logger as loguru_logger
 
 from jenny.config import store
-from jenny.config.loader import _backup_path, load_config, save_config
+from jenny.config.loader import load_config, save_config
 from jenny.config.schema import Config, ProviderConfig
+from jenny.utils.path import backup_path as _backup_path
 
 
 def _names(path) -> list[str]:
