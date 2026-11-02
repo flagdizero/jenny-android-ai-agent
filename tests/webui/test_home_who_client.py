@@ -230,7 +230,7 @@ def _run(body: str) -> None:
         root = Path(tmp)
         (root / "shared").mkdir()
         shutil.copy(WHO_JS, root / "home-who.js")
-        for name in ("conversation-list.js", "spines.js", "type-ahead.js"):
+        for name in ("conversation-list.js", "spines.js", "type-ahead.js", "when.js"):
             shutil.copy(ASSETS / "shared" / name, root / "shared" / name)
         for name, text in _neighbors().items():
             (root / "shared" / name).write_text(text, encoding="utf-8")

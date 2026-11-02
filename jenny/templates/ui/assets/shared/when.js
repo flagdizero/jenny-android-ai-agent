@@ -27,6 +27,25 @@ export function dayOffset(at, now = Date.now()) {
   return Math.round((day(now) - day(at)) / 86400000);
 }
 
+/** «2 ore fa» da un mtime unix in **secondi**; `''` se non si sa.
+ *
+ *  Le chiavi sono `scope.ago.*`, le stesse per i due gusci (la tendina
+ *  dell'officina e il pannello «con chi parli» della casa). Un'ora e'
+ *  singolare — da 60 a 119 minuti si leggeva «1 ore fa» — e i giorni si
+ *  contano sul calendario, come `dayOffset`: a blocchi di 24 ore, 47 ore fa
+ *  era «ieri» anche quando era l'altro ieri. */
+export function ago(modified, now = Date.now()) {
+  if (!modified) return '';
+  const minutes = Math.floor((now / 1000 - modified) / 60);
+  if (minutes < 2) return i18n.t('scope.ago.now');
+  if (minutes < 60) return i18n.t('scope.ago.minutes', { n: String(minutes) });
+  const hours = Math.floor(minutes / 60);
+  if (hours === 1) return i18n.t('scope.ago.hour');
+  if (hours < 24) return i18n.t('scope.ago.hours', { n: String(hours) });
+  const days = Math.max(1, dayOffset(modified * 1000, now));
+  return days === 1 ? i18n.t('scope.ago.yesterday') : i18n.t('scope.ago.days', { n: String(days) });
+}
+
 /** «oggi alle 14:22» o «ieri alle 14:22», o `''` per un giorno piu' lontano:
  *  li' ogni posto dice la data a modo suo (un giorno della settimana, «3 giorni
  *  fa», «3 ott»). Un momento nel futuro (un orologio indietro) conta come oggi.

@@ -24,9 +24,8 @@ import { showToast } from './utils.js';
 import { deleteProjectFlow } from './project-delete.js';
 import { createProjectFlow } from './project-create.js';
 import { rpc } from './rpc-client.js';
-import {
-  ConversationList, UNOPENABLE_HINT_KEYS, ago, projectKey,
-} from './conversation-list.js';
+import { ConversationList, UNOPENABLE_HINT_KEYS, projectKey } from './conversation-list.js';
+import { ago } from './when.js';
 
 /** Quanto del nome entra nel placeholder prima dei puntini.
  *
@@ -587,7 +586,7 @@ export class ScopeChip {
    *  passa chi chiama: quel modulo non importa niente, apposta.
    */
   _ago(modified) {
-    return ago(modified, (key, vars) => i18n.t(key, vars));
+    return ago(modified);
   }
 }
 

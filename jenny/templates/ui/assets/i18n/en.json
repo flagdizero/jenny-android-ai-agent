@@ -926,6 +926,7 @@
     "ago": {
       "now": "just now",
       "minutes": "{n} min ago",
+      "hour": "1 h ago",
       "hours": "{n} h ago",
       "yesterday": "yesterday",
       "days": "{n} days ago"

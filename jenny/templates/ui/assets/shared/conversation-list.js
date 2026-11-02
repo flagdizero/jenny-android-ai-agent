@@ -11,7 +11,7 @@
  *  Disegnare non e' mestiere di questo modulo, e infatti non tocca il DOM.
  *
  *  **Non importa niente**: ne' la rete ne' le traduzioni. La fetch arriva dal
- *  costruttore, il traduttore da chi chiama `ago()`. E' la forma di
+ *  costruttore; «da quanto» lo dice `ago()` in `when.js`. E' la forma di
  *  `wire-error.js`, e la ragione e' la stessa: i due gusci lo montano ognuno
  *  col proprio, e un banco di prova puo' esercitare *questo* codice invece di
  *  ricostruirne una copia che gli somiglia.
@@ -212,23 +212,4 @@ export class ConversationList {
       return false;
     }
   }
-}
-
-/** "2 ore fa" da un mtime unix in secondi. Stringa vuota se non si sa.
- *
- *  `t` e' il traduttore di chi chiama — v. la nota in cima al file. Le chiavi
- *  sono `scope.ago.*`, e sono le stesse per tutti e due i gusci: una seconda
- *  copia di quelle cinque frasi sarebbe una seconda cosa da tenere allineata,
- *  per dire esattamente la stessa cosa.
- */
-export function ago(modified, t) {
-  if (!modified) return '';
-  const minutes = Math.floor((Date.now() / 1000 - modified) / 60);
-  if (minutes < 2) return t('scope.ago.now');
-  if (minutes < 60) return t('scope.ago.minutes', { n: String(minutes) });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('scope.ago.hours', { n: String(hours) });
-  const days = Math.floor(hours / 24);
-  if (days === 1) return t('scope.ago.yesterday');
-  return t('scope.ago.days', { n: String(days) });
 }

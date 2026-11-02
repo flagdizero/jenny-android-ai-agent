@@ -926,6 +926,7 @@
     "ago": {
       "now": "adesso",
       "minutes": "{n} min fa",
+      "hour": "1 ora fa",
       "hours": "{n} ore fa",
       "yesterday": "ieri",
       "days": "{n} giorni fa"

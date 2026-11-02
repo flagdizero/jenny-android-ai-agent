@@ -25,10 +25,11 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, function, member, requires_node, run_js
 
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
+WHEN_SRC = (ASSETS / "shared" / "when.js").read_text(encoding="utf-8")
 CSS = ASSETS / "mobile-style.css"
 I18N_DIR = ASSETS / "i18n"
 
@@ -44,7 +45,8 @@ _HARNESS = """
 import assert from 'node:assert/strict';
 
 const i18n = { t: (key) => 'i18n:' + key };
-const { ConversationList, ago } = await import('__LIST_URL__');
+const { ConversationList } = await import('__LIST_URL__');
+__AGO_FN__
 
 /* Un elemento è quel poco che `_renderMenu` e i suoi aiutanti toccano. */
 __MAKE_EL__
@@ -123,6 +125,8 @@ def _harness() -> str:
     return (
         _HARNESS.replace("__MAKE_EL__", FAKE_MENU_ELEMENT)
         .replace("__LIST_URL__", LIST_JS.as_uri())
+        # `ago` sta in `when.js`, sulla `i18n` del banco.
+        .replace("__AGO_FN__", "\n".join(function(WHEN_SRC, n) for n in ("dayOffset", "ago")))
         .replace("__PROJECTS__", member(src, "_projects"))
         .replace("__UNOPENABLE__", member(src, "_unopenable"))
         .replace("__LOAD_FAILED__", member(src, "_loadFailed"))
