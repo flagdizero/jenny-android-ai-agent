@@ -225,6 +225,47 @@ def is_wiki_page_rel(
 # che e' il registro delle wiki e non la mappa di una.
 WIKI_INDEX_FILENAME = "index.md"
 
+# Il tetto della mappa, in caratteri: quanto ne entra nel blocco di progetto di
+# ogni turno (``agent/context.py``, T3) e la soglia oltre cui il giardiniere la
+# pota (``agent/gardener.py``). Si paga a **ogni** turno del progetto, quindi è
+# una soglia sui caratteri e non sui token: è quella che si legge a occhio nel
+# file. Duemila caratteri sono circa una schermata piena sul telefono, cioè
+# esattamente quel che la mappa dichiara di essere.
+#
+# Una misura per due lettori, qui e non in uno dei due:
+# ``context.py`` tira dentro mezzo repo, e il giardiniere se lo copiava per non
+# importarlo. **La copia che resta è voluta**: ``MAP_MAX_CHARS`` in
+# ``jenny/skills/llm-wiki/scripts/lint_wiki.py``, che gira anche fuori dall'app e
+# non importa ``jenny`` (v. ``FORK_BOUNDARY.md``); li tiene uguali
+# ``tests/skills/llm_wiki/test_lint_wiki.py::test_the_ceiling_matches_the_one_the_prompt_uses``.
+WIKI_MAP_MAX_CHARS = 2000
+
+
+def read_wiki_map(wiki_root: Path) -> str:
+    """Il testo di ``wiki/index.md`` spogliato ai bordi, o ``""`` se non c'è.
+
+    L'unico lettore della mappa: il blocco di progetto ci costruisce la mappa e
+    l'**ordine** delle pagine (che, con da 1 a 4 pagine nel tetto, è la loro
+    selezione), il giardiniere ci misura se va potata. Due lettori diversi
+    davano due misure: il giardiniere leggeva in UTF-8 stretto e su un indice in
+    latin-1 misurava 0, quindi non lo potava mai, mentre il prompt lo mostrava.
+
+    **Un file che non è UTF-8 non è un errore** (T6.12): si sostituiscono i byte
+    guasti invece di buttare la mappa. Degradarla ad «assente» costerebbe la
+    sezione della mappa e, peggio, l'ordine delle pagine, che a mappa vuota
+    ricade sull'alfabeto — cioè cambierebbe *quali* pagine il modello vede,
+    senza dirlo. Il segno resta visibile nel testo (il carattere di
+    sostituzione), e il rimedio lo dà il lint («Pages that are not UTF-8»).
+    """
+    try:
+        return (
+            (wiki_root / "wiki" / WIKI_INDEX_FILENAME)
+            .read_text(encoding="utf-8", errors="replace")
+            .strip()
+        )
+    except OSError:
+        return ""
+
 
 def safe_wiki_page_path(input_path: str) -> str | None:
     """Normalizza e valida un path di pagina wiki relativo.

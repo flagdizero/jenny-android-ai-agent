@@ -374,10 +374,10 @@ def test_the_ceiling_matches_the_one_the_prompt_uses(lint_wiki):
     così il giorno che uno cambia il test lo dice invece di lasciare un lint che
     avvisa alla soglia sbagliata."""
     source = (
-        Path(__file__).resolve().parents[3] / "jenny" / "agent" / "context.py"
+        Path(__file__).resolve().parents[3] / "jenny" / "utils" / "wiki_paths.py"
     ).read_text(encoding="utf-8")
 
-    assert f"_PROJECT_MAP_MAX_CHARS = {lint_wiki.MAP_MAX_CHARS}" in source
+    assert f"WIKI_MAP_MAX_CHARS = {lint_wiki.MAP_MAX_CHARS}" in source
 
 
 # ── E le pagine pure, con una differenza ─────────────────────────────────────

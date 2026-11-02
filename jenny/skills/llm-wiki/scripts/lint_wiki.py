@@ -384,7 +384,7 @@ def _decided_cap_reason(
 
 # Tetto della mappa, in caratteri. **Non è un numero scelto qui**: è la soglia
 # oltre la quale il blocco di progetto smette di iniettare la mappa intera in
-# ogni turno (``jenny/agent/context.py::_PROJECT_MAP_MAX_CHARS``). Oltre, il
+# ogni turno (``jenny/utils/wiki_paths.py::WIKI_MAP_MAX_CHARS``). Oltre, il
 # resto della mappa esiste ma l'agente non lo vede senza aprire il file — quindi
 # è un avviso che vale per **tutti** i layout, perché la mappa la riceve ogni
 # progetto.

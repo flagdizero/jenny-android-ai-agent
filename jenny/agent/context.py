@@ -39,30 +39,18 @@ from jenny.utils.helpers import (
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import (
     LEGACY_WIKI_SCHEMA_FILENAME,
-    WIKI_INDEX_FILENAME,
+    WIKI_MAP_MAX_CHARS,
     WIKI_SCHEMA_FILENAME,
     discover_wiki_roots,
     is_wiki_root,
     iter_wiki_pages,
+    read_wiki_map,
     read_wiki_scope,
     wiki_schema_file,
 )
 
-# Tetto sulla mappa di progetto iniettata nel blocco (T3). Si paga a **ogni**
-# turno del progetto, quindi e' una soglia sui caratteri e non sui token: e'
-# quella che si legge a occhio nel file, ed e' il numero che il lint usa per dire
-# a una mappa che si sta gonfiando. Duemila caratteri sono circa una schermata
-# piena sul telefono, cioe' esattamente quel che la mappa dichiara di essere.
-#
-# **Questo numero e' scritto due volte** (T3.12): la copia e'
-# ``MAP_MAX_CHARS`` in ``jenny/skills/llm-wiki/scripts/lint_wiki.py``. La
-# duplicazione e' voluta e non si puo' togliere — quello script gira anche fuori
-# dall'app e non deve importare ``jenny`` (v. ``FORK_BOUNDARY.md``) — quindi
-# quello che tiene insieme i due valori e' un test, non un import:
-# ``tests/skills/llm_wiki/test_lint_wiki.py::test_the_ceiling_matches_the_one_the_prompt_uses``
-# legge *questo* file come testo e cade se i due numeri divergono. Cambiando qui,
-# cambiare la' — o e' il lint che avvisa alla soglia sbagliata.
-_PROJECT_MAP_MAX_CHARS = 2000
+# Il tetto della mappa nel blocco di progetto: v. ``utils.wiki_paths.WIKI_MAP_MAX_CHARS``.
+_PROJECT_MAP_MAX_CHARS = WIKI_MAP_MAX_CHARS
 
 # Tetto sul **contenuto delle pagine** iniettato nel blocco di progetto (T6.4, il
 # gradino 2 di P4): oltre la mappa entrano anche le note, cosi' il turno si
@@ -302,58 +290,18 @@ def _map_page_targets(text: str) -> list[str]:
 
 
 def _read_map_source(root: Path) -> str:
-    """Il testo grezzo di ``wiki/index.md``, o stringa vuota se non c'e'. T3.7.
+    """Il testo grezzo di ``wiki/index.md`` (:func:`read_wiki_map`). T3.7.
 
     Un solo lettore per i due consumatori — il blocco della mappa
     (:meth:`ContextBuilder._read_project_map`) e l'**ordine delle pagine**
     (:func:`_pages_in_map_order`) — perche' se leggessero il file per conto loro
     la seconda potrebbe ordinare su una mappa e la prima mostrarne un'altra: fra
-    le due letture c'e' un turno del giardiniere che riscrive l'indice.
-
-    Un file assente non e' un errore: una wiki fatta a mano puo' non avere
-    indice, e in quel caso non c'e' ne' mappa da mostrare ne' ordine da imporre.
-
-    **E un file che non e' UTF-8 non e' un errore nemmeno lui** (T6.12). Prima si
-    leggeva in ``utf-8`` stretto e si catturava il solo ``OSError``: un
-    ``index.md`` salvato in latin-1 alzava ``UnicodeDecodeError`` da qui fino a
-    ``build_system_prompt``, cioe' **ogni turno di quel progetto** falliva. Non
-    era simmetrico con le pagine, che il loro lettore cattura e conta fra le
-    «rimaste fuori» (v. :meth:`ContextBuilder._read_project_pages`): la mappa era
-    la sola lettura di questo blocco che potesse spegnere un progetto.
-
-    **Si sostituiscono i byte guasti, non si butta la mappa**, e la ragione e'
-    che qui degradare a «assente» costa **due** cose e non una. La prima e' la
-    sezione della mappa, che e' il difetto dichiarato. La seconda e' invisibile e
-    peggiore: questo e' anche il lettore che decide **l'ordine** delle pagine
-    (:func:`_pages_in_map_order`), e a mappa vuota l'ordine ripiega
-    sull'alfabeto — cioe' esattamente il criterio che T3.7 ha rimosso dopo averlo
-    misurato («la prima lettera dell'alfabeto come criterio di rilevanza», con
-    ``concepts/2DCD`` in testa a una wiki da 52 pagine). Siccome nel tetto
-    entrano da 1 a 4 pagine, **l'ordine e' la selezione**: un byte guasto
-    nell'indice cambierebbe *quali* pagine il modello vede, senza dirlo. Con la
-    sostituzione i bersagli dei wikilink — che sono percorsi di file — restano
-    leggibili, e a degradare e' il solo carattere guasto.
-    E il prompt che circonda il blocco parla comunque della mappa («``wiki/index.md``
-    — **the map** … Read on every turn») anche quando la sezione non c'e': una
-    mappa assente rende quel testo una promessa falsa, e ``read_file`` su quel
-    file rifiuta a sua volta un non-UTF-8.
-
-    **Dove l'utente lo vede**: nel lint della wiki, passo 0 — «Pages that are not
-    UTF-8», che nomina il file e il byte esatto (``scripts/lint_wiki.py``,
-    ``decode_problem``). Non si logga qui: ``build_system_prompt`` gira una volta
-    per turno, quindi una riga da qui sarebbe una riga per turno per sempre su un
-    fatto che non cambia — e il rimedio («ri-salva in UTF-8») e' del lint, non
-    del turno. Nel prompt il segno resta comunque visibile, perche' il carattere
-    di sostituzione finisce nel testo della mappa.
+    le due letture c'e' un turno del giardiniere che riscrive l'indice. Un file
+    assente non e' un errore: una wiki fatta a mano puo' non avere indice.
+    Non si logga qui: ``build_system_prompt`` gira una volta per turno, e una
+    riga per turno su un file che non cambia e' rumore.
     """
-    try:
-        return (
-            (root / "wiki" / WIKI_INDEX_FILENAME)
-            .read_text(encoding="utf-8", errors="replace")
-            .strip()
-        )
-    except OSError:
-        return ""
+    return read_wiki_map(root)
 
 
 def _pages_in_map_order(entries: Sequence[str], map_text: str) -> list[str]:

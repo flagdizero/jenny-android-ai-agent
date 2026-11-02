@@ -76,9 +76,11 @@ from jenny.utils.helpers import safe_zoneinfo
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import (
     WIKI_INDEX_FILENAME,
+    WIKI_MAP_MAX_CHARS,
     is_wiki_root,
     iter_wiki_pages,
     page_chars_if_over,
+    read_wiki_map,
     wiki_journal_dir,
 )
 
@@ -106,18 +108,13 @@ _MAX_AGENTS_CHARS = 4000
 
 # Il bersaglio della mappa, in caratteri. **Non è un numero scelto qui**: è la
 # soglia oltre la quale il blocco di progetto smette di iniettare la mappa
-# intera a ogni turno (``jenny/agent/context.py::_PROJECT_MAP_MAX_CHARS``, e il
-# lint di T5 tiene lo stesso numero). Oltre, il modello vede la testa della
-# mappa e nient'altro: su una wiki reale da 12.298 caratteri di mappa il
-# troncamento lascia **5 pagine su 51** fra quelle che la mappa
-# nomina. L'elenco nudo delle stesse 51 costerebbe 1.495 caratteri — il tetto è
-# giusto, ed è la prosa nella mappa a non doverci stare.
-#
-# È duplicato e non importato perché ``jenny/agent/context.py`` tira dentro
-# mezzo repo (v. la nota su ``_CRON_TOOL_NAME`` lì) e questo modulo lo
-# importerebbe per un intero: i due numeri li tiene uguali un test, come già
-# fa il lint.
-MAP_TARGET_CHARS = 2000
+# intera a ogni turno (``utils.wiki_paths.WIKI_MAP_MAX_CHARS``, la stessa del
+# blocco e del lint di T5). Oltre, il modello vede la testa della mappa e
+# nient'altro: su una wiki reale da 12.298 caratteri di mappa il troncamento
+# lascia **5 pagine su 51** fra quelle che la mappa nomina. L'elenco nudo delle
+# stesse 51 costerebbe 1.495 caratteri — il tetto è giusto, ed è la prosa nella
+# mappa a non doverci stare.
+MAP_TARGET_CHARS = WIKI_MAP_MAX_CHARS
 
 
 def page_ceiling() -> int:
@@ -504,15 +501,15 @@ class GardenerStore:
     def map_chars(self) -> int:
         """La misura della mappa, in caratteri. ``0`` se non c'è o non si legge.
 
-        La stessa misura che il blocco di progetto confronta col suo tetto, cioè
-        il file **spogliato** ai bordi (``strip``) e non la sua dimensione su
-        disco: due numeri diversi per la stessa cosa sarebbero il modo di far
-        potare una passata che non doveva, o di non farla potare quando doveva.
+        La stessa misura, dallo stesso lettore (:func:`read_wiki_map`), che il
+        blocco di progetto confronta col suo tetto: il file **spogliato** ai
+        bordi e non la sua dimensione su disco. Due numeri diversi per la stessa
+        cosa sarebbero il modo di far potare una passata che non doveva, o di
+        non farla potare quando doveva — e fino al 02/11/2026 un indice in
+        latin-1 qui misurava 0 mentre il prompt lo mostrava, quindi non veniva
+        potato mai.
         """
-        try:
-            return len(self.map_path.read_text(encoding="utf-8").strip())
-        except (OSError, UnicodeDecodeError):
-            return 0
+        return len(read_wiki_map(self.root))
 
     def map_needs_pruning(self, state: GardenerState | None = None) -> bool:
         """Se la mappa, **da sola**, vale una passata.

@@ -357,13 +357,14 @@ class TestTheIndexFilenameHasOneDefinition:
 
     @staticmethod
     def _move_the_name(monkeypatch, new_name: str) -> None:
-        from jenny.agent import context as context_mod
         from jenny.agent import gardener as gardener_mod
         from jenny.utils import wiki_paths as wiki_paths_mod
         from jenny.webui import project_scaffold as scaffold_mod
         from jenny.webui import wiki_routes as routes_mod
 
-        for mod in (wiki_paths_mod, context_mod, gardener_mod, scaffold_mod, routes_mod):
+        # L'iniettore (``context.py``) la legge da ``wiki_paths.read_wiki_map``:
+        # non ha più un nome suo da spostare.
+        for mod in (wiki_paths_mod, gardener_mod, scaffold_mod, routes_mod):
             monkeypatch.setattr(mod, "WIKI_INDEX_FILENAME", new_name)
 
     @staticmethod
@@ -472,3 +473,23 @@ class TestTheIndexFilenameHasOneDefinition:
             source = (repo / rel).read_text(encoding="utf-8")
             found = literals.findall(source)
             assert not found, f"{rel} nomina la mappa a mano: {found}"
+
+
+class TestOneMapReaderForPromptAndGardener:
+    """Il prompt e il giardiniere misurano la mappa con lo stesso lettore.
+
+    Il giardiniere leggeva ``index.md`` in UTF-8 stretto: su un file in latin-1
+    misurava 0 e non lo potava mai, mentre il blocco di progetto lo mostrava
+    (sostituendo i byte guasti) e lo troncava al tetto.
+    """
+
+    def test_a_latin1_map_has_the_same_size_for_both(self, tmp_path):
+        from jenny.agent.context import _read_map_source
+        from jenny.agent.gardener import GardenerStore
+
+        root = tmp_path / "wikis" / "viaggio"
+        (root / "wiki").mkdir(parents=True)
+        (root / "wiki" / "index.md").write_bytes(("Città — " * 400).encode("latin-1", "replace"))
+        store = GardenerStore(root, tmp_path)
+        assert store.map_chars() == len(_read_map_source(root)) > 2000
+        assert store.map_needs_pruning() is True
