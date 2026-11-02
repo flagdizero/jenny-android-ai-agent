@@ -49,6 +49,7 @@ from jenny.security.subagent_policy import (
 )
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
+    current_notebook_root,
     current_turn_is_readonly,
     current_workspace_scope,
 )
@@ -522,9 +523,7 @@ class SuggestNotebookTool(Tool):
         name = (notebook or "").strip()
         line = " ".join((context or "").split())
         request = current_request_context()
-        scope = current_workspace_scope()
-        own = scope.write_root() if scope is not None else None
-        if own is not None and is_wiki_root(own):
+        if current_notebook_root() is not None:
             return "You are already in a notebook: there is nowhere to move. Nothing was offered."
         if request is not None and request.channel != "websocket":
             return ("A notebook opens only in the app, not from here. Nothing was offered: "

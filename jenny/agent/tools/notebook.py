@@ -52,8 +52,8 @@ from jenny.security.subagent_policy import must_stage as must_stage_subagent_wri
 from jenny.security.subagent_policy import note_write as note_subagent_write
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
+    current_notebook_root,
     current_turn_is_readonly,
-    current_workspace_scope,
 )
 from jenny.security.workspace_policy import (
     is_path_within,
@@ -179,14 +179,9 @@ class _NotebookTool(Tool):
 
     def _root(self) -> Path | None:
         from jenny.session.keys import is_project_session_key
-        from jenny.utils.wiki_paths import is_wiki_root
 
         key = self._origin or current_request_session_key() or ""
-        if not is_project_session_key(key):
-            return None
-        scope = current_workspace_scope()
-        root = scope.write_root() if scope is not None else None
-        return root if root is not None and is_wiki_root(root) else None
+        return current_notebook_root() if is_project_session_key(key) else None
 
     async def execute(self, action: str = "", **kw: Any) -> str:
         if action not in self._actions:

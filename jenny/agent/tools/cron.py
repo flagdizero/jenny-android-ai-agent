@@ -315,8 +315,7 @@ class CronTool(Tool, ContextAware):
         quaderno si cerca per nome.
         """
         from jenny.board.cron_link import notebook_root
-        from jenny.security.workspace_access import current_workspace_scope
-        from jenny.utils.wiki_paths import is_wiki_root
+        from jenny.security.workspace_access import current_notebook_root
 
         session = self._session_key.get()
         here = project_name(session) if is_project_session_key(session) else None
@@ -328,9 +327,8 @@ class CronTool(Tool, ContextAware):
                 return None, None, (
                     f"Not from here: this chat is the notebook «{here}». Ask in the personal "
                     f"chat or in «{name}» for a job of that notebook.")
-            scope = current_workspace_scope()
-            root = scope.write_root() if scope is not None else None
-            if root is None or not is_wiki_root(root):
+            root = current_notebook_root()
+            if root is None:
                 return None, None, f"No notebook «{name}» behind this chat."
             return name, root, None
         root = notebook_root(name)

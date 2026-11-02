@@ -471,12 +471,21 @@ def _attribute_reads(path: Path) -> set[str]:
     una regex li conterebbe come codice.
     """
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    return {
+    reads = {
         node.attr
         for node in ast.walk(tree)
         if isinstance(node, ast.Attribute)
         and node.attr in {"write_root", "allowed_root", "project_path"}
     }
+    # ``current_write_root``/``current_notebook_root`` sono ``write_root()`` dello
+    # scope del turno, chiesto per conto del chiamante: contano come la lettura.
+    if any(isinstance(node, ast.Name) and node.id in _WRITE_ROOT_HELPERS
+           for node in ast.walk(tree)):
+        reads.add("write_root")
+    return reads
+
+
+_WRITE_ROOT_HELPERS = frozenset({"current_write_root", "current_notebook_root"})
 
 
 def test_every_module_that_asks_for_the_write_root_has_a_probe() -> None:

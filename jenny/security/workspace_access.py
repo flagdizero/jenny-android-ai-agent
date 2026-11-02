@@ -595,6 +595,30 @@ def current_workspace_scope() -> WorkspaceScope | None:
     return _CURRENT_WORKSPACE_SCOPE.get()
 
 
+def current_write_root(default: Path) -> Path:
+    """La radice di scrittura del turno (``WorkspaceScope.write_root``), o *default*.
+
+    Senza uno scope legato — sessioni interne, test — resta *default*, il
+    workspace del costruttore di chi chiede, che in quel caso e' anche la radice
+    del turno.
+    """
+    scope = current_workspace_scope()
+    return scope.write_root() if scope is not None else default
+
+
+def current_notebook_root() -> Path | None:
+    """La cartella del quaderno di questo turno, o ``None`` se il turno non e' in uno.
+
+    E' la radice di scrittura del turno quando e' un quaderno: lo stesso confine
+    di ogni altra scrittura, quindi da un quaderno non si arriva a un altro.
+    """
+    from jenny.utils.wiki_paths import is_wiki_root
+
+    scope = current_workspace_scope()
+    root = scope.write_root() if scope is not None else None
+    return root if root is not None and is_wiki_root(root) else None
+
+
 def current_tool_workspace(
     default_workspace: str | Path | None,
     *,

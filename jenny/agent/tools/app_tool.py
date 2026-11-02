@@ -32,7 +32,6 @@ from jenny.agent.tools.schema import ObjectSchema, StringSchema, tool_parameters
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
-    current_workspace_scope,
 )
 
 _MAX_FAILURES = 6
@@ -806,7 +805,8 @@ class AppTool(Tool):
     async def _place(self, workspace: Path, slug: str, session: str, kw: dict[str, Any]) -> str:
         from jenny.apps.drafts import app_dir
         from jenny.board.placements import placements
-        from jenny.utils.wiki_paths import discover_wiki_roots, is_wiki_root
+        from jenny.security.workspace_access import current_notebook_root
+        from jenny.utils.wiki_paths import discover_wiki_roots
 
         if not (app_dir(workspace, slug) / "app.json").is_file():
             return f"No app `{slug}`: write it with action=draft first."
@@ -814,9 +814,8 @@ class AppTool(Tool):
 
         root = None
         if is_project_session_key(session):
-            scope = current_workspace_scope()
-            root = scope.write_root() if scope is not None else None
-            if root is None or not is_wiki_root(root):
+            root = current_notebook_root()
+            if root is None:
                 return "This notebook has no folder I can find."
         else:
             name = kw.get("notebook")
