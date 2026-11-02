@@ -5,7 +5,7 @@ import { rpc } from './shared/rpc-client.js';
 import { escapeHtml, showToast } from './shared/utils.js';
 import { copyWithToast } from './shared/reply.js';
 import { i18n } from './shared/i18n.js';
-import { confirmDialog, detailDialog } from './shared/dialog.js';
+import { confirmDialog, detailDialog, formDialog } from './shared/dialog.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
 import { RemoteAccessPanel, remoteSummary } from './mobile-remote-access.js';
 import { getProviderBrand } from './shared/provider-brand.js';
@@ -2137,15 +2137,13 @@ export class SettingsController {
        il `[hidden] { display:none }` dello user-agent. Con `hidden` il campo
        resterebbe a schermo su un host a chiave. */
     const passwordFieldStyle = auth === 'password' ? '' : 'display:none';
-    const dialog = document.createElement('dialog');
-    dialog.className = 'oc-dialog';
-    dialog.id = 'ssh-host-dialog';
     const value = (field, fallback = '') => escapeHtml(String(existing?.[field] ?? fallback));
-    dialog.innerHTML = `
-      <div class="oc-dialog-inner">
-        <h3 style="margin:0 0 16px;font-size:15px;font-weight:600">
-          ${isEdit ? i18n.t('settings.ssh.editHost') : i18n.t('settings.ssh.addHost')}
-        </h3>
+    formDialog({
+      id: 'ssh-host-dialog',
+      title: isEdit ? i18n.t('settings.ssh.editHost') : i18n.t('settings.ssh.addHost'),
+      okText: i18n.t('settings.save'),
+      cancelText: i18n.t('common.cancel'),
+      bodyHtml: `
         <div class="settings-field">
           <label class="settings-label">${i18n.t('settings.ssh.alias')}</label>
           <input type="text" class="settings-input" id="dlg-ssh-alias" placeholder="${i18n.t('settings.ssh.aliasPlaceholder')}"
@@ -2187,63 +2185,58 @@ export class SettingsController {
           <span class="settings-field-hint">${existing?.has_password
             ? i18n.t('settings.ssh.passwordKeepBlank')
             : i18n.t('settings.ssh.passwordHint')}</span>
-        </div>
-        <div class="oc-dialog-buttons" style="margin-top:16px">
-          <button class="oc-btn oc-btn-cancel" id="dlg-ssh-cancel">${i18n.t('common.cancel')}</button>
-          <button class="oc-btn oc-btn-confirm" id="dlg-ssh-save">${i18n.t('settings.save')}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(dialog);
-    dialog.showModal();
-
-    const close = () => { dialog.close(); dialog.remove(); };
-    const authEl = dialog.querySelector('#dlg-ssh-auth');
-    const passwordField = dialog.querySelector('#dlg-ssh-password-field');
-    const passwordEl = dialog.querySelector('#dlg-ssh-password');
-    /* Passando a "chiave" il campo password viene anche svuotato, non solo
-       nascosto: un campo nascosto ma pieno resterebbe nel DOM, e il valore
-       digitato per ripensarci un attimo dopo non ha motivo di sopravvivere al
-       cambio di modo. */
-    authEl.addEventListener('change', () => {
-      const byPassword = authEl.value === 'password';
-      // Stringa vuota, non 'flex': così torna a valere la regola della classe.
-      passwordField.style.display = byPassword ? '' : 'none';
-      if (!byPassword) passwordEl.value = '';
-    });
-
-    dialog.querySelector('#dlg-ssh-cancel').addEventListener('click', close);
-    dialog.querySelector('#dlg-ssh-save').addEventListener('click', async () => {
-      const params = {
-        alias: dialog.querySelector('#dlg-ssh-alias').value.trim(),
-        host: dialog.querySelector('#dlg-ssh-host').value.trim(),
-        port: dialog.querySelector('#dlg-ssh-port').value.trim() || '22',
-        username: dialog.querySelector('#dlg-ssh-username').value.trim(),
-        description: dialog.querySelector('#dlg-ssh-description').value.trim(),
-        auth: authEl.value,
-      };
-      if (!params.alias || !params.host || !params.username) {
-        showToast(i18n.t('settings.ssh.fieldsRequired'), 'error');
-        return;
-      }
-      if (params.auth === 'password') {
-        // Niente `.trim()`: gli spazi in una password sono contenuto. Il campo
-        // vuoto vale "tieni quella salvata", e senza niente di salvato il
-        // server rifiuta comunque — questo controllo evita solo il giro.
-        const typed = passwordEl.value;
-        if (!typed && !existing?.has_password) {
-          showToast(i18n.t('settings.ssh.passwordRequired'), 'error');
-          return;
+        </div>`,
+      setup: (dialog) => {
+        const authEl = dialog.querySelector('#dlg-ssh-auth');
+        const passwordField = dialog.querySelector('#dlg-ssh-password-field');
+        const passwordEl = dialog.querySelector('#dlg-ssh-password');
+        /* Passando a "chiave" il campo password viene anche svuotato, non solo
+           nascosto: un campo nascosto ma pieno resterebbe nel DOM, e il valore
+           digitato per ripensarci un attimo dopo non ha motivo di sopravvivere al
+           cambio di modo. */
+        authEl.addEventListener('change', () => {
+          const byPassword = authEl.value === 'password';
+          // Stringa vuota, non 'flex': così torna a valere la regola della classe.
+          passwordField.style.display = byPassword ? '' : 'none';
+          if (!byPassword) passwordEl.value = '';
+        });
+      },
+      onOk: async (dialog) => {
+        const field = (id) => dialog.querySelector(`#dlg-ssh-${id}`);
+        const params = {
+          alias: field('alias').value.trim(),
+          host: field('host').value.trim(),
+          port: field('port').value.trim() || '22',
+          username: field('username').value.trim(),
+          description: field('description').value.trim(),
+          auth: field('auth').value,
+        };
+        if (!params.alias || !params.host || !params.username) {
+          showToast(i18n.t('settings.ssh.fieldsRequired'), 'error');
+          return undefined;
         }
-        if (typed) params.password = typed;
-      }
-      try {
-        await rpc.saveSshHost(params);
-        close();
+        if (params.auth === 'password') {
+          // Niente `.trim()`: gli spazi in una password sono contenuto. Il campo
+          // vuoto vale "tieni quella salvata", e senza niente di salvato il
+          // server rifiuta comunque — questo controllo evita solo il giro.
+          const typed = field('password').value;
+          if (!typed && !existing?.has_password) {
+            showToast(i18n.t('settings.ssh.passwordRequired'), 'error');
+            return undefined;
+          }
+          if (typed) params.password = typed;
+        }
+        try {
+          await rpc.saveSshHost(params);
+        } catch (e) {
+          showToast(e.message, 'error');
+          return undefined;
+        }
         showToast(i18n.t('settings.saved'));
         this._loadSsh();
-      } catch (e) { showToast(e.message, 'error'); }
+        return true;
+      },
     });
-    dialog.addEventListener('close', () => dialog.remove());
   }
 
   // ── I file veri ────────────────────────────────────────────────────
@@ -3228,7 +3221,8 @@ export class SettingsController {
   }
 
   /* keepStoredKey: il provider ha già una chiave salvata, quindi un campo
-     vuoto significa "lasciala com'è" e non va segnalato come errore. */
+     vuoto significa "lasciala com'è" e non va segnalato come errore.
+     Vero se il dialog si chiude, `undefined` se resta aperto (v. `formDialog`). */
   /* Salva una marca. In aggiunta, la finisce.
    *
    * **Una marca senza un modello che funziona non e' una marca che c'e'.**
@@ -3251,23 +3245,16 @@ export class SettingsController {
   ) {
     if (!name || (!apiKey && !keepStoredKey)) {
       showToast(i18n.t('settings.nameAndKeyRequired'), 'error');
-      return;
+      return undefined;
     }
     if (useItNow && !firstModel) {
       showToast(i18n.t('settings.firstModelRequired'), 'error');
-      return;
+      return undefined;
     }
 
-    // Finestra di salvataggio in volo: finché la richiesta è in corso il
-    // dialog non deve poter sparire. Un Indietro dispatcha un `cancel` che
-    // nessuno preveniva, il listener `close` faceva remove(), e la chiave API
-    // appena digitata se ne andava col DOM lasciando solo un toast. Il flag
-    // vive sul dataset perché è il `cancel` a doverlo leggere.
-    const dialog = document.getElementById('provider-dialog');
-    const buttons = dialog ? [...dialog.querySelectorAll('.oc-btn')] : [];
-    if (dialog) dialog.dataset.busy = '1';
-    buttons.forEach(b => { b.disabled = true; });
-
+    // Finché la richiesta è in corso il dialog non può sparire: lo tiene
+    // occupato `formDialog`, che aspetta questa Promise. Prima un Indietro lo
+    // smontava, e la chiave API appena digitata se ne andava col DOM.
     try {
       await rpc.updateProvider({
         name, format, api_key: apiKey, api_base: apiBase,
@@ -3276,10 +3263,7 @@ export class SettingsController {
       });
     } catch (e) {
       showToast(e.message, 'error');
-      return;
-    } finally {
-      if (dialog) delete dialog.dataset.busy;
-      buttons.forEach(b => { b.disabled = false; });
+      return undefined;
     }
 
     /* La seconda scrittura, e solo se l'hai chiesto. Separata dalla prima
@@ -3291,16 +3275,15 @@ export class SettingsController {
       try {
         await api.updateSettings({ model: firstModel, default_provider: name });
       } catch (e) {
-        this._closeProviderDialog();
         showToast(i18n.t('settings.providerSavedNotActive', { error: e.message }), 'error');
         this.loadSettings();
-        return;
+        return true;
       }
     }
 
-    this._closeProviderDialog();
     showToast(useItNow ? i18n.t('settings.providerSavedAndActive') : i18n.t('settings.providerSaved'));
     this.loadSettings();
+    return true;
   }
 
   _editProvider(name) {
@@ -3328,11 +3311,6 @@ export class SettingsController {
       .catch(e => showToast(e.message, 'error'));
   }
 
-  _closeProviderDialog() {
-    const dialog = document.getElementById('provider-dialog');
-    if (dialog) { dialog.close(); dialog.remove(); }
-  }
-
   _saveWebSearch() {
     const v = k => this._val(k);
     const payload = {
@@ -3358,14 +3336,12 @@ export class SettingsController {
     const keyPlaceholder = hasStoredKey
       ? existingProvider.api_key_hint
       : i18n.t('settings.apiKeyPlaceholder');
-    const dialog = document.createElement('dialog');
-    dialog.className = 'oc-dialog';
-    dialog.id = 'provider-dialog';
-    dialog.innerHTML = `
-      <div class="oc-dialog-inner">
-        <h3 style="margin:0 0 16px;font-size:15px;font-weight:600">
-          ${isEdit ? i18n.t('settings.editProvider') : i18n.t('settings.addProviderTitle')}
-        </h3>
+    formDialog({
+      id: 'provider-dialog',
+      title: isEdit ? i18n.t('settings.editProvider') : i18n.t('settings.addProviderTitle'),
+      okText: i18n.t('settings.save'),
+      cancelText: i18n.t('common.cancel'),
+      bodyHtml: `
         <div class="settings-field">
           <label class="settings-label">${i18n.t('settings.name')}</label>
           <input type="text" class="settings-input" id="dlg-provider-name" ${NO_AUTOCORRECT} placeholder="${i18n.t('settings.namePlaceholder')}"
@@ -3411,79 +3387,59 @@ export class SettingsController {
             placeholder="${i18n.t('settings.firstModelPlaceholder')}" ${NO_AUTOCORRECT} value="" />
           <span class="settings-field-hint">${i18n.t('settings.firstModelHint')}</span>
         </div>
-        <p class="settings-field-hint" id="dlg-first-model-later" hidden>${i18n.t('settings.firstModelLater')}</p>`}
-        <div class="oc-dialog-buttons" style="margin-top:16px">
-          <button class="oc-btn oc-btn-cancel" id="dlg-provider-cancel">${i18n.t('common.cancel')}</button>
-          <button class="oc-btn oc-btn-confirm" id="dlg-provider-save">${i18n.t('settings.save')}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(dialog);
-    dialog.showModal();
-
-    const formatSelect = dialog.querySelector('#dlg-provider-format');
-    const baseInput = dialog.querySelector('#dlg-api-base');
-    /* «First model» vale solo con «Use it now»: spento, il modello scritto non
-       andava da nessuna parte (una marca non ha un modello suo) e spariva
-       senza dirlo. Spento, il campo si nasconde e una riga dice quando lo si
-       sceglie. */
-    const useNow = dialog.querySelector('#dlg-use-now');
-    const syncFirstModel = () => {
-      const on = !!useNow?.checked;
-      const field = dialog.querySelector('#dlg-first-model-field');
-      const later = dialog.querySelector('#dlg-first-model-later');
-      if (field) field.hidden = !on;
-      if (later) later.hidden = on;
-    };
-    useNow?.addEventListener('change', syncFirstModel);
-    syncFirstModel();
-    formatSelect.addEventListener('change', () => {
-      baseInput.placeholder = DEFAULT_API_BASE[formatSelect.value] || '';
+        <p class="settings-field-hint" id="dlg-first-model-later" hidden>${i18n.t('settings.firstModelLater')}</p>`}`,
+      setup: (dialog) => {
+        const formatSelect = dialog.querySelector('#dlg-provider-format');
+        const baseInput = dialog.querySelector('#dlg-api-base');
+        /* «First model» vale solo con «Use it now»: spento, il modello scritto non
+           andava da nessuna parte (una marca non ha un modello suo) e spariva
+           senza dirlo. Spento, il campo si nasconde e una riga dice quando lo si
+           sceglie. */
+        const useNow = dialog.querySelector('#dlg-use-now');
+        const syncFirstModel = () => {
+          const on = !!useNow?.checked;
+          const field = dialog.querySelector('#dlg-first-model-field');
+          const later = dialog.querySelector('#dlg-first-model-later');
+          if (field) field.hidden = !on;
+          if (later) later.hidden = on;
+        };
+        useNow?.addEventListener('change', syncFirstModel);
+        syncFirstModel();
+        formatSelect.addEventListener('change', () => {
+          baseInput.placeholder = DEFAULT_API_BASE[formatSelect.value] || '';
+        });
+      },
+      onOk: (dialog) => {
+        const name = dialog.querySelector('#dlg-provider-name').value.trim();
+        const format = dialog.querySelector('#dlg-provider-format').value;
+        const apiKey = dialog.querySelector('#dlg-api-key').value.trim();
+        const useNow = dialog.querySelector('#dlg-use-now');
+        // L'indirizzo si controlla qui per dirlo nella lingua di chi legge; il
+        // server lo ricontrolla (v. `shared/api-base.js`).
+        const base = normalizeApiBase(dialog.querySelector('#dlg-api-base').value);
+        if (base.error) {
+          showToast(i18n.t('settings.baseUrlInvalid'), 'error');
+          dialog.querySelector('#dlg-api-base').focus();
+          return undefined;
+        }
+        const apiBase = base.value;
+        const caBundle = dialog.querySelector('#dlg-ca-bundle').value.trim();
+        // In modifica il campo vuoto vale sempre "tieni la chiave salvata":
+        // il provider esiste già, non serve ridigitarla per cambiare l'URL.
+        // Per la CA vale l'opposto — campo vuoto significa "nessuna CA" — ma la
+        // stringa vuota non sopravvive alla query, quindi svuotarla si dichiara.
+        return this._saveProvider(name, format, apiKey, apiBase, {
+          keepStoredKey: isEdit,
+          caBundle,
+          clearCaBundle: !caBundle && !!(isEdit && existingProvider.ca_bundle),
+          /* Solo in aggiunta, mai in modifica: cambiare l'endpoint di una marca
+             gia' in uso non deve poter cambiare anche chi risponde. */
+          firstModel: isEdit || !useNow?.checked
+            ? '' : (dialog.querySelector('#dlg-first-model')?.value.trim() || ''),
+          useItNow: !isEdit && !!useNow?.checked,
+        });
+      },
     });
-
-    // Anche Annulla passa dal `cancel` annullabile, come Esc e il tasto
-    // Indietro: chiamando close() dritto scavalcava il guard del salvataggio in
-    // volo, e restava l'unica via per perdere la chiave API a metà richiesta.
-    dialog.querySelector('#dlg-provider-cancel').addEventListener('click', () => {
-      if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) this._closeProviderDialog();
-    });
-    dialog.querySelector('#dlg-provider-save').addEventListener('click', () => {
-      const name = dialog.querySelector('#dlg-provider-name').value.trim();
-      const format = dialog.querySelector('#dlg-provider-format').value;
-      const apiKey = dialog.querySelector('#dlg-api-key').value.trim();
-      // L'indirizzo si controlla qui per dirlo nella lingua di chi legge; il
-      // server lo ricontrolla (v. `shared/api-base.js`).
-      const base = normalizeApiBase(dialog.querySelector('#dlg-api-base').value);
-      if (base.error) {
-        showToast(i18n.t('settings.baseUrlInvalid'), 'error');
-        baseInput.focus();
-        return;
-      }
-      const apiBase = base.value;
-      const caBundle = dialog.querySelector('#dlg-ca-bundle').value.trim();
-      // In modifica il campo vuoto vale sempre "tieni la chiave salvata":
-      // il provider esiste già, non serve ridigitarla per cambiare l'URL.
-      // Per la CA vale l'opposto — campo vuoto significa "nessuna CA" — ma la
-      // stringa vuota non sopravvive alla query, quindi svuotarla si dichiara.
-      this._saveProvider(name, format, apiKey, apiBase, {
-        keepStoredKey: isEdit,
-        caBundle,
-        clearCaBundle: !caBundle && !!(isEdit && existingProvider.ca_bundle),
-        /* Solo in aggiunta, mai in modifica: cambiare l'endpoint di una marca
-           gia' in uso non deve poter cambiare anche chi risponde. */
-        firstModel: isEdit || !useNow?.checked
-          ? '' : (dialog.querySelector('#dlg-first-model')?.value.trim() || ''),
-        useItNow: !isEdit && !!useNow?.checked,
-      });
-    });
-    // Il congedo (Indietro, Esc, catena della shell) passa da un `cancel`
-    // annullabile: durante un salvataggio in volo lo si rifiuta, altrimenti il
-    // dialog si smonta portandosi via i campi mentre la richiesta è ancora in
-    // corso. Fuori da quella finestra lo scarto dei campi resta la semantica
-    // normale di una modale annullabile e non si tocca.
-    dialog.addEventListener('cancel', (e) => {
-      if (dialog.dataset.busy) e.preventDefault();
-    });
-    dialog.addEventListener('close', () => dialog.remove());
   }
 
   _val(key) {

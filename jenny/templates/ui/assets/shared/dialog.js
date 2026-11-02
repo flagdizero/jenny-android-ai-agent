@@ -309,6 +309,97 @@ export function promptDialog(message, {
   });
 }
 
+/** Un modulo in una finestra: titolo, campi, Annulla e un bottone pieno.
+ *
+ *  Erano cinque finestre costruite a mano — l'host SSH e il provider in
+ *  officina, la passphrase e il riavvio del backup, la password del Drive —
+ *  con lo stesso titolo a stile in linea e tre modi diversi di non farsi
+ *  chiudere a metà; quella dell'host SSH nessuno: Indietro durante il
+ *  salvataggio la smontava sotto la richiesta, e un secondo tocco su Salva
+ *  ne mandava una seconda.
+ *
+ *  - `bodyHtml` è markup già escapato da chi chiama; titolo ed etichette
+ *    entrano come testo.
+ *  - `setup(dialog)` gira montata la finestra e prima di `showModal`: i
+ *    listener dei campi.
+ *  - `onOk(dialog)` può essere asincrona. Quel che restituisce chiude la
+ *    finestra e risolve la Promise; `undefined` la lascia aperta (un campo da
+ *    correggere: l'errore lo dice chi chiama). Mentre gira la finestra è
+ *    **occupata**: bottoni spenti, Annulla, Indietro ed Esc rifiutati, un
+ *    secondo tocco ignorato; `busyText` è l'etichetta del bottone intanto.
+ *  - `cancelText: null`: niente Annulla e niente congedo (il riavvio dopo un
+ *    ripristino, che consuma Indietro restando dov'è).
+ *
+ *  Risolve con il valore di `onOk`, o `null` per ogni altra chiusura — anche
+ *  una che non passa da `cancel` (un `close()` diretto, una rimozione): una
+ *  Promise appesa lascerebbe chi aspetta occupato per sempre. Chiudendosi
+ *  svuota i campi password, che così non restano nel DOM. */
+export function formDialog({
+  id, title = '', bodyHtml = '', okText, cancelText, busyText = '', setup, onOk,
+} = {}) {
+  const cancellable = cancelText !== null;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'oc-dialog oc-dialog-form';
+  if (id) dialog.id = id;
+  dialog.innerHTML = `
+    <div class="oc-dialog-inner">
+      <h3 class="oc-dialog-title"></h3>
+      ${bodyHtml}
+      <div class="oc-dialog-buttons">
+        ${cancellable ? '<button class="oc-btn oc-btn-cancel" type="button" data-form-cancel></button>' : ''}
+        <button class="oc-btn oc-btn-confirm" type="button" data-form-ok></button>
+      </div>
+    </div>`;
+  dialog.querySelector('.oc-dialog-title').textContent = title;
+  const okBtn = dialog.querySelector('[data-form-ok]');
+  const cancelBtn = dialog.querySelector('[data-form-cancel]');
+  okBtn.textContent = okText || i18n.t('dialog.confirm');
+  if (cancelBtn) cancelBtn.textContent = cancelText || i18n.t('dialog.cancel');
+  document.body.appendChild(dialog);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      dialog.querySelectorAll('input[type="password"]').forEach((input) => { input.value = ''; });
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    const setBusy = (busy) => {
+      if (busy) dialog.dataset.busy = '1';
+      else delete dialog.dataset.busy;
+      dialog.querySelectorAll('.oc-btn').forEach((b) => { b.disabled = busy; });
+    };
+    const ok = async () => {
+      if (dialog.dataset.busy || !onOk) return;
+      const label = okBtn.textContent;
+      setBusy(true);
+      if (busyText) okBtn.textContent = busyText;
+      let value;
+      try {
+        value = await onOk(dialog);
+      } catch (err) {
+        console.error('form dialog:', err);
+      } finally {
+        setBusy(false);
+        okBtn.textContent = label;
+      }
+      if (value !== undefined) done(value);
+    };
+    okBtn.addEventListener('click', ok);
+    cancelBtn?.addEventListener('click', () => { if (!dialog.dataset.busy) done(null); });
+    dialog.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      if (cancellable && !dialog.dataset.busy) done(null);
+    });
+    dialog.addEventListener('close', () => done(null));
+    setup?.(dialog);
+    dialog.showModal();
+  });
+}
+
 /** Congeda il `<dialog>` aperto più in alto, con la semantica di Esc. Vero se
  *  ce n'era uno, anche quando ha rifiutato di chiudersi.
  *

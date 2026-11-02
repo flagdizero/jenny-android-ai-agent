@@ -190,9 +190,13 @@ def test_closing_a_dialog_goes_through_a_cancelable_event() -> None:
     assert "if (dismissTopDialog()) return true;" in _method(home, "_closeOverlays")
 
     backup = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
-    assert "addEventListener('cancel', (e) => e.preventDefault())" in backup, (
+    restart = backup[backup.index("export function showRestartDialog") :]
+    assert "cancelText: null" in restart, (
         "sparito il dialog non annullabile: il giro via evento `cancel` non ha più motivo di esistere"
     )
+    form = dialog_js[dialog_js.index("export function formDialog") :]
+    form = form[: form.index("\n}\n")]
+    assert "e.preventDefault();" in form and "if (cancellable && !dialog.dataset.busy)" in form
 
 
 def test_escape_is_the_same_chain_as_the_hardware_back() -> None:

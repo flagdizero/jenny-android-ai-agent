@@ -4185,6 +4185,13 @@ dialog.image-lightbox::backdrop { background: transparent; }
   justify-content: flex-end;
   gap: 8px;
 }
+/* Il modulo in una finestra (`formDialog`): il titolo, una riga di spiegazione
+   sotto, e i bottoni staccati dai campi. Erano cinque stili in linea uguali. */
+.oc-dialog-title { margin: 0 0 16px; font-size: 15px; font-weight: 600; }
+.oc-dialog-title:has(+ .oc-dialog-note) { margin-bottom: 8px; }
+.oc-dialog-note { margin: 0 0 12px; font-size: 12px; color: var(--text-faint); }
+.oc-dialog-form .oc-dialog-buttons { margin-top: 16px; }
+.oc-dialog-form .oc-dialog-note + .oc-dialog-buttons { margin-top: 0; }
 .oc-btn {
   padding: 8px 16px;
   border-radius: var(--radius-sm);

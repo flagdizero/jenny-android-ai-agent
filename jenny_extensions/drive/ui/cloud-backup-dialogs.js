@@ -8,7 +8,7 @@
 import { i18n } from '../../shared/i18n.js';
 import { escapeHtml } from '../../shared/utils.js';
 import { whenText } from '../../shared/when.js';
-import { detailDialog } from '../../shared/dialog.js';
+import { detailDialog, formDialog } from '../../shared/dialog.js';
 import { CLOUD_PASSWORD_MIN, PASSWORD_RETRY, cloudErrorText } from './cloud-backup.js';
 
 /** Quale copia ripristinare. Risolve con l'id scelto, o `null`.
@@ -54,72 +54,61 @@ export function passwordProblem(mode, first, second) {
  *  rinunciando risolve `null`. Mentre il gateway lavora (PBKDF2, Drive) i
  *  bottoni sono fermi: chiudere a metà lascerebbe un'accensione a metà. */
 function promptCloudPassword({ mode = 'choose', submit }) {
-  return new Promise((resolve) => {
-    const two = mode !== 'type';
-    const t = (key, params) => escapeHtml(i18n.t(`cloudBackup.password.${mode}.${key}`, params));
-    const label = (text) => `<label class="settings-label">${text}</label>`;
-    const field = (id, auto) => `<input type="password" class="settings-input" id="${id}"
-        autocomplete="${auto}" autocapitalize="off" autocorrect="off" spellcheck="false" />`;
-    const dialog = document.createElement('dialog');
-    dialog.className = 'oc-dialog';
-    dialog.id = CLOUD_PASSWORD_DIALOG_ID;
-    dialog.innerHTML = `
-      <div class="oc-dialog-inner">
-        <h3 style="margin:0 0 8px;font-size:15px;font-weight:600">${t('title')}</h3>
-        <p style="margin:0 0 12px;font-size:13px;line-height:1.45;color:var(--text-muted)">${t('text', { n: CLOUD_PASSWORD_MIN })}</p>
-        <div class="settings-field">
-          ${label(t('field', { n: CLOUD_PASSWORD_MIN }))}
-          ${field('cloud-pw', two ? 'new-password' : 'current-password')}
-        </div>
-        ${two ? `<div class="settings-field">${label(escapeHtml(i18n.t('cloudBackup.password.repeat')))}${field('cloud-pw2', 'new-password')}</div>` : ''}
-        <label style="display:flex;gap:8px;align-items:center;margin:4px 0 0;font-size:13px;color:var(--text-muted)">
-          <input type="checkbox" id="cloud-pw-show" /> ${escapeHtml(i18n.t('cloudBackup.password.show'))}
-        </label>
-        <p id="cloud-pw-error" role="alert" hidden style="margin:10px 0 0;font-size:13px;color:var(--error)"></p>
-        <div class="oc-dialog-buttons" style="margin-top:16px">
-          <button class="oc-btn oc-btn-cancel" id="cloud-pw-cancel" type="button">${escapeHtml(i18n.t('common.cancel'))}</button>
-          <button class="oc-btn oc-btn-confirm" id="cloud-pw-ok" type="button">${t('ok')}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(dialog);
-
-    const $ = (id) => dialog.querySelector(`#${id}`);
-    const first = $('cloud-pw');
-    const second = $('cloud-pw2');
-    const okBtn = $('cloud-pw-ok');
-    const cancelBtn = $('cloud-pw-cancel');
-    const errorEl = $('cloud-pw-error');
-    let busy = false;
-    let settled = false;
-
-    const showError = (text) => {
-      errorEl.textContent = text || '';
-      errorEl.hidden = !text;
-    };
-    const done = (value) => {
-      if (settled) return;
-      settled = true;
-      // La password non resta nel DOM una volta chiusa la finestra.
-      first.value = '';
-      if (second) second.value = '';
-      dialog.close();
-      dialog.remove();
-      resolve(value);
-    };
-    const onOk = async () => {
-      if (busy) return;
+  const two = mode !== 'type';
+  const t = (key, params) => escapeHtml(i18n.t(`cloudBackup.password.${mode}.${key}`, params));
+  const label = (text) => `<label class="settings-label">${text}</label>`;
+  const field = (id, auto) => `<input type="password" class="settings-input" id="${id}"
+      autocomplete="${auto}" autocapitalize="off" autocorrect="off" spellcheck="false" />`;
+  let first;
+  let second;
+  let errorEl;
+  const showError = (text) => {
+    errorEl.textContent = text || '';
+    errorEl.hidden = !text;
+  };
+  return formDialog({
+    id: CLOUD_PASSWORD_DIALOG_ID,
+    title: i18n.t(`cloudBackup.password.${mode}.title`),
+    okText: i18n.t(`cloudBackup.password.${mode}.ok`),
+    cancelText: i18n.t('common.cancel'),
+    busyText: i18n.t('cloudBackup.password.working'),
+    bodyHtml: `
+      <p class="oc-dialog-note" style="font-size:13px;line-height:1.45;color:var(--text-muted)">${t('text', { n: CLOUD_PASSWORD_MIN })}</p>
+      <div class="settings-field">
+        ${label(t('field', { n: CLOUD_PASSWORD_MIN }))}
+        ${field('cloud-pw', two ? 'new-password' : 'current-password')}
+      </div>
+      ${two ? `<div class="settings-field">${label(escapeHtml(i18n.t('cloudBackup.password.repeat')))}${field('cloud-pw2', 'new-password')}</div>` : ''}
+      <label style="display:flex;gap:8px;align-items:center;margin:4px 0 0;font-size:13px;color:var(--text-muted)">
+        <input type="checkbox" id="cloud-pw-show" /> ${escapeHtml(i18n.t('cloudBackup.password.show'))}
+      </label>
+      <p id="cloud-pw-error" role="alert" hidden style="margin:10px 0 0;font-size:13px;color:var(--error)"></p>`,
+    setup: (dialog) => {
+      first = dialog.querySelector('#cloud-pw');
+      second = dialog.querySelector('#cloud-pw2');
+      errorEl = dialog.querySelector('#cloud-pw-error');
+      const ok = dialog.querySelector('[data-form-ok]');
+      dialog.querySelector('#cloud-pw-show').addEventListener('change', (e) => {
+        const type = e.target.checked ? 'text' : 'password';
+        first.type = type;
+        if (second) second.type = type;
+      });
+      for (const input of [first, second].filter(Boolean)) {
+        input.addEventListener('input', () => showError(''));
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); ok.click(); }
+        });
+      }
+      setTimeout(() => first.focus(), 0);
+    },
+    onOk: async () => {
       const problem = passwordProblem(mode, first.value, second?.value);
       if (problem) {
         showError(problem);
         first.focus();
-        return;
+        return undefined;
       }
-      busy = true;
-      okBtn.disabled = true;
-      cancelBtn.disabled = true;
       showError('');
-      const okText = okBtn.textContent;
-      okBtn.textContent = i18n.t('cloudBackup.password.working');
       let result;
       try {
         result = await submit(first.value);
@@ -127,40 +116,13 @@ function promptCloudPassword({ mode = 'choose', submit }) {
         console.error('Cloud password submit failed:', err);
         result = { ok: false, error: 'generic' };
       }
-      busy = false;
-      okBtn.disabled = false;
-      cancelBtn.disabled = false;
-      okBtn.textContent = okText;
       if (!result?.ok && PASSWORD_RETRY.includes(result?.error)) {
         showError(cloudErrorText(result.error));
         first.select();
-        return;
+        return undefined;
       }
-      done(result);
-    };
-
-    okBtn.addEventListener('click', onOk);
-    cancelBtn.addEventListener('click', () => { if (!busy) done(null); });
-    $('cloud-pw-show').addEventListener('change', (e) => {
-      const type = e.target.checked ? 'text' : 'password';
-      first.type = type;
-      if (second) second.type = type;
-    });
-    for (const input of [first, second].filter(Boolean)) {
-      input.addEventListener('input', () => showError(''));
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); onOk(); }
-      });
-    }
-    // Indietro / Esc: si rinuncia, salvo a meta' di una risposta del gateway.
-    dialog.addEventListener('cancel', (e) => {
-      e.preventDefault();
-      if (!busy) done(null);
-    });
-    // Cintura, come per la passphrase: ogni chiusura risolve la Promise.
-    dialog.addEventListener('close', () => done(null));
-    dialog.showModal();
-    first.focus();
+      return result ?? null;
+    },
   });
 }
 
