@@ -135,7 +135,8 @@ class CommandContext:
 Command =Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
 
 
-def _require_str(params: Mapping[str, Any], key: str) -> str:
+def required_str(params: Mapping[str, Any], key: str) -> str:
+    """Il parametro *key*, una stringa non vuota; altrimenti ``bad_request``."""
     value = params.get(key)
     if not isinstance(value, str) or not value.strip():
         raise CommandError("bad_request", f"{key} required")
@@ -293,7 +294,7 @@ async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dic
     """
     from jenny.webui.workspace_files import validate_path, write_file
 
-    rel_path = _require_str(params, "path")
+    rel_path = required_str(params, "path")
     content = params.get("content", "")
     if not isinstance(content, str):
         raise CommandError("bad_request", "content must be a string")
@@ -537,7 +538,7 @@ async def workspace_delete(ctx: CommandContext, params: Mapping[str, Any]) -> di
     """
     from jenny.webui.workspace_files import delete_path, validate_entry_path
 
-    rel_path = _require_str(params, "path")
+    rel_path = required_str(params, "path")
     _require_workspace_flag("enabled", "unavailable", "workspace is disabled")
     _require_workspace_flag("allow_delete", "forbidden", "workspace deletes are disabled")
 
@@ -560,8 +561,8 @@ async def workspace_rename(ctx: CommandContext, params: Mapping[str, Any]) -> di
     """
     from jenny.webui.workspace_files import rename_path, validate_entry_path
 
-    old_rel = _require_str(params, "old_path")
-    new_rel = _require_str(params, "new_path")
+    old_rel = required_str(params, "old_path")
+    new_rel = required_str(params, "new_path")
     _require_workspace_flag("enabled", "unavailable", "workspace is disabled")
     # Rinominare cambia il disco quanto scrivere: la rotta di prima non lo
     # chiedeva.
@@ -591,7 +592,7 @@ async def workspace_copy(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     """
     from jenny.webui.workspace_files import copy_path, free_copy_name, validate_path
 
-    src_rel = _require_str(params, "path")
+    src_rel = required_str(params, "path")
     dest_rel = params.get("dest")
     if dest_rel is not None and (not isinstance(dest_rel, str) or not dest_rel.strip()):
         raise CommandError("bad_request", "dest must be a non-empty string")
@@ -800,8 +801,8 @@ async def page_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     e le due del workspace — questo riscrive una pagina, cioè esattamente ciò che
     ``workspace.allow_write`` esiste per governare.
     """
-    wiki_name = _require_str(params, "wiki")
-    page_path = _require_str(params, "page")
+    wiki_name = required_str(params, "wiki")
+    page_path = required_str(params, "page")
     content = params.get("content")
     if not isinstance(content, str):
         raise CommandError("bad_request", "content must be a string")
@@ -939,13 +940,13 @@ async def project_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     # La forma del nome la decide ``jenny.session.keys``, che e' anche chi la
     # applica a ogni ``chat_id`` in arrivo: un nome che qui passasse e li' no
     # creerebbe un progetto che non si puo' aprire.
-    name = _require_str(params, "name").strip()
+    name = required_str(params, "name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
 
     # Una riga: gli a-capo vengono richiusi invece di far fallire il comando, che
     # su una tastiera mobile e' quel che l'utente si aspetta.
-    seed = " ".join(_require_str(params, "seed").split())
+    seed = " ".join(required_str(params, "seed").split())
     if not seed:
         raise CommandError("bad_request", "seed required")
     if len(seed) > MAX_PROJECT_SEED_CHARS:
@@ -992,7 +993,7 @@ async def project_greet(ctx: CommandContext, params: Mapping[str, Any]) -> dict[
     from jenny.utils.wiki_paths import discover_wiki_roots, read_wiki_scope
     from jenny.webui.project_greet import greet_project
 
-    name = _require_str(params, "name").strip()
+    name = required_str(params, "name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
     _require_wiki_enabled()
@@ -1047,7 +1048,7 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     from jenny.session.keys import is_valid_project_name, project_session_key
     from jenny.webui.project_delete import delete_project
 
-    name = _require_str(params, "name").strip()
+    name = required_str(params, "name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
 
@@ -1105,8 +1106,8 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     from jenny.session.keys import is_valid_project_name, project_session_key
     from jenny.webui.project_rename import rename_project
 
-    name = _require_str(params, "name").strip()
-    new_name = _require_str(params, "new_name").strip()
+    name = required_str(params, "name").strip()
+    new_name = required_str(params, "new_name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
     if not is_valid_project_name(new_name):
