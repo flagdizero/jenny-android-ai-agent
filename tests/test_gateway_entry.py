@@ -177,6 +177,17 @@ def test_ensure_minimal_config_uses_existing_workspace(tmp_path: Path):
     assert path.exists()
 
 
+def test_ensure_minimal_config_leaves_a_config_that_is_not_utf8_to_the_loader(tmp_path: Path):
+    """Un byte non UTF-8 non deve far fallire l'avvio qui: il file rotto lo
+    recupera (o lo mette da parte) ``config.loader``, che viene dopo."""
+    path = tmp_path / "config.json"
+    path.write_bytes(b'{"websocket": "caf\xe9"}')
+
+    ensure_minimal_config(tmp_path)
+
+    assert path.read_bytes() == b'{"websocket": "caf\xe9"}'
+
+
 def test_ensure_minimal_config_is_idempotent(tmp_path: Path):
     """ensure_minimal_config should not overwrite an existing config."""
     ensure_minimal_config(tmp_path)

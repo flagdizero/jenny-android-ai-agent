@@ -1229,6 +1229,18 @@ class TestTheRun:
         assert not list((root / "wiki").glob(".*"))
 
 
+def test_a_state_file_that_is_not_utf8_reads_as_empty(tmp_path):
+    """Come uno troncato: si rilegge da capo, invece di far fallire la passata."""
+    from jenny.agent.gardener_state import gardener_state_file
+
+    root = _project(tmp_path)
+    path = gardener_state_file(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b'{"version": "caf\xe9"}')
+
+    assert read_state(root) == GardenerState()
+
+
 def test_the_state_survives_a_restart(tmp_path):
     """Il cursore è su disco, non in memoria: un riavvio non fa ricominciare."""
     root = _project(tmp_path)

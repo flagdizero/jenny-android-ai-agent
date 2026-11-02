@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import re
@@ -249,8 +250,6 @@ def iter_jsonl(
     scartate passano a *on_bad*, per chi le conta o le dice nel log. L'I/O resta
     a chi chiama (un file aperto, ``read_text().splitlines()``).
     """
-    import json
-
     for line in lines:
         line = line.strip()
         if not line:
@@ -265,6 +264,35 @@ def iter_jsonl(
             on_bad(line)
 
 
+def read_json(path: Path) -> Any:
+    """Il JSON di *path*; ``None`` se manca, non si legge o non è JSON.
+
+    Per i file di stato di cui un difetto vale «niente»: chi chiama controlla il
+    tipo. ``ValueError`` prende sia ``JSONDecodeError`` sia ``UnicodeDecodeError``:
+    i lettori scritti a mano che prendevano solo il primo cadevano su un byte non
+    UTF-8.
+    """
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def read_json_dict(path: Path) -> dict[str, Any]:
+    """Come :func:`read_json`, ma ``{}`` per tutto quel che non è un oggetto."""
+    data = read_json(path)
+    return data if isinstance(data, dict) else {}
+
+
+def write_json(path: Path, data: Any, *, indent: int | None = None, **kwargs: Any) -> None:
+    """Scrive *data* come JSON con :func:`atomic_write` (*kwargs* vanno a lei).
+
+    Con *indent* il file finisce con un a capo, come lo lascerebbe un editor.
+    """
+    text = json.dumps(data, ensure_ascii=False, indent=indent)
+    atomic_write(path, text + "\n" if indent is not None else text, **kwargs)
+
+
 def rotate_valid_json_backup(
     path: Path, write: Callable[[Path, str], None] | None = None
 ) -> None:
@@ -277,8 +305,6 @@ def rotate_valid_json_backup(
     senza fsync della cartella; la config la vuole in ``600``); un suo
     ``OSError`` si propaga, e chi chiama decide se il salvataggio vero procede.
     """
-    import json
-
     if not path.exists():
         return
     try:

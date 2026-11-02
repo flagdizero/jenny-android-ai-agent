@@ -3,7 +3,7 @@ import json
 import secrets
 from pathlib import Path
 
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, read_json
 
 _TOKEN_ISSUE_SECRET_KEYS = ("token_issue_secret", "tokenIssueSecret")
 
@@ -49,10 +49,8 @@ def _backfill_token_issue_secret(config_path: Path) -> None:
     No-ops if the config already has a non-empty ``token`` or
     ``token_issue_secret`` — an explicit operator choice is never overwritten.
     """
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return
+    # Un file illeggibile (anche un byte non UTF-8) lo lascia a ``config.loader``.
+    data = read_json(config_path)
     if not isinstance(data, dict):
         return
 
