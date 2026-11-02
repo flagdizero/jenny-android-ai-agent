@@ -166,19 +166,20 @@ class WebUISettingsRouter:
     def _unauthorized(self) -> Response:
         return self._error_response(401, "Unauthorized")
 
+    def _fire(self, callback: Callable[..., None] | None, what: str, *args: Any) -> None:
+        """Un gancio dopo un salvataggio riuscito; il suo guasto finisce nel log."""
+        if callback is None:
+            return
+        try:
+            callback(*args)
+        except Exception:
+            self.logger.exception("{} callback failed {}", what, args or "")
+
     def _fire_settings_changed(self) -> None:
-        if self._on_settings_changed:
-            try:
-                self._on_settings_changed()
-            except Exception:
-                self.logger.exception("on_settings_changed callback failed")
+        self._fire(self._on_settings_changed, "on_settings_changed")
 
     def _fire_jobs_changed(self, worker: str) -> None:
-        if self._on_jobs_changed:
-            try:
-                self._on_jobs_changed(worker)
-            except Exception:
-                self.logger.exception("on_jobs_changed callback failed for {}", worker)
+        self._fire(self._on_jobs_changed, "on_jobs_changed", worker)
 
     async def _handle_settings(self, request: WsRequest) -> Response:
         if not self._authorized(request):
@@ -256,46 +257,26 @@ class WebUISettingsRouter:
         )
 
     async def _handle_settings_web_search_update(self, request: WsRequest) -> Response:
-        if not self._authorized(request):
-            return self._unauthorized()
-        try:
-            payload = await update_web_search_settings(self._query(request))
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("web search settings update failed")
-            return self._error_response(500, "failed to update web search settings")
-        return self._json_response(payload)
+        return await self._handle_mutation(
+            request, update_web_search_settings, "web search settings update",
+            failure="failed to update web search settings",
+        )
 
     async def _handle_settings_location_update(self, request: WsRequest) -> Response:
-        if not self._authorized(request):
-            return self._unauthorized()
-        try:
-            payload = await update_location_settings(self._query(request))
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("location settings update failed")
-            return self._error_response(500, "failed to update location settings")
-        return self._json_response(payload)
+        return await self._handle_mutation(
+            request, update_location_settings, "location settings update",
+            failure="failed to update location settings",
+        )
 
     async def _handle_settings_floating_update(self, request: WsRequest) -> Response:
-        if not self._authorized(request):
-            return self._unauthorized()
-        if (refused := refuse_if_remote()) is not None:
-            return refused
-        try:
-            payload = await update_floating_settings(self._query(request))
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("floating settings update failed")
-            return self._error_response(500, "failed to update floating settings")
         # Nessun _fire_settings_changed: la mascotte non è un pezzo dell'agente
         # da ricostruire a caldo, ed è già stata applicata al bridge dentro
         # ``update_floating_settings``. Niente requires_restart, per la stessa
         # ragione: quella riga esiste apposta perché non ce ne sia bisogno.
-        return self._json_response(payload)
+        return await self._handle_mutation(
+            request, update_floating_settings, "floating settings update",
+            failure="failed to update floating settings", pre=refuse_if_remote,
+        )
 
     async def _handle_screen_settings_open(self, request: WsRequest) -> Response:
         """Apre Impostazioni → Accessibilità, dove si accende la lettura dello
@@ -322,19 +303,13 @@ class WebUISettingsRouter:
         return self._json_response({"opened": await open_permission_settings()})
 
     async def _handle_settings_power_update(self, request: WsRequest) -> Response:
-        if not self._authorized(request):
-            return self._unauthorized()
-        try:
-            payload = await update_power_settings(self._query(request))
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("power settings update failed")
-            return self._error_response(500, "failed to update power settings")
         # Nessun _fire_settings_changed: il wakelock di servizio si prende
         # all'avvio del gateway e non c'è niente da ricostruire a caldo. La
         # risposta porta requires_restart, la UI lo dice a parole.
-        return self._json_response(payload)
+        return await self._handle_mutation(
+            request, update_power_settings, "power settings update",
+            failure="failed to update power settings",
+        )
 
     async def _handle_settings_power_diagnostics(self, request: WsRequest) -> Response:
         if not self._authorized(request):
@@ -358,23 +333,19 @@ class WebUISettingsRouter:
         nessuno. La protezione contro le chiamate ripetute sta in
         ``run_update_check``, che è dove vive il lock.
         """
-        if not self._authorized(request):
-            return self._unauthorized()
-        try:
-            payload = await run_update_check()
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("manual update check failed")
-            return self._error_response(500, "failed to run the update check")
-        version = payload.get("version") or {}
-        self.logger.info(
-            "[updates] manual check: status={!r} available={} latest={!r}",
-            payload.get("status"),
-            version.get("update_available"),
-            version.get("latest"),
+        def after(query: QueryParams, payload: dict[str, Any]) -> None:
+            version = payload.get("version") or {}
+            self.logger.info(
+                "[updates] manual check: status={!r} available={} latest={!r}",
+                payload.get("status"),
+                version.get("update_available"),
+                version.get("latest"),
+            )
+
+        return await self._handle_mutation(
+            request, lambda _query: run_update_check(), "manual update check",
+            failure="failed to run the update check", on_success=after,
         )
-        return self._json_response(payload)
 
     async def _handle_update_install(self, request: WsRequest) -> Response:
         """Avvia l'installazione dell'update annunciato nel payload versione.
@@ -385,25 +356,20 @@ class WebUISettingsRouter:
         chiama quindi in GET; se un giorno il trasporto accettasse POST, questa
         route lo servirebbe senza modifiche.
         """
-        if not self._authorized(request):
-            return self._unauthorized()
-        if (refused := refuse_if_remote()) is not None:
-            return refused
-        try:
-            payload = await start_update_install()
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("update install failed to start")
-            return self._error_response(500, "failed to start the update installation")
-        # Loggato anche quando va bene: un'installazione è l'unica azione della
-        # WebUI che si porta via il processo, e senza questa riga il log si
-        # interrompe senza spiegare perché.
-        self.logger.info(
-            "[updates] install requested: ok={} state={!r} detail={!r}",
-            payload.get("ok"), payload.get("state"), payload.get("detail"),
+        def after(query: QueryParams, payload: dict[str, Any]) -> None:
+            # Loggato anche quando va bene: un'installazione è l'unica azione
+            # della WebUI che si porta via il processo, e senza questa riga il
+            # log si interrompe senza spiegare perché.
+            self.logger.info(
+                "[updates] install requested: ok={} state={!r} detail={!r}",
+                payload.get("ok"), payload.get("state"), payload.get("detail"),
+            )
+
+        return await self._handle_mutation(
+            request, lambda _query: start_update_install(), "update install start",
+            failure="failed to start the update installation", pre=refuse_if_remote,
+            on_success=after,
         )
-        return self._json_response(payload)
 
     def _handle_update_status(self, request: WsRequest) -> Response:
         """Fase e progresso dell'installazione, per il polling della UI."""
@@ -436,6 +402,8 @@ class WebUISettingsRouter:
         what: str,
         *,
         on_success: Callable[[QueryParams, dict[str, Any]], None] | None = None,
+        failure: str | None = None,
+        pre: Callable[[], Response | None] | None = None,
     ) -> Response:
         """Tronco comune delle route che scrivono: auth, errori applicativi, 500 muto.
 
@@ -449,9 +417,15 @@ class WebUISettingsRouter:
         ``on_success`` gira **solo** dopo un salvataggio riuscito e riceve la
         query e il payload: è lì che vivono i rearm dei job e i rebuild del
         provider, che non devono partire se la scrittura è fallita.
+
+        ``pre`` gira dopo l'autenticazione e prima del gestore, e una sua risposta
+        chiude lì: è ``refuse_if_remote`` per le route che toccano il telefono.
+        ``failure`` è il testo del 500, se non è «*what* failed».
         """
         if not self._authorized(request):
             return self._unauthorized()
+        if pre is not None and (refused := pre()) is not None:
+            return refused
         query = self._query(request)
         try:
             payload = await handler(query)
@@ -459,7 +433,7 @@ class WebUISettingsRouter:
             return self._error_response(e.status, e.message)
         except Exception:
             self.logger.exception("{} failed", what)
-            return self._error_response(500, f"{what} failed")
+            return self._error_response(500, failure or f"{what} failed")
         if on_success is not None:
             on_success(query, payload)
         return self._json_response(payload)
@@ -468,11 +442,7 @@ class WebUISettingsRouter:
 
     def _fire_telegram_changed(self) -> None:
         """Applica la config Telegram a caldo (ricrea/ferma il canale)."""
-        if self._on_telegram_changed:
-            try:
-                self._on_telegram_changed()
-            except Exception:
-                self.logger.exception("on_telegram_changed callback failed")
+        self._fire(self._on_telegram_changed, "on_telegram_changed")
 
     def _handle_telegram_status(self, request: WsRequest) -> Response:
         if not self._authorized(request):
@@ -486,39 +456,28 @@ class WebUISettingsRouter:
             return self._error_response(500, "failed to load telegram status")
 
     async def _handle_telegram_unpair(self, request: WsRequest) -> Response:
-        if not self._authorized(request):
-            return self._unauthorized()
         from jenny.webui.telegram_api import unpair_telegram
 
-        try:
-            payload = await unpair_telegram()
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("telegram unpair failed")
-            return self._error_response(500, "failed to unpair telegram")
-        self._fire_telegram_changed()
-        return self._json_response(payload)
+        return await self._handle_mutation(
+            request, lambda _query: unpair_telegram(), "telegram unpair",
+            failure="failed to unpair telegram",
+            on_success=lambda query, payload: self._fire_telegram_changed(),
+        )
 
     async def _handle_telegram_enabled(self, request: WsRequest) -> Response:
-        if not self._authorized(request):
-            return self._unauthorized()
         from jenny.webui.telegram_api import set_telegram_enabled
 
         # ``parse_flag`` e' vero solo se il valore e' dichiarato vero, quindi un
         # parametro assente o storto spegne. Va bene per un toggle — il client
         # manda sempre ``true``/``false`` esplicito — ed e' il verso prudente:
         # il caso ambiguo lascia il canale fermo, non lo accende.
-        enabled = parse_flag(_query_param(self._query(request), "enabled"))
-        try:
-            payload = await set_telegram_enabled(enabled)
-        except WebUISettingsError as e:
-            return self._error_response(e.status, e.message)
-        except Exception:
-            self.logger.exception("telegram enabled toggle failed")
-            return self._error_response(500, "failed to update telegram channel")
-        self._fire_telegram_changed()
-        return self._json_response(payload)
+        return await self._handle_mutation(
+            request,
+            lambda query: set_telegram_enabled(parse_flag(_query_param(query, "enabled"))),
+            "telegram enabled toggle",
+            failure="failed to update telegram channel",
+            on_success=lambda query, payload: self._fire_telegram_changed(),
+        )
 
 
 def _query_param(query: QueryParams, key: str) -> str:

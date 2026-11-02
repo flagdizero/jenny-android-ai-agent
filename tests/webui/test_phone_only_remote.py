@@ -235,7 +235,9 @@ def test_every_route_that_reaches_a_phone_action_refuses_remote_callers() -> Non
             body = m.group(0)
             if any(a in body for a in actions):
                 found.append(m.group(1))
-                assert "refuse_if_remote()" in body, f"{module.__name__}.{m.group(1)} non rifiuta da fuori"
+                # A mano, o dal tronco comune delle scritture (``pre=``).
+                refuses = "refuse_if_remote()" in body or "pre=refuse_if_remote" in body
+                assert refuses, f"{module.__name__}.{m.group(1)} non rifiuta da fuori"
     assert len(found) >= 8, found
     assert len(PHONE_ONLY_ROUTES) == 8
 
