@@ -47,7 +47,7 @@ MAX_WRITE_BYTES = 1_000_000
 MAX_PROJECT_SEED_CHARS = 500
 
 
-class CommandError(Exception):
+class CommandError(CodedError):
     """Errore di un comando, con un codice che il trasporto sa tradurre.
 
     I codici sono un insieme chiuso — ``bad_request``, ``forbidden``,
@@ -75,11 +75,6 @@ class CommandError(Exception):
     vecchio); e ``rollback_failed``: un ritorno partito si è fermato a metà per
     un errore del disco, il quaderno è in parte tornato, e riprovare è sicuro.
     """
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 @dataclass(frozen=True)
@@ -939,7 +934,7 @@ async def project_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     superficie ``/api/`` non sa trasportarlo (v. la docstring del modulo).
     """
     from jenny.session.keys import is_valid_project_name
-    from jenny.webui.project_create import ProjectCreateError, create_project
+    from jenny.webui.project_create import create_project
 
     # La forma del nome la decide ``jenny.session.keys``, che e' anche chi la
     # applica a ogni ``chat_id`` in arrivo: un nome che qui passasse e li' no
@@ -977,8 +972,8 @@ async def project_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict
             # bottoni. V. la docstring di ``project_create``.
             conversation=_conversation_choice(params),
         )
-    except ProjectCreateError as exc:
-        raise CommandError("bad_request", str(exc)) from exc
+    except CodedError as exc:
+        raise CommandError(exc.code, exc.message) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
@@ -1050,7 +1045,7 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     """
     from jenny.board.cron_link import remove_notebook_crons
     from jenny.session.keys import is_valid_project_name, project_session_key
-    from jenny.webui.project_delete import ProjectDeleteError, delete_project
+    from jenny.webui.project_delete import delete_project
 
     name = _require_str(params, "name").strip()
     if not is_valid_project_name(name):
@@ -1076,8 +1071,8 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
             name=name,
             invalidate_session=ctx.invalidate_session,
         )
-    except ProjectDeleteError as exc:
-        raise CommandError("bad_request", str(exc)) from exc
+    except CodedError as exc:
+        raise CommandError(exc.code, exc.message) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
     # I cron delle sue schede se ne vanno con lui: restando, fallirebbero a ogni

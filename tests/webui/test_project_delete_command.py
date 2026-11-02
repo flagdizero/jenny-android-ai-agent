@@ -36,6 +36,25 @@ async def test_the_command_refuses_while_someone_writes_there(
     assert touched == []
 
 
+async def test_a_notebook_that_is_not_there_is_not_found_as_for_the_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Il rinomino diceva ``not_found``, la cancellazione ``bad_request``: lo
+    stesso «non c'è» con due codici."""
+    monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
+    (tmp_path / "wikis").mkdir()
+    ctx = SimpleNamespace(
+        get_workspace_root=lambda: tmp_path,
+        invalidate_session=lambda k: None,
+        busy_session_keys=lambda: (),
+    )
+    for command, params in ((commands.project_delete, {"name": "piante"}),
+                            (commands.project_rename, {"name": "piante", "new_name": "orto"})):
+        with pytest.raises(CommandError) as err:
+            await command(ctx, params)
+        assert err.value.code == "not_found", command.__name__
+
+
 async def test_another_notebook_busy_does_not_stop_the_delete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

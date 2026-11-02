@@ -39,6 +39,7 @@ from jenny.session.project_traces import (
     describe_project_traces,
     recorded_wiki_id,
 )
+from jenny.utils.errors import CodedError
 from jenny.utils.path import atomic_write
 from jenny.utils.wiki_paths import (
     FRONTMATTER_RE,
@@ -61,8 +62,11 @@ _TITLE_SPLIT_RE = re.compile(r"[-_.]+")
 _SUMMARY_LINE_RE = re.compile(r"^summary:[ \t]*(.*)$", re.M)
 
 
-class ProjectCreateError(Exception):
+class ProjectCreateError(CodedError):
     """Creazione non riuscita, con un messaggio mostrabile all'utente."""
+
+    def __init__(self, message: str, *, code: str = "bad_request") -> None:
+        super().__init__(code, message)
 
 
 def project_title(name: str) -> str:

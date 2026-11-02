@@ -45,13 +45,20 @@ from jenny.session.project_traces import (
     delete_project_traces,
     describe_project_traces,
 )
+from jenny.utils.errors import CodedError
 from jenny.utils.wiki_paths import is_wiki_root
 from jenny.webui.wiki_registry import refresh_wiki_registry
 from jenny.webui.workspace_files import os_error_text
 
 
-class ProjectDeleteError(Exception):
-    """Cancellazione non riuscita, con un messaggio mostrabile all'utente."""
+class ProjectDeleteError(CodedError):
+    """Cancellazione non riuscita, con un messaggio mostrabile all'utente.
+
+    «Non c'e'» e' ``not_found``, come per il rinomino; gli altri ``bad_request``.
+    """
+
+    def __init__(self, message: str, *, code: str = "bad_request") -> None:
+        super().__init__(code, message)
 
 
 def _tree_files(root: Path) -> int:
@@ -115,7 +122,7 @@ def delete_project(
             f"a folder named {name} is in the way: it exists but is not a project"
         )
     if not root.exists() and not traces_before.exists:
-        raise ProjectDeleteError(f"no project named {name}")
+        raise ProjectDeleteError(f"no project named {name}", code="not_found")
 
     orphan = not root.exists()
 
