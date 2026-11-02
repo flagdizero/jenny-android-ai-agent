@@ -32,11 +32,11 @@ def _bridge() -> str:
 
 def test_the_session_webview_gets_the_guard_before_any_page() -> None:
     ensure = function_body(_bridge(), "ensureWebViewOnMain")
-    assert "installNetworkGuardOnMain(wv)" in ensure
-    assert ensure.index("installNetworkGuardOnMain(wv)") < ensure.index("webView = wv")
+    assert "installNetworkGuardOnMain(wv, appContext)" in ensure
+    assert ensure.index("installNetworkGuardOnMain(wv, appContext)") < ensure.index("webView = wv")
     install = function_body(_bridge(), "installNetworkGuardOnMain")
     assert "WebViewFeature.DOCUMENT_START_SCRIPT" in install
-    assert "WebViewCompat.addDocumentStartJavaScript(wv, networkGuardJs, setOf(" in install
+    assert "WebViewCompat.addDocumentStartJavaScript(wv, networkGuardJs(context), setOf(" in install
     # code_only svuota le stringhe: il nome si controlla sul sorgente vero, sotto.
     assert re.search(r'addJavascriptInterface\(NetworkGuard\(\), "\s*"\)', install)
     raw = read_source("JennyBrowserBridge")
@@ -52,7 +52,7 @@ def test_the_guard_asks_the_same_verdict_as_http() -> None:
     intercept = function_body(_bridge(), "blockedResponse")
     assert "isBlockedHost(host)" in intercept
     code = _bridge()
-    assert "@JavascriptInterface\n        fun blocked(host: String): Boolean" in code
+    assert "@JavascriptInterface\n            fun blocked(host: String): Boolean" in code
 
 
 def test_service_worker_requests_go_through_the_same_filter() -> None:

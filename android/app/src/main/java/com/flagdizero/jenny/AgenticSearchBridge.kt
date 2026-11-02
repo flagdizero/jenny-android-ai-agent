@@ -85,7 +85,12 @@ class AgenticSearchBridge(context: Context) {
 
     private fun ensureWebView() {
         if (webView != null) return
-        webView = HiddenWebView.create(appContext, TAG, logSource = true)
+        val wv = HiddenWebView.create(appContext, TAG, logSource = true)
+        // `fetchUrl` carica pagine qualunque col JavaScript acceso: senza la
+        // guardia lato pagina potevano aprire `ws://` verso la LAN, che
+        // `shouldInterceptRequest` non vede.
+        JennyBrowserBridge.installNetworkGuardOnMain(wv, appContext)
+        webView = wv
     }
 
     /**
