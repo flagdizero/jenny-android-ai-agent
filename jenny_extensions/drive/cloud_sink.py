@@ -13,8 +13,9 @@ Contratto che ogni destinazione deve rispettare:
   lo stesso nome: la sua implementazione deve cercare prima di creare).
 - ``get_*``/``delete`` su una chiave assente alzano :class:`RemoteNotFoundError`.
 
-``MemorySink`` esiste per i test; ``LocalDirSink`` per provare tutto sul Mac
-contro una cartella vera, e come base per una cartella sincronizzata.
+``LocalDirSink`` serve a provare tutto sul Mac contro una cartella vera, e a
+``scripts/restore_drive_copy.py`` per riaprire una copia scaricata. Quella in
+memoria è dei test (``tests/extensions/drive/memory_sink.py``): qui finiva nell'APK.
 """
 
 from __future__ import annotations
@@ -64,45 +65,6 @@ def split_key(key: str) -> tuple[str, str]:
     if len(parts) > 2 or any(p in ("", ".", "..") for p in parts):
         raise ValueError(f"invalid remote key {key!r}")
     return ("", parts[0]) if len(parts) == 1 else (parts[0], parts[1])
-
-
-class MemorySink:
-    """Destinazione in memoria, per i test. ``puts`` conta i caricamenti."""
-
-    def __init__(self) -> None:
-        self.files: dict[str, bytes] = {}
-        self.puts: list[str] = []
-
-    async def list(self, folder: str) -> list[str]:
-        out = []
-        for key in self.files:
-            parent, name = split_key(key)
-            if parent == folder:
-                out.append(name)
-        return sorted(out)
-
-    async def put_bytes(self, key: str, data: bytes) -> None:
-        split_key(key)
-        self.files[key] = bytes(data)
-        self.puts.append(key)
-
-    async def put_file(
-        self, key: str, source: Path, on_progress: Callable[[int, int], None] | None = None
-    ) -> None:
-        await self.put_bytes(key, Path(source).read_bytes())
-
-    async def get_bytes(self, key: str) -> bytes:
-        try:
-            return self.files[key]
-        except KeyError:
-            raise RemoteNotFoundError(key) from None
-
-    async def get_file(self, key: str, dest: Path) -> None:
-        Path(dest).write_bytes(await self.get_bytes(key))
-
-    async def delete(self, key: str) -> None:
-        if self.files.pop(key, None) is None:
-            raise RemoteNotFoundError(key)
 
 
 class LocalDirSink:

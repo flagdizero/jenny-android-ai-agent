@@ -25,7 +25,7 @@ from jenny_extensions.drive.cloud_service import (
     CloudBackupService,
     CloudUnavailableError,
 )
-from jenny_extensions.drive.cloud_sink import MemorySink
+from tests.extensions.drive.memory_sink import MemorySink
 
 pytest.importorskip("cryptography")
 

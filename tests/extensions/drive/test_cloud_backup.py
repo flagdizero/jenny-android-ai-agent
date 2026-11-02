@@ -30,10 +30,10 @@ from jenny_extensions.drive.cloud import (
 )
 from jenny_extensions.drive.cloud_sink import (
     LocalDirSink,
-    MemorySink,
     RemoteNotFoundError,
     split_key,
 )
+from tests.extensions.drive.memory_sink import MemorySink
 
 pytest.importorskip("cryptography")
 
