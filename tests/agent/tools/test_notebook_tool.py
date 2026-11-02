@@ -30,13 +30,13 @@ from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader
 from jenny.agent.tools.notebook import NotebookEditTool, NotebookReadTool
 from jenny.agent.tools.registry import ToolRegistry
-from jenny.board import notify
 from jenny.board.store import (
     mutate_board,
     read_board,
     write_card_summary,
 )
 from jenny.config.schema import ToolsConfig
+from jenny.runtime import ui_events
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     bind_workspace_scope,
@@ -105,12 +105,13 @@ def notebook_chat(root: Path):
 def announced():
     seen: list[str] = []
 
-    async def collect(name: str) -> None:
-        seen.append(name)
+    async def collect(event: dict) -> None:
+        if event.get("_board_changed"):
+            seen.append(event["notebook"])
 
-    notify.set_notifier(collect)
+    ui_events.set_publisher(collect)
     yield seen
-    notify.set_notifier(None)
+    ui_events.set_publisher(None)
 
 
 # ── Le due facce ─────────────────────────────────────────────────────────────

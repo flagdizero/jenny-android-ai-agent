@@ -23,9 +23,10 @@ from jenny.agent.tools.context import (
 from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader
 from jenny.agent.tools.registry import ToolRegistry
-from jenny.board import model, notify
+from jenny.board import model
 from jenny.board.store import mutate_board, read_board, read_card_summary
 from jenny.config.schema import ToolsConfig
+from jenny.runtime import ui_events
 from jenny.security.workspace_access import (
     bind_workspace_scope,
     build_workspace_scope,
@@ -87,12 +88,13 @@ def _notes(cron) -> list[dict]:
 def announced(monkeypatch):
     seen: list[str] = []
 
-    async def collect(name: str) -> None:
-        seen.append(name)
+    async def collect(event: dict) -> None:
+        if event.get("_board_changed"):
+            seen.append(event["notebook"])
 
-    notify.set_notifier(collect)
+    ui_events.set_publisher(collect)
     yield seen
-    notify.set_notifier(None)
+    ui_events.set_publisher(None)
 
 
 @pytest.mark.parametrize("scope", ["core", "orchestrator", "subagent", "apps", "remote"])

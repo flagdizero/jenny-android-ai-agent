@@ -372,71 +372,45 @@ class GatewayContainer:
                 "parte comunque e il prossimo avvio riprova"
             )
 
-    def _wire_app_notifier(self) -> None:
-        """«I dati di un'app sono cambiati» va sulla WebUI (``jenny/apps/notify.py``):
-        una scrittura dallo schermo o un lettore che ricalcola aggiornano la
-        polaroid sulla bacheca e lo schermo aperto."""
-        from jenny.apps.notify import set_notifier
-        from jenny.bus.events import OutboundMessage
+    def _wire_ui_events(self) -> None:
+        """Gli avvisi «la casa è cambiata» vanno sulla WebUI (``runtime/ui_events``).
 
-        bus = self.bus
-
-        async def announce(slug: str) -> None:
-            await bus.publish_outbound(OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_app_data_changed": True, "app_slug": slug},
-            ))
-
-        set_notifier(announce)
-
-    def _wire_board_notifier(self) -> None:
-        """«La bacheca è cambiata» va sulla WebUI (``jenny/board/notify.py``): una
-        scrittura che non viene dalla bacheca stessa — l'editore, un'app posata,
-        la passata del giardiniere — ridisegna la bacheca aperta."""
-        from jenny.board.notify import set_notifier
-        from jenny.bus.events import OutboundMessage
-
-        bus = self.bus
-
-        async def announce(notebook: str) -> None:
-            await bus.publish_outbound(OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_board_changed": True, "notebook": notebook},
-            ))
-
-        set_notifier(announce)
-
-    def _wire_staged_notifier(self) -> None:
-        """«Le bozze in attesa sono cambiate» va sulla WebUI (``agent.staged_writes``).
-
-        L'avviso può arrivare da un thread (le RPC fanno il disco fuori dal
-        loop), quindi si rientra nel loop con ``call_soon_threadsafe``.
+        Una scrittura che non viene dalla bacheca o dallo schermo stesso — l'editore,
+        un'app posata, la passata del giardiniere, un lettore che ricalcola, le
+        bozze di un subagent — ridisegna quel che è aperto. L'avviso delle bozze
+        può arrivare da un thread (le RPC fanno il disco fuori dal loop), quindi
+        rientra nel loop con ``call_soon_threadsafe``.
         """
         import asyncio
 
         from jenny.agent.staged_writes import StagedChange, add_change_listener
         from jenny.bus.events import OutboundMessage
+        from jenny.runtime import ui_events
 
         bus = self.bus
+
+        async def publish(event: dict[str, Any]) -> None:
+            await bus.publish_outbound(OutboundMessage(
+                channel="websocket", chat_id="webui", content="", metadata=event,
+            ))
+
+        ui_events.set_publisher(publish)
         try:
             gateway_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
         except RuntimeError:  # ``build()`` chiamata fuori dal loop (i test)
             gateway_loop = None
 
-        def announce(change: StagedChange) -> None:
-            message = OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_staged_changed": True, "count": change.count},
-            )
+        def staged(change: StagedChange) -> None:
+            event = {"_staged_changed": True, "count": change.count}
             try:
-                asyncio.get_running_loop().create_task(bus.publish_outbound(message))
+                asyncio.get_running_loop().create_task(ui_events.emit(event))
             except RuntimeError:
                 if (target := gateway_loop) is not None:
                     target.call_soon_threadsafe(
-                        lambda: target.create_task(bus.publish_outbound(message))
+                        lambda: target.create_task(ui_events.emit(event))
                     )
 
-        add_change_listener(announce)
+        add_change_listener(staged)
 
     def _prepare_apps(self) -> None:
         """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
@@ -509,9 +483,7 @@ class GatewayContainer:
         self.session_manager = SessionManager(config.workspace_path)
         self._repair_pending_renames()
         self._prepare_apps()
-        self._wire_app_notifier()
-        self._wire_board_notifier()
-        self._wire_staged_notifier()
+        self._wire_ui_events()
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)

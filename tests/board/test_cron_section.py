@@ -62,25 +62,26 @@ async def test_a_pause_from_the_drawer_tells_the_home_like_the_route_and_the_too
     """Fino al 02/11/2026 la RPC del cassetto metteva in pausa senza dirlo alla casa."""
     import dataclasses
 
-    from jenny.board import notify
     from jenny.board.cron_link import make_link
     from jenny.cron.service import CronService
+    from jenny.runtime import ui_events
 
     service = CronService(tmp_path / "jobs.json")
     job = _meteo(service, notebook, make_link("piante", "acero"))
     seen: list[str] = []
 
-    async def collect(name: str) -> None:
-        seen.append(name)
+    async def collect(event: dict) -> None:
+        if event.get("_board_changed"):
+            seen.append(event["notebook"])
 
-    notify.set_notifier(collect)
+    ui_events.set_publisher(collect)
     try:
         with_cron = dataclasses.replace(ctx, get_cron_service=lambda: service)
         for paused in (True, True, False):
             await dispatch_command(with_cron, "board.cron.pause",
                                    {"wiki": "piante", "job": job.id, "paused": paused})
     finally:
-        notify.set_notifier(None)
+        ui_events.set_publisher(None)
     # La seconda pausa non cambia niente, e non lo dice.
     assert seen == ["piante", "piante"]
 
