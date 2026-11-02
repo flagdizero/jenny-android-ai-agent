@@ -24,6 +24,7 @@ from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
 from jenny.runtime.user_text import say
 from jenny.utils.document import extract_documents, prepare_attachments
+from jenny.utils.helpers import clip
 
 if TYPE_CHECKING:
     import asyncio
@@ -156,8 +157,9 @@ class StateHandlersMixin:
             ctx.msg = dataclasses.replace(msg, content=new_content, media=image_only)
             msg = ctx.msg
 
-        preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-        logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
+        logger.info(
+            "Processing message from {}:{}: {}", msg.channel, msg.sender_id, clip(msg.content, 80)
+        )
 
         # Session is already fetched by the caller (_process_message) but
         # ensure it exists in case this handler is invoked independently.

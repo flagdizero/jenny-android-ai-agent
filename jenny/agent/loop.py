@@ -113,7 +113,7 @@ from jenny.session.turn_visibility import (
     mark_silent_turn,
     resolve_turn_visibility,
 )
-from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, reserved_output_tokens
+from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, clip, reserved_output_tokens
 from jenny.utils.llm_runtime import LLMRuntime
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_migration import restore_wiki_id
@@ -169,7 +169,7 @@ def _shown_folder_name(name: str) -> str:
     ``WebSocketChannel._refuse_invalid_project`` tronca per la stessa ragione.
     """
     flat = " ".join(name.split()).replace("`", "'")
-    return flat if len(flat) <= 80 else flat[:79] + "…"
+    return clip(flat, 80)
 
 
 def _new_turn_id(session_key: str) -> str:
@@ -2878,8 +2878,9 @@ class AgentLoop(
             if not had_injections or stop_reason == "empty_final_response":
                 return None
 
-        preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
-        logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
+        logger.info(
+            "Response to {}:{}: {}", msg.channel, msg.sender_id, clip(final_content, 120)
+        )
 
         meta = dict(msg.metadata or {})
         # ``_streamed`` dice al dispatcher "i client l'hanno già visto arrivare a

@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from jenny.session.history_meta import CHECKPOINT_META, COMPACTED_META, INJECTED_EVENT_META
-from jenny.utils.helpers import estimate_message_tokens, merge_message_content
+from jenny.utils.helpers import clip, estimate_message_tokens, merge_message_content
 
 __all__ = [
     "InFlightCheckpoint",
@@ -263,9 +263,7 @@ def _call_line(call: dict[str, Any], max_args: int) -> str:
     if not isinstance(args, str):
         args = json.dumps(args, ensure_ascii=False, default=str)
     args = " ".join(args.split())
-    if len(args) > max_args:
-        args = args[:max_args] + "…"
-    return f"{name}({args})"
+    return f"{name}({clip(args, max_args)})"
 
 
 def format_range(

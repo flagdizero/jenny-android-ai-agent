@@ -13,7 +13,7 @@ from jenny import __version__
 from jenny.bus.events import OutboundMessage
 from jenny.command.router import CommandContext, CommandRouter
 from jenny.runtime.user_text import say
-from jenny.utils.helpers import build_status_content
+from jenny.utils.helpers import build_status_content, clip
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -864,8 +864,7 @@ def _format_history_message(msg: dict) -> str | None:
     content = str(content).strip()
     if not content:
         return None
-    if len(content) > _HISTORY_MAX_CONTENT_CHARS:
-        content = content[:_HISTORY_MAX_CONTENT_CHARS] + "…"
+    content = clip(content, _HISTORY_MAX_CONTENT_CHARS)
     label = say("cmd.history.you") if role == "user" else say("cmd.history.bot")
     return f"{label}: {content}"
 

@@ -34,6 +34,7 @@ from jenny.session.keys import (
     is_project_session_key,
     session_key_for_channel,
 )
+from jenny.utils.helpers import clip
 from jenny.utils.plain_text import plain_text
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
@@ -142,9 +143,7 @@ def alert_fields(
     if conversation:
         tag = f"{conversation}{CONVERSATION_TAG_SEPARATOR}{tag}"
 
-    body = " ".join(plain_text(content).split())
-    if len(body) > _BODY_MAX_CHARS:
-        body = body[: _BODY_MAX_CHARS - 1] + "…"
+    body = clip(" ".join(plain_text(content).split()), _BODY_MAX_CHARS)
     if not body:
         body = say("notify.new_message")
     return title, body, tag

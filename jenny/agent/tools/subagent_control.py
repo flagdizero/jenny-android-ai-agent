@@ -31,6 +31,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
+from jenny.utils.helpers import clip
 
 # Quanti caratteri di riassunto del risultato entrano nell'elenco compatto. Il
 # testo completo si ottiene chiedendo un singolo ``task_id``.
@@ -257,8 +258,8 @@ class SubagentStatusTool(_SubagentControlTool):
         line = "- " + ", ".join(parts)
         summary = (entry.get("result_summary") or "").strip()
         if summary:
-            if preview and len(summary) > preview:
-                summary = summary[:preview].rstrip() + "…"
+            if preview:
+                summary = clip(summary, preview)
             line += "\n  " + summary.replace("\n", " ")
         return line
 

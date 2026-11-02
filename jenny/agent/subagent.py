@@ -98,7 +98,7 @@ from jenny.security.workspace_access import (
 )
 from jenny.session.history_meta import INJECTED_EVENT_META
 from jenny.session.turn_visibility import resolve_turn_visibility
-from jenny.utils.helpers import truncate_text
+from jenny.utils.helpers import clip, truncate_text
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.runtime import (
     BUDGET_NOTICE_EVENT,
@@ -952,8 +952,7 @@ def _task_head(task: str) -> str:
     """La prima riga del compito, quanto basta a riconoscerlo."""
     text = (task or "").strip()
     head = text.splitlines()[0] if text else ""
-    if len(head) > _ANNOUNCE_TASK_CHARS:
-        head = head[:_ANNOUNCE_TASK_CHARS].rstrip() + "…"
+    head = clip(head, _ANNOUNCE_TASK_CHARS)
     if head != text:
         head += " (the full brief is in your spawn call)"
     return head

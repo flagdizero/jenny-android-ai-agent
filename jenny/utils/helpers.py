@@ -340,6 +340,19 @@ def image_placeholder_text(path: str | None, *, empty: str = "[image]") -> str:
     return f"[image: {path}]" if path else empty
 
 
+def clip(text: str, limit: int) -> str:
+    """*text* in non più di *limit* caratteri, con «…» al posto di quel che manca.
+
+    Per anteprime, log ed elenchi: era scritto a mano in una quindicina di posti,
+    con ``n`` o ``n-1``, con ``…`` o ``...``, togliendo o no lo spazio prima dei
+    puntini. Per un risultato che il modello deve sapere troncato c'è
+    :func:`truncate_text`, che lo dice per esteso.
+    """
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
 def truncate_text(text: str, max_chars: int) -> str:
     """Truncate text with a stable suffix."""
     if max_chars <= 0 or len(text) <= max_chars:

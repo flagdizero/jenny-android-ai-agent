@@ -47,6 +47,7 @@ from jenny.agent.tools.schema import (
     tool_parameters_schema,
 )
 from jenny.security.workspace_access import current_tool_workspace
+from jenny.utils.helpers import clip
 
 # Una pagina dell'elenco, in caratteri. Sotto i 16.000 di ``max_tool_result_chars``
 # di proposito: oltre, il risultato finisce in un file e il modello ne vede solo
@@ -402,8 +403,7 @@ def _history_index_line(rec: dict[str, Any]) -> str:
     notes = [n.strip() for n in content.splitlines() if n.strip()]
     head = notes[0] if notes else ""
     head = head.lstrip("- ").strip()
-    if len(head) > _HISTORY_SNIPPET_CHARS:
-        head = head[: _HISTORY_SNIPPET_CHARS - 1].rstrip() + "…"
+    head = clip(head, _HISTORY_SNIPPET_CHARS)
     # Il conteggio delle altre note non è decorazione: tre quarti delle voci ne
     # hanno più di una (74 su 108, misurate), quindi senza questo il modello
     # crederebbe che la voce sia solo la sua prima riga.

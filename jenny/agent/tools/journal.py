@@ -53,7 +53,7 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
-from jenny.utils.helpers import safe_zoneinfo
+from jenny.utils.helpers import clip, safe_zoneinfo
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
 
 # Non c'e' un progetto: il rifiuto dice **dove** vive il diario invece di dire
@@ -339,8 +339,7 @@ class JournalAppendTool(Tool):
     async def _personal(self, fact: str, attribution: str) -> str:
         """Una riga del diario personale: un fatto che non e' di nessun quaderno."""
         request = current_request_context()
-        content = fact if len(fact) <= _MIRROR_MAX_CHARS else (
-            fact[: _MIRROR_MAX_CHARS - 1].rstrip() + "…")
+        content = clip(fact, _MIRROR_MAX_CHARS)
         try:
             await asyncio.to_thread(
                 self._memory.append_history, content,
@@ -421,8 +420,7 @@ class JournalAppendTool(Tool):
             where = page
         request = current_request_context()
         session_key = request.session_key if request is not None else None
-        content = text if len(text) <= _MIRROR_MAX_CHARS else (
-            text[: _MIRROR_MAX_CHARS - 1].rstrip() + "…")
+        content = clip(text, _MIRROR_MAX_CHARS)
         try:
             await asyncio.to_thread(
                 store.append_history, content,
@@ -527,8 +525,7 @@ class SuggestNotebookTool(Tool):
             return f"No notebook named '{name}' (existing: {known}). Nothing was offered."
         if not line:
             return "Say in `context` what you were working on: it is what the notebook picks up."
-        if len(line) > _MIRROR_MAX_CHARS:
-            line = line[: _MIRROR_MAX_CHARS - 1].rstrip() + "…"
+        line = clip(line, _MIRROR_MAX_CHARS)
         try:
             await asyncio.to_thread(
                 self._memory.append_history, f"From the personal chat: {line}",
