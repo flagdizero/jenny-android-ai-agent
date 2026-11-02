@@ -41,6 +41,7 @@ from jenny.channels.telegram_media import (
 from jenny.config.paths import get_uploads_dir
 from jenny.config.schema import TelegramConfig
 from jenny.runtime.power import keep_awake
+from jenny.runtime.user_text import say
 from jenny.utils.media_decode import FileSizeExceeded, save_bytes
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
@@ -144,47 +145,6 @@ _TYPING_MAX_S = 300.0
 # context come "User location (shared via Telegram): …".
 _LOCATION_TURN_MARKER = "📍 [The user just shared their current location via Telegram.]"
 
-# Risposte lato bot, localizzate come i WELCOME_TEMPLATES dell'onboarding.
-_BOT_STRINGS: dict[str, dict[str, str]] = {
-    "it": {
-        "paired": "✅ Collegato! Da ora puoi parlare con Jenny da questa chat.",
-        "welcome": (
-            "Scrivimi come in una chat normale e ti risponde Jenny.\n\n"
-            "• /new — inizia una nuova conversazione\n"
-            "• 📎 Foto, file, vocali e video: arrivano a Jenny. Le foto le vede;\n"
-            "  gli altri li riceve come file, senza ascoltarli o guardarli."
-        ),
-        "start_prompt": (
-            "Per collegarti, inviami il codice a 6 cifre che vedi nella WebUI di Jenny."
-        ),
-        "wrong_code": (
-            "Codice non valido. Controlla il codice a 6 cifre nella WebUI di Jenny e riprova."
-        ),
-        "media_unsupported": "🤷 Questo tipo di messaggio non so ancora gestirlo.",
-        "media_too_big": "📦 Allegato troppo grande: non riesco a scaricarlo.",
-        "media_failed": "⚠️ Non sono riuscita a scaricare l'allegato. Riprova.",
-    },
-    "en": {
-        "paired": "✅ Paired! You can now talk to Jenny from this chat.",
-        "welcome": (
-            "Message me like a normal chat and Jenny replies.\n\n"
-            "• /new — start a new conversation\n"
-            "• 📎 Photos, files, voice notes and videos reach Jenny. She can see\n"
-            "  photos; the rest arrive as files she cannot listen to or watch."
-        ),
-        "start_prompt": (
-            "To pair, send me the 6-digit code shown in Jenny's WebUI."
-        ),
-        "wrong_code": (
-            "Invalid code. Check the 6-digit code in Jenny's WebUI and try again."
-        ),
-        "media_unsupported": "🤷 I can't handle this kind of message yet.",
-        "media_too_big": "📦 That attachment is too big for me to download.",
-        "media_failed": "⚠️ I couldn't download that attachment. Try again.",
-    },
-}
-
-
 class _TypingHeartbeat:
     """Tiene acceso "sta scrivendo…" finché qualcuno lo tiene acceso.
 
@@ -252,14 +212,16 @@ class TelegramChannel(NonStreamingChannelMixin):
         *,
         api: TelegramAPI | None = None,
         on_paired: Callable[[str, str | None], Awaitable[None]] | None = None,
-        language: str = "en",
+        language: str | None = None,
         runtime_events: Any | None = None,
     ):
         self.config = config
         self.bus = bus
         self.api = api or TelegramAPI(config.bot_token or "")
         self._on_paired = on_paired
-        self._language = language if language in _BOT_STRINGS else "en"
+        # ``None``: la lingua configurata, letta a ogni frase (``user_text.say``),
+        # così un cambio vale senza ricreare il canale.
+        self._language = language
         self._paired_chat_id = config.paired_chat_id
         self._pairing_code = config.pairing_code
         self._offset: int | None = None
@@ -287,7 +249,7 @@ class TelegramChannel(NonStreamingChannelMixin):
             )
 
     def _t(self, key: str) -> str:
-        return _BOT_STRINGS[self._language][key]
+        return say(f"telegram.{key}", language=self._language)
 
     @property
     def paired_chat_id(self) -> str | None:

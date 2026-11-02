@@ -377,6 +377,21 @@ _TEXT: dict[str, dict[str, str]] = {
         "plan.journal_rollback_undone": (
             "[system] notebook back as the plan «{title}» left it (rollback undone)"
         ),
+        # Un progetto la cui cartella non torna (``AgentLoop._refuse_*``).
+        "project.reincarnated": "This conversation belongs to a different `{name}` from the one that is there now.\n\nThe folder was replaced — deleted and created again, or restored from somewhere else — so what I remember here is another project's. I have not read your message and I have changed nothing, because answering out of the wrong history is the one mistake you could not check.\n\nTwo ways out. If the folder now at `{name}` is the one you want, delete that project from the workspace file browser — hold it and pick Delete — and create it again: that clears this history too, and tells you what it is removing first. If instead the old folder should come back, put it back and this chat is exactly where you left it.",
+        "project.missing_busy": "The folder for project `{name}` is not there any more, and I am still finishing the previous message in this chat, so I have not read this one.\n\nI will look for where the folder went as soon as that is done — send this again then. If you renamed the folder, renaming it back to `{name}` also fixes it. Or pick another project, or the personal chat, from the chip above the message box.",
+        "project.renamed": "The folder `{name}` was renamed to `{moved_to}`, so I moved this conversation's history there — nothing was lost, and I have not read your message.\n\nOpen `{moved_to}` from the chip above the message box and it is all where you left it.",
+        "project.unopenable": "The folder for project `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI found where it went — it is now called `{unopenable}` — but that cannot be the name of a conversation, so I left this chat's history under `{name}` rather than moving it somewhere nothing could open it. Nothing is lost.\n\nRename the folder using letters, numbers, dot, dash and underscore only, no spaces and no accents, and this chat follows it — renaming it back to `{name}` works too. Then pick the project from the chip above the message box.",
+        "project.split": "The folder for project `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI could not move this conversation to where the folder went{detail}. So part of its history is under a new name and part is still under the old one — nothing has been deleted, but the chat is not all in one place until those two halves are joined. Restart me and that happens on the way up; then open the project from the chip above the message box.",
+        "project.missing": "The folder for project `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI could not find where it went{detail}. Nothing is lost: the chat is still here, and it comes back as soon as the folder does. If you renamed it, renaming it back to `{name}` is the fix — a project's address is its folder name. Otherwise pick another project, or the personal chat, from the chip above the message box.",
+        # Il bot Telegram.
+        "telegram.paired": "✅ Paired! You can now talk to Jenny from this chat.",
+        "telegram.welcome": "Message me like a normal chat and Jenny replies.\n\n• /new — start a new conversation\n• 📎 Photos, files, voice notes and videos reach Jenny. She can see\n  photos; the rest arrive as files she cannot listen to or watch.",
+        "telegram.start_prompt": "To pair, send me the 6-digit code shown in Jenny's WebUI.",
+        "telegram.wrong_code": "Invalid code. Check the 6-digit code in Jenny's WebUI and try again.",
+        "telegram.media_unsupported": "🤷 I can't handle this kind of message yet.",
+        "telegram.media_too_big": "📦 That attachment is too big for me to download.",
+        "telegram.media_failed": "⚠️ I couldn't download that attachment. Try again.",
     },
     "it": {
         "stop.done": "Mi sono fermata.",
@@ -741,6 +756,21 @@ _TEXT: dict[str, dict[str, str]] = {
             "[system] quaderno di nuovo come l'ha lasciato il piano «{title}» "
             "(ritorno annullato)"
         ),
+        # Un progetto la cui cartella non torna (``AgentLoop._refuse_*``).
+        "project.reincarnated": "Questa conversazione appartiene a un `{name}` diverso da quello che c'è adesso.\n\nLa cartella è stata sostituita — cancellata e ricreata, o ripristinata da un'altra parte — quindi quello che ricordo qui è di un altro progetto. Non ho letto il tuo messaggio e non ho cambiato niente, perché rispondere partendo dalla storia sbagliata è l'unico errore che non potresti controllare.\n\nCi sono due strade. Se la cartella che ora si chiama `{name}` è quella che vuoi, elimina quel progetto dal file browser del workspace — tienilo premuto e scegli Elimina — e ricrealo: così si cancella anche questa storia, e prima ti dice cosa sta togliendo. Se invece deve tornare la cartella di prima, rimettila al suo posto e ritrovi questa chat esattamente dove l'avevi lasciata.",
+        "project.missing_busy": "La cartella del progetto `{name}` non c'è più, e sto ancora finendo il messaggio precedente in questa chat, quindi questo non l'ho letto.\n\nAppena ho finito cerco dov'è finita la cartella: rimandamelo allora. Se l'hai rinominata, anche rinominarla di nuovo in `{name}` risolve. Oppure scegli un altro progetto, o la chat personale, dal chip sopra la casella del messaggio.",
+        "project.renamed": "La cartella `{name}` è stata rinominata in `{moved_to}`, quindi ho spostato lì la storia di questa conversazione — non si è perso niente, e il tuo messaggio non l'ho letto.\n\nApri `{moved_to}` dal chip sopra la casella del messaggio e trovi tutto dove l'avevi lasciato.",
+        "project.unopenable": "La cartella del progetto `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nHo trovato dov'è finita — ora si chiama `{unopenable}` — ma quello non può essere il nome di una conversazione, quindi ho lasciato la storia di questa chat sotto `{name}` invece di spostarla dove niente potrebbe aprirla. Non si è perso niente.\n\nRinomina la cartella usando solo lettere, numeri, punto, trattino e trattino basso, senza spazi e senza accenti, e questa chat la segue — va bene anche rinominarla di nuovo in `{name}`. Poi scegli il progetto dal chip sopra la casella del messaggio.",
+        "project.split": "La cartella del progetto `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nNon sono riuscita a spostare questa conversazione dove è finita la cartella{detail}. Così una parte della sua storia è sotto un nome nuovo e una parte è ancora sotto quello vecchio — non è stato cancellato niente, ma la chat non è tutta in un posto finché le due metà non si riuniscono. Riavviami e succede durante l'avvio; poi apri il progetto dal chip sopra la casella del messaggio.",
+        "project.missing": "La cartella del progetto `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nNon ho trovato dov'è finita{detail}. Non si è perso niente: la chat è ancora qui, e torna appena torna la cartella. Se l'hai rinominata, rinominarla di nuovo in `{name}` è la soluzione — l'indirizzo di un progetto è il nome della sua cartella. Altrimenti scegli un altro progetto, o la chat personale, dal chip sopra la casella del messaggio.",
+        # Il bot Telegram.
+        "telegram.paired": "✅ Collegato! Da ora puoi parlare con Jenny da questa chat.",
+        "telegram.welcome": "Scrivimi come in una chat normale e ti risponde Jenny.\n\n• /new — inizia una nuova conversazione\n• 📎 Foto, file, vocali e video: arrivano a Jenny. Le foto le vede;\n  gli altri li riceve come file, senza ascoltarli o guardarli.",
+        "telegram.start_prompt": "Per collegarti, inviami il codice a 6 cifre che vedi nella WebUI di Jenny.",
+        "telegram.wrong_code": "Codice non valido. Controlla il codice a 6 cifre nella WebUI di Jenny e riprova.",
+        "telegram.media_unsupported": "🤷 Questo tipo di messaggio non so ancora gestirlo.",
+        "telegram.media_too_big": "📦 Allegato troppo grande: non riesco a scaricarlo.",
+        "telegram.media_failed": "⚠️ Non sono riuscita a scaricare l'allegato. Riprova.",
     },
 }
 

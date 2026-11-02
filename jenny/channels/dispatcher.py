@@ -162,7 +162,6 @@ class WebSocketDispatcher:
             section,
             self.bus,
             on_paired=record_paired,
-            language=self.config.agents.defaults.language,
             runtime_events=self._runtime_events,
         )
         logger.info("Telegram channel enabled")

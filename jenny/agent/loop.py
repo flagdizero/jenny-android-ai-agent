@@ -944,19 +944,7 @@ class AgentLoop(
         await self.bus.publish_outbound(OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
-            content=(
-                f"This conversation belongs to a different `{name}` from the one that "
-                "is there now.\n\nThe folder was replaced — deleted and created again, "
-                "or restored from somewhere else — so what I remember here is another "
-                "project's. I have not read your message and I have changed nothing, "
-                "because answering out of the wrong history is the one mistake you "
-                "could not check.\n\nTwo ways out. If the folder now at `"
-                f"{name}` is the one you want, delete that project from the workspace "
-                "file browser — hold it and pick Delete — and create it again: that "
-                "clears this history too, and tells you what it is removing first. If "
-                "instead the old folder should come back, put it back and this chat is "
-                "exactly where you left it."
-            ),
+            content=say("project.reincarnated", name=name),
             metadata={**dict(msg.metadata or {}), "render_as": "text"},
         ))
         return True
@@ -1019,14 +1007,7 @@ class AgentLoop(
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content=(
-                    f"The folder for project `{name}` is not there any more, and I am "
-                    "still finishing the previous message in this chat, so I have not "
-                    "read this one.\n\nI will look for where the folder went as soon as "
-                    "that is done — send this again then. If you renamed the folder, "
-                    f"renaming it back to `{name}` also fixes it. Or pick another "
-                    "project, or the personal chat, from the chip above the message box."
-                ),
+                content=say("project.missing_busy", name=name),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return True
@@ -1040,12 +1021,7 @@ class AgentLoop(
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content=(
-                    f"The folder `{name}` was renamed to `{outcome.moved_to}`, so I moved "
-                    "this conversation's history there — nothing was lost, and I have not "
-                    f"read your message.\n\nOpen `{outcome.moved_to}` from the chip above "
-                    "the message box and it is all where you left it."
-                ),
+                content=say("project.renamed", name=name, moved_to=outcome.moved_to),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return True
@@ -1064,37 +1040,11 @@ class AgentLoop(
             # Il solo rifiuto che sa dove e' finita la cartella. Non passa da
             # ``detail``: la si nomina, e si dice la regola invece di rimandare
             # l'utente al chip, che quella cartella non la elenca (T4.1).
-            content = (
-                f"The folder for project `{name}` is not there any more, so this "
-                "conversation has nothing to work on and I have not read your message.\n\n"
-                f"I found where it went — it is now called `{outcome.unopenable}` — but "
-                "that cannot be the name of a conversation, so I left this chat's history "
-                f"under `{name}` rather than moving it somewhere nothing could open it. "
-                "Nothing is lost.\n\nRename the folder using letters, numbers, dot, dash "
-                "and underscore only, no spaces and no accents, and this chat follows it "
-                f"— renaming it back to `{name}` works too. Then pick the project from the "
-                "chip above the message box."
-            )
+            content = say("project.unopenable", name=name, unopenable=outcome.unopenable)
         elif self._project_history_is_split(key):
-            content = (
-                f"The folder for project `{name}` is not there any more, so this "
-                "conversation has nothing to work on and I have not read your message.\n\n"
-                f"I could not move this conversation to where the folder went{detail}. So "
-                "part of its history is under a new name and part is still under the old "
-                "one — nothing has been deleted, but the chat is not all in one place "
-                "until those two halves are joined. Restart me and that happens on the "
-                "way up; then open the project from the chip above the message box."
-            )
+            content = say("project.split", name=name, detail=detail)
         else:
-            content = (
-                f"The folder for project `{name}` is not there any more, so this "
-                "conversation has nothing to work on and I have not read your message.\n\n"
-                f"I could not find where it went{detail}. Nothing is lost: the chat is still "
-                "here, and it comes back as soon as the folder does. If you renamed it, "
-                f"renaming it back to `{name}` is the fix — a project's address is its folder "
-                "name. Otherwise pick another project, or the personal chat, from the chip "
-                "above the message box."
-            )
+            content = say("project.missing", name=name, detail=detail)
         await self.bus.publish_outbound(OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
