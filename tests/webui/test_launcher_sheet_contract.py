@@ -1080,3 +1080,16 @@ def test_the_grid_hides_text_without_hiding_it_from_talkback() -> None:
     assert block, "la regola che nasconde i testi secondari non c'e'"
     assert "clip-path: inset(50%)" in block.group(1)
     assert "display: none" not in block.group(1)
+
+
+def test_the_app_page_has_its_own_class_not_the_board_drawer_s() -> None:
+    """``.home-drawer`` era due cose: il cassetto della bacheca
+    (``home-board-drawer.js``) e la pagina App. La pagina ereditava la cornice
+    del cassetto (20 px di lato, 16 fra i pezzi, il contenitore per le query) e
+    ``#launcher-sheet`` doveva disfarla."""
+    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    sheet = re.search(r'<div [^>]*id="launcher-sheet"[^>]*>', html).group(0)
+    assert 'class="home-launcher"' in sheet, sheet
+    css = _src("home-style.css")
+    assert len(re.findall(r"^\.home-drawer \{", css, re.M)) == 1, "un .home-drawer solo: la bacheca"
+    assert not re.search(r"^#launcher-sheet \{[^}]*\bgap: 0", css, re.M), "una cornice da disfare"

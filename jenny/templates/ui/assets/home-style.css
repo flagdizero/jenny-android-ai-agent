@@ -5383,11 +5383,12 @@ dialog.home-photo-viewer[open] { display: flex; }
    Il cassetto, senza le cose di un foglio: prende l'altezza della pagina, e
    in fondo lascia il posto a Jenny come le impostazioni. */
 
-.home-drawer {
+.home-launcher {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 4px 0 0;
   outline: none;
 }
 
@@ -5397,14 +5398,10 @@ dialog.home-photo-viewer[open] { display: flex; }
    cinque colonne. Le celle sono le righe dell'officina (`.launcher-row`, stesso
    `option`, stesso tocco lungo), vestite qui da cella: le regole stanno tutte
    sotto `#launcher-sheet`, che esiste solo in casa, perche' mobile-style.css lo
-   carica anche l'officina e `.home-drawer` e' anche il cassetto della bacheca.
+   carica anche l'officina.
    Le cinque colonne sono `GRID_COLS` in `mobile-launcher.js`: ↑↓ saltano di
    tante voci, e le due cifre devono restare uguali. */
 
-/* `.home-drawer` porta anche la cornice del cassetto della bacheca (20 px di
-   lato, 16 fra i pezzi): qui si sommava a quella del campo e della griglia, e
-   su 432 px di altezza costava quasi una fila di icone. */
-#launcher-sheet { padding: 4px 0 0; gap: 0; }
 /* Il cestino delle app, in fondo alla griglia: una riga sobria, che c'e' solo
    quando qualcosa e' stato eliminato. */
 .launcher-trash {
