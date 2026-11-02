@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -375,9 +374,9 @@ class _NotebookTool(Tool):
         si leggono e riscrivono a vicenda, quindi nessuna perde la sezione
         dell'altra.
         """
-        from jenny.utils.helpers import safe_zoneinfo
+        from jenny.utils.clock import local_now
 
-        now = datetime.now(safe_zoneinfo(self._timezone or "UTC"))
+        now = local_now(self._timezone)
         rel = f"{_TRACE_DIR}/{now:%Y-%m-%d}.md"
         path = _fenced(root, root / rel)
         section = [f"\n## {now:%H:%M} — {len(targets)} page(s)\n", f"Reason: {reason}\n"]
