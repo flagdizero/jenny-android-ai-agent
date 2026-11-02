@@ -214,10 +214,21 @@ def append_lines_durable(
     sono comunque nel file, solo non ancora garantite su disco): è la scelta del
     transcript, che non deve far fallire un turno per questo. Gli altri due no,
     perché il loro chiamante cancella qualcosa subito dopo.
+
+    Un append interrotto (processo ucciso) lascia l'ultima riga senza a capo, e
+    la prima riga nuova le si attaccava: la riga unita non si legge più, e
+    :func:`iter_jsonl` buttava via tutte e due. Qui la si chiude prima con un a
+    capo: resta rotta solo lei, che la lettura salta. Era la guardia di
+    ``apps/storage``, l'unico chiamante che l'aveva.
     """
-    with open(path, "a", encoding="utf-8") as f:
-        for line in lines:
-            f.write(line + "\n")
+    with open(path, "ab+") as f:
+        f.seek(0, os.SEEK_END)
+        torn = False
+        if f.tell() > 0:
+            f.seek(-1, os.SEEK_END)
+            torn = f.read(1) != b"\n"
+        payload = ("\n" if torn else "") + "".join(line + "\n" for line in lines)
+        f.write(payload.encode("utf-8"))
         f.flush()
         try:
             os.fsync(f.fileno())

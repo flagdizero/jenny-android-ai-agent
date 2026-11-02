@@ -42,3 +42,18 @@ def test_an_fsync_failure_can_be_tolerated_and_the_line_is_there(tmp_path: Path,
     target = tmp_path / "x"
     append_lines_durable(target, ["riga"], tolerate_fsync_error=True)
     assert target.read_text(encoding="utf-8") == "riga\n"
+
+
+def test_a_torn_last_line_is_closed_before_the_new_ones(tmp_path: Path) -> None:
+    """Un append interrotto lascia l'ultima riga senza a capo: la riga nuova non
+    le si attacca, così si perde solo quella rotta e non anche la nuova."""
+    target = tmp_path / "log.jsonl"
+    target.write_text('{"a": 1}\n{"b": ', encoding="utf-8")
+    append_lines_durable(target, ['{"c": 3}'])
+    assert target.read_text(encoding="utf-8") == '{"a": 1}\n{"b": \n{"c": 3}\n'
+
+
+def test_a_new_file_starts_without_a_blank_line(tmp_path: Path) -> None:
+    target = tmp_path / "new.jsonl"
+    append_lines_durable(target, ["riga"])
+    assert target.read_text(encoding="utf-8") == "riga\n"
