@@ -28,7 +28,6 @@ contati ma non mostrati no.
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,6 +40,7 @@ from jenny.utils.helpers import clip
 from jenny.utils.wiki_paths import (
     FRONTMATTER_RE,
     WIKI_INDEX_FILENAME,
+    fold,
     is_research_layout,
     iter_wiki_pages,
     page_chars,
@@ -555,13 +555,8 @@ def render_check(report: CheckReport, *, limit: int, max_chars: int) -> str:
 # ── map ──────────────────────────────────────────────────────────────────────
 
 
-def _fold(text: str) -> str:
-    """Minuscolo e senza accenti: «Città» e «citta» sono la stessa parola qui."""
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
-
-
 def _terms_regex(terms: Iterable[str]) -> re.Pattern[str] | None:
-    folded = sorted({_fold(t).strip() for t in terms if _fold(str(t)).strip()}, key=len,
+    folded = sorted({fold(t).strip() for t in terms if fold(str(t)).strip()}, key=len,
                     reverse=True)
     if not folded:
         return None
@@ -664,8 +659,8 @@ def map_notebook(root: Path, subjects: list[Term], topics: list[Term],
             continue
         spent += size
         searched += 1
-        folded_text = _fold(text)
-        stem = _fold(path.stem.replace("-", " ").replace("_", " "))
+        folded_text = fold(text)
+        stem = fold(path.stem.replace("-", " ").replace("_", " "))
         # Prima il file intero, una ricerca per termine: le righe si scorrono
         # solo per i soggetti e gli argomenti che il file nomina davvero.
         topic_in = [t.regex.search(folded_text) is not None for t in topics]
@@ -679,7 +674,7 @@ def map_notebook(root: Path, subjects: list[Term], topics: list[Term],
         lines = text.split("\n")
         folded = folded_text.split("\n")
         if len(folded) != len(lines):  # una piegatura che cambia le righe: riga per riga
-            folded = [_fold(line) for line in lines]
+            folded = [fold(line) for line in lines]
         rel = _rel(root, path)
         topic_hits = [[i for i, f in enumerate(folded) if t.regex.search(f)] if topic_in[ti]
                       else [] for ti, t in enumerate(topics)]

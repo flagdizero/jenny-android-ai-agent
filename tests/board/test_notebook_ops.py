@@ -265,6 +265,19 @@ def test_map_counts_subject_by_topic_with_file_and_line(tmp_path: Path) -> None:
     assert "Empty cells (1): Acero × acqua" in out
 
 
+def test_map_finds_subjects_that_are_not_in_the_latin_alphabet(tmp_path: Path) -> None:
+    """La piegatura toglie gli accenti, non le lettere: un ``encode("ascii")``
+    riduceva «Москва» e «東京» alla stringa vuota, e il soggetto spariva."""
+    root = tmp_path / "q"
+    _write(root / "wiki" / "viaggio.md", "# Viaggio\n\nМосква d'inverno, poi 東京.\nStraße.\n")
+    subjects = ops.parse_terms([{"name": "Москва"}, {"name": "東京"}, {"name": "Straße"}],
+                               "aliases")
+    assert [s.name for s in subjects] == ["Москва", "東京", "Straße"]
+    out = ops.map_notebook(root, subjects, ops.parse_terms(["viaggio"], "keywords"),
+                           ["wiki"], per_cell=3, max_chars=12000)
+    assert "| 東京 (1) | 1 |" in out and "| Straße (1) | 1 |" in out
+
+
 def test_read_many_splits_the_budget_and_says_what_it_cut(tmp_path: Path) -> None:
     root = tmp_path / "q"
     _write(root / "wiki" / "corta.md", "---\nstate: open\n---\n# Corta\n")

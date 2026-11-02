@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, overload
 
@@ -130,6 +131,24 @@ def wiki_schema_file(wiki_root: Path) -> Path | None:
     """Il file di istruzioni di una wiki, o ``None`` se non ne ha nessuno."""
     candidate = wiki_root / WIKI_SCHEMA_FILENAME
     return candidate if candidate.is_file() else None
+
+
+# ── La piegatura della ricerca ───────────────────────────────────────────────
+
+
+def fold(text: str) -> str:
+    """Normalizza per la ricerca: NFKD, via i diacritici, minuscolo.
+
+    «Città» e «citta» diventano la stessa parola; «東京» e «Москва» restano
+    loro stesse — si tolgono gli accenti, non le lettere. La usano la ricerca
+    delle wiki, quella della memoria e la mappa di un quaderno. Il gemello
+    JavaScript è ``foldText`` in ``shared/wiki-search.js``: le due devono restare
+    identiche, altrimenti il client cerca termini che il server non ha mai
+    scritto nel dizionario.
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    without_marks = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return without_marks.lower()
 
 
 # ── Frontmatter ──────────────────────────────────────────────────────────────

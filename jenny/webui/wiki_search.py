@@ -44,14 +44,13 @@ import hashlib
 import re
 import sys
 import threading
-import unicodedata
 from array import array
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jenny.utils.wiki_paths import split_frontmatter
+from jenny.utils.wiki_paths import fold, split_frontmatter
 from jenny.webui.wiki import (
     GraphData,
     PageSource,
@@ -89,18 +88,6 @@ _WEIGHT_MAX = 255  # i pesi viaggiano in un Uint8Array
 # significhi "tre pagine", trasformando parole normalissime in universali.
 _UNIVERSAL_DF_RATIO = 0.6
 _UNIVERSAL_MIN_DOCS = 34
-
-
-def fold(text: str) -> str:
-    """Normalizza per la ricerca: NFKD, via i diacritici, minuscolo.
-
-    Il gemello JavaScript è ``foldText`` in ``shared/wiki-search.js``: le due
-    implementazioni devono restare identiche, altrimenti il client cerca
-    termini che il server non ha mai scritto nel dizionario.
-    """
-    decomposed = unicodedata.normalize("NFKD", text)
-    without_marks = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return without_marks.lower()
 
 
 def tokenize(text: str) -> list[str]:
