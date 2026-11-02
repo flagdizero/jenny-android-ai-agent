@@ -5120,7 +5120,7 @@ dialog.home-photo-viewer[open] { display: flex; }
    a mano, centrata e in `cqw`, sul foglio del modulo si leggeva appena e andava
    a capo — jenny_s22, 01/11/2026). */
 .home-board-row.is-every { align-items: center; }
-.home-board-form-label {
+.home-board-row.is-every > .home-board-form-label {
   flex: none;
   color: var(--text);
   font-size: 14px;
