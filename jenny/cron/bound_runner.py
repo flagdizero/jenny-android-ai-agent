@@ -26,7 +26,6 @@ from jenny.cron.could_not_check import (
 )
 from jenny.cron.monitor_followup import resolve_pending_delegation
 from jenny.cron.service import CronJobSkippedError
-from jenny.cron.session_delivery import origin_delivery_context
 from jenny.cron.session_turns import (
     CRON_DEFER_UNTIL_IDLE_META,
     CRON_MIRROR_META,
@@ -43,11 +42,11 @@ from jenny.cron.types import (
     job_display_name,
     job_user_label,
 )
-from jenny.cron.webui_metadata import cron_proactive_delivery_metadata
 from jenny.runtime.power import keep_awake
 from jenny.session.keys import notebook_cron_session_key
 from jenny.session.turn_visibility import mark_silent_turn
 from jenny.utils.prompt_templates import render_template
+from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 # Coda di storico tenuta nella sessione isolata di un monitor: un monitor gira
 # all'infinito e senza potatura la sua sessione cresce senza limite.
@@ -133,6 +132,33 @@ def _cron_prompt_ref(prompt: str, *, monitor: bool = False) -> dict[str, Any]:
         "version": 1,
         "sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
     }
+
+
+def origin_delivery_context(job: CronJob) -> tuple[str, str, dict[str, Any]]:
+    """Return ``(channel, chat_id, metadata)`` for a session-bound cron job."""
+    payload = job.payload
+    if not payload.origin_channel or not payload.origin_chat_id:
+        raise ValueError(f"cron job {job.id} is missing origin delivery context")
+    return payload.origin_channel, payload.origin_chat_id, dict(payload.origin_metadata or {})
+
+
+def cron_proactive_delivery_metadata(
+    channel: str,
+    metadata: dict[str, Any] | None,
+    *,
+    turn_seed: str,
+    source_label: str | None = None,
+) -> dict[str, Any]:
+    """Return channel metadata for a fresh proactive cron delivery turn."""
+    out = dict(metadata or {})
+    out.pop(WEBUI_TURN_METADATA_KEY, None)
+    if channel == "websocket":
+        out[WEBUI_TURN_METADATA_KEY] = f"{turn_seed}:{uuid.uuid4().hex}"
+        source: dict[str, str] = {"kind": "cron"}
+        if source_label:
+            source["label"] = source_label
+        out[WEBUI_MESSAGE_SOURCE_METADATA_KEY] = source
+    return out
 
 
 def _bound_session_delivery_context(

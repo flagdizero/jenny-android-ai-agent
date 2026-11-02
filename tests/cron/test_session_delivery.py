@@ -1,6 +1,6 @@
 import pytest
 
-from jenny.cron.session_delivery import origin_delivery_context
+from jenny.cron.bound_runner import origin_delivery_context
 from jenny.cron.types import CronJob, CronPayload
 
 

@@ -7,7 +7,7 @@ di un turn id residuo su qualunque canale, e non-mutazione dell'input.
 
 from __future__ import annotations
 
-from jenny.cron.webui_metadata import cron_proactive_delivery_metadata
+from jenny.cron.bound_runner import cron_proactive_delivery_metadata
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 
