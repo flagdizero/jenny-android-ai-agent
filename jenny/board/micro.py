@@ -625,19 +625,3 @@ def is_due(spec: dict[str, Any], state: dict[str, Any], now: datetime) -> bool:
         return False
     due = next_run_at(spec, state)
     return due is None or now >= due - _DUE_SLACK
-
-
-# ── una scheda per nome ─────────────────────────────────────────────────────
-
-
-def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
-    """Una scheda per id o per titolo (senza badare alle maiuscole)."""
-    ref = (ref or "").strip()
-    card = model.card_by_id(board, ref) if model.is_valid_id(ref) else None
-    if card is not None:
-        return card
-    low = ref.casefold()
-    matches = [c for c in board["cards"] if c["title"].casefold() == low]
-    return matches[0] if len(matches) == 1 else None
-
-

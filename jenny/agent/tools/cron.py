@@ -382,9 +382,9 @@ class CronTool(Tool, ContextAware):
                                 condition: Any, why: str | None) -> str:
         """Un job del quaderno: su una scheda o sul quaderno intero, da qualunque chat."""
         from jenny.board.cron_link import add_notebook_job
-        from jenny.board.micro import find_card
         from jenny.board.model import NOTEBOOK
         from jenny.board.notify import board_changed
+        from jenny.board.place import find_card
         from jenny.board.store import read_board
 
         if not message:
@@ -396,7 +396,8 @@ class CronTool(Tool, ContextAware):
         ref = str(card_ref or "").strip()
         card = find_card(board, ref) if ref and board is not None else None
         if ref and card is None:
-            titles = ", ".join(f"«{c['title']}»" for c in (board or {}).get("cards") or [])
+            titles = ", ".join(f"«{c['title']}» ({c['id']})"
+                               for c in (board or {}).get("cards") or [])
             return (f"No card «{ref}» on the board of «{notebook}». Cards: {titles or 'none'}. "
                     "Use one of them, or leave `card` empty if the job is for the whole notebook.")
         try:

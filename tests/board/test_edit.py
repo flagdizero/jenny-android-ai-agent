@@ -339,6 +339,29 @@ def test_an_unknown_card_names_the_ones_there_are(notebook: Path) -> None:
     assert "«Acero» (acero)" in err.value.message
 
 
+def test_a_card_is_found_by_id_then_by_title_slug_and_never_by_a_guess(notebook: Path) -> None:
+    """Id prima, poi il titolo senza maiuscole e accenti; due titoli uguali: nessuna."""
+    from jenny.board.place import find_card
+
+    def apply(board):
+        board["cards"] += [
+            {"id": "c1", "title": "Ciliégio", "pages": [], "pos": {"x": 1, "y": 1}},
+            {"id": "c2", "title": "Rosa", "pages": [], "pos": {"x": 30, "y": 1}},
+            {"id": "c3", "title": "rosa!", "pages": [], "pos": {"x": 60, "y": 1}},
+            {"id": "rosa", "title": "Altro", "pages": [], "pos": {"x": 90, "y": 1}},
+        ]
+
+    mutate_board(notebook, apply)
+    board = read_board(notebook)
+    assert find_card(board, "CILIEGIO")["id"] == "c1"
+    assert find_card(board, " c2 ")["id"] == "c2"
+    # Un id vince su un titolo che si legge uguale.
+    assert find_card(board, "rosa")["id"] == "rosa"
+    # Due schede col titolo «Rosa»: una ricerca per nome non sceglie a caso.
+    assert find_card(board, "Rosa!") is None
+    assert find_card(board, "") is None and find_card(board, "???") is None
+
+
 def test_cards_asked_one_next_to_the_other_go_right_not_off_the_screen(notebook: Path) -> None:
     """Sull'emulatore il 09/10/2026 tre schede «accanto» finivano a x = 2, −18, −38."""
     _seed(notebook)

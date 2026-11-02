@@ -22,12 +22,22 @@ from jenny.board.store import mutate_board
 
 
 def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
-    """Una scheda per id o per titolo (senza badare a maiuscole e accenti)."""
-    card = model.card_by_id(board, ref)
+    """Una scheda per id o per titolo (senza badare a maiuscole e accenti).
+
+    L'unica ricerca per nome delle schede: la usano la bacheca, la posa delle app e
+    il tool cron, cosi' «ciliegio» trova «Ciliégio» da tutte le strade. Prima l'id;
+    poi lo slug del titolo, ma solo se una scheda sola ce l'ha: con due «Rosa» non
+    sceglie a caso, e il chiamante elenca le schede (con gli id) per farla scegliere.
+    """
+    ref = str(ref or "").strip()
+    card = model.card_by_id(board, ref) if model.is_valid_id(ref) else None
     if card is not None:
         return card
-    want = model.slugify(ref)
-    return next((c for c in board["cards"] if model.slugify(c["title"]) == want), None)
+    want = model.slugify(ref, fallback="")
+    if not want:
+        return None
+    matches = [c for c in board["cards"] if model.slugify(c["title"], fallback="") == want]
+    return matches[0] if len(matches) == 1 else None
 
 
 def tie(board: dict[str, Any], a: str, b: str, by: str = model.USER) -> bool:
