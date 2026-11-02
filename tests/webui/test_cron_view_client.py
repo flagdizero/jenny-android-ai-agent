@@ -19,9 +19,7 @@ import json
 
 from support.js_harness import ASSETS, requires_node, run_js
 
-VIEW_JS = (
-    ASSETS / "shared" / "cron-view.js"
-)
+VIEW_JS = ASSETS / "shared" / "cron-view.js"
 
 
 pytestmark = requires_node

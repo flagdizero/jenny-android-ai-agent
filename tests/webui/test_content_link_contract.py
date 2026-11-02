@@ -34,16 +34,12 @@ link morto. Quel che resta qui e' la meta' della chat, che non ha un gemello.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support.js_harness import ASSETS
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
 CHAT_JS = ASSETS / "mobile-chat.js"
-MAIN_ACTIVITY = (
-    ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny" / "MainActivity.kt"
-)
+MAIN_ACTIVITY = ANDROID_SRC / "MainActivity.kt"
 
 # Tutto ciò che, eseguito prima di preventDefault(), lascerebbe partire la
 # navigazione del main frame (o la renderebbe inutile).

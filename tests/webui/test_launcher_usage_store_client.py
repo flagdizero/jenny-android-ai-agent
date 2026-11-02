@@ -22,9 +22,7 @@ from __future__ import annotations
 
 from support.js_harness import ASSETS, requires_node, run_js
 
-STORE_JS = (
-    ASSETS / "shared" / "launcher-usage-store.js"
-)
+STORE_JS = ASSETS / "shared" / "launcher-usage-store.js"
 RANK_JS = STORE_JS.parent / "launcher-rank.js"
 
 

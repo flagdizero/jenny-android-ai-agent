@@ -23,9 +23,7 @@ import re
 
 from support.js_harness import ASSETS
 
-THEMES_CSS = (
-    ASSETS / "mobile-style.css"
-)
+THEMES_CSS = ASSETS / "mobile-style.css"
 
 
 def _rules(css: str) -> list[tuple[set[str], str]]:

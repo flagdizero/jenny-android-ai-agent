@@ -10,14 +10,12 @@ guscio risponde con l'evento ``jenny-location-permission``.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support.js_harness import ASSETS, member, requires_node, run_js
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_JS = ASSETS / "mobile-settings.js"
-MAIN_ACTIVITY = ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny" / "MainActivity.kt"
+MAIN_ACTIVITY = ANDROID_SRC / "MainActivity.kt"
 
 
 @requires_node

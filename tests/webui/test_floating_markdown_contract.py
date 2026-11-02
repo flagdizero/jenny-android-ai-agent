@@ -24,10 +24,10 @@ import re
 from pathlib import Path
 
 from support.js_harness import ASSETS
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
 ROOT = Path(__file__).resolve().parents[2]
-CONTROLLER = ROOT / "android/app/src/main/java/com/flagdizero/jenny/FloatingOverlayController.kt"
+CONTROLLER = ANDROID_SRC / "FloatingOverlayController.kt"
 GRADLE = ROOT / "android/app/build.gradle.kts"
 CHAT_JS = ASSETS / "mobile-chat.js"
 MARKDOWN_JS = ASSETS / "shared/markdown.js"

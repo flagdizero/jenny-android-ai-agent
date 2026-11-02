@@ -14,10 +14,9 @@ banco con il codice tornato a ``return block()``.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-from support.kotlin_source import block_at, code_only
+from support.kotlin_source import ANDROID_SRC, block_at, code_only
 
 
 def _inner(code: str, start: int) -> str | None:
@@ -28,10 +27,7 @@ def _inner(code: str, start: int) -> str | None:
         return None
 
 
-MAIN_HOP = (
-    Path(__file__).resolve().parents[2]
-    / "android/app/src/main/java/com/flagdizero/jenny/MainHop.kt"
-)
+MAIN_HOP = ANDROID_SRC / "MainHop.kt"
 
 # ``block()`` dentro un ``try``, con un ``catch (e: Throwable)`` subito dopo: un
 # ``Error`` sul main abbatte il processo quanto un'eccezione.

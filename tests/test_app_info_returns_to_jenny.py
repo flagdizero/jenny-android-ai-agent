@@ -10,14 +10,10 @@ si tiene fermo il flag che lo decide.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
-_BRIDGE = (
-    Path(__file__).resolve().parents[1]
-    / "android/app/src/main/java/com/flagdizero/jenny/InstalledAppsBridge.kt"
-)
+_BRIDGE = ANDROID_SRC / "InstalledAppsBridge.kt"
 
 
 def test_app_info_gets_its_own_task() -> None:

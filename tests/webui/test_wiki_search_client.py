@@ -23,9 +23,7 @@ from support.js_harness import ASSETS, requires_node, run_js
 from jenny.webui.wiki import build_graph, read_pages
 from jenny.webui.wiki_search import SearchIndex, pack_index, tokenize
 
-SEARCH_JS = (
-    ASSETS / "shared" / "wiki-search.js"
-)
+SEARCH_JS = ASSETS / "shared" / "wiki-search.js"
 
 
 pytestmark = requires_node

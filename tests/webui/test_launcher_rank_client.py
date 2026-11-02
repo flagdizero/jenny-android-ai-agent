@@ -18,9 +18,7 @@ import json
 
 from support.js_harness import ASSETS, requires_node, run_js
 
-RANK_JS = (
-    ASSETS / "shared" / "launcher-rank.js"
-)
+RANK_JS = ASSETS / "shared" / "launcher-rank.js"
 
 
 pytestmark = requires_node

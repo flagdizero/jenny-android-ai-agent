@@ -18,9 +18,7 @@ import json
 
 from support.js_harness import ASSETS, requires_node, run_js
 
-SCRIPT = (
-    ASSETS / "shared" / "editable-focus.js"
-)
+SCRIPT = ASSETS / "shared" / "editable-focus.js"
 
 pytestmark = requires_node
 

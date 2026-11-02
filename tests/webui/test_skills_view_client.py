@@ -13,9 +13,7 @@ from __future__ import annotations
 
 from support.js_harness import ASSETS, locale, requires_node, run_js
 
-VIEW_JS = (
-    ASSETS / "shared" / "skills-view.js"
-)
+VIEW_JS = ASSETS / "shared" / "skills-view.js"
 
 
 pytestmark = requires_node

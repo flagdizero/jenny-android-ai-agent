@@ -28,9 +28,7 @@ from __future__ import annotations
 
 from support.js_harness import ASSETS, requires_node, run_js
 
-POLICY_JS = (
-    ASSETS / "shared" / "subagent-policy.js"
-)
+POLICY_JS = ASSETS / "shared" / "subagent-policy.js"
 
 
 pytestmark = requires_node

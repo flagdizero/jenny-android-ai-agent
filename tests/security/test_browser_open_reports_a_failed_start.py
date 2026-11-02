@@ -15,15 +15,11 @@ Il Kotlin non gira in CI: la regola si fissa sul sorgente, come in
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
-BRIDGE = (
-    Path(__file__).resolve().parents[2]
-    / "android/app/src/main/java/com/flagdizero/jenny/JennyBrowserBridge.kt"
-)
+BRIDGE = ANDROID_SRC / "JennyBrowserBridge.kt"
 
 
 def _open_body() -> str:

@@ -12,11 +12,9 @@ Qui il bersaglio sono proprio i commenti, quindi si legge il sorgente grezzo.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-
-ANDROID_SRC = Path(__file__).resolve().parents[1] / "android/app/src/main/java/com/flagdizero/jenny"
+from support.kotlin_source import ANDROID_SRC
 
 
 def test_no_kdoc_is_followed_by_another_kdoc() -> None:

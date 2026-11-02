@@ -17,13 +17,12 @@ from pathlib import Path
 
 import pytest
 from support.js_harness import ASSETS
-from support.kotlin_source import read_code, read_source
+from support.kotlin_source import ANDROID_SRC, read_code, read_source
 
 from jenny.runtime import floating as fl
 
-REPO = Path(__file__).resolve().parents[2]
-CONTROLLER = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingOverlayController.kt"
-BRIDGE_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingBridge.kt"
+CONTROLLER = ANDROID_SRC / "FloatingOverlayController.kt"
+BRIDGE_KT = ANDROID_SRC / "FloatingBridge.kt"
 
 
 class _FakeBridge:
@@ -213,7 +212,7 @@ class TestThePhysicsDoesNotDiverge:
     una costante nuova entra da sola nel confronto.
     """
 
-    FLIGHT_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingFlight.kt"
+    FLIGHT_KT = ANDROID_SRC / "FloatingFlight.kt"
     COMPANION_JS = ASSETS / "shared/mascot-drag.js"
 
     @staticmethod
@@ -292,7 +291,7 @@ class TestSquashParity:
     ritoccata da una parte sola cambia la sequenza.
     """
 
-    SQUASH_KT = REPO / "android/app/src/main/java/com/flagdizero/jenny/FloatingSquash.kt"
+    SQUASH_KT = ANDROID_SRC / "FloatingSquash.kt"
     SQUASH_JS = ASSETS / "shared/mascot-squash.js"
     FUNCTIONS = (
         "heldStretch", "airStretch", "impactSquash", "loadLegs", "walkStep", "walkStart", "stretch",

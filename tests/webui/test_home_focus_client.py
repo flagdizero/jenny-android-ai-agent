@@ -19,9 +19,7 @@ import json
 
 from support.js_harness import ASSETS, requires_node, run_js
 
-FOCUS_JS = (
-    ASSETS / "home-focus.js"
-)
+FOCUS_JS = ASSETS / "home-focus.js"
 
 
 pytestmark = requires_node

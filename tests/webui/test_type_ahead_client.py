@@ -23,9 +23,7 @@ import json
 
 from support.js_harness import ASSETS, requires_node, run_js
 
-TYPE_AHEAD_JS = (
-    ASSETS / "shared" / "type-ahead.js"
-)
+TYPE_AHEAD_JS = ASSETS / "shared" / "type-ahead.js"
 
 
 pytestmark = requires_node

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
 from jenny.agent.tools import screen as tool_mod
 from jenny.agent.tools.context import RequestContext, bind_request_context, reset_request_context
@@ -28,7 +28,7 @@ from tests.agent.test_prompt_matches_offered_tools import (  # noqa: F401
 )
 
 REPO = Path(__file__).resolve().parents[2]
-KT = REPO / "android/app/src/main/java/com/flagdizero/jenny"
+KT = ANDROID_SRC
 
 SUMMARY = {
     "id": "snap-1", "takenAt": 1_760_000_000_000, "app": "Chrome",

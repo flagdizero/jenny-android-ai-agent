@@ -21,22 +21,17 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 import pytest
 from support.js_harness import ASSETS
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
 from jenny.config.schema import KEEP_AWAKE_MODES
 
-ROOT = Path(__file__).resolve().parents[2]
 _UI_ASSETS = ASSETS
 _SETTINGS_JS = _UI_ASSETS / "mobile-settings.js"
 _STYLE_CSS = _UI_ASSETS / "mobile-style.css"
-_MAIN_ACTIVITY = (
-    ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny"
-    / "MainActivity.kt"
-)
+_MAIN_ACTIVITY = ANDROID_SRC / "MainActivity.kt"
 
 
 def _js() -> str:

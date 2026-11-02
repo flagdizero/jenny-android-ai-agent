@@ -22,15 +22,13 @@ tenere allineati. Qui si prova il giro intero, che nessun compilatore vede:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support.js_harness import ASSETS, requires_node, run_js
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
 THEME_JS = ASSETS / "shared" / "theme.js"
 SPA_CSS = ASSETS / "mobile-style.css"
-ANDROID = ROOT / "android/app/src/main/java/com/flagdizero/jenny"
+ANDROID = ANDROID_SRC
 
 
 # I sei token che vestono la finestra, nell'ordine in cui viaggiano sul ponte.

@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 
 from support.js_harness import ASSETS
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -570,7 +570,7 @@ def test_the_gesture_margin_chain_is_unbroken() -> None:
     esattamente quegli otto pixel a separare "scorre" da "l'interfaccia
     collassa"). Questo test è il nodo che li tiene insieme.
     """
-    kotlin = read_source(ROOT / "android/app/src/main/java/com/flagdizero/jenny/MainActivity.kt")
+    kotlin = read_source(ANDROID_SRC / "MainActivity.kt")
     assert "fun getBottomGestureInset()" in kotlin
     # Raggiunto solo per reflection: senza l'annotazione la WebView non lo vede,
     # e R8 in release non avrebbe motivo di tenerlo.
