@@ -455,7 +455,7 @@ def _notebooks_inside(workspace_root: Path, target: Path) -> list[str]:
     from jenny.utils.wiki_paths import is_wiki_root
 
     wikis_dir = _notebooks_dir(workspace_root)
-    if wikis_dir != target and target not in wikis_dir.parents:
+    if not is_path_within(wikis_dir, target, path_resolved=True):
         return []
     try:
         return sorted(child.name for child in wikis_dir.iterdir() if is_wiki_root(child))

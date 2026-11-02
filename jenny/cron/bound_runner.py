@@ -232,9 +232,12 @@ def _why_page(job: CronJob) -> str:
     root = notebook_root(str(job.payload.board.get("notebook")))
     if root is None:
         return ""
-    wiki = (root / "wiki").resolve()
-    page = (wiki / job.payload.why).resolve()
-    if not page.is_relative_to(wiki):
+    from jenny.security.workspace_policy import is_path_within
+
+    wiki = root / "wiki"
+    page = wiki / job.payload.why
+    # Risolto, e un loop di symlink è un «fuori», non un'eccezione.
+    if not is_path_within(page, wiki):
         return ""
     try:
         return page.read_text(encoding="utf-8")[:WHY_PAGE_CHARS]
