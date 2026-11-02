@@ -1475,8 +1475,6 @@
       "who": "Chi risponde",
       "none": "da configurare",
       "models": "Modelli di {provider}",
-      "saved": "Adesso risponde questo",
-      "failed": "Non sono riuscita a cambiarlo.",
       "needsBase": "Manca l'indirizzo del provider: si mette in officina.",
       "listFailed": "L'elenco non è arrivato. Quello in uso resta quello che vedi sopra.",
       "key": "Chiave",

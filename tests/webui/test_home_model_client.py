@@ -24,6 +24,7 @@ la propria copia.
 from __future__ import annotations
 
 import json
+import re
 
 from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
 
@@ -61,6 +62,8 @@ const requested = [];
 const saves = [];
 let brokenSave = false;
 let lastPayload = null;
+/* Una promessa che tiene in volo il salvataggio, finche' il banco la scioglie. */
+let hold = null;
 const toasts = [];
 
 const api = {
@@ -73,6 +76,7 @@ const api = {
   updateSettings(params) {
     saves.push({ type: 'settings', ...params });
     if (brokenSave) return Promise.reject(new Error('rifiutato'));
+    if (hold) return hold.then(() => lastPayload);
     return Promise.resolve(lastPayload);
   },
   updateProvider(params) {
@@ -171,6 +175,13 @@ function tileEls() {
 """
 
 
+def _inline(path) -> str:
+    """Un modulo condiviso dentro il banco: senza ``import`` (``api``, ``i18n`` e
+    ``showToast`` sono i finti di sopra) e senza ``export``."""
+    src = path.read_text(encoding="utf-8")
+    return re.sub(r"^import .*?;\n", "", src, flags=re.M | re.S).replace("export ", "")
+
+
 def _harness() -> str:
     src = MODEL_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
@@ -179,7 +190,7 @@ def _harness() -> str:
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__BRAND_URL__", BRAND_JS.as_uri())
-        .replace("__CATALOGS__", CATALOG_JS.read_text(encoding="utf-8").replace("export ", ""))
+        .replace("__CATALOGS__", _inline(CATALOG_JS))
         .replace("__SHORT_BRAND__", function(src, "shortBrand"))
         .replace("__TILE_NAMES__", function(src, "tileNames"))
         .replace("__MODEL_VALUE__", function(src, "modelValue"))
@@ -314,6 +325,28 @@ def test_a_model_that_did_not_save_leaves_the_room_as_it_was() -> None:
       assert.equal(toasts.length, 1);
       assert.equal(toasts[0][1], 'error');
       assert.deepEqual(active(), ['llama-3.3-70b'], 'il segno di spunta si e mosso lo stesso');
+    """)
+
+
+def test_one_choice_at_a_time_and_a_restart_is_said() -> None:
+    """Due tocchi di fila facevano due scritture, e il toast diceva «adesso
+    risponde questo» anche quando il cambio valeva dal prossimo avvio. La
+    scelta e' la stessa dell'officina: ``switchModel`` in
+    ``shared/model-catalog.js``."""
+    _run_js("""
+      const data = settings([{ name: 'groq' }], 'groq', 'llama-3.3-70b');
+      const s = await room(data, { groq: { status: 'available', models: [{ id: 'a' }, { id: 'b' }] } });
+      let release;
+      hold = new Promise((r) => { release = r; });
+      lastPayload = settings(data.providers, 'groq', 'a', { requires_restart: true });
+      const first = s.pickModel('a');
+      await s.pickModel('b');
+      release();
+      await first;
+      hold = null;
+
+      assert.equal(saves.length, 1, 'un secondo tocco in volo ha scritto: ' + JSON.stringify(saves));
+      assert.deepEqual(toasts, [[TRANSLATIONS.it.settings.brandModelSavedRestart, 'success']]);
     """)
 
 

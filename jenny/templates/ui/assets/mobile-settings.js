@@ -22,7 +22,7 @@ import {
 /* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
    e un import qui li rimetterebbe a portata di un bottone dimenticato. */
 import { runSnapshotRestore } from './shared/backup-flow.js';
-import { CATALOG_NOTE_KEYS, ModelCatalogs } from './shared/model-catalog.js';
+import { CATALOG_NOTE_KEYS, ModelCatalogs, switchModel } from './shared/model-catalog.js';
 
 // Ripiego per `power.modes` quando il payload arriva da un gateway più vecchio
 // del client: stesso ordine di `KEEP_AWAKE_MODES` in config/schema.py, dal più
@@ -1284,23 +1284,14 @@ export class SettingsController {
     if (provider === this.data?.default_provider && model === this.data?.agent?.model) return;
     const gen = this._gen;
     this._setBrandsBusy(true);
-    let payload;
-    try {
-      payload = await api.updateSettings({ model, default_provider: provider });
-    } catch (err) {
-      console.warn('settings: model not changed', err);
-      showToast(i18n.t('settings.brandModelFailed'), 'error');
-      return;
-    } finally {
-      this._setBrandsBusy(false);
-    }
-    this.data = payload?.agent ? payload : {
+    const payload = await switchModel(provider, model);
+    this._setBrandsBusy(false);
+    if (!payload) return;
+    this.data = payload.agent ? payload : {
       ...this.data,
       default_provider: provider,
       agent: { ...(this.data?.agent || {}), model },
     };
-    showToast(i18n.t(payload?.requires_restart
-      ? 'settings.brandModelSavedRestart' : 'settings.brandModelSaved'), 'success');
     if (!this._stale(gen)) this._repaintBrands();
   }
 

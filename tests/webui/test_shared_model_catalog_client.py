@@ -8,9 +8,15 @@ visita dopo.
 
 from __future__ import annotations
 
+import re
+
 from support.js_harness import ASSETS, requires_node, run_js
 
-CATALOG_JS = (ASSETS / "shared" / "model-catalog.js").read_text(encoding="utf-8")
+# Senza gli ``import``: quel che servono (``switchModel``) qui non si prova.
+CATALOG_JS = re.sub(
+    r"^import .*?;\n", "", (ASSETS / "shared" / "model-catalog.js").read_text(encoding="utf-8"),
+    flags=re.M,
+)
 
 pytestmark = requires_node
 

@@ -27,6 +27,8 @@ from support.js_harness import ASSETS, member, run_module
 
 SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 CATALOG_JS = (ASSETS / "shared" / "model-catalog.js").read_text(encoding="utf-8")
+# Dentro il banco: senza ``import`` (``api``, ``i18n``, ``showToast`` sono i finti).
+_CATALOG = re.sub(r"^import .*?;\n", "", CATALOG_JS, flags=re.M).replace("export ", "")
 
 _REAL = (
     "_formatLabel",
@@ -109,7 +111,7 @@ const api = {{
   }},
 }};
 
-{CATALOG_JS.replace("export ", "")}
+{_CATALOG}
 
 class Settings {{
   constructor() {{

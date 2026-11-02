@@ -1475,8 +1475,6 @@
       "who": "Who answers",
       "none": "not set up yet",
       "models": "{provider} models",
-      "saved": "This one answers now",
-      "failed": "I could not change it.",
       "needsBase": "This provider has no address yet: set it in the workshop.",
       "listFailed": "The list did not arrive. The one in use is still the one above.",
       "key": "Key",
