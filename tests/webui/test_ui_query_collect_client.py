@@ -18,6 +18,9 @@ pytestmark = requires_node
 
 QUERY_SRC = (ASSETS / "mobile-ui-query.js").read_text(encoding="utf-8")
 SETTINGS_SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
+# La potatura vera: e' lei che toglie l'`inert` della vista coperta. Senza
+# `DOMParser` (node) ripiega sul testo com'e', a parte quello.
+SHARED_SRC = (ASSETS / "shared" / "ui-query.js").read_text(encoding="utf-8")
 
 
 def _script(body: str) -> str:
@@ -37,8 +40,10 @@ globalThis.document = {{ getElementById: (id) => views[id] ?? null }};
 const AppState = {{ currentMode: 'chat' }};
 globalThis.window = {{ mobileApp: {{ drawer: {{ activeDrawer: null }} }} }};
 
+{function(SHARED_SRC, "pruneHtml")}
+const HTML_CAP = 48 * 1024;
 class Responder {{
-  _pruneHtml(s) {{ return s; }}
+  _pruneHtml(s) {{ return pruneHtml(s); }}
 {member(QUERY_SRC, "_collect")}
 }}
 const r = new Responder();
