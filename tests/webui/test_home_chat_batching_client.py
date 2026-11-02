@@ -69,6 +69,8 @@ let renders = 0;
 const renderMarkdown = (t) => { renders += 1; return t; };
 const renderRich = () => {};
 const renderPlacesIn = () => {};
+const renderReplyExtras = (n) => { renderRich(n); renderPlacesIn(n); };
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 
 /* I fotogrammi: si scaricano a mano, come farebbe il browser al suo giro. */
 const frames = new Map();

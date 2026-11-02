@@ -74,6 +74,8 @@ const renderMarkdown = (t) => t;
    `test_rich_surfaces_contract.py`. */
 const renderRich = () => {};
 const renderPlacesIn = () => {};
+const renderReplyExtras = (n) => { renderRich(n); renderPlacesIn(n); };
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 const i18n = { t: (key) => 'i18n:' + key };
 /* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
    suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */

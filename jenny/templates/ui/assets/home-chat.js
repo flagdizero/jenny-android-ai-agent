@@ -42,35 +42,19 @@
  */
 
 import { api } from './shared/api-client.js';
-import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
+import { showToast } from './shared/utils.js';
 import { i18n } from './shared/i18n.js';
 import { openImageLightbox } from './shared/image-lightbox.js';
 import { sessionManager } from './shared/session-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
-import { renderRich } from './shared/rich-content.js';
-import { openPlaceFromClick, renderPlacesIn } from './shared/places.js';
+import { openPlaceFromClick } from './shared/places.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
 import { chatTime, chatTimeIso } from './shared/chat-time.js';
 import { mediaKind, openMediaFile } from './shared/media.js';
-
-/* Da dove e' entrato un messaggio che non hai scritto qui dentro. La chat e' il
-   registro completo di tutte le superfici — l'app, Telegram, la tendina delle
-   notifiche, il fumetto della mascotte — e la provenienza va detta, altrimenti
-   un messaggio scritto dal blocco schermo sembra comparso dal nulla.
-
-   Nomi e non identificatori: in officina l'etichetta e' il canale con
-   l'iniziale maiuscola ("Floating"), che e' il nome che ha nel codice. Qui e'
-   il nome che ha per chi lo legge. */
-const ORIGINS = {
-  telegram: { icon: 'ti-brand-telegram', key: 'home.origin.telegram' },
-  notification: { icon: 'ti-bell', key: 'home.origin.notification' },
-  floating: { icon: 'ti-message-circle', key: 'home.origin.floating' },
-  /* Scritto da un altro dispositivo del tailnet (il Mac, un secondo
-     telefono). Col nome che gli da' MagicDNS, quando c'e': «dal mac». */
-  remote: { icon: 'ti-device-laptop', key: 'home.origin.remote', named: 'home.origin.remoteNamed' },
-};
+import { originBadgeHtml } from './shared/origin.js';
+import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
    Sotto questa soglia il filo insegue i messaggi nuovi; sopra, no — chi sta
@@ -672,8 +656,7 @@ export class HomeChat {
     const finalText = fullText || this.buffer;
     if (this.blockNode && finalText) {
       this.blockNode.innerHTML = renderMarkdown(finalText);
-      renderRich(this.blockNode);
-      renderPlacesIn(this.blockNode);
+      renderReplyExtras(this.blockNode);
       this._register(this.turnNode, finalText, this.blockNode);
       this._lastSegment = this.blockNode;
       this.band?.refresh();
@@ -730,8 +713,7 @@ export class HomeChat {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
-      renderRich(block);
-      renderPlacesIn(block);
+      renderReplyExtras(block);
       this._ensureTurn().appendChild(block);
       this._register(this.turnNode, msg.text, block);
       if (step) this._markPassing(block);
@@ -959,8 +941,7 @@ export class HomeChat {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(content);
-      renderRich(block);
-      renderPlacesIn(block);
+      renderReplyExtras(block);
       node.appendChild(block);
       this._register(node, content);
     }
@@ -1128,7 +1109,7 @@ export class HomeChat {
       }
       const s = document.createElement('span');
       s.className = 'home-seconds';
-      s.textContent = (latencyMs / 1000).toFixed(1) + 's';
+      s.textContent = latencyText(latencyMs);
       row.appendChild(s);
     }
     node.appendChild(row);
@@ -1190,12 +1171,7 @@ export class HomeChat {
 
   async _copy(node) {
     const text = this._textOf(node);
-    if (!text) return;
-    if (!(await copyToClipboard(text))) {
-      showToast(i18n.t('chat.copyFailed'), 'error');
-      return;
-    }
-    showToast(i18n.t('chat.copied'), 'success');
+    await copyReplyText(text);
   }
 
   /* Il separatore di un azzeramento del contesto. Nessuna scritta: dire
@@ -1207,15 +1183,13 @@ export class HomeChat {
     this._append(hr, toTop);
   }
 
+  /* Da dove e' entrato il messaggio, se non da qui (`shared/origin.js`). */
   _originBadge(origin, device = null) {
-    if (!origin || origin === 'websocket') return null;
-    const known = ORIGINS[origin];
+    const html = originBadgeHtml(origin, device);
+    if (!html) return null;
     const badge = document.createElement('div');
     badge.className = 'home-origin';
-    const icon = known ? known.icon : 'ti-arrows-exchange';
-    const label = !known ? origin
-      : (device && known.named) ? i18n.t(known.named, { device }) : i18n.t(known.key);
-    badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
+    badge.innerHTML = html;
     return badge;
   }
 

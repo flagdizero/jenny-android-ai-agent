@@ -38,7 +38,8 @@ SURFACES = {
 }
 
 # La chiamata che disegna il resto, comunque si chiami localmente.
-RICH = re.compile(r"\brenderRich\w*\(")
+# `renderReplyExtras` (`shared/reply.js`) e' `renderRich` piu' le schede dei posti.
+RICH = re.compile(r"\b(?:renderRich\w*|renderReplyExtras)\(")
 
 # Le esenzioni, e portano il loro perche' addosso: **il testo che sta ancora
 # arrivando**. Una formula a meta' non e' una formula, e un diagramma a meta' e'
@@ -100,7 +101,9 @@ def test_no_surface_talks_to_the_libraries_by_itself() -> None:
                 f"{name} chiama {direct} per conto suo: il come sta in "
                 f"shared/rich-content.js, o le copie divergono"
             )
-        assert "rich-content.js" in src, f"{name} non importa il modulo condiviso"
+        assert "rich-content.js" in src or "shared/reply.js" in src, (
+            f"{name} non importa il modulo condiviso"
+        )
 
 
 def test_the_inline_dollar_is_on_only_where_the_skill_mandates_it() -> None:

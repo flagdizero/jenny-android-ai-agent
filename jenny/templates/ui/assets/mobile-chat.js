@@ -35,7 +35,7 @@ import {
  *  garantiva un involucro, ora `test_chat_rich_has_no_inline_dollar.py`.
  */
 import { renderRich } from './shared/rich-content.js';
-import { openPlaceFromClick, renderPlacesIn } from './shared/places.js';
+import { openPlaceFromClick } from './shared/places.js';
 import { workspacePathIn } from './shared/conversation-list.js';
 import { MARKED_OPTIONS, renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
@@ -56,6 +56,8 @@ import {
   saVisibleCards,
 } from './shared/subagent-policy.js';
 import { mediaKind, openMediaFile } from './shared/media.js';
+import { originBadgeHtml } from './shared/origin.js';
+import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
 
 const TOOL_ICONS = {
   start: 'ti-loader-2',
@@ -1058,8 +1060,7 @@ export class ChatController {
       const content = node.querySelector('.chat-content');
       if (content) {
         content.innerHTML = renderMarkdown(turn.content.trim());
-        renderRich(content);
-        renderPlacesIn(content);
+        renderReplyExtras(content);
         this._makeFilePathsClickable(content);
       }
       this._setMessageSource(node, turn.content.trim());
@@ -1148,7 +1149,7 @@ export class ChatController {
     if (!msg || latencyMs == null || msg.querySelector('.chat-meta')) return;
     const meta = document.createElement('span');
     meta.className = 'chat-meta';
-    meta.textContent = (latencyMs / 1000).toFixed(1) + 's';
+    meta.textContent = latencyText(latencyMs);
     this._ensureMsgActions(msg).appendChild(meta);
   }
 
@@ -1216,12 +1217,7 @@ export class ChatController {
      azioni, che non c'e' piu': ne resta una, ed e' questa. */
   async _copyMessage(msg) {
     const text = this._messageText(msg);
-    if (!text) return;
-    if (!(await copyToClipboard(text))) {
-      showToast(i18n.t('chat.copyFailed'), 'error');
-      return;
-    }
-    showToast(i18n.t('chat.copied'), 'success');
+    await copyReplyText(text);
   }
 
   _appendFileEdits(msg, edits) {
@@ -1260,15 +1256,14 @@ export class ChatController {
   }
 
   /* Badge di provenienza per i messaggi entrati da un altro canale
-     (es. Telegram): piccola etichetta sopra il contenuto della bolla. */
-  _appendOriginBadge(msg, origin) {
-    if (!origin || origin === 'websocket') return;
+     (es. Telegram): piccola etichetta sopra il contenuto della bolla, con le
+     parole della casa (`shared/origin.js`). */
+  _appendOriginBadge(msg, origin, device = null) {
+    const html = originBadgeHtml(origin, device);
+    if (!html) return;
     const badge = document.createElement('div');
     badge.className = 'chat-origin-badge';
-    const icon = origin === 'telegram' ? 'ti-brand-telegram'
-      : origin === 'remote' ? 'ti-device-laptop' : 'ti-arrows-exchange';
-    const label = origin.charAt(0).toUpperCase() + origin.slice(1);
-    badge.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
+    badge.innerHTML = html;
     msg.insertBefore(badge, msg.firstChild);
   }
 
@@ -1282,8 +1277,7 @@ export class ChatController {
       content.textContent = text;
     } else {
       content.innerHTML = renderMarkdown(String(text || ''));
-      renderRich(content);
-      renderPlacesIn(content);
+      renderReplyExtras(content);
       this._makeFilePathsClickable(content);
     }
     msg.appendChild(content);
@@ -1863,8 +1857,7 @@ export class ChatController {
     if (!this._currentContent && fullText) this._openContent();
     if (this._currentContent && finalText) {
       this._currentContent.innerHTML = renderMarkdown(finalText);
-      renderRich(this._currentContent);
-      renderPlacesIn(this._currentContent);
+      renderReplyExtras(this._currentContent);
       this._makeFilePathsClickable(this._currentContent);
       this._setMessageSource(this._currentMsg, finalText);
     }
@@ -1995,8 +1988,7 @@ export class ChatController {
       content.className = 'chat-content';
       this._currentMsg.appendChild(content);
       content.innerHTML = renderMarkdown(msg.text);
-      renderRich(content);
-      renderPlacesIn(content);
+      renderReplyExtras(content);
       this._makeFilePathsClickable(content);
       this._setMessageSource(this._currentMsg, msg.text);
       /* Una consegna proattiva può non avere un `turn_end` dietro: la riga di

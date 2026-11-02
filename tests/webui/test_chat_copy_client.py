@@ -51,6 +51,7 @@ def _harness() -> str:
     methods = ",\n    ".join(_method(chat, name) for name in _METHODS)
     return """
 import assert from 'node:assert/strict';
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 
 /* ── DOM minimo ──────────────────────────────────────────────────────────────
    Solo ciò che questi metodi toccano. `appendChild` **sposta** un figlio che è
