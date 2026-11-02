@@ -31,7 +31,7 @@ import {
    sono responsabilita' dell'artista, non del codice. Il layer del volo
    coincide col box dello sprite e le img sono tutte width:100%: nessuna scala
    o offset a runtime. L'unica costante e' il pivot della posa appesa. */
-export const FLY_POSES = {
+const FLY_POSES = {
   hang: '/html-mobile/assets/jenny-hang.webp',
   fall: '/html-mobile/assets/jenny-fall.webp',
   ground: '/html-mobile/assets/jenny-ground.webp',
@@ -57,9 +57,9 @@ const WALK_SPEED = 150; // rientro a passo costante (px/s), tipo camminata
 const GETUP_MS = 700; // pausa a terra dopo il tonfo (tempo per "rialzarsi")
 const RETURN_TIMEOUT_MS = 6000; // failsafe: oltre, snap allo stato finale
 const WALK_MARGIN_MS = 1500; // aria sopra la camminata prevista, prima dello snap
-export const DRAG_THRESHOLD = 24;
+const DRAG_THRESHOLD = 24;
 export const TAP_SLOP = 6;
-export const HOLD_DELAY_MS = 250; // soglia per distinguere tap da hold
+const HOLD_DELAY_MS = 250; // soglia per distinguere tap da hold
 
 /** Costruisce il livello del volo: le 5 pose impilate, una visibile alla volta. */
 export function buildFlyLayer(parent) {

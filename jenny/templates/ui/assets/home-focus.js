@@ -70,7 +70,7 @@ export function physicalKeyboard(win = globalThis.window) {
  *  rimette dove l'avevi lasciato se qualcosa lo sposta. Lo spostamento
  *  misurato arriva 3-15 ms dopo il `focus`; un tasto vero cambia il testo, e
  *  da li' la guardia non vale piu'. */
-export const CARET_GUARD_MS = 150;
+const CARET_GUARD_MS = 150;
 
 /** Quanto dura «c'e' un dito sul campo»: il fuoco di un tocco arriva col
  *  `mousedown` di compatibilita', dopo il rilascio. */

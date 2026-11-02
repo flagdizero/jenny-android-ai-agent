@@ -53,7 +53,7 @@ export function passwordProblem(mode, first, second) {
  *  che si è scritto resta. Con ogni altra risposta si chiude e la restituisce;
  *  rinunciando risolve `null`. Mentre il gateway lavora (PBKDF2, Drive) i
  *  bottoni sono fermi: chiudere a metà lascerebbe un'accensione a metà. */
-export function promptCloudPassword({ mode = 'choose', submit }) {
+function promptCloudPassword({ mode = 'choose', submit }) {
   return new Promise((resolve) => {
     const two = mode !== 'type';
     const t = (key, params) => escapeHtml(i18n.t(`cloudBackup.password.${mode}.${key}`, params));

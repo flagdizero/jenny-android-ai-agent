@@ -40,7 +40,7 @@ import { button, el, icon, writeFailedToast } from './shared/dom.js';
 import { dayAndTime } from './shared/when.js';
 
 /** «oggi alle 04:12», «ieri», «3 ott»: quando e' stato riscritto il cassetto. */
-export function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
+function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
   return dayAndTime(at, { now, locale })
@@ -49,10 +49,10 @@ export function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
 
 /** Le cadenze di un promemoria a condizione («controlla ogni»), la prima e' la
  *  proposta: la sceglie l'utente, e diventa l'`every` del suo cron. */
-export const CONDITION_EVERY = [['hour', 3_600_000], ['sixHours', 21_600_000], ['day', 86_400_000]];
+const CONDITION_EVERY = [['hour', 3_600_000], ['sixHours', 21_600_000], ['day', 86_400_000]];
 
 /** «controllo ogni 6 ore»: la cadenza di un promemoria a condizione, o `''`. */
-export function everyLabel(when) {
+function everyLabel(when) {
   if (when?.kind !== 'condition' || !(when.every_ms > 0)) return '';
   const tr = (key, vars) => i18n.t(key, vars);
   return i18n.t('board.app.checkedEvery', { every: humanizeDuration(when.every_ms, { tr, locale: i18n.locale }) });
@@ -60,7 +60,7 @@ export function everyLabel(when) {
 
 /** Quanto manca a *date* (`AAAA-MM-GG`), a parole: «tra 3 settimane», «ieri».
  *  Giorni fino a due settimane, poi settimane fino a due mesi, poi mesi. */
-export function untilLabel(date, today = new Date(), locale = i18n.locale) {
+function untilLabel(date, today = new Date(), locale = i18n.locale) {
   const [y, m, d] = String(date || '').split('-').map(Number);
   if (!y || !m) return '';
   const from = new Date(today.getFullYear(), today.getMonth(), today.getDate());

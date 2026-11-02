@@ -678,7 +678,7 @@ export function bentoOrder(inUse) {
  *  due con piu' pagine sono alti e il terzo e' largo (a pari pagine vince il
  *  piu' recente). Un quaderno senza pagine, o di cui non si sanno, resta
  *  semplice: una tessera alta che dice «0 p» non ha niente da mostrare. */
-export function bentoSizes(inUse) {
+function bentoSizes(inUse) {
   const sizes = new Map();
   if (!inUse.length) return sizes;
   sizes.set(inUse[0].name, 'hero');

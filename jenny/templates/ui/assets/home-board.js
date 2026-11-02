@@ -54,13 +54,13 @@ import { confirmDialog } from './shared/dialog.js';
 import { writeFailedToast } from './shared/dom.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
-export const LONG_PRESS_MS = 450;
-export const DRAG_THRESHOLD_PX = 6;
+const LONG_PRESS_MS = 450;
+const DRAG_THRESHOLD_PX = 6;
 /* L'etichetta di un filo acceso sta al 62% verso l'altro capo: a meta' finiva
    sotto la scheda sollevata. */
-export const LABEL_AT = 0.62;
+const LABEL_AT = 0.62;
 /* L'anteprima di una pagina fuori bacheca: le prime righe, non la pagina. */
-export const PREVIEW_CHARS = 170;
+const PREVIEW_CHARS = 170;
 
 /** Il colore della «foto» di una polaroid, da quello che la scheda e'.
  *
@@ -94,7 +94,7 @@ export function whenLabel(when, locale = i18n.locale) {
 }
 
 /** Un istante in breve, per i fogli della bacheca: «dom 25, 18:30». */
-export function shortStamp(iso, locale = i18n.locale) {
+function shortStamp(iso, locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
   try {
@@ -111,7 +111,7 @@ export function shortStamp(iso, locale = i18n.locale) {
  *  In pausa lo dice per primo; poi un monitor che non riesce a guardare (va
  *  detto, o il suo silenzio sembra un «niente da dire»); poi l'ultimo esito, o
  *  l'ultimo giro muto. Un monitor che non ha ancora girato dice come lavora. */
-export function autoLastLine(job, locale = i18n.locale) {
+function autoLastLine(job, locale = i18n.locale) {
   if (job.paused) return i18n.t('board.cron.paused');
   if (job.couldNotCheck > 0) return i18n.t('board.auto.trouble', { count: job.couldNotCheck });
   const result = job.result;
@@ -130,7 +130,7 @@ export function autoLastLine(job, locale = i18n.locale) {
 }
 
 /** Il giorno di *d* come `AAAA-MM-GG`, nell'ora di chi guarda (non in UTC). */
-export function localDay(d = new Date()) {
+function localDay(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }

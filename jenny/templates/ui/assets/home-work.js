@@ -51,7 +51,7 @@ const TICK_MS = 30_000;
 
 /* Senza progresso da tanto, la bolla lo dice. Prima no: una passata ha
    momenti di silenzio normali, e un avviso che scatta ogni volta e' rumore. */
-export const SLOW_AFTER_MS = 60_000;
+const SLOW_AFTER_MS = 60_000;
 
 /* Un aiutante fallito si racconta solo se e' finito da poco: lo snapshot porta
    anche i finiti di ore fa, e riaprire la chat non deve tirarli fuori. */

@@ -38,7 +38,7 @@ const PHOTO_MAX_SIDE = 1600;
 const DECK_LOADED = 3;
 
 /** Riduce una foto prima di mandarla: JPEG, lato lungo `PHOTO_MAX_SIDE`. */
-export async function shrinkPhoto(file) {
+async function shrinkPhoto(file) {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
@@ -57,7 +57,7 @@ export async function shrinkPhoto(file) {
 
 
 /** «14 ottobre»: la data per esteso, nella pagina d'album e a tutto schermo. */
-export function photoDay(iso, locale = i18n.locale) {
+function photoDay(iso, locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(at);

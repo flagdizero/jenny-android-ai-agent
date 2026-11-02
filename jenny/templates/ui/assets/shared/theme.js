@@ -118,7 +118,7 @@ export function themeTokens() {
    questi si legge col nome di adesso (e lo riscrive `setTheme`). */
 export const MIGRATION = { dark: 'chanel', light: 'stone', match: 'chanel', fumetto: 'comic', pietra: 'stone' };
 
-export function getTheme(id) {
+function getTheme(id) {
   return THEMES.find(t => t.id === id) || null;
 }
 
@@ -308,7 +308,7 @@ function syncFloatingBubble() {
 }
 
 /** Toggle the dark/light syntax stylesheets (highlight.js + CodeMirror). */
-export function applySyntaxTheme(scheme) {
+function applySyntaxTheme(scheme) {
   for (const [id, s] of [
     ['hljs-theme-dark', 'dark'], ['hljs-theme-light', 'light'],
     ['cm-theme-dark', 'dark'], ['cm-theme-light', 'light'],
