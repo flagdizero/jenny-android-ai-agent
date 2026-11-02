@@ -12,17 +12,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import websockets
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OutboundMessage
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 
@@ -37,15 +36,7 @@ def _channel(port: int | None = None) -> WebSocketChannel:
         "path": "/ws",
         "websocketRequiresToken": False,
     }
-    gateway = build_gateway_services(
-        config=WebSocketConfig.model_validate(cfg),
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 def _events(conn: AsyncMock) -> list[dict]:

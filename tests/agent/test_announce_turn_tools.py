@@ -12,11 +12,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import LLMResponse
 from jenny.session.keys import UNIFIED_SESSION_KEY
@@ -26,11 +27,10 @@ MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation = SimpleNamespace(max_tokens=4096)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="done"))
-    loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
+    loop = make_loop(tmp_path, provider=provider, context_window_tokens=None)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(  # type: ignore[method-assign]
         return_value=False
     )

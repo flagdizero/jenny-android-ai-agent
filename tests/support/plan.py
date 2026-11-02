@@ -11,19 +11,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from support.bus import FakeBus as FakeBus  # i test del piano la prendono da qui
+
 KEY = "project:piante"
-
-
-class FakeBus:
-    def __init__(self) -> None:
-        self.inbound: list[Any] = []
-        self.outbound: list[Any] = []
-
-    async def publish_inbound(self, msg: Any) -> None:
-        self.inbound.append(msg)
-
-    async def publish_outbound(self, msg: Any) -> None:
-        self.outbound.append(msg)
 
 
 class FakeHost:

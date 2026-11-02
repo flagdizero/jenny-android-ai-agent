@@ -11,11 +11,10 @@ correzione lo stile toccato e' identico a quello a riposo.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 SHEETS = (ASSETS / "mobile-style.css", ASSETS / "home-style.css", ASSETS / "apps" / "jenny-kit.css")
 
 

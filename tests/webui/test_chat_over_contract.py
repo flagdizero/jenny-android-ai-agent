@@ -12,11 +12,10 @@ allo schermo, e nessuna regola di ``chat-over`` ritaglia la chat.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 APP = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
 CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
 

@@ -21,15 +21,15 @@ essere contrabbandato dentro il dict metadata del chiamante.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop, TurnContext, TurnState
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.turn_types import TurnDisposition
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import CRON_MONITOR_META, CRON_TRIGGER_META
 from jenny.providers.base import LLMResponse
 from jenny.runtime.user_text import say
@@ -43,15 +43,9 @@ MONITOR_SESSION_KEY = "cron:job-m"
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok"))
-    return AgentLoop(
-        bus=MessageBus(),
-        provider=provider,
-        workspace=tmp_path,
-        model="test-model",
-    )
+    return make_loop(tmp_path, provider=provider, context_window_tokens=None)
 
 
 def _cron_metadata(*, monitor: bool) -> dict:

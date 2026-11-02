@@ -9,15 +9,14 @@ produca un frame dedicato e che non tocchi mai il transcript.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from port_alloc import free_port
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OUTBOUND_META_SUBAGENT_STATUS, OutboundMessage
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 
 _SNAPSHOT: dict[str, Any] = {
     "running": [{
@@ -60,16 +59,7 @@ def _channel(bus: Any = None) -> WebSocketChannel:
         "path": "/ws",
         "websocketRequiresToken": False,
     }
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus or MagicMock(),
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    channel = WebSocketChannel(cfg, bus or MagicMock(), gateway=gateway)
+    channel = make_ws_channel(cfg, bus or MagicMock())
     # Il transcript reale scriverebbe su disco: qui interessa solo *se* viene
     # chiamato (la riga vuota persistita era il bug).
     channel._transcripts = MagicMock()

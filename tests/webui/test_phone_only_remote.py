@@ -26,12 +26,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from support.ws_channel import make_ws_channel
 
 from jenny.channels import ws_remote
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketConfig
 from jenny.channels.ws_remote import RemoteListener
 from jenny.webui import apps_routes, settings_routes, static_cache, ws_http
-from jenny.webui.gateway_services import build_gateway_services
 from jenny.webui.phone_only import PHONE_ONLY_ROUTES
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -61,11 +61,7 @@ def rig(bus, monkeypatch):
         "enabled": True, "allowFrom": ["*"], "host": "127.0.0.1", "port": port, "path": "/",
         "tokenIssueSecret": "master-secret", "websocketRequiresToken": True,
     })
-    gateway = build_gateway_services(
-        config=cfg, bus=bus, session_manager=None, workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False, runtime_model_name=None,
-    )
-    ch = WebSocketChannel(cfg, bus, gateway=gateway)
+    ch = make_ws_channel(cfg, bus)
     ch._remote = RemoteListener(
         serve=ch._serve_remote, port=remote_port, detect=lambda: ("127.0.0.1",), poll_s=3600,
     )

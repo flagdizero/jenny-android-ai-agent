@@ -20,13 +20,12 @@ non si apre) sta in `tests/webui/test_project_create.py`.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
+from support.ws_channel import make_ws_channel
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 
 # Nomi che una cartella vera può avere e una sessione no. Non ipotetici: sono
 # quelli che un utente italiano scrive per primo.
@@ -40,19 +39,7 @@ _UNOPENABLE = [
 
 
 def _make_channel() -> WebSocketChannel:
-    bus = MagicMock()
-    bus.publish_inbound = AsyncMock()
-    cfg = {"enabled": True, "allowFrom": ["*"], "websocketRequiresToken": False}
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway)
+    channel = make_ws_channel()
     channel._handle_message = AsyncMock()  # type: ignore[method-assign]
     return channel
 

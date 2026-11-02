@@ -20,17 +20,14 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 from support import theme_tokens
-from support.js_harness import requires_node, run_js
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS, requires_node, run_js
+from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 THEME_JS = ASSETS / "shared" / "theme.js"
 BRIDGE_JS = ASSETS / "shared" / "native-bridge.js"
-ANDROID = ROOT / "android/app/src/main/java/com/flagdizero/jenny"
+ANDROID = ANDROID_SRC
 
 TOKENS = [
     "bubble-user-bg", "bubble-user-text", "bubble-user-border",

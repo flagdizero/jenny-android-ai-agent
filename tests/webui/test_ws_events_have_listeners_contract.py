@@ -32,12 +32,12 @@ import re
 from pathlib import Path
 
 import pytest
+from support.js_harness import ASSETS
 
 from jenny.channels.subagent_activity_wire import ACTIVITY_FRAME_EVENT
 
 ROOT = Path(__file__).resolve().parents[2]
 CHANNELS = ROOT / "jenny" / "channels"
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 # Eventi che il client non deve ascoltare, ognuno con il suo perché. Chi ne
 # aggiunge uno qui lo fa sapendolo; un evento nuovo senza ascoltatore fa rosso.

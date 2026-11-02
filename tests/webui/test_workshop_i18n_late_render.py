@@ -11,10 +11,11 @@ anche le impostazioni, non solo le scritte statiche.
 from __future__ import annotations
 
 import re
-from pathlib import Path
+
+from support.js_harness import ASSETS
 
 APP = (
-    Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "mobile-app.js"
+    ASSETS / "mobile-app.js"
 ).read_text(encoding="utf-8")
 
 

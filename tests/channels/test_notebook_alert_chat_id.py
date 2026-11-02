@@ -8,15 +8,15 @@ e ogni notifica apriva la chat personale.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
+
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.channels.dispatcher import WebSocketDispatcher
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 
 
 def _spy(monkeypatch, target: str) -> list[tuple[str, Any]]:
@@ -36,15 +36,7 @@ def _ws_channel(bus: MessageBus) -> WebSocketChannel:
         "path": "/ws",
         "websocketRequiresToken": False,
     }
-    gateway = build_gateway_services(
-        config=WebSocketConfig.model_validate(cfg),
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 async def test_a_notebook_answer_passes_its_chat_id(tmp_path, monkeypatch) -> None:

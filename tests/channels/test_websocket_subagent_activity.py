@@ -23,12 +23,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from port_alloc import free_port
 from support.aio import wait_until
+from support.ws_channel import make_ws_channel
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
 
@@ -39,8 +39,7 @@ from jenny.channels.subagent_activity_wire import (
     MAX_FRAME_EVENTS,
     MAX_WATCHES_PER_CONNECTION,
 )
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 
 _TASK = "d2ee4342"
 
@@ -61,18 +60,8 @@ def _channel(*, manager: Any = None) -> WebSocketChannel:
         "path": "/ws",
         "websocketRequiresToken": False,
     }
-    parsed = WebSocketConfig.model_validate(cfg)
     bus = MagicMock()
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-        get_subagent_manager=(lambda: manager) if manager is not None else None,
-    )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway)
+    channel = make_ws_channel(cfg, bus, get_subagent_manager=(lambda: manager) if manager is not None else None)
     # Il transcript reale scriverebbe su disco: qui interessa solo *se* viene
     # chiamato (la riga persistita per evento sarebbe il bug).
     channel._transcripts = MagicMock()

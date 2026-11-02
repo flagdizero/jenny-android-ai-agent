@@ -17,12 +17,9 @@ che il dito ci arrivi (quello l'ha detto il telefono).
 
 from __future__ import annotations
 
-from pathlib import Path
+from support.js_harness import ASSETS, requires_node, run_js
 
-from support.js_harness import requires_node, run_js
-
-ROOT = Path(__file__).resolve().parents[2]
-MODULE = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "horizontal-swipe.js"
+MODULE = ASSETS / "shared" / "horizontal-swipe.js"
 
 pytestmark = requires_node
 

@@ -10,11 +10,11 @@ esattamente il caso che quel codice esiste per coprire.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS
+from support.kotlin_source import ANDROID_SRC, read_source
 
-UI_ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+UI_ASSETS = ASSETS
 
 
 def _sizes_from(source: str, pattern: str) -> dict[str, int]:
@@ -75,7 +75,7 @@ def test_the_floating_mascot_takes_its_size_from_the_same_place():
     `@JavascriptInterface` che la riceve, e il fatto che il controller non
     reintroduca una taglia fissa come misura di lavoro.
     """
-    android = Path(__file__).resolve().parents[2] / "android/app/src/main/java/com/flagdizero/jenny"
+    android = ANDROID_SRC
 
     mascot_js = (UI_ASSETS / "shared" / "mascot.js").read_text("utf-8")
     assert "JennyNative?.setMascotSize?.(px, window.devicePixelRatio" in mascot_js, (

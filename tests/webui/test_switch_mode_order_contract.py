@@ -32,10 +32,10 @@ inseguisse sarebbe instabile quanto il difetto.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-APP_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "mobile-app.js"
+from support.js_harness import ASSETS
+
+APP_JS = ASSETS / "mobile-app.js"
 
 
 def _body(src: str, start: int) -> str:

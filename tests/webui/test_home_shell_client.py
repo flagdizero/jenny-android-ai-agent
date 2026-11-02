@@ -15,12 +15,10 @@ un'app aperta?», e il primo disegno della fila dopo le traduzioni.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-APP_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "home-app.js"
+APP_JS = ASSETS / "home-app.js"
 
 pytestmark = requires_node
 

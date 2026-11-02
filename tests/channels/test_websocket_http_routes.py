@@ -10,32 +10,12 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketChannel
 from jenny.session.manager import Session, SessionManager
-from jenny.webui.gateway_services import GatewayServices, build_gateway_services
 
 _AUTH_SECRET = "test-secret"
-
-
-def _make_handler(
-    cfg: dict[str, Any] | WebSocketConfig,
-    bus: Any,
-    *,
-    session_manager: SessionManager | None = None,
-    workspace_path: Path | None = None,
-    runtime_model_name: Any | None = None,
-) -> GatewayServices:
-    config = WebSocketConfig.model_validate(cfg) if isinstance(cfg, dict) else cfg
-    workspace = workspace_path or Path.cwd()
-    return build_gateway_services(
-        config=config,
-        bus=bus,
-        session_manager=session_manager,
-        workspace_path=workspace,
-        default_restrict_to_workspace=False,
-        runtime_model_name=runtime_model_name,
-    )
 
 
 def _ch(
@@ -58,13 +38,12 @@ def _ch(
         "tokenIssueSecret": _AUTH_SECRET,
     }
     cfg.update(extra)
-    gateway = _make_handler(
+    return make_ws_channel(
         cfg, bus,
         session_manager=session_manager,
         workspace_path=workspace_path,
         runtime_model_name=runtime_model_name,
     )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
 
 
 @pytest.fixture()

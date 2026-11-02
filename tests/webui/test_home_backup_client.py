@@ -28,12 +28,9 @@ copia su Drive vera si prova in ``tests/extensions/drive/``.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 ROOM_JS = ASSETS / "home-backup.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
@@ -49,24 +46,7 @@ import assert from 'node:assert/strict';
 const TRANSLATIONS = __TRANSLATIONS__;
 const i18n = { locale: 'it', translations: TRANSLATIONS, __T__ };
 
-function makeEl(tag) {
-  const el = {
-    tag, className: '', textContent: '', hidden: false, disabled: false,
-    attrs: {}, children: [], listeners: {},
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(t, fn) { (el.listeners[t] ||= []).push(fn); },
-    appendChild(c) { el.children.push(c); return c; },
-    classList: {
-      add(n) { if (!el.classList.contains(n)) el.className = (el.className + ' ' + n).trim(); },
-      remove(n) {
-        el.className = String(el.className).split(' ').filter((x) => x && x !== n).join(' ');
-      },
-      contains(n) { return String(el.className).split(' ').includes(n); },
-      toggle(n, on) { if (on) el.classList.add(n); else el.classList.remove(n); },
-    },
-  };
-  return el;
-}
+__MAKE_EL__
 
 const nodi = {};
 const document = { createElement: (t) => makeEl(t), getElementById: (id) => (nodi[id] ||= makeEl('div')) };
@@ -138,7 +118,8 @@ def _harness() -> str:
     room = ROOM_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
+        _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
+        .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__WHEN_TEXT__", function(WHEN_JS.read_text(encoding="utf-8"), "whenText"))
         .replace("__BACKUP_VALUE__", function(room, "backupValue"))

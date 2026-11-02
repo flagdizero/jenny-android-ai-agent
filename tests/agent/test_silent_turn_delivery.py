@@ -21,6 +21,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 from support.aio import drain_nowait
 
 from jenny.agent.loop import AgentLoop
@@ -39,13 +40,10 @@ MONITOR_SESSION_KEY = monitor_session_key("rain-check")
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation = SimpleNamespace(max_tokens=4096)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="done"))
-    return AgentLoop(
-        bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model"
-    )
+    return make_loop(tmp_path, provider=provider, context_window_tokens=None)
 
 
 def _stub_run(loop: AgentLoop, final_content: str = "All clear.") -> None:

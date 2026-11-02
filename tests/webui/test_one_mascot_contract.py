@@ -18,11 +18,10 @@ due i gusci.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MASCOT_JS = ASSETS / "shared" / "jenny-mascot.js"
 HOME_CSS = ASSETS / "home-style.css"
 WORKSHOP_CSS = ASSETS / "mobile-style.css"

@@ -24,10 +24,9 @@ import re
 from pathlib import Path
 
 import pytest
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
 ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 SETTINGS = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")

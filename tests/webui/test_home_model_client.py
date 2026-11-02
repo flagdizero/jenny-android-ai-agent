@@ -24,12 +24,9 @@ la propria copia.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 MODEL_JS = ASSETS / "home-model.js"
 BRAND_JS = ASSETS / "shared" / "provider-brand.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
@@ -47,35 +44,7 @@ const { getProviderBrand } = await import('__BRAND_URL__');
 const TRANSLATIONS = __TRANSLATIONS__;
 const i18n = { locale: 'it', translations: TRANSLATIONS, __T__ };
 
-function makeEl(tag) {
-  const el = {
-    tag,
-    className: '',
-    textContent: '',
-    value: '',
-    placeholder: '',
-    hidden: false,
-    dataset: {},
-    attrs: {},
-    style: {},
-    children: [],
-    listeners: {},
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type, fn) { (el.listeners[type] ||= []).push(fn); },
-    appendChild(child) { el.children.push(child); return child; },
-    replaceChildren(...fresh) { el.children = fresh; },
-    focus() { el.focused = true; },
-    classList: {
-      add(n) { if (!el.classList.contains(n)) el.className = (el.className + ' ' + n).trim(); },
-      remove(n) {
-        el.className = String(el.className).split(' ').filter((x) => x && x !== n).join(' ');
-      },
-      contains(n) { return String(el.className).split(' ').includes(n); },
-      toggle(n, on) { if (on) el.classList.add(n); else el.classList.remove(n); },
-    },
-  };
-  return el;
-}
+__MAKE_EL__
 
 const nodi = {};
 const document = {
@@ -200,7 +169,8 @@ def _harness() -> str:
     src = MODEL_JS.read_text(encoding="utf-8")
     it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
+        _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
+        .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__BRAND_URL__", BRAND_JS.as_uri())
         .replace("__SHORT_BRAND__", function(src, "shortBrand"))

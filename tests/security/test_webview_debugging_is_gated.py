@@ -19,10 +19,9 @@ import re
 from pathlib import Path
 
 import pytest
-from support.kotlin_source import code_only
+from support.kotlin_source import ANDROID_SRC, code_only
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ANDROID_SRC = REPO_ROOT / "android/app/src/main/java/com/flagdizero/jenny"
 
 ENABLE_CALL = "setWebContentsDebuggingEnabled(true)"
 # Il cancello guarda il flag dell'APK e non ``BuildConfig.DEBUG``: è la proprietà

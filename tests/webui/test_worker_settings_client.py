@@ -22,9 +22,8 @@ import re
 from pathlib import Path
 
 import pytest
-from support.js_harness import requires_node, run_module
+from support.js_harness import ASSETS, requires_node, run_module
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 
 

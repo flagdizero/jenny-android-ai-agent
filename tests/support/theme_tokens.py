@@ -20,11 +20,10 @@ che parla vince, e le `var(--x)` si risolvono fino in fondo.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-THEMES_CSS = (
-    Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "mobile-style.css"
-)
+from support.js_harness import ASSETS
+
+THEMES_CSS = ASSETS / "mobile-style.css"
 
 
 def _rules(css: str) -> list[tuple[set[str], str]]:

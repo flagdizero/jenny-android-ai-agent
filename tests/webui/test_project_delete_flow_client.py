@@ -16,10 +16,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from support.js_harness import requires_node, run_module
+from support.js_harness import ASSETS, requires_node, run_module
 
-ROOT = Path(__file__).resolve().parents[2]
-SHARED = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared"
+SHARED = ASSETS / "shared"
 
 pytestmark = requires_node
 

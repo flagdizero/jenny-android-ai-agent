@@ -12,6 +12,7 @@ import httpx
 import pytest
 import websockets
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
 
@@ -56,16 +57,7 @@ def _ch(bus: Any, **kw: Any) -> WebSocketChannel:
         "websocketRequiresToken": False,
     }
     cfg.update(kw)
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 def _basic_handler(bus: Any, **kw: Any) -> GatewayServices:

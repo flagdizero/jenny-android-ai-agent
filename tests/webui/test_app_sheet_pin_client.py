@@ -20,10 +20,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from support.js_harness import requires_node, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS, requires_node, run_module
 
 pytestmark = requires_node
 

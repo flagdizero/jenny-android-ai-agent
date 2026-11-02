@@ -19,11 +19,9 @@ Qui si tiene fermo:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 BAND_JS = ASSETS / "home-band.js"
 MASCOT_JS = ASSETS / "shared" / "mascot.js"
 HOME_CHAT_JS = ASSETS / "home-chat.js"

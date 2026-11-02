@@ -21,7 +21,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from support.gateway_http import make_request
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS
+from support.kotlin_source import ANDROID_SRC, read_source
 from websockets.http11 import Request as WsRequest
 
 from jenny.channels.http_utils import check_api_secret, http_error, http_json_response, parse_query
@@ -35,12 +36,8 @@ from jenny.webui.settings_routes import WebUISettingsRouter
 
 _SECRET = "s3cr3t-diagnostics"
 
-ROOT = Path(__file__).resolve().parents[2]
-_UI_ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-_MAIN_ACTIVITY = (
-    ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny"
-    / "MainActivity.kt"
-)
+_UI_ASSETS = ASSETS
+_MAIN_ACTIVITY = ANDROID_SRC / "MainActivity.kt"
 
 
 @pytest.fixture

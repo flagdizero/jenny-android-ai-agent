@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from port_alloc import free_port
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OutboundMessage
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from jenny.channels.websocket import WebSocketChannel
 
 
 def _ch(bus: Any) -> WebSocketChannel:
@@ -23,16 +22,7 @@ def _ch(bus: Any) -> WebSocketChannel:
         "path": "/ws",
         "websocketRequiresToken": False,
     }
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 def _fake_connection() -> MagicMock:

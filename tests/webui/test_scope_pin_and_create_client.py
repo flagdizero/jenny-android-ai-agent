@@ -53,9 +53,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 # Le due domande e le cinque regole non stanno più nel chip: stanno qui,
 # perché le usa anche il pannello della casa.

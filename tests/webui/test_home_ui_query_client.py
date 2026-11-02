@@ -17,9 +17,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from support.js_harness import requires_node, run_module
+from support.js_harness import ASSETS, requires_node, run_module
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 pytestmark = requires_node
 
 _FAKE_WS = """

@@ -13,12 +13,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.ws_channel import make_ws_channel
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketChannel
 from jenny.config.loader import save_config
 from jenny.config.schema import Config
 from jenny.runtime.context import get_runtime_context
-from jenny.webui.gateway_services import build_gateway_services
 
 
 class _FakeConnection:
@@ -55,16 +55,7 @@ def _channel(workspace: Path, *, secret: str = _SECRET) -> WebSocketChannel:
         "websocketRequiresToken": False,
         "tokenIssueSecret": secret,
     }
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=workspace,
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus, workspace_path=workspace)
 
 
 def _authed_connection(channel: WebSocketChannel) -> _FakeConnection:
