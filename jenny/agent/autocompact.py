@@ -16,6 +16,7 @@ from jenny.session.keys import (
     PROJECT_SESSION_PREFIX,
     UNIFIED_SESSION_KEY,
     is_project_session_key,
+    project_name,
 )
 from jenny.session.manager import DIARY_HARVEST_METADATA_KEY, Session, SessionManager
 
@@ -263,7 +264,7 @@ class AutoCompact:
         workspace = self._workspace
         if workspace is None:
             return self._defer(key, "the workspace root is unknown")
-        name = key[len(PROJECT_SESSION_PREFIX):]
+        name = project_name(key)
         # Stessa risoluzione chiave -> cartella del giardiniere e di
         # ``WorkspaceScopeResolver.for_project``, guardia sui ``..`` compresa. E
         # la sottocartella e' quella configurata, non ``"wikis"`` cablata.

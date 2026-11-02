@@ -71,6 +71,25 @@ def wiki_journal_dir(wiki_root: Path) -> Path:
     return wiki_root / JOURNAL_DIRNAME
 
 
+# Le cartelle di ``wiki/`` che dichiarano il layout di ricerca. Copia di
+# ``lint_wiki.RESEARCH_SUBDIRS`` (lo script della skill non importa ``jenny``):
+# ``tests/board/test_notebook_ops.py`` le tiene uguali.
+RESEARCH_SUBDIRS = ("concepts", "entities", "summaries")
+
+
+def is_research_layout(pages_dir: Path) -> bool:
+    """Se le **pagine** di ``wiki/`` (*pages_dir*) sono una biblioteca di ricerca.
+
+    La regola del lint (``lint_wiki.is_research_layout``): almeno un ``.md`` in
+    una delle :data:`RESEARCH_SUBDIRS`. :func:`is_research_wiki` chiede di più,
+    e per un'altra domanda: se un quaderno merita una bacheca.
+    """
+    return any(
+        (pages_dir / name).is_dir() and any(p.is_file() for p in (pages_dir / name).rglob("*.md"))
+        for name in RESEARCH_SUBDIRS
+    )
+
+
 def is_research_wiki(wiki_root: Path) -> bool:
     """Se *wiki_root* e' un archivio di ricerca: la forma di ricerca
     (``concepts/``/``entities/``) **e** nessuna pagina di diario.

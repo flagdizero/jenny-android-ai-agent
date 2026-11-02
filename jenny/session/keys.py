@@ -292,6 +292,15 @@ def is_personal_session_key(key: str) -> bool:
     return session_kind(key) == "personal"
 
 
+def project_name(key: str) -> str:
+    """Il nome del quaderno di una chiave ``project:<nome>``; ``""`` per le altre.
+
+    Solo il taglio del prefisso, senza dire se il nome è valido
+    (:func:`is_valid_project_name`): era scritto a mano in una ventina di posti.
+    """
+    return key[len(PROJECT_SESSION_PREFIX):] if key.startswith(PROJECT_SESSION_PREFIX) else ""
+
+
 def project_session_key(project_id: str) -> str:
     """La session key di un progetto dal suo id.
 
@@ -371,6 +380,6 @@ def session_key_for_channel(channel: str, chat_id: str) -> str:
     tastiera, e la vita "fuori" di Jenny — Telegram, cron, avvisi — non ci entra.
     """
     if channel == WEBUI_CHANNEL and is_project_chat_id(chat_id):
-        if is_valid_project_name(chat_id[len(PROJECT_SESSION_PREFIX):]):
+        if is_valid_project_name(project_name(chat_id)):
             return chat_id
     return UNIFIED_SESSION_KEY

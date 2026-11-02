@@ -45,7 +45,7 @@ _PHOTO_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 def _project(ctx: CommandContext, params: Mapping[str, Any]) -> Path:
     from jenny.utils.wiki_paths import discover_wiki_roots
 
-    _require_wiki_enabled(fail_closed=True)
+    _require_wiki_enabled()
     name = params.get("wiki")
     roots = discover_wiki_roots(_wikis_dir(ctx))
     if not isinstance(name, str) or name not in roots:
@@ -75,21 +75,9 @@ def _need_card(board: dict[str, Any], card_id: str) -> dict[str, Any]:
 
 
 async def _run(fn: Any, *args: Any, **kwargs: Any) -> Any:
-    """Su disco, quindi fuori dal loop; un ``CommandError`` torna com'è, un
-    rifiuto di :mod:`jenny.board.edit` diventa il ``CommandError`` col suo codice."""
-    try:
-        return await asyncio.to_thread(fn, *args, **kwargs)
-    except edit.BoardEditError as exc:
-        raise CommandError(exc.code, exc.message) from exc
-
-
-async def _edit(pending: Any) -> Any:
-    """Una scrittura async di :mod:`jenny.board.edit` (quelle che toccano i cron):
-    il suo rifiuto diventa il ``CommandError`` col suo codice, come in :func:`_run`."""
-    try:
-        return await pending
-    except edit.BoardEditError as exc:
-        raise CommandError(exc.code, exc.message) from exc
+    """Su disco, quindi fuori dal loop. Un rifiuto di :mod:`jenny.board.edit`
+    (``BoardEditError``) lo traduce ``dispatch_command``, col suo codice."""
+    return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 def _cron(ctx: CommandContext) -> Any:
@@ -97,12 +85,10 @@ def _cron(ctx: CommandContext) -> Any:
 
 
 def _timezone() -> str | None:
-    try:
-        from jenny.config.loader import load_config
+    """Il fuso dell'utente: ``cron_link.user_timezone``, l'unico che lo legge."""
+    from jenny.board.cron_link import user_timezone
 
-        return load_config().agents.defaults.timezone or None
-    except Exception:  # noqa: BLE001 — l'ora locale del sistema è il ripiego
-        return None
+    return user_timezone()
 
 
 # ── lastSeen / lastOpened ────────────────────────────────────────────────────
@@ -251,14 +237,14 @@ async def board_card_rename(ctx: CommandContext, params: Mapping[str, Any]) -> d
 async def board_card_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli una scheda, con un Annulla: v. :func:`jenny.board.edit.remove_card`."""
     root = _project(ctx, params)
-    entry = await _edit(edit.remove_card(root, _card_id(params, "id"), cron=_cron(ctx)))
+    entry = await edit.remove_card(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True, "title": entry["card"]["title"]}
 
 
 async def board_card_restore(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """L'Annulla di «Togli»: v. :func:`jenny.board.edit.restore_card`."""
     root = _project(ctx, params)
-    await _edit(edit.restore_card(root, _card_id(params, "id"), cron=_cron(ctx)))
+    await edit.restore_card(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -285,8 +271,8 @@ async def board_suggestion_respond(
     :func:`jenny.board.edit.respond_suggestion`."""
     root = _project(ctx, params)
     sid = _card_id(params, "id")
-    await _edit(edit.respond_suggestion(root, sid, str(params.get("answer")), near=_near(params),
-                                        workspace=ctx.get_workspace_root(), cron=_cron(ctx)))
+    await edit.respond_suggestion(root, sid, str(params.get("answer")), near=_near(params),
+                                        workspace=ctx.get_workspace_root(), cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -493,8 +479,8 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
 async def board_section_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli una sezione. La wiki non cambia: togliere è una scelta di forma."""
     root = _project(ctx, params)
-    await _edit(edit.remove_section(root, _card_id(params), _card_id(params, "id"),
-                                    cron=_cron(ctx)))
+    await edit.remove_section(root, _card_id(params), _card_id(params, "id"),
+                                    cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -531,9 +517,9 @@ def _every_ms(params: Mapping[str, Any]) -> Any:
 
 async def _add_reminder(ctx: CommandContext, root: Path, card: str,
                         params: Mapping[str, Any]) -> str:
-    return await _edit(edit.add_reminder(
+    return await edit.add_reminder(
         root, card, params.get("text"), params.get("when"), cron=_cron(ctx),
-        every_ms=_every_ms(params), why=params.get("why"), timezone_name=_timezone()))
+        every_ms=_every_ms(params), why=params.get("why"), timezone_name=_timezone())
 
 
 async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -553,8 +539,8 @@ async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> 
 async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Un promemoria fatto: v. :func:`jenny.board.edit.close_reminder`."""
     root = _project(ctx, params)
-    await _edit(edit.close_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
-                                    timezone_name=_timezone()))
+    await edit.close_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+                                    timezone_name=_timezone())
     return {"ok": True}
 
 
@@ -562,17 +548,33 @@ async def board_reminder_update(ctx: CommandContext, params: Mapping[str, Any]) 
     """Correggi un promemoria dal calendario di cura, per id: ``text``, ``when``,
     ``every_ms`` (solo per uno a condizione)."""
     root = _project(ctx, params)
-    await _edit(edit.update_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+    await edit.update_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
                                      text=params.get("text"), when=params.get("when"),
-                                     every_ms=_every_ms(params), timezone_name=_timezone()))
+                                     every_ms=_every_ms(params), timezone_name=_timezone())
     return {"ok": True}
 
 
 async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli un promemoria dal calendario di cura: v. :func:`jenny.board.edit.drop_reminder`."""
     root = _project(ctx, params)
-    await _edit(edit.drop_reminder(root, _card_id(params, "id"), cron=_cron(ctx)))
+    await edit.drop_reminder(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True}
+
+
+def _notebook_job(ctx: CommandContext, root: Path, params: Mapping[str, Any]) -> tuple[Any, str]:
+    """Lo scheduler e l'id del job ``params["job"]``, se è legato a questo quaderno.
+
+    Il cassetto tocca solo i cron del suo quaderno, non la sveglia della chat
+    personale: ``not_found`` per tutti gli altri.
+    """
+    job_id = _card_id(params, "job")
+    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
+    if cron is None:
+        raise CommandError("unavailable", "scheduler not running")
+    job = cron.get_job(job_id)
+    if job is None or job.notebook != root.name:
+        raise CommandError("not_found", "job not found in this notebook")
+    return cron, job_id
 
 
 async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -581,15 +583,11 @@ async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> di
     Solo un job legato a questo quaderno: il cassetto non mette in pausa la
     sveglia della chat personale.
     """
+    from jenny.board.cron_link import set_job_paused
+
     root = _project(ctx, params)
-    job_id = _card_id(params, "job")
-    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
-    if cron is None:
-        raise CommandError("unavailable", "scheduler not running")
-    job = cron.get_job(job_id)
-    if job is None or (job.payload.board or {}).get("notebook") != root.name:
-        raise CommandError("not_found", "job not found in this notebook")
-    result = cron.set_paused(job_id, params.get("paused") is True)
+    cron, job_id = _notebook_job(ctx, root, params)
+    result = await set_job_paused(cron, job_id, params.get("paused") is True)
     return {"ok": True, "result": result}
 
 
@@ -602,13 +600,7 @@ async def board_cron_remove(ctx: CommandContext, params: Mapping[str, Any]) -> d
     from jenny.board.cron_link import detach_job
 
     root = _project(ctx, params)
-    job_id = _card_id(params, "job")
-    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
-    if cron is None:
-        raise CommandError("unavailable", "scheduler not running")
-    job = cron.get_job(job_id)
-    if job is None or (job.payload.board or {}).get("notebook") != root.name:
-        raise CommandError("not_found", "job not found in this notebook")
+    cron, job_id = _notebook_job(ctx, root, params)
     result = await detach_job(cron, job_id)
     if result != "removed":
         raise CommandError("conflict", f"cron not removed: {result}")

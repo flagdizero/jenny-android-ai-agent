@@ -12,9 +12,10 @@ riga è rosso. La regola valeva anche prima, scritta in un commento — ed è st
 persa lo stesso: il giardiniere è stato registrato il giorno che è nato e si è
 presentato come «System-managed internal job.» finché quel test non è esistito.
 
-I job **ritirati** (``_RETIRED_SYSTEM_JOBS``) non stanno qui: il loro job sparisce
-dallo store al primo avvio della versione che li ritira, e nel frattempo cade sul
-fallback, che è esattamente ciò che vogliamo dire di loro.
+I job **ritirati** (``atlas``, ``heartbeat``) non stanno qui: senza una riga
+nessuno li sa eseguire, e ``GatewayContainer._retire_orphan_system_jobs`` li toglie
+dallo store al primo avvio; nel frattempo cadono sul fallback, che è esattamente
+ciò che vogliamo dire di loro.
 """
 
 from __future__ import annotations

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from jenny.board.cron_link import remove_notebook_crons
 from jenny.webui import commands
 from jenny.webui import project_delete as module
 from jenny.webui.commands import CommandError
@@ -172,4 +173,4 @@ async def test_the_delete_removes_the_cron_jobs_of_its_cards(
 
 
 def test_without_a_cron_service_nothing_is_removed() -> None:
-    assert module.remove_notebook_crons(None, "piante") == []
+    assert remove_notebook_crons(None, "piante") == []

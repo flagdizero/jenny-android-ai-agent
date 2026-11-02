@@ -620,7 +620,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     dentro il progetto, come per ``journal_append``, e le manopole stanno in
     Impostazioni: restava solo un comando che significava tre cose.
     """
-    from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+    from jenny.session.keys import is_project_session_key, project_name
 
     loop = ctx.loop
     msg = ctx.msg
@@ -631,7 +631,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
         # dei rifiuti del passo 6, e la stessa forma del rifiuto di
         # ``journal_append`` fuori da un progetto.
         return _reply(msg, _gardener_no_target())
-    target = ctx.key[len(PROJECT_SESSION_PREFIX):]
+    target = project_name(ctx.key)
     # La bolla di lavoro della home: compare adesso, cresce mentre la passata
     # lavora, e alla fine diventa il resoconto (v. ``runtime/work_status.py``).
     # I due testi qui sotto restano per chi la bolla non ce l'ha — l'officina,

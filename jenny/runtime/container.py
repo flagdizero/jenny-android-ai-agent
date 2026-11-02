@@ -25,12 +25,6 @@ from loguru import logger
 from jenny import __logo__, __version__
 from jenny.config.schema import Config
 
-# Id dei job di sistema che una versione precedente registrava e questa non
-# esegue piu'. ``build`` li ritira dallo store prima di registrare i vivi (v. il
-# commento sul posto e ``CronService.retire_system_job``). Per id e non per
-# nome: un promemoria dell'utente puo' chiamarsi come vuole.
-_RETIRED_SYSTEM_JOBS: tuple[str, ...] = ("atlas", "heartbeat")
-
 
 class GatewayContainer:
     """Costruisce e avvia il grafo del gateway; possiede lo stato di runtime."""
@@ -333,11 +327,11 @@ class GatewayContainer:
         A regime costa zero scritture: la migrazione e' idempotente e a wiki
         gia' a posto non tocca niente. V. ``utils/wiki_migration.py``.
         """
+        from jenny.config.paths import get_wikis_path
         from jenny.utils.wiki_migration import migrate_wikis
 
-        wiki_cfg = getattr(self.config, "wiki", None)
-        wikis_dir = getattr(wiki_cfg, "wikis_dir", "wikis") or "wikis"
-        migrate_wikis(self.config.workspace_path / wikis_dir, self.config.workspace_path)
+        workspace = self.config.workspace_path
+        migrate_wikis(get_wikis_path(workspace, config=self.config), workspace)
 
     def _repair_pending_renames(self) -> None:
         """Finisce i rinomini di progetto interrotti a metà.
@@ -357,7 +351,7 @@ class GatewayContainer:
         metà", è "un rinomino a metà contro **nessun gateway**". Un rinomino
         lasciato aperto lo riprova l'avvio dopo; un gateway che non parte no.
         """
-        from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+        from jenny.session.keys import is_project_session_key, project_name
         from jenny.session.project_rename import repair_pending_project_renames
 
         self._resumed_renames = []
@@ -370,79 +364,53 @@ class GatewayContainer:
                     old_key, new_key,
                 )
                 if is_project_session_key(old_key) and is_project_session_key(new_key):
-                    self._resumed_renames.append((old_key[len(PROJECT_SESSION_PREFIX):],
-                                                  new_key[len(PROJECT_SESSION_PREFIX):]))
+                    self._resumed_renames.append((project_name(old_key),
+                                                  project_name(new_key)))
         except Exception:
             logger.opt(exception=True).error(
                 "Ripresa dei rinomini di progetto in sospeso fallita; il gateway "
                 "parte comunque e il prossimo avvio riprova"
             )
 
-    def _wire_app_notifier(self) -> None:
-        """«I dati di un'app sono cambiati» va sulla WebUI (``jenny/apps/notify.py``):
-        una scrittura dallo schermo o un lettore che ricalcola aggiornano la
-        polaroid sulla bacheca e lo schermo aperto."""
-        from jenny.apps.notify import set_notifier
-        from jenny.bus.events import OutboundMessage
+    def _wire_ui_events(self) -> None:
+        """Gli avvisi «la casa è cambiata» vanno sulla WebUI (``runtime/ui_events``).
 
-        bus = self.bus
-
-        async def announce(slug: str) -> None:
-            await bus.publish_outbound(OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_app_data_changed": True, "app_slug": slug},
-            ))
-
-        set_notifier(announce)
-
-    def _wire_board_notifier(self) -> None:
-        """«La bacheca è cambiata» va sulla WebUI (``jenny/board/notify.py``): una
-        scrittura che non viene dalla bacheca stessa — l'editore, un'app posata,
-        la passata del giardiniere — ridisegna la bacheca aperta."""
-        from jenny.board.notify import set_notifier
-        from jenny.bus.events import OutboundMessage
-
-        bus = self.bus
-
-        async def announce(notebook: str) -> None:
-            await bus.publish_outbound(OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_board_changed": True, "notebook": notebook},
-            ))
-
-        set_notifier(announce)
-
-    def _wire_staged_notifier(self) -> None:
-        """«Le bozze in attesa sono cambiate» va sulla WebUI (``agent.staged_writes``).
-
-        L'avviso può arrivare da un thread (le RPC fanno il disco fuori dal
-        loop), quindi si rientra nel loop con ``call_soon_threadsafe``.
+        Una scrittura che non viene dalla bacheca o dallo schermo stesso — l'editore,
+        un'app posata, la passata del giardiniere, un lettore che ricalcola, le
+        bozze di un subagent — ridisegna quel che è aperto. L'avviso delle bozze
+        può arrivare da un thread (le RPC fanno il disco fuori dal loop), quindi
+        rientra nel loop con ``call_soon_threadsafe``.
         """
         import asyncio
 
         from jenny.agent.staged_writes import StagedChange, add_change_listener
         from jenny.bus.events import OutboundMessage
+        from jenny.runtime import ui_events
 
         bus = self.bus
+
+        async def publish(event: dict[str, Any]) -> None:
+            await bus.publish_outbound(OutboundMessage(
+                channel="websocket", chat_id="webui", content="", metadata=event,
+            ))
+
+        ui_events.set_publisher(publish)
         try:
             gateway_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
         except RuntimeError:  # ``build()`` chiamata fuori dal loop (i test)
             gateway_loop = None
 
-        def announce(change: StagedChange) -> None:
-            message = OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_staged_changed": True, "count": change.count},
-            )
+        def staged(change: StagedChange) -> None:
+            event = {"_staged_changed": True, "count": change.count}
             try:
-                asyncio.get_running_loop().create_task(bus.publish_outbound(message))
+                asyncio.get_running_loop().create_task(ui_events.emit(event))
             except RuntimeError:
                 if (target := gateway_loop) is not None:
                     target.call_soon_threadsafe(
-                        lambda: target.create_task(bus.publish_outbound(message))
+                        lambda: target.create_task(ui_events.emit(event))
                     )
 
-        add_change_listener(announce)
+        add_change_listener(staged)
 
     def _prepare_apps(self) -> None:
         """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
@@ -515,9 +483,7 @@ class GatewayContainer:
         self.session_manager = SessionManager(config.workspace_path)
         self._repair_pending_renames()
         self._prepare_apps()
-        self._wire_app_notifier()
-        self._wire_board_notifier()
-        self._wire_staged_notifier()
+        self._wire_ui_events()
 
         cron_store_path = config.workspace_path / "cron" / "jobs.json"
         self.cron = CronService(cron_store_path)
@@ -622,45 +588,23 @@ class GatewayContainer:
             extension_jobs=self._extension_job_runners(),
         ).dispatch
 
-        # I lavoratori periodici che questa versione **non esegue piu'**. Il loro
-        # job e' ancora scritto nello store di chi aggiorna — e' cosi' che la
-        # registrazione sotto e' idempotente al riavvio — e senza il suo ramo nel
-        # dispatcher scatterebbe nel vuoto a ogni scadenza, per sempre. Si
-        # ritira per id, prima di registrare i vivi. Elenco chiuso: chi toglie un
-        # lavoratore aggiunge il suo id qui, e nessun altro punto lo conosce.
-        for retired in _RETIRED_SYSTEM_JOBS:
-            self.cron.retire_system_job(retired)
+        # I lavoratori periodici che questa versione **non esegue piu'** (``atlas``,
+        # ``heartbeat``) e quelli di un'estensione che questa build non ha: il loro
+        # job e' ancora scritto nello store, e senza un ramo nel dispatcher
+        # scatterebbe nel vuoto a ogni scadenza, per sempre. Si ritirano prima di
+        # registrare i vivi.
         self._retire_orphan_system_jobs()
 
-        # Register Dream system job (idempotent on restart).
-        dream_cfg = config.agents.defaults.dream
-        if dream_cfg.enabled:
-            self.cron.register_system_job(CronJob(
-                id="dream",
-                name="dream",
-                schedule=dream_cfg.build_schedule(),
-                payload=CronPayload(kind="system_event"),
-            ))
-            logger.info("Dream: {}", dream_cfg.describe_schedule())
-        else:
-            logger.info("Dream: disabled")
+        # Dream e il giardiniere (idempotente al riavvio): la stessa registrazione
+        # che li ri-arma da Impostazioni, ``refresh_system_job``. Nessuno snapshot
+        # prima del giardiniere: **aggiunge e promuove**, non riscrive, e non tocca
+        # né il diario (il suo input) né AGENTS.md — a differenza di Dream, che
+        # riscrive memoria irrecuperabile.
+        from jenny.runtime.cron_dispatch import SYSTEM_WORKERS, refresh_system_job
 
-        # Register the Gardener system job (idempotent on restart). Nessuno
-        # snapshot pre-run: il giardiniere **aggiunge e promuove**, non riscrive,
-        # e non tocca né il diario (il suo input) né AGENTS.md. Quel che scrive
-        # sono pagine nuove sotto wiki/, che l'utente può correggere leggendole —
-        # a differenza di Dream, che riscrive memoria irrecuperabile.
-        gardener_cfg = config.agents.defaults.gardener
-        if gardener_cfg.enabled:
-            self.cron.register_system_job(CronJob(
-                id="gardener",
-                name="gardener",
-                schedule=gardener_cfg.build_schedule(),
-                payload=CronPayload(kind="system_event"),
-            ))
-            logger.info("Gardener: {}", gardener_cfg.describe_schedule())
-        else:
-            logger.info("Gardener: disabled")
+        for worker in SYSTEM_WORKERS:
+            armed = refresh_system_job(self.cron, worker, config=config)
+            logger.info("{}: {}", worker.capitalize(), armed or "disabled")
 
         # L'orologio dei quaderni: le micro app dei cassetti, le attese delle
         # bacheche e gli eventi delle sezioni, un giro ogni quarto d'ora su tutti

@@ -60,10 +60,6 @@ def all_placements(workspace: Path) -> list[dict[str, Any]]:
 
 
 def _wikis_dirs(workspace: Path) -> list[Path]:
-    try:
-        from jenny.config.loader import load_config
+    from jenny.config.paths import get_wikis_path
 
-        name = getattr(load_config().wiki, "wikis_dir", "wikis") or "wikis"
-    except Exception:  # noqa: BLE001 — senza config, il nome di serie
-        name = "wikis"
-    return [Path(workspace) / name]
+    return [get_wikis_path(Path(workspace))]

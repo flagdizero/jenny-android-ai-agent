@@ -83,7 +83,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.utils.helpers import safe_filename
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, iter_jsonl
 
 #: Dove stanno i registri, relativo alla radice dell'installazione.
 JOURNAL_REL = ("subagents", "journal")
@@ -387,15 +387,8 @@ class WriteJournal:
         except OSError as e:
             logger.warning("Subagent journal unreadable {}: {}", path, e)
             return []
-        out: list[dict[str, Any]] = []
-        for line in raw.splitlines():
-            try:
-                entry = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(entry, dict) and isinstance(entry.get("path"), str):
-                out.append(entry)
-        return out
+        return [entry for entry in iter_jsonl(raw.splitlines())
+                if isinstance(entry.get("path"), str)]
 
     def begin(self, task_id: str, attempt: int) -> None:
         """Un tentativo nuovo del lineage comincia a lavorare.

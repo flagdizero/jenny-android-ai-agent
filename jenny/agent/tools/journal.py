@@ -53,7 +53,8 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
-from jenny.utils.helpers import clip, safe_zoneinfo
+from jenny.utils.clock import local_now
+from jenny.utils.helpers import clip
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
 
 # Non c'e' un progetto: il rifiuto dice **dove** vive il diario invece di dire
@@ -365,28 +366,25 @@ class JournalAppendTool(Tool):
         dal proprio fuso il fatto entrava nel diario con un'ora che non è quella
         in cui è stato detto.
 
-        ``safe_zoneinfo`` e non ``ZoneInfo``: su Android il database tzdata può
+        ``local_now`` (``safe_zoneinfo``) e non ``ZoneInfo``: su Android il database tzdata può
         mancare, e una cattura che solleva è un fatto perduto.
         """
         if self._now is not None:
             return self._now()
-        tz = safe_zoneinfo(self._timezone) if self._timezone else None
-        return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+        return local_now(self._timezone)
 
     async def _append(self, root: Path, line: str, *, text: str = "",
                       attribution: str = "") -> str:
         # Un colpo d'orologio, due usi: la pagina e l'ora della riga.
         stamp = self._stamp()
         day = self._today() if self._today is not None else stamp.date()
-        page = wiki_journal_dir(root) / journal_page_name(day)
         entry = f"- {stamp.strftime('%H:%M')} — {line}\n"
-        # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
-        # La copia nel diario personale (``_mirror``) resta: è la memoria.
-        journal_touch(page)
+        # La copia nel diario personale (``_mirror``) resta fuori dall'annulla:
+        # è la memoria.
         try:
-            lineno = append_journal_entry(page, day, entry)
+            page, lineno = append_journal_line(root, stamp, line, day=day)
         except OSError as exc:
-            logger.warning("journal_append on {} failed: {}", page, exc)
+            logger.warning("journal_append on {} failed: {}", root.name, exc)
             return f"Could not append to the journal: {exc}"
 
         logger.info("journal_append: {} <- {}", page.name, line[:60])
@@ -452,6 +450,22 @@ def append_journal_entry(page: Path, day: date, entry: str) -> int:
         fh.write(entry)
     with page.open(encoding="utf-8") as fh:
         return sum(1 for _ in fh)
+
+
+def append_journal_line(root: Path, stamp: datetime, line: str, *,
+                        day: date | None = None) -> tuple[Path, int]:
+    """La riga ``- HH:MM — line`` nel diario del quaderno *root*; torna pagina e numero.
+
+    L'unica strada per una riga scritta dal codice o dal tool: la pagina del
+    giorno (*day*, di serie quello di *stamp*), il «prima» per l'annulla di un
+    aiutante (``journal_touch``) e :func:`append_journal_entry`. La usano il tool
+    ``journal_append`` e le righe della bacheca (``board/sections.py``).
+    """
+    day = day or stamp.date()
+    page = wiki_journal_dir(root) / journal_page_name(day)
+    # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
+    journal_touch(page)
+    return page, append_journal_entry(page, day, f"- {stamp.strftime('%H:%M')} — {line}\n")
 
 
 # ── «Ci spostiamo?» ──────────────────────────────────────────────────────────

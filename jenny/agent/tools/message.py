@@ -43,7 +43,7 @@ def _unusable_silent_alert(content: str, *, has_media: bool) -> str | None:
     - il **marcatore di protocollo** (``CHECK_OK 1`` il 16, 17 e 23 agosto,
       ``CHECK_OK`` il 23). È il caso peggiore dei tre, perché sbaglia due volte:
       l'utente riceve una parola d'ordine interna, e il verdetto non viene
-      registrato — ``parse_ok_marks`` legge il testo finale del turno, non
+      registrato — ``has_mark(…, CHECK_OK)`` legge il testo finale del turno, non
       l'argomento di un tool, quindi la voce del task resta in sospeso come se
       il modello non si fosse pronunciato;
     - la **parola nuda** (``silent`` il 24, ``x`` il 17 e il 22, ``boh`` il 16,

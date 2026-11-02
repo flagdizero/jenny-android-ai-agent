@@ -73,7 +73,7 @@ from jenny.snapshot.crypto import (
 from jenny.snapshot.crypto_backends.base import CryptoAuthError, CryptoBackend
 from jenny.snapshot.engine import SnapshotEngine
 from jenny.snapshot.store import BlobCorruptError, hash_content, object_path
-from jenny.snapshot.types import SnapshotManifest, is_snapshot_id, unsafe_entry_reason
+from jenny.snapshot.types import SnapshotManifest, entry_problem, entry_target, is_snapshot_id
 from jenny.utils.path import atomic_write
 
 from .cloud_sink import RemoteNotFoundError, RemoteSink
@@ -577,10 +577,6 @@ class CloudRepository:
         await asyncio.to_thread(self._save_cache)
         return size
 
-    def record_failure(self, error: str) -> None:
-        """Annota un giro fallito: la spia conta da ``last_success_ms``, non da qui."""
-        self._write_state(last_failure_ms=int(time.time() * 1000), last_error=error[:500])
-
     # -- ripristino ---------------------------------------------------------------
 
     async def load_manifest(self, snapshot: RemoteSnapshot) -> SnapshotManifest:
@@ -612,12 +608,7 @@ class CloudRepository:
         dest_dir = Path(dest_dir)
         root = dest_dir.resolve()
         for entry in manifest.files:
-            reason = unsafe_entry_reason(entry.path, entry.hash)
-            if reason is None:
-                resolved = (root / Path(*entry.path.split("/"))).resolve()
-                if not resolved.is_relative_to(root):
-                    reason = f"unsafe path {entry.path!r} leaves the destination"
-            if reason is not None:
+            if (reason := entry_problem(root, entry.path, entry.hash)) is not None:
                 raise CloudBackupError(f"snapshot {snapshot.id[:12]}: {reason}")
 
         await self.refresh_index()
@@ -723,4 +714,4 @@ def _extract_blobs(
             if hash_content(content) != blob_hash:
                 raise CloudBackupError(f"blob {blob_hash[:12]} does not match its hash")
             for rel in paths_by_hash[blob_hash]:
-                atomic_write(dest_dir / Path(*rel.split("/")), content, fsync_dir=False)
+                atomic_write(entry_target(dest_dir, rel), content, fsync_dir=False)

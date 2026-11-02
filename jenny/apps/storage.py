@@ -12,6 +12,7 @@ import json
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from loguru import logger
 
@@ -22,7 +23,7 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import is_project_session_key
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, iter_jsonl
 from jenny.utils.wiki_paths import is_wiki_root
 
 DEFAULT_QUERY_LIMIT = 200
@@ -69,24 +70,11 @@ def _collection_path(app_dir: Path, collection: str) -> Path:
 def _read_records(path: Path) -> list[dict]:
     if not path.is_file():
         return []
-    records: list[dict] = []
-    skipped = 0
+    bad: list[str] = []
     with open(path, encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                skipped += 1
-                continue
-            if isinstance(record, dict):
-                records.append(record)
-            else:
-                skipped += 1
-    if skipped:
-        logger.warning("Skipped {} corrupt line(s) in {}", skipped, path)
+        records = list(iter_jsonl(f, on_bad=bad.append))
+    if bad:
+        logger.warning("Skipped {} corrupt line(s) in {}", len(bad), path)
     return records
 
 
@@ -192,6 +180,35 @@ def _dump(record: dict) -> str:
 def _rewrite(path: Path, records: list[dict]) -> None:
     content = "".join(_dump(r) + "\n" for r in records)
     atomic_write(path, content)
+
+
+async def edit_collection(
+    app_dir: Path,
+    collection: str,
+    change: Callable[[list[dict]], tuple[list[dict], bool]],
+) -> list[dict]:
+    """Legge, cambia e scrive una collezione sotto il lock delle azioni dell'app.
+
+    Per chi scrive i dati di un'app senza passare da un'azione: il lettore
+    (``jenny/apps/reader.py``), che fino al 02/11/2026 riscriveva
+    ``readings.jsonl`` per conto suo, fuori da questo lock. *change* riceve i
+    record e torna quelli nuovi, piu' se sono **solo cresciuti in coda**: allora
+    si aggiungono le righe nuove, altrimenti il file si riscrive intero. Torna i
+    record dopo il cambio.
+    """
+    path = _collection_path(app_dir, collection)
+    async with _lock_for(path):
+        records = _read_records(path)
+        before = len(records)
+        after, grown = change(records)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not grown:
+            _rewrite(path, after)
+        elif len(after) > before:
+            lead = "\n" if _ends_without_newline(path) else ""
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(lead + "".join(_dump(r) + "\n" for r in after[before:]))
+        return after
 
 
 def _require_id(params: dict) -> str:

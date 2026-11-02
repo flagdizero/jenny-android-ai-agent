@@ -23,8 +23,9 @@ from jenny.snapshot.store import get_blob, iter_blob_hashes, object_path, put_bl
 from jenny.snapshot.types import (
     FileEntry,
     SnapshotManifest,
+    entry_problem,
+    entry_target,
     is_snapshot_id,
-    unsafe_entry_reason,
 )
 from jenny.utils.path import atomic_write
 
@@ -366,23 +367,15 @@ class SnapshotEngine:
         manifest = self.load_manifest(snapshot_id)
         dest_dir = Path(dest_dir)
         # Tutte le voci prima di scrivere la prima: un manifest importato da un
-        # ``.jbk`` e' dato non fidato, e un ``..`` usciva dallo staging. Il
-        # confronto sul percorso risolto copre anche un link simbolico che
-        # nessun controllo sulla stringa vedrebbe.
+        # ``.jbk`` e' dato non fidato, e un ``..`` usciva dallo staging.
         root = dest_dir.resolve()
         for entry in manifest.files:
-            reason = unsafe_entry_reason(entry.path, entry.hash)
-            if reason is None:
-                resolved = (root / Path(*entry.path.split("/"))).resolve()
-                if not resolved.is_relative_to(root):
-                    reason = f"unsafe path {entry.path!r} leaves the destination"
-            if reason is not None:
+            if (reason := entry_problem(root, entry.path, entry.hash)) is not None:
                 raise ValueError(f"snapshot {snapshot_id[:12]}: {reason}")
         dest_dir.mkdir(parents=True, exist_ok=True)
         for entry in manifest.files:
             content = get_blob(self.objects_dir, entry.hash)
-            target = dest_dir / Path(*entry.path.split("/"))
-            atomic_write(target, content, fsync_dir=False)
+            atomic_write(entry_target(dest_dir, entry.path), content, fsync_dir=False)
         return manifest
 
     # -- retention / gc -----------------------------------------------------

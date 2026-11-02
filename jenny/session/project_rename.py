@@ -69,7 +69,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from jenny.session.keys import PROJECT_SESSION_PREFIX, is_valid_project_name
+from jenny.session.keys import PROJECT_SESSION_PREFIX, is_valid_project_name, project_name
 from jenny.session.project_traces import project_trace_paths
 from jenny.utils.path import atomic_write
 
@@ -90,7 +90,7 @@ def _can_be_opened(key: str) -> bool:
     """
     if not key.startswith(PROJECT_SESSION_PREFIX):
         return True
-    return is_valid_project_name(key[len(PROJECT_SESSION_PREFIX):])
+    return is_valid_project_name(project_name(key))
 
 
 def _journal_path(workspace: Path) -> Path:

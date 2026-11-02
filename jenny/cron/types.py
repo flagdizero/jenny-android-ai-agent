@@ -195,6 +195,17 @@ class CronJob:
     # pausa», e una versione vecchia che non lo conosce lascia il job spento.
     paused_at_ms: int | None = None
 
+    @property
+    def notebook(self) -> str | None:
+        """Il quaderno a cui il job è legato (``payload.board.notebook``), o ``None``.
+
+        L'unico posto che legge il legame: prima ogni filtro «i job di questo
+        quaderno» se lo scriveva a mano.
+        """
+        link = self.payload.board
+        name = link.get("notebook") if isinstance(link, dict) else None
+        return name if isinstance(name, str) else None
+
     @classmethod
     def from_dict(cls, kwargs: dict):
         state_kwargs = dict(kwargs.get("state", {}))
@@ -251,3 +262,29 @@ def job_display_name(job: CronJob) -> str:
     if name:
         return name
     return (job.payload.message or "")[:_LEGACY_NAME_CHARS].strip() or job.id
+
+
+def schedule_payload(schedule: CronSchedule) -> dict[str, Any]:
+    """La schedulazione **strutturata** di un job, come esce sul filo.
+
+    Una sola forma per l'officina (``webui/cron_api.py``) e per il cassetto della
+    bacheca (``board/cron_link.job_snapshot``): il client la racconta con lo stesso
+    ``describeSchedule`` (``assets/shared/cron-view.js``), nella sua lingua. Il
+    tool ``cron`` invece la dice in inglese («every 30m»), perche' il suo lettore
+    e' il modello.
+    """
+    from jenny.cron.cronexpr import shape
+
+    return {
+        "kind": schedule.kind,
+        "every_ms": schedule.every_ms,
+        "expr": schedule.expr,
+        "at_ms": schedule.at_ms,
+        "tz": schedule.tz,
+        # La forma di un'espressione comune, per dirla a parole («ogni domenica
+        # alle 18:30»); ``None`` quando non ce l'ha, e il client mostra l'espressione.
+        "shape": shape(schedule.expr) if schedule.kind == "cron" and schedule.expr else None,
+        # Solo su un ``at``: ``day`` (un giorno, senza ora) o ``month`` («marzo
+        # 2027»); ``None`` vale l'ora esatta. Il client la dice nella sua lingua.
+        "precision": schedule.precision if schedule.kind == "at" else None,
+    }

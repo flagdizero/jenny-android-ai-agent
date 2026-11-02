@@ -44,15 +44,11 @@ from jenny.board.store import (
     read_board,
     read_card_summary,
 )
+from jenny.utils.errors import CodedError
 
 
-class BoardEditError(Exception):
+class BoardEditError(CodedError):
     """Una scrittura rifiutata: *code* è quello dei comandi RPC, *message* la ragione."""
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 def _notes(root: Path) -> list[dict[str, Any]]:
@@ -730,7 +726,7 @@ def reminder_job(cron: Any, root: Path, rid: str) -> Any:
     from jenny.board.cron_link import is_note
 
     job = _need_cron(cron).get_job(str(rid or "").strip())
-    if job is None or (job.payload.board or {}).get("notebook") != root.name:
+    if job is None or job.notebook != root.name:
         raise BoardEditError("not_found", f"no reminder `{rid}` in this notebook")
     # Un ricorrente di questo quaderno c'è, ma non è un promemoria: dirgli «non
     # esiste» manda a cercarlo altrove (jenny_s22, 01/11/2026).

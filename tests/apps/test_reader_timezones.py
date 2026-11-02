@@ -61,11 +61,11 @@ def test_the_newest_reading_wins_across_time_zones(tmp_path: Path) -> None:
     assert field_value(app, {}, "totale", now=NOW) == (34934.0, True)
 
 
-def test_readings_are_written_in_utc_whoever_runs_the_reader(tmp_path: Path) -> None:
+async def test_readings_are_written_in_utc_whoever_runs_the_reader(tmp_path: Path) -> None:
     d = _write(tmp_path, "portfolio", PORTFOLIO)
     clock = datetime(2026, 10, 6, 14, 7, 9, tzinfo=ROME)
-    append_readings(d, [{"totale": 34967.0, "primo": "CSSPX 56%"}], key=None, now=clock)
-    append_readings(d, [{"totale": 34934.0, "primo": "CSSPX 60%"}], key=None,
+    await append_readings(d, [{"totale": 34967.0, "primo": "CSSPX 56%"}], key=None, now=clock)
+    await append_readings(d, [{"totale": 34934.0, "primo": "CSSPX 60%"}], key=None,
                     now=datetime(2026, 10, 6, 13, 18, 40, tzinfo=timezone.utc))
     stamps = [r["ts"] for r in read_readings(d)]
     # Anche chi legge il file come testo (lo schermo dell'app, ``query``) lo

@@ -108,16 +108,10 @@ def legacy_result_key(link: dict[str, Any]) -> str | None:
 
 def notebook_root(name: str) -> Path | None:
     """La cartella del quaderno *name*, o ``None`` se non c'e' (piu')."""
-    from jenny.config.paths import get_workspace_path
+    from jenny.config.paths import get_wikis_path
     from jenny.utils.wiki_paths import is_wiki_root
 
-    try:
-        from jenny.config.loader import load_config
-
-        wikis = load_config().wiki.wikis_dir or "wikis"
-    except Exception:  # noqa: BLE001 — il default e' quello dello scaffold
-        wikis = "wikis"
-    root = get_workspace_path() / wikis / name
+    root = get_wikis_path() / name
     return root if is_wiki_root(root) else None
 
 
@@ -198,6 +192,24 @@ def record_result(
         mutate_board(root, apply, actor=model.JENNY)
     except Exception as exc:  # noqa: BLE001 — l'esito sulla bacheca e' una cortesia
         logger.warning("cron: result of {} not recorded in {}: {}", job_name, root.name, exc)
+
+
+async def set_job_paused(cron: Any, job_id: str, paused: bool) -> str:
+    """Pausa o ripresa di un job; se era di un quaderno e qualcosa è cambiato, lo dice alla casa.
+
+    L'unica pausa di un cron, come :func:`detach_job` è l'unico smontaggio: la
+    usano il tool ``cron``, l'officina e il cassetto della bacheca. Fino al
+    02/11/2026 il cassetto non avvisava, e la casa aperta altrove restava
+    indietro. Restituisce l'esito di ``CronService.set_paused``. Sul loop.
+    """
+    from jenny.board.notify import board_changed
+
+    job = cron.get_job(job_id)
+    notebook = job.notebook if job is not None else None
+    result = cron.set_paused(job_id, paused)
+    if notebook and result in ("paused", "resumed"):
+        await board_changed(notebook)
+    return result
 
 
 async def detach_job(cron: Any, job_id: str) -> str:
@@ -286,11 +298,47 @@ def notebook_jobs(cron: Any, notebook: str) -> dict[str, dict[str, Any]]:
     if cron is None:
         return {}
     try:
-        jobs = cron.list_jobs(include_disabled=True)
+        jobs = cron.jobs_of_notebook(notebook)
     except Exception:  # noqa: BLE001 — una bacheca senza job resta una bacheca
         return {}
-    return {j.id: job_snapshot(j) for j in jobs
-            if (j.payload.board or {}).get("notebook") == notebook}
+    return {j.id: job_snapshot(j) for j in jobs}
+
+
+def remove_notebook_crons(cron: Any, name: str) -> list[str]:
+    """Toglie i cron legati alle schede del quaderno *name*; ritorna gli id tolti.
+
+    Un cron chiesto nella chat di un quaderno porta ``payload.board =
+    {notebook, card, section}``. Cancellato il quaderno restava nello store, e a
+    ogni giro falliva con «notebook gone» (``cron/bound_runner.py``) — per
+    sempre, perche' nessuno poteva piu' aprire il cassetto da cui si toglieva.
+    Anche quelli in pausa (le schede nel cestino): il cestino se ne va col
+    quaderno.
+
+    **Sul loop, non nel thread della cancellazione**: il servizio cron riarma il
+    suo timer con l'event loop corrente, e da un thread di lavoro solleva «no
+    running event loop» (lo stesso motivo per cui ``board/edit.py`` mette in
+    pausa i cron delle schede sul loop). Un job che non si toglie non fa
+    fallire niente: il quaderno e' gia' cancellato, e il job si toglie a mano.
+    """
+    if cron is None:
+        return []
+    removed: list[str] = []
+    try:
+        jobs = cron.jobs_of_notebook(name)
+    except Exception:  # noqa: BLE001 — uno store illeggibile non ferma la cancellazione
+        logger.opt(exception=True).warning("Cron jobs of notebook {} not listed", name)
+        return []
+    for job in jobs:
+        try:
+            if cron.remove_job(job.id) == "removed":
+                removed.append(job.id)
+        except Exception:  # noqa: BLE001 — si prova il prossimo
+            logger.opt(exception=True).warning(
+                "Cron job {} of notebook {} not removed", job.id, name,
+            )
+    if removed:
+        logger.info("Removed {} cron job(s) of deleted notebook {}", len(removed), name)
+    return removed
 
 
 def follow_renamed_notebook(cron: Any, old: str, new: str) -> list[str]:
@@ -320,78 +368,38 @@ def follow_renamed_notebook(cron: Any, old: str, new: str) -> list[str]:
 
 
 def notebook_jobs_on_disk(notebook: str, workspace: Path | None = None) -> list[dict[str, Any]]:
-    """I cron del quaderno letti da ``cron/jobs.json``, per chi scrive un prompt.
+    """Le istantanee (:func:`job_snapshot`) dei cron del quaderno lette da ``cron/jobs.json``.
 
     Sola lettura e fuori dal loop: chi costruisce il prompt di un turno o della
     passata del giardiniere non ha lo scheduler in mano, e una lettura del file
-    non gli tocca lo stato (v. :func:`notebook_jobs` per chi lo ha). Restano i
-    job vivi, accesi o in pausa; un job ``at`` già scattato è spento e non conta.
+    non gli tocca lo stato (v. :func:`notebook_jobs` per chi lo ha). Il file lo
+    legge il parser dello scheduler, così i job sono quelli che vede lui. Restano
+    i job vivi, accesi o in pausa; un job ``at`` già scattato è spento e non conta.
     """
-    import json
-
     from jenny.config.paths import get_workspace_path
+    from jenny.cron.service import read_jobs_file
 
     path = (workspace or get_workspace_path()) / "cron" / "jobs.json"
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        jobs = read_jobs_file(path)
+    except Exception:  # noqa: BLE001 — uno store illeggibile è «nessun cron»
         return []
-    out = []
-    for job in raw.get("jobs") or [] if isinstance(raw, dict) else []:
-        if not isinstance(job, dict):
-            continue
-        payload = job.get("payload") or {}
-        link = payload.get("board") if isinstance(payload, dict) else None
-        if not isinstance(link, dict) or link.get("notebook") != notebook:
-            continue
-        paused = job.get("pausedAtMs") is not None
-        if not job.get("enabled", True) and not paused:
-            continue
-        state = job.get("state") or {}
-        out.append({
-            "id": str(job.get("id") or ""),
-            "name": str(job.get("name") or ""),
-            "message": " ".join(str(payload.get("message") or "").split()),
-            "kind": (job.get("schedule") or {}).get("kind"),
-            "atMs": (job.get("schedule") or {}).get("atMs"),
-            "everyMs": (job.get("schedule") or {}).get("everyMs"),
-            "precision": (job.get("schedule") or {}).get("precision"),
-            "mode": payload.get("mode") or "reminder",
-            "why": payload.get("why"),
-            "condition": payload.get("condition"),
-            "scope": scope_of(link),
-            "nextRunAtMs": state.get("nextRunAtMs") if isinstance(state, dict) else None,
-            "paused": paused,
-            "link": link,
-        })
-    return out
+    return [job_snapshot(j) for j in jobs
+            if j.notebook == notebook and (j.enabled or j.paused_at_ms is not None)]
 
 
 def job_snapshot(job: Any) -> dict[str, Any]:
     """Quel che la bacheca mostra di un job: nome, quando, prossimo giro, stato, ambito."""
-    from jenny.cron.types import job_display_name
+    from jenny.cron.types import job_display_name, schedule_payload
 
-    sched = job.schedule
-    # La forma dello ``schedule`` dell'officina (``webui/cron_api._schedule_payload``):
-    # il cassetto lo racconta con lo stesso ``describeSchedule``.
-    when: dict[str, Any] = {"kind": sched.kind}
-    if sched.kind == "every":
-        when["every_ms"] = sched.every_ms
-    elif sched.kind == "cron":
-        from jenny.cron.cronexpr import shape
-
-        when.update({"expr": sched.expr, "tz": sched.tz, "shape": shape(sched.expr or "")})
-    elif sched.kind == "at":
-        when["at_ms"] = sched.at_ms
-        if sched.precision:
-            when["precision"] = sched.precision
     return {
         "id": job.id,
         # Mai vuoto per il cassetto (v. ``cron.types.job_display_name``).
         "name": job_display_name(job),
         "message": (job.payload.message or "")[:300],
         "mode": job.payload.mode,
-        "schedule": when,
+        # La forma dell'officina: il cassetto lo racconta con lo stesso ``describeSchedule``.
+        "schedule": schedule_payload(job.schedule),
         "nextRunAtMs": job.state.next_run_at_ms,
         "lastRunAtMs": job.state.last_run_at_ms,
         "lastStatus": job.state.last_status,
@@ -433,6 +441,11 @@ def is_note(kind: Any, condition: Any) -> bool:
     return kind == "at" or (isinstance(condition, dict) and bool(condition))
 
 
+def snapshot_is_note(snap: dict[str, Any]) -> bool:
+    """:func:`is_note` su un'istantanea di :func:`job_snapshot`."""
+    return is_note((snap.get("schedule") or {}).get("kind"), snap.get("condition"))
+
+
 def note_of(
     *,
     job_id: str,
@@ -464,9 +477,9 @@ def note_of(
                                 "field": condition.get("field"), "op": condition.get("op"),
                                 "value": condition.get("value"), "every_ms": every_ms}
     elif kind == "at" and isinstance(at_ms, (int, float)) and at_ms:
-        from jenny.utils.helpers import safe_zoneinfo
+        from jenny.utils.clock import zone
 
-        tz = safe_zoneinfo(tz_name) if tz_name else None
+        tz = zone(tz_name)
         at = (datetime.fromtimestamp(at_ms / 1000, tz=tz) if tz
               else datetime.fromtimestamp(at_ms / 1000).astimezone())
         when = {"kind": "date", "date": at.strftime("%Y-%m-%d"),
@@ -483,13 +496,17 @@ def note_of(
 
 
 def notes_from_jobs(cron_jobs: Any, tz_name: str | None = None) -> list[dict[str, Any]]:
-    """Le righe dei promemoria dalle istantanee di :func:`notebook_jobs`, dalla più vicina.
+    """Le righe dei promemoria fra le istantanee dei job, dalla più vicina.
 
-    Solo i job vivi: un singolo già scattato non c'è più, e uno spento resta
-    fuori. Uno in pausa c'è, segnato (v. :func:`note_of`).
+    *cron_jobs* è ``{id: istantanea}`` di :func:`notebook_jobs` (dallo scheduler,
+    sul loop) o la lista di :func:`notebook_jobs_on_disk` (dal file): la stessa
+    traduzione per tutte e due. Solo i job vivi: un singolo già scattato non c'è
+    più, e uno spento resta fuori. Uno in pausa c'è, segnato (v. :func:`note_of`).
     """
+    pairs = (cron_jobs.items() if isinstance(cron_jobs, dict)
+             else ((snap["id"], snap) for snap in cron_jobs or []))
     out = []
-    for job_id, snap in (cron_jobs or {}).items():
+    for job_id, snap in pairs:
         if not (snap.get("enabled") or snap.get("paused")):
             continue
         sched = snap.get("schedule") or {}
@@ -518,26 +535,7 @@ def notes_on_disk(notebook: str, workspace: Path | None = None,
             workspace = get_workspace_path()
         except RuntimeError:
             return []
-    return notes_of_disk_jobs(notebook_jobs_on_disk(notebook, workspace), tz_name)
-
-
-def notes_of_disk_jobs(jobs: list[dict[str, Any]], tz_name: str | None = None,
-                       ) -> list[dict[str, Any]]:
-    """Le righe dei promemoria fra i job di :func:`notebook_jobs_on_disk`, dalla più vicina.
-
-    Per chi ha già letto il file una volta e ne vuole sia i cron sia i promemoria
-    (il blocco della bacheca nel prompt): una lettura, non una per domanda.
-    """
-    out = []
-    for job in jobs:
-        note = note_of(job_id=job["id"], scope=job["scope"],
-                       text=job["name"] or job["message"][:60] or job["id"], kind=job["kind"],
-                       at_ms=job["atMs"], precision=job["precision"],
-                       condition=job["condition"], every_ms=job["everyMs"], tz_name=tz_name,
-                       paused=bool(job.get("paused")))
-        if note is not None:
-            out.append(note)
-    return model.sorted_notes(out)
+    return notes_from_jobs(notebook_jobs_on_disk(notebook, workspace), tz_name)
 
 
 def note_words(note: dict[str, Any]) -> str:

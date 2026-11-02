@@ -1,4 +1,4 @@
-"""Path utilities: abbreviation and atomic writes."""
+"""Path utilities: abbreviation, atomic writes and the state files' safety nets."""
 
 from __future__ import annotations
 
@@ -6,9 +6,12 @@ import contextlib
 import logging
 import os
 import re
+import threading
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Iterator
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -222,3 +225,100 @@ def append_lines_durable(
             if not tolerate_fsync_error:
                 raise
 
+
+def iter_jsonl(
+    lines: Iterable[str], *, on_bad: Callable[[str], None] | None = None
+) -> Iterator[dict[str, Any]]:
+    """Gli oggetti JSON di un JSONL, una riga ciascuno, saltando quel che non lo è.
+
+    Il lettore tollerante dei file a cui :func:`append_lines_durable` accoda:
+    un'ultima riga tronca da un processo ucciso, o una riga che non è un oggetto,
+    non invalidano le altre. Le righe vuote si saltano in silenzio; le altre
+    scartate passano a *on_bad*, per chi le conta o le dice nel log. L'I/O resta
+    a chi chiama (un file aperto, ``read_text().splitlines()``).
+    """
+    import json
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            record = None
+        if isinstance(record, dict):
+            yield record
+        elif on_bad is not None:
+            on_bad(line)
+
+
+def rotate_valid_json_backup(
+    path: Path, write: Callable[[Path, str], None] | None = None
+) -> None:
+    """Copia *path* in ``<nome>.bak``, ma solo se si legge come JSON.
+
+    La rete di sicurezza dei file di stato (config, cron, bacheca), prima di ogni
+    salvataggio: un salvataggio partito da un file già rotto distruggerebbe
+    l'ultimo backup buono, che è esattamente quello che serve un istante dopo.
+    Senza *path* non fa niente. *write* scrive la copia (di serie ``atomic_write``
+    senza fsync della cartella; la config la vuole in ``600``); un suo
+    ``OSError`` si propaga, e chi chiama decide se il salvataggio vero procede.
+    """
+    import json
+
+    if not path.exists():
+        return
+    try:
+        content = path.read_text(encoding="utf-8")
+        json.loads(content)
+    except (OSError, ValueError):
+        return
+    backup = path.with_name(path.name + ".bak")
+    if write is None:
+        atomic_write(backup, content, fsync_dir=False)
+    else:
+        write(backup, content)
+
+
+def quarantine(path: Path) -> Path | None:
+    """Sposta di lato un file di stato illeggibile; ``None`` se non ci riesce.
+
+    Non lo cancella: serve a capire cosa è successo. Il nome dice quando,
+    ``<nome>.corrupt-<AAAAMMGGThhmmssZ><estensione>`` (``config.corrupt-…json``),
+    uguale per config, cron e bacheca; due nello stesso secondo prendono ``_1``,
+    ``_2``…, perché ``os.replace`` non chiede il permesso e la seconda
+    cancellerebbe in silenzio la prova della prima.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    target = path.with_name(f"{path.stem}.corrupt-{stamp}{path.suffix}")
+    # Un tetto ai tentativi: un filesystem che dice «c'è» a ogni nome non deve
+    # diventare un ciclo senza fine.
+    for n in range(1, 100):
+        if not target.exists():
+            break
+        target = path.with_name(f"{path.stem}.corrupt-{stamp}_{n}{path.suffix}")
+    else:
+        return None
+    try:
+        os.replace(path, target)
+    except OSError:
+        return None
+    return target
+
+
+_PATH_LOCKS: dict[str, threading.Lock] = {}
+_PATH_LOCKS_GUARD = threading.Lock()
+
+
+def path_lock(path: Path) -> threading.Lock:
+    """Il ``threading.Lock`` di *path*, lo stesso per ogni nome dello stesso file.
+
+    Per i file di stato scritti da funzioni sincrone, anche da un thread (la
+    bacheca): due chiamanti sullo stesso percorso si mettono in fila, su due
+    percorsi diversi no. La chiave è il percorso risolto, così due nomi della
+    stessa cartella non fanno due lock.
+    """
+    key = str(path.resolve(strict=False))
+    with _PATH_LOCKS_GUARD:
+        return _PATH_LOCKS.setdefault(key, threading.Lock())

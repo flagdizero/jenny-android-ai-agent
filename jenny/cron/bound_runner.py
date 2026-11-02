@@ -17,15 +17,15 @@ from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.cron.condition import describe as describe_condition
 from jenny.cron.condition import read_condition
 from jenny.cron.could_not_check import (
+    DELEGATED_MARKER,
     ESCALATE_AFTER_FAILURES,
     ESCALATION_ASK_LIMIT,
+    WARNED_MARKER,
     could_not_check_reason,
-    parse_delegated_marks,
-    parse_warned_marks,
+    has_mark,
 )
 from jenny.cron.monitor_followup import resolve_pending_delegation
 from jenny.cron.service import CronJobSkippedError
-from jenny.cron.session_delivery import origin_delivery_context
 from jenny.cron.session_turns import (
     CRON_DEFER_UNTIL_IDLE_META,
     CRON_MIRROR_META,
@@ -42,11 +42,11 @@ from jenny.cron.types import (
     job_display_name,
     job_user_label,
 )
-from jenny.cron.webui_metadata import cron_proactive_delivery_metadata
 from jenny.runtime.power import keep_awake
 from jenny.session.keys import notebook_cron_session_key
 from jenny.session.turn_visibility import mark_silent_turn
 from jenny.utils.prompt_templates import render_template
+from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 # Coda di storico tenuta nella sessione isolata di un monitor: un monitor gira
 # all'infinito e senza potatura la sua sessione cresce senza limite.
@@ -134,6 +134,33 @@ def _cron_prompt_ref(prompt: str, *, monitor: bool = False) -> dict[str, Any]:
     }
 
 
+def origin_delivery_context(job: CronJob) -> tuple[str, str, dict[str, Any]]:
+    """Return ``(channel, chat_id, metadata)`` for a session-bound cron job."""
+    payload = job.payload
+    if not payload.origin_channel or not payload.origin_chat_id:
+        raise ValueError(f"cron job {job.id} is missing origin delivery context")
+    return payload.origin_channel, payload.origin_chat_id, dict(payload.origin_metadata or {})
+
+
+def cron_proactive_delivery_metadata(
+    channel: str,
+    metadata: dict[str, Any] | None,
+    *,
+    turn_seed: str,
+    source_label: str | None = None,
+) -> dict[str, Any]:
+    """Return channel metadata for a fresh proactive cron delivery turn."""
+    out = dict(metadata or {})
+    out.pop(WEBUI_TURN_METADATA_KEY, None)
+    if channel == "websocket":
+        out[WEBUI_TURN_METADATA_KEY] = f"{turn_seed}:{uuid.uuid4().hex}"
+        source: dict[str, str] = {"kind": "cron"}
+        if source_label:
+            source["label"] = source_label
+        out[WEBUI_MESSAGE_SOURCE_METADATA_KEY] = source
+    return out
+
+
 def _bound_session_delivery_context(
     job: CronJob,
     *,
@@ -205,9 +232,12 @@ def _why_page(job: CronJob) -> str:
     root = notebook_root(str(job.payload.board.get("notebook")))
     if root is None:
         return ""
-    wiki = (root / "wiki").resolve()
-    page = (wiki / job.payload.why).resolve()
-    if not page.is_relative_to(wiki):
+    from jenny.security.workspace_policy import is_path_within
+
+    wiki = root / "wiki"
+    page = wiki / job.payload.why
+    # Risolto, e un loop di symlink è un «fuori», non un'eccezione.
+    if not is_path_within(page, wiki):
         return ""
     try:
         return page.read_text(encoding="utf-8")[:WHY_PAGE_CHARS]
@@ -413,7 +443,7 @@ async def _run_bound_cron_job(
         # guasto chiudeva il giro come «non controllato» e il verdetto
         # dell'aiutante, quando arrivava, non trovava nessuno in attesa (è
         # l'ordine che il cappello di ``tools/nothing_to_report.py`` promette).
-        if parse_delegated_marks(outcome.final_text) and not outcome.spoke:
+        if has_mark(outcome.final_text, DELEGATED_MARKER) and not outcome.spoke:
             cron.write_run_record(
                 run_id,
                 {**run_record_base, "status": "delegated", "delivery": "suppressed"},
@@ -468,7 +498,7 @@ async def _run_bound_cron_job(
                 # esattamente ciò che impedisce il doppione due giri dopo. Se il
                 # modello dimentica la riga il guasto si ripete: rumore, non
                 # silenzio.
-                escalated=bool(parse_warned_marks(outcome.final_text)),
+                escalated=has_mark(outcome.final_text, WARNED_MARKER),
             )
         # L'esito lo dice da sé: per un monitor l'outbound finale è sempre None,
         # e ``spoke`` distingue "ho parlato col tool ``message``" da "non avevo

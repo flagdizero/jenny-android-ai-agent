@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from jenny.session.keys import PROJECT_SESSION_PREFIX, session_kind
+from jenny.session.keys import project_name, session_kind
 
 #: Lo stato della vista congelata, nei metadata della sessione:
 #: ``{"cursor": int, "at": "AAAA-MM-GG HH:MM", "seen": "AAAA-MM-GG HH:MM"}``.
@@ -115,7 +115,7 @@ def upcoming_dates(cron: Any, roots: Mapping[str, Any], *, now: datetime,
     end = int((now + COMING_UP).timestamp() * 1000)
     by_notebook: dict[str, dict[str, dict[str, Any]]] = {}
     for job in cron.list_jobs(include_disabled=False):
-        notebook = (job.payload.board or {}).get("notebook")
+        notebook = job.notebook
         if not isinstance(notebook, str) or job.paused_at_ms is not None:
             continue
         snap = job_snapshot(job)
@@ -182,8 +182,8 @@ def _place(row: Mapping[str, Any]) -> str:
     if isinstance(about, str) and about:
         return f"notebook {about}"
     key = row.get("session_key")
-    if isinstance(key, str) and key.startswith(PROJECT_SESSION_PREFIX):
-        return f"notebook {key[len(PROJECT_SESSION_PREFIX):]}"
+    if isinstance(key, str) and project_name(key):
+        return f"notebook {project_name(key)}"
     return "chat"
 
 
@@ -201,7 +201,7 @@ def visible_rows(entries: Sequence[Mapping[str, Any]], session_key: str) -> list
     kind = session_kind(session_key)
     if kind not in ("personal", "project"):
         return []
-    notebook = session_key[len(PROJECT_SESSION_PREFIX):] if kind == "project" else None
+    notebook = project_name(session_key) if kind == "project" else None
     rows: list[Mapping[str, Any]] = []
     for row in entries:
         if not row.get("kind") or not isinstance(row.get("content"), str):

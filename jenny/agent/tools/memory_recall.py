@@ -29,7 +29,6 @@ un file di indice sarebbe una seconda verità da tenere allineata.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,6 +47,7 @@ from jenny.agent.tools.schema import (
 )
 from jenny.security.workspace_access import current_tool_workspace
 from jenny.utils.helpers import clip
+from jenny.utils.path import iter_jsonl
 
 # Una pagina dell'elenco, in caratteri. Sotto i 16.000 di ``max_tool_result_chars``
 # di proposito: oltre, il risultato finisce in un file e il modello ne vede solo
@@ -384,15 +384,8 @@ def _read_history(memory_dir: Path) -> list[dict[str, Any]]:
         except OSError as exc:
             logger.warning("{} illeggibile: {}", path.name, exc)
             continue
-        for line in raw.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(rec, dict) and rec.get("content"):
+        for rec in iter_jsonl(raw.splitlines()):
+            if rec.get("content"):
                 by_cursor[rec.get("cursor")] = rec
     out = list(by_cursor.values())
     out.sort(key=_cursor_key, reverse=True)

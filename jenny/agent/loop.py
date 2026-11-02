@@ -66,6 +66,7 @@ from jenny.bus.runtime_events import (
     RuntimeEventPublisher,
 )
 from jenny.command import CommandContext, CommandRouter, register_builtin_commands
+from jenny.config.paths import wikis_dir_name
 from jenny.config.schema import AgentDefaults
 from jenny.cron.session_turns import (
     cron_history_overrides,
@@ -99,6 +100,7 @@ from jenny.session.keys import (
     PROJECT_SESSION_PREFIX,
     is_project_session_key,
     is_valid_project_name,
+    project_name,
     session_key_for_channel,
 )
 from jenny.session.manager import Session, SessionManager, scrub_lone_surrogates
@@ -534,7 +536,7 @@ class AgentLoop(
             extract_document_text=config.extract_document_text,
             timezone=defaults.timezone,
             disabled_skills=defaults.disabled_skills,
-            projects_subdir=config.wiki.wikis_dir,
+            projects_subdir=wikis_dir_name(config),
             wikis_enabled=config.wiki.enabled,
             session_ttl_minutes=defaults.session_ttl_minutes,
             compact_projects_when_idle=defaults.compact_projects_when_idle,
@@ -936,7 +938,7 @@ class AgentLoop(
             )
             return False
 
-        name = key[len(PROJECT_SESSION_PREFIX):]
+        name = project_name(key)
         logger.warning(
             "Reincarnated project: session {} belongs to wiki {}, the folder "
             "is now {}; turn refused", key, recorded, current,
@@ -979,7 +981,7 @@ class AgentLoop(
             root = None
         if root is not None and root.is_dir():
             return False
-        name = key[len(PROJECT_SESSION_PREFIX):]
+        name = project_name(key)
         if key in self._pending_queues:
             # Un turno di questa chat e' **in volo**, e la riparazione gli
             # sposterebbe i file sotto le mani: quando quel turno finisce, il suo
@@ -1153,7 +1155,7 @@ class AgentLoop(
             # fallirebbe con «notebook gone» e consegnerebbe al nome vecchio.
             from jenny.board.cron_link import follow_renamed_notebook
 
-            follow_renamed_notebook(self.cron_service, key[len(PROJECT_SESSION_PREFIX):],
+            follow_renamed_notebook(self.cron_service, project_name(key),
                                     target.name)
             return ProjectFollowOutcome(moved_to=target.name)
         except Exception:

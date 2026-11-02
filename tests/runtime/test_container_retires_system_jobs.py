@@ -24,7 +24,7 @@ from jenny.config import paths as paths_mod
 from jenny.config.schema import Config
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronPayload, CronSchedule
-from jenny.runtime.container import _RETIRED_SYSTEM_JOBS, GatewayContainer
+from jenny.runtime.container import GatewayContainer
 
 _HOUR_MS = 3_600_000
 
@@ -84,10 +84,6 @@ def _seed(workspace: Path) -> Path:
     (runs / "atlas_1725000000000_ab12.json").write_text("{}", encoding="utf-8")
     (runs / "a1b2c3_1725000000000_cd34.json").write_text("{}", encoding="utf-8")
     return path
-
-
-def test_the_first_retired_worker_is_the_one_this_plan_removes() -> None:
-    assert "atlas" in _RETIRED_SYSTEM_JOBS
 
 
 def test_build_retires_the_job_and_its_run_records_and_keeps_the_users(workspace: Path) -> None:

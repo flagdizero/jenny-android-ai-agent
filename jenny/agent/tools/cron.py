@@ -21,7 +21,7 @@ from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
 )
-from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+from jenny.session.keys import is_project_session_key, project_name
 from jenny.utils.helpers import safe_zoneinfo, validate_timezone_name
 
 # Modi accettati da action='add'. Vive qui e non in cron/types.py perché è la
@@ -283,8 +283,7 @@ class CronTool(Tool, ContextAware):
         if action in ("remove", "pause", "resume"):
             job = self._cron.get_job(str(job_id or ""))
             # Dalla chat di un quaderno si toccano solo i job di quel quaderno.
-            if job is None or (in_notebook_chat
-                               and (job.payload.board or {}).get("notebook") != notebook):
+            if job is None or (in_notebook_chat and job.notebook != notebook):
                 where = "in this notebook" if in_notebook_chat else ""
                 return f"No job `{job_id}` {where} (action='list' shows them).".replace("  ", " ")
             if action == "remove":
@@ -320,7 +319,7 @@ class CronTool(Tool, ContextAware):
         from jenny.utils.wiki_paths import is_wiki_root
 
         session = self._session_key.get()
-        here = session[len(PROJECT_SESSION_PREFIX):] if is_project_session_key(session) else None
+        here = project_name(session) if is_project_session_key(session) else None
         name = str(requested or "").strip() or here
         if name is None:
             return None, None, None
@@ -380,9 +379,9 @@ class CronTool(Tool, ContextAware):
                                 condition: Any, why: str | None) -> str:
         """Un job del quaderno: su una scheda o sul quaderno intero, da qualunque chat."""
         from jenny.board.cron_link import add_notebook_job
-        from jenny.board.micro import find_card
         from jenny.board.model import NOTEBOOK
         from jenny.board.notify import board_changed
+        from jenny.board.place import find_card
         from jenny.board.store import read_board
 
         if not message:
@@ -394,7 +393,8 @@ class CronTool(Tool, ContextAware):
         ref = str(card_ref or "").strip()
         card = find_card(board, ref) if ref and board is not None else None
         if ref and card is None:
-            titles = ", ".join(f"«{c['title']}»" for c in (board or {}).get("cards") or [])
+            titles = ", ".join(f"«{c['title']}» ({c['id']})"
+                               for c in (board or {}).get("cards") or [])
             return (f"No card «{ref}» on the board of «{notebook}». Cards: {titles or 'none'}. "
                     "Use one of them, or leave `card` empty if the job is for the whole notebook.")
         try:
@@ -412,11 +412,9 @@ class CronTool(Tool, ContextAware):
         return f"{out} — in the notebook «{notebook}», {where}; it runs and delivers there."
 
     async def _pause_job(self, job: CronJob, *, paused: bool) -> str:
-        from jenny.board.notify import board_changed
+        from jenny.board.cron_link import set_job_paused
 
-        result = self._cron.set_paused(job.id, paused)
-        if job.payload.board:
-            await board_changed(str(job.payload.board.get("notebook")))
+        result = await set_job_paused(self._cron, job.id, paused)
         return {
             "paused": f"Paused job {job.id}.",
             "resumed": f"Resumed job {job.id}.",
@@ -562,7 +560,7 @@ class CronTool(Tool, ContextAware):
         jobs = [
             j for j in self._cron.list_jobs(include_disabled=True)
             if (j.enabled or j.paused_at_ms is not None)
-            and (notebook is None or (j.payload.board or {}).get("notebook") == notebook)
+            and (notebook is None or j.notebook == notebook)
         ]
         if not jobs:
             return "No scheduled jobs in this notebook." if notebook else "No scheduled jobs."

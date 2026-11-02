@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from loguru import logger
 
 from jenny.bus.events import OutboundMessage
+from jenny.config.paths import wikis_dir_name
 from jenny.cron.bound_runner import (
     CRON_WAKELOCK_TIMEOUT_S,
     BoundCronAgent,
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from jenny.agent.context import ContextBuilder
     from jenny.agent.gardener import GardenerOutcome, GardenerStore
     from jenny.agent.tools.registry import ToolRegistry
+    from jenny.agent.turn_types import TurnOutcome
     from jenny.config.schema import Config
     from jenny.cron.service import CronService
     from jenny.cron.types import CronJob
@@ -77,6 +79,17 @@ class CronCapableAgent(BoundCronAgent, Protocol):
         metadata: dict[str, Any] | None = ...,
     ) -> OutboundMessage | None: ...
 
+    async def process_direct_outcome(
+        self,
+        content: str,
+        session_key: str = ...,
+        channel: str = ...,
+        chat_id: str = ...,
+        on_progress: Callable[..., Awaitable[None]] | None = ...,
+        visibility: "TurnVisibility | None" = ...,
+        metadata: dict[str, Any] | None = ...,
+    ) -> "TurnOutcome": ...
+
     def evict_pruned_sessions(self, keys: list[str]) -> None: ...
 
 
@@ -96,29 +109,33 @@ async def run_silent_alert_turn(
     prompt: str,
     *,
     session_key: str,
-    label: str,
-) -> None:
+    source: dict[str, Any] | None = None,
+) -> "TurnOutcome":
     """Un turno silenzioso in cui Jenny avvisa l'utente con il tool ``message``.
 
-    È la forma dell'annuncio di un aggiornamento, offerta ai giri delle
-    estensioni: il prompt deve dire che la risposta non arriva a nessuno e che
-    l'unico modo di parlare è ``message``. La sessione *session_key* (``cron:…``)
+    L'unico per l'annuncio di un aggiornamento, quello dei controlli di
+    ``HEARTBEAT.md`` ritirati e gli avvisi delle estensioni: il prompt deve dire
+    che la risposta non arriva a nessuno e che l'unico modo di parlare è
+    ``message``. *source* è da dove la WebUI dice che viene il messaggio
+    (``{"kind": "cron", "label": …}``). La sessione *session_key* (``cron:…``)
     tiene solo una coda cortissima, perché gli avvisi passati sono rumore.
+    Torna l'esito del turno: ``spoke`` dice se ``message`` è stato chiamato.
     """
     from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
-    await agent.process_direct(
+    outcome = await agent.process_direct_outcome(
         prompt,
         session_key=session_key,
         channel="websocket",
         chat_id="default",
         on_progress=silent_progress,
         visibility=TurnVisibility.SILENT,
-        metadata={WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": label}},
+        metadata={WEBUI_MESSAGE_SOURCE_METADATA_KEY: source} if source else None,
     )
     session = agent.sessions.get_or_create(session_key)
     session.retain_recent_legal_suffix(_UPDATE_HISTORY_KEEP)
     agent.sessions.save(session)
+    return outcome
 
 _UPDATE_PREAMBLE = (
     "[This is the scheduled update check, and it is SILENT: whatever you write "
@@ -174,7 +191,7 @@ GARDENER_JOB_ID = "gardener"
 # I due lavoratori periodici, col nome del loro job e il campo di config che li
 # tara. Elenco chiuso e non un getattr sul nome: chi aggiunge un lavoratore lo
 # registra qui, e chi legge vede in due righe quali sono.
-_SYSTEM_WORKERS: tuple[str, ...] = ("dream", "gardener")
+SYSTEM_WORKERS: tuple[str, ...] = ("dream", "gardener")
 
 
 def refresh_system_job(
@@ -212,8 +229,8 @@ def refresh_system_job(
     from jenny.config.loader import load_config
     from jenny.cron.types import CronJob, CronPayload
 
-    if worker not in _SYSTEM_WORKERS:
-        raise ValueError(f"unknown system worker {worker!r}; known: {_SYSTEM_WORKERS}")
+    if worker not in SYSTEM_WORKERS:
+        raise ValueError(f"unknown system worker {worker!r}; known: {SYSTEM_WORKERS}")
     cfg = getattr((config or load_config()).agents.defaults, worker)
     if not cfg.enabled:
         return None
@@ -265,6 +282,9 @@ class CronDispatcher:
         # Un ``HEARTBEAT.md`` rimasto dalla 2.0.0 si guarda al primo job con un
         # agente, una volta per processo: v. ``jenny/cron/retired_heartbeat.py``.
         self._heartbeat_retirement_checked = False
+        # I ``reminders.json`` della 2.0.0 si portano nello scheduler al primo
+        # giro dell'orologio di ogni avvio: v. ``jenny/board/legacy_reminders.py``.
+        self._legacy_reminders_checked = False
 
     async def dispatch(self, job: "CronJob") -> str | None:
         """Execute a cron job through the agent.
@@ -406,7 +426,7 @@ class CronDispatcher:
             min_hours_between_passes=cfg.min_hours_between_passes,
             sessions=agent.sessions,
             active_session_keys=agent.active_session_keys(),
-            wikis_dir_name=getattr(self._config.wiki, "wikis_dir", "wikis") or "wikis",
+            wikis_dir_name=wikis_dir_name(self._config),
         )
         if pick is None:
             logger.debug("Gardener: no project ready")
@@ -720,12 +740,15 @@ class CronDispatcher:
         if not config.wiki.enabled:
             logger.debug("Reminders: wiki disabled")
             return None
+        migrate_legacy = not self._legacy_reminders_checked
+        self._legacy_reminders_checked = True
         return await run_reminders(
             agent,
             self._config.workspace_path,
-            wikis_dir_name=getattr(self._config.wiki, "wikis_dir", "wikis") or "wikis",
+            wikis_dir_name=wikis_dir_name(self._config),
             timezone_name=config.agents.defaults.timezone or None,
             cron=self._cron,
+            migrate_legacy=migrate_legacy,
         )
 
     async def _run_update_check(self, agent: "CronCapableAgent") -> str | None:
@@ -789,9 +812,6 @@ class CronDispatcher:
             logger.debug("Update check: {} was already announced", info.version_name)
             return None
 
-        from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
-
-        source_metadata = {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "update"}}
         size_mb = info.size / (1024 * 1024)
         prompt = (
             _UPDATE_PREAMBLE
@@ -806,40 +826,20 @@ class CronDispatcher:
             )
         )
 
-        await agent.process_direct(
-            prompt,
-            session_key=UPDATE_SESSION_KEY,
-            channel="websocket",
-            chat_id="default",
-            on_progress=silent_progress,
-            visibility=TurnVisibility.SILENT,
-            metadata=source_metadata,
+        outcome = await run_silent_alert_turn(
+            agent, prompt, session_key=UPDATE_SESSION_KEY, source={"kind": "update"},
         )
 
-        # Marcato **incondizionatamente**, anche se il modello non avesse
-        # chiamato ``message``. È un compromesso, non una svista, e va detto per
-        # intero perché il costo cade su un utente che non vedrà mai il log.
-        #
-        # Il fatto esiste: il turno lo calcola come ``TurnOutcome.spoke``
-        # (``agent/turn_types.py``, da ``ctx.spoke_via_tool``). Non arriva qui
-        # perché ``process_direct`` restituisce per contratto il *payload* e non
-        # l'esito — scelta deliberata, documentata nella sua docstring — e
-        # cambiarla vorrebbe dire toccare la firma condivisa da Dream
-        # e dai comandi. La strada alternativa (un deliverer iniettato
-        # nel dispatcher) è chiusa apposta: v. la docstring di questo modulo e
-        # ``runtime/container.py``.
-        #
-        # Legandolo a ``spoke`` si scambierebbe comunque un difetto con un
-        # altro: un modello che sistematicamente non chiama ``message`` farebbe
-        # ripartire un turno LLM a ogni controllo, per sempre. Così invece si
-        # perde al più *una* spinta in chat — e la versione resta visibile
+        # Marcato **incondizionatamente**, anche se il modello non ha chiamato
+        # ``message`` (``outcome.spoke``). È un compromesso, non una svista:
+        # legandolo a ``spoke``, un modello che sistematicamente non chiama
+        # ``message`` farebbe ripartire un turno LLM a ogni controllo, per sempre.
+        # Così si perde al più *una* spinta in chat — e la versione resta visibile
         # altrove, nel badge delle impostazioni (``webui/settings_api.py``) e nel
         # tool ``update_status``, che leggono lo stesso ``cached_update()``.
+        if not outcome.spoke:
+            logger.warning("Update check: {} announced without a message", info.version_name)
         mark_notified(info.version_code)
-
-        session = agent.sessions.get_or_create(UPDATE_SESSION_KEY)
-        session.retain_recent_legal_suffix(_UPDATE_HISTORY_KEEP)
-        agent.sessions.save(session)
 
         if info.critical:
             # Una fix di sicurezza deve squillare anche se l'utente non aveva la
@@ -848,10 +848,11 @@ class CronDispatcher:
             # notifiche si sostituiscono invece di sommarsi.
             from jenny.runtime.notifier import post_alert
             from jenny.runtime.user_text import say
+            from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
             await post_alert(
                 say("alarm.update_critical", version=info.version_name),
-                source_metadata,
+                {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "update"}},
             )
 
         logger.info(

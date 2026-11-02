@@ -34,10 +34,7 @@ from __future__ import annotations
 
 import copy
 import json
-import os
-import threading
 from collections.abc import Callable
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +52,7 @@ from jenny.board.model import (
     ownership_violations,
 )
 from jenny.security.subagent_policy import journal_touch
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, path_lock, quarantine, rotate_valid_json_backup
 
 
 class BoardOwnershipError(Exception):
@@ -64,16 +61,6 @@ class BoardOwnershipError(Exception):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("; ".join(problems))
         self.problems = problems
-
-
-_LOCKS: dict[str, threading.Lock] = {}
-_LOCKS_GUARD = threading.Lock()
-
-
-def _lock_for(path: Path) -> threading.Lock:
-    key = str(path.resolve(strict=False))
-    with _LOCKS_GUARD:
-        return _LOCKS.setdefault(key, threading.Lock())
 
 
 def board_dir(project_root: Path) -> Path:
@@ -112,11 +99,7 @@ def _read_with_recovery(path: Path) -> Any | None:
         return _read_json(path)
     except (OSError, ValueError) as exc:
         logger.error("board: {} is unreadable ({}); falling back to the backup", path, exc)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        try:
-            os.replace(path, path.with_name(f"{path.stem}.corrupt-{stamp}{path.suffix}"))
-        except OSError:
-            pass
+        quarantine(path)
     try:
         return _read_json(_backup(path))
     except (OSError, ValueError):
@@ -129,17 +112,10 @@ def _write(path: Path, data: Any) -> None:
     # (``agent.subagent_journal``). Fuori è una no-op. Il ``.bak`` no: è la copia
     # di rotazione dell'ultimo contenuto valido, non il lavoro di qualcuno.
     journal_touch(path)
-    if path.exists():
-        try:
-            content = path.read_text(encoding="utf-8")
-            json.loads(content)
-        except (OSError, ValueError):
-            content = None
-        if content is not None:
-            try:
-                atomic_write(_backup(path), content, fsync_dir=False)
-            except OSError as exc:
-                logger.warning("board: backup of {} not refreshed: {}", path, exc)
+    try:
+        rotate_valid_json_backup(path)
+    except OSError as exc:
+        logger.warning("board: backup of {} not refreshed: {}", path, exc)
     atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
@@ -152,7 +128,7 @@ def rewrite_json(path: Path, change: Callable[[Any], Any]) -> None:
     perso. Se *change* solleva non si scrive niente. Nessuna normalizzazione:
     il contenuto è già quello che uno scrittore normale aveva lasciato.
     """
-    with _lock_for(path):
+    with path_lock(path):
         current = _read_json(path) if path.exists() else None
         _write(path, change(current))
 
@@ -172,7 +148,7 @@ def _mutate(
 ) -> dict[str, Any]:
     if actor not in (USER, JENNY):
         raise ValueError(f"unknown actor {actor!r}")
-    with _lock_for(path):
+    with path_lock(path):
         current = normalize(_read_with_recovery(path))
         before = copy.deepcopy(current)
         if apply(current) is False:
@@ -229,7 +205,7 @@ def write_card_summary(project_root: Path, card_id: str, summary: dict[str, Any]
     path = card_summary_path(project_root, card_id)
     data = normalize_card_summary(summary, card_id) or {"card": card_id}
     journal_touch(path)
-    with _lock_for(path):
+    with path_lock(path):
         atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
     return data
 

@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from jenny.apps import notify
 from jenny.apps.executor import execute_action
 from jenny.apps.reader import run_reader
+from jenny.runtime import ui_events
 
 LIST = {
     "name": "Spesa", "description": "x",
@@ -33,12 +33,13 @@ TOTAL = {
 def heard(monkeypatch) -> list[str]:
     out: list[str] = []
 
-    async def note(slug: str) -> None:
-        out.append(slug)
+    async def note(event: dict) -> None:
+        if event.get("_app_data_changed"):
+            out.append(event["app_slug"])
 
-    notify.set_notifier(note)
+    ui_events.set_publisher(note)
     yield out
-    notify.set_notifier(None)
+    ui_events.set_publisher(None)
 
 
 def _app(ws: Path, slug: str, manifest: dict, run: str | None = None) -> None:

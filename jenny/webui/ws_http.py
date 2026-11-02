@@ -65,10 +65,10 @@ from jenny.channels.ws_remote import on_remote_listener
 from jenny.config.paths import get_workspace_path
 from jenny.security.workspace_policy import is_path_within
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
     UNIFIED_SESSION_KEY,
     is_project_session_key,
     is_valid_project_name,
+    project_name,
     webui_chat_id,
     webui_transcript_key,
 )
@@ -708,15 +708,9 @@ class GatewayHTTPHandler:
             return skills_response
         if got == "/api/webui/android-apps":
             return await self._handle_webui_android_apps(request)
-        m = re.match(r"^/api/webui/android-apps/([^/]+)/launch$", got)
+        m = re.match(r"^/api/webui/android-apps/([^/]+)/(launch|uninstall|app-info)$", got)
         if m:
-            return await self._handle_webui_android_app_launch(request, m.group(1))
-        m = re.match(r"^/api/webui/android-apps/([^/]+)/uninstall$", got)
-        if m:
-            return await self._handle_webui_android_app_uninstall(request, m.group(1))
-        m = re.match(r"^/api/webui/android-apps/([^/]+)/app-info$", got)
-        if m:
-            return await self._handle_webui_android_app_info(request, m.group(1))
+            return await self._handle_webui_android_app_action(request, m.group(1), m.group(2))
         if got == "/api/webui/commands":
             return self._handle_webui_commands(request)
         if got == "/api/client-log":
@@ -785,35 +779,16 @@ class GatewayHTTPHandler:
             return _http_json_response({"apps": []})
         return _http_json_response(await webui_android_apps_payload())
 
-    async def _handle_webui_android_app_launch(self, request: WsRequest, raw_package: str) -> Response:
-        if not self.check_api_secret(request):
-            return _http_error(401, "Unauthorized")
-        if (refused := refuse_if_remote()) is not None:
-            return refused
-        package = unquote(raw_package)
-        if not package or _ANDROID_PACKAGE_RE.match(package) is None:
-            return _http_error(400, "invalid package name")
-        launched = await launch_android_app(package)
-        if not launched:
-            return _http_error(404, "app not found or launch failed")
-        return _http_json_response({"launched": True})
-
-    async def _handle_webui_android_app_uninstall(
-        self, request: WsRequest, raw_package: str
+    async def _handle_webui_android_app_action(
+        self, request: WsRequest, raw_package: str, action: str
     ) -> Response:
-        if not self.check_api_secret(request):
-            return _http_error(401, "Unauthorized")
-        if (refused := refuse_if_remote()) is not None:
-            return refused
-        package = unquote(raw_package)
-        if not package or _ANDROID_PACKAGE_RE.match(package) is None:
-            return _http_error(400, "invalid package name")
-        ok = await uninstall_android_app(package)
-        return _http_json_response({"ok": ok})
+        """Aprire, disinstallare o mostrare le informazioni di un'app del telefono.
 
-    async def _handle_webui_android_app_info(
-        self, request: WsRequest, raw_package: str
-    ) -> Response:
+        Le tre route avevano lo stesso tronco: la chiave, il rifiuto da fuori
+        (``phone_only``), il nome del pacchetto. La tabella sta qui dentro e
+        legge le funzioni a ogni chiamata, così un test che le sostituisce nel
+        modulo le trova.
+        """
         if not self.check_api_secret(request):
             return _http_error(401, "Unauthorized")
         if (refused := refuse_if_remote()) is not None:
@@ -821,8 +796,12 @@ class GatewayHTTPHandler:
         package = unquote(raw_package)
         if not package or _ANDROID_PACKAGE_RE.match(package) is None:
             return _http_error(400, "invalid package name")
-        ok = await open_android_app_info(package)
-        return _http_json_response({"ok": ok})
+        if action == "launch":
+            if not await launch_android_app(package):
+                return _http_error(404, "app not found or launch failed")
+            return _http_json_response({"launched": True})
+        run = {"uninstall": uninstall_android_app, "app-info": open_android_app_info}[action]
+        return _http_json_response({"ok": await run(package)})
 
     def _handle_client_log(self, request: WsRequest) -> Response:
         """Riporta errori/anomalie del WebUI nel log del gateway.
@@ -1078,5 +1057,5 @@ def _is_webui_readable_session_key(key: str) -> bool:
     # dal solo prefisso e arrivava al session manager e alla trascrizione come
     # un quaderno, con un nome che e' un percorso.
     if is_project_session_key(key):
-        return is_valid_project_name(key[len(PROJECT_SESSION_PREFIX):])
+        return is_valid_project_name(project_name(key))
     return False

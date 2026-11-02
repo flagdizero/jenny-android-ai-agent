@@ -34,6 +34,7 @@ from loguru import logger
 
 from jenny.session.keys import webui_transcript_key
 from jenny.session.manager import SessionManager
+from jenny.utils.path import iter_jsonl
 
 # Tetto sul file di sessione che si accetta di contare per una conferma. Oltre,
 # il numero non si mostra: v. :func:`describe_project_traces`.
@@ -175,21 +176,11 @@ def _count_messages(session_file: Path) -> int | None:
             return None
     except OSError:
         return None
-    count = 0
     try:
         with session_file.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except ValueError:
-                    # Una riga storta non invalida il conto delle altre: il file
-                    # e' append-only e l'ultima puo' essere tronca.
-                    continue
-                if isinstance(record, dict) and record.get("role"):
-                    count += 1
+            # Una riga storta non invalida il conto delle altre: il file e'
+            # append-only e l'ultima puo' essere tronca.
+            count = sum(1 for record in iter_jsonl(handle) if record.get("role"))
     except OSError:
         return None
     return count

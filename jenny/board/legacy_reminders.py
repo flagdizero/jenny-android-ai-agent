@@ -7,8 +7,10 @@ però quel file, con le attese aperte dell'utente: senza questa passata
 smetterebbero di suonare in silenzio, e nessuna superficie lo direbbe (review
 del 01/11/2026; la regola sui nomi persistiti è in ``AGENTS.md``).
 
-La passata la fa l'orologio (:func:`jenny.board.clock.run_reminders`), una volta
-per quaderno: ogni attesa ``open`` diventa un job del quaderno — un singolo per
+La passata la fa l'orologio (:func:`jenny.board.clock.run_reminders`) al primo
+giro dopo ogni avvio, e non a ogni quarto d'ora: il file nasce solo da una
+versione vecchia, o da un backup di una versione vecchia ripristinato (e un
+ripristino riavvia il gateway). Una volta per quaderno: ogni attesa ``open`` diventa un job del quaderno — un singolo per
 una data, un ricorrente col filtro per una condizione — e il file prende il
 suffisso ``.migrated``, così non si rilegge e resta da vedere. Un'attesa a data
 già passata suona al primo giro, come un singolo recuperato a telefono spento:

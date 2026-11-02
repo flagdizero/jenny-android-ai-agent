@@ -37,14 +37,19 @@ from typing import Any
 from jenny.security.subagent_policy import SubagentSecretError
 from jenny.security.subagent_policy import check_read as check_subagent_read
 from jenny.security.workspace_policy import is_path_within
-from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, iter_wiki_pages, page_chars
+from jenny.utils.wiki_paths import (
+    WIKI_INDEX_FILENAME,
+    is_research_layout,
+    iter_wiki_pages,
+    page_chars,
+)
 
 # ── Le regole condivise con ``lint_wiki.py`` (copie: v. la docstring) ────────
 
 # Il vocabolario di ``state:``. Copia di ``lint_wiki.PAGE_STATES``.
 PAGE_STATES = frozenset({"open", "hypothesis", "decided", "done"})
-# Le cartelle che dichiarano il layout di ricerca. Copia di ``RESEARCH_SUBDIRS``.
-RESEARCH_SUBDIRS = ("concepts", "entities", "summaries")
+# Le cartelle del layout di ricerca e la sua regola: ``utils.wiki_paths``
+# (``RESEARCH_SUBDIRS``, ``is_research_layout``), copie di quelle del lint.
 # Il frontmatter tollerante del lint (BOM, riga vuota prima, ``---`` finale senza
 # a capo): un 🔴 su un file corretto costa la credibilità dei 🔴 veri.
 _FRONTMATTER_RE = re.compile(r"^﻿?\s*---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
@@ -189,14 +194,6 @@ def _key_line(text: str, start: int, key: str, needle: str = "") -> int:
         elif key_line and needle and needle in line:
             return idx + 1
     return key_line or start + 1
-
-
-def is_research_layout(wiki_dir: Path) -> bool:
-    """Una biblioteca di ricerca, letta dalle **pagine** (la regola del lint)."""
-    return any(
-        (wiki_dir / name).is_dir() and any(p.is_file() for p in (wiki_dir / name).rglob("*.md"))
-        for name in RESEARCH_SUBDIRS
-    )
 
 
 def _wiki_md_files(wiki_dir: Path) -> list[Path]:

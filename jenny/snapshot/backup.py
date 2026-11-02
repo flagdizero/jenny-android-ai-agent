@@ -218,9 +218,10 @@ class BackupManager:
             return {"metadata": metadata}
 
     def _validated_staged_file(self, staged_path: str) -> Path:
+        from jenny.security.workspace_policy import is_path_within
+
         candidate = Path(staged_path).resolve()
-        staging = self._staging.resolve()
-        if not candidate.is_relative_to(staging):
+        if not is_path_within(candidate, self._staging, path_resolved=True):
             raise BackupError("staged file must live inside the backup staging directory")
         if not candidate.is_file():
             raise FileNotFoundError(f"staged backup file not found: {candidate.name}")

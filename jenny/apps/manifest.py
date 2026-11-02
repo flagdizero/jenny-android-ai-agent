@@ -20,6 +20,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from jenny.board.model import CONDITION_OPS
+
 # I nomi validi di app, azioni e collezioni: una sola copia, qui (il validatore
 # della skill che li duplicava e' uno stub dal 07/10/2026).
 SLUG_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
@@ -35,9 +37,9 @@ MAX_SLUG_LEN = 32
 # cleartext dell'APK rifiuta un iframe verso un ``http://`` non-loopback, quindi
 # "incornicia il mio server" non era esprimibile in nessun modo.
 VIEW_KINDS = {"external"}
-# Gli operatori di un allarme della sezione compatta. Gli stessi delle attese a
-# condizione della bacheca (``jenny/board/model.py::CONDITION_OPS``).
-SECTION_OPS = {"<", "<=", ">", ">=", "==", "!="}
+# Gli operatori di un allarme della sezione compatta: quelli delle attese a
+# condizione della bacheca, la stessa tupla.
+SECTION_OPS = CONDITION_OPS
 SECTION_PARAM_RE = re.compile(r"\A[a-z][a-zA-Z0-9_]*\Z")
 MAX_SECTION_TREND_DAYS = 31
 

@@ -33,6 +33,7 @@ from loguru import logger
 from jenny.snapshot.crypto import DEFAULT_KDF_ITERATIONS
 from jenny.snapshot.locations import runtime_root_for
 from jenny.snapshot.store import hash_content
+from jenny.snapshot.types import entry_target
 from jenny.utils.path import atomic_write
 
 from .cloud import (
@@ -568,7 +569,7 @@ class CloudBackupService:
 def _mismatches(root: Path, entries: list[Any]) -> list[str]:
     bad = []
     for entry in entries:
-        path = root / Path(*entry.path.split("/"))
+        path = entry_target(root, entry.path)
         try:
             if hash_content(path.read_bytes()) != entry.hash:
                 bad.append(entry.path)
