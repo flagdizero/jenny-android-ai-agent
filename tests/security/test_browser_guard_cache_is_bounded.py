@@ -52,9 +52,9 @@ def test_page_driven_warnings_are_throttled() -> None:
     code = _code()
     guard = function_body(code, "blocked")
     resolve = function_body(code, "isBlockedHost")
-    intercept = function_body(code, "blockedResponseFor")
+    intercept = function_body(code, "blockedResponse")
     for name, body in (("blocked", guard), ("isBlockedHost", resolve),
-                       ("blockedResponseFor", intercept)):
+                       ("blockedResponse", intercept)):
         assert "Log.w(" not in body, f"{name}: un avviso per ogni nome scelto dalla pagina"
         assert "warnThrottled(" in body
     throttle = function_body(code, "warnThrottled")
@@ -92,7 +92,7 @@ def test_the_security_model_puts_the_dns_cap_where_the_code_has_it() -> None:
     """Il tetto di 2 secondi c'e' solo sulla domanda della guardia lato pagina;
     una richiesta HTTP risolve con ``isBlockedHost`` diretto, senza tetto. Il
     modello di sicurezza lo diceva di ogni nome non in cache."""
-    http = function_body(_code(), "blockedResponseFor")
+    http = function_body(_code(), "blockedResponse")
     assert "isBlockedHost(host)" in http
     assert "GUARD_DNS_TIMEOUT_MS" not in http and "guardDns" not in http
     doc = (Path(__file__).resolve().parents[2] / "docs/internals/security-model.md").read_text(

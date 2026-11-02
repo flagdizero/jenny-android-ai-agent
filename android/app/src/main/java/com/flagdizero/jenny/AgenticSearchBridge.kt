@@ -210,6 +210,21 @@ class AgenticSearchBridge(context: Context) {
                         return true
                     }
 
+                    // La stessa guardia della sessione di browser: una pagina
+                    // scaricata qui gira col suo JavaScript, e senza filtro le
+                    // sue sottorisorse e i suoi redirect arrivavano alla LAN.
+                    // Il controllo di Python sull'URL finale resta, ma vede
+                    // solo la pagina, non quel che la pagina chiede.
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): android.webkit.WebResourceResponse? {
+                        val uri = request?.url ?: return null
+                        return JennyBrowserBridge.blockedResponse(uri) {
+                            if (request.isForMainFrame) errorRef.set("address not allowed")
+                        }
+                    }
+
                     override fun onReceivedError(
                         view: WebView?,
                         request: WebResourceRequest?,

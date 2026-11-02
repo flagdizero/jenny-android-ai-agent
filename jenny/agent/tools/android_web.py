@@ -726,13 +726,13 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
             )
 
         # The WebView follows redirects/JS navigation itself (real Chromium,
-        # not httpx) with no per-hop SSRF check, so by the time we get here
-        # the request may already have landed on a loopback/RFC1918/link-local
-        # address — this can only catch it after the fact (reduce blast
-        # radius by not returning the fetched content) and cannot prevent the
-        # WebView from having already made that request. A real fix needs a
-        # Kotlin-side WebViewClient.shouldOverrideUrlLoading/
-        # shouldInterceptRequest hook that re-validates each navigation.
+        # not httpx). Every request it makes, main frame and subresources,
+        # passes the browser session's private-address guard
+        # (``AgenticSearchBridge`` → ``JennyBrowserBridge.blockedResponse``),
+        # which refuses it before it leaves. This check on the final URL is the
+        # second layer, on the Python side of the same rules: it keeps the
+        # content of a page that still ended on a blocked address out of the
+        # model's context.
         final_ok, final_error = await validate_url_target_async(final_url)
         if not final_ok:
             logger.warning(

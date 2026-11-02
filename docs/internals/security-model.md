@@ -111,7 +111,7 @@ The refusal is an ordinary answer, not an error, and tells the job to report wha
 **What stays open — read this before relying on it.**
 
 - Code inside `python_exec` is not sandboxed (Level 4). A raw thread reached through `asyncio` internals carries none of these checks, nor does the C-level `_socket.socket` type; patching a shared module through `sys.modules` outlives the job. With `security.restrictToWorkspace` off, `python_exec` has no path guard at all, this policy's included.
-- `web_fetch` follows redirects inside the WebView before the final address is checked.
+- The WebView behind `web_fetch` and `web_search` has the browser's HTTP check (every redirect and subresource), but not its document-start script: a fetched page's `WebSocket` or WebRTC is not filtered.
 - An untrusted job that is *not* private can still put what it read into a URL (a GET); it holds nothing of yours to leak, but the task text and the files it reads are not checked for sensitivity beyond the list above. DNS lookups by the job's code are not filtered. `os.environ` is not wrapped.
 - Laundering through memory: an untrusted result Jenny discusses can reach `history.jsonl` at consolidation, then Dream, then `MEMORY.md`, which is loaded into every prompt. Dream treats its inputs as notes, not commands, but no code enforces it.
 - `journal_append`, a notebook's pages and an app's `AGENT.md` written by an untrusted job are not drafted.
@@ -226,7 +226,8 @@ refactor.
   (`jenny/security/network.py`): besides the private, loopback and link-local ranges it refuses
   multicast, broadcast, `::/96`, the site-local `fec0::/10`, SIIT-translated `::ffff:0:0:0/96`
   and local-use NAT64 `64:ff9b:1::/48`, and it reads IPv4-mapped, NAT64 `64:ff9b::/96` and
-  6to4 `2002::/16` addresses as the IPv4 they carry.
+  6to4 `2002::/16` addresses as the IPv4 they carry. The same HTTP check, with the same cache,
+  guards the WebView behind `web_fetch` and `web_search` (`AgenticSearchBridge.kt`).
   Not covered:
   `WebSocket` inside a worker, DNS rebinding between the check and the connection, and WebViews
   too old for document-start scripts or multiple profiles. It stops an ordinary page, not one

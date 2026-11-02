@@ -141,6 +141,148 @@ class JennyBrowserBridge(context: Context, slot: Int) {
          * main thread, quindi senza sincronizzazione.
          */
         private val leftoverProfilesHandled = HashSet<String>()
+
+        // -------------------------------------------------------------- guardia
+        //
+        // Di processo e non di sessione: la usano tutte le sessioni e la WebView
+        // della ricerca ([blockedResponse]), e il verdetto su un nome non
+        // dipende da chi lo chiede.
+
+        // LRU con tetto (v. MAX_HOST_VERDICTS); letta e scritta da più thread
+        // (IO di Chromium, JavaBridge, Python), sempre sotto il suo monitor.
+        private val hostVerdicts = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) =
+                size > MAX_HOST_VERDICTS
+        }
+
+        private val lastWarnAt = AtomicLong(0L)
+        private val suppressedWarnings = AtomicInteger(0)
+
+        /**
+         * L'IPv4 che un indirizzo IPv6 porta dentro, nelle forme che arrivano a un
+         * IPv4 vero: IPv4-mapped (`::ffff:a.b.c.d`), NAT64 (`64:ff9b::a.b.c.d`,
+         * che un DNS64 restituisce per un nome solo IPv4) e 6to4 (`2002:AABB:CCDD::`,
+         * l'IPv4 nei due gruppi dopo il prefisso). Per ognuna il verdetto e' quello
+         * dell'IPv4 incapsulato: `64:ff9b::7f00:1` e' il loopback, e `2002:c0a8:101::`
+         * la LAN. `null` se l'indirizzo non ne porta.
+         */
+        private fun embeddedIpv4(b: ByteArray): ByteArray? {
+            fun zero(range: IntRange) = range.all { b[it] == 0.toByte() }
+            return when {
+                zero(0..9) && b[10] == 0xFF.toByte() && b[11] == 0xFF.toByte() -> b.copyOfRange(12, 16)
+                b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
+                    b[3] == 0x9B.toByte() && zero(4..11) -> b.copyOfRange(12, 16)
+                b[0] == 0x20.toByte() && b[1] == 0x02.toByte() -> b.copyOfRange(2, 6)
+                else -> null
+            }
+        }
+
+        private fun isBlockedAddress(addr: InetAddress): Boolean {
+            if (addr.isLoopbackAddress || addr.isLinkLocalAddress ||
+                addr.isSiteLocalAddress || addr.isAnyLocalAddress || addr.isMulticastAddress) return true
+            when (addr) {
+                is Inet4Address -> {
+                    val b = addr.address
+                    val v = ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or
+                        ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
+                    for ((net, bits) in BLOCKED_V4) {
+                        val n = InetAddress.getByName(net).address
+                        val nv = ((n[0].toInt() and 0xFF) shl 24) or ((n[1].toInt() and 0xFF) shl 16) or
+                            ((n[2].toInt() and 0xFF) shl 8) or (n[3].toInt() and 0xFF)
+                        val mask = if (bits == 0) 0 else (-1 shl (32 - bits))
+                        if ((v and mask) == (nv and mask)) return true
+                    }
+                }
+                is Inet6Address -> {
+                    val b = addr.address
+                    // fc00::/7 (unique local) — fe80::/10 lo copre già isLinkLocalAddress
+                    if ((b[0].toInt() and 0xFE) == 0xFC) return true
+                    // ::/96: `::` e le IPv4-compatibili, deprecate. `::127.0.0.1` e'
+                    // il loopback in una forma che `isLoopbackAddress` non riconosce
+                    // (vale solo per `::1`); come in Python, l'intera /96 non e' mai
+                    // un server.
+                    if ((0..11).all { b[it] == 0.toByte() }) return true
+                    // ::ffff:0:0:0/96, la forma «tradotta» di SIIT (::ffff:0:a.b.c.d):
+                    // non e' una IPv4-mapped, e fuori da un traduttore non porta a
+                    // nessun server. Come in Python, bloccata intera.
+                    if ((0..7).all { b[it] == 0.toByte() } && b[8] == 0xFF.toByte() &&
+                        b[9] == 0xFF.toByte() && b[10] == 0.toByte() && b[11] == 0.toByte()) return true
+                    // 64:ff9b:1::/48, il NAT64 di uso locale: il prefisso li' non ha
+                    // lunghezza fissa, quindi l'IPv4 dentro non si sa estrarre.
+                    if (b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
+                        b[3] == 0x9B.toByte() && b[4] == 0x00.toByte() && b[5] == 0x01.toByte()) return true
+                    embeddedIpv4(b)?.let { return isBlockedAddress(InetAddress.getByAddress(it)) }
+                }
+            }
+            return false
+        }
+
+        /** Verdetto per hostname, con cache. Risolve: **mai dal main thread**. */
+        private fun isBlockedHost(host: String): Boolean {
+            cachedVerdict(host)?.let { return it }
+            val verdict = try {
+                InetAddress.getAllByName(host).any { isBlockedAddress(it) }
+            } catch (e: Exception) {
+                // Il nome lo sceglie la pagina: un avviso per ogni nome nuovo
+                // sarebbe un log che la pagina scrive a piacere.
+                warnThrottled("DNS failed (${e.javaClass.simpleName}): host blocked")
+                true   // in dubbio si blocca
+            }
+            synchronized(hostVerdicts) { hostVerdicts[host] = verdict }
+            return verdict
+        }
+
+        private fun cachedVerdict(host: String): Boolean? = synchronized(hostVerdicts) { hostVerdicts[host] }
+
+        /**
+         * Un `Log.w` al massimo ogni [WARN_INTERVAL_MS], con il numero di quelli
+         * taciuti nel frattempo. Per le voci che una pagina visitata può far
+         * ripetere quanto vuole: nomi irrisolvibili, connessioni dirette rifiutate.
+         */
+        private fun warnThrottled(message: String) {
+            val now = System.currentTimeMillis()
+            val last = lastWarnAt.get()
+            if (now - last < WARN_INTERVAL_MS || !lastWarnAt.compareAndSet(last, now)) {
+                suppressedWarnings.incrementAndGet()
+                return
+            }
+            val skipped = suppressedWarnings.getAndSet(0)
+            Log.w(TAG, if (skipped > 0) "$message (+$skipped similar suppressed)" else message)
+        }
+
+        /** Controllo sincrono, senza DNS: è tutto ciò che si può fare sul main thread. */
+        private fun isBlockedLiteral(uri: Uri): Boolean {
+            val host = uri.host ?: return true
+            val scheme = (uri.scheme ?: "").lowercase()
+            if (scheme != "http" && scheme != "https") return true
+            if (!host.any { it.isDigit() || it == ':' }) return false   // non è un IP letterale
+            return try { isBlockedAddress(InetAddress.getByName(host)) } catch (e: Exception) { false }
+        }
+
+        /**
+         * Il verdetto sulle richieste HTTP, senza stato di sessione: lo usano la
+         * sessione di browser ([blockedResponseFor]) e la WebView della ricerca e
+         * del fetch (`AgenticSearchBridge`), che fino al 02/11/2026 non aveva
+         * nessuna guardia e lasciava a una pagina scaricata da `web_fetch` le
+         * sottorisorse verso la LAN. `null` vuol dire «lascia passare».
+         * [onHostBlocked] gira quando a fermare la richiesta è l'host (non lo
+         * schema): è lì che la sessione si annota l'indirizzo per dirlo al modello.
+         * Gira su un thread di lavoro: qui il DNS si può risolvere.
+         */
+        internal fun blockedResponse(uri: Uri, onHostBlocked: () -> Unit): WebResourceResponse? {
+            val scheme = (uri.scheme ?: "").lowercase()
+            if (scheme != "http" && scheme != "https") {
+                return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+            }
+            val host = uri.host ?: return null
+            if (isBlockedHost(host)) {
+                // Una pagina può chiedere mille sotto-risorse private in un ciclo.
+                warnThrottled("request to a private or unresolvable host blocked")
+                onHostBlocked()
+                return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+            }
+            return null
+        }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -158,12 +300,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     private val loading = AtomicBoolean(false)
     private val lastError = AtomicReference<String?>(null)
     private val lastFinishAt = AtomicReference(0L)
-    // LRU con tetto (v. MAX_HOST_VERDICTS); letta e scritta da più thread
-    // (IO di Chromium, JavaBridge, Python), sempre sotto il suo monitor.
-    private val hostVerdicts = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) =
-            size > MAX_HOST_VERDICTS
-    }
 
     // I DNS chiesti dalla guardia lato pagina, fuori dal thread JavaBridge (v.
     // GUARD_DNS_TIMEOUT_MS). Due thread e una coda corta: una pagina che
@@ -173,9 +309,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         2, 2, 30L, TimeUnit.SECONDS, ArrayBlockingQueue(32),
     ) { r -> Thread(r, "jenny-browser-guard-dns").apply { isDaemon = true } }
         .apply { allowCoreThreadTimeOut(true) }
-
-    private val lastWarnAt = AtomicLong(0L)
-    private val suppressedWarnings = AtomicInteger(0)
 
     // L'ultimo indirizzo rifiutato dalla guardia. Serve a **dirlo**: un blocco
     // muto lascia il modello davanti a un about:blank vuoto, che sembra un sito
@@ -224,109 +357,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         val lastTwo = labels.takeLast(2).joinToString(".")
         val take = if (lastTwo in TWO_LEVEL_SUFFIXES) 3 else 2
         return labels.takeLast(take).joinToString(".")
-    }
-
-    // ------------------------------------------------------------------ guardia
-
-    /**
-     * L'IPv4 che un indirizzo IPv6 porta dentro, nelle forme che arrivano a un
-     * IPv4 vero: IPv4-mapped (`::ffff:a.b.c.d`), NAT64 (`64:ff9b::a.b.c.d`,
-     * che un DNS64 restituisce per un nome solo IPv4) e 6to4 (`2002:AABB:CCDD::`,
-     * l'IPv4 nei due gruppi dopo il prefisso). Per ognuna il verdetto e' quello
-     * dell'IPv4 incapsulato: `64:ff9b::7f00:1` e' il loopback, e `2002:c0a8:101::`
-     * la LAN. `null` se l'indirizzo non ne porta.
-     */
-    private fun embeddedIpv4(b: ByteArray): ByteArray? {
-        fun zero(range: IntRange) = range.all { b[it] == 0.toByte() }
-        return when {
-            zero(0..9) && b[10] == 0xFF.toByte() && b[11] == 0xFF.toByte() -> b.copyOfRange(12, 16)
-            b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
-                b[3] == 0x9B.toByte() && zero(4..11) -> b.copyOfRange(12, 16)
-            b[0] == 0x20.toByte() && b[1] == 0x02.toByte() -> b.copyOfRange(2, 6)
-            else -> null
-        }
-    }
-
-    private fun isBlockedAddress(addr: InetAddress): Boolean {
-        if (addr.isLoopbackAddress || addr.isLinkLocalAddress ||
-            addr.isSiteLocalAddress || addr.isAnyLocalAddress || addr.isMulticastAddress) return true
-        when (addr) {
-            is Inet4Address -> {
-                val b = addr.address
-                val v = ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or
-                    ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
-                for ((net, bits) in BLOCKED_V4) {
-                    val n = InetAddress.getByName(net).address
-                    val nv = ((n[0].toInt() and 0xFF) shl 24) or ((n[1].toInt() and 0xFF) shl 16) or
-                        ((n[2].toInt() and 0xFF) shl 8) or (n[3].toInt() and 0xFF)
-                    val mask = if (bits == 0) 0 else (-1 shl (32 - bits))
-                    if ((v and mask) == (nv and mask)) return true
-                }
-            }
-            is Inet6Address -> {
-                val b = addr.address
-                // fc00::/7 (unique local) — fe80::/10 lo copre già isLinkLocalAddress
-                if ((b[0].toInt() and 0xFE) == 0xFC) return true
-                // ::/96: `::` e le IPv4-compatibili, deprecate. `::127.0.0.1` e'
-                // il loopback in una forma che `isLoopbackAddress` non riconosce
-                // (vale solo per `::1`); come in Python, l'intera /96 non e' mai
-                // un server.
-                if ((0..11).all { b[it] == 0.toByte() }) return true
-                // ::ffff:0:0:0/96, la forma «tradotta» di SIIT (::ffff:0:a.b.c.d):
-                // non e' una IPv4-mapped, e fuori da un traduttore non porta a
-                // nessun server. Come in Python, bloccata intera.
-                if ((0..7).all { b[it] == 0.toByte() } && b[8] == 0xFF.toByte() &&
-                    b[9] == 0xFF.toByte() && b[10] == 0.toByte() && b[11] == 0.toByte()) return true
-                // 64:ff9b:1::/48, il NAT64 di uso locale: il prefisso li' non ha
-                // lunghezza fissa, quindi l'IPv4 dentro non si sa estrarre.
-                if (b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
-                    b[3] == 0x9B.toByte() && b[4] == 0x00.toByte() && b[5] == 0x01.toByte()) return true
-                embeddedIpv4(b)?.let { return isBlockedAddress(InetAddress.getByAddress(it)) }
-            }
-        }
-        return false
-    }
-
-    /** Verdetto per hostname, con cache. Risolve: **mai dal main thread**. */
-    private fun isBlockedHost(host: String): Boolean {
-        cachedVerdict(host)?.let { return it }
-        val verdict = try {
-            InetAddress.getAllByName(host).any { isBlockedAddress(it) }
-        } catch (e: Exception) {
-            // Il nome lo sceglie la pagina: un avviso per ogni nome nuovo
-            // sarebbe un log che la pagina scrive a piacere.
-            warnThrottled("DNS failed (${e.javaClass.simpleName}): host blocked")
-            true   // in dubbio si blocca
-        }
-        synchronized(hostVerdicts) { hostVerdicts[host] = verdict }
-        return verdict
-    }
-
-    private fun cachedVerdict(host: String): Boolean? = synchronized(hostVerdicts) { hostVerdicts[host] }
-
-    /**
-     * Un `Log.w` al massimo ogni [WARN_INTERVAL_MS], con il numero di quelli
-     * taciuti nel frattempo. Per le voci che una pagina visitata può far
-     * ripetere quanto vuole: nomi irrisolvibili, connessioni dirette rifiutate.
-     */
-    private fun warnThrottled(message: String) {
-        val now = System.currentTimeMillis()
-        val last = lastWarnAt.get()
-        if (now - last < WARN_INTERVAL_MS || !lastWarnAt.compareAndSet(last, now)) {
-            suppressedWarnings.incrementAndGet()
-            return
-        }
-        val skipped = suppressedWarnings.getAndSet(0)
-        Log.w(TAG, if (skipped > 0) "$message (+$skipped similar suppressed)" else message)
-    }
-
-    /** Controllo sincrono, senza DNS: è tutto ciò che si può fare sul main thread. */
-    private fun isBlockedLiteral(uri: Uri): Boolean {
-        val host = uri.host ?: return true
-        val scheme = (uri.scheme ?: "").lowercase()
-        if (scheme != "http" && scheme != "https") return true
-        if (!host.any { it.isDigit() || it == ':' }) return false   // non è un IP letterale
-        return try { isBlockedAddress(InetAddress.getByName(host)) } catch (e: Exception) { false }
     }
 
     // ------------------------------------------------------------------ ciclo di vita
@@ -442,25 +472,12 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     }
 
     /**
-     * Il verdetto sulle richieste HTTP, in un posto solo: la pagina
-     * ([sessionClient]) e i suoi service worker ([guardServiceWorkersOnMain]).
-     * `null` vuol dire «lascia passare». Gira su un thread di lavoro: qui il
-     * DNS si può risolvere.
+     * Il verdetto della sessione: quello di processo ([blockedResponse]), più
+     * l'indirizzo rifiutato annotato per dirlo al modello. Lo chiedono la
+     * pagina ([sessionClient]) e i suoi service worker ([guardServiceWorkersOnMain]).
      */
-    private fun blockedResponseFor(uri: Uri, isMainFrame: Boolean): WebResourceResponse? {
-        val scheme = (uri.scheme ?: "").lowercase()
-        if (scheme != "http" && scheme != "https") {
-            return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-        }
-        val host = uri.host ?: return null
-        if (isBlockedHost(host)) {
-            // Una pagina può chiedere mille sotto-risorse private in un ciclo.
-            warnThrottled("request to a private or unresolvable host blocked")
-            if (isMainFrame) lastBlocked.set(uri.toString())
-            return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-        }
-        return null
-    }
+    private fun blockedResponseFor(uri: Uri, isMainFrame: Boolean): WebResourceResponse? =
+        blockedResponse(uri) { if (isMainFrame) lastBlocked.set(uri.toString()) }
 
     /**
      * Butta il profilo rimasto su disco da un processo precedente, **prima**

@@ -49,7 +49,7 @@ def test_the_guard_asks_the_same_verdict_as_http() -> None:
     """Un secondo elenco di reti in JS divergerebbe dal primo alla prima modifica."""
     blocked = function_body(_bridge(), "blocked")
     assert "isBlockedHost(" in blocked
-    intercept = function_body(_bridge(), "blockedResponseFor")
+    intercept = function_body(_bridge(), "blockedResponse")
     assert "isBlockedHost(host)" in intercept
     code = _bridge()
     assert "@JavascriptInterface\n        fun blocked(host: String): Boolean" in code
