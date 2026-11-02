@@ -321,18 +321,33 @@ class TestWhatIsAPage:
         assert iter_wiki_pages(root / "wiki", titles=False) == ["INDEX.md"]
 
     def test_the_graph_sees_the_same_pages_plus_the_map(self, tmp_path):
-        """Consumatore 2: ``webui/wiki.py::iter_page_files`` (grafo e ricerca).
+        """Consumatore 2: grafo e ricerca (``wiki_page_files(include_index=True)``).
 
         L'unica differenza legittima è l'indice, e va nel verso giusto: per il
         prompt la mappa è un blocco a sé, per chi navigherà è il nodo centrale.
         """
-        from jenny.webui.wiki import iter_page_files
+        from jenny.utils.wiki_paths import wiki_page_files
 
         pages = self._wiki(tmp_path) / "wiki"
 
-        rels = {rel for rel, _path in iter_page_files(pages)}
+        rels = {rel for rel, _path in wiki_page_files(pages, include_index=True)}
 
         assert rels == set(self._PAGES) | {"index.md"}
+
+    def test_both_listings_keep_a_folder_s_pages_together(self, tmp_path):
+        """Lo stesso ordine per prompt, grafo e ricerca: quello d'albero."""
+        from jenny.utils.wiki_paths import wiki_page_files
+        from jenny.webui.wiki import read_pages
+
+        pages = tmp_path / "wiki"
+        for rel in ("a-b/x.md", "a.md", "a/x.md", "index.md"):
+            (pages / rel).parent.mkdir(parents=True, exist_ok=True)
+            (pages / rel).write_text("# t\n", encoding="utf-8")
+
+        expected = ["a/x.md", "a-b/x.md", "a.md"]
+        assert iter_wiki_pages(pages, titles=False) == expected
+        assert [r for r, _ in wiki_page_files(pages, include_index=True)] == [*expected, "index.md"]
+        assert [p.rel for p in read_pages(pages)] == [*expected, "index.md"]
 
 
 class TestTheIndexFilenameHasOneDefinition:

@@ -25,7 +25,12 @@ from markdown.preprocessors import Preprocessor
 from jenny.security.workspace_policy import is_path_within
 from jenny.utils.path import atomic_write
 from jenny.utils.wiki_paths import extract_title as _extract_title
-from jenny.utils.wiki_paths import is_wiki_page_rel, resolve_wikilink, slugify, strip_wiki_prefix
+from jenny.utils.wiki_paths import (
+    resolve_wikilink,
+    slugify,
+    strip_wiki_prefix,
+    wiki_page_files,
+)
 from jenny.utils.wiki_paths import strip_frontmatter as _strip_frontmatter
 from jenny.webui.audit import (
     AuditEntry,
@@ -114,43 +119,6 @@ def _split_wikilink(raw: str) -> tuple[str, str | None]:
 # ── Graph ────────────────────────────────────────────────────────────────────
 
 
-def iter_page_files(pages_dir: Path) -> list[tuple[str, Path]]:
-    """``(rel, path)`` delle pagine che entrano nel grafo, in ordine stabile.
-
-    Unico punto in cui si decide *quali* file contano. Il fingerprint della
-    cache (``wiki_search``) e la lettura vera (:func:`read_pages`) devono
-    guardare esattamente lo stesso insieme: se divergessero, o si
-    ricostruirebbe l'indice per una modifica in ``summaries/`` che non lo
-    tocca, oppure — molto peggio — una pagina cambierebbe senza muovere il
-    fingerprint e la ricerca resterebbe ferma al contenuto vecchio.
-
-    L'ordine è per rel-path perché quello di ``rglob`` dipende dal filesystem:
-    da questa lista discende l'indice numerico dei nodi, che è la chiave delle
-    postings dell'indice full-text.
-
-    **Quali file** lo decide :func:`jenny.utils.wiki_paths.is_wiki_page_rel`,
-    la stessa regola dell'iniettore e dell'albero (T9.5): fuori i
-    ``summaries/``, fuori i nascosti a ogni livello. I nascosti prima entravano
-    — un ``.draft.md`` sotto ``wiki/`` non arrivava al modello e non compariva
-    nell'albero, ma era un nodo del grafo e un risultato di ricerca.
-
-    L'indice invece **e' una pagina**, qui, e la differenza e' voluta: per il
-    prompt ``wiki/index.md`` e' la mappa e ha un blocco suo, per chi navighera'
-    e' il nodo centrale, e cercare dentro la mappa e' la cosa piu' ovvia del
-    mondo.
-    """
-    if not pages_dir.exists():
-        return []
-    out: list[tuple[str, Path]] = []
-    for f in pages_dir.rglob("*.md"):
-        rel = f.relative_to(pages_dir)
-        if not is_wiki_page_rel(rel):
-            continue
-        out.append((rel.as_posix(), f))
-    out.sort(key=lambda item: item[0])
-    return out
-
-
 def read_pages(pages_dir: Path) -> list[PageSource]:
     """Legge una volta sola tutte le pagine indicizzabili di una wiki.
 
@@ -158,7 +126,7 @@ def read_pages(pages_dir: Path) -> list[PageSource]:
     WARNING: è una pagina in meno nel grafo, non un 500 su tutta la wiki.
     """
     pages: list[PageSource] = []
-    for rel, f in iter_page_files(pages_dir):
+    for rel, f in wiki_page_files(pages_dir, include_index=True):
         try:
             text = f.read_text("utf-8")
         except (OSError, UnicodeDecodeError) as err:

@@ -217,7 +217,7 @@ def is_wiki_page_rel(
 
     **Una regola sola per i quattro camminatori** (T9.5). Prima ce n'erano
     quattro, e le differenze non erano decisioni: :func:`iter_wiki_pages`
-    saltava i nascosti, ``webui/wiki.py::iter_page_files`` no — quindi un
+    saltava i nascosti, ``webui/wiki.py::iter_page_files`` (ora :func:`wiki_page_files`) no — quindi un
     ``.draft.md`` sotto ``wiki/`` non arrivava al modello ma diventava un nodo
     del grafo e un risultato di ricerca — e ``_walk`` saltava i nascosti a ogni
     livello, cioe' **anche le cartelle**, mentre gli altri due guardavano solo
@@ -456,6 +456,40 @@ def _page_title(path: Path) -> str:
         return path.stem
 
 
+def wiki_page_files(pages_dir: Path, *, include_index: bool) -> list[tuple[str, Path]]:
+    """``(rel, path)`` delle pagine sotto *pages_dir* (``wiki/``), in ordine d'albero.
+
+    L'unica camminata delle pagine: :func:`iter_wiki_pages` (prompt, giardiniere)
+    senza l'indice, grafo e ricerca (``webui/wiki.read_pages``, il fingerprint di
+    ``wiki_search``) con. **Quali file** lo decide :func:`is_wiki_page_rel`.
+
+    L'indice e' la sola differenza, e voluta: per il prompt ``wiki/index.md`` e'
+    la mappa e ha un blocco suo, per chi naviga e' il nodo centrale e cercarci
+    dentro e' la cosa piu' ovvia. **Il confronto e' sensibile alle maiuscole, di
+    proposito** (T9.5): un ``wiki/INDEX.md`` su Android **non e'** il file che
+    l'iniettore apre come mappa (``context.py::_read_map_source`` chiede
+    esattamente ``index.md``); escluderlo lo toglierebbe al modello in tutt'e due
+    i modi, mentre cosi' almeno arriva come pagina.
+
+    L'ordine e' quello dei ``Path`` (le pagine di una cartella stanno insieme:
+    ``a/x.md`` prima di ``a-b/x.md``), e non dipende dal filesystem come quello di
+    ``rglob``: da questa lista discende l'indice dei nodi del grafo, che e' la
+    chiave delle postings della ricerca. Fino al 03/11/2026 grafo e ricerca
+    ordinavano per stringa, che mette ``a-b/`` fra ``a.md`` e ``a/``.
+    """
+    if not pages_dir.is_dir():
+        return []
+    found: list[tuple[str, Path]] = []
+    for path in sorted(pages_dir.rglob("*.md")):
+        rel = path.relative_to(pages_dir)
+        if not is_wiki_page_rel(rel):
+            continue
+        if not include_index and rel.as_posix() == WIKI_INDEX_FILENAME:
+            continue
+        found.append((rel.as_posix(), path))
+    return found
+
+
 @overload
 def iter_wiki_pages(pages_dir: Path) -> list[tuple[str, str]]: ...
 
@@ -509,28 +543,7 @@ def iter_wiki_pages(
     un prompt: cosi' chi lo usasse per sbaglio si rompe subito invece di
     stampare una riga muta. Gli ``@overload`` servono a dirlo al type checker.
     """
-    if not pages_dir.is_dir():
-        return []
-    found: list[tuple[str, Path]] = []
-    for path in sorted(pages_dir.rglob("*.md")):
-        rel = path.relative_to(pages_dir)
-        if not is_wiki_page_rel(rel):
-            continue
-        # L'esclusione dell'indice sta **qui e non nel predicato**: e' l'unica
-        # cosa che distingue questo elenco da quello di grafo, albero e ricerca,
-        # e per la mappa il prompt ha un blocco suo.
-        #
-        # **Il confronto e' sensibile alle maiuscole, di proposito** (T9.5). Un
-        # ``wiki/INDEX.md`` sull'unico runtime che esiste — Android, filesystem
-        # sensibile alle maiuscole — **non e'** il file che l'iniettore apre come
-        # mappa (``context.py::_read_map_source`` chiede esattamente
-        # ``index.md``). Confrontare senza maiuscole lo escluderebbe da qui
-        # *senza* che entri come mappa: il suo contenuto smetterebbe di
-        # raggiungere il modello in tutt'e due i modi. Oggi almeno arriva come
-        # pagina, che e' il peggio-caso giusto.
-        if rel.as_posix() == WIKI_INDEX_FILENAME:
-            continue
-        found.append((rel.as_posix(), path))
+    found = wiki_page_files(pages_dir, include_index=False)
     if not titles:
         return [rel for rel, _ in found]
     return [(rel, _page_title(path)) for rel, path in found]

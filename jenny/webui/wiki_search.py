@@ -50,12 +50,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jenny.utils.wiki_paths import fold, split_frontmatter
+from jenny.utils.wiki_paths import fold, split_frontmatter, wiki_page_files
 from jenny.webui.wiki import (
     GraphData,
     PageSource,
     build_graph_from_pages,
-    iter_page_files,
     read_pages,
 )
 
@@ -251,7 +250,7 @@ def fingerprint(pages_dir: Path) -> str:
     dell'insieme del grafo, per il solo consumatore della ricerca.
     """
     digest = hashlib.sha256()
-    for rel, path in iter_page_files(pages_dir):
+    for rel, path in wiki_page_files(pages_dir, include_index=True):
         try:
             st = path.stat()
             marker = f"{st.st_mtime_ns}:{st.st_size}"
