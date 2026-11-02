@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
@@ -149,6 +150,28 @@ def atomic_write(
     except BaseException:
         with contextlib.suppress(OSError):
             tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def atomic_copy(source: Path, dest: Path) -> None:
+    """Copia *source* in *dest* passando da un temporaneo accanto e da un rename.
+
+    Una copia a metà (disco pieno, processo ucciso) non prende mai il nome buono,
+    come con :func:`atomic_write`, ma a flusso: un archivio intero non passa in
+    memoria. Il temporaneo finisce in ``.tmp`` con un suffisso unico, così due
+    copie sulla stessa destinazione non si pestano e chi elenca la cartella lo
+    riconosce. ``copyfile``, non ``copy2``: sul telefono gli xattr SELinux fanno
+    fallire la copia dei metadati dopo che i byte sono già passati.
+    """
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{uuid.uuid4().hex[:12]}.tmp")
+    try:
+        shutil.copyfile(source, tmp)
+        os.replace(tmp, dest)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
         raise
 
 

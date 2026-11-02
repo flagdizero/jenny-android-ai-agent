@@ -20,14 +20,12 @@ contro una cartella vera, e come base per una cartella sincronizzata.
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
-import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_copy, atomic_write
 
 
 class RemoteNotFoundError(Exception):
@@ -137,20 +135,7 @@ class LocalDirSink:
     async def put_file(
         self, key: str, source: Path, on_progress: Callable[[int, int], None] | None = None
     ) -> None:
-        dest = self._path(key)
-
-        def _copy() -> None:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            # Un temporaneo per copia, come ``atomic_write`` (che qui non si usa
-            # per non tenere in memoria un archivio intero): col solo pid due
-            # copie della stessa chiave nello stesso processo si pestavano.
-            tmp = dest.with_name(f"{dest.name}.{uuid.uuid4().hex[:8]}.tmp")
-            # ``copyfile``, non ``copy2``: sul telefono gli xattr SELinux fanno
-            # fallire la copia dei metadati dopo che i byte sono già passati.
-            shutil.copyfile(source, tmp)
-            os.replace(tmp, dest)
-
-        await asyncio.to_thread(_copy)
+        await asyncio.to_thread(atomic_copy, source, self._path(key))
 
     async def get_bytes(self, key: str) -> bytes:
         path = self._path(key)
