@@ -276,12 +276,6 @@ class ApiClient {
     return token;
   }
 
-  async deleteJennyApp(slug) {
-    const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/delete`);
-    if (!res.ok) throw new Error(`Jenny app delete failed: ${res.status}`);
-    return res.json();
-  }
-
 
   /** Progetti dello scope chip: un progetto e' una wiki, quindi e' l'elenco
    *  delle wiki. Ritorna `{ dir, projects: [{ name, modified }] }`. */

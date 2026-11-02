@@ -487,6 +487,7 @@ correlate a reply to.
 | `telegram.save` | `token` | Save the Telegram bot token (checked with `getMe`) and restart the channel. |
 | `ssh.host.save` | `alias`, `host`, `port`, `username`, `auth`, `password`, `description`, `job_log_dir` | Create or update an SSH host. A missing `password` keeps the saved one. |
 | `onboarding.save` | `provider_name`, `format`, `api_key`, `api_base`, `model`, `bot_name`, `bot_icon`, `locale` | The first-run setup: save the provider with its API key, the model and Jenny's name, then wake the agent that was waiting for it and write the welcome message into the conversation. Replies `{status, chat_id, welcome_message}`. A missing provider or model is `bad_request` and nothing is saved. |
+| `apps.delete` | `slug` | Move an app to the trash, data included, and take away the home page that led to it. Replies `{deleted, trashed}`, where `trashed` is the trash entry `apps.restore` takes. `not_found` when there is no such app. |
 | `apps.trash` | — | The app trash, newest first: `{trash: [{id, slug, name, at, records}]}`. Deleting an app moves its folder here, data included. |
 | `apps.restore` | `id` | Put an app back from the trash (`id` is the trash entry). `conflict` when an app with that slug exists again. |
 | `apps.purge` | `id` | Delete a trash entry for good, data included. The only way an app's files are erased. |

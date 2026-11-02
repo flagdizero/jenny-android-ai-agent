@@ -563,10 +563,10 @@ export class AppsActions {
          si rimette anche dopo. */
       let trashed = null;
       try {
-        trashed = (await api.deleteJennyApp(slug))?.trashed || null;
+        trashed = (await rpc.apps('delete', { slug }))?.trashed || null;
         await this.source.loadJennyApps();
         /* Il gateway ha tolto anche la sua pagina, se ne aveva una (v.
-           `apps_api.delete_app`): qui la casa lo deve sapere, o resterebbe un
+           `apps_commands.apps_delete`): qui la casa lo deve sapere, o resterebbe un
            pagina verso un'app che non c'e' piu'. */
         await this.shell?.homePages?.()?.reload();
       } catch {

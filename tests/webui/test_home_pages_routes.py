@@ -351,23 +351,29 @@ async def test_deleting_an_app_takes_its_page_and_only_its_page(env) -> None:
         {"id": "p2", "kind": "app", "ref": "lampo"},
         {"id": "p3", "kind": "conversation", "ref": "project:orto"},
     ])
-    req = _request("/api/webui/apps/orto/delete")
-    reply = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
+    from jenny.webui.apps_commands import apps_delete
 
-    assert reply.status_code == 200
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    reply = await apps_delete(ctx, {"slug": "orto"})
+
+    assert reply["deleted"] is True
     assert not (env.workspace / "apps" / "orto").exists()
     # Solo l'app: un quaderno che si chiama come lei e' un'altra cosa.
     assert [p["id"] for p in _pages_on_disk(env)] == ["p2", "p3"]
 
 
 async def test_a_failed_app_delete_leaves_the_pages_alone(env) -> None:
-    """Un'app che non c'e' e' un 404, e le pagine non si toccano: la pagina
-    se ne va **con** la cosa, non al posto suo."""
-    await _with_pages(env, [{"id": "p1", "kind": "app", "ref": "orto"}])
-    req = _request("/api/webui/apps/orto/delete")
-    reply = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
+    """Un'app che non c'e' e' un ``not_found``, e le pagine non si toccano: la
+    pagina se ne va **con** la cosa, non al posto suo."""
+    from jenny.webui.apps_commands import apps_delete
+    from jenny.webui.commands import CommandError
 
-    assert reply.status_code == 404
+    await _with_pages(env, [{"id": "p1", "kind": "app", "ref": "orto"}])
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    with pytest.raises(CommandError) as refused:
+        await apps_delete(ctx, {"slug": "orto"})
+
+    assert refused.value.code == "not_found"
     assert [p["id"] for p in _pages_on_disk(env)] == ["p1"]
 
 
@@ -431,10 +437,11 @@ async def test_a_page_that_cannot_be_taken_does_not_undo_the_delete(env, monkeyp
         raise RuntimeError("disco pieno")
 
     monkeypatch.setattr(home_pages, "detach_pages_of", _broken)
+    from jenny.webui.apps_commands import apps_delete
+
     (env.workspace / "apps" / "orto").mkdir(parents=True)
-    req = _request("/api/webui/apps/orto/delete")
-    reply = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
-    assert reply.status_code == 200
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    assert (await apps_delete(ctx, {"slug": "orto"}))["deleted"] is True
 
 
 async def test_a_delete_does_not_reach_across_kinds(env) -> None:

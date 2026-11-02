@@ -1,4 +1,4 @@
-"""I comandi ``apps.*`` dell'interfaccia: il cestino delle app.
+"""I comandi ``apps.*`` dell'interfaccia: «Elimina» e il cestino delle app.
 
 Sono RPC sul WebSocket della WebUI, come i ``board.*``: le chiama solo
 l'interfaccia, con il segreto della WebUI. Jenny non ha un tool che le
@@ -12,6 +12,8 @@ import asyncio
 from collections.abc import Mapping
 from typing import Any
 
+from loguru import logger
+
 from jenny.webui.commands import CommandContext, CommandError
 
 
@@ -24,6 +26,32 @@ def _trash_id(params: Mapping[str, Any]) -> str:
     if not isinstance(value, str) or not value:
         raise CommandError("bad_request", "id required")
     return value
+
+
+async def apps_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """«Elimina» un'app: la sposta nel cestino (``apps/.trash/``), dati compresi.
+
+    Fino al 06/10/2026 era ``rmtree``, senza ritorno; adesso si rimette con
+    ``apps.restore`` e si butta davvero solo con ``apps.purge``. Fino al
+    02/11/2026 era un GET di ``/api/webui/apps/<slug>/delete``: una scrittura su
+    una superficie che accetta il token anche nell'indirizzo, dove un
+    ``<img src>`` poteva raggiungerla. Qui come le cancellazioni del file
+    manager. La pagina della casa che portava all'app si toglie insieme.
+    """
+    from jenny.apps.trash import trash_app
+    from jenny.webui.home_pages import detach_pages_quietly
+
+    slug = params.get("slug")
+    if not isinstance(slug, str) or not slug:
+        raise CommandError("bad_request", "slug required")
+    try:
+        trashed = await _run(trash_app, ctx.get_workspace_root(), slug)
+    except ValueError as exc:
+        raise CommandError("bad_request", "invalid app slug") from exc
+    except FileNotFoundError as exc:
+        raise CommandError("not_found", "app not found") from exc
+    await detach_pages_quietly("app", slug, log=logger)
+    return {"ok": True, "deleted": True, "trashed": trashed}
 
 
 async def apps_trash_list(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -62,6 +90,7 @@ async def apps_purge(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
 
 
 APPS_COMMANDS = {
+    "apps.delete": apps_delete,
     "apps.trash": apps_trash_list,
     "apps.restore": apps_restore,
     "apps.purge": apps_purge,
