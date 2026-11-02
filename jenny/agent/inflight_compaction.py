@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from jenny.session.history_meta import CHECKPOINT_META, COMPACTED_META, INJECTED_EVENT_META
-from jenny.utils.helpers import clip, estimate_message_tokens, merge_message_content
+from jenny.utils.helpers import clip, content_text, estimate_message_tokens, merge_message_content
 
 __all__ = [
     "InFlightCheckpoint",
@@ -208,18 +208,6 @@ def plan_cut(
     return cut if cut > start else None
 
 
-def _text_of(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "\n".join(
-            str(part.get("text", ""))
-            for part in content
-            if isinstance(part, dict) and part.get("type") == "text"
-        )
-    return ""
-
-
 def collect_user_messages(
     previous: list[str],
     messages: list[dict[str, Any]],
@@ -237,7 +225,7 @@ def collect_user_messages(
             continue
         if message.get(INJECTED_EVENT_META):
             continue
-        text = " ".join(_text_of(message.get("content")).split())
+        text = " ".join(content_text(message.get("content")).split())
         if not text:
             continue
         if len(text) > VERBATIM_USER_EACH_MAX_CHARS:
@@ -285,10 +273,10 @@ def format_range(
     i messaggi dell'utente sono gia' fuori di qui, alla lettera.
     """
     results = [
-        _text_of(m.get("content")).strip() for m in messages if m.get("role") == "tool"
+        content_text(m.get("content")).strip() for m in messages if m.get("role") == "tool"
     ]
     other = sum(
-        len(_text_of(m.get("content"))) + 200 for m in messages if m.get("role") != "tool"
+        len(content_text(m.get("content"))) + 200 for m in messages if m.get("role") != "tool"
     )
     room = max_chars - len(previous_summary or "") - other
     result_chars = max(min_result_chars, room // len(results)) if results else 0
@@ -296,7 +284,7 @@ def format_range(
     for message in messages:
         role = message.get("role")
         if role == "assistant":
-            text = _text_of(message.get("content")).strip()
+            text = content_text(message.get("content")).strip()
             calls = [_call_line(c, 400) for c in message.get("tool_calls") or []]
             line = "ASSISTANT:"
             if text:
@@ -305,12 +293,12 @@ def format_range(
                 line += "\n  calls: " + "; ".join(calls)
             blocks.append(line)
         elif role == "tool":
-            text = _text_of(message.get("content")).strip()
+            text = content_text(message.get("content")).strip()
             if len(text) > result_chars:
                 text = text[:result_chars] + " […]"
             blocks.append(f"RESULT ({message.get('name') or 'tool'}): {text}")
         elif role == "user":
-            blocks.append(f"USER: {_text_of(message.get('content')).strip()}")
+            blocks.append(f"USER: {content_text(message.get('content')).strip()}")
     kept: list[str] = []
     total = len(previous_summary or "")
     for block in reversed(blocks):
@@ -322,7 +310,7 @@ def format_range(
     kept.reverse()
     head = ""
     if request is not None:
-        head += f"USER REQUEST (verbatim):\n{_text_of(request.get('content')).strip()}\n\n"
+        head += f"USER REQUEST (verbatim):\n{content_text(request.get('content')).strip()}\n\n"
     if previous_summary:
         head += f"EARLIER CHECKPOINT:\n{previous_summary.strip()}\n\n"
     return head + "\n\n".join(kept)
@@ -341,7 +329,7 @@ def deterministic_summary(
     risultato che serve ancora si rilegge.
     """
     results = {
-        m.get("tool_call_id"): " ".join(_text_of(m.get("content")).split())[:160]
+        m.get("tool_call_id"): " ".join(content_text(m.get("content")).split())[:160]
         for m in messages
         if m.get("role") == "tool"
     }
@@ -349,7 +337,7 @@ def deterministic_summary(
     for message in messages:
         if message.get("role") != "assistant":
             continue
-        text = " ".join(_text_of(message.get("content")).split())
+        text = " ".join(content_text(message.get("content")).split())
         if text:
             lines.append(f"- note: {text[:200]}")
         for call in message.get("tool_calls") or []:

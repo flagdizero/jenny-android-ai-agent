@@ -472,6 +472,23 @@ def find_legal_message_start(messages: list[dict[str, Any]]) -> int:
     return start
 
 
+def content_text(content: Any) -> str:
+    """Il testo di un ``content``, stringa o lista di blocchi; il resto vale ``""``.
+
+    Tollerante, al contrario di :func:`stringify_text_blocks`: i blocchi che non
+    sono testo (immagini, tool) si saltano invece di far tornare ``None``.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            str(block.get("text") or "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return ""
+
+
 def stringify_text_blocks(content: list[dict[str, Any]]) -> str | None:
     parts: list[str] = []
     for block in content:

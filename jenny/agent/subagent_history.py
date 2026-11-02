@@ -39,7 +39,7 @@ from loguru import logger
 
 from jenny.session.history_meta import INJECTED_EVENT_META
 from jenny.session.keys import SUBAGENT_SESSION_PREFIX, subagent_session_key
-from jenny.utils.helpers import merge_message_content
+from jenny.utils.helpers import content_text, merge_message_content
 
 if TYPE_CHECKING:  # pragma: no cover - solo per i type checker
     from jenny.session.manager import SessionManager
@@ -530,19 +530,6 @@ _LIGHT_RESUME_NOTE = (
 )
 
 
-def _text_of(content: Any) -> str:
-    """Il testo di un ``content``, stringa o lista di blocchi."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "\n".join(
-            str(block.get("text") or "")
-            for block in content
-            if isinstance(block, dict) and block.get("type") == "text"
-        )
-    return ""
-
-
 def _call_arguments(call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """Nome e argomenti di una tool call in forma OpenAI; ``("", {})`` se illeggibile."""
     function = call.get("function")
@@ -644,10 +631,10 @@ def light_resume_messages(
             if m.get(INJECTED_EVENT_META):
                 continue
             content = m.get("content")
-            if isinstance(content, list) or _text_of(content).strip():
+            if isinstance(content, list) or content_text(content).strip():
                 _push("user", content)
         elif role == "assistant" and not m.get("tool_calls"):
-            text = _text_of(m.get("content")).strip()
+            text = content_text(m.get("content")).strip()
             if text:
                 _push("assistant", text)
     # Serve un brief in testa e almeno un resoconto: senza, non c'e' nulla da
