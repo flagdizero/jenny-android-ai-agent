@@ -124,6 +124,8 @@ def _emitted_events() -> set[str]:
     src = "".join(p.read_text(encoding="utf-8") for p in sorted(CHANNELS.glob("*.py")))
     names = set(re.findall(r'"event"\s*:\s*"([a-z_]+)"', src))
     names |= set(re.findall(r'_send_event\(\s*[\w.]+\s*,\s*"([a-z_]+)"', src, re.S))
+    # Gli avvisi di aggiornamento: ``_broadcast("board_changed", notebook=...)``.
+    names |= set(re.findall(r'_broadcast\(\s*"([a-z_]+)"', src))
     names.add(ACTIVITY_FRAME_EVENT)
     return names
 

@@ -126,6 +126,25 @@ class OutboundSenderMixin:
                 pending.append(connection)
         return pending
 
+    def _chat_conns(self, chat_id: str, only_conns: list[Any] | None) -> list[Any]:
+        """Le connessioni a cui va un invio di *chat_id*: *only_conns* (il retry
+        del dispatcher, solo verso chi aveva fallito), o tutti gli iscritti."""
+        return only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
+
+    async def _emit(self, conns: list[Any], body: Any, label: str) -> list[Any]:
+        """Un frame JSON a *conns*; ritorna le connessioni da ritentare (:meth:`_fanout`)."""
+        return await self._fanout(conns, json.dumps(body, ensure_ascii=False), label=f" {label} ")
+
+    async def _broadcast(self, event: str, **fields: Any) -> None:
+        """Un avviso di aggiornamento a ogni connessione aperta.
+
+        Idempotente: il client rilegge quel che gli serve, e il prossimo avviso
+        sostituisce questo, quindi le connessioni fallite non si ritentano.
+        """
+        conns = list(self._conn_chats)
+        if conns:
+            await self._emit(conns, {"event": event, **fields}, event)
+
     async def send_ui_query(self, conn_id: str, correlation_id: str) -> bool:
         """Chiedi la vista corrente alla singola connessione ``conn_id``.
 
@@ -514,11 +533,10 @@ class OutboundSenderMixin:
                 metadata=msg.metadata,
                 phase="user",
             )
-        conns = only_conns if only_conns is not None else list(self._subs.get(msg.chat_id, ()))
+        conns = self._chat_conns(msg.chat_id, only_conns)
         if not conns:
             return []
-        raw = json.dumps(self._user_echo_wire(payload), ensure_ascii=False)
-        return await self._fanout(conns, raw, label=" user_echo ")
+        return await self._emit(conns, self._user_echo_wire(payload), "user_echo")
 
     def _user_echo_wire(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Copia del record con gli allegati firmati, per i soli client.
@@ -582,11 +600,10 @@ class OutboundSenderMixin:
             body["stream_id"] = stream_id
         if not skip_persist:
             self._reasoning_buffer_for(chat_id, stream_id).append(delta)
-        conns = only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
+        conns = self._chat_conns(chat_id, only_conns)
         if not conns:
             return []
-        raw = json.dumps(body, ensure_ascii=False)
-        return await self._fanout(conns, raw, label=" reasoning ")
+        return await self._emit(conns, body, "reasoning")
 
     async def send_reasoning_end(
         self,
@@ -619,11 +636,10 @@ class OutboundSenderMixin:
                 metadata=meta,
                 phase="reasoning",
             )
-        conns = only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
+        conns = self._chat_conns(chat_id, only_conns)
         if not conns:
             return []
-        raw = json.dumps(body, ensure_ascii=False)
-        return await self._fanout(conns, raw, label=" reasoning_end ")
+        return await self._emit(conns, body, "reasoning_end")
 
     async def send_file_edit_events(
         self,
@@ -646,11 +662,10 @@ class OutboundSenderMixin:
                 metadata=metadata,
                 phase="activity",
             )
-        conns = only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
+        conns = self._chat_conns(chat_id, only_conns)
         if not conns:
             return []
-        raw = json.dumps(payload, ensure_ascii=False)
-        return await self._fanout(conns, raw, label=" file_edit ")
+        return await self._emit(conns, payload, "file_edit")
 
     async def send_delta(
         self,
@@ -703,13 +718,12 @@ class OutboundSenderMixin:
                 metadata=meta,
                 phase="answer",
             )
-        conns = only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
+        conns = self._chat_conns(chat_id, only_conns)
         if not conns:
             if is_stream_end:
                 self._stream_text_buffers.pop(stream_key, None)
             return []
-        raw = json.dumps(body, ensure_ascii=False)
-        pending = await self._fanout(conns, raw, label=" stream ")
+        pending = await self._emit(conns, body, "stream")
         if is_stream_end and not pending:
             # Fully delivered — safe to release the buffered text now.
             self._stream_text_buffers.pop(stream_key, None)
@@ -739,14 +753,13 @@ class OutboundSenderMixin:
                 metadata=metadata,
                 phase="complete",
             )
-        conns = only_conns if only_conns is not None else list(self._subs.get(chat_id, ()))
+        conns = self._chat_conns(chat_id, only_conns)
         if not conns:
             return []
         # La revisione del filo dopo questa riga, solo sul filo e non su disco:
         # chi la riceve sa di avere tutto fino a qui (v. ``transcript_revision``).
         wire = {**body, "rev": self._transcripts.revision(chat_id)}
-        raw = json.dumps(wire, ensure_ascii=False)
-        return await self._fanout(conns, raw, label=" turn_end ")
+        return await self._emit(conns, wire, "turn_end")
 
     async def send_goal_status(
         self,
@@ -766,9 +779,8 @@ class OutboundSenderMixin:
         }
         if status == "running" and started_at is not None:
             body["started_at"] = started_at
-        raw = json.dumps(body, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next status replaces it).
-        await self._fanout(conns, raw, label=" goal_status ")
+        await self._emit(conns, body, "goal_status")
 
     async def send_mascot_mood(
         self,
@@ -790,8 +802,7 @@ class OutboundSenderMixin:
         body: dict[str, Any] = {"event": "mascot_mood", "chat_id": chat_id, "mood": mood}
         if turn_id:
             body["turn_id"] = turn_id
-        raw = json.dumps(body, ensure_ascii=False)
-        await self._fanout(conns, raw, label=" mascot_mood ")
+        await self._emit(conns, body, "mascot_mood")
 
     async def send_subagent_status(self, chat_id: str, payload: Any) -> None:
         """Manda ai client lo snapshot dei subagent (running + terminati recenti).
@@ -813,9 +824,8 @@ class OutboundSenderMixin:
             "running": running if isinstance(running, list) else [],
             "recent": recent if isinstance(recent, list) else [],
         }
-        raw = json.dumps(body, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next snapshot replaces it).
-        await self._fanout(conns, raw, label=" subagent_status ")
+        await self._emit(conns, body, "subagent_status")
 
     async def send_work_status(self, chat_id: str, payload: Any) -> None:
         """Manda ai client lo stato di un lavoro lungo (``work_status``).
@@ -828,8 +838,7 @@ class OutboundSenderMixin:
         if not conns or not isinstance(payload, dict):
             return
         body: dict[str, Any] = {**payload, "event": "work_status", "chat_id": chat_id}
-        raw = json.dumps(body, ensure_ascii=False)
-        await self._fanout(conns, raw, label=" work_status ")
+        await self._emit(conns, body, "work_status")
 
     # -- Attività fine di un subagent (solo per chi la sta guardando) --------
     #
@@ -1025,51 +1034,23 @@ class OutboundSenderMixin:
 
     async def send_app_data_changed(self, slug: str) -> None:
         """Broadcast that a Jenny App's data changed (open app iframes refresh)."""
-        conns = list(self._conn_chats)
-        if not conns:
-            return
-        raw = json.dumps({"event": "app_data_changed", "slug": slug}, ensure_ascii=False)
-        # Idempotent refresh-hint: discard pending, no retry (next change replaces it).
-        await self._fanout(conns, raw, label=" app_data_changed ")
+        await self._broadcast("app_data_changed", slug=slug)
 
     async def send_board_changed(self, notebook: str) -> None:
         """Broadcast that a notebook's board changed (an open board redraws)."""
-        conns = list(self._conn_chats)
-        if not conns:
-            return
-        raw = json.dumps({"event": "board_changed", "notebook": notebook}, ensure_ascii=False)
-        # Idempotent refresh-hint, like app_data_changed: the next change replaces it.
-        await self._fanout(conns, raw, label=" board_changed ")
+        await self._broadcast("board_changed", notebook=notebook)
 
     async def send_apps_list_changed(self) -> None:
         """Broadcast that the Jenny Apps list changed (WebUI grid refreshes)."""
-        conns = list(self._conn_chats)
-        if not conns:
-            return
-        raw = json.dumps({"event": "apps_list_changed"}, ensure_ascii=False)
-        # Idempotent refresh-hint: discard pending, no retry (next change replaces it).
-        await self._fanout(conns, raw, label=" apps_list_changed ")
+        await self._broadcast("apps_list_changed")
 
     async def send_plan_changed(self, notebook: str, plan_id: str) -> None:
         """Broadcast that a notebook's plan changed (the plan card re-reads ``plan.get``)."""
-        conns = list(self._conn_chats)
-        if not conns:
-            return
-        raw = json.dumps(
-            {"event": "plan_changed", "notebook": notebook, "plan_id": plan_id},
-            ensure_ascii=False,
-        )
-        # Idempotent refresh-hint, like board_changed: the next change replaces it.
-        await self._fanout(conns, raw, label=" plan_changed ")
+        await self._broadcast("plan_changed", notebook=notebook, plan_id=plan_id)
 
     async def send_staged_changed(self, count: int) -> None:
         """Broadcast that the drafts awaiting approval changed (the home card redraws)."""
-        conns = list(self._conn_chats)
-        if not conns:
-            return
-        raw = json.dumps({"event": "staged_changed", "count": count}, ensure_ascii=False)
-        # Idempotent refresh-hint: the client re-reads ``staged.list``.
-        await self._fanout(conns, raw, label=" staged_changed ")
+        await self._broadcast("staged_changed", count=count)
 
     async def send_runtime_model_updated(
         self,
@@ -1090,6 +1071,5 @@ class OutboundSenderMixin:
             body["model_preset"] = model_preset.strip()
         if isinstance(provider, str) and provider.strip():
             body["provider"] = provider.strip()
-        raw = json.dumps(body, ensure_ascii=False)
         # Idempotent refresh-hint: discard pending, no retry (next update replaces it).
-        await self._fanout(conns, raw, label=" runtime_model_updated ")
+        await self._emit(conns, body, "runtime_model_updated")
