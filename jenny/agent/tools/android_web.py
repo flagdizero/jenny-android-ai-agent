@@ -242,7 +242,6 @@ async def _bridge_search(
     context: Any,
     query: str,
     max_results: int,
-    search_engine: str = "bing",
     timeout: int = 30,
 ) -> list[dict[str, Any]]:
     """Call Kotlin bridge and parse JSON results.
@@ -252,8 +251,6 @@ async def _bridge_search(
     Kotlin-side timeout, so a stuck WebView can never block the gateway loop.
     """
     logger.debug("_bridge_search: getting bridge for query='{}'", query)
-    if search_engine != "bing":
-        raise ValueError(f"Unsupported Android search engine: {search_engine}")
     global _SEARCH_STALLED_UNTIL
     async with _BRIDGE_LOCK:
         # Dentro il lock: anche chi era in coda dietro al timeout lo vede.
@@ -452,7 +449,6 @@ class AndroidWebSearchTool(AndroidWebGateMixin, Tool):
         return cls(
             android_context=ctx.android_context,
             max_results=ctx.config.android_web.search.max_results,
-            search_engine=ctx.config.android_web.search.search_engine,
             timeout=ctx.config.android_web.search.timeout,
         )
 
@@ -460,12 +456,10 @@ class AndroidWebSearchTool(AndroidWebGateMixin, Tool):
         self,
         android_context: Any,
         max_results: int = 8,
-        search_engine: str = "bing",
         timeout: int = 30,
     ):
         self.android_context = android_context
         self.max_results = max_results
-        self.search_engine = search_engine
         self.timeout = timeout
 
     @property
@@ -484,7 +478,6 @@ class AndroidWebSearchTool(AndroidWebGateMixin, Tool):
                 self.android_context,
                 query,
                 n,
-                search_engine=self.search_engine,
                 timeout=self.timeout,
             )
             return _format_results(query, results, n)

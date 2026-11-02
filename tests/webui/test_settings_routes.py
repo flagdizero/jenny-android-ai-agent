@@ -271,13 +271,12 @@ async def test_web_search_update_persists_values(config_path) -> None:
     response = await router.dispatch(
         _request(
             "/api/settings/web-search/update"
-            "?search_engine=bing&max_results=7&timeout=45&fetch_max_chars=20000"
+            "?max_results=7&timeout=45&fetch_max_chars=20000"
         ),
         "/api/settings/web-search/update",
     )
     assert response.status_code == 200
     body = _json(response)["web_search"]
-    assert body["search_engine"] == "bing"
     assert body["max_results"] == 7
     assert body["timeout"] == 45
     assert body["fetch_max_chars"] == 20000
@@ -286,15 +285,6 @@ async def test_web_search_update_persists_values(config_path) -> None:
     assert saved.tools.android_web.search.max_results == 7
     assert saved.tools.android_web.search.timeout == 45
     assert saved.tools.android_web.fetch.max_chars == 20000
-
-
-async def test_web_search_update_invalid_engine_maps_to_400(config_path) -> None:
-    router = _router()
-    response = await router.dispatch(
-        _request("/api/settings/web-search/update?search_engine=altavista"),
-        "/api/settings/web-search/update",
-    )
-    assert response.status_code == 400
 
 
 async def test_web_search_update_unexpected_error_maps_to_500(config_path, monkeypatch) -> None:

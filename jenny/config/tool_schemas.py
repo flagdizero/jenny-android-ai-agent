@@ -88,7 +88,6 @@ class AndroidWebSearchConfig(Base):
     migrazione v6 di ``Config._migrate_by_version``.
     """
 
-    search_engine: str = "bing"
     max_results: int = Field(default=8, ge=1, le=10)
     timeout: int = Field(default=15, ge=1, le=120)
 

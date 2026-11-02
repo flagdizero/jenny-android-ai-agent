@@ -198,12 +198,6 @@ class TestBridgeSearch:
             results = await android_web._bridge_search(object(), "python", 5)
         assert results == RESULTS
 
-    async def test_unsupported_engine_raises(self):
-        bridge = Mock()
-        with patch.object(android_web, "_get_bridge", return_value=bridge):
-            with pytest.raises(ValueError, match="Unsupported Android search engine"):
-                await android_web._bridge_search(object(), "python", 5, search_engine="google")
-
     async def test_timeout_propagates(self):
         """Il timeout non viene inghiottito, e il backstop è quello dichiarato.
 

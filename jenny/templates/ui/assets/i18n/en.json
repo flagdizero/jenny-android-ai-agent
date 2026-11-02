@@ -331,7 +331,6 @@
     "noKey": "(no key)",
     "brandAddress": "Address",
     "brandKey": "Key",
-    "searchEngine": "Search engine",
     "maxResults": "Max results",
     "maxResultsPlaceholder": "1 – 10",
     "timeoutSec": "Timeout (sec)",

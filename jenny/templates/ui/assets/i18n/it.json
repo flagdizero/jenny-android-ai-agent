@@ -331,7 +331,6 @@
     "noKey": "(nessuna chiave)",
     "brandAddress": "Indirizzo",
     "brandKey": "Chiave",
-    "searchEngine": "Motore di ricerca",
     "maxResults": "Risultati massimi",
     "maxResultsPlaceholder": "1 – 10",
     "timeoutSec": "Timeout (sec)",

@@ -279,10 +279,6 @@ async def run_update_check() -> dict[str, Any]:
     return {"status": _check_outcome(version), "version": version}
 
 
-# Il tool android_web supporta solo Bing (android_web.py rifiuta ogni altro
-# valore): il motore è quindi una costante, non un flag selezionabile.
-_ANDROID_WEB_SEARCH_ENGINE = "bing"
-
 WELCOME_TEMPLATES: dict[str, str] = {
     "it": "Ciao sono {bot_name} e da oggi vivo sul tuo smartphone, molto piacere!",
     "en": "Hi, I'm {bot_name} and from today I live on your smartphone. Nice to meet you!",
@@ -934,7 +930,6 @@ def settings_payload(
             "tool_hint_max_length": defaults.tool_hint_max_length,
         },
         "web_search": {
-            "search_engine": android_web_search.search_engine,
             "max_results": android_web_search.max_results,
             "timeout": android_web_search.timeout,
             "fetch_max_chars": android_web_fetch.max_chars,
@@ -1373,13 +1368,6 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
         if getattr(fetch_config, attr) != value:
             setattr(fetch_config, attr, value)
             changed = True
-
-    search_engine = query_first(query, "search_engine")
-    if search_engine is not None:
-        search_engine = search_engine.strip().lower()
-        if search_engine != _ANDROID_WEB_SEARCH_ENGINE:
-            raise WebUISettingsError("unknown search engine")
-        set_search_value("search_engine", search_engine)
 
     max_results = _query_first_alias(query, "max_results", "maxResults")
     if max_results is not None:

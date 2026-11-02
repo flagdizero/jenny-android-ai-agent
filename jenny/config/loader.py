@@ -295,6 +295,10 @@ RETIRED_KEY_PATHS: frozenset[str] = frozenset({
     # L'heartbeat, ritirato il 31/10/2026: un controllo periodico ora è un job
     # ``monitor`` del cron con la sua cadenza (``jenny/cron/``).
     "gateway.heartbeat",
+    # Il motore di ``web_search``, ritirato il 02/11/2026: poteva valere solo
+    # ``bing``, che è l'unica pagina che il ponte Kotlin sa leggere.
+    "tools.androidWeb.search.searchEngine",
+    "tools.android_web.search.search_engine",
 })
 
 
