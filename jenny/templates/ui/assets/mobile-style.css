@@ -3143,7 +3143,11 @@ dialog.image-lightbox::backdrop { background: transparent; }
 
 .place-card {
   display: block;
-  width: min(100%, 312px);
+  /* Larghezza fissa che si stringe solo se manca spazio. Con `min(100%, …)`
+     seguiva il messaggio di Jenny, che e' largo quanto il suo testo: dopo un
+     «Eccola:» la cartolina restava stretta (visto su jenny_s22). */
+  width: 312px;
+  max-width: 100%;
   margin: 8px 0 4px;
   border-radius: 16px;
   overflow: hidden;
@@ -3244,7 +3248,7 @@ dialog.image-lightbox::backdrop { background: transparent; }
   background: rgba(0, 0, 0, 0.5);
 }
 
-.place-card-body { padding: 9px 12px 0; }
+.place-card-body { padding: 12px 15px 0; }
 .place-name {
   display: block;
   color: var(--text);
@@ -3257,15 +3261,15 @@ dialog.image-lightbox::backdrop { background: transparent; }
   color: var(--text-muted);
   font-size: 12.5px;
   line-height: 1.35;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .place-address:empty { display: none; }
 .place-card-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 7px;
-  padding: 8px 12px 9px;
+  gap: 12px;
+  margin-top: 11px;
+  padding: 11px 15px 12px;
   border-top: 1px solid var(--border);
   font-size: 13px;
 }
@@ -3285,7 +3289,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
 
 /* Piu' posti di fila: una scheda, una riga ciascuno. */
 .place-list {
-  width: min(100%, 330px);
+  width: 330px;
+  max-width: 100%;
   margin: 8px 0 4px;
   border-radius: 16px;
   overflow: hidden;
@@ -3318,8 +3323,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .place-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px 8px 11px;
+  gap: 12px;
+  padding: 11px 15px 11px 13px;
 }
 .place-row + .place-row { border-top: 1px solid var(--border); }
 .place-row:active { background: var(--surface-2); }
@@ -3338,7 +3343,7 @@ dialog.image-lightbox::backdrop { background: transparent; }
 }
 .place-row-text { flex: 1; min-width: 0; }
 .place-row .place-name { font-size: 14px; line-height: 1.25; }
-.place-row .place-address { font-size: 12px; margin-top: 1px; }
+.place-row .place-address { font-size: 12px; margin-top: 2px; }
 .place-row .place-name,
 .place-row .place-address { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .place-row-meta { flex: 0 0 auto; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
