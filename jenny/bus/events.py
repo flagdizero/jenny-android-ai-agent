@@ -82,6 +82,11 @@ COORDINATION_FLAGS = (
 )
 
 
+def is_coordination(metadata: dict[str, Any] | None) -> bool:
+    """Il messaggio è un marcatore della vista WebUI, non un testo da consegnare."""
+    return bool(metadata) and any(metadata.get(flag) for flag in COORDINATION_FLAGS)
+
+
 @dataclass
 class InboundMessage:
     """Message received from a chat channel."""

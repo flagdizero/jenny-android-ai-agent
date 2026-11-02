@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 
 from loguru import logger
 
-from jenny.bus.events import COORDINATION_FLAGS, InboundMessage, OutboundMessage
+from jenny.bus.events import InboundMessage, OutboundMessage, is_coordination
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import TurnRunStatusChanged
 from jenny.channels.http_utils import secret_matches
@@ -826,7 +826,7 @@ class TelegramChannel(NonStreamingChannelMixin):
 
     @staticmethod
     def _is_webui_only_event(meta: dict[str, Any]) -> bool:
-        return any(meta.get(key) for key in COORDINATION_FLAGS)
+        return is_coordination(meta)
 
     async def _send_chunk(self, chat_id: str, chunk: str) -> None:
         """Invia un chunk con retry interno; HTML → fallback plain su 400."""
