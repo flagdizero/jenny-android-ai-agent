@@ -53,6 +53,63 @@ async def invoke_file_edit_progress(
     await on_progress("", file_edit_events=file_edit_events)
 
 
+# Da quale famiglia e' ogni strumento: la parola con cui la casa dice cosa sta
+# facendo Jenny («Legge», «Cerca», «Scrive»...). La decide il filo, e la casa
+# la mostra: fino al 02/11/2026 la tabella stava solo nella WebUI
+# (`home-activity.js::FAMILY_BY_TOOL`), e diciotto strumenti nati dopo non
+# c'erano. La' resta come ripiego, per gli eventi registrati prima.
+#
+# ``busy`` e' il vocabolario generico («mi do da fare»): per chi non lavora su
+# qualcosa che si possa nominare. ``cron`` e ``message`` ci stanno apposta: non
+# mettono al lavoro nessuno, e come «delega» dicevano «chiamo una mini-me»
+# mentre Jenny fissava un promemoria. Un nome che non e' qui vale ``busy``.
+TOOL_FAMILIES: dict[str, str] = {
+    # Legge: guarda qualcosa che gia' esiste, senza toccarlo.
+    **dict.fromkeys(
+        (
+            "read_file", "list_dir", "get_source", "recall", "recall_history", "memory",
+            "ui_view", "my", "subagent_status", "list_exec_sessions", "update_status",
+            "ssh_hosts", "get_recent_logs", "notebook", "screen",
+        ),
+        "read",
+    ),
+    # Cerca: non sa ancora dove sia.
+    **dict.fromkeys(("grep", "find_files", "web_search", "find_place"), "search"),
+    # Scrive: lascia un segno.
+    **dict.fromkeys(
+        ("write_file", "edit_file", "apply_patch", "journal_append", "board", "app"), "write"
+    ),
+    # Esce: qualcosa fuori da questo telefono.
+    **dict.fromkeys(
+        (
+            "web_fetch", "browser_open", "browser_read", "browser_do", "browser_close",
+            "browser_snapshot", "download_file", "ssh_exec", "ssh_job", "ssh_transfer",
+            "get_location", "install_update",
+        ),
+        "out",
+    ),
+    # Esegue: fa girare qualcosa.
+    **dict.fromkeys(("python_exec", "write_stdin"), "run"),
+    # Delega: manda una mini-me. Solo i subagent.
+    **dict.fromkeys(
+        ("spawn", "subagent_send", "subagent_cancel", "subagent_restart"), "delegate"
+    ),
+    # Il resto: niente da nominare.
+    **dict.fromkeys(
+        (
+            "cron", "message", "nothing_to_report", "suggest_notebook", "plan_propose",
+            "plan_step_done", "plan_step_skip", "plan_blocked",
+        ),
+        "busy",
+    ),
+}
+
+
+def tool_family(name: Any) -> str:
+    """La famiglia di *name* (``read``, ``search``, ...), ``busy`` se non si sa."""
+    return TOOL_FAMILIES.get(name, "busy") if isinstance(name, str) else "busy"
+
+
 def _tool_event_arguments(tool_call: Any) -> dict[str, Any]:
     arguments = getattr(tool_call, "arguments", {}) or {}
     return arguments if isinstance(arguments, dict) else {}
@@ -64,6 +121,7 @@ def build_tool_event_start_payload(tool_call: Any) -> dict[str, Any]:
         "phase": "start",
         "call_id": str(getattr(tool_call, "id", "") or ""),
         "name": getattr(tool_call, "name", ""),
+        "family": tool_family(getattr(tool_call, "name", "")),
         "arguments": _tool_event_arguments(tool_call),
         "result": None,
         "error": None,
@@ -95,6 +153,7 @@ def build_tool_event_finish_payloads(context: AgentHookContext) -> list[dict[str
             "phase": phase,
             "call_id": str(getattr(tool_call, "id", "") or ""),
             "name": getattr(tool_call, "name", ""),
+            "family": tool_family(getattr(tool_call, "name", "")),
             "arguments": _tool_event_arguments(tool_call),
             "result": result if phase == "end" else None,
             "error": None,

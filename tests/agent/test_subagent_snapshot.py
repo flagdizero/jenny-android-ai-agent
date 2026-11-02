@@ -34,6 +34,8 @@ from jenny.bus.queue import MessageBus
 RUNNING_KEYS = {
     "task_id", "lineage_id", "attempt", "label", "task", "agent_type", "state",
     "phase", "iteration", "elapsed_s", "idle_s", "last_tool", "tool_events",
+    # La famiglia dell'ultimo strumento, a parole della casa (``progress_events``).
+    "last_tool_family",
     # Il passo del piano per cui lavora (``None`` fuori da un piano).
     "plan_id", "plan_step",
     # Quanti file ha cambiato: «Ferma e annulla le sue modifiche (N file)».
@@ -121,6 +123,7 @@ def test_snapshot_shape_and_keys(tmp_path: Path) -> None:
     assert running["agent_type"] == "researcher"
     assert running["attempt"] == 2
     assert running["last_tool"] == "web_search"
+    assert running["last_tool_family"] == "search"
     assert running["elapsed_s"] >= 42.0
     assert running["idle_s"] >= 0.0
 
@@ -217,6 +220,7 @@ def test_a_running_subagent_without_tool_events_reports_an_empty_list(tmp_path: 
     running = mgr.status_snapshot()["running"][0]
     assert running["tool_events"] == []
     assert running["last_tool"] is None
+    assert running["last_tool_family"] is None
 
 
 def test_recent_is_newest_first_and_bounded(tmp_path: Path) -> None:

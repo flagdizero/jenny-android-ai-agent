@@ -77,3 +77,24 @@ await tick(600);
 assert.equal(secs(), 0, `il turno nuovo eredita i secondi del vecchio: ${clock()}`);
 await done('t2');
 """)
+
+
+def test_the_family_comes_with_the_event() -> None:
+    """La parola la decide il filo (`progress_events.TOOL_FAMILIES`): `board`
+    non e' nella tabella della casa, e con la sua famiglia nell'evento dice
+    «scrive». Un evento senza famiglia (uno vecchio) cade sulla tabella."""
+    run_home(_HEAD + """
+const app = await boot();
+running();
+await tick(600);
+frame({ event: 'message', chat_id: 'default', turn_id: 't1', kind: 'progress',
+        tool_events: [{ phase: 'start', name: 'board', family: 'write' }] });
+await tick(600);
+assert.ok(V.write.includes(line().querySelector('.home-activity-text').textContent),
+  'la famiglia dell\\u2019evento non conta');
+frame({ event: 'message', chat_id: 'default', turn_id: 't1', kind: 'progress',
+        tool_events: [{ phase: 'start', name: 'web_fetch' }] });
+await tick(600);
+assert.ok(V.out.includes(line().querySelector('.home-activity-text').textContent));
+await done();
+""")

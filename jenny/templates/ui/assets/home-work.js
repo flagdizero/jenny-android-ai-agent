@@ -42,7 +42,7 @@
 import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
 import { saIsTerminal } from './shared/subagent-policy.js';
-import { FAMILY_BY_TOOL } from './home-activity.js';
+import { familyOf } from './home-activity.js';
 import { el, icon } from './shared/dom.js';
 import { closeActionSheet, openActionSheet, sheetHead, sheetRow } from './shared/sheet.js';
 
@@ -517,7 +517,10 @@ export class WorkBubbles {
      parole semplici («Legge», «Cerca»). La stessa tabella della bolla di
      Jenny, cosi' le due non si contraddicono. */
   _helperDoing(entry) {
-    const family = FAMILY_BY_TOOL[entry.last_tool] || (entry.last_tool ? 'busy' : 'think');
+    /* La famiglia la dice il server (`last_tool_family`); il nome solo e' il
+       ripiego per uno snapshot che non la porta. */
+    const family = entry.last_tool_family
+      || (entry.last_tool ? familyOf(entry.last_tool) : 'think');
     return i18n.t(`home.work.doing.${family}`);
   }
 
