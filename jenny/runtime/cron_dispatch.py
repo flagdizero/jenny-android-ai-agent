@@ -282,6 +282,9 @@ class CronDispatcher:
         # Un ``HEARTBEAT.md`` rimasto dalla 2.0.0 si guarda al primo job con un
         # agente, una volta per processo: v. ``jenny/cron/retired_heartbeat.py``.
         self._heartbeat_retirement_checked = False
+        # I ``reminders.json`` della 2.0.0 si portano nello scheduler al primo
+        # giro dell'orologio di ogni avvio: v. ``jenny/board/legacy_reminders.py``.
+        self._legacy_reminders_checked = False
 
     async def dispatch(self, job: "CronJob") -> str | None:
         """Execute a cron job through the agent.
@@ -737,12 +740,15 @@ class CronDispatcher:
         if not config.wiki.enabled:
             logger.debug("Reminders: wiki disabled")
             return None
+        migrate_legacy = not self._legacy_reminders_checked
+        self._legacy_reminders_checked = True
         return await run_reminders(
             agent,
             self._config.workspace_path,
             wikis_dir_name=wikis_dir_name(self._config),
             timezone_name=config.agents.defaults.timezone or None,
             cron=self._cron,
+            migrate_legacy=migrate_legacy,
         )
 
     async def _run_update_check(self, agent: "CronCapableAgent") -> str | None:
