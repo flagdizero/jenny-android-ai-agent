@@ -548,6 +548,21 @@ def test_the_primary_button_is_filled_and_there_is_only_one() -> None:
     )
 
 
+def test_no_plain_rule_after_the_modifier_takes_its_fill_back() -> None:
+    """Un secondo blocco ``.settings-btn-add`` dopo ``.settings-btn-full``, a pari
+    specificità, si riprendeva sfondo, colore e display: «Aggiungi provider»
+    usciva grigio come le azioni secondarie."""
+    full = re.search(r"^\.settings-btn-full \{", CSS, re.M)
+    assert full
+    later = CSS[full.end():]
+    for m in re.finditer(r"^\.settings-btn-add(:hover)? \{(.*?)\}", later, re.S | re.M):
+        props = {d.split(":", 1)[0].strip() for d in m.group(2).split(";") if ":" in d}
+        assert not props & {"background", "color", "display"}, (
+            f".settings-btn-add{m.group(1) or ''} dopo il modificatore: {sorted(props)}"
+        )
+    assert len(re.findall(r"^\.settings-btn-add \{", CSS, re.M)) == 1, "un blocco solo"
+
+
 # ── Terzo giro: dettagli ─────────────────────────────────────────────────────
 
 

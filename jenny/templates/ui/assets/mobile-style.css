@@ -5915,14 +5915,27 @@ dialog.image-lightbox::backdrop { background: transparent; }
   cursor: pointer;
   transition: background 0.25s cubic-bezier(.25,.1,.25,1), border-color 0.25s cubic-bezier(.25,.1,.25,1), box-shadow 0.25s cubic-bezier(.25,.1,.25,1), transform 0.25s cubic-bezier(.34,1.56,.64,1);
   margin-top: 4px;
+  background: var(--overlay);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+
+.settings-btn-add:hover {
+  background: var(--overlay-strong);
+  color: var(--text);
+  transform: scale(1.03);
+}
+.settings-btn-add:active { transform: scale(0.97); }
 
 /* Il bottone principale di un gruppo: pieno d'accento, a tutta larghezza.
    Modificatore e non sostituzione di `.settings-btn-add`: gli altri cinque usi
    (genera chiave, verifica, copia, crea istantanea, aggiungi host) sono azioni
    secondarie, e sei bottoni pieni sulla stessa pagina non ne fanno risaltare
    nessuno. `--on-accent` e non il bianco: con un accento chiaro (Chanel) il
-   bianco su bianco non si legge. */
+   bianco su bianco non si legge. Dopo `.settings-btn-add` e il suo `:hover`:
+   a pari specificita' vince l'ultima, e qui deve vincere il pieno. */
 .settings-btn-full {
   width: 100%;
   min-height: 38px;
@@ -5938,22 +5951,6 @@ dialog.image-lightbox::backdrop { background: transparent; }
   gap: 6px;
 }
 .settings-btn-full:active { opacity: .85; }
-
-
-.settings-btn-add {
-  background: var(--overlay);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.settings-btn-add:hover {
-  background: var(--overlay-strong);
-  color: var(--text);
-  transform: scale(1.03);
-}
-.settings-btn-add:active { transform: scale(0.97); }
 
 
 /* Bottone segmented condiviso (lingua, taglia mascotte, ...): in lista
