@@ -299,7 +299,10 @@ def test_only_our_open_chat_clears_the_alerts() -> None:
     assert "getStringExtra(EXTRA_OPEN_CHAT_TOKEN)" in check
     assert "MessageDigest.isEqual(" in check
     token = _code_only(_fun_body(kotlin, "openChatToken"))
-    assert "SecureRandom()" in token and "Context.MODE_PRIVATE" in token
+    assert "SecureRandom()" in token and "JennyPrefs.of(context)" in token
+    # Le preferenze dell'app sono private (``JennyPrefs``).
+    prefs = read_source("JennyPrefs")
+    assert "Context.MODE_PRIVATE" in prefs
     for fun in ("onNewIntent", "onCreate"):
         body = _code_only(_fun_body(kotlin, fun))
         assert "isOurOpenChat(this, intent)" in body, f"{fun} non controlla il gettone"

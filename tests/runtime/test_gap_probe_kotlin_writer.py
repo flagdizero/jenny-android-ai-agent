@@ -22,7 +22,9 @@ def test_watchdog_writes_both_probe_keys() -> None:
     assert f'"{gap_history.PREF_PROBE_VALUE}"' in source
     assert f'"{gap_history.PREF_PROBE_AT}"' in source
     assert "KEY_PROBE_VALUE" in body and "KEY_PROBE_AT" in body
-    assert f'"{gap_history.PREFS_NAME}"' in source
+    prefs = read_source(ANDROID_SRC / "JennyPrefs.kt")
+    assert f'const val NAME = "{gap_history.PREFS_NAME}"' in prefs
+    assert "JennyPrefs.of(" in source
 
 
 def test_service_takes_the_probe_before_the_new_heartbeat() -> None:

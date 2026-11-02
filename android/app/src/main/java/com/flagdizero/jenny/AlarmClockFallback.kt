@@ -55,7 +55,6 @@ object AlarmClockFallback {
 
     /** Stesso file di preferenze di `Watchdog` e `MainActivity`: una sola
      *  `SharedPreferences` per app, chiavi nuove e basta. */
-    private const val PREFS_NAME = "jenny"
     private const val KEY_ENABLED = "alarmClockFallbackEnabled"
 
     /** 8 ore ≈ 3 risvegli al giorno. Vedi il KDoc della classe per il perché
@@ -143,6 +142,5 @@ object AlarmClockFallback {
         }
     }
 
-    private fun prefs(appContext: Context) =
-        appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs(appContext: Context) = JennyPrefs.of(appContext)
 }

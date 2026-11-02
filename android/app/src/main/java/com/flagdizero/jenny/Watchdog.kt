@@ -38,10 +38,7 @@ object Watchdog {
      *  `cancel_wake` da Python non può smontare la catena. */
     const val REQUEST_CODE = 9002
 
-    /** Stesso file di preferenze di MainActivity: una sola `SharedPreferences`
-     *  per app, chiavi nuove e basta. Due file separati sarebbero due lock e
-     *  due punti da ricordare al momento di un wipe. */
-    private const val PREFS_NAME = "jenny"
+    // Le chiavi stanno nel file di preferenze dell'app (`JennyPrefs`).
     private const val KEY_ENABLED = "watchdogEnabled"
     private const val KEY_INTERVAL_MIN = "watchdogIntervalMin"
     private const val KEY_HEARTBEAT_MS = "gatewayHeartbeatMs"
@@ -273,6 +270,5 @@ object Watchdog {
         }
     }
 
-    private fun prefs(appContext: Context) =
-        appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs(appContext: Context) = JennyPrefs.of(appContext)
 }

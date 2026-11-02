@@ -81,7 +81,6 @@ class WakeReceiver : BroadcastReceiver() {
 
         /** Stesso file di preferenze di `Watchdog` e `AlarmClockFallback`: una
          *  sola `SharedPreferences` per app, chiavi nuove e basta. */
-        private const val PREFS_NAME = "jenny"
         private const val KEY_EXACT_ALARMS_GRANTED = "exactAlarmsGranted"
 
         /** Valore che significa "non l'ho mai guardato": distinto sia da
@@ -188,7 +187,6 @@ class WakeReceiver : BroadcastReceiver() {
             }
         }
 
-        private fun prefs(appContext: Context) =
-            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        private fun prefs(appContext: Context) = JennyPrefs.of(appContext)
     }
 }
