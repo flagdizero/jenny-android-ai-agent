@@ -14,14 +14,21 @@ import re
 from support.js_harness import ASSETS, function, requires_node, run_js
 
 DOM_JS = (ASSETS / "shared" / "dom.js").read_text(encoding="utf-8")
-EXEMPT = {"home-plan.js"}
+EXEMPT = {"home-plan.js", "shared/place-card.js", "shared/dom.js"}
 
 
-def test_no_home_module_keeps_its_own_copy() -> None:
+def _modules():
+    for pattern in ("home-*.js", "mobile-*.js", "shared/*.js"):
+        yield from ASSETS.glob(pattern)
+
+
+def test_no_module_keeps_its_own_copy() -> None:
+    """Della casa, dell'officina e dei moduli condivisi: anche un metodo
+    (``_icon(name)``) che rifà ``icon()`` e' una copia."""
     copies = [
-        f.name for f in ASSETS.glob("home-*.js")
-        if f.name not in EXEMPT
-        and re.search(r"(?m)^(?:function (?:el|button)\(|const (?:el|icon) = )",
+        str(f.relative_to(ASSETS)) for f in _modules()
+        if str(f.relative_to(ASSETS)) not in EXEMPT
+        and re.search(r"(?m)^(?:function (?:el|button|icon)\(|const (?:el|icon|button) = |  _icon\()",
                       f.read_text(encoding="utf-8"))
     ]
     assert copies == []

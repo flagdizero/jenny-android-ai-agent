@@ -30,7 +30,7 @@ import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { PinnedDeck } from './home-board-deck.js';
 import { openPhotoViewer } from './home-photo-viewer.js';
-import { button, el } from './shared/dom.js';
+import { button, el, icon } from './shared/dom.js';
 
 /* Il lato lungo di una foto mandata al server: il telefono ne fa di 4000 px, e
    in un cassetto largo 590 ne servono meno di un terzo. */
@@ -271,9 +271,7 @@ export class DrawerPhotos {
     list.appendChild(el('p', 'home-notes-sub', `${this.title} · ${i18n.t('board.photos.hint')}`));
     const grid = el('div', 'home-photos-grid');
     const add = button('home-photos-new', '', () => this.compose());
-    const icon = el('i', 'ti ti-camera-plus');
-    icon.setAttribute('aria-hidden', 'true');
-    add.append(icon, el('span', '', i18n.t('board.photos.new')));
+    add.append(icon('ti-camera-plus'), el('span', '', i18n.t('board.photos.new')));
     grid.appendChild(add);
     for (const photo of this.photos) grid.appendChild(this._tile(photo));
     list.appendChild(grid);
@@ -334,16 +332,10 @@ export class DrawerPhotos {
     return '';
   }
 
-  _icon(name) {
-    const icon = el('i', `ti ti-${name}`);
-    icon.setAttribute('aria-hidden', 'true');
-    return icon;
-  }
-
   /** Un comando della colonna accanto alla polaroid: icona e parole. */
   _act(className, iconName, text, onClick) {
     const b = button(`home-photos-act${className ? ` ${className}` : ''}`, '', onClick);
-    b.append(this._icon(iconName), el('span', '', text));
+    b.append(icon(`ti-${iconName}`), el('span', '', text));
     return b;
   }
 
@@ -362,11 +354,11 @@ export class DrawerPhotos {
       const i = this.photos.indexOf(photo);
       const go = (k) => () => this._show({ openId: this.photos[k].id });
       const prev = button('home-photos-step', '', go(i - 1));
-      prev.appendChild(this._icon('chevron-left'));
+      prev.appendChild(icon('ti-chevron-left'));
       prev.setAttribute('aria-label', i18n.t('board.photos.prev'));
       prev.disabled = i === 0;
       const next = button('home-photos-step', '', go(i + 1));
-      next.appendChild(this._icon('chevron-right'));
+      next.appendChild(icon('ti-chevron-right'));
       next.setAttribute('aria-label', i18n.t('board.photos.next'));
       next.disabled = i === this.photos.length - 1;
       const pager = el('span', 'home-photos-pager');
@@ -390,7 +382,7 @@ export class DrawerPhotos {
     shot.appendChild(img);
     if (photo && !editing) {
       shot.setAttribute('aria-label', i18n.t('board.photos.full'));
-      shot.appendChild(el('span', 'home-photos-pol-full')).appendChild(this._icon('arrows-maximize'));
+      shot.appendChild(el('span', 'home-photos-pol-full')).appendChild(icon('ti-arrows-maximize'));
     }
     const cap = el('div', 'home-photos-pol-cap');
     if (editing) {
