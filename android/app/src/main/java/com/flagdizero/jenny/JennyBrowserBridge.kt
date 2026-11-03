@@ -68,6 +68,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
         private const val PROFILE_NAME = "jenny-browser-session"
         private const val SETTLE_QUIET_MS = 400L
+        private const val NOT_STARTED = "the browser did not open: the page never started loading"
 
         /**
          * Il cancello di [open] e di [evaluate]: chi tocca la pagina (il main
@@ -726,12 +727,15 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         }
         if (!done.await(timeoutSeconds, TimeUnit.SECONDS)) {
             if (gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
-                return """{"error":"evaluateJavascript timed out after ${timeoutSeconds}s: the page was not touched"}"""
+                return errorJson("evaluateJavascript timed out after ${timeoutSeconds}s: the page was not touched")
             }
             // Il cancello l'ha gia' preso il main: lo script e' partito, e un
             // `act` puo' aver cliccato. Dirlo, invece di un «timeout» che
             // suona come «non e' successo niente».
-            return """{"error":"evaluateJavascript timed out after ${timeoutSeconds}s: the script started without answering, the page may have changed"}"""
+            return errorJson(
+                "evaluateJavascript timed out after ${timeoutSeconds}s: " +
+                    "the script started without answering, the page may have changed",
+            )
         }
         return out.get()
     }
@@ -749,7 +753,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     /** Apre [url] e aspetta che la pagina si sia posata. */
     fun open(url: String, timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS): String {
         val uri = Uri.parse(url)
-        if (isBlockedLiteral(uri)) return """{"error":"address not allowed"}"""
+        if (isBlockedLiteral(uri)) return errorJson("address not allowed")
         lastBlocked.set(null)
         // Un browser_open e' un atto esplicito: il perimetro si rifa' **dopo**,
         // sull'indirizzo dove la pagina si e' posata davvero. Fino ad allora il
@@ -804,17 +808,17 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         // `loadUrl` che solleva quando questo thread sta gia' aspettando.
         if (!started && gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
             openInFlight.set(false)
-            return """{"error":"the browser did not open: the page never started loading"}"""
+            return errorJson(NOT_STARTED)
         }
         val settled = awaitSettled(timeoutSeconds)
         openInFlight.set(false)
         if (gate.get() == GATE_FAILED) {
-            return """{"error":"the browser did not open: the page never started loading"}"""
+            return errorJson(NOT_STARTED)
         }
         lastBlocked.getAndSet(null)?.let {
-            return """{"error":${quote(describeBlock(it))}}"""
+            return errorJson(describeBlock(it))
         }
-        lastError.get()?.let { return """{"error":${quote(it)}}""" }
+        lastError.get()?.let { return errorJson(it) }
         val (u, t) = currentUrlAndTitle()
         // Il recinto si pianta dove si e' finiti, non dove si era chiesto, e
         // solo qui: la pagina nuova si e' posata. Senza un host (lettura
@@ -858,4 +862,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     }
 
     private fun quote(s: String): String = org.json.JSONObject.quote(s)
+
+    /** `{"error":"…"}`, la risposta che Python legge come un fallimento. */
+    private fun errorJson(message: String): String = """{"error":${quote(message)}}"""
 }
