@@ -578,6 +578,17 @@ Searches the notes taken on the personal conversation: one entry per stretch tha
 - A [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks) line is tagged with where it comes from and who said it (`(notebook film, the user said)`); opened, it also shows the journal lines around the one it copies.
 - Scope `core` + `orchestrator`.
 
+### recall_chat
+
+Searches the exact words of past chats: what you wrote and what Jenny answered, as the chat showed them, back to the first conversation. For what a summary loses — a number, a name, a link, the exact wording — and for what never reached the notes.
+
+- `query`: words in Italian and English; each word also matches longer words that start with it ("vet" finds "veterinario"), regardless of accents and case. The best exchanges come first, each with its date, its chat and a cursor, the matching words in brackets. No match is never reported as "never said".
+- `cursors` opens exchanges in full, with the one before and the one after.
+- It reads the chats' own record, not the model's history: your messages (also those from the floating mascot, Telegram and a notification reply) and Jenny's answers; not her reasoning, not tool results. An exchange still in progress is searchable once it ends.
+- From the personal chat it searches every chat, notebooks included; inside a notebook only that notebook's chat — the same boundary as `recall_history`, for the same reason.
+- The words live in a search index (`index.sqlite`, SQLite FTS5) next to the state, rebuilt from the chats whenever it is missing or behind; it is not in the backup or in snapshots.
+- Scope `core` + `orchestrator`.
+
 ### journal_append
 
 Appends one line to a notebook's working journal (`raw/journal/<today>.md`) — the notebook of the conversation, or, from the personal chat, the one named in `notebook` — and leaves a short copy of it in the [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks).

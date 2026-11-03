@@ -48,7 +48,7 @@ import { Flower } from './home-flower.js';
 export const FAMILY_BY_TOOL = {
   // Legge: guarda qualcosa che gia' esiste, senza toccarlo.
   read_file: 'read', list_dir: 'read', get_source: 'read', recall: 'read',
-  recall_history: 'read', memory: 'read', ui_view: 'read', my: 'read',
+  recall_history: 'read', recall_chat: 'read', memory: 'read', ui_view: 'read', my: 'read',
   subagent_status: 'read', list_exec_sessions: 'read', update_status: 'read',
   ssh_hosts: 'read', get_recent_logs: 'read',
   // Il quaderno a colpo d'occhio (check, map, read_many): quasi sempre letture.

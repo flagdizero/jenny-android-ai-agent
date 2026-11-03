@@ -134,7 +134,7 @@ Tools are **explicitly registered**, not discovered by scanning the filesystem. 
 | 11 | `journal.py` | `JournalAppendTool`, `SuggestNotebookTool` | Appends one line to the project's working journal (`raw/journal/<today>.md`), and offers to move a personal-chat conversation into one of your notebooks. No config toggle: always registered |
 | 12 | `app_tool.py` | `AppTool`, `AppBuildTool`, `AppPublishTool` | The `app` tool, one class per scope so the three never meet in one registry: `core`, the `app-builder` subagent's `draft`/`edit`/`set` (scope `apps`), and the orchestrator's `publish`/`place` |
 | 13 | `self.py` | *(none — see below)* | Declares `MyTool` but registers it manually, not through `TOOLS` |
-| 14 | `memory_recall.py` | `MemoryRecallTool`, `HistoryRecallTool` | Search the memory archive (`recall`) and the notes taken on past conversation (`recall_history`). `core` + `orchestrator` only |
+| 14 | `memory_recall.py` | `MemoryRecallTool`, `HistoryRecallTool`, `ChatRecallTool` | Search the memory archive (`recall`), the notes taken on past conversation (`recall_history`) and the exact words of past chats (`recall_chat`, over `webui/chat_index.py`). `core` + `orchestrator` only |
 | 15 | `search.py` | `FindFilesTool`, `GrepTool` | Filename and content search inside the workspace |
 | 16 | `message.py` | `MessageTool` | Sends a proactive message (with attachments/buttons) outside the current turn |
 | 17 | `nothing_to_report.py` | `NothingToReportTool` | Lets a silent scheduled run declare that there is nothing for the user to see, instead of sending an empty message. `core` + `orchestrator` |

@@ -16,6 +16,8 @@ le stesse regole — a file chiusi, idempotente, il vecchio tenuto da parte.
   quei file non ci sono più. Un annulla rimasto a metà verrebbe applicato a file
   che non ha mai visto. Con lui vanno i piani (``plan.store``): un piano vive
   del suo diario, e non deve restare a promettere un ritorno che non c'è più.
+- ``index.sqlite``, l'indice delle chat, si cancella anche lui: è derivato dai
+  verbali, e si rifà da quelli ripristinati (``webui.chat_index.reconcile``).
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from jenny.snapshot.locations import STAGED_DB_DIR_NAME, db_dir_for_runtime_root
 
 STATE_FILE = "state.sqlite"
 UNDO_FILE = "undo.sqlite"
+INDEX_FILE = "index.sqlite"
 UNDO_OBJECTS_DIR_NAME = "undo-objects"
 PRE_RESTORE_SUFFIX = ".pre-restore"
 # I file accanto a un database in WAL: vanno e vengono col database.
@@ -139,6 +142,7 @@ def apply_staged(runtime_root: Path) -> bool:
         logger.info("State database restored from the backup")
     shutil.rmtree(staged_db_dir(runtime_root), ignore_errors=True)
     reset_undo(runtime_root)
+    reset_index(runtime_root)
     return swapped
 
 
@@ -149,6 +153,13 @@ def reset_undo(runtime_root: Path) -> None:
     undo.unlink(missing_ok=True)
     _drop_sidecars(undo)
     shutil.rmtree(live_dir / UNDO_OBJECTS_DIR_NAME, ignore_errors=True)
+
+
+def reset_index(runtime_root: Path) -> None:
+    """L'indice delle chat da zero: si rifà dai verbali ripristinati (``webui.chat_index``)."""
+    index = db_dir_for_runtime_root(Path(runtime_root)) / INDEX_FILE
+    index.unlink(missing_ok=True)
+    _drop_sidecars(index)
 
 
 def sweep_pre_restore(runtime_root: Path, *, max_age_days: int = 7) -> bool:

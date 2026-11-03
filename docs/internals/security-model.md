@@ -267,7 +267,8 @@ refactor.
   of a project shows the personal history. The other direction is open by design: your
   identity (`SOUL.md`, `USER.md`) travels into every project, and `recall_history`, called from
   the personal chat, can read the journals of every project, including entries that are never
-  shown in any prompt. Personal is not secret from a project, and a project is not secret from
+  shown in any prompt; `recall_chat`, from the personal chat, searches the exact words of every
+  project's chat, and from a project only that project's. Personal is not secret from a project, and a project is not secret from
   the personal chat. See [Memory](../using/memory.md).
 - **The read-only turn** is an instruction backed by tool refusals, not a containment control:
   code in `python_exec` that starts a raw thread escapes it, together with the workspace path

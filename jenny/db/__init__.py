@@ -10,6 +10,9 @@ tool del modello):
 - ``undo.sqlite`` — il diario dell'annulla (``agent.write_journal``) e i piani
   che ci lavorano sopra (``plan.store``). Solo sul telefono: non va nel backup
   e si svuota a un ripristino, piani compresi.
+- ``index.sqlite`` — l'indice di ricerca delle chat (``webui.chat_index``).
+  Derivato dai verbali: non va nel backup, un ripristino lo cancella, e si
+  rifà da solo.
 
 Restano file, per scelta: ``config.json`` (lo legge anche Kotlin), le pagine e
 la bacheca dei quaderni, ``MEMORY.md``/``SOUL.md``/``USER.md`` e gli appunti, le
@@ -46,7 +49,8 @@ __all__ = [
 
 STATE = "state"
 UNDO = "undo"
-DATABASE_NAMES = (STATE, UNDO)
+INDEX = "index"
+DATABASE_NAMES = (STATE, UNDO, INDEX)
 
 _OPEN: dict[Path, Database] = {}
 _GUARD = threading.Lock()

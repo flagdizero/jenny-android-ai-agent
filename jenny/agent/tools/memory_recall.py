@@ -620,4 +620,192 @@ class HistoryRecallTool(_RecallTool):
         return header + "\n\n" + "\n".join(pages[page - 1])
 
 
-TOOLS = [MemoryRecallTool, HistoryRecallTool]
+# ---------------------------------------------------------------------------
+# recall_chat: le parole esatte dette in chat
+# ---------------------------------------------------------------------------
+#
+# Il terzo posto dove ricordare, dopo i fatti (``recall``) e gli appunti
+# (``recall_history``): le parole della chat come la WebUI le ha mostrate,
+# cercate nell'indice di ``webui.chat_index``. Serve per quel che un riassunto
+# perde — un numero, un nome, un link, la frase precisa — e per quel che non è
+# finito negli appunti. Come Hermes (``session_search``), il prompt dice di
+# cercare qui prima di chiedere all'utente di ripetere.
+#
+# **Il recinto è quello di ``recall_history``**: dalla chat di un quaderno si
+# vede solo quella chat, perché una sessione di progetto scrive nel progetto
+# (pagine, diario, a volte un repository pubblico) e la chat personale non ci
+# deve finire. Dalla chat personale si cerca in tutte: è lo stesso utente.
+
+_CHAT_HITS = 40
+_CHAT_TURN_MAX_CHARS = 12_000
+_CHAT_USER_LINE_CHARS = 200
+_CHAT_MESSAGE_MAX_CHARS = 2_000
+
+
+def _chat_label(key: str) -> str:
+    from jenny.session.keys import project_name, webui_chat_id
+
+    name = project_name(webui_chat_id(key))
+    return f"notebook {name}" if name else "personal chat"
+
+
+def _chat_when(at: Any) -> str:
+    from datetime import datetime
+
+    if not isinstance(at, int) or isinstance(at, bool):
+        return "date unknown"
+    return datetime.fromtimestamp(at / 1000).strftime("%Y-%m-%d %H:%M")
+
+
+def _chat_cursor(key: str, turn: int) -> str:
+    return f"{turn}@{key}"
+
+
+def _parse_chat_cursor(cursor: str) -> tuple[str, int] | None:
+    turn, _, key = str(cursor).strip().partition("@")
+    try:
+        return key, int(turn)
+    except ValueError:
+        return None
+
+
+@tool_parameters(
+    tool_parameters_schema(
+        query=ArraySchema(StringSchema("A word to search for"), description=_QUERY_DESCRIPTION),
+        cursors=ArraySchema(
+            StringSchema("Cursor of an exchange from a search, e.g. '412@websocket:default'"),
+            description="Open these exchanges in full, with the one before and after.",
+        ),
+    )
+)
+class ChatRecallTool(_RecallTool):
+    """Cerca le parole dette in chat, e apre gli scambi che il modello ha riconosciuto."""
+
+    @property
+    def name(self) -> str:
+        return "recall_chat"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Search the exact words of past chats with the user: what they wrote and what you "
+            "answered, as the chat showed them, back to the first conversation. Pass `query` "
+            "with words in both Italian and English (each word also matches longer words that "
+            "start with it); you get the matching exchanges, best first, each with its date, "
+            "its chat and a cursor. Call it again with `cursors` to read those exchanges in "
+            "full. Use it for what notes lose — a number, a name, a link, the exact wording — "
+            "or when recall and recall_history found nothing, and before asking the user to "
+            "repeat something they take for granted. In a notebook's chat it searches only that "
+            "notebook's chat."
+        )
+
+    async def execute(
+        self,
+        query: list[str] | None = None,
+        cursors: list[str] | None = None,
+        **kwargs: Any,
+    ) -> str:
+        import asyncio
+
+        keys = self._keys()
+        if cursors:
+            return await asyncio.to_thread(self._open, cursors, keys)
+        if query:
+            return await asyncio.to_thread(self._search, query, keys)
+        return "Pass `query` with the words to look for, or `cursors` from a search to open."
+
+    def _keys(self) -> list[str] | None:
+        """Le chat che questo turno può leggere: ``None`` vuol dire tutte."""
+        from jenny.session.keys import project_session_key, webui_transcript_key
+
+        scoped = current_tool_workspace(self._root).project_path
+        if scoped is None:
+            return None
+        try:
+            same = Path(scoped).resolve() == self._root.resolve()
+        except OSError:
+            same = False
+        if same:
+            return None
+        return [webui_transcript_key(project_session_key(Path(scoped).name))]
+
+    def _search(self, query: list[str], keys: list[str] | None) -> str:
+        from jenny.webui import chat_index
+
+        terms = query_terms(query)
+        if not terms:
+            return "The query has no word of three letters or more to search for."
+        total, hits = chat_index.search(self._root, terms, keys=keys, limit=_CHAT_HITS)
+        if not hits:
+            return _NO_MATCH.format(terms=", ".join(terms)).replace(
+                "or browse the list without a query", "or try recall_history for the notes")
+        by_turn: dict[tuple[str, int], list[Any]] = {}
+        for hit in hits:
+            by_turn.setdefault((hit.key, hit.turn), []).append(hit)
+        asked: dict[tuple[str, int], str] = {}
+        for key in {k for k, _t in by_turn}:
+            turns = [t for k, t in by_turn if k == key]
+            for text in chat_index.turn_texts(self._root, key, turns):
+                if text.role == chat_index.USER:
+                    asked.setdefault((key, text.turn), text.text)
+        blocks: list[str] = []
+        used = 0
+        for (key, turn), found in by_turn.items():
+            lines = [f"[{_chat_cursor(key, turn)}] {_chat_when(found[0].at)}, {_chat_label(key)}"]
+            if (key, turn) in asked and not any(h.role == chat_index.USER for h in found):
+                lines.append(f"  user: {clip(asked[(key, turn)], _CHAT_USER_LINE_CHARS)}")
+            for hit in found:
+                who = "user" if hit.role == chat_index.USER else "you"
+                lines.append(f"  {who}: {hit.snippet}")
+            block = "\n".join(lines)
+            if blocks and used + len(block) > _INDEX_MAX_CHARS:
+                break
+            blocks.append(block)
+            used += len(block)
+        header = (
+            f"{total} messages match {', '.join(terms)}; the best {len(hits)} are in "
+            f"{len(by_turn)} exchanges, best first, matching words in [brackets]. Call "
+            "recall_chat again with the cursors you want in full."
+        )
+        if len(blocks) < len(by_turn):
+            header += f" Only the first {len(blocks)} exchanges fit here."
+        return header + "\n\n" + "\n\n".join(blocks)
+
+    def _open(self, cursors: list[str], keys: list[str] | None) -> str:
+        from jenny.webui import chat_index
+
+        parts: list[str] = []
+        used = 0
+        bad: list[str] = []
+        for raw in cursors:
+            parsed = _parse_chat_cursor(raw)
+            if parsed is None or (keys is not None and parsed[0] not in keys):
+                bad.append(str(raw))
+                continue
+            key, turn = parsed
+            texts = chat_index.turn_texts(self._root, key, [turn - 1, turn, turn + 1])
+            if not any(t.turn == turn for t in texts):
+                bad.append(str(raw))
+                continue
+            lines = [f"[{_chat_cursor(key, turn)}] {_chat_label(key)}, with the exchange "
+                     "before and after:"]
+            for text in texts:
+                who = "user" if text.role == chat_index.USER else "you"
+                mark = " <<" if text.turn == turn else ""
+                lines.append(f"{_chat_when(text.at)} {who}{mark}: "
+                             f"{clip(text.text, _CHAT_MESSAGE_MAX_CHARS)}")
+            block = "\n".join(lines)
+            if parts and used + len(block) > _CHAT_TURN_MAX_CHARS:
+                parts.append("(stopped here: the rest would not fit in one answer — ask for "
+                             "fewer cursors)")
+                break
+            parts.append(block)
+            used += len(block)
+        if bad:
+            # Un cursore che non c'è si dice: tacerlo fa concludere che lo scambio non esiste.
+            parts.append(f"No exchange to open for {', '.join(bad)}: use the cursors a search "
+                         "of this chat returned.")
+        return "\n\n".join(parts)
+
+
+TOOLS = [MemoryRecallTool, HistoryRecallTool, ChatRecallTool]

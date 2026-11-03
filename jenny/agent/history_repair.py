@@ -61,6 +61,7 @@ COMPACTABLE_TOOLS = frozenset(
         "get_recent_logs",
         "get_source",
         "recall_history",
+        "recall_chat",
     }
 )
 # Quelli che fanno qualcosa oltre a leggere: il segnaposto non invita a

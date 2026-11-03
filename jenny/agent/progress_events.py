@@ -67,7 +67,8 @@ TOOL_FAMILIES: dict[str, str] = {
     # Legge: guarda qualcosa che gia' esiste, senza toccarlo.
     **dict.fromkeys(
         (
-            "read_file", "list_dir", "get_source", "recall", "recall_history", "memory",
+            "read_file", "list_dir", "get_source", "recall", "recall_history", "recall_chat",
+            "memory",
             "ui_view", "my", "subagent_status", "list_exec_sessions", "update_status",
             "ssh_hosts", "get_recent_logs", "notebook", "screen",
         ),

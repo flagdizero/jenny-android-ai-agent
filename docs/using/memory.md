@@ -127,6 +127,10 @@ You can also just ask Jenny to remember, change or forget something, but she doe
 
 You can search it yourself with the `python_exec` tool or by asking Jenny to `grep` it, if you ever want to see exactly what got archived. Jenny reads it herself with the `recall_history` tool, from the personal chat only (inside a project the tool refuses). She searches it by words (in Italian and English) or browses it a page at a time, over the archived months too. It covers **every** entry, not just the personal chat's: the journals of your projects (notebooks) are included, and so are entries hidden from the prompt with `prompt_visible=False` — such as the conversation `/new` just archived.
 
+### The exact words: `recall_chat`
+
+Notes and facts are summaries. When the detail is in what was actually written — the name you gave something, a number, a link — Jenny searches the chats themselves with `recall_chat`: your messages and her answers, back to the first conversation, by words in both languages. Before asking you to repeat something you take for granted, she looks there too. From the personal chat she searches every chat, notebooks included; inside a notebook, only that notebook's chat.
+
 ## What Jenny actually remembers when you open a new chat
 
 At the start of every conversation, Jenny's system prompt includes:
