@@ -32,7 +32,7 @@ import { escapeHtml } from './shared/utils.js';
 import { confirmDialog } from './shared/dialog.js';
 import { iconHtml } from './shared/dom.js';
 import {
-  runExportFlow, runImportFlow, runSnapshotRestore, backupNativeAvailable,
+  runExportFlow, runImportFlow, runSnapshotRestore, backupNativeAvailable, snapshotDetail,
 } from './shared/backup-flow.js';
 
 /* Quanti snapshot si vedono aprendo la storia: di solito si cerca «prima di
@@ -220,9 +220,7 @@ export class HomeBackup {
     const now = Date.now();
     const rows = shown.map((s) => {
       const when = snapshotWhen(s.created_at_ms, now);
-      const key = `backup.trigger.${s.trigger}`;
-      const trigger = i18n.tOr(key, s.trigger);
-      const detail = `${trigger}${s.label ? ` · ${s.label}` : ''} · ${s.file_count} ${i18n.t('backup.files')}`;
+      const detail = snapshotDetail(s);
       return `<button class="home-history-snap" type="button" data-snapshot="${escapeHtml(s.id)}" data-when="${escapeHtml(when)}">`
         + `<span>${escapeHtml(when)}<small>${escapeHtml(detail)}</small></span>`
         + `${iconHtml('restore')}</button>`;

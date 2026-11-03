@@ -2,7 +2,7 @@
 
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
-import { escapeHtml, showToast, sizeText } from './shared/utils.js';
+import { escapeHtml, showToast } from './shared/utils.js';
 import { copyWithToast } from './shared/reply.js';
 import { i18n, tr } from './shared/i18n.js';
 import { confirmDialog, detailDialog, formDialog } from './shared/dialog.js';
@@ -22,7 +22,7 @@ import {
 } from './shared/skills-view.js';
 /* Solo `runSnapshotRestore`: esportare e ripristinare da file sono in casa,
    e un import qui li rimetterebbe a portata di un bottone dimenticato. */
-import { runSnapshotRestore } from './shared/backup-flow.js';
+import { runSnapshotRestore, snapshotDetail } from './shared/backup-flow.js';
 import { CATALOG_NOTE_KEYS, ModelCatalogs, switchModel } from './shared/model-catalog.js';
 
 // Ripiego per `power.modes` quando il payload arriva da un gateway più vecchio
@@ -2525,12 +2525,10 @@ export class SettingsController {
     }
     listEl.innerHTML = snapshots.map(s => {
       const date = new Date(s.created_at_ms).toLocaleString(i18n.locale);
-      const trigger = i18n.tOr(`backup.trigger.${s.trigger}`, s.trigger);
-      const label = s.label ? ` · ${escapeHtml(s.label)}` : '';
       return `<button class="snapshot-row" data-snapshot="${escapeHtml(s.id)}" data-date="${escapeHtml(date)}"
         style="display:flex;flex-direction:column;align-items:flex-start;width:100%;gap:2px;padding:8px 10px;margin-bottom:6px;border:1px solid var(--border,rgba(128,128,128,.25));border-radius:8px;background:transparent;color:inherit;text-align:left">
-        <span style="font-size:13px">${escapeHtml(date)}${label}</span>
-        <span style="font-size:11px;color:var(--text-faint)">${escapeHtml(trigger)} · ${s.file_count} ${i18n.t('backup.files')} · ${(s.total_bytes == null ? '—' : sizeText(s.total_bytes, i18n.locale))}</span>
+        <span style="font-size:13px">${escapeHtml(date)}</span>
+        <span style="font-size:11px;color:var(--text-faint)">${escapeHtml(snapshotDetail(s, { size: true }))}</span>
       </button>`;
     }).join('');
     listEl.querySelectorAll('.snapshot-row').forEach(btn => {

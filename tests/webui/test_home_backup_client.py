@@ -41,6 +41,7 @@ from support.js_harness import (
 
 ROOM_JS = ASSETS / "home-backup.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
+BACKUP_FLOW_JS = ASSETS / "shared" / "backup-flow.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 I18N_DIR = ASSETS / "i18n"
 
@@ -82,6 +83,7 @@ const api = {
 const CONFIRM = { answer: true, asked: [] };
 async function confirmDialog(text) { CONFIRM.asked.push(text); return CONFIRM.answer; }
 async function runSnapshotRestore(id) { actions.push(`restore:${id}`); }
+__SNAPSHOT_DETAIL__
 __SNAPSHOT_WHEN__
 
 __WHEN_TEXT__
@@ -148,6 +150,7 @@ def _harness() -> str:
         .replace("__HISTORY_CLICK__", member(room, "_onHistoryClick"))
         .replace("__HISTORY_HTML__", member(room, "_historyHtml"))
         .replace("__SNAPSHOT_WHEN__", function(room, "snapshotWhen"))
+        .replace("__SNAPSHOT_DETAIL__", function(BACKUP_FLOW_JS.read_text(encoding="utf-8"), "snapshotDetail"))
         .replace("__PAINT__", member(room, "_paint"))
     )
 

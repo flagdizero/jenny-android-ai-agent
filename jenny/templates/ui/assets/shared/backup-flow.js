@@ -10,7 +10,7 @@
 
 import { api } from './api-client.js';
 import { i18n } from './i18n.js';
-import { showToast } from './utils.js';
+import { showToast, sizeText } from './utils.js';
 import { formDialog } from './dialog.js';
 
 // ── Callback dal nativo ─────────────────────────────────────────────────
@@ -98,6 +98,17 @@ export function restartApp() {
   // (SharedPreferences in restartApp → ?mode=chat nell'URL della WebView);
   // il localStorage non sopravvivrebbe al killProcess (persistenza asincrona).
   if (window.JennyNative?.restartApp) window.JennyNative.restartApp();
+}
+
+/** «manuale · prima di un ripristino · 42 file»: la riga sotto la data di uno
+ *  snapshot, la stessa in casa e in officina (che la scrivevano ciascuna a
+ *  modo suo). *size*: anche quanto pesa, dove c'e' posto (l'officina). */
+export function snapshotDetail(s, { size = false } = {}) {
+  const parts = [i18n.tOr(`backup.trigger.${s.trigger}`, s.trigger)];
+  if (s.label) parts.push(s.label);
+  parts.push(`${s.file_count} ${i18n.t('backup.files')}`);
+  if (size && s.total_bytes != null) parts.push(sizeText(s.total_bytes, i18n.locale));
+  return parts.join(' · ');
 }
 
 // ── Dialog passphrase ───────────────────────────────────────────────────

@@ -25,7 +25,8 @@ _NEIGHBORS = {
     "api-client.js": "export const api = { noteBackupExported: async () => {}, "
     "exportBackup: async () => ({ staged_path: '/s', suggested_filename: 'b.jbk' }) };\n",
     "i18n.js": "export const i18n = { t: (k) => k };\n",
-    "utils.js": "export const toasts = []; export function showToast(m) { toasts.push(m); }\n",
+    "utils.js": "export const toasts = []; export function showToast(m) { toasts.push(m); }\n"
+    "export const sizeText = (n) => `${n} B`;\n",
     # Le finestre qui non contano: si misura l'attesa del nativo.
     "dialog.js": "export function formDialog() { return Promise.resolve(null); }\n",
 }
