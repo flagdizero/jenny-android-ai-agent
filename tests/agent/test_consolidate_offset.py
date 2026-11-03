@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.manager import Session, SessionManager
@@ -487,21 +488,11 @@ class TestNewCommandArchival:
 
     @staticmethod
     def _make_loop(tmp_path: Path):
-        from jenny.agent.loop import AgentLoop
-        from jenny.bus.queue import MessageBus
         from jenny.providers.base import LLMResponse
 
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
+        provider = make_provider(bare=True)
         provider.estimate_prompt_tokens.return_value = (10_000, "test")
-        loop = AgentLoop(
-            bus=bus,
-            provider=provider,
-            workspace=tmp_path,
-            model="test-model",
-            context_window_tokens=1,
-        )
+        loop = make_loop(tmp_path, context_window_tokens=1, provider=provider)
         loop.provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok", tool_calls=[]))
         loop.tools.get_definitions = MagicMock(return_value=[])
         return loop
