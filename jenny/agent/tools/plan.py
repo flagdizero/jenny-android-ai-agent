@@ -121,11 +121,18 @@ class PlanProposeTool(PlanTool):
 
     @property
     def description(self) -> str:
+        # La prima frase dice quando NON si usa: dal 03/11/2026 il tool è nella
+        # lista a ogni turno delle chat dove si pianifica, e «voglio un piano» detto
+        # in chat lo faceva chiamare (sempre con Haiku) invece di proporre il
+        # quaderno o il tasto Piano.
         return (
-            "Propose a step-by-step plan for a big job in this chat. The user sees it "
-            "as a card with Approve and Review; nothing starts until they approve, and then "
-            "the code opens the steps one at a time. A new call replaces a plan that is "
-            "still only proposed. Call it once, then end your turn."
+            "Only in a planning turn, which the user starts with the Plan button (that turn's "
+            "message says so). Anywhere else the call is refused: if the user asks for a plan, "
+            "answer them, and tell them about the Plan button. In a planning turn: propose a "
+            "step-by-step plan for a big job in this chat. The user sees it as a card with "
+            "Approve and Review; nothing starts until they approve, and then the code opens "
+            "the steps one at a time. A new call replaces a plan that is still only proposed. "
+            "Call it once, then end your turn."
         )
 
     async def execute(
