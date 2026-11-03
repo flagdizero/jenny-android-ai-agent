@@ -5,7 +5,7 @@ corrente; apre ogni passo con un turno iniettato nella chat del quaderno
 (``agent/plan_step.md``: la lista con gli stati, il dettaglio del passo, le
 regole), e il modello lo chiude con un tool (``plan_step_done``,
 ``plan_step_skip``, ``plan_blocked``). Fra un passo e l'altro c'è il codice:
-conta i file del passo dai registri, aggiorna ``plan.json`` e apre il passo
+conta i file del passo dai registri, aggiorna il piano e apre il passo
 dopo, o si ferma se l'utente ha chiesto la pausa. Così Pausa e Ferma sono
 deterministiche, Jenny non può saltare o riordinare i passi, e «cosa ha fatto
 il passo 3» sono le righe dei registri scritte per quel passo.
@@ -26,8 +26,8 @@ Chi chiama il driver:
 Il driver non conosce ``AgentLoop``: gli parla attraverso :class:`PlanHost`
 (``LoopPlanHost`` in produzione, un finto nei test).
 
-Le scritture di ``plan.json`` passano dallo store (lock per piano, scrittura
-atomica); qui sopra un ``asyncio.Lock`` per sessione serializza le transizioni,
+Le scritture del piano passano dallo store (una transazione ciascuna); qui
+sopra un ``asyncio.Lock`` per sessione serializza le transizioni,
 perché una transizione è fatta di più passaggi (conti, scrittura, messaggio) che
 non devono intrecciarsi con quelli di un'altra — un Ferma toccato mentre il passo
 si chiude, per esempio.
@@ -487,7 +487,7 @@ class PlanDriver:
         # domanda dopo un cambio dell'indice, non a ogni scrittura.
         self._held_roots: dict[Path, str] | None = None
         # notebook → la sua pianificazione in corso: la copia in memoria di
-        # ``drafting.json`` (lo store è la fonte), per le domande sincrone di
+        # quella dello store (che è la fonte), per le domande sincrone di
         # ogni turno — il filtro dei tool la legge a ogni lettura del registro.
         self._drafting: dict[str, dict[str, Any]] = {}
         # Il loop su cui rientrano gli avvisi delle bozze, che arrivano anche

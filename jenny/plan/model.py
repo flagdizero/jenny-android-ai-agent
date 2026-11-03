@@ -1,12 +1,12 @@
 """Il modello di un piano a lista: dati, stati, transizioni, validazione.
 
 Puro, senza I/O: lo leggono lo store (che lo salva), il driver (che lo muove) e
-i tool del modello (che lo propongono). Lo stato di un piano vive **solo** in
-``plan.json``; questo modulo ne è la forma, e le regole che nessun chiamante
+i tool del modello (che lo propongono). Lo stato di un piano vive **solo** nel
+piano salvato (``store``); questo modulo ne è la forma, e le regole che nessun chiamante
 deve poter aggirare — quali stati seguono quali, che aspetto ha una proposta —
 stanno qui una volta sola invece che ripetute in ogni chiamante.
 
-Le chiavi sconosciute di ``plan.json`` si conservano (``extra``) e si
+Le chiavi sconosciute di un piano salvato si conservano (``extra``) e si
 riscrivono: una versione più vecchia dell'app che rilegge un piano scritto da
 una più nuova non deve cancellare quello che non capisce. È la stessa regola di
 ``config/store.py::mutate``.

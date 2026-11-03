@@ -14,7 +14,8 @@ le stesse regole — a file chiusi, idempotente, il vecchio tenuto da parte.
 - ``undo.sqlite`` e i suoi oggetti si cancellano a **ogni** ripristino: il
   diario dice come tornare indietro dai file di prima, e dopo un ripristino
   quei file non ci sono più. Un annulla rimasto a metà verrebbe applicato a file
-  che non ha mai visto.
+  che non ha mai visto. Con lui vanno i piani (``plan.store``): un piano vive
+  del suo diario, e non deve restare a promettere un ritorno che non c'è più.
 """
 
 from __future__ import annotations

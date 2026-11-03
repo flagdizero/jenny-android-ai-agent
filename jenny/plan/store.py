@@ -1,25 +1,20 @@
-"""Lo store dei piani: ``<runtime_root>/plans/<plan_id>/plan.json``.
+"""Lo store dei piani: righe di ``undo.sqlite``, accanto al diario dell'annulla.
 
-``plan.json`` è l'unica fonte dello stato di un piano: scheda, striscia,
-bollino e riga nel contesto di Jenny lo leggono, e solo questo modulo lo scrive.
-Le regole sono quelle di ``config/store.py::mutate`` e di ``board/store.py``:
+Il piano è l'unica fonte del suo stato: scheda, striscia, bollino e riga nel
+contesto di Jenny lo leggono, e solo questo modulo lo scrive. Le regole sono
+quelle di ``config/store.py::mutate``: **si rilegge dentro la transazione con
+cui si scrive** (:meth:`PlanStore.update`), così nessun chiamante salva una
+copia vecchia sopra una nuova; e **niente I/O lento nel callback**: i conti dai
+registri si fanno prima, qui si annotano.
 
-- **si rilegge dentro il lock con cui si scrive** (:meth:`PlanStore.update`),
-  così nessun chiamante salva una copia vecchia sopra una nuova;
-- **scrittura atomica** (``atomic_write``);
-- **niente I/O lento nel callback**: i conti dai registri si fanno prima, qui si annotano.
+**Perché in ``undo.sqlite`` e non nello stato che viaggia.** Un piano vive del
+suo diario («cosa ha fatto il passo», «torna a prima»), e il diario resta sul
+telefono e si svuota a ogni ripristino (``jenny/db/restore``): piani e diario
+spariscono insieme, e nessun piano resta a promettere un ritorno che non c'è
+più. Fino alla 2.x i piani stavano in ``<runtime_root>/plans/<id>/plan.json``;
+li importa ``jenny/db_migration/plans.py``.
 
-**I lock sono ``threading.Lock`` e le funzioni sincrone**, come la bacheca: i
-chiamanti async passano da ``asyncio.to_thread``, il corpo critico è un file
-piccolo, e un lock di thread non si lega a un event loop.
-
-Due livelli di lock. Uno **per piano** serializza le letture-modifica-scrittura
-di quel ``plan.json``. Uno **per store** serializza le operazioni che guardano
-più piani insieme — creare (la regola «al più un piano aperto per quaderno»),
-rinominare, cancellare, potare — e si prende sempre *prima* di quello del piano,
-mai dopo, così due operazioni non si aspettano a vicenda. La regola del piano
-aperto regge con il solo lock dello store perché l'unico modo di diventare
-aperto è nascere: nessuna transizione porta un piano chiuso ad aperto.
+Le funzioni sono sincrone: i chiamanti async passano da ``asyncio.to_thread``.
 """
 
 from __future__ import annotations
@@ -27,8 +22,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
-import shutil
-import threading
+import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -36,9 +30,10 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.db.database import Database
+from jenny.db.schema import Schema
 from jenny.plan.model import (
     CLOSED_STATUSES,
-    PLAN_FORMAT,
     RAN_STATUSES,
     Plan,
     PlanError,
@@ -50,11 +45,6 @@ from jenny.plan.model import (
 )
 from jenny.session.keys import project_session_key
 from jenny.snapshot.locations import plans_dir_for
-from jenny.utils.path import atomic_write
-
-PLAN_FILE_NAME = "plan.json"
-# Le pianificazioni in corso, una per quaderno (v. :meth:`PlanStore.drafting_update`).
-DRAFTING_FILE_NAME = "drafting.json"
 
 _PLAN_ID_RE = re.compile(r"\Ap_[0-9a-f]{12}\Z")
 
@@ -62,9 +52,8 @@ _PLAN_ID_RE = re.compile(r"\Ap_[0-9a-f]{12}\Z")
 def is_plan_id(value: object) -> bool:
     """*value* ha la forma di un id di piano: ``p_`` e 12 cifre esadecimali.
 
-    L'id arriva dalla WebUI (``plan.get {id}``) e finisce in un percorso che
-    :meth:`PlanStore.delete_for_notebook` e la potatura cancellano: uno che non
-    ne ha la forma non è un piano, come per ``is_snapshot_id``.
+    L'id arriva dalla WebUI (``plan.get {id}``): uno che non ne ha la forma
+    non è un piano, e non si cerca nemmeno.
     """
     return isinstance(value, str) and _PLAN_ID_RE.match(value) is not None
 
@@ -73,7 +62,7 @@ def slot_id(place: str) -> str:
     """L'id del posto (``nb:<nome>`` o ``personal``) da un id o da un nome di quaderno.
 
     Il driver passa sempre id; il nome nudo resta per chi chiede di un quaderno
-    (i test, la rinomina) e per le voci di ``drafting.json`` di prima dei posti.
+    (i test, la rinomina).
     """
     from jenny.plan.place import NOTEBOOK_PREFIX, PERSONAL
 
@@ -102,16 +91,6 @@ class PlanConflictError(PlanError):
         self.status = status
 
 
-_LOCKS: dict[str, threading.Lock] = {}
-_LOCKS_GUARD = threading.Lock()
-
-
-def _lock_for(path: Path) -> threading.Lock:
-    key = str(path.resolve(strict=False))
-    with _LOCKS_GUARD:
-        return _LOCKS.setdefault(key, threading.Lock())
-
-
 def _parse_iso(value: str) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(value)
@@ -120,82 +99,100 @@ def _parse_iso(value: str) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+SCHEMA = Schema(
+    "plans",
+    (
+        """
+        CREATE TABLE plans (
+          id TEXT PRIMARY KEY,
+          place TEXT NOT NULL,
+          notebook TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          version INTEGER NOT NULL,
+          updated_at TEXT NOT NULL,
+          data TEXT NOT NULL
+        );
+        CREATE INDEX plans_place ON plans(place);
+        CREATE TABLE plan_drafting (
+          slot TEXT PRIMARY KEY,
+          data TEXT NOT NULL
+        );
+        """,
+    ),
+)
+
+
 class PlanStore:
-    """I piani di un'installazione, uno per cartella sotto *plans_dir*."""
+    """I piani di un'installazione, righe di ``undo.sqlite``."""
 
     def __init__(self, plans_dir: Path, *, workspace: Path | None = None) -> None:
+        # ``plans_dir`` è dove stavano i piani prima del database: serve solo a
+        # trovare il workspace, accanto (``snapshot.locations``).
         self.plans_dir = Path(plans_dir)
-        # Il workspace dei registri dell'annulla (``plan.work``): accanto a
-        # ``plans/``, come lo mette ``snapshot.locations``.
+        # Il workspace dei registri dell'annulla (``plan.work``), e del
+        # database dove i piani stanno insieme a loro.
         self.workspace = Path(workspace) if workspace is not None else (
             self.plans_dir.parent / "workspace")
-        self._store_lock = _lock_for(self.plans_dir)
+        self._database: Database | None = None
 
     @classmethod
     def for_workspace(cls, workspace: Path) -> PlanStore:
         return cls(plans_dir_for(workspace), workspace=workspace)
 
-    # -- percorsi -----------------------------------------------------------
-
-    def plan_dir(self, plan_id: str) -> Path:
-        if not is_plan_id(plan_id):
-            raise PlanNotFoundError(f"no plan {str(plan_id)[:80]!r}")
-        return self.plans_dir / plan_id
-
-    def _plan_file(self, plan_id: str) -> Path:
-        return self.plan_dir(plan_id) / PLAN_FILE_NAME
-
     @property
-    def drafting_path(self) -> Path:
-        return self.plans_dir / DRAFTING_FILE_NAME
+    def _db(self) -> Database:
+        # Tenuto: il driver legge lo store a ogni turno. Uno chiuso (lo
+        # spegnimento, un test che chiude tutto) si riapre.
+        if self._database is None or self._database.closed:
+            from jenny import db
+
+            self._database = db.database_for_workspace(self.workspace, db.UNDO)
+            self._database.require(SCHEMA)
+        return self._database
 
     # -- pianificazioni in corso (``drafting``) -----------------------------
     #
     # **Una fonte sola, qui accanto ai piani**, e non nei metadati della
     # sessione ``project:<nome>``. Tre ragioni. Sopravvive a un riavvio come i
-    # piani, e con le stesse garanzie (lock, scrittura atomica). La legge
-    # ``plan.get`` anche senza agente, dallo store, come legge i piani: i
-    # metadati della sessione stanno nel ``SessionManager`` del loop, che le RPC
-    # non hanno. E segue il quaderno nei rinomini e nelle cancellazioni insieme
-    # ai suoi piani (:meth:`follow_rename`, :meth:`delete_for_notebook`),
-    # mentre i metadati di una sessione li riscrive il turno intero — un
-    # ripristino di checkpoint, un ``/new`` — senza sapere che c'è un piano in
-    # preparazione. Il driver ne tiene una copia in memoria come per l'indice
-    # dei piani, e la riscrive a ogni cambio.
+    # piani, e con le stesse garanzie. La legge ``plan.get`` anche senza
+    # agente, dallo store, come legge i piani: i metadati della sessione stanno
+    # nel ``SessionManager`` del loop, che le RPC non hanno. E segue il quaderno
+    # nei rinomini e nelle cancellazioni insieme ai suoi piani
+    # (:meth:`follow_rename`, :meth:`delete_for_notebook`), mentre i metadati di
+    # una sessione li riscrive il turno intero — un ripristino di checkpoint, un
+    # ``/new`` — senza sapere che c'è un piano in preparazione. Il driver ne
+    # tiene una copia in memoria come per l'indice dei piani, e la riscrive a
+    # ogni cambio.
 
-    def _read_drafting(self) -> dict[str, dict[str, Any]]:
-        try:
-            data = json.loads(self.drafting_path.read_text("utf-8"))
-        except FileNotFoundError:
-            return {}
-        except ValueError as exc:
-            # Un file rotto non ferma i piani: si riparte senza pianificazioni
-            # in corso, che è lo stato più innocuo (il prossimo messaggio è una
-            # chat normale).
-            logger.warning("Unreadable {}: {}", DRAFTING_FILE_NAME, exc)
-            return {}
-        entries = data.get("notebooks") if isinstance(data, dict) else None
-        if not isinstance(entries, dict):
-            return {}
-        return {
-            slot_id(str(name)): dict(entry)
-            for name, entry in entries.items()
-            if isinstance(entry, dict)
-        }
+    @staticmethod
+    def _read_drafting(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
+        entries: dict[str, dict[str, Any]] = {}
+        for row in conn.execute("SELECT slot, data FROM plan_drafting"):
+            try:
+                entry = json.loads(row["data"])
+            except ValueError:
+                logger.warning("Unreadable planning for {}", row["slot"])
+                continue
+            if isinstance(entry, dict):
+                entries[row["slot"]] = entry
+        return entries
 
-    def _write_drafting(self, entries: dict[str, dict[str, Any]]) -> None:
-        self.plans_dir.mkdir(parents=True, exist_ok=True)
-        atomic_write(
-            self.drafting_path,
-            json.dumps(
-                {"format": PLAN_FORMAT, "notebooks": entries}, ensure_ascii=False, indent=1
-            ),
+    @staticmethod
+    def _write_drafting(conn: sqlite3.Connection, slot: str, entry: dict[str, Any] | None) -> None:
+        if entry is None:
+            conn.execute("DELETE FROM plan_drafting WHERE slot = ?", (slot,))
+            return
+        conn.execute(
+            "INSERT INTO plan_drafting(slot, data) VALUES (?, ?) "
+            "ON CONFLICT(slot) DO UPDATE SET data = excluded.data",
+            (slot, json.dumps(entry, ensure_ascii=False)),
         )
 
     def drafting_all(self) -> dict[str, dict[str, Any]]:
         """``{posto: voce}`` delle pianificazioni in corso, scadute comprese."""
-        with _lock_for(self.drafting_path):
-            return self._read_drafting()
+        with self._db.reading() as conn:
+            return self._read_drafting(conn)
 
     def drafting_get(self, place: str) -> dict[str, Any] | None:
         return self.drafting_all().get(slot_id(place))
@@ -205,102 +202,122 @@ class PlanStore:
         place: str,
         fn: Callable[[dict[str, Any] | None], dict[str, Any] | None],
     ) -> dict[str, Any] | None:
-        """Rilegge la voce di *place* dentro il lock, le applica *fn*, riscrive.
+        """Rilegge la voce di *place* nella transazione, le applica *fn*, riscrive.
 
         *fn* riceve la voce (o ``None``) e ritorna quella nuova, o ``None`` per
-        toglierla. Come :meth:`update`: si rilegge dentro il lock con cui si
-        scrive, così un conto delle letture non ne cancella un altro.
+        toglierla. Come :meth:`update`: si rilegge dentro la transazione con cui
+        si scrive, così un conto delle letture non ne cancella un altro.
         """
         key = slot_id(place)
-        with _lock_for(self.drafting_path):
-            entries = self._read_drafting()
-            current = entries.get(key)
+        with self._db.write() as conn:
+            current = self._read_drafting(conn).get(key)
             result = fn(dict(current) if current is not None else None)
-            if result is None:
-                if current is None:
-                    return None
-                entries.pop(key, None)
-            else:
-                entries[key] = dict(result)
-            self._write_drafting(entries)
+            if result is None and current is None:
+                return None
+            self._write_drafting(conn, key, None if result is None else dict(result))
             return result
+
+    def drafting_remove(self, place: str) -> dict[str, Any] | None:
+        """Toglie la pianificazione di *place*; ritorna la voce che c'era, o ``None``."""
+        key = slot_id(place)
+        with self._db.write() as conn:
+            entry = self._read_drafting(conn).get(key)
+            if entry is not None:
+                self._write_drafting(conn, key, None)
+            return entry
 
     # -- lettura/scrittura di un piano --------------------------------------
 
-    def _read(self, plan_id: str) -> Plan:
-        path = self._plan_file(plan_id)
+    @staticmethod
+    def _check_id(plan_id: str) -> None:
+        if not is_plan_id(plan_id):
+            raise PlanNotFoundError(f"no plan {str(plan_id)[:80]!r}")
+
+    @staticmethod
+    def _parse(plan_id: str, raw: str) -> Plan:
         try:
-            data = json.loads(path.read_text("utf-8"))
-        except FileNotFoundError:
-            raise PlanNotFoundError(f"no plan {plan_id}") from None
+            data = json.loads(raw)
         except ValueError as exc:
             raise PlanFormatError(f"plan {plan_id}: {exc}") from exc
         plan = Plan.from_dict(data)
-        # Il file dice di essere un altro piano: non è sano, come un manifest
-        # di snapshot che non si chiama col suo id.
+        # La riga dice di essere un altro piano: non è sana.
         if plan.id != plan_id:
-            raise PlanFormatError(f"plan file {plan_id} says it is {plan.id[:80]!r}")
+            raise PlanFormatError(f"plan row {plan_id} says it is {plan.id[:80]!r}")
         return plan
 
-    def _write(self, plan: Plan) -> None:
-        atomic_write(
-            self._plan_file(plan.id),
-            json.dumps(plan.to_dict(), ensure_ascii=False, indent=1),
+    def _read(self, conn: sqlite3.Connection, plan_id: str) -> Plan:
+        self._check_id(plan_id)
+        row = conn.execute("SELECT data FROM plans WHERE id = ?", (plan_id,)).fetchone()
+        if row is None:
+            raise PlanNotFoundError(f"no plan {plan_id}")
+        return self._parse(plan_id, row["data"])
+
+    @staticmethod
+    def _write(conn: sqlite3.Connection, plan: Plan) -> None:
+        conn.execute(
+            "INSERT INTO plans(id, place, notebook, status, created_at, version, updated_at, data) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+            "place = excluded.place, notebook = excluded.notebook, status = excluded.status, "
+            "created_at = excluded.created_at, version = excluded.version, "
+            "updated_at = excluded.updated_at, data = excluded.data",
+            (plan.id, plan.place, plan.notebook, plan.status, plan.created_at, plan.version,
+             plan.updated_at, json.dumps(plan.to_dict(), ensure_ascii=False)),
         )
 
     def load(self, plan_id: str) -> Plan:
-        with _lock_for(self.plan_dir(plan_id)):
-            return self._read(plan_id)
+        with self._db.reading() as conn:
+            return self._read(conn, plan_id)
 
     def save(self, plan: Plan) -> Plan:
         """Scrive *plan* così com'è. Per cambiare uno stato si usa :meth:`update`."""
-        with _lock_for(self.plan_dir(plan.id)):
+        self._check_id(plan.id)
+        with self._db.write() as conn:
             plan.updated_at = now_iso()
-            self._write(plan)
+            self._write(conn, plan)
         return plan
 
     def update(self, plan_id: str, fn: Callable[[Plan], Plan | None]) -> Plan:
-        """Rilegge il piano dentro il lock, gli applica *fn* e lo riscrive.
+        """Rilegge il piano nella transazione, gli applica *fn* e lo riscrive.
 
         *fn* muta il piano (o ne ritorna uno nuovo); se solleva, non si scrive
-        niente. Deve essere veloce: il lock resta preso per tutta la sua durata.
+        niente. Deve essere veloce: la transazione resta aperta per tutta la
+        sua durata, e con lei la scrittura di chiunque altro sul database.
         """
-        with _lock_for(self.plan_dir(plan_id)):
-            plan = self._read(plan_id)
+        with self._db.write() as conn:
+            plan = self._read(conn, plan_id)
             result = fn(plan)
             if result is not None:
                 plan = result
             if plan.id != plan_id:
                 raise PlanError(f"update of {plan_id} returned plan {plan.id}")
             plan.updated_at = now_iso()
-            self._write(plan)
+            self._write(conn, plan)
             return plan
 
     # -- elenchi ------------------------------------------------------------
 
-    def list_all(self) -> list[Plan]:
-        """Tutti i piani leggibili, dal più recente. Uno illeggibile si salta con un avviso."""
+    def _list(self, conn: sqlite3.Connection, where: str = "", params: tuple = ()) -> list[Plan]:
         plans: list[Plan] = []
-        if not self.plans_dir.is_dir():
-            return plans
-        for entry in self.plans_dir.iterdir():
-            if not is_plan_id(entry.name) or not entry.is_dir():
-                continue
+        for row in conn.execute(f"SELECT id, data FROM plans {where}", params):
             try:
-                plans.append(self.load(entry.name))
-            except PlanNotFoundError:
-                continue
+                plans.append(self._parse(row["id"], row["data"]))
             except PlanFormatError as exc:
-                logger.warning("Skipping unreadable plan {}: {}", entry.name, exc)
+                logger.warning("Skipping unreadable plan {}: {}", row["id"], exc)
         plans.sort(key=lambda p: (p.created_at, p.version), reverse=True)
         return plans
 
+    def list_all(self) -> list[Plan]:
+        """Tutti i piani leggibili, dal più recente. Uno illeggibile si salta con un avviso."""
+        with self._db.reading() as conn:
+            return self._list(conn)
+
     def list_for_notebook(self, notebook: str) -> list[Plan]:
-        return [p for p in self.list_all() if p.notebook == notebook]
+        with self._db.reading() as conn:
+            return self._list(conn, "WHERE notebook = ?", (notebook,))
 
     def list_for_place(self, place: str) -> list[Plan]:
-        key = slot_id(place)
-        return [p for p in self.list_all() if p.place == key]
+        with self._db.reading() as conn:
+            return self._list(conn, "WHERE place = ?", (slot_id(place),))
 
     def open_plan_for(self, place: str) -> Plan | None:
         """Il piano aperto di un posto (un id, o il nome di un quaderno)."""
@@ -315,18 +332,21 @@ class PlanStore:
         """Scrive una proposta nuova per *place* (un id, o il nome di un quaderno).
 
         Se il quaderno ha già una proposta, la nuova ne è la versione seguente:
-        la vecchia diventa ``superseded`` nello stesso passaggio, e i passi
+        la vecchia diventa ``superseded`` nella stessa transazione, e i passi
         della nuova ricevono i tag (``new``/``moved``/``changed``) calcolati
         qui, dal codice. Se il quaderno ha un piano aperto che non è una
         proposta (in corsa, in pausa, bloccato), :class:`PlanConflictError`.
+        La regola «al più un piano aperto per posto» regge sulla transazione:
+        l'unico modo di diventare aperto è nascere.
         """
         from jenny.plan.place import place_from_id
 
         where = place_from_id(slot_id(place))
         if where is None:
             raise PlanError(f"no place {place!r}")
-        with self._store_lock:
-            current = self.open_plan_for(where.id)
+        with self._db.write() as conn:
+            current = next(
+                (p for p in self._list(conn, "WHERE place = ?", (where.id,)) if p.is_open), None)
             stamp = now_iso()
             plan = Plan(
                 id=new_plan_id(),
@@ -342,85 +362,55 @@ class PlanStore:
                 assumptions=list(proposal.assumptions),
             )
             if current is not None:
-                with _lock_for(self.plan_dir(current.id)):
-                    # Riletto dentro il suo lock: fra la lista e qui un'altra
-                    # strada (l'Approva) può averlo fatto partire.
-                    current = self._read(current.id)
-                    if current.status != "proposed":
-                        if current.is_open:
-                            raise PlanConflictError(where.id, current.id, current.status)
-                    else:
-                        plan.version = current.version + 1
-                        plan.replaces = current.id
-                        plan.dropped = tag_new_version(current.steps, plan.steps)
-                        apply_transition(current, "superseded", at=stamp, by=plan.id)
-                        self._write(current)
+                if current.status != "proposed":
+                    raise PlanConflictError(where.id, current.id, current.status)
+                plan.version = current.version + 1
+                plan.replaces = current.id
+                plan.dropped = tag_new_version(current.steps, plan.steps)
+                apply_transition(current, "superseded", at=stamp, by=plan.id)
+                self._write(conn, current)
             plan.history.append({"at": stamp, "event": "proposed", "version": plan.version})
-            self._write(plan)
-            logger.info(
-                "Plan {} proposed for {} (v{}, {} steps)",
-                plan.id,
-                where.id,
-                plan.version,
-                len(plan.steps),
-            )
-            return plan
+            self._write(conn, plan)
+        logger.info(
+            "Plan {} proposed for {} (v{}, {} steps)",
+            plan.id,
+            where.id,
+            plan.version,
+            len(plan.steps),
+        )
+        return plan
 
     # -- quaderni -----------------------------------------------------------
 
     def follow_rename(self, old: str, new: str) -> list[str]:
         """Porta i piani di *old* su *new*: ``notebook``, ``place`` e ``session_key``."""
         moved: list[str] = []
-        with self._store_lock:
-            for plan in self.list_for_notebook(old):
-
-                def _rename(p: Plan) -> None:
-                    p.notebook = new
-                    p.place = slot_id(new)
-                    p.session_key = project_session_key(new)
-
-                self.update(plan.id, _rename)
+        with self._db.write() as conn:
+            for plan in self._list(conn, "WHERE notebook = ?", (old,)):
+                plan.notebook = new
+                plan.place = slot_id(new)
+                plan.session_key = project_session_key(new)
+                plan.updated_at = now_iso()
+                self._write(conn, plan)
                 moved.append(plan.id)
-            self._move_drafting(slot_id(old), slot_id(new))
+            entry = self._read_drafting(conn).get(slot_id(old))
+            if entry is not None:
+                self._write_drafting(conn, slot_id(old), None)
+                self._write_drafting(conn, slot_id(new), entry)
         if moved:
             logger.info("Plans of notebook {!r} follow it to {!r}: {}", old, new, len(moved))
         return moved
 
     def delete_for_notebook(self, notebook: str) -> list[str]:
         """Cancella i piani di *notebook*. Ritorna gli id."""
-        removed: list[str] = []
-        with self._store_lock:
-            for plan in self.list_for_notebook(notebook):
-                self._remove(plan.id)
-                removed.append(plan.id)
-            self._move_drafting(slot_id(notebook), None)
+        with self._db.write() as conn:
+            removed = [r["id"] for r in conn.execute(
+                "SELECT id FROM plans WHERE notebook = ?", (notebook,))]
+            conn.execute("DELETE FROM plans WHERE notebook = ?", (notebook,))
+            self._write_drafting(conn, slot_id(notebook), None)
         if removed:
             logger.info("Deleted {} plan(s) of notebook {!r}", len(removed), notebook)
         return removed
-
-    def drafting_remove(self, place: str) -> dict[str, Any] | None:
-        """Toglie la pianificazione di *place*; ritorna la voce che c'era, o ``None``."""
-        with _lock_for(self.drafting_path):
-            entries = self._read_drafting()
-            entry = entries.pop(slot_id(place), None)
-            if entry is not None:
-                self._write_drafting(entries)
-            return entry
-
-    def _move_drafting(self, old: str, new: str | None) -> None:
-        """La pianificazione in corso di *old* va su *new*, o via (``None``)."""
-        with _lock_for(self.drafting_path):
-            entries = self._read_drafting()
-            entry = entries.pop(old, None)
-            if entry is None:
-                return
-            if new is not None:
-                entries[new] = entry
-            self._write_drafting(entries)
-
-    def _remove(self, plan_id: str) -> None:
-        with _lock_for(self.plan_dir(plan_id)):
-            shutil.rmtree(self.plan_dir(plan_id), ignore_errors=True)
 
     def prune(
         self,
@@ -434,7 +424,7 @@ class PlanStore:
         Un piano chiuso va via se non è fra i *keep_closed* più recenti del suo
         quaderno **o** se è chiuso da più di *max_age_days* giorni: il primo
         limite dei due che scatta. Un piano potato perde solo la scheda e «Torna
-        a prima»: senza ``plan.json`` non si sa più quali registri sono suoi.
+        a prima»: senza il piano non si sa più quali registri sono suoi.
 
         I piani che hanno girato (``done``/``stopped``/``rolled_back``) e quelli
         che non sono mai partiti (``discarded``/``superseded``) si contano a
@@ -444,9 +434,9 @@ class PlanStore:
         moment = now or datetime.now(timezone.utc)
         cutoff = moment - timedelta(days=max_age_days)
         removed: list[str] = []
-        with self._store_lock:
+        with self._db.write() as conn:
             by_bucket: dict[tuple[str, bool], list[Plan]] = {}
-            for plan in self.list_all():
+            for plan in self._list(conn):
                 if plan.status not in CLOSED_STATUSES:
                     continue
                 key = (plan.notebook, plan.status in RAN_STATUSES)
@@ -457,8 +447,8 @@ class PlanStore:
                     closed_at = _parse_iso(plan.updated_at)
                     too_old = closed_at is not None and closed_at < cutoff
                     if rank >= keep_closed or too_old:
-                        self._remove(plan.id)
                         removed.append(plan.id)
+            conn.executemany("DELETE FROM plans WHERE id = ?", [(i,) for i in removed])
         if removed:
             logger.info("Pruned {} closed plan(s)", len(removed))
         return removed

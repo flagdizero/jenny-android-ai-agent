@@ -85,23 +85,31 @@ def convert_plans(runtime_root: Path) -> dict[str, int]:
         data = read_json(path)
         if not isinstance(data, dict) or data.get("format", 1) != 1:
             continue
-        data.pop("photos", None)
-        for step in data.get("steps") or []:
-            if isinstance(step, dict):
-                step.pop("photo_before", None)
-                step.pop("photo_after", None)
-        status = data.get("status")
-        stamp = str(data.get("updated_at") or "")
-        if status in _OPEN or status == "proposed":
-            new = "discarded" if status == "proposed" else "stopped"
-            data["status"] = new
-            history = data.setdefault("history", [])
-            if isinstance(history, list):
-                history.append({"at": stamp, "event": new, "from": status,
-                                "reason": "update", "note": "update: no going back"})
+        if convert_plan_dict(data):
             counts["plans_stopped"] += 1
-        data["format"] = 2
-        data.setdefault("place", f"nb:{data.get('notebook', '')}")
         atomic_write(path, json.dumps(data, ensure_ascii=False))
         counts["plans_converted"] += 1
     return counts
+
+
+def convert_plan_dict(data: dict) -> bool:
+    """Un piano di formato 1 portato al 2, sul posto; True se l'ha fermato o scartato."""
+    data.pop("photos", None)
+    for step in data.get("steps") or []:
+        if isinstance(step, dict):
+            step.pop("photo_before", None)
+            step.pop("photo_after", None)
+    status = data.get("status")
+    stamp = str(data.get("updated_at") or "")
+    stopped = False
+    if status in _OPEN or status == "proposed":
+        new = "discarded" if status == "proposed" else "stopped"
+        data["status"] = new
+        history = data.setdefault("history", [])
+        if isinstance(history, list):
+            history.append({"at": stamp, "event": new, "from": status,
+                            "reason": "update", "note": "update: no going back"})
+        stopped = True
+    data["format"] = 2
+    data.setdefault("place", f"nb:{data.get('notebook', '')}")
+    return stopped

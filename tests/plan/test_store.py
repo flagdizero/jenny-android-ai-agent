@@ -1,4 +1,4 @@
-"""Lo store dei piani: percorsi, lock, la regola del piano aperto, rinomino, potatura."""
+"""Lo store dei piani: righe di ``undo.sqlite``, la regola del piano aperto, rinomino, potatura."""
 
 from __future__ import annotations
 
@@ -41,21 +41,32 @@ def _close(store: PlanStore, plan: Plan, *statuses: str, at: str | None = None) 
     plan = store.update(plan.id, _go)
     if at is not None:
         # ``update`` timbra ``updated_at`` adesso: per invecchiare un piano si
-        # riscrive il file a mano, come lo troverebbe la potatura fra un mese.
-        path = store.plan_dir(plan.id) / "plan.json"
-        data = json.loads(path.read_text("utf-8"))
-        data["updated_at"] = at
-        path.write_text(json.dumps(data), "utf-8")
+        # riscrive la riga a mano, come la troverebbe la potatura fra un mese.
+        _rewrite(store, plan.id, updated_at=at)
     return plan
 
 
-def test_plans_live_next_to_the_workspace_not_inside(tmp_path: Path) -> None:
+def _rewrite(store: PlanStore, plan_id: str, **fields) -> None:
+    with store._db.write() as conn:
+        data = json.loads(conn.execute("SELECT data FROM plans WHERE id = ?",
+                                       (plan_id,)).fetchone()["data"])
+        data.update(fields)
+        conn.execute("UPDATE plans SET data = ? WHERE id = ?", (json.dumps(data), plan_id))
+
+
+def _row(store: PlanStore, plan_id: str) -> str | None:
+    rows = store._db.read("SELECT data FROM plans WHERE id = ?", (plan_id,))
+    return rows[0]["data"] if rows else None
+
+
+def test_plans_live_with_the_undo_diary_out_of_the_workspace(tmp_path: Path) -> None:
     workspace = tmp_path / "files" / "workspace"
     workspace.mkdir(parents=True)
     store = PlanStore.for_workspace(workspace)
-    assert store.plans_dir == (tmp_path / "files" / "plans").resolve()
+    plan = store.create("piante", _proposal())
+    assert store._db.path == (tmp_path / "files" / "db" / "undo.sqlite").resolve()
+    assert _row(store, plan.id) is not None
     assert plans_dir_for(workspace) == store.plans_dir
-    assert not store.plans_dir.is_relative_to(workspace.resolve())
 
 
 def test_create_load_round_trip(tmp_path: Path) -> None:
@@ -78,7 +89,7 @@ def test_ids_are_validated_before_building_paths(tmp_path: Path, bad: str) -> No
     with pytest.raises(PlanNotFoundError):
         store.load(bad)
     with pytest.raises(PlanNotFoundError):
-        store.plan_dir(bad)
+        store.update(bad, lambda p: None)
 
 
 def test_missing_plan_is_not_found(tmp_path: Path) -> None:
@@ -86,13 +97,10 @@ def test_missing_plan_is_not_found(tmp_path: Path) -> None:
         _store(tmp_path).load("p_0123456789ab")
 
 
-def test_a_file_claiming_another_id_is_refused(tmp_path: Path) -> None:
+def test_a_row_claiming_another_id_is_refused(tmp_path: Path) -> None:
     store = _store(tmp_path)
     plan = store.create("piante", _proposal())
-    path = store.plan_dir(plan.id) / "plan.json"
-    data = json.loads(path.read_text("utf-8"))
-    data["id"] = "p_ffffffffffff"
-    path.write_text(json.dumps(data), "utf-8")
+    _rewrite(store, plan.id, id="p_ffffffffffff")
     with pytest.raises(PlanFormatError):
         store.load(plan.id)
     # Gli elenchi lo saltano invece di cadere.
@@ -109,7 +117,7 @@ def test_update_reads_inside_the_lock_and_writes(tmp_path: Path) -> None:
 def test_update_that_raises_writes_nothing(tmp_path: Path) -> None:
     store = _store(tmp_path)
     plan = store.create("piante", _proposal())
-    before = (store.plan_dir(plan.id) / "plan.json").read_text("utf-8")
+    before = _row(store, plan.id)
 
     def _boom(p: Plan) -> None:
         p.title = "cambiato"
@@ -117,7 +125,7 @@ def test_update_that_raises_writes_nothing(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError):
         store.update(plan.id, _boom)
-    assert (store.plan_dir(plan.id) / "plan.json").read_text("utf-8") == before
+    assert _row(store, plan.id) == before
 
 
 def test_concurrent_updates_do_not_lose_writes(tmp_path: Path) -> None:
@@ -191,14 +199,13 @@ def test_follow_rename(tmp_path: Path) -> None:
     assert store.list_for_notebook("piante") == []
 
 
-def test_delete_for_notebook_removes_the_whole_dir(tmp_path: Path) -> None:
+def test_delete_for_notebook_removes_its_plans(tmp_path: Path) -> None:
     store = _store(tmp_path)
     a = store.create("piante", _proposal())
-    (store.plan_dir(a.id) / "leftover").mkdir(parents=True)
     keep = store.create("ricette", _proposal())
     assert store.delete_for_notebook("piante") == [a.id]
-    assert not store.plan_dir(a.id).exists()
-    assert store.plan_dir(keep.id).exists()
+    assert _row(store, a.id) is None
+    assert _row(store, keep.id) is not None
 
 
 def test_prune_keeps_the_newest_closed_and_never_an_open_one(tmp_path: Path) -> None:
@@ -239,5 +246,5 @@ def test_prune_drops_closed_plans_older_than_max_age(tmp_path: Path) -> None:
     )
     fresh = _close(store, store.create("piante", _proposal()), "running", "done")
     assert store.prune(now=now) == [old.id]
-    assert not store.plan_dir(old.id).exists()
+    assert _row(store, old.id) is None
     assert store.load(fresh.id).status == "done"

@@ -8,7 +8,7 @@ directory che contiene il workspace (su Android è ``filesDir``, la stessa
     <runtime_root>/
       workspace/               ← l'albero versionato/scambiato al restore
       snapshots/               ← store content-addressed (storia)
-      plans/                   ← i piani a lista: ``plan.json`` e le foto del quaderno
+      plans.migrated/          ← i piani di prima di ``undo.sqlite``, per 30 giorni
       db/                      ← lo stato in SQLite (``jenny/db``): state, undo
       map_tiles/               ← le tessere delle schede dei posti in chat (cache)
       backup_staging/          ← file .jbk in export/import + albero staged
@@ -26,12 +26,10 @@ MARKER_FILE_NAME = "restore_pending.json"
 SAFETY_DIR_PREFIX = "workspace_pre_restore_"
 SANITY_FILE_NAME = ".jenny_restore_manifest.json"
 
-# I piani a lista (``jenny/plan/``). Stanno qui accanto a ``snapshots/`` e non
-# nel package del piano perche' questo modulo e' la pianta della runtime root:
-# chi si chiede cosa vive fuori dal workspace deve trovarlo in un posto solo.
-# Fuori dal workspace di proposito: i tool file del modello non ci arrivano
-# (non puo' ritoccare un piano ne' le sue foto), e non entrano negli snapshot
-# del workspace ne' nel backup — sono lavoro in corso, non memoria.
+# Dove stavano i piani a lista (``jenny/plan/``) fino alla 2.x, un
+# ``plan.json`` per cartella: ora sono righe di ``undo.sqlite`` accanto al
+# diario dell'annulla (``plan/store.py``), e la cartella la importa una volta
+# ``db_migration/plans.py``. Resta il nome per chi la cerca.
 PLANS_DIR_NAME = "plans"
 
 

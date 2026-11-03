@@ -273,19 +273,19 @@ def test_plan_propose_offers_covers_on_steps() -> None:
 
 
 async def test_an_old_plan_reads_with_empty_new_fields(workspace: Path, driver: PlanDriver) -> None:
-    """Un ``plan.json`` di prima: copertura e assunzioni vuote, ``done_when`` vuoto,
+    """Un piano di prima: copertura e assunzioni vuote, ``done_when`` vuoto,
     un blocco senza ``kind`` è una domanda senza bozze."""
     await start_drafting(driver)
     await driver.propose(KEY, "Rifare la wiki", STEPS, coverage=COVERAGE)
     plan = driver.store.open_plan_for("piante")
-    path = driver.store.plan_dir(plan.id) / "plan.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = plan.to_dict()
     for key in ("coverage", "assumptions"):
         data.pop(key)
     for step in data["steps"]:
         step.pop("done_when")
     data["blocked"] = {"step": "s1", "question": "Quale?", "reason": "question", "at": "x"}
-    path.write_text(json.dumps(data), encoding="utf-8")
+    with driver.store._db.write() as conn:
+        conn.execute("UPDATE plans SET data = ? WHERE id = ?", (json.dumps(data), plan.id))
     got = await dispatch_command(_ctx(workspace, driver), "plan.get", {"id": plan.id})
     view = got["plan"]
     assert view["coverage"] == [] and view["assumptions"] == []

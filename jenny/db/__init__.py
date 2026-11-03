@@ -7,8 +7,9 @@ tool del modello):
   pezzi di testo (``shards``), così la storia locale e Drive lo riportano
   insieme ai file. Lo riempiono, un archivio alla volta, i job, i record degli
   aiutanti, le sessioni.
-- ``undo.sqlite`` — il diario dell'annulla (``agent.write_journal``). Solo sul
-  telefono: non va nel backup e si svuota a un ripristino.
+- ``undo.sqlite`` — il diario dell'annulla (``agent.write_journal``) e i piani
+  che ci lavorano sopra (``plan.store``). Solo sul telefono: non va nel backup
+  e si svuota a un ripristino, piani compresi.
 
 Restano file, per scelta: ``config.json`` (lo legge anche Kotlin), le pagine e
 la bacheca dei quaderni, ``MEMORY.md``/``SOUL.md``/``USER.md`` e gli appunti, le

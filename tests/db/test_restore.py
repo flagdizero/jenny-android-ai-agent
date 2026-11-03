@@ -214,3 +214,22 @@ async def test_a_failed_export_still_makes_the_snapshot(env, monkeypatch) -> Non
     manifest = await env.service.snapshot_now("manual")
     assert manifest is not None
     assert [e.path for e in manifest.files] == ["SOUL.md"]
+
+
+async def test_a_restore_takes_the_plans_away_with_their_diary(state_env) -> None:
+    """I piani stanno in ``undo.sqlite`` col diario: un ripristino li svuota
+    insieme, e nessun piano resta a promettere un «torna a prima»."""
+    from jenny.plan.model import validate_proposal
+    from jenny.plan.store import PlanStore
+
+    env = state_env
+    store = PlanStore.for_workspace(env.workspace)
+    store.create("piante", validate_proposal(
+        "Rifare", [{"title": t, "detail": "x", "done_when": "x",
+                    "kind": "check" if t == "Due" else "other"} for t in ("Uno", "Due")],
+        [{"item": "Acero", "have": "", "missing": "", "strategy": "notebook"}]))
+    manifest = await env.service.snapshot_now("manual")
+    await env.manager.stage_snapshot_restore(manifest.id)
+    jdb.close_all()
+    assert apply_pending_restore(env.runtime_root)
+    assert PlanStore.for_workspace(env.workspace).list_all() == []

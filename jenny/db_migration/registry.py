@@ -58,11 +58,14 @@ class Migration:
 
 def migrations() -> tuple[Migration, ...]:
     """L'elenco, letto a ogni boot: un modulo per archivio, in ordine."""
-    from jenny.db_migration import cron, undo_cleanup
+    from jenny.db_migration import cron, plans, undo_cleanup
 
     return (
         Migration("undo_cleanup", remove_after="2.3.0", run=undo_cleanup.run,
                   pending=undo_cleanup.pending),
         Migration("cron", remove_after="2.3.0", run=cron.run,
                   pending=cron.pending, cleanup=cron.cleanup),
+        # Dopo ``undo_cleanup``: un piano di formato 1 lo converte comunque da sé.
+        Migration("plans", remove_after="2.3.0", run=plans.run,
+                  pending=plans.pending, cleanup=plans.cleanup),
     )
