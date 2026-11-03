@@ -82,6 +82,7 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.utils.helpers import safe_filename
 from jenny.utils.path import atomic_write, iter_jsonl
 
@@ -136,7 +137,7 @@ class _ConflictError(Exception):
 def _mergeable(rel: str) -> bool:
     """La bacheca di un quaderno: JSON che si annulla per pezzi."""
     parts = rel.split("/")
-    return (len(parts) == 4 and parts[0] == "wikis" and parts[2] == "board"
+    return (len(parts) == 4 and parts[0] == DEFAULT_WIKIS_DIR and parts[2] == "board"
             and parts[3] == "board.json")
 
 

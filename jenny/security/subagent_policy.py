@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.security.taint_ledger import ledger_for
 
 if TYPE_CHECKING:
@@ -294,7 +295,7 @@ def _project_relative(parts: tuple[str, ...]) -> tuple[str, ...]:
     Un quaderno ha la sua ``memory/`` e i suoi ``downloads/``: valgono come
     quelli dell'installazione. Si riconosce dalla posizione, senza I/O.
     """
-    if len(parts) >= 3 and parts[0] == "wikis":
+    if len(parts) >= 3 and parts[0] == DEFAULT_WIKIS_DIR:
         return parts[2:]
     return ()
 

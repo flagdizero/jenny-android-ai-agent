@@ -66,7 +66,7 @@ from jenny.bus.runtime_events import (
     RuntimeEventPublisher,
 )
 from jenny.command import CommandContext, CommandRouter, register_builtin_commands
-from jenny.config.paths import wikis_dir_name
+from jenny.config.paths import DEFAULT_WIKIS_DIR, wikis_dir_name
 from jenny.config.schema import AgentDefaults
 from jenny.cron.session_turns import (
     cron_history_overrides,
@@ -285,7 +285,7 @@ class AgentLoop(
         max_messages: int = 120,
         hooks: list[AgentHook] | None = None,
         disabled_skills: list[str] | None = None,
-        projects_subdir: str = "wikis",
+        projects_subdir: str = DEFAULT_WIKIS_DIR,
         wikis_enabled: bool = True,
         tools_config: ToolsConfig | None = None,
         runtime_events: RuntimeEventBus | None = None,

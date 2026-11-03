@@ -30,6 +30,7 @@ from loguru import logger
 
 from jenny.board import model
 from jenny.board.store import mutate_board, read_board
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 
 # Il passo dell'orologio: un quarto d'ora (decisione del 05/10/2026). E' anche
 # l'intervallo minimo di un lettore (``micro.MIN_EVERY_MINUTES``).
@@ -95,7 +96,7 @@ async def run_reminders(
     agent: Any,
     workspace: Path,
     *,
-    wikis_dir_name: str = "wikis",
+    wikis_dir_name: str = DEFAULT_WIKIS_DIR,
     timezone_name: str | None = None,
     now: datetime | None = None,
     cron: Any = None,

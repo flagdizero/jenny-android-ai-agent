@@ -70,6 +70,7 @@ from jenny.agent.internal_run import (
 # modulo si tirerebbe dentro ``internal_run`` — v. la docstring di
 # ``jenny/agent/wiki_provenance.py``.
 from jenny.agent.wiki_provenance import _provenance_guard
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import GARDENER_SESSION_PREFIX
 from jenny.session.turn_visibility import silent_progress
 from jenny.utils.clock import local_now
@@ -343,7 +344,7 @@ class GardenerStore:
 
     @classmethod
     def for_project(
-        cls, workspace: Path, name: str, *, wikis_dir_name: str = "wikis"
+        cls, workspace: Path, name: str, *, wikis_dir_name: str = DEFAULT_WIKIS_DIR
     ) -> "GardenerStore | None":
         """Lo store del progetto *name*, o ``None`` se quella cartella non è un progetto.
 

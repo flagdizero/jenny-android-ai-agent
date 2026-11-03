@@ -12,6 +12,7 @@ from typing import Any, Literal
 
 from loguru import logger
 
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.config.runtime_env import (
     WORKSPACE_SANDBOX_ENFORCED_ENV,
     WORKSPACE_SANDBOX_ENFORCED_LEGACY_ENV,
@@ -212,7 +213,7 @@ class WorkspaceScopeResolver:
     # *e'* una wiki: non esiste una
     # ``projects/`` separata. Configurabile perche' lo e' ``config.wiki.wikis_dir``,
     # e chi costruisce il resolver la passa da li'.
-    projects_subdir: str = "wikis"
+    projects_subdir: str = DEFAULT_WIKIS_DIR
 
     @property
     def sandbox_status(self) -> WorkspaceSandboxStatus:
