@@ -14,7 +14,12 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import COORDINATION_FLAGS, INTERNAL_CHANNEL, OutboundMessage
+from jenny.bus.events import (
+    COORDINATION_FLAGS,
+    INTERNAL_CHANNEL,
+    WEBSOCKET_CHANNEL,
+    OutboundMessage,
+)
 from jenny.cron.session_turns import CRON_MIRROR_META
 from jenny.session.keys import (
     is_project_session_key,
@@ -31,8 +36,6 @@ if TYPE_CHECKING:
 # Firma dell'hook di registrazione fornito dall'AgentLoop
 # (``AgentLoop.record_channel_delivery``).
 RecordHook = Callable[..., Awaitable[None]]
-
-WEBSOCKET_CHANNEL = "websocket"
 
 # Un testo che apre con un blocco markdown (titolo, elenco, citazione, codice):
 # il prefisso sulla stessa riga lo romperebbe, quindi va sulla riga sopra.

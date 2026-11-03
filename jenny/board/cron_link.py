@@ -24,6 +24,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.board import model
+from jenny.bus.events import WEBSOCKET_CHANNEL
 
 MAX_RESULT = 600
 
@@ -49,7 +50,7 @@ def notebook_delivery(notebook: str) -> dict[str, str]:
     from jenny.session.keys import project_session_key
 
     key = project_session_key(notebook)
-    return {"session_key": key, "origin_channel": "websocket", "origin_chat_id": key}
+    return {"session_key": key, "origin_channel": WEBSOCKET_CHANNEL, "origin_chat_id": key}
 
 
 def add_notebook_job(

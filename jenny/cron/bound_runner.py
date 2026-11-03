@@ -13,7 +13,7 @@ from loguru import logger
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
 from jenny.board.cron_link import last_message_text, link_alive, record_result, scope_of
-from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
 from jenny.cron.condition import describe as describe_condition
 from jenny.cron.condition import read_condition
 from jenny.cron.could_not_check import (
@@ -152,7 +152,7 @@ def cron_proactive_delivery_metadata(
     """Return channel metadata for a fresh proactive cron delivery turn."""
     out = dict(metadata or {})
     out.pop(WEBUI_TURN_METADATA_KEY, None)
-    if channel == "websocket":
+    if channel == WEBSOCKET_CHANNEL:
         out[WEBUI_TURN_METADATA_KEY] = f"{turn_seed}:{uuid.uuid4().hex}"
         source: dict[str, str] = {"kind": "cron"}
         if source_label:
@@ -191,10 +191,10 @@ def _bound_session_delivery_context(
         # e falso, non perché serva come difesa.
         metadata.pop("_wants_stream", None)
 
-    if channel == "websocket":
+    if channel == WEBSOCKET_CHANNEL:
         metadata.update(
             cron_proactive_delivery_metadata(
-                "websocket",
+                WEBSOCKET_CHANNEL,
                 metadata,
                 turn_seed=turn_seed,
                 source_label=source_label,

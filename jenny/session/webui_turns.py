@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import INTERNAL_CHANNEL, InboundMessage, OutboundMessage
+from jenny.bus.events import INTERNAL_CHANNEL, WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import (
     RuntimeEventBus,
@@ -63,11 +63,11 @@ def webui_view_target(ctx: RuntimeEventContext) -> tuple[str, str] | None:
         ctx.metadata, channel=ctx.channel, session_key=ctx.session_key
     ).silent:
         return None
-    if ctx.channel == "websocket":
+    if ctx.channel == WEBSOCKET_CHANNEL:
         return (ctx.channel, ctx.chat_id)
     if ctx.channel == INTERNAL_CHANNEL or ctx.session_key != UNIFIED_SESSION_KEY:
         return None
-    return ("websocket", WEBUI_DEFAULT_CHAT_ID)
+    return (WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID)
 
 
 def websocket_turn_wall_started_at(chat_id: str) -> float | None:
@@ -83,7 +83,7 @@ async def publish_turn_run_status(
     started_at: float | None = None,
 ) -> None:
     """Notify WebSocket clients while a user turn is executing (timing strip)."""
-    if msg.channel != "websocket":
+    if msg.channel != WEBSOCKET_CHANNEL:
         return
     cid = str(msg.chat_id)
     meta: dict[str, Any] = {
@@ -167,7 +167,7 @@ class WebuiTurnCoordinator:
 
     async def _handle_session_turn_started(self, event: SessionTurnStarted) -> None:
         ctx = event.context
-        if ctx.channel == "websocket":
+        if ctx.channel == WEBSOCKET_CHANNEL:
             session = self.sessions.get_or_create(ctx.session_key)
             mark_webui_session(session, ctx.metadata)
             return
@@ -270,7 +270,7 @@ class WebuiTurnCoordinator:
     async def _handle_runtime_model_changed(self, event: RuntimeModelChanged) -> None:
         await self.bus.publish_outbound(
             OutboundMessage(
-                channel="websocket",
+                channel=WEBSOCKET_CHANNEL,
                 chat_id="*",
                 content="",
                 metadata={
@@ -288,7 +288,7 @@ class WebuiTurnCoordinator:
         *,
         latency_ms: int | None,
     ) -> None:
-        if msg.channel != "websocket":
+        if msg.channel != WEBSOCKET_CHANNEL:
             return
 
         turn_metadata: dict[str, Any] = {**msg.metadata, "_turn_end": True}

@@ -20,6 +20,7 @@ from jenny.agent.tools.message import MessageTool
 from jenny.agent.tools.nothing_to_report import NothingToReportTool
 from jenny.agent.turn_persistence import prepare_save_boundary, record_sent_content
 from jenny.agent.turn_types import TurnState
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
 from jenny.runtime.user_text import say
@@ -229,7 +230,7 @@ class StateHandlersMixin:
 
             await self.bus.publish_outbound(
                 OutboundMessage(
-                    channel="websocket",
+                    channel=WEBSOCKET_CHANNEL,
                     chat_id="webui",
                     content="",
                     metadata={"_apps_list_changed": True},

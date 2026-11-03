@@ -13,7 +13,7 @@ from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 from websockets.http11 import Request as WsRequest
 
-from jenny.bus.events import InboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.config.paths import get_uploads_dir
 from jenny.config.schema import Base
@@ -148,7 +148,7 @@ class WebSocketConfig(Base):
 class WebSocketChannel(OutboundSenderMixin):
     """Run a local WebSocket server; forward text/JSON messages to the message bus."""
 
-    name = "websocket"
+    name = WEBSOCKET_CHANNEL
 
     def __init__(
         self,

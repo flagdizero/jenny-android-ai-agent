@@ -23,11 +23,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
 from jenny.runtime.user_text import current_bot_name, say
 from jenny.session.keys import (
-    WEBUI_CHANNEL,
     is_project_session_key,
     project_name,
     session_key_for_channel,
@@ -86,7 +86,7 @@ def alert_conversation(chat_id: str | None) -> str | None:
     """
     if not chat_id:
         return None
-    key = session_key_for_channel(WEBUI_CHANNEL, chat_id)
+    key = session_key_for_channel(WEBSOCKET_CHANNEL, chat_id)
     return key if is_project_session_key(key) else None
 
 

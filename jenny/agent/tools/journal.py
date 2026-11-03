@@ -42,6 +42,7 @@ from loguru import logger
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import current_request_context
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.security.subagent_policy import (
     current_subagent_policy,
     current_turn_taint,
@@ -525,7 +526,7 @@ class SuggestNotebookTool(Tool):
         request = current_request_context()
         if current_notebook_root() is not None:
             return "You are already in a notebook: there is nowhere to move. Nothing was offered."
-        if request is not None and request.channel != "websocket":
+        if request is not None and request.channel != WEBSOCKET_CHANNEL:
             return ("A notebook opens only in the app, not from here. Nothing was offered: "
                     "go on in this conversation.")
         if current_subagent_policy() is not None:

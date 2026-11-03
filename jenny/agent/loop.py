@@ -58,7 +58,7 @@ from jenny.agent.turn_types import (
 from jenny.agent.turn_types import (
     StateTraceEntry as StateTraceEntry,
 )
-from jenny.bus.events import INTERNAL_CHANNEL, InboundMessage, OutboundMessage
+from jenny.bus.events import INTERNAL_CHANNEL, WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
 from jenny.bus.progress import build_bus_progress_callback
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import (
@@ -778,7 +778,7 @@ class AgentLoop(
             # «Ci spostiamo?» ha senso solo dove c'e' un tasto da toccare: la
             # chat personale, nell'app (non Telegram, non una notifica).
             if name == "suggest_notebook":
-                return in_project or silent or msg.channel != "websocket"
+                return in_project or silent or msg.channel != WEBSOCKET_CHANNEL
             # ``notebook`` lavora solo nella chat di un quaderno (fuori risponde
             # «not from here»): ~2,9k caratteri di schema in ogni turno della
             # chat personale, per uno strumento che li' non puo' servire. La
@@ -2096,7 +2096,7 @@ class AgentLoop(
         silent = self._is_silent_turn(msg, key)
         if silent:
             mark_silent_turn(msg.metadata)
-        elif channel == "websocket":
+        elif channel == WEBSOCKET_CHANNEL:
             # Un turno della WebUI ha l'id che il client manda col messaggio; un
             # turno di sistema non ha un messaggio del client, e senza id la
             # rilettura non accorpa (``home-chat.js``): la frase e il file del

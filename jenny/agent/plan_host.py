@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import InboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, InboundMessage
 from jenny.plan.driver import PLAN_NOTES_META
 from jenny.session.keys import project_session_key
 
@@ -141,7 +141,7 @@ class LoopPlanHost:
         await loop._cancel_active_tasks(session_key, spare_subagents=True)
         loop._restore_cancelled_turn(session_key)
         origin = InboundMessage(
-            channel="websocket", sender_id="plan", chat_id=session_key, content="",
+            channel=WEBSOCKET_CHANNEL, sender_id="plan", chat_id=session_key, content="",
         )
         try:
             await loop._emit_stop_turn_end(origin, session_key)
@@ -175,7 +175,7 @@ class LoopPlanHost:
         if had_turn:
             loop._restore_cancelled_turn(session_key)
             origin = InboundMessage(
-                channel="websocket", sender_id="plan", chat_id=session_key, content="",
+                channel=WEBSOCKET_CHANNEL, sender_id="plan", chat_id=session_key, content="",
             )
             try:
                 await loop._emit_stop_turn_end(origin, session_key)

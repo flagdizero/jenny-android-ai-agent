@@ -12,6 +12,7 @@ from typing import Any, Literal
 
 from loguru import logger
 
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.config.runtime_env import (
     WORKSPACE_SANDBOX_ENFORCED_ENV,
@@ -208,7 +209,7 @@ class WorkspaceScopeResolver:
 
     default_workspace: str | Path
     default_restrict_to_workspace: bool
-    scoped_channel: str = "websocket"
+    scoped_channel: str = WEBSOCKET_CHANNEL
     # Sottocartella che ospita i progetti, relativa al workspace. Un progetto
     # *e'* una wiki: non esiste una
     # ``projects/`` separata. Configurabile perche' lo e' ``config.wiki.wikis_dir``,

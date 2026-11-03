@@ -10,7 +10,7 @@ from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import ContextAware, RequestContext
 from jenny.agent.tools.path_utils import resolve_workspace_path
 from jenny.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
-from jenny.bus.events import OutboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, OutboundMessage
 from jenny.config.paths import get_workspace_path
 from jenny.cron.could_not_check import is_only_markers
 from jenny.security.subagent_policy import is_config_file
@@ -335,8 +335,8 @@ class MessageTool(Tool, ContextAware):
         channel = channel or default_channel
         explicit_chat_id = chat_id
         if (
-            default_channel == "websocket"
-            and channel == "websocket"
+            default_channel == WEBSOCKET_CHANNEL
+            and channel == WEBSOCKET_CHANNEL
             and explicit_chat_id is not None
             and str(explicit_chat_id).strip() != ""
             and str(explicit_chat_id).strip() != str(default_chat_id).strip()
