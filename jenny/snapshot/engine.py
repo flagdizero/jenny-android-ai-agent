@@ -63,6 +63,15 @@ DEFAULT_EXCLUDE_GLOBS: tuple[str, ...] = (
 # (``STATE_ENTRY_DIR``): lo scrive il motore, mai un file vero del workspace.
 ALWAYS_EXCLUDED_DIRS: tuple[str, ...] = ("subagents/journal", STATE_ENTRY_DIR)
 
+# Una cartella ``<nome>.migrated`` è la copia che una migrazione verso SQLite
+# lascia per 30 giorni (``jenny/db_migration``: ``sessions.migrated``,
+# ``.jenny/webui.migrated``, ``cron.migrated``…). I suoi dati sono già nello stato,
+# che lo snapshot porta a pezzi: tenerla avrebbe messo gli stessi dati due volte
+# in ogni foto e in ogni ``.jbk`` (72 MB sul telefono di prova, il 03/11/2026).
+# Solo le cartelle: i pochi ``*.json.migrated`` pesano kB, e un file dell'utente
+# non deve sparire da un backup per come si chiama.
+MIGRATED_DIR_SUFFIX = ".migrated"
+
 # ``output/`` NON è in quella lista, ed è una scelta, non una dimenticanza.
 #
 # È la cartella dove il system prompt manda ogni file che l'agente produce, e
@@ -141,6 +150,8 @@ class SnapshotEngine:
             return None
 
     def _is_excluded_dir(self, rel: str, name: str) -> bool:
+        if name.endswith(MIGRATED_DIR_SUFFIX):
+            return True
         for prefix in self._exclude_prefixes:
             if rel == prefix or rel.startswith(prefix + "/"):
                 return True

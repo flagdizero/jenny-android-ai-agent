@@ -123,7 +123,7 @@ Earlier versions also had a **heartbeat**: a checklist in `HEARTBEAT.md` that on
 
 Your jobs live in Jenny's state database (`state.sqlite`, next to the workspace), not in a file of their own. Every change is saved whole or not at all, so a killed process or a full disk cannot leave half a list behind. The database travels with every snapshot, the copy on Google Drive and the backup file: restoring any of them brings your reminders back as they were at that moment.
 
-Versions before the database kept the list in `cron/jobs.json` in the workspace. The first start after the update moves it into the database and leaves the old folder as `cron.migrated/` for 30 days, in case you go back to the older app.
+Versions before the database kept the list in `cron/jobs.json` in the workspace. The first start after the update moves it into the database and leaves the old folder as `cron.migrated/` for 30 days, in case you go back to the older app. That folder stays on the phone: snapshots and backup files leave it out, since the database already carries the same jobs.
 
 The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
 
