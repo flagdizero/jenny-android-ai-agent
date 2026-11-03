@@ -15,14 +15,11 @@ cose che la tengono in piedi e che si rompono in silenzio:
 
 from __future__ import annotations
 
-import json
 import re
 from html.parser import HTMLParser
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI, locale
+
 SHELLS = ("index.html", "workshop.html", "onboarding.html")
 
 _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
@@ -91,7 +88,7 @@ def _by_id(root: _Node, ident: str) -> _Node:
 
 
 def _i18n(lang: str) -> dict:
-    return json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+    return locale(lang)
 
 
 def _has_key(d: dict, key: str) -> bool:

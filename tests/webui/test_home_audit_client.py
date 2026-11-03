@@ -186,7 +186,7 @@ def test_nothing_in_the_flow_asks_for_a_severity() -> None:
     assert "severity" not in m.group(1)
 
     for lang in ("it", "en"):
-        data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        data = locale(lang)
         assert "sev" not in data["home"]["audit"], lang
 
 

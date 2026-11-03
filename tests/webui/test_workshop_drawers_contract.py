@@ -22,11 +22,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import ASSETS, requires_node, run_js
+from support.js_harness import ASSETS, ROOT, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 APP_JS = ASSETS / "mobile-app.js"
 WORKSHOP = ROOT / "jenny" / "templates" / "ui" / "workshop.html"

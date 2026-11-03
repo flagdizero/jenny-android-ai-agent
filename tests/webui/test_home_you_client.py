@@ -25,12 +25,11 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, locale, member, requires_node, run_js
 
 YOU_JS = ASSETS / "home-you.js"
 THEME_JS = ASSETS / "shared" / "theme.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -100,7 +99,7 @@ function room() {
 def _harness() -> str:
     src = YOU_JS.read_text(encoding="utf-8")
     theme = THEME_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
         _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))

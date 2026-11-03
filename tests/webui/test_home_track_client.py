@@ -26,11 +26,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI, member, requires_node, run_js, run_module
 
 pytestmark = requires_node
 

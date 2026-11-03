@@ -26,13 +26,12 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, locale, member, requires_node, run_js
 
 MODEL_JS = ASSETS / "home-model.js"
 BRAND_JS = ASSETS / "shared" / "provider-brand.js"
 CATALOG_JS = ASSETS / "shared" / "model-catalog.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -184,7 +183,7 @@ def _inline(path) -> str:
 
 def _harness() -> str:
     src = MODEL_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
         _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))

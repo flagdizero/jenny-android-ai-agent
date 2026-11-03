@@ -21,9 +21,7 @@ from pathlib import Path
 
 import pytest
 from support.home_dom import requires_jsdom, run_home
-from support.js_harness import ASSETS, member, requires_node, run_js, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
+from support.js_harness import ASSETS, ROOT, member, requires_node, run_js, run_module
 
 pytestmark = requires_node
 

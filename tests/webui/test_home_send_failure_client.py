@@ -15,12 +15,11 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, locale, member, requires_node, run_js
 
 HOME_CHAT_JS = ASSETS / "home-chat.js"
 HOME_APP_JS = ASSETS / "home-app.js"
 WIRE_ERROR_JS = ASSETS / "shared" / "wire-error.js"
-I18N = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -109,7 +108,7 @@ const thread = (chat) => chat.el.children.map((n) => {
 
 
 def _harness_src() -> str:
-    words = json.loads((I18N / "it.json").read_text(encoding="utf-8"))
+    words = locale("it")
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     return (
         _HARNESS.replace("__WORDS__", json.dumps({"common": words["common"]}, ensure_ascii=False))

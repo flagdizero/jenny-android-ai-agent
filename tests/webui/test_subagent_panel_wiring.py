@@ -15,13 +15,12 @@ import re
 from pathlib import Path
 
 from support import css_levels
-from support.js_harness import ASSETS
+from support.js_harness import ASSETS, UI
 
-UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-CHAT_JS = UI_DIR / "assets" / "mobile-chat.js"
-DIALOG_JS = UI_DIR / "assets" / "shared" / "dialog.js"
-WORKSHOP_HTML = UI_DIR / "workshop.html"
-CSS = UI_DIR / "assets" / "mobile-style.css"
+CHAT_JS = UI / "assets" / "mobile-chat.js"
+DIALOG_JS = UI / "assets" / "shared" / "dialog.js"
+WORKSHOP_HTML = UI / "workshop.html"
+CSS = UI / "assets" / "mobile-style.css"
 
 
 def _chat() -> str:

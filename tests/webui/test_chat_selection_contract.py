@@ -17,14 +17,11 @@ ha un runner con DOM, e queste sono tutte proprietà statiche del file.
 
 from __future__ import annotations
 
-import json
 import re
 from html.parser import HTMLParser
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, ROOT, UI, locale
+
 APP_JS = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
 CHAT_JS = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
 SELECTION_JS = (ASSETS / "shared" / "selection.js").read_text(encoding="utf-8")
@@ -183,7 +180,7 @@ def test_the_sheet_strings_left_with_the_sheet() -> None:
     niente — e il posto in cui una stringa morta torna a schermo."""
     dead = ("messageActions", "copyPlain", "copyMarkdown")
     for lang in ("it", "en"):
-        chat = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))["chat"]
+        chat = locale(lang)["chat"]
         for key in dead:
             assert key not in chat, f"{lang}.chat.{key} è rimasta orfana"
         # E quella che resta c'è ancora, in tutte e due.
@@ -200,5 +197,5 @@ def test_the_select_sheet_and_the_anchor_pin_are_gone() -> None:
     assert "pinSelectionAnchor" not in SELECTION_JS and "pinSelectionAnchor" not in APP_JS
     assert "setBaseAndExtent" not in _code_only(SELECTION_JS), "nessuna scrittura della selezione da JS"
     for lang in ("it", "en"):
-        chat = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))["chat"]
+        chat = locale(lang)["chat"]
         assert "selectText" not in chat and "selectAll" not in chat, lang

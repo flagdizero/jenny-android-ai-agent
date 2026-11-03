@@ -15,9 +15,9 @@ esattamente il difetto, e un test su «ci sono tutti» non lo vedrebbe.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from support.js_harness import ROOT
+
 WORKSHOP_HTML = ROOT / "jenny" / "templates" / "ui" / "workshop.html"
 TOUR_DOC = ROOT / "docs" / "using" / "webui-tour.md"
 

@@ -12,9 +12,9 @@ sorgente e lega i due capi.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
+from support.js_harness import UI
+
 SETTINGS = (UI / "assets" / "mobile-settings.js").read_text(encoding="utf-8")
 WORKSHOP = (UI / "workshop.html").read_text(encoding="utf-8")
 

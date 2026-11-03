@@ -20,12 +20,16 @@ import asyncio
 import gzip
 import inspect
 import re
-from pathlib import Path
+
+# Il generatore di porte libere sta in `tests/channels` (pytest mette nel path
+# solo la cartella del test): lo stesso dei banchi del canale.
+import sys  # noqa: E402
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from support.js_harness import ROOT
 from support.ws_channel import make_ws_channel
 
 from jenny.channels import ws_remote
@@ -33,12 +37,6 @@ from jenny.channels.websocket import WebSocketConfig
 from jenny.channels.ws_remote import RemoteListener
 from jenny.webui import apps_routes, settings_routes, static_cache, ws_http
 from jenny.webui.phone_only import PHONE_ONLY_ROUTES
-
-ROOT = Path(__file__).resolve().parents[2]
-
-# Il generatore di porte libere sta in `tests/channels` (pytest mette nel path
-# solo la cartella del test): lo stesso dei banchi del canale.
-import sys  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests" / "channels"))
 from port_alloc import free_port  # noqa: E402

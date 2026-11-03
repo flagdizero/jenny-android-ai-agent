@@ -7,11 +7,9 @@ L'officina scriveva il nome del canale con l'iniziale maiuscola («Floating»,
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, locale, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 ORIGIN_JS = (ASSETS / "shared" / "origin.js").read_text(encoding="utf-8")
 I18N_JS = (ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8")
 
@@ -25,7 +23,7 @@ def test_neither_shell_spells_it_by_itself() -> None:
 
 @requires_node
 def test_the_words() -> None:
-    it = json.loads((ASSETS / "i18n" / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     o = it["home"]["origin"]
     run_js(
         "import assert from 'node:assert/strict';\n"

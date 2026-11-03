@@ -21,14 +21,13 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, function, i18n_helpers, member, requires_node, run_js
+from support.js_harness import ASSETS, function, i18n_helpers, locale, member, requires_node, run_js
 
 APP_JS = ASSETS / "home-app.js"
 SPINES_JS = ASSETS / "shared" / "spines.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 DIALOG_JS = ASSETS / "shared" / "dialog.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -489,7 +488,7 @@ def _spines() -> str:
 def _harness() -> str:
     src = APP_JS.read_text(encoding="utf-8")
     dialog_js = DIALOG_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))

@@ -11,11 +11,11 @@ lavorando li'».
 from __future__ import annotations
 
 import re
-from pathlib import Path
+
+from support.js_harness import ROOT
 
 from jenny.webui import commands
 
-ROOT = Path(__file__).resolve().parents[2]
 DOC = (ROOT / "docs" / "reference" / "websocket.md").read_text(encoding="utf-8")
 
 

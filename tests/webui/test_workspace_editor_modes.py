@@ -20,11 +20,10 @@ nessun file registra, e un nome registrato da un file che nessuno carica.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
+from support.js_harness import UI
 
-UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 WORKSPACE_JS = UI / "assets" / "mobile-workspace.js"
 WORKSHOP_HTML = UI / "workshop.html"
 MODE_DIR = UI / "assets" / "vendor" / "codemirror@5.65.16" / "mode"

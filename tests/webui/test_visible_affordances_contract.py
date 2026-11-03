@@ -11,9 +11,7 @@
 
 from __future__ import annotations
 
-import json
-
-from support.js_harness import ASSETS
+from support.js_harness import ASSETS, locale
 
 
 def _src(name: str) -> str:
@@ -34,7 +32,7 @@ def test_deleting_for_good_asks_with_a_red_button_that_says_so() -> None:
     assert "{ danger: true }" in flow
     assert "{ danger: true }" in _src("home-apps-trash.js"), "anche il cestino elimina per sempre"
     for lang in ("it", "en"):
-        words = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        words = locale(lang)
         ws = words["workspace"]
         assert ws["deleteProjectForever"]
         for key in ("deleteProjectConfirm", "deleteProjectConfirmWithChat"):

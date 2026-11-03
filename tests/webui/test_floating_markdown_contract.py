@@ -21,12 +21,10 @@ Kotlin: le asserzioni sono sul sorgente.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import ASSETS
+from support.js_harness import ASSETS, ROOT
 from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
 CONTROLLER = ANDROID_SRC / "FloatingOverlayController.kt"
 GRADLE = ROOT / "android/app/build.gradle.kts"
 CHAT_JS = ASSETS / "mobile-chat.js"

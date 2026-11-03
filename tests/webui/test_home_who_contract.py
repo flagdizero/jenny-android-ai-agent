@@ -10,12 +10,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import member
+from support.js_harness import UI, member
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
 WHO_JS = UI / "assets" / "home-who.js"
 APP_JS = UI / "assets" / "home-app.js"

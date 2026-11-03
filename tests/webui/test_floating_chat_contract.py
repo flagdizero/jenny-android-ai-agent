@@ -19,11 +19,10 @@ Kotlin: le asserzioni sono sul sorgente.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
+from support.js_harness import ROOT
 from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
 CONTROLLER = ANDROID_SRC / "FloatingOverlayController.kt"
 STRINGS_EN = ROOT / "android/app/src/main/res/values/strings.xml"
 STRINGS_IT = ROOT / "android/app/src/main/res/values-it/strings.xml"

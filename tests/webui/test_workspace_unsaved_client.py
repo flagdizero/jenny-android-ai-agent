@@ -21,10 +21,9 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, member, requires_node, run_js
+from support.js_harness import ASSETS, locale, member, requires_node, run_js
 
 WORKSPACE_JS = ASSETS / "mobile-workspace.js"
-I18N_DIR = ASSETS / "i18n"
 
 pytestmark = requires_node
 
@@ -155,7 +154,7 @@ def _harness() -> str:
     for name in _REAL:
         if re.search(rf"\n  (?:async )?{re.escape(name)}\(", source):
             methods.append("  " + member(source, name))
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
       # La funzione vera che traduce gli errori del file manager, accanto alla classe.
     helper = re.search(r"\nfunction workspaceErrorText\(err\) \{\n.*?\n\}\n", source, re.S)
     assert helper, "workspaceErrorText not found in mobile-workspace.js"

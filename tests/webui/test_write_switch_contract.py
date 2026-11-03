@@ -24,14 +24,12 @@ Asserzioni sul sorgente, come ``test_scope_menu_contract.py`` e
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS, UI, locale
 
-UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
 SWITCH = ASSETS / "shared" / "write-switch.js"
 WS = ASSETS / "shared" / "ws-manager.js"
 CHIP = ASSETS / "shared" / "scope-chip.js"
@@ -216,7 +214,7 @@ def test_the_placeholder_shortens_a_long_project_name() -> None:
         "il separatore finale va tolto, o i puntini del template attaccano a un trattino"
     )
     for lang in ("it", "en"):
-        data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        data = locale(lang)
         assert data["scope"]["askAbout"].rstrip().endswith(("...", "…")), (
             f"{lang}: se il template perde i puntini, un nome tagliato non si vede più"
         )
@@ -242,7 +240,7 @@ def test_the_placeholder_is_wired_to_the_change_and_not_to_the_order() -> None:
 
 def test_both_states_are_named_in_both_languages() -> None:
     for lang in ("it", "en"):
-        data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        data = locale(lang)
         block = data["write"]
         for key in ("write", "readonly", "change", "writeHint", "readonlyHint",
                     "askReadonly", "askAboutReadonly"):

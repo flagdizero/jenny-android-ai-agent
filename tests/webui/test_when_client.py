@@ -9,11 +9,9 @@ resta, il calendario.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, locale, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 WHEN_JS = (ASSETS / "shared" / "when.js").read_text(encoding="utf-8")
 I18N_JS = (ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8")
 
@@ -21,7 +19,7 @@ pytestmark = requires_node
 
 
 def test_today_yesterday_and_farther() -> None:
-    it = json.loads((ASSETS / "i18n" / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     run_js(
         "import assert from 'node:assert/strict';\n"
         f"const i18n = {{ locale: 'it', translations: {{ it: {json.dumps(it)} }}, {member(I18N_JS, 't')} }};\n"
@@ -47,7 +45,7 @@ def test_ago_says_one_hour_and_counts_days_on_the_calendar() -> None:
     47 ore fa, che sul calendario e' l'altro ieri, diceva «ieri». Era in
     ``conversation-list.js``, che non importa niente; sta qui, accanto a
     ``dayOffset``."""
-    it = json.loads((ASSETS / "i18n" / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     run_js(
         "import assert from 'node:assert/strict';\n"
         f"const i18n = {{ locale: 'it', translations: {{ it: {json.dumps(it)} }}, {member(I18N_JS, 't')} }};\n"
@@ -71,7 +69,7 @@ def test_short_date_and_the_near_day() -> None:
     """«12 ott» era scritto sette volte (le note, le foto, il cestino delle app,
     il cassetto, i blocchi della bacheca, la copia su Drive), e «domenica alle
     3:12» due (gli snapshot e la copia su Drive), con due chiavi uguali."""
-    it = json.loads((ASSETS / "i18n" / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     run_js(
         "import assert from 'node:assert/strict';\n"
         f"const i18n = {{ locale: 'it', translations: {{ it: {json.dumps(it)} }}, {member(I18N_JS, 't')} }};\n"

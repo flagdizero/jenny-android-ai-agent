@@ -13,16 +13,13 @@ from __future__ import annotations
 import itertools
 import json
 import re
-from pathlib import Path
 
 from support import css_levels, theme_tokens
+from support.js_harness import ASSETS, UI
 
 from jenny.utils.android_assets import _UI_MANIFEST
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
-ASSETS = UI / "assets"
 APP_JS = ASSETS / "home-app.js"
 YOU_JS = ASSETS / "home-you.js"
 CSS = ASSETS / "home-style.css"

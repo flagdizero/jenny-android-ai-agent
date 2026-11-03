@@ -29,11 +29,9 @@ Asserzioni sul sorgente, nello stile di
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import ASSETS
+from support.js_harness import ASSETS, ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
 SDK_JS = ASSETS / "apps" / "jenny-sdk.js"
 APPS_JS = ASSETS / "shared" / "apps-actions.js"
 SKILL_DIR = ROOT / "jenny" / "skills" / "app-creator"

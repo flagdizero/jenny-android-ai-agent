@@ -21,12 +21,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 import pytest
-from support.js_harness import ASSETS, function, member, requires_node, run_js
-
-ROOT = Path(__file__).resolve().parents[2]
+from support.js_harness import ASSETS, ROOT, function, locale, member, requires_node, run_js
 
 SETTINGS = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 CSS = (ASSETS / "mobile-style.css").read_text(encoding="utf-8")
@@ -241,9 +238,8 @@ def test_the_summary_does_not_stay_loading_forever() -> None:
 
 @pytest.mark.parametrize("language", ("it", "en"))
 def test_the_two_summary_sentences_exist(language: str) -> None:
-    import json
 
-    d = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))["backup"]
+    d = locale(language)["backup"]
     assert "{count}" in d["snapshotSummary"] and "{when}" in d["snapshotSummary"], (
         f"{language}: il riepilogo non porta i due numeri che lo rendono utile"
     )
@@ -326,12 +322,11 @@ console.log('ok');
 def test_the_telegram_summary_covers_all_states() -> None:
     """Quattro stati più «non leggibile»: se ne manca uno, la riga resta vuota
     proprio nel caso che l'utente vuole capire."""
-    import json
 
     pairing = (ASSETS / "shared" / "telegram-pairing.js").read_text(encoding="utf-8")
     assert "export function telegramSummary" in pairing
     for language in ("it", "en"):
-        tg = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+        tg = locale(language)
         tg = tg["settings"]["telegram"]
         for k in ("summaryPaired", "summaryNotPaired", "summaryNoToken", "summaryOff",
                   "summaryUnknown"):
@@ -408,9 +403,8 @@ def test_the_command_wiring_looks_inside_the_panel() -> None:
 
 @pytest.mark.parametrize("language", ("it", "en"))
 def test_the_short_words_of_the_two_states_exist(language: str) -> None:
-    import json
 
-    ssh = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+    ssh = locale(language)
     ssh = ssh["settings"]["ssh"]
     for k in ("markKey", "markPassword", "markFingerprint"):
         assert ssh.get(k, "").strip(), f"{language}: manca {k}"
@@ -477,10 +471,9 @@ def test_the_measure_says_how_much_remains_not_just_how_much_it_measures() -> No
     assert "_capState(" in _body("_measureCap")
     assert "settings.memory.headroom" in body
     assert "headroomOver" in body, "sopra il tetto non si dice cosa succede"
-    import json
 
     for language in ("it", "en"):
-        mem = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+        mem = locale(language)
         mem = mem["settings"]["memory"]
         assert "{left}" in mem["headroom"] and "{over}" in mem["headroomOver"]
 
@@ -646,7 +639,7 @@ def test_the_pill_words_do_not_stay_orphaned() -> None:
     )
     assert "workshop.state" not in sources
     for language in ("it", "en"):
-        d = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+        d = locale(language)
         assert "stato" not in d["workshop"], f"{language}: le parole della pastiglia sono ancora li'"
 
 
@@ -665,10 +658,9 @@ def test_the_drawer_says_where_what_does_not_fit_lives() -> None:
     è l'errore che il giro dei cassetti ha già fatto una volta."""
     assert "workshop.link.dreamInMemory" in SETTINGS
     assert ".settings-link {" in CSS
-    import json
 
     for language in ("it", "en"):
-        d = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+        d = locale(language)
         assert d["workshop"]["link"]["dreamInMemory"].strip()
 
 
@@ -710,7 +702,7 @@ def test_the_work_row_says_when() -> None:
     detail = _body("_showCronJobDialog")
     assert "cron.job.when" in detail and "row.schedule" in detail
     for language in ("it", "en"):
-        d = json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+        d = locale(language)
         assert "{schedule}" in d["cron"]["job"]["when"]
         assert "{when}" in d["cron"]["job"]["nextAt"]
 

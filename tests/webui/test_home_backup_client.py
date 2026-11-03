@@ -34,6 +34,7 @@ from support.js_harness import (
     FAKE_ELEMENT,
     function,
     i18n_helpers,
+    locale,
     member,
     requires_node,
     run_js,
@@ -43,7 +44,6 @@ ROOM_JS = ASSETS / "home-backup.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
 BACKUP_FLOW_JS = ASSETS / "shared" / "backup-flow.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -126,7 +126,7 @@ function room(backup) {
 
 def _harness() -> str:
     room = ROOM_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
         _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
