@@ -86,24 +86,31 @@ class TestExecute:
         outcome = await add.execute(testo="x")
         assert outcome.ok is False
 
-    async def test_storage_mutation_publishes_data_changed(self, tmp_path):
-        from unittest.mock import AsyncMock, MagicMock
+    async def test_storage_mutation_announces_data_changed_from_any_channel(self, tmp_path):
+        """L'avviso va alla WebUI (``apps.notify``), non sul canale del turno: da
+        un turno Telegram lo schermo aperto dell'app si rilegge lo stesso."""
+        from jenny.agent.tools.context import (
+            RequestContext,
+            bind_request_context,
+            reset_request_context,
+        )
+        from jenny.runtime import ui_events
+
+        heard: list[dict] = []
+
+        async def note(event: dict) -> None:
+            heard.append(event)
 
         _write_note_app(tmp_path)
-        bus = MagicMock()
-        bus.publish_outbound = AsyncMock()
-        add = AppActionTool(tmp_path, "note", "Note", _storage_action(), bus=bus)
-        await add.execute(testo="ciao")
-        bus.publish_outbound.assert_awaited_once()
-        msg = bus.publish_outbound.await_args.args[0]
-        assert msg.metadata == {"_app_data_changed": True, "app_slug": "note"}
-
-    async def test_query_does_not_publish(self, tmp_path):
-        from unittest.mock import AsyncMock, MagicMock
-
-        _write_note_app(tmp_path)
-        bus = MagicMock()
-        bus.publish_outbound = AsyncMock()
-        query = AppActionTool(tmp_path, "note", "Note", _storage_action("query"), bus=bus)
-        await query.execute()
-        bus.publish_outbound.assert_not_awaited()
+        ui_events.set_publisher(note)
+        req = bind_request_context(RequestContext(channel="telegram", chat_id="42",
+                                                  session_key="unified:default"))
+        try:
+            add = AppActionTool(tmp_path, "note", "Note", _storage_action())
+            await add.execute(testo="ciao")
+            query = AppActionTool(tmp_path, "note", "Note", _storage_action("query"))
+            await query.execute()
+        finally:
+            reset_request_context(req)
+            ui_events.set_publisher(None)
+        assert heard == [{"_app_data_changed": True, "app_slug": "note"}]

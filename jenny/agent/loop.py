@@ -586,7 +586,7 @@ class AgentLoop(
         # Jenny App actions — manifest-driven, kept in sync per turn
         from jenny.agent.tools.app_actions import AppToolsSyncer
 
-        self._app_tools_syncer = AppToolsSyncer(Path(self.workspace), bus=self.bus)
+        self._app_tools_syncer = AppToolsSyncer(Path(self.workspace))
         app_tools, _changed = self._app_tools_syncer.sync(self.tools)
         if app_tools:
             registered.append(f"apps:{len(app_tools)}")

@@ -54,9 +54,6 @@ async def test_a_write_from_the_screen_is_announced(tmp_path: Path, heard) -> No
     _app(tmp_path, "spesa", LIST)
     await execute_action(tmp_path, "spesa", "add", {"what": "latte"})
     assert heard == ["spesa"]
-    # Il tool di Jenny avvisa da se': niente doppione.
-    await execute_action(tmp_path, "spesa", "add", {"what": "uova"}, announce=False)
-    assert heard == ["spesa"]
 
 
 async def test_a_reader_that_recomputes_is_announced(tmp_path: Path, heard) -> None:
