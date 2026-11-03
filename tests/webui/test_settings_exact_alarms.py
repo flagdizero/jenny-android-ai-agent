@@ -189,7 +189,7 @@ def test_an_unknown_mode_prints_nothing_instead_of_the_raw_key() -> None:
     match = re.search(r"_keepAwakeCost\(mode\) \{\n(.*?)\n  \}", _js(), re.S)
     assert match, "_keepAwakeCost non trovata in mobile-settings.js"
 
-    assert "text === key ? '' : text" in match.group(1)
+    assert "return i18n.tOr(`settings.battery.keepAwakeCost.${mode}`);" in match.group(1)
 
 
 def test_the_cost_line_can_wrap() -> None:

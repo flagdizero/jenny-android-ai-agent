@@ -27,7 +27,7 @@
 
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
-import { i18n } from './shared/i18n.js';
+import { i18n, tr } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { reminderGroups, whenLabel } from './home-board.js';
@@ -53,7 +53,6 @@ const CONDITION_EVERY = [['hour', 3_600_000], ['sixHours', 21_600_000], ['day', 
 /** «controllo ogni 6 ore»: la cadenza di un promemoria a condizione, o `''`. */
 function everyLabel(when) {
   if (when?.kind !== 'condition' || !(when.every_ms > 0)) return '';
-  const tr = (key, vars) => i18n.t(key, vars);
   return i18n.t('board.app.checkedEvery', { every: humanizeDuration(when.every_ms, { tr, locale: i18n.locale }) });
 }
 
@@ -898,18 +897,18 @@ export class BoardDrawer {
     for (const c of cols) head.appendChild(el('th', c.type === 'number' ? 'is-num' : '', c.label));
     table.appendChild(head);
     for (const row of v.rows || []) {
-      const tr = el('tr');
+      const line = el('tr');
       for (const c of cols) {
-        tr.appendChild(el('td', c.type === 'number' ? 'is-num' : '', this._cell(row[c.field], c.type, c.unit)));
+        line.appendChild(el('td', c.type === 'number' ? 'is-num' : '', this._cell(row[c.field], c.type, c.unit)));
       }
-      table.appendChild(tr);
+      table.appendChild(line);
     }
     if (!(v.rows || []).length) {
-      const tr = el('tr');
+      const line = el('tr');
       const td = el('td', 'home-drawer-hint', i18n.t('board.micro.noRows'));
       td.colSpan = Math.max(1, cols.length);
-      tr.appendChild(td);
-      table.appendChild(tr);
+      line.appendChild(td);
+      table.appendChild(line);
     }
     return table;
   }

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 
-from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, locale, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, i18n_helpers, locale, member, requires_node, run_js
 
 from jenny.command.specs import BUILTIN_COMMAND_SPECS
 
@@ -48,7 +48,8 @@ const TRANSLATIONS = __TRANSLATIONS__;
 const i18n = {
   locale: 'it',
   translations: TRANSLATIONS,
-  __T__
+  __T__,
+  __T_OR__
 };
 
 /* Un elemento è quel poco che la tendina tocca. `listeners` registra i tipi
@@ -188,6 +189,7 @@ def _harness() -> str:
         _HARNESS.replace("__MAKE_EL__", FAKE_MENU_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": locale("it")}))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T_OR__", i18n_helpers())
         .replace("__SPECS__", _specs_json())
         .replace("__LOAD__", member(src, "_load"))
         .replace("__RENDER_MENU__", member(src, "_renderMenu"))

@@ -43,10 +43,9 @@ function workspaceErrorText(err) {
 function fileHelpText(path) {
   const key = FILE_HELP_KEYS[path];
   if (!key) return '';
-  const text = i18n.t(key);
-  // i18n.t() ritorna la chiave grezza quando manca la traduzione: meglio
-  // niente sheet che "workspace.fileHelp.agents" stampato addosso all'utente.
-  return text === key ? '' : text;
+  // Meglio niente sheet che "workspace.fileHelp.agents" stampato addosso
+  // all'utente.
+  return i18n.tOr(key);
 }
 
 // ── Apple-style SVG icons for grid view ──

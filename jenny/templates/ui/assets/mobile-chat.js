@@ -2413,9 +2413,7 @@ export class ChatController {
   _saEnum(group, value) {
     const raw = String(value || '');
     if (!raw) return '';
-    const key = `subagents.${group}.${raw}`;
-    const translated = i18n.t(key);
-    return translated === key ? raw : translated;
+    return i18n.tOr(`subagents.${group}.${raw}`, raw);
   }
 
   _saDuration(seconds) {

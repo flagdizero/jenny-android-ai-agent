@@ -47,7 +47,8 @@ _PAGES = {
 _STUBS = {
     "api-client.js": "export const api = {};\n",
     "rpc-client.js": "export const rpc = {};\n",
-    "i18n.js": "export const i18n = { locale: 'it', t: (k) => k };\n",
+    "i18n.js": "export const i18n = { locale: 'it', t: (k) => k, "
+    "tOr(k, f = '') { return f; } };\nexport const tr = (k) => k;\n",
     "utils.js": (
         "export const escapeHtml = (s) => s; export const showToast = () => {};\n"
         "export const showUndo = () => () => {};\n"

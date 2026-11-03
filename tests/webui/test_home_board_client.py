@@ -12,7 +12,7 @@ import json
 
 from support import theme_tokens
 from support.home_dom import UI, requires_jsdom, run_home
-from support.js_harness import ASSETS, function, requires_node, run_js
+from support.js_harness import ASSETS, function, i18n_helpers, requires_node, run_js
 
 pytestmark = requires_node
 
@@ -243,7 +243,7 @@ def test_the_envelope_answers_go_to_the_server() -> None:
 
 _PURE = """
 import assert from 'node:assert/strict';
-const i18n = { locale: 'it', t: (k, p) => (k === 'board.since.kind.card_added' ? `${p.title} ok` : k) };
+const i18n = { locale: 'it', t: (k, p) => (k === 'board.since.kind.card_added' ? `${p.title} ok` : k), __T_OR__ };
 __TINT__
 __WHEN__
 __SINCE__
@@ -293,7 +293,8 @@ def test_the_pure_helpers_of_the_board() -> None:
     reader = (ASSETS / "home-reader.js").read_text(encoding="utf-8")
     drawer = (ASSETS / "home-board-drawer.js").read_text(encoding="utf-8")
     script = (
-        _PURE.replace("__TINT__", function(board, "tintFor"))
+        _PURE.replace("__T_OR__", i18n_helpers())
+        .replace("__TINT__", function(board, "tintFor"))
         .replace("__WHEN__", function(board, "whenLabel"))
         .replace("__SINCE__", function(board, "sinceText"))
         .replace("__CLASSIFY__", function(reader, "classifyBoardLink"))

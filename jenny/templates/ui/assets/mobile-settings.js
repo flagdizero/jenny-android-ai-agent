@@ -4,7 +4,7 @@ import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { escapeHtml, showToast, sizeText } from './shared/utils.js';
 import { copyWithToast } from './shared/reply.js';
-import { i18n } from './shared/i18n.js';
+import { i18n, tr } from './shared/i18n.js';
 import { confirmDialog, detailDialog, formDialog } from './shared/dialog.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
 import { RemoteAccessPanel, remoteSummary } from './mobile-remote-access.js';
@@ -592,9 +592,7 @@ export class SettingsController {
    *  `i18n.t` in quel caso ritorna la chiave — stampata sotto la select
    *  sembrerebbe un guasto. Meglio nessuna riga che "settings.battery...". */
   _keepAwakeCost(mode) {
-    const key = `settings.battery.keepAwakeCost.${mode}`;
-    const text = i18n.t(key);
-    return text === key ? '' : text;
+    return i18n.tOr(`settings.battery.keepAwakeCost.${mode}`);
   }
 
   // ── Diagnostica energetica ─────────────────────────────────────────
@@ -2527,9 +2525,7 @@ export class SettingsController {
     }
     listEl.innerHTML = snapshots.map(s => {
       const date = new Date(s.created_at_ms).toLocaleString(i18n.locale);
-      const triggerKey = `backup.trigger.${s.trigger}`;
-      let trigger = i18n.t(triggerKey);
-      if (trigger === triggerKey) trigger = s.trigger;
+      const trigger = i18n.tOr(`backup.trigger.${s.trigger}`, s.trigger);
       const label = s.label ? ` · ${escapeHtml(s.label)}` : '';
       return `<button class="snapshot-row" data-snapshot="${escapeHtml(s.id)}" data-date="${escapeHtml(date)}"
         style="display:flex;flex-direction:column;align-items:flex-start;width:100%;gap:2px;padding:8px 10px;margin-bottom:6px;border:1px solid var(--border,rgba(128,128,128,.25));border-radius:8px;background:transparent;color:inherit;text-align:left">
@@ -2646,7 +2642,7 @@ export class SettingsController {
     try {
       const { skills } = await api.listSkills();
       if (this._stale(gen)) return;
-      write(skillsSummary(splitSkill(skills), (k, v) => i18n.t(k, v)));
+      write(skillsSummary(splitSkill(skills), tr));
     } catch {
       if (this._stale(gen)) return;
       write(i18n.t('skills.summaryError'));
@@ -2801,7 +2797,7 @@ export class SettingsController {
     if (!blockEl) return;
     this._cron = buildCronView(payload, {
       nowMs: payload.now_ms,
-      tr: (key, params) => i18n.t(key, params),
+      tr,
       locale: i18n.locale,
       keep: HANDS_JOBS,
     });

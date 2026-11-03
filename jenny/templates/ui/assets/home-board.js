@@ -187,8 +187,7 @@ export function sinceText(row) {
   /* Lo stato di un'app arriva come parola chiave (`alarm`, `stale`…): la
      frase la dice nella lingua di chi guarda. */
   if (row?.kind === 'app_event') params.state = i18n.t(`board.app.event.${row.state}`);
-  const text = i18n.t(key, params);
-  return text === key ? i18n.t('board.since.kind.other') : text;
+  return i18n.tOr(key, i18n.t('board.since.kind.other'), params);
 }
 
 /* Il muro, in percento dello schermo (come le posizioni): dall'origine fino a

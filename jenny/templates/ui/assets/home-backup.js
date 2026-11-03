@@ -221,7 +221,7 @@ export class HomeBackup {
     const rows = shown.map((s) => {
       const when = snapshotWhen(s.created_at_ms, now);
       const key = `backup.trigger.${s.trigger}`;
-      const trigger = i18n.t(key) === key ? s.trigger : i18n.t(key);
+      const trigger = i18n.tOr(key, s.trigger);
       const detail = `${trigger}${s.label ? ` · ${s.label}` : ''} · ${s.file_count} ${i18n.t('backup.files')}`;
       return `<button class="home-history-snap" type="button" data-snapshot="${escapeHtml(s.id)}" data-when="${escapeHtml(when)}">`
         + `<span>${escapeHtml(when)}<small>${escapeHtml(detail)}</small></span>`

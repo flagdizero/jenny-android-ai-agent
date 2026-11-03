@@ -16,7 +16,7 @@
  * cambio: ricaricare quel che è a schermo non è mestiere di questo modulo.
  */
 
-import { i18n } from './i18n.js';
+import { i18n, tr } from './i18n.js';
 import { botName } from './bot-name.js';
 import { AppState, armComposeMenu, claimComposeMenu } from './state.js';
 import { api } from './api-client.js';
@@ -555,7 +555,7 @@ export class ScopeChip {
    */
   async _createProject() {
     const clean = await createProjectFlow({
-      t: (key, vars) => i18n.t(key, vars),
+      t: tr,
       known: this._projects || [],
     });
     if (!clean) return;

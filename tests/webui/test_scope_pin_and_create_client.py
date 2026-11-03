@@ -101,6 +101,7 @@ const { ConversationList, projectKey } = await import('__LIST_URL__');
 const i18n = {
   t: (key, vars) => 'i18n:' + key + (vars ? ':' + Object.values(vars).join(',') : ''),
 };
+const tr = (key, params) => i18n.t(key, params);
 __VALID_NAME__
 __CREATE_ERROR_KEYS__
 __NOTEBOOK_WORDS__

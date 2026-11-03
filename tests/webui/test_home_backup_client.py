@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import json
 
-from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, i18n_helpers, member, requires_node, run_js
 
 ROOM_JS = ASSETS / "home-backup.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
@@ -44,7 +44,7 @@ _HARNESS = """
 import assert from 'node:assert/strict';
 
 const TRANSLATIONS = __TRANSLATIONS__;
-const i18n = { locale: 'it', translations: TRANSLATIONS, __T__ };
+const i18n = { locale: 'it', translations: TRANSLATIONS, __T__, __T_OR__ };
 
 __MAKE_EL__
 
@@ -121,6 +121,7 @@ def _harness() -> str:
         _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T_OR__", i18n_helpers())
         .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay")))
         .replace("__BACKUP_VALUE__", function(room, "backupValue"))
         .replace("__ROW_HTML__", function(room, "rowHtml"))
