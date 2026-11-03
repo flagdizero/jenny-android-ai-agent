@@ -1,7 +1,6 @@
 package com.flagdizero.jenny
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -771,17 +770,10 @@ class GatewayService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val manager = getSystemService(NotificationManager::class.java)
-        val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            getString(R.string.gateway_channel_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = getString(R.string.gateway_channel_description)
-            setSound(null, null)
-            enableVibration(false)
-        }
-        manager.createNotificationChannel(channel)
+        JennyChannels.ensure(
+            this, NOTIFICATION_CHANNEL_ID, R.string.gateway_channel_name,
+            R.string.gateway_channel_description, NotificationManager.IMPORTANCE_LOW, silent = true,
+        )
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(getString(R.string.gateway_notification_title))
@@ -797,23 +789,10 @@ class GatewayService : Service() {
     /**
      * Tap sulla notifica → apre Jenny. È l'unica via di rientro sempre visibile
      * quando l'app non è il launcher attivo, e senza questo intent la notifica
-     * persistente non fa assolutamente niente al tocco.
-     *
-     * Intent esplicito e senza categoria: MainActivity è `singleTask` e riporta
-     * a galla il task esistente via `onNewIntent`, che simula la pressione di
-     * Home (tornando in chat) solo per gli intent con `CATEGORY_HOME`. Toccare
-     * la notifica lascia quindi l'utente dov'era.
+     * persistente non fa assolutamente niente al tocco. Lascia l'utente
+     * dov'era: v. [JennyChannels.openJenny].
      */
-    private fun openUiIntent(): PendingIntent {
-        val intent = Intent(this, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return PendingIntent.getActivity(
-            this,
-            OPEN_UI_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
+    private fun openUiIntent(): PendingIntent = JennyChannels.openJenny(this, OPEN_UI_REQUEST_CODE)
 
     /**
      * Porta il service in foreground. Ritorna se al ritorno CI SIAMO — non se

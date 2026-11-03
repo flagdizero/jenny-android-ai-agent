@@ -1,6 +1,5 @@
 package com.flagdizero.jenny
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -617,20 +616,13 @@ class UpdateBridge(context: Context) {
 
     private fun postConfirmationNotification(confirm: Intent): Boolean {
         return try {
-            val manager = appContext.getSystemService(NotificationManager::class.java)
-                ?: return false
             // Canale dedicato e non `jenny_alerts`: quella è la voce dell'agente
             // e l'utente deve poterla silenziare senza perdersi il fatto che un
             // aggiornamento è fermo in attesa di un suo tocco.
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    UPDATE_CHANNEL_ID,
-                    appContext.getString(R.string.update_channel_name),
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = appContext.getString(R.string.update_channel_description)
-                }
-            )
+            val manager = JennyChannels.ensure(
+                appContext, UPDATE_CHANNEL_ID, R.string.update_channel_name,
+                R.string.update_channel_description, NotificationManager.IMPORTANCE_HIGH,
+            ) ?: return false
             val pending = PendingIntent.getActivity(
                 appContext,
                 UPDATE_NOTIFICATION_ID,

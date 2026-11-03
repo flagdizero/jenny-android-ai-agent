@@ -1,17 +1,13 @@
 package com.flagdizero.jenny
 
-import android.Manifest
 import android.app.ForegroundServiceStartNotAllowedException
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 
 /**
  * «Jenny è ferma — tocca per riavviarla»: la notifica che chiede all'utente il
@@ -124,10 +120,7 @@ object RestartNotice {
      * deve riceverne un secondo.
      */
     private fun post(appContext: Context, reason: String): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!JennyChannels.canPostNotifications(appContext)) {
             Log.w(
                 TAG,
                 "Gateway cannot restart from the background and POST_NOTIFICATIONS is denied: " +
@@ -136,9 +129,7 @@ object RestartNotice {
             return false
         }
         return try {
-            val manager = appContext.getSystemService(NotificationManager::class.java)
-                ?: return false
-            ensureChannel(appContext, manager)
+            val manager = ensureChannel(appContext) ?: return false
             val blocked = !manager.areNotificationsEnabled() ||
                 manager.getNotificationChannel(CHANNEL_ID)?.importance ==
                 NotificationManager.IMPORTANCE_NONE
@@ -177,17 +168,11 @@ object RestartNotice {
      * allarme — chi l'ha davanti non perde niente nei prossimi secondi — ma
      * deve esserci quando l'utente guarda, perché è l'unico che può agire.
      */
-    private fun ensureChannel(context: Context, manager: NotificationManager) {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            context.getString(R.string.restart_channel_name),
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = context.getString(R.string.restart_channel_description)
-            setSound(null, null)
-            enableVibration(false)
-        }
-        manager.createNotificationChannel(channel)
+    private fun ensureChannel(context: Context): NotificationManager? {
+        return JennyChannels.ensure(
+            context, CHANNEL_ID, R.string.restart_channel_name,
+            R.string.restart_channel_description, NotificationManager.IMPORTANCE_LOW, silent = true,
+        )
     }
 
     /**

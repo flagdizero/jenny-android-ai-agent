@@ -978,9 +978,7 @@ class MainActivity : AppCompatActivity() {
             ensureLocationPermission()
             return
         }
-        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-        if (!granted) {
+        if (!JennyChannels.canPostNotifications(this)) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             ensureLocationPermission()
