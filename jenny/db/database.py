@@ -35,6 +35,7 @@ _T = TypeVar("_T")
 # Quanto un'altra connessione (un altro processo, o ``sqlite3`` lanciato a mano
 # sul telefono) può tenere il file prima che una scrittura rinunci.
 BUSY_TIMEOUT_MS = 5000
+WAL_SIZE_LIMIT = 16 * 1024 * 1024
 
 
 # Le tabelle di ogni database, prima di qualunque schema: la versione di ogni
@@ -69,6 +70,10 @@ def _connect(path: Path) -> sqlite3.Connection:
     # In WAL ``NORMAL`` non perde mai la coerenza del file; dopo un crash di
     # corrente può perdere l'ultima transazione. Per lo stato di Jenny basta.
     conn.execute("PRAGMA synchronous=NORMAL")
+    # Dopo un checkpoint il ``-wal`` torna a questa misura: senza, resta grande
+    # quanto la transazione più grossa che abbia mai visto (una migrazione da
+    # centinaia di MB lo lasciava lì per sempre).
+    conn.execute(f"PRAGMA journal_size_limit={WAL_SIZE_LIMIT}")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     return conn

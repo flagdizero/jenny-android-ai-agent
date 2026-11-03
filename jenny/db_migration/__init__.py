@@ -64,6 +64,13 @@ def run_pending(workspace: Path, *, now: float | None = None,
         except Exception:
             logger.opt(exception=True).error("Migration {} could not run", migration.name)
             outcome[migration.name] = FAILED
+    if DONE in outcome.values():
+        # Un import grosso lascia un ``-wal`` grande quanto lui: si porta dentro il
+        # database adesso, e il file torna piccolo (``journal_size_limit``).
+        try:
+            ctx.state.read("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            logger.opt(exception=True).warning("Checkpoint after the migrations failed")
     return outcome
 
 
