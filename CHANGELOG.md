@@ -49,6 +49,9 @@ Releases before 1.0 are described only on their
 
 ### Fixed
 
+- Asked to change what a helper just finished (a title for the poem it wrote), Jenny sends
+  the change back to that same helper, which still has its work at hand, instead of starting a
+  new one.
 - An app action that switches something on (watering the plants, a light) no longer runs
   while a plan is being prepared or while writing is turned off.
 - Undoing a plan's rollback that was interrupted by a restart puts back every file; one could
