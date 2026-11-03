@@ -135,6 +135,11 @@ class Runner:
         created: list[str] = []
         jobs_before = self._job_ids()
         usage_before = self._usage()
+        # L'archivio della memoria non sta fra i file che ogni giro rimette
+        # (``RESET_FILES``): i fatti che Dream archivia in un giro restavano, e il
+        # 03/11/2026 ``recall_superseded`` trovava sei «barista al caffe' ...» lasciati
+        # da ``dream_replace_links_versions`` e non sapeva quale fosse il vero.
+        archive_before = set(dev.listdir("memory/archive"))
         try:
             if scenario.chat == "personal":
                 self._fresh_personal_session()
@@ -210,6 +215,8 @@ class Runner:
             result.error = f"{type(exc).__name__}: {exc}"
         finally:
             self._cleanup(jobs_before, project, created)
+            for name in sorted(set(dev.listdir("memory/archive")) - archive_before):
+                dev.remove(f"memory/archive/{name}")
             result.cost = _usage_delta(usage_before, self._usage())
             result.seconds = round(time.monotonic() - start, 1)
         return result
