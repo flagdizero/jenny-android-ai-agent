@@ -101,10 +101,20 @@ async def execute_action(
                 await data_changed(slug)
             return result
         if (action.method or "GET").upper() != "GET":
-            # Un'azione http che cambia qualcosa (annaffia, registra) segue la
-            # stessa regola della posa delle azioni storage.
+            # Un'azione http che cambia qualcosa (annaffia, registra) segue le
+            # stesse regole delle azioni storage: la sola lettura e la posa.
+            # La sola lettura non la lasciava passare fino al 03/11/2026: una
+            # pianificazione poteva accendere l'irrigazione. A differenza di
+            # ``ssh_exec`` (che scrive su un'altra macchina e resta aperto),
+            # qui si cambia lo stato di un'app dell'utente.
             from jenny.apps.permissions import write_refusal
+            from jenny.security.workspace_access import (
+                READONLY_TOOL_REFUSAL,
+                current_turn_is_readonly,
+            )
 
+            if current_turn_is_readonly():
+                raise AppActionError(READONLY_TOOL_REFUSAL, status=403)
             refusal = write_refusal(app.dir)
             if refusal is not None:
                 raise AppActionError(refusal, status=403)
