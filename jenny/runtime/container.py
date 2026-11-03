@@ -482,6 +482,12 @@ class GatewayContainer:
         )
         self._sync_templates()
         self._open_databases()
+        # L'unica porta dello strumento di migrazione (``jenny/db_migration``,
+        # da cancellare fra qualche versione): dopo i database, prima di chiunque
+        # li usi. Non solleva.
+        from jenny.db_migration import run_pending
+
+        run_pending(self.config.workspace_path)
 
         # Backpressure su dispositivi memory-constrained (Android): code limitate.
         # I delta di streaming/progress usano try_publish_outbound (scartabili),
