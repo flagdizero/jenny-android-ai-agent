@@ -629,6 +629,29 @@ class WriteJournal:
         except Exception as e:  # noqa: BLE001 — vedi docstring
             logger.warning("Subagent journal could not note {}: {}", path, e)
 
+    def save_before_now(self, path: str | Path) -> None:
+        """Salva subito il «prima» che :meth:`touch` ha annotato per *path*.
+
+        Di solito il contenuto aspetta in memoria fino a :meth:`settle`, che lo
+        salva solo se il file è cambiato davvero. Un annulla invece sa che lo
+        cambierà, e un kill fra la scrittura e ``settle`` porterebbe via l'unica
+        copia di quel che c'era: trovato sul telefono il 03/11/2026, un ritorno
+        interrotto lasciava una pagina che annullare il ritorno non rimetteva.
+        Salvato prima, al boot ``_UndoRun._repair`` lo ritrova.
+        """
+        try:
+            raw = os.path.abspath(path)
+            target = Path(os.path.realpath(os.path.dirname(raw))) / os.path.basename(raw)
+            rel = self._rel(target)
+            if rel is None:
+                return
+            with self._lock:
+                pending = self._pending.get(rel)
+                if pending is not None and rel not in self._seen:
+                    self._save_before(pending)
+        except Exception as e:  # noqa: BLE001 — come ``touch``: al più non annullabile
+            logger.warning("Subagent journal could not save the before of {}: {}", path, e)
+
     def _touch_missing_parents(self, target: Path) -> None:
         for parent in reversed(target.parents):
             if parent == self.root or self.root not in parent.parents:
@@ -1098,6 +1121,7 @@ class _UndoRun:
         try:
             if self.into is not None:
                 self.into.touch(target)
+                self.into.save_before_now(target)
             if outcome == _MERGE:
                 if not self._merge_back(key, chain):
                     self._count(report, key, _KEEP, self._verdict(chain, now) or KEPT_ERROR)
@@ -1123,16 +1147,19 @@ class _UndoRun:
     def _repair(self, key: str, chain: list[dict[str, Any]]) -> None:
         """Un file rimesso da un annulla poi ucciso prima della sua riga: la riga
         si scrive adesso, o annullare l'annulla non lo vedrebbe. Il contenuto di
-        prima dell'annulla non c'è più, quindi la riga dice «non salvato»."""
+        prima dell'annulla l'ha salvato :meth:`WriteJournal.save_before_now`
+        prima di toccare il file; se non c'è (troppo grande, o un errore), la
+        riga dice «non salvato»."""
         into = self.into
         first, last = chain[0].get("before"), chain[-1].get("after")
         if into is None or last == first:
             return
         if any(e["path"] == key for e in into._read_entries()):
             return
+        saved = into._has_object(str(last)) if _is_sha(last) else last is None
         with into._lock:
             into._append([{"path": key, "before": last, "after": first, "ts": time.time(),
-                           "saved": False, "tool": "undo"}])
+                           "saved": saved, "tool": "undo"}])
             into._note_path(key)
 
     def _merged_board(self, key: str, chain: list[dict[str, Any]]) -> Any:

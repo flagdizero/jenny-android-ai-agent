@@ -788,7 +788,11 @@ def test_a_killed_undo_set_is_finished_at_boot_with_its_choices(ws: Path, monkey
 
 
 def test_a_file_put_back_before_its_row_gets_a_repair_row(ws: Path, monkeypatch) -> None:
+    """Il kill arriva fra la scrittura dell'annulla e la sua riga. Il «prima»
+    era già salvato (``save_before_now``), quindi annullare l'annulla rimette
+    anche quel file: sul telefono, il 03/11/2026, era l'unico che mancava."""
     a, b = _plan_helpers(ws)
+    helped = _tree(ws)
     into = WriteJournal(ws, journal_key("undo", "p1-1"))
     real = WriteJournal.settle
 
@@ -805,6 +809,30 @@ def test_a_file_put_back_before_its_row_gets_a_repair_row(ws: Path, monkeypatch)
     assert finish_interrupted_undos(ws) == 1
     repaired = [e for e in into._read_entries() if e.get("tool") == "undo"]
     assert repaired and all("path" in e for e in repaired)
+    report = undo_set([into], into=WriteJournal(ws, journal_key("undo", "p1-2")))
+    assert report.kept == []
+    assert _tree(ws) == helped
+
+
+def test_a_repair_row_without_the_saved_before_says_not_saved(ws: Path, monkeypatch) -> None:
+    """Se il «prima» non si è potuto salvare (troppo grande, un errore), la
+    riga rifatta al boot lo dice, e annullare l'annulla lascia il file com'è."""
+    a, b = _plan_helpers(ws)
+    into = WriteJournal(ws, journal_key("undo", "p1-1"))
+    monkeypatch.setattr(WriteJournal, "save_before_now", lambda self, path: None)
+    real = WriteJournal.settle
+
+    def _dies_once(self, tool=""):
+        if self is into and tool == "undo":
+            monkeypatch.setattr(WriteJournal, "settle", real)
+            self._pending.clear()
+            raise SystemExit("kill")
+        return real(self, tool)
+
+    monkeypatch.setattr(WriteJournal, "settle", _dies_once)
+    with pytest.raises(SystemExit):
+        undo_set([a.journal, b.journal], into=into)
+    assert finish_interrupted_undos(ws) == 1
     report = undo_set([into], into=WriteJournal(ws, journal_key("undo", "p1-2")))
     assert {"path": "wikis/piante/wiki/acero.md", "reason": KEPT_NOT_SAVED} in report.kept
 
