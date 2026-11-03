@@ -170,7 +170,7 @@ export class HomeModel {
   applyTranslations() {
     if (this.brandsLabel) this.brandsLabel.textContent = i18n.t('home.model.who');
     if (this.keyLabel) this.keyLabel.textContent = i18n.t('home.model.key');
-    if (this.keySave) this.keySave.textContent = i18n.t('home.model.keySave');
+    if (this.keySave) this.keySave.textContent = i18n.t('common.save');
     if (this.keyInput) this.keyInput.placeholder = i18n.t('home.model.keyPlaceholder');
     this._paint();
   }

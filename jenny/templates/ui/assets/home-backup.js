@@ -282,7 +282,7 @@ export class HomeBackup {
          scambiata per questa: la riga dice cos'e' e cosa **non** e'. Spenta,
          gli snapshot gia' fatti restano, e si sfogliano lo stesso. */
       const on = this.backup?.snapshots_enabled !== false;
-      this.historyBtn.innerHTML = rowHtml('history', i18n.t('home.backup.history.title'),
+      this.historyBtn.innerHTML = rowHtml('history', i18n.t('backup.snapshotHistory'),
         i18n.t(on ? 'home.backup.history.sub' : 'home.backup.history.off'),
         this._history ? 'chevron-up' : 'chevron-down');
       this.historyBtn.setAttribute('aria-expanded', String(!!this._history));

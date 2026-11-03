@@ -508,7 +508,7 @@ export class WorkspaceController {
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'ws-save-btn';
-      saveBtn.textContent = i18n.t('workspace.save');
+      saveBtn.textContent = i18n.t('common.save');
       saveBtn.addEventListener('click', () => this.saveFile());
       bar.appendChild(saveBtn);
     }
@@ -656,7 +656,7 @@ export class WorkspaceController {
       }
       actions.push({ icon: 'ti-edit', label: i18n.t('workspace.rename'), action: 'rename' });
       actions.push({ icon: 'ti-copy', label: i18n.t('workspace.clone'), action: 'clone' });
-      actions.push({ icon: 'ti-trash', label: i18n.t('workspace.delete'), action: 'delete', danger: true });
+      actions.push({ icon: 'ti-trash', label: i18n.t('common.delete'), action: 'delete', danger: true });
     }
 
     this._openSheet(
@@ -1070,19 +1070,19 @@ export class WorkspaceController {
          flag lo faceva credere: la conferma di uscita non sarebbe comparsa.
          Il bottone torna attivo per salvarlo. */
       if (this.currentPath !== path || this.editor?.getValue() !== content) {
-        if (btn) { btn.textContent = i18n.t('workspace.save'); btn.disabled = false; }
+        if (btn) { btn.textContent = i18n.t('common.save'); btn.disabled = false; }
         return;
       }
       this._dirty = false;
       if (btn) { btn.textContent = i18n.t('workspace.saved'); btn.classList.remove('dirty'); }
-      setTimeout(() => { if (btn) btn.textContent = i18n.t('workspace.save'); }, 2000);
+      setTimeout(() => { if (btn) btn.textContent = i18n.t('common.save'); }, 2000);
     } catch (err) {
       // Il motivo va mostrato, non inghiottito: un bottone che dice solo
       // "Errore" ha tenuto nascosto per mesi un salvataggio che non poteva
       // riuscire (contenuto in un header HTTP, v. ws-manager.request).
       showToast(workspaceErrorText(err), 'error');
       const btn = document.querySelector('.ws-save-btn');
-      if (btn) { btn.textContent = i18n.t('workspace.save'); btn.disabled = false; }
+      if (btn) { btn.textContent = i18n.t('common.save'); btn.disabled = false; }
     }
   }
 
@@ -1123,7 +1123,7 @@ export class WorkspaceController {
     this.editor.on('change', () => {
       this._dirty = true;
       const btn = document.querySelector('.ws-save-btn');
-      if (btn) { btn.textContent = i18n.t('workspace.save'); btn.disabled = false; btn.classList.add('dirty'); }
+      if (btn) { btn.textContent = i18n.t('common.save'); btn.disabled = false; btn.classList.add('dirty'); }
     });
   }
 

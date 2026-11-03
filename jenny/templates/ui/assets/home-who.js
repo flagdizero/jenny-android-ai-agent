@@ -558,7 +558,7 @@ export class WhoPanel {
     }
     if (this._searchClear) {
       this._searchClear.hidden = !this._query;
-      this._searchClear.setAttribute('aria-label', i18n.t('home.who.clearSearch'));
+      this._searchClear.setAttribute('aria-label', i18n.t('launcher.clearSearch'));
     }
   }
 

@@ -108,7 +108,7 @@ export class DriveBackupCard {
       : '')
       + (on
         ? row('home-cloud-off', 'turnOff', 'cloud-off',
-          i18n.t('cloudBackup.more.off'), i18n.t('cloudBackup.more.offSub'))
+          i18n.t('cloudBackup.turnOff'), i18n.t('cloudBackup.more.offSub'))
         : '');
   }
 
@@ -284,7 +284,7 @@ export class DriveBackupCard {
       }
       case 'blocked':
         return hero(view.reason === 'consent_needed' ? 'cloud-lock' : 'lock-question', t('cloudBackup.blocked.title'),
-          view.last ? t('cloudBackup.blocked.sub', { when: dayText(view.last, now) }) : t('cloudBackup.blocked.subNever'))
+          view.last ? t('cloudBackup.blocked.sub', { when: dayText(view.last, now) }) : t('cloudBackup.late.subNever'))
           + box(view.reason)
           + action(view.action)
           + note('heart', t('cloudBackup.blocked.calm'));
@@ -302,7 +302,7 @@ export class DriveBackupCard {
           + note('heart', t(view.alerted ? 'cloudBackup.late.calmAlerted' : 'cloudBackup.late.calm'));
       case 'damaged':
         return hero('cloud-exclamation', t('cloudBackup.damaged.title'),
-          t('cloudBackup.damaged.sub', { when: dayText(view.last, now) }))
+          t('cloudBackup.safe.sub', { when: dayText(view.last, now) }))
           + this._stripHtml(now)
           + box(view.reason)
           + action('copyNow')

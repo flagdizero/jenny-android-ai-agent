@@ -190,10 +190,10 @@ export class HomeJenny {
     if (this.floatingAllow) this.floatingAllow.textContent = i18n.t('settings.floatingAllow');
     if (this.nameLabel) this.nameLabel.textContent = i18n.t('home.jenny.name');
     if (this.nameNote) this.nameNote.textContent = i18n.t('home.jenny.nameHint');
-    if (this.nameSave) this.nameSave.textContent = i18n.t('home.jenny.rulesSave');
+    if (this.nameSave) this.nameSave.textContent = i18n.t('common.save');
     if (this.rulesLabel) this.rulesLabel.textContent = i18n.t('home.jenny.rules');
     if (this.rulesNote) this.rulesNote.textContent = i18n.t('home.jenny.rulesHint');
-    if (this.rulesSave) this.rulesSave.textContent = i18n.t('home.jenny.rulesSave');
+    if (this.rulesSave) this.rulesSave.textContent = i18n.t('common.save');
     if (this.rulesEl) this.rulesEl.placeholder = i18n.t('home.jenny.rulesPlaceholder');
     if (this._painted) {
       for (const btn of this.sizeEl.children) {

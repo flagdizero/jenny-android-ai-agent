@@ -329,8 +329,8 @@ export class DrawerPhotos {
   }
 
   _status(photo) {
-    if (photo.status === 'integrated') return i18n.t('board.photos.integrated');
-    if (photo.status === 'pending') return i18n.t('board.photos.pending');
+    if (photo.status === 'integrated') return i18n.t('board.wiki.integrated');
+    if (photo.status === 'pending') return i18n.t('board.wiki.pending');
     return '';
   }
 
@@ -419,7 +419,7 @@ export class DrawerPhotos {
     side.appendChild(el('span', 'home-photos-rule'));
     const acts = el('div', 'home-photos-acts');
     if (editing) {
-      const save = button('home-photos-save', i18n.t('board.section.save'), () => this._save(photo));
+      const save = button('home-photos-save', i18n.t('common.save'), () => this._save(photo));
       save.disabled = this._saving;
       acts.append(save, this._act('is-quiet', 'x', i18n.t('common.cancel'),
         () => this._show(photo ? { openId: photo.id } : {})));
@@ -450,7 +450,7 @@ export class DrawerPhotos {
         count: (n, count, card) => i18n.t('board.photos.viewer', { card, n, count }),
         day: (iso) => shortDate(iso, { month: 'long' }),
         state: (p) => this._status(p),
-        close: i18n.t('board.notes.close'),
+        close: i18n.t('common.close'),
       },
       onIndex: (i) => {
         if (!this.openId || this.editId || this.photos[i]?.id === this.openId) return;

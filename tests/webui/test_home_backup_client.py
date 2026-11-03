@@ -325,7 +325,7 @@ def test_the_local_history_is_told_apart_from_a_backup() -> None:
     _run_js("""
       room({ snapshots_enabled: true });
       const active = nodi['home-backup-history'].innerHTML;
-      assert.ok(active.includes(i18n.t('home.backup.history.title')));
+      assert.ok(active.includes(i18n.t('backup.snapshotHistory')));
       assert.ok(active.includes(i18n.t('home.backup.history.sub')));
       assert.ok(i18n.t('home.backup.history.sub').length > 40, 'la frase non spiega niente');
 

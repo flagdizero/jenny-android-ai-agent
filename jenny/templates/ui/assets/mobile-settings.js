@@ -1072,7 +1072,7 @@ export class SettingsController {
           <i class="ti ti-edit" aria-hidden="true"></i> ${i18n.t('settings.edit')}
         </button>
         <button class="settings-btn-add btn-danger provider-delete" data-provider="${escapeHtml(p.name)}">
-          <i class="ti ti-trash" aria-hidden="true"></i> ${i18n.t('settings.delete')}
+          <i class="ti ti-trash" aria-hidden="true"></i> ${i18n.t('common.delete')}
         </button>
       </div>`;
     document.querySelectorAll('#drawer-brand-body .provider-edit').forEach(b =>
@@ -1886,7 +1886,7 @@ export class SettingsController {
         <button class="btn-icon ssh-edit" data-ssh-alias="${alias}" title="${i18n.t('settings.edit')}">
           <i class="ti ti-edit"></i>
         </button>
-        <button class="btn-icon btn-danger ssh-delete" data-ssh-alias="${alias}" title="${i18n.t('settings.delete')}">
+        <button class="btn-icon btn-danger ssh-delete" data-ssh-alias="${alias}" title="${i18n.t('common.delete')}">
           <i class="ti ti-trash"></i>
         </button>
       </div>`;
@@ -1976,7 +1976,7 @@ export class SettingsController {
     if (hasKey && !await confirmDialog(i18n.t('settings.ssh.regenerateConfirm', { alias }))) return;
     try {
       await api.generateSshKey(alias, { replace: hasKey });
-      showToast(i18n.t('settings.ssh.keyGenerated'));
+      showToast(i18n.t('settings.ssh.statusKeyReady'));
       this._loadSsh();
     } catch (e) { showToast(e.message, 'error'); }
   }
@@ -2139,7 +2139,7 @@ export class SettingsController {
     formDialog({
       id: 'ssh-host-dialog',
       title: isEdit ? i18n.t('settings.ssh.editHost') : i18n.t('settings.ssh.addHost'),
-      okText: i18n.t('settings.save'),
+      okText: i18n.t('common.save'),
       cancelText: i18n.t('common.cancel'),
       bodyHtml: `
         <div class="settings-field">
@@ -2820,7 +2820,7 @@ export class SettingsController {
       <div class="cron-asof">
         <span>${escapeHtml(i18n.t('cron.asOf', { time: stamp }))}</span>
         <button class="cron-refresh" id="btn-cron-refresh">
-          <i class="ti ti-refresh" aria-hidden="true"></i> ${i18n.t('cron.refresh')}
+          <i class="ti ti-refresh" aria-hidden="true"></i> ${i18n.t('header.refresh')}
         </button>
       </div>`;
   }
@@ -3326,7 +3326,7 @@ export class SettingsController {
     formDialog({
       id: 'provider-dialog',
       title: isEdit ? i18n.t('settings.editProvider') : i18n.t('settings.addProviderTitle'),
-      okText: i18n.t('settings.save'),
+      okText: i18n.t('common.save'),
       cancelText: i18n.t('common.cancel'),
       bodyHtml: `
         <div class="settings-field">
@@ -3339,7 +3339,7 @@ export class SettingsController {
           <label class="settings-label">${i18n.t('settings.format')}</label>
           <select class="settings-select" id="dlg-provider-format">
             <option value="openai_compat" ${isEdit && existingProvider.format === 'openai_compat' ? 'selected' : ''}>${i18n.t('settings.openaiCompat')}</option>
-            <option value="anthropic" ${isEdit && existingProvider.format === 'anthropic' ? 'selected' : ''}>${i18n.t('settings.anthropicCompat')}</option>
+            <option value="anthropic" ${isEdit && existingProvider.format === 'anthropic' ? 'selected' : ''}>${i18n.t('provider.anthropic')}</option>
           </select>
         </div>
         <div class="settings-field">

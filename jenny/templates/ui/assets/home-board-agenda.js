@@ -57,7 +57,7 @@ export function reminderForm({ onSave, onCancel }) {
   monthBox.type = 'checkbox';
   month.append(monthBox, document.createTextNode(i18n.t('board.section.reminderMonth')));
   const actions = el('div', 'home-board-actions');
-  const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+  const save = el('button', 'home-board-btn is-primary', i18n.t('common.save'));
   save.type = 'submit';
   actions.append(button('home-board-btn', i18n.t('common.cancel'), () => onCancel()), save);
   form.append(what, when, month, actions);

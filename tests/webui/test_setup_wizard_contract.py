@@ -488,7 +488,7 @@ w.step = 1;
 w.apiBase = 'Http:/10.0.2.2:8765/v1';
 w._goToStep2();
 assert.equal(w.step, 1, 'con un indirizzo storpiato si e andati a chiedere i modelli');
-assert.deepEqual(toasts, ['onboarding.baseUrlInvalid']);
+assert.deepEqual(toasts, ['settings.baseUrlInvalid']);
 w.apiBase = 'Http://10.0.2.2:8765/v1';
 w._goToStep2();
 assert.equal(w.step, 2);

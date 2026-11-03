@@ -2311,7 +2311,8 @@ def test_the_album_polaroid_is_square_and_the_viewer_shows_the_whole_photo() -> 
     from support import css_levels
 
     css = (css_levels.ASSETS / "home-style.css").read_text(encoding="utf-8")
-    rules = {sel.strip(): body for sel, body, _ in css_levels.rules(css)}
+    # Un selettore in una lista vale come da solo (`a, b { ... }`).
+    rules = {one.strip(): body for sel, body, _ in css_levels.rules(css) for one in sel.split(",")}
     assert "aspect-ratio: 1" in rules[".home-photos-pol-img"]
     assert "object-fit: cover" in rules[".home-photos-pol-img img"]
     assert "object-fit: contain" in rules[".home-photo-viewer-img"]

@@ -1113,7 +1113,7 @@ export class HomeChat {
       fileCls: 'home-file',
       onImage: (entry) => openImageLightbox(entry.url, {
         alt: entry.name || '',
-        closeLabel: i18n.t('home.closeImage'),
+        closeLabel: i18n.t('common.close'),
       }),
     });
     if (list) node.appendChild(list);

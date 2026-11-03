@@ -1483,7 +1483,7 @@ export class HomeBoard {
     bar.append(act('square-x', 'board.card.remove', () => this.removeCard(card.id, card.title)));
     const close = act('x', 'board.card.close', () => this.setFocus(null));
     close.classList.add('is-close');
-    close.setAttribute('aria-label', i18n.t('board.card.close'));
+    close.setAttribute('aria-label', i18n.t('common.close'));
     close.querySelector('span').remove();
     bar.appendChild(close);
     if (bar.parentNode !== this.canvas) this.canvas.appendChild(bar);
@@ -1596,7 +1596,7 @@ export class HomeBoard {
     this._nameSheet({
       title: i18n.t('board.card.renameTitle'),
       value: current || '',
-      submit: i18n.t('board.card.save'),
+      submit: i18n.t('common.save'),
       send: async (title) => {
         await rpc.board('card.rename', this.notebook, { id: cardId, title });
         await this.load(this.notebook);
@@ -1735,7 +1735,7 @@ export class HomeBoard {
         await rpc.board('card.restore', notebook, { id: cardId });
       } catch (err) {
         console.warn('home.board: restore failed', err);
-        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.restoreFailed'),
+        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'apps.restoreFailed'),
           'error');
         return;
       }
@@ -1745,7 +1745,7 @@ export class HomeBoard {
           ?.classList.add('is-appearing');
         this.reveal(cardId);
       }
-    }, { label: i18n.t('board.card.undo') });
+    }, { label: i18n.t('apps.undo') });
   }
 
   /** I fili: sempre visibili, sottili e senza scritte; quelli della scheda
@@ -2131,7 +2131,7 @@ export class HomeBoard {
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'home-board-btn';
-    close.textContent = i18n.t('board.preview.close');
+    close.textContent = i18n.t('common.close');
     close.addEventListener('click', () => this.sheet.close());
     const want = document.createElement('button');
     want.type = 'button';

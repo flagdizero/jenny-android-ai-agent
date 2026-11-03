@@ -19,7 +19,6 @@
     "copy": "Copia",
     "copied": "Copiato!",
     "copyFailed": "Copia non riuscita",
-    "close": "Chiudi",
     "filesModified": "{count} file modificati",
     "online": "online",
     "offline": "offline",
@@ -158,7 +157,6 @@
     "idle": "Inattivo"
   },
   "settings": {
-    "save": "Salva",
     "saved": "Salvato!",
     "webSearch": "Ricerca web",
     "memory": {
@@ -228,7 +226,6 @@
     "addProvider": "Aggiungi provider",
     "noProviders": "Nessun provider configurato.",
     "edit": "Modifica",
-    "delete": "Elimina",
     "failedToLoad": "Caricamento impostazioni fallito",
     "nameAndKeyRequired": "Nome e chiave API sono obbligatori",
     "providerSaved": "Provider salvato",
@@ -286,7 +283,6 @@
       "generateKey": "Genera chiave",
       "regenerateKey": "Rigenera chiave",
       "regenerateConfirm": "Rigenerare la chiave di {alias}? Quella già installata sul server smetterà di funzionare.",
-      "keyGenerated": "Chiave generata",
       "publicKeyHint": "Incolla questa riga in ~/.ssh/authorized_keys sul server. La chiave privata resta sul telefono.",
       "copy": "Copia",
       "copied": "Chiave pubblica copiata",
@@ -319,7 +315,6 @@
     "namePlaceholder": "Il mio Provider",
     "format": "Formato",
     "openaiCompat": "OpenAI Compatibile",
-    "anthropicCompat": "Anthropic Compatibile",
     "apiKey": "Chiave API",
     "apiKeyPlaceholder": "sk-...",
     "apiKeyKeepBlank": "Lascia vuoto per mantenere la chiave salvata",
@@ -567,21 +562,20 @@
     "weekdayAt": "{day} alle {time}",
     "yesterdayAt": "ieri alle {time}",
     "modelsLoading": "Chiedo l'elenco…",
-    "modelsNeedKey": "Serve una chiave per farsi dare l'elenco."
+    "modelsNeedKey": "Serve una chiave per farsi dare l'elenco.",
+    "save": "Salva",
+    "delete": "Elimina"
   },
   "dialog": {
-    "confirm": "Conferma",
-    "cancel": "Annulla"
+    "confirm": "Conferma"
   },
   "workspace": {
     "root": "workspace",
-    "save": "Salva",
     "saved": "Salvato",
     "newFile": "Nuovo file",
     "newFolder": "Nuova cartella",
     "rename": "Rinomina",
     "clone": "Clona",
-    "delete": "Elimina",
     "download": "Scarica",
     "new": "Nuovo",
     "fileName": "Nome file:",
@@ -638,10 +632,8 @@
     "invalidManifest": "manifest non valido",
     "open": "Apri",
     "edit": "Modifica",
-    "delete": "Elimina",
     "uninstall": "Disinstalla",
     "appInfo": "Info app",
-    "close": "Chiudi",
     "brokenConfirm": "L'app \"{name}\" è rotta: {error}. Chiedo a Jenny di sistemarla?",
     "brokenPrompt": "L'app \"{slug}\" risulta rotta con questo errore: {error}. Puoi sistemarla?",
     "uninstalled": "{name} disinstallata",
@@ -769,7 +761,6 @@
   },
   "cron": {
     "asOf": "Aggiornato alle {time}",
-    "refresh": "Aggiorna",
     "empty": "Nessuna attività programmata.",
     "notStarted": "La programmazione non è ancora partita: succede durante la configurazione iniziale.",
     "failed": "Non riesco a leggere lo stato della programmazione.",
@@ -855,7 +846,6 @@
   "onboarding": {
     "selectFormat": "Scegli il formato del provider",
     "selectFormatDesc": "La maggior parte dei servizi LLM usa uno di questi formati.",
-    "openaiCompat": "OpenAI Compatibile",
     "openaiCompatHint": "OpenAI, Groq, DeepSeek, Ollama, vLLM, OpenRouter, Together, Fireworks...",
     "anthropicCompat": "Anthropic Compatibile",
     "anthropicCompatHint": "Modelli Claude tramite Anthropic Messages API",
@@ -866,9 +856,6 @@
     "apiKeyPlaceholderOpenai": "sk-...",
     "apiKeyPlaceholderAnthropic": "sk-ant-...",
     "providerNameHint": "Il nome che vedrai nelle Impostazioni",
-    "apiKey": "Chiave API",
-    "baseUrl": "URL base",
-    "baseUrlInvalid": "Questo indirizzo non è un indirizzo web: deve iniziare con http:// o https://.",
     "baseUrlHint": "Lascia il predefinito se non sei sicuro",
     "selectModel": "Scegli un modello",
     "searchModels": "Cerca modelli",
@@ -878,7 +865,6 @@
     "orCustomModel": "Oppure digita un nome modello personalizzato",
     "botName": "Nome assistente",
     "launch": "Avvia",
-    "back": "Indietro",
     "next": "Avanti",
     "configuring": "Configurazione del bot...",
     "configuringDesc": "Configurazione del provider e creazione della prima chat",
@@ -1286,7 +1272,6 @@
       "undoActionMany": "Annulla le sue modifiche ({count} file)",
       "stopFailed": "Non sono riuscita a fermarla.",
       "undoFailed": "Non sono riuscita ad annullare.",
-      "sheetClose": "Chiudi",
       "undone": {
         "you": "Annullato: {count} file rimessi com'erano prima di lei.",
         "youOne": "Annullato: 1 file rimesso com'era prima di lei.",
@@ -1400,7 +1385,6 @@
     },
     "attach": "Allega",
     "removeAttachment": "Togli l'allegato",
-    "closeImage": "Chiudi",
     "workshop": "Officina",
     "back": {
       "chat": "torna alla chat",
@@ -1435,7 +1419,6 @@
       "rules": "Le regole che le hai dato tu",
       "rulesHint": "Questo resta tuo: lo rilegge a ogni turno e non lo riscrive. Il resto del suo carattere lo tiene lei, e si legge in officina.",
       "rulesPlaceholder": "Per esempio: chiamami per nome, e niente emoji.",
-      "rulesSave": "Salva",
       "rulesSaved": "Salvato",
       "rulesFailed": "Non sono riuscita a salvare quel che hai scritto."
     },
@@ -1445,7 +1428,6 @@
       "loadFailed": "Non sono riuscita a leggere l'elenco: quello che vedi può essere incompleto.",
       "newNotebook": "Nuovo quaderno",
       "search": "Cerca un quaderno…",
-      "clearSearch": "Pulisci la ricerca",
       "inUse": "In uso",
       "archive": "Archivio",
       "archiveHint": "fermi da più di un mese",
@@ -1465,8 +1447,6 @@
     "reader": {
       "failed": "Non sono riuscita ad aprire questa pagina.",
       "edit": "Modifica",
-      "save": "Salva",
-      "cancel": "Annulla",
       "saved": "Salvata.",
       "saveFailed": "Non sono riuscita a salvare questa pagina.",
       "conflict": "Jenny ha cambiato questa pagina mentre la modificavi. La ricarico? Quel che hai scritto qui si perde.",
@@ -1483,7 +1463,6 @@
       "keyNone": "nessuna",
       "keyAdd": "Aggiungi",
       "keyChange": "Cambia",
-      "keySave": "Salva",
       "keySaved": "Chiave salvata",
       "keyFailed": "Non sono riuscita a salvare la chiave.",
       "keyPlaceholder": "incolla qui la chiave",
@@ -1510,7 +1489,6 @@
         "restoreSub": "Sostituisce tutto con quello che c'è nel file, poi riavvio."
       },
       "history": {
-        "title": "Storia locale",
         "sub": "Automatica: rimette a posto un file cancellato per sbaglio. Vive però su questo telefono — di un telefono perso non salva niente.",
         "off": "Spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina, Memoria → Storia locale.",
         "loading": "Un attimo…",
@@ -1522,7 +1500,6 @@
       "title": "Cosa c'e' che non va",
       "placeholder": "Cos'e' sbagliato, e perche'.",
       "send": "Invia",
-      "cancel": "Annulla",
       "failed": "Non sono riuscita a segnalarlo.",
       "needComment": "Scrivi cosa c'e' che non va.",
       "empty": "Scegli prima il pezzo di testo da segnalare.",
@@ -1689,7 +1666,6 @@
     },
     "preview": {
       "notOnBoard": "Questa pagina non è in bacheca: la uso io per lavorare. Se ti serve qui, dimmelo.",
-      "close": "Chiudi",
       "want": "Voglio vederla in bacheca",
       "wanted": "Ci penso alla prossima passata."
     },
@@ -1772,7 +1748,6 @@
       "removeConfirm": "Togliere questa sezione? La wiki non cambia.",
       "moveUp": "Sposta su",
       "failed": "Non sono riuscita a salvarla.",
-      "save": "Salva",
       "reminderWhat": "Cosa?",
       "reminderWhen": "Quando?",
       "reminderMonth": "Solo il mese",
@@ -1790,8 +1765,7 @@
         "micro": "App",
         "cron": "Cron"
       },
-      "addFab": "Aggiungi al cassetto",
-      "close": "Chiudi"
+      "addFab": "Aggiungi al cassetto"
     },
     "micro": {
       "what": "Cosa vuoi vedere, o fare?",
@@ -1835,15 +1809,11 @@
       "create": "Crea",
       "rename": "Rinomina",
       "renameTitle": "Rinomina la scheda",
-      "save": "Salva",
       "remove": "Togli dalla bacheca",
       "removed": "«{title}» tolta dalla bacheca",
-      "undo": "Annulla",
-      "restoreFailed": "Non sono riuscita a rimetterla",
       "full": "La bacheca è piena: togli prima qualcosa",
       "failed": "Non è andata, riprova",
       "actions": "Azioni sulla scheda {title}",
-      "close": "Chiudi",
       "what": "Cosa ci metti?",
       "whatNothing": "Niente per ora",
       "appPlaced": "«{name}» è sulla bacheca, accanto a {card}"
@@ -1880,10 +1850,7 @@
       "readMore": "Leggi tutto",
       "deck": "Nota {n} di {count}: {text}. Tocca per la prossima.",
       "edit": "Correggi",
-      "close": "Chiudi",
       "removeConfirm": "Togliere questa nota? Quello che è già finito nella wiki resta.",
-      "integrated": "✓ nella wiki",
-      "pending": "in attesa della wiki",
       "placeholder": "Per esempio: lo tengo sul davanzale sud solo d'inverno."
     },
     "photos": {
@@ -1895,8 +1862,6 @@
       "placeholder": "Due parole su questa foto",
       "noteLabel": "La nota della foto",
       "now": "Adesso",
-      "integrated": "✓ nella wiki",
-      "pending": "in attesa della wiki",
       "removeConfirm": "Togliere questa foto dalla scheda? Il file resta fra il materiale del quaderno, e quel che è già nella wiki resta.",
       "full": "Vedi la foto intera, a tutto schermo",
       "back": "Tutte le foto",
@@ -1945,6 +1910,10 @@
       "reminder": "Un promemoria di tutto il quaderno",
       "automation": "Un'automazione: chiedila a Jenny",
       "automationPrompt": "Un'automazione in questo quaderno: ogni "
+    },
+    "wiki": {
+      "integrated": "✓ nella wiki",
+      "pending": "in attesa della wiki"
     }
   },
   "place": {

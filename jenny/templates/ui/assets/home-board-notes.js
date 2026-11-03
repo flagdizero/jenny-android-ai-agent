@@ -176,10 +176,10 @@ export class DrawerNotes {
     const status = note.status === 'integrated' ? 'integrated' : 'pending';
     const bar = el('div', 'home-notes-bar');
     bar.append(
-      el('span', 'home-notes-when', `${shortDate(note.created)} · ${i18n.t(`board.notes.${status}`)}`),
+      el('span', 'home-notes-when', `${shortDate(note.created)} · ${i18n.t(`board.wiki.${status}`)}`),
       button('home-notes-btn is-primary', i18n.t('board.notes.edit'),
         () => this._show({ editId: note.id, draft: note.text })),
-      button('home-notes-btn', i18n.t('board.notes.close'), () => this._show({})),
+      button('home-notes-btn', i18n.t('common.close'), () => this._show({})),
     );
     box.append(el('span', 'home-notes-pin'), el('p', 'home-notes-open-text', note.text), bar);
     return box;
@@ -205,7 +205,7 @@ export class DrawerNotes {
     requestAnimationFrame(fit);
     const bar = el('div', 'home-notes-bar');
     bar.append(
-      button('home-notes-btn is-primary', i18n.t('board.section.save'), () => this._save(note)),
+      button('home-notes-btn is-primary', i18n.t('common.save'), () => this._save(note)),
       button('home-notes-btn', i18n.t('common.cancel'),
         () => this._show(note ? { openId: note.id } : {})),
     );

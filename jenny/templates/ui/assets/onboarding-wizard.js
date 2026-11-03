@@ -151,7 +151,7 @@ export class OnboardingController {
         <div class="format-cards">
           <button class="format-card${this.format === 'openai_compat' ? ' selected' : ''}" data-format="openai_compat">
             <i class="ti ti-brand-openai" aria-hidden="true"></i>
-            <span class="format-label">${i18n.t('onboarding.openaiCompat')}</span>
+            <span class="format-label">${i18n.t('settings.openaiCompat')}</span>
             <span class="format-hint">${i18n.t('onboarding.openaiCompatHint')}</span>
           </button>
           <button class="format-card${this.format === 'anthropic' ? ' selected' : ''}" data-format="anthropic">
@@ -238,18 +238,18 @@ export class OnboardingController {
           <span class="onboarding-hint">${i18n.t('onboarding.providerNameHint')}</span>
         </div>
         <div class="onboarding-field">
-          <label class="onboarding-label" for="api-key">${i18n.t('onboarding.apiKey')}</label>
+          <label class="onboarding-label" for="api-key">${i18n.t('settings.apiKey')}</label>
           <input type="password" class="onboarding-input" id="api-key" ${NO_AUTOCORRECT} data-lpignore="true"
                  placeholder="${i18n.t(`onboarding.apiKeyPlaceholder${suffix}`)}" value="${escapeHtml(this.apiKey)}">
         </div>
         <div class="onboarding-field">
-          <label class="onboarding-label" for="api-base">${i18n.t('onboarding.baseUrl')}</label>
+          <label class="onboarding-label" for="api-base">${i18n.t('settings.baseUrl')}</label>
           <input type="url" inputmode="url" class="onboarding-input" id="api-base" ${NO_AUTOCORRECT}
                  placeholder="${escapeHtml(defaults[this.format] || '')}" value="${escapeHtml(this.apiBase)}">
           <span class="onboarding-hint">${i18n.t('onboarding.baseUrlHint')}</span>
         </div>
         <div class="onboarding-nav">
-          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-1">${i18n.t('onboarding.back')}</button>
+          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-1">${i18n.t('header.back')}</button>
           <button class="onboarding-btn onboarding-btn-primary" id="btn-next-1" ${canContinue ? '' : 'disabled'}>${i18n.t('onboarding.next')}</button>
         </div>
       </div>`;
@@ -302,7 +302,7 @@ export class OnboardingController {
     // indirizzo che non esiste; «Http://» si corregge da solo.
     const base = normalizeApiBase(this.apiBase);
     if (base.error) {
-      showToast(i18n.t('onboarding.baseUrlInvalid'), 'error');
+      showToast(i18n.t('settings.baseUrlInvalid'), 'error');
       this.contentEl?.querySelector('#api-base')?.focus();
       return;
     }
@@ -380,7 +380,7 @@ export class OnboardingController {
         </div>
         <div class="onboarding-summary" id="summary-display" style="display:none"></div>
         <div class="onboarding-nav">
-          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-2">${i18n.t('onboarding.back')}</button>
+          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-2">${i18n.t('header.back')}</button>
           <button class="onboarding-btn onboarding-btn-primary" id="btn-launch" ${this.model ? '' : 'disabled'}>${i18n.t('onboarding.launch')}</button>
         </div>
       </div>`;

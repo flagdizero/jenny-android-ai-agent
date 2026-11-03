@@ -172,8 +172,8 @@ export class HomeReader {
   /** Le parole dei due bottoni in basso. Chiamata all'avvio e a ogni cambio
    *  di lingua: sono scritte solo qui, mai nell'HTML. */
   applyTranslations() {
-    if (this.saveBtn) this.saveBtn.textContent = i18n.t('home.reader.save');
-    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('home.reader.cancel');
+    if (this.saveBtn) this.saveBtn.textContent = i18n.t('common.save');
+    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('common.cancel');
   }
 
   /** Chiude o riapre le pagine del quaderno alla modifica, con la riga che lo

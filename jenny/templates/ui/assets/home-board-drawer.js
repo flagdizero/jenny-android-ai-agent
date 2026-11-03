@@ -216,7 +216,7 @@ export class BoardDrawer {
   _labelFab() {
     if (!this.fab) return;
     const open = !this.dial.hidden;
-    this.fab.setAttribute('aria-label', i18n.t(open ? 'board.section.close' : 'board.section.addFab'));
+    this.fab.setAttribute('aria-label', i18n.t(open ? 'common.close' : 'board.section.addFab'));
     this.fab.classList.toggle('is-open', open);
     this.fab.setAttribute('aria-expanded', String(open));
   }
@@ -543,7 +543,7 @@ export class BoardDrawer {
       monthBox.checked = rem.when?.precision === 'month';
     }
     const actions = el('div', 'home-board-actions');
-    const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+    const save = el('button', 'home-board-btn is-primary', i18n.t('common.save'));
     save.type = 'submit';
     actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
     form.append(what, ...(dated ? [when, month] : []), actions);
@@ -975,7 +975,7 @@ export class BoardDrawer {
     every.setAttribute('aria-label', i18n.t('board.app.checkEvery'));
     cadence.append(el('span', 'home-board-form-label', i18n.t('board.app.checkEvery')), every);
     const actions = el('div', 'home-board-actions');
-    const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+    const save = el('button', 'home-board-btn is-primary', i18n.t('common.save'));
     save.type = 'submit';
     actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
     form.append(what, row, cadence, actions);

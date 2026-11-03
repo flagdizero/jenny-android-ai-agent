@@ -550,7 +550,7 @@ export class ChatController {
 
   /** Overlay fullscreen per un'immagine: tap-per-zoom, tap sullo sfondo / Esc per chiudere. */
   _openLightbox(src, alt) {
-    openImageLightbox(src, { alt, closeLabel: i18n.t('chat.close') });
+    openImageLightbox(src, { alt, closeLabel: i18n.t('common.close') });
   }
 
   /** Renderer condiviso degli allegati media (live + history), per tipo:

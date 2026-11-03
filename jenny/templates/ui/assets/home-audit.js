@@ -126,7 +126,7 @@ export class HomeAudit {
     if (this.openBtn) this.openBtn.textContent = i18n.t('home.audit.report');
     if (this.titleEl) this.titleEl.textContent = i18n.t('home.audit.title');
     if (this.sendBtn) this.sendBtn.textContent = i18n.t('home.audit.send');
-    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('home.audit.cancel');
+    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('common.cancel');
     if (this.commentEl) this.commentEl.placeholder = i18n.t('home.audit.placeholder');
   }
 

@@ -64,7 +64,7 @@ const MARKUP = `
   <div class="oc-dialog-inner">
     <p class="oc-dialog-message" id="oc-confirm-message"></p>
     <div class="oc-dialog-buttons">
-      <button class="oc-btn oc-btn-cancel" id="oc-confirm-cancel" data-i18n="dialog.cancel">Cancel</button>
+      <button class="oc-btn oc-btn-cancel" id="oc-confirm-cancel" data-i18n="common.cancel">Cancel</button>
       <button class="oc-btn oc-btn-confirm" id="oc-confirm-ok" data-i18n="dialog.confirm">Confirm</button>
     </div>
   </div>
@@ -77,7 +77,7 @@ const MARKUP = `
     <p class="oc-dialog-hint" id="oc-prompt-hint" hidden></p>
     <p class="oc-dialog-error" id="oc-prompt-error" role="alert" hidden></p>
     <div class="oc-dialog-buttons">
-      <button class="oc-btn oc-btn-cancel" id="oc-prompt-cancel" data-i18n="dialog.cancel">Cancel</button>
+      <button class="oc-btn oc-btn-cancel" id="oc-prompt-cancel" data-i18n="common.cancel">Cancel</button>
       <button class="oc-btn oc-btn-confirm" id="oc-prompt-ok" data-i18n="dialog.confirm">Confirm</button>
     </div>
   </div>
@@ -112,7 +112,7 @@ mountDialogs();
  *  10/10/2026). */
 export function confirmDialog(message, okText, cancelText, { danger = false } = {}) {
   okText = okText || i18n.t('dialog.confirm');
-  cancelText = cancelText || i18n.t('dialog.cancel');
+  cancelText = cancelText || i18n.t('common.cancel');
   const dialog = document.getElementById('oc-confirm-dialog');
   if (!dialog) return Promise.resolve(false);
   // Dialog condiviso: una seconda apertura (doppio tap) mentre è già aperto
@@ -238,7 +238,7 @@ export function promptDialog(message, {
   placeholder = '', initial = '', okText, cancelText, hint = '', validate = null,
 } = {}) {
   okText = okText || i18n.t('dialog.confirm');
-  cancelText = cancelText || i18n.t('dialog.cancel');
+  cancelText = cancelText || i18n.t('common.cancel');
   const dialog = document.getElementById('oc-prompt-dialog');
   if (!dialog) return Promise.resolve(null);
   if (dialog.open) return Promise.resolve(null);
@@ -354,7 +354,7 @@ export function formDialog({
   const okBtn = dialog.querySelector('[data-form-ok]');
   const cancelBtn = dialog.querySelector('[data-form-cancel]');
   okBtn.textContent = okText || i18n.t('dialog.confirm');
-  if (cancelBtn) cancelBtn.textContent = cancelText || i18n.t('dialog.cancel');
+  if (cancelBtn) cancelBtn.textContent = cancelText || i18n.t('common.cancel');
   document.body.appendChild(dialog);
 
   return new Promise((resolve) => {
