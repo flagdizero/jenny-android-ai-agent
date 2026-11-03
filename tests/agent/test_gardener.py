@@ -1802,34 +1802,25 @@ class TestTheClosingContract:
 # ── Il controllo incrociato ──────────────────────────────────────────────────
 
 
-def _transcript_path(name: str) -> Path:
-    from jenny.config.paths import get_webui_dir
-
-    return get_webui_dir() / f"websocket_project_{name}.jsonl"
+def _transcript_key(name: str) -> str:
+    return f"websocket:project:{name}"
 
 
 @pytest.fixture(autouse=True)
 def _no_leftover_transcript():
-    """La dir della WebUI è **condivisa** dalla fixture di workspace, che è di
-    sessione: un transcript scritto da un test resta lì per il successivo. Visto
-    subito (un test che verificava l'assenza della sezione la trovava), e vale la
-    pena tenerlo pulito qui invece che ricordarselo in ogni test."""
-    import shutil
+    """Il verbale sta nel database del workspace di sessione, **condiviso** fra i
+    test: uno scritto da un test resterebbe per il successivo."""
+    from jenny.webui.transcript_store import delete_webui_transcript
 
     yield
     for name in ("orto", "viaggio"):
-        _transcript_path(name).unlink(missing_ok=True)
-        # I segmenti di una rotazione stanno in una **cartella** accanto al file
-        # attivo, e la loro sola esistenza dice «ci sono messaggi più vecchi»
-        # (v. ``read_recent_user_messages``): lasciarla in piedi cambierebbe
-        # l'esito del test dopo.
-        shutil.rmtree(_transcript_path(name).with_suffix(".segments"), ignore_errors=True)
+        delete_webui_transcript(_transcript_key(name))
 
 
-def _transcript(tmp_path: Path, name: str, *messages: str) -> Path:
+def _transcript(tmp_path: Path, name: str, *messages: str) -> str:
     """Il transcript di un progetto, nella forma che scrive la WebUI."""
-    path = _transcript_path(name)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    from jenny.webui.transcript_store import append_transcript_object
+
     rows = []
     for i, message in enumerate(messages):
         rows.append(json.dumps({
@@ -1857,8 +1848,9 @@ def _transcript(tmp_path: Path, name: str, *messages: str) -> Path:
             "event": "reasoning_delta", "chat_id": f"project:{name}",
             "text": 'quoting the "user" verbatim: ragionamento che non è una cosa detta',
         }))
-    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
-    return path
+    for row in rows:
+        append_transcript_object(_transcript_key(name), json.loads(row))
+    return _transcript_key(name)
 
 
 class TestReadingWhatWasSaid:
@@ -1908,29 +1900,6 @@ class TestReadingWhatWasSaid:
         assert said == ["z" * 100]
         assert truncated is True
 
-    def test_a_rotated_transcript_says_the_window_is_partial(self, tmp_path):
-        """Il taglio non è solo il tetto: è anche il file che si è spezzato.
-
-        Superati gli 8 MB, ``transcript_store`` sposta i turni vecchi in
-        ``<key>.segments/`` e lascia sul posto la coda. La finestra risultava
-        allora **intera** — tre messaggi, ``truncated=False`` — mentre metà
-        conversazione stava in un altro file: la rete del controllo incrociato
-        era lossy *e* muta.
-        """
-        from jenny.agent.gardener import read_recent_user_messages
-
-        _transcript(tmp_path, "orto", "primo", "secondo", "terzo")
-        segments = _transcript_path("orto").with_suffix(".segments")
-        segments.mkdir(parents=True, exist_ok=True)
-        (segments / "000001.jsonl").write_text(
-            json.dumps({"event": "user", "text": "detto mesi fa"}) + "\n", "utf-8"
-        )
-
-        said, truncated = read_recent_user_messages("orto")
-
-        assert said == ["primo", "secondo", "terzo"]
-        assert truncated is True
-
     def test_the_tail_is_read_without_parsing_the_whole_file(self, tmp_path, monkeypatch):
         """Il file attivo arriva a 8 MB e di quel file serve **la coda**.
 
@@ -1938,36 +1907,33 @@ class TestReadingWhatWasSaid:
         storia del progetto, per poi tenerne quaranta: un costo per passata e per
         progetto, pagato sul lato più grosso del prompt.
 
-        Si conta il numero di ``json.loads``, che è l'unità di costo vera qui (il
-        pre-filtro grezzo scarta senza parsare). Con la lettura in avanti sono
-        tutte le righe che nominano l'utente; dal fondo sono quelle della coda più
-        una.
+        Si contano le righe lette dal verbale: dal fondo, a blocchi, ci si ferma
+        al primo blocco che basta; in avanti sarebbero tutte e seicento.
         """
         import jenny.agent.gardener as gmod
+        import jenny.webui.transcript_store as tstore
 
         _transcript(tmp_path, "orto", *[f"messaggio {i}" for i in range(200)])
         parsed = []
-        real = gmod.json.loads
+        real = tstore.json.loads
         monkeypatch.setattr(
-            gmod.json, "loads", lambda raw, *a, **k: (parsed.append(1), real(raw, *a, **k))[1]
+            tstore.json, "loads", lambda raw, *a, **k: (parsed.append(1), real(raw, *a, **k))[1]
         )
 
         said, truncated = gmod.read_recent_user_messages("orto", limit=5)
 
         assert said == [f"messaggio {i}" for i in range(195, 200)]
         assert truncated is True
-        # Sei messaggi dell'utente più le due righe di rumore che il pre-filtro
-        # ammette per ciascuno: la lettura in avanti ne parserebbe seicento.
-        assert len(parsed) < 30, len(parsed)
+        assert len(parsed) <= 200, len(parsed)
 
     def test_a_broken_line_does_not_stop_the_rest(self, tmp_path):
         from jenny.agent.gardener import read_recent_user_messages
-        from jenny.config.paths import get_webui_dir
+        from jenny.webui.transcript_store import _db
 
-        path = _transcript(tmp_path, "orto", "buono")
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write('{"event":"user","text":"rotto\n')
-        assert get_webui_dir().is_dir()
+        key = _transcript(tmp_path, "orto", "buono")
+        with _db().write() as conn:
+            conn.execute("INSERT INTO transcript_rows(key, seq, turn, data) "
+                         "VALUES (?, 999, 0, '{\"event\":\"user\",\"text\":\"rotto')", (key,))
 
         said, _ = read_recent_user_messages("orto")
 

@@ -38,7 +38,6 @@ Tre cose che questo modulo sa e che vale scrivere:
 
 from __future__ import annotations
 
-import json
 import re
 import time
 from collections.abc import Collection, Iterator
@@ -984,56 +983,9 @@ class GardenerStore:
             logger.warning("gardener: log not written to {}: {}", page, exc)
 
 
-def _lines_backwards(path: Path, *, chunk: int = 64 * 1024) -> Iterator[str]:
-    """Le righe di *path* dalla fine verso l'inizio, un blocco alla volta.
-
-    Serve a ``read_recent_user_messages``, che vuole **la coda** di un file che
-    arriva a 8 MB (``transcript_store._MAX_TRANSCRIPT_FILE_BYTES``): leggerlo in
-    avanti significa parsarlo tutto per buttarne via il 99% a ogni passata.
-
-    Si divide sui byte e si decodifica **per riga intera**: nessuna sequenza
-    UTF-8 multibyte contiene ``0x0A``, quindi tagliare su ``b"\\n"`` non può
-    spezzare un carattere a metà. Il resto del blocco (la prima riga, che
-    continua nel blocco precedente) si porta indietro e si unisce là.
-    """
-    with path.open("rb") as fh:
-        fh.seek(0, 2)
-        pos = fh.tell()
-        head = b""
-        while pos > 0:
-            step = min(chunk, pos)
-            pos -= step
-            fh.seek(pos)
-            parts = (fh.read(step) + head).split(b"\n")
-            head = parts[0]
-            for raw in reversed(parts[1:]):
-                yield raw.decode("utf-8", "replace")
-        if head:
-            yield head.decode("utf-8", "replace")
-
-
-def _user_said_backwards(path: Path) -> Iterator[str]:
-    """I messaggi dell'utente in *path*, dal più recente al più vecchio."""
-    for raw in _lines_backwards(path):
-        raw = raw.strip()
-        if not raw or "user" not in raw:
-            # Filtro grezzo prima di parsare: un transcript e' fatto in gran
-            # parte di delta, e parsarli tutti per buttarli costa.
-            #
-            # **Soprainsieme, e non quasi-esatto.** Prima cercava ``'"user"'``
-            # con le virgolette, che e' quasi la condizione finale — e siccome
-            # ``json.dumps`` scappa le virgolette nei testi, nessuna riga di
-            # ragionamento realistica poteva passare qui. Risultato: il controllo
-            # vero sotto era irraggiungibile, quindi **non provabile** (tre
-            # mutazioni di fila sopravvissute prima di capirlo). Un filtro grezzo
-            # deve ammettere piu' del necessario e lasciar decidere il controllo
-            # vero; il prezzo e' parsare i delta che nominano l'utente, che e' una
-            # minoranza.
-            continue
-        try:
-            row = json.loads(raw)
-        except ValueError:
-            continue
+def _user_said(records) -> Iterator[str]:
+    """I messaggi dell'utente fra *records*, nell'ordine dato."""
+    for row in records:
         if row.get("event") != "user" and row.get("role") != "user":
             continue
         text = row.get("text") or row.get("content")
@@ -1058,44 +1010,26 @@ def read_recent_user_messages(
     ``sessions/``, non questo file. E' per questo che serve — e' il solo posto
     dove resta quel che l'utente ha detto davvero.
 
-    **Si legge dal fondo** (``_lines_backwards``), e si smette appena la finestra
-    è piena: la coda è tutto quel che serve, il file attivo arriva a 8 MB, e
-    prima si parsava da riga uno accumulando ogni messaggio dell'utente della
-    storia del progetto per poi tenerne quaranta. Il costo era per passata e per
-    progetto.
-
-    **E il taglio dice la verità anche quando il file è ruotato.** Superati gli
-    8 MB, ``transcript_store`` sposta i turni vecchi in
-    ``<key>.segments/NNNNNN.jsonl`` e lascia sul posto solo la coda: la
-    finestra risultava allora «intera» — ``truncated=False`` — mentre metà
-    conversazione era in un altro file. Un segmento esiste solo perché una
-    rotazione è avvenuta, e ogni turno comincia con un messaggio dell'utente
-    (``_split_transcript_turns``), quindi la sua presenza *è* la prova che
-    esistono messaggi più vecchi.
+    **Si legge dal fondo**, a blocchi, e si smette appena la finestra è piena:
+    la coda è tutto quel che serve, e il verbale di un progetto può essere
+    lungo. ``truncated`` dice se prima della finestra c'erano altri messaggi.
     """
     from jenny.session.keys import project_session_key, webui_transcript_key
-    from jenny.webui.transcript_store import (
-        webui_transcript_path,
-        webui_transcript_segments_dir,
-    )
+    from jenny.webui.transcript_store import iter_transcript_backwards
 
     try:
-        key = webui_transcript_key(project_session_key(name))
-        path = webui_transcript_path(key)
-        rotated = any(webui_transcript_segments_dir(key).glob("*.jsonl"))
+        records = iter_transcript_backwards(webui_transcript_key(project_session_key(name)))
     except Exception:  # noqa: BLE001 — senza transcript il controllo salta, non rompe
-        return [], False
-    if not path.is_file():
         return [], False
 
     # Il tetto in caratteri toglie **dalla testa**: i messaggi piu' recenti sono
     # quelli che la cattura puo' aver mancato adesso. Da qui il verso della
     # lettura, che e' anche il verso in cui si spende il budget.
     kept: list[str] = []
-    truncated = rotated
+    truncated = False
     total = 0
     try:
-        for message in _user_said_backwards(path):
+        for message in _user_said(records):
             if len(kept) >= limit:
                 # Un messaggio in piu' del tetto: e' come si sa che ce n'erano
                 # altri, senza tenerli.
@@ -1106,7 +1040,7 @@ def read_recent_user_messages(
                 truncated = True
                 break
             kept.append(message)
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001 — senza transcript il controllo salta, non rompe
         logger.warning("gardener: transcript di {} illeggibile: {}", name, exc)
         return [], False
 
@@ -1116,8 +1050,8 @@ def read_recent_user_messages(
         # scrive una riga (v. ``GardenerStore.log_pass``).
         logger.info(
             "gardener: cross-check window for {} is truncated "
-            "({} messages kept{})",
-            name, len(kept), ", transcript rotated" if rotated else "",
+            "({} messages kept)",
+            name, len(kept),
         )
     return list(reversed(kept)), truncated
 

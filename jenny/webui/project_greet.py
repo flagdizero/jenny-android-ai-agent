@@ -43,7 +43,7 @@ from jenny.session.keys import (
 )
 from jenny.utils.prompt_templates import render_template
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
-from jenny.webui.transcript_store import read_transcript_lines
+from jenny.webui.transcript_store import has_webui_transcript
 
 # Quanto aspettare il modello prima della frase fissa. Il saluto e' la prima
 # cosa che si legge nel quaderno: oltre questo tempo una frase fissa subito
@@ -134,7 +134,7 @@ def _is_empty(session_manager: Any, session_key: str) -> bool:
     session = session_manager.get_or_create(session_key)
     if session.messages:
         return False
-    return not read_transcript_lines(webui_transcript_key(session_key))
+    return not has_webui_transcript(webui_transcript_key(session_key))
 
 
 async def greet_project(

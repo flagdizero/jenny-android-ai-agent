@@ -99,6 +99,7 @@ _PRIVATE_DIRS = (
     # Le conversazioni di prima del database, per i 30 giorni in cui la
     # migrazione le tiene (``db_migration/sessions.py``).
     ("sessions.migrated",),
+    (".jenny", "webui.migrated"),
     (".jenny", "webui"),
     (".jenny", "ssh_jobs"),
     ("subagents",),

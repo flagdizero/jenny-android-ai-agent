@@ -65,6 +65,7 @@ def migrations() -> tuple[Migration, ...]:
         small_state,
         staged_taint,
         subagents,
+        transcripts,
         undo_cleanup,
     )
 
@@ -84,4 +85,6 @@ def migrations() -> tuple[Migration, ...]:
                   pending=small_state.pending, cleanup=small_state.cleanup),
         Migration("sessions", remove_after="2.3.0", run=sessions.run,
                   pending=sessions.pending, cleanup=sessions.cleanup),
+        Migration("transcripts", remove_after="2.3.0", run=transcripts.run,
+                  pending=transcripts.pending, cleanup=transcripts.cleanup),
     )

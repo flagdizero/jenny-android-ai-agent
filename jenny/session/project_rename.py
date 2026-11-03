@@ -120,6 +120,21 @@ def _move_session(workspace: Path, old_key: str, new_key: str) -> bool:
     return store.rename(_sessions(workspace), old_key, new_key)
 
 
+def _has_transcript(key: str) -> bool:
+    from jenny.session.keys import webui_transcript_key
+    from jenny.webui.transcript_store import has_webui_transcript
+
+    return has_webui_transcript(webui_transcript_key(key))
+
+
+def _move_transcript(old_key: str, new_key: str) -> bool:
+    """Il verbale della WebUI di *old_key* passa a *new_key* (una transazione)."""
+    from jenny.session.keys import webui_transcript_key
+    from jenny.webui.transcript_store import rename_webui_transcript
+
+    return rename_webui_transcript(webui_transcript_key(old_key), webui_transcript_key(new_key))
+
+
 def pending_project_renames(workspace: Path) -> list[tuple[str, str]]:
     """Gli spostamenti aperti: ``(chiave vecchia, chiave nuova)``, in ordine.
 
@@ -192,6 +207,11 @@ def _finish_move(workspace: Path, old_key: str, new_key: str) -> bool:
             stuck.append("session")
         else:
             _move_session(workspace, old_key, new_key)
+    if _has_transcript(old_key):
+        if _has_transcript(new_key):
+            stuck.append("transcript")
+        else:
+            _move_transcript(old_key, new_key)
     for src, dst in zip(
         project_trace_paths(workspace, old_key),
         project_trace_paths(workspace, new_key),
@@ -290,11 +310,14 @@ def follow_renamed_project(
         if src.exists()
     ]
     session = _has_session(workspace, old_key)
-    if not pairs and not session:
+    transcript = _has_transcript(old_key)
+    if not pairs and not session and not transcript:
         return False, "there was nothing recorded under the old name"
     occupied = [dst.name for _, dst in pairs if dst.exists()]
     if session and _has_session(workspace, new_key):
         occupied.append("session")
+    if transcript and _has_transcript(new_key):
+        occupied.append("transcript")
     if occupied:
         # Il caso dello scambio di due nomi. Non si sceglie: si dice.
         return False, (
@@ -314,6 +337,14 @@ def follow_renamed_project(
     if session and not _move_session(workspace, old_key, new_key):
         _forget(workspace, record)
         return False, "moving the conversation failed, so nothing was moved"
+    if transcript and not _move_transcript(old_key, new_key):
+        if not session or _move_session(workspace, new_key, old_key):
+            _forget(workspace, record)
+            return False, "moving the conversation failed, so nothing was moved"
+        return False, (
+            "moving the conversation's files stopped halfway; it is written down "
+            "and I will finish it the next time I start"
+        )
     moved: list[tuple[Path, Path]] = []
     for src, dst in pairs:
         try:
@@ -324,7 +355,9 @@ def follow_renamed_project(
                 "Rinomino parziale delle tracce di {} verso {}: {} non spostato",
                 old_key, new_key, src.name,
             )
-            if _roll_back(moved) and (not session or _move_session(workspace, new_key, old_key)):
+            if (_roll_back(moved)
+                    and (not transcript or _move_transcript(new_key, old_key))
+                    and (not session or _move_session(workspace, new_key, old_key))):
                 _forget(workspace, record)
                 return False, "moving the conversation's files failed, so nothing was moved"
             # Ne' avanti ne' indietro: la voce resta aperta, ed e' quella che al

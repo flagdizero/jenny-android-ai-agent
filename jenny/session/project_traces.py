@@ -45,26 +45,23 @@ PROJECT_WIKI_ID_KEY = "project_wiki_id"
 
 
 def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
-    """I percorsi che portano il nome di *session_key*, esistenti o no.
+    """I file che portano il nome di *session_key*, esistenti o no.
 
     Sono le tracce che un rinomino deve portarsi dietro. L'elenco sta qui e non
     sparso fra i sottosistemi che le scrivono: quando ne nascera' una nuova,
     questo e' il posto in cui aggiungerla — e
     ``tests/session/test_project_session_files.py`` e' quello che se ne accorge.
+
+    Oggi resta solo il thread della WebUI di prima del verbale (``.json``), se
+    l'installazione ne ha uno: la sessione col diario del turno, il verbale e i
+    record degli aiutanti sono righe di ``state.sqlite`` sotto la chiave della
+    conversazione, e li spostano e li tolgono :mod:`jenny.session.project_rename`
+    e :func:`delete_project_traces` con una query.
     """
-    # La sessione, il diario del turno e i record degli aiutanti non sono più
-    # file col nome della chat: stanno in ``state.sqlite``, e il rinomino e la
-    # cancellazione li seguono con una query (``session.store``,
-    # ``agent.subagent_records``).
     from jenny.config.paths import get_webui_dir
 
     webui_stem = SessionManager.safe_key(webui_transcript_key(session_key))
-    webui = get_webui_dir()
-    return [
-        webui / f"{webui_stem}.jsonl",
-        webui / f"{webui_stem}.segments",
-        webui / f"{webui_stem}.json",  # thread legacy, se questa installazione ne ha uno
-    ]
+    return [get_webui_dir() / f"{webui_stem}.json"]
 
 
 def recorded_wiki_id(workspace: Path, session_key: str) -> str | None:
@@ -134,6 +131,15 @@ def describe_project_traces(workspace: Path, session_key: str) -> TraceReport:
         files += 1
         total += found["bytes"]
         messages = int(found["count"])
+    from jenny.webui.transcript_store import has_webui_transcript, transcript_bytes
+
+    try:
+        transcript_key = webui_transcript_key(session_key)
+        if has_webui_transcript(transcript_key):
+            files += 1
+            total += transcript_bytes(transcript_key)
+    except Exception:  # noqa: BLE001 — il verbale non contato resta fuori dal conto
+        pass
     return TraceReport(files=files, bytes=total, messages=messages)
 
 
@@ -165,6 +171,13 @@ def delete_project_traces(workspace: Path, session_key: str) -> list[str]:
             removed.append("session")
     except Exception:  # noqa: BLE001 — come una traccia che resiste: si dice e si va avanti
         logger.opt(exception=True).error("Sessione non rimossa per {}", session_key)
+    from jenny.webui.transcript_store import delete_webui_transcript
+
+    try:
+        if delete_webui_transcript(webui_transcript_key(session_key)):
+            removed.append("transcript")
+    except Exception:  # noqa: BLE001 — come una traccia che resiste: si dice e si va avanti
+        logger.opt(exception=True).error("Verbale non rimosso per {}", session_key)
     try:
         if delete_session_records(workspace, session_key):
             removed.append("subagent records")
