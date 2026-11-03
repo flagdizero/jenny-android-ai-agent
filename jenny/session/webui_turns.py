@@ -20,11 +20,11 @@ from jenny.bus.runtime_events import (
     TurnRunStatusChanged,
 )
 from jenny.config.loader import load_config
+from jenny.providers.base import LLMRuntime
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.manager import Session, SessionManager
 from jenny.session.mascot_mood import NEUTRAL_MOOD, last_reply, mood_from_reply
 from jenny.session.turn_visibility import resolve_turn_visibility
-from jenny.utils.llm_runtime import LLMRuntime
 from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 if TYPE_CHECKING:

@@ -48,7 +48,7 @@ from jenny.channels.subagent_activity_wire import (
     normalize_since,
     normalize_task_id,
 )
-from jenny.channels.ws_logging import websockets_server_logger
+from jenny.channels.ws_logging import redirect_lib_logging, websockets_server_logger
 from jenny.channels.ws_parsing import (
     _MAX_FILE_BYTES,
     _MAX_FILES_PER_MESSAGE,
@@ -387,8 +387,6 @@ class WebSocketChannel(OutboundSenderMixin):
     # -- Server lifecycle and connection ingress ---------------------------
 
     async def start(self) -> None:
-        from jenny.utils.logging_bridge import redirect_lib_logging
-
         redirect_lib_logging("websockets", level="WARNING")
         ws_logger = websockets_server_logger()
 

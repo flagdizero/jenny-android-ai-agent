@@ -41,9 +41,9 @@ if TYPE_CHECKING:
     from jenny.bus.queue import MessageBus
     from jenny.bus.runtime_events import RuntimeEventPublisher
     from jenny.command import CommandRouter
+    from jenny.providers.base import LLMRuntime
     from jenny.security.workspace_access import WorkspaceScopeResolver
     from jenny.session.manager import Session, SessionManager
-    from jenny.utils.llm_runtime import LLMRuntime
 
 
 class StateHandlersMixin:

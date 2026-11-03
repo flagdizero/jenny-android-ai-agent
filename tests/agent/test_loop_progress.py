@@ -14,10 +14,9 @@ from jenny.agent.progress_events import (
 from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import TurnCompleted
-from jenny.providers.base import LLMResponse, ToolCallRequest
+from jenny.providers.base import LLMResponse, LLMRuntime, ToolCallRequest
 from jenny.runtime.user_text import say
 from jenny.session.webui_turns import WebuiTurnCoordinator
-from jenny.utils.llm_runtime import LLMRuntime
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:

@@ -24,10 +24,10 @@ from jenny.bus.runtime_events import (
 )
 from jenny.config.schema import Config
 from jenny.cron.session_turns import monitor_session_key
+from jenny.providers.base import LLMRuntime
 from jenny.session import webui_turns as wt
 from jenny.session.manager import Session, SessionManager
 from jenny.session.turn_visibility import silent_turn_metadata
-from jenny.utils.llm_runtime import LLMRuntime
 
 # Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
 MONITOR_SESSION_KEY = monitor_session_key("rain-check")

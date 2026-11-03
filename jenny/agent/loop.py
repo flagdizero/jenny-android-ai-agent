@@ -71,7 +71,7 @@ from jenny.config.schema import AgentDefaults
 from jenny.cron.session_turns import (
     cron_history_overrides,
 )
-from jenny.providers.base import LLMProvider
+from jenny.providers.base import LLMProvider, LLMRuntime
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
@@ -116,7 +116,6 @@ from jenny.session.turn_visibility import (
     resolve_turn_visibility,
 )
 from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, clip, reserved_output_tokens
-from jenny.utils.llm_runtime import LLMRuntime
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_migration import restore_wiki_id
 from jenny.utils.wiki_paths import find_wiki_by_id, wiki_id, wiki_schema_file

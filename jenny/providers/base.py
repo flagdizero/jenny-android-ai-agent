@@ -981,3 +981,11 @@ class LLMProvider(ABC):
     def get_default_model(self) -> str:
         """Get the default model for this provider."""
         pass
+
+
+@dataclass(frozen=True)
+class LLMRuntime:
+    """Il provider attivo e il suo modello, passati insieme."""
+
+    provider: LLMProvider
+    model: str
