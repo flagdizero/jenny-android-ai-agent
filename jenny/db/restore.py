@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 import shutil
 import sqlite3
+import time
 from pathlib import Path
 
 from loguru import logger
@@ -126,7 +127,11 @@ def apply_staged(runtime_root: Path) -> bool:
     if staged.is_file():
         live = live_dir / STATE_FILE
         if live.exists():
-            _move_with_sidecars(live, live_dir / (STATE_FILE + PRE_RESTORE_SUFFIX))
+            kept = live_dir / (STATE_FILE + PRE_RESTORE_SUFFIX)
+            _move_with_sidecars(live, kept)
+            # La data del ripristino, non quella dell'ultima scrittura: è lei che
+            # dice quando la copia scade (``sweep_pre_restore``).
+            os.utime(kept)
         else:
             _drop_sidecars(live)
         os.replace(staged, live)
@@ -144,6 +149,27 @@ def reset_undo(runtime_root: Path) -> None:
     undo.unlink(missing_ok=True)
     _drop_sidecars(undo)
     shutil.rmtree(live_dir / UNDO_OBJECTS_DIR_NAME, ignore_errors=True)
+
+
+def sweep_pre_restore(runtime_root: Path, *, max_age_days: int = 7) -> bool:
+    """Toglie lo ``state.sqlite.pre-restore`` più vecchio di *max_age_days*.
+
+    È il gemello delle copie del workspace (``workspace_pre_restore_*``, v.
+    ``snapshot.restore_marker.sweep_safety_copies``) e scade con loro: dopo un
+    ripristino serve per tornare indietro, poi sono solo un centinaio di MB.
+    Fino al 03/11/2026 non lo toglieva nessuno. Mai raises.
+    """
+    kept = db_dir_for_runtime_root(Path(runtime_root)) / (STATE_FILE + PRE_RESTORE_SUFFIX)
+    try:
+        if not kept.is_file() or kept.stat().st_mtime >= time.time() - max_age_days * 86_400:
+            return False
+        for suffix in ("",) + _SIDECARS:
+            Path(str(kept) + suffix).unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning("Could not remove the pre-restore state copy: {}", exc)
+        return False
+    logger.info("Removed the state copy kept by an old restore")
+    return True
 
 
 def _move_with_sidecars(src: Path, dest: Path) -> None:

@@ -102,6 +102,36 @@ async def test_the_state_goes_into_the_backup_and_comes_back(env) -> None:
     assert not (env.runtime_root / STAGED_DB_DIR_NAME).exists()
 
 
+def test_the_kept_state_expires_with_the_workspace_copy(tmp_path: Path) -> None:
+    """Lo ``state.sqlite.pre-restore`` porta la data del ripristino e se ne va
+    dopo 7 giorni, con la copia del workspace. Fino al 03/11/2026 restava per
+    sempre: sul telefono di prova, 119 MB."""
+    import os
+    import time
+
+    from jenny.db.restore import apply_staged
+    from jenny.snapshot.restore_marker import sweep_safety_copies
+
+    live = tmp_path / "db"
+    staged = tmp_path / STAGED_DB_DIR_NAME
+    for folder in (live, staged):
+        folder.mkdir()
+        (folder / "state.sqlite").write_bytes(b"SQLite format 3\x00" + folder.name.encode())
+    week_ago = time.time() - 30 * 86_400
+    os.utime(live / "state.sqlite", (week_ago, week_ago))
+    assert apply_staged(tmp_path)
+    kept = live / f"state.sqlite{PRE_RESTORE_SUFFIX}"
+    assert kept.is_file() and kept.stat().st_mtime > time.time() - 60, "la data del ripristino"
+
+    sweep_safety_copies(tmp_path, max_age_days=7)
+    assert kept.is_file(), "un ripristino di oggi si tiene"
+    old = time.time() - 8 * 86_400
+    os.utime(kept, (old, old))
+    sweep_safety_copies(tmp_path, max_age_days=7)
+    assert not kept.exists()
+    assert (live / "state.sqlite").is_file()
+
+
 def _plain_zip(env) -> zipfile.ZipFile:
     dest = env.runtime_root / "plain.zip"
     env.manager._build_zip(dest)

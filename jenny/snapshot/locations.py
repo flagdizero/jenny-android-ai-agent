@@ -9,7 +9,8 @@ directory che contiene il workspace (su Android è ``filesDir``, la stessa
       workspace/               ← l'albero versionato/scambiato al restore
       snapshots/               ← store content-addressed (storia)
       plans.migrated/          ← i piani di prima di ``undo.sqlite``, per 30 giorni
-      db/                      ← lo stato in SQLite (``jenny/db``): state, undo
+      db/                      ← lo stato in SQLite (``jenny/db``): state, undo, e per
+                                 7 giorni dopo un restore ``state.sqlite.pre-restore``
       map_tiles/               ← le tessere delle schede dei posti in chat (cache)
       backup_staging/          ← file .jbk in export/import + albero staged
       restore_pending.json     ← marker del protocollo di restore al boot

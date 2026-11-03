@@ -258,4 +258,8 @@ def sweep_safety_copies(runtime_root: Path, *, max_age_days: int = 7) -> int:
         pass
     if removed:
         logger.info("Removed {} old workspace safety cop(ies)", removed)
+    # Lo stato tenuto da parte dallo stesso ripristino scade con la sua copia.
+    from jenny.db.restore import sweep_pre_restore
+
+    sweep_pre_restore(Path(runtime_root), max_age_days=max_age_days)
     return removed
