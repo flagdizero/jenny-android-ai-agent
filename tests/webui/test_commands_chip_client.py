@@ -21,7 +21,15 @@ from __future__ import annotations
 
 import json
 
-from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, i18n_helpers, locale, member, requires_node, run_js
+from support.js_harness import (
+    ASSETS,
+    FAKE_MENU_ELEMENT,
+    i18n_helpers,
+    locale,
+    member,
+    requires_node,
+    run_js,
+)
 
 from jenny.command.specs import BUILTIN_COMMAND_SPECS
 

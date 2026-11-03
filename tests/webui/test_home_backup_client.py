@@ -29,7 +29,15 @@ from __future__ import annotations
 
 import json
 
-from support.js_harness import ASSETS, FAKE_ELEMENT, function, i18n_helpers, member, requires_node, run_js
+from support.js_harness import (
+    ASSETS,
+    FAKE_ELEMENT,
+    function,
+    i18n_helpers,
+    member,
+    requires_node,
+    run_js,
+)
 
 ROOM_JS = ASSETS / "home-backup.js"
 WHEN_JS = ASSETS / "shared" / "when.js"

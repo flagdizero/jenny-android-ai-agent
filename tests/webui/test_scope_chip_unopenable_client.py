@@ -35,7 +35,15 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, FAKE_MENU_ELEMENT, function, locale, member, requires_node, run_js
+from support.js_harness import (
+    ASSETS,
+    FAKE_MENU_ELEMENT,
+    function,
+    locale,
+    member,
+    requires_node,
+    run_js,
+)
 
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
