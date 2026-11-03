@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import time
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop
 
 from jenny.config.schema import AgentDefaults
 from jenny.runtime.user_text import say
@@ -27,21 +28,13 @@ def _sub_spec(task: str = "do task", label: str = "label", **kw):
 
 def _make_loop(*, tools_config=None):
     """Create a minimal AgentLoop with mocked dependencies."""
-    from jenny.agent.loop import AgentLoop
-    from jenny.bus.queue import MessageBus
-
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
     workspace = MagicMock()
     workspace.__truediv__ = MagicMock(return_value=MagicMock())
-
-    with patch("jenny.agent.loop.ContextBuilder"), \
-         patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        loop = AgentLoop(bus=bus, provider=provider, workspace=workspace, tools_config=tools_config)
-    return loop, bus
+    loop = make_loop(
+        workspace, model=None, context_window_tokens=None, bare=True, patch_deps=True,
+        tools_config=tools_config,
+    )
+    return loop, loop.bus
 
 
 class TestHandleStop:

@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import pathlib
 
 import pytest
 from support.aio import wait_until
 from support.bus import FakeBus
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
 from jenny.bus.events import NOTIFICATION_CHANNEL
 from jenny.runtime import native_input as ni
@@ -118,9 +117,7 @@ class TestBoundaryWithKotlin:
 
     @staticmethod
     def _gateway_service() -> str:
-        repo = pathlib.Path(__file__).resolve().parents[2]
-        kt = repo / "android/app/src/main/java/com/flagdizero/jenny/GatewayService.kt"
-        return read_source(kt)
+        return read_source(ANDROID_SRC / "GatewayService.kt")
 
     def test_kotlin_calls_this_module(self):
         assert 'getModule("jenny.runtime.native_input")' in self._gateway_service()

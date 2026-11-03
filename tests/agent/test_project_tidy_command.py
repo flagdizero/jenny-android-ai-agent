@@ -28,21 +28,16 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
+from support.agent import make_loop
 
 from jenny.agent.loop import PROJECT_TIDY_COMMAND, AgentLoop
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 
 
 def _loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    return AgentLoop(
-        bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model"
-    )
+    return make_loop(tmp_path, context_window_tokens=None, bare=True)
 
 
 def _msg(content: str = PROJECT_TIDY_COMMAND) -> InboundMessage:

@@ -14,9 +14,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.base import Tool
@@ -85,18 +86,16 @@ class _ContextProbe(Tool, ContextAware):
 
 
 def _loop(tmp_path: Path, *, orchestrator: bool = False) -> tuple[AgentLoop, MessageBus]:
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.supports_progress_deltas = False
     # Letta dal Consolidator per il budget di token: un MagicMock qui farebbe
     # esplodere il secondo turno di una sessione con history.
     provider.generation.max_tokens = 4096
-    loop = AgentLoop(
-        bus=bus, provider=provider, workspace=tmp_path, model="test-model",
+    loop = make_loop(
+        tmp_path, context_window_tokens=None, provider=provider,
         orchestrator_mode=orchestrator,
     )
-    return loop, bus
+    return loop, loop.bus
 
 
 def _script(loop: AgentLoop, responses: list[LLMResponse]) -> list[list[dict[str, Any]]]:

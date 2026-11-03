@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from support.agent import make_loop, make_provider
@@ -80,19 +80,12 @@ async def test_dispatch_cancellation_restores_checkpoint():
     caught by CI instead of silently regressing.
     """
     from jenny.bus.events import InboundMessage
-    from jenny.bus.queue import MessageBus
 
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
     workspace = MagicMock()
     workspace.__truediv__ = MagicMock(return_value=MagicMock())
-
-    with patch("jenny.agent.loop.ContextBuilder"), \
-         patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        loop = AgentLoop(bus=bus, provider=provider, workspace=workspace)
+    loop = make_loop(
+        workspace, model=None, context_window_tokens=None, bare=True, patch_deps=True,
+    )
 
     checkpoint_key = loop._RUNTIME_CHECKPOINT_KEY
     session = SimpleNamespace(
@@ -151,19 +144,12 @@ async def test_dispatch_cancellation_after_bump_skips_restore():
     checkpoint dal proprio handler CancelledError: lo fa /stop in modo
     sincrono, e l'handler dello zombie può girare molto più tardi."""
     from jenny.bus.events import InboundMessage
-    from jenny.bus.queue import MessageBus
 
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
     workspace = MagicMock()
     workspace.__truediv__ = MagicMock(return_value=MagicMock())
-
-    with patch("jenny.agent.loop.ContextBuilder"), \
-         patch("jenny.agent.loop.SessionManager"), \
-         patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-        loop = AgentLoop(bus=bus, provider=provider, workspace=workspace)
+    loop = make_loop(
+        workspace, model=None, context_window_tokens=None, bare=True, patch_deps=True,
+    )
 
     session = SimpleNamespace(
         key="unified:default",

@@ -2,9 +2,10 @@
 import asyncio
 import os
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from support.agent import make_loop
 
 from jenny.agent.memory import MemoryStore
 
@@ -118,24 +119,15 @@ class TestEvictPrunedSessions:
     """
 
     def _make_loop(self, tmp_path):
-        from jenny.agent.loop import AgentLoop
-        from jenny.bus.queue import MessageBus
         from jenny.session.manager import SessionManager
 
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
         workspace = MagicMock()
         workspace.__truediv__ = MagicMock(return_value=MagicMock())
-        sessions = SessionManager(tmp_path)
-
-        with patch("jenny.agent.loop.ContextBuilder"), \
-             patch("jenny.agent.loop.SubagentManager") as mock_sub_mgr:
-            mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
-            loop = AgentLoop(
-                bus=bus, provider=provider, workspace=workspace, session_manager=sessions,
-            )
-        return loop
+        return make_loop(
+            workspace, model=None, context_window_tokens=None, bare=True,
+            patches=("jenny.agent.loop.ContextBuilder", "jenny.agent.loop.SubagentManager"),
+            session_manager=SessionManager(tmp_path),
+        )
 
     @pytest.mark.asyncio
     async def test_pruned_keys_evicted_finished_keys_kept(self, tmp_path):
