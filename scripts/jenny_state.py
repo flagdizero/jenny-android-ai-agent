@@ -58,6 +58,13 @@ def _check_device() -> None:
         raise SystemExit(f"{os.environ['ANDROID_SERIAL']} non è {AVD}: niente da fare.")
 
 
+def _run_as(command: str) -> str:
+    """*command* come utente dell'app: una stringa sola per ``adb shell``, che
+    altrimenti riunisce gli argomenti con spazi e perde le virgolette."""
+    quoted = command.replace("'", "'\\''")
+    return f"run-as {PACKAGE} sh -c '{quoted}'"
+
+
 def _remote(db: str) -> str:
     return f"{DB_DIR}/{db}.sqlite"
 
@@ -66,8 +73,7 @@ def pull(db: str, dest: Path) -> Path:
     """Il database e il suo ``-wal`` in *dest*: senza il wal mancano le ultime righe."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("", "-wal"):
-        data = _adb("exec-out", "run-as", PACKAGE, "sh", "-c",
-                    f"cat {_remote(db)}{suffix} 2>/dev/null", check=False)
+        data = _adb("exec-out", _run_as(f"cat {_remote(db)}{suffix} 2>/dev/null"), check=False)
         target = Path(f"{dest}{suffix}")
         target.unlink(missing_ok=True)
         if data or not suffix:
@@ -89,8 +95,8 @@ def push(db: str, source: Path) -> None:
     """Rimanda *source* al posto del database, ad app ferma."""
     _adb("shell", "am", "force-stop", PACKAGE)
     remote = _remote(db)
-    _adb("shell", "run-as", PACKAGE, "sh", "-c",
-         f"rm -f {remote}-wal {remote}-shm && cat > {remote}", stdin=source.read_bytes())
+    _adb("shell", _run_as(f"rm -f {remote}-wal {remote}-shm && cat > {remote}"),
+         stdin=source.read_bytes())
     print(f"{remote} rimandato; l'app è ferma, riaprila per vederlo.")
 
 

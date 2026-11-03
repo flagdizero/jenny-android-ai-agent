@@ -190,9 +190,10 @@ class Device:
     def pull_state(self, dest: Path) -> None:
         """Una copia di ``state.sqlite`` in *dest*, col suo ``-wal`` dentro."""
         for suffix in ("", "-wal"):
+            command = f"cat {STATE_DB}{suffix} 2>/dev/null"
             proc = subprocess.run(
-                ["adb", "-s", self.serial, "exec-out", "run-as", PACKAGE, "sh", "-c",
-                 f"cat {STATE_DB}{suffix} 2>/dev/null"], capture_output=True, check=False)
+                ["adb", "-s", self.serial, "exec-out", f"run-as {PACKAGE} sh -c '{command}'"],
+                capture_output=True, check=False)
             target = Path(f"{dest}{suffix}")
             target.unlink(missing_ok=True)
             if proc.stdout or not suffix:
