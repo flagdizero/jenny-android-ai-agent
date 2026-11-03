@@ -202,8 +202,9 @@ def test_the_async_queries_are_awaited_by_their_callers() -> None:
     # Il tocco su un allegato, per tutte e due le chat (`shared/media.js`).
     media = (assets / "shared" / "media.js").read_text(encoding="utf-8")
     assert "await bridge.openFile(" in media
+    assert "openMediaFile(entry)" in media, "la pastiglia di un file non lo apre"
     for chat in ("mobile-chat.js", "home-chat.js"):
-        assert "openMediaFile(" in (assets / chat).read_text(encoding="utf-8"), chat
+        assert "renderMediaList(" in (assets / chat).read_text(encoding="utf-8"), chat
     settings = (assets / "mobile-settings.js").read_text(encoding="utf-8")
     assert "await native.requestExactAlarmPermission()" in settings
     assert "await native.openBatterySettings()" in settings
