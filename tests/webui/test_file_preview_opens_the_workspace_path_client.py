@@ -24,7 +24,8 @@ def _opened(payload: dict, *, html: bool = False):
     out = run_js(
         f"""
 {function(UTILS_SRC, "escapeHtml")}
-const i18n = {{ t: (k) => k }};
+{function(UTILS_SRC, "sizeText")}
+const i18n = {{ locale: 'it', t: (k) => k }};
 const sessionManager = {{ currentKey: 'project:orto' }};
 const api = {{ fetchFilePreview: async () => ({json.dumps(payload)}) }};
 function el() {{

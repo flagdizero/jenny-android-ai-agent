@@ -16,13 +16,13 @@
 
 import { i18n } from '../../shared/i18n.js';
 import { whenText } from '../../shared/when.js';
-import { escapeHtml, showToast } from '../../shared/utils.js';
+import { escapeHtml, showToast, sizeText } from '../../shared/utils.js';
 import { confirmDialog } from '../../shared/dialog.js';
 import { iconHtml } from '../../shared/dom.js';
 import { rowHtml } from '../../home-backup.js';
 import {
   choosePassword, cloudAction, cloudErrorText, cloudNativeAvailable, cloudStatus, cloudView,
-  copyNow, dayText, findMyCopy, giveConsentBack, nightStrip, progressSizes, restoreCopy, sizeText,
+  copyNow, dayText, findMyCopy, giveConsentBack, nightStrip, progressSizes, restoreCopy,
   turnOnDrive, unlockHere,
 } from './cloud-backup.js';
 import { askCloudPassword, pickCloudCopy } from './cloud-backup-dialogs.js';
@@ -316,7 +316,7 @@ export class DriveBackupCard {
       default: { // safe
         const c = this.cloud || {};
         const inside = c.stored_bytes
-          ? t('cloudBackup.facts.insideValue', { size: sizeText(c.stored_bytes) })
+          ? t('cloudBackup.facts.insideValue', { size: sizeText(c.stored_bytes, i18n.locale) })
           : t('cloudBackup.facts.insideValueNoSize');
         /* Il controllo settimanale non ha una riga sua: quando va bene non e'
            un'informazione («al sicuro» lo dice gia'), quando va male cambia lo

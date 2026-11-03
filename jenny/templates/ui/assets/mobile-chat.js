@@ -4,7 +4,7 @@ import { wsManager } from './shared/ws-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
 import { describeWireError } from './shared/wire-error.js';
 import { api } from './shared/api-client.js';
-import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
+import { copyToClipboard, escapeHtml, showToast, sizeText } from './shared/utils.js';
 import { sessionManager } from './shared/session-manager.js';
 import { scopeChip } from './shared/scope-chip.js';
 import { botName } from './shared/bot-name.js';
@@ -3643,7 +3643,7 @@ export class ChatController {
       const content = data.content || '';
       const language = data.language || 'text';
       const size = data.size || 0;
-      const sizeLabel = size > 1024 ? (size / 1024).toFixed(1) + ' KB' : size + ' B';
+      const sizeLabel = sizeText(size, i18n.locale);
 
       let highlighted;
       if (typeof hljs !== 'undefined') {

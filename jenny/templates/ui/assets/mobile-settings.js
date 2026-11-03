@@ -2,7 +2,7 @@
 
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
-import { escapeHtml, showToast } from './shared/utils.js';
+import { escapeHtml, showToast, sizeText } from './shared/utils.js';
 import { copyWithToast } from './shared/reply.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog, detailDialog, formDialog } from './shared/dialog.js';
@@ -2534,7 +2534,7 @@ export class SettingsController {
       return `<button class="snapshot-row" data-snapshot="${escapeHtml(s.id)}" data-date="${escapeHtml(date)}"
         style="display:flex;flex-direction:column;align-items:flex-start;width:100%;gap:2px;padding:8px 10px;margin-bottom:6px;border:1px solid var(--border,rgba(128,128,128,.25));border-radius:8px;background:transparent;color:inherit;text-align:left">
         <span style="font-size:13px">${escapeHtml(date)}${label}</span>
-        <span style="font-size:11px;color:var(--text-faint)">${escapeHtml(trigger)} · ${s.file_count} ${i18n.t('backup.files')} · ${this._fmtBytes(s.total_bytes)}</span>
+        <span style="font-size:11px;color:var(--text-faint)">${escapeHtml(trigger)} · ${s.file_count} ${i18n.t('backup.files')} · ${(s.total_bytes == null ? '—' : sizeText(s.total_bytes, i18n.locale))}</span>
       </button>`;
     }).join('');
     listEl.querySelectorAll('.snapshot-row').forEach(btn => {
@@ -2546,13 +2546,6 @@ export class SettingsController {
     });
     // Anche la lista degli snapshot era un segnaposto: v. `_restoreScrollTop()`.
     this._restoreScrollTop();
-  }
-
-  _fmtBytes(n) {
-    if (n == null) return '—';
-    if (n >= 1e6) return (n / 1e6).toFixed(1) + ' MB';
-    if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB';
-    return n + ' B';
   }
 
   // ── Token Usage ──────────────────────────────────────────────────────

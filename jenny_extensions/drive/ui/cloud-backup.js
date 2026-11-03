@@ -356,11 +356,3 @@ export function progressSizes(done, total, locale = i18n.locale) {
   return { done: fmt(Math.min(Number(done) || 0, t)), total: fmt(t) };
 }
 
-/** «8,4 MB», nel formato numerico della lingua. */
-export function sizeText(bytes, locale = i18n.locale) {
-  const n = Number(bytes) || 0;
-  const fmt = (v, unit) => `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(v)} ${unit}`;
-  if (n >= 1e9) return fmt(n / 1e9, 'GB');
-  if (n >= 1e6) return fmt(n / 1e6, 'MB');
-  return fmt(Math.max(1, Math.round(n / 1e3)), 'kB');
-}
