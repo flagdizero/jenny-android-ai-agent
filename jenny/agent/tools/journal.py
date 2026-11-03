@@ -42,6 +42,7 @@ from loguru import logger
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import current_request_context
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.security.subagent_policy import (
     current_subagent_policy,
     current_turn_taint,
@@ -49,10 +50,11 @@ from jenny.security.subagent_policy import (
 )
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
+    current_notebook_root,
     current_turn_is_readonly,
     current_workspace_scope,
 )
-from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
+from jenny.session.keys import UNIFIED_SESSION_KEY, project_session_key
 from jenny.utils.clock import local_now
 from jenny.utils.helpers import clip
 from jenny.utils.path import append_with_header
@@ -328,15 +330,13 @@ class JournalAppendTool(Tool):
         return roots[notebook], ""
 
     def _notebooks(self) -> dict[str, Path]:
-        from jenny.board.placements import _wikis_dirs
+        from jenny.config.paths import get_wikis_path
         from jenny.utils.wiki_paths import discover_wiki_roots
 
         workspace = Path(getattr(self._memory, "workspace", "") or ".")
-        roots: dict[str, Path] = {}
-        for wikis in _wikis_dirs(workspace):
-            with suppress(OSError):
-                roots.update(discover_wiki_roots(wikis))
-        return roots
+        with suppress(OSError):
+            return discover_wiki_roots(get_wikis_path(workspace))
+        return {}
 
     async def _personal(self, fact: str, attribution: str) -> str:
         """Una riga del diario personale: un fatto che non e' di nessun quaderno."""
@@ -423,7 +423,7 @@ class JournalAppendTool(Tool):
         try:
             await asyncio.to_thread(
                 store.append_history, content,
-                session_key=session_key or f"{PROJECT_SESSION_PREFIX}{root.name}",
+                session_key=session_key or project_session_key(root.name),
                 kind=attribution, about=root.name, ref=f"{where.as_posix()}:{lineno}",
                 untrusted=bool(current_turn_taint()),
             )
@@ -520,11 +520,9 @@ class SuggestNotebookTool(Tool):
         name = (notebook or "").strip()
         line = " ".join((context or "").split())
         request = current_request_context()
-        scope = current_workspace_scope()
-        own = scope.write_root() if scope is not None else None
-        if own is not None and is_wiki_root(own):
+        if current_notebook_root() is not None:
             return "You are already in a notebook: there is nowhere to move. Nothing was offered."
-        if request is not None and request.channel != "websocket":
+        if request is not None and request.channel != WEBSOCKET_CHANNEL:
             return ("A notebook opens only in the app, not from here. Nothing was offered: "
                     "go on in this conversation.")
         if current_subagent_policy() is not None:

@@ -48,16 +48,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.security.taint_ledger import ledger_for
 
 if TYPE_CHECKING:
     from jenny.agent.subagent_journal import WriteJournal
 
 # I file di configurazione nella radice del workspace: ``config.json``, il suo
-# ``.bak``, i temporanei dello store e le copie in quarantena. Sono gli stessi
-# nomi che il listing della WebUI nasconde
-# (``webui/workspace_files._DEFAULT_INTERNAL_PATTERNS``) e che il
-# ``FileProvider`` Kotlin rifiuta di condividere.
+# ``.bak``, i temporanei dello store e le copie in quarantena. Il listing della
+# WebUI li nasconde con questi stessi nomi
+# (``webui/workspace_files._DEFAULT_INTERNAL_PATTERNS``), e il ``FileProvider``
+# Kotlin rifiuta di condividerli.
 CONFIG_FILE_PATTERNS = ("config.json*", "config.corrupt-*.json")
 
 # Cartelle (relative alla radice) che contengono copie di ``config.json``.
@@ -294,7 +295,7 @@ def _project_relative(parts: tuple[str, ...]) -> tuple[str, ...]:
     Un quaderno ha la sua ``memory/`` e i suoi ``downloads/``: valgono come
     quelli dell'installazione. Si riconosce dalla posizione, senza I/O.
     """
-    if len(parts) >= 3 and parts[0] == "wikis":
+    if len(parts) >= 3 and parts[0] == DEFAULT_WIKIS_DIR:
         return parts[2:]
     return ()
 

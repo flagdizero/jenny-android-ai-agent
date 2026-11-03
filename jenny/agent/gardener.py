@@ -70,6 +70,7 @@ from jenny.agent.internal_run import (
 # modulo si tirerebbe dentro ``internal_run`` — v. la docstring di
 # ``jenny/agent/wiki_provenance.py``.
 from jenny.agent.wiki_provenance import _provenance_guard
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import GARDENER_SESSION_PREFIX
 from jenny.session.turn_visibility import silent_progress
 from jenny.utils.clock import local_now
@@ -80,6 +81,7 @@ from jenny.utils.wiki_paths import (
     WIKI_MAP_MAX_CHARS,
     is_wiki_root,
     iter_wiki_pages,
+    notebook_dir,
     page_chars_if_over,
     read_wiki_map,
     wiki_journal_dir,
@@ -343,7 +345,7 @@ class GardenerStore:
 
     @classmethod
     def for_project(
-        cls, workspace: Path, name: str, *, wikis_dir_name: str = "wikis"
+        cls, workspace: Path, name: str, *, wikis_dir_name: str = DEFAULT_WIKIS_DIR
     ) -> "GardenerStore | None":
         """Lo store del progetto *name*, o ``None`` se quella cartella non è un progetto.
 
@@ -351,13 +353,11 @@ class GardenerStore:
         avvolgere ogni giro in un ``try``, e quello che risponde a un comando ha
         un rifiuto da scrivere, non un errore da propagare.
         """
-        root = (workspace / wikis_dir_name / name).resolve(strict=False)
-        wikis_root = (workspace / wikis_dir_name).resolve(strict=False)
         # Il nome arriva da una chiave di sessione o da un argomento di comando:
-        # un ``..`` non deve poter far uscire la passata dalla cartella dei
-        # progetti (stessa guardia di ``WorkspaceScopeResolver.for_project``).
-        if root == wikis_root or wikis_root not in root.parents:
-            logger.warning("gardener: {} cade fuori da {}", name, wikis_root)
+        # un ``..`` non deve poter far uscire la passata dalla cartella dei progetti.
+        root = notebook_dir(workspace / wikis_dir_name, name)
+        if root is None:
+            logger.warning("gardener: {} cade fuori da {}", name, workspace / wikis_dir_name)
             return None
         if not is_wiki_root(root):
             return None

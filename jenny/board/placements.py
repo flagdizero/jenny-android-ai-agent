@@ -49,17 +49,11 @@ def placed_slugs(root: Path) -> set[str]:
 
 def all_placements(workspace: Path) -> list[dict[str, Any]]:
     """Le pose di tutti i quaderni, ciascuna con il nome del suo quaderno."""
+    from jenny.config.paths import get_wikis_path
     from jenny.utils.wiki_paths import discover_wiki_roots
 
     out: list[dict[str, Any]] = []
-    for wikis in _wikis_dirs(workspace):
-        for name, root in sorted(discover_wiki_roots(wikis).items()):
-            for place in placements(root):
-                out.append({**place, "notebook": name})
+    for name, root in sorted(discover_wiki_roots(get_wikis_path(workspace)).items()):
+        for place in placements(root):
+            out.append({**place, "notebook": name})
     return out
-
-
-def _wikis_dirs(workspace: Path) -> list[Path]:
-    from jenny.config.paths import get_wikis_path
-
-    return [get_wikis_path(Path(workspace))]

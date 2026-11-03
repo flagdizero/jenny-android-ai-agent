@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from loguru import logger
 
-from jenny.bus.events import OutboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, OutboundMessage
 from jenny.config.paths import wikis_dir_name
 from jenny.cron.bound_runner import (
     CRON_WAKELOCK_TIMEOUT_S,
@@ -126,7 +126,7 @@ async def run_silent_alert_turn(
     outcome = await agent.process_direct_outcome(
         prompt,
         session_key=session_key,
-        channel="websocket",
+        channel=WEBSOCKET_CHANNEL,
         chat_id="default",
         on_progress=silent_progress,
         visibility=TurnVisibility.SILENT,

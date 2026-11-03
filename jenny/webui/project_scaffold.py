@@ -18,7 +18,7 @@ pattern document-first (una knowledge base di ricerca che digerisce paper), e
 obbligano a scegliere «concept o entity?» *nel momento peggiore*, cioe' mentre
 si prende un appunto. Le sottocartelle non sono vietate — sono libere, si aprono
 quando un gruppo di pagine se le guadagna. I ``[[link]]`` restano nudi:
-``webui/wiki.py::resolve_wikilink`` risolve per stem in tutto ``wiki/``, quindi
+``utils/wiki_paths.py::resolve_wikilink`` risolve per stem in tutto ``wiki/``, quindi
 spostare una pagina in una sottocartella non rompe niente.
 
 **Non e' lo scaffolder della skill, e non lo sostituisce.**

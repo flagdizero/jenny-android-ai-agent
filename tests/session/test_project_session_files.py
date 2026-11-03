@@ -30,10 +30,10 @@ from pathlib import Path
 
 import pytest
 
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.session.keys import (
     PROJECT_SESSION_PREFIX,
     UNIFIED_SESSION_KEY,
-    WEBUI_CHANNEL,
     is_valid_project_name,
     session_key_for_channel,
 )
@@ -138,7 +138,7 @@ def test_a_trailing_newline_is_refused_before_it_becomes_a_path() -> None:
     capo nel nome. Il ``chat_id`` arriva dal client senza ``strip``."""
     assert not is_valid_project_name("viaggi\n")
     assert session_key_for_channel(
-        WEBUI_CHANNEL, f"{PROJECT_SESSION_PREFIX}viaggi\n"
+        WEBSOCKET_CHANNEL, f"{PROJECT_SESSION_PREFIX}viaggi\n"
     ) == UNIFIED_SESSION_KEY
 
 

@@ -309,6 +309,33 @@ async def test_the_trace_passes_the_same_fences(notebook_chat: Path, monkeypatch
     assert (notebook_chat / "wiki" / "pino.md").exists()
 
 
+@pytest.fixture
+def far_east_clock(monkeypatch):
+    """Il telefono a UTC+14: l'ora locale non coincide mai con quella UTC."""
+    import time
+
+    monkeypatch.setenv("TZ", "Etc/GMT-14")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+async def test_without_a_timezone_the_trace_keeps_the_phone_s_clock(
+    notebook_chat: Path, far_east_clock
+) -> None:
+    """Senza ``timezone`` in config vale il fuso del telefono, come per tutti gli
+    altri (``utils.clock.local_now``), non UTC."""
+    from datetime import datetime, timezone
+
+    await NotebookEditTool().execute(action="remove_pages", pages=["wiki/pino.md"], reason="x")
+    [trace] = (notebook_chat / "raw" / "removed").glob("*.md")
+    hour = re.search(r"^## (\d{2}):\d{2} ", trace.read_text(encoding="utf-8"), re.M).group(1)
+    local, utc = datetime.now().astimezone(), datetime.now(timezone.utc)
+    assert hour == f"{local:%H}" != f"{utc:%H}"
+    assert trace.stem == f"{local:%Y-%m-%d}"
+
+
 async def test_remove_pages_is_refused_in_a_read_only_turn(root: Path) -> None:
     scope = bind_workspace_scope(build_workspace_scope(root, "restricted").without_write_access())
     req = bind_request_context(RequestContext(channel="websocket", chat_id="project:piante",

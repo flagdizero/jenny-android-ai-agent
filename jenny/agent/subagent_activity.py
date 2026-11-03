@@ -71,6 +71,7 @@ from urllib.parse import urlparse
 from loguru import logger
 
 from jenny.agent.subagent_records import SUBAGENTS_DIRNAME
+from jenny.utils.helpers import clip
 from jenny.utils.path import abbreviate_path, atomic_write
 
 __all__ = [
@@ -227,9 +228,7 @@ def _clean(value: Any, *, limit: int = MAX_SUMMARY_CHARS) -> str:
     if not isinstance(value, str):
         value = "" if value is None else str(value)
     text = _WS_RE.sub(" ", _CONTROL_RE.sub(" ", value)).strip()
-    if limit > 0 and len(text) > limit:
-        text = text[: max(1, limit - 3)].rstrip() + "..."
-    return text
+    return clip(text, limit) if limit > 0 else text
 
 
 def _fmt_bytes(size: int) -> str:

@@ -20,7 +20,6 @@ contesto non c'è, non c'è nessuna finestra, e non è un errore.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from loguru import logger
@@ -63,26 +62,11 @@ async def _get_bridge(context: Any) -> Any:
 
 
 async def _call(method: str, *args: Any) -> bool:
-    """Chiama un metodo del bridge su un thread, con timeout. Mai solleva.
-
-    ``asyncio.to_thread`` e non una chiamata diretta: siamo sul loop del
-    gateway e l'attraversamento Chaquopy è bloccante. È la stessa disciplina di
-    ``notifier.post_alert``, e il motivo per cui il canale può restare
-    ``send_max_retries = 1``: qui dentro non esce mai un'eccezione, quindi non
-    c'è niente che il dispatcher possa ritentare.
-    """
-    context = get_android_context()
-    if context is None:
-        return False
-    try:
-        bridge = await _get_bridge(context)
-        result = await asyncio.wait_for(
-            asyncio.to_thread(getattr(bridge, method), *args), timeout=_BRIDGE_TIMEOUT_S
-        )
-    except Exception:
-        logger.opt(exception=True).warning("FloatingBridge.{} failed", method)
-        return False
-    return bool(result)
+    """Chiama un metodo del bridge (:meth:`BridgeCache.call`). Mai solleva: è il
+    motivo per cui il canale può restare ``send_max_retries = 1``, non c'è
+    niente che il dispatcher possa ritentare."""
+    return bool(await _BRIDGE.call(_get_bridge, get_android_context(), method, *args,
+                                   timeout=_BRIDGE_TIMEOUT_S, default=False))
 
 
 async def show_reply(text: str) -> bool:

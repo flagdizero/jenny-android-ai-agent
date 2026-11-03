@@ -24,6 +24,7 @@ from typing import Any
 from loguru import logger
 
 from jenny.board import model
+from jenny.bus.events import WEBSOCKET_CHANNEL
 
 MAX_RESULT = 600
 
@@ -49,7 +50,7 @@ def notebook_delivery(notebook: str) -> dict[str, str]:
     from jenny.session.keys import project_session_key
 
     key = project_session_key(notebook)
-    return {"session_key": key, "origin_channel": "websocket", "origin_chat_id": key}
+    return {"session_key": key, "origin_channel": WEBSOCKET_CHANNEL, "origin_chat_id": key}
 
 
 def add_notebook_job(
@@ -106,13 +107,19 @@ def legacy_result_key(link: dict[str, Any]) -> str | None:
     return f"{link.get('card')}/{section}" if section else None
 
 
-def notebook_root(name: str) -> Path | None:
-    """La cartella del quaderno *name*, o ``None`` se non c'e' (piu')."""
-    from jenny.config.paths import get_wikis_path
-    from jenny.utils.wiki_paths import is_wiki_root
+def notebook_root(name: Any) -> Path | None:
+    """La cartella del quaderno *name*, o ``None`` se non c'e' (piu').
 
-    root = get_wikis_path() / name
-    return root if is_wiki_root(root) else None
+    *name* arriva da un legame letto dal disco: se non è una stringa non c'è un
+    quaderno (e non quello che si chiama ``"None"``).
+    """
+    from jenny.config.paths import get_wikis_path
+    from jenny.utils.wiki_paths import is_wiki_root, notebook_dir
+
+    if not isinstance(name, str):
+        return None
+    root = notebook_dir(get_wikis_path(), name)
+    return root if root is not None and is_wiki_root(root) else None
 
 
 def link_alive(link: dict[str, Any]) -> bool:
@@ -123,7 +130,7 @@ def link_alive(link: dict[str, Any]) -> bool:
     """
     from jenny.board.store import read_board
 
-    root = notebook_root(str(link.get("notebook")))
+    root = notebook_root(link.get("notebook"))
     if root is None:
         return False
     board = read_board(root)
@@ -158,7 +165,7 @@ def record_result(
     """
     from jenny.board.store import mutate_board
 
-    root = notebook_root(str(link.get("notebook")))
+    root = notebook_root(link.get("notebook"))
     if root is None:
         return
     legacy = legacy_result_key(link)
@@ -238,7 +245,7 @@ async def forget_job(link: dict[str, Any], job_id: str) -> None:
     from jenny.board.notify import board_changed
     from jenny.board.store import mutate_board
 
-    notebook = str(link.get("notebook"))
+    notebook = link.get("notebook")
     root = notebook_root(notebook)
     if root is None:
         return

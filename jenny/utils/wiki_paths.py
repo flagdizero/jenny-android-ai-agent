@@ -1,16 +1,17 @@
-"""Discovery, frontmatter e fingerprint delle wiki del workspace.
+"""Discovery, frontmatter, wikilink e fingerprint delle wiki del workspace.
 
 Layer neutro, senza dipendenze su ``webui/`` o ``agent/``: entrambi devono
-sapere dove vivono le wiki e come leggerne l'intestazione, e farlo importare
-all'uno dall'altro sarebbe un'inversione di layer. ``webui/wiki.py`` re-importa
-questi nomi in cima al modulo, così la sua API pubblica (``discover_wikis``) e i
-suoi helper privati restano dove i chiamanti li hanno sempre trovati.
+sapere dove vivono le wiki, come leggerne l'intestazione e dove porta un
+``[[link]]``, e farlo importare all'uno dall'altro sarebbe un'inversione di
+layer. ``webui/wiki.py`` (il renderer, che tira dentro ``markdown``) importa da
+qui, non il contrario.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, overload
 
@@ -19,14 +20,20 @@ if TYPE_CHECKING:
 
 from loguru import logger
 
-_FRONTMATTER_RE = re.compile(r"^---\n([\s\S]*?)\n---\n?")
+# La frontmatter di una pagina, letta come la legge il lint
+# (``lint_wiki.FRONTMATTER_RE``, una copia: il lint non importa ``jenny``): un BOM
+# o una riga vuota prima del ``---``, e il ``---`` finale senza a capo. Una sola
+# forma per tutti i lettori, guardia di provenienza compresa: se la guardia
+# leggesse «nessuna frontmatter» dove il lint legge ``state: decided``, una riga
+# vuota in cima basterebbe a passarla.
+FRONTMATTER_RE = re.compile(r"^\ufeff?\s*---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 
 # Il **registro delle wiki**: ``wikis/_index.md``, una riga per wiki. Non e' la
 # mappa di una wiki — quella e' :data:`WIKI_INDEX_FILENAME`, ``wiki/index.md``,
 # e i due nomi distavano un underscore (T3.12). Sono due file diversi a due
 # livelli diversi dell'albero: qui "registry" e la' "index", cosi' che leggere
 # uno dei due non richieda di ricordarsi dell'altro.
-_WIKIS_REGISTRY_FILENAME = "_index.md"
+WIKIS_REGISTRY_FILENAME = "_index.md"
 # Il file di istruzioni di una wiki. **Uno solo**, da quando il passo 7 migra le
 # wiki esistenti a ogni avvio (``utils/wiki_migration.py``).
 #
@@ -126,12 +133,30 @@ def wiki_schema_file(wiki_root: Path) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+# ── La piegatura della ricerca ───────────────────────────────────────────────
+
+
+def fold(text: str) -> str:
+    """Normalizza per la ricerca: NFKD, via i diacritici, minuscolo.
+
+    «Città» e «citta» diventano la stessa parola; «東京» e «Москва» restano
+    loro stesse — si tolgono gli accenti, non le lettere. La usano la ricerca
+    delle wiki, quella della memoria e la mappa di un quaderno. Il gemello
+    JavaScript è ``foldText`` in ``shared/wiki-search.js``: le due devono restare
+    identiche, altrimenti il client cerca termini che il server non ha mai
+    scritto nel dizionario.
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    without_marks = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return without_marks.lower()
+
+
 # ── Frontmatter ──────────────────────────────────────────────────────────────
 
 
 def extract_title(text: str) -> str | None:
     """Titolo di una pagina: ``title:`` nel frontmatter, altrimenti il primo H1."""
-    fm = _FRONTMATTER_RE.match(text)
+    fm = FRONTMATTER_RE.match(text)
     if fm:
         t = re.search(r"^title:\s*(.+)$", fm.group(1), re.M)
         if t:
@@ -147,7 +172,7 @@ def split_frontmatter(text: str) -> tuple[str, str]:
     pesca i tag — e non può permettersi un ``yaml.safe_load`` per pagina su
     centinaia di file. Senza frontmatter il primo elemento è la stringa vuota.
     """
-    m = _FRONTMATTER_RE.match(text)
+    m = FRONTMATTER_RE.match(text)
     if not m:
         return "", text
     return m.group(1), text[m.end() :]
@@ -155,7 +180,7 @@ def split_frontmatter(text: str) -> tuple[str, str]:
 
 def strip_frontmatter(text: str) -> tuple[dict[str, Any] | None, str, str | None]:
     """Return ``(frontmatter, body, title)`` for a page's raw markdown."""
-    m = _FRONTMATTER_RE.match(text)
+    m = FRONTMATTER_RE.match(text)
     frontmatter: dict[str, Any] | None = None
     body = text
     if m:
@@ -192,7 +217,7 @@ def is_wiki_page_rel(
 
     **Una regola sola per i quattro camminatori** (T9.5). Prima ce n'erano
     quattro, e le differenze non erano decisioni: :func:`iter_wiki_pages`
-    saltava i nascosti, ``webui/wiki.py::iter_page_files`` no — quindi un
+    saltava i nascosti, ``webui/wiki.py::iter_page_files`` (ora :func:`wiki_page_files`) no — quindi un
     ``.draft.md`` sotto ``wiki/`` non arrivava al modello ma diventava un nodo
     del grafo e un risultato di ricerca — e ``_walk`` saltava i nascosti a ogni
     livello, cioe' **anche le cartelle**, mentre gli altri due guardavano solo
@@ -240,7 +265,7 @@ def is_wiki_page_rel(
 # ``tests/utils/test_wiki_paths.py::TestTheIndexFilenameHasOneDefinition`` cade se
 # ne ricompare un secondo.
 #
-# Da non confondere con :data:`_WIKIS_REGISTRY_FILENAME` (``wikis/_index.md``),
+# Da non confondere con :data:`WIKIS_REGISTRY_FILENAME` (``wikis/_index.md``),
 # che e' il registro delle wiki e non la mappa di una.
 WIKI_INDEX_FILENAME = "index.md"
 
@@ -431,6 +456,40 @@ def _page_title(path: Path) -> str:
         return path.stem
 
 
+def wiki_page_files(pages_dir: Path, *, include_index: bool) -> list[tuple[str, Path]]:
+    """``(rel, path)`` delle pagine sotto *pages_dir* (``wiki/``), in ordine d'albero.
+
+    L'unica camminata delle pagine: :func:`iter_wiki_pages` (prompt, giardiniere)
+    senza l'indice, grafo e ricerca (``webui/wiki.read_pages``, il fingerprint di
+    ``wiki_search``) con. **Quali file** lo decide :func:`is_wiki_page_rel`.
+
+    L'indice e' la sola differenza, e voluta: per il prompt ``wiki/index.md`` e'
+    la mappa e ha un blocco suo, per chi naviga e' il nodo centrale e cercarci
+    dentro e' la cosa piu' ovvia. **Il confronto e' sensibile alle maiuscole, di
+    proposito** (T9.5): un ``wiki/INDEX.md`` su Android **non e'** il file che
+    l'iniettore apre come mappa (``context.py::_read_map_source`` chiede
+    esattamente ``index.md``); escluderlo lo toglierebbe al modello in tutt'e due
+    i modi, mentre cosi' almeno arriva come pagina.
+
+    L'ordine e' quello dei ``Path`` (le pagine di una cartella stanno insieme:
+    ``a/x.md`` prima di ``a-b/x.md``), e non dipende dal filesystem come quello di
+    ``rglob``: da questa lista discende l'indice dei nodi del grafo, che e' la
+    chiave delle postings della ricerca. Fino al 03/11/2026 grafo e ricerca
+    ordinavano per stringa, che mette ``a-b/`` fra ``a.md`` e ``a/``.
+    """
+    if not pages_dir.is_dir():
+        return []
+    found: list[tuple[str, Path]] = []
+    for path in sorted(pages_dir.rglob("*.md")):
+        rel = path.relative_to(pages_dir)
+        if not is_wiki_page_rel(rel):
+            continue
+        if not include_index and rel.as_posix() == WIKI_INDEX_FILENAME:
+            continue
+        found.append((rel.as_posix(), path))
+    return found
+
+
 @overload
 def iter_wiki_pages(pages_dir: Path) -> list[tuple[str, str]]: ...
 
@@ -484,28 +543,7 @@ def iter_wiki_pages(
     un prompt: cosi' chi lo usasse per sbaglio si rompe subito invece di
     stampare una riga muta. Gli ``@overload`` servono a dirlo al type checker.
     """
-    if not pages_dir.is_dir():
-        return []
-    found: list[tuple[str, Path]] = []
-    for path in sorted(pages_dir.rglob("*.md")):
-        rel = path.relative_to(pages_dir)
-        if not is_wiki_page_rel(rel):
-            continue
-        # L'esclusione dell'indice sta **qui e non nel predicato**: e' l'unica
-        # cosa che distingue questo elenco da quello di grafo, albero e ricerca,
-        # e per la mappa il prompt ha un blocco suo.
-        #
-        # **Il confronto e' sensibile alle maiuscole, di proposito** (T9.5). Un
-        # ``wiki/INDEX.md`` sull'unico runtime che esiste — Android, filesystem
-        # sensibile alle maiuscole — **non e'** il file che l'iniettore apre come
-        # mappa (``context.py::_read_map_source`` chiede esattamente
-        # ``index.md``). Confrontare senza maiuscole lo escluderebbe da qui
-        # *senza* che entri come mappa: il suo contenuto smetterebbe di
-        # raggiungere il modello in tutt'e due i modi. Oggi almeno arriva come
-        # pagina, che e' il peggio-caso giusto.
-        if rel.as_posix() == WIKI_INDEX_FILENAME:
-            continue
-        found.append((rel.as_posix(), path))
+    found = wiki_page_files(pages_dir, include_index=False)
     if not titles:
         return [rel for rel, _ in found]
     return [(rel, _page_title(path)) for rel, path in found]
@@ -614,7 +652,7 @@ def settle_wiki_id_lines(text: str, value: str | None = None) -> str:
     torna identico, byte per byte — e' cosi' che la migrazione sa di non dover
     scrivere.
     """
-    match = _FRONTMATTER_RE.match(text)
+    match = FRONTMATTER_RE.match(text)
     if match is None:
         if value is None:
             return text
@@ -723,6 +761,132 @@ def find_wiki_by_id(wikis_dir: Path, target: str) -> Path | None:
     return None
 
 
+# ── Wikilink ─────────────────────────────────────────────────────────────────
+#
+# Qui e non in ``webui/wiki.py``: la bacheca e i comandi la chiedono senza
+# il renderer, che tira dentro il pacchetto ``markdown``.
+
+
+def slugify(name: str) -> str:
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    name = name.lower()
+    name = re.sub(r"[\s_]+", "-", name)
+    name = re.sub(r"[^a-z0-9.\-]", "", name)
+    return name.strip("-")
+
+
+def _normalize_page_path(path: str) -> str:
+    parts = path.split("/")
+    slugged = [slugify(p) for p in parts]
+    if not slugged[-1].endswith(".md"):
+        slugged[-1] += ".md"
+    return "/".join(slugged)
+
+
+def strip_wiki_prefix(page_ref: str) -> str:
+    """Remove a leading wiki/ prefix used when pages are stored under wiki/."""
+    if page_ref.startswith("wiki/"):
+        return page_ref[5:]
+    return page_ref
+
+
+def suffix_rank(path: Path) -> tuple[int, str]:
+    """Ordine di preferenza fra più pagine che finiscono per lo stesso path.
+
+    Vince la più vicina alla radice, a pari profondità la prima in ordine
+    alfabetico. Serve solo a rendere la scelta **deterministica**: senza una
+    regola, l'ordine di ``rglob`` è quello del filesystem, quindi lo stesso link
+    poteva aprire due pagine diverse su due telefoni. La stessa regola è copiata
+    in ``jenny/skills/llm-wiki/scripts/lint_wiki.py::page_for_link`` — il lint
+    non può importare il package — e i due test la confrontano.
+    """
+    return (len(path.parts), path.as_posix())
+
+
+def resolve_wikilink(wiki_root: Path, target: str) -> Path | None:
+    """Resolve a wikilink target to a file path.
+
+    Tries: exact path, with .md, case-insensitive, slug, path suffix, stem.
+    wiki_root is the wiki root directory (contains wiki/ and audit/).
+
+    Il ramo *path suffix* vale solo per un bersaglio a più segmenti, ed è la
+    generalizzazione di quello per stem: ``[[<aspect>]]`` trovava una pagina
+    ovunque sotto ``wiki/``, mentre ``[[<Topic>/<aspect>]]`` — più specifico, e
+    la forma che ``references/article-guide.md`` raccomanda dentro un
+    ``index.md`` diviso in cartella — non trovava niente, perché nessuno stem
+    contiene una barra. Il link più preciso moriva dove quello più vago apriva.
+    """
+    pages_dir = wiki_root / "wiki"
+    target = strip_wiki_prefix(target)
+    # Exact path
+    p = pages_dir / target
+    if p.is_file():
+        return p
+    # Directory with index.md
+    if p.is_dir():
+        index = p / "index.md"
+        if index.is_file():
+            return index
+    # With .md
+    p = pages_dir / f"{target}.md"
+    if p.is_file():
+        return p
+    # Case-insensitive on relative path
+    target_norm = _normalize_page_path(target)
+    # I candidati del ramo per suffisso si raccolgono nello stesso passaggio di
+    # ``rglob``: su una wiki vera sono centinaia di file su flash, e leggere due
+    # volte la stessa directory è l'unica parte davvero cara.
+    suffixes: tuple[str, ...] = ()
+    if "/" in target:
+        low = target.lower()
+        suffixes = (
+            f"/{target_norm.lower()}",  # <Topic>/<aspect>  → …/<topic>/<aspect>.md
+            f"/{low}/index.md",  # <Topic>/<sub>     → …/<topic>/<sub>/index.md
+            f"/{target_norm.lower().removesuffix('.md')}/index.md",
+        )
+    candidates: list[Path] = []
+    for f in pages_dir.rglob("*.md"):
+        rel = f.relative_to(pages_dir).as_posix()
+        if rel.lower() == target_norm.lower():
+            return f
+        if rel.lower().removesuffix(".md") == target.lower():
+            return f
+        if suffixes:
+            rel_low = rel.lower()
+            if rel_low.endswith(suffixes) or rel_low.removesuffix(".md").endswith(f"/{low}"):
+                candidates.append(f)
+    if candidates:
+        return min(candidates, key=suffix_rank)
+    # Stem search
+    return _find_by_stem(pages_dir, target)
+
+
+def _find_by_stem(dir_path: Path, target: str) -> Path | None:
+    """La pagina con questo stem, **scelta in modo deterministico**.
+
+    Due pagine con lo stesso nome in cartelle diverse (`a/nota.md`, `b/nota.md`)
+    esistono davvero, e qui vinceva quella che ``rglob`` restituiva per prima —
+    cioè l'ordine della directory sul filesystem. Lo stesso `[[nota]]` poteva
+    aprire due pagine diverse, e il lint (che indicizza per chiave, non per
+    ordine di lettura) non poteva concordare con nessuna delle due. Ora la regola
+    è scritta: ``suffix_rank``, la stessa del ramo per suffisso.
+
+    Un solo livello, insensibile alle maiuscole. Prima ce n'erano due — prima i
+    nomi identici carattere per carattere, poi quelli uguali a meno di
+    maiuscole — e il primo livello il lint non può esprimerlo, perché indicizza
+    per chiave minuscola. Serviva soltanto per due pagine che differiscono *solo*
+    per maiuscole nella stessa wiki, e in quel caso la regola di ordine sceglie
+    comunque la stessa delle due.
+    """
+    lowered = target.lower()
+    matches = [
+        f
+        for f in dir_path.rglob("*.md")
+        if f.stem.lower() in (lowered, lowered.removesuffix(".md"))
+    ]
+    return min(matches, key=suffix_rank) if matches else None
+
+
 # ── Discovery ────────────────────────────────────────────────────────────────
 
 
@@ -736,6 +900,20 @@ def is_wiki_root(path: Path) -> bool:
     di dire "questa e' una wiki" sarebbe un secondo modo di sbagliarlo.
     """
     return (path / "wiki").is_dir()
+
+
+def notebook_dir(wikis_dir: Path, name: str) -> Path | None:
+    """La cartella (risolta) del quaderno *name* in *wikis_dir*, o ``None`` se ne esce.
+
+    Il nome arriva da una chiave di sessione, da un argomento del modello o da
+    un client: un ``..``, un separatore o il nome vuoto non devono portare fuori
+    dalla cartella dei quaderni, né in una sottocartella di un quaderno. Un
+    quaderno è un figlio diretto di ``wikis/`` (come in :func:`discover_wikis`).
+    Non guarda se esiste: chi vuole un quaderno vero aggiunge :func:`is_wiki_root`.
+    """
+    wikis = wikis_dir.resolve(strict=False)
+    root = (wikis / name).resolve(strict=False)
+    return root if root.parent == wikis and root != wikis else None
 
 
 def discover_wikis(wikis_dir: Path) -> dict[str, Path]:
@@ -819,7 +997,7 @@ def _is_placeholder(value: str) -> bool:
 
 def _frontmatter_scalar(text: str, *keys: str) -> str | None:
     """Primo scalare non-placeholder fra *keys* nel frontmatter YAML iniziale."""
-    m = _FRONTMATTER_RE.match(text)
+    m = FRONTMATTER_RE.match(text)
     if not m:
         return None
     for line in m.group(1).split("\n"):

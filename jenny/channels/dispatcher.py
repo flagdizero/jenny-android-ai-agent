@@ -17,13 +17,13 @@ from jenny.bus.events import (
     COORDINATION_FLAGS,
     FLOATING_CHANNEL,
     NOTIFICATION_CHANNEL,
+    WEBSOCKET_CHANNEL,
     OutboundMessage,
 )
 from jenny.bus.queue import MessageBus
 from jenny.config.schema import Config
 from jenny.providers import retry_notice
 from jenny.runtime.notifier import notify_delivery
-from jenny.session.keys import WEBUI_CHANNEL
 from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 if TYPE_CHECKING:
@@ -35,8 +35,6 @@ _SEND_RETRY_DELAYS = (1, 2, 4)
 # Duplicate suppression only needs recent replies; older entries are evicted
 # FIFO so the fingerprint map stays bounded on a long-lived gateway process.
 _MAX_REPLY_FINGERPRINTS = 512
-
-CHANNEL_NAME = "websocket"
 
 # Flag che marcano un outbound come coordinamento/streaming: tutto ciò che NON
 # è un messaggio finale user-visible, e quindi non va proiettato sulla vista
@@ -131,7 +129,7 @@ class WebSocketDispatcher:
             on_jobs_changed=self._on_jobs_changed,
             on_telegram_changed=self._schedule_telegram_reload,
         )
-        self.channels[CHANNEL_NAME] = WebSocketChannel(
+        self.channels[WEBSOCKET_CHANNEL] = WebSocketChannel(
             section, self.bus, gateway=gateway, ui_query=self._ui_query
         )
         logger.info("WebSocket channel enabled")
@@ -468,17 +466,17 @@ class WebSocketDispatcher:
         Le copie ``_mirror`` del fan-out proattivo sono escluse (la primaria
         websocket è già stata pubblicata dal ChannelDeliverer).
         """
-        if msg.channel == CHANNEL_NAME:
+        if msg.channel == WEBSOCKET_CHANNEL:
             return
         if not msg.content or not msg.content.strip():
             return
         if any(msg.metadata.get(flag) for flag in _NON_FINAL_METADATA_FLAGS):
             return
-        ws_channel = self.channels.get(CHANNEL_NAME)
+        ws_channel = self.channels.get(WEBSOCKET_CHANNEL)
         if ws_channel is None:
             return
         copy = OutboundMessage(
-            channel=CHANNEL_NAME,
+            channel=WEBSOCKET_CHANNEL,
             chat_id=WEBUI_DEFAULT_CHAT_ID,
             content=msg.content,
             media=msg.media,
@@ -540,7 +538,7 @@ class WebSocketDispatcher:
         # stai leggendo li', e il telefono non suona. Stessa regola del ramo non
         # streammato in ``ws_sender.send``; questo e' il caso normale.
         if not skip_persist and msg.content.strip() and not msg.metadata.get("origin_channel"):
-            chat_id = msg.chat_id if msg.channel == WEBUI_CHANNEL else None
+            chat_id = msg.chat_id if msg.channel == WEBSOCKET_CHANNEL else None
             notify_delivery(msg.content, msg.metadata, chat_id=chat_id)
         return None
 

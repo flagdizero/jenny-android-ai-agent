@@ -41,8 +41,6 @@ def format_tool_hints(tool_calls: list, max_length: int = 40) -> str:
         fmt = _TOOL_FORMATS.get(tc.name)
         if fmt:
             formatted.append(_fmt_known(tc, fmt, max_length))
-        elif tc.name.startswith("mcp_"):
-            formatted.append(_fmt_mcp(tc, max_length))
         else:
             formatted.append(_fmt_fallback(tc, max_length))
 
@@ -113,27 +111,6 @@ def _abbreviate_command(cmd: str, max_len: int = 40) -> str:
     if len(abbreviated) <= max_len:
         return abbreviated
     return clip(abbreviated, max_len)
-
-
-def _fmt_mcp(tc, max_length: int = 40) -> str:
-    """Format MCP tool as server::tool."""
-    name = tc.name
-    if "__" in name:
-        parts = name.split("__", 1)
-        server = parts[0].removeprefix("mcp_")
-        tool = parts[1]
-    else:
-        rest = name.removeprefix("mcp_")
-        parts = rest.split("_", 1)
-        server = parts[0] if parts else rest
-        tool = parts[1] if len(parts) > 1 else ""
-    if not tool:
-        return name
-    args = _get_args(tc)
-    val = next((v for v in args.values() if isinstance(v, str) and v), None)
-    if val is None:
-        return f"{server}::{tool}"
-    return f'{server}::{tool}("{abbreviate_path(val, max_length)}")'
 
 
 def _fmt_fallback(tc, max_length: int = 40) -> str:

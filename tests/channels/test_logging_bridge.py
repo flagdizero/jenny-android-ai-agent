@@ -1,4 +1,4 @@
-"""Test per il bridge logging stdlib -> loguru (jenny.utils.logging_bridge).
+"""Test per il bridge logging stdlib -> loguru (jenny.channels.ws_logging).
 
 Nota: questo modulo non contiene alcun riferimento ad Android/Chaquopy (è un
 bridge puramente stdlib-logging -> loguru); i fake di ``tests.support.android``
@@ -17,7 +17,7 @@ import logging
 import pytest
 from loguru import logger
 
-from jenny.utils.logging_bridge import _LoguruBridge, redirect_lib_logging
+from jenny.channels.ws_logging import _LoguruBridge, redirect_lib_logging
 
 
 @pytest.fixture()

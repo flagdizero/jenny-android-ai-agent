@@ -28,7 +28,6 @@ contati ma non mostrati no.
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,7 +38,9 @@ from jenny.security.subagent_policy import check_read as check_subagent_read
 from jenny.security.workspace_policy import is_path_within
 from jenny.utils.helpers import clip
 from jenny.utils.wiki_paths import (
+    FRONTMATTER_RE,
     WIKI_INDEX_FILENAME,
+    fold,
     is_research_layout,
     iter_wiki_pages,
     page_chars,
@@ -52,9 +53,6 @@ from jenny.utils.wiki_paths import (
 PAGE_STATES = frozenset({"open", "hypothesis", "decided", "done"})
 # Le cartelle del layout di ricerca e la sua regola: ``utils.wiki_paths``
 # (``RESEARCH_SUBDIRS``, ``is_research_layout``), copie di quelle del lint.
-# Il frontmatter tollerante del lint (BOM, riga vuota prima, ``---`` finale senza
-# a capo): un 🔴 su un file corretto costa la credibilità dei 🔴 veri.
-_FRONTMATTER_RE = re.compile(r"^﻿?\s*---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 _WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 _CODE_FENCE_RE = re.compile(
     r"^[ \t]*(`{3,}|~{3,})[^\n]*(?:\n.*?)?(?:^[ \t]*\1[ \t]*$|\Z)",
@@ -132,7 +130,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any] | None, int]:
     e due parser diversi darebbero due risposte a «questa pagina ha uno stato?».
     La riga d'inizio (1 = la riga del primo ``---``) serve ai numeri di riga.
     """
-    match = _FRONTMATTER_RE.match(text)
+    match = FRONTMATTER_RE.match(text)
     if not match:
         return None, 0
     start = text[: match.start(1)].count("\n")  # righe prima del corpo
@@ -223,7 +221,7 @@ class _Links:
     def resolve(self, target: str) -> Path | None:
         target = target.strip()
         if target not in self._cache:
-            from jenny.webui.wiki import resolve_wikilink
+            from jenny.utils.wiki_paths import resolve_wikilink
 
             self._cache[target] = resolve_wikilink(self._root, target) if target else None
         return self._cache[target]
@@ -557,13 +555,8 @@ def render_check(report: CheckReport, *, limit: int, max_chars: int) -> str:
 # ── map ──────────────────────────────────────────────────────────────────────
 
 
-def _fold(text: str) -> str:
-    """Minuscolo e senza accenti: «Città» e «citta» sono la stessa parola qui."""
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
-
-
 def _terms_regex(terms: Iterable[str]) -> re.Pattern[str] | None:
-    folded = sorted({_fold(t).strip() for t in terms if _fold(str(t)).strip()}, key=len,
+    folded = sorted({fold(t).strip() for t in terms if fold(str(t)).strip()}, key=len,
                     reverse=True)
     if not folded:
         return None
@@ -666,8 +659,8 @@ def map_notebook(root: Path, subjects: list[Term], topics: list[Term],
             continue
         spent += size
         searched += 1
-        folded_text = _fold(text)
-        stem = _fold(path.stem.replace("-", " ").replace("_", " "))
+        folded_text = fold(text)
+        stem = fold(path.stem.replace("-", " ").replace("_", " "))
         # Prima il file intero, una ricerca per termine: le righe si scorrono
         # solo per i soggetti e gli argomenti che il file nomina davvero.
         topic_in = [t.regex.search(folded_text) is not None for t in topics]
@@ -681,7 +674,7 @@ def map_notebook(root: Path, subjects: list[Term], topics: list[Term],
         lines = text.split("\n")
         folded = folded_text.split("\n")
         if len(folded) != len(lines):  # una piegatura che cambia le righe: riga per riga
-            folded = [_fold(line) for line in lines]
+            folded = [fold(line) for line in lines]
         rel = _rel(root, path)
         topic_hits = [[i for i, f in enumerate(folded) if t.regex.search(f)] if topic_in[ti]
                       else [] for ti, t in enumerate(topics)]
@@ -774,7 +767,7 @@ def resolve_inside(root: Path, raw: str) -> Path | None:
 
 def _extract(text: str, mode: str, lines: int) -> tuple[str, int | None]:
     if mode == "frontmatter":
-        match = _FRONTMATTER_RE.match(text)
+        match = FRONTMATTER_RE.match(text)
         if match:
             return text[: match.end()].rstrip("\n"), text[: match.end()].count("\n") + 1
         heading = next((ln for ln in text.split("\n") if ln.startswith("# ")), "")

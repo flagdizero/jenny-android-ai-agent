@@ -26,14 +26,11 @@ from jenny.apps.storage import (
     StorageError,
     execute_storage_action,
 )
+from jenny.utils.errors import StatusError
 
 
-class AppActionError(Exception):
+class AppActionError(StatusError):
     """Structured action failure; ``status`` maps to an HTTP-ish code."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 def resolve_action(app: LoadedApp, action_name: str) -> AppAction:
@@ -69,12 +66,10 @@ async def execute_action(
     *,
     http_timeout_s: float = DEFAULT_TIMEOUT_S,
     max_collection_bytes: int = DEFAULT_MAX_COLLECTION_BYTES,
-    announce: bool = True,
 ) -> dict:
     """Execute one action of one app; returns a JSON-safe result dict.
 
-    With *announce* a storage write tells the WebUI (``jenny/apps/notify.py``);
-    the app's own tool passes ``False`` because it announces by itself.
+    A storage write tells the WebUI (``jenny/apps/notify.py``), whoever made it.
 
     Raises AppActionError with a readable message and an HTTP-ish status on
     any failure. Never half-executes: validation happens before any write.
@@ -98,7 +93,7 @@ async def execute_action(
                 from jenny.apps.reader import schedule_reader
 
                 schedule_reader(workspace, slug)
-            elif action.op != "query" and announce:
+            elif action.op != "query":
                 # Senza lettore il riassunto si legge dai dati: la polaroid e lo
                 # schermo aperto possono rileggersi subito.
                 from jenny.apps.notify import data_changed

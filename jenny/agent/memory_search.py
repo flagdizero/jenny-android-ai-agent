@@ -21,8 +21,9 @@ from __future__ import annotations
 
 import math
 import re
-import unicodedata
 from collections.abc import Iterable
+
+from jenny.utils.wiki_paths import fold
 
 _TOKEN_RE = re.compile(r"[0-9a-z]+")
 
@@ -35,18 +36,6 @@ _MIN_TOKEN_LEN = 3
 # "pianta"/"piante", "lavora"/"lavorare", "plant"/"plants" — in tutte e due le
 # lingue, senza un dizionario per ciascuna.
 _STEM_LEN = 5
-
-
-def fold(text: str) -> str:
-    """NFKD, via i diacritici, minuscolo.
-
-    Copia di ``jenny.webui.wiki_search.fold`` e non un import: quel modulo tira
-    dentro ``jenny.webui.wiki`` e con lui il pacchetto ``markdown``, che il
-    livello degli agenti non deve richiedere per confrontare due righe.
-    """
-    decomposed = unicodedata.normalize("NFKD", text)
-    without_marks = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return without_marks.lower()
 
 
 def stems(text: str) -> list[str]:

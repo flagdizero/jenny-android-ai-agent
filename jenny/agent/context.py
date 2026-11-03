@@ -19,7 +19,7 @@ from jenny.agent.memory import (
     is_gardener_session_key,
 )
 from jenny.agent.skills import SkillsLoader
-from jenny.config.paths import get_output_path
+from jenny.config.paths import DEFAULT_WIKIS_DIR, get_output_path
 from jenny.runtime.user_text import current_bot_name
 from jenny.session.keys import is_personal_session_key, is_project_session_key
 from jenny.session.plan_probe import plan_running_in_session
@@ -556,7 +556,7 @@ class ContextBuilder:
         disabled_skills: list[str] | None = None,
         orchestrator: bool = False,
         available_tools: Callable[[], list[str]] | None = None,
-        wikis_dir_name: str = "wikis",
+        wikis_dir_name: str = DEFAULT_WIKIS_DIR,
         wikis_enabled: bool = True,
         cron_service: Any = None,
     ):
@@ -566,7 +566,7 @@ class ContextBuilder:
         # (``config.wiki.wikis_dir`` e ``config.wiki.enabled``): il blocco
         # ``## Wikis`` elenca quel che c'e' in quella cartella, e a funzione
         # spenta non deve nominarla.
-        self.wikis_dir_name = wikis_dir_name or "wikis"
+        self.wikis_dir_name = wikis_dir_name or DEFAULT_WIKIS_DIR
         self.wikis_enabled = wikis_enabled
         # Callable e non lista: il registry non esiste ancora quando ``AgentLoop``
         # costruisce questo oggetto, e comunque i tool delle Jenny App cambiano

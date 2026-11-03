@@ -171,8 +171,13 @@ class TestGetLocation:
 
     async def test_geocode_cache_avoids_recall(self, monkeypatch):
         bridge = _FakeBridge(place="Milano")
-        fix1 = await location._reverse_geocode(bridge, 45.4642, 9.1900)
-        fix2 = await location._reverse_geocode(bridge, 45.4642, 9.1900)
+
+        async def fake_get_bridge(ctx: Any) -> Any:
+            return bridge
+
+        monkeypatch.setattr(location, "_get_bridge", fake_get_bridge)
+        fix1 = await location._reverse_geocode(object(), 45.4642, 9.1900)
+        fix2 = await location._reverse_geocode(object(), 45.4642, 9.1900)
         assert fix1 == fix2 == "Milano"
         assert bridge.geocode_calls == 1  # seconda volta dalla cache
 

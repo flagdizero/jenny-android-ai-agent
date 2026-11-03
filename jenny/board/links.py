@@ -28,7 +28,7 @@ def page_membership(
         return None
     owners = model.page_owners(board)
     titles = {c["id"]: c["title"] for c in board["cards"]}
-    from jenny.webui.wiki import resolve_wikilink
+    from jenny.utils.wiki_paths import resolve_wikilink
 
     pages_dir = project_root / "wiki"
     links: dict[str, Any] = {}

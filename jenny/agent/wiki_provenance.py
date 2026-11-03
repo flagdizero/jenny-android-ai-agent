@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from jenny.security.workspace_policy import is_path_within
-from jenny.utils.wiki_paths import wiki_page_rel
+from jenny.utils.wiki_paths import FRONTMATTER_RE, wiki_page_rel
 
 _PROVENANCE_REFUSAL_TEMPLATE = (
     "Refused: `{page}` declares `state: {state}`, but {why}. Only a line the conversation "
@@ -91,10 +91,15 @@ def _page_frontmatter(text: str) -> dict[str, list[str]]:
     ``decided``. Una guardia non deve indovinare quale valore vale: prende tutti e
     decide sul piu' impegnativo. L'ordine non conta piu', che e' il punto.
     """
-    if not text.startswith("---"):
+    # La frontmatter come la legge il lint (BOM, righe vuote prima). Una che non si
+    # chiude si legge tutta, come prima: davanti al dubbio la guardia guarda di piu'.
+    match = FRONTMATTER_RE.match(text)
+    if match is not None:
+        head = match.group(1)
+    elif text.lstrip("\ufeff \t\r\n").startswith("---"):
+        head = text
+    else:
         return {}
-    end = text.find("\n---", 3)
-    head = text[: end if end != -1 else len(text)]
     out: dict[str, list[str]] = {}
     for match in _FRONTMATTER_VALUE.finditer(head):
         out.setdefault(match.group(1), []).append(match.group(2).strip().strip("\"'"))

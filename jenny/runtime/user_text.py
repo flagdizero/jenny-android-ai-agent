@@ -392,6 +392,15 @@ _TEXT: dict[str, dict[str, str]] = {
         "telegram.media_unsupported": "🤷 I can't handle this kind of message yet.",
         "telegram.media_too_big": "📦 That attachment is too big for me to download.",
         "telegram.media_failed": "⚠️ I couldn't download that attachment. Try again.",
+        # Le righe d'attesa del retry del provider (``providers/retry_notice.py``).
+        # L'inglese è anche il testo dei log, e ``retry_notice._PATTERNS`` lo
+        # riconosce: si cambiano insieme.
+        "retry.waiting": "Model request failed, retry in {seconds}s (attempt {attempt}).",
+        "retry.waiting_persistent": (
+            "Model request failed, persistent retry in {seconds}s (attempt {attempt})."
+        ),
+        "retry.stopped": "Persistent retry stopped after {count} identical errors.",
+        "retry.gave_up": "Model request failed after {attempts} attempts, giving up.",
     },
     "it": {
         "stop.done": "Mi sono fermata.",
@@ -771,6 +780,12 @@ _TEXT: dict[str, dict[str, str]] = {
         "telegram.media_unsupported": "🤷 Questo tipo di messaggio non so ancora gestirlo.",
         "telegram.media_too_big": "📦 Allegato troppo grande: non riesco a scaricarlo.",
         "telegram.media_failed": "⚠️ Non sono riuscita a scaricare l'allegato. Riprova.",
+        "retry.waiting": "Il modello non risponde: riprovo fra {seconds} s (tentativo {attempt}).",
+        "retry.waiting_persistent": (
+            "Il modello non risponde: riprovo ancora fra {seconds} s (tentativo {attempt})."
+        ),
+        "retry.stopped": "Smetto di riprovare: {count} errori uguali di fila.",
+        "retry.gave_up": "Il modello non ha risposto dopo {attempts} tentativi: mi fermo.",
     },
 }
 

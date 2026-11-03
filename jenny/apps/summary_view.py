@@ -84,6 +84,74 @@ def _record_time(record: Mapping[str, Any]) -> datetime | None:
     return stamp.astimezone(timezone.utc) if stamp else None
 
 
+# Quanti punti al più ha l'andamento di una sezione: uno al giorno.
+_TREND_POINTS = 31
+
+
+def records_view(
+    records: list[dict[str, Any]],
+    *,
+    field_name: str,
+    latest: str = "ts",
+    alarm: Mapping[str, Any] | None = None,
+    stale_after_minutes: int | None = None,
+    trend_days: int = 0,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Lo stato di una serie di letture: l'ultimo valore, l'allarme, il dato fermo, l'andamento.
+
+    **Un solo motore** per le sezioni mini app, che i record vengano da una
+    collezione dell'app o dalle letture del suo lettore (``readings.jsonl``): stessi
+    record ``{id, ts, ...}``, stessi stati, stesso andamento — cosi' la vista, gli
+    eventi di diario e le attese a condizione non sanno chi ha prodotto il dato.
+    ``record`` e' l'ultima lettura intera, per chi vuole anche gli altri campi.
+    """
+    from jenny.board import model
+
+    if not records:
+        return {"state": "empty", "value": None, "at": "", "trend": [], "record": None}
+
+    def order(record: Mapping[str, Any]) -> tuple[int, float, str]:
+        return model.instant_order(record.get(latest))
+
+    # A parita' d'ora vince l'ultima scritta: ``max`` tiene la prima, e due
+    # letture nello stesso secondo (una prova e la versione nuova) mostravano
+    # quella vecchia.
+    last = max(reversed(records), key=order)
+    value = last.get(field_name)
+    at = _record_time(last)
+    current = now or datetime.now(timezone.utc)
+    state = "ok"
+    # L'allarme guarda il *suo* campo dell'ultima lettura, non quello mostrato:
+    # ``{"field": "online", "op": "==", "value": false}`` su una striscia
+    # dell'umidità confrontava l'umidità con ``false``, e non scattava mai.
+    if alarm and model.compare(
+        last.get(alarm.get("field") or field_name), alarm["op"], alarm["value"]
+    ):
+        state = "alarm"
+    if stale_after_minutes and (
+        at is None or current - at > timedelta(minutes=stale_after_minutes)
+    ):
+        state = "stale"
+    trend: list[Any] = []
+    if trend_days:
+        since = current - timedelta(days=trend_days)
+        daily: dict[str, Any] = {}
+        for record in sorted(records, key=order):
+            stamp = _record_time(record)
+            if stamp is None or stamp < since:
+                continue
+            daily[stamp.date().isoformat()] = record.get(field_name)
+        trend = [v for v in daily.values() if isinstance(v, (int, float))][-_TREND_POINTS:]
+    return {
+        "state": state,
+        "value": value,
+        "at": at.isoformat(timespec="seconds") if at else "",
+        "trend": trend,
+        "record": last,
+    }
+
+
 def _count_view(section: AppSection, records: list[dict[str, Any]],
                 now: datetime) -> dict[str, Any]:
     """``aggregate: count``: quanti record passano il filtro, e i piu' recenti come righe."""
@@ -117,8 +185,6 @@ def summary_view(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Il riassunto di *app* per una posa con *params*. Mai un'eccezione."""
-    from jenny.board.sections import records_view
-
     manifest = app.manifest
     base: dict[str, Any] = {
         "slug": app.slug, "app": app.slug,

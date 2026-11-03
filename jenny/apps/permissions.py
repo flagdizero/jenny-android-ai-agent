@@ -34,13 +34,11 @@ def write_refusal(app_dir: Path) -> str | None:
     """
     from jenny.apps.storage import _in_a_project
     from jenny.board.placements import placed_slugs
-    from jenny.security.workspace_access import current_workspace_scope
-    from jenny.utils.wiki_paths import is_wiki_root
+    from jenny.security.workspace_access import current_notebook_root
 
     if not _in_a_project(app_dir):
         return None
-    scope = current_workspace_scope()
-    root = scope.write_root() if scope is not None else None
-    if root is not None and is_wiki_root(root) and Path(app_dir).name in placed_slugs(root):
+    root = current_notebook_root()
+    if root is not None and Path(app_dir).name in placed_slugs(root):
         return None
     return NOT_PLACED_REFUSAL.format(name=Path(app_dir).name)

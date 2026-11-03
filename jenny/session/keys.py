@@ -6,6 +6,8 @@ import re
 
 from loguru import logger
 
+from jenny.bus.events import WEBSOCKET_CHANNEL
+
 __all__ = [
     "CRON_SESSION_PREFIX",
     "DREAM_SESSION_PREFIX",
@@ -15,7 +17,6 @@ __all__ = [
     "PROJECT_SESSION_PREFIX",
     "SUBAGENT_SESSION_PREFIX",
     "UNIFIED_SESSION_KEY",
-    "WEBUI_CHANNEL",
     "internal_session_kind",
     "is_internal_session_key",
     "is_personal_session_key",
@@ -34,10 +35,6 @@ __all__ = [
 
 UNIFIED_SESSION_KEY = "unified:default"
 
-# Il canale della WebUI. E' l'unico su cui un ``chat_id`` puo' nominare un
-# progetto: v. :func:`session_key_for_channel`. Il nome e' quello che
-# ``WebSocketChannel.name`` mette negli ``InboundMessage``.
-WEBUI_CHANNEL = "websocket"
 
 # Prefisso di una sessione-progetto (``project:<id>``): una conversazione con
 # l'utente, legata a una cartella, che **non** alimenta la memoria di lungo
@@ -320,7 +317,7 @@ def webui_chat_id(key: str) -> str:
     in corso: ``default`` nel primo caso, la chiave intera nel secondo — lo
     stesso calcolo di ``chatIdOf`` in ``shared/ws-manager.js``.
     """
-    prefix = f"{WEBUI_CHANNEL}:"
+    prefix = f"{WEBSOCKET_CHANNEL}:"
     if key.startswith(prefix):
         return key[len(prefix):]
     return key
@@ -339,7 +336,7 @@ def webui_transcript_key(key: str) -> str:
     dei subagent disegnati come messaggi dell'utente. Chi legge o sposta quei file
     passa di qui, cosi' la forma sta in un punto solo.
     """
-    return f"{WEBUI_CHANNEL}:{webui_chat_id(key)}"
+    return f"{WEBSOCKET_CHANNEL}:{webui_chat_id(key)}"
 
 
 def normalize_user_session_key(key: str) -> str:
@@ -379,7 +376,7 @@ def session_key_for_channel(channel: str, chat_id: str) -> str:
     la conversazione personale. Un progetto e' una sessione di lavoro alla
     tastiera, e la vita "fuori" di Jenny — Telegram, cron, avvisi — non ci entra.
     """
-    if channel == WEBUI_CHANNEL and is_project_chat_id(chat_id):
+    if channel == WEBSOCKET_CHANNEL and is_project_chat_id(chat_id):
         if is_valid_project_name(project_name(chat_id)):
             return chat_id
     return UNIFIED_SESSION_KEY

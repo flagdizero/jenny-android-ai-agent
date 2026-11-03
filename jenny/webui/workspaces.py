@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.security.workspace_access import (
     WORKSPACE_SCOPE_METADATA_KEY,
     WorkspaceScope,
@@ -25,7 +26,7 @@ class WebUIWorkspaceController:
         session_manager: Any | None,
         default_workspace: Path,
         default_restrict_to_workspace: bool,
-        projects_subdir: str = "wikis",
+        projects_subdir: str = DEFAULT_WIKIS_DIR,
     ) -> None:
         self._sessions = session_manager
         self._default_workspace = default_workspace

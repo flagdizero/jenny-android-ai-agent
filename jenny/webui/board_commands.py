@@ -43,14 +43,14 @@ _PHOTO_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
 
 def _project(ctx: CommandContext, params: Mapping[str, Any]) -> Path:
-    from jenny.utils.wiki_paths import discover_wiki_roots
+    from jenny.utils.wiki_paths import is_wiki_root, notebook_dir
 
     _require_wiki_enabled()
     name = params.get("wiki")
-    roots = discover_wiki_roots(_wikis_dir(ctx))
-    if not isinstance(name, str) or name not in roots:
+    root = notebook_dir(_wikis_dir(ctx), name) if isinstance(name, str) else None
+    if root is None or not is_wiki_root(root):
         raise CommandError("bad_request", "wiki required")
-    return roots[name]
+    return root
 
 
 def _card_id(params: Mapping[str, Any], key: str = "card") -> str:
@@ -72,12 +72,6 @@ def _need_card(board: dict[str, Any], card_id: str) -> dict[str, Any]:
     if card is None:
         raise CommandError("not_found", "card not found")
     return card
-
-
-async def _run(fn: Any, *args: Any, **kwargs: Any) -> Any:
-    """Su disco, quindi fuori dal loop. Un rifiuto di :mod:`jenny.board.edit`
-    (``BoardEditError``) lo traduce ``dispatch_command``, col suo codice."""
-    return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 def _cron(ctx: CommandContext) -> Any:
@@ -114,7 +108,7 @@ async def board_seen(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
         _card_id(params)
     if not (root / "board" / "board.json").exists():
         return {"ok": True}
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True, "at": stamp}
 
 
@@ -141,13 +135,13 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
         def apply(board: dict[str, Any]) -> None:
             _need_card(board, item)["pos"] = pos
 
-        await _run(mutate_board, root, apply)
+        await asyncio.to_thread(mutate_board, root, apply)
     elif kind in _NOTEBOOK_POS and params.get("id") == model.NOTEBOOK:
         # Il post-it e l'etichetta di tutto il quaderno: il posto sta sulla bacheca.
         def apply_notebook(board: dict[str, Any]) -> None:
             board[_NOTEBOOK_POS[kind]] = pos
 
-        await _run(mutate_board, root, apply_notebook)
+        await asyncio.to_thread(mutate_board, root, apply_notebook)
     elif kind in _ATTACHED_POS:
         # Il post-it delle attese, l'etichetta dei cron, quello lilla delle note, la
         # galleria: l'id e' quello della scheda, il posto e' un campo suo.
@@ -156,7 +150,7 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
         def apply_attached(board: dict[str, Any]) -> None:
             _need_card(board, card_id)[_ATTACHED_POS[kind]] = pos
 
-        await _run(mutate_board, root, apply_attached)
+        await asyncio.to_thread(mutate_board, root, apply_attached)
     else:
         raise CommandError("bad_request", "kind must be card, postit, auto, notes or photos")
     return {"ok": True}
@@ -184,7 +178,7 @@ async def board_card_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         # Una scheda che **e'** un'app: la polaroid porta il suo valore.
         return await _card_from_app(ctx, root, app, params)
     glyph = params.get("glyph") if isinstance(params.get("glyph"), str) else ""
-    made, _redraw = await _run(edit.add_card, root, params.get("title"), glyph=glyph,
+    made, _redraw = await asyncio.to_thread(edit.add_card, root, params.get("title"), glyph=glyph,
                                near=_near(params))
     return {"ok": True, "card": {"id": made["id"], "title": made["title"], "pos": made["pos"]}}
 
@@ -215,11 +209,11 @@ async def _card_from_app(ctx: CommandContext, root: Path, app: Mapping[str, Any]
     slug, app_params = _app_params(workspace, app.get("slug"), app.get("params"))
     title = model.clean_text(params.get("title"), model.MAX_TITLE) or None
     try:
-        where = await _run(place_app, root, slug, params=app_params, near=_near(params),
+        where = await asyncio.to_thread(place_app, root, slug, params=app_params, near=_near(params),
                            title=title, workspace=workspace, link=params.get("link") or None)
     except ValueError as exc:
         raise CommandError("conflict", str(exc)) from exc
-    board = await _run(read_board, root)
+    board = await asyncio.to_thread(read_board, root)
     card = next((c for c in reversed((board or {}).get("cards") or [])
                  if (c.get("app") or {}).get("slug") == slug), None)
     return {"ok": True, "where": where,
@@ -230,7 +224,7 @@ async def _card_from_app(ctx: CommandContext, root: Path, app: Mapping[str, Any]
 async def board_card_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Il nome di una scheda diventa dell'utente: Jenny non lo riscrive più."""
     root = _project(ctx, params)
-    await _run(edit.rename_card, root, _card_id(params, "id"), params.get("title"))
+    await asyncio.to_thread(edit.rename_card, root, _card_id(params, "id"), params.get("title"))
     return {"ok": True}
 
 
@@ -281,7 +275,7 @@ async def board_connection_remove(
 ) -> dict[str, Any]:
     """Togliere un filo: l'utente sempre, Jenny mai (propone)."""
     root = _project(ctx, params)
-    await _run(edit.disconnect, root, _card_id(params, "a"), _card_id(params, "b"))
+    await asyncio.to_thread(edit.disconnect, root, _card_id(params, "a"), _card_id(params, "b"))
     return {"ok": True}
 
 
@@ -303,7 +297,7 @@ async def board_offboard_want(ctx: CommandContext, params: Mapping[str, Any]) ->
         })
         return None
 
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True}
 
 
@@ -323,7 +317,7 @@ async def board_preview(ctx: CommandContext, params: Mapping[str, Any]) -> dict[
         board["previews"] = previews
 
     if (root / "board" / "board.json").exists():
-        await _run(mutate_board, root, apply)
+        await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True}
 
 
@@ -331,11 +325,11 @@ async def _resolve_page(root: Path, page: Any) -> str:
     """Il percorso vero di una pagina, anche da un bersaglio di link senza ``.md``."""
     from jenny.board.view import wiki_titles
 
-    titles = await _run(wiki_titles, root)
+    titles = await asyncio.to_thread(wiki_titles, root)
     if isinstance(page, str) and page not in titles and ".." not in page:
-        from jenny.webui.wiki import resolve_wikilink
+        from jenny.utils.wiki_paths import resolve_wikilink
 
-        resolved = await _run(resolve_wikilink, root, page)
+        resolved = await asyncio.to_thread(resolve_wikilink, root, page)
         if resolved is not None:
             page = resolved.relative_to(root / "wiki").as_posix()
     if not isinstance(page, str) or page not in titles:
@@ -360,16 +354,16 @@ async def board_fix(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
         raise CommandError("bad_request", "text required")
     if len(text.encode("utf-8")) > 8000:
         raise CommandError("too_large", "correction too long")
-    board = await _run(read_board, root)
+    board = await asyncio.to_thread(read_board, root)
     card = model.card_by_id(board or {}, card_id)
-    summary = await _run(read_card_summary, root, card_id)
+    summary = await asyncio.to_thread(read_card_summary, root, card_id)
     if card is None or summary is None:
         raise CommandError("not_found", "card not found")
     section = next((s for s in summary["sections"] if s["title"] == section_title), None)
     if section is None:
         raise CommandError("not_found", "section not found")
     try:
-        result = await _run(
+        result = await asyncio.to_thread(
             create_correction, root, card_id=card_id, card_title=card["title"],
             section=section_title, sources=section["sources"], old_text=section["text"],
             correction=text,
@@ -400,7 +394,7 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
         raise CommandError("bad_request",
                            "an app is a card of its own: use board.card.add with app and link")
     if kind == "note":
-        sid = await _run(edit.add_note, root, card_id, params.get("text"),
+        sid = await asyncio.to_thread(edit.add_note, root, card_id, params.get("text"),
                          timezone_name=_timezone())
     elif kind == "reminder":
         # Come ``board.reminder.add`` con la scheda: dal cassetto, il promemoria è suo.
@@ -415,7 +409,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
     from jenny.board.sections import PHOTOS_DIR
     from jenny.utils.path import atomic_write
 
-    await _run(edit.card_id_of, root, card_id)
+    await asyncio.to_thread(edit.card_id_of, root, card_id)
     mime = params.get("mime")
     data = params.get("data")
     if mime not in _PHOTO_EXT or not isinstance(data, str):
@@ -428,7 +422,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
         raise CommandError("too_large", "photo too large")
     name = f"{card_id}-{model.now_iso()[:19].replace(':', '').replace('-', '')}"
     rel = f"{PHOTOS_DIR}/{name}{_PHOTO_EXT[mime]}"
-    await _run(atomic_write, root / rel, raw)
+    await asyncio.to_thread(atomic_write, root / rel, raw)
     section = {"kind": "photo", "created": model.now_iso(), "path": rel,
                "caption": model.clean_text(params.get("caption"), model.MAX_TEXT)}
     # Con una nota, la foto è anche una riga [said] del diario (prima della
@@ -438,7 +432,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
         from jenny.board.sections import journal_note
 
         try:
-            section["journalLine"] = await _run(
+            section["journalLine"] = await asyncio.to_thread(
                 journal_note, root, section["caption"], photo=rel, timezone_name=_timezone())
         except OSError as exc:
             logger.warning("board: photo note not journaled in {}: {}", root.name, exc)
@@ -448,7 +442,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
         section["id"] = model.unique_id("s-photo", [s["id"] for s in card["userSections"]])
         card["userSections"].append(section)
 
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return str(section["id"])
 
 
@@ -457,7 +451,7 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
     root = _project(ctx, params)
     card_id = _card_id(params)
     sid = _card_id(params, "id")
-    board = await _run(read_board, root)
+    board = await asyncio.to_thread(read_board, root)
     card = model.card_by_id(board or {}, card_id)
     if card is None:
         raise CommandError("not_found", "card not found")
@@ -465,10 +459,10 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
     if section is None:
         raise CommandError("not_found", "section not found")
     if section["kind"] == "note":
-        await _run(edit.update_note, root, card_id, sid, params.get("text"),
+        await asyncio.to_thread(edit.update_note, root, card_id, sid, params.get("text"),
                    timezone_name=_timezone())
     elif section["kind"] == "photo":
-        await _run(edit.update_photo_caption, root, card_id, sid, params.get("text"),
+        await asyncio.to_thread(edit.update_photo_caption, root, card_id, sid, params.get("text"),
                    timezone_name=_timezone())
     else:
         # Un promemoria si corregge per id (``board.reminder.update``): è un job.
@@ -497,7 +491,7 @@ async def board_section_reorder(ctx: CommandContext, params: Mapping[str, Any]) 
         rank = {sid: i for i, sid in enumerate(order)}
         card["userSections"].sort(key=lambda s: rank.get(s["id"], len(rank)))
 
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True}
 
 

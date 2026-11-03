@@ -23,6 +23,7 @@ from typing import Any
 from loguru import logger
 
 from jenny import __logo__, __version__
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.config.schema import Config
 
 
@@ -391,7 +392,7 @@ class GatewayContainer:
 
         async def publish(event: dict[str, Any]) -> None:
             await bus.publish_outbound(OutboundMessage(
-                channel="websocket", chat_id="webui", content="", metadata=event,
+                channel=WEBSOCKET_CHANNEL, chat_id="webui", content="", metadata=event,
             ))
 
         ui_events.set_publisher(publish)

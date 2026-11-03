@@ -362,6 +362,41 @@ async def test_deleting_an_app_takes_its_page_and_only_its_page(env) -> None:
     assert [p["id"] for p in _pages_on_disk(env)] == ["p2", "p3"]
 
 
+async def test_the_two_deletes_of_an_app_do_the_same_thing(env) -> None:
+    """«Elimina» dalla pagina App e ``app action=trash`` dalla chat personale: in
+    tutti e due i casi l'app va nel cestino, la sua bozza sparisce e la pagina
+    della casa che portava a lei si toglie."""
+    from jenny.agent.tools.app_tool import AppTool
+    from jenny.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
+    from jenny.webui.apps_commands import apps_delete
+
+    for slug in ("orto", "lampo"):
+        (env.workspace / "apps" / slug).mkdir(parents=True)
+        (env.workspace / "apps" / ".drafts" / slug).mkdir(parents=True)
+    await _with_pages(env, [
+        {"id": "p1", "kind": "app", "ref": "orto"},
+        {"id": "p2", "kind": "app", "ref": "lampo"},
+    ])
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    assert (await apps_delete(ctx, {"slug": "orto"}))["deleted"] is True
+    req = bind_request_context(RequestContext(channel="websocket", chat_id="unified:default",
+                                              session_key="unified:default"))
+    try:
+        out = await AppTool().execute(action="trash", slug="lampo")
+    finally:
+        reset_request_context(req)
+    assert "in the trash" in out, out
+
+    for slug in ("orto", "lampo"):
+        assert not (env.workspace / "apps" / slug).exists()
+        assert not (env.workspace / "apps" / ".drafts" / slug).exists(), slug
+    assert _pages_on_disk(env) == []
+
+
 async def test_a_failed_app_delete_leaves_the_pages_alone(env) -> None:
     """Un'app che non c'e' e' un ``not_found``, e le pagine non si toccano: la
     pagina se ne va **con** la cosa, non al posto suo."""

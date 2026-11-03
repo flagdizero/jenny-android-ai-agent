@@ -1377,7 +1377,7 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
                     if inspect.isawaitable(result):
                         await result
                 except Exception:
-                    logger.debug("on_context_overflow callback failed", exc_info=True)
+                    logger.opt(exception=True).debug("on_context_overflow callback failed")
 
             # Mutazione in-place dello stesso ``spec`` (invariante preservata):
             # ``_govern_context`` al giro successivo del loop rifà lo snip con

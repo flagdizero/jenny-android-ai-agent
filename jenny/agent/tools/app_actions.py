@@ -44,14 +44,11 @@ class AppActionTool(Tool):
         slug: str,
         app_name: str,
         action: AppAction,
-        *,
-        bus: Any = None,
     ) -> None:
         self._workspace = Path(workspace)
         self._slug = slug
         self._app_name = app_name
         self._action = action
-        self._bus = bus
 
     @property
     def name(self) -> str:
@@ -79,32 +76,13 @@ class AppActionTool(Tool):
                 kwargs,
                 http_timeout_s=http_timeout_s,
                 max_collection_bytes=max_collection_bytes,
-                announce=False,
             )
         except AppActionError as exc:
             return ToolResult.failure(str(exc), code="app_action")
-        await self._notify_data_changed()
+        # L'avviso alla WebUI lo manda ``execute_action`` (``apps.notify``), come
+        # per una scrittura dallo schermo: da qualunque canale venga il turno, e
+        # dopo il ricalcolo se l'app ha un lettore.
         return ToolResult.success(json.dumps(result, ensure_ascii=False))
-
-    async def _notify_data_changed(self) -> None:
-        """Let an open app iframe refresh after an agent-side storage mutation."""
-        if self._bus is None or self._action.kind != "storage" or self._action.op == "query":
-            return
-        try:
-            from jenny.agent.tools.context import current_request_context
-            from jenny.bus.events import OutboundMessage
-
-            ctx = current_request_context()
-            await self._bus.publish_outbound(
-                OutboundMessage(
-                    channel=ctx.channel if ctx else "websocket",
-                    chat_id=ctx.chat_id if ctx else "webui",
-                    content="",
-                    metadata={"_app_data_changed": True, "app_slug": self._slug},
-                )
-            )
-        except Exception as e:
-            logger.debug("app data-changed notify failed for {}: {}", self._slug, e)
 
 
 class AppToolsSyncer:
@@ -116,9 +94,8 @@ class AppToolsSyncer:
     with a warning.
     """
 
-    def __init__(self, workspace: Path, *, bus: Any = None) -> None:
+    def __init__(self, workspace: Path) -> None:
         self._workspace = Path(workspace)
-        self._bus = bus
         # slug -> (app.json mtime_ns, [registered tool names])
         self._state: dict[str, tuple[object, list[str]]] = {}
 
@@ -166,10 +143,7 @@ class AppToolsSyncer:
                 registered: list[str] = []
                 if app is not None and not app.broken and app.manifest is not None:
                     for action in app.manifest.actions:
-                        tool = AppActionTool(
-                            self._workspace, slug, app.manifest.name, action,
-                            bus=self._bus,
-                        )
+                        tool = AppActionTool(self._workspace, slug, app.manifest.name, action)
                         existing = registry.get(tool.name)
                         if existing is not None and not isinstance(existing, AppActionTool):
                             logger.warning(

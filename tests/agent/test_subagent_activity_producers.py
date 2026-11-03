@@ -391,8 +391,8 @@ class TestThinkingSignal:
         await hook.emit_reasoning("word " * 4000)
         event = log.tail("t1")[0]
         assert len(event["summary"]) <= MAX_SUMMARY_CHARS
-        # Il taglio e nostro, non del cap del log: nessun "..." aggiunto sopra.
-        assert not event["summary"].endswith("...")
+        # Il taglio e nostro, non del cap del log: nessun «…» aggiunto sopra.
+        assert not event["summary"].endswith(("...", "…"))
 
     async def test_thinking_counts_as_progress(self, monkeypatch):
         clock = {"now": 1000.0}

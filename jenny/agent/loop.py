@@ -58,7 +58,7 @@ from jenny.agent.turn_types import (
 from jenny.agent.turn_types import (
     StateTraceEntry as StateTraceEntry,
 )
-from jenny.bus.events import INTERNAL_CHANNEL, InboundMessage, OutboundMessage
+from jenny.bus.events import INTERNAL_CHANNEL, WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
 from jenny.bus.progress import build_bus_progress_callback
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import (
@@ -66,12 +66,12 @@ from jenny.bus.runtime_events import (
     RuntimeEventPublisher,
 )
 from jenny.command import CommandContext, CommandRouter, register_builtin_commands
-from jenny.config.paths import wikis_dir_name
+from jenny.config.paths import DEFAULT_WIKIS_DIR, wikis_dir_name
 from jenny.config.schema import AgentDefaults
 from jenny.cron.session_turns import (
     cron_history_overrides,
 )
-from jenny.providers.base import LLMProvider
+from jenny.providers.base import LLMProvider, LLMRuntime
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
@@ -97,10 +97,10 @@ from jenny.session.history_meta import (
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
-    PROJECT_SESSION_PREFIX,
     is_project_session_key,
     is_valid_project_name,
     project_name,
+    project_session_key,
     session_key_for_channel,
 )
 from jenny.session.manager import Session, SessionManager, scrub_lone_surrogates
@@ -116,7 +116,6 @@ from jenny.session.turn_visibility import (
     resolve_turn_visibility,
 )
 from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, clip, reserved_output_tokens
-from jenny.utils.llm_runtime import LLMRuntime
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_migration import restore_wiki_id
 from jenny.utils.wiki_paths import find_wiki_by_id, wiki_id, wiki_schema_file
@@ -286,7 +285,7 @@ class AgentLoop(
         max_messages: int = 120,
         hooks: list[AgentHook] | None = None,
         disabled_skills: list[str] | None = None,
-        projects_subdir: str = "wikis",
+        projects_subdir: str = DEFAULT_WIKIS_DIR,
         wikis_enabled: bool = True,
         tools_config: ToolsConfig | None = None,
         runtime_events: RuntimeEventBus | None = None,
@@ -587,7 +586,7 @@ class AgentLoop(
         # Jenny App actions — manifest-driven, kept in sync per turn
         from jenny.agent.tools.app_actions import AppToolsSyncer
 
-        self._app_tools_syncer = AppToolsSyncer(Path(self.workspace), bus=self.bus)
+        self._app_tools_syncer = AppToolsSyncer(Path(self.workspace))
         app_tools, _changed = self._app_tools_syncer.sync(self.tools)
         if app_tools:
             registered.append(f"apps:{len(app_tools)}")
@@ -779,7 +778,7 @@ class AgentLoop(
             # «Ci spostiamo?» ha senso solo dove c'e' un tasto da toccare: la
             # chat personale, nell'app (non Telegram, non una notifica).
             if name == "suggest_notebook":
-                return in_project or silent or msg.channel != "websocket"
+                return in_project or silent or msg.channel != WEBSOCKET_CHANNEL
             # ``notebook`` lavora solo nella chat di un quaderno (fuori risponde
             # «not from here»): ~2,9k caratteri di schema in ogni turno della
             # chat personale, per uno strumento che li' non puo' servire. La
@@ -1144,7 +1143,7 @@ class AgentLoop(
                             "name of a conversation",
                     unopenable=shown,
                 )
-            new_key = f"{PROJECT_SESSION_PREFIX}{target.name}"
+            new_key = project_session_key(target.name)
             # La sessione e' in cache e i suoi file stanno per cambiare nome:
             # tenerla vorrebbe dire riscriverla al vecchio nome al primo salvataggio.
             self.sessions.invalidate(key)
@@ -1603,7 +1602,7 @@ class AgentLoop(
                             replay_max_messages=self._max_messages,
                         )
                 except Exception:
-                    logger.debug("Post-overflow compaction failed", exc_info=True)
+                    logger.opt(exception=True).debug("Post-overflow compaction failed")
 
         try:
             result = await self.runner.run(AgentRunSpec(
@@ -2001,10 +2000,9 @@ class AgentLoop(
                                     key,
                                 )
                         except Exception:
-                            logger.debug(
+                            logger.opt(exception=True).debug(
                                 "Could not restore checkpoint for cancelled session {}",
                                 session_key,
-                                exc_info=True,
                             )
                     raise
                 except Exception as exc:
@@ -2098,7 +2096,7 @@ class AgentLoop(
         silent = self._is_silent_turn(msg, key)
         if silent:
             mark_silent_turn(msg.metadata)
-        elif channel == "websocket":
+        elif channel == WEBSOCKET_CHANNEL:
             # Un turno della WebUI ha l'id che il client manda col messaggio; un
             # turno di sistema non ha un messaggio del client, e senza id la
             # rilettura non accorpa (``home-chat.js``): la frase e il file del
@@ -2955,7 +2953,7 @@ class AgentLoop(
             try:
                 forget(session_key)
             except Exception:  # noqa: BLE001 — la pulizia non deve rompere la chiusura del turno
-                logger.debug("python_exec globals of {} not released", session_key, exc_info=True)
+                logger.opt(exception=True).debug("python_exec globals of {} not released", session_key)
 
     def forget_file_reads(self, session_key: str) -> None:
         """Dichiara che *session_key* non contiene piu' il contenuto di nessun file.
@@ -3004,7 +3002,6 @@ class AgentLoop(
         questi ci scrive lascia una chat sotto il nome vecchio, senza cartella.
         """
         from jenny.agent.gardener import passes_in_flight
-        from jenny.session.keys import project_session_key
 
         keys = dict.fromkeys(self._pending_queues)
         keys.update(dict.fromkeys(self.subagents.active_origin_session_keys()))

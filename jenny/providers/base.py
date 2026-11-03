@@ -17,7 +17,6 @@ from loguru import logger
 
 from jenny.providers import retry_notice
 from jenny.providers.message_repair import (
-    SYNTHETIC_USER_CONTENT,
     strip_image_content,
     strip_image_content_inplace,
 )
@@ -315,7 +314,6 @@ class GenerationSettings:
 
 
 # Ri-esportato da message_repair per retro-compatibilità (era definito qui).
-_SYNTHETIC_USER_CONTENT = SYNTHETIC_USER_CONTENT
 
 
 class LLMProvider(ABC):
@@ -353,38 +351,6 @@ class LLMProvider(ABC):
         self.api_key = api_key
         self.api_base = api_base
         self.generation: GenerationSettings = GenerationSettings()
-
-    @staticmethod
-    def _tool_name(tool: dict[str, Any]) -> str:
-        """Extract tool name from either OpenAI or Anthropic-style tool schemas."""
-        name = tool.get("name")
-        if isinstance(name, str):
-            return name
-        fn = tool.get("function")
-        if isinstance(fn, dict):
-            fname = fn.get("name")
-            if isinstance(fname, str):
-                return fname
-        return ""
-
-    @classmethod
-    def _tool_cache_marker_indices(cls, tools: list[dict[str, Any]]) -> list[int]:
-        """Return cache marker indices: builtin/MCP boundary and tail index."""
-        if not tools:
-            return []
-
-        tail_idx = len(tools) - 1
-        last_builtin_idx: int | None = None
-        for i in range(tail_idx, -1, -1):
-            if not cls._tool_name(tools[i]).startswith("mcp_"):
-                last_builtin_idx = i
-                break
-
-        ordered_unique: list[int] = []
-        for idx in (last_builtin_idx, tail_idx):
-            if idx is not None and idx not in ordered_unique:
-                ordered_unique.append(idx)
-        return ordered_unique
 
     @staticmethod
     def _sanitize_request_messages(
@@ -1015,3 +981,11 @@ class LLMProvider(ABC):
     def get_default_model(self) -> str:
         """Get the default model for this provider."""
         pass
+
+
+@dataclass(frozen=True)
+class LLMRuntime:
+    """Il provider attivo e il suo modello, passati insieme."""
+
+    provider: LLMProvider
+    model: str
