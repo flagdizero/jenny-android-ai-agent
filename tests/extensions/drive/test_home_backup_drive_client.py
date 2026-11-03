@@ -152,7 +152,11 @@ def _run(script: str) -> None:
 def test_safe_says_it_and_answers_the_three_questions() -> None:
     _run("""
       const copies = [0, 1, 2, 3, 4, 5, 6].map(daysAgo);
-      const { page } = await room(on({ last_success_ms: NOW - H, recent_copies_ms: copies,
+      /* Un'ora fa, ma non prima di mezzanotte: fra le 00:00 e l'01:00 «un'ora
+         fa» è ieri, la riga dice giustamente «ieri alle 23:07» e la prova sotto
+         su «oggi alle» falliva per un'ora al giorno. */
+      const midnight = new Date(NOW).setHours(0, 0, 0, 0);
+      const { page } = await room(on({ last_success_ms: Math.max(NOW - H, midnight), recent_copies_ms: copies,
                                        stored_bytes: 8_400_000, last_verified_ms: daysAgo(2) }));
       const html = card();
       assert.equal(nodi['home-backup-ext'].hidden, false);
