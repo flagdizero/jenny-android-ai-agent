@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
-PLAN_FORMAT = 1
+PLAN_FORMAT = 2
 
 # ── Stati ────────────────────────────────────────────────────────────────────
 
@@ -197,10 +197,12 @@ class Step:
     started_at: str | None = None
     ended_at: str | None = None
     note: str | None = None
-    photo_before: str | None = None
-    photo_after: str | None = None
     done_when: str = ""
     covers: list[str] = field(default_factory=list)
+    # I registri dell'annulla (``agent.write_journal``) degli aiutanti nati in
+    # questo passo, o rimandati a lavorare qui: il suo lavoro, oltre alle righe
+    # del registro del piano col suo id.
+    helpers: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     _KEYS = (
@@ -216,8 +218,7 @@ class Step:
         "started_at",
         "ended_at",
         "note",
-        "photo_before",
-        "photo_after",
+        "helpers",
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -225,6 +226,7 @@ class Step:
         for key in self._KEYS:
             data[key] = getattr(self, key)
         data["covers"] = list(self.covers)
+        data["helpers"] = list(self.helpers)
         return data
 
     @classmethod
@@ -249,8 +251,7 @@ class Step:
             started_at=_opt_str(data.get("started_at")),
             ended_at=_opt_str(data.get("ended_at")),
             note=_opt_str(data.get("note")),
-            photo_before=_opt_str(data.get("photo_before")),
-            photo_after=_opt_str(data.get("photo_after")),
+            helpers=_read_covers(data.get("helpers")),
             # Un passo di prima dei criteri di «fatto» non ne ha uno: vuoto.
             done_when=str(data.get("done_when") or ""),
             # Un passo di prima del legame con la copertura non copre niente.
@@ -266,13 +267,16 @@ def _read_covers(raw: Any) -> list[str]:
     return [str(c) for c in raw if isinstance(c, str) and c]
 
 
-def _empty_photos() -> dict[str, str | None]:
-    return {"start": None, "end": None, "before_rollback": None, "after_rollback": None}
-
-
 @dataclass
 class Plan:
-    """Un piano: la sua lista, il suo stato, le sue foto, la sua storia.
+    """Un piano: la sua lista, il suo stato, il suo posto, la sua storia.
+
+    ``place`` è dove gira (``plan.place``: ``nb:<nome>`` o ``personal``);
+    ``notebook`` il quaderno di un piano di quaderno, vuoto per uno personale.
+    Il lavoro fatto non è nel piano: sono le righe dei registri dell'annulla
+    (``agent.write_journal``) — quello del piano e quelli degli aiutanti dei
+    passi (``Step.helpers``). ``rollback_journal`` è il registro dell'ultimo
+    ritorno, ``undo_journal`` quello del suo annullamento.
 
     ``dropped`` sono i passi della versione precedente che questa non ha più,
     come ``{"id", "title"}``: con il titolo e non solo l'id, così la scheda li
@@ -290,18 +294,25 @@ class Plan:
     notes: str | None = None
     replaces: str | None = None
     dropped: list[dict[str, str]] = field(default_factory=list)
-    photos: dict[str, str | None] = field(default_factory=_empty_photos)
     blocked: dict[str, Any] | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
     coverage: list[dict[str, str]] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
+    place: str = ""
+    rollback_journal: str | None = None
+    undo_journal: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.place and self.notebook:
+            self.place = f"nb:{self.notebook}"
 
     _KEYS = (
         "format",
         "id",
+        "place",
         "notebook",
         "session_key",
         "version",
@@ -313,11 +324,12 @@ class Plan:
         "assumptions",
         "steps",
         "dropped",
-        "photos",
         "blocked",
         "history",
         "created_at",
         "updated_at",
+        "rollback_journal",
+        "undo_journal",
     )
 
     @property
@@ -330,6 +342,7 @@ class Plan:
             {
                 "format": PLAN_FORMAT,
                 "id": self.id,
+                "place": self.place,
                 "notebook": self.notebook,
                 "session_key": self.session_key,
                 "version": self.version,
@@ -341,11 +354,12 @@ class Plan:
                 "assumptions": list(self.assumptions),
                 "steps": [s.to_dict() for s in self.steps],
                 "dropped": [dict(d) for d in self.dropped],
-                "photos": dict(self.photos),
                 "blocked": dict(self.blocked) if self.blocked is not None else None,
                 "history": [dict(h) for h in self.history],
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
+                "rollback_journal": self.rollback_journal,
+                "undo_journal": self.undo_journal,
             }
         )
         return data
@@ -360,6 +374,10 @@ class Plan:
         # il piano con un avviso invece di cadere.
         if not isinstance(fmt, int) or fmt > PLAN_FORMAT:
             raise PlanFormatError(f"plan format {fmt!r} is newer than {PLAN_FORMAT}")
+        # Il formato 1 (le foto) lo riscrive la migrazione al boot
+        # (``db_migration/undo_cleanup``): il modello non lo indovina.
+        if fmt < PLAN_FORMAT:
+            raise PlanFormatError(f"plan format {fmt!r} is older than {PLAN_FORMAT}")
         status = str(data.get("status", ""))
         if status not in PLAN_STATUSES:
             raise PlanFormatError(f"plan {data.get('id')!r}: unknown status {status!r}")
@@ -367,17 +385,15 @@ class Plan:
             raw_steps = data.get("steps") or []
             if not isinstance(raw_steps, list):
                 raise PlanFormatError("steps is not a list")
-            photos = _empty_photos()
-            raw_photos = data.get("photos")
-            if isinstance(raw_photos, dict):
-                for key in photos:
-                    photos[key] = _opt_str(raw_photos.get(key))
             blocked = data.get("blocked")
             history = data.get("history") or []
             dropped = data.get("dropped") or []
             return cls(
                 id=str(data["id"]),
-                notebook=str(data["notebook"]),
+                notebook=str(data.get("notebook") or ""),
+                place=str(data.get("place") or ""),
+                rollback_journal=_opt_str(data.get("rollback_journal")),
+                undo_journal=_opt_str(data.get("undo_journal")),
                 session_key=str(data.get("session_key", "")),
                 title=str(data.get("title", "")),
                 steps=[Step.from_dict(s) for s in raw_steps],
@@ -390,7 +406,6 @@ class Plan:
                     for d in dropped
                     if isinstance(d, dict)
                 ],
-                photos=photos,
                 blocked=_read_blocked(blocked),
                 history=[dict(h) for h in history if isinstance(h, dict)],
                 created_at=str(data.get("created_at", "")),

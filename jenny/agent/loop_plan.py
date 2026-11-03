@@ -190,6 +190,28 @@ class LoopPlanMixin:
             if isinstance(tool, PlanTool):
                 tool.bind_driver(driver)
 
+    # ── il registro dell'annulla ──────────────────────────────────────────────
+
+    def _plan_journal_of(self, metadata: Mapping[str, Any] | None) -> tuple[Any, str | None]:
+        """Il registro del piano e il passo, per un turno di un passo; ``(None, None)``.
+
+        Solo un turno con un passo aperto: lì Jenny lavora per il piano, e quel
+        che scrive (le scritture dirette, le bozze installate dopo) è del passo.
+        """
+        driver = self.plan_driver
+        meta = metadata or {}
+        plan_id, step_id = meta.get(PLAN_ID_META), meta.get(PLAN_STEP_META)
+        if driver is None or not isinstance(plan_id, str) or not isinstance(step_id, str):
+            return None, None
+        from jenny.agent.write_journal import journal_for
+        from jenny.plan.work import plan_journal_key
+
+        try:
+            return journal_for(driver.store.workspace, plan_journal_key(plan_id)), step_id
+        except Exception:  # noqa: BLE001 — senza registro il turno lavora lo stesso
+            logger.opt(exception=True).warning("Plan {}: no undo journal for the turn", plan_id)
+            return None, None
+
     # ── tool ────────────────────────────────────────────────────────────────
 
     def _plan_tool_filter(

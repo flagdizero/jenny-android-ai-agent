@@ -77,7 +77,7 @@ import time
 import zlib
 from collections.abc import Iterable, Iterator
 from contextlib import ExitStack, contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -132,6 +132,9 @@ SCHEMA = Schema("undo", (
 ))
 
 HELPER = "helper"
+# I registri dei piani (``plan.work``): la pulizia li toglie solo quando sa
+# quali nominano ancora i piani.
+SWEPT_WITH_KEEP_KEYS = ("plan", "undo")
 
 
 def journal_key(kind: str, ident: str) -> str:
@@ -520,6 +523,19 @@ class WriteJournal:
             logger.warning("Write journal {} unreadable: {}", self.key, e)
             return []
         return [_entry(row) for row in rows]
+
+    def entries(self) -> list[dict[str, Any]]:
+        """Le righe del registro, in ordine di ora: chi vuole sapere cosa ha fatto."""
+        return self._read_entries()
+
+    def saved_content(self, sha: str) -> bytes | None:
+        """Il contenuto salvato con firma *sha*, se questo registro l'ha salvato."""
+        if not _is_sha(sha) or not self._has_object(sha):
+            return None
+        try:
+            return _read_object(self.objects, sha)
+        except (OSError, ValueError, zlib.error):
+            return None
 
     def _has_object(self, sha: str) -> bool:
         rows = self._db().read(
@@ -1224,6 +1240,16 @@ def current_step() -> str | None:
     return binding.step if binding is not None else None
 
 
+def set_journal(journal: WriteJournal | None, *, step: str | None = None) -> Token:
+    """Come :func:`bind_journal`, per chi lega e slega in due punti diversi
+    (il turno del loop, coi suoi altri ``bind_*``): :func:`reset_journal` dopo."""
+    return _CURRENT.set(_Binding(journal, step))
+
+
+def reset_journal(token: Token) -> None:
+    _CURRENT.reset(token)
+
+
 @contextmanager
 def bind_journal(journal: WriteJournal | None, *, step: str | None = None) -> Iterator[None]:
     """Le scritture fatte qui dentro vanno in *journal* (``None``: in nessuno).
@@ -1345,18 +1371,19 @@ def sweep_orphan_journals(install_root: Path, keep: Iterable[str],
     La vita del registro di un aiutante è quella dei record del suo lineage (TTL
     e potatura di ``subagent_records``): senza record nessuno può più chiedere
     l'annulla, e le copie sono solo spazio. *keep* sono i lineage vivi;
-    *keep_keys* i registri che qualcun altro nomina ancora (gli aiutanti dei
-    passi di un piano, che il piano può riportare indietro). I registri che non
-    sono di un aiutante (``plan-*``, ``undo-*``) li toglie chi li ha creati. Poi
+    *keep_keys* i registri che i piani nominano ancora (``plan.work``): i loro,
+    quelli dei ritorni, quelli degli aiutanti dei passi. Con *keep_keys* anche i
+    registri ``plan-*``/``undo-*`` di piani che non ci sono più se ne vanno. Poi
     i contenuti salvati che nessuna riga nomina più.
     """
     alive = {journal_key(HELPER, k) for k in keep} | set(keep_keys)
     prefix = f"{HELPER}-"
+    swept = (prefix, *(f"{kind}-" for kind in SWEPT_WITH_KEEP_KEYS)) if keep_keys else (prefix,)
     try:
         database = _undo_db(install_root)
         known = {r[0] for r in database.read("SELECT key FROM journals")} | {
             r[0] for r in database.read("SELECT key FROM undos")}
-        gone = sorted(k for k in known if k.startswith(prefix) and k not in alive)
+        gone = sorted(k for k in known if k.startswith(swept) and k not in alive)
         if gone:
             with database.write() as conn:
                 for key in gone:

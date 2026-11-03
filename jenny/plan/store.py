@@ -53,8 +53,6 @@ from jenny.snapshot.locations import plans_dir_for
 from jenny.utils.path import atomic_write
 
 PLAN_FILE_NAME = "plan.json"
-PHOTOS_DIR_NAME = "photos"
-ROLLBACK_JOURNAL_NAME = "rollback.journal"
 # Le pianificazioni in corso, una per quaderno (v. :meth:`PlanStore.drafting_update`).
 DRAFTING_FILE_NAME = "drafting.json"
 
@@ -113,13 +111,17 @@ def _parse_iso(value: str) -> datetime | None:
 class PlanStore:
     """I piani di un'installazione, uno per cartella sotto *plans_dir*."""
 
-    def __init__(self, plans_dir: Path) -> None:
+    def __init__(self, plans_dir: Path, *, workspace: Path | None = None) -> None:
         self.plans_dir = Path(plans_dir)
+        # Il workspace dei registri dell'annulla (``plan.work``): accanto a
+        # ``plans/``, come lo mette ``snapshot.locations``.
+        self.workspace = Path(workspace) if workspace is not None else (
+            self.plans_dir.parent / "workspace")
         self._store_lock = _lock_for(self.plans_dir)
 
     @classmethod
     def for_workspace(cls, workspace: Path) -> PlanStore:
-        return cls(plans_dir_for(workspace))
+        return cls(plans_dir_for(workspace), workspace=workspace)
 
     # -- percorsi -----------------------------------------------------------
 
@@ -127,12 +129,6 @@ class PlanStore:
         if not is_plan_id(plan_id):
             raise PlanNotFoundError(f"no plan {str(plan_id)[:80]!r}")
         return self.plans_dir / plan_id
-
-    def photos_dir(self, plan_id: str) -> Path:
-        return self.plan_dir(plan_id) / PHOTOS_DIR_NAME
-
-    def journal_path(self, plan_id: str) -> Path:
-        return self.plan_dir(plan_id) / ROLLBACK_JOURNAL_NAME
 
     def _plan_file(self, plan_id: str) -> Path:
         return self.plan_dir(plan_id) / PLAN_FILE_NAME

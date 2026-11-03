@@ -18,7 +18,7 @@ from jenny.plan.driver import PlanDriver
 from jenny.plan.store import PlanStore
 from jenny.runtime.context import get_runtime_context
 from jenny.webui.commands import CommandContext, CommandError, dispatch_command
-from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_file
+from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, plan_write, propose, write_file
 
 
 @pytest.fixture()
@@ -120,11 +120,12 @@ async def test_the_whole_card_lifecycle_over_rpc(
         await _rpc(ctx, "plan.discard", id=plan.id)
     assert info.value.code == "bad_state"
 
-    write_file(workspace / "wikis" / "piante", "wiki/acero.md", "nuova")
+    plan_write(driver, "wiki/acero.md", "nuova")
     await driver.step_done(KEY, "scritta")
     await driver.on_turn_end(KEY, {})
     files = await _rpc(ctx, "plan.step_files", id=plan.id, step="s1")
-    assert files == {"ok": True, "added": ["wiki/acero.md"], "changed": [], "removed": []}
+    assert files == {"ok": True, "added": ["wiki/acero.md"], "changed": [], "removed": [],
+                     "groups": {"wiki/acero.md": "pages"}}
 
     await driver.blocked(KEY, "Quale acero?")
     assert await _rpc(ctx, "plan.answer", id=plan.id, text="Il rosso") == {"ok": True}

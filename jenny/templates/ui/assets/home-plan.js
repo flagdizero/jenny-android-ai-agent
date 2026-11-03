@@ -63,30 +63,25 @@ const KIND_ICON = {
   other: 'ti-list-details',
 };
 
-/** Il gruppo di un percorso del quaderno, per il conto del ritorno: la stessa
- *  regola di `jenny/plan/photos.py::group_of` (che decide davvero cosa si
- *  tiene). Qui serve solo a contare le caselle; `journal` non compare mai,
- *  perche' il diario non torna indietro. */
-export function groupOf(path) {
-  const p = String(path || '');
-  if (p.startsWith('raw/journal/')) return 'journal';
-  const head = p.split('/', 1)[0];
-  if (head === 'wiki') return 'pages';
-  if (head === 'raw') return 'sources';
-  if (head === 'board') return 'board';
-  return 'other';
-}
+/* Il gruppo di un percorso (pagine, ricerche, bacheca, … o, nella chat
+   personale, il quaderno toccato) lo decide il server (`jenny/plan/place.py`):
+   arriva con ogni elenco di file (`groups`, percorso → gruppo) e con il conto
+   del ritorno (`group_of`, `keepable`). La scheda non ne tiene una copia. */
 
-export const KEEPABLE_GROUPS = ['pages', 'sources', 'board', 'other'];
+/** Il nome di un gruppo per la scheda: tradotto se è uno dei gruppi di un
+ *  quaderno, così com'è se è il nome di un quaderno. */
+function groupLabel(group) {
+  return i18n.tOr(`home.plan.group.${group}`, String(group));
+}
 
 /** Il nome di un percorso dentro il suo gruppo, senza `.md`:
  *  `wiki/entities/Acero/substrato.md` → `entities/Acero/substrato`. Il solo
  *  nome del file non basta: in una wiki rifatta ci sono dieci `index` e dieci
  *  `substrato`, e «index, calendario, index…» non diceva quali. */
-export function relInGroup(path) {
+export function relInGroup(path, group) {
   const p = String(path || '');
-  const g = groupOf(p);
-  const rest = g === 'pages' || g === 'sources' || g === 'board' ? p.slice(p.indexOf('/') + 1) : p;
+  const rest = group === 'pages' || group === 'sources' || group === 'board'
+    ? p.slice(p.indexOf('/') + 1) : p;
   return rest.replace(/\.md$/i, '');
 }
 
@@ -1749,7 +1744,8 @@ export class HomePlan {
     const key = `${plan.id}@${plan.updated_at}`;
     if (this._changesFor !== key || !this._changes) return null;
     const c = this._changes;
-    const inGroup = (list, group) => (list || []).filter((p) => groupOf(p) === group).length;
+    const groups = c.groups || {};
+    const inGroup = (list, group) => (list || []).filter((p) => groups[p] === group).length;
     const cells = [
       [inGroup(c.added, 'pages'), t('summary.newPages')],
       [(c.changed || []).length, t('summary.changed')],
@@ -2127,7 +2123,7 @@ export class HomePlan {
       return null;
     }
     const groups = out?.groups || {};
-    const groupName = (p) => t(`group.${groups[p] || groupOf(p)}`);
+    const groupName = (p) => groupLabel(groups[p] || 'other');
     const box = el('div', 'home-plan-sheet-list');
     let any = false;
     for (const [kind, cls, glyph] of [['added', 'is-added', 'ti-plus'],
@@ -2144,7 +2140,7 @@ export class HomePlan {
         line.dataset.kind = kind;
         line.appendChild(icon(glyph));
         line.appendChild(el('b', null, t(`changes.${kind}`, { count: paths.length, group: g })));
-        const names = paths.slice(0, 6).map(relInGroup);
+        const names = paths.slice(0, 6).map((p) => relInGroup(p, groups[p]));
         line.append(` · ${names.join(', ')}${paths.length > 6 ? '…' : ''}`);
         box.appendChild(line);
       }
@@ -2211,12 +2207,15 @@ export class HomePlan {
     const restored = report.restored || [];
     const removed = report.removed || [];
     const left = report.left || [];
+    const pathGroup = report.group_of || {};
+    const groupOfPath = (p) => pathGroup[p] || 'other';
+    const keepable = report.keepable || [];
     const keep = new Set();
     const box = el('div', 'home-plan-sheet-list');
     const lines = el('div', 'home-plan-rollback-lines');
     const counted = () => {
-      const r = restored.filter((p) => !keep.has(groupOf(p))).length;
-      const g = removed.filter((p) => !keep.has(groupOf(p))).length;
+      const r = restored.filter((p) => !keep.has(groupOfPath(p))).length;
+      const g = removed.filter((p) => !keep.has(groupOfPath(p))).length;
       lines.replaceChildren();
       if (r) {
         const line = el('div', 'is-back');
@@ -2235,7 +2234,7 @@ export class HomePlan {
     };
     box.appendChild(lines);
     if (left.length) {
-      const names = left.slice(0, 4).map(relInGroup);
+      const names = left.slice(0, 4).map((p) => relInGroup(p, groupOfPath(p)));
       const line = el('div', 'is-keep');
       line.append(icon('ti-lock'), el('span', null, t('rollbackSheet.left', {
         names: names.join(', ') + (left.length > 4 ? '…' : ''),
@@ -2245,11 +2244,11 @@ export class HomePlan {
     /* Una casella per gruppo che il ritorno toccherebbe. */
     const touched = new Map();
     for (const p of [...restored, ...removed]) {
-      const g = groupOf(p);
-      if (!KEEPABLE_GROUPS.includes(g)) continue;
+      const g = groupOfPath(p);
+      if (!keepable.includes(g)) continue;
       touched.set(g, (touched.get(g) || 0) + 1);
     }
-    for (const g of KEEPABLE_GROUPS) {
+    for (const g of keepable) {
       if (!touched.has(g)) continue;
       const label = el('label', 'home-plan-keep');
       const check = el('input');
@@ -2261,7 +2260,7 @@ export class HomePlan {
         counted();
       });
       label.append(check, el('span', null, t('rollbackSheet.keep', {
-        group: t(`groupThe.${g}`), count: touched.get(g),
+        group: i18n.tOr(`home.plan.groupThe.${g}`, String(g)), count: touched.get(g),
       })));
       box.appendChild(label);
     }

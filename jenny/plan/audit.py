@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -263,14 +263,16 @@ def empty_folders(root: Path) -> list[str]:
     )
 
 
-def remove_empty_folders(root: Path, keep: Iterable[str] = ()) -> list[str]:
+def remove_empty_folders(
+    root: Path, keep: Iterable[str] = (), *, before_remove: Callable[[Path], None] | None = None,
+) -> list[str]:
     """Toglie le cartelle vuote sotto ``wiki/`` (mai ``wiki/`` stessa), dalle più profonde.
 
     ``rmdir`` toglie solo una cartella vuota: un file arrivato nel frattempo la
     tiene. *keep* sono quelle vuote già all'Approva (:func:`empty_folders`): non
-    sono lavoro del piano, e le foto del piano tengono i file, non le cartelle,
-    quindi un ritorno indietro non le rimetterebbe. Restituisce i percorsi tolti,
-    come ``wiki/concepts/Acero/``.
+    sono lavoro del piano, e un ritorno indietro non deve toccarle.
+    *before_remove* è chiamata prima di ogni ``rmdir`` (il registro dell'annulla
+    del piano). Restituisce i percorsi tolti, come ``wiki/concepts/Acero/``.
     """
     wiki = root / "wiki"
     if not wiki.is_dir():
@@ -285,6 +287,8 @@ def remove_empty_folders(root: Path, keep: Iterable[str] = ()) -> list[str]:
         if f"wiki/{folder.relative_to(wiki).as_posix()}/" in kept:
             continue
         try:
+            if before_remove is not None and not any(folder.iterdir()):
+                before_remove(folder)
             folder.rmdir()
         except OSError:
             continue

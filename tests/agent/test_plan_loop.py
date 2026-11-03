@@ -120,7 +120,13 @@ class Script:
         if found and self.close_steps:
             n = int(found.group(1))
             page = self.workspace / "wikis" / "piante" / "wiki" / f"passo{n}.md"
+            # Come la scriverebbe un tool del turno: dai recinti, che la annotano
+            # nel registro del piano legato al turno del passo.
+            from jenny.security.subagent_policy import check_write, settle_writes
+
+            check_write(page)
             page.write_text(f"passo {n}\n", encoding="utf-8")
+            settle_writes("write_file")
             return _call("plan_step_done", note=f"passo {n} scritto")
         return LLMResponse(content="Va bene.")
 
@@ -287,7 +293,6 @@ async def test_propose_approve_and_three_steps_to_done(workspace: Path) -> None:
     plan = driver.store.load(plan.id)
     assert [s.status for s in plan.steps] == ["done"] * 4
     assert [s.note for s in plan.steps] == [f"passo {n} scritto" for n in range(1, 5)]
-    assert plan.photos["start"] and plan.photos["end"]
     assert driver.step_files(plan.id, "s2")["added"] == ["wiki/passo2.md"]
     assert driver.changes(plan.id)["added"] == [
         "wiki/passo1.md", "wiki/passo2.md", "wiki/passo3.md", "wiki/passo4.md",

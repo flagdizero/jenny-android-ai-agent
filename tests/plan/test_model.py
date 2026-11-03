@@ -266,13 +266,9 @@ def test_round_trip_keeps_unknown_keys() -> None:
     out = again.to_dict()
     assert out["future_field"] == {"x": 1}
     assert out["steps"][0]["outside"] == [{"type": "cron"}]
-    assert out["format"] == 1
-    assert out["photos"] == {
-        "start": None,
-        "end": None,
-        "before_rollback": None,
-        "after_rollback": None,
-    }
+    assert out["format"] == 2 and "photos" not in out
+    assert out["place"] == f"nb:{plan.notebook}"
+    assert out["rollback_journal"] is None and out["steps"][0]["helpers"] == []
     assert Plan.from_dict(out).to_dict() == out
 
 
@@ -285,7 +281,8 @@ def test_unknown_step_kind_reads_as_other() -> None:
 @pytest.mark.parametrize(
     "mutate",
     [
-        lambda d: d.update(format=2),
+        lambda d: d.update(format=3),
+        lambda d: d.update(format=1),
         lambda d: d.update(status="flying"),
         lambda d: d.pop("id"),
         lambda d: d["steps"][0].update(status="maybe"),

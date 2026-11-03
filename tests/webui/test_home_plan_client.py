@@ -634,11 +634,16 @@ current = plan({ status: 'done', done: 3, can_rollback: true,
   steps: [step('s1', 'A', { status: 'done' }), step('s2', 'B', { status: 'done' }),
     step('s3', 'C', { status: 'done' })] });
 rpcAnswers['plan.changes'] = () => ({ ok: true, added: ['wiki/new.md', 'raw/research/x.md'],
-  changed: ['wiki/index.md'], removed: ['wiki/old.md'], groups: {} });
+  changed: ['wiki/index.md'], removed: ['wiki/old.md'],
+  groups: { 'wiki/new.md': 'pages', 'raw/research/x.md': 'sources', 'wiki/index.md': 'pages',
+    'wiki/old.md': 'pages' } });
 rpcAnswers['plan.rollback_preview'] = () => ({ ok: true, expect_end: 'B1', report: {
   restored: ['wiki/old.md', 'wiki/index.md'], removed: ['wiki/new.md', 'raw/research/x.md'],
   left: ['wiki/acero.md'], kept: [], already: [], excluded: [],
-  counts: { restored: 2, removed: 2, left: 1, kept: 0, already: 0, excluded: 0 } } });
+  counts: { restored: 2, removed: 2, left: 1, kept: 0, already: 0, excluded: 0 },
+  group_of: { 'wiki/old.md': 'pages', 'wiki/index.md': 'pages', 'wiki/new.md': 'pages',
+    'raw/research/x.md': 'sources', 'wiki/acero.md': 'pages' },
+  keepable: ['pages', 'sources'] } });
 rpcAnswers['plan.rollback'] = () => ({ ok: true, report: { counts: { restored: 2, removed: 1 } } });
 await toNotebook();
 await tick(30);
@@ -1426,7 +1431,10 @@ assert.equal(sheet().open, false, 'chiusa la chat, il foglio non resta sopra la 
 def test_the_changes_sheet_names_pages_by_their_path_in_the_group() -> None:
     run_home(_HEAD + """
 current = plan({ status: 'done', done: 3, steps: [step('s1', 'A', { status: 'done' })] });
-rpcAnswers['plan.changes'] = () => ({ ok: true, groups: {},
+rpcAnswers['plan.changes'] = () => ({ ok: true,
+  groups: { 'wiki/entities/Acero/substrato.md': 'pages', 'wiki/entities/Fico/substrato.md': 'pages',
+    'raw/research/2026-10-23-acero.md': 'sources', 'wiki/index.md': 'pages',
+    'wiki/entities/Acero/index.md': 'pages' },
   added: ['wiki/entities/Acero/substrato.md', 'wiki/entities/Fico/substrato.md', 'raw/research/2026-10-23-acero.md'],
   changed: ['wiki/index.md', 'wiki/entities/Acero/index.md'], removed: [] });
 await toNotebook();

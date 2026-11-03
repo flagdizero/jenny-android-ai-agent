@@ -58,6 +58,7 @@ from jenny.agent.turn_types import (
 from jenny.agent.turn_types import (
     StateTraceEntry as StateTraceEntry,
 )
+from jenny.agent.write_journal import reset_journal, set_journal
 from jenny.bus.events import INTERNAL_CHANNEL, WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
 from jenny.bus.progress import build_bus_progress_callback
 from jenny.bus.queue import MessageBus
@@ -1574,6 +1575,11 @@ class AgentLoop(
         turn_taint_token = bind_turn_taint(
             turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META, TOOL_TAINT_META)
         )
+        # Un turno di un passo di un piano scrive nel registro del piano
+        # (``plan.work``), col passo: il ritorno toglie il suo lavoro. Gli
+        # aiutanti che lancia scrivono nei loro (``_run_subagent`` li lega).
+        plan_journal, plan_step = self._plan_journal_of(metadata)
+        journal_token = set_journal(plan_journal, step=plan_step)
         async def _on_context_overflow(new_window: int) -> None:
             """Called by the runner when a context_length error occurs.
 
@@ -1637,6 +1643,7 @@ class AgentLoop(
                 closed_reasoning_flagged=session is not None,
             ))
         finally:
+            reset_journal(journal_token)
             reset_turn_taint(turn_taint_token)
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)

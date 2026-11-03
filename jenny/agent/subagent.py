@@ -1117,6 +1117,9 @@ class SubagentManager:
         # (il driver dei piani: un risveglio tenuto non deve aspettare chi non
         # va piu avanti). V. :meth:`set_stall_listener`.
         self._stall_listener: Callable[[str, list[str]], None] | None = None
+        # Chi vuole sapere in quale registro dell'annulla lavora un aiutante di un
+        # passo (il driver dei piani). V. :meth:`set_journal_listener`.
+        self._journal_listener: Callable[[str, str, str], None] | None = None
         # Orologio del freno dei checkpoint; iniettabile dai test.
         self._clock: Callable[[], float] = time.monotonic
         # I registri delle scritture per l'annulla (``agent.write_journal``),
@@ -1282,7 +1285,11 @@ class SubagentManager:
         try:
             keep = {r.lineage_id for r in self._records.load_all()}
             keep |= {m.lineage_id for m in self._records.load_running()}
-            removed = sweep_orphan_journals(root, keep)
+            # I registri che i piani nominano ancora: il ritorno di un piano
+            # toglie anche il lavoro degli aiutanti dei suoi passi.
+            from jenny.plan.work import kept_journal_keys
+
+            removed = sweep_orphan_journals(root, keep, kept_journal_keys(root))
             if removed:
                 logger.info("Swept {} orphan subagent journal(s)", removed)
         except Exception as e:  # noqa: BLE001 — vedi docstring
@@ -1519,6 +1526,16 @@ class SubagentManager:
         Come per :meth:`set_limit_provider`, il manager non sa cosa sia un piano.
         """
         self._stall_listener = fn
+
+    def set_journal_listener(self, fn: Callable[[str, str, str], None] | None) -> None:
+        """Inietta chi ascolta i registri degli aiutanti dei piani.
+
+        ``fn(plan_id, step_id, journal_key)`` a ogni tentativo che parte per un
+        passo — nuovo, rimandato con ``subagent_send``, ripreso: è il lavoro del
+        passo, e il ritorno del piano lo toglie. Lo cabla il driver attraverso il
+        suo ospite (``LoopPlanHost.watch_helper_journals``).
+        """
+        self._journal_listener = fn
 
     def helper_plan_step(self, task_id: str) -> tuple[str | None, str | None] | None:
         """Piano e passo per cui lavora (o ha lavorato) *task_id*, se lo si sa ancora.
@@ -1970,6 +1987,13 @@ class SubagentManager:
                 # Un lineage che riparte dopo un annulla non è più «annullato».
                 self._journal_cache.pop(status.lineage_id, None)
                 run_journal.append(journal)
+                if spec.plan_id and spec.plan_step and self._journal_listener is not None:
+                    try:
+                        self._journal_listener(spec.plan_id, spec.plan_step, journal.key)
+                    except Exception:  # noqa: BLE001 — il lavoro parte comunque
+                        logger.opt(exception=True).warning(
+                            "Subagent [{}]: plan {} not told about its journal",
+                            task_id, spec.plan_id)
             self._run_policies[task_id] = policy
             initial.extend(messages)
             run_policy.append(policy)

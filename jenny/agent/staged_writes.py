@@ -180,9 +180,11 @@ def stage(
         }
         # Il registro dell'annulla di chi l'ha scritta (``agent.write_journal``):
         # installata, la bozza conta come suo lavoro, e il suo annulla la toglie.
-        journal = _current_journal_key()
+        journal, step = _current_journal_key()
         if journal is not None:
             meta["journal"] = journal
+            if step is not None:
+                meta["journal_step"] = step
         atomic_write(entry / "meta.json", json.dumps(meta, ensure_ascii=False), fsync_dir=False)
     _notify(root, "staged", staged_id, target_rel)
     return StagedRef(staged_id, target_rel)
@@ -252,13 +254,14 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
         if sha256_of(target) != expected_sha:
             return "conflict"
         journal = _journal_of(root, meta)
-        if journal is not None:
-            journal.touch(target)
-        try:
-            atomic_write(target, _keep_wiki_id(target, content))
-        finally:
+        with _bound(journal, meta.get("journal_step")):
             if journal is not None:
-                journal.settle("install draft")
+                journal.touch(target)
+            try:
+                atomic_write(target, _keep_wiki_id(target, content))
+            finally:
+                if journal is not None:
+                    journal.settle("install draft")
         # L'utente l'ha guardata e confermata: da qui in poi non è più contenuto
         # non fidato per chi la legge.
         ledger_for(root).clear(meta["target"])
@@ -268,11 +271,23 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
     return "installed"
 
 
-def _current_journal_key() -> str | None:
-    from jenny.agent.write_journal import current_journal
+def _current_journal_key() -> tuple[str | None, str | None]:
+    from jenny.agent.write_journal import current_journal, current_step
 
     journal = current_journal()
-    return journal.key if journal is not None else None
+    return (journal.key, current_step()) if journal is not None else (None, None)
+
+
+def _bound(journal: Any, step: Any):
+    """Il registro della bozza legato mentre la si installa, col passo per cui
+    era stata scritta: le righe sono di quel passo."""
+    from contextlib import nullcontext
+
+    from jenny.agent.write_journal import bind_journal
+
+    if journal is None:
+        return nullcontext()
+    return bind_journal(journal, step=step if isinstance(step, str) else None)
 
 
 def _journal_of(root: Path, meta: dict[str, Any]):

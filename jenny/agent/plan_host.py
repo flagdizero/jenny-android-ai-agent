@@ -128,6 +128,13 @@ class LoopPlanHost:
         if callable(register):
             register(fn)
 
+    def watch_helper_journals(self, fn: Any) -> None:
+        """Lega *fn* ai registri dell'annulla degli aiutanti dei passi
+        (``SubagentManager.set_journal_listener``)."""
+        register = getattr(self._loop.subagents, "set_journal_listener", None)
+        if callable(register):
+            register(fn)
+
     async def cancel_turn(self, session_key: str) -> bool:
         """Solo il turno in volo della sessione (``/stop`` semplice), non gli aiutanti.
 

@@ -194,7 +194,7 @@ def test_follow_rename(tmp_path: Path) -> None:
 def test_delete_for_notebook_removes_the_whole_dir(tmp_path: Path) -> None:
     store = _store(tmp_path)
     a = store.create("piante", _proposal())
-    (store.photos_dir(a.id) / "objects").mkdir(parents=True)
+    (store.plan_dir(a.id) / "leftover").mkdir(parents=True)
     keep = store.create("ricette", _proposal())
     assert store.delete_for_notebook("piante") == [a.id]
     assert not store.plan_dir(a.id).exists()

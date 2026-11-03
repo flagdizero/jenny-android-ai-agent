@@ -34,6 +34,7 @@ from tests.support.plan import (
     STEPS,
     FakeBus,
     FakeHost,
+    plan_write,
     propose,
     write_file,
 )
@@ -137,11 +138,10 @@ async def test_a_malformed_proposal_returns_the_reason_to_the_model(driver: Plan
 # ── approva ─────────────────────────────────────────────────────────────────
 
 
-async def test_approve_takes_photo_a_and_opens_step_one(driver: PlanDriver, bus: FakeBus) -> None:
+async def test_approve_opens_step_one(driver: PlanDriver, bus: FakeBus) -> None:
     plan = await _approve(driver)
-    assert plan.status == "running"
-    assert plan.photos["start"]
-    assert plan.steps[0].status == "now" and plan.steps[0].photo_before
+    assert plan.status == "running" and plan.place == "nb:piante"
+    assert plan.steps[0].status == "now" and plan.steps[0].started_at
     [msg] = _step_messages(bus)
     assert msg.channel == "system" and msg.session_key == KEY
     assert msg.chat_id == "websocket:project:piante"
@@ -192,13 +192,13 @@ def _real_page(rel: str) -> str:
 
 
 async def _close_step(driver: PlanDriver, workspace: Path, rel: str) -> None:
-    write_file(workspace / "wikis" / "piante", rel, _real_page(rel))
+    plan_write(driver, rel, _real_page(rel))
     text = await driver.step_done(KEY, f"scritto {rel}")
     assert "closed" in text, text
     await driver.on_turn_end(KEY, {})
 
 
-async def test_three_steps_run_to_done_with_a_photo_per_step(
+async def test_three_steps_run_to_done_with_their_files_per_step(
     driver: PlanDriver, workspace: Path, bus: FakeBus
 ) -> None:
     plan = await _approve(driver)
@@ -210,11 +210,11 @@ async def test_three_steps_run_to_done_with_a_photo_per_step(
     assert plan.status == "done"
     assert [s.status for s in plan.steps] == ["done", "done", "done"]
     assert plan.steps[2].extra["machine_check"]["final"] is True
-    assert plan.photos["end"]
     assert len(_step_messages(bus)) == 2
     assert plan.steps[1].extra["files"] == {"added": 1, "changed": 0, "removed": 0}
     assert driver.step_files(plan.id, "s2") == {
         "added": ["wiki/ginkgo.md"], "changed": [], "removed": [],
+        "groups": {"wiki/ginkgo.md": "pages"},
     }
     changes = driver.changes(plan.id)
     assert changes["added"] == ["raw/research/acero.md", "wiki/ginkgo.md"]
@@ -322,7 +322,7 @@ async def test_resume_before_the_pause_lands_cancels_it(driver: PlanDriver) -> N
     assert driver.store.load(plan.id).status == "running"
 
 
-async def test_stop_cancels_turn_and_helpers_and_takes_photo_b(
+async def test_stop_cancels_turn_and_helpers(
     driver: PlanDriver, host: FakeHost
 ) -> None:
     plan = await _approve(driver)
@@ -331,7 +331,7 @@ async def test_stop_cancels_turn_and_helpers_and_takes_photo_b(
     assert await driver.stop(plan.id, "keep") is None
     plan = driver.store.load(plan.id)
     assert host.cancelled == [KEY]
-    assert plan.status == "stopped" and plan.photos["end"]
+    assert plan.status == "stopped"
     assert [s.status for s in plan.steps] == ["interrupted", "pending", "pending"]
     assert plan.history[-1]["cancelled"] == 3
     assert not driver.plan_open(KEY)
@@ -483,24 +483,25 @@ async def test_restart_mid_step_pauses_with_a_note(
     assert fresh.recover() == [plan.id]
     plan = store.load(plan.id)
     assert plan.status == "paused"
-    assert plan.steps[0].status == "pending" and plan.steps[0].photo_before is None
+    assert plan.steps[0].status == "pending" and plan.steps[0].started_at is None
     last = plan.history[-1]
     assert last["reason"] == "restart" and last["step"] == 1 and last["note"]
     assert fresh.held_status(KEY) == "paused"
 
 
-async def test_restart_after_a_close_photographs_the_step(
+async def test_restart_after_a_close_counts_the_step(
     workspace: Path, host: FakeHost, bus: FakeBus
 ) -> None:
     store = PlanStore.for_workspace(workspace)
     first = PlanDriver(store, bus, host)
     plan = await _approve(first)
-    write_file(workspace / "wikis" / "piante", "wiki/nuova.md", "x")
+    plan_write(first, "wiki/nuova.md", "x")
     await first.step_done(KEY, "fatto")  # ...e il gateway muore prima della fine del turno
     PlanDriver(store, FakeBus(), host).recover()
     plan = store.load(plan.id)
     assert plan.status == "paused"
-    assert plan.steps[0].status == "done" and plan.steps[0].photo_after
+    assert plan.steps[0].status == "done"
+    assert plan.steps[0].extra["files"] == {"added": 1, "changed": 0, "removed": 0}
     assert plan.steps[1].status == "pending"
 
 
@@ -522,7 +523,7 @@ async def test_a_blocked_plan_keeps_its_question_across_a_restart(
     assert plan.status == "blocked"
     assert plan.blocked == before.blocked
     assert plan.steps[0].status == "blocked"
-    assert plan.steps[0].photo_before == before.steps[0].photo_before
+    assert plan.steps[0].started_at == before.steps[0].started_at
     assert plan.history == before.history, "nessuna riga di pausa nella storia"
     # Un messaggio scritto in chat e' ancora la risposta, e la risposta riparte.
     metadata: dict[str, Any] = {}
@@ -552,11 +553,10 @@ async def test_a_blocked_plan_answered_from_the_card_after_a_restart(
 
 async def _finished(driver: PlanDriver, workspace: Path) -> Any:
     plan = await _approve(driver)
-    nb = workspace / "wikis" / "piante"
-    write_file(nb, "wiki/acero.md", "acero v2")
+    plan_write(driver, "wiki/acero.md", "acero v2")
     await driver.step_done(KEY, "riscritta")
     await driver.on_turn_end(KEY, {})
-    write_file(nb, "raw/research/ginkgo.md", "ricerca")
+    plan_write(driver, "raw/research/ginkgo.md", "ricerca")
     await driver.step_done(KEY, "ricerca")
     await driver.on_turn_end(KEY, {})
     await driver.step_skip(KEY, "niente da controllare")
@@ -570,9 +570,10 @@ async def test_rollback_refuses_while_jenny_works_or_on_a_stale_summary(
     driver: PlanDriver, workspace: Path, host: FakeHost
 ) -> None:
     plan = await _finished(driver, workspace)
+    token = (await driver.rollback_preview(plan.id))["expect_end"]
     host.busy.add(KEY)
     with pytest.raises(PlanCommandError) as info:
-        await driver.rollback(plan.id, [], plan.photos["end"])
+        await driver.rollback(plan.id, [], token)
     assert info.value.code == "conflict"
     host.busy.clear()
     with pytest.raises(PlanCommandError) as info:
@@ -585,7 +586,7 @@ async def test_rollback_then_undo(driver: PlanDriver, workspace: Path, host: Fak
     plan = await _finished(driver, workspace)
     nb = workspace / "wikis" / "piante"
     preview = await driver.rollback_preview(plan.id)
-    assert preview["expect_end"] == plan.photos["end"]
+    assert preview["expect_end"]
     report = preview["report"]
     assert report["dry_run"] is True
     assert report["groups"]["pages"] == {"restored": 1}
@@ -610,7 +611,7 @@ async def test_rollback_then_undo(driver: PlanDriver, workspace: Path, host: Fak
 async def test_stop_then_rollback(driver: PlanDriver, workspace: Path) -> None:
     plan = await _approve(driver)
     nb = workspace / "wikis" / "piante"
-    write_file(nb, "wiki/acero.md", "rovinata a metà")
+    plan_write(driver, "wiki/acero.md", "rovinata a metà")
     result = await driver.stop(plan.id, "rollback")
     assert result is not None and result["report"]["counts"]["restored"] == 1
     assert (nb / "wiki/acero.md").read_text() == "acero v1"
@@ -708,68 +709,65 @@ async def test_a_reminder_still_queued_keeps_waiting(driver: PlanDriver) -> None
 # ── ritorno: errori del disco, crolli, conferme ─────────────────────────────
 
 
-async def test_a_disk_error_mid_rollback_leaves_no_journal_and_says_so(
-    driver: PlanDriver, workspace: Path, monkeypatch: pytest.MonkeyPatch
+async def test_a_disk_error_on_one_file_leaves_that_file_and_says_so(
+    driver: PlanDriver, workspace: Path, host: FakeHost, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jenny.plan.photos import PlanPhotos
+    """Un file che non si riesce a riscrivere resta com'è, e il conto lo dice
+    («lasciato»); gli altri tornano. Annullare il ritorno e riprovare resta
+    possibile."""
+    from jenny.agent import write_journal
 
     plan = await _finished(driver, workspace)
     nb = workspace / "wikis" / "piante"
-    original = PlanPhotos._apply_one
-    calls: list[str] = []
+    original = write_journal.atomic_write
 
-    def _disk_full(self: PlanPhotos, op: Any) -> None:
-        if calls:
+    def _disk_full(path: Any, content: Any, **kw: Any) -> None:
+        if str(path).endswith("acero.md"):
             raise OSError(28, "No space left on device")
-        calls.append(op.path)
-        original(self, op)
+        original(path, content, **kw)
 
-    monkeypatch.setattr(PlanPhotos, "_apply_one", _disk_full)
+    monkeypatch.setattr(write_journal, "atomic_write", _disk_full)
     preview = await driver.rollback_preview(plan.id)
-    with pytest.raises(PlanCommandError) as info:
-        await driver.rollback(plan.id, [], preview["expect_end"])
-    monkeypatch.setattr(PlanPhotos, "_apply_one", original)
-
-    assert info.value.code == "rollback_failed"
-    assert not driver.store.journal_path(plan.id).exists()
-    plan = driver.store.load(plan.id)
-    assert plan.status == "done"
-    failure = plan_view(plan)["rollback_failed"]
-    assert failure["kind"] == "rollback" and failure["applied"] == 1 and failure["total"] == 2
-    assert "No space" in failure["error"]
-    # L'utente scrive di nuovo; un riavvio non riapplica niente.
-    write_file(nb, "wiki/acero.md", "acero dell'utente")
-    driver.recover()
-    assert (nb / "wiki/acero.md").read_text() == "acero dell'utente"
-    # Riprovare è sicuro, e toglie il segno del fallimento.
-    preview = await driver.rollback_preview(plan.id)
-    await driver.rollback(plan.id, [], preview["expect_end"])
+    done = await driver.rollback(plan.id, [], preview["expect_end"])
+    monkeypatch.undo()
+    assert done["report"]["left"] == ["wiki/acero.md"]
+    assert (nb / "wiki/acero.md").read_text() == "acero v2"
+    assert not (nb / "raw/research/ginkgo.md").exists()
     plan = driver.store.load(plan.id)
     assert plan.status == "rolled_back" and "rollback_failed" not in plan_view(plan)
-    assert (nb / "wiki/acero.md").read_text() == "acero dell'utente"
+    assert "1 left as they were" in host.notes[-1][1]
 
 
 async def test_the_reviewed_repro_a_folder_the_user_filled_does_not_break_the_rollback(
     driver: PlanDriver, workspace: Path
 ) -> None:
     """Il caso della revisione: il piano fa di un file una cartella, l'utente ci
-    aggiunge un suo file, il ritorno cadeva con ``IsADirectoryError`` lasciando
-    il journal, e al riavvio cancellava il file che l'utente aveva ricreato."""
+    aggiunge un suo file. Il file di prima non si può rimettere (al suo posto
+    c'è una cartella non vuota): resta com'è, e il file dell'utente pure."""
     nb = workspace / "wikis" / "piante"
     write_file(nb, "notes", "il file di prima")
     plan = await _approve(driver)
-    (nb / "notes").unlink()
-    write_file(nb, "notes/a.md", "del piano")
+    plan_write(driver, "notes", None)
+    plan_write(driver, "notes/a.md", "del piano")
     await driver.stop(plan.id, "keep")
     write_file(nb, "notes/b.md", "dell'utente")
     preview = await driver.rollback_preview(plan.id)
     done = await driver.rollback(plan.id, [], preview["expect_end"])
     assert "notes" in done["report"]["left"]
-    assert not driver.store.journal_path(plan.id).exists()
-    write_file(nb, "notes/a.md", "ricreato dall'utente")
-    driver.recover()
-    assert (nb / "notes/a.md").read_text() == "ricreato dall'utente"
+    assert not (nb / "notes/a.md").exists()
     assert (nb / "notes/b.md").read_text() == "dell'utente"
+
+
+def _boot(workspace: Path, host: FakeHost) -> PlanDriver:
+    """Il riavvio: il container finisce gli annulla a metà, poi il driver."""
+    from jenny.agent import write_journal
+    from jenny.agent.write_journal import finish_interrupted_undos
+
+    write_journal._LIVE.clear()
+    finish_interrupted_undos(workspace)
+    fresh = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), host)
+    fresh.recover()
+    return fresh
 
 
 async def test_death_between_the_files_and_plan_json_is_finished_at_boot(
@@ -795,55 +793,34 @@ async def test_death_between_the_files_and_plan_json_is_finished_at_boot(
         await first.rollback(plan.id, ["sources"], preview["expect_end"])
     monkeypatch.undo()
     assert (nb / "wiki/acero.md").read_text() == "acero v1"
-    assert first.store.load(plan.id).status == "done"
-    assert first.store.journal_path(plan.id).exists()
+    stuck = first.store.load(plan.id)
+    assert stuck.status == "done" and stuck.extra.get("pending_undo")
 
-    # Il riavvio: un driver nuovo, come al boot.
     host.notes.clear()
-    fresh = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), host)
-    fresh.recover()
+    fresh = _boot(workspace, host)
     plan = fresh.store.load(plan.id)
-    assert plan.status == "rolled_back"
-    assert plan.photos["before_rollback"] == preview["expect_end"]
-    assert plan.photos["after_rollback"]
+    assert plan.status == "rolled_back" and plan.rollback_journal
     assert plan.history[-1]["recovered"] is True and plan.history[-1]["keep"] == ["sources"]
-    assert not fresh.store.journal_path(plan.id).exists()
+    assert "pending_undo" not in plan.extra
     assert len(host.notes) == 1 and "rolled the notebook back" in host.notes[0][1]
     assert (nb / "raw/research/ginkgo.md").exists()
-    # E «Annulla il ritorno» funziona dalla foto del recupero.
+    # E «Annulla il ritorno» funziona dal registro del recupero.
     await fresh.undo_rollback(plan.id)
     assert (nb / "wiki/acero.md").read_text() == "acero v2"
 
 
-async def test_death_after_plan_json_does_not_roll_back_twice(
-    driver: PlanDriver, workspace: Path, host: FakeHost, monkeypatch: pytest.MonkeyPatch
+async def test_a_boot_after_a_finished_rollback_changes_nothing(
+    driver: PlanDriver, workspace: Path, host: FakeHost
 ) -> None:
-    from jenny.plan import driver as driver_mod
-
     plan = await _finished(driver, workspace)
-    journal = driver.store.journal_path(plan.id)
-    saved: list[str] = []
-    original = driver_mod.apply_transition
-
-    def _spy(p: Any, wanted: str, **kw: Any) -> Any:
-        # Il journal deve esserci ancora mentre si scrive ``plan.json``.
-        if wanted == "rolled_back":
-            saved.append(journal.read_text("utf-8"))
-        return original(p, wanted, **kw)
-
-    monkeypatch.setattr(driver_mod, "apply_transition", _spy)
     preview = await driver.rollback_preview(plan.id)
     await driver.rollback(plan.id, [], preview["expect_end"])
-    monkeypatch.undo()
-    # Il crollo fra ``plan.json`` e la cancellazione del journal.
-    journal.write_text(saved[0], "utf-8")
     notes = len(host.notes)
     history = len(driver.store.load(plan.id).history)
-    driver.recover()
+    _boot(workspace, host)
     plan = driver.store.load(plan.id)
     assert plan.status == "rolled_back" and len(plan.history) == history
     assert len(host.notes) == notes
-    assert not journal.exists()
 
 
 async def test_death_mid_undo_is_finished_at_boot(
@@ -868,9 +845,9 @@ async def test_death_mid_undo_is_finished_at_boot(
         await driver.undo_rollback(plan.id)
     monkeypatch.undo()
     assert driver.store.load(plan.id).status == "rolled_back"
-    driver.recover()
+    _boot(workspace, host)
     plan = driver.store.load(plan.id)
-    assert plan.status == "done" and not plan.photos["before_rollback"]
+    assert plan.status == "done" and not plan.rollback_journal and plan.undo_journal
     assert "undid the rollback" in host.notes[-1][1]
     assert (nb / "wiki/acero.md").read_text() == "acero v2"
 
@@ -878,18 +855,17 @@ async def test_death_mid_undo_is_finished_at_boot(
 async def test_the_confirmation_sees_a_change_made_after_the_summary(
     driver: PlanDriver, workspace: Path
 ) -> None:
-    """``expect_end`` era la foto B, che dopo il Ferma non cambia: il controllo
-    «il quaderno è cambiato» non scattava mai. Ora è la foto dell'anteprima."""
+    """Il gettone dell'anteprima fotografa i file che il ritorno toccherebbe: se
+    uno cambia fra il conto e la conferma, il conto mostrato non è più vero."""
     plan = await _finished(driver, workspace)
     nb = workspace / "wikis" / "piante"
     preview = await driver.rollback_preview(plan.id)
-    write_file(nb, "wiki/nuova.md", "scritta dopo il conto")
     write_file(nb, "wiki/acero.md", "riscritta dopo il conto")
     with pytest.raises(PlanCommandError) as info:
         await driver.rollback(plan.id, [], preview["expect_end"])
     assert info.value.code == "conflict"
     with pytest.raises(PlanCommandError) as info:
-        await driver.rollback(plan.id, [], plan.photos["end"])
+        await driver.rollback(plan.id, [], "0" * 16)
     assert info.value.code == "conflict"
     assert (nb / "wiki/acero.md").read_text() == "riscritta dopo il conto"
     again = await driver.rollback_preview(plan.id)

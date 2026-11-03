@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +47,7 @@ from typing import Any, Protocol
 from loguru import logger
 
 from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.plan import work
 from jenny.plan.audit import (
     Audit,
     audit_notebook,
@@ -77,16 +79,7 @@ from jenny.plan.model import (
     to_research_items,
     validate_proposal,
 )
-from jenny.plan.photos import (
-    KEEPABLE_GROUPS,
-    PlanPhotos,
-    RecoveryResult,
-    RollbackConflictError,
-    RollbackError,
-    RollbackIncompleteError,
-    RollbackReport,
-    group_of,
-)
+from jenny.plan.place import PlanPlace, notebook_place, place_from_id
 from jenny.plan.store import PlanConflictError, PlanNotFoundError, PlanStore
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
@@ -205,6 +198,11 @@ ROLLBACK_FAILED_KEY = "rollback_failed"
 # per portare il piano dove il ritorno l'avrebbe portato.
 _KIND_ROLLBACK = "rollback"
 _KIND_UNDO = "undo"
+# Il ritorno in corso, scritto nel piano prima di toccare un file: il registro in
+# cui annota, il tipo, i gruppi tenuti. Il boot lo chiude (:meth:`_recover_undo`).
+PENDING_UNDO_KEY = "pending_undo"
+# Quanti registri di ritorno il piano ha aperto: la chiave del prossimo.
+_UNDO_COUNT = "undo_count"
 
 # I segni della lista nel turno del passo e nel contesto: corti, e uguali ai
 # nomi degli stati della scheda.
@@ -374,15 +372,15 @@ def _stamp_step(metadata: dict[str, Any], plan: Plan) -> None:
 
 
 def _closing(plan: Plan) -> list[Step]:
-    """I passi chiusi dal modello ma non ancora fotografati dopo.
+    """I passi chiusi dal modello ma non ancora contati.
 
-    Il tool chiude il passo subito (la scheda lo vede fatto), la foto «dopo»
-    la fa il driver a fine turno: il turno può scrivere ancora dopo la chiamata,
+    Il tool chiude il passo subito (la scheda lo vede fatto), i conti dei file
+    li fa il driver a fine turno: il turno può scrivere ancora dopo la chiamata,
     e quelle scritture sono del passo.
     """
     return [
         s for s in plan.steps
-        if s.status in ("done", "skipped") and s.photo_before and not s.photo_after
+        if s.status in ("done", "skipped") and s.started_at and "files" not in s.extra
     ]
 
 
@@ -390,15 +388,38 @@ def _counts(diff: Mapping[str, list[str]]) -> dict[str, int]:
     return {key: len(diff.get(key, ())) for key in ("added", "changed", "removed")}
 
 
-def report_with_groups(report: Mapping[str, Any]) -> dict[str, Any]:
-    """Il resoconto di un ritorno con i conti per gruppo, per le caselle della scheda."""
-    data = dict(report)
+OUTCOMES: tuple[str, ...] = ("restored", "removed", "already", "left", "kept", "excluded")
+
+
+def place_of(plan: Plan) -> PlanPlace:
+    return place_from_id(plan.place) or notebook_place(plan.notebook)
+
+
+def card_report(report: Any, place: PlanPlace) -> dict[str, Any]:
+    """Un resoconto d'annulla (``write_journal.UndoReport``) come lo legge la scheda.
+
+    Gli esiti per lista, coi percorsi come li mostra il posto, i conti, e i conti
+    per gruppo per le caselle («Tieni le 12 ricerche»).
+    """
+    outcomes = report.outcomes()
+    data: dict[str, Any] = {
+        outcome: [place.shown(p) for p in outcomes.get(outcome, ())] for outcome in OUTCOMES
+    }
+    data["counts"] = {outcome: len(outcomes.get(outcome, ())) for outcome in OUTCOMES}
+    data["dry_run"] = bool(report.dry_run)
     groups: dict[str, dict[str, int]] = {}
-    for outcome in ("restored", "removed", "already", "left", "kept", "excluded"):
-        for path in report.get(outcome, ()):
-            bucket = groups.setdefault(group_of(path), {})
+    group_of: dict[str, str] = {}
+    for outcome in OUTCOMES:
+        for path in outcomes.get(outcome, ()):
+            group = place.group_of(path)
+            group_of[place.shown(path)] = group
+            bucket = groups.setdefault(group, {})
             bucket[outcome] = bucket.get(outcome, 0) + 1
     data["groups"] = groups
+    # Per la scheda: il gruppo di ogni percorso (il conto si rifà quando l'utente
+    # spunta un gruppo) e quali gruppi si possono tenere, nell'ordine.
+    data["group_of"] = group_of
+    data["keepable"] = [g for g in groups if place.keepable(g)]
     return data
 
 
@@ -435,6 +456,11 @@ class PlanDriver:
         watch: Any = getattr(host, "watch_stalls", None)
         if callable(watch):
             watch(self.on_helpers_stalled)
+        # E quando un aiutante parte per un passo: il suo registro è lavoro del
+        # passo (``Step.helpers``), e il ritorno del piano lo toglie.
+        watch_journals: Any = getattr(host, "watch_helper_journals", None)
+        if callable(watch_journals):
+            watch_journals(self.on_helper_journal)
         self._locks: dict[str, asyncio.Lock] = {}
         # session_key → il piano aperto di quella sessione. È ciò che rende
         # economiche le domande di ogni turno (i tool si vedono? il turno è
@@ -1128,13 +1154,13 @@ class PlanDriver:
             step_id = step.id
             if (
                 outcome == "done" and step.kind == "delete"
-                and step.extra.get(_LOST_GATE) != _GAPS_GATE_USED and step.photo_before
+                and step.extra.get(_LOST_GATE) != _GAPS_GATE_USED and step.started_at
             ):
                 # Chi cancella risponde dei fatti: quelli che erano in una pagina
                 # all'apertura del passo e adesso in nessuna. Una volta sola,
                 # come il cancello dei buchi: sul Titan (26/10) questo controllo
                 # l'hanno fatto quattro aiutanti in 17 minuti.
-                lost = await asyncio.to_thread(self._lost_since, plan, step.photo_before)
+                lost = await asyncio.to_thread(self._lost_since, plan, step)
                 if lost is not None and lost.total:
 
                     def _lost_gate(p: Plan) -> None:
@@ -1402,6 +1428,23 @@ class PlanDriver:
         self._wakes.add(task)
         task.add_done_callback(self._wakes.discard)
 
+    def on_helper_journal(self, plan_id: str, step_id: str, key: str) -> None:
+        """Un aiutante lavora per *step_id* di *plan_id* nel registro *key*."""
+
+        def _apply(p: Plan) -> None:
+            step = next((s for s in p.steps if s.id == step_id), None)
+            if step is None or key in step.helpers:
+                raise _UnchangedError
+            step.helpers.append(key)
+
+        try:
+            self.store.update(plan_id, _apply)
+        except (_UnchangedError, PlanNotFoundError):
+            return
+        except (PlanError, OSError):
+            logger.opt(exception=True).warning(
+                "Plan {}: helper journal {} not noted", plan_id, key)
+
     def _helper_group(self, task_id: str) -> tuple[str | None, str | None] | None:
         lookup: Any = getattr(self.host, "helper_plan_step", None)
         if lookup is None:
@@ -1629,7 +1672,12 @@ class PlanDriver:
         title, step_id, step_title = plan.title, step.id, step.title
 
         def _write() -> int:
+            with self._journaled(plan, step_id) as journal:
+                return _write_gaps(journal)
+
+        def _write_gaps(journal: Any) -> int:
             path = root / OPEN_GAPS_PATH
+            journal.touch(path)
             existing = path.read_text(encoding="utf-8") if path.is_file() else ""
             known = {_norm(line[2:]) for line in existing.splitlines() if line.startswith("- ")}
             fresh = [item for item in items if _norm(item) not in known]
@@ -2061,8 +2109,7 @@ class PlanDriver:
             if plan.status != "proposed":
                 raise PlanCommandError("bad_state", f"the plan is {plan.status}, not proposed")
             self._require_idle(plan.session_key)
-            photos = self._photos(plan)
-            start = await asyncio.to_thread(photos.take, "start")
+            self._require_place(plan)
             baseline, empty = await asyncio.to_thread(self._audit_baseline, plan)
 
             def _approve(p: Plan) -> None:
@@ -2076,7 +2123,6 @@ class PlanDriver:
                 for s in p.steps:
                     if s.id in cut_ids:
                         s.status = "cut"
-                p.photos["start"] = start
                 p.extra[_AUDIT_BASELINE] = baseline
                 p.extra[_EMPTY_AT_START] = empty
 
@@ -2165,8 +2211,6 @@ class PlanDriver:
             if plan.status not in HELD_STATUSES:
                 raise PlanCommandError("bad_state", f"the plan is {plan.status}")
             cancelled = await self.host.cancel(plan.session_key)
-            photos = self._photos(plan)
-            end = await asyncio.to_thread(photos.take, "end")
 
             def _stop(p: Plan) -> None:
                 stamp = now_iso()
@@ -2175,7 +2219,6 @@ class PlanDriver:
                         s.status = "interrupted"
                         s.ended_at = stamp
                         s.extra.pop(_NUDGE, None)
-                p.photos["end"] = end
                 apply_transition(p, "stopped", at=stamp, then=then, cancelled=cancelled)
 
             plan = await asyncio.to_thread(self.store.update, plan_id, _stop)
@@ -2185,7 +2228,8 @@ class PlanDriver:
         await self._prune()
         if then == "rollback":
             try:
-                return await self.rollback(plan_id, keep=(), expect_end=plan.photos["end"])
+                preview = await self.rollback_preview(plan_id)
+                return await self.rollback(plan_id, keep=(), expect_end=preview["expect_end"])
             except PlanCommandError as exc:
                 # Il piano è fermo comunque: il ritorno si può chiedere dopo dalla
                 # scheda (un aiutante che non è morto in tempo, per esempio). La
@@ -2278,100 +2322,95 @@ class PlanDriver:
             )
 
     async def rollback_preview(self, plan_id: str) -> dict[str, Any]:
-        """Il conto del ritorno, e l'id della foto di «adesso» da cui è stato fatto.
+        """Il conto del ritorno, e il gettone dei file com'erano quando è stato fatto.
 
-        ``expect_end`` è quella foto: la conferma (:meth:`rollback`) ne rifà una
-        e, se è un'altra, il quaderno è cambiato dopo che l'utente ha letto il
-        conto — ``conflict``. Il nome è quello dell'RPC; prima era la foto B
-        del piano, che dopo il Ferma non cambia più e quindi non vedeva niente.
+        ``expect_end`` è quel gettone (``write_journal.undo_set``): la conferma
+        (:meth:`rollback`) lo rifà e, se è un altro, i file sono cambiati dopo che
+        l'utente ha letto il conto — ``conflict``.
         """
         plan = self._load(plan_id)
         if plan.status not in ("done", "stopped"):
             raise PlanCommandError("bad_state", f"the plan is {plan.status}")
-        start, end = plan.photos.get("start"), plan.photos.get("end")
-        if not start or not end:
-            raise PlanCommandError("bad_state", "the plan has no photos to go back to")
         self._refuse_if_held(plan)
-        photos = self._photos(plan)
+        place = place_of(plan)
         async with self._lock(plan.session_key):
-            report = await asyncio.to_thread(
-                photos.rollback,
-                start,
-                end,
-                journal_path=self.store.journal_path(plan_id),
-                dry_run=True,
-            )
-        return {"report": report_with_groups(report.to_dict()), "expect_end": report.before}
+            report = await asyncio.to_thread(self._undo, plan, dry_run=True)
+        return {"report": card_report(report, place), "expect_end": report.token}
+
+    def _undo(self, plan: Plan, *, dry_run: bool = False, keep: Iterable[str] = (),
+              token: str | None = None, into: str | None = None, of: str | None = None) -> Any:
+        """Un ``undo_set`` sui registri del piano (o su quello del ritorno *of*)."""
+        from jenny.agent.write_journal import undo_set
+
+        root = self.store.workspace
+        place = place_of(plan)
+        sources = [work.journal(root, of)] if of else work.plan_journals(root, plan)
+        return undo_set(
+            sources, by="user", into=work.journal(root, into) if into else None,
+            keep_groups=keep, group_of=place.group_of, never=place.never,
+            dry_run=dry_run, token=token,
+        )
 
     async def rollback(
         self, plan_id: str, keep: Iterable[Any] = (), expect_end: Any = None
     ) -> dict[str, Any]:
-        """Torna a prima: ``rollback(target=A, expected=B)``, foto C e R, ``rolled_back``.
+        """Torna a prima: annulla il lavoro del piano in un registro suo, ``rolled_back``.
 
-        *expect_end* è l'id che :meth:`rollback_preview` ha ritornato (la foto
-        del quaderno su cui l'utente ha letto il conto); dal Ferma con ritorno è
-        la foto B appena fatta.
+        *expect_end* è il gettone che :meth:`rollback_preview` ha ritornato (i
+        file su cui l'utente ha letto il conto). Il registro del ritorno si
+        scrive nel piano **prima** di toccare un file (``pending_undo``): un
+        crollo a metà lo finisce il boot, e il piano sa dove guardare.
         """
-        keep_groups = _keep_groups(keep)
         plan = self._load(plan_id)
+        keep_groups = _keep_groups(keep, place_of(plan))
         async with self._lock(plan.session_key):
             plan = self._load(plan_id)
             if plan.status not in ("done", "stopped"):
                 raise PlanCommandError("bad_state", f"the plan is {plan.status}")
-            start, end = plan.photos.get("start"), plan.photos.get("end")
-            if not start or not end:
-                raise PlanCommandError("bad_state", "the plan has no photos to go back to")
             self._refuse_if_held(plan)
             self._require_idle(plan.session_key, code="conflict")
             if not isinstance(expect_end, str) or not expect_end:
                 raise PlanCommandError(
                     "conflict", "the notebook changed since the summary was shown: read it again"
                 )
-            photos = self._photos(plan)
-            committed: list[Plan] = []
-
-            def _commit(report: RollbackReport) -> None:
-                # Nel thread del ritorno, prima di togliere il journal: un crollo
-                # fra i file rimessi e ``plan.json`` lascia il journal, e il boot
-                # finisce il lavoro (``recover``).
-                committed.append(
-                    self.store.update(
-                        plan_id,
-                        lambda p: _mark_rolled_back(
-                            p,
-                            before=report.before,
-                            after=report.after,
-                            keep=keep_groups,
-                            counts=report.counts,
-                        ),
-                    )
-                )
-
+            into = await asyncio.to_thread(self._start_undo, plan_id, _KIND_ROLLBACK, keep_groups)
             report = await self._run_rollback(
-                plan,
-                _KIND_ROLLBACK,
-                photos.rollback,
-                start,
-                end,
-                journal_path=self.store.journal_path(plan_id),
-                keep_groups=keep_groups,
-                expect_now=expect_end,
-                journal_header={"plan_id": plan_id, "kind": _KIND_ROLLBACK},
-                commit=_commit,
+                plan, _KIND_ROLLBACK, self._undo, plan, keep=keep_groups, token=expect_end,
+                into=into,
             )
-            plan = committed[-1]
+            counts = card_report(report, place_of(plan))["counts"]
+            plan = await asyncio.to_thread(
+                self.store.update, plan_id,
+                lambda p: _mark_rolled_back(p, journal=into, keep=keep_groups, counts=counts),
+            )
             self._remember(plan)
             discarded = await asyncio.to_thread(self._discard_plan_drafts, plan)
             self.host.append_note(
-                plan.session_key, _rollback_note(plan, report.counts, len(discarded))
+                plan.session_key, _rollback_note(plan, counts, len(discarded))
             )
             await asyncio.to_thread(self._journal_line, plan, "plan.journal_rolled_back")
-            logger.info("Plan {} rolled back: {}", plan_id, report.counts)
+            logger.info("Plan {} rolled back: {}", plan_id, counts)
         await self._changed(plan)
         return {
-            "report": report_with_groups(report.to_dict()),
+            "report": card_report(report, place_of(plan)),
             "discarded_drafts": discarded,
         }
+
+    def _start_undo(self, plan_id: str, kind: str, keep: Iterable[str] = ()) -> str:
+        """Il registro di un ritorno (o del suo annullamento), scritto nel piano prima
+        di toccare un file. Ritorna la sua chiave."""
+        chosen: list[str] = []
+
+        def _apply(p: Plan) -> None:
+            n = int(p.extra.get(_UNDO_COUNT) or 0) + 1
+            key = work.undo_journal_key(p.id, n)
+            p.extra[_UNDO_COUNT] = n
+            p.extra[PENDING_UNDO_KEY] = {"journal": key, "kind": kind, "keep": sorted(keep),
+                                         "of": p.rollback_journal if kind == _KIND_UNDO else None}
+            chosen.append(key)
+
+        self.store.update(plan_id, _apply)
+        return chosen[-1]
 
     def _discard_plan_drafts(self, plan: Plan) -> list[dict[str, str]]:
         """Butta le bozze del piano ancora in attesa (sincrono).
@@ -2396,70 +2435,54 @@ class PlanDriver:
         return discarded
 
     async def undo_rollback(self, plan_id: str) -> dict[str, Any]:
-        """Annulla il ritorno: ``rollback(target=C, expected=R)``, e lo stato di prima."""
+        """Annulla il ritorno: annulla il registro del ritorno, e lo stato di prima."""
         plan = self._load(plan_id)
         async with self._lock(plan.session_key):
             plan = self._load(plan_id)
             if plan.status != "rolled_back":
                 raise PlanCommandError("bad_state", f"the plan is {plan.status}")
-            before = plan.photos.get("before_rollback")
-            after = plan.photos.get("after_rollback")
-            if not before or not after:
+            if not plan.rollback_journal:
                 raise PlanCommandError("bad_state", "there is no rollback to undo")
             self._refuse_if_held(plan)
             self._require_idle(plan.session_key, code="conflict")
-            photos = self._photos(plan)
-            committed: list[Plan] = []
-
-            def _commit(report: RollbackReport) -> None:
-                committed.append(
-                    self.store.update(plan_id, lambda p: _mark_rollback_undone(p, report.counts))
-                )
-
-            report = await self._run_rollback(
-                plan,
-                _KIND_UNDO,
-                photos.rollback,
-                before,
-                after,
-                journal_path=self.store.journal_path(plan_id),
-                journal_header={"plan_id": plan_id, "kind": _KIND_UNDO},
-                commit=_commit,
+            of = plan.rollback_journal
+            into = await asyncio.to_thread(self._start_undo, plan_id, _KIND_UNDO)
+            report = await self._run_rollback(plan, _KIND_UNDO, self._undo, plan, into=into, of=of)
+            counts = card_report(report, place_of(plan))["counts"]
+            plan = await asyncio.to_thread(
+                self.store.update, plan_id,
+                lambda p: _mark_rollback_undone(p, counts, journal=into),
             )
-            plan = committed[-1]
             self._remember(plan)
-            self.host.append_note(plan.session_key, _undo_note(plan, report.counts))
+            self.host.append_note(plan.session_key, _undo_note(plan, counts))
             await asyncio.to_thread(self._journal_line, plan, "plan.journal_rollback_undone")
         await self._changed(plan)
-        return {"report": report_with_groups(report.to_dict())}
+        return {"report": card_report(report, place_of(plan))}
 
     async def _run_rollback(self, plan: Plan, kind: str, fn: Any, *args: Any, **kw: Any) -> Any:
         """Esegue un ritorno in un thread e traduce i suoi errori per la scheda.
 
-        Un ritorno rifiutato prima di scrivere è ``conflict``; uno caduto a metà
-        (il disco) resta scritto nel piano (``rollback_failed``) e risponde
-        ``rollback_failed``: il quaderno è a metà, e la scheda lo deve dire
-        invece di mostrare un piano finito come se niente fosse.
+        I file cambiati dopo il conto sono ``conflict``, e niente è stato
+        toccato. Un errore a metà (il disco) resta scritto nel piano
+        (``rollback_failed``) e risponde ``rollback_failed``: i file sono a metà,
+        e la scheda lo deve dire invece di mostrare un piano finito come se
+        niente fosse.
         """
+        from jenny.agent.write_journal import UndoConflictError
+
         try:
             return await asyncio.to_thread(fn, *args, **kw)
-        except RollbackIncompleteError as exc:
-            await asyncio.to_thread(
-                self._record_rollback_failure,
-                plan.id,
-                kind,
-                str(exc),
-                applied=exc.applied,
-                total=exc.total,
-            )
+        except UndoConflictError as exc:
+            await asyncio.to_thread(self.store.update, plan.id, _drop_pending_undo)
+            raise PlanCommandError("conflict", str(exc)) from exc
+        except Exception as exc:
+            await asyncio.to_thread(self._record_rollback_failure, plan.id, kind, str(exc))
             await self._changed(self._load(plan.id))
             raise PlanCommandError(
                 "rollback_failed",
-                f"the rollback stopped after {exc.applied} of {exc.total} file(s): {exc}. "
-                "The notebook is partly rolled back; try again",
+                f"the rollback stopped halfway: {exc}. The files are partly rolled back; "
+                "try again",
             ) from exc
-        except (RollbackConflictError, RollbackError) as exc:
-            raise PlanCommandError("conflict", str(exc)) from exc
 
     def _record_rollback_failure(
         self,
@@ -2492,30 +2515,32 @@ class PlanDriver:
         """``plan.json`` più i campi derivati che la scheda usa."""
         return plan_view(plan)
 
-    def step_files(self, plan_id: str, step_id: Any) -> dict[str, list[str]]:
+    def step_files(self, plan_id: str, step_id: Any) -> dict[str, Any]:
         plan = self._load(plan_id)
         if not isinstance(step_id, str):
             raise PlanCommandError("bad_request", "step required")
         step = next((s for s in plan.steps if s.id == step_id), None)
         if step is None:
             raise PlanCommandError("not_found", "no such step")
-        if not step.photo_before or not step.photo_after:
+        if not step.started_at or step.status in ("now", "blocked"):
             raise PlanCommandError("bad_state", "the step has not finished")
-        return self._photos(plan).diff(step.photo_before, step.photo_after)
+        root = self.store.workspace
+        return self._shown_files(plan, work.files(work.step_journals(root, plan, step),
+                                                  step=step.id))
 
     def changes(self, plan_id: str) -> dict[str, Any]:
         plan = self._load(plan_id)
-        start = plan.photos.get("start")
-        if not start:
+        if plan.status == "proposed" or not any(s.started_at for s in plan.steps):
             raise PlanCommandError("bad_state", "the plan has not started")
-        # La B se c'è; in corsa, l'ultima foto «dopo» di un passo: il confronto
-        # di un piano a metà dice quel che è successo fin qui.
-        end = plan.photos.get("end") or next(
-            (s.photo_after for s in reversed(plan.steps) if s.photo_after), start
-        )
-        diff = self._photos(plan).diff(start, end)
-        paths = [*diff["added"], *diff["changed"], *diff["removed"]]
-        return {**diff, "groups": {path: group_of(path) for path in paths}}
+        return self._shown_files(plan, work.files(work.plan_journals(self.store.workspace, plan)))
+
+    @staticmethod
+    def _shown_files(plan: Plan, diff: Mapping[str, list[str]]) -> dict[str, Any]:
+        place = place_of(plan)
+        out: dict[str, Any] = {k: [place.shown(p) for p in v] for k, v in diff.items()}
+        out["groups"] = {place.shown(p): place.group_of(p)
+                         for paths in diff.values() for p in paths}
+        return out
 
     # ── boot ───────────────────────────────────────────────────────────────
 
@@ -2539,30 +2564,23 @@ class PlanDriver:
 
         paused: list[str] = []
         for plan in self.store.list_all():
-            if self.store.journal_path(plan.id).exists():
-                plan = self._recover_journal(plan)
+            if plan.extra.get(PENDING_UNDO_KEY):
+                plan = self._recover_undo(plan)
             if plan.status not in ("running", "pausing"):
                 if plan.status == "blocked":
                     logger.info("Plan {} was blocked at boot: still waits for the user", plan.id)
                 continue
-            closing = _closing(plan)
-            after: dict[str, str] = {}
-            if closing:
-                root = self.host.notebook_root(plan.notebook)
-                if root is not None:
-                    photo = PlanPhotos(self.store.plan_dir(plan.id), root).take("after")
-                    after = {s.id: photo for s in closing}
+            counts = {s.id: self._step_counts(plan, s) for s in _closing(plan)}
             interrupted = current_step(plan) or next_pending_step(plan)
             n = _position(plan, interrupted.id) if interrupted is not None else 0
 
-            def _pause(p: Plan, after: dict[str, str] = after, n: int = n) -> None:
+            def _pause(p: Plan, counts: dict[str, dict[str, int]] = counts, n: int = n) -> None:
                 for s in p.steps:
-                    if s.id in after:
-                        s.photo_after = after[s.id]
+                    if s.id in counts:
+                        s.extra["files"] = counts[s.id]
                     if s.status in ("now", "blocked"):
                         s.status = "pending"
                         s.started_at = None
-                        s.photo_before = None
                         s.extra.pop(_NUDGE, None)
                 apply_transition(
                     p, "paused", event="paused", reason="restart", step=n,
@@ -2579,88 +2597,43 @@ class PlanDriver:
         self.refresh_index()
         return paused
 
-    def _recover_journal(self, plan: Plan) -> Plan:
-        """Finisce al boot un ritorno (o un annullamento) rimasto a metà.
+    def _recover_undo(self, plan: Plan) -> Plan:
+        """Chiude al boot un ritorno (o un annullamento) rimasto a metà.
 
-        I file: :meth:`PlanPhotos.recover_pending`, che applica un'operazione
-        solo se il file è ancora com'era quando il ritorno è stato deciso. Lo
-        stato: se il ritorno è finito, il piano va dove il ritorno l'avrebbe
-        portato — ``rolled_back`` con la foto «dopo», o lo stato di prima per un
-        annullamento — e Jenny ne riceve la nota, come per un ritorno normale.
-        Se il crollo è venuto dopo la scrittura di ``plan.json``, il piano è già
-        lì e non si tocca. Un recupero caduto lascia il piano com'è con
-        ``rollback_failed``; un journal illeggibile o insicuro si mette da parte
-        (``.rejected``) invece di ritentarlo a ogni avvio.
+        I file li ha già finiti il container, prima dell'agente
+        (``write_journal.finish_interrupted_undos``): qui si legge come è
+        andata e il piano va dove il ritorno l'avrebbe portato — ``rolled_back``,
+        o lo stato di prima per un annullamento — e Jenny ne riceve la nota,
+        come per un ritorno normale. Un annulla che il diario non conosce (un
+        ripristino da backup l'ha svuotato) lascia il piano com'è con
+        ``rollback_failed``.
         """
-        journal = self.store.journal_path(plan.id)
-        root = self.host.notebook_root(plan.notebook)
-        if root is None:
-            logger.warning(
-                "Plan {}: a rollback was interrupted but notebook {!r} is gone",
-                plan.id, plan.notebook,
-            )
-            return plan
-        photos = PlanPhotos(self.store.plan_dir(plan.id), root)
-        settled: list[tuple[Plan, str, dict[str, int]]] = []
+        from jenny.agent.write_journal import read_undo_state
 
-        def _commit(result: RecoveryResult) -> None:
-            header = result.header
-            kind = header.get("kind")
-            counts = _header_counts(header)
+        pending = plan.extra.get(PENDING_UNDO_KEY) or {}
+        key = str(pending.get("journal") or "")
+        kind = pending.get("kind")
+        state = read_undo_state(self.store.workspace, key) if key else None
+        if state is None or state.get("state") != "done":
+            self.store.update(plan.id, _drop_pending_undo)
+            return self._failed_at_boot(plan, "the rollback was interrupted and not finished",
+                                        kind=kind)
+        from jenny.agent.write_journal import UndoReport
 
-            def _settle(p: Plan) -> None:
-                if kind == _KIND_ROLLBACK and p.status in ("done", "stopped"):
-                    _mark_rolled_back(
-                        p,
-                        before=str(header.get("before") or "") or None,
-                        after=result.after,
-                        keep=[str(g) for g in header.get("keep") or ()],
-                        counts=counts,
-                        recovered=True,
-                    )
-                elif (
-                    kind == _KIND_UNDO
-                    and p.status == "rolled_back"
-                    and p.photos.get("before_rollback") == header.get("target")
-                ):
-                    _mark_rollback_undone(p, counts, recovered=True)
-                else:
-                    raise _UnchangedError
+        counts = card_report(UndoReport.from_dict(state), place_of(plan))["counts"]
+        keep = [str(g) for g in pending.get("keep") or ()]
 
-            try:
-                settled.append((self.store.update(plan.id, _settle), str(kind), counts))
-            except _UnchangedError:
-                pass
+        def _settle(p: Plan) -> None:
+            if kind == _KIND_ROLLBACK and p.status in ("done", "stopped"):
+                _mark_rolled_back(p, journal=key, keep=keep, counts=counts, recovered=True)
+            elif kind == _KIND_UNDO and p.status == "rolled_back":
+                _mark_rollback_undone(p, counts, journal=key, recovered=True)
+            else:
+                p.extra.pop(PENDING_UNDO_KEY, None)
 
-        try:
-            parsed = PlanPhotos.read_journal(journal)
-            if parsed is not None and parsed[0].get("plan_id") != plan.id:
-                raise RollbackError(
-                    f"journal of plan {str(parsed[0].get('plan_id'))[:40]!r}, not {plan.id}"
-                )
-            result = photos.recover_pending(journal, commit=_commit)
-        except RollbackError as exc:
-            logger.error("Plan {}: interrupted rollback journal rejected: {}", plan.id, exc)
-            try:
-                journal.replace(journal.with_name(journal.name + ".rejected"))
-            except OSError:
-                logger.opt(exception=True).error("Plan {}: journal not set aside", plan.id)
-            return self._failed_at_boot(plan, str(exc))
-        except (PlanError, OSError) as exc:
-            logger.opt(exception=True).error(
-                "Plan {}: could not finish an interrupted rollback", plan.id
-            )
-            return self._failed_at_boot(plan, str(exc))
-        if result is not None and result.error is not None:
-            return self._failed_at_boot(plan, result.error, kind=result.header.get("kind"))
-        if result is not None and result.left:
-            logger.warning(
-                "Plan {}: recovered rollback left {} file(s) changed since: {}",
-                plan.id, len(result.left), result.left[:5],
-            )
-        if not settled:
-            return self._reload(plan)
-        updated, kind, counts = settled[-1]
+        updated = self.store.update(plan.id, _settle)
+        if updated.status == plan.status:
+            return updated
         note = _undo_note(updated, counts) if kind == _KIND_UNDO else _rollback_note(
             updated, counts
         )
@@ -2708,11 +2681,30 @@ class PlanDriver:
         except PlanNotFoundError as exc:
             raise PlanCommandError("not_found", "no such plan") from exc
 
-    def _photos(self, plan: Plan) -> PlanPhotos:
-        root = self.host.notebook_root(plan.notebook)
-        if root is None:
+    @contextmanager
+    def _journaled(self, plan: Plan, step_id: str) -> Iterator[Any]:
+        """Le scritture del driver per un passo vanno nel registro del piano.
+
+        Scrivono con ``atomic_write`` o ``rmdir``, che non passano da nessun
+        recinto: chi scrive chiama ``touch`` a mano, e il «dopo» si annota qui.
+        """
+        from jenny.agent.write_journal import bind_journal
+
+        journal = work.plan_journal(self.store.workspace, plan)
+        with bind_journal(journal, step=step_id):
+            try:
+                yield journal
+            finally:
+                journal.settle("plan")
+
+    def _require_place(self, plan: Plan) -> None:
+        """Il quaderno di un piano di quaderno c'è ancora."""
+        if plan.notebook and self.host.notebook_root(plan.notebook) is None:
             raise PlanCommandError("bad_state", f"notebook {plan.notebook!r} is not there")
-        return PlanPhotos(self.store.plan_dir(plan.id), root)
+
+    def _step_counts(self, plan: Plan, step: Step) -> dict[str, int]:
+        journals = work.step_journals(self.store.workspace, plan, step)
+        return _counts(work.files(journals, step=step.id))
 
     def _require_idle(self, session_key: str, *, code: str = "busy") -> None:
         if self.host.turn_in_flight(session_key) or self.host.running_helpers(session_key):
@@ -2744,24 +2736,15 @@ class PlanDriver:
         return plan
 
     async def _settle_closed(self, plan: Plan) -> Plan:
-        """La foto «dopo» dei passi appena chiusi, e i loro conti."""
-        photos = self._photos(plan)
-        photo = await asyncio.to_thread(photos.take, "after")
+        """I conti dei file dei passi appena chiusi, dai registri."""
         counts: dict[str, dict[str, int]] = {}
         for step in _closing(plan):
-            if step.photo_before:
-                counts[step.id] = _counts(
-                    await asyncio.to_thread(photos.diff, step.photo_before, photo)
-                )
+            counts[step.id] = await asyncio.to_thread(self._step_counts, plan, step)
 
         def _apply(p: Plan) -> None:
             for s in p.steps:
-                if s.id in counts or (
-                    s.status in ("done", "skipped") and s.photo_before and not s.photo_after
-                ):
-                    s.photo_after = photo
-                    if s.id in counts:
-                        s.extra["files"] = counts[s.id]
+                if s.id in counts:
+                    s.extra["files"] = counts[s.id]
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _apply)
         self._remember(plan)
@@ -2781,16 +2764,14 @@ class PlanDriver:
         await self._open_step(plan, nxt.id)
 
     async def _open_step(self, plan: Plan, step_id: str) -> None:
-        photos = self._photos(plan)
-        before = await asyncio.to_thread(photos.take, f"before {step_id}")
+        self._require_place(plan)
 
         def _open(p: Plan) -> None:
             s = _find(p, step_id)
             s.status = "now"
             s.started_at = now_iso()
             s.ended_at = None
-            s.photo_before = before
-            s.photo_after = None
+            s.extra.pop("files", None)
             for key in (_NUDGE, _PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION,
                         _PENDING_REASON, _DRAFT_OUTCOMES, _RESUME_TO, _GAPS, _GAPS_GATE,
                         _GAPS_LISTED, _RESEARCH_ROUND, _RESEARCH_LINEAGES, _MACHINE):
@@ -2800,9 +2781,8 @@ class PlanDriver:
         self._remember(plan)
         step = _find(plan, step_id)
         lost: LostFacts | None = None
-        start = plan.photos.get("start")
-        if start and _checks_facts(plan, step):
-            lost = await asyncio.to_thread(self._lost_facts, plan, photos, start, before)
+        if _checks_facts(plan, step):
+            lost = await asyncio.to_thread(self._lost_facts, plan)
         audit: Audit | None = None
         if step.kind == "check":
             audit = await asyncio.to_thread(self._run_audit, plan, step)
@@ -2871,7 +2851,9 @@ class PlanDriver:
         if root is None:
             return None
         try:
-            removed = remove_empty_folders(root, plan.extra.get(_EMPTY_AT_START) or ())
+            with self._journaled(plan, step.id) as journal:
+                removed = remove_empty_folders(root, plan.extra.get(_EMPTY_AT_START) or (),
+                                               before_remove=journal.touch)
             audit = audit_notebook(
                 root,
                 expect=step.extra.get("expect") or None,
@@ -2887,30 +2869,51 @@ class PlanDriver:
         )
         return audit
 
+    def _first_pages(self, plan: Plan, step: Step | None = None) -> dict[str, str] | None:
+        """Le pagine ``wiki/`` toccate dal piano (o dal passo) com'erano prima.
+
+        Chiavi relative al quaderno, come ``audit.wiki_texts``. Solo quelle
+        toccate: le altre sono com'erano, e sono già fra le pagine di adesso.
+        """
+        if not plan.notebook:
+            return None
+        place = place_of(plan)
+        root = self.store.workspace
+        journals = (work.step_journals(root, plan, step) if step is not None
+                    else work.plan_journals(root, plan))
+        texts = work.first_texts(journals, under=place.prefix + "wiki/",
+                                 step=step.id if step is not None else None)
+        return {place.shown(path): text for path, text in texts.items()}
+
     def _lost_now(self, plan: Plan) -> int | None:
-        """Quanti fatti della foto di partenza mancano adesso dalle pagine; ``None`` se non si sa.
+        """Quanti fatti di prima del piano mancano adesso dalle pagine; ``None`` se non si sa.
 
         ``None`` e non 0: un conteggio saltato non è «niente perso», e la nota lo
         dice («not counted»).
         """
-        start = plan.photos.get("start")
-        root = self.host.notebook_root(plan.notebook)
-        if not start or root is None:
-            return None
-        try:
-            return lost_facts(self._photos(plan).texts(start, "wiki/"), wiki_texts(root)).total
-        except Exception:  # noqa: BLE001 — un conteggio per la nota
-            logger.opt(exception=True).warning("Plan {}: lost facts not counted", plan.id)
-            return None
+        lost = self._lost_facts(plan)
+        return lost.total if lost is not None else None
 
-    def _lost_since(self, plan: Plan, photo: str) -> LostFacts | None:
-        """I fatti delle pagine della foto *photo* che adesso non sono in nessuna pagina."""
-        root = self.host.notebook_root(plan.notebook)
+    def _lost_since(self, plan: Plan, step: Step) -> LostFacts | None:
+        """I fatti delle pagine che il passo ha toccato, com'erano alla sua
+        apertura, che adesso non sono in nessuna pagina."""
+        return self._lost_facts(plan, step)
+
+    def _lost_facts(self, plan: Plan, step: Step | None = None) -> LostFacts | None:
+        """I fatti delle pagine di prima del piano (o del passo) che adesso non ci sono.
+
+        In un thread. Un errore qui non ferma il passo: si apre senza il blocco,
+        e il log lo dice.
+        """
+        root = self.host.notebook_root(plan.notebook) if plan.notebook else None
         if root is None:
             return None
         try:
-            return lost_facts(self._photos(plan).texts(photo, "wiki/"), wiki_texts(root))
-        except Exception:  # noqa: BLE001 — un controllo che non si è potuto fare non ferma il passo
+            before = self._first_pages(plan, step)
+            if before is None:
+                return None
+            return lost_facts(before, wiki_texts(root))
+        except Exception:  # noqa: BLE001 — un aiuto al controllo, non una condizione del passo
             logger.opt(exception=True).warning("Plan {}: lost facts not computed", plan.id)
             return None
 
@@ -2970,11 +2973,7 @@ class PlanDriver:
 
 
     async def _finish(self, plan: Plan) -> None:
-        photos = self._photos(plan)
-        end = await asyncio.to_thread(photos.take, "end")
-
         def _done(p: Plan) -> None:
-            p.photos["end"] = end
             apply_transition(p, "done")
 
         plan = await asyncio.to_thread(self.store.update, plan.id, _done)
@@ -2982,21 +2981,6 @@ class PlanDriver:
         logger.info("Plan {} done", plan.id)
         await self._changed(plan)
         await self._prune()
-
-    def _lost_facts(
-        self, plan: Plan, photos: PlanPhotos, start: str, now: str
-    ) -> LostFacts | None:
-        """I fatti delle pagine ``wiki/`` della foto di partenza che adesso non ci sono.
-
-        In un thread, all'apertura del passo di verifica. *now* è la foto
-        «prima» appena fatta, cioè il quaderno com'è adesso. Un errore qui non
-        ferma il passo: si apre senza il blocco, e il log lo dice.
-        """
-        try:
-            return lost_facts(photos.texts(start, "wiki/"), photos.texts(now, "wiki/"))
-        except Exception:  # noqa: BLE001 — un aiuto al controllo, non una condizione del passo
-            logger.opt(exception=True).warning("Plan {}: lost facts not computed", plan.id)
-            return None
 
     def _step_message(
         self,
@@ -3406,7 +3390,6 @@ def plan_view(plan: Plan) -> dict[str, Any]:
     ``can_undo_rollback``: le letture che la scheda e il bollino fanno sempre."""
     counts = step_counts(plan)
     current = current_step(plan)
-    photos = plan.photos
     data = plan.to_dict()
     # Cosa fa il passo, per la scheda: i buchi aperti del passo in corso, quelli
     # messi in lista, il giro di ricerca che il passo ha aperto, e quanto budget
@@ -3432,11 +3415,8 @@ def plan_view(plan: Plan) -> dict[str, Any]:
             "total": counts["total"],
             "current_step_id": current.id if current is not None else None,
             "can_rollback": plan.status in ("done", "stopped")
-            and bool(photos.get("start"))
-            and bool(photos.get("end")),
-            "can_undo_rollback": plan.status == "rolled_back"
-            and bool(photos.get("before_rollback"))
-            and bool(photos.get("after_rollback")),
+            and any(s.started_at for s in plan.steps),
+            "can_undo_rollback": plan.status == "rolled_back" and bool(plan.rollback_journal),
         }
     )
     return data
@@ -3687,46 +3667,39 @@ def _cut_ids(plan: Plan, cut: Iterable[Any]) -> set[str]:
     return ids
 
 
-def _keep_groups(keep: Iterable[Any]) -> set[str]:
+def _keep_groups(keep: Iterable[Any], place: PlanPlace) -> set[str]:
     if keep is None:
         return set()
     if isinstance(keep, (str, bytes)) or not isinstance(keep, Iterable):
         raise PlanCommandError("bad_request", "keep must be a list of groups")
     groups = set()
     for value in keep:
-        if value not in KEEPABLE_GROUPS:
+        if not isinstance(value, str) or not place.keepable(value):
             raise PlanCommandError("bad_request", f"unknown group: {str(value)[:40]!r}")
         groups.add(str(value))
     return groups
 
 
 class _UnchangedError(Exception):
-    """Il piano è già nello stato che il journal recuperato gli darebbe."""
+    """Il piano è già nello stato che la scrittura gli darebbe."""
 
 
-def _header_counts(header: Mapping[str, Any]) -> dict[str, int]:
-    raw = header.get("counts")
-    counts = {k: 0 for k in ("restored", "removed", "already", "left", "kept", "excluded")}
-    if isinstance(raw, Mapping):
-        for key in counts:
-            value = raw.get(key)
-            if isinstance(value, int) and not isinstance(value, bool):
-                counts[key] = value
-    return counts
+def _drop_pending_undo(plan: Plan) -> None:
+    plan.extra.pop(PENDING_UNDO_KEY, None)
 
 
 def _mark_rolled_back(
     plan: Plan,
     *,
-    before: str | None,
-    after: str | None,
+    journal: str,
     keep: Iterable[str],
     counts: Mapping[str, int],
     recovered: bool = False,
 ) -> None:
-    """Il piano dopo un ritorno: foto C e R, ``rolled_back``. Lo stesso dal vivo e al boot."""
-    plan.photos["before_rollback"] = before
-    plan.photos["after_rollback"] = after
+    """Il piano dopo un ritorno: il suo registro, ``rolled_back``. Lo stesso dal vivo e al boot."""
+    plan.rollback_journal = journal
+    plan.undo_journal = None
+    plan.extra.pop(PENDING_UNDO_KEY, None)
     plan.extra.pop(ROLLBACK_FAILED_KEY, None)
     details: dict[str, Any] = {"keep": sorted(keep), "counts": dict(counts)}
     if recovered:
@@ -3735,12 +3708,13 @@ def _mark_rolled_back(
 
 
 def _mark_rollback_undone(
-    plan: Plan, counts: Mapping[str, int], *, recovered: bool = False
+    plan: Plan, counts: Mapping[str, int], *, journal: str, recovered: bool = False
 ) -> None:
-    """Il piano dopo «Annulla il ritorno»: lo stato di prima, senza le foto C e R."""
+    """Il piano dopo «Annulla il ritorno»: lo stato di prima, e il registro dell'annullamento."""
     previous = _status_before_rollback(plan)
-    plan.photos["before_rollback"] = None
-    plan.photos["after_rollback"] = None
+    plan.rollback_journal = None
+    plan.undo_journal = journal
+    plan.extra.pop(PENDING_UNDO_KEY, None)
     plan.extra.pop(ROLLBACK_FAILED_KEY, None)
     details: dict[str, Any] = {"counts": dict(counts)}
     if recovered:
@@ -3800,6 +3774,7 @@ __all__ = [
     "PlanDriver",
     "PlanHost",
     "notebook_of",
+    "card_report",
+    "place_of",
     "plan_view",
-    "report_with_groups",
 ]
