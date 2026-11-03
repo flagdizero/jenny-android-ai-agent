@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 
 from support.home_dom import UI, requires_jsdom, run_home
+from support.js_harness import ASSETS, ROOT
 
 pytestmark = requires_jsdom
 
@@ -88,3 +89,16 @@ assert.equal(cancel($('prova-dialog')), null);
 assert.equal(dismissTopDialog(), true, 'la pressione non e\\u2019 stata consumata');
 assert.ok($('prova-dialog').open, 'il riavvio si e\\u2019 chiuso');
 """)
+
+
+def test_the_five_hand_built_dialogs_go_through_it() -> None:
+    settings = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
+    for method in ("_showSshHostDialog(existing) {", "_showAddProviderDialog(existingProvider) {"):
+        body = settings[settings.index(method) :]
+        assert "formDialog({" in body[: body.index("\n  }\n")], method
+    backup = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
+    assert backup.count("formDialog({") == 2
+    drive = (ROOT / "jenny_extensions/drive/ui/cloud-backup-dialogs.js").read_text(encoding="utf-8")
+    assert "formDialog({" in drive
+    for src in (settings, backup, drive):
+        assert "document.createElement('dialog')" not in src
