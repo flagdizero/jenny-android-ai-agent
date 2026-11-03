@@ -113,12 +113,17 @@ async def test_the_webui_receives_the_whole_text_after_drops() -> None:
     task = asyncio.create_task(dispatcher._dispatch_outbound())
     try:
         await publishing
+        # Il tetto e' largo apposta: lo ``stream_end`` arriva di sicuro, ma il
+        # dispatcher scrive anche il verbale (SQLite, in un thread), e sotto il
+        # carico della suite intera i 2 s di prima non bastavano (03/11/2026,
+        # «condizione non raggiunta in 2.0s», mai da solo). Se arriva prima,
+        # l'attesa finisce prima.
         await wait_until(
             lambda: any(
                 json.loads(c.args[0]).get("event") == "stream_end"
                 for c in ws.send.await_args_list
             ),
-            timeout=2.0,
+            timeout=15.0,
         )
     finally:
         task.cancel()

@@ -9,8 +9,37 @@ Releases before 1.0 are described only on their
 
 ## [Unreleased]
 
+### Added
+
+- **Jenny can find the exact words of past chats.** When something isn't in her memory or her
+  notes — a name you gave something three weeks ago, a number, a link — she searches your
+  earlier conversations and says where it came from. From the personal chat she searches
+  every chat; from a notebook's chat, only that notebook's.
+- **A step-by-step plan in the personal chat too**, for a job that spans several notebooks and
+  apps. Messages you send while a step runs wait for that step's turn and get their own answer
+  right after it.
+
+### Changed
+
+- **Jenny keeps her state in a database on the phone**: reminders and automations,
+  conversations, helpers, drafts, token counts and plans. Chats reopen several times faster.
+  The first start after the update moves the old files over (they are kept aside for 30
+  days), and about a minute later tidies the stored conversations; the phone stays usable
+  meanwhile.
+- **Backups bring the state back too.** A restore from the local history, from Drive or from
+  a `.jbk` file returns reminders, helpers and conversations as they were at that moment.
+  Snapshots no longer carry the folders kept aside by the update, so they are smaller.
+- **Plans no longer photograph the notebook.** Undoing a plan, a step or a helper uses the
+  list of what each one changed: a plan starts sooner and takes far less space.
+- **Every message costs less.** Your apps' actions reach Jenny through one tool instead of one
+  per action, so installing another app no longer adds to every message. The list of tools no
+  longer changes between one message and the next in the same chat, so starting a plan,
+  writing from the floating mascot or answering from Telegram no longer makes the provider
+  read the whole conversation again at full price.
+
 ### Removed
 
+- The search engine setting: it could only be Bing.
 - `/goal` and the long-running goal behind it. Jenny could start one on her own and then keep
   going turn after turn with nothing on screen to say so, and the only way to stop it was
   typing `/stop`. Long work now goes through the two ways you can see: a step-by-step plan in a
@@ -20,6 +49,17 @@ Releases before 1.0 are described only on their
 
 ### Fixed
 
+- An app action that switches something on (watering the plants, a light) no longer runs
+  while a plan is being prepared or while writing is turned off.
+- Undoing a plan's rollback that was interrupted by a restart puts back every file; one could
+  be lost.
+- A notebook's name can no longer point outside the notebooks folder.
+- Deleting an app does the same thing from the App page and from the chat.
+- "Copy link" says so when it fails.
+- Restores from a file, the local history and Drive no longer overlap: they wait for each
+  other.
+- The page Jenny searches the web with refuses addresses on your private network, like the
+  browser already did.
 - After undoing a helper with one file, the chat says "1 file put back as it was", not
   "1 files put back as they were"; the same for the file it left alone.
 - A one-time reminder that could not ring — the provider failed, or Jenny was not set up
