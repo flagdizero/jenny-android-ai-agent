@@ -73,7 +73,7 @@ async def test_question_answer_proposal_the_answer_is_still_planning(
     first: dict[str, Any] = {PLAN_MODE_META: True, WORKSPACE_READONLY_METADATA_KEY: True}
     await driver.before_user_turn(KEY, first)
     assert driver.drafting_for(KEY) is not None
-    assert _changed(bus)[-1] == {"_plan_changed": True, "notebook": "piante", "plan_id": ""}
+    assert _changed(bus)[-1] == {"_plan_changed": True, "place": "nb:piante", "notebook": "piante", "plan_id": ""}
     assert PLAN_FOLLOWUP_META not in first
     await driver.note_read(KEY)
 
@@ -129,7 +129,7 @@ async def test_cancel_ends_it_and_says_whether_there_was_one(
     bus.outbound.clear()
     assert await driver.cancel_drafting("piante") is True
     assert driver.drafting_for(KEY) is None
-    assert _changed(bus) == [{"_plan_changed": True, "notebook": "piante", "plan_id": ""}]
+    assert _changed(bus) == [{"_plan_changed": True, "place": "nb:piante", "notebook": "piante", "plan_id": ""}]
     assert await driver.cancel_drafting("piante") is False
     meta: dict[str, Any] = {}
     await driver.before_user_turn(KEY, meta)

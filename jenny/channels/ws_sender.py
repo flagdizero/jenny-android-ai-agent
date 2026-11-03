@@ -256,10 +256,13 @@ class OutboundSenderMixin:
             await self.send_staged_changed(count if isinstance(count, int) else 0)
             return []
         if msg.metadata.get("_plan_changed"):
+            place = msg.metadata.get("place")
             notebook = msg.metadata.get("notebook")
             plan_id = msg.metadata.get("plan_id")
-            if isinstance(notebook, str) and notebook and isinstance(plan_id, str):
-                await self.send_plan_changed(notebook, plan_id)
+            if isinstance(place, str) and place and isinstance(plan_id, str):
+                await self.send_plan_changed(
+                    notebook if isinstance(notebook, str) and notebook else None, plan_id,
+                    place=place)
             return []
         if msg.metadata.get("_user_echo"):
             return await self._send_user_echo(
@@ -1044,9 +1047,16 @@ class OutboundSenderMixin:
         """Broadcast that the Jenny Apps list changed (WebUI grid refreshes)."""
         await self._broadcast("apps_list_changed")
 
-    async def send_plan_changed(self, notebook: str, plan_id: str) -> None:
-        """Broadcast that a notebook's plan changed (the plan card re-reads ``plan.get``)."""
-        await self._broadcast("plan_changed", notebook=notebook, plan_id=plan_id)
+    async def send_plan_changed(
+        self, notebook: str | None, plan_id: str, *, place: str | None = None,
+    ) -> None:
+        """Broadcast that a plan changed (the plan card re-reads ``plan.get``).
+
+        *place* is ``nb:<name>`` or ``personal``; *notebook* is ``None`` for a plan
+        of the personal chat.
+        """
+        await self._broadcast("plan_changed", notebook=notebook, plan_id=plan_id,
+                              place=place or (f"nb:{notebook}" if notebook else None))
 
     async def send_staged_changed(self, count: int) -> None:
         """Broadcast that the drafts awaiting approval changed (the home card redraws)."""

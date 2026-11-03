@@ -41,6 +41,7 @@ from loguru import logger
 from jenny.agent.hook import AgentHook, ToolResultHookContext
 from jenny.cron.session_turns import is_cron_turn
 from jenny.plan.driver import (
+    PLAN_ANSWER_META,
     PLAN_FOLLOWUP_META,
     PLAN_ID_META,
     PLAN_MODE_META,
@@ -106,19 +107,27 @@ PLANNING_HIDDEN_TOOLS: frozenset[str] = frozenset(
 PLANNING_READ_TOOLS: frozenset[str] = frozenset({"read_file", "list_dir", "grep", "find_files"})
 
 
+def has_plans(session_key: str | None, driver: PlanDriver | None) -> bool:
+    """Nella sessione si può pianificare: la chat di un quaderno, o quella
+    personale quando il driver la permette (``PlanDriver.place_of``)."""
+    if driver is None:
+        return bool(session_key) and is_project_session_key(session_key or "")
+    return driver.place_of(session_key) is not None
+
+
 def is_planning_turn(
     metadata: Mapping[str, Any] | None,
     session_key: str,
     driver: PlanDriver | None = None,
 ) -> bool:
-    """Un turno di pianificazione, nella chat di un quaderno (fuori non vale).
+    """Un turno di pianificazione, dove si può pianificare (fuori non vale).
 
     Lo è il turno del tasto Piano (``plan_mode`` nei metadati) e, con il
     *driver*, ogni turno di una sessione che ha una pianificazione in corso:
     la risposta dell'utente a una domanda di Jenny non porta il tasto, ed è
     pianificazione lo stesso. I turni di un passo e quelli di un cron no.
     """
-    if not is_project_session_key(session_key):
+    if not has_plans(session_key, driver):
         return False
     if isinstance(metadata, Mapping) and metadata.get(PLAN_MODE_META) is True:
         return True
@@ -233,6 +242,14 @@ class LoopPlanMixin:
             and not is_cron_turn(msg.metadata)
             and driver.step_open(session_key)
         )
+        if step_open and driver is not None:
+            # Nella chat personale un turno di chat (la mascotte, una notifica)
+            # non chiude il passo: solo il turno del passo, o la risposta data
+            # dalla scheda.
+            place = driver.place_of(session_key)
+            meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+            if place is not None and not place.traits.answer_by_chat:
+                step_open = is_plan_turn(meta) or bool(meta.get(PLAN_ANSWER_META))
 
         def plan_hidden(name: str) -> bool | None:
             if name == PLAN_PROPOSE_TOOL:
@@ -306,9 +323,18 @@ class LoopPlanMixin:
         """
         if not is_plan_turn(pending_msg.metadata):
             driver = self.plan_driver
-            if driver is None or not session_key or not is_project_session_key(session_key):
+            if driver is None or not session_key or not has_plans(session_key, driver):
                 return "inject"
             meta = pending_msg.metadata if isinstance(pending_msg.metadata, Mapping) else {}
+            place = driver.place_of(session_key)
+            if (
+                place is not None and not place.traits.answer_by_chat
+                and is_plan_turn(turn_metadata) and driver.step_open(session_key)
+            ):
+                # Nella chat personale arriva di tutto (la mascotte, le notifiche,
+                # Telegram): un messaggio a metà passo non entra nel turno del
+                # passo, aspetta e diventa un turno suo.
+                return "defer"
             if (
                 pending_msg.channel != "system"
                 and not meta.get(INJECTED_EVENT_META)
@@ -376,7 +402,7 @@ class LoopPlanMixin:
             return
         if is_plan_turn(msg.metadata) or is_cron_turn(msg.metadata):
             return
-        if not is_project_session_key(session_key) or driver.drafting_for(session_key) is None:
+        if not has_plans(session_key, driver) or driver.drafting_for(session_key) is None:
             return
         msg.metadata[PLAN_MODE_META] = True
         msg.metadata[WORKSPACE_READONLY_METADATA_KEY] = True
@@ -393,7 +419,7 @@ class LoopPlanMixin:
         meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
         if driver is None or meta.get(INJECTED_EVENT_META) != SUBAGENT_RESULT_EVENT:
             return
-        if not is_project_session_key(session_key):
+        if not has_plans(session_key, driver):
             return
         try:
             await driver.note_helper_result(session_key, meta.get("subagent_task_id"))
@@ -412,7 +438,7 @@ class LoopPlanMixin:
         meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
         if driver is None or meta.get(INJECTED_EVENT_META) != SUBAGENT_RESULT_EVENT:
             return
-        if not is_project_session_key(session_key) or not driver.plan_running(session_key):
+        if not has_plans(session_key, driver) or not driver.plan_running(session_key):
             return
         try:
             await driver.note_step_report(
@@ -440,7 +466,7 @@ class LoopPlanMixin:
                 msg.metadata[WORKSPACE_READONLY_METADATA_KEY] = True
                 logger.info("Cron turn in held notebook {} runs read-only", notebook)
             return
-        if not is_project_session_key(session_key):
+        if not has_plans(session_key, driver):
             return
         try:
             await driver.before_user_turn(session_key, msg.metadata)
@@ -452,7 +478,7 @@ class LoopPlanMixin:
     ) -> None:
         """*stop_reason*: come è finito il giro del modello (``TurnOutcome``), o vuoto."""
         driver = self.plan_driver
-        if driver is None or not is_project_session_key(session_key):
+        if driver is None or not has_plans(session_key, driver):
             return
         if isinstance(msg.metadata, dict) and msg.metadata.get(PLAN_STALE_META):
             return

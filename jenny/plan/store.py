@@ -69,6 +69,18 @@ def is_plan_id(value: object) -> bool:
     return isinstance(value, str) and _PLAN_ID_RE.match(value) is not None
 
 
+def slot_id(place: str) -> str:
+    """L'id del posto (``nb:<nome>`` o ``personal``) da un id o da un nome di quaderno.
+
+    Il driver passa sempre id; il nome nudo resta per chi chiede di un quaderno
+    (i test, la rinomina) e per le voci di ``drafting.json`` di prima dei posti.
+    """
+    from jenny.plan.place import NOTEBOOK_PREFIX, PERSONAL
+
+    return place if place == PERSONAL or place.startswith(NOTEBOOK_PREFIX) else (
+        NOTEBOOK_PREFIX + place)
+
+
 def new_plan_id() -> str:
     return f"p_{secrets.token_hex(6)}"
 
@@ -166,7 +178,7 @@ class PlanStore:
         if not isinstance(entries, dict):
             return {}
         return {
-            str(name): dict(entry)
+            slot_id(str(name)): dict(entry)
             for name, entry in entries.items()
             if isinstance(entry, dict)
         }
@@ -181,34 +193,35 @@ class PlanStore:
         )
 
     def drafting_all(self) -> dict[str, dict[str, Any]]:
-        """``{quaderno: voce}`` delle pianificazioni in corso, scadute comprese."""
+        """``{posto: voce}`` delle pianificazioni in corso, scadute comprese."""
         with _lock_for(self.drafting_path):
             return self._read_drafting()
 
-    def drafting_get(self, notebook: str) -> dict[str, Any] | None:
-        return self.drafting_all().get(notebook)
+    def drafting_get(self, place: str) -> dict[str, Any] | None:
+        return self.drafting_all().get(slot_id(place))
 
     def drafting_update(
         self,
-        notebook: str,
+        place: str,
         fn: Callable[[dict[str, Any] | None], dict[str, Any] | None],
     ) -> dict[str, Any] | None:
-        """Rilegge la voce di *notebook* dentro il lock, le applica *fn*, riscrive.
+        """Rilegge la voce di *place* dentro il lock, le applica *fn*, riscrive.
 
         *fn* riceve la voce (o ``None``) e ritorna quella nuova, o ``None`` per
         toglierla. Come :meth:`update`: si rilegge dentro il lock con cui si
         scrive, così un conto delle letture non ne cancella un altro.
         """
+        key = slot_id(place)
         with _lock_for(self.drafting_path):
             entries = self._read_drafting()
-            current = entries.get(notebook)
+            current = entries.get(key)
             result = fn(dict(current) if current is not None else None)
             if result is None:
                 if current is None:
                     return None
-                entries.pop(notebook, None)
+                entries.pop(key, None)
             else:
-                entries[notebook] = dict(result)
+                entries[key] = dict(result)
             self._write_drafting(entries)
             return result
 
@@ -285,16 +298,21 @@ class PlanStore:
     def list_for_notebook(self, notebook: str) -> list[Plan]:
         return [p for p in self.list_all() if p.notebook == notebook]
 
-    def open_plan_for(self, notebook: str) -> Plan | None:
-        for plan in self.list_for_notebook(notebook):
+    def list_for_place(self, place: str) -> list[Plan]:
+        key = slot_id(place)
+        return [p for p in self.list_all() if p.place == key]
+
+    def open_plan_for(self, place: str) -> Plan | None:
+        """Il piano aperto di un posto (un id, o il nome di un quaderno)."""
+        for plan in self.list_for_place(place):
             if plan.is_open:
                 return plan
         return None
 
     # -- creazione ----------------------------------------------------------
 
-    def create(self, notebook: str, proposal: Proposal, *, notes: str | None = None) -> Plan:
-        """Scrive una proposta nuova per *notebook* e la ritorna.
+    def create(self, place: str, proposal: Proposal, *, notes: str | None = None) -> Plan:
+        """Scrive una proposta nuova per *place* (un id, o il nome di un quaderno).
 
         Se il quaderno ha già una proposta, la nuova ne è la versione seguente:
         la vecchia diventa ``superseded`` nello stesso passaggio, e i passi
@@ -302,13 +320,19 @@ class PlanStore:
         qui, dal codice. Se il quaderno ha un piano aperto che non è una
         proposta (in corsa, in pausa, bloccato), :class:`PlanConflictError`.
         """
+        from jenny.plan.place import place_from_id
+
+        where = place_from_id(slot_id(place))
+        if where is None:
+            raise PlanError(f"no place {place!r}")
         with self._store_lock:
-            current = self.open_plan_for(notebook)
+            current = self.open_plan_for(where.id)
             stamp = now_iso()
             plan = Plan(
                 id=new_plan_id(),
-                notebook=notebook,
-                session_key=project_session_key(notebook),
+                notebook=where.notebook or "",
+                place=where.id,
+                session_key=where.session_key,
                 title=proposal.title,
                 steps=proposal.steps,
                 notes=notes,
@@ -324,7 +348,7 @@ class PlanStore:
                     current = self._read(current.id)
                     if current.status != "proposed":
                         if current.is_open:
-                            raise PlanConflictError(notebook, current.id, current.status)
+                            raise PlanConflictError(where.id, current.id, current.status)
                     else:
                         plan.version = current.version + 1
                         plan.replaces = current.id
@@ -334,9 +358,9 @@ class PlanStore:
             plan.history.append({"at": stamp, "event": "proposed", "version": plan.version})
             self._write(plan)
             logger.info(
-                "Plan {} proposed for notebook {!r} (v{}, {} steps)",
+                "Plan {} proposed for {} (v{}, {} steps)",
                 plan.id,
-                notebook,
+                where.id,
                 plan.version,
                 len(plan.steps),
             )
@@ -345,43 +369,40 @@ class PlanStore:
     # -- quaderni -----------------------------------------------------------
 
     def follow_rename(self, old: str, new: str) -> list[str]:
-        """Porta i piani di *old* su *new*: ``notebook`` e ``session_key``.
-
-        Le foto restano valide: i loro percorsi sono relativi alla cartella del
-        quaderno, non al suo nome.
-        """
+        """Porta i piani di *old* su *new*: ``notebook``, ``place`` e ``session_key``."""
         moved: list[str] = []
         with self._store_lock:
             for plan in self.list_for_notebook(old):
 
                 def _rename(p: Plan) -> None:
                     p.notebook = new
+                    p.place = slot_id(new)
                     p.session_key = project_session_key(new)
 
                 self.update(plan.id, _rename)
                 moved.append(plan.id)
-            self._move_drafting(old, new)
+            self._move_drafting(slot_id(old), slot_id(new))
         if moved:
             logger.info("Plans of notebook {!r} follow it to {!r}: {}", old, new, len(moved))
         return moved
 
     def delete_for_notebook(self, notebook: str) -> list[str]:
-        """Cancella i piani di *notebook*, foto comprese. Ritorna gli id."""
+        """Cancella i piani di *notebook*. Ritorna gli id."""
         removed: list[str] = []
         with self._store_lock:
             for plan in self.list_for_notebook(notebook):
                 self._remove(plan.id)
                 removed.append(plan.id)
-            self._move_drafting(notebook, None)
+            self._move_drafting(slot_id(notebook), None)
         if removed:
             logger.info("Deleted {} plan(s) of notebook {!r}", len(removed), notebook)
         return removed
 
-    def drafting_remove(self, notebook: str) -> dict[str, Any] | None:
-        """Toglie la pianificazione di *notebook*; ritorna la voce che c'era, o ``None``."""
+    def drafting_remove(self, place: str) -> dict[str, Any] | None:
+        """Toglie la pianificazione di *place*; ritorna la voce che c'era, o ``None``."""
         with _lock_for(self.drafting_path):
             entries = self._read_drafting()
-            entry = entries.pop(notebook, None)
+            entry = entries.pop(slot_id(place), None)
             if entry is not None:
                 self._write_drafting(entries)
             return entry

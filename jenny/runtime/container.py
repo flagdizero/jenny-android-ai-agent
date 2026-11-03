@@ -772,7 +772,9 @@ class GatewayContainer:
         from jenny.session.plan_probe import set_plan_probe
 
         driver = PlanDriver(
-            PlanStore.for_workspace(config.workspace_path), self.bus, LoopPlanHost(agent)
+            PlanStore.for_workspace(config.workspace_path), self.bus, LoopPlanHost(agent),
+            # Il piano nella chat principale c'è solo quando scrivono gli aiutanti.
+            personal_plans=bool(getattr(agent, "orchestrator_mode", False)),
         )
         try:
             paused = driver.recover()

@@ -79,8 +79,8 @@ from jenny.plan.model import (
     to_research_items,
     validate_proposal,
 )
-from jenny.plan.place import PlanPlace, notebook_place, place_from_id
-from jenny.plan.store import PlanConflictError, PlanNotFoundError, PlanStore
+from jenny.plan.place import PlanPlace, notebook_place, place_from_id, place_of_session
+from jenny.plan.store import PlanConflictError, PlanNotFoundError, PlanStore, slot_id
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     PLAN_REMINDER_EVENT,
@@ -329,6 +329,17 @@ class _HeldResults:
     woken: bool = False
 
 
+def slot_of(session_key: str | None) -> str | None:
+    """L'id del posto dei piani di una sessione (``nb:<nome>``, ``personal``), o ``None``."""
+    place = place_of_session(session_key)
+    return place.id if place is not None else None
+
+
+def _session_of_slot(slot: str) -> str:
+    place = place_from_id(slot)
+    return place.session_key if place is not None else ""
+
+
 def notebook_of(session_key: str | None) -> str | None:
     """Il quaderno di una chiave ``project:<nome>``, o ``None``."""
     if not session_key or not is_project_session_key(session_key):
@@ -435,8 +446,12 @@ class PlanDriver:
         keep_closed: int = 5,
         max_age_days: int = 30,
         held_wake_after_s: float = HELD_WAKE_AFTER_S,
+        personal_plans: bool = False,
     ) -> None:
         self.store = store
+        # I piani nella chat personale: solo quando i file li scrivono gli
+        # aiutanti (``orchestrator_mode``), che hanno ciascuno il suo registro.
+        self.personal_plans = personal_plans
         self.bus = bus
         self.host = host
         self.keep_closed = keep_closed
@@ -487,6 +502,19 @@ class PlanDriver:
         # (``time.monotonic``): un ``plan_propose`` che arriva poco dopo, dal
         # turno che stava pianificando, riceve «fermati», non «nessuno pianifica».
         self._cancelled_drafting: dict[str, float] = {}
+
+    # ── posti ──────────────────────────────────────────────────────────────
+
+    def place_of(self, session_key: str | None) -> PlanPlace | None:
+        """Il posto dei piani di una sessione, se lì si può pianificare."""
+        place = place_of_session(session_key)
+        if place is None or (place.notebook is None and not self.personal_plans):
+            return None
+        return place
+
+    def _slot(self, session_key: str | None) -> str | None:
+        place = self.place_of(session_key)
+        return place.id if place is not None else None
 
     # ── indice ─────────────────────────────────────────────────────────────
 
@@ -562,10 +590,13 @@ class PlanDriver:
     def held_notebooks(self) -> set[str]:
         """I quaderni tenuti da un piano partito: l'utente non ci scrive."""
         return {
-            live.notebook for live in self._index.values() if live.status in HELD_STATUSES
+            live.notebook for live in self._index.values()
+            if live.notebook and live.status in HELD_STATUSES
         }
 
     def holds_notebook(self, notebook: str) -> bool:
+        if not notebook:
+            return False
         return any(
             live.notebook == notebook and live.status in HELD_STATUSES
             for live in self._index.values()
@@ -622,17 +653,18 @@ class PlanDriver:
 
     def drafting_for(self, session_key: str | None) -> dict[str, Any] | None:
         """La pianificazione in corso della sessione, o ``None`` (scaduta = finita)."""
-        notebook = notebook_of(session_key)
-        if notebook is None:
+        slot = self._slot(session_key)
+        if slot is None:
             return None
-        entry = self._drafting.get(notebook)
+        entry = self._drafting.get(slot)
         if entry is None or drafting_expired(entry):
             return None
         return entry
 
-    def drafting_info(self, notebook: str) -> dict[str, Any] | None:
-        """``{since, revise, reads}`` per ``plan.get``, o ``None``."""
-        entry = self._drafting.get(notebook)
+    def drafting_info(self, slot: str) -> dict[str, Any] | None:
+        """``{since, revise, reads}`` per ``plan.get``, o ``None``. *slot*: un
+        posto, o il nome di un quaderno."""
+        entry = self._drafting.get(slot_id(slot))
         if entry is None or drafting_expired(entry):
             return None
         return drafting_view(entry)
@@ -648,12 +680,12 @@ class PlanDriver:
         tocca solo una pianificazione che c'è: un turno che la continua non la
         fa rinascere se intanto l'utente l'ha annullata.
         """
-        notebook = notebook_of(session_key)
-        if notebook is None:
+        slot = self._slot(session_key)
+        if slot is None:
             return
         if create:
             # Una pianificazione nuova chiude il conto dell'annullamento di prima.
-            self._cancelled_drafting.pop(notebook, None)
+            self._cancelled_drafting.pop(slot, None)
         stamp = now_iso()
         created: list[bool] = []
 
@@ -668,32 +700,32 @@ class PlanDriver:
             entry["touched"] = stamp
             return entry
 
-        await self._update_drafting(notebook, _apply)
+        await self._update_drafting(slot, _apply)
         if created:
-            logger.info("Plan drafting started in notebook {}", notebook)
-            await self._drafting_changed(notebook)
+            logger.info("Plan drafting started in slot {}", slot)
+            await self._drafting_changed(slot)
 
     async def _update_drafting(
-        self, notebook: str, fn: Callable[[dict[str, Any] | None], dict[str, Any] | None]
+        self, slot: str, fn: Callable[[dict[str, Any] | None], dict[str, Any] | None]
     ) -> dict[str, Any] | None:
-        """Scrive la voce di *notebook* e ne allinea la copia in memoria.
+        """Scrive la voce di *slot* e ne allinea la copia in memoria.
 
         Sotto un lock solo per tutte le pianificazioni: la scrittura sul file e
         la copia in memoria vanno insieme, o un annullamento che arriva fra le
         due lascerebbe in memoria una pianificazione che sul file non c'è più.
         """
         async with self._drafting_lock:
-            entry = await asyncio.to_thread(self.store.drafting_update, notebook, fn)
+            entry = await asyncio.to_thread(self.store.drafting_update, slot, fn)
             if entry is None:
-                self._drafting.pop(notebook, None)
+                self._drafting.pop(slot, None)
             else:
-                self._drafting[notebook] = entry
+                self._drafting[slot] = entry
             return entry
 
     async def note_read(self, session_key: str | None) -> None:
         """Una lettura del quaderno durante la pianificazione (il pavimento di A2)."""
-        notebook = notebook_of(session_key)
-        if notebook is None or self.drafting_for(session_key) is None:
+        slot = self._slot(session_key)
+        if slot is None or self.drafting_for(session_key) is None:
             return
         stamp = now_iso()
 
@@ -705,12 +737,12 @@ class PlanDriver:
             entry["touched"] = stamp
             return entry
 
-        await self._update_drafting(notebook, _apply)
+        await self._update_drafting(slot, _apply)
 
     async def note_helper(self, session_key: str | None, task_id: str) -> None:
         """Un aiutante lanciato durante la pianificazione: il suo risultato conterà."""
-        notebook = notebook_of(session_key)
-        if notebook is None or not task_id or self.drafting_for(session_key) is None:
+        slot = self._slot(session_key)
+        if slot is None or not task_id or self.drafting_for(session_key) is None:
             return
 
         def _apply(entry: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -722,7 +754,7 @@ class PlanDriver:
             entry["helpers"] = helpers[-20:]
             return entry
 
-        await self._update_drafting(notebook, _apply)
+        await self._update_drafting(slot, _apply)
 
     async def note_helper_result(self, session_key: str | None, task_id: Any) -> bool:
         """Il risultato di un aiutante: è una lettura solo se l'ha lanciato la pianificazione.
@@ -741,12 +773,12 @@ class PlanDriver:
 
     async def end_drafting(self, session_key: str | None, reason: str) -> bool:
         """Chiude la pianificazione della sessione. ``True`` se ce n'era una."""
-        notebook = notebook_of(session_key)
-        if notebook is None:
+        slot = self._slot(session_key)
+        if slot is None:
             return False
-        return await self._drop_drafting(notebook, reason)
+        return await self._drop_drafting(slot, reason)
 
-    async def cancel_drafting(self, notebook: str) -> bool:
+    async def cancel_drafting(self, slot: str) -> bool:
         """``plan.cancel_drafting``: l'utente ha spento il tasto o annullato.
 
         Ferma anche il lavoro della pianificazione: il turno in volo e gli
@@ -754,16 +786,18 @@ class PlanDriver:
         solo lo stato: il turno andava avanti, ``plan_propose`` lo rifiutava, e
         Jenny («non è partita la modalità piano, così sono andata diretta»)
         lanciava un editor che riscriveva l'indice senza nessuna approvazione.
+        *slot*: un posto, o il nome di un quaderno.
         """
-        entry = self._drafting.get(notebook) or {}
+        slot = slot_id(slot)
+        entry = self._drafting.get(slot) or {}
         helpers = [h for h in entry.get("helpers") or () if isinstance(h, str)]
-        dropped = await self._drop_drafting(notebook, "cancelled")
+        dropped = await self._drop_drafting(slot, "cancelled")
         if dropped:
-            self._cancelled_drafting[notebook] = time.monotonic()
-            await self._stop_drafting_work(notebook, helpers)
+            self._cancelled_drafting[slot] = time.monotonic()
+            await self._stop_drafting_work(slot, helpers)
         return dropped
 
-    async def _stop_drafting_work(self, notebook: str, helpers: list[str]) -> None:
+    async def _stop_drafting_work(self, slot: str, helpers: list[str]) -> None:
         """Il turno di pianificazione in volo e gli aiutanti suoi, non gli altri.
 
         Gli altri aiutanti della chat (una ricerca chiesta prima del tasto Piano)
@@ -771,9 +805,7 @@ class PlanDriver:
         ``host.cancel``, che è ``/stop all``. Metodi facoltativi dell'ospite: un
         ospite che non li ha (i test vecchi) annulla solo lo stato, come prima.
         """
-        from jenny.session.keys import project_session_key
-
-        session_key = project_session_key(notebook)
+        session_key = _session_of_slot(slot)
         cancel_turn: Any = getattr(self.host, "cancel_turn", None)
         cancel_helpers: Any = getattr(self.host, "cancel_helpers", None)
         try:
@@ -785,27 +817,27 @@ class PlanDriver:
                 await cancel_helpers(mine)
         except Exception:  # noqa: BLE001 — lo stato è già annullato: il resto è un aiuto
             logger.opt(exception=True).warning(
-                "Plan drafting in notebook {}: work not stopped", notebook
+                "Plan drafting in {}: work not stopped", slot
             )
         logger.info(
-            "Plan drafting in notebook {} cancelled: turn stopped, {} helper(s)",
-            notebook, len(helpers),
+            "Plan drafting in {} cancelled: turn stopped, {} helper(s)",
+            slot, len(helpers),
         )
 
     async def _drop_drafting(
-        self, notebook: str, reason: str, *, announce: bool = True
+        self, slot: str, reason: str, *, announce: bool = True
     ) -> bool:
         async with self._drafting_lock:
-            self._drafting.pop(notebook, None)
-            removed = await asyncio.to_thread(self.store.drafting_remove, notebook)
+            self._drafting.pop(slot, None)
+            removed = await asyncio.to_thread(self.store.drafting_remove, slot)
         if removed is None:
             return False
         # Una voce scaduta è già finita per tutti (``drafting_for`` la ignora):
         # toglierla è pulizia, ma la scheda la vedeva già spenta.
         live = not drafting_expired(removed)
-        logger.info("Plan drafting in notebook {} ended: {}", notebook, reason)
+        logger.info("Plan drafting in {} ended: {}", slot, reason)
         if announce:
-            await self._drafting_changed(notebook)
+            await self._drafting_changed(slot)
         return live
 
     async def _settle_drafting(self, session_key: str, metadata: dict[str, Any]) -> None:
@@ -820,19 +852,19 @@ class PlanDriver:
         turno che la continua non la ricrea: se l'utente l'ha annullata nel
         frattempo, resta annullata.
         """
-        notebook = notebook_of(session_key)
-        if notebook is None:
+        slot = self._slot(session_key)
+        if slot is None:
             return
-        entry = self._drafting.get(notebook)
+        entry = self._drafting.get(slot)
         if entry is not None and drafting_expired(entry):
-            await self._drop_drafting(notebook, "expired")
+            await self._drop_drafting(slot, "expired")
             entry = None
         if self.held_status(session_key) is not None:
             # Un piano partito tiene il quaderno: non si pianifica sopra di lui
             # (``plan_propose`` lo rifiuterebbe), e una pianificazione rimasta
             # aperta non deve rendere «di pianificazione» la risposta a un blocco.
             if entry is not None:
-                await self._drop_drafting(notebook, "plan running")
+                await self._drop_drafting(slot, "plan running")
             return
         asked = metadata.get(PLAN_REVISE_META)
         revise = asked if isinstance(asked, str) and asked else None
@@ -850,16 +882,14 @@ class PlanDriver:
             metadata[PLAN_REVISE_META] = kept
         await self.start_drafting(session_key, revise, create=False)
 
-    async def _drafting_changed(self, notebook: str) -> None:
+    async def _drafting_changed(self, slot: str) -> None:
         """``plan_changed`` per l'inizio o la fine di una pianificazione.
 
         ``plan_id`` è il piano aperto del quaderno, se c'è (una revisione), o
-        ``""``: il client rilegge comunque ``plan.get {notebook}``.
+        ``""``: il client rilegge comunque ``plan.get {slot}``.
         """
-        from jenny.session.keys import project_session_key
-
-        live = self._index.get(project_session_key(notebook))
-        await self._publish_changed(notebook, live.plan_id if live is not None else "")
+        live = self._index.get(_session_of_slot(slot))
+        await self._publish_changed(slot, live.plan_id if live is not None else "")
 
     # ── contesto del turno ─────────────────────────────────────────────────
 
@@ -874,17 +904,24 @@ class PlanDriver:
         """
         if not session_key:
             return []
-        if is_project_session_key(session_key):
-            live = self._index.get(session_key)
-            if live is None:
-                return []
-            try:
-                plan = self.store.load(live.plan_id)
-            except PlanError:
-                return []
-            return self._notebook_lines(plan)
         lines: list[str] = []
+        place = self.place_of(session_key)
+        if place is not None:
+            live = self._index.get(session_key)
+            if live is not None:
+                try:
+                    lines = self._notebook_lines(self.store.load(live.plan_id))
+                except PlanError:
+                    lines = []
+            if place.notebook:
+                return lines
+        elif is_project_session_key(session_key):
+            return []
+        # Nella chat personale: oltre al suo piano, una riga per ogni piano di
+        # quaderno aperto.
         for live in sorted(self._index.values(), key=lambda v: v.notebook):
+            if not live.notebook:
+                continue
             try:
                 plan = self.store.load(live.plan_id)
             except PlanError:
@@ -916,6 +953,11 @@ class PlanDriver:
                 "is finished call plan_step_done (plan_step_skip if there is nothing to do, "
                 "plan_blocked if you need the user)."
             )
+        elif plan.status == "paused" and not plan.notebook:
+            lines.append(
+                "The user paused the plan until they tap Resume. Answer them, but do not "
+                "work on the plan's steps."
+            )
         elif plan.status == "paused":
             lines.append(
                 "The user paused the plan: this conversation is read-only until they tap "
@@ -932,7 +974,9 @@ class PlanDriver:
                 )
             else:
                 question = blocked.get("question") or ""
-                lines.append(f"The plan waits for the user's answer to: {question}".rstrip())
+                where = "" if plan.notebook else " (they answer on the plan card)"
+                lines.append(
+                    f"The plan waits for the user's answer{where} to: {question}".rstrip())
         return lines
 
     def planning_block(
@@ -1005,8 +1049,8 @@ class PlanDriver:
         letture prima della proposta, e «raw/ has all the material» scritto
         come un fatto. Il resto lo fa la copertura, obbligatoria.
         """
-        notebook = notebook_of(session_key)
-        if notebook is None or session_key is None:
+        slot = self._slot(session_key)
+        if slot is None or session_key is None:
             return "Error: a plan can only be proposed inside a notebook chat."
         held = self.held_status(session_key)
         if held is not None:
@@ -1016,7 +1060,7 @@ class PlanDriver:
             )
         drafting = self.drafting_for(session_key)
         if drafting is None:
-            cancelled_at = self._cancelled_drafting.get(notebook)
+            cancelled_at = self._cancelled_drafting.get(slot)
             if cancelled_at is not None and time.monotonic() - cancelled_at < _CANCELLED_GRACE_S:
                 return (
                     "Stop: the user cancelled this plan while you were preparing it. Do not "
@@ -1027,7 +1071,7 @@ class PlanDriver:
                 "Error: nobody is preparing a plan in this notebook now: the user starts it "
                 "with the Plan button. Do not propose a plan; answer the user."
             )
-        if not drafting.get("reads") and not self._revises_a_plan_of(notebook, drafting):
+        if not drafting.get("reads") and not self._revises_a_plan_of(slot, drafting):
             return (
                 "Not yet: look at the notebook first: read the pages and sources this job "
                 "depends on (list_dir, read_file, grep), so the plan says what is there and "
@@ -1044,7 +1088,7 @@ class PlanDriver:
         async with self._lock(session_key):
             try:
                 plan = await asyncio.to_thread(
-                    self.store.create, notebook, proposal, notes=clean_notes
+                    self.store.create, slot, proposal, notes=clean_notes
                 )
             except PlanConflictError as exc:
                 return (
@@ -1054,7 +1098,7 @@ class PlanDriver:
             self._remember(plan)
         # La proposta chiude la pianificazione: il prossimo messaggio è una chat
         # normale, o un Rivedi che ne apre un'altra. L'avviso è quello del piano.
-        await self._drop_drafting(notebook, "proposed", announce=False)
+        await self._drop_drafting(slot, "proposed", announce=False)
         await self._changed(plan)
         await self._prune()
         version = f" (version {plan.version})" if plan.version > 1 else ""
@@ -1707,7 +1751,7 @@ class PlanDriver:
         )
         return len(items)
 
-    def _revises_a_plan_of(self, notebook: str, drafting: Mapping[str, Any]) -> bool:
+    def _revises_a_plan_of(self, slot: str, drafting: Mapping[str, Any]) -> bool:
         """La pianificazione rivede un piano di questo quaderno, che ha già guardato.
 
         Il cancello delle letture esiste perché una proposta nasca guardando il
@@ -1719,7 +1763,7 @@ class PlanDriver:
         if not isinstance(revise, str) or not revise:
             return False
         try:
-            return self.store.load(revise).notebook == notebook
+            return self.store.load(revise).place == slot
         except PlanError:
             return False
 
@@ -1863,6 +1907,11 @@ class PlanDriver:
             live = self._index.get(session_key)
         if live is None or metadata.get(PLAN_ANSWER_META):
             return
+        place = self.place_of(session_key)
+        if place is None or not place.traits.answer_by_chat:
+            # Nella chat personale un messaggio non è la risposta (si risponde
+            # dalla scheda) e non c'è niente da tenere in sola lettura: è chat.
+            return
         if live.status == "paused" or (
             live.status == "blocked" and self._blocked_kind(live.plan_id) == "drafts"
         ):
@@ -1882,10 +1931,12 @@ class PlanDriver:
             await self._changed(plan)
 
     def awaits_answer(self, session_key: str) -> bool:
-        """Il piano della sessione è fermo su una domanda per l'utente."""
+        """Il piano della sessione è fermo su una domanda a cui si risponde in chat."""
         live = self._index.get(session_key)
+        place = self.place_of(session_key)
         return (
             live is not None
+            and place is not None and place.traits.answer_by_chat
             and live.status == "blocked"
             and self._blocked_kind(live.plan_id) == "question"
         )
@@ -2132,7 +2183,7 @@ class PlanDriver:
             # Un Rivedi aperto e poi lasciato lì (Approva sulla versione che c'è):
             # la pianificazione è finita, o i turni dopo resterebbero «di
             # pianificazione» sopra un piano che gira.
-            await self._drop_drafting(plan.notebook, "approved", announce=False)
+            await self._drop_drafting(plan.place, "approved", announce=False)
             await self._advance(plan)
         return self._load(plan_id)
 
@@ -2314,7 +2365,10 @@ class PlanDriver:
         al piano nuovo un ritorno che non ha fatto: è la stessa regola per cui
         l'utente non scrive in un quaderno tenuto.
         """
-        if self.holds_notebook(plan.notebook):
+        live = self._index.get(plan.session_key)
+        busy = (self.holds_notebook(plan.notebook) if plan.notebook else
+                live is not None and live.plan_id != plan.id and live.status in HELD_STATUSES)
+        if busy:
             raise PlanCommandError(
                 "plan_running",
                 f"notebook {plan.notebook!r} is held by a running plan: wait for it, "
@@ -3065,9 +3119,10 @@ class PlanDriver:
 
     async def _changed(self, plan: Plan) -> None:
         """``plan_changed`` alla WebUI: un accenno, il client rilegge ``plan.get``."""
-        await self._publish_changed(plan.notebook, plan.id)
+        await self._publish_changed(plan.place, plan.id)
 
-    async def _publish_changed(self, notebook: str, plan_id: str) -> None:
+    async def _publish_changed(self, slot: str, plan_id: str) -> None:
+        place = place_from_id(slot)
         try:
             await self.bus.publish_outbound(
                 OutboundMessage(
@@ -3076,13 +3131,14 @@ class PlanDriver:
                     content="",
                     metadata={
                         "_plan_changed": True,
-                        "notebook": notebook,
+                        "place": slot,
+                        "notebook": place.notebook if place is not None else None,
                         "plan_id": plan_id,
                     },
                 )
             )
         except Exception as exc:  # noqa: BLE001 — un avviso perso non è un guasto
-            logger.debug("plan_changed not delivered for {}: {}", plan_id or notebook, exc)
+            logger.debug("plan_changed not delivered for {}: {}", plan_id or slot, exc)
 
     # ── bozze di un passo ──────────────────────────────────────────────────
 
