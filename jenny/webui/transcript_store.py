@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -405,15 +406,19 @@ def rename_webui_transcript(old_key: str, new_key: str) -> bool:
     return True
 
 
-def compact_closed_turns(*, batch: int = 50) -> int:
+def compact_closed_turns(*, batch: int = 10, pause: float = 0.02) -> int:
     """Compatta i turni chiusi che non lo sono ancora; ritorna quante righe ha tolto.
 
     Al boot, in un thread: i verbali di prima di questa versione, quelli
     importati dalla migrazione e quelli riportati da uno snapshot vecchio. Il
     segnalibro (``transcript_compacted``) la fa costare una query quando non c'è
-    niente da fare. A lotti di *batch* turni, ognuno una transazione, così chi
-    scrive in chat non aspetta la passata intera.
+    niente da fare. A lotti di *batch* turni, ognuno una transazione, e fra un
+    lotto e l'altro *pause* secondi: il lock di scrittura non è equo, e senza la
+    pausa questo thread lo riprendeva prima che chi aspettava si svegliasse —
+    sul telefono, il 03/11/2026, una richiesta della casa ha aspettato tutti i
+    16 secondi della prima passata.
     """
+
     database = _db()
     removed = 0
     for row in database.read(
@@ -432,6 +437,7 @@ def compact_closed_turns(*, batch: int = 50) -> int:
                     "ON CONFLICT(key) DO UPDATE SET through_turn = excluded.through_turn",
                     (key, last))
             done = last
+            time.sleep(pause)
     if removed:
         logger.info("Transcripts: fused {} streaming rows", removed)
     return removed

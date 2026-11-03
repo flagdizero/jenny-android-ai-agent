@@ -482,11 +482,17 @@ class GatewayContainer:
     # verbali di prima della fusione (287 mila righe sul telefono di prova) sì, i
     # turni rimasti di un giorno no.
     _VACUUM_AFTER_ROWS = 50_000
+    # Quanto aspetta la manutenzione dopo l'avvio. Partita insieme all'avvio, la
+    # prima passata sui verbali (16 s sul telefono di prova) faceva aspettare
+    # 4,5 s la chat e i progetti che la casa carica per primi (misurato il
+    # 03/11/2026); un minuto dopo la casa ha già caricato.
+    _MAINTENANCE_DELAY_S = 60.0
 
     async def _database_maintenance(self) -> None:
-        """Al boot, in un thread e senza fermare l'avvio: i verbali compatti, lo
+        """Dopo l'avvio, in un thread e senza fermarlo: i verbali compatti, lo
         spazio che torna, l'indice delle chat in pari. Non solleva."""
         workspace = self.config.workspace_path
+        await asyncio.sleep(self._MAINTENANCE_DELAY_S)
 
         def run() -> None:
             import shutil

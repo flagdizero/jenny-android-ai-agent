@@ -22,7 +22,7 @@ Uso::
     python3 scripts/jenny_state.py pull ./state.sqlite
     python3 scripts/jenny_state.py push ./state.sqlite
 
-``--db undo`` lavora sul diario dell'annulla invece che sullo stato. Il
+``--db undo`` lavora sul diario dell'annulla, ``--db index`` sull'indice delle chat. Il
 dispositivo è quello di ``ANDROID_SERIAL``, che deve essere l'emulatore
 ``jenny_s22``.
 """
@@ -127,7 +127,7 @@ def sql(db: str, statement: str, *, write: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lo stato di Jenny sull'emulatore.")
-    parser.add_argument("--db", default="state", choices=("state", "undo"))
+    parser.add_argument("--db", default="state", choices=("state", "undo", "index"))
     sub = parser.add_subparsers(dest="command", required=True)
     p_sql = sub.add_parser("sql", help="una query (con --write la rimanda)")
     p_sql.add_argument("statement")
