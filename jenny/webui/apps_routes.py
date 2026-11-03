@@ -18,6 +18,7 @@ from urllib.parse import unquote
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
+from jenny.apps.drafts import app_dir
 from jenny.apps.manifest import ACTION_NAME_RE
 from jenny.apps.manifest import SLUG_RE as APP_SLUG_RE
 from jenny.channels.http_utils import (
@@ -160,7 +161,7 @@ class AppsRoutes:
         mime = MEDIA_MIMES.get(Path(name).suffix.lower())
         if mime is None or _MEDIA_NAME_RE.match(name) is None:
             return http_error(400, "invalid media name")
-        media = self._get_workspace_root() / "apps" / slug / "data" / MEDIA_DIR
+        media = app_dir(self._get_workspace_root(), slug) / "data" / MEDIA_DIR
         candidate = media / name
         if not is_path_within(candidate, media) or not candidate.is_file():
             return http_error(404, "not found")

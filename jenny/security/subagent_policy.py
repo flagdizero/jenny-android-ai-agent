@@ -54,10 +54,10 @@ if TYPE_CHECKING:
     from jenny.agent.subagent_journal import WriteJournal
 
 # I file di configurazione nella radice del workspace: ``config.json``, il suo
-# ``.bak``, i temporanei dello store e le copie in quarantena. Sono gli stessi
-# nomi che il listing della WebUI nasconde
-# (``webui/workspace_files._DEFAULT_INTERNAL_PATTERNS``) e che il
-# ``FileProvider`` Kotlin rifiuta di condividere.
+# ``.bak``, i temporanei dello store e le copie in quarantena. Il listing della
+# WebUI li nasconde con questi stessi nomi
+# (``webui/workspace_files._DEFAULT_INTERNAL_PATTERNS``), e il ``FileProvider``
+# Kotlin rifiuta di condividerli.
 CONFIG_FILE_PATTERNS = ("config.json*", "config.corrupt-*.json")
 
 # Cartelle (relative alla radice) che contengono copie di ``config.json``.

@@ -36,14 +36,14 @@ MIGRATED_DIRNAME = ".migrated"
 
 
 def _taken(workspace: Path) -> set[str]:
+    from jenny.apps.drafts import DRAFTS_DIRNAME
+    from jenny.apps.trash import trashed_slugs
+
     apps = Path(workspace) / "apps"
-    names: set[str] = set()
-    for sub in (apps, apps / ".drafts"):
+    names = trashed_slugs(workspace)
+    for sub in (apps, apps / DRAFTS_DIRNAME):
         if sub.is_dir():
             names |= {p.name for p in sub.iterdir() if p.is_dir()}
-    trash = apps / ".trash"
-    if trash.is_dir():
-        names |= {p.name.rsplit("-", 1)[0] for p in trash.iterdir()}
     return names
 
 

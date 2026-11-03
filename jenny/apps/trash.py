@@ -122,6 +122,14 @@ def _records(path: Path) -> int:
     return count
 
 
+def trashed_slugs(workspace: Path) -> set[str]:
+    """Gli slug che hanno una voce nel cestino (uno slug preso, per chi ne sceglie uno)."""
+    root = trash_dir(workspace)
+    if not root.is_dir():
+        return set()
+    return {m.group("slug") for p in root.iterdir() if (m := _ENTRY_RE.match(p.name))}
+
+
 def list_trash(workspace: Path) -> list[dict]:
     """Le voci del cestino, la più recente per prima: ``{id, slug, name, at, records}``."""
     root = trash_dir(workspace)

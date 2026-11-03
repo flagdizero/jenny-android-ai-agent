@@ -664,7 +664,9 @@ def find_app(workspace: Path, slug: str) -> LoadedApp | None:
     """Load a single app by slug, or None when the folder doesn't exist."""
     if not SLUG_RE.match(slug):
         return None
-    app_dir = Path(workspace) / "apps" / slug
+    from jenny.apps.drafts import app_dir as live_dir
+
+    app_dir = live_dir(workspace, slug)
     if not app_dir.is_dir():
         return None
     return load_app(app_dir)
