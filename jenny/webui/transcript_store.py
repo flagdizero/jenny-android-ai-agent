@@ -49,14 +49,105 @@ SCHEMA = Schema(
         ) WITHOUT ROWID;
         CREATE INDEX transcript_rows_turn ON transcript_rows(key, turn);
         """,
+        # Fin dove i turni di un verbale sono già compatti (``compact_turn``).
+        """
+        CREATE TABLE transcript_compacted (
+          key TEXT PRIMARY KEY,
+          through_turn INTEGER NOT NULL
+        );
+        """,
     ),
     # Negli snapshot: un pezzo per chunk di turni, così i turni vecchi restano
     # lo stesso blob mentre la coda cresce.
     shards={
         "transcripts": "key",
         "transcript_rows": f"key || '/' || (turn / {TURNS_PER_CHUNK})",
+        "transcript_compacted": "key",
     },
 )
+
+# -- i pezzetti dello streaming ---------------------------------------------------
+#
+# Un turno arriva a pezzetti: un ``delta`` o un ``reasoning_delta`` per ogni
+# chunk del provider. Nel verbale erano il 95% delle righe (287 mila su 303 mila
+# sul telefono di prova, il 03/11/2026, e 52 dei 67 MB di dati). Il replay li
+# incolla comunque (``transcript_replay``: i ``delta`` consecutivi fanno un testo,
+# i ``reasoning_delta`` consecutivi un ragionamento), quindi a turno chiuso si
+# fondono: un frame per tratto, col testo di tutti e gli altri campi dell'ultimo
+# (il replay tiene il ``turn_seq`` dell'ultimo pezzo). Misurato sui dati veri: il
+# replay è identico su tutti i 2056 turni, e 8 volte più veloce. Il turno in corso
+# resta a pezzetti: una WebUI che si riconnette a metà lo rivede come prima.
+_FUSIBLE_EVENTS = frozenset({"delta", "reasoning_delta"})
+# I campi che cambiano da un pezzetto all'altro dello stesso tratto.
+_PER_CHUNK_FIELDS = frozenset({"text", "at", "turn_seq", "ts"})
+
+
+def _same_stretch(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    if a.get("event") != b.get("event") or a.get("event") not in _FUSIBLE_EVENTS:
+        return False
+    if not isinstance(a.get("text"), str) or not isinstance(b.get("text"), str):
+        return False
+    return ({k: v for k, v in a.items() if k not in _PER_CHUNK_FIELDS}
+            == {k: v for k, v in b.items() if k not in _PER_CHUNK_FIELDS})
+
+
+def fuse_frames(
+    frames: list[tuple[int, dict[str, Any]]],
+) -> list[tuple[int, dict[str, Any], list[int]]]:
+    """I tratti da fondere di un turno: ``(seq tenuta, frame fuso, seq da togliere)``.
+
+    *frames* sono ``(seq, frame)`` in ordine. Un frame che non si fonde con niente
+    non compare.
+    """
+    out: list[tuple[int, dict[str, Any], list[int]]] = []
+    i = 0
+    while i < len(frames):
+        j = i + 1
+        while j < len(frames) and _same_stretch(frames[j - 1][1], frames[j][1]):
+            j += 1
+        if j - i > 1:
+            stretch = [frame for _seq, frame in frames[i:j]]
+            fused = dict(stretch[-1], text="".join(f["text"] for f in stretch))
+            out.append((frames[i][0], fused, [seq for seq, _f in frames[i + 1:j]]))
+        i = j
+    return out
+
+
+def compact_turn(conn: Any, session_key: str, turn: int) -> int:
+    """Fonde i pezzetti del turno *turn* di *session_key*; ritorna quante righe ha tolto.
+
+    Dentro la transazione di chi chiama. Rifarla non cambia niente.
+    """
+    frames: list[tuple[int, dict[str, Any]]] = []
+    for row in conn.execute("SELECT seq, data FROM transcript_rows WHERE key = ? AND turn = ? "
+                            "ORDER BY seq", (session_key, turn)):
+        try:
+            record = json.loads(row["data"])
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            frames.append((row["seq"], record))
+    removed = 0
+    for seq, fused, dropped in fuse_frames(frames):
+        conn.execute("UPDATE transcript_rows SET data = ? WHERE key = ? AND seq = ?",
+                     (_record_json_line(fused), session_key, seq))
+        conn.executemany("DELETE FROM transcript_rows WHERE key = ? AND seq = ?",
+                         [(session_key, s) for s in dropped])
+        removed += len(dropped)
+    return removed
+
+
+def _note_compacted(conn: Any, session_key: str, turn: int) -> None:
+    """Il segnalibro avanza solo di un turno alla volta: ``through_turn`` vuol dire
+    «tutti i turni fino a qui», e i turni di prima di questa versione li compatta
+    :func:`compact_closed_turns`, che lo porta avanti lei."""
+    row = conn.execute("SELECT through_turn FROM transcript_compacted WHERE key = ?",
+                       (session_key,)).fetchone()
+    through = row["through_turn"] if row else -1
+    if through == turn - 1:
+        conn.execute("INSERT INTO transcript_compacted(key, through_turn) VALUES (?, ?) "
+                     "ON CONFLICT(key) DO UPDATE SET through_turn = excluded.through_turn",
+                     (session_key, turn))
 
 
 def _is_user_transcript_row(row: dict[str, Any]) -> bool:
@@ -205,6 +296,36 @@ def iter_transcript_backwards(session_key: str, *, block: int = 200) -> Iterator
         before = rows[-1]["seq"]
 
 
+# -- chi segue i verbali ----------------------------------------------------------
+#
+# L'indice di ricerca delle chat (``webui/chat_index``) si tiene in pari da qui:
+# questo modulo è l'unico che scrive i verbali. Sta in un altro database, quindi
+# non nella stessa transazione: se un aggiornamento manca (un kill in mezzo), lo
+# rimette in pari la riconciliazione dell'indice. Un errore qui non ferma mai la
+# scrittura del verbale.
+
+
+def _follow(action: str, *args: str) -> None:
+    try:
+        from jenny.webui import chat_index
+
+        getattr(chat_index, action)(_workspace(), *args)
+    except Exception:  # noqa: BLE001 — l'indice si rimette in pari da solo
+        logger.opt(exception=True).warning("Chat index: {} failed", action)
+
+
+def _turn_closed(session_key: str) -> None:
+    _follow("turn_closed", session_key)
+
+
+def _transcript_dropped(session_key: str) -> None:
+    _follow("transcript_dropped", session_key)
+
+
+def _transcript_renamed(old_key: str, new_key: str) -> None:
+    _follow("transcript_renamed", old_key, new_key)
+
+
 # -- scrivere -------------------------------------------------------------------
 
 
@@ -239,12 +360,18 @@ def append_transcript_object(session_key: str, obj: dict[str, Any]) -> None:
         seq, turn = (row["next_seq"], row["turn"]) if row else (0, 0)
         conn.execute("INSERT INTO transcript_rows(key, seq, turn, data) VALUES (?, ?, ?, ?)",
                      (session_key, seq, turn, raw))
+        closes = obj.get("event") == "turn_end"
         conn.execute(
             "INSERT INTO transcripts(key, next_seq, turn) VALUES (?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET next_seq = excluded.next_seq, turn = excluded.turn",
-            (session_key, seq + 1, turn + 1 if obj.get("event") == "turn_end" else turn),
+            (session_key, seq + 1, turn + 1 if closes else turn),
         )
+        if closes:
+            compact_turn(conn, session_key, turn)
+            _note_compacted(conn, session_key, turn)
     _bump_revision(session_key)
+    if closes:
+        _turn_closed(session_key)
 
 
 def delete_webui_transcript(session_key: str) -> bool:
@@ -253,7 +380,9 @@ def delete_webui_transcript(session_key: str) -> bool:
                                (session_key,)).rowcount > 0
         removed = conn.execute("DELETE FROM transcript_rows WHERE key = ?",
                                (session_key,)).rowcount > 0 or removed
+        conn.execute("DELETE FROM transcript_compacted WHERE key = ?", (session_key,))
     if removed:
+        _transcript_dropped(session_key)
         _bump_revision(session_key)
     return removed
 
@@ -268,9 +397,44 @@ def rename_webui_transcript(old_key: str, new_key: str) -> bool:
             return False
         conn.execute("UPDATE transcripts SET key = ? WHERE key = ?", (new_key, old_key))
         conn.execute("UPDATE transcript_rows SET key = ? WHERE key = ?", (new_key, old_key))
+        conn.execute("DELETE FROM transcript_compacted WHERE key = ?", (new_key,))
+        conn.execute("UPDATE transcript_compacted SET key = ? WHERE key = ?", (new_key, old_key))
+    _transcript_renamed(old_key, new_key)
     _bump_revision(old_key)
     _bump_revision(new_key)
     return True
+
+
+def compact_closed_turns(*, batch: int = 50) -> int:
+    """Compatta i turni chiusi che non lo sono ancora; ritorna quante righe ha tolto.
+
+    Al boot, in un thread: i verbali di prima di questa versione, quelli
+    importati dalla migrazione e quelli riportati da uno snapshot vecchio. Il
+    segnalibro (``transcript_compacted``) la fa costare una query quando non c'è
+    niente da fare. A lotti di *batch* turni, ognuno una transazione, così chi
+    scrive in chat non aspetta la passata intera.
+    """
+    database = _db()
+    removed = 0
+    for row in database.read(
+        "SELECT t.key, t.turn, coalesce(c.through_turn, -1) AS through FROM transcripts t "
+        "LEFT JOIN transcript_compacted c ON c.key = t.key WHERE t.turn - 1 > "
+        "coalesce(c.through_turn, -1)"
+    ):
+        key, closed, done = row["key"], int(row["turn"]) - 1, int(row["through"])
+        while done < closed:
+            last = min(done + batch, closed)
+            with database.write() as conn:
+                for turn in range(done + 1, last + 1):
+                    removed += compact_turn(conn, key, turn)
+                conn.execute(
+                    "INSERT INTO transcript_compacted(key, through_turn) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET through_turn = excluded.through_turn",
+                    (key, last))
+            done = last
+    if removed:
+        logger.info("Transcripts: fused {} streaming rows", removed)
+    return removed
 
 
 def transcript_bytes(session_key: str) -> int:

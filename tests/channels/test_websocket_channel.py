@@ -774,7 +774,9 @@ async def test_stream_transcript_persists_without_subscribers() -> None:
 
     assert channel._subs == {}
     lines = read_transcript_lines("websocket:default")
-    assert [line["event"] for line in lines] == ["delta", "delta", "stream_end", "turn_end"]
+    # Chiuso il turno, i due pezzetti sono un frame solo (``transcript_store.compact_turn``).
+    assert [line["event"] for line in lines] == ["delta", "stream_end", "turn_end"]
+    assert lines[0]["text"] == "hello world"
     body = build_webui_thread_response("websocket:default")
     assert body is not None
     assert body["messages"][-1]["role"] == "assistant"

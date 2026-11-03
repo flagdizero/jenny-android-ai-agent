@@ -22,6 +22,9 @@ from jenny.webui.transcript import (
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr("jenny.config.paths.get_data_dir", lambda: tmp_path)
+    # Turni a pezzetti come quelli di prima della fusione (``compact_turn``), che
+    # restano tali finché la passata d'avvio non li compatta: il tetto è per loro.
+    monkeypatch.setattr("jenny.webui.transcript_store.compact_turn", lambda *a: 0)
     return tmp_path
 
 

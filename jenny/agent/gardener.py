@@ -1003,12 +1003,13 @@ def read_recent_user_messages(
 
     Letti dal codice e messi nel prompt, **non** esposti come file: la cassetta
     del giardiniere resta chiusa sulla cartella del progetto, e il transcript sta
-    fuori (``.jenny/webui/``). Allargargli la superficie di lettura per questa
-    cosa sola sarebbe pagare in permessi quel che si puo' pagare in prompt.
+    fuori, in ``state.sqlite`` (``webui/transcript_store``). Allargargli la
+    superficie di lettura per questa cosa sola sarebbe pagare in permessi quel
+    che si puo' pagare in prompt.
 
-    Il transcript non e' il registro del modello: la compattazione riscrive
-    ``sessions/``, non questo file. E' per questo che serve — e' il solo posto
-    dove resta quel che l'utente ha detto davvero.
+    Il transcript non e' il registro del modello: la compattazione riscrive la
+    sessione, non il transcript. E' per questo che serve — e' il solo posto dove
+    resta quel che l'utente ha detto davvero.
 
     **Si legge dal fondo**, a blocchi, e si smette appena la finestra è piena:
     la coda è tutto quel che serve, e il verbale di un progetto può essere

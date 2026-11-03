@@ -203,22 +203,32 @@ class Database:
     # -- copia e chiusura -----------------------------------------------------
 
     def backup_to(self, dest: Path) -> None:
-        """Una copia coerente del database in *dest*, mentre gli altri scrivono.
+        """Una copia coerente e compatta del database in *dest*, mentre gli altri scrivono.
 
-        Si usa l'API di backup di SQLite e non una copia del file: il file vivo
-        ha accanto il suo ``-wal``, e copiarlo a metà di una transazione darebbe
-        un database rotto.
+        ``VACUUM INTO`` e non una copia del file: il file vivo ha accanto il suo
+        ``-wal``, e copiarlo a metà di una transazione darebbe un database rotto.
+        Nemmeno l'API di backup, che copia pagina per pagina anche quelle rimaste
+        vuote: dopo che si tolgono righe (i pezzetti dei verbali, il 03/11/2026)
+        il backup si sarebbe portato dietro lo spazio libero.
         """
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.unlink(missing_ok=True)
-        target = sqlite3.connect(str(dest))
-        try:
-            with self._read_lock:
-                self._check_open()
-                self._reader.backup(target)
-        finally:
-            target.close()
+        with self._read_lock:
+            self._check_open()
+            self._reader.execute("VACUUM INTO ?", (str(dest),))
+
+    def vacuum(self) -> None:
+        """Riscrive il file senza le pagine vuote, e riporta il ``-wal`` piccolo.
+
+        Tiene la scrittura per tutto il tempo (secondi, su un file grande): chi
+        scrive aspetta il lock, non fallisce. Serve circa la misura del file in
+        spazio libero.
+        """
+        with self._write_lock:
+            self._check_open()
+            self._writer.execute("VACUUM")
+            self._writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def close(self) -> None:
         with self._write_lock, self._read_lock:

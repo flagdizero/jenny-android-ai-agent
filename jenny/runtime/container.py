@@ -478,6 +478,49 @@ class GatewayContainer:
         if finished:
             logger.info("Finished {} interrupted undo(s)", finished)
 
+    # Dopo quante righe tolte vale un ``VACUUM`` dello stato: la prima passata sui
+    # verbali di prima della fusione (287 mila righe sul telefono di prova) sì, i
+    # turni rimasti di un giorno no.
+    _VACUUM_AFTER_ROWS = 50_000
+
+    async def _database_maintenance(self) -> None:
+        """Al boot, in un thread e senza fermare l'avvio: i verbali compatti, lo
+        spazio che torna, l'indice delle chat in pari. Non solleva."""
+        workspace = self.config.workspace_path
+
+        def run() -> None:
+            import shutil
+
+            from jenny import db
+            from jenny.webui import chat_index
+            from jenny.webui.transcript_store import compact_closed_turns
+
+            try:
+                removed = compact_closed_turns()
+            except Exception:
+                logger.opt(exception=True).warning("Could not compact the transcripts")
+                removed = 0
+            if removed >= self._VACUUM_AFTER_ROWS:
+                state = db.database_for_workspace(workspace, db.STATE)
+                try:
+                    size = state.path.stat().st_size
+                    free = shutil.disk_usage(state.path.parent).free
+                    if free > size * 2:
+                        state.vacuum()
+                        logger.info("State database vacuumed: {} -> {} bytes",
+                                    size, state.path.stat().st_size)
+                    else:
+                        logger.warning("State database not vacuumed: {} bytes free, {} needed",
+                                       free, size * 2)
+                except Exception:
+                    logger.opt(exception=True).warning("Could not vacuum the state database")
+            try:
+                chat_index.reconcile(workspace)
+            except Exception:
+                logger.opt(exception=True).warning("Could not bring the chat index up to date")
+
+        await asyncio.to_thread(run)
+
     def build(self) -> None:
         """Costruisce l'intero grafo di oggetti (composition point)."""
         from jenny.bus.queue import MessageBus
@@ -898,6 +941,7 @@ class GatewayContainer:
             await record_startup_gap()
             await self.cron.start()
             await self.snapshot.start()
+            self._maintenance = asyncio.create_task(self._database_maintenance())
             tasks = [self.channels.start()]
             if self._agent:
                 tasks.append(self._agent.run())
