@@ -67,7 +67,7 @@ let hold = null;
 const toasts = [];
 
 const api = {
-  getProviderModels(provider) {
+  providerModels(provider) {
     requested.push(provider);
     const c = catalogs[provider];
     if (c === undefined) return Promise.reject(new Error('niente elenco'));
@@ -89,7 +89,7 @@ const api = {
 function showToast(msg, type) { toasts.push([msg, type]); }
 /* I due comandi della stanza sul filo, che qui passano per i finti di sopra. */
 const rpc = {
-  providerModels: ({ provider }) => api.getProviderModels(provider),
+  providerModels: ({ provider }) => api.providerModels(provider),
   updateProvider: (params) => api.updateProvider(params),
 };
 
@@ -422,7 +422,7 @@ def test_a_catalogue_that_arrives_late_does_not_paint_over_the_one_you_read() ->
       for (const k of Object.keys(nodi)) delete nodi[k];
       requested.length = 0;
       const s = new HomeModel({});
-      api.getProviderModels = (p) => {
+      api.providerModels = (p) => {
         requested.push(p);
         if (p === 'groq') return expected.then(() => ({ status: 'available', models: [{ id: 'tardi' }] }));
         return Promise.resolve({ status: 'available', models: [{ id: 'subito' }] });
