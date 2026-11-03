@@ -578,7 +578,7 @@ async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -
     anche l'app viva (``agent.write_journal``). Prima l'annulla diceva «rimesso»
     — la bozza non c'era più — e l'app restava cambiata."""
     from jenny.agent.tools.app_tool import AppBuildTool, AppPublishTool
-    from jenny.agent.write_journal import HELPER, journal_for, journal_key
+    from jenny.agent.write_journal import HELPER, bind_journal, journal_for, journal_key
     from jenny.security.subagent_policy import (
         SubagentRunPolicy,
         enter_subagent_policy,
@@ -595,10 +595,10 @@ async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -
               for p in live.rglob("*") if p.is_file()}
 
     policy = SubagentRunPolicy.for_run("t9", ws)
-    policy.journal = journal_for(ws, journal_key(HELPER, "lin-b"))
-    policy.journal.begin("t9", 1)
+    journal = journal_for(ws, journal_key(HELPER, "lin-b"))
+    journal.begin("t9", 1)
     builder = AppBuildTool(origin_session_key="unified:default", lineage_id="lin-b")
-    with enter_subagent_policy(policy):
+    with enter_subagent_policy(policy), bind_journal(journal):
         out = await builder.execute(action="set", slug="portafoglio", key="reader.every",
                                     value="1440")
         settle_writes("app")
@@ -607,7 +607,7 @@ async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -
     assert "`portafoglio` is updated" in out, out
     assert json.loads((live / "app.json").read_text())["reader"]["every"] == 1440
 
-    report = policy.journal.undo(by="jenny")
+    report = journal.undo(by="jenny")
     assert report.kept == [], report.kept
     after = {p.relative_to(live).as_posix(): p.read_bytes()
              for p in live.rglob("*") if p.is_file()}

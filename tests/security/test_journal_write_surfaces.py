@@ -1,16 +1,16 @@
 """Ogni scrittore passa dal registro dell'annulla, o dice perché no.
 
-Il registro delle scritture degli aiutanti (``agent.subagent_journal``) vale
-quanto i punti in cui è agganciato: un modo di scrivere nato fra sei mesi e mai
-agganciato è un file che l'annulla lascerebbe com'è, mentre la casa promette
-«annullate le sue modifiche». La lista degli scrittori esiste già — è
+Il registro delle scritture (``agent.write_journal``) vale quanto i punti in cui
+è agganciato: un modo di scrivere nato fra sei mesi e mai agganciato è un file
+che l'annulla lascerebbe com'è, mentre la casa promette «annullate le sue
+modifiche». La lista degli scrittori esiste già — è
 l'inventario della sola lettura (``test_readonly_write_surfaces``) — e questo
 file la riusa: ogni modulo che lì risulta scrivere qui è o agganciato (con il
 punto da cui passa) o fuori (con la ragione). Uno nuovo non classificato fa
 fallire il test.
 
 Le prove di comportamento, con i file veri, stanno in
-``tests/agent/test_subagent_journal.py``.
+``tests/agent/test_write_journal.py``.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ _NOT_JOURNALED: dict[str, str] = {
 
 _HOOK = re.compile(
     r"\bjournal_touch\(|\bcheck_subagent_write\(|\b_check_subagent_write\("
-    r"|\b_refuse_guarded_write\(|\.journal\.touch\("
+    r"|\b_refuse_guarded_write\(|\bjournal\.touch\("
 )
 
 
@@ -102,9 +102,16 @@ def test_the_journaled_ones_really_reach_the_journal() -> None:
     assert not missing, f"agganci dichiarati ma assenti: {missing}"
 
 
+def _body(src: str, name: str) -> str:
+    return src.split(f"def {name}(", 1)[1].split("\ndef ", 1)[0]
+
+
 def test_the_common_fence_notes_the_before() -> None:
     """``check_write`` è l'aggancio di quasi tutti: se smette di annotare, il
-    test sopra resta verde e l'annulla diventa vuoto."""
+    test sopra resta verde e l'annulla diventa vuoto. E annota anche fuori da un
+    aiutante (il turno di Jenny in un piano): l'annotazione non sta dentro il
+    ramo della politica, che vale solo per gli aiutanti."""
     src = _strip_prose((ROOT / "security/subagent_policy.py").read_text(encoding="utf-8"))
-    body = src.split("def check_write(", 1)[1].split("\ndef ", 1)[0]
-    assert ".journal.touch(" in body
+    last = _body(src, "check_write").rstrip().splitlines()[-1]
+    assert last.strip().startswith("journal_touch("), last
+    assert "current_journal()" in _body(src, "journal_touch")

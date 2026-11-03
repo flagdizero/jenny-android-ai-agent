@@ -11,6 +11,8 @@ giro intero, con un aiutante finto che scrive coi suoi strumenti.
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -26,6 +28,7 @@ from jenny.agent.write_journal import (
     KEPT_CHANGED_DURING,
     KEPT_NOT_SAVED,
     WriteJournal,
+    bind_journal,
     finish_interrupted_undos,
     journal_key,
     objects_dir_for,
@@ -73,12 +76,25 @@ def ws(tmp_path: Path) -> Path:
     return root
 
 
-def _helper(ws: Path, lineage: str = "lin1", task: str = "t1", attempt: int = 1):
-    """Una politica di lavoro col suo registro, come la lega ``_run_subagent``."""
-    policy = SubagentRunPolicy.for_run(task, ws)
-    policy.journal = WriteJournal(ws, _key(lineage))
-    policy.journal.begin(task, attempt)
-    return policy
+@dataclass
+class _Helper:
+    """Un aiutante finto: la sua politica e il suo registro."""
+
+    policy: SubagentRunPolicy
+    journal: WriteJournal
+
+
+def _helper(ws: Path, lineage: str = "lin1", task: str = "t1", attempt: int = 1) -> _Helper:
+    journal = WriteJournal(ws, _key(lineage))
+    journal.begin(task, attempt)
+    return _Helper(SubagentRunPolicy.for_run(task, ws), journal)
+
+
+@contextmanager
+def _at_work(helper: _Helper):
+    """Come lega ``_run_subagent``: la politica e il registro, insieme."""
+    with enter_subagent_policy(helper.policy), bind_journal(helper.journal):
+        yield
 
 
 def _write(path: Path, text: str) -> None:
@@ -107,7 +123,7 @@ def _tree(root: Path) -> dict[str, str]:
 
 def test_the_journal_notes_before_and_after_only_for_real_changes(ws: Path) -> None:
     page = ws / "wikis/piante/wiki/acero.md"
-    with enter_subagent_policy(_helper(ws)):
+    with _at_work(_helper(ws)):
         _write(page, "nuovo")
         check_write(ws / "wikis/piante/wiki/felce.md")  # toccato e non scritto
         settle_writes("apply_patch")
@@ -134,7 +150,7 @@ def test_undo_puts_back_three_written_pages_and_one_deleted(ws: Path) -> None:
     before = _tree(ws)
     wiki = ws / "wikis/piante/wiki"
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         _write(wiki / "acero.md", "riscritta")
         _write(wiki / "nuove" / "quercia.md", "nuova pagina")
         _write(wiki / "felce.md", "riscritta anche questa")
@@ -152,7 +168,7 @@ def test_undo_puts_back_three_written_pages_and_one_deleted(ws: Path) -> None:
 def test_a_page_changed_after_the_helper_is_left_alone(ws: Path) -> None:
     wiki = ws / "wikis/piante/wiki"
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         _write(wiki / "acero.md", "dell'aiutante")
         _write(wiki / "felce.md", "dell'aiutante")
     (wiki / "acero.md").write_text("dell'utente, dopo", encoding="utf-8")
@@ -165,11 +181,11 @@ def test_a_page_changed_after_the_helper_is_left_alone(ws: Path) -> None:
 def test_two_helpers_on_the_same_page_never_undo_each_other(ws: Path) -> None:
     page = ws / "wikis/piante/wiki/acero.md"
     a, b = _helper(ws, "linA", "tA"), _helper(ws, "linB", "tB")
-    with enter_subagent_policy(a):
+    with _at_work(a):
         _write(page, "A1")
-    with enter_subagent_policy(b):
+    with _at_work(b):
         _write(page, "B1")
-    with enter_subagent_policy(a):
+    with _at_work(a):
         _write(page, "A2")
     report_a = a.journal.undo()
     assert page.read_text() == "A2", "B è passato in mezzo: il lavoro di A resta"
@@ -182,9 +198,9 @@ def test_two_helpers_on_the_same_page_never_undo_each_other(ws: Path) -> None:
 def test_the_last_helper_on_a_page_can_be_undone_alone(ws: Path) -> None:
     page = ws / "wikis/piante/wiki/acero.md"
     a, b = _helper(ws, "linA", "tA"), _helper(ws, "linB", "tB")
-    with enter_subagent_policy(a):
+    with _at_work(a):
         _write(page, "di A")
-    with enter_subagent_policy(b):
+    with _at_work(b):
         _write(page, "di B")
     b.journal.undo()
     assert page.read_text() == "di A", "si toglie B, e A resta com'era"
@@ -193,9 +209,9 @@ def test_the_last_helper_on_a_page_can_be_undone_alone(ws: Path) -> None:
 def test_simultaneous_writes_are_shared_and_left_alone(ws: Path) -> None:
     page = ws / "wikis/piante/wiki/acero.md"
     a, b = _helper(ws, "linA", "tA"), _helper(ws, "linB", "tB")
-    with enter_subagent_policy(a):
+    with _at_work(a):
         check_write(page)
-    with enter_subagent_policy(b):
+    with _at_work(b):
         check_write(page)
     page.write_text("di chi?", encoding="utf-8")
     a.journal.settle()
@@ -209,18 +225,13 @@ def test_a_resumed_lineage_is_undone_as_a_whole(ws: Path) -> None:
     """Fermato al budget e fatto continuare: lo stesso lavoro, un annulla solo."""
     wiki = ws / "wikis/piante/wiki"
     before = _tree(ws)
-    journal = WriteJournal(ws, _key())
-    first = SubagentRunPolicy.for_run("t1", ws)
-    first.journal = journal
-    journal.begin("t1", 1)
-    with enter_subagent_policy(first):
+    first = _helper(ws, task="t1")
+    with _at_work(first):
         _write(wiki / "acero.md", "primo tentativo")
     # Un processo nuovo: il registro si rilegge dal database.
     jdb.close_all()
-    again = SubagentRunPolicy.for_run("t2", ws)
-    again.journal = WriteJournal(ws, _key())
-    again.journal.begin("t2", 1)
-    with enter_subagent_policy(again):
+    again = _helper(ws, task="t2")
+    with _at_work(again):
         _write(wiki / "acero.md", "ripresa")
         _write(wiki / "felce.md", "ripresa")
     assert again.journal.changed_files == 2
@@ -232,7 +243,7 @@ def test_a_file_too_large_to_copy_is_not_undoable(ws: Path, monkeypatch) -> None
     monkeypatch.setattr(write_journal, "MAX_BLOB_BYTES", 10)
     page = ws / "wikis/piante/wiki/acero.md"
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         _write(page, "x" * 50)
     report = policy.journal.undo()
     assert page.read_text() == "x" * 50
@@ -243,7 +254,7 @@ def test_an_undo_killed_halfway_is_finished_at_boot(ws: Path, monkeypatch) -> No
     wiki = ws / "wikis/piante/wiki"
     before = _tree(ws)
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         _write(wiki / "acero.md", "uno")
         _write(wiki / "felce.md", "due")
     calls = {"n": 0}
@@ -272,7 +283,7 @@ def test_a_new_folder_copied_in_one_go_is_undone(ws: Path) -> None:
     ``copytree``): i suoi file non passano uno per uno da un recinto."""
     target = ws / "apps" / ".drafts" / "meteo"
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         check_write(target)
         (target / "app").mkdir(parents=True)
         (target / "app.json").write_text("{}", encoding="utf-8")
@@ -291,7 +302,7 @@ def test_files_already_in_a_partly_noted_folder_are_never_taken_for_new(
     monkeypatch.setattr(write_journal, "MAX_DIR_FILES", 1)
     wiki = ws / "wikis/piante/wiki"
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         check_write(wiki, tree=True)
         (wiki / "nuova.md").write_text("nuova", encoding="utf-8")
         settle_writes("python_exec")
@@ -317,11 +328,11 @@ def board_ws(ws: Path) -> Path:
     return ws
 
 
-def _helper_edits_board(ws: Path) -> SubagentRunPolicy:
+def _helper_edits_board(ws: Path) -> _Helper:
     """L'editore toglie una pagina da una scheda e ne aggiunge una nuova."""
     root = ws / "wikis" / "piante"
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         def edit(b):
             b["cards"][0]["pages"] = []
             b["cards"].append({"id": "c3", "title": "Ficus", "pages": ["ficus.md"]})
@@ -389,7 +400,7 @@ def test_touching_an_existing_folder_does_not_hand_its_files_to_the_helper(ws: P
     durante lo strumento diventava dell'aiutante, e l'annulla lo toglieva."""
     wiki = ws / "wikis/piante/wiki"
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         check_write(wiki)  # os.makedirs(wiki, exist_ok=True)
         (wiki / "acero.md").write_text("dell'utente, durante", encoding="utf-8")
         (wiki / "utente.md").write_text("nuova dell'utente", encoding="utf-8")
@@ -407,7 +418,7 @@ def test_a_moved_file_that_could_not_be_saved_is_never_deleted(ws: Path, monkeyp
     raw.mkdir(parents=True)
     (raw / "foto.jpg").write_bytes(b"x" * 100)
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         check_write(raw / "foto.jpg", tree=True)
         check_write(raw / "rinominata.jpg", tree=True)
         (raw / "foto.jpg").rename(raw / "rinominata.jpg")
@@ -420,7 +431,7 @@ def test_a_moved_file_that_could_not_be_saved_is_never_deleted(ws: Path, monkeyp
 
 def test_a_second_undo_keeps_the_first_report(ws: Path) -> None:
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         _write(ws / "wikis/piante/wiki/acero.md", "x")
     first = policy.journal.undo(by="jenny")
     again = policy.journal.undo(by="user")
@@ -431,7 +442,7 @@ def test_a_board_merge_finished_before_a_kill_is_not_redone(board_ws: Path, monk
     root = board_ws / "wikis" / "piante"
     before = _board(board_ws)
     policy = _helper_edits_board(board_ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         _write(board_ws / "wikis/piante/wiki/acero.md", "x")
     mutate_board(root, lambda b: b.update(lastSeen="t"))
     real = WriteJournal._undo_file
@@ -491,7 +502,7 @@ async def test_python_exec_writes_are_journaled_through_the_executor(ws: Path) -
         "write_file('wikis/piante/wiki/felce.md', 'dal builtin')\n"
         "print('ok')\n"
     )
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         out = await tool.execute(code=code)
         settle_writes("python_exec")
     assert "ok" in out
@@ -509,7 +520,7 @@ def test_the_journal_lives_outside_the_workspace(ws: Path, tmp_path: Path) -> No
     """Fuori dal workspace: un aiutante non ci arriva coi suoi strumenti, e né le
     foto né il backup lo portano."""
     policy = _helper(ws)
-    with enter_subagent_policy(policy):
+    with _at_work(policy):
         _write(ws / "wikis/piante/wiki/acero.md", "x")
     blob = next(p for p in objects_dir_for(ws).rglob("*") if p.is_file())
     assert ws.resolve() not in blob.resolve().parents
@@ -523,14 +534,14 @@ def test_the_old_journal_folder_stays_secret_until_it_is_removed(ws: Path) -> No
     old = ws / "subagents" / "journal" / "lin1" / "entries.jsonl"
     old.parent.mkdir(parents=True)
     old.write_text("{}", encoding="utf-8")
-    with enter_subagent_policy(_helper(ws)), pytest.raises(SubagentSecretError):
+    with _at_work(_helper(ws)), pytest.raises(SubagentSecretError):
         check_read(old)
 
 
 def test_orphan_journals_are_swept(ws: Path) -> None:
     for lineage, page in (("vivo", "acero.md"), ("orfano", "felce.md")):
         policy = _helper(ws, lineage, lineage)
-        with enter_subagent_policy(policy):
+        with _at_work(policy):
             _write(ws / "wikis/piante/wiki" / page, "x")
     saved = lambda: [p for p in objects_dir_for(ws).rglob("*") if p.is_file()]  # noqa: E731
     assert len(saved()) == 2
@@ -622,3 +633,36 @@ async def test_jenny_can_stop_and_undo_from_her_tool(ws: Path) -> None:
     assert _tree(ws) == before
     status = manager.status_snapshot("unified:default")["recent"][0]
     assert status["undo"]["by"] == "jenny"
+
+
+# -- il registro legato, fuori da un aiutante --------------------------------
+
+
+def test_a_bound_journal_notes_writes_outside_a_helper(ws: Path) -> None:
+    """Il turno di Jenny in un piano non ha politica d'aiutante, ma un registro
+    sì: le sue scritture passano dagli stessi recinti e si annotano lo stesso,
+    col passo del piano."""
+    page = ws / "wikis/piante/wiki/acero.md"
+    journal = WriteJournal(ws, journal_key("plan", "p1"))
+    with bind_journal(journal, step="s2"):
+        _write(page, "dal piano")
+    entry = _entries_of(ws, journal.key)[0]
+    assert entry["path"] == "wikis/piante/wiki/acero.md" and entry["step"] == "s2"
+    journal.undo()
+    assert page.read_text() == "# acero.md\n\nstato iniziale\n"
+
+
+def test_no_bound_journal_notes_nothing(ws: Path) -> None:
+    _write(ws / "wikis/piante/wiki/acero.md", "dell'utente")
+    assert not (ws.parent / "db" / "undo.sqlite").exists() or not _entries(ws)
+
+
+def test_binding_none_hides_an_inherited_journal(ws: Path) -> None:
+    journal = WriteJournal(ws, _key())
+    with bind_journal(journal), bind_journal(None):
+        _write(ws / "wikis/piante/wiki/acero.md", "da un task nato altrove")
+    assert not _entries(ws)
+
+
+def _entries_of(ws: Path, key: str) -> list[dict]:
+    return WriteJournal(ws, key)._read_entries()

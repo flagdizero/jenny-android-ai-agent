@@ -49,7 +49,6 @@ from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in conf
 from jenny.security.subagent_policy import StagedWriteRequiredError
 from jenny.security.subagent_policy import check_read as _check_subagent_read
 from jenny.security.subagent_policy import check_write as _check_subagent_write
-from jenny.security.subagent_policy import current_subagent_policy as _current_subagent_policy
 from jenny.security.subagent_policy import must_stage as _must_stage_subagent_write
 from jenny.security.subagent_policy import note_move as _note_subagent_move
 from jenny.security.subagent_policy import note_write as _note_subagent_write
@@ -3326,10 +3325,12 @@ async def run_python_async(
     ident_cell: list[int | None] = [None]
     done_cell = [False]
 
-    # Dentro un aiutante il registro dell'annulla conta questo thread: dopo una
-    # cancellazione può continuare a scrivere, e l'annulla lo aspetta.
-    _policy = _current_subagent_policy()
-    journal = _policy.journal if _policy is not None else None
+    # Il registro dell'annulla legato (un aiutante, un turno di un piano) conta
+    # questo thread: dopo una cancellazione può continuare a scrivere, e
+    # l'annulla lo aspetta.
+    from jenny.agent.write_journal import current_journal
+
+    journal = current_journal()
 
     def _run():
         ident_cell[0] = threading.get_ident()

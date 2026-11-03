@@ -11,15 +11,14 @@ nel frattempo hanno scritto l'utente, il giardiniere o un altro aiutante. Il
 registro invece lo scrive chi scrive, nei punti da cui ogni scrittura di un
 aiutante passa già.
 
-**Chi lo tiene.** Il codice, mai il modello. :class:`WriteJournal` sta sulla
-politica del lavoro (``security.subagent_policy.SubagentRunPolicy.journal``),
-che ``SubagentManager._run_subagent`` lega a una ``ContextVar`` e che arriva
-anche nei thread di ``python_exec``. I recinti di scrittura chiamano
-:meth:`WriteJournal.touch` subito prima di scrivere (``subagent_policy.check_write``
-e ``journal_touch``), e il runner chiama :meth:`WriteJournal.settle` dopo ogni
-strumento: lì si misura il «dopo» e si annota la riga. Fuori da un aiutante non
-c'è politica, e niente di questo modulo gira: Jenny principale, il giardiniere,
-Dream e l'utente non hanno registro.
+**Chi lo tiene.** Il codice, mai il modello. Chi lavora per conto di qualcosa
+lega il suo registro con :func:`bind_journal` (una ``ContextVar``, che arriva
+anche nei thread di ``python_exec``): ``SubagentManager._run_subagent`` quello
+dell'aiutante. I recinti di scrittura chiamano :meth:`WriteJournal.touch` del
+registro legato subito prima di scrivere (``subagent_policy.check_write`` e
+``journal_touch``), e il runner chiama :meth:`WriteJournal.settle` dopo ogni
+strumento: lì si misura il «dopo» e si annota la riga. Senza registro legato
+niente di questo modulo gira: il giardiniere, Dream e l'utente non ne hanno.
 
 **La chiave è il lineage**, non il tentativo: un aiutante fatto continuare dopo
 un budget, un 429 o un riavvio è lo stesso lavoro, e l'annulla toglie tutto ciò
@@ -76,7 +75,9 @@ import sqlite3
 import threading
 import time
 import zlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -336,6 +337,8 @@ class _Pending:
     # L'ora del tocco, non del «dopo»: due registri che scrivono lo stesso file
     # uno dopo l'altro si mettono in fila per quando hanno scritto davvero.
     ts: float = 0.0
+    # Il passo del piano per cui si scriveva, se il registro era legato a uno.
+    step: str | None = None
     # Una cartella di cui si conosce tutto il contenuto al tocco (nuova, o
     # annotata per intero): al «dopo» ogni file che ci si trova e non era
     # annotato è nato in questo strumento. Una cartella annotata solo in parte
@@ -602,7 +605,8 @@ class WriteJournal:
                     content = None
                 else:
                     self._pending_bytes += len(content)
-        pending = _Pending(before=before, content=content, walk=before is None, ts=time.time())
+        pending = _Pending(before=before, content=content, walk=before is None, ts=time.time(),
+                           step=current_step() if current_journal() is self else None)
         self._pending[rel] = pending
         key = str(target)
         with _OWNERS_LOCK:
@@ -656,6 +660,8 @@ class WriteJournal:
                 }
                 if tool:
                     entry["tool"] = tool
+                if p.step:
+                    entry["step"] = p.step
                 if shared:
                     entry["shared"] = True
                 key = entry["path"]
@@ -694,7 +700,7 @@ class WriteJournal:
                     if child_rel is None or child_rel in pending or child_rel in found:
                         continue
                     found.add(child_rel)
-                    born.append((child_rel, _Pending(before=None, ts=p.ts)))
+                    born.append((child_rel, _Pending(before=None, ts=p.ts, step=p.step)))
                     if len(born) >= MAX_DIR_FILES:
                         return born
         return born
@@ -940,6 +946,41 @@ class WriteJournal:
         self._paths.clear()
         self._changed = 0
         self._saved_bytes = 0
+
+
+@dataclass(frozen=True, slots=True)
+class _Binding:
+    journal: WriteJournal | None
+    step: str | None
+
+
+_CURRENT: ContextVar[_Binding | None] = ContextVar("jenny_write_journal", default=None)
+
+
+def current_journal() -> WriteJournal | None:
+    """Il registro legato a questo lavoro, se c'è."""
+    binding = _CURRENT.get()
+    return binding.journal if binding is not None else None
+
+
+def current_step() -> str | None:
+    """Il passo del piano del registro legato, se è legato a uno."""
+    binding = _CURRENT.get()
+    return binding.step if binding is not None else None
+
+
+@contextmanager
+def bind_journal(journal: WriteJournal | None, *, step: str | None = None) -> Iterator[None]:
+    """Le scritture fatte qui dentro vanno in *journal* (``None``: in nessuno).
+
+    ``None`` serve a chi parte da un contesto copiato e non deve ereditare per
+    caso il registro di un altro (un task nato da un thread).
+    """
+    token = _CURRENT.set(_Binding(journal, step))
+    try:
+        yield
+    finally:
+        _CURRENT.reset(token)
 
 
 def _entry(row: sqlite3.Row) -> dict[str, Any]:

@@ -72,6 +72,7 @@ from jenny.agent.write_journal import (
     HELPER,
     UndoReport,
     WriteJournal,
+    bind_journal,
     journal_for,
     journal_key,
     journal_stats,
@@ -1880,6 +1881,9 @@ class SubagentManager:
         # coda a una sua copia, e il checkpoint ne porta solo la parte nuova.
         initial: list[dict[str, Any]] = []
         run_policy: list[SubagentRunPolicy] = []
+        # Il registro del tentativo, tenuto qui e non solo nel contesto: il
+        # ``finally`` sotto sta fuori dal blocco che lo lega.
+        run_journal: list[WriteJournal] = []
 
         async def _on_checkpoint(payload: dict) -> None:
             phase = payload.get("phase", status.phase)
@@ -1958,17 +1962,20 @@ class SubagentManager:
                 task_id, Path(self.workspace), seed=spec.taint_seed, task=spec.task,
             )
             # Il registro delle scritture del lineage, per l'annulla: i recinti
-            # di scrittura ci annotano il «prima», il runner il «dopo».
-            policy.journal = self._journal_for(status.lineage_id or task_id)
-            if policy.journal is not None:
-                policy.journal.begin(task_id, status.attempt)
+            # di scrittura ci annotano il «prima», il runner il «dopo». Col passo
+            # del piano, se lavora per uno: il ritorno di un passo toglie il suo.
+            journal = self._journal_for(status.lineage_id or task_id)
+            if journal is not None:
+                journal.begin(task_id, status.attempt)
                 # Un lineage che riparte dopo un annulla non è più «annullato».
                 self._journal_cache.pop(status.lineage_id, None)
+                run_journal.append(journal)
             self._run_policies[task_id] = policy
             initial.extend(messages)
             run_policy.append(policy)
             max_iterations = self._type_max_iterations(atype)
-            with enter_workspace_scope(workspace_scope), enter_subagent_policy(policy):
+            with (enter_workspace_scope(workspace_scope), enter_subagent_policy(policy),
+                  bind_journal(journal, step=spec.plan_step)):
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
                     tools=tools,
@@ -2142,8 +2149,8 @@ class SubagentManager:
         finally:
             # Le scritture dello strumento interrotto (una cancellazione arriva
             # a metà di un tool): il runner non è arrivato al suo «dopo».
-            if run_policy and run_policy[0].journal is not None:
-                run_policy[0].journal.settle()
+            if run_journal:
+                run_journal[0].settle()
             self._run_policies.pop(task_id, None)
             self._close_browser_session(status.lineage_id)
             if not marker.done():
