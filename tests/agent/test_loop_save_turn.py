@@ -4,12 +4,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.context import ContextBuilder
 from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_persistence import FollowupState
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import CRON_HISTORY_META, CRON_TRIGGER_META
 from jenny.providers.base import LLMResponse
 from jenny.runtime.user_text import say
@@ -41,11 +41,10 @@ def _mk_loop() -> AgentLoop:
 
 
 def _make_full_loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation = SimpleNamespace(max_tokens=4096)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Test title"))
-    loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
+    loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
     WebuiTurnCoordinator(
         bus=loop.bus,
         sessions=loop.sessions,

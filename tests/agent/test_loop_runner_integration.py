@@ -170,14 +170,9 @@ async def test_loop_retries_think_only_final_response(tmp_path):
 async def test_streamed_flag_not_set_on_llm_error(tmp_path):
     """When LLM errors during a streaming-capable channel interaction,
     _streamed must NOT be set so the outbound dispatcher delivers the error."""
-    from jenny.agent.loop import AgentLoop
     from jenny.bus.events import InboundMessage
-    from jenny.bus.queue import MessageBus
 
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+    loop = make_loop(tmp_path, context_window_tokens=None, bare=True)
     error_resp = LLMResponse(
         content="503 service unavailable", finish_reason="error", tool_calls=[], usage={},
         error_status_code=503,
