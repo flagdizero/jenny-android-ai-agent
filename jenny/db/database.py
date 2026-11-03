@@ -12,9 +12,10 @@ scrive e vede l'ultima transazione chiusa. Dentro una transazione si legge con
 la connessione che ``write`` restituisce, o non si vede quel che si è appena
 scritto.
 
-**Solo il motore che c'è sul telefono.** Chaquopy porta SQLite 3.50.4 senza
-FTS (misurato il 03/11/2026), mentre i Python del Mac hanno FTS5: una query che
-passa i test può non esistere sul telefono. Vale per tutto ``jenny/``:
+**Solo il motore che c'è sul telefono.** È il SQLite di Chaquopy, non quello dei
+Python del Mac: una query che passa i test può non esistere sul telefono. Dal
+plugin 17.1.0 è SQLite 3.53.4 con FTS3/4/5 (misurato il 03/11/2026), senza
+estensioni caricabili. Vale per tutto ``jenny/``:
 ``tests/db/test_engine_features.py`` lo controlla.
 """
 
