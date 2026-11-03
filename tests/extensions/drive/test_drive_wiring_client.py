@@ -13,13 +13,13 @@ from __future__ import annotations
 import re
 
 from support.js_harness import function, requires_node, run_js
-from support.kotlin_source import read_source
+from support.kotlin_source import PLAY_SRC, read_source
 
-from .ui_paths import EXT_UI, ROOT
+from .ui_paths import EXT_UI
 
 CLOUD_JS = (EXT_UI / "cloud-backup.js").read_text(encoding="utf-8")
 ONBOARDING_JS = (EXT_UI / "onboarding.js").read_text(encoding="utf-8")
-KOTLIN = ROOT / "android" / "app" / "src" / "play" / "java" / "com" / "flagdizero" / "jenny"
+KOTLIN = PLAY_SRC
 
 pytestmark = requires_node
 

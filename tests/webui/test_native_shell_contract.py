@@ -19,10 +19,10 @@ from __future__ import annotations
 import re
 
 import pytest
-from support.js_harness import ASSETS, ROOT
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS
+from support.kotlin_source import ANDROID_MAIN, read_source
 
-ANDROID = ROOT / "android" / "app" / "src" / "main"
+ANDROID = ANDROID_MAIN
 JAVA = ANDROID / "java" / "com" / "flagdizero" / "jenny"
 MANIFEST = ANDROID / "AndroidManifest.xml"
 MAIN_ACTIVITY = JAVA / "MainActivity.kt"

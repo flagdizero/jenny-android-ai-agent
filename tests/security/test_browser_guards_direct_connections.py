@@ -17,10 +17,10 @@ import re
 from pathlib import Path
 
 from support.js_harness import requires_node, run_js
-from support.kotlin_source import function_body, read_code, read_source
+from support.kotlin_source import ANDROID_MAIN, function_body, read_code, read_source
 
 ROOT = Path(__file__).resolve().parents[2]
-GUARD_JS = ROOT / "android" / "app" / "src" / "main" / "res" / "raw" / "browser_network_guard.js"
+GUARD_JS = ANDROID_MAIN / "res" / "raw" / "browser_network_guard.js"
 
 
 def _bridge() -> str:
