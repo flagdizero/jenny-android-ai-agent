@@ -129,6 +129,10 @@ def _apply_pending_restore(runtime_root: Path) -> bool:
         if workspace.is_dir():
             # Marker orfano (staging mai completato o già consumato): boot normale.
             logger.error("Restore marker without staged tree; clearing and booting normally")
+            # Il marker si scrive per ultimo, quindi lo staging era completo: è
+            # il giro dopo un crash fra la mossa 2 e la fine, e i database
+            # vanno ancora scambiati.
+            _apply_staged_databases(runtime_root)
         else:
             # Crash dopo la mossa 1 ma senza staged: ripristina la copia di
             # sicurezza per non avviarsi mai senza workspace.
@@ -164,6 +168,7 @@ def _apply_pending_restore(runtime_root: Path) -> bool:
     if staged_snapshots.is_dir():
         _merge_snapshot_store(staged_snapshots, runtime_root / "snapshots")
 
+    _apply_staged_databases(runtime_root)
     clear_marker(runtime_root)
     # Nel retry post-crash la mossa 1 era già avvenuta: safety può non esistere.
     logger.info(
@@ -172,6 +177,16 @@ def _apply_pending_restore(runtime_root: Path) -> bool:
         safety.name if safety.is_dir() else "an earlier safety copy",
     )
     return True
+
+
+def _apply_staged_databases(runtime_root: Path) -> None:
+    """Lo stato del backup al suo posto e l'annulla vuoto (``jenny/db/restore``).
+
+    I database sono ancora chiusi: questo gira prima del container.
+    """
+    from jenny.db.restore import apply_staged
+
+    apply_staged(runtime_root)
 
 
 def _merge_snapshot_store(staged: Path, current: Path) -> None:

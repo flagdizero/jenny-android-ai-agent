@@ -47,6 +47,10 @@ if TYPE_CHECKING:
 
 BACKUP_FORMAT_VERSION = 1
 IMPORT_STAGED_FILENAME = f"import{BACKUP_FILE_EXTENSION}"
+# Lo stato in SQLite (``jenny/db``), accanto a ``tree/`` e ``snapshots/``. Il
+# formato non cambia versione: chi non conosce questa voce la salta, come ogni
+# nome fuori da quei due, e un backup senza di lei lascia lo stato com'è.
+BACKUP_STATE_ENTRY = "db/state.sqlite"
 # I temporanei di export/import: in staging, fuori dal workspace (quindi fuori
 # dagli snapshot), e con un suffisso che la rotazione degli export non tocca.
 _PART_SUFFIX = ".part"
@@ -179,6 +183,7 @@ class BackupManager:
                     archive.write(full, f"tree/{rel}", compress_type=_compress_type_for(rel))
                 except OSError:
                     logger.warning("Backup export: skipping vanished file {}", rel)
+            self._add_state(archive)
             snapshots_dir = self._engine.snapshots_dir
             if snapshots_dir.is_dir():
                 for item in sorted(snapshots_dir.rglob("*")):
@@ -188,6 +193,20 @@ class BackupManager:
                             archive.write(item, f"snapshots/{rel}")
                         except OSError:
                             logger.warning("Backup export: skipping vanished file {}", rel)
+
+    def _add_state(self, archive: zipfile.ZipFile) -> None:
+        """Lo stato in SQLite (``jenny/db``): una copia coerente, non il file vivo.
+
+        Il diario dell'annulla no: vale solo per i file di questo telefono.
+        """
+        from jenny import db
+
+        copy = self._staging / f"state{_PART_SUFFIX}"
+        try:
+            db.database(self._runtime_root, db.STATE).backup_to(copy)
+            archive.write(copy, BACKUP_STATE_ENTRY)
+        finally:
+            copy.unlink(missing_ok=True)
 
     # -- import -----------------------------------------------------------------
 
@@ -255,6 +274,17 @@ class BackupManager:
                 metadata = json.loads(archive.read("metadata.json").decode("utf-8"))
             except (ValueError, UnicodeDecodeError) as exc:
                 raise BackupError("backup metadata.json is unreadable") from exc
+
+            if BACKUP_STATE_ENTRY in names:
+                from jenny.db.restore import StagedStateError, stage_state
+
+                try:
+                    with archive.open(BACKUP_STATE_ENTRY) as src:
+                        stage_state(self._runtime_root, src)
+                except StagedStateError as exc:
+                    shutil.rmtree(staged_ws, ignore_errors=True)
+                    shutil.rmtree(staged_snap, ignore_errors=True)
+                    raise BackupError(f"backup archive {BACKUP_STATE_ENTRY}: {exc}") from exc
 
             extracted_tree = 0
             for name in names:

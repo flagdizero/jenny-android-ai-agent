@@ -167,19 +167,29 @@ class SnapshotService:
         si sta ancora copiando. Se qualcosa fallisce prima del marker, l'albero
         si toglie.
         """
-        from jenny.snapshot.locations import STAGED_WORKSPACE_DIR_NAME, runtime_root_for
+        from jenny.snapshot.locations import (
+            STAGED_DB_DIR_NAME,
+            STAGED_WORKSPACE_DIR_NAME,
+            runtime_root_for,
+        )
         from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
 
         runtime_root = runtime_root_for(self._engine.root)
         staged = runtime_root / STAGED_WORKSPACE_DIR_NAME
+        # Lo stato in SQLite che un backup porta con sé (``jenny/db/restore``):
+        # stesso destino dell'albero, svuotato prima e tolto se il riempimento
+        # fallisce. Un ripristino dalla storia locale non lo riempie.
+        staged_db = runtime_root / STAGED_DB_DIR_NAME
         async with self._restore_lock:
             await asyncio.to_thread(shutil.rmtree, staged, True)
+            await asyncio.to_thread(shutil.rmtree, staged_db, True)
             try:
                 result = await fill(staged)
                 await asyncio.to_thread(write_staging_sanity, staged)
                 await self.snapshot_now("pre_restore")
             except BaseException:
                 await asyncio.to_thread(shutil.rmtree, staged, True)
+                await asyncio.to_thread(shutil.rmtree, staged_db, True)
                 raise
             write_marker(runtime_root, source=source, snapshot_id=snapshot_id)
             return result
