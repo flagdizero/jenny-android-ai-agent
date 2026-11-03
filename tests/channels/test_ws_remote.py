@@ -290,13 +290,6 @@ async def test_write_generates_the_key_once_and_keeps_it_when_off(config_file: P
 # -- Il canale vero -------------------------------------------------------------
 
 
-@pytest.fixture()
-def bus() -> MagicMock:
-    b = MagicMock()
-    b.publish_inbound = AsyncMock()
-    return b
-
-
 def _channel(bus: Any, port: int) -> WebSocketChannel:
     cfg: dict[str, Any] = {
         "enabled": True,

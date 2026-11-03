@@ -16,7 +16,7 @@ import hashlib
 import hmac
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -61,13 +61,6 @@ def _ch(
         "tokenIssueSecret": _AUTH_SECRET,
     }
     return make_ws_channel(cfg, bus, session_manager=session_manager, workspace_path=workspace_path)
-
-
-@pytest.fixture()
-def bus() -> MagicMock:
-    b = MagicMock()
-    b.publish_inbound = AsyncMock()
-    return b
 
 
 def _fake_media_dir(root: Path):

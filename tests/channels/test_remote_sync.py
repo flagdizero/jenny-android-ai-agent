@@ -38,13 +38,6 @@ from jenny.webui.transcript_store import (
 
 
 @pytest.fixture()
-def bus() -> MagicMock:
-    b = MagicMock()
-    b.publish_inbound = AsyncMock()
-    return b
-
-
-@pytest.fixture()
 def data_dir(tmp_path, monkeypatch) -> Path:
     monkeypatch.setattr("jenny.config.paths.get_data_dir", lambda: tmp_path)
     return tmp_path

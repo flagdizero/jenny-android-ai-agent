@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 import websockets
@@ -31,13 +31,6 @@ def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:
     }
     cfg.update(kw)
     return make_ws_channel(cfg, bus)
-
-
-@pytest.fixture()
-def bus() -> MagicMock:
-    b = MagicMock()
-    b.publish_inbound = AsyncMock()
-    return b
 
 
 # -- Connection basics ----------------------------------------------------

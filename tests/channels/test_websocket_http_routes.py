@@ -5,7 +5,7 @@ import functools
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -44,13 +44,6 @@ def _ch(
         workspace_path=workspace_path,
         runtime_model_name=runtime_model_name,
     )
-
-
-@pytest.fixture()
-def bus() -> MagicMock:
-    b = MagicMock()
-    b.publish_inbound = AsyncMock()
-    return b
 
 
 async def _http_get(
