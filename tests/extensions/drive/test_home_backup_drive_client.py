@@ -22,7 +22,6 @@ from .ui_paths import CORE_ASSETS, EXT_UI, locale
 ROOM_JS = (CORE_ASSETS / "home-backup.js").read_text(encoding="utf-8")
 DRIVE_JS = (EXT_UI / "home.js").read_text(encoding="utf-8")
 CLOUD_JS = (EXT_UI / "cloud-backup.js").read_text(encoding="utf-8")
-UTILS_JS = (CORE_ASSETS / "shared" / "utils.js").read_text(encoding="utf-8")
 WHEN_JS = (CORE_ASSETS / "shared" / "when.js").read_text(encoding="utf-8")
 I18N_JS = (CORE_ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8")
 IT = locale("it")
@@ -41,9 +40,9 @@ def _harness() -> str:
     blocking = re.search(r"export const CLOUD_BLOCKING = (\[[^\]]+\]);", CLOUD_JS).group(1)
     pure = "\n".join(
         function(CLOUD_JS, name)
-        for name in ("_startOfDay", "reasonKey", "cloudView", "nightStrip",
-                     "dayText", "progressSizes")
-    ) + "\n" + function(UTILS_JS, "sizeText")
+        for name in ("_startOfDay", "calendarDays", "reasonKey", "cloudView", "nightStrip",
+                     "dayText", "sizeText", "progressSizes")
+    )
     drive_value = function(DRIVE_JS, "backupValue").replace(
         "function backupValue(", "function driveBackupValue(")
     drive_class = _class(DRIVE_JS, "DriveBackupCard").replace(
@@ -55,6 +54,7 @@ const i18n = { locale: 'it', translations: { it: __IT__ }, __T__ };
 __WHEN__
 const CLOUD_LATE_MS = __LATE__;
 const CLOUD_BLOCKING = __BLOCKING__;
+const DAY_MS = 86400000;
 __PURE__
 
 function makeEl(tag) {
@@ -98,7 +98,7 @@ async function confirmDialog(text) { flows.push('confirm'); CONFIRM.asked.push(t
 const POLL_MS = 1500;
 const HISTORY_FIRST = 8;
 __SNAPSHOT_WHEN__
-const iconHtml = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
+const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 __ROW_HTML__
 __BACKUP_VALUE__
 __DRIVE_VALUE__
@@ -132,7 +132,7 @@ const on = (extra = {}) => ({ available: true, provider: 'drive', enabled_at_ms:
 """
         .replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
-        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay")))
+        .replace("__WHEN__", function(WHEN_JS, "whenText"))
         .replace("__LATE__", late)
         .replace("__BLOCKING__", blocking)
         .replace("__PURE__", pure)
@@ -152,9 +152,11 @@ def _run(script: str) -> None:
 def test_safe_says_it_and_answers_the_three_questions() -> None:
     _run("""
       const copies = [0, 1, 2, 3, 4, 5, 6].map(daysAgo);
-      /* Un'ora fa, ma sempre oggi: fra mezzanotte e l'una «un'ora fa» è ieri. */
-      const earlier = Math.max(new Date(NOW).setHours(0, 0, 0, 0), NOW - H);
-      const { page } = await room(on({ last_success_ms: earlier, recent_copies_ms: copies,
+      /* Un'ora fa, ma non prima di mezzanotte: fra le 00:00 e l'01:00 «un'ora
+         fa» è ieri, la riga dice giustamente «ieri alle 23:07» e la prova sotto
+         su «oggi alle» falliva per un'ora al giorno. */
+      const midnight = new Date(NOW).setHours(0, 0, 0, 0);
+      const { page } = await room(on({ last_success_ms: Math.max(NOW - H, midnight), recent_copies_ms: copies,
                                        stored_bytes: 8_400_000, last_verified_ms: daysAgo(2) }));
       const html = card();
       assert.equal(nodi['home-backup-ext'].hidden, false);
@@ -399,16 +401,18 @@ def test_the_local_history_names_the_copys_snapshots() -> None:
     assert locale("en")["backup"]["trigger"]["pre_cloud"]
 
 
-def test_mounting_reads_the_state() -> None:
+def test_mounting_registers_the_password_dialog_and_reads_the_state() -> None:
     mount = function(DRIVE_JS, "mountHome")
     _run(f"""
+      const CLOUD_PASSWORD_DIALOG_ID = 'oc-cloud-password-dialog';
       {mount}
       for (const k of Object.keys(nodi)) delete nodi[k];
       CLOUD.status = on({{ last_success_ms: NOW }});
       const page = new HomeBackup({{}});
-      mountHome({{ homeBackup: page }});
+      const registered = [];
+      mountHome({{ homeBackup: page, registerSharedDialog: (id) => registered.push(id) }});
       await new Promise((r) => setTimeout(r, 0));
+      assert.deepEqual(registered, ['oc-cloud-password-dialog']);
       assert.ok(page.value().startsWith('al sicuro'), page.value());
       assert.equal(nodi['home-backup-ext'].hidden, false);
     """)
-
