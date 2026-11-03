@@ -186,6 +186,7 @@ def _finish_move(workspace: Path, old_key: str, new_key: str) -> bool:
             "Spostamento {} -> {} ancora incompleto: {}", old_key, new_key, ", ".join(stuck)
         )
         return False
+    _follow_records(workspace, old_key, new_key)
     logger.info("Spostamento interrotto completato: {} -> {}", old_key, new_key)
     return True
 
@@ -297,6 +298,20 @@ def follow_renamed_project(
                 "and I will finish it the next time I start"
             )
         moved.append((src, dst))
+    _follow_records(workspace, old_key, new_key)
     _forget(workspace, record)
     logger.info("Chat di progetto seguita: {} -> {}", old_key, new_key)
     return True, None
+
+
+def _follow_records(workspace: Path, old_key: str, new_key: str) -> None:
+    """I record degli aiutanti seguono la chat: una transazione, ripetibile."""
+    # Import locale: ``agent/subagent_records`` tira dentro ``agent/loop``, che
+    # importa questo modulo (``tests/session/test_cold_imports.py``).
+    from jenny.agent.subagent_records import rename_session_records
+
+    try:
+        rename_session_records(workspace, old_key, new_key)
+    except Exception:  # noqa: BLE001 — i file sono già spostati; la ripresa al boot riprova
+        logger.opt(exception=True).error("Record degli aiutanti non spostati: {} -> {}",
+                                         old_key, new_key)

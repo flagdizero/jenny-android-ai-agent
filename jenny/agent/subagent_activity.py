@@ -17,8 +17,8 @@ Tre livelli, indipendenti e testabili separatamente:
   invece di fidarsi. Uno stream che perde eventi in silenzio e peggio di un
   pannello statico, perche si guadagna una fiducia che non merita.
 * :func:`build_digest` + :class:`SubagentDigestStore` — la condensa che
-  sopravvive al task: un file per task sotto ``<workspace>/subagents/activity/``,
-  scritto una volta alla transizione terminale e letto solo quando qualcuno
+  sopravvive al task: una riga per task in ``state.sqlite``,
+  scritta una volta alla transizione terminale e letto solo quando qualcuno
   espande il blocco "cosa ha fatto davvero".
 
 Forma dell'evento (piatta, sola-JSON, una forma con campi opzionali, cosi un
@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import threading
 import time
 from collections import deque
@@ -70,9 +71,9 @@ from urllib.parse import urlparse
 
 from loguru import logger
 
-from jenny.agent.subagent_records import SUBAGENTS_DIRNAME
+from jenny.agent.subagent_records import subagents_database
 from jenny.utils.helpers import clip
-from jenny.utils.path import abbreviate_path, atomic_write
+from jenny.utils.path import abbreviate_path
 
 __all__ = [
     "ACTIVITY_KINDS",
@@ -177,9 +178,6 @@ MAX_DIGEST_EVENTS = 300
 MAX_TRACKED_TASKS = 64
 
 _DIGEST_VERSION = 1
-# La radice ``subagents/`` arriva dai record: un letterale duplicato qui
-# diventerebbe una seconda directory al primo refuso.
-_ACTIVITY_DIRNAME = "activity"
 
 # Guardia: un digest oltre questa soglia e patologico (non lo produciamo mai),
 # quindi lo si ignora invece di caricarlo in RAM su un telefono.
@@ -1827,26 +1825,17 @@ class DigestMeta:
         return self.events > 0 and self.bytes > 0
 
 
-# Traversal guard: il task id diventa un nome di file, quindi passa da un
-# charset chiuso invece che da una sanitizzazione per sottrazione. ``..`` e ``/``
-# non sopravvivono a questa sostituzione.
-_UNSAFE_TASK_ID_RE = re.compile(r"[^A-Za-z0-9_-]")
 _MAX_TASK_ID_CHARS = 120
 
 
 class SubagentDigestStore:
-    """Un file JSON per task sotto ``<workspace>/subagents/activity/``.
+    """Il digest di attività di un task: una riga di ``state.sqlite`` (``subagent_digests``).
 
     Scritto **una volta** alla transizione terminale, riletto solo quando
-    qualcuno espande il blocco: il digest non sta dentro il JSONL dei record
-    Tier-1 proprio per questo — quel file viene riscritto per intero a ogni
-    transizione, e ~16 KB di digest per subagent lo trasformerebbero in
-    centinaia di KB riscritti ogni volta.
-
-    Scritture atomiche con fsync come il resto del codebase
-    (``agent/memory.py``, ``session/manager.py``). Letture tolleranti: un file
-    troncato o corrotto degrada a "nessun digest", perche il gateway deve poter
-    bootare comunque.
+    qualcuno espande il blocco: il digest non sta dentro il record proprio per
+    questo — il record si riscrive a ogni transizione, e ~16 KB di digest per
+    aiutante lo appesantirebbero ogni volta. Letture tolleranti: una riga
+    rotta degrada a "nessun digest".
     """
 
     def __init__(self, workspace: Any) -> None:
@@ -1856,18 +1845,8 @@ class SubagentDigestStore:
         self._workspace = workspace
 
     @property
-    def root(self) -> Path | None:
-        try:
-            return Path(self._workspace) / SUBAGENTS_DIRNAME / _ACTIVITY_DIRNAME
-        except TypeError:
-            return None
-
-    def path_for(self, task_id: str) -> Path | None:
-        root = self.root
-        if root is None or not isinstance(task_id, str):
-            return None
-        stem = _UNSAFE_TASK_ID_RE.sub("_", task_id)[:_MAX_TASK_ID_CHARS].strip("_")
-        return root / f"{stem}.json" if stem else None
+    def _db(self):
+        return subagents_database(self._workspace)
 
     # -- write ---------------------------------------------------------------
 
@@ -1875,12 +1854,13 @@ class SubagentDigestStore:
         """Scrive il digest e ritorna cosa il record deve registrarne.
 
         Non solleva: siamo sul percorso della transizione terminale, dove un
-        errore di I/O non deve poter impedire di chiudere il subagent. Un digest
-        vuoto non produce file (il blocco in chat non va offerto per niente).
+        errore del database non deve poter impedire di chiudere il subagent. Un
+        digest vuoto non produce riga (il blocco in chat non va offerto per
+        niente).
         """
-        path = self.path_for(task_id)
+        database = self._db
         normalized = [e for e in (_normalize_event(x) for x in events) if e is not None]
-        if path is None or not normalized:
+        if database is None or not isinstance(task_id, str) or not task_id or not normalized:
             return DigestMeta()
         payload = json.dumps(
             {
@@ -1892,73 +1872,65 @@ class SubagentDigestStore:
             ensure_ascii=False,
         )
         try:
-            atomic_write(path, payload)
-        except OSError as e:
+            with database.write() as conn:
+                conn.execute(
+                    "INSERT INTO subagent_digests(task_id, data) VALUES (?, ?) "
+                    "ON CONFLICT(task_id) DO UPDATE SET data = excluded.data",
+                    (task_id, payload),
+                )
+        except sqlite3.Error as e:
             logger.warning("Subagent activity digest write failed for {}: {}", task_id, e)
             return DigestMeta()
         return DigestMeta(events=len(normalized), bytes=len(payload.encode("utf-8")))
 
     def delete(self, task_id: str) -> bool:
-        """Cancella il digest di un task. ``True`` se un file e stato rimosso."""
-        path = self.path_for(task_id)
-        if path is None:
+        """Cancella il digest di un task. ``True`` se ce n'era uno."""
+        database = self._db
+        if database is None:
             return False
         try:
-            return path.unlink(missing_ok=True) is None and not path.exists()
-        except OSError as e:
+            with database.write() as conn:
+                return conn.execute("DELETE FROM subagent_digests WHERE task_id = ?",
+                                    (task_id,)).rowcount > 0
+        except sqlite3.Error as e:
             logger.warning("Subagent activity digest delete failed for {}: {}", task_id, e)
             return False
 
     def keep_only(self, task_ids: Iterable[str]) -> int:
         """Rimuove i digest orfani, cioe senza record. Ritorna quanti.
 
-        Su un telefono un file orfano e una perdita lenta: i digest vengono
-        cancellati insieme al loro record (vedi ``SubagentRecordStore.append``),
-        e questa e la rete di sicurezza per cio che e sfuggito — un crash tra la
-        scrittura del digest e quella del record, o un file lasciato da una
-        versione precedente.
+        I digest vanno via insieme al loro record (``SubagentRecordStore.append``);
+        questa e la rete di sicurezza per cio che e sfuggito, come un crash fra
+        la scrittura del digest e quella del record.
         """
-        root = self.root
-        if root is None:
+        database = self._db
+        if database is None:
             return 0
-        live = {
-            stem for task_id in task_ids
-            if (path := self.path_for(task_id)) is not None and (stem := path.stem)
-        }
-        removed = 0
-        try:
-            paths = list(root.glob("*.json"))
-        except OSError as e:
-            logger.warning("Subagent activity dir unreadable {}: {}", root, e)
-            return 0
-        for path in paths:
-            if path.stem in live:
-                continue
-            try:
-                path.unlink(missing_ok=True)
-                removed += 1
-            except OSError as e:
-                logger.warning("Orphan digest unlink failed {}: {}", path, e)
-        return removed
+        live = set(task_ids)
+        with database.write() as conn:
+            orphans = [r["task_id"] for r in conn.execute("SELECT task_id FROM subagent_digests")
+                       if r["task_id"] not in live]
+            conn.executemany("DELETE FROM subagent_digests WHERE task_id = ?",
+                             [(i,) for i in orphans])
+        return len(orphans)
 
     # -- read ----------------------------------------------------------------
 
     def load(self, task_id: str) -> list[dict[str, Any]]:
         """Eventi del digest, o ``[]`` se non c'e o non e leggibile."""
-        path = self.path_for(task_id)
-        if path is None:
+        database = self._db
+        if database is None or not isinstance(task_id, str):
+            return []
+        rows = database.read("SELECT data FROM subagent_digests WHERE task_id = ?", (task_id,))
+        if not rows:
             return []
         try:
-            if not path.is_file():
+            if len(rows[0]["data"]) > _MAX_DIGEST_FILE_BYTES:
+                logger.warning("Subagent activity digest too large, ignoring: {}", task_id)
                 return []
-            if path.stat().st_size > _MAX_DIGEST_FILE_BYTES:
-                logger.warning("Subagent activity digest too large, ignoring: {}", path)
-                return []
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as e:
-            # Un digest e un extra: troncato da un kill a meta scrittura o
-            # scritto da una versione incompatibile, degrada a "nessun digest".
-            logger.warning("Subagent activity digest unreadable {}: {}", path, e)
+            raw = json.loads(rows[0]["data"])
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning("Subagent activity digest unreadable {}: {}", task_id, e)
             return []
         events = raw.get("events") if isinstance(raw, Mapping) else None
         if not isinstance(events, list):

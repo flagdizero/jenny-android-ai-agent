@@ -1,4 +1,4 @@
-"""Tests per la retention Tier-1 dei subagent (spec + record su disco)."""
+"""Tests per la retention Tier-1 dei subagent (spec + record in ``state.sqlite``)."""
 
 from __future__ import annotations
 
@@ -120,17 +120,19 @@ class TestRecordStoreRetention:
         assert loaded[0].result_summary == "found it"
         assert loaded[0].spec.task == "do the thing"
 
-    def test_records_live_under_workspace_subagents_dir(self, tmp_path: Path):
-        store = SubagentRecordStore(tmp_path)
+    def test_records_live_in_the_state_database(self, tmp_path: Path):
+        store = SubagentRecordStore(tmp_path / "ws")
         store.append(_record("t1"))
-        assert (tmp_path / "subagents" / "records" / "s1.jsonl").is_file()
+        assert store._db.path == (tmp_path / "db" / "state.sqlite").resolve()
+        assert [r["task_id"] for r in _rows(store)] == ["t1"]
 
-    def test_session_key_is_sanitized_into_filename(self, tmp_path: Path):
+    def test_two_keys_that_once_shared_a_file_stay_apart(self, tmp_path: Path):
+        """Il nome del file perdeva i ``:``: ``a:b`` e ``a_b`` finivano insieme."""
         store = SubagentRecordStore(tmp_path)
-        store.append(_record("t1", session_key="websocket:chat/1"))
-        files = list((tmp_path / "subagents" / "records").glob("*.jsonl"))
-        assert len(files) == 1
-        assert ":" not in files[0].name and "/" not in files[0].stem
+        store.append(_record("t1", session_key="websocket:chat"))
+        store.append(_record("t2", session_key="websocket_chat"))
+        assert [r.task_id for r in store.load("websocket:chat")] == ["t1"]
+        assert [r.task_id for r in store.load("websocket_chat")] == ["t2"]
 
     def test_cap_keeps_only_last_twenty_per_session(self, tmp_path: Path):
         store = SubagentRecordStore(tmp_path)
@@ -161,8 +163,7 @@ class TestRecordStoreRetention:
         now = time.time()
         store.append(_record("old", ended_at=now - RECORD_TTL_S - 10), now=now)
         store.append(_record("fresh", ended_at=now), now=now)
-        raw = (tmp_path / "subagents" / "records" / "s1.jsonl").read_text(encoding="utf-8")
-        assert "old" not in raw
+        assert [r["task_id"] for r in _rows(store)] == ["fresh"]
 
     def test_find_by_task_id_and_lineage(self, tmp_path: Path):
         store = SubagentRecordStore(tmp_path)
@@ -181,58 +182,28 @@ class TestRecordStoreRetention:
 
 
 class TestRecordStoreCorruption:
-    def _path(self, store: SubagentRecordStore, key: str = "s1") -> Path:
-        path = store._path_for(key)
-        assert path is not None
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path
+    def _put(self, store: SubagentRecordStore, task_id: str, data: str) -> None:
+        with store._db.write() as conn:
+            conn.execute("INSERT INTO subagent_records(task_id, session_key, ended_at, data) "
+                         "VALUES (?, 's1', 0, ?)", (task_id, data))
 
-    def test_truncated_line_is_skipped_not_raised(self, tmp_path: Path):
+    def test_an_unreadable_row_is_skipped_not_raised(self, tmp_path: Path):
         store = SubagentRecordStore(tmp_path)
+        store.append(_record("good"))
         good = json.dumps(_record("good").to_dict(), ensure_ascii=False)
-        path = self._path(store)
-        # Ultima riga troncata: kill a metà scrittura.
-        path.write_text(f"{good}\n{good[:40]}", encoding="utf-8")
-        loaded = store.load("s1")
-        assert [r.task_id for r in loaded] == ["good"]
-
-    def test_a_bad_byte_costs_only_its_line(self, tmp_path: Path):
-        """Prima la decodifica del file intero falliva, e lo storico era vuoto."""
-        store = SubagentRecordStore(tmp_path)
-        good = json.dumps(_record("good").to_dict(), ensure_ascii=False)
-        path = self._path(store)
-        path.write_bytes(b'{"task_id": "caf\xe9"}\n' + good.encode() + b"\n")
+        self._put(store, "cut", good[:40])
+        self._put(store, "no-spec", json.dumps({"task_id": "no-spec"}))
+        self._put(store, "list", json.dumps([1, 2, 3]))
         assert [r.task_id for r in store.load("s1")] == ["good"]
-
-    def test_garbage_and_wrong_shape_lines_are_skipped(self, tmp_path: Path):
-        store = SubagentRecordStore(tmp_path)
-        good = json.dumps(_record("good").to_dict(), ensure_ascii=False)
-        path = self._path(store)
-        path.write_text(
-            "\n".join([
-                "not json at all",
-                json.dumps({"task_id": "no-spec"}),
-                json.dumps([1, 2, 3]),
-                "",
-                good,
-            ]),
-            encoding="utf-8",
-        )
-        assert [r.task_id for r in store.load("s1")] == ["good"]
-
-    def test_fully_corrupt_file_loads_as_empty(self, tmp_path: Path):
-        store = SubagentRecordStore(tmp_path)
-        self._path(store).write_text("\x00\x01 broken", encoding="utf-8")
-        assert store.load("s1") == []
-        assert store.load_all() == []
+        assert [r.task_id for r in store.load_all()] == ["good"]
 
     def test_append_after_corruption_still_persists(self, tmp_path: Path):
         store = SubagentRecordStore(tmp_path)
-        self._path(store).write_text("garbage\n", encoding="utf-8")
+        self._put(store, "garbage", "garbage")
         store.append(_record("t1"))
         assert [r.task_id for r in store.load("s1")] == ["t1"]
 
-    def test_missing_file_loads_as_empty(self, tmp_path: Path):
+    def test_missing_records_load_as_empty(self, tmp_path: Path):
         store = SubagentRecordStore(tmp_path)
         assert store.load("never-written") == []
         assert store.find("whatever") is None
@@ -240,10 +211,14 @@ class TestRecordStoreCorruption:
     def test_unusable_workspace_is_a_noop(self):
         """Il manager deve restare costruibile anche senza un workspace usabile."""
         store = SubagentRecordStore(object())
-        assert store.root is None
+        assert store._db is None
         store.append(_record("t1"))  # nessuna eccezione
         assert store.load("s1") == []
         assert store.load_all() == []
+
+
+def _rows(store: SubagentRecordStore) -> list:
+    return store._db.read("SELECT task_id FROM subagent_records ORDER BY task_id")
 
 
 def test_the_default_label_stops_at_a_word() -> None:

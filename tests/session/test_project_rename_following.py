@@ -32,6 +32,7 @@ l'invariante vera — uno stato a metà è scritto e finibile — ha i suoi test
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -592,8 +593,11 @@ async def test_a_refusal_with_nothing_moved_still_says_nothing_is_lost(
 # ── L'elenco delle tracce ────────────────────────────────────────────────
 
 
-def test_the_trace_list_covers_the_three_that_move(loop: AgentLoop) -> None:
-    """La quarta traccia vive **dentro** la cartella, quindi si è già spostata da sé.
+def test_the_trace_list_covers_the_files_that_move(loop: AgentLoop) -> None:
+    """La traccia che vive **dentro** la cartella si è già spostata da sé.
+
+    I record degli aiutanti non sono più un file col nome della chat: stanno in
+    ``state.sqlite`` e li sposta una query (v. il test qui sotto).
 
     ``<progetto>/.jenny/tool-results/project_<nome>/`` viaggia col rinomino; il
     suo nome resta quello vecchio e ``_cleanup_tool_result_buckets`` lo rimuove
@@ -604,8 +608,28 @@ def test_the_trace_list_covers_the_three_that_move(loop: AgentLoop) -> None:
     kinds = {p.parent.name for p in paths}
     assert "sessions" in kinds
     assert "webui" in kinds
-    assert "records" in kinds
     assert all("project_palestra" in p.name for p in paths)
+
+
+def test_the_helpers_records_follow_the_chat(tmp_path: Path) -> None:
+    from jenny.agent.subagent_records import (
+        SubagentRecord,
+        SubagentRecordStore,
+        SubagentSpec,
+    )
+    from jenny.session.project_rename import follow_renamed_project
+
+    ws = tmp_path / "workspace"
+    (ws / "sessions").mkdir(parents=True)
+    (ws / "sessions" / "project_palestra.jsonl").write_text('{"_type": "metadata"}\n')
+    store = SubagentRecordStore(ws)
+    store.append(SubagentRecord(
+        task_id="t1", lineage_id="t1", attempt=1, state="done", ended_at=time.time(),
+        spec=SubagentSpec(task="x", label="x", session_key="project:palestra")))
+    assert follow_renamed_project(ws, "project:palestra", "project:corsa") == (True, None)
+    [moved] = store.load("project:corsa")
+    assert moved.spec.session_key == "project:corsa"
+    assert store.load("project:palestra") == []
 
 
 # ── T4.15 — non si insegue dentro un nome che nessuno puo' riaprire ──────

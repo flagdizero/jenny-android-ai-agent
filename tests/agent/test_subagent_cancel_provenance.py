@@ -226,11 +226,8 @@ def test_an_unknown_cancel_reason_degrades_to_none(tmp_path):
     assert record.cancel_reason is None
 
 
-def test_legacy_and_current_records_coexist_in_the_same_file(tmp_path):
+def test_legacy_and_current_records_coexist(tmp_path):
     store = SubagentRecordStore(tmp_path)
-    path = store._path_for("internal:direct")
-    assert path is not None
-    path.parent.mkdir(parents=True, exist_ok=True)
     current = SubagentRecord(
         task_id="ee55ff66",
         lineage_id="ee55ff66",
@@ -240,10 +237,12 @@ def test_legacy_and_current_records_coexist_in_the_same_file(tmp_path):
         cancel_reason=CANCEL_REASON_USER,
         ended_at=time.time(),
     )
-    path.write_text(
-        _legacy_line() + json.dumps(current.to_dict(), ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    with store._db.write() as conn:
+        for line in (_legacy_line(), json.dumps(current.to_dict(), ensure_ascii=False)):
+            data = json.loads(line)
+            conn.execute("INSERT INTO subagent_records(task_id, session_key, ended_at, data) "
+                         "VALUES (?, 'internal:direct', ?, ?)",
+                         (data["task_id"], data.get("ended_at") or 0, line))
 
     loaded = store.load("internal:direct")
     assert [r.cancel_reason for r in loaded] == [None, CANCEL_REASON_USER]

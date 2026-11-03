@@ -893,8 +893,14 @@ class TestDigestBeforeAfter:
 # --------------------------------------------------------------------------
 
 
+def _put_digest(store: SubagentDigestStore, task_id: str, payload: str) -> None:
+    with store._db.write() as conn:
+        conn.execute("INSERT INTO subagent_digests(task_id, data) VALUES (?, ?) "
+                     "ON CONFLICT(task_id) DO UPDATE SET data = excluded.data", (task_id, payload))
+
+
 class TestDigestStore:
-    def test_round_trip_through_disk(self, tmp_path):
+    def test_round_trip_through_the_database(self, tmp_path):
         store = SubagentDigestStore(tmp_path)
         log = SubagentActivityLog()
         log.append("sub-1", KIND_TOOL_START, summary="reading a.md", name="read_file")
@@ -908,23 +914,16 @@ class TestDigestStore:
         assert meta.exists
         assert meta.events == len(digest)
         assert meta.bytes > 0
-        assert (tmp_path / "subagents" / "activity" / "sub-1.json").is_file()
 
         loaded = store.load("sub-1")
         assert loaded == digest
-
-    def test_write_is_atomic_and_leaves_no_temp_file(self, tmp_path):
-        store = SubagentDigestStore(tmp_path)
-        store.write("sub-1", [{"seq": 1, "ts": 1.0, "kind": KIND_RESULT, "summary": "done"}])
-        files = sorted(p.name for p in (tmp_path / "subagents" / "activity").iterdir())
-        assert files == ["sub-1.json"]
 
     def test_empty_digest_writes_nothing(self, tmp_path):
         store = SubagentDigestStore(tmp_path)
         meta = store.write("sub-1", [])
         assert not meta.exists
         assert store.load("sub-1") == []
-        assert not (tmp_path / "subagents" / "activity" / "sub-1.json").exists()
+        assert store._db.read("SELECT count(*) FROM subagent_digests")[0][0] == 0
 
     def test_missing_digest_loads_as_empty(self, tmp_path):
         assert SubagentDigestStore(tmp_path).load("never-ran") == []
@@ -945,26 +944,18 @@ class TestDigestStore:
         # Il gateway deve poter bootare comunque: un post-mortem mancante non e
         # un'emergenza, un'eccezione al boot si.
         store = SubagentDigestStore(tmp_path)
-        path = store.path_for("sub-1")
-        assert path is not None
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(payload, encoding="utf-8")
+        _put_digest(store, "sub-1", payload)
         assert store.load("sub-1") == []
 
     def test_oversized_digest_is_ignored(self, tmp_path):
         store = SubagentDigestStore(tmp_path)
-        path = store.path_for("sub-1")
-        assert path is not None
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"version": 1, "events": [{"kind": "result", "summary": "x" * 600_000}]}))
+        _put_digest(store, "sub-1", json.dumps(
+            {"version": 1, "events": [{"kind": "result", "summary": "x" * 600_000}]}))
         assert store.load("sub-1") == []
 
     def test_persisted_events_keep_the_contract_shape(self, tmp_path):
         store = SubagentDigestStore(tmp_path)
-        path = store.path_for("sub-1")
-        assert path is not None
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({
+        _put_digest(store, "sub-1", json.dumps({
             "version": 1,
             "events": [
                 {"kind": "tool", "summary": "x", "status": "bogus", "duration_ms": "abc", "extra": 1},
@@ -979,23 +970,21 @@ class TestDigestStore:
         assert events[0]["status"] is None
         assert events[0]["duration_ms"] is None
 
-    def test_task_id_cannot_escape_the_activity_directory(self, tmp_path):
+    def test_a_task_id_is_a_key_not_a_path(self, tmp_path):
         store = SubagentDigestStore(tmp_path)
-        path = store.path_for("../../etc/passwd")
-        assert path is not None
-        assert path.parent == (tmp_path / "subagents" / "activity")
-        assert ".." not in path.name
+        store.write("../../etc/passwd", [{"kind": KIND_RESULT, "summary": "done"}])
+        assert store.load("../../etc/passwd") != []
+        assert not (tmp_path / "subagents").exists()
 
     def test_unusable_workspace_degrades_instead_of_raising(self):
         store = SubagentDigestStore(None)
-        assert store.root is None
-        assert store.path_for("x") is None
+        assert store._db is None
         assert not store.write("x", [{"kind": KIND_RESULT, "summary": "y"}]).exists
         assert store.load("x") == []
         assert store.delete("x") is False
         assert store.keep_only(["x"]) == 0
 
-    def test_delete_removes_the_file(self, tmp_path):
+    def test_delete_removes_the_digest(self, tmp_path):
         store = SubagentDigestStore(tmp_path)
         store.write("sub-1", [{"kind": KIND_RESULT, "summary": "done"}])
         assert store.delete("sub-1") is True

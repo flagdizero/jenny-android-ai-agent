@@ -55,12 +55,9 @@ def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
     questo e' il posto in cui aggiungerla — e
     ``tests/session/test_project_session_files.py`` e' quello che se ne accorge.
     """
-    # Import locali, e non e' igiene: ``agent/subagent_records`` tira dentro
-    # ``agent/loop``, che importa questo modulo — un ciclo, e un modulo di
-    # ``session/`` che importa ``agent/`` a livello di modulo e' anche
-    # un'inversione di layer. Preso da ``tests/session/test_cold_imports.py``,
-    # che prova ogni modulo come **primo** import di un interprete.
-    from jenny.agent.subagent_records import _RECORDS_DIRNAME, SUBAGENTS_DIRNAME
+    # I record degli aiutanti non sono più un file col nome della chat: stanno
+    # in ``state.sqlite``, e il rinomino e la cancellazione li seguono con una
+    # query (:func:`follow_project_records`, :func:`delete_project_traces`).
     from jenny.config.paths import get_webui_dir
 
     stem = SessionManager.safe_key(session_key)
@@ -71,7 +68,6 @@ def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
         webui / f"{webui_stem}.jsonl",
         webui / f"{webui_stem}.segments",
         webui / f"{webui_stem}.json",  # thread legacy, se questa installazione ne ha uno
-        workspace / SUBAGENTS_DIRNAME / _RECORDS_DIRNAME / f"{stem}.jsonl",
         # Il diario del turno in corso (``SessionManager.turn_journal_path``):
         # un turno interrotto lo lascia accanto alla sessione, e il checkpoint
         # lo rilegge al riavvio. Se non seguisse la sessione, il quaderno che
@@ -196,6 +192,15 @@ def delete_project_traces(workspace: Path, session_key: str) -> list[str]:
     la verita' sul disco.
     """
     removed: list[str] = []
+    # Import locale: ``agent/subagent_records`` tira dentro ``agent/loop``, che
+    # importa questo modulo (``tests/session/test_cold_imports.py``).
+    from jenny.agent.subagent_records import delete_session_records
+
+    try:
+        if delete_session_records(workspace, session_key):
+            removed.append("subagent records")
+    except Exception:  # noqa: BLE001 — come una traccia che resiste: si dice e si va avanti
+        logger.opt(exception=True).error("Record degli aiutanti non rimossi per {}", session_key)
     for path in project_trace_paths(workspace, session_key):
         if not path.exists():
             continue

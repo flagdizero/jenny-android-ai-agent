@@ -96,7 +96,6 @@ _EXTRA_SCANNED = (
     "apps/storage.py",
     "session/manager.py",
     "webui/transcript_store.py",
-    "agent/subagent_records.py",
     "config/store.py",
 )
 
@@ -222,12 +221,6 @@ _OUT_OF_SCOPE = {
         "il transcript è il verbale del turno, non un suo effetto: un turno in sola "
         "lettura va comunque registrato, o l'interruttore cancellerebbe la prova di "
         "cosa è stato chiesto"
-    ),
-    "agent/subagent_records.py": (
-        "contabilità di ciclo di vita dei subagent (`subagents/records/*.jsonl`), "
-        "scritta dal runtime e non dal modello. Il lavoro delegato *è* già coperto: "
-        "`spawn` copia lo scope del turno nella spec e il run lo rilega, quindi un "
-        "subagent nato in sola lettura è in sola lettura"
     ),
     "config/store.py": (
         "è il funnel della configurazione, e nessun tool lo chiama: i chiamanti sono "
