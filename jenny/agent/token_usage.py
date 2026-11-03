@@ -2,6 +2,10 @@
 
 Shared low-level module: the runtime and command layers record usage here,
 while the WebUI read view (`token_usage_payload`) surfaces the aggregates.
+
+I conti stanno in ``state.sqlite``, una riga per giorno (``token_usage_days``):
+viaggiano con gli snapshot e il backup, a pezzi per mese. Fino alla 2.x erano
+``.jenny/webui/token-usage.json``; lo importa ``db_migration/small_state.py``.
 """
 
 from __future__ import annotations
@@ -16,13 +20,11 @@ from typing import Any
 from loguru import logger
 
 from jenny.agent.hook import AgentHook, AgentHookContext
-from jenny.config.paths import get_webui_dir
+from jenny.db.schema import Schema
 from jenny.session.keys import internal_session_kind
 from jenny.utils.helpers import safe_zoneinfo
-from jenny.utils.path import atomic_write
 
 TOKEN_USAGE_SCHEMA_VERSION = 1
-_MAX_STATE_FILE_BYTES = 512 * 1024
 _MAX_DAYS_RETAINED = 400
 _USAGE_KEYS = (
     "prompt_tokens",
@@ -68,8 +70,28 @@ _INTERNAL_KIND_TO_SOURCE = {
 _WRITE_LOCK = threading.Lock()
 
 
-def token_usage_state_path() -> Path:
-    return get_webui_dir() / "token-usage.json"
+SCHEMA = Schema(
+    "token_usage",
+    ("CREATE TABLE token_usage_days ("
+     "day TEXT PRIMARY KEY, updated_at TEXT NOT NULL, data TEXT NOT NULL);",),
+    # Negli snapshot un pezzo per mese: i mesi passati non cambiano più.
+    shards={"token_usage_days": "substr(day, 1, 7)"},
+)
+
+
+def _workspace() -> Path:
+    """Il workspace dei conti; i test lo sostituiscono con uno loro."""
+    from jenny.config.paths import get_workspace_path
+
+    return get_workspace_path()
+
+
+def _db():
+    from jenny import db
+
+    database = db.database_for_workspace(_workspace(), db.STATE)
+    database.require(SCHEMA)
+    return database
 
 
 def default_token_usage_state() -> dict[str, Any]:
@@ -221,36 +243,45 @@ def normalize_token_usage_state(raw: Any) -> dict[str, Any]:
 
 
 def read_token_usage_state() -> dict[str, Any]:
-    path = token_usage_state_path()
-    if not path.is_file():
-        return default_token_usage_state()
-    try:
-        if path.stat().st_size > _MAX_STATE_FILE_BYTES:
-            logger.warning("token usage state too large, ignoring: {}", path)
-            return default_token_usage_state()
-        with open(path, encoding="utf-8") as f:
-            raw = json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
-        logger.warning("read token usage state failed {}: {}", path, e)
-        return default_token_usage_state()
-    return normalize_token_usage_state(raw)
+    rows = _db().read("SELECT day, updated_at, data FROM token_usage_days ORDER BY day")
+    days: dict[str, Any] = {}
+    for row in rows:
+        try:
+            days[row["day"]] = json.loads(row["data"])
+        except ValueError:
+            logger.warning("token usage of {} unreadable, skipped", row["day"])
+    updated = max((row["updated_at"] for row in rows), default=None)
+    return normalize_token_usage_state({"days": days, "updated_at": updated})
 
 
 def write_token_usage_state(raw: dict[str, Any]) -> dict[str, Any]:
+    """*raw* al posto dei conti salvati, in una transazione."""
     state = normalize_token_usage_state(raw)
     state["updated_at"] = _utc_now_iso()
-    encoded = json.dumps(
-        state,
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-    ).encode("utf-8")
-    if len(encoded) > _MAX_STATE_FILE_BYTES:
-        raise ValueError("token usage state is too large")
-
-    path = token_usage_state_path()
-    atomic_write(path, encoded + b"\n")
+    with _db().write() as conn:
+        conn.execute("DELETE FROM token_usage_days")
+        conn.executemany(
+            "INSERT INTO token_usage_days(day, updated_at, data) VALUES (?, ?, ?)",
+            [(day, state["updated_at"], json.dumps(row, ensure_ascii=False, sort_keys=True))
+             for day, row in state["days"].items()],
+        )
     return state
+
+
+def _write_day(day: str, row: dict[str, Any]) -> None:
+    """Il giorno *day* salvato; oltre ``_MAX_DAYS_RETAINED`` giorni cadono i più vecchi."""
+    with _db().write() as conn:
+        conn.execute(
+            "INSERT INTO token_usage_days(day, updated_at, data) VALUES (?, ?, ?) "
+            "ON CONFLICT(day) DO UPDATE SET updated_at = excluded.updated_at, "
+            "data = excluded.data",
+            (day, _utc_now_iso(), json.dumps(row, ensure_ascii=False, sort_keys=True)),
+        )
+        conn.execute(
+            "DELETE FROM token_usage_days WHERE day NOT IN "
+            "(SELECT day FROM token_usage_days ORDER BY day DESC LIMIT ?)",
+            (_MAX_DAYS_RETAINED,),
+        )
 
 
 def record_token_usage(
@@ -289,11 +320,8 @@ def record_token_usage(
         sources[source_key] = source_row
         row["sources"] = sources
 
-        state["days"][day] = row
-        if len(state["days"]) > _MAX_DAYS_RETAINED:
-            kept = dict(sorted(state["days"].items())[-_MAX_DAYS_RETAINED:])
-            state["days"] = kept
-        return write_token_usage_state(state)
+        _write_day(day, row)
+        return read_token_usage_state()
 
 
 def token_usage_payload(

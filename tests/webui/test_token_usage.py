@@ -13,7 +13,7 @@ from jenny.agent.token_usage import (
 
 
 def test_record_token_usage_aggregates_by_local_day(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("jenny.agent.token_usage.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("jenny.agent.token_usage._workspace", lambda: tmp_path / "workspace")
 
     record_token_usage(
         {"prompt_tokens": 100, "completion_tokens": 40, "cached_tokens": 20},
@@ -37,7 +37,7 @@ def test_record_token_usage_aggregates_by_local_day(tmp_path, monkeypatch) -> No
 
 
 def test_record_token_usage_skips_empty_usage(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("jenny.agent.token_usage.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("jenny.agent.token_usage._workspace", lambda: tmp_path / "workspace")
 
     record_token_usage({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
 
@@ -47,7 +47,7 @@ def test_record_token_usage_skips_empty_usage(tmp_path, monkeypatch) -> None:
 
 
 def test_record_token_usage_keeps_estimated_split(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("jenny.agent.token_usage.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("jenny.agent.token_usage._workspace", lambda: tmp_path / "workspace")
 
     record_token_usage(
         {"prompt_tokens": 100, "completion_tokens": 25, "estimated_tokens": 125},
@@ -61,7 +61,7 @@ def test_record_token_usage_keeps_estimated_split(tmp_path, monkeypatch) -> None
 
 
 def test_record_token_usage_keeps_source_breakdown(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("jenny.agent.token_usage.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("jenny.agent.token_usage._workspace", lambda: tmp_path / "workspace")
 
     record_token_usage(
         {"prompt_tokens": 100, "completion_tokens": 25},
@@ -82,7 +82,7 @@ def test_record_token_usage_keeps_source_breakdown(tmp_path, monkeypatch) -> Non
 
 @pytest.mark.asyncio
 async def test_token_usage_hook_classifies_source_from_session_key(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("jenny.agent.token_usage.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("jenny.agent.token_usage._workspace", lambda: tmp_path / "workspace")
     monkeypatch.setattr("jenny.agent.token_usage._local_day", lambda *_, **__: "2026-06-03")
 
     hook = TokenUsageHook()

@@ -266,7 +266,7 @@ def test_settings_payload_includes_token_usage_summary(
     config = Config()
     save_config(config, config_path)
     monkeypatch.setattr(get_runtime_context(), "config_path", config_path)
-    monkeypatch.setattr("jenny.agent.token_usage.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("jenny.agent.token_usage._workspace", lambda: tmp_path / "workspace")
 
     from jenny.agent.token_usage import record_token_usage
 

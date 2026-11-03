@@ -59,3 +59,19 @@ def test_the_leftovers_go_thirty_days_later(workspace: Path) -> None:
     assert not (workspace / ".jenny" / "taint_ledger.json.migrated").exists()
     assert not (workspace / ".jenny" / "staged" / "abc123def456" / "meta.json.migrated").exists()
     assert (workspace / ".jenny" / "staged" / "abc123def456" / "content").is_file()
+
+
+def test_the_token_usage_comes_in_by_day(workspace: Path) -> None:
+    from jenny.agent.token_usage import read_token_usage_state
+
+    path = workspace / ".jenny" / "webui" / "token-usage.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"schema_version": 1, "updated_at": "2026-11-01T10:00:00+00:00",
+                                "days": {"2026-11-01": {"requests": 3, "total_tokens": 900}}}))
+    assert run_pending(workspace)["small_state"] == DONE
+    from unittest.mock import patch
+
+    with patch("jenny.agent.token_usage._workspace", lambda: workspace):
+        state = read_token_usage_state()
+    assert state["days"]["2026-11-01"]["total_tokens"] == 900
+    assert not path.exists() and path.with_name("token-usage.json.migrated").is_file()
