@@ -378,7 +378,7 @@ Settings that belong to an extension, one object per extension name. Extensions 
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `apps.enabled` | bool | `true` | Enables the Jenny Apps runtime and the dynamic `<slug>_<action>` tools it registers. |
+| `apps.enabled` | bool | `true` | Enables the Jenny Apps runtime and the `use_app` tool that runs their actions. |
 | `apps.httpTimeoutS` | float 1–120 | `20.0` | Timeout for an app's outbound HTTP proxy calls. |
 | `apps.maxCollectionBytes` | int | `5000000` | Per-collection storage ceiling (5 MB). Writes past it fail with `413`. |
 

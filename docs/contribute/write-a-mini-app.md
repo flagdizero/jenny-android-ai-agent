@@ -69,7 +69,7 @@ Every action needs:
 
 | Field | Required | Notes |
 |---|---|---|
-| `name` | yes | Matches `^[a-z][a-z0-9_]*$`, unique within the app. Exposed as tool `<slug>_<name>`. |
+| `name` | yes | Matches `^[a-z][a-z0-9_]*$`, unique within the app. Run by the agent as `use_app(app=<slug>, action=<name>)`. |
 | `description` | yes | This is what the LLM reads to decide when to call the action — write it for the model. |
 | `kind` | yes | `"storage"` or `"http"` — nothing else. A `python` kind is explicitly not supported: server-side logic belongs behind the app's own external server, called via an `http` action. |
 | `params` | no | Map of param name → JSON Schema fragment (must include `"type"`). |
@@ -214,7 +214,7 @@ window.jenny = { slug, theme, lang, accent, action, discuss, navigate, back };
 | `jenny.navigate(url, state)` / `jenny.back()` | — | Push/pop one logical screen and report the new depth to the parent (`jenny:nav-state`), so the Android back button can pop one level inside the app before leaving it. The SDK deliberately never writes the browser history: entries pushed from the iframe land in the WebView's joint session history, which the parent cannot prune, so they survived `closeApp()` as dead back presses. `url` is only a readable label — it is not applied to the address bar; carry data in `state`, which comes back on the synthetic `popstate` that `back()` dispatches. Open `<dialog>`s count towards the same depth, so back closes the topmost dialog before the screen underneath it. |
 | `jenny:data-changed` window event | — | Dispatched whenever Jenny (not the app itself) mutates a storage collection the app might be showing, so the app can refetch and redraw. |
 
-The `data-changed` push comes from the agent side: `AppActionTool._notify_data_changed()` (`jenny/agent/tools/app_actions.py`) publishes an `OutboundMessage` with `metadata={"_app_data_changed": True, "app_slug": ...}` after any agent-triggered storage mutation that isn't a `query` — the SPA relays it into the iframe as `postMessage({type: 'jenny:data-changed', slug})`, and the SDK re-dispatches it as the `jenny:data-changed` `CustomEvent` your app listens for. It only fires for writes made *while the app happens to be open*; there's no catch-up mechanism for changes made while the app was closed, so always fetch fresh data when the app opens rather than relying on the event alone.
+The `data-changed` push comes from the action executor: `execute_action()` (`jenny/apps/executor.py`, through `jenny/apps/notify.py`) publishes an `OutboundMessage` with `metadata={"_app_data_changed": True, "app_slug": ...}` after any storage mutation that isn't a `query`, whoever made it — the SPA relays it into the iframe as `postMessage({type: 'jenny:data-changed', slug})`, and the SDK re-dispatches it as the `jenny:data-changed` `CustomEvent` your app listens for. It only fires for writes made *while the app happens to be open*; there's no catch-up mechanism for changes made while the app was closed, so always fetch fresh data when the app opens rather than relying on the event alone.
 
 Two optional helpers ship next to `jenny-sdk.js` in `jenny/templates/ui/assets/apps/`, served from the same `/html-mobile/assets/apps/` path:
 
@@ -232,20 +232,21 @@ That token is the app's own, not the gateway's: an HMAC of the per-install secre
 - Never call the actions endpoint with raw `fetch()`, and never with `POST` or custom headers — always go through `jenny.action()`.
 - No external hosts in `src`/`href` — only same-origin gateway paths (`/html-mobile/assets/...`) are reachable; the device may be offline.
 
-## How `<slug>_<action>` tools appear to the agent
+## How actions appear to the agent
 
-Every declared action becomes a native tool the LLM can call directly — `AppActionTool` wraps one action with a name of `<slug>_<action_name>` (e.g. `plants_water`) and a JSON Schema built from `action_param_schema()`, which is the same schema used to validate the HTTP-side call.
+Every declared action is reached through one tool, `use_app` (`UseAppTool` in `jenny/agent/tools/app_actions.py`): `use_app(app="plants", action="water", args={...})`. The system prompt's Jenny Apps section lists each app's actions as short signatures built by `action_signature()` (`water(id, litres?)`: required parameters first, optional ones with `?`); `use_app` with only `app` returns every action's full parameters from `action_param_schema()`, the same schema that validates the HTTP-side call. Wrong arguments are refused by `execute_action()` before any write, and the refusal carries the right signature and schema.
 
-Registration is kept in sync by `AppToolsSyncer` (`jenny/agent/tools/app_actions.py`), invoked once per agent turn rather than once at startup:
+The tool is kept in sync by `AppToolsSyncer`, invoked once per agent turn rather than once at startup:
 
 - It stats every `app.json` under `workspace/apps/`; if nothing changed since the last sync, it's a cheap no-op (one `stat()` per app).
-- On any change (new app, edited manifest, deleted app), it unregisters that app's old tools and re-registers from the fresh manifest — no gateway restart needed. A broken app (bad JSON, invalid action) contributes zero tools rather than crashing the sync.
-- **Name collisions with a non-app tool are skipped with an explicit warning** (`App tool '<name>' collides with an existing tool; skipped`) — a deliberately gentler path than the built-in loader's raise (see [Write a tool](write-a-tool.md#name-collisions-abort-startup)), because an app manifest can be LLM-generated and imperfect; the sync must degrade gracefully rather than disturb the agent loop. Slugs keep their hyphens in the tool name (`my-app` → `my-app_list`), deliberately, so `my-app` and `my_app` can't fold into each other.
-- This means Jenny can call `plants_water` (and mutate `data/`) even while the app is fully closed — a closed app is just unrendered HTML.
+- On any change (new app, edited manifest, deleted app), it rescans the apps — no gateway restart needed. A broken app (bad JSON, invalid action) contributes no actions rather than crashing the sync.
+- `use_app` is registered while at least one app has an action, and removed otherwise, so an install without apps carries nothing. Adding or changing an app changes the prompt's list, never the tool list.
+- The permissions are those of the executor and storage, not of the tool list: in a notebook's chat only the apps placed on its board can be changed (`jenny/apps/permissions.py`), and a read-only turn reads but does not write (storage writes and `http` actions that are not `GET`).
+- This means Jenny can run `water` (and mutate `data/`) even while the app is fully closed — a closed app is just unrendered HTML.
 
 ## Testing
 
-Runtime unit tests live at `tests/apps/` (mirroring `jenny/apps/`) — write manifests to a `tmp_path` fixture and call `execute_action()`/`load_app()` directly rather than going through the gateway. `tests/agent/test_apps_tool_sync.py` is the reference for exercising `AppToolsSyncer`: it writes an `app.json`, calls `sync(registry)`, and asserts on the resulting tool names, tool identity across unchanged syncs (`registry.get(name) is tool`), and cleanup after deleting the app folder — copy that pattern if you change sync behavior. As with any tool, run `ruff check jenny/ tests/`, the pyright subset, and `pytest -q` before opening a PR — see [Code style](code-style.md).
+Runtime unit tests live at `tests/apps/` (mirroring `jenny/apps/`) — write manifests to a `tmp_path` fixture and call `execute_action()`/`load_app()` directly rather than going through the gateway. `tests/agent/test_apps_tool_sync.py` is the reference for exercising `AppToolsSyncer`: it writes an `app.json`, calls `sync(registry)`, and asserts on the actions it reports, a tool list that stays the same across syncs, and cleanup after deleting the app folder — copy that pattern if you change sync behavior; `tests/agent/test_app_action_tool.py` covers `use_app` itself. As with any tool, run `ruff check jenny/ tests/`, the pyright subset, and `pytest -q` before opening a PR — see [Code style](code-style.md).
 
 ## See also
 

@@ -725,14 +725,13 @@ class AgentLoop(
     ) -> ToolRegistry | None:
         """Il registro di questo turno, o ``None`` se e' quello del loop intero.
 
-        Fuori restano, solo quando il turno non li puo' usare: le azioni che
-        **scrivono** delle app non posate sulla bacheca di questo quaderno (le
-        letture restano: da qui un'app non posata si legge,
-        ``apps/permissions.py``); ``recall_history``, che nei quaderni rifiuta;
-        ``nothing_to_report``, che serve solo a un giro silenzioso. Il resto
-        e' il registro del loop, vivo (``ToolRegistryView``).
+        Fuori restano, solo quando il turno non li puo' usare: ``recall_history``,
+        che nei quaderni rifiuta; ``nothing_to_report``, che serve solo a un giro
+        silenzioso. Il resto e' il registro del loop, vivo (``ToolRegistryView``).
+        Le azioni delle app che scrivono, nascoste qui fino al 03/11/2026 nei
+        quaderni dove l'app non e' posata, passano tutte da ``use_app``: le
+        rifiuta l'esecutore (``apps/permissions.py``).
         """
-        from jenny.agent.tools.app_actions import AppActionTool
         from jenny.agent.tools.registry import ToolRegistryView
 
         in_project = is_project_session_key(session_key)
@@ -743,24 +742,6 @@ class AgentLoop(
             root = self.workspace_scopes.for_message(msg, session.metadata).project_path
             if root is not None and not is_wiki_root(root):
                 root = None
-        # La bacheca si rilegge quando cambia: un'app posata a meta' turno
-        # (``app action=place``) si usa subito.
-        board: dict[str, Any] = {"sig": object(), "placed": set()}
-
-        def placed() -> set[str]:
-            if root is None:
-                return set()
-            from jenny.board.placements import placed_slugs
-            from jenny.board.store import board_path
-
-            try:
-                sig: Any = board_path(root).stat().st_mtime_ns
-            except OSError:
-                sig = None
-            if sig != board["sig"]:
-                board.update(sig=sig, placed=set(placed_slugs(root)))
-            return board["placed"]
-
         # I tool del piano a lista: il proprio filtro, che legge lo stato del
         # piano una volta per turno (``loop_plan.py``).
         plan_hidden = self._plan_tool_filter(msg, session_key)
@@ -788,10 +769,7 @@ class AgentLoop(
                 return root is None
             if not in_project:
                 return False
-            if name == "recall_history":
-                return True
-            return (isinstance(tool, AppActionTool) and not tool.read_only
-                    and tool._slug not in placed())
+            return name == "recall_history"
 
         if not any(hidden(n, self.tools.get(n)) for n in self.tools.tool_names):
             return None

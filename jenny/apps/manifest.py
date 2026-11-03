@@ -172,6 +172,18 @@ def action_param_schema(action: AppAction) -> dict:
     }
 
 
+def action_signature(action: AppAction) -> str:
+    """``add_todo(text, due?)``: the action as the prompt lists it.
+
+    The parameters are those of the full schema (``action_param_schema``), so
+    the ``id`` a storage write needs is there too; optional ones end in ``?``.
+    """
+    schema = action_param_schema(action)
+    required = list(schema["required"])
+    optional = [name for name in schema["properties"] if name not in required]
+    return f"{action.name}({', '.join(required + [f'{name}?' for name in optional])})"
+
+
 def _parse_action(raw: object, index: int, has_server: bool) -> AppAction:
     """Parse one action entry; raises ValueError with a readable message."""
     where = f"actions[{index}]"

@@ -60,7 +60,7 @@ async def test_success_renders_open_app():
     assert result.ok
     assert "app open: Todo" in result.content
     assert "buy milk" in result.content
-    assert "<slug>_<action>" in result.content
+    assert "`use_app`" in result.content
 
 
 async def test_app_no_sdk_flags_missing_dom():

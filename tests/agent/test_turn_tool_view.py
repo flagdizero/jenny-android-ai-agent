@@ -65,13 +65,12 @@ async def test_a_notebook_turn_sees_only_what_it_can_use(notebook: Path) -> None
     await loop._process_message(InboundMessage(
         channel="websocket", sender_id="u", chat_id="project:soldi", content="ciao"))
     offered = _offered_names(captured)
-    assert {"etf_add", "etf_list", "todo_list"} <= offered
-    assert "todo_add" not in offered
+    # Le app passano tutte da ``use_app``: la scrittura di un'app non posata la
+    # rifiuta l'esecutore, non la lista (dal 03/11/2026).
+    assert "use_app" in offered and not any(n.startswith(("etf_", "todo_")) for n in offered)
     assert "recall_history" not in offered and "nothing_to_report" not in offered
     # La vista e' ancora l'orchestratore: il suo prompt c'e'.
     assert "# Orchestrator Mode" in _system_prompt(captured)
-    # Il registro del loop non e' stato toccato.
-    assert loop.tools.get("todo_add") is not None
 
 
 async def test_the_personal_chat_keeps_its_app_tools(notebook: Path) -> None:
@@ -79,7 +78,7 @@ async def test_the_personal_chat_keeps_its_app_tools(notebook: Path) -> None:
     await loop._process_message(InboundMessage(
         channel="websocket", sender_id="u", chat_id="default", content="ciao"))
     offered = _offered_names(captured)
-    assert {"todo_add", "etf_add"} <= offered and "nothing_to_report" not in offered
+    assert "use_app" in offered and "nothing_to_report" not in offered
 
 
 def test_the_view_is_live_and_counts_on_the_loop_registry() -> None:
@@ -98,8 +97,12 @@ def test_the_view_is_live_and_counts_on_the_loop_registry() -> None:
     assert hidden[0] is None
 
 
-async def test_an_app_placed_mid_turn_is_usable_in_the_same_turn(notebook: Path) -> None:
-    """``app action=place`` a meta' turno: le azioni che scrivono si vedono subito."""
+async def test_placing_an_app_mid_turn_leaves_the_tool_list_alone(notebook: Path) -> None:
+    """``app action=place`` a meta' turno non cambia la lista: la cache del provider resta.
+
+    Fino al 03/11/2026 le azioni che scrivono comparivano alla posa, e la chiamata
+    dopo ripagava tutta la conversazione.
+    """
     from jenny.board.store import mutate_board
     from jenny.session.manager import Session
 
@@ -109,10 +112,10 @@ async def test_an_app_placed_mid_turn_is_usable_in_the_same_turn(notebook: Path)
                          content="ciao")
     view = loop._turn_tool_view(msg, Session(key="project:soldi"), "project:soldi",
                                 silent=False)
-    assert view is not None and "todo_add" not in view.tool_names
+    before = (view or loop.tools).get_definitions()
     mutate_board(notebook / "wikis" / "soldi", lambda b: b["cards"].append(
         {"id": "todo", "title": "Todo", "pos": {"x": 2, "y": 1}, "app": {"slug": "todo"}}))
-    assert "todo_add" in view.tool_names
+    assert (view or loop.tools).get_definitions() == before
 
 
 async def test_the_move_offer_is_only_for_the_personal_chat_in_the_app(notebook: Path) -> None:

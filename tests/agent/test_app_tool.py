@@ -100,8 +100,8 @@ async def test_a_new_app_is_live_at_once_with_its_tools(personal: Path) -> None:
     assert find_app(ws, "spesa") is not None
     assert not (ws / "apps" / ".drafts" / "spesa").exists()
     registry = ToolRegistry()
-    AppToolsSyncer(ws).sync(registry)
-    assert registry.get("spesa_add") is not None
+    names, _changed = AppToolsSyncer(ws).sync(registry)
+    assert "spesa.add" in names and registry.get("use_app") is not None
     await execute_action(ws, "spesa", "add", {"what": "latte", "done": False})
     view = summary_view(ws, find_app(ws, "spesa"), {})
     assert (view["value"], view["rows"]) == (1, [{"what": "latte"}])
@@ -499,9 +499,9 @@ async def test_a_published_app_brings_its_tools_into_the_same_turn(personal: Pat
     await _builder("unified:default").execute(
         action="draft", slug="portafoglio",
         files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
-    assert registry.get("portafoglio_set_quote") is None
+    assert "portafoglio" not in syncer.apps()
     await publisher.execute(action="publish", slug="portafoglio")
-    assert registry.get("portafoglio_set_quote") is not None
+    assert "portafoglio" in syncer.apps() and registry.get("use_app") is not None
 
 
 def test_startup_publishes_only_migrated_drafts(ws: Path) -> None:

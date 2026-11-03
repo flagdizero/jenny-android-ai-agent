@@ -1,6 +1,6 @@
 """Single entry point to execute a Jenny App action.
 
-Shared by the WebUI actions route and the agent-facing AppActionTool: both
+Shared by the WebUI actions route and the agent-facing ``use_app`` tool: both
 resolve the app, validate params against the manifest's JSON Schema, and
 dispatch to the storage or http executor.
 """

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jenny.apps.manifest import LoadedApp, scan_apps
+from jenny.apps.manifest import LoadedApp, action_signature, scan_apps
 
 
 def _line(app: LoadedApp, *, here: bool) -> str:
@@ -23,8 +23,11 @@ def _line(app: LoadedApp, *, here: bool) -> str:
     m = app.manifest
     parts = [f"- **{m.name}** (`{app.slug}`) — {m.description}"]
     if m.actions:
-        tools = ", ".join(f"`{app.slug}_{a.name}`" for a in m.actions)
-        parts.append(f"tools: {tools}")
+        # Le firme corte, che ``use_app`` esegue: dal 03/11/2026 al posto dei
+        # nomi dei tool ``<slug>_<action>``, che portavano ciascuno la sua
+        # descrizione intera in ogni chiamata.
+        actions = ", ".join(f"`{action_signature(a)}`" for a in m.actions)
+        parts.append(f"actions: {actions}")
     else:
         parts.append("no agent-facing actions (display-only app)")
     if m.reader is not None:
@@ -60,8 +63,9 @@ def build_apps_summary(workspace: Path, notebook_root: Path | None = None) -> st
         if others:
             names = ", ".join(f"{a.manifest.name if a.manifest else a.slug} (`{a.slug}`)"
                               for a in others)
-            lines.append(f"Other apps of the user, read-only from here (place one on this board "
-                         f"with `app action=place` if the user wants it here): {names}")
+            lines.append(f"Other apps of the user, read-only from here (`use_app` with only "
+                         f"`app` lists their actions; place one on this board with "
+                         f"`app action=place` if the user wants it here): {names}")
         lines.append("A new app the user asks for here is made from this chat too, then "
                      "placed on this board.")
     else:

@@ -66,7 +66,7 @@ _NOT_JOURNALED: dict[str, str] = {
     "agent/tools/ssh_transport.py": "stato locale del trasporto SSH",
     "apps/storage.py": (
         "i dati delle app li scrivono le azioni delle app, che ha solo il turno di Jenny "
-        "(lo strumento per-app si sincronizza sul registro del loop principale)"
+        "(``use_app`` si sincronizza sul registro del loop principale)"
     ),
     "apps/executor.py": (
         "chiede alla sola lettura per le azioni http, che non scrivono file sul telefono; "

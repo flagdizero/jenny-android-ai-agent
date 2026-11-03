@@ -30,7 +30,7 @@ Fields common to every action:
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `name` | yes | snake_case, unique in the app; exposed to the agent as tool `<slug>_<name>` |
+| `name` | yes | snake_case, unique in the app; the agent runs it with `use_app app=<slug> action=<name>` |
 | `description` | yes | What it does — this is what the agent reads to pick the tool |
 | `kind` | yes | `storage` or `http` (no other kinds exist) |
 | `params` | no | Map of param name → JSON Schema (`{"type": "string", "description": "..."}`) |

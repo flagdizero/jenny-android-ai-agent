@@ -50,9 +50,11 @@ Every app is a folder under `workspace/apps/<slug>/`:
 
 Because it's a normal folder in the workspace, you can also open and edit these files by hand from the workspace files in the workshop's **Memory** drawer (see [WebUI tour](webui-tour.md)). Jenny's own file tools cannot write an app's code (`app.json`, `run.py`, `app/`): only the `app` tool can, so every change is checked — and its reader tested — before it goes live. `data/` and `AGENT.md` she can change freely.
 
-## Every action is also a tool
+## Jenny uses every action through one tool
 
-Each action declared in `app.json` becomes a native tool that the LLM can call directly, named `<slug>_<action>` — for a "plants" app with a `water` action, that's `plants_water`. These tools are re-registered on the fly whenever `app.json` changes, with no restart needed.
+Each action declared in `app.json` is something Jenny can run with the `use_app` tool — for a "plants" app with a `water` action, that's `use_app(app="plants", action="water")`. Her instructions list every app's actions as short signatures (`water(id, litres?)`), and `use_app` with only the app returns their full parameters. The list follows `app.json` as it changes, with no restart needed.
+
+One tool for all apps, rather than one tool per action, keeps the fixed part of every request small and the same from one message to the next: before November 2026 each action was a tool of its own, and each installed app added its descriptions to every call, used or not.
 
 This has a consequence worth calling out explicitly: **Jenny can read and modify an app's data even while the app is closed.** A closed app is just unrendered HTML; nothing stops Jenny from appending a record to its `data/` collection because you asked her to in chat. The reverse is not true — see below.
 
