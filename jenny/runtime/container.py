@@ -539,7 +539,9 @@ class GatewayContainer:
         # Versioning locale del workspace: snapshot automatici di sistema.
         # Lo store vive FUORI dal workspace (sibling), così lo swap atomico
         # del ripristino non porta via la storia insieme al workspace.
+        from jenny import db
         from jenny.config.paths import get_data_dir
+        from jenny.db import shards
         from jenny.snapshot.engine import SnapshotEngine
         from jenny.snapshot.locations import snapshots_dir_for
         from jenny.snapshot.service import SnapshotService
@@ -552,6 +554,11 @@ class GatewayContainer:
                 # Esclusione per path reale: vale anche quando il runtime dir
                 # ha ancora il nome legacy (.minijenny).
                 exclude_dirs=(get_data_dir() / "logs",),
+                # Lo stato in SQLite viaggia con ogni snapshot, a pezzi: così la
+                # storia locale e Drive lo riportano insieme ai file.
+                extra_entries=lambda: shards.export(
+                    db.database_for_workspace(config.workspace_path, db.STATE)
+                ),
             ),
             config.snapshots,
         )

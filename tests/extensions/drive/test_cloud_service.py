@@ -369,6 +369,41 @@ async def test_new_phone_opens_the_copy_with_the_password_and_restores(tmp_path:
     assert new.snapshots.engine.list_snapshots(limit=1)[0]["trigger"] == "pre_restore"
 
 
+async def test_the_copy_on_drive_carries_the_state_too(tmp_path: Path) -> None:
+    """Lo stato in SQLite viaggia a pezzi dentro lo snapshot: Drive lo porta su
+    come i file, e il telefono nuovo lo ritrova pronto per lo scambio."""
+    import sqlite3
+
+    from jenny import db as jdb
+    from jenny.db import shards
+    from jenny.db.schema import Schema
+    from jenny.snapshot.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
+
+    kv = Schema("kv", ("CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT);",))
+    old = _env(tmp_path / "old")
+    state = jdb.database(old.runtime, jdb.STATE)
+    state.require(kv)
+    with state.write() as conn:
+        conn.execute("INSERT INTO kv VALUES ('job', 'ogni mattina')")
+    old.snapshots.engine._extra_entries = lambda: shards.export(state)
+    try:
+        await old.service.enable(PW)
+        await old.service.run()
+        snapshot_id = old.snapshots.engine.head_id()
+        new = _env(tmp_path / "new", sink=old.sink)
+        assert await new.service.unlock(PW) == {"ok": True}
+        staged = await new.service.stage_restore(snapshot_id)
+        assert staged["ok"] and staged["file_count"] == 2
+        assert not (new.runtime / STAGED_WORKSPACE_DIR_NAME / ".jenny-state").exists()
+        conn = sqlite3.connect(new.runtime / STAGED_DB_DIR_NAME / "state.sqlite")
+        try:
+            assert conn.execute("SELECT v FROM kv").fetchall() == [("ogni mattina",)]
+        finally:
+            conn.close()
+    finally:
+        jdb.close_all()
+
+
 async def test_a_drive_restore_and_a_local_one_never_fill_the_staging_together(
     tmp_path: Path, monkeypatch
 ) -> None:

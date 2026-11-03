@@ -5,9 +5,12 @@ Il ripristino scambia il workspace al boot, prima che qualcuno lo apra
 scambio non li porterebbe: li scambia questo modulo, nello stesso momento e con
 le stesse regole — a file chiusi, idempotente, il vecchio tenuto da parte.
 
-- ``state.sqlite`` arriva dal backup in ``db_staged/`` (``stage_state``) e prende
-  il posto di quello vivo, che resta come ``state.sqlite.pre-restore``. Un
-  ripristino dalla storia locale non porta lo stato: resta quello di adesso.
+- ``state.sqlite`` arriva in ``db_staged/`` — dal file di backup
+  (``stage_state``), o rifatto dai pezzi che uno snapshot della storia locale o
+  di Drive porta con sé (``stage_state_from_tree``, ``jenny/db/shards``) — e
+  prende il posto di quello vivo, che resta come ``state.sqlite.pre-restore``.
+  Uno snapshot senza stato (fatto prima che lo stato fosse in SQLite) lascia
+  quello di adesso: i file vecchi che riporta li fonde la migrazione.
 - ``undo.sqlite`` e i suoi oggetti si cancellano a **ogni** ripristino: il
   diario dice come tornare indietro dai file di prima, e dopo un ripristino
   quei file non ci sono più. Un annulla rimasto a metà verrebbe applicato a file
@@ -58,6 +61,38 @@ def stage_state(runtime_root: Path, source) -> Path:
         shutil.rmtree(dest_dir, ignore_errors=True)
         raise StagedStateError(problem)
     return dest
+
+
+def stage_state_from_tree(runtime_root: Path, tree: Path) -> bool:
+    """Lo stato che uno snapshot ripristinato in *tree* porta, in ``db_staged/``.
+
+    I pezzi escono comunque dall'albero: non sono file del workspace. Ritorna
+    True se ha preparato uno stato; False se lo snapshot non ne aveva, o se lo
+    staging ne aveva già uno (il file di backup porta il suo database intero).
+    """
+    from jenny import db
+    from jenny.db.shards import ShardsError, build
+    from jenny.snapshot.types import STATE_ENTRY_DIR
+
+    shards_dir = Path(tree) / STATE_ENTRY_DIR
+    try:
+        if not shards_dir.is_dir():
+            return False
+        dest = staged_db_dir(runtime_root) / STATE_FILE
+        if dest.exists():
+            return False
+        known = db.database(Path(runtime_root), db.STATE).known_versions()
+        try:
+            build(shards_dir, dest, known=known)
+        except ShardsError as exc:
+            raise StagedStateError(str(exc)) from exc
+        problem = _state_problem(dest)
+        if problem is not None:
+            dest.unlink(missing_ok=True)
+            raise StagedStateError(problem)
+        return True
+    finally:
+        shutil.rmtree(shards_dir, ignore_errors=True)
 
 
 def _state_problem(path: Path) -> str | None:

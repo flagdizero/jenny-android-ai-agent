@@ -13,7 +13,9 @@ Le regole di ogni migrazione:
   il commit;
 - **se fallisce** lascia i file vecchi come sono, la riga ``failed`` e un ERROR
   nel log (lo legge anche ``get_recent_logs``); il boot dopo ritenta;
-- una ``done`` non gira più; 30 giorni dopo toglie i suoi ``*.migrated``.
+- una ``done`` non gira più, finché i suoi file vecchi non tornano (il
+  ripristino di uno snapshot di prima: ``Migration.pending``); 30 giorni dopo
+  toglie i suoi ``*.migrated``.
 """
 
 from __future__ import annotations
@@ -68,7 +70,8 @@ def run_pending(workspace: Path, *, now: float | None = None,
 def _one(ctx: MigrationContext, migration: Migration, clock: Callable[[], float]) -> str:
     now = clock()
     last = runs.last_run(ctx.state, migration.name)
-    if last is not None and last["status"] in (DONE, NOTHING, CLEANED):
+    again = migration.pending is not None and migration.pending(ctx)
+    if last is not None and last["status"] in (DONE, NOTHING, CLEANED) and not again:
         if (last["status"] == DONE and migration.cleanup is not None
                 and now - float(last["finished_at"] or now) >= KEEP_MIGRATED_S):
             migration.cleanup(ctx)

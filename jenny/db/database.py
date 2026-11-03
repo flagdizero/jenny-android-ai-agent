@@ -37,6 +37,17 @@ _T = TypeVar("_T")
 BUSY_TIMEOUT_MS = 5000
 
 
+# Le tabelle di ogni database, prima di qualunque schema: la versione di ogni
+# archivio, e come l'export per gli snapshot divide in pezzi le sue tabelle
+# (``jenny/db/shards``). Le crea anche chi ricostruisce un database dai pezzi.
+META_TABLES = (
+    "CREATE TABLE IF NOT EXISTS schema_versions ("
+    "name TEXT PRIMARY KEY, version INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS table_shards (tbl TEXT PRIMARY KEY, expr TEXT NOT NULL)",
+)
+META_TABLE_NAMES = ("schema_versions", "table_shards")
+
+
 class SchemaError(RuntimeError):
     """Uno schema non si è potuto portare alla versione del codice."""
 
@@ -98,10 +109,8 @@ class Database:
         self._reader = _connect(self.path)
         self._schemas: dict[str, int] = {}
         self._closed = False
-        self._writer.execute(
-            "CREATE TABLE IF NOT EXISTS schema_versions ("
-            "name TEXT PRIMARY KEY, version INTEGER NOT NULL)"
-        )
+        for ddl in META_TABLES:
+            self._writer.execute(ddl)
 
     # -- scrivere e leggere ---------------------------------------------------
 
@@ -136,6 +145,17 @@ class Database:
             self._check_open()
             return self._reader.execute(sql, params).fetchall()
 
+    @contextmanager
+    def reading(self) -> Iterator[sqlite3.Connection]:
+        """Più letture che vedono tutte lo stesso momento (una transazione di lettura)."""
+        with self._read_lock:
+            self._check_open()
+            self._reader.execute("BEGIN")
+            try:
+                yield self._reader
+            finally:
+                self._reader.execute("COMMIT")
+
     async def aread(self, sql: str, params: Any = ()) -> list[sqlite3.Row]:
         return await asyncio.to_thread(self.read, sql, params)
 
@@ -165,6 +185,10 @@ class Database:
 
             apply(self, schema)
             self._schemas[schema.name] = schema.version
+
+    def known_versions(self) -> dict[str, int]:
+        """Le versioni degli schemi che questo processo ha chiesto finora."""
+        return dict(self._schemas)
 
     def schema_version(self, name: str) -> int:
         rows = self.read("SELECT version FROM schema_versions WHERE name = ?", (name,))

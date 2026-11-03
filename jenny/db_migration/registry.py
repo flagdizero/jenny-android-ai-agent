@@ -50,6 +50,10 @@ class Migration:
     # I resti da togliere 30 giorni dopo il ``done`` (i ``*.migrated``): fino ad
     # allora tornare a un APK vecchio ritrova i dati.
     cleanup: Callable[[MigrationContext], None] | None = None
+    # Se ci sono ancora file vecchi da portare. Una migrazione ``done`` rigira
+    # quando tornano: il ripristino di uno snapshot di prima riporta i file
+    # vecchi nel workspace, e la riga ``done`` non deve lasciarli lì.
+    pending: Callable[[MigrationContext], bool] | None = None
 
 
 def migrations() -> tuple[Migration, ...]:
@@ -57,5 +61,6 @@ def migrations() -> tuple[Migration, ...]:
     from jenny.db_migration import undo_cleanup
 
     return (
-        Migration("undo_cleanup", remove_after="2.3.0", run=undo_cleanup.run),
+        Migration("undo_cleanup", remove_after="2.3.0", run=undo_cleanup.run,
+                  pending=undo_cleanup.pending),
     )

@@ -19,6 +19,23 @@ from jenny.db_migration.registry import DONE, NOTHING, MigrationContext, Migrati
 OLD_JOURNAL = ("subagents", "journal")
 
 
+def pending(ctx: MigrationContext) -> bool:
+    if ctx.workspace.joinpath(*OLD_JOURNAL).exists():
+        return True
+    base = ctx.runtime_root / PLANS_DIR
+    if not base.is_dir():
+        return False
+    from jenny.utils.path import read_json
+
+    for plan_dir in (p for p in base.iterdir() if p.is_dir()):
+        if (plan_dir / "photos").is_dir() or any(plan_dir.glob("rollback.journal*")):
+            return True
+        data = read_json(plan_dir / "plan.json")
+        if isinstance(data, dict) and data.get("format", 1) == 1:
+            return True
+    return False
+
+
 def run(ctx: MigrationContext) -> MigrationResult:
     counts: dict[str, int] = {}
     sources: list[str] = []

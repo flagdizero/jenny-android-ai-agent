@@ -1,9 +1,10 @@
 """Lo stato in SQLite nel backup e nel ripristino; l'annulla che si svuota.
 
-Il giro intero: lo stato va nel ``.jbk``, torna allo staging, e al boot prende
-il posto di quello vivo, mentre il diario dell'annulla riparte vuoto. Poi i
-casi storti: uno ``state.sqlite`` rotto nell'archivio, un ripristino dalla
-storia locale (che lo stato non lo porta), il giro dopo un crash a metà.
+Il giro intero: lo stato va nel ``.jbk`` e negli snapshot (a pezzi), torna
+allo staging, e al boot prende il posto di quello vivo, mentre il diario
+dell'annulla riparte vuoto. Poi i casi storti: uno ``state.sqlite`` rotto
+nell'archivio, uno snapshot senza stato (che lascia quello di adesso), il giro
+dopo un crash a metà.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import pytest
 
 from jenny import db as jdb
 from jenny.config.schema import SnapshotConfig
+from jenny.db import shards
 from jenny.db.restore import PRE_RESTORE_SUFFIX, UNDO_OBJECTS_DIR_NAME
 from jenny.db.schema import Schema
 from jenny.snapshot.backup import BACKUP_STATE_ENTRY, BackupError, BackupManager
@@ -32,11 +34,22 @@ _KV = Schema("kv", ("CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT);",))
 
 @pytest.fixture
 def env(tmp_path: Path):
+    yield from _env(tmp_path, with_state=False)
+
+
+@pytest.fixture
+def state_env(tmp_path: Path):
+    yield from _env(tmp_path, with_state=True)
+
+
+def _env(tmp_path: Path, *, with_state: bool):
     runtime_root = tmp_path / "data"
     workspace = runtime_root / "workspace"
     (workspace / "memory").mkdir(parents=True)
     (workspace / "SOUL.md").write_text("anima", encoding="utf-8")
-    engine = SnapshotEngine(workspace, runtime_root / "snapshots")
+    # Come il composition root: lo stato a pezzi in ogni snapshot.
+    extra = (lambda: shards.export(jdb.database(runtime_root, jdb.STATE))) if with_state else None
+    engine = SnapshotEngine(workspace, runtime_root / "snapshots", extra_entries=extra)
     service = SnapshotService(engine, SnapshotConfig(pbkdf2_iterations=100_000))
     yield SimpleNamespace(
         manager=BackupManager(service), service=service, engine=engine,
@@ -107,7 +120,9 @@ def test_a_damaged_state_in_the_archive_fails_the_import(env) -> None:
     assert not (env.runtime_root / STAGED_WORKSPACE_DIR_NAME).exists()
 
 
-async def test_a_restore_from_history_keeps_the_state_but_empties_the_undo(env) -> None:
+async def test_a_snapshot_without_state_keeps_the_state_but_empties_the_undo(env) -> None:
+    """Uno snapshot di prima che lo stato fosse in SQLite: i file che riporta li
+    fonde la migrazione, lo stato di adesso resta."""
     _set(env.runtime_root, "di adesso")
     manifest = await env.service.snapshot_now("manual")
     assert manifest is not None
@@ -143,3 +158,59 @@ async def test_a_failed_fill_leaves_no_staged_state(env) -> None:
     with pytest.raises(RuntimeError):
         await env.service.stage_restore(fill, source="test")
     assert not staged.exists()
+
+
+async def test_a_snapshot_carries_the_state_and_brings_it_back(state_env) -> None:
+    env = state_env
+    _set(env.runtime_root, "nello snapshot")
+    manifest = await env.service.snapshot_now("manual")
+    assert manifest is not None
+    assert any(e.path == ".jenny-state/kv/all.jsonl" for e in manifest.files)
+    # I conteggi che la casa mostra sono quelli dei file del workspace.
+    assert manifest.file_count == 1
+    _set(env.runtime_root, "di adesso")
+    _dirty_undo(env.runtime_root)
+    await env.manager.stage_snapshot_restore(manifest.id)
+    # I pezzi non restano nell'albero: non sono file del workspace.
+    assert not (env.runtime_root / STAGED_WORKSPACE_DIR_NAME / ".jenny-state").exists()
+    jdb.close_all()
+    assert apply_pending_restore(env.runtime_root)
+    assert _get(env.runtime_root) == "nello snapshot"
+    assert not (env.workspace / ".jenny-state").exists()
+    assert not (env.runtime_root / "db" / UNDO_OBJECTS_DIR_NAME).exists()
+
+
+async def test_a_still_state_makes_no_new_snapshot(state_env) -> None:
+    env = state_env
+    _set(env.runtime_root, "uno")
+    first = await env.service.snapshot_now("manual")
+    assert first is not None
+    assert await env.service.snapshot_now("manual") is None
+    _set(env.runtime_root, "due")
+    second = await env.service.snapshot_now("manual")
+    assert second is not None
+    piece = {e.path: e.hash for e in second.files}
+    assert piece[".jenny-state/kv/all.jsonl"] != {
+        e.path: e.hash for e in first.files}[".jenny-state/kv/all.jsonl"]
+
+
+async def test_a_real_jenny_state_folder_is_never_tracked(state_env) -> None:
+    env = state_env
+    _set(env.runtime_root, "vero")
+    fake = env.workspace / ".jenny-state" / "kv"
+    fake.mkdir(parents=True)
+    (fake / "all.jsonl").write_text("finto")
+    manifest = await env.service.snapshot_now("manual")
+    assert manifest is not None
+    entries = {e.path: e.size for e in manifest.files}
+    assert entries[".jenny-state/kv/all.jsonl"] != len("finto")
+
+
+async def test_a_failed_export_still_makes_the_snapshot(env, monkeypatch) -> None:
+    def broken() -> list[tuple[str, bytes]]:
+        raise RuntimeError("database rotto")
+
+    monkeypatch.setattr(env.engine, "_extra_entries", broken)
+    manifest = await env.service.snapshot_now("manual")
+    assert manifest is not None
+    assert [e.path for e in manifest.files] == ["SOUL.md"]

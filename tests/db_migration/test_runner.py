@@ -63,3 +63,23 @@ def test_the_leftovers_go_thirty_days_after_done(workspace: Path) -> None:
     assert run_pending(workspace, registry=reg, now=later) == {"m": "cleaned"}
     assert run_pending(workspace, registry=reg, now=later) == {"m": "skipped"}
     assert cleaned == [1]
+
+
+def test_a_done_migration_runs_again_when_its_old_files_come_back(workspace: Path) -> None:
+    # Il ripristino di uno snapshot di prima della migrazione riporta i file
+    # vecchi: la riga ``done`` non li deve lasciare nel workspace.
+    old = workspace / "old.json"
+    calls: list[int] = []
+
+    def run(ctx):
+        calls.append(1)
+        old.unlink(missing_ok=True)
+        return MigrationResult(DONE, sources=["old.json"])
+
+    reg = (Migration("m", "9.9.9", run, pending=lambda ctx: old.exists()),)
+    old.write_text("{}")
+    assert run_pending(workspace, registry=reg) == {"m": DONE}
+    assert run_pending(workspace, registry=reg) == {"m": "skipped"}
+    old.write_text("{}")
+    assert run_pending(workspace, registry=reg) == {"m": DONE}
+    assert calls == [1, 1]

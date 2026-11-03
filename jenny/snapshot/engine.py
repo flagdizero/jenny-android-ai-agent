@@ -14,17 +14,19 @@ import os
 import threading
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
 from loguru import logger
 
 from jenny.snapshot.store import get_blob, iter_blob_hashes, object_path, put_blob
 from jenny.snapshot.types import (
+    STATE_ENTRY_DIR,
     FileEntry,
     SnapshotManifest,
     entry_problem,
     entry_target,
     is_snapshot_id,
+    is_state_entry,
 )
 from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write, read_json_dict
@@ -57,7 +59,9 @@ DEFAULT_EXCLUDE_GLOBS: tuple[str, ...] = (
 # stava il registro dell'annulla prima di ``undo.sqlite`` (``agent.write_journal``):
 # la migrazione ``undo_cleanup`` la cancella al primo boot, e finché quella non è
 # riuscita le sue copie non devono finire in una foto. Si toglie insieme a lei.
-ALWAYS_EXCLUDED_DIRS: tuple[str, ...] = ("subagents/journal",)
+# ``.jenny-state`` è il posto dello stato in SQLite dentro uno snapshot
+# (``STATE_ENTRY_DIR``): lo scrive il motore, mai un file vero del workspace.
+ALWAYS_EXCLUDED_DIRS: tuple[str, ...] = ("subagents/journal", STATE_ENTRY_DIR)
 
 # ``output/`` NON è in quella lista, ed è una scelta, non una dimenticanza.
 #
@@ -104,8 +108,12 @@ class SnapshotEngine:
         *,
         exclude_globs: Iterable[str] = DEFAULT_EXCLUDE_GLOBS,
         exclude_dirs: Iterable[Path] = (),
+        extra_entries: Callable[[], Iterable[tuple[str, bytes]]] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
+        # Voci che non sono file del workspace: lo stato in SQLite a pezzi
+        # (``jenny/db/shards``), che il composition root collega qui.
+        self._extra_entries = extra_entries
         self.snapshots_dir = Path(snapshots_dir)
         self.objects_dir = self.snapshots_dir / "objects"
         self.manifests_dir = self.snapshots_dir / "manifests"
@@ -252,6 +260,7 @@ class SnapshotEngine:
             entries.append(
                 FileEntry(path=rel, hash=blob_hash, size=len(content), mtime_ns=st.st_mtime_ns)
             )
+        entries.extend(self._state_entries())
 
         if parent_manifest is not None:
             same = {e.path: e.hash for e in parent_manifest.files} == {
@@ -287,6 +296,28 @@ class SnapshotEngine:
             manifest.total_bytes,
         )
         return manifest
+
+    def _state_entries(self) -> list[FileEntry]:
+        """Lo stato a pezzi, come voci del manifest.
+
+        Se l'export fallisce lo snapshot si fa lo stesso, senza stato: la storia
+        dei file non si ferma per un database rotto, e il ripristino di uno
+        snapshot senza stato lascia quello di adesso.
+        """
+        if self._extra_entries is None:
+            return []
+        try:
+            extra = list(self._extra_entries())
+        except Exception:
+            logger.opt(exception=True).error("Snapshot: the state could not be exported")
+            return []
+        entries = []
+        for path, content in extra:
+            if not is_state_entry(path):
+                raise ValueError(f"extra snapshot entry outside {STATE_ENTRY_DIR}: {path!r}")
+            blob_hash = put_blob(self.objects_dir, content)
+            entries.append(FileEntry(path=path, hash=blob_hash, size=len(content), mtime_ns=0))
+        return entries
 
     def _reusable_entries(self, parent: SnapshotManifest | None) -> dict[str, FileEntry]:
         """Le voci di *parent* il cui hash si può riusare senza rileggere il file.

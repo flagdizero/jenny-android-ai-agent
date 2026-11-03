@@ -14,8 +14,8 @@ deve mai riscrivere uno schema che non capisce.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -32,6 +32,11 @@ Step = str | Callable[[sqlite3.Connection], None]
 class Schema:
     name: str
     steps: tuple[Step, ...]
+    # Come l'export per gli snapshot divide una tabella in pezzi: tabella →
+    # espressione SQL sulle sue colonne (``jenny/db/shards``). Una tabella che
+    # non c'è fa un pezzo solo; righe che cambiano insieme stanno nello stesso
+    # pezzo, così quelle ferme danno lo stesso blob da uno snapshot all'altro.
+    shards: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def version(self) -> int:
@@ -45,6 +50,12 @@ def apply(database: Database, schema: Schema) -> None:
             "SELECT version FROM schema_versions WHERE name = ?", (schema.name,)
         ).fetchone()
         current = int(row["version"]) if row else 0
+        for table, expr in schema.shards.items():
+            conn.execute(
+                "INSERT INTO table_shards(tbl, expr) VALUES (?, ?) "
+                "ON CONFLICT(tbl) DO UPDATE SET expr = excluded.expr",
+                (table, expr),
+            )
         if current > schema.version:
             raise SchemaTooNewError(
                 f"{database.name}.{schema.name} is at version {current}, "

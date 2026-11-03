@@ -1,10 +1,12 @@
 """Lo stato di Jenny in SQLite; i contenuti restano file.
 
 Sotto ``<runtime_root>/db/`` (accanto al workspace, fuori dalla portata dei
-tool del modello e fuori dagli snapshot del workspace):
+tool del modello):
 
-- ``state.sqlite`` — lo stato che va nel backup. Lo riempiono, un archivio alla
-  volta, i job, i piani, i record degli aiutanti, le sessioni.
+- ``state.sqlite`` — lo stato che viaggia: va nel backup, e in ogni snapshot a
+  pezzi di testo (``shards``), così la storia locale e Drive lo riportano
+  insieme ai file. Lo riempiono, un archivio alla volta, i job, i record degli
+  aiutanti, le sessioni.
 - ``undo.sqlite`` — il diario dell'annulla (``agent.write_journal``). Solo sul
   telefono: non va nel backup e si svuota a un ripristino.
 
