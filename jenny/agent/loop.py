@@ -97,10 +97,10 @@ from jenny.session.history_meta import (
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
-    PROJECT_SESSION_PREFIX,
     is_project_session_key,
     is_valid_project_name,
     project_name,
+    project_session_key,
     session_key_for_channel,
 )
 from jenny.session.manager import Session, SessionManager, scrub_lone_surrogates
@@ -1143,7 +1143,7 @@ class AgentLoop(
                             "name of a conversation",
                     unopenable=shown,
                 )
-            new_key = f"{PROJECT_SESSION_PREFIX}{target.name}"
+            new_key = project_session_key(target.name)
             # La sessione e' in cache e i suoi file stanno per cambiare nome:
             # tenerla vorrebbe dire riscriverla al vecchio nome al primo salvataggio.
             self.sessions.invalidate(key)
@@ -3002,7 +3002,6 @@ class AgentLoop(
         questi ci scrive lascia una chat sotto il nome vecchio, senza cartella.
         """
         from jenny.agent.gardener import passes_in_flight
-        from jenny.session.keys import project_session_key
 
         keys = dict.fromkeys(self._pending_queues)
         keys.update(dict.fromkeys(self.subagents.active_origin_session_keys()))

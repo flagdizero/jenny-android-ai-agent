@@ -19,10 +19,10 @@ from jenny.config.runtime_env import (
 )
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
     is_project_session_key,
     notebook_of_cron_session,
     project_name,
+    project_session_key,
 )
 from jenny.utils.errors import StatusError
 from jenny.utils.wiki_paths import notebook_dir
@@ -260,7 +260,7 @@ class WorkspaceScopeResolver:
             scope = self.for_project(session_key)
         elif notebook is not None:
             # Il turno di un cron del quaderno: lo stesso recinto della sua chat.
-            scope = self.for_project(f"{PROJECT_SESSION_PREFIX}{notebook}")
+            scope = self.for_project(project_session_key(notebook))
         else:
             scope = resolve_effective_workspace_scope(
                 message_metadata=message_metadata,

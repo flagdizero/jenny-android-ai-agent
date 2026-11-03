@@ -53,7 +53,7 @@ from jenny.security.workspace_access import (
     current_turn_is_readonly,
     current_workspace_scope,
 )
-from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
+from jenny.session.keys import UNIFIED_SESSION_KEY, project_session_key
 from jenny.utils.clock import local_now
 from jenny.utils.helpers import clip
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
@@ -421,7 +421,7 @@ class JournalAppendTool(Tool):
         try:
             await asyncio.to_thread(
                 store.append_history, content,
-                session_key=session_key or f"{PROJECT_SESSION_PREFIX}{root.name}",
+                session_key=session_key or project_session_key(root.name),
                 kind=attribution, about=root.name, ref=f"{where.as_posix()}:{lineno}",
                 untrusted=bool(current_turn_taint()),
             )
