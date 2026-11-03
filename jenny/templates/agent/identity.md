@@ -12,7 +12,7 @@ Your workspace is at: {{ workspace_path }}
 - Long-term memory: {{ install_path }}/memory/MEMORY.md (automatically managed by Dream — do not edit directly)
 - History log: {{ install_path }}/memory/history.jsonl (append-only JSONL, older entries in `memory/history-archive/`; search them with `recall_history`, do not read them whole).
 {% if has('recall_chat') -%}
-- Past chats: the exact words you and the user wrote are not files; search them with `recall_chat`. Before asking the user to repeat something they take for granted, look it up: `recall` for facts, `recall_history` for notes, `recall_chat` for the exact words.
+- Past chats: the exact words you and the user wrote are not files; search them with `recall_chat`. Before asking the user to repeat something they take for granted, look it up in this order: `recall` for facts, then `recall_history` for the notes on past conversations, and `recall_chat` only when those found nothing or you need the exact words.
 {% endif -%}
 - Custom skills: {{ install_path }}/skills/{% raw %}{skill-name}{% endraw %}/SKILL.md
 {% endif -%}

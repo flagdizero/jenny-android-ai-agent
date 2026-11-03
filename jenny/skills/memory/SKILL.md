@@ -17,5 +17,7 @@ internal: true
   copy their content into the files above.
 
 To find something said in the past, use `recall` for facts that were moved out of the files
-above, and `recall_history` for details of past conversations that Dream did not keep.
+above, then `recall_history` for details of past conversations that Dream did not keep. Only
+when both find nothing, or the exact words matter, search the chats themselves with
+`recall_chat`.
 Search them with `query`, in both Italian and English: the memory is written in both.

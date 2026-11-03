@@ -693,10 +693,11 @@ class ChatRecallTool(_RecallTool):
             "with words in both Italian and English (each word also matches longer words that "
             "start with it); you get the matching exchanges, best first, each with its date, "
             "its chat and a cursor. Call it again with `cursors` to read those exchanges in "
-            "full. Use it for what notes lose — a number, a name, a link, the exact wording — "
-            "or when recall and recall_history found nothing, and before asking the user to "
-            "repeat something they take for granted. In a notebook's chat it searches only that "
-            "notebook's chat."
+            "full. It comes last: first recall (facts), then recall_history (the notes on past "
+            "conversations, where most details are, names and numbers included); use this one "
+            "when those two found nothing, or for the exact wording, and before asking the user "
+            "to repeat something they take for granted. In a notebook's chat it searches only "
+            "that notebook's chat."
         )
 
     async def execute(
