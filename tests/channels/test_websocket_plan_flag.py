@@ -44,9 +44,12 @@ async def test_review_carries_the_plan_id() -> None:
     assert meta["plan_revise"] == "p_0123456789ab"
 
 
-async def test_plan_outside_a_notebook_is_ignored() -> None:
+async def test_plan_in_the_personal_chat_is_a_planning_turn_too() -> None:
+    """La chat personale può avere piani (con l'orchestratore): il flag passa, e
+    se lì i piani non ci sono lo decide il driver. Trovato sul telefono il
+    03/11/2026: il canale lo buttava, e il tasto Piano non apriva niente."""
     meta = await _metadata({"chat_id": "default", "content": "piano", "plan": True})
-    assert "plan_mode" not in meta and "readonly" not in meta
+    assert meta["plan_mode"] is True and meta["readonly"] is True
 
 
 async def test_only_true_turns_it_on() -> None:

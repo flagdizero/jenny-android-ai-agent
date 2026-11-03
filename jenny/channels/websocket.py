@@ -866,13 +866,16 @@ class WebSocketChannel(OutboundSenderMixin):
             if envelope.get(WORKSPACE_READONLY_METADATA_KEY) is True:
                 metadata[WORKSPACE_READONLY_METADATA_KEY] = True
             # Il tasto Piano: apre una pianificazione, che propone la lista e
-            # non tocca niente (``jenny/plan/driver.py``). Solo nella chat di un
-            # quaderno: un piano fotografa un quaderno, e fuori non ce n'e' uno.
+            # non tocca niente (``jenny/plan/driver.py``). Nella chat di un
+            # quaderno e in quella personale: se lì i piani ci sono lo decide il
+            # driver (``PlanDriver.place_of``, la personale solo con
+            # l'orchestratore), e un turno marcato dove non ci sono resta un turno
+            # normale in sola lettura — il client ha solo ristretto se stesso.
             # La sola lettura la impone il server, non la fiducia nel client. I
             # messaggi dopo, finche' la pianificazione dura, arrivano senza il
             # flag: li marca il driver (``PlanDriver._settle_drafting``), perche'
             # lo stato e' suo e non del client.
-            if envelope.get("plan") is True and is_project_chat_id(cid):
+            if envelope.get("plan") is True:
                 metadata["plan_mode"] = True
                 metadata[WORKSPACE_READONLY_METADATA_KEY] = True
                 revise = envelope.get("plan_revise")

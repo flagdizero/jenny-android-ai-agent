@@ -945,3 +945,39 @@ def test_plan_step_messages_stay_out_of_the_notes_dream_reads() -> None:
     ])
     assert "Do step 1" not in text
     assert "Fatto il passo 1." in text and "USER: Grazie" in text
+
+
+async def test_in_the_personal_chat_only_turns_about_the_step_see_its_tools(
+    tmp_path: Path,
+) -> None:
+    """Nella chat personale arriva di tutto: un messaggio dalla mascotte a metà
+    passo non vede i tool del passo; il turno del passo e il resoconto di un suo
+    aiutante (che porta piano e passo) sì. Trovato sul telefono il 03/11/2026:
+    il resoconto non li vedeva, e il passo si chiudeva solo al promemoria."""
+    from jenny.agent.loop_plan import LoopPlanMixin
+    from jenny.bus.events import InboundMessage
+    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META, PlanDriver
+    from jenny.plan.store import PlanStore
+    from tests.support.plan import FakeBus, FakeHost, propose
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    driver = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), FakeHost(workspace),
+                        personal_plans=True)
+    steps = [{"title": "Uno", "detail": "x", "kind": "write", "done_when": "x"},
+             {"title": "Due", "detail": "x", "kind": "other", "done_when": "x"}]
+    assert "card" in await propose(driver, "Prova", steps, key="unified:default")
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+
+    loop = LoopPlanMixin()
+    loop.plan_driver = driver
+
+    def sees(metadata: dict) -> bool:
+        msg = InboundMessage(channel="websocket", sender_id="u", chat_id="default",
+                             content="x", metadata=metadata)
+        return loop._plan_tool_filter(msg, "unified:default")("plan_step_done") is False
+
+    assert not sees({}), "un messaggio di chat a metà passo"
+    assert sees({PLAN_ID_META: plan.id, PLAN_STEP_META: "s1"}), "il resoconto di un aiutante"
+    assert not sees({PLAN_ID_META: plan.id, PLAN_STEP_META: "s2"}), "un passo che non è aperto"

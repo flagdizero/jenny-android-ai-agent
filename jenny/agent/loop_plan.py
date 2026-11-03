@@ -244,12 +244,14 @@ class LoopPlanMixin:
         )
         if step_open and driver is not None:
             # Nella chat personale un turno di chat (la mascotte, una notifica)
-            # non chiude il passo: solo il turno del passo, o la risposta data
-            # dalla scheda.
+            # non chiude il passo: solo un turno che parla del passo aperto (il
+            # suo messaggio, il promemoria, il resoconto di un suo aiutante, che
+            # porta piano e passo) o la risposta data dalla scheda.
             place = driver.place_of(session_key)
             meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
             if place is not None and not place.traits.answer_by_chat:
-                step_open = is_plan_turn(meta) or bool(meta.get(PLAN_ANSWER_META))
+                step_open = (driver.step_message_current(meta)
+                             or bool(meta.get(PLAN_ANSWER_META)))
 
         def plan_hidden(name: str) -> bool | None:
             if name == PLAN_PROPOSE_TOOL:
