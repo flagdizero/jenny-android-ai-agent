@@ -7,7 +7,7 @@ Le regole sono quelle di ``config/store.py::mutate`` e di ``board/store.py``:
 - **si rilegge dentro il lock con cui si scrive** (:meth:`PlanStore.update`),
   così nessun chiamante salva una copia vecchia sopra una nuova;
 - **scrittura atomica** (``atomic_write``);
-- **niente I/O lento nel callback**: le foto si fanno prima, qui si annota l'id.
+- **niente I/O lento nel callback**: i conti dai registri si fanno prima, qui si annotano.
 
 **I lock sono ``threading.Lock`` e le funzioni sincrone**, come la bacheca: i
 chiamanti async passano da ``asyncio.to_thread``, il corpo critico è un file
@@ -433,13 +433,13 @@ class PlanStore:
 
         Un piano chiuso va via se non è fra i *keep_closed* più recenti del suo
         quaderno **o** se è chiuso da più di *max_age_days* giorni: il primo
-        limite dei due che scatta. Le foto pesano, e dopo la potatura «Torna a
-        prima» sparisce dalla scheda: senza foto non si promette.
+        limite dei due che scatta. Un piano potato perde solo la scheda e «Torna
+        a prima»: senza ``plan.json`` non si sa più quali registri sono suoi.
 
         I piani che hanno girato (``done``/``stopped``/``rolled_back``) e quelli
         che non sono mai partiti (``discarded``/``superseded``) si contano a
-        parte: cinque revisioni di una proposta non devono spingere fuori le
-        foto dell'ultimo piano vero. Un piano aperto non si pota mai.
+        parte: cinque revisioni di una proposta non devono spingere fuori
+        l'ultimo piano vero, e il suo ritorno. Un piano aperto non si pota mai.
         """
         moment = now or datetime.now(timezone.utc)
         cutoff = moment - timedelta(days=max_age_days)

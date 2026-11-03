@@ -23,8 +23,8 @@ recinto, ``notebook_cron_session_key``): il suo prompt non è una risposta a un
 piano bloccato, la sua fine non giudica il passo, e i tool del passo non li
 vede. Finché il piano tiene il quaderno gira in sola lettura: per la stessa
 ragione per cui il giardiniere salta i quaderni tenuti (``pick_project``),
-quel che scrivesse finirebbe nelle foto come lavoro del piano, e «Torna a
-prima» lo cancellerebbe.
+quel che scrivesse sopra un file del piano lo terrebbe fuori da «Torna a
+prima».
 
 Senza driver (i test che non lo montano, l'agente prima del composition root)
 tutto questo tace: i tool del piano restano nascosti e nessun hook gira.

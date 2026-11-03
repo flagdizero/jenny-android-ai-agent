@@ -5,10 +5,10 @@ corrente; apre ogni passo con un turno iniettato nella chat del quaderno
 (``agent/plan_step.md``: la lista con gli stati, il dettaglio del passo, le
 regole), e il modello lo chiude con un tool (``plan_step_done``,
 ``plan_step_skip``, ``plan_blocked``). Fra un passo e l'altro c'è il codice:
-fa le foto, aggiorna ``plan.json`` e apre il passo dopo, o si ferma se l'utente
-ha chiesto la pausa. Così Pausa e Ferma sono deterministiche, Jenny non può
-saltare o riordinare i passi, e «cosa ha fatto il passo 3» è il confronto fra
-due foto con confini netti.
+conta i file del passo dai registri, aggiorna ``plan.json`` e apre il passo
+dopo, o si ferma se l'utente ha chiesto la pausa. Così Pausa e Ferma sono
+deterministiche, Jenny non può saltare o riordinare i passi, e «cosa ha fatto
+il passo 3» sono le righe dei registri scritte per quel passo.
 
 Chi chiama il driver:
 
@@ -28,7 +28,7 @@ Il driver non conosce ``AgentLoop``: gli parla attraverso :class:`PlanHost`
 
 Le scritture di ``plan.json`` passano dallo store (lock per piano, scrittura
 atomica); qui sopra un ``asyncio.Lock`` per sessione serializza le transizioni,
-perché una transizione è fatta di più passaggi (foto, scrittura, messaggio) che
+perché una transizione è fatta di più passaggi (conti, scrittura, messaggio) che
 non devono intrecciarsi con quelli di un'altra — un Ferma toccato mentre il passo
 si chiude, per esempio.
 """
@@ -149,7 +149,7 @@ MAX_RESEARCH_ROUNDS = 2
 # — o all'ultimo passo qualunque fosse, e sul Titan «Riscrivi i drawer» ha
 # ricevuto 7 temi di ricerca — e lì si pagava un altro giro. Ora vanno in un
 # file del quaderno, che la pianificazione successiva legge, e nelle pagine come
-# «non documentato». Scritto prima della foto di fine passo: il ritorno lo toglie.
+# «non documentato». Scritto nel registro del piano, col passo: il ritorno lo toglie.
 OPEN_GAPS_PATH = "raw/notes/open-gaps.md"
 _GAPS_LISTED = "gaps_listed"
 # Il cancello dei fatti persi di un passo ``delete``: uno per passo, come quello dei buchi.
@@ -1181,15 +1181,15 @@ class PlanDriver:
         helpers = self._helpers_of_step(session_key, live.plan_id, live_step=None)
         if helpers is None:
             # Il registro degli aiutanti non ha risposto: chiudere «al buio»
-            # lascerebbe le loro scritture al passo dopo, e la foto mentirebbe.
+            # lascerebbe le loro scritture fuori dai conti del passo.
             return (
                 "Not yet: I cannot tell whether helpers of this step are still working (the "
                 "helper registry did not answer). Wait a moment, then call `plan_step_done` again."
             )
         if helpers:
             # Un passo chiuso con gli aiutanti ancora al lavoro: le loro
-            # scritture finirebbero nel passo dopo, e la foto «dopo» di questo
-            # mentirebbe. Non è un errore (non «riprova diversamente»): è presto.
+            # scritture arriverebbero dopo i conti di questo, che
+            # mentirebbero. Non è un errore (non «riprova diversamente»): è presto.
             return (
                 f"Not yet: {len(helpers)} helper(s) you started for this step are still "
                 "working. Wait for their results, then close the step."
@@ -1513,7 +1513,7 @@ class PlanDriver:
 
         Con il registro per passo (``step_helpers``) contano quelli del passo
         aperto e quelli **senza** passo (un turno dell'utente durante il piano:
-        la loro scrittura finirebbe comunque nella foto, e si segnala). Un
+        la loro scrittura toccherebbe comunque il quaderno del piano, e si segnala). Un
         aiutante di un altro passo o di un altro piano non tiene fermo questo.
         Senza registro per passo, tutti i vivi della sessione, come prima.
         """
@@ -1708,8 +1708,9 @@ class PlanDriver:
 
         Un file solo, una sezione per passo (data, piano, passo), una riga per
         voce; una voce già nel file (stesso testo, spazi normalizzati) non si
-        riscrive. Scritto qui, sotto il lock e **prima** della foto di fine
-        passo (``_settle_closed``): è lavoro del passo, e il ritorno lo toglie.
+        riscrive. Scritto qui, sotto il lock, nel registro del piano col passo
+        (``_journaled``) e **prima** dei conti di fine passo (``_settle_closed``):
+        è lavoro del passo, e il ritorno lo toglie.
         Senza la radice del quaderno non si scrive niente, e lo si dice.
         """
         items: list[str] = []
@@ -1959,8 +1960,8 @@ class PlanDriver:
     ) -> None:
         """A fine turno nella chat di un quaderno: il passo è chiuso? va avanti.
 
-        - passo chiuso → foto «dopo», poi il passo seguente, o la pausa chiesta,
-          o la fine;
+        - passo chiuso → i suoi conti dai registri, poi il passo seguente, o la
+          pausa chiesta, o la fine;
         - passo aperto con aiutanti in volo → niente: il loro risultato aprirà
           un turno, e quel turno continua lo stesso passo;
         - passo aperto, nessun aiutante, Jenny ha finito senza chiuderlo →
@@ -2154,7 +2155,7 @@ class PlanDriver:
     # ── comandi dell'utente (RPC) ──────────────────────────────────────────
 
     async def approve(self, plan_id: str, version: Any, cut: Iterable[Any] = ()) -> Plan:
-        """Approva: foto A, ``running``, primo passo. ``version`` come ``target_sha256``."""
+        """Approva: ``running``, primo passo. ``version`` come ``target_sha256``."""
         plan = self._load(plan_id)
         cut_ids = _cut_ids(plan, cut)
         async with self._lock(plan.session_key):
@@ -2257,7 +2258,7 @@ class PlanDriver:
         return plan
 
     async def stop(self, plan_id: str, then: str = "keep") -> dict[str, Any] | None:
-        """Ferma: via il turno e gli aiutanti, passo ``interrupted``, foto B, ``stopped``.
+        """Ferma: via il turno e gli aiutanti, passo ``interrupted``, ``stopped``.
 
         Con ``then="rollback"`` continua col ritorno a prima, e ne ritorna il
         resoconto.
@@ -2369,8 +2370,8 @@ class PlanDriver:
         """``plan_running`` se un piano più nuovo tiene il quaderno di *plan*.
 
         Tornare indietro con un piano vecchio mentre uno nuovo gira riscriverebbe
-        il quaderno sotto i passi di quest'ultimo, e le sue foto attribuirebbero
-        al piano nuovo un ritorno che non ha fatto: è la stessa regola per cui
+        il quaderno sotto i passi di quest'ultimo, e il suo ritorno troverebbe
+        i suoi file cambiati da un altro: è la stessa regola per cui
         l'utente non scrive in un quaderno tenuto.
         """
         live = self._index.get(plan.session_key)
@@ -2612,8 +2613,8 @@ class PlanDriver:
         Riprendere da solo un passo interrotto rischia doppioni anche con passi
         idempotenti, e l'utente non saprebbe che il telefono si è riavviato: il
         piano aspetta Riprendi (deciso il 23/10), con una riga nella storia. Il
-        passo interrotto torna ``pending`` e Riprendi lo riapre da capo, con
-        una foto «prima» nuova. Sincrono: gira prima del loop.
+        passo interrotto torna ``pending`` e Riprendi lo riapre da capo.
+        Sincrono: gira prima del loop.
 
         Un piano fermo (``blocked``, su una domanda o sulle bozze) resta fermo:
         aspettava già l'utente, e non c'è lavoro a metà da proteggere. Fino al
@@ -3254,7 +3255,7 @@ class PlanDriver:
         adesso tocca a lei. Ritorna il piano se è cambiato qualcosa da far
         vedere, ``None`` altrimenti. Va chiamato col lock della sessione.
 
-        *advance* dice se fotografare il passo e aprire il seguente qui: di
+        *advance* dice se fare i conti del passo e aprire il seguente qui: di
         default sì, se nessun turno è in volo in quella sessione. Se ce n'è uno,
         lo fa il suo gancio di fine turno, come per ogni passo chiuso — mai due
         aperture dello stesso passo.

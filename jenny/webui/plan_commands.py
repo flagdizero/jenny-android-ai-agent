@@ -34,22 +34,22 @@ Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``)
   (``plan.stop`` con ``then: "rollback"`` aggiunge ``report``, o
   ``rollback_error: {code, message}`` se il piano si è fermato ma il ritorno
   è stato rifiutato: si può chiedere dopo con ``plan.rollback``).
-- ``plan.step_files {id, step}`` → ``{ok, added, changed, removed}``: la foto
-  prima e quella dopo del passo.
+- ``plan.step_files {id, step}`` → ``{ok, added, changed, removed, groups:
+  {path: group}}``: le righe dei registri del piano scritte per quel passo.
 - ``plan.changes {id}`` → ``{ok, added, changed, removed, groups: {path:
-  group}}``: la foto A e la B (in corsa, l'ultima foto di un passo).
+  group}}``: le righe di tutti i registri del piano.
 - ``plan.rollback_preview {id}`` → ``{ok, report, expect_end}``: il conto del
   ritorno senza toccare niente. ``report`` ha le liste ``restored``,
   ``removed``, ``already``, ``left``, ``kept``, ``excluded``, i loro
-  ``counts``, e ``groups: {group: {esito: quanti}}``. ``expect_end`` è l'id
-  della foto del quaderno **su cui è stato fatto questo conto** (non la foto B
-  del piano, che dopo il Ferma non cambia più): il client lo rimanda tale e
-  quale a ``plan.rollback``.
+  ``counts``, ``groups: {group: {esito: quanti}}``, ``group_of: {path:
+  group}`` e ``keepable`` (i gruppi che si possono tenere). ``expect_end`` è il
+  gettone delle firme dei file **su cui è stato fatto questo conto**: il client
+  lo rimanda tale e quale a ``plan.rollback``.
 - ``plan.rollback {id, keep: [group], expect_end}``, ``plan.undo_rollback {id}``
   → ``{ok, report}`` (``plan.rollback`` anche ``discarded_drafts: [{id,
-  target}]``: le bozze del piano ancora in attesa, buttate col ritorno). ``plan.rollback`` rifà la foto del quaderno: se non è
-  ``expect_end``, il quaderno è cambiato dopo il conto e la risposta è
-  ``conflict`` (si rilegge l'anteprima).
+  target}]``: le bozze del piano ancora in attesa, buttate col ritorno).
+  ``plan.rollback`` rifà il gettone: se non è ``expect_end``, i file sono
+  cambiati dopo il conto e la risposta è ``conflict`` (si rilegge l'anteprima).
 - ``plan.full {id}`` → ``{ok, title, coverage, assumptions, steps: [{id, title,
   detail, kind, status, tag, done_when, covers}]}``: il «piano completo», in sola
   lettura.

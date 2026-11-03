@@ -45,13 +45,13 @@ CLOSED_STATUSES: frozenset[str] = frozenset(PLAN_STATUSES) - OPEN_STATUSES
 
 # Partito e non ancora chiuso: il piano *tiene* il quaderno. Finché è in uno di
 # questi stati l'utente non scrive nel quaderno (le RPC rispondono
-# ``plan_running``) e il giardiniere non ci passa: tutto quel che cambia fra la
-# foto A e la foto B dev'essere del piano, così il ritorno non indovina di chi è
-# un file. ``proposed`` ne resta fuori: una proposta non ha ancora fotografato
-# niente, e proporre non deve chiudere il quaderno.
+# ``plan_running``) e il giardiniere non ci passa: tutto quel che cambia mentre
+# gira dev'essere del piano, così il ritorno non indovina di chi è un file.
+# ``proposed`` ne resta fuori: una proposta non ha ancora scritto niente, e
+# proporre non deve chiudere il quaderno.
 HELD_STATUSES: frozenset[str] = frozenset({"running", "pausing", "paused", "blocked"})
 
-# Chiusi dopo aver girato: hanno le foto, e sono quelli da cui si torna indietro.
+# Chiusi dopo aver girato: hanno i registri, e sono quelli da cui si torna indietro.
 RAN_STATUSES: frozenset[str] = frozenset({"done", "stopped", "rolled_back"})
 
 STEP_STATUSES: tuple[str, ...] = (

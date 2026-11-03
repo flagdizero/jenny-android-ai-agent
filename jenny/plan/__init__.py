@@ -7,6 +7,8 @@ Il package fornisce:
 - ``store``: ``plan.json``, l'unica fonte dello stato di un piano, fuori dal
   workspace (sotto ``<runtime_root>/plans/``), e accanto ``drafting.json``, le
   pianificazioni in corso (una per quaderno);
-- ``photos``: le foto del quaderno (uno ``SnapshotEngine`` per piano), il loro
-  confronto e il ritorno indietro a tre vie con journal.
+- ``place``: il posto di un piano, un quaderno (``nb:<nome>``) o la chat
+  personale (``personal``);
+- ``work``: il lavoro di un piano letto dai suoi registri d'annulla (i file per
+  passo, i primi testi), da cui si torna indietro.
 """

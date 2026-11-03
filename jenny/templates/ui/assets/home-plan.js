@@ -27,7 +27,8 @@
  *  Le regole decise con l'utente, che il disegno non riapre: in corsa solo
  *  Pausa e Ferma (e la risposta quando e' bloccata); toccare un passo fatto
  *  **mostra** cosa ha fatto, non lo cambia; il ritorno indietro lo fa il
- *  codice; la foto la fa l'app all'Approva, e qui e' una riga, non un passo.
+ *  codice; il punto a cui tornare lo segna l'app all'Approva, e qui e' una
+ *  riga, non un passo.
  */
 
 import { rpc } from './shared/rpc-client.js';
@@ -43,7 +44,7 @@ import { physicalKeyboard } from './home-focus.js';
  *  composer della sua chat si spegne mentre corre, la copertina ha il bollino.
  *  `proposed` no: una proposta non ha ancora toccato niente. */
 export const LIVE_STATUSES = new Set(['running', 'pausing', 'paused', 'blocked']);
-/* Chiusi dopo aver girato: hanno le foto, e la scheda resta finche' non la togli. */
+/* Chiusi dopo aver girato: hanno i registri, e la scheda resta finche' non la togli. */
 const RAN_STATUSES = new Set(['done', 'stopped', 'rolled_back']);
 /* Il composer e' spento solo mentre un passo gira: in pausa e in blocco si parla. */
 const COMPOSER_OFF = new Set(['running', 'pausing']);
@@ -132,7 +133,7 @@ export function countedSteps(plan) {
   return (plan?.steps || []).filter((s) => s.status !== 'cut');
 }
 
-/* Quando e' successo un evento della storia (l'approvazione, per la foto). */
+/* Quando e' successo un evento della storia (l'approvazione: il punto a cui si torna). */
 function historyAt(plan, events) {
   const hit = (plan?.history || []).find((h) => events.includes(h?.event));
   return hit?.at || null;
@@ -1642,7 +1643,7 @@ export class HomePlan {
     if (plan.status === 'pausing') key = 'pausingNote';
     const closing = this._closingKey(plan);
     if (closing) {
-      /* Fra un passo e l'altro (la foto, il turno che chiude) il piano corre
+      /* Fra un passo e l'altro (i conti, il turno che chiude) il piano corre
          senza un passo «adesso»: senza questa riga la scheda restava muta per
          mezzo minuto, e alla fine per uno intero. */
       const note = el('div', 'home-plan-note home-plan-closing');
@@ -1771,7 +1772,7 @@ export class HomePlan {
     return row.children.length ? row : null;
   }
 
-  /* I conti della scheda finita: dal confronto delle due foto (`plan.changes`). */
+  /* I conti della scheda finita: dai registri del piano (`plan.changes`). */
   _summary(plan) {
     const key = `${plan.id}@${plan.updated_at}`;
     if (this._changesFor !== key || !this._changes) return null;
@@ -2111,8 +2112,8 @@ export class HomePlan {
     return box;
   }
 
-  /** Cosa ha fatto un passo: il confronto fra la foto di prima e quella di
-   *  dopo il passo. Si guarda e basta. */
+  /** Cosa ha fatto un passo: le righe dei registri scritte per quel passo.
+   *  Si guarda e basta. */
   async openStepFiles(plan, step) {
     const n = countedSteps(plan).findIndex((s) => s.id === step.id) + 1;
     let out;
@@ -2142,7 +2143,7 @@ export class HomePlan {
     return this._openSheet(children, 'is-step');
   }
 
-  /** Cosa ha cambiato il piano: la foto di prima contro quella di dopo. */
+  /** Cosa ha cambiato il piano: tutti i suoi registri. */
   async openChanges() {
     const plan = this.plan;
     if (!plan) return null;
@@ -2324,8 +2325,8 @@ export class HomePlan {
       showToast(t(`error.${errorKey(err?.code)}`), 'error');
       await this.refresh();
       this.refreshList();
-      /* `conflict`: il quaderno e' cambiato dopo il conto (`expect_end` e' la
-         foto di quel conto). Il conto vecchio non vale piu': se ne rifa' uno
+      /* `conflict`: il quaderno e' cambiato dopo il conto (`expect_end` e' il
+         gettone dei file di quel conto). Il conto vecchio non vale piu': se ne rifa' uno
          e lo si rimostra, coi numeri nuovi, invece di lasciare l'utente a
          riaprire il foglio per sapere cosa tornerebbe adesso. */
       if (err?.code === 'conflict' && this.plan?.id === plan.id && this.plan.can_rollback !== false) {
