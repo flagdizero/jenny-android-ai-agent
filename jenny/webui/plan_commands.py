@@ -168,10 +168,14 @@ async def plan_get(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, 
     plan = await asyncio.to_thread(_pick)
     if plan is not None:
         plan = await _recheck(ctx, plan)
+    driver = _driver_or_none(ctx)
     return {
         "ok": True,
         "plan": plan_view(plan) if plan is not None else None,
         "drafting": await asyncio.to_thread(_drafting, store, where),
+        # La chat personale ha piani solo con l'orchestratore (``PlanDriver``):
+        # senza, la scheda non mostra il tasto Piano.
+        "enabled": where.startswith("nb:") or bool(getattr(driver, "personal_plans", False)),
     }
 
 

@@ -68,6 +68,13 @@ const KIND_ICON = {
    arriva con ogni elenco di file (`groups`, percorso → gruppo) e con il conto
    del ritorno (`group_of`, `keepable`). La scheda non ne tiene una copia. */
 
+/** Il posto di un piano (`nb:<nome>` o `personal`); un piano letto da un
+ *  gateway di prima dei posti ha solo il quaderno. */
+function placeOf(plan) {
+  if (!plan) return null;
+  return plan.place || (plan.notebook ? `nb:${plan.notebook}` : 'personal');
+}
+
 /** Il nome di un gruppo per la scheda: tradotto se è uno dei gruppi di un
  *  quaderno, così com'è se è il nome di un quaderno. */
 function groupLabel(group) {
@@ -281,6 +288,8 @@ export class HomePlan {
    * @param chatEl     `#home-chat`: la striscia ci sta in cima e si sposta con lei.
    * @param composer   `{field, input, attach, send, root}` del composer della casa.
    * @param currentNotebook il quaderno della chat a schermo, o `null`.
+   * @param currentPlace il posto dei piani della chat a schermo (`nb:<nome>`,
+   *                   `personal`), o `null`: senza, quello del quaderno.
    * @param onChange   chiamata dopo ogni ridisegno della scheda (`chat.liveChanged`).
    * @param onLockChange chiamata quando cambia l'elenco dei quaderni chiusi.
    * @param onComposerChange chiamata quando cambiano segnaposto o stato del composer.
@@ -295,7 +304,7 @@ export class HomePlan {
    *                   per contare quelle del passo in corso (`plan_step`).
    */
   constructor({
-    live, thread, chatEl, composer = {}, currentNotebook, onChange, onLockChange,
+    live, thread, chatEl, composer = {}, currentNotebook, currentPlace, onChange, onLockChange,
     onComposerChange, sendText, appendOwn, turnRunning, sheet,
     stagedItems, stagedFailed, refreshStaged, onDraftsChange, keyboard = physicalKeyboard,
     helpers,
@@ -307,6 +316,16 @@ export class HomePlan {
     this.chatEl = chatEl;
     this.composer = composer;
     this.currentNotebook = currentNotebook || (() => null);
+    this.currentPlace = currentPlace || (() => {
+      const notebook = this.currentNotebook();
+      return notebook ? `nb:${notebook}` : null;
+    });
+    /* Il piano aperto della chat personale, dall'elenco (`plan.list`); i
+       quaderni stanno in `open`, che decide anche i lucchetti. */
+    this.openPersonal = null;
+    /* La chat personale puo' avere piani: lo dice il gateway (`plan.get` →
+       `enabled`, solo con l'orchestratore). Finche' non l'ha detto, no. */
+    this._enabled = false;
     this.onChange = onChange;
     this.onLockChange = onLockChange;
     this.onComposerChange = onComposerChange;
@@ -429,7 +448,8 @@ export class HomePlan {
       return;
     }
     this.refreshList();
-    if (!msg.notebook || msg.notebook === this.currentNotebook()) this.refresh();
+    const place = msg.place || (msg.notebook ? `nb:${msg.notebook}` : null);
+    if (!place || place === this.currentPlace()) this.refresh();
   }
 
   _retryStale() {
@@ -442,15 +462,16 @@ export class HomePlan {
 
   /** Rilegge il piano del quaderno a schermo e ridisegna. */
   async refresh() {
-    const notebook = this.currentNotebook();
+    const place = this.currentPlace();
     const token = ++this._token;
     let plan = null;
     let drafting = null;
-    if (notebook) {
+    if (place) {
       try {
-        const out = await rpc.plan('get', { notebook });
+        const out = await rpc.plan('get', { place });
         plan = out?.plan || null;
         drafting = out?.drafting || null;
+        this._enabled = out?.enabled === true;
       } catch (err) {
         console.warn('home.plan: get failed', err);
         if (token !== this._token) return this.plan;
@@ -504,9 +525,12 @@ export class HomePlan {
     clearTimeout(this._listRetry);
     this._listRetry = null;
     const next = new Map();
+    let personal = null;
     for (const p of plans) {
       if (p?.notebook && LIVE_STATUSES.has(p.status)) next.set(p.notebook, p);
+      else if (p?.place === 'personal' && LIVE_STATUSES.has(p.status)) personal = p;
     }
+    this.openPersonal = personal;
     const before = JSON.stringify([...this.open]);
     this.open = next;
     if (JSON.stringify([...next]) !== before) {
@@ -546,7 +570,7 @@ export class HomePlan {
   /* Il piano del quaderno a schermo, come chiave della base del tasto. */
   _planKey() {
     const plan = this.plan;
-    return plan && plan.notebook === this.currentNotebook() ? `${plan.id}@${plan.version}` : '';
+    return plan && placeOf(plan) === this.currentPlace() ? `${plan.id}@${plan.version}` : '';
   }
 
   /** La revisione in corso: quella che hai chiesto col tasto (Rivedi), o
@@ -559,13 +583,13 @@ export class HomePlan {
   /** «Annulla il piano»: la pianificazione finisce senza proposta, e il tasto
    *  si spegne. Vero se il gateway l'ha presa. */
   async cancelDrafting() {
-    const notebook = this.currentNotebook();
-    if (!notebook || this._cancelling) return false;
+    const place = this.currentPlace();
+    if (!place || this._cancelling) return false;
     this._cancelling = true;
     this._paintComposer();
     let ok = false;
     try {
-      await rpc.plan('cancel_drafting', { notebook });
+      await rpc.plan('cancel_drafting', { place });
       ok = true;
     } catch (err) {
       console.warn('home.plan: cancel_drafting failed', err);
@@ -709,12 +733,19 @@ export class HomePlan {
   /** Il segnaposto che il composer deve avere adesso, o `null` per il suo. */
   placeholder() {
     if (!this._inNotebook()) return null;
-    if (COMPOSER_OFF.has(this._status())) return t('composerOff');
+    if (this._holds() && COMPOSER_OFF.has(this._status())) return t('composerOff');
     if (AppState.planTurn) return this.drafting ? t('placeholderDrafting') : t('placeholder');
     return null;
   }
 
   _inNotebook() {
+    const place = this.currentPlace();
+    return Boolean(place) && (place !== 'personal' || this._enabled);
+  }
+
+  /** Il piano tiene la sua cartella (un quaderno): niente scrittura e composer
+   *  spento mentre corre. La chat personale non tiene niente. */
+  _holds() {
     return Boolean(this.currentNotebook());
   }
 
@@ -723,17 +754,18 @@ export class HomePlan {
    *  fallita, o un piano di un altro quaderno rimasto in mano, non
    *  riaccendono la chat sotto un piano che corre. */
   _status() {
-    const notebook = this.currentNotebook();
-    if (!notebook) return null;
-    if (this.plan && this.plan.notebook === notebook) return this.plan.status;
-    return this.open.get(notebook)?.status || null;
+    const place = this.currentPlace();
+    if (!place) return null;
+    if (this.plan && placeOf(this.plan) === place) return this.plan.status;
+    if (place === 'personal') return this.openPersonal?.status || null;
+    return this.open.get(this.currentNotebook())?.status || null;
   }
 
   _paintComposer() {
     const { field, input, attach, send } = this.composer;
     const inNotebook = this._inNotebook();
     const status = this._status();
-    const off = inNotebook && COMPOSER_OFF.has(status);
+    const off = inNotebook && this._holds() && COMPOSER_OFF.has(status);
     /* Il tasto: solo nella chat di un quaderno, e non mentre un piano lo tiene
        (non se ne fa un secondo sopra il primo). */
     const toggleable = inNotebook && !LIVE_STATUSES.has(status);
@@ -794,7 +826,7 @@ export class HomePlan {
 
   _shown() {
     const plan = this.plan;
-    if (!plan || !this._inNotebook() || plan.notebook !== this.currentNotebook()) return null;
+    if (!plan || !this._inNotebook() || placeOf(plan) !== this.currentPlace()) return null;
     if (plan.status === 'superseded' || plan.status === 'discarded') return null;
     /* Un ritorno rimasto a meta' non si toglie: il quaderno e' a meta', e la
        scheda e' l'unico posto che lo dice e offre di riprovare. */

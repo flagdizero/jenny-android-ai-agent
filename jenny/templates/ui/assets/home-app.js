@@ -240,6 +240,14 @@ class HomeApp {
         send: this.send,
       },
       currentNotebook: () => projectNameOf(sessionManager.currentKey),
+      /* Il posto dei piani della chat a schermo (`jenny/plan/place.py`): il
+         quaderno, o la chat personale. */
+      currentPlace: () => {
+        const key = sessionManager.currentKey;
+        const notebook = projectNameOf(key);
+        if (notebook) return `nb:${notebook}`;
+        return key && key === sessionManager.personalKey ? 'personal' : null;
+      },
       onChange: () => this.chat.liveChanged(),
       onLockChange: () => {
         this._applyPlanLock();

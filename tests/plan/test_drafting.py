@@ -202,7 +202,7 @@ async def test_plan_get_carries_drafting_next_to_the_plan(
 ) -> None:
     ctx = _ctx(workspace, driver)
     got = await dispatch_command(ctx, "plan.get", {"notebook": "piante"})
-    assert got == {"ok": True, "plan": None, "drafting": None}
+    assert got == {"ok": True, "plan": None, "drafting": None, "enabled": True}
     await start_drafting(driver, reads=2)
     got = await dispatch_command(ctx, "plan.get", {"notebook": "piante"})
     assert got["plan"] is None

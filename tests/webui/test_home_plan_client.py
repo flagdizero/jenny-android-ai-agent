@@ -164,7 +164,7 @@ assert.equal($('home-input').placeholder, P.placeholderDrafting);
 rpcAnswers['plan.cancel_drafting'] = () => { drafting = null; return { ok: true, cancelled: true }; };
 document.querySelector('[data-plan-action="cancel-drafting"]').click();
 await tick(40);
-assert.deepEqual(rpcs('plan.cancel_drafting')[0].params, { notebook: 'orto' });
+assert.deepEqual(rpcs('plan.cancel_drafting')[0].params, { place: 'nb:orto' });
 assert.equal(toggle.getAttribute('aria-pressed'), 'false');
 assert.equal(document.querySelector('.home-plan-hint').hidden, true);
 // Spegnere il tasto mentre pianifica e' annullare.
@@ -1567,3 +1567,30 @@ def test_block_markdown_in_a_coverage_line_flows_inline() -> None:
     for tag in ("p", "ul", "ol", "li", "h1", "h3", "pre"):
         assert tag in rule.split("{", 1)[0], tag
     assert "display: inline" in rule and "font-size: inherit" in rule
+
+
+def test_the_personal_chat_has_the_plan_toggle_only_when_the_gateway_allows_it() -> None:
+    """Il piano nella chat principale c'è solo con l'orchestratore (`plan.get` →
+    `enabled`). Lì un piano che corre non spegne la chat: non tiene niente, e la
+    mascotte e le notifiche ci scrivono comunque."""
+    run_home(_HEAD + """
+let enabled = false;
+rpcAnswers['plan.get'] = () => ({ ok: true, plan: current, drafting, enabled });
+const toggle = () => document.querySelector('.home-plan-toggle');
+await app.plan.refresh();
+await tick(20);
+assert.equal(toggle().hidden, true, 'senza permesso il tasto non c\\'e\\'');
+assert.deepEqual(rpcs('plan.get').at(-1).params, { place: 'personal' });
+enabled = true;
+await app.plan.refresh();
+await tick(20);
+assert.equal(toggle().hidden, false, 'col permesso il tasto c\\'e\\'');
+current = plan({ id: 'pp', notebook: '', place: 'personal', session_key: 'unified:default',
+  status: 'running', current_step_id: 's1',
+  steps: [step('s1', 'Tidy the recipes', { status: 'now' }), step('s2', 'Sort the apps')] });
+await app.plan.refresh();
+await tick(20);
+assert.ok(card(), 'la scheda del piano personale');
+assert.equal($('home-input').disabled, false, 'la chat resta accesa');
+assert.ok(!document.querySelector('.home-field').classList.contains('is-plan-off'));
+""")

@@ -71,8 +71,14 @@ async def _proposed(driver: PlanDriver) -> Any:
 async def test_get_and_list_read_the_store(workspace: Path, driver: PlanDriver) -> None:
     ctx = _ctx(workspace, driver)
     assert await _rpc(ctx, "plan.get", notebook="piante") == {
-        "ok": True, "plan": None, "drafting": None,
+        "ok": True, "plan": None, "drafting": None, "enabled": True,
     }
+    # La chat personale ha piani solo quando il driver li permette (l'orchestratore).
+    personal = await _rpc(ctx, "plan.get", place="personal")
+    assert personal["plan"] is None and personal["enabled"] is False
+    driver.personal_plans = True
+    assert (await _rpc(ctx, "plan.get", place="personal"))["enabled"] is True
+    driver.personal_plans = False
     plan = await _proposed(driver)
     got = await _rpc(ctx, "plan.get", id=plan.id)
     assert got["plan"]["status"] == "proposed"
