@@ -981,3 +981,39 @@ async def test_in_the_personal_chat_only_turns_about_the_step_see_its_tools(
     assert not sees({}), "un messaggio di chat a metà passo"
     assert sees({PLAN_ID_META: plan.id, PLAN_STEP_META: "s1"}), "il resoconto di un aiutante"
     assert not sees({PLAN_ID_META: plan.id, PLAN_STEP_META: "s2"}), "un passo che non è aperto"
+
+
+async def test_in_the_personal_chat_a_message_waits_for_the_whole_step_turn(
+    tmp_path: Path,
+) -> None:
+    """Un messaggio dalla mascotte a metà del turno di un passo aspetta la fine
+    del turno, anche dopo che il passo si è chiuso: il rimandato si ricontrolla
+    a ogni giro, e fino al 03/11/2026 a passo chiuso entrava nella coda del
+    turno del passo (provato sul telefono), con la risposta in chat e non nel
+    fumetto."""
+    from jenny.agent.loop_plan import LoopPlanMixin
+    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+    from tests.support.plan import FakeBus, FakeHost, propose
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    driver = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), FakeHost(workspace),
+                        personal_plans=True)
+    steps = [{"title": "Uno", "detail": "x", "kind": "write", "done_when": "x"},
+             {"title": "Due", "detail": "x", "kind": "other", "done_when": "x"}]
+    assert "card" in await propose(driver, "Prova", steps, key="unified:default")
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+
+    loop = LoopPlanMixin()
+    loop.plan_driver = driver
+    step_turn = {INJECTED_EVENT_META: PLAN_STEP_EVENT, PLAN_ID_META: plan.id,
+                 PLAN_STEP_META: "s1"}
+    mascot = InboundMessage(channel="floating", sender_id="u", chat_id="shade", content="ciao")
+
+    assert loop._plan_injection(mascot, step_turn, "unified:default") == "defer"
+    await driver.step_done("unified:default", "fatto")
+    assert not driver.step_open("unified:default")
+    assert loop._plan_injection(mascot, step_turn, "unified:default") == "defer", (
+        "il passo è chiuso, ma il turno è ancora il suo")
+    assert loop._plan_injection(mascot, {}, "unified:default") == "inject", "fuori dal passo"

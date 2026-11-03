@@ -331,11 +331,15 @@ class LoopPlanMixin:
             place = driver.place_of(session_key)
             if (
                 place is not None and not place.traits.answer_by_chat
-                and is_plan_turn(turn_metadata) and driver.step_open(session_key)
+                and is_plan_turn(turn_metadata)
             ):
                 # Nella chat personale arriva di tutto (la mascotte, le notifiche,
                 # Telegram): un messaggio a metà passo non entra nel turno del
-                # passo, aspetta e diventa un turno suo.
+                # passo, aspetta e diventa un turno suo. Per tutto il turno, non
+                # solo finché il passo è aperto: il messaggio rimandato si
+                # ricontrolla a ogni giro, e chiuso il passo sarebbe entrato
+                # nella coda del turno — con la risposta in chat invece che nel
+                # fumetto (trovato sul telefono il 03/11/2026).
                 return "defer"
             if (
                 pending_msg.channel != "system"
