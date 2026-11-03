@@ -68,6 +68,10 @@ _NOT_JOURNALED: dict[str, str] = {
         "i dati delle app li scrivono le azioni delle app, che ha solo il turno di Jenny "
         "(lo strumento per-app si sincronizza sul registro del loop principale)"
     ),
+    "apps/executor.py": (
+        "chiede alla sola lettura per le azioni http, che non scrivono file sul telefono; "
+        "le scritture sono di apps/storage.py"
+    ),
     "session/manager.py": "il magazzino delle sessioni, scritto dal runtime",
     "webui/transcript_store.py": "il verbale dei turni, scritto dal runtime",
     "agent/subagent_records.py": "la contabilità degli aiutanti, scritta dal runtime",
