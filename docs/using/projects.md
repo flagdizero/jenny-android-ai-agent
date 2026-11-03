@@ -42,7 +42,7 @@ Subfolders under `wiki/` are allowed, not required. Wikis that existed before th
 
 | | Personal chat | Notebook |
 |---|---|---|
-| Session history | `sessions/unified_default.jsonl` | `sessions/project_<name>.jsonl` — its own thread |
+| Session history | the `unified:default` session in Jenny's state database | the `project:<name>` session — its own thread |
 | Feeds long-term memory? | Yes — the [Dream](./memory.md) pipeline builds `MEMORY.md`, `USER.md`, `SOUL.md` from it | **Only `USER.md`.** It is archived into `memory/history.jsonl` under its own key, and Dream may take facts about *you* from it into `USER.md`, nothing else |
 | Remembers by | Dream, between conversations | Writing facts into its own folder, during the conversation |
 | Where writes may land | Anywhere in the workspace | **Only inside its own folder** |

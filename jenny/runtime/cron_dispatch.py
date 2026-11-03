@@ -56,7 +56,7 @@ class CronCapableAgent(BoundCronAgent, Protocol):
     """
 
     context: "ContextBuilder"  # con ``.memory`` (MemoryStore)
-    sessions: "SessionManager"  # con get_or_create / save / sessions_dir
+    sessions: "SessionManager"  # con get_or_create / save / list_keys / delete
 
     def active_session_keys(self) -> tuple[str, ...]:
         """Le sessioni con un turno in volo: il giardiniere non entra li'."""
@@ -672,7 +672,7 @@ class CronDispatcher:
         # file; run it off the event loop so a concurrent append holding the
         # lock (on another thread) can't stall the loop on the blocking wait.
         await asyncio.to_thread(store.compact_history)
-        pruned_keys = prune_dream_sessions(agent.sessions.sessions_dir)
+        pruned_keys = prune_dream_sessions(agent.sessions)
         if pruned_keys:
             agent.evict_pruned_sessions(pruned_keys)
         return None

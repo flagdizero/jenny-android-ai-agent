@@ -1745,9 +1745,9 @@ class MemoryStore:
         return f"{DREAM_SESSION_PREFIX}{datetime.now():%Y%m%d-%H%M%S}"
 
     @classmethod
-    def prune_dream_sessions(cls, sessions_dir: Path, *, keep: int = 10) -> list[str]:
-        """Remove the oldest Dream session files, keeping only the N most recent."""
-        return cls.prune_internal_sessions(sessions_dir, "dream", keep=keep)
+    def prune_dream_sessions(cls, sessions: Any, *, keep: int = 10) -> list[str]:
+        """Remove the oldest Dream sessions, keeping only the N most recent."""
+        return cls.prune_internal_sessions(sessions, "dream", keep=keep)
 
 
 # ---------------------------------------------------------------------------

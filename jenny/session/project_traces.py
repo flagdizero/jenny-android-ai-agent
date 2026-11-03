@@ -7,6 +7,10 @@ WebUI (quel che vedi, piu' i suoi segmenti), i record dei subagent. Un'altra
 traccia — ``.jenny/tool-results/`` — vive *dentro* la cartella della wiki,
 quindi segue la cartella e non e' qui.
 
+La sessione (col diario del turno) e i record dei subagent non sono più file:
+sono righe di ``state.sqlite`` sotto la chiave della conversazione, e qui si
+spostano e si tolgono con una query. Restano file i verbali della WebUI.
+
 Enumerarli in un posto solo e' l'unica difesa che c'e': un'operazione che ne
 dimentichi uno lascia una traccia sotto un nome che qualcun altro puo' prendere,
 ed e' esattamente il difetto riprodotto sul telefono il 24/08/2026 — cartella
@@ -24,7 +28,6 @@ file portano il nome di una conversazione, quanto pesano e come si tolgono.
 
 from __future__ import annotations
 
-import json
 import shutil
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -34,12 +37,6 @@ from loguru import logger
 
 from jenny.session.keys import webui_transcript_key
 from jenny.session.manager import SessionManager
-from jenny.utils.path import iter_jsonl
-
-# Tetto sul file di sessione che si accetta di contare per una conferma. Oltre,
-# il numero non si mostra: v. :func:`describe_project_traces`.
-_COUNT_MAX_BYTES = 8_000_000
-
 
 # Chiave nei metadati di sessione in cui vive l'id della wiki di appartenenza.
 # Scritta una volta, al primo turno in cui la cartella c'e' — v.
@@ -55,35 +52,19 @@ def project_trace_paths(workspace: Path, session_key: str) -> list[Path]:
     questo e' il posto in cui aggiungerla — e
     ``tests/session/test_project_session_files.py`` e' quello che se ne accorge.
     """
-    # I record degli aiutanti non sono più un file col nome della chat: stanno
-    # in ``state.sqlite``, e il rinomino e la cancellazione li seguono con una
-    # query (:func:`follow_project_records`, :func:`delete_project_traces`).
+    # La sessione, il diario del turno e i record degli aiutanti non sono più
+    # file col nome della chat: stanno in ``state.sqlite``, e il rinomino e la
+    # cancellazione li seguono con una query (``session.store``,
+    # ``agent.subagent_records``).
     from jenny.config.paths import get_webui_dir
 
-    stem = SessionManager.safe_key(session_key)
     webui_stem = SessionManager.safe_key(webui_transcript_key(session_key))
     webui = get_webui_dir()
     return [
-        project_session_file(workspace, session_key),
         webui / f"{webui_stem}.jsonl",
         webui / f"{webui_stem}.segments",
         webui / f"{webui_stem}.json",  # thread legacy, se questa installazione ne ha uno
-        # Il diario del turno in corso (``SessionManager.turn_journal_path``):
-        # un turno interrotto lo lascia accanto alla sessione, e il checkpoint
-        # lo rilegge al riavvio. Se non seguisse la sessione, il quaderno che
-        # riprende quel nome ereditarebbe il turno a meta' di un altro.
-        workspace / "sessions" / f"{stem}.turn-journal",
     ]
-
-
-def project_session_file(workspace: Path, session_key: str) -> Path:
-    """Il file di sessione di *session_key*: la prima delle sue tracce.
-
-    A parte da :func:`project_trace_paths` perche' chi chiede solo questo — la
-    migrazione delle wiki, all'avvio — non deve toccare la cartella della WebUI,
-    che ``get_webui_dir`` crea quando la nomina.
-    """
-    return workspace / "sessions" / f"{SessionManager.safe_key(session_key)}.jsonl"
 
 
 def recorded_wiki_id(workspace: Path, session_key: str) -> str | None:
@@ -94,31 +75,24 @@ def recorded_wiki_id(workspace: Path, session_key: str) -> str | None:
     probabilmente sta per sparire, e mettere in cache una sessione in quel
     momento e' il modo di farla riscrivere subito dopo.
     """
-    path = project_session_file(workspace, session_key)
+    from jenny.session import store
+
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            first = handle.readline()
-    except OSError:
+        found = store.head(store.session_database(workspace), session_key)
+    except Exception:  # noqa: BLE001 — una lettura mancata vale «nessun id»
         return None
-    try:
-        record = json.loads(first)
-    except ValueError:
+    if found is None:
         return None
-    if not isinstance(record, dict):
-        return None
-    metadata = record.get("metadata")
-    if not isinstance(metadata, dict):
-        return None
-    found = metadata.get(PROJECT_WIKI_ID_KEY)
-    return str(found) if found else None
+    recorded = found["metadata"].get(PROJECT_WIKI_ID_KEY)
+    return str(recorded) if recorded else None
 
 
 @dataclass(frozen=True)
 class TraceReport:
     """Cosa una cancellazione sta per portare via, in una forma mostrabile.
 
-    ``messages`` e' ``None`` quando non si e' potuto contare — file illeggibile,
-    o piu' grande di :data:`_COUNT_MAX_BYTES`. E' un caso da dire («la sua
+    ``messages`` e' ``None`` quando non si e' potuto contare (nessuna sessione
+    salvata, o il database non si legge). E' un caso da dire («la sua
     conversazione») e non da indovinare: un numero sbagliato in una conferma
     distruttiva e' peggio di nessun numero.
     """
@@ -138,17 +112,29 @@ def describe_project_traces(workspace: Path, session_key: str) -> TraceReport:
     Solo letture, nessun effetto: la conferma la si costruisce **prima** di
     chiedere, e chiedere non deve poter cambiare niente.
     """
-    paths = project_trace_paths(workspace, session_key)
+    from jenny.session import store
+
     files = 0
     total = 0
-    for path in paths:
+    for path in project_trace_paths(workspace, session_key):
         for item in _walk(path):
             files += 1
             try:
                 total += item.stat().st_size
             except OSError:
                 pass
-    return TraceReport(files=files, bytes=total, messages=_count_messages(paths[0]))
+    messages: int | None = None
+    try:
+        found = store.head(store.session_database(workspace), session_key)
+    except Exception:  # noqa: BLE001 — un conto mancato si dice, non si indovina
+        found = None
+    if found is not None:
+        # La sessione conta come una traccia: e' quella che una cancellazione
+        # porta via per prima.
+        files += 1
+        total += found["bytes"]
+        messages = int(found["count"])
+    return TraceReport(files=files, bytes=total, messages=messages)
 
 
 def _walk(path: Path) -> Iterator[Path]:
@@ -157,29 +143,6 @@ def _walk(path: Path) -> Iterator[Path]:
         yield from (p for p in path.rglob("*") if p.is_file())
     elif path.exists():
         yield path
-
-
-def _count_messages(session_file: Path) -> int | None:
-    """I messaggi nel file di sessione, o ``None`` se non si e' potuto contare.
-
-    Conta le righe che hanno un ``role``, che e' quel che distingue un messaggio
-    dal record di metadati in testa. Non usa ``SessionManager`` di proposito:
-    questo conto serve a una conferma, e una conferma non deve poter mettere in
-    cache la sessione che sta per sparire.
-    """
-    try:
-        if session_file.stat().st_size > _COUNT_MAX_BYTES:
-            return None
-    except OSError:
-        return None
-    try:
-        with session_file.open("r", encoding="utf-8") as handle:
-            # Una riga storta non invalida il conto delle altre: il file e'
-            # append-only e l'ultima puo' essere tronca.
-            count = sum(1 for record in iter_jsonl(handle) if record.get("role"))
-    except OSError:
-        return None
-    return count
 
 
 def delete_project_traces(workspace: Path, session_key: str) -> list[str]:
@@ -195,7 +158,13 @@ def delete_project_traces(workspace: Path, session_key: str) -> list[str]:
     # Import locale: ``agent/subagent_records`` tira dentro ``agent/loop``, che
     # importa questo modulo (``tests/session/test_cold_imports.py``).
     from jenny.agent.subagent_records import delete_session_records
+    from jenny.session import store
 
+    try:
+        if store.delete(store.session_database(workspace), session_key):
+            removed.append("session")
+    except Exception:  # noqa: BLE001 — come una traccia che resiste: si dice e si va avanti
+        logger.opt(exception=True).error("Sessione non rimossa per {}", session_key)
     try:
         if delete_session_records(workspace, session_key):
             removed.append("subagent records")

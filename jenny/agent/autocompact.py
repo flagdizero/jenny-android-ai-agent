@@ -343,23 +343,16 @@ class AutoCompact:
         return tuple(key for key in keys if self._may_archive_for_idleness(key))
 
     def _project_session_keys(self) -> tuple[str, ...]:
-        """Le sessioni-progetto che esistono su disco.
+        """Le sessioni-progetto salvate.
 
-        Si guardano i **file**, non le wiki: un progetto senza conversazione non
-        ha niente da compattare, e un progetto la cui cartella e' stata rinominata
-        conserva la propria sessione (passo 7). Lo stesso mestiere che
-        ``MemoryStore.prune_internal_sessions`` fa per i run interni, con la
-        stessa traduzione nome-file -> chiave.
+        Si guardano le **sessioni**, non le wiki: un progetto senza
+        conversazione non ha niente da compattare, e un progetto la cui cartella
+        e' stata rinominata conserva la propria sessione (passo 7).
         """
-        directory = getattr(self.sessions, "sessions_dir", None)
-        if directory is None:
+        list_keys = getattr(self.sessions, "list_keys", None)
+        if not callable(list_keys):
             return ()
-        prefix = PROJECT_SESSION_PREFIX[:-1]  # "project", senza i due punti
-        try:
-            files = sorted(directory.glob(f"{prefix}_*.jsonl"))
-        except OSError:
-            return ()
-        return tuple(path.stem.replace("_", ":", 1) for path in files)
+        return tuple(sorted(list_keys(PROJECT_SESSION_PREFIX)))
 
     def busy_session_keys(self) -> tuple[str, ...]:
         """Le sessioni che l'autocompact sta riscrivendo **adesso**.

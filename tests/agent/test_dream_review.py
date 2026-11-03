@@ -410,27 +410,22 @@ class TestSessionKey:
     ) -> None:
         """Il prefisso ``dream:`` è la ragione per cui non serve un secondo pruner.
 
-        ``prune_dream_sessions`` globba ``dream_*.jsonl``. Se la chiave fosse
-        coniata come ``review:...`` il glob non matcherebbe, e ogni review pass
-        lascerebbe dietro un file di sessione per sempre — un accumulo silenzioso
-        su un telefono, senza nessun errore a segnalarlo.
+        ``prune_dream_sessions`` pota le chiavi ``dream:``. Se la chiave fosse
+        coniata come ``review:...`` non ci rientrerebbe, e ogni review pass
+        lascerebbe dietro una sessione per sempre — un accumulo silenzioso su un
+        telefono, senza nessun errore a segnalarlo.
         """
-        sessions_dir = tmp_path / "sessions"
-        sessions_dir.mkdir()
+        sessions = SessionManager(tmp_path / "ws")
         keys = [f"dream:review-2026081{i}-100000" for i in range(11)]
         for key in keys:
-            (sessions_dir / f"{SessionManager.safe_key(key)}.jsonl").write_text(
-                "{}\n", encoding="utf-8"
-            )
+            session = sessions.get_or_create(key)
+            session.add_message("user", "x")
+            sessions.save(session)
 
-        assert len(list(sessions_dir.glob("dream_*.jsonl"))) == len(keys)
+        removed = MemoryStore.prune_dream_sessions(sessions, keep=10)
 
-        removed = MemoryStore.prune_dream_sessions(sessions_dir, keep=10)
-
-        # Il pruner restituisce la chiave originale, non il nome del file: se il
-        # round-trip non tornasse, il chiamante non saprebbe quale cache svuotare.
         assert removed and removed[0] in keys
-        assert len(list(sessions_dir.glob("dream_*.jsonl"))) == 10
+        assert len(sessions.list_keys("dream:")) == 10
 
 
 # ---------------------------------------------------------------------------

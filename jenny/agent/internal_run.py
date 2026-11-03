@@ -22,7 +22,7 @@ questo spostamento vuole comprare.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -115,33 +115,27 @@ def internal_run_should_commit(
     return writes_attempted == 0
 
 
-def prune_internal_sessions(
-    sessions_dir: Path, prefix: str, *, keep: int = 10
-) -> list[str]:
-    """Remove the oldest ``<prefix>_*.jsonl`` session files, keeping N.
+def prune_internal_sessions(sessions: Any, prefix: str, *, keep: int = 10) -> list[str]:
+    """Toglie le sessioni ``<prefix>:…`` meno recenti, tenendone *keep*.
 
-    Only files matching the prefix are considered; sessions belonging to
-    anything else are never touched.
-
-    Returns the original ``<prefix>:...`` session keys of the files that
-    were actually removed, so callers can also evict any in-memory
-    bookkeeping (``SessionManager`` cache, active tasks, session locks)
-    keyed by the same value — deleting the on-disk file alone leaves those
-    caches growing forever.
+    Solo le chiavi col prefisso; le sessioni di chiunque altro non si toccano.
+    Ritorna le chiavi tolte, perché il chiamante tolga anche quel che tiene in
+    memoria sotto la stessa chiave (cache del ``SessionManager``, task attivi,
+    lock di sessione): togliere solo la sessione salvata lascerebbe quelle
+    cache crescere per sempre.
     """
-    files = sorted(
-        sessions_dir.glob(f"{prefix}_*.jsonl"), key=lambda p: p.stat().st_mtime,
-    )
-    if len(files) <= keep:
+    list_keys = getattr(sessions, "list_keys", None)
+    if not callable(list_keys):  # un doppio senza elenco: niente da potare
         return []
-
-    to_remove = files[: len(files) - keep]
+    keys = list_keys(f"{prefix}:")
+    if len(keys) <= keep:
+        return []
     removed_keys: list[str] = []
-    for path in to_remove:
+    for key in keys[: len(keys) - keep]:
         try:
-            path.unlink()
-            logger.debug("Pruned old {} session: {}", prefix, path.stem)
-            removed_keys.append(path.stem.replace("_", ":", 1))
-        except OSError:
-            logger.warning("Failed to prune {} session {}", prefix, path)
+            if sessions.delete(key):
+                logger.debug("Pruned old {} session: {}", prefix, key)
+                removed_keys.append(key)
+        except Exception:  # noqa: BLE001 — una potatura mancata non ferma il lavoro
+            logger.opt(exception=True).warning("Failed to prune {} session {}", prefix, key)
     return removed_keys

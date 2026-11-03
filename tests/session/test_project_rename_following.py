@@ -330,8 +330,8 @@ async def test_a_process_killed_between_two_renames_is_repaired_at_the_next_boot
     _all_traces(loop, "project:src")
     import json
 
-    (tmp_path / "sessions").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "sessions" / ".project-rename-pending.json").write_text(
+    (tmp_path / ".jenny").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".jenny" / "project-rename-pending.json").write_text(
         json.dumps([{"old": "project:src", "new": "project:dst"}]), encoding="utf-8"
     )
     for i in (0, 1):
@@ -349,7 +349,7 @@ async def test_a_process_killed_between_two_renames_is_repaired_at_the_next_boot
 async def test_repairing_nothing_is_a_no_op(loop: AgentLoop, tmp_path: Path) -> None:
     """Il costo al boot quando non c'è niente da fare: una lettura che non trova."""
     assert repair_pending_project_renames(loop.workspace) == []
-    assert not (tmp_path / "sessions" / ".project-rename-pending.json").exists()
+    assert not (tmp_path / ".jenny" / "project-rename-pending.json").exists()
 
 
 async def test_a_completed_move_leaves_nothing_to_repair(
@@ -366,7 +366,7 @@ async def test_a_completed_move_leaves_nothing_to_repair(
     dst = project_trace_paths(loop.workspace, "project:dst")
     assert len([p for p in dst if p.exists()]) == len(dst)
     assert pending_project_renames(loop.workspace) == []
-    assert not (tmp_path / "sessions" / ".project-rename-pending.json").exists()
+    assert not (tmp_path / ".jenny" / "project-rename-pending.json").exists()
 
 
 async def test_a_chat_that_never_recorded_an_id_gets_the_plain_refusal(
@@ -473,8 +473,9 @@ async def test_the_turn_that_lands_after_it_does_not_resurrect_the_old_name(
     assert [p for p in project_trace_paths(loop.workspace, "project:nuovo") if p.exists()] == [], (
         "un file sotto il nome nuovo qui vuol dire che la storia si e' divisa in due"
     )
-    survived = project_trace_paths(loop.workspace, "project:vecchio")[0]
-    assert "quel che stavo dicendo" in survived.read_text(encoding="utf-8"), (
+    assert not loop.sessions.exists("project:nuovo")
+    survived = loop.sessions.read_session_file("project:vecchio")
+    assert "quel che stavo dicendo" in str(survived["messages"]), (
         "e lo scambio appena concluso deve stare dove sta tutto il resto"
     )
 
@@ -606,7 +607,6 @@ def test_the_trace_list_covers_the_files_that_move(loop: AgentLoop) -> None:
     """
     paths = project_trace_paths(loop.workspace, "project:palestra")
     kinds = {p.parent.name for p in paths}
-    assert "sessions" in kinds
     assert "webui" in kinds
     assert all("project_palestra" in p.name for p in paths)
 
@@ -620,8 +620,12 @@ def test_the_helpers_records_follow_the_chat(tmp_path: Path) -> None:
     from jenny.session.project_rename import follow_renamed_project
 
     ws = tmp_path / "workspace"
-    (ws / "sessions").mkdir(parents=True)
-    (ws / "sessions" / "project_palestra.jsonl").write_text('{"_type": "metadata"}\n')
+    from jenny.session.manager import SessionManager
+
+    sessions = SessionManager(ws)
+    chat = sessions.get_or_create("project:palestra")
+    chat.add_message("user", "ciao")
+    sessions.save(chat)
     store = SubagentRecordStore(ws)
     store.append(SubagentRecord(
         task_id="t1", lineage_id="t1", attempt=1, state="done", ended_at=time.time(),
@@ -718,7 +722,7 @@ async def test_the_refusal_leaves_no_journal_entry_open(
     await loop._refuse_missing_project(_msg(), "project:vecchio")
 
     assert pending_project_renames(loop.workspace) == []
-    assert not (tmp_path / "sessions" / ".project-rename-pending.json").exists()
+    assert not (tmp_path / ".jenny" / "project-rename-pending.json").exists()
 
     # E l'avvio dopo non completa niente: e' la seconda meta' della stessa
     # asserzione, e la sola che prova che il rifiuto non e' un rinvio.

@@ -51,7 +51,7 @@ _DEFAULT_INTERNAL_PATTERNS = [
     "__pycache__", "__pycache__/**", "*/__pycache__/**",
     "agent", "agent/**",
     "cron", "cron/**",
-    "sessions", "sessions/**",
+    "sessions", "sessions/**", "sessions.migrated", "sessions.migrated/**",
     "ui", "ui/**",
 ]
 

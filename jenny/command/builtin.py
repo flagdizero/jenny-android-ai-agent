@@ -451,7 +451,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             # cinque punti in cui era stata scritta. Toglierla non perde una misura
             # — ne toglie una finta.
             await asyncio.to_thread(store.compact_history)
-            pruned_keys = prune_dream_sessions(loop.sessions.sessions_dir)
+            pruned_keys = prune_dream_sessions(loop.sessions)
             if pruned_keys:
                 loop.evict_pruned_sessions(pruned_keys)
         await loop.bus.publish_outbound(OutboundMessage(

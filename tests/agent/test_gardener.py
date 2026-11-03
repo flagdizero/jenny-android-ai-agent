@@ -123,7 +123,9 @@ class _FakeAgent:
 
     def __init__(self, sessions_dir: Path, *, stop_reason: str = "completed") -> None:
         self.context = SimpleNamespace(memory=None, timezone="Europe/Rome")
-        self.sessions = SimpleNamespace(sessions_dir=sessions_dir)
+        from jenny.session.manager import SessionManager
+
+        self.sessions = SessionManager(sessions_dir)
         self.calls: list[dict] = []
         self._stop_reason = stop_reason
         self.evicted: list[str] = []
@@ -167,24 +169,26 @@ class _WritingAgent(_FakeAgent):
         return await super().process_direct(prompt, **kwargs)
 
 
-def _stale_sessions(sessions_dir: Path, *, count: int = 11) -> Path:
-    """Undici sessioni finte del giardiniere; restituisce la più vecchia.
+def _stale_sessions(sessions, *, count: int = 11) -> str:
+    """Undici sessioni finte del giardiniere; restituisce la chiave della più vecchia.
 
-    ``prune_internal_sessions`` tiene le dieci più recenti, quindi undici file
-    sono il minimo perché una potatura *possa* avvenire: senza di loro un test
-    sulla potatura passa anche se ``_prune_sessions`` non viene chiamato mai.
-    Le mtime si scrivono a mano perché l'ordinamento è per mtime e undici file
-    creati di fila stanno nello stesso secondo.
+    ``prune_internal_sessions`` tiene le dieci più recenti, quindi undici
+    sessioni sono il minimo perché una potatura *possa* avvenire: senza di loro
+    un test sulla potatura passa anche se ``_prune_sessions`` non viene chiamato
+    mai. Le date si scrivono a mano perché l'ordinamento è per ``updated_at`` e
+    undici sessioni create di fila stanno nello stesso istante.
     """
-    import os
+    from datetime import datetime, timedelta
 
-    oldest: Path | None = None
+    oldest: str | None = None
     for i in range(count):
-        path = sessions_dir / f"gardener_viaggio-old{i:02d}.jsonl"
-        path.write_text("{}\n", "utf-8")
-        os.utime(path, (1_700_000_000 + i, 1_700_000_000 + i))
+        key = f"gardener:viaggio-old{i:02d}"
+        session = sessions.get_or_create(key)
+        session.add_message("user", "x")
+        session.updated_at = datetime(2023, 11, 14) + timedelta(seconds=i)
+        sessions.save(session)
         if oldest is None:
-            oldest = path
+            oldest = key
     assert oldest is not None
     return oldest
 
@@ -1127,8 +1131,8 @@ class TestTheRun:
 
         root = _project(tmp_path)
         page = root / "wiki" / "tappe.md"
-        oldest = _stale_sessions(tmp_path)
         agent = _WritingAgent(tmp_path, page)
+        oldest = _stale_sessions(agent.sessions)
         store = _with_states(_store(tmp_path), _states(attempted=1, ok=1))
 
         def _full_disk(*_args, **_kwargs):
@@ -1150,7 +1154,7 @@ class TestTheRun:
         assert read_state(root).cursor == {}
         assert any("cursor was not recorded" in line for line in errors)
         # E anche questa uscita ripulisce la propria traccia.
-        assert not oldest.exists()
+        assert not agent.sessions.exists(oldest)
 
     @pytest.mark.parametrize(
         "status, stop_reason, attempted, ok",
@@ -1180,13 +1184,13 @@ class TestTheRun:
             if stop_reason == "_explode"
             else _FakeAgent(tmp_path, stop_reason=stop_reason)
         )
-        oldest = _stale_sessions(tmp_path)
+        oldest = _stale_sessions(agent.sessions)
         store = _with_states(_store(tmp_path), _states(attempted=attempted, ok=ok))
 
         outcome = await run_gardener(agent, store)
 
         assert outcome.status == status
-        assert not oldest.exists()
+        assert not agent.sessions.exists(oldest)
         # Il file da solo non basta: senza l'eviction la voce in
         # ``_session_locks`` resta, ed è la perdita che non si vede.
         assert agent.evicted == ["gardener:viaggio-old00"]

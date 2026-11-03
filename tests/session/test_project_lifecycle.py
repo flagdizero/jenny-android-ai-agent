@@ -100,21 +100,34 @@ def _remove(workspace: Path, name: str = NAME, **kwargs) -> dict:
 
 
 def _live_chat(workspace: Path, key: str = KEY, messages: int = 3) -> list[Path]:
-    """Scrive a mano le tracce di una chat vissuta, come farebbe un turno vero."""
+    """Le tracce di una chat vissuta, come le lascerebbe un turno vero: la
+    sessione nel database, i verbali come file."""
+    from jenny.session.manager import SessionManager
+
+    sessions = SessionManager(workspace)
+    chat = sessions.get_or_create(key)
+    for _ in range(messages):
+        chat.add_message("user", "ciao")
+    sessions.save(chat)
     made: list[Path] = []
-    for index, path in enumerate(project_trace_paths(workspace, key)):
+    for path in project_trace_paths(workspace, key):
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.suffix == ".segments":
             path.mkdir(exist_ok=True)
             (path / "0001.jsonl").write_text("{}\n", encoding="utf-8")
-        elif index == 0:
-            lines = ['{"_type": "metadata", "key": "%s", "metadata": {}}' % key]
-            lines += ['{"role": "user", "content": "ciao"}'] * messages
-            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         else:
             path.write_text("{}\n", encoding="utf-8")
         made.append(path)
     return made
+
+
+def _remember_id(workspace: Path, ident: str, key: str = KEY) -> None:
+    from jenny.session.manager import SessionManager
+
+    sessions = SessionManager(workspace)
+    chat = sessions.get_or_create(key)
+    chat.metadata[PROJECT_WIKI_ID_KEY] = ident
+    sessions.save(chat)
 
 
 def _paths_naming(workspace: Path, name: str) -> list[Path]:
@@ -140,6 +153,9 @@ def test_deleting_a_project_leaves_no_path_carrying_its_name(workspace: Path) ->
 
     leftover = _paths_naming(workspace, NAME)
     assert leftover == [], f"restano tracce del progetto cancellato: {leftover}"
+    from jenny.session.manager import SessionManager
+
+    assert not SessionManager(workspace).exists(KEY), "resta la conversazione nel database"
 
 
 def test_the_traces_removed_are_the_ones_the_enumeration_names(
@@ -154,7 +170,7 @@ def test_the_traces_removed_are_the_ones_the_enumeration_names(
     import jenny.session.project_traces as traces
 
     real = traces.project_trace_paths
-    invented = workspace / "sessions" / f"project_{NAME}.inventata"
+    invented = workspace / ".jenny" / f"project_{NAME}.inventata"
 
     def with_a_fifth(ws: Path, key: str) -> list[Path]:
         return [*real(ws, key), invented]
@@ -242,12 +258,7 @@ def test_keep_adopts_the_id_the_conversation_remembers(workspace: Path) -> None:
     from jenny.utils.wiki_paths import wiki_id
 
     _live_chat(workspace)
-    session_file = project_trace_paths(workspace, KEY)[0]
-    session_file.write_text(
-        '{"_type": "metadata", "key": "%s", "metadata": {"%s": "abc123abc123"}}\n'
-        '{"role": "user", "content": "ciao"}\n' % (KEY, PROJECT_WIKI_ID_KEY),
-        encoding="utf-8",
-    )
+    _remember_id(workspace, "abc123abc123")
 
     _make(workspace, conversation="keep")
 
@@ -421,11 +432,7 @@ async def test_a_kept_conversation_is_not_refused_at_the_first_turn(
     l'id scritto nel file non basta: quel che conta e' che il turno passi.
     """
     _live_chat(workspace)
-    project_trace_paths(workspace, KEY)[0].write_text(
-        '{"_type": "metadata", "key": "%s", "metadata": {"%s": "abc123abc123"}}\n'
-        '{"role": "user", "content": "ciao"}\n' % (KEY, PROJECT_WIKI_ID_KEY),
-        encoding="utf-8",
-    )
+    _remember_id(workspace, "abc123abc123")
     _make(workspace, conversation="keep")
 
     assert await loop._refuse_reincarnated_project(_msg(), KEY) is False
@@ -448,9 +455,9 @@ def test_deleting_a_project_takes_its_interrupted_turn_journal(workspace: Path) 
 
     _make(workspace)
     _live_chat(workspace)
-    journal = SessionManager(workspace).turn_journal_path(KEY)
-    journal.write_text('{"_type": "turn_journal", "stamp": "x"}\n', encoding="utf-8")
+    SessionManager(workspace).turn_reset(KEY, "x", ['{"role": "user", "content": "a meta"}'])
 
     _remove(workspace)
 
-    assert not journal.exists(), "il diario del turno e' rimasto orfano"
+    assert SessionManager(workspace).turn_read(KEY) == (None, []), (
+        "il diario del turno e' rimasto orfano")

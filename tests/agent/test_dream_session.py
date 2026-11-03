@@ -1,6 +1,5 @@
 """Tests for Dream session key generation and rotation."""
 import asyncio
-import os
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -41,75 +40,46 @@ class TestDreamSessionKey:
         assert k1 != k2
 
 
+def _sessions(tmp_path, keys, *, start: int = 0):
+    """Sessioni salvate per *keys*, con ``updated_at`` crescente nell'ordine dato."""
+    from jenny.session.manager import SessionManager
+
+    sessions = SessionManager(tmp_path / "ws")
+    for i, key in enumerate(keys):
+        session = sessions.get_or_create(key)
+        session.add_message("user", key)
+        session.updated_at = datetime(2026, 5, 28, 10, 0, 0) + timedelta(seconds=start + i)
+        sessions.save(session)
+    return sessions
+
+
 class TestPruneDreamSessions:
     def test_keeps_n_most_recent(self, tmp_path):
-        sessions_dir = tmp_path / "sessions"
-        sessions_dir.mkdir()
+        keys = [f"dream:20260528-{100000 + i:06d}" for i in range(15)]
+        sessions = _sessions(tmp_path, [*keys, "websocket:123"])
 
-        for i in range(15):
-            key = f"dream:20260528-{100000 + i:06d}"
-            safe_key = key.replace(":", "_")
-            path = sessions_dir / f"{safe_key}.jsonl"
-            path.write_text(
-                f'{{"_type": "metadata", "key": "{key}", '
-                f'"created_at": "2026-05-28T10:00:{i:02d}", '
-                f'"updated_at": "2026-05-28T10:00:{i:02d}"}}\n',
-                encoding="utf-8",
-            )
+        MemoryStore.prune_dream_sessions(sessions, keep=10)
 
-        normal_path = sessions_dir / "websocket_123.jsonl"
-        normal_path.write_text('{"_type": "metadata"}\n', encoding="utf-8")
-
-        MemoryStore.prune_dream_sessions(sessions_dir, keep=10)
-
-        dream_files = sorted(sessions_dir.glob("dream_*.jsonl"))
-        assert len(dream_files) == 10
-        remaining_keys = [f.stem for f in dream_files]
-        assert "dream_20260528-100000" not in remaining_keys
-        assert "dream_20260528-100014" in remaining_keys
-        assert normal_path.exists()
+        remaining = sessions.list_keys("dream:")
+        assert len(remaining) == 10
+        assert "dream:20260528-100000" not in remaining
+        assert "dream:20260528-100014" in remaining
+        assert sessions.exists("websocket:123")
 
     def test_noop_when_under_limit(self, tmp_path):
-        sessions_dir = tmp_path / "sessions"
-        sessions_dir.mkdir()
-        for i in range(3):
-            key = f"dream:20260528-{100000 + i:06d}"
-            safe_key = key.replace(":", "_")
-            (sessions_dir / f"{safe_key}.jsonl").write_text("{}", encoding="utf-8")
+        sessions = _sessions(tmp_path, [f"dream:20260528-{100000 + i:06d}" for i in range(3)])
+        assert MemoryStore.prune_dream_sessions(sessions, keep=10) == []
+        assert len(sessions.list_keys("dream:")) == 3
 
-        MemoryStore.prune_dream_sessions(sessions_dir, keep=10)
-        assert len(list(sessions_dir.glob("dream_*.jsonl"))) == 3
+    def test_nothing_saved_is_a_noop(self, tmp_path):
+        sessions = _sessions(tmp_path, [])
+        assert MemoryStore.prune_dream_sessions(sessions, keep=10) == []
 
-    def test_empty_dir_noop(self, tmp_path):
-        sessions_dir = tmp_path / "sessions"
-        sessions_dir.mkdir()
-        MemoryStore.prune_dream_sessions(sessions_dir, keep=10)
-        assert list(sessions_dir.iterdir()) == []
-
-    def test_returns_original_session_keys_of_removed_files(self, tmp_path):
-        sessions_dir = tmp_path / "sessions"
-        sessions_dir.mkdir()
-
+    def test_returns_the_keys_it_removed_oldest_first(self, tmp_path):
         keys = [f"dream:20260528-{100000 + i:06d}" for i in range(15)]
-        for i, key in enumerate(keys):
-            path = sessions_dir / f"{key.replace(':', '_')}.jsonl"
-            path.write_text(
-                f'{{"_type": "metadata", "key": "{key}"}}\n', encoding="utf-8"
-            )
-            os.utime(path, (i, i))
-
-        removed = MemoryStore.prune_dream_sessions(sessions_dir, keep=10)
-
-        assert set(removed) == set(keys[:5])
-        assert removed == sorted(removed, key=lambda k: keys.index(k))
-
-    def test_noop_prune_returns_empty_list(self, tmp_path):
-        sessions_dir = tmp_path / "sessions"
-        sessions_dir.mkdir()
-        for i in range(3):
-            key = f"dream:20260528-{100000 + i:06d}"
-            (sessions_dir / f"{key.replace(':', '_')}.jsonl").write_text("{}", encoding="utf-8")
-        assert MemoryStore.prune_dream_sessions(sessions_dir, keep=10) == []
+        sessions = _sessions(tmp_path, keys)
+        removed = MemoryStore.prune_dream_sessions(sessions, keep=10)
+        assert removed == keys[:5]
 
 
 class TestEvictPrunedSessions:
@@ -136,8 +106,8 @@ class TestEvictPrunedSessions:
         keys = [f"dream:20260528-{100000 + i:06d}" for i in range(15)]
         for i, key in enumerate(keys):
             session = loop.sessions.get_or_create(key)
+            session.updated_at = datetime(2026, 5, 28, 10, 0, 0) + timedelta(seconds=i)
             loop.sessions.save(session)
-            os.utime(loop.sessions._get_session_path(key), (i, i))
 
             # Populate the same bookkeeping process_direct() creates for a
             # real Dream run, all already finished/released.
@@ -150,7 +120,7 @@ class TestEvictPrunedSessions:
         assert all(k in loop._session_locks for k in keys)
         assert all(k in loop._active_tasks for k in keys)
 
-        pruned_keys = MemoryStore.prune_dream_sessions(loop.sessions.sessions_dir, keep=10)
+        pruned_keys = MemoryStore.prune_dream_sessions(loop.sessions, keep=10)
         assert set(pruned_keys) == set(keys[:5])
 
         loop.evict_pruned_sessions(pruned_keys)

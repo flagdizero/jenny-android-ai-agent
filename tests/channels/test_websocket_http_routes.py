@@ -280,14 +280,13 @@ async def test_session_routes_reject_non_websocket_keys(
         )
         assert msgs.status_code == 404
 
-        doomed = sm._get_session_path("other-channel:C123")
-        assert doomed.exists()
+        assert sm.exists("other-channel:C123")
         deny_delete = await _http_get(
             f"http://127.0.0.1:{port}/api/sessions/other-channel:C123/delete",
             headers=auth,
         )
         assert deny_delete.status_code == 404
-        assert doomed.exists()
+        assert sm.exists("other-channel:C123")
     finally:
         await channel.stop()
         await server_task

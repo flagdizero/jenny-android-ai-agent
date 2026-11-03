@@ -1,7 +1,6 @@
 """Tests for auto compact (idle TTL) feature."""
 
 import asyncio
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -292,12 +291,9 @@ class TestAutoCompact:
         session.add_message("user", "hello")
         loop.sessions.save(session)
         loop.sessions.invalidate(UNIFIED_SESSION_KEY)
-        path = loop.sessions._get_session_path(UNIFIED_SESSION_KEY)
-        lines = path.read_text(encoding="utf-8").splitlines()
-        assert '"updated_at"' in lines[0]
-        meta = json.loads(lines[0])
-        meta["updated_at"] = "yesterday-ish"
-        path.write_text("\n".join([json.dumps(meta), *lines[1:]]) + "\n", encoding="utf-8")
+        with loop.sessions._db.write() as conn:
+            conn.execute("UPDATE sessions SET updated_at = 'yesterday-ish' WHERE key = ?",
+                         (UNIFIED_SESSION_KEY,))
 
         scheduled: list = []
         loop.auto_compact.check_expired(scheduled.append, active_session_keys=())

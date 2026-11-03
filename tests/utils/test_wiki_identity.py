@@ -18,7 +18,6 @@ La lezione del passo 6: si rifiuta invece di scegliere.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -465,13 +464,13 @@ def test_a_valid_id_under_a_hand_written_one_is_found_not_replaced(wikis: Path) 
 
 def _chat_remembers(workspace: Path, name: str, ident: str) -> None:
     """La sessione di progetto come la lascia ``AgentLoop._remember_project_id``."""
-    from jenny.session.project_traces import PROJECT_WIKI_ID_KEY, project_session_file
+    from jenny.session.manager import SessionManager
+    from jenny.session.project_traces import PROJECT_WIKI_ID_KEY
 
-    path = project_session_file(workspace, f"project:{name}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    meta = {"_type": "metadata", "key": f"project:{name}",
-            "metadata": {PROJECT_WIKI_ID_KEY: ident}}
-    path.write_text(json.dumps(meta) + "\n", encoding="utf-8")
+    sessions = SessionManager(workspace)
+    session = sessions.get_or_create(f"project:{name}")
+    session.metadata[PROJECT_WIKI_ID_KEY] = ident
+    sessions.save(session)
 
 
 def test_a_lost_id_comes_back_from_the_chat_that_remembers_it(tmp_path: Path) -> None:

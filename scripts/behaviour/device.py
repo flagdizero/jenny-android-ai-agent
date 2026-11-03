@@ -32,7 +32,7 @@ PERSONAL_CHAT = "default"
 #: fine suite. Le sessioni si rimettono a app ferma: il gateway le tiene in
 #: memoria e un file riscritto sotto i suoi piedi verrebbe sovrascritto.
 SNAPSHOT_PATHS = ("memory", "USER.md", "SOUL.md", "AGENTS.md", "skills",
-                  "sessions", "wikis", ".jenny/staged")
+                  "wikis", ".jenny/staged")
 SNAPSHOT_FILE = "files/behaviour_snapshot.tar"
 #: Lo stato in SQLite (i job del cron, ``jenny/cron/store.py``): accanto al
 #: workspace, fotografato e rimesso col resto, sempre ad app ferma.
@@ -223,6 +223,78 @@ class Device:
             finally:
                 conn.close()
         return [json.loads(r[0]) for r in rows]
+
+    def _state_query(self, fn):
+        """*fn(conn)* su una copia di ``state.sqlite``, presa ad app accesa (sola lettura)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "state.sqlite"
+            self.pull_state(local)
+            conn = sqlite3.connect(local)
+            conn.row_factory = sqlite3.Row
+            try:
+                return fn(conn)
+            except sqlite3.OperationalError:
+                return None
+            finally:
+                conn.close()
+
+    def read_session(self, key: str) -> str:
+        """La sessione *key* nella forma JSONL di prima (metadati, poi un messaggio
+        per riga), o ``""``: gli scenari la leggono così."""
+        def query(conn):  # type: ignore[no-untyped-def]
+            head = conn.execute("SELECT * FROM sessions WHERE key = ?", (key,)).fetchone()
+            if head is None:
+                return ""
+            meta = {"_type": "metadata", "key": key, "created_at": head["created_at"],
+                    "updated_at": head["updated_at"], "metadata": json.loads(head["metadata"]),
+                    "last_consolidated": head["last_consolidated"]}
+            rows = conn.execute("SELECT data FROM session_messages WHERE key = ? ORDER BY seq",
+                                (key,)).fetchall()
+            return "\n".join([json.dumps(meta, ensure_ascii=False), *[r[0] for r in rows]]) + "\n"
+
+        return self._state_query(query) or ""
+
+    def session_stamp(self, key: str) -> tuple:
+        """``(versione, messaggi)`` della sessione: cambia a ogni salvataggio."""
+        rows = self._state_query(lambda conn: conn.execute(
+            "SELECT version, count FROM sessions WHERE key = ?", (key,)).fetchall())
+        return tuple(rows[0]) if rows else ()
+
+    def session_keys(self, prefix: str = "") -> list[str]:
+        rows = self._state_query(lambda conn: conn.execute(
+            "SELECT key FROM sessions WHERE substr(key, 1, ?) = ?", (len(prefix), prefix)
+        ).fetchall())
+        return [r[0] for r in rows or []]
+
+    def write_session(self, key: str, text: str) -> None:
+        """Mette la sessione *key* (in forma JSONL) nel database, ad app ferma, e la riapre."""
+        lines = [json.loads(line) for line in text.splitlines() if line.strip()]
+        meta = next((r for r in lines if r.get("_type") == "metadata"), {})
+        messages = [r for r in lines if r.get("_type") != "metadata"]
+        self.adb("shell", "am", "force-stop", PACKAGE)
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "state.sqlite"
+            self.pull_state(local)
+            conn = sqlite3.connect(local)
+            try:
+                conn.execute("DELETE FROM session_messages WHERE key = ?", (key,))
+                conn.execute(
+                    "INSERT INTO sessions(key, created_at, updated_at, metadata, last_consolidated,"
+                    " version, count, bytes) VALUES (?, ?, ?, ?, ?, 1, ?, 0) ON CONFLICT(key) DO "
+                    "UPDATE SET created_at = excluded.created_at, updated_at = excluded.updated_at,"
+                    " metadata = excluded.metadata, last_consolidated = excluded.last_consolidated,"
+                    " version = sessions.version + 1, count = excluded.count",
+                    (key, meta.get("created_at"), meta.get("updated_at"),
+                     json.dumps(meta.get("metadata") or {}, ensure_ascii=False),
+                     int(meta.get("last_consolidated") or 0), len(messages)))
+                conn.executemany(
+                    "INSERT INTO session_messages(key, seq, data) VALUES (?, ?, ?)",
+                    [(key, i, json.dumps(m, ensure_ascii=False)) for i, m in enumerate(messages)])
+                conn.commit()
+            finally:
+                conn.close()
+            self.push_state(local)
+        self.restart_app()
 
     def shift_system_jobs(self, *, delay_ms: int | None = None,
                           only: tuple[str, ...] = ()) -> dict[str, int]:

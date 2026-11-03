@@ -94,7 +94,6 @@ TOOLS_DIR = ROOT / "agent" / "tools"
 # una dimenticanza.
 _EXTRA_SCANNED = (
     "apps/storage.py",
-    "session/manager.py",
     "webui/transcript_store.py",
     "config/store.py",
 )
@@ -212,11 +211,6 @@ _OUT_OF_SCOPE = {
     # in sola lettura l'interruttore deve proteggere la conversazione, non
     # romperla. Se questi si chiudessero, il turno che promette «non cambio
     # niente» perderebbe i messaggi dell'utente.
-    "session/manager.py": (
-        "è il magazzino delle sessioni: ci scrive il gateway per persistere la "
-        "conversazione, non un tool su richiesta del modello. Chiuderlo perderebbe "
-        "il turno stesso"
-    ),
     "webui/transcript_store.py": (
         "il transcript è il verbale del turno, non un suo effetto: un turno in sola "
         "lettura va comunque registrato, o l'interruttore cancellerebbe la prova di "

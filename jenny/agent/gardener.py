@@ -1874,7 +1874,7 @@ def _prune_sessions(agent: Any, session_key: str | None = None) -> None:
     """Ripulisce quel che la passata ha lasciato dietro: i file e la memoria.
 
     **La chiave della passata si dimentica subito** (T2.5), e non fra dieci
-    passate. ``prune_internal_sessions`` tiene i dieci ``gardener_*.jsonl`` più
+    passate. ``prune_internal_sessions`` tiene le dieci sessioni ``gardener:`` più
     recenti e ``evict_pruned_sessions`` sgombera per le chiavi *potate* il lock,
     i task e la cache delle sessioni — quindi ``_session_locks`` è limitato per
     costruzione, non cresce all'infinito. Ma quella strada non passa da
@@ -1903,11 +1903,10 @@ def _prune_sessions(agent: Any, session_key: str | None = None) -> None:
     (``agent/subagent_history.py``).
     """
     sessions = getattr(agent, "sessions", None)
-    sessions_dir = getattr(sessions, "sessions_dir", None)
     if session_key and hasattr(agent, "forget_file_reads"):
         agent.forget_file_reads(session_key)
-    if sessions_dir is None:
+    if not callable(getattr(sessions, "list_keys", None)):
         return
-    pruned = prune_internal_sessions(sessions_dir, "gardener")
+    pruned = prune_internal_sessions(sessions, "gardener")
     if pruned and hasattr(agent, "evict_pruned_sessions"):
         agent.evict_pruned_sessions(pruned)

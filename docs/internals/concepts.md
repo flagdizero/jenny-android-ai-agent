@@ -92,7 +92,7 @@ Jenny uses three related stores:
 
 | Store | Location | Purpose |
 |---|---|---|
-| Sessions | `<workspace>/sessions/*.jsonl` | Recent conversation turns replayed into model context; compacted after 15 minutes idle by default, capped at 120 messages |
+| Sessions | `state.sqlite`, one row per message (`jenny/session/store.py`) | Recent conversation turns replayed into model context; compacted after 15 minutes idle by default, capped at 120 messages |
 | Memory | `<workspace>/memory/MEMORY.md` and `<workspace>/memory/history.jsonl` | Long-term facts and consolidated history that survive session compaction |
 | Wikis | `<workspace>/wikis/<name>/` | Your own knowledge bases; the personal prompt lists them by name and scope, read from disk, and opens pages on demand |
 

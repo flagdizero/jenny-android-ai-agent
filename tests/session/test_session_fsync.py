@@ -1,9 +1,8 @@
-"""Tests for session fsync and flush_all on graceful shutdown."""
+"""Tests for flush_all on graceful shutdown."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -20,36 +19,6 @@ def sessions_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def manager(sessions_dir: Path) -> SessionManager:
     return SessionManager(workspace=sessions_dir)
-
-
-class TestSaveFsync:
-    """Verify that save(fsync=True) calls os.fsync."""
-
-    def test_save_without_fsync_does_not_call_fsync(self, manager: SessionManager):
-        session = manager.get_or_create("test:no-fsync")
-        session.add_message("user", "hello")
-
-        with patch("os.fsync") as mock_fsync:
-            manager.save(session, fsync=False)
-            mock_fsync.assert_not_called()
-
-    def test_save_with_fsync_calls_fsync(self, manager: SessionManager):
-        session = manager.get_or_create("test:with-fsync")
-        session.add_message("user", "hello")
-
-        with patch("os.fsync") as mock_fsync:
-            manager.save(session, fsync=True)
-            # Android/POSIX: file fsync + directory fsync.
-            assert mock_fsync.call_count == 2
-
-    def test_save_default_no_fsync(self, manager: SessionManager):
-        """Default save() should not fsync (backward compat)."""
-        session = manager.get_or_create("test:default")
-        session.add_message("user", "hello")
-
-        with patch("os.fsync") as mock_fsync:
-            manager.save(session)
-            mock_fsync.assert_not_called()
 
 
 class TestFlushAll:
@@ -69,16 +38,6 @@ class TestFlushAll:
 
         flushed = manager.flush_all()
         assert flushed == 2
-
-    def test_flush_all_uses_fsync(self, manager: SessionManager):
-        session = manager.get_or_create("test:fsync-check")
-        session.add_message("user", "important")
-        manager.save(session)
-
-        with patch("os.fsync") as mock_fsync:
-            manager.flush_all()
-            # Android/POSIX: file fsync + directory fsync.
-            assert mock_fsync.call_count == 2
 
     def test_flush_all_continues_on_error(self, manager: SessionManager):
         """One broken session should not prevent others from flushing."""
@@ -115,7 +74,7 @@ class TestFlushAll:
         rinomino all'indietro con ``name_taken``."""
         manager.get_or_create("project:viaggio")
         assert manager.flush_all() == 0
-        assert not manager._get_session_path("project:viaggio").exists()
+        assert not manager.exists("project:viaggio")
 
     def test_flush_all_still_rewrites_an_emptied_session_on_disk(
         self, manager: SessionManager
@@ -136,7 +95,7 @@ class TestFlushAll:
         session = manager.get_or_create("test:meta-only")
         session.metadata["title"] = "Viaggio"
         assert manager.flush_all() == 1
-        assert manager._get_session_path("test:meta-only").exists()
+        assert manager.exists("test:meta-only")
 
     def test_flush_all_data_survives_reload(self, sessions_dir: Path):
         """Data flushed by flush_all should survive a fresh SessionManager load."""

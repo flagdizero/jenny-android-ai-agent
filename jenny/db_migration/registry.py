@@ -61,6 +61,7 @@ def migrations() -> tuple[Migration, ...]:
     from jenny.db_migration import (
         cron,
         plans,
+        sessions,
         small_state,
         staged_taint,
         subagents,
@@ -81,4 +82,6 @@ def migrations() -> tuple[Migration, ...]:
                   pending=staged_taint.pending, cleanup=staged_taint.cleanup),
         Migration("small_state", remove_after="2.3.0", run=small_state.run,
                   pending=small_state.pending, cleanup=small_state.cleanup),
+        Migration("sessions", remove_after="2.3.0", run=sessions.run,
+                  pending=sessions.pending, cleanup=sessions.cleanup),
     )

@@ -33,9 +33,9 @@ _RETIRED_FILES: tuple[str, ...] = (
 )
 
 # Pattern ``glob`` relativi al workspace, per i file coniati per esecuzione.
-_RETIRED_GLOBS: tuple[str, ...] = (
-    "sessions/atlas_*.jsonl",  # una sessione per run, che Atlas potava da se'
-)
+# (Le sessioni di Atlas, una per run, non si portano nel database: le salta
+# ``db_migration/sessions.py``.)
+_RETIRED_GLOBS: tuple[str, ...] = ()
 
 
 def sweep_retired_artifacts(workspace: Path) -> list[Path]:

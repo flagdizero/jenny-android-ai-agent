@@ -64,9 +64,9 @@ class _RegistryAgent:
         self._session_locks = SessionLocks()
         self._file_state_store = FileStateStore()
         self._active_tasks: dict[str, list] = {}
-        self.sessions = SimpleNamespace(
-            sessions_dir=sessions_dir, invalidate=lambda _key: None
-        )
+        from jenny.session.manager import SessionManager
+
+        self.sessions = SessionManager(sessions_dir)
         self.context = SimpleNamespace(timezone=None)
         self.calls: list[str] = []
 
@@ -140,16 +140,15 @@ def test_dream_keys_become_bounded_instead_of_disappearing(tmp_path: Path) -> No
     base = datetime(2026, 8, 23, 2, 0, 0)
     for run in range(20):
         stamp = (base + timedelta(hours=2 * run)).strftime("%Y%m%d-%H%M%S")
-        path = tmp_path / f"dream_{stamp}.jsonl"
-        path.write_text("{}\n", encoding="utf-8")
-        # mtime a mano: venti write nello stesso secondo non hanno un ordine.
-        import os
-
-        os.utime(path, (run + 1, run + 1))
+        session = agent.sessions.get_or_create(f"dream:{stamp}")
+        session.add_message("user", "x")
+        # La data a mano: venti salvataggi nello stesso istante non hanno un ordine.
+        session.updated_at = base + timedelta(hours=2 * run)
+        agent.sessions.save(session)
         agent._file_state_store.for_session(f"dream:{stamp}")
 
     assert agent.file_state_keys == 20
 
-    agent.evict_pruned_sessions(MemoryStore.prune_dream_sessions(tmp_path))
+    agent.evict_pruned_sessions(MemoryStore.prune_dream_sessions(agent.sessions))
 
     assert agent.file_state_keys == 10

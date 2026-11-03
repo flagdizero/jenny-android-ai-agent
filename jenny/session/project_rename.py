@@ -73,10 +73,10 @@ from jenny.session.keys import PROJECT_SESSION_PREFIX, is_valid_project_name, pr
 from jenny.session.project_traces import project_trace_paths
 from jenny.utils.path import atomic_write
 
-# Il giornale degli spostamenti aperti. Vive accanto ai file di sessione perche'
-# e' di quelli che parla, e il nome comincia con un punto per non finire fra le
-# tracce che qualcuno elenca.
-RENAME_JOURNAL_NAME = ".project-rename-pending.json"
+# Il giornale degli spostamenti aperti, sotto ``.jenny/`` del workspace. Fino
+# alla 2.x stava in ``sessions/``, accanto ai file di sessione; lo porta qui
+# ``db_migration/sessions.py``.
+RENAME_JOURNAL_NAME = "project-rename-pending.json"
 
 
 def _can_be_opened(key: str) -> bool:
@@ -94,7 +94,30 @@ def _can_be_opened(key: str) -> bool:
 
 
 def _journal_path(workspace: Path) -> Path:
-    return workspace / "sessions" / RENAME_JOURNAL_NAME
+    return workspace / ".jenny" / RENAME_JOURNAL_NAME
+
+
+def _sessions(workspace: Path):
+    from jenny.session import store
+
+    return store.session_database(workspace)
+
+
+def _has_session(workspace: Path, key: str) -> bool:
+    from jenny.session import store
+
+    return store.head(_sessions(workspace), key) is not None
+
+
+def _move_session(workspace: Path, old_key: str, new_key: str) -> bool:
+    """La sessione (col diario del turno) di *old_key* passa a *new_key*.
+
+    Una transazione: o si sposta tutta o niente. False se non c'era da spostare
+    o la destinazione è occupata.
+    """
+    from jenny.session import store
+
+    return store.rename(_sessions(workspace), old_key, new_key)
 
 
 def pending_project_renames(workspace: Path) -> list[tuple[str, str]]:
@@ -164,6 +187,11 @@ def _finish_move(workspace: Path, old_key: str, new_key: str) -> bool:
     dice, che e' la stessa scelta del rifiuto sullo scambio di due nomi.
     """
     stuck: list[str] = []
+    if _has_session(workspace, old_key):
+        if _has_session(workspace, new_key):
+            stuck.append("session")
+        else:
+            _move_session(workspace, old_key, new_key)
     for src, dst in zip(
         project_trace_paths(workspace, old_key),
         project_trace_paths(workspace, new_key),
@@ -261,9 +289,12 @@ def follow_renamed_project(
         )
         if src.exists()
     ]
-    if not pairs:
+    session = _has_session(workspace, old_key)
+    if not pairs and not session:
         return False, "there was nothing recorded under the old name"
     occupied = [dst.name for _, dst in pairs if dst.exists()]
+    if session and _has_session(workspace, new_key):
+        occupied.append("session")
     if occupied:
         # Il caso dello scambio di due nomi. Non si sceglie: si dice.
         return False, (
@@ -278,6 +309,11 @@ def follow_renamed_project(
         # il difetto che questo codice esiste per non avere.
         logger.opt(exception=True).error("Giornale dei rinomini non scrivibile, non sposto")
         return False, "I could not write down the move before starting it, so I did not start"
+    # Prima la sessione, in una transazione: e' quella che conta, e se i file
+    # dopo non si spostano torna indietro con loro.
+    if session and not _move_session(workspace, old_key, new_key):
+        _forget(workspace, record)
+        return False, "moving the conversation failed, so nothing was moved"
     moved: list[tuple[Path, Path]] = []
     for src, dst in pairs:
         try:
@@ -288,7 +324,7 @@ def follow_renamed_project(
                 "Rinomino parziale delle tracce di {} verso {}: {} non spostato",
                 old_key, new_key, src.name,
             )
-            if _roll_back(moved):
+            if _roll_back(moved) and (not session or _move_session(workspace, new_key, old_key)):
                 _forget(workspace, record)
                 return False, "moving the conversation's files failed, so nothing was moved"
             # Ne' avanti ne' indietro: la voce resta aperta, ed e' quella che al

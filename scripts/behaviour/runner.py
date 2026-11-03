@@ -148,10 +148,10 @@ class Runner:
                 prelude_calls = self._prelude(scenario, nonces, project)
             if scenario.chat == "notebook":
                 chat_id = f"project:{project}"
-                session_file = f"sessions/project_{project}.jsonl"
+                session_file = f"project:{project}"
             else:
                 chat_id = PERSONAL_CHAT
-                session_file = "sessions/unified_default.jsonl"
+                session_file = "unified:default"
             if scenario.seed_session:
                 self._seed_session(scenario, nonces, session_file,
                                    f"project:{project}" if project else "unified:default")
@@ -160,7 +160,7 @@ class Runner:
             for index, turn in enumerate(scenario.turns):
                 if index and scenario.wait_subagents:
                     self._wait_subagents_done(session_file)
-                last_turn_start = len(_rows(dev.read(session_file) or ""))
+                last_turn_start = len(_rows(dev.read_session(session_file)))
                 outcome = dev.turn(scenario.render(turn, nonces), chat_id=chat_id)
                 replies.append(outcome.reply)
                 timed_out = timed_out or outcome.timed_out
@@ -168,12 +168,12 @@ class Runner:
                     raise ProviderDownError(outcome.reply.splitlines()[-1][:200])
             if scenario.final_reply_after_subagents:
                 self._wait_subagents_done(session_file)
-                final = [r for r in _rows(dev.read(session_file) or "")
+                final = [r for r in _rows(dev.read_session(session_file))
                          if r.get("role") == "assistant" and isinstance(r.get("content"), str)
                          and r["content"].strip()]
                 if final:
                     replies.append(final[-1]["content"])
-            rows = _rows(dev.read(session_file) or "")
+            rows = _rows(dev.read_session(session_file))
             extra: dict[str, Any] = {
                 "last_turn_calls": observation_from_rows(rows[last_turn_start:], []).tool_calls,
                 "prelude_calls": prelude_calls,
@@ -183,12 +183,11 @@ class Runner:
             if scenario.monitor_after:
                 extra["monitor"] = self._first_monitor_run(jobs_before)
             if scenario.dream_after:
-                before_sessions = set(dev.listdir("sessions"))
+                before_sessions = set(dev.session_keys("dream:"))
                 extra.update(self._dream_now())
                 # Le chiamate di Dream, per capire un giro rosso senza rifarlo.
-                new = sorted(f for f in set(dev.listdir("sessions")) - before_sessions
-                             if f.startswith("dream"))
-                dream_rows = [r for f in new for r in _rows(dev.read(f"sessions/{f}") or "")]
+                new = sorted(set(dev.session_keys("dream:")) - before_sessions)
+                dream_rows = [r for k in new for r in _rows(dev.read_session(k))]
                 rows = rows + dream_rows
                 extra["dream_sessions"] = new
             files: dict[str, str | None] = {}
@@ -238,7 +237,7 @@ class Runner:
     def _fresh_personal_session(self) -> None:
         dev = self.device
         before = _max_cursor(dev.read("memory/history.jsonl") or "")
-        rows = _rows(dev.read("sessions/unified_default.jsonl") or "")
+        rows = _rows(dev.read_session("unified:default"))
         dev.turn("/new")
         if any(r.get("role") in ("user", "assistant") and not r.get("_command") for r in rows):
             self._wait_for_entry(before)
@@ -306,7 +305,7 @@ class Runner:
         first_status = runs[0].get("status") if runs else None
 
         def calls() -> list[str]:
-            rows = _rows(dev.read(f"sessions/cron_{found['id']}.jsonl") or "")
+            rows = _rows(dev.read_session(f"cron:{found['id']}"))
             return [c.name for c in observation_from_rows(rows, []).tool_calls]
 
         # Subito: il giro dopo sfoltisce la sessione e porterebbe via questo.
@@ -369,7 +368,7 @@ class Runner:
         # dal prompt (``# Recent History``) e lo scenario misurerebbe altro.
         cursor = max(_max_cursor(dev.read("memory/history.jsonl") or ""),
                      _int((dev.read("memory/.cursor") or "").strip()),
-                     _history_floor(dev.read("sessions/unified_default.jsonl") or ""))
+                     _history_floor(dev.read_session("unified:default")))
         last = cursor
         for raw_path, raw_text in scenario.append.items():
             path = scenario.render(raw_path, nonces)
@@ -392,25 +391,25 @@ class Runner:
         acceso li' scriverebbe a meta' del turno osservato) e se ne restituiscono
         le chiamate, per distinguere un rosso di qua da un fatto mai annotato di la'.
         """
-        session_file = f"sessions/project_{project}.jsonl"
+        session_file = f"project:{project}"
         for turn in scenario.notebook_prelude:
             outcome = self.device.turn(scenario.render(turn, nonces), chat_id=f"project:{project}")
             if _PROVIDER_FAILED.search(outcome.reply):
                 raise ProviderDownError(outcome.reply.splitlines()[-1][:200])
         self._wait_subagents_done(session_file)
-        rows = _rows(self.device.read(session_file) or "")
+        rows = _rows(self.device.read_session(session_file))
         return observation_from_rows(rows, []).tool_calls
 
     def _seed_session(self, scenario: Scenario, nonces: Mapping[str, str], session_file: str,
                       key: str) -> None:
-        """La conversazione di ``seed_session`` sul file, metadati di prima compresi.
+        """La conversazione di ``seed_session`` nel database, metadati di prima compresi.
 
         I messaggi sono datati a un minuto l'uno dall'altro, finendo un minuto fa:
         per il gateway e' una sessione appena usata, non una da compattare per
         inattivita'.
         """
         dev = self.device
-        rows = _rows(dev.read(session_file) or "")
+        rows = [json.loads(line) for line in dev.read_session(session_file).splitlines() if line]
         meta = next((r for r in rows if r.get("_type") == "metadata"), None) or {
             "_type": "metadata", "key": key, "metadata": {},
             "created_at": datetime.now().isoformat(),
@@ -430,7 +429,7 @@ class Runner:
             lines.append(json.dumps({
                 "role": role, "content": scenario.render(text, nonces), "timestamp": stamp,
             }, ensure_ascii=False))
-        dev.write(session_file, "\n".join(lines) + "\n")
+        dev.write_session(session_file, "\n".join(lines) + "\n")
 
     def _filler(self) -> str:
         """Un MEMORY.md oltre il tetto di Dream (``memoryBudgetChars``, 3.000 di default)."""
@@ -474,7 +473,7 @@ class Runner:
                 running = _running_subagents(self.device.http_get("/api/subagents"))
             except Exception:  # noqa: BLE001
                 running = []
-            current = self.device.mtime_size(session_file)
+            current = self.device.session_stamp(session_file)
             if current != last:
                 last, quiet_since = current, time.monotonic()
             if not running and time.monotonic() - quiet_since > 15:

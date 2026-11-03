@@ -169,7 +169,7 @@ Defaults (all relative to the workspace root unless noted):
 |---|---|
 | Config | `workspace/config.json` |
 | Workspace | `<filesDir>/workspace` (Android) |
-| Sessions | `<workspace>/sessions/*.jsonl` |
+| Sessions | Tables `sessions` and `session_messages` of `<runtime_root>/db/state.sqlite` (`jenny/session/store.py`): one row per message, a save writes only what changed; the in-flight turn's journal is two more tables. The 2.x `sessions/*.jsonl` are imported once by `jenny/db_migration/sessions.py` |
 | Memory | `<workspace>/memory/` (`MEMORY.md`, `history.jsonl`) |
 | Cron store | Tables `cron_jobs` and `cron_runs` in `<runtime_root>/db/state.sqlite` (`jenny/cron/store.py`), written in one transaction per save; a row that cannot be read is skipped and logged. The 2.x `cron/jobs.json` is imported once by `jenny/db_migration/cron.py` |
 | Uploads (chat attachments) | `<workspace>/uploads/` |
@@ -184,7 +184,7 @@ Session history is the near-term conversation replay. Memory is the longer-term 
 
 | Store | File area | Notes |
 |---|---|---|
-| Session JSONL | `<workspace>/sessions/*.jsonl` | Recent conversation turns, replayed into context; compacted on idle (`agents.defaults.idleCompactAfterMinutes`, default 15 min) and capped by `max_messages` (default 120) |
+| Sessions | `state.sqlite` (`session/store.py`) | Recent conversation turns, replayed into context; compacted on idle (`agents.defaults.idleCompactAfterMinutes`, default 15 min) and capped by `max_messages` (default 120) |
 | Long-term memory | `<workspace>/memory/MEMORY.md` | Facts and durable context Dream writes back |
 | Consolidation source history | `<workspace>/memory/history.jsonl` | Append-only log Dream reads from; capped at 1000 entries, older ones moved to `memory/history-archive/<YYYY-MM>.jsonl` (never deleted) |
 | Bootstrap identity files | `<workspace>/SOUL.md`, `<workspace>/USER.md`, seeded from `jenny/templates/` | Identity/persona and user-facts files Dream also updates |
