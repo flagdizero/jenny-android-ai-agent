@@ -1119,3 +1119,66 @@ async def test_the_journal_line_uses_the_configured_timezone(
     page = workspace / "wikis/piante/raw/journal" / journal_page_name(now.date())
     last = page.read_text(encoding="utf-8").strip().splitlines()[-1]
     assert last.startswith(f"- {now.strftime('%H:')}"), last
+
+
+# ── il piano nella chat principale ─────────────────────────────────────────
+
+_PERSONAL_STEPS = [
+    {"title": "Sistemo acero e pane", "detail": "Un aiutante riscrive le due pagine.",
+     "kind": "write", "done_when": "Le due pagine sono riscritte."},
+    {"title": "Riordino le app", "detail": "Niente da fare se sono in ordine.",
+     "kind": "other", "done_when": "Le app sono in ordine."},
+]
+PERSONAL_KEY = "unified:default"
+
+
+async def test_a_personal_plan_runs_across_notebooks_and_rolls_back_only_its_work(
+    workspace: Path, host: FakeHost, bus: FakeBus
+) -> None:
+    """Nella chat principale il piano non tiene niente: il ritorno toglie solo
+    quel che hanno scritto i suoi aiutanti, e una pagina ritoccata dall'utente
+    dopo resta com'è."""
+    from jenny.agent.write_journal import bind_journal, journal_for, journal_key
+
+    driver = PlanDriver(PlanStore.for_workspace(workspace), bus, host, personal_plans=True)
+    write_file(workspace / "wikis" / "ricette", "wiki/pane.md", "pane v1")
+    text = await propose(driver, "Riordino", _PERSONAL_STEPS, key=PERSONAL_KEY)
+    assert "card" in text, text  # nessun passo `check` richiesto qui
+    plan = driver.store.open_plan_for("personal")
+    assert plan is not None and plan.place == "personal" and plan.notebook == ""
+    await driver.approve(plan.id, plan.version, [])
+    assert driver.held_notebooks() == set(), "la chat personale non tiene quaderni"
+
+    helper = journal_for(workspace, journal_key("helper", "L1"))
+    driver.on_helper_journal(plan.id, "s1", helper.key)
+    acero = workspace / "wikis/piante/wiki/acero.md"
+    pane = workspace / "wikis/ricette/wiki/pane.md"
+    with bind_journal(helper, step="s1"):
+        for path, text in ((acero, "acero dal piano"), (pane, "pane dal piano")):
+            helper.touch(path)
+            path.write_text(text, encoding="utf-8")
+        helper.settle("write_file")
+    assert "closed" in await driver.step_done(PERSONAL_KEY, "riscritte")
+    await driver.on_turn_end(PERSONAL_KEY, {})
+    await driver.step_skip(PERSONAL_KEY, "in ordine")
+    await driver.on_turn_end(PERSONAL_KEY, {})
+    plan = driver.store.load(plan.id)
+    assert plan.status == "done" and plan.steps[0].helpers == [helper.key]
+    files = driver.step_files(plan.id, "s1")
+    assert files["changed"] == ["wikis/piante/wiki/acero.md", "wikis/ricette/wiki/pane.md"]
+    assert files["groups"]["wikis/ricette/wiki/pane.md"] == "ricette"
+
+    pane.write_text("pane dell'utente", encoding="utf-8")
+    preview = await driver.rollback_preview(plan.id)
+    assert preview["report"]["groups"]["piante"] == {"restored": 1}
+    done = await driver.rollback(plan.id, [], preview["expect_end"])
+    assert done["report"]["left"] == ["wikis/ricette/wiki/pane.md"]
+    assert acero.read_text() == "acero v1"
+    assert pane.read_text() == "pane dell'utente"
+    assert driver.store.load(plan.id).status == "rolled_back"
+
+
+async def test_personal_plans_need_the_orchestrator(driver: PlanDriver) -> None:
+    text = await propose(driver, "Riordino", _PERSONAL_STEPS, key=PERSONAL_KEY)
+    assert text.startswith("Error"), text
+    assert driver.store.open_plan_for("personal") is None
