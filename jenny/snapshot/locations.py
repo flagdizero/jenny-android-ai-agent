@@ -9,6 +9,7 @@ directory che contiene il workspace (su Android è ``filesDir``, la stessa
       workspace/               ← l'albero versionato/scambiato al restore
       snapshots/               ← store content-addressed (storia)
       plans/                   ← i piani a lista: ``plan.json`` e le foto del quaderno
+      db/                      ← lo stato in SQLite (``jenny/db``): state, undo
       map_tiles/               ← le tessere delle schede dei posti in chat (cache)
       backup_staging/          ← file .jbk in export/import + albero staged
       restore_pending.json     ← marker del protocollo di restore al boot
@@ -57,3 +58,18 @@ MAP_TILES_DIR_NAME = "map_tiles"
 
 def map_tiles_dir_for(workspace_path: Path) -> Path:
     return runtime_root_for(workspace_path) / MAP_TILES_DIR_NAME
+
+
+# Lo stato di Jenny in SQLite (``jenny/db``). Fuori dal workspace come i piani:
+# i tool file del modello non ci arrivano, e lo swap di un ripristino non lo
+# porta via insieme al workspace (lo scambia ``restore_marker`` a parte).
+DB_DIR_NAME = "db"
+STAGED_DB_DIR_NAME = "db_staged"
+
+
+def db_dir_for_runtime_root(runtime_root: Path) -> Path:
+    return Path(runtime_root) / DB_DIR_NAME
+
+
+def db_dir_for(workspace_path: Path) -> Path:
+    return db_dir_for_runtime_root(runtime_root_for(workspace_path))

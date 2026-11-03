@@ -445,6 +445,23 @@ class GatewayContainer:
             logger.opt(exception=True).error(
                 "Preparazione delle app fallita; il gateway parte comunque")
 
+    def _open_databases(self) -> None:
+        """Apre lo stato in SQLite (``jenny/db``) prima di chiunque lo usi.
+
+        Prima dell'agente di proposito: con l'onboarding non finito l'agente
+        nasce dopo (``_wait_and_create_agent``), quando il cron gira già, e
+        quel che va ripreso al boot non deve aspettarlo. Un database che non si
+        apre non ferma il gateway: lo dice il log, e l'archivio che lo usa
+        fallisce lui.
+        """
+        from jenny import db
+        from jenny.snapshot.locations import runtime_root_for
+
+        try:
+            db.open_all(runtime_root_for(self.config.workspace_path))
+        except Exception:
+            logger.opt(exception=True).error("Could not open the state databases")
+
     def build(self) -> None:
         """Costruisce l'intero grafo di oggetti (composition point)."""
         from jenny.bus.queue import MessageBus
@@ -464,6 +481,7 @@ class GatewayContainer:
             __logo__, __version__, self.port,
         )
         self._sync_templates()
+        self._open_databases()
 
         # Backpressure su dispositivi memory-constrained (Android): code limitate.
         # I delta di streaming/progress usano try_publish_outbound (scartabili),
@@ -892,3 +910,7 @@ class GatewayContainer:
                 await self.snapshot.snapshot_now("shutdown")
             except Exception:
                 logger.exception("Shutdown snapshot failed")
+            # Per ultimi: fino a qui chiunque sopra può ancora scrivere lo stato.
+            from jenny import db
+
+            db.close_all()
