@@ -238,12 +238,27 @@ class ToolRegistryView(ToolRegistry):
 
     ``exec_seq`` avanza anche sul registro del loop: la guardia anti-polling di
     ``subagent_status`` legge quello.
+
+    **Nascosto o rifiutato** (dal 03/11/2026). ``hidden`` toglie uno strumento
+    dalla lista: va bene per quel che cambia fra una chat e l'altra, che hanno
+    comunque conversazioni (e cache del provider) diverse. Quel che cambia da un
+    turno all'altro della stessa chat sta invece in ``refused``: lo strumento
+    resta nella lista, e la chiamata risponde col motivo. La lista dei tool sta in
+    testa a quel che il provider tiene in cache, e cambiarla a meta' chat faceva
+    ripagare tutta la conversazione (entrando in pianificazione, 21,6k token su
+    29,8k sul telefono di prova).
     """
 
-    def __init__(self, base: ToolRegistry, hidden: "Callable[[str, Tool], bool]") -> None:
+    def __init__(
+        self,
+        base: ToolRegistry,
+        hidden: "Callable[[str, Tool], bool]",
+        refused: "Callable[[str, Tool], str | None] | None" = None,
+    ) -> None:
         super().__init__()
         self.view_of = base
         self._hidden = hidden
+        self._refused = refused
         self.file_states = base.file_states
         self.memory_entries = base.memory_entries
 
@@ -272,17 +287,27 @@ class ToolRegistryView(ToolRegistry):
     def prepare_call(self, name: str, params: Any) -> tuple[Tool | None, Any, str | None]:
         # Uno strumento visibile si risolve sul registro del loop, come sempre:
         # stessi controlli, e ``exec_seq`` avanza li'. Uno nascosto qui non
-        # esiste, con i suggerimenti presi fra i visibili.
+        # esiste, con i suggerimenti presi fra i visibili. Uno rifiutato c'e', e
+        # risponde col motivo senza girare.
+        if (refusal := self._refusal(name)) is not None:
+            self.view_of.exec_seq += 1
+            return None, params, refusal
         if not self._is_hidden(name):
             return self.view_of.prepare_call(name, params)
         self.view_of.exec_seq += 1
         return super().prepare_call(name, params)
 
     async def execute(self, name: str, params: dict[str, Any]) -> Any:
-        if not self._is_hidden(name):
-            return await self.view_of.execute(name, params)
-        return await super().execute(name, params)
+        if self._refusal(name) is not None or self._is_hidden(name):
+            return await super().execute(name, params)
+        return await self.view_of.execute(name, params)
 
     def _is_hidden(self, name: str) -> bool:
         tool = self.view_of.get(name)
         return tool is not None and self._hidden(name, tool)
+
+    def _refusal(self, name: str) -> str | None:
+        tool = self.view_of.get(name)
+        if tool is None or self._refused is None or self._hidden(name, tool):
+            return None
+        return self._refused(name, tool)

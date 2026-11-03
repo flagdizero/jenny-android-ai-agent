@@ -270,7 +270,7 @@ What was on the phone's screen when you wrote to Jenny from the **floating masco
 | `action` | `read` — the app's text, with its title, address and numbered `[image N: …]` markers. For a web page this is the page from its top, including the parts scrolled off screen — the whole of an ordinary article. `screenshot` — the picture, saved under `uploads/screen/` and shown to the model. `image` — one of the numbered images, cut out of the screenshot and saved there too; if the page exposes the original's address it comes along, so `download_file` can fetch it at full size. An image that was off screen has no picture, only that address |
 | `image` | With `action=image`, the number `read` gave it |
 
-- **It exists only in the turn that came from the mascot.** From the app's chat, from Telegram, from a reminder, the tool is not offered at all, and there is no screen to read: the reading happens at the tap and nowhere else.
+- **It reads only in the turn that came from the mascot.** From the app's chat, from Telegram, from a reminder, there is no screen to read and the tool says so: the reading happens at the tap and nowhere else. The tool is listed in every turn of the personal chat all the same (and in no notebook's chat), because a tool list that changes between two messages of one chat makes the provider re-read the whole conversation instead of taking it from its cache.
 - A reading lives in memory, one at a time, for ten minutes or until the next tap; after that the tool says it is gone. Nothing is written to disk until the tool is asked for a picture.
 - **Apps that block screenshots are not read at all**, text included. Android withholds a secure window's pixels (banking apps, password managers, incognito tabs) but not its accessibility text; Jenny drops both.
 - Password fields never come through.
@@ -613,7 +613,7 @@ Offers to continue the conversation in one of your notebooks: a button «Open th
 
 - Meant for the moment a personal-chat conversation has become work on one notebook's subject — several exchanges, a plan to lay out — and never for a passing fact (that is `journal_append` with `notebook`). Offered once: if you stay, Jenny goes on where you are.
 - Parameters: `notebook` (an existing notebook; any other name is refused with the list) and `context`, one line on what you were working on. That line is written to the [diary](../using/memory.md#the-diary-what-happened-in-your-notebooks) as being about the notebook, so in the notebook's chat Jenny knows where you came from.
-- Only in the personal chat in the app: hidden in a notebook, on Telegram, in a notification reply and in silent turns. Scope `core` + `orchestrator`; not for subagents.
+- Only in the personal chat in the app: not listed in a notebook or in silent turns; from Telegram or a notification reply it is listed (the chat is the same) and answers that a notebook opens only in the app. Scope `core` + `orchestrator`; not for subagents.
 
 ### board
 

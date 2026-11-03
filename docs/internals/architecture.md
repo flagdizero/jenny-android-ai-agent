@@ -127,7 +127,7 @@ Tools are **explicitly registered**, not discovered by scanning the filesystem. 
 | 4 | `browser.py` | `BrowserOpenTool`, `BrowserSnapshotTool`, `BrowserDoTool`, `BrowserReadTool`, `BrowserCloseTool` | An interactive second WebView with persistent cookies, for pages `web_fetch` cannot handle. Gated on the same `tools.androidWeb.enable` as search/fetch |
 | 5 | `download.py` | `DownloadFileTool` | Downloads a URL into the turn root's `downloads/` (`<project>/downloads/` inside a notebook, `workspace/downloads/` otherwise), per-hop SSRF-checked |
 | 6 | `location.py` | `GetLocationTool` | On-demand fresh GPS fix (distinct from the last-known location injected into every turn's context) |
-| 7 | `screen.py` | `ScreenTool` | The screen as it was when the user tapped the floating mascot. Offered only in that turn |
+| 7 | `screen.py` | `ScreenTool` | The screen as it was when the user tapped the floating mascot. Listed in the personal chat; it reads only in the turn of the tap |
 | 8 | `spawn.py` | `SpawnTool` | Spawns a subagent, blind to the parent conversation |
 | 9 | `subagent_control.py` | `SubagentStatusTool`, `SubagentCancelTool`, `SubagentRestartTool`, `SubagentSendTool` | Drive running subagents (status/cancel/restart/send). The only module whose tools are `orchestrator`-scope **only** — never `core`, never `subagent` |
 | 10 | `cron.py` | `CronTool` | Create/list/cancel reminders and scheduled jobs |
@@ -146,7 +146,7 @@ Tools are **explicitly registered**, not discovered by scanning the filesystem. 
 | 23 | `ssh.py` | `SshHostsTool`, `SshExecTool`, `SshJobTool`, `SshTransferTool` | Remote machines over SSH. Scope `remote`, which no agent loads by default — only the `sysadmin` subagent type asks for it |
 | 24 | `app_update.py` | `UpdateStatusTool`, `InstallUpdateTool` | Report a pending app update and install it. Android-only; `install_update` kills the process by design |
 | 25 | `board.py` | `BoardTool` | Edits a notebook's board. Scope `notebook`: only the `notebook-editor` subagent has it |
-| 26 | `plan.py` | `PlanProposeTool`, `PlanStepDoneTool`, `PlanStepSkipTool`, `PlanBlockedTool` | The step-by-step plan: `plan_propose` only in a planning turn, the other three only while a plan step is open |
+| 26 | `plan.py` | `PlanProposeTool`, `PlanStepDoneTool`, `PlanStepSkipTool`, `PlanBlockedTool` | The step-by-step plan: listed in every turn of a chat that can plan; `plan_propose` runs only in a planning turn, the other three only while a plan step is open, and outside those turns the call answers with the reason |
 | 27 | `notebook.py` | `NotebookReadTool`, `NotebookEditTool` | Bulk notebook reads and checks (`check`/`map`/`read_many`, `core` + `orchestrator`), and `remove_pages` for the `notebook-editor` (scope `notebook`) |
 
 The numbering is the load order in `_HARDCODED_TOOL_MODULES`, which is the order `discover()` walks.

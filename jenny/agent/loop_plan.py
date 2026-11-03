@@ -109,6 +109,22 @@ PLANNING_HIDDEN_TOOLS: frozenset[str] = frozenset(
     {*UNTRUSTED_TOOLS, "download_file", "python_exec", "write_stdin", "list_exec_sessions"}
 )
 
+#: Le risposte dei tool del piano fuori dal loro turno, e di quelli che la
+#: pianificazione chiude: restano nella lista (v. ``_plan_tool_filter``).
+NOT_PLANNING_REFUSAL = (
+    "Not now: a plan is proposed only while the user is planning (they start it with the Plan "
+    "button). Do not propose a plan; answer the user."
+)
+NO_STEP_REFUSAL = (
+    "Not now: no plan step is open in this turn, so there is nothing to close. Answer this "
+    "message; the plan's steps go on in their own turns."
+)
+PLANNING_REFUSAL = (
+    "Not while planning: a plan is being prepared, and the web and code do not run now (what "
+    "they read would reach every helper of the plan's steps). Put what needs looking up in the "
+    "plan, as a step of its own."
+)
+
 #: Le letture che contano come «ha guardato il quaderno» (``PlanDriver.propose``).
 #: ``board`` solo con ``show``: le altre azioni scrivono, e in sola lettura sono
 #: comunque rifiutate. ``notebook`` con ogni azione tranne ``remove_pages``
@@ -235,16 +251,27 @@ class LoopPlanMixin:
 
     def _plan_tool_filter(
         self, msg: InboundMessage, session_key: str
-    ) -> Callable[[str], bool | None]:
+    ) -> Callable[[str], bool | str | None]:
         """Il pezzo del piano nel filtro dei tool del turno.
 
         Ritorna una funzione nome → ``True`` (nascosto), ``False`` (visibile),
-        ``None`` (non è un tool del piano: decide il resto del filtro). Lo stato
-        del piano si legge **una volta**, qui: il filtro gira a ogni lettura del
-        registro, e un passo chiuso a metà turno lascia i tool visibili fino alla
-        fine del turno — sono loro stessi a rispondere che non c'è più niente.
+        una frase (nella lista, ma la chiamata risponde con quella), ``None``
+        (non è un tool del piano: decide il resto del filtro). Lo stato del piano
+        si legge **una volta**, qui: il filtro gira a ogni lettura del registro,
+        e un passo chiuso a metà turno lascia i tool visibili fino alla fine del
+        turno — sono loro stessi a rispondere che non c'è più niente.
+
+        **Nascosti solo dove non si pianifica mai** (dal 03/11/2026): dove si
+        può pianificare i tool del piano restano nella lista a ogni turno, e
+        fuori dal loro turno rispondono col motivo. Lo stesso per quelli che la
+        pianificazione chiude. Nasconderli per turno cambiava la lista a metà
+        chat, e il provider ripagava tutta la conversazione (v.
+        ``AgentLoop._turn_tool_view``). Il rifiuto sta qui e non nei tool:
+        ``plan_step_done`` da un turno di chat chiuderebbe il passo, e il web
+        in pianificazione contaminerebbe la sessione.
         """
         driver = self.plan_driver
+        here = has_plans(session_key, driver)
         planning = driver is not None and is_planning_turn(msg.metadata, session_key, driver)
         # Un cron non apre né chiude passi: i tool del passo non li vede.
         step_open = (
@@ -263,16 +290,20 @@ class LoopPlanMixin:
                 step_open = (driver.step_message_current(meta)
                              or bool(meta.get(PLAN_ANSWER_META)))
 
-        def plan_hidden(name: str) -> bool | None:
+        def plan_verdict(name: str) -> bool | str | None:
             if name == PLAN_PROPOSE_TOOL:
-                return not planning
+                if not here:
+                    return True
+                return False if planning else NOT_PLANNING_REFUSAL
             if name in PLAN_STEP_TOOLS:
-                return not step_open
+                if not here:
+                    return True
+                return False if step_open else NO_STEP_REFUSAL
             if planning and name in PLANNING_HIDDEN_TOOLS:
-                return True
+                return PLANNING_REFUSAL
             return None
 
-        return plan_hidden
+        return plan_verdict
 
     # ── contesto ────────────────────────────────────────────────────────────
 

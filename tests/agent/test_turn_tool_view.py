@@ -118,12 +118,18 @@ async def test_placing_an_app_mid_turn_leaves_the_tool_list_alone(notebook: Path
     assert (view or loop.tools).get_definitions() == before
 
 
-async def test_the_move_offer_is_only_for_the_personal_chat_in_the_app(notebook: Path) -> None:
-    """«Ci spostiamo?» e' un tasto: dove non c'e' un tasto da toccare, non c'e'."""
+async def test_the_move_offer_is_only_for_the_personal_chat(notebook: Path) -> None:
+    """«Ci spostiamo?» e' un tasto della chat personale: un quaderno non ce l'ha.
+
+    Da Telegram la chat e' la stessa, quindi la lista resta quella dell'app (una
+    lista diversa faceva ripagare la conversazione al provider, dal 03/11/2026):
+    e' il tool a rispondere che da li' non si puo'.
+    """
     loop, captured = _loop_with_capture(notebook)
     await loop._process_message(InboundMessage(
         channel="websocket", sender_id="u", chat_id="default", content="ciao"))
-    assert "suggest_notebook" in _offered_names(captured)
+    from_the_app = _offered_names(captured)
+    assert "suggest_notebook" in from_the_app
     captured.clear()
     await loop._process_message(InboundMessage(
         channel="websocket", sender_id="u", chat_id="project:soldi", content="ciao"))
@@ -131,7 +137,7 @@ async def test_the_move_offer_is_only_for_the_personal_chat_in_the_app(notebook:
     captured.clear()
     await loop._process_message(InboundMessage(
         channel="telegram", sender_id="u", chat_id="42", content="ciao"))
-    assert "suggest_notebook" not in _offered_names(captured)
+    assert _offered_names(captured) == from_the_app
 
 
 @pytest.mark.parametrize(
@@ -168,3 +174,27 @@ def test_a_system_turn_offers_the_tools_of_a_user_turn_in_that_chat(
         key, session, silent=silent,
     )
     assert sorted((system or loop.tools).tool_names) == sorted((user or loop.tools).tool_names)
+
+
+async def test_the_personal_chat_offers_one_tool_list_from_every_channel(notebook: Path) -> None:
+    """App, Telegram, il fumetto della mascotte: la stessa chat, la stessa lista.
+
+    La lista dei tool sta in testa a quel che il provider tiene in cache. Il
+    03/11/2026, sul telefono di prova, un turno con un tool in piu' (la
+    pianificazione) riprendeva dalla cache 8k token su 30k; il tocco sulla
+    mascotte e una risposta da Telegram, calcolati, il 25-33%.
+    """
+    from jenny.agent.tools.screen import ScreenTool
+    from jenny.channels.floating import FLOATING_CHANNEL
+
+    loop, captured = _loop_with_capture(notebook)
+    loop.tools.register(ScreenTool())
+    lists = []
+    for channel, chat_id in (("websocket", "default"), ("telegram", "42"),
+                             (FLOATING_CHANNEL, "shade"), ("websocket", "default")):
+        captured.clear()
+        await loop._process_message(InboundMessage(
+            channel=channel, sender_id="u", chat_id=chat_id, content="ciao"))
+        lists.append(_offered_names(captured))
+    assert all(names == lists[0] for names in lists), lists
+    assert {"screen", "suggest_notebook", "use_app"} <= lists[0]

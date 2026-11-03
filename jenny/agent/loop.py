@@ -76,7 +76,7 @@ from jenny.providers.base import LLMProvider, LLMRuntime
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
-from jenny.runtime.screen import has_screen, screen_runtime_lines
+from jenny.runtime.screen import screen_runtime_lines
 from jenny.runtime.user_text import say
 from jenny.security.subagent_policy import (
     bind_turn_taint,
@@ -725,16 +725,31 @@ class AgentLoop(
     ) -> ToolRegistry | None:
         """Il registro di questo turno, o ``None`` se e' quello del loop intero.
 
-        Fuori restano, solo quando il turno non li puo' usare: ``recall_history``,
-        che nei quaderni rifiuta; ``nothing_to_report``, che serve solo a un giro
-        silenzioso. Il resto e' il registro del loop, vivo (``ToolRegistryView``).
-        Le azioni delle app che scrivono, nascoste qui fino al 03/11/2026 nei
-        quaderni dove l'app non e' posata, passano tutte da ``use_app``: le
-        rifiuta l'esecutore (``apps/permissions.py``).
+        **La lista non cambia dentro una chat** (dal 03/11/2026). Sta in testa a
+        quel che il provider tiene in cache: un turno con un tool in piu' o in
+        meno ripagava tutta la conversazione (entrando in pianificazione, 21,6k
+        token su 29,8k sul telefono di prova; il tocco sulla mascotte o una
+        risposta da Telegram, ~70%). Quindi:
+
+        - fuori dalla lista resta solo quel che dipende dalla **chat**:
+          ``recall_history`` nei quaderni (rifiuta), ``notebook`` fuori da un
+          quaderno, ``screen`` e ``suggest_notebook`` fuori dalla chat personale,
+          i tool del piano dove non si pianifica, ``nothing_to_report`` fuori
+          dai giri silenziosi;
+        - quel che dipende dal **turno** resta nella lista e risponde col motivo:
+          ``screen`` senza un tocco sulla mascotte e ``suggest_notebook`` fuori
+          dall'app lo fanno da se'; i tool del piano e quelli che la
+          pianificazione chiude li rifiuta la vista (``loop_plan.py``), perche'
+          da soli accetterebbero.
+
+        Le azioni delle app passano tutte da ``use_app``: la posa e la sola
+        lettura le controlla l'esecutore (``apps/permissions.py``).
         """
         from jenny.agent.tools.registry import ToolRegistryView
+        from jenny.session.keys import is_personal_session_key
 
         in_project = is_project_session_key(session_key)
+        personal = is_personal_session_key(session_key)
         root: Path | None = None
         if in_project:
             from jenny.utils.wiki_paths import is_wiki_root
@@ -744,23 +759,24 @@ class AgentLoop(
                 root = None
         # I tool del piano a lista: il proprio filtro, che legge lo stato del
         # piano una volta per turno (``loop_plan.py``).
-        plan_hidden = self._plan_tool_filter(msg, session_key)
+        plan_verdict = self._plan_tool_filter(msg, session_key)
 
-        def hidden(name: str, tool: Any) -> bool:
-            plan_verdict = plan_hidden(name)
-            if plan_verdict is not None:
-                return plan_verdict
+        def hidden(name: str, _tool: Any) -> bool:
+            verdict = plan_verdict(name)
+            if verdict is not None:
+                return verdict is True
             if name == "nothing_to_report":
                 return not silent
             # Lo schermo si legge solo nel turno nato da un tocco sulla
-            # mascotte, che ne porta la lettura (``runtime/screen.py``): da
-            # Telegram, da un promemoria o dall'app non c'e' niente da vedere.
+            # mascotte (``runtime/screen.py``), che arriva nella chat personale:
+            # negli altri turni di quella chat il tool risponde che non c'e'
+            # niente da leggere.
             if name == "screen":
-                return not has_screen(msg.metadata)
-            # «Ci spostiamo?» ha senso solo dove c'e' un tasto da toccare: la
-            # chat personale, nell'app (non Telegram, non una notifica).
+                return not personal
+            # «Ci spostiamo?» e' un tasto sotto la risposta nella chat personale;
+            # da Telegram o da una notifica il tool risponde che non si puo'.
             if name == "suggest_notebook":
-                return in_project or silent or msg.channel != WEBSOCKET_CHANNEL
+                return in_project or silent
             # ``notebook`` lavora solo nella chat di un quaderno (fuori risponde
             # «not from here»): ~2,9k caratteri di schema in ogni turno della
             # chat personale, per uno strumento che li' non puo' servire. La
@@ -771,9 +787,14 @@ class AgentLoop(
                 return False
             return name == "recall_history"
 
-        if not any(hidden(n, self.tools.get(n)) for n in self.tools.tool_names):
+        def refused(name: str, _tool: Any) -> str | None:
+            verdict = plan_verdict(name)
+            return verdict if isinstance(verdict, str) else None
+
+        names = self.tools.tool_names
+        if not any(hidden(n, None) or refused(n, None) for n in names):
             return None
-        return ToolRegistryView(self.tools, hidden)
+        return ToolRegistryView(self.tools, hidden, refused)
 
     def _build_initial_messages(
         self,

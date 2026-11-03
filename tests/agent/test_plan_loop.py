@@ -193,23 +193,47 @@ async def _planning(loop: AgentLoop, content: str, **metadata: Any) -> Any:
 # ── quali tool si vedono ─────────────────────────────────────────────────────
 
 
-async def test_plan_tools_are_hidden_in_an_ordinary_turn(workspace: Path) -> None:
+async def test_plan_tools_stay_listed_and_refuse_outside_their_turn(workspace: Path) -> None:
+    """Dove si pianifica i tool del piano sono nella lista a ogni turno: cambiarla
+    a meta' chat faceva ripagare la conversazione al provider (dal 03/11/2026).
+    Fuori dal loro turno rispondono col motivo, senza girare."""
+    from jenny.agent.loop_plan import NO_STEP_REFUSAL, NOT_PLANNING_REFUSAL, has_plans
+
     script = Script(workspace)
-    loop, _ = _loop(workspace, script)
+    loop, driver = _loop(workspace, script)
     await loop._process_message(_user("ciao"), session_key=KEY)
-    assert not (script.offered[-1] & PLAN_TOOLS)
+    assert PLAN_TOOLS <= script.offered[-1]
+    verdict = loop._plan_tool_filter(_user("ciao"), KEY)
+    assert verdict("plan_propose") == NOT_PLANNING_REFUSAL
+    assert all(verdict(name) == NO_STEP_REFUSAL for name in PLAN_STEP_TOOLS)
     await loop._process_message(
         InboundMessage(channel="websocket", sender_id="u", chat_id="default", content="ciao"),
     )
-    assert not (script.offered[-1] & PLAN_TOOLS)
+    personal = has_plans("unified:default", driver)
+    assert bool(script.offered[-1] & PLAN_TOOLS) is personal
 
 
-async def test_the_planning_turn_offers_only_plan_propose(workspace: Path) -> None:
+async def test_a_refused_plan_tool_answers_without_running(workspace: Path) -> None:
+    from jenny.agent.loop_plan import NO_STEP_REFUSAL
+    from jenny.session.manager import Session
+
+    loop, _ = _loop(workspace, Script(workspace))
+    view = loop._turn_tool_view(_user("ciao"), Session(key=KEY), KEY, silent=False)
+    assert view is not None and "plan_step_done" in view.tool_names
+    tool, _params, error = view.prepare_call("plan_step_done", {"note": "x"})
+    assert tool is None and error == NO_STEP_REFUSAL
+    assert NO_STEP_REFUSAL in await view.execute("plan_step_done", {"note": "x"})
+
+
+async def test_the_planning_turn_keeps_the_tool_list_of_the_chat(workspace: Path) -> None:
     script = Script(workspace)
     loop, driver = _loop(workspace, script)
+    await loop._process_message(_user("ciao"), session_key=KEY)
+    ordinary = script.offered[-1]
+    script.offered.clear()
+    script.prompts.clear()
     await _planning(loop, "Rifai la wiki")
-    assert "plan_propose" in script.offered[0]
-    assert not (script.offered[0] & PLAN_STEP_TOOLS)
+    assert script.offered[0] == ordinary
     assert "[Planning turn]" in script.prompts[0]
     plan = driver.store.open_plan_for("piante")
     assert plan is not None and plan.status == "proposed"
@@ -238,7 +262,6 @@ async def test_a_step_turn_offers_the_step_tools_and_persists_no_user_bubble(
     assert step_msg.metadata[INJECTED_EVENT_META] == PLAN_STEP_EVENT
     outcome = await loop._process_message(step_msg)
     assert PLAN_STEP_TOOLS <= script.offered[-1]
-    assert "plan_propose" not in script.offered[-1]
     assert "Step 1: Scrivo acero" in script.prompts[-1]
     # La lista del piano è anche nel contesto del turno.
     assert 'Plan "Rifare la wiki"' in script.prompts[-1]
@@ -596,9 +619,11 @@ async def test_a_cron_turn_during_a_step_neither_sees_nor_judges_it(workspace: P
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
     plan, _ = await _approved(loop, driver)
+    from jenny.agent.loop_plan import NO_STEP_REFUSAL
+
     cron = _cron()
+    assert loop._plan_tool_filter(cron, KEY)("plan_step_done") == NO_STEP_REFUSAL
     await _dispatch(loop, cron)
-    assert not (script.offered[-1] & PLAN_STEP_TOOLS)
     assert cron.metadata[WORKSPACE_READONLY_METADATA_KEY] is True
     # Nessun promemoria: la fine di un cron non giudica il passo.
     assert loop.bus.inbound.empty()
@@ -726,7 +751,8 @@ async def test_the_answer_to_a_question_is_still_a_planning_turn(workspace: Path
     after = _user("grazie")
     await loop._plan_before_turn(after, KEY)
     await loop._process_message(after, session_key=KEY)
-    assert "plan_propose" not in script.offered[-1]
+    # La stessa lista: fuori dalla pianificazione ``plan_propose`` risponde col motivo.
+    assert script.offered[-1] == script.offered[-2]
     assert "[Planning turn]" not in script.prompts[-1]
 
 
@@ -744,8 +770,11 @@ async def test_the_planning_turn_counts_its_reads(workspace: Path) -> None:
 
 
 async def test_no_web_while_planning(workspace: Path) -> None:
-    """In un turno di pianificazione il web non si vede (l'agente in modalità core
-    lo avrebbe): una pagina letta adesso contaminerebbe gli aiutanti dei passi."""
+    """In un turno di pianificazione il web non gira (l'agente in modalità core
+    lo avrebbe): una pagina letta adesso contaminerebbe gli aiutanti dei passi.
+    Resta nella lista, e risponde col motivo."""
+    from jenny.agent.loop_plan import PLANNING_REFUSAL
+
     loop, driver = _loop(workspace, Script(workspace))
     await driver.start_drafting(KEY)
     planning = loop._plan_tool_filter(_user("x"), KEY)
@@ -755,7 +784,7 @@ async def test_no_web_while_planning(workspace: Path) -> None:
     )
     for name in ("web_search", "web_fetch", "browser_open", "download_file", "python_exec",
                  "write_stdin"):
-        assert planning(name) is True
+        assert planning(name) == PLANNING_REFUSAL
         assert plain(name) is None
     assert planning("read_file") is None and planning("plan_propose") is False
 
