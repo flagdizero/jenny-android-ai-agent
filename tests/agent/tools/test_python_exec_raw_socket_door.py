@@ -22,8 +22,17 @@ from jenny.security.network import configure_ssrf_whitelist
 
 @pytest.fixture
 def listener():
-    """Un server TCP su loopback che conta le connessioni ricevute."""
+    """Un server TCP su loopback che conta le connessioni ricevute.
+
+    Rende ``(port, hits, received)``. ``hits`` lo riempie il thread di accept,
+    non chi si connette: quando ``execute`` torna, il client ha già scritto e
+    chiuso, ma il thread può non aver ancora fatto ``accept``/``recv`` (sotto
+    ``-n auto`` su un runner carico è successo, ``assert [] == [b'hi']``).
+    Chi aspetta una connessione chiama ``received(n)``, che attende l'``n``-esimo
+    arrivo invece di leggere ``hits`` subito.
+    """
     hits: list[bytes] = []
+    arrived = threading.Condition()
     srv = socket.socket()
     srv.bind(("127.0.0.1", 0))
     srv.listen(8)
@@ -39,13 +48,21 @@ def listener():
             with conn:
                 conn.settimeout(1)
                 try:
-                    hits.append(conn.recv(64))
+                    data = conn.recv(64)
                 except OSError:
-                    hits.append(b"")
+                    data = b""
+            with arrived:
+                hits.append(data)
+                arrived.notify_all()
+
+    def received(n: int = 1, timeout: float = 5) -> list[bytes]:
+        with arrived:
+            arrived.wait_for(lambda: len(hits) >= n, timeout)
+            return list(hits)
 
     thread = threading.Thread(target=_accept, daemon=True)
     thread.start()
-    yield srv.getsockname()[1], hits
+    yield srv.getsockname()[1], hits, received
     stop.set()
     thread.join(timeout=2)
     srv.close()
@@ -84,7 +101,7 @@ def _raw_socket(port: int) -> str:
 
 @pytest.mark.parametrize("make_code", [_open_connection, _raw_socket])
 async def test_a_raw_socket_to_loopback_is_refused(tmp_path, listener, no_whitelist, make_code):
-    port, hits = listener
+    port, hits, _ = listener
     out = await _tool(tmp_path).execute(code=make_code(port))
     assert "CONNECTED" not in out
     assert "private or internal address" in out
@@ -92,7 +109,7 @@ async def test_a_raw_socket_to_loopback_is_refused(tmp_path, listener, no_whitel
 
 
 async def test_a_datagram_to_loopback_is_refused(tmp_path, listener, no_whitelist):
-    port, _ = listener
+    port, _, _ = listener
     code = (
         "import asyncio\n"
         "s = asyncio.base_events.socket.socket(asyncio.base_events.socket.AF_INET,"
@@ -124,11 +141,11 @@ async def test_an_allowed_destination_still_connects(tmp_path, listener, no_whit
     Il loopback viene aperto con ``security.ssrfWhitelist``, che è anche
     l'eccezione che vale per ``http_get``: stessa politica, stessa porta.
     """
-    port, hits = listener
+    port, _, received = listener
     configure_ssrf_whitelist(["127.0.0.0/8"])
     out = await _tool(tmp_path).execute(code=_open_connection(port))
     assert "CONNECTED" in out, out
-    assert hits == [b"hi"]
+    assert received(1) == [b"hi"]
 
 
 def test_host_code_is_not_guarded(listener, no_whitelist):
@@ -136,14 +153,10 @@ def test_host_code_is_not_guarded(listener, no_whitelist):
     from jenny.agent.tools.python_exec import _patch_socket_egress
 
     _patch_socket_egress()
-    port, hits = listener
+    port, _, received = listener
     with socket.create_connection(("127.0.0.1", port), timeout=2) as conn:
         conn.sendall(b"host")
-    for _ in range(50):
-        if hits:
-            break
-        threading.Event().wait(0.02)
-    assert hits == [b"host"]
+    assert received(1) == [b"host"]
 
 
 async def test_the_c_level_socket_type_is_a_known_open_door(tmp_path, listener, no_whitelist):
@@ -153,7 +166,7 @@ async def test_the_c_level_socket_type_is_a_known_open_door(tmp_path, listener, 
     di proposito. Se un giorno fallisce, qualcuno ha chiuso anche questa porta:
     vanno aggiornati questo test e il commento su ``_patch_socket_egress``.
     """
-    port, hits = listener
+    port, _, _ = listener
     code = (
         "import asyncio\n"
         "s = asyncio.base_events.socket._socket.socket()\n"
