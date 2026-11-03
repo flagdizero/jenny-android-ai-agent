@@ -27,7 +27,7 @@
 
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
-import { i18n } from './shared/i18n.js';
+import { i18n, tr } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { confirmDialog, promptDialog } from './shared/dialog.js';
 import { reminderGroups, whenLabel } from './home-board.js';
@@ -37,14 +37,13 @@ import { DrawerPhotos } from './home-board-photos.js';
 import { automationRow } from './home-board-automation.js';
 import { renderBlock } from './home-board-blocks.js';
 import { button, el, icon, writeFailedToast } from './shared/dom.js';
-import { dayAndTime } from './shared/when.js';
+import { dayAndTime, dayOffset, shortDate } from './shared/when.js';
 
 /** «oggi alle 04:12», «ieri», «3 ott»: quando e' stato riscritto il cassetto. */
 function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
-  return dayAndTime(at, { now, locale })
-    || new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
+  return dayAndTime(at, { now, locale }) || shortDate(at, { locale });
 }
 
 /** Le cadenze di un promemoria a condizione («controlla ogni»), la prima e' la
@@ -54,7 +53,6 @@ const CONDITION_EVERY = [['hour', 3_600_000], ['sixHours', 21_600_000], ['day', 
 /** «controllo ogni 6 ore»: la cadenza di un promemoria a condizione, o `''`. */
 function everyLabel(when) {
   if (when?.kind !== 'condition' || !(when.every_ms > 0)) return '';
-  const tr = (key, vars) => i18n.t(key, vars);
   return i18n.t('board.app.checkedEvery', { every: humanizeDuration(when.every_ms, { tr, locale: i18n.locale }) });
 }
 
@@ -63,8 +61,7 @@ function everyLabel(when) {
 function untilLabel(date, today = new Date(), locale = i18n.locale) {
   const [y, m, d] = String(date || '').split('-').map(Number);
   if (!y || !m) return '';
-  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const days = Math.round((new Date(y, m - 1, d || 1) - from) / 86_400_000);
+  const days = -dayOffset(new Date(y, m - 1, d || 1), today);
   const abs = Math.abs(days);
   const [n, unit] = abs < 14 ? [days, 'day'] : abs < 60 ? [Math.round(days / 7), 'week']
     : [Math.round(days / 30), 'month'];
@@ -219,7 +216,7 @@ export class BoardDrawer {
   _labelFab() {
     if (!this.fab) return;
     const open = !this.dial.hidden;
-    this.fab.setAttribute('aria-label', i18n.t(open ? 'board.section.close' : 'board.section.addFab'));
+    this.fab.setAttribute('aria-label', i18n.t(open ? 'common.close' : 'board.section.addFab'));
     this.fab.classList.toggle('is-open', open);
     this.fab.setAttribute('aria-expanded', String(open));
   }
@@ -546,7 +543,7 @@ export class BoardDrawer {
       monthBox.checked = rem.when?.precision === 'month';
     }
     const actions = el('div', 'home-board-actions');
-    const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+    const save = el('button', 'home-board-btn is-primary', i18n.t('common.save'));
     save.type = 'submit';
     actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
     form.append(what, ...(dated ? [when, month] : []), actions);
@@ -900,18 +897,18 @@ export class BoardDrawer {
     for (const c of cols) head.appendChild(el('th', c.type === 'number' ? 'is-num' : '', c.label));
     table.appendChild(head);
     for (const row of v.rows || []) {
-      const tr = el('tr');
+      const line = el('tr');
       for (const c of cols) {
-        tr.appendChild(el('td', c.type === 'number' ? 'is-num' : '', this._cell(row[c.field], c.type, c.unit)));
+        line.appendChild(el('td', c.type === 'number' ? 'is-num' : '', this._cell(row[c.field], c.type, c.unit)));
       }
-      table.appendChild(tr);
+      table.appendChild(line);
     }
     if (!(v.rows || []).length) {
-      const tr = el('tr');
+      const line = el('tr');
       const td = el('td', 'home-drawer-hint', i18n.t('board.micro.noRows'));
       td.colSpan = Math.max(1, cols.length);
-      tr.appendChild(td);
-      table.appendChild(tr);
+      line.appendChild(td);
+      table.appendChild(line);
     }
     return table;
   }
@@ -978,7 +975,7 @@ export class BoardDrawer {
     every.setAttribute('aria-label', i18n.t('board.app.checkEvery'));
     cadence.append(el('span', 'home-board-form-label', i18n.t('board.app.checkEvery')), every);
     const actions = el('div', 'home-board-actions');
-    const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+    const save = el('button', 'home-board-btn is-primary', i18n.t('common.save'));
     save.type = 'submit';
     actions.append(button('home-board-btn', i18n.t('common.cancel'), () => this.sheet.close()), save);
     form.append(what, row, cadence, actions);

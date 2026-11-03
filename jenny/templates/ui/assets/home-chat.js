@@ -51,10 +51,10 @@ import { openPlaceFromClick } from './shared/places.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { describeWireError } from './shared/wire-error.js';
 import { contentLinkOf, openContentLink } from './shared/content-link.js';
-import { chatTime, chatTimeIso } from './shared/chat-time.js';
-import { mediaKind, openMediaFile } from './shared/media.js';
-import { originBadgeHtml } from './shared/origin.js';
-import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { chatTimeNode } from './shared/chat-time.js';
+import { renderMediaList } from './shared/media.js';
+import { originBadge } from './shared/origin.js';
+import { copyWithToast, latencyText, renderReplyExtras } from './shared/reply.js';
 import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
@@ -183,9 +183,6 @@ export class HomeChat {
        chiuso da `_streamEnd`, che diventa di passaggio se lo segue un passo. */
     this._lastSegment = null;
     this._passing = [];
-    /* L'allegato dietro ogni pastiglia di file: il percorso che il ponte
-       nativo sa aprire non sta nell'URL firmato (v. `shared/media.js::openMediaFile`). */
-    this._files = new WeakMap();
     /* I secondi dell'ultimo `turn_end`, in attesa che la bolla si chiuda. */
     this._seconds = null;
     /* Le annotazioni nei cassetti del turno in corso (`journalNotes`): lo
@@ -276,7 +273,7 @@ export class HomeChat {
       listenOn: this.el,
       container: () => this.el,
       pageSize: HISTORY_PAGE_SIZE,
-      begin: () => this._beginHistoryPage(),
+      begin: () => sessionManager.historyPage(),
       prepend: (messages) => this.prependTurns(messages),
       // In cima a tutto: se sopra entra una pagina, `ensureReach` lo rimette
       // primo lui. Il primo figlio del filo porta il `margin-top:auto` che
@@ -303,15 +300,6 @@ export class HomeChat {
      in casa non ce n'e', ma il primo che arrivera' non deve prendersi anche
      l'avviso del link inerte (e' successo in officina). */
   _onClick(e) {
-    /* Una pastiglia di file e' un `<a>` anche lei, ma non e' un link del
-       testo: non e' Jenny ad averla scritta, e la regola dei link la dava per
-       inerte (una regressione di `a1b8b1e3`). Si apre col visore. */
-    const file = e.target.closest('a.home-file');
-    if (file && this.el.contains(file)) {
-      e.preventDefault();
-      openMediaFile(this._files.get(file) || { url: file.getAttribute('href') });
-      return;
-    }
     /* Non solo `a[href]`: un `<area href>` o un link SVG sono link anche loro,
        e un tocco lasciato passare navigava il frame principale. */
     /* La scheda di un posto e' un `<a>` anche lei, ma apre Maps, non il
@@ -342,25 +330,6 @@ export class HomeChat {
      tolta il 05/10/2026). */
   _openLink(e, a) {
     openContentLink(e, a, this.el, (type) => showToast(i18n.t('common.linkNotOpenable'), type));
-  }
-
-  /* La guardia contro la pagina che arriva dopo un cambio di conversazione.
-     Era gia' quella vera del session manager quando in casa la conversazione
-     era una sola — «il giorno che le conversazioni diventassero due non sarebbe
-     una bugia da scoprire». Quel giorno e' arrivato, e qui non c'e' stato
-     niente da cambiare. */
-  _beginHistoryPage() {
-    const key = sessionManager.currentKey;
-    if (!key) return null;
-    let stale = false;
-    return {
-      fetch: async (limit, cursor) => {
-        const res = await sessionManager.loadThread(key, limit, cursor);
-        stale = !!res.stale;
-        return res.thread;
-      },
-      stale: () => stale,
-    };
   }
 
   /* ── Storia ── */
@@ -876,7 +845,7 @@ export class HomeChat {
   _appendUser(text, origin, media, toTop = false, at = null, device = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-user';
-    const badge = this._originBadge(origin, device);
+    const badge = originBadge(origin, device, 'home-origin');
     if (badge) node.appendChild(badge);
     if (text) {
       const block = document.createElement('div');
@@ -889,7 +858,7 @@ export class HomeChat {
     if (text) this._userSent.set(node, { text, media: Boolean(media?.length) });
     /* L'ora, sotto la bolla e fuori dalla sua pelle (che e' di `.home-block`):
        quel che hai scritto ha la sua, come le risposte. */
-    const time = this._timeEl(at);
+    const time = chatTimeNode(at, 'home-time');
     if (time) node.appendChild(time);
     /* L'ora in millisecondi sul nodo: chi mette qualcosa al suo posto nel filo
        (la scheda di un piano finito, `HomePlan.place`) la legge da qui, anche
@@ -950,19 +919,6 @@ export class HomeChat {
       this.onRetry?.(sent.text);
     });
     node.appendChild(btn);
-  }
-
-  /** L'ora di un messaggio (v. `shared/chat-time.js`), o `null` se non ce
-   *  n'e' una: una cronologia scritta prima del 06/10/2026 che la sessione non
-   *  sa datare resta senza, invece di prendere un'ora inventata. */
-  _timeEl(at) {
-    const text = chatTime(at);
-    if (!text) return null;
-    const el = document.createElement('time');
-    el.className = 'home-time';
-    el.dateTime = chatTimeIso(at);
-    el.textContent = text;
-    return el;
   }
 
   /** La riga in coda a una risposta: il Copia, l'ora e i secondi che ci ha
@@ -1050,7 +1006,7 @@ export class HomeChat {
     /* Un turno in cui Jenny ha solo lavorato non ha testo da copiare; una
        risposta di sole immagini non ha Copia, ma la sua ora si'. */
     const hasText = Boolean(this._textOf(node));
-    const time = this._timeEl(at);
+    const time = chatTimeNode(at, 'home-time');
     if (!hasText && !time) return;
     const row = document.createElement('div');
     row.className = 'home-tail';
@@ -1136,7 +1092,7 @@ export class HomeChat {
 
   async _copy(node) {
     const text = this._textOf(node);
-    await copyReplyText(text);
+    await copyWithToast(text);
   }
 
   /* Il separatore di un azzeramento del contesto. Nessuna scritta: dire
@@ -1148,52 +1104,19 @@ export class HomeChat {
     this._append(hr, toTop);
   }
 
-  /* Da dove e' entrato il messaggio, se non da qui (`shared/origin.js`). */
-  _originBadge(origin, device = null) {
-    const html = originBadgeHtml(origin, device);
-    if (!html) return null;
-    const badge = document.createElement('div');
-    badge.className = 'home-origin';
-    badge.innerHTML = html;
-    return badge;
-  }
-
   _appendMedia(node, entries) {
-    const wrap = document.createElement('div');
-    wrap.className = 'home-media';
-    for (const raw of entries) {
-      const entry = typeof raw === 'string' ? { url: raw } : raw;
-      if (!entry.url) continue;
-      const kind = mediaKind(entry);
-      if (kind === 'image') {
-        const img = document.createElement('img');
-        img.src = entry.url;
-        img.loading = 'lazy';
-        img.alt = entry.name || '';
-        /* Ingrandimento: la stessa lightbox dell'officina, col suo pinch-zoom.
-           Lo zoom del viewport e' disabilitato in tutta l'app, quindi senza
-           questa un'immagine si guarda solo alla misura della miniatura. */
-        img.addEventListener('click', () => openImageLightbox(entry.url, {
-          alt: entry.name || '',
-          closeLabel: i18n.t('home.closeImage'),
-        }));
-        wrap.appendChild(img);
-      } else if (kind === 'video') {
-        const video = document.createElement('video');
-        video.src = entry.url;
-        video.controls = true;
-        video.preload = 'metadata';
-        wrap.appendChild(video);
-      } else {
-        const chip = document.createElement('a');
-        chip.className = 'home-file';
-        chip.href = entry.url;
-        chip.textContent = entry.name || entry.url;
-        this._files.set(chip, entry);
-        wrap.appendChild(chip);
-      }
-    }
-    if (wrap.childElementCount) node.appendChild(wrap);
+    /* Ingrandimento: la stessa lightbox dell'officina, col suo pinch-zoom.
+       Lo zoom del viewport e' disabilitato in tutta l'app, quindi senza
+       questa un'immagine si guarda solo alla misura della miniatura. */
+    const list = renderMediaList(entries, {
+      cls: 'home-media',
+      fileCls: 'home-file',
+      onImage: (entry) => openImageLightbox(entry.url, {
+        alt: entry.name || '',
+        closeLabel: i18n.t('common.close'),
+      }),
+    });
+    if (list) node.appendChild(list);
   }
 
   /** La bolla dell'assistente del turno, creata al primo frame che la riempie. */

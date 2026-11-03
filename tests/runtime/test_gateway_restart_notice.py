@@ -130,9 +130,12 @@ def test_the_notice_goes_away_when_the_service_is_in_foreground() -> None:
 
 def test_without_post_notifications_it_logs_and_does_not_crash() -> None:
     post = function_body(read_code("RestartNotice"), "post")
-    permission = block_after(post, r"Manifest\.permission\.POST_NOTIFICATIONS")
+    permission = block_after(post, r"if \(!JennyChannels\.canPostNotifications\(appContext\)\)")
     assert "Log.w(" in permission and "return false" in permission
-    assert post.index("POST_NOTIFICATIONS") < post.index(".notify(")
+    assert post.index("canPostNotifications") < post.index(".notify(")
+    check = read_code("JennyChannels")
+    check = check[check.index("fun canPostNotifications(") : check.index("fun openJenny(")]
+    assert "Manifest.permission.POST_NOTIFICATIONS" in check and "TIRAMISU" in check
     guarded = block_after(post, r"\btry\b")
     assert ".notify(" in guarded, "un rifiuto del sistema non deve risalire a chi ripara"
     assert re.search(r"catch \(e: Exception\)", post)
@@ -142,7 +145,8 @@ def test_the_channel_is_its_own_quiet_but_visible_one() -> None:
     code = read_code("RestartNotice")
     channel = function_body(code, "ensureChannel")
     assert "NotificationManager.IMPORTANCE_LOW" in channel
-    assert "createNotificationChannel(" in channel
+    assert "JennyChannels.ensure(" in channel and "silent = true" in channel
+    assert "createNotificationChannel(" in function_body(read_code("JennyChannels"), "ensure")
     src = read_source("RestartNotice")
     assert re.search(r'CHANNEL_ID\s*=\s*"jenny_restart"', src)
     for key in ("restart_channel_name", "restart_channel_description"):

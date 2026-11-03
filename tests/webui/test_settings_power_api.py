@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from support.gateway_http import make_request
-from support.js_harness import ASSETS
+from support.js_harness import ASSETS, locale
 from websockets.http11 import Request as WsRequest
 
 from jenny.channels.http_utils import check_api_secret, http_error, http_json_response, parse_query
@@ -159,14 +159,14 @@ async def test_the_write_goes_through_store_mutate(config_path, monkeypatch) -> 
 _UI_ASSETS = ASSETS
 
 
-@pytest.mark.parametrize("locale", ["it", "en"])
-def test_every_mode_has_its_own_line_of_copy(locale: str) -> None:
+@pytest.mark.parametrize("lang", ["it", "en"])
+def test_every_mode_has_its_own_line_of_copy(lang: str) -> None:
     """Un'etichetta col solo nome ("Sempre") non dice che cosa si sta pagando.
 
     Ogni modo ha la sua riga, e accanto al controllo c'è l'avvertenza sul
     riavvio: senza, chi cambia impostazione crede di aver acceso qualcosa ora.
     """
-    strings = json.loads((_UI_ASSETS / "i18n" / f"{locale}.json").read_text("utf-8"))
+    strings = locale(lang)
     battery = strings["settings"]["battery"]
 
     for mode in KEEP_AWAKE_MODES:

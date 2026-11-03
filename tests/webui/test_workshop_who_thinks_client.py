@@ -27,6 +27,8 @@ from support.js_harness import ASSETS, member, run_module
 
 SRC = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
 CATALOG_JS = (ASSETS / "shared" / "model-catalog.js").read_text(encoding="utf-8")
+# Dentro il banco: senza ``import`` (``api``, ``i18n``, ``showToast`` sono i finti).
+_CATALOG = re.sub(r"^import .*?;\n", "", CATALOG_JS, flags=re.M).replace("export ", "")
 
 _REAL = (
     "_formatLabel",
@@ -89,7 +91,7 @@ const catalogs = {{
 const api = {{
   asks: [],
   writes: [],
-  getProviderModels: async (name) => {{
+  providerModels: async (name) => {{
     api.asks.push(name);
     const c = catalogs[name];
     return typeof c === 'function' ? c() : c;
@@ -109,13 +111,13 @@ const api = {{
   }},
 }};
 
-{CATALOG_JS.replace("export ", "")}
+{_CATALOG}
 
 class Settings {{
   constructor() {{
     this._gen = 0;
     this.contentEl = document.getElementById('content');
-    this._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
+    this._modelCatalogs = new ModelCatalogs((name) => api.providerModels(name));
     this._resetBrandVisit();
     this.data = {{
       default_provider: 'og',
@@ -327,7 +329,7 @@ def test_a_failed_list_says_why_and_is_asked_again() -> None:
     out = _run(
         """
 catalogs.sec = { status: 'error', models: [], message: 'TLS: unknown CA' };
-s._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
+s._modelCatalogs = new ModelCatalogs((name) => api.providerModels(name));
 s._resetBrandVisit();
 api.asks.length = 0;
 s._paint();
@@ -361,7 +363,7 @@ def test_a_late_list_paints_the_group_that_is_there_now() -> None:
         """
 let release;
 catalogs.sec = () => new Promise((r) => { release = () => r({ status: 'available', models: [{ id: 'late' }] }); });
-s._modelCatalogs = new ModelCatalogs((name) => api.getProviderModels(name));
+s._modelCatalogs = new ModelCatalogs((name) => api.providerModels(name));
 s._resetBrandVisit();
 s._paint();
 s._paint();

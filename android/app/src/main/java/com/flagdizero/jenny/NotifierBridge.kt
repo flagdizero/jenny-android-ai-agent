@@ -1,7 +1,6 @@
 package com.flagdizero.jenny
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -96,15 +95,10 @@ class NotifierBridge(context: Context) {
          *  proprio quando nessuno ha ancora costruito un `NotifierBridge` — e
          *  una notifica su un canale inesistente non compare e non dice perché. */
         internal fun ensureAlertChannel(context: Context) {
-            val manager = context.getSystemService(NotificationManager::class.java) ?: return
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                context.getString(R.string.alerts_channel_name),
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = context.getString(R.string.alerts_channel_description)
-            }
-            manager.createNotificationChannel(channel)
+            JennyChannels.ensure(
+                context, CHANNEL_ID, R.string.alerts_channel_name,
+                R.string.alerts_channel_description, NotificationManager.IMPORTANCE_HIGH,
+            )
         }
 
         /**

@@ -21,12 +21,10 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import UI, requires_node, run_js
 from support.kotlin_source import ANDROID_SRC, read_source
 
-UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 UI_ASSETS = UI / "assets"
 MASCOT_JS = UI_ASSETS / "shared" / "mascot.js"
 DRAG_JS = UI_ASSETS / "shared" / "mascot-drag.js"

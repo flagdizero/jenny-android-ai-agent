@@ -48,3 +48,50 @@ export async function openMediaFile(entry) {
   }
   if (entry.url) window.open(entry.url, '_blank');
 }
+
+/** Gli allegati di un messaggio in un `<div class=cls>`: le foto, i video, e
+ *  una pastiglia per ogni file; `null` se nessuno si mostra.
+ *
+ *  Casa e officina ne avevano una copia ciascuna, e la pastiglia non era la
+ *  stessa: in casa un `<a href>` verso l'URL firmato (che la regola dei link
+ *  del filo dava per inerte), in officina un `<button>` con 📄 e la parola
+ *  `'file'` scritta a mano, non tradotta. Resta il bottone: aprire un file e'
+ *  un'azione, non una navigazione, e `openMediaFile` sa gia' il ripiego fuori
+ *  dalla WebView. Dice il nome, o «file» nella lingua di chi legge.
+ *
+ *  *fileCls* e' la classe della pastiglia; *onImage(entry)* il tocco su una
+ *  foto (in officina la lightbox la apre il click delegato del filo). */
+export function renderMediaList(entries, { cls, fileCls, onImage } = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = cls;
+  for (const raw of entries || []) {
+    const entry = typeof raw === 'string' ? { url: raw } : raw;
+    if (!entry?.url) continue;
+    const name = entry.name || '';
+    const kind = mediaKind(entry);
+    let node;
+    if (kind === 'file') {
+      node = document.createElement('button');
+      node.type = 'button';
+      node.className = fileCls;
+      node.innerHTML = '<i class="ti ti-file" aria-hidden="true"></i><span class="media-file-name"></span>';
+      node.lastChild.textContent = name || i18n.t('chat.file');
+      node.addEventListener('click', () => openMediaFile(entry));
+    } else if (kind === 'image') {
+      node = document.createElement('img');
+      node.loading = 'lazy';
+      node.alt = name;
+      if (onImage) node.addEventListener('click', () => onImage(entry));
+    } else {
+      node = document.createElement('video');
+      node.controls = true;
+      node.preload = 'metadata';
+    }
+    if (kind !== 'file') {
+      node.src = entry.url;
+      node.title = name;
+    }
+    wrap.appendChild(node);
+  }
+  return wrap.childElementCount ? wrap : null;
+}

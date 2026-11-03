@@ -18,6 +18,10 @@
  *  e passa dalla rete: per questo si tiene.
  */
 
+import { api } from './api-client.js';
+import { i18n } from './i18n.js';
+import { showToast } from './utils.js';
+
 const LOADING = Object.freeze({ status: 'loading', models: [], message: '' });
 
 /** Le frasi uguali nei due gusci; `missing_api_base` ed `error` dicono dove si
@@ -84,5 +88,37 @@ export class ModelCatalogs {
     }
     this._lists.set(key, outcome);
     return true;
+  }
+}
+
+/* La scelta in volo, una per pagina: v. `switchModel`. */
+let switching = false;
+
+/** Cambia chi risponde: modello **e** marca, in una chiamata sola, per tutti e
+ *  due i gusci (la casa da «Chi risponde», l'officina da «Chi pensa»).
+ *
+ *  - **Una scelta alla volta.** Mentre un salvataggio e' in volo un secondo
+ *    tocco non scrive: due scritture di fila potevano lasciare il segno su un
+ *    modello e far rispondere l'altro.
+ *  - **Il toast dice quando vale.** `requires_restart` vuol dire «dal prossimo
+ *    avvio»: la casa diceva «adesso risponde questo» lo stesso.
+ *
+ *  Il payload del server (le impostazioni intere), `{}` se la rotta non ne ha
+ *  dato uno, o `null` se non e' cambiato niente: scelta in volo o fallita, e
+ *  il fallimento l'ha gia' detto il toast. */
+export async function switchModel(provider, model) {
+  if (!provider || !model || switching) return null;
+  switching = true;
+  try {
+    const payload = await api.updateSettings({ model, default_provider: provider });
+    showToast(i18n.t(payload?.requires_restart
+      ? 'settings.brandModelSavedRestart' : 'settings.brandModelSaved'), 'success');
+    return payload || {};
+  } catch (err) {
+    console.warn('model not changed', err);
+    showToast(i18n.t('settings.brandModelFailed'), 'error');
+    return null;
+  } finally {
+    switching = false;
   }
 }

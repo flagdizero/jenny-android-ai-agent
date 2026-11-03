@@ -18,13 +18,12 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, locale, member, requires_node, run_js
 
 ROOM_JS = ASSETS / "home-updates.js"
 FLOW_JS = ASSETS / "shared" / "update-flow.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -114,7 +113,7 @@ function rows() {
 def _harness() -> str:
     room = ROOM_JS.read_text(encoding="utf-8")
     flow = FLOW_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
         _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))

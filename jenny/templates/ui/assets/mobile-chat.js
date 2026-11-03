@@ -4,7 +4,7 @@ import { wsManager } from './shared/ws-manager.js';
 import { HistoryPager } from './shared/history-pager.js';
 import { describeWireError } from './shared/wire-error.js';
 import { api } from './shared/api-client.js';
-import { copyToClipboard, escapeHtml, showToast } from './shared/utils.js';
+import { copyToClipboard, escapeHtml, showToast, sizeText } from './shared/utils.js';
 import { sessionManager } from './shared/session-manager.js';
 import { scopeChip } from './shared/scope-chip.js';
 import { botName } from './shared/bot-name.js';
@@ -39,7 +39,7 @@ import { openPlaceFromClick } from './shared/places.js';
 import { workspacePathIn } from './shared/conversation-list.js';
 import { MARKED_OPTIONS, renderMarkdown as renderSafeMarkdown } from './shared/markdown.js';
 import { i18n } from './shared/i18n.js';
-import { chatTime, chatTimeIso } from './shared/chat-time.js';
+import { chatTimeNode } from './shared/chat-time.js';
 import { brandLabel, getProviderBrand } from './shared/provider-brand.js';
 import { confirmDialog, detailDialog } from './shared/dialog.js';
 import { commandsChip } from './shared/commands-chip.js';
@@ -55,9 +55,9 @@ import {
   saIsTerminal,
   saVisibleCards,
 } from './shared/subagent-policy.js';
-import { mediaKind, openMediaFile } from './shared/media.js';
-import { originBadgeHtml } from './shared/origin.js';
-import { copyReplyText, latencyText, renderReplyExtras } from './shared/reply.js';
+import { renderMediaList } from './shared/media.js';
+import { originBadge } from './shared/origin.js';
+import { copyWithToast, latencyText, renderReplyExtras } from './shared/reply.js';
 import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
 
 const TOOL_ICONS = {
@@ -87,6 +87,24 @@ const SA_EVENT_ICONS = {
   error: 'ti-alert-triangle',
 };
 
+/** *text* colorato da highlight.js nella sua lingua (o indovinata), come HTML;
+ *  escapato e basta se la libreria non c'e' o solleva. `language` e' la
+ *  lingua usata, `null` se indovinata. Il blocco di codice del markdown e
+ *  l'anteprima di un file ne avevano una copia ciascuno. */
+function highlight(text, lang) {
+  const hasHljs = typeof hljs !== 'undefined';
+  const language = lang && hasHljs && hljs.getLanguage(lang) ? lang : null;
+  if (!hasHljs) return { html: escapeHtml(text), language };
+  try {
+    const html = language
+      ? hljs.highlight(text, { language }).value
+      : hljs.highlightAuto(text).value;
+    return { html, language };
+  } catch {
+    return { html: escapeHtml(text), language };
+  }
+}
+
 function initMarked() {
   if (window._markedReady) return;
   if (typeof marked === 'undefined') return;
@@ -94,20 +112,7 @@ function initMarked() {
   const renderer = new marked.Renderer();
 
   renderer.code = function ({ text, lang }) {
-    const hasHljs = typeof hljs !== 'undefined';
-    const language = lang && hasHljs && hljs.getLanguage(lang) ? lang : null;
-    let highlighted;
-    try {
-      if (hasHljs) {
-        highlighted = language
-          ? hljs.highlight(text, { language }).value
-          : hljs.highlightAuto(text).value;
-      } else {
-        highlighted = escapeHtml(text);
-      }
-    } catch {
-      highlighted = escapeHtml(text);
-    }
+    const { html: highlighted, language } = highlight(text, lang);
     const langLabel = language || 'text';
     /* Il «Copia» qui e' solo un segnaposto: `<button>` e' fra i tag che il
        sanificatore toglie (`SANITIZE_CONFIG`), e il bottone vero lo rimette
@@ -229,7 +234,7 @@ export class ChatController {
       listenOn: window,
       container: () => this.chatArea,
       pageSize: HISTORY_PAGE_SIZE,
-      begin: () => this._beginHistoryPage(),
+      begin: () => sessionManager.historyPage(),
       prepend: (messages) => this._renderThreadMessagesToTop(messages),
       mount: (node) => this._insertAtTop(node),
       label: () => i18n.t('chat.loadPrevious'),
@@ -545,47 +550,15 @@ export class ChatController {
 
   /** Overlay fullscreen per un'immagine: tap-per-zoom, tap sullo sfondo / Esc per chiudere. */
   _openLightbox(src, alt) {
-    openImageLightbox(src, { alt, closeLabel: i18n.t('chat.close') });
+    openImageLightbox(src, { alt, closeLabel: i18n.t('common.close') });
   }
 
   /** Renderer condiviso degli allegati media (live + history), per tipo:
       image → <img> (lightbox via delegazione), video → <video>, altro → chip
       file che si apre col viewer di sistema via bridge nativo. */
   _renderMediaAttachments(msgNode, entries) {
-    if (!entries?.length) return;
-    const media = document.createElement('div');
-    media.className = 'chat-media';
-    for (const raw of entries) {
-      const entry = typeof raw === 'string' ? { url: raw } : raw;
-      if (!entry.url) continue;
-      const name = entry.name || '';
-      const kind = mediaKind(entry);
-      if (kind === 'image') {
-        const img = document.createElement('img');
-        img.src = entry.url;
-        img.loading = 'lazy';
-        img.alt = name;
-        img.title = name;
-        media.appendChild(img);
-      } else if (kind === 'video') {
-        const video = document.createElement('video');
-        video.src = entry.url;
-        video.controls = true;
-        video.preload = 'metadata';
-        video.title = name;
-        media.appendChild(video);
-      } else {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'chat-file-chip';
-        chip.innerHTML = '<span class="chat-file-chip-icon">📄</span>' +
-          '<span class="chat-file-chip-name"></span>';
-        chip.querySelector('.chat-file-chip-name').textContent = name || 'file';
-        chip.addEventListener('click', () => openMediaFile(entry));
-        media.appendChild(chip);
-      }
-    }
-    if (media.childElementCount) msgNode.appendChild(media);
+    const list = renderMediaList(entries, { cls: 'chat-media', fileCls: 'chat-file-chip' });
+    if (list) msgNode.appendChild(list);
   }
 
   _autoResize() {
@@ -886,19 +859,6 @@ export class ChatController {
      incollata in cima al thread di un'altra chat — è la stessa regola del
      caricamento iniziale, e questo è il pezzo che il modulo condiviso non può
      sapere da sé. */
-  _beginHistoryPage() {
-    if (!sessionManager.currentKey) return null;
-    const generation = sessionManager.switchGeneration;
-    const key = sessionManager.currentKey;
-    return {
-      fetch: async (limit, cursor) => {
-        const { thread } = await sessionManager.loadThread(key, limit, cursor);
-        return thread;
-      },
-      stale: () => generation !== sessionManager.switchGeneration,
-    };
-  }
-
   _ensureHistoryReach() {
     this._pager.ensureReach();
   }
@@ -1089,14 +1049,10 @@ export class ChatController {
    *  (`.chat-time + .chat-meta`). Senza un'ora — una cronologia di prima che
    *  la sessione non sa datare — non si inventa niente. */
   _appendTime(msg, at) {
-    const text = chatTime(at);
-    if (!msg || !text) return;
+    const el = chatTimeNode(at, 'chat-time');
+    if (!msg || !el) return;
     const row = this._ensureMsgActions(msg);
     if (row.querySelector(':scope > .chat-time')) return;
-    const el = document.createElement('time');
-    el.className = 'chat-time';
-    el.dateTime = chatTimeIso(at);
-    el.textContent = text;
     row.insertBefore(el, row.querySelector(':scope > .chat-meta'));
   }
 
@@ -1172,7 +1128,7 @@ export class ChatController {
      azioni, che non c'e' piu': ne resta una, ed e' questa. */
   async _copyMessage(msg) {
     const text = this._messageText(msg);
-    await copyReplyText(text);
+    await copyWithToast(text);
   }
 
   _appendFileEdits(msg, edits) {
@@ -1214,12 +1170,8 @@ export class ChatController {
      (es. Telegram): piccola etichetta sopra il contenuto della bolla, con le
      parole della casa (`shared/origin.js`). */
   _appendOriginBadge(msg, origin, device = null) {
-    const html = originBadgeHtml(origin, device);
-    if (!html) return;
-    const badge = document.createElement('div');
-    badge.className = 'chat-origin-badge';
-    badge.innerHTML = html;
-    msg.insertBefore(badge, msg.firstChild);
+    const badge = originBadge(origin, device, 'chat-origin-badge');
+    if (badge) msg.insertBefore(badge, msg.firstChild);
   }
 
   _buildCompletedMessage(text, role, origin, media, at = null) {
@@ -2445,9 +2397,7 @@ export class ChatController {
   _saEnum(group, value) {
     const raw = String(value || '');
     if (!raw) return '';
-    const key = `subagents.${group}.${raw}`;
-    const translated = i18n.t(key);
-    return translated === key ? raw : translated;
+    return i18n.tOr(`subagents.${group}.${raw}`, raw);
   }
 
   _saDuration(seconds) {
@@ -3675,21 +3625,9 @@ export class ChatController {
       const content = data.content || '';
       const language = data.language || 'text';
       const size = data.size || 0;
-      const sizeLabel = size > 1024 ? (size / 1024).toFixed(1) + ' KB' : size + ' B';
+      const sizeLabel = sizeText(size, i18n.locale);
 
-      let highlighted;
-      if (typeof hljs !== 'undefined') {
-        try {
-          const lang = hljs.getLanguage(language) ? language : null;
-          highlighted = lang
-            ? hljs.highlight(content, { language: lang }).value
-            : hljs.highlightAuto(content).value;
-        } catch {
-          highlighted = escapeHtml(content);
-        }
-      } else {
-        highlighted = escapeHtml(content);
-      }
+      const highlighted = highlight(content, language).html;
 
       const lines = highlighted.split('\n');
       const numberedLines = lines.map((line, i) =>
@@ -3699,8 +3637,8 @@ export class ChatController {
       previewEl.innerHTML = `
         <div class="file-preview-header">
           <span class="file-preview-path">${escapeHtml(filePath)}</span>
-          <span class="file-preview-meta">${language} · ${sizeLabel}</span>
-          <button class="file-preview-close" title="${i18n.t('common.close')}"><i class="ti ti-x"></i></button>
+          <span class="file-preview-meta">${escapeHtml(language)} · ${sizeLabel}</span>
+          <button class="file-preview-close" title="${i18n.t('common.close')}" aria-label="${i18n.t('common.close')}"><i class="ti ti-x" aria-hidden="true"></i></button>
         </div>
         <div class="file-preview-content"><div class="file-preview-code">${numberedLines}</div></div>
         <div class="file-preview-actions">

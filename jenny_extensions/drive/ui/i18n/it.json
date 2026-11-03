@@ -44,9 +44,6 @@
       "caption": "Le ultime 7 notti: un pallino pieno è una copia riuscita.",
       "aria": "Ultime 7 notti: {copies} con la copia, {missed} senza."
     },
-    "when": {
-      "weekday": "{day} alle {time}"
-    },
     "safe": {
       "title": "Sei al sicuro",
       "sub": "Ultima copia su Google Drive: {when}"
@@ -61,7 +58,6 @@
     "blocked": {
       "title": "La copia è ferma",
       "sub": "Ultima copia: {when}",
-      "subNever": "Non è ancora riuscita nessuna copia",
       "calm": "Appena risolto faccio subito una copia. Intanto è tutto ancora qui sul telefono."
     },
     "first": {
@@ -129,7 +125,6 @@
       "setPassword": "Scegli la password"
     },
     "more": {
-      "off": "Spegni la copia su Drive",
       "offSub": "Quella che c'è resta nel tuo Drive.",
       "password": "Password della copia",
       "passwordSub": "Cambiala quando vuoi: la vecchia non serve, e le copie già fatte si apriranno con la nuova."
@@ -146,8 +141,7 @@
       "nopass": "senza password"
     },
     "damaged": {
-      "title": "L'ultima copia non si apre bene",
-      "sub": "Ultima copia su Google Drive: {when}"
+      "title": "L'ultima copia non si apre bene"
     },
     "nopass": {
       "title": "La copia non ha una password",

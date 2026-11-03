@@ -17,9 +17,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from support.js_harness import ASSETS, requires_node, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
+from support.js_harness import ASSETS, ROOT, requires_node, run_module
 
 pytestmark = requires_node
 

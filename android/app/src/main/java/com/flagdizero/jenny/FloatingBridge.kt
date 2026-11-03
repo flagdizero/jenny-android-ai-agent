@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import android.util.Log
 
 /**
  * Bridge per la mascotte flottante, esposto a Python via Chaquopy
@@ -92,15 +91,12 @@ class FloatingBridge(context: Context) {
             ),
             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
         )
-        for (intent in tries) {
-            try {
-                appContext.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                return true
-            } catch (e: Exception) {
-                Log.w(TAG, "Cannot open overlay permission settings (${intent.data})", e)
-            }
+        return tries.any { intent ->
+            Intents.tryStart(
+                appContext, intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), TAG,
+                "overlay permission settings (${intent.data})",
+            )
         }
-        return false
     }
 
     /** Disegna la risposta nel fumetto. `false` se non c'è nessuna finestra. */

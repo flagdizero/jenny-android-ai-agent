@@ -14,10 +14,8 @@ veri di ``index.html``.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI
 
 
 def _table(src: str, name: str) -> dict[str, str]:

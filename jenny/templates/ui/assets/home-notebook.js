@@ -58,7 +58,7 @@ export class NotebookCard {
     if (this.shell.rename) {
       rows.push({ icon: 'ti-cursor-text', label: i18n.t('home.notebook.rename'), action: 'rename' });
     }
-    rows.push({ icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true });
+    rows.push({ icon: 'ti-trash', label: i18n.t('common.delete'), action: 'delete', danger: true });
     return rows;
   }
 

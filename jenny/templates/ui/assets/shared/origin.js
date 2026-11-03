@@ -34,3 +34,14 @@ export function originBadgeHtml(origin, device = null) {
     : (device && known.named) ? i18n.t(known.named, { device }) : i18n.t(known.key);
   return `<i class="ti ${icon}" aria-hidden="true"></i>${escapeHtml(label)}`;
 }
+
+/** L'etichetta di provenienza come nodo (`<div class=cls>`), o `null` per un
+ *  messaggio scritto qui. */
+export function originBadge(origin, device = null, cls = '') {
+  const html = originBadgeHtml(origin, device);
+  if (!html) return null;
+  const badge = document.createElement('div');
+  badge.className = cls;
+  badge.innerHTML = html;
+  return badge;
+}

@@ -58,9 +58,10 @@ globalThis.getComputedStyle = () => ({
 def _run_js(script: str) -> str:
     source = (
         _SHELL
-        + THEME_JS.read_text(encoding="utf-8").replace(
-            "import { AppState } from './state.js';", ""
-        )
+        + THEME_JS.read_text(encoding="utf-8")
+        .replace("import { AppState } from './state.js';", "")
+        .replace("import { writeStorage } from './utils.js';",
+                 "const writeStorage = (k, v) => { try { localStorage.setItem(k, v); } catch {} };")
         + "\nimport assert from 'node:assert/strict';\n"
         + script
     )

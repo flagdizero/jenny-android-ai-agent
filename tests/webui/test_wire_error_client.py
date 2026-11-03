@@ -13,20 +13,17 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import ASSETS, requires_node, run_js
+from support.js_harness import ASSETS, ROOT, locale, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
 WIRE_ERROR_JS = ASSETS / "shared" / "wire-error.js"
-I18N = ASSETS / "i18n"
 
 
 pytestmark = requires_node
 
 
 def _locale(name: str) -> dict:
-    return json.loads((I18N / f"{name}.json").read_text(encoding="utf-8"))
+    return locale(name)
 
 
 def _harness() -> str:

@@ -22,11 +22,10 @@ lega il commento al codice che descrive, così una prossima deriva si vede.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.kotlin_source import function_body, read_code, read_comments
+from support.kotlin_source import ANDROID_MAIN, function_body, read_code, read_comments
 
-ANDROID = Path(__file__).resolve().parents[2] / "android/app/src/main"
+ANDROID = ANDROID_MAIN
 
 
 def test_the_floating_controller_describes_three_windows() -> None:

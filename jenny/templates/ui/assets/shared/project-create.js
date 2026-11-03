@@ -7,7 +7,7 @@
  *
  *  **Le parole invece sono di chi chiama.** Questo modulo non sa come si chiama
  *  quel che sta creando: riceve `words` (le chiavi i18n da usare) e `t` (il
- *  traduttore), come `ago()` in `conversation-list.js`. È anche la ragione per
+ *  traduttore), come il costruttore di `ConversationList`. È anche la ragione per
  *  cui non importa `i18n`.
  *
  *  Le cinque regole, in ordine di quando mordono:

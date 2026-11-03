@@ -10,12 +10,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import member
+from support.js_harness import UI, member
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
 WHO_JS = UI / "assets" / "home-who.js"
 APP_JS = UI / "assets" / "home-app.js"
@@ -152,8 +149,9 @@ def test_the_panel_speaks_both_languages() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         section = data["home"]["who"]
+        assert data["launcher"]["clearSearch"].strip(), "launcher.clearSearch, anche del pannello"
         for key in ("none", "loadFailed", "search",
-                    "clearSearch", "inUse", "archive", "archiveHint", "inArchive", "sortRecent",
+                    "inUse", "archive", "archiveHint", "inArchive", "sortRecent",
                     "sortAz", "sortLabel", "results", "noResult", "create", "emptyHint",
                     "pages", "pagesShort", "plateKeys", "newNotebook", "page"):
             assert section.get(key, "").strip(), f"home.who.{key} manca in {locale}.json"

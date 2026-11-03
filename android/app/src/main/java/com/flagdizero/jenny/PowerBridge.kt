@@ -343,13 +343,7 @@ class PowerBridge(context: Context) {
             val alarm = appContext.getSystemService(AlarmManager::class.java) ?: return false
             val pending = wakePendingIntent(appContext, requestCode, create = true) ?: return false
             return try {
-                val show = PendingIntent.getActivity(
-                    appContext,
-                    requestCode,
-                    Intent(appContext, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
+                val show = JennyChannels.openJenny(appContext, requestCode)
                 alarm.setAlarmClock(AlarmManager.AlarmClockInfo(atMillisSinceEpoch, show), pending)
                 true
             } catch (e: SecurityException) {

@@ -482,7 +482,7 @@ export class WorkBubbles {
     error.hidden = true;
     const sheet = openActionSheet(this.sheet, {
       children: [...sheetHead(title, note), ...rows, error],
-      closeLabel: i18n.t('home.work.sheetClose'),
+      closeLabel: i18n.t('common.close'),
       onClose: () => this._closeSheet(),
     });
     if (!sheet) return null;

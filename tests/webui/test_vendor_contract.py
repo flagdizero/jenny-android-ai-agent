@@ -25,11 +25,9 @@ del codice.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import ASSETS
+from support.js_harness import ASSETS, ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
 VENDOR = ASSETS / "vendor"
 NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 

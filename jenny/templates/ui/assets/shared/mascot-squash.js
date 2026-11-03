@@ -17,16 +17,16 @@
 
 /** Appesa per la mano: si allunga quanto piu' la strattoni. */
 export const HELD_MAX = 0.05;
-export const HELD_SPEED = 4000; // px/s per un allungamento del 100%: il tetto arriva prima
+const HELD_SPEED = 4000; // px/s per un allungamento del 100%: il tetto arriva prima
 /** In aria: si allunga in verticale quanto va veloce su o giu'. */
 export const AIR_MAX = 0.06;
-export const AIR_SPEED = 2500;
+const AIR_SPEED = 2500;
 /** Il tonfo: schiacciata quanto e' caduta forte, poi una molla smorzata. */
 export const IMPACT_MIN = 0.05;
 export const IMPACT_MAX = 0.18;
-export const IMPACT_SPEED = 1800;
-export const IMPACT_PERIOD_MS = 300;
-export const IMPACT_DECAY_MS = 120;
+const IMPACT_SPEED = 1800;
+const IMPACT_PERIOD_MS = 300;
+const IMPACT_DECAY_MS = 120;
 export const IMPACT_MS = 600; // oltre, e' ferma
 /** La ripartenza: carica le gambe **da ferma**, negli ultimi LOAD_MS a terra,
  *  e si distende nel primo passo in BLEND_MS, mentre il passo entra. Niente

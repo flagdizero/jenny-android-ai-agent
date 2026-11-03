@@ -51,7 +51,7 @@ import assert from 'node:assert/strict';
 
 /* Cursore e chiavistello della paginazione stanno nel modulo condiviso: qui si
    importa quello vero, cosi' la guardia contro il cambio di conversazione si
-   misura sull'intera catena (pager -> `_beginHistoryPage`
+   misura sull'intera catena (pager -> `sessionManager.historyPage`
    -> `loadThread`) invece che su un ritaglio di testo. */
 globalThis.document = {
   createElement() {
@@ -89,6 +89,7 @@ class SessionManager extends EventTarget {
   __SWITCH_TO__
   __GENERATION__
   __LOAD_THREAD__
+  __HISTORY_PAGE__
 }
 
 const sessionManager = new SessionManager();
@@ -120,7 +121,6 @@ function makeChat() {
     },
     __INVALIDATE__,
     __LOAD_INITIAL__,
-    __BEGIN_PAGE__,
     __SWITCH_CONVERSATION__,
   };
   // Il DOM ridotto all'osso: svuotarlo si vede, ed è ciò che `invalidateHistory`
@@ -137,7 +137,7 @@ function makeChat() {
     listenOn: { addEventListener() {} },
     container: () => chat.chatArea,
     pageSize: 120,
-    begin: () => chat._beginHistoryPage(),
+    begin: () => sessionManager.historyPage(),
     prepend: (msgs) => chat._renderThreadMessagesToTop(msgs),
     mount() {},
     label: () => 'i18n:chat.loadPrevious',
@@ -187,7 +187,7 @@ def _harness() -> str:
         .replace("__LOAD_THREAD__", member(session, "loadThread"))
         .replace("__INVALIDATE__", member(chat, "invalidateHistory"))
         .replace("__LOAD_INITIAL__", member(chat, "loadInitialHistory"))
-        .replace("__BEGIN_PAGE__", member(chat, "_beginHistoryPage"))
+        .replace("__HISTORY_PAGE__", member(session, "historyPage"))
         .replace("__PAGER_URL__", PAGER_JS.as_uri())
         .replace("__SWITCH_CONVERSATION__", member(chat, "_switchConversation"))
     )

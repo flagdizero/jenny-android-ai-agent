@@ -21,14 +21,13 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, i18n_helpers, locale, member, requires_node, run_js
 
 APP_JS = ASSETS / "home-app.js"
 SPINES_JS = ASSETS / "shared" / "spines.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 DIALOG_JS = ASSETS / "shared" / "dialog.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -52,8 +51,10 @@ const botName = { get: () => 'Jenny', set() {}, onChange() { return () => {}; } 
 const i18n = {
   locale: 'it',
   translations: TRANSLATIONS,
-  __T__
+  __T__,
+  __T_OR__
 };
+const tr = (key, params) => i18n.t(key, params);
 
 function makeEl(tag) {
   return {
@@ -487,11 +488,12 @@ def _spines() -> str:
 def _harness() -> str:
     src = APP_JS.read_text(encoding="utf-8")
     dialog_js = DIALOG_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
         _HARNESS.replace("__LIST_URL__", LIST_JS.as_uri())
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
+        .replace("__T_OR__", i18n_helpers())
         .replace("__DOT_COLOR__", _spines())
         .replace("__SWITCH__", member(src, "switchConversation"))
         # Il corpo del cambio vive in `showConversation` dal 23/09/2026:

@@ -17,14 +17,12 @@ c'è un emulatore in CI, e queste sono proprietà del codice, non del runtime.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
 from support.js_harness import ASSETS
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_MAIN, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
-ANDROID = ROOT / "android" / "app" / "src" / "main"
+ANDROID = ANDROID_MAIN
 JAVA = ANDROID / "java" / "com" / "flagdizero" / "jenny"
 MANIFEST = ANDROID / "AndroidManifest.xml"
 MAIN_ACTIVITY = JAVA / "MainActivity.kt"

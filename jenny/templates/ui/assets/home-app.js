@@ -69,7 +69,7 @@ import { confirmDialog, dismissTopDialog, isQuestionDialog, promptDialog } from 
 import { DEFAULT_BOT_NAME, botName } from './shared/bot-name.js';
 import { rpc } from './shared/rpc-client.js';
 import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
-import { i18n } from './shared/i18n.js';
+import { i18n, tr } from './shared/i18n.js';
 import { HomeAppsTrash } from './home-apps-trash.js';
 import { HomeStaged } from './home-staged.js';
 import { HomePlan } from './home-plan.js';
@@ -834,7 +834,7 @@ class HomeApp {
    */
   async createNotebook(initial = '') {
     const name = await createProjectFlow({
-      t: (key, vars) => i18n.t(key, vars),
+      t: tr,
       known: this.who.known,
       initial: typeof initial === 'string' ? initial : '',
     });

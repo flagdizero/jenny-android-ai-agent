@@ -68,6 +68,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
         private const val PROFILE_NAME = "jenny-browser-session"
         private const val SETTLE_QUIET_MS = 400L
+        private const val NOT_STARTED = "the browser did not open: the page never started loading"
 
         /**
          * Il cancello di [open] e di [evaluate]: chi tocca la pagina (il main
@@ -285,6 +286,91 @@ class JennyBrowserBridge(context: Context, slot: Int) {
             }
             return null
         }
+
+        // I DNS chiesti dalla guardia lato pagina, fuori dal thread JavaBridge (v.
+        // GUARD_DNS_TIMEOUT_MS). Due thread e una coda corta: una pagina che
+        // chiede mille nomi non crea mille thread, e una coda piena vuol dire
+        // «bloccato». Di processo, come la cache: lo usano tutte le WebView.
+        private val guardDns = ThreadPoolExecutor(
+            2, 2, 30L, TimeUnit.SECONDS, ArrayBlockingQueue(32),
+        ) { r -> Thread(r, "jenny-browser-guard-dns").apply { isDaemon = true } }
+            .apply { allowCoreThreadTimeOut(true) }
+
+        // La guardia di rete lato pagina, letta una volta: v.
+        // installNetworkGuardOnMain. R.raw e non getIdentifier, per lo stesso
+        // motivo di `agentJs`. Solo main thread, quindi senza sincronizzazione.
+        private var networkGuardSource: String? = null
+
+        private fun networkGuardJs(context: Context): String =
+            networkGuardSource ?: context.applicationContext.resources
+                .openRawResource(R.raw.browser_network_guard)
+                .bufferedReader().use { it.readText() }
+                .also { networkGuardSource = it }
+
+        /**
+         * La domanda che la guardia lato pagina fa prima di aprire un WebSocket (o
+         * un WebTransport): questo host sta dentro la rete del telefono? È lo
+         * **stesso** verdetto, con la stessa cache, di `shouldInterceptRequest`.
+         *
+         * Visibile a ogni pagina che le due WebView aprono, ed è voluto: dice soltanto
+         * «bloccato o irrisolvibile» di un nome che la pagina ha già in mano, cioè
+         * quel che una `fetch` verso quel nome le direbbe comunque.
+         *
+         * Gira sul thread JavaBridge, e il JS della pagina aspetta la risposta
+         * (il costruttore di `WebSocket` è sincrono): un DNS lento lì congelava la
+         * pagina per tutta la sua durata. Il verdetto in cache risponde subito;
+         * altrimenti il DNS va su [guardDns] e si aspetta al massimo
+         * [GUARD_DNS_TIMEOUT_MS] — poi «bloccato», e la risoluzione arriva in
+         * cache da sola. Coda piena: «bloccato» anche lì.
+         */
+        private class NetworkGuard {
+            @JavascriptInterface
+            fun blocked(host: String): Boolean {
+                val h = host.trim().removePrefix("[").removeSuffix("]")
+                if (h.isEmpty()) return true
+                val verdict = cachedVerdict(h) ?: try {
+                    guardDns.submit(Callable { isBlockedHost(h) })
+                        .get(GUARD_DNS_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                } catch (e: Exception) {
+                    // Timeout, coda piena o interruzione: nel dubbio si blocca.
+                    true
+                }
+                if (verdict) warnThrottled("direct connection refused (WebSocket/WebTransport)")
+                return verdict
+            }
+        }
+
+        /**
+         * Le connessioni che `shouldInterceptRequest` non vede: WebSocket,
+         * WebTransport, WebRTC. Chromium le apre fuori dal percorso delle richieste
+         * HTTP, quindi il filtro sugli indirizzi privati non le fermava — una
+         * pagina visitata dall'agente poteva parlare coi servizi della LAN su
+         * `ws://192.168.x.y`.
+         *
+         * Rimedio parziale e dichiarato come tale: uno script iniettato a inizio
+         * documento (`res/raw/browser_network_guard.js`) avvolge i costruttori nei
+         * frame della pagina. Non copre i Worker né un frame in cui lo script non
+         * arriva — v. il commento in testa allo script, che elenca i limiti.
+         * Senza `DOCUMENT_START_SCRIPT` la guardia non c'è, e lo si scrive nel log
+         * invece di fingere.
+         *
+         * Di processo come il verdetto: la installano la sessione di browser e la
+         * WebView della ricerca e del fetch (`AgenticSearchBridge`), che fino al
+         * 02/11/2026 caricava pagine col JavaScript acceso e nessuna guardia per
+         * le connessioni dirette.
+         */
+        internal fun installNetworkGuardOnMain(wv: WebView, context: Context) {
+            if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                Log.w(TAG, "No DOCUMENT_START_SCRIPT: WebSocket/WebRTC to the LAN stay unguarded")
+                return
+            }
+            try {
+                wv.addJavascriptInterface(NetworkGuard(), "JennyBrowserGuard")
+                WebViewCompat.addDocumentStartJavaScript(wv, networkGuardJs(context), setOf("*"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Browser network guard not installed", e)
+            }
+        }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -302,15 +388,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     private val loading = AtomicBoolean(false)
     private val lastError = AtomicReference<String?>(null)
     private val lastFinishAt = AtomicReference(0L)
-
-    // I DNS chiesti dalla guardia lato pagina, fuori dal thread JavaBridge (v.
-    // GUARD_DNS_TIMEOUT_MS). Due thread e una coda corta: una pagina che
-    // chiede mille nomi non crea mille thread, e una coda piena vuol dire
-    // «bloccato».
-    private val guardDns = ThreadPoolExecutor(
-        2, 2, 30L, TimeUnit.SECONDS, ArrayBlockingQueue(32),
-    ) { r -> Thread(r, "jenny-browser-guard-dns").apply { isDaemon = true } }
-        .apply { allowCoreThreadTimeOut(true) }
 
     // L'ultimo indirizzo rifiutato dalla guardia. Serve a **dirlo**: un blocco
     // muto lascia il modello davanti a un about:blank vuoto, che sembra un sito
@@ -342,13 +419,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     // La costante e risolta a compile time e sopravvive all'offuscamento.
     private val agentJs: String by lazy {
         appContext.resources.openRawResource(R.raw.browser_agent)
-            .bufferedReader().use { it.readText() }
-    }
-
-    // La guardia di rete lato pagina: v. installNetworkGuardOnMain. Stesso
-    // motivo di R.raw qui sopra.
-    private val networkGuardJs: String by lazy {
-        appContext.resources.openRawResource(R.raw.browser_network_guard)
             .bufferedReader().use { it.readText() }
     }
 
@@ -385,68 +455,8 @@ class JennyBrowserBridge(context: Context, slot: Int) {
                 Log.e(TAG, "Browser profile not attached", e)
             }
         }
-        installNetworkGuardOnMain(wv)
+        installNetworkGuardOnMain(wv, appContext)
         webView = wv
-    }
-
-    /**
-     * La domanda che la guardia lato pagina fa prima di aprire un WebSocket (o
-     * un WebTransport): questo host sta dentro la rete del telefono? È lo
-     * **stesso** verdetto, con la stessa cache, di `shouldInterceptRequest`.
-     *
-     * Visibile a ogni pagina che la sessione apre, ed è voluto: dice soltanto
-     * «bloccato o irrisolvibile» di un nome che la pagina ha già in mano, cioè
-     * quel che una `fetch` verso quel nome le direbbe comunque.
-     *
-     * Gira sul thread JavaBridge, e il JS della pagina aspetta la risposta
-     * (il costruttore di `WebSocket` è sincrono): un DNS lento lì congelava la
-     * pagina per tutta la sua durata. Il verdetto in cache risponde subito;
-     * altrimenti il DNS va su [guardDns] e si aspetta al massimo
-     * [GUARD_DNS_TIMEOUT_MS] — poi «bloccato», e la risoluzione arriva in
-     * cache da sola. Coda piena: «bloccato» anche lì.
-     */
-    private inner class NetworkGuard {
-        @JavascriptInterface
-        fun blocked(host: String): Boolean {
-            val h = host.trim().removePrefix("[").removeSuffix("]")
-            if (h.isEmpty()) return true
-            val verdict = cachedVerdict(h) ?: try {
-                guardDns.submit(Callable { isBlockedHost(h) })
-                    .get(GUARD_DNS_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            } catch (e: Exception) {
-                // Timeout, coda piena o interruzione: nel dubbio si blocca.
-                true
-            }
-            if (verdict) warnThrottled("direct connection refused (WebSocket/WebTransport)")
-            return verdict
-        }
-    }
-
-    /**
-     * Le connessioni che `shouldInterceptRequest` non vede: WebSocket,
-     * WebTransport, WebRTC. Chromium le apre fuori dal percorso delle richieste
-     * HTTP, quindi il filtro sugli indirizzi privati non le fermava — una
-     * pagina visitata dall'agente poteva parlare coi servizi della LAN su
-     * `ws://192.168.x.y`.
-     *
-     * Rimedio parziale e dichiarato come tale: uno script iniettato a inizio
-     * documento (`res/raw/browser_network_guard.js`) avvolge i costruttori nei
-     * frame della pagina. Non copre i Worker né un frame in cui lo script non
-     * arriva — v. il commento in testa allo script, che elenca i limiti.
-     * Senza `DOCUMENT_START_SCRIPT` la guardia non c'è, e lo si scrive nel log
-     * invece di fingere.
-     */
-    private fun installNetworkGuardOnMain(wv: WebView) {
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            Log.w(TAG, "No DOCUMENT_START_SCRIPT: WebSocket/WebRTC to the LAN stay unguarded")
-            return
-        }
-        try {
-            wv.addJavascriptInterface(NetworkGuard(), "JennyBrowserGuard")
-            WebViewCompat.addDocumentStartJavaScript(wv, networkGuardJs, setOf("*"))
-        } catch (e: Exception) {
-            Log.e(TAG, "Browser network guard not installed", e)
-        }
     }
 
     /**
@@ -717,12 +727,15 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         }
         if (!done.await(timeoutSeconds, TimeUnit.SECONDS)) {
             if (gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
-                return """{"error":"evaluateJavascript timed out after ${timeoutSeconds}s: the page was not touched"}"""
+                return errorJson("evaluateJavascript timed out after ${timeoutSeconds}s: the page was not touched")
             }
             // Il cancello l'ha gia' preso il main: lo script e' partito, e un
             // `act` puo' aver cliccato. Dirlo, invece di un «timeout» che
             // suona come «non e' successo niente».
-            return """{"error":"evaluateJavascript timed out after ${timeoutSeconds}s: the script started without answering, the page may have changed"}"""
+            return errorJson(
+                "evaluateJavascript timed out after ${timeoutSeconds}s: " +
+                    "the script started without answering, the page may have changed",
+            )
         }
         return out.get()
     }
@@ -740,7 +753,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     /** Apre [url] e aspetta che la pagina si sia posata. */
     fun open(url: String, timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS): String {
         val uri = Uri.parse(url)
-        if (isBlockedLiteral(uri)) return """{"error":"address not allowed"}"""
+        if (isBlockedLiteral(uri)) return errorJson("address not allowed")
         lastBlocked.set(null)
         // Un browser_open e' un atto esplicito: il perimetro si rifa' **dopo**,
         // sull'indirizzo dove la pagina si e' posata davvero. Fino ad allora il
@@ -795,17 +808,17 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         // `loadUrl` che solleva quando questo thread sta gia' aspettando.
         if (!started && gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
             openInFlight.set(false)
-            return """{"error":"the browser did not open: the page never started loading"}"""
+            return errorJson(NOT_STARTED)
         }
         val settled = awaitSettled(timeoutSeconds)
         openInFlight.set(false)
         if (gate.get() == GATE_FAILED) {
-            return """{"error":"the browser did not open: the page never started loading"}"""
+            return errorJson(NOT_STARTED)
         }
         lastBlocked.getAndSet(null)?.let {
-            return """{"error":${quote(describeBlock(it))}}"""
+            return errorJson(describeBlock(it))
         }
-        lastError.get()?.let { return """{"error":${quote(it)}}""" }
+        lastError.get()?.let { return errorJson(it) }
         val (u, t) = currentUrlAndTitle()
         // Il recinto si pianta dove si e' finiti, non dove si era chiesto, e
         // solo qui: la pagina nuova si e' posata. Senza un host (lettura
@@ -849,4 +862,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     }
 
     private fun quote(s: String): String = org.json.JSONObject.quote(s)
+
+    /** `{"error":"…"}`, la risposta che Python legge come un fallimento. */
+    private fun errorJson(message: String): String = """{"error":${quote(message)}}"""
 }

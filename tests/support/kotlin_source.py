@@ -15,9 +15,18 @@ from pathlib import Path
 
 import pytest
 
-ANDROID_SRC = (
-    Path(__file__).resolve().parents[2] / "android/app/src/main/java/com/flagdizero/jenny"
-)
+APP_SRC = Path(__file__).resolve().parents[2] / "android/app/src"
+"""I source set dell'app: ``main`` e quelli dei flavor (``play``, ``foss``)."""
+ANDROID_MAIN = APP_SRC / "main"
+ANDROID_SRC = ANDROID_MAIN / "java/com/flagdizero/jenny"
+PLAY_SRC = APP_SRC / "play/java/com/flagdizero/jenny"
+"""Il Kotlin che solo la build ``play`` contiene (la copia su Google Drive)."""
+
+
+def all_kotlin() -> list[Path]:
+    """Ogni ``.kt`` dell'app, di tutti i source set: anche il codice di un
+    flavor finisce in un APK."""
+    return sorted(APP_SRC.glob("*/java/com/flagdizero/jenny/**/*.kt"))
 
 _CHAR_LITERAL = re.compile(r"'(\\.[^']*|[^'\\])'")
 

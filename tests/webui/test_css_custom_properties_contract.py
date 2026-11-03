@@ -14,10 +14,9 @@ il JS/HTML la scrive per nome (`setProperty('--x', …)`, `style="--x: …"`):
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI
+
 SHEETS = ("mobile-style.css", "home-style.css")
 
 

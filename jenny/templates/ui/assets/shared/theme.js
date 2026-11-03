@@ -6,6 +6,7 @@
  */
 
 import { AppState } from './state.js';
+import { writeStorage } from './utils.js';
 
 // `desc`/`reply` are the mini-conversation preview copy shown on each theme
 // card in the settings picker — the card *is* the preview, so the copy leans
@@ -323,11 +324,7 @@ export function setTheme(id) {
   document.documentElement.setAttribute('data-theme', theme.id);
   // Una preferenza: se lo storage la rifiuta, il tema si applica lo stesso
   // e al prossimo avvio si riparte dal default.
-  try {
-    localStorage.setItem('tc-theme', theme.id);
-  } catch (_) {
-    /* storage non disponibile */
-  }
+  writeStorage('tc-theme', theme.id);
   AppState.theme = theme.id;
   applySyntaxTheme(theme.scheme);
   syncNativeBars(theme.scheme);

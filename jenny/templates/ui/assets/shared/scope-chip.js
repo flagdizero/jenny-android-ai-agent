@@ -16,7 +16,7 @@
  * cambio: ricaricare quel che è a schermo non è mestiere di questo modulo.
  */
 
-import { i18n } from './i18n.js';
+import { i18n, tr } from './i18n.js';
 import { botName } from './bot-name.js';
 import { AppState, armComposeMenu, claimComposeMenu } from './state.js';
 import { api } from './api-client.js';
@@ -24,9 +24,8 @@ import { showToast } from './utils.js';
 import { deleteProjectFlow } from './project-delete.js';
 import { createProjectFlow } from './project-create.js';
 import { rpc } from './rpc-client.js';
-import {
-  ConversationList, UNOPENABLE_HINT_KEYS, ago, projectKey,
-} from './conversation-list.js';
+import { ConversationList, UNOPENABLE_HINT_KEYS, projectKey } from './conversation-list.js';
+import { ago } from './when.js';
 
 /** Quanto del nome entra nel placeholder prima dei puntini.
  *
@@ -556,7 +555,7 @@ export class ScopeChip {
    */
   async _createProject() {
     const clean = await createProjectFlow({
-      t: (key, vars) => i18n.t(key, vars),
+      t: tr,
       known: this._projects || [],
     });
     if (!clean) return;
@@ -587,7 +586,7 @@ export class ScopeChip {
    *  passa chi chiama: quel modulo non importa niente, apposta.
    */
   _ago(modified) {
-    return ago(modified, (key, vars) => i18n.t(key, vars));
+    return ago(modified);
   }
 }
 

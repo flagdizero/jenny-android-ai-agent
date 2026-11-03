@@ -22,6 +22,7 @@ from .ui_paths import CORE_ASSETS, EXT_UI, locale
 ROOM_JS = (CORE_ASSETS / "home-backup.js").read_text(encoding="utf-8")
 DRIVE_JS = (EXT_UI / "home.js").read_text(encoding="utf-8")
 CLOUD_JS = (EXT_UI / "cloud-backup.js").read_text(encoding="utf-8")
+UTILS_JS = (CORE_ASSETS / "shared" / "utils.js").read_text(encoding="utf-8")
 WHEN_JS = (CORE_ASSETS / "shared" / "when.js").read_text(encoding="utf-8")
 I18N_JS = (CORE_ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8")
 IT = locale("it")
@@ -41,8 +42,8 @@ def _harness() -> str:
     pure = "\n".join(
         function(CLOUD_JS, name)
         for name in ("_startOfDay", "reasonKey", "cloudView", "nightStrip",
-                     "dayText", "sizeText", "progressSizes")
-    )
+                     "dayText", "progressSizes")
+    ) + "\n" + function(UTILS_JS, "sizeText")
     drive_value = function(DRIVE_JS, "backupValue").replace(
         "function backupValue(", "function driveBackupValue(")
     drive_class = _class(DRIVE_JS, "DriveBackupCard").replace(
@@ -131,7 +132,7 @@ const on = (extra = {}) => ({ available: true, provider: 'drive', enabled_at_ms:
 """
         .replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
-        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText")))
+        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay")))
         .replace("__LATE__", late)
         .replace("__BLOCKING__", blocking)
         .replace("__PURE__", pure)

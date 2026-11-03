@@ -15,11 +15,11 @@ WebUI non ha un runner JS con DOM.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-CHAT_JS = UI_DIR / "assets" / "mobile-chat.js"
-CSS = UI_DIR / "assets" / "mobile-style.css"
+from support.js_harness import UI
+
+CHAT_JS = UI / "assets" / "mobile-chat.js"
+CSS = UI / "assets" / "mobile-style.css"
 
 
 def _chat() -> str:

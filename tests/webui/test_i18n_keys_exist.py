@@ -18,8 +18,8 @@ import json
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
+from support.js_harness import ROOT, UI
+
 EXTENSIONS = ROOT / "jenny_extensions"
 LOCALES = ("it", "en")
 

@@ -29,12 +29,11 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, member, requires_node, run_js
+from support.js_harness import ASSETS, locale, member, requires_node, run_js
 
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 WORKSPACE_JS = ASSETS / "mobile-workspace.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -173,7 +172,7 @@ async function open(items, { broken = false } = {}) {
 
 def _harness() -> str:
     ws = WORKSPACE_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     methods = "\n".join("  " + member(ws, name) for name in _REAL)
     return (
         _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))

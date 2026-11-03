@@ -29,12 +29,21 @@ from __future__ import annotations
 
 import json
 
-from support.js_harness import ASSETS, FAKE_ELEMENT, function, member, requires_node, run_js
+from support.js_harness import (
+    ASSETS,
+    FAKE_ELEMENT,
+    function,
+    i18n_helpers,
+    locale,
+    member,
+    requires_node,
+    run_js,
+)
 
 ROOM_JS = ASSETS / "home-backup.js"
 WHEN_JS = ASSETS / "shared" / "when.js"
+BACKUP_FLOW_JS = ASSETS / "shared" / "backup-flow.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -44,7 +53,7 @@ _HARNESS = """
 import assert from 'node:assert/strict';
 
 const TRANSLATIONS = __TRANSLATIONS__;
-const i18n = { locale: 'it', translations: TRANSLATIONS, __T__ };
+const i18n = { locale: 'it', translations: TRANSLATIONS, __T__, __T_OR__ };
 
 __MAKE_EL__
 
@@ -74,6 +83,7 @@ const api = {
 const CONFIRM = { answer: true, asked: [] };
 async function confirmDialog(text) { CONFIRM.asked.push(text); return CONFIRM.answer; }
 async function runSnapshotRestore(id) { actions.push(`restore:${id}`); }
+__SNAPSHOT_DETAIL__
 __SNAPSHOT_WHEN__
 
 __WHEN_TEXT__
@@ -116,12 +126,13 @@ function room(backup) {
 
 def _harness() -> str:
     room = ROOM_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
         _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
-        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText")))
+        .replace("__T_OR__", i18n_helpers())
+        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay")))
         .replace("__BACKUP_VALUE__", function(room, "backupValue"))
         .replace("__ROW_HTML__", function(room, "rowHtml"))
         .replace("__CTOR__", member(room, "constructor"))
@@ -139,6 +150,7 @@ def _harness() -> str:
         .replace("__HISTORY_CLICK__", member(room, "_onHistoryClick"))
         .replace("__HISTORY_HTML__", member(room, "_historyHtml"))
         .replace("__SNAPSHOT_WHEN__", function(room, "snapshotWhen"))
+        .replace("__SNAPSHOT_DETAIL__", function(BACKUP_FLOW_JS.read_text(encoding="utf-8"), "snapshotDetail"))
         .replace("__PAINT__", member(room, "_paint"))
     )
 
@@ -313,7 +325,7 @@ def test_the_local_history_is_told_apart_from_a_backup() -> None:
     _run_js("""
       room({ snapshots_enabled: true });
       const active = nodi['home-backup-history'].innerHTML;
-      assert.ok(active.includes(i18n.t('home.backup.history.title')));
+      assert.ok(active.includes(i18n.t('backup.snapshotHistory')));
       assert.ok(active.includes(i18n.t('home.backup.history.sub')));
       assert.ok(i18n.t('home.backup.history.sub').length > 40, 'la frase non spiega niente');
 

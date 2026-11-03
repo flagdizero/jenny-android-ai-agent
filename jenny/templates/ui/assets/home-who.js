@@ -57,7 +57,8 @@
 
 import { i18n } from './shared/i18n.js';
 import { api } from './shared/api-client.js';
-import { ConversationList, UNOPENABLE_HINT_KEYS, ago } from './shared/conversation-list.js';
+import { ConversationList, UNOPENABLE_HINT_KEYS } from './shared/conversation-list.js';
+import { ago } from './shared/when.js';
 import { setupLongPress } from './shared/longpress.js';
 import { isTypeAheadKey } from './shared/type-ahead.js';
 import { initialOf, paintSpine } from './shared/spines.js';
@@ -418,7 +419,7 @@ export class WhoPanel {
       setupLongPress(cover, () => this._onHold(item.name));
     }
 
-    const age = ago(item.modified, (key, vars) => i18n.t(key, vars));
+    const age = ago(item.modified);
     const pages = typeof item.pages === 'number' ? item.pages : null;
     /* Il nome intero lo legge TalkBack dall'etichetta: sulla copertina puo'
        essere tagliato a due righe, e l'iniziale e il numero corto sono segni. */
@@ -512,7 +513,7 @@ export class WhoPanel {
 
     const when = document.createElement('span');
     when.className = 'home-who-row-meta';
-    when.textContent = ago(item.modified, (key, vars) => i18n.t(key, vars));
+    when.textContent = ago(item.modified);
     row.appendChild(when);
     return row;
   }
@@ -557,7 +558,7 @@ export class WhoPanel {
     }
     if (this._searchClear) {
       this._searchClear.hidden = !this._query;
-      this._searchClear.setAttribute('aria-label', i18n.t('home.who.clearSearch'));
+      this._searchClear.setAttribute('aria-label', i18n.t('launcher.clearSearch'));
     }
   }
 

@@ -7,7 +7,7 @@
  *  mostra decide solo dove metterlo e come scrivere.
  */
 
-import { i18n } from './shared/i18n.js';
+import { i18n, tr } from './shared/i18n.js';
 import { describeSchedule } from './shared/cron-view.js';
 import { button, el } from './shared/dom.js';
 
@@ -15,7 +15,6 @@ import { button, el } from './shared/dom.js';
 
 /** Il ritmo di un cron a parole («ogni domenica alle 18:30»), dal suo `schedule`. */
 export function rhythmLabel(job) {
-  const tr = (key, vars) => i18n.t(key, vars);
   return describeSchedule(job?.schedule, { tr, locale: i18n.locale });
 }
 

@@ -27,12 +27,11 @@
  *  client, quindi il campo parte vuoto e quel che non riscrivi resta com'e'.
  */
 
-import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { showToast } from './shared/utils.js';
-import { CATALOG_NOTE_KEYS, ModelCatalogs } from './shared/model-catalog.js';
+import { CATALOG_NOTE_KEYS, ModelCatalogs, switchModel } from './shared/model-catalog.js';
 
 /** Il nome di marca, per una pastiglia e per un titolo.
  *
@@ -171,7 +170,7 @@ export class HomeModel {
   applyTranslations() {
     if (this.brandsLabel) this.brandsLabel.textContent = i18n.t('home.model.who');
     if (this.keyLabel) this.keyLabel.textContent = i18n.t('home.model.key');
-    if (this.keySave) this.keySave.textContent = i18n.t('home.model.keySave');
+    if (this.keySave) this.keySave.textContent = i18n.t('common.save');
     if (this.keyInput) this.keyInput.placeholder = i18n.t('home.model.keyPlaceholder');
     this._paint();
   }
@@ -184,18 +183,10 @@ export class HomeModel {
     this._loadModels(name);
   }
 
-  /** Cambia modello — e provider, nella stessa chiamata. */
+  /** Cambia modello — e provider, nella stessa chiamata (v. `switchModel`). */
   async pickModel(model) {
-    const provider = this.viewing;
-    if (!model || !provider) return;
-    try {
-      const payload = await api.updateSettings({ model, default_provider: provider });
-      this._apply(payload);
-      showToast(i18n.t('home.model.saved'), 'success');
-    } catch (err) {
-      console.warn('home.model: model not changed', err);
-      showToast(i18n.t('home.model.failed'), 'error');
-    }
+    const payload = await switchModel(this.viewing, model);
+    if (payload) this._apply(payload);
   }
 
   /** Apre o chiude il campo della chiave. */

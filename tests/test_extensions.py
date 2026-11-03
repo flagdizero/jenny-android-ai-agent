@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 from support.gateway_http import make_handler, make_request
+from support.kotlin_source import APP_SRC, PLAY_SRC
 
 from jenny import extensions
 from jenny.utils.android_assets import (
@@ -42,8 +43,8 @@ DRIVE_IDENTIFIERS = (
 )
 CORE_TREES = (
     ROOT / "jenny",
-    ROOT / "android" / "app" / "src" / "main",
-    ROOT / "android" / "app" / "src" / "foss",
+    APP_SRC / "main",
+    APP_SRC / "foss",
 )
 TEXT_SUFFIXES = {".py", ".js", ".css", ".html", ".json", ".md", ".kt", ".xml", ".txt", ".j2"}
 
@@ -100,7 +101,7 @@ def test_only_one_core_module_knows_the_extensions_package() -> None:
 
 
 def test_the_drive_native_code_lives_in_the_play_source_set() -> None:
-    play = ROOT / "android" / "app" / "src" / "play" / "java" / "com" / "flagdizero" / "jenny"
+    play = PLAY_SRC
     assert (play / "DriveBridge.kt").is_file()
     assert (play / "DriveExtension.kt").is_file()
     gradle = (ROOT / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")

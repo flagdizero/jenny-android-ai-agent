@@ -246,7 +246,7 @@ export class AppsActions {
     overlay.innerHTML = `
       <div class="app-frame-header">
         <span class="app-frame-title">${escapeHtml(app.name || slug)}</span>
-        <button class="app-frame-close" title="${i18n.t('apps.close')}"><i class="ti ti-x"></i></button>
+        <button class="app-frame-close" title="${i18n.t('common.close')}"><i class="ti ti-x"></i></button>
       </div>
     `;
     overlay.appendChild(iframe);
@@ -517,7 +517,7 @@ export class AppsActions {
       ...(app.section
         ? [{ icon: 'ti-layout-board', label: i18n.t('apps.place'), action: 'place' }] : []),
       { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
-      { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
+      { icon: 'ti-trash', label: i18n.t('common.delete'), action: 'delete', danger: true },
     ];
 
     const actionsEl = document.getElementById('jenny-app-sheet-actions');

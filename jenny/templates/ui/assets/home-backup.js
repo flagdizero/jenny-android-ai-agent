@@ -26,13 +26,13 @@
  */
 
 import { i18n } from './shared/i18n.js';
-import { dayAndTime, dayOffset, whenText } from './shared/when.js';
+import { dayOffset, nearDay, whenText } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
 import { confirmDialog } from './shared/dialog.js';
 import { iconHtml } from './shared/dom.js';
 import {
-  runExportFlow, runImportFlow, runSnapshotRestore, backupNativeAvailable,
+  runExportFlow, runImportFlow, runSnapshotRestore, backupNativeAvailable, snapshotDetail,
 } from './shared/backup-flow.js';
 
 /* Quanti snapshot si vedono aprendo la storia: di solito si cerca «prima di
@@ -47,12 +47,7 @@ export function snapshotWhen(ms, now = Date.now(), locale = i18n.locale) {
   if (dayOffset(at, now) >= 7) {
     return at.toLocaleString(locale, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   }
-  const near = dayAndTime(at, { now, locale, hour: 'numeric' });
-  if (near) return near;
-  const time = at.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  return i18n.t('home.backup.history.weekday', {
-    day: at.toLocaleDateString(locale, { weekday: 'long' }), time,
-  });
+  return nearDay(at, { now, locale });
 }
 
 /** La riga che si legge senza entrare: quando l'hai esportato l'ultima volta.
@@ -225,9 +220,7 @@ export class HomeBackup {
     const now = Date.now();
     const rows = shown.map((s) => {
       const when = snapshotWhen(s.created_at_ms, now);
-      const key = `backup.trigger.${s.trigger}`;
-      const trigger = i18n.t(key) === key ? s.trigger : i18n.t(key);
-      const detail = `${trigger}${s.label ? ` · ${s.label}` : ''} · ${s.file_count} ${i18n.t('backup.files')}`;
+      const detail = snapshotDetail(s);
       return `<button class="home-history-snap" type="button" data-snapshot="${escapeHtml(s.id)}" data-when="${escapeHtml(when)}">`
         + `<span>${escapeHtml(when)}<small>${escapeHtml(detail)}</small></span>`
         + `${iconHtml('restore')}</button>`;
@@ -289,7 +282,7 @@ export class HomeBackup {
          scambiata per questa: la riga dice cos'e' e cosa **non** e'. Spenta,
          gli snapshot gia' fatti restano, e si sfogliano lo stesso. */
       const on = this.backup?.snapshots_enabled !== false;
-      this.historyBtn.innerHTML = rowHtml('history', i18n.t('home.backup.history.title'),
+      this.historyBtn.innerHTML = rowHtml('history', i18n.t('backup.snapshotHistory'),
         i18n.t(on ? 'home.backup.history.sub' : 'home.backup.history.off'),
         this._history ? 'chevron-up' : 'chevron-down');
       this.historyBtn.setAttribute('aria-expanded', String(!!this._history));

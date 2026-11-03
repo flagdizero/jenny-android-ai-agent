@@ -11,7 +11,7 @@
  *  si guardano e basta non hanno un Annulla, e velo e Indietro non si vedono.
  */
 
-import { el, icon } from './dom.js';
+import { button, el, icon } from './dom.js';
 
 /** Riempie *sheet* e lo apre (se non lo e' gia'); torna il foglio, o `null`.
  *
@@ -30,12 +30,11 @@ export function openActionSheet(sheet, {
   if (cls !== null) sheet.className = `oc-sheet home-plan-sheet ${cls}`.trim();
   const body = sheet.querySelector('.home-plan-sheet-inner') || sheet;
   const grab = el('div', 'home-plan-sheet-grab');
-  const close = el('button', 'home-plan-sheet-close');
-  close.type = 'button';
+  const close = button('home-plan-sheet-close', null,
+    () => (onClose ? onClose() : closeActionSheet(sheet)));
   if (closeData) Object.assign(close.dataset, closeData);
   close.setAttribute('aria-label', closeLabel);
   close.appendChild(icon('ti-x'));
-  close.addEventListener('click', () => (onClose ? onClose() : closeActionSheet(sheet)));
   body.replaceChildren(grab, close, ...children.filter(Boolean));
   if (!sheet.open) {
     if (typeof sheet.showModal === 'function') sheet.showModal();
@@ -60,8 +59,7 @@ export function sheetHead(title, sub = '') {
 /** Una riga-bottone: l'icona, l'etichetta e, se c'e', la riga piccola sotto.
  *  *data* sono i suoi `data-*` (`{ workAction: 'stop' }`). */
 export function sheetRow(glyph, label, sub, cls, run, data = null) {
-  const row = el('button', `home-plan-sheet-row ${cls || ''}`.trim());
-  row.type = 'button';
+  const row = button(`home-plan-sheet-row ${cls || ''}`.trim());
   if (data) Object.assign(row.dataset, data);
   row.appendChild(icon(glyph));
   const text = el('span', 'home-plan-row-text');

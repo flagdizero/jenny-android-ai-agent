@@ -35,7 +35,8 @@ NODE = shutil.which("node")
 requires_node = pytest.mark.skipif(NODE is None, reason="node non disponibile")
 
 ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+UI = ROOT / "jenny" / "templates" / "ui"
+ASSETS = UI / "assets"
 I18N_DIR = ASSETS / "i18n"
 
 
@@ -186,3 +187,13 @@ function makeEl(tag) {
 def locale(name: str) -> dict:
     """Il dizionario i18n *name* (``it``, ``en``) com'è nel pacchetto."""
     return json.loads((I18N_DIR / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def i18n_helpers() -> str:
+    """Per un ``i18n`` finto: il ``tOr`` vero di ``shared/i18n.js``, da mettere
+    dentro l'oggetto (``const i18n = { t, ...tOr }``), e la riga che definisce
+    ``tr`` accanto. Il codice dei gusci usa tutti e due dal 03/11/2026."""
+    return member((ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8"), "tOr")
+
+
+I18N_TR = "const tr = (key, params) => i18n.t(key, params);"

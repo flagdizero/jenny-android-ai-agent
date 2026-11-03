@@ -40,14 +40,16 @@
  *  non ama le bacheche e per lo screen reader.
  */
 
+import { shortDate } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js';
+import { sanitizeContent } from './shared/markdown.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 import { metaText, renderBlock } from './home-board-blocks.js';
 import { DrawerNotes } from './home-board-notes.js';
-import { DrawerPhotos, PhotoUrls, photoDate } from './home-board-photos.js';
+import { DrawerPhotos, PhotoUrls } from './home-board-photos.js';
 import { automationRow, rhythmLabel } from './home-board-automation.js';
 import { agendaList, reminderForm } from './home-board-agenda.js';
 import { confirmDialog } from './shared/dialog.js';
@@ -186,8 +188,7 @@ export function sinceText(row) {
   /* Lo stato di un'app arriva come parola chiave (`alarm`, `stale`…): la
      frase la dice nella lingua di chi guarda. */
   if (row?.kind === 'app_event') params.state = i18n.t(`board.app.event.${row.state}`);
-  const text = i18n.t(key, params);
-  return text === key ? i18n.t('board.since.kind.other') : text;
+  return i18n.tOr(key, i18n.t('board.since.kind.other'), params);
 }
 
 /* Il muro, in percento dello schermo (come le posizioni): dall'origine fino a
@@ -1030,7 +1031,7 @@ export class HomeBoard {
       row.className = 'home-board-postit-row';
       const when = document.createElement('span');
       when.className = 'home-board-postit-when';
-      when.textContent = photoDate(note.created);
+      when.textContent = shortDate(note.created);
       const text = document.createElement('span');
       text.className = 'home-board-postit-text';
       text.textContent = note.text;
@@ -1482,7 +1483,7 @@ export class HomeBoard {
     bar.append(act('square-x', 'board.card.remove', () => this.removeCard(card.id, card.title)));
     const close = act('x', 'board.card.close', () => this.setFocus(null));
     close.classList.add('is-close');
-    close.setAttribute('aria-label', i18n.t('board.card.close'));
+    close.setAttribute('aria-label', i18n.t('common.close'));
     close.querySelector('span').remove();
     bar.appendChild(close);
     if (bar.parentNode !== this.canvas) this.canvas.appendChild(bar);
@@ -1595,7 +1596,7 @@ export class HomeBoard {
     this._nameSheet({
       title: i18n.t('board.card.renameTitle'),
       value: current || '',
-      submit: i18n.t('board.card.save'),
+      submit: i18n.t('common.save'),
       send: async (title) => {
         await rpc.board('card.rename', this.notebook, { id: cardId, title });
         await this.load(this.notebook);
@@ -1734,7 +1735,7 @@ export class HomeBoard {
         await rpc.board('card.restore', notebook, { id: cardId });
       } catch (err) {
         console.warn('home.board: restore failed', err);
-        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.restoreFailed'),
+        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'apps.restoreFailed'),
           'error');
         return;
       }
@@ -1744,7 +1745,7 @@ export class HomeBoard {
           ?.classList.add('is-appearing');
         this.reveal(cardId);
       }
-    }, { label: i18n.t('board.card.undo') });
+    }, { label: i18n.t('apps.undo') });
   }
 
   /** I fili: sempre visibili, sottili e senza scritte; quelli della scheda
@@ -2113,7 +2114,7 @@ export class HomeBoard {
        trascura, e la passata dopo lo legge. Un conto perso non e' un guasto. */
     rpc.board('preview', this.notebook, { page: path }).catch(() => {});
     const tmp = document.createElement('div');
-    tmp.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(page.html || '') : '';
+    tmp.innerHTML = typeof DOMPurify !== 'undefined' ? sanitizeContent(page.html) : '';
     tmp.querySelector('h1')?.remove();
     const text = (tmp.textContent || page.raw || '').replace(/\s+/g, ' ').trim();
     const short = text.length > PREVIEW_CHARS
@@ -2130,7 +2131,7 @@ export class HomeBoard {
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'home-board-btn';
-    close.textContent = i18n.t('board.preview.close');
+    close.textContent = i18n.t('common.close');
     close.addEventListener('click', () => this.sheet.close());
     const want = document.createElement('button');
     want.type = 'button';

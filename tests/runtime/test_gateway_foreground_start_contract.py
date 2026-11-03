@@ -45,3 +45,14 @@ def test_a_refused_location_attempt_falls_back_or_keeps_the_type_it_has() -> Non
     after = body[body.index(location) + len(location) :]
     assert "FOREGROUND_SERVICE_TYPE_SPECIAL_USE)" in after, "il ripiego senza location"
     assert re.search(r"catch \(e: Exception\)", after), "il ripiego resta l'ultima rete"
+
+
+def test_the_location_type_follows_the_same_permission_as_the_tool() -> None:
+    """Con la posizione approssimativa (solo COARSE) il servizio non chiedeva mai
+    il tipo ``location``: guardava FINE soltanto, mentre ``LocationBridge``
+    accetta l'una o l'altra. Una regola sola, quella del ponte."""
+    code = read_code("GatewayService")
+    at = code.index("fun hasLocationPermission(")
+    check = code[at : code.index("\n", at)]
+    assert "LocationBridge.hasPermission(this)" in check
+    assert "ACCESS_FINE_LOCATION" not in check

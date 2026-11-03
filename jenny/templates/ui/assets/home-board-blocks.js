@@ -16,6 +16,7 @@
  * solo da vicino.
  */
 
+import { shortDate } from './shared/when.js';
 import { i18n } from './shared/i18n.js';
 import { el } from './shared/dom.js';
 
@@ -171,7 +172,7 @@ function timeText(at, now = new Date()) {
   const sameDay = d.toDateString() === now.toDateString();
   return sameDay
     ? d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
+    : shortDate(d, { locale: locale() });
 }
 
 function ageText(at, now = new Date()) {
@@ -259,7 +260,7 @@ function events(b) {
   for (const r of shown) {
     const row = el('div', 'home-board-block-row');
     const d = new Date(`${r.date}T12:00:00`);
-    const label = Number.isNaN(d.getTime()) ? r.date : d.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
+    const label = shortDate(d, { locale: locale() }) || r.date;
     row.append(el('span', `home-board-block-strong is-key${r.days <= 7 ? ' is-alarm' : ''}`, label), el('span', 'home-board-block-cell', formatValue(r.text)));
     node.appendChild(row);
   }

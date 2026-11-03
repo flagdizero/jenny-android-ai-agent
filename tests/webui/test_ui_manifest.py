@@ -6,11 +6,10 @@ files on disk mutually consistent, and enforce Phase-1 CSS invariants.
 """
 
 import re
-from pathlib import Path
+
+from support.js_harness import UI
 
 from jenny.utils.android_assets import _UI_MANIFEST
-
-UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 
 # Tokens removed by the token rationalization: any reference is a regression.
 DEAD_TOKENS = [
@@ -46,7 +45,7 @@ SHELLS = ["index.html", "workshop.html", "onboarding.html"]
 
 
 def _shell_asset_refs(shell: str) -> list[str]:
-    html = (UI_DIR / shell).read_text()
+    html = (UI / shell).read_text()
     refs = re.findall(r'(?:href|src)="/html-mobile/([^"]+)"', html)
     assert refs, f"no /html-mobile/ asset references found in {shell}"
     return refs
@@ -92,12 +91,12 @@ def test_js_module_imports_are_in_manifest():
     for entry in _UI_MANIFEST:
         if not entry.endswith(".js"):
             continue
-        source = UI_DIR / entry
+        source = UI / entry
         if not source.is_file():
             continue
         for spec in import_re.findall(source.read_text()):
             resolved = (source.parent / spec).resolve()
-            target = resolved.relative_to(UI_DIR.resolve()).as_posix()
+            target = resolved.relative_to(UI.resolve()).as_posix()
             if target not in manifest:
                 problems.append(f"{entry} -> {spec}")
     assert not problems, (
@@ -106,7 +105,7 @@ def test_js_module_imports_are_in_manifest():
 
 
 def test_manifest_entries_exist_on_disk():
-    missing = [entry for entry in _UI_MANIFEST if not (UI_DIR / entry).is_file()]
+    missing = [entry for entry in _UI_MANIFEST if not (UI / entry).is_file()]
     assert not missing, f"_UI_MANIFEST lists files that do not exist: {missing}"
 
 
@@ -121,10 +120,10 @@ def test_ui_active_files_on_disk_are_in_manifest():
     """
     manifest = set(_UI_MANIFEST)
     unlisted = sorted(
-        p.relative_to(UI_DIR).as_posix()
+        p.relative_to(UI).as_posix()
         for ext in ("*.js", "*.css", "*.html")
-        for p in UI_DIR.rglob(ext)
-        if p.relative_to(UI_DIR).as_posix() not in manifest
+        for p in UI.rglob(ext)
+        if p.relative_to(UI).as_posix() not in manifest
     )
     assert not unlisted, (
         f"file UI attivi su disco assenti da _UI_MANIFEST "
@@ -148,7 +147,7 @@ def _css_url_problems(manifest: set[str]) -> list[str]:
     problems = []
     url_re = re.compile(r"url\(\s*['\"]?([^'\")]+)['\"]?\s*\)")
     for rel in sorted(e for e in manifest if e.endswith(".css")):
-        css_path = UI_DIR / rel
+        css_path = UI / rel
         css = re.sub(r"/\*.*?\*/", "", css_path.read_text(), flags=re.S)
         urls = []
         for decl in re.split(r"[;{}]", css):
@@ -164,7 +163,7 @@ def _css_url_problems(manifest: set[str]) -> list[str]:
                 entry = path[len("/html-mobile/"):]
             else:
                 resolved = (css_path.parent / path).resolve()
-                entry = resolved.relative_to(UI_DIR.resolve()).as_posix()
+                entry = resolved.relative_to(UI.resolve()).as_posix()
             if entry not in manifest:
                 problems.append(f"{rel} -> {url}")
     return problems
@@ -181,7 +180,7 @@ def test_the_css_guard_reads_every_sheet():
     `jenny-kit.css` restavano fuori. Ora li legge tutti: togliere dal manifest
     il foglio che `jenny-kit.css` importa deve far fallire il banco."""
     victim = "assets/vendor/fonts/google-fonts.css"
-    kit = (UI_DIR / "assets/apps/jenny-kit.css").read_text()
+    kit = (UI / "assets/apps/jenny-kit.css").read_text()
     assert f"/html-mobile/{victim}" in kit, "il kit non importa piu' quel foglio: cambia vittima"
     problems = _css_url_problems(set(_UI_MANIFEST) - {victim})
     assert any(p.startswith("assets/apps/jenny-kit.css ->") for p in problems), problems
@@ -212,7 +211,7 @@ def test_backdrop_filter_only_on_the_drawer_scrim():
     mascotte — il nodo trasparente piu\' grosso della casa — a cassetto aperto.
     Se tornassero nere, si toglie la riga e si rimette il divieto tondo.
     """
-    css = (UI_DIR / "assets/mobile-style.css").read_text()
+    css = (UI / "assets/mobile-style.css").read_text()
     # I selettori a cui e\' concesso. Si dichiarano uno per uno.
     allowed = {".launcher-scrim"}
 
@@ -236,7 +235,7 @@ def test_the_drawer_scrim_actually_blurs():
     """E l\'eccezione deve esserci davvero: toglierla e\' una decisione, non una
     svista. Senza questa riga, il banco qui sopra passerebbe anche a
     sfocatura sparita."""
-    css = (UI_DIR / "assets/mobile-style.css").read_text()
+    css = (UI / "assets/mobile-style.css").read_text()
     block = next(b for b in css.split("}") if ".launcher-scrim" in b.split("{")[0])
     assert re.search(r"[^-]backdrop-filter:\s*blur\(", block), "lo scrim non sfoca piu\'"
     assert "-webkit-backdrop-filter" in block, "manca il prefisso: il WebView usa quello"
@@ -252,13 +251,13 @@ def test_accent_backgrounds_use_on_accent():
     white_re = re.compile(r"color\s*:\s*(#fff\b|#ffffff\b|white\b)", re.IGNORECASE)
     offenders = []
 
-    css = (UI_DIR / "assets/mobile-style.css").read_text()
+    css = (UI / "assets/mobile-style.css").read_text()
     for block in css.split("}"):
         if "background: var(--accent)" in block and white_re.search(block):
             selector = block.split("{")[0].strip().splitlines()[-1].strip()
             offenders.append(f"mobile-style.css: {selector}")
 
-    for path in sorted((UI_DIR / "assets").rglob("*.js")):
+    for path in sorted((UI / "assets").rglob("*.js")):
         if "vendor" in path.parts:
             continue
         for match in re.finditer(r'style="([^"]*)"', path.read_text()):
@@ -277,7 +276,7 @@ def test_provider_dialog_never_prefills_masked_api_key():
     Pre-compilare il campo con ``api_key_hint`` faceva salvare il segnaposto
     (`sk-a...j8f9`) come chiave vera, distruggendo quella configurata.
     """
-    source = (UI_DIR / "assets/mobile-settings.js").read_text()
+    source = (UI / "assets/mobile-settings.js").read_text()
     offenders = [
         line.strip()
         for line in source.splitlines()
@@ -291,7 +290,7 @@ def test_no_dead_token_references():
         r"var\((" + "|".join(re.escape(tok) for tok in DEAD_TOKENS) + r")[,)]"
     )
     offenders = []
-    for path in [UI_DIR / "assets/mobile-style.css", *sorted((UI_DIR / "assets").glob("mobile-*.js"))]:
+    for path in [UI / "assets/mobile-style.css", *sorted((UI / "assets").glob("mobile-*.js"))]:
         for match in pattern.finditer(path.read_text()):
             offenders.append(f"{path.name}: {match.group(0)}")
     assert not offenders, f"references to removed CSS tokens: {offenders}"
@@ -307,12 +306,12 @@ def test_third_party_licenses_are_actually_shipped():
     perché guarda solo ``.js``/``.css``/``.html``, e un ``LICENSE`` non ha
     estensione.
     """
-    notices = (UI_DIR.parents[2] / "THIRD_PARTY_NOTICES.md").read_text()
+    notices = (UI.parents[2] / "THIRD_PARTY_NOTICES.md").read_text()
     promised = sorted(set(re.findall(r"`(vendor/[^`]+/LICENSE(?:\.md|\.txt)?)`", notices)))
     assert promised, "nessun percorso di licenza trovato in THIRD_PARTY_NOTICES.md"
 
     manifest = set(_UI_MANIFEST)
-    missing_on_disk = [p for p in promised if not (UI_DIR / "assets" / p).is_file()]
+    missing_on_disk = [p for p in promised if not (UI / "assets" / p).is_file()]
     unshipped = [p for p in promised if f"assets/{p}" not in manifest]
 
     assert not missing_on_disk, f"licenze promesse dalle note e assenti su disco: {missing_on_disk}"

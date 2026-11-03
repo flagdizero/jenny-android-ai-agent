@@ -18,11 +18,9 @@ difetto senza che servisse inciamparci.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import ASSETS, requires_node, run_js
+from support.js_harness import ASSETS, ROOT, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
 HANDLER_JS = (ASSETS / "shared"
               / "image-handler.js").read_text(encoding="utf-8")
 WS_PARSING = (ROOT / "jenny" / "channels" / "ws_parsing.py").read_text(encoding="utf-8")

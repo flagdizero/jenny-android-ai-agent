@@ -13,16 +13,13 @@ from __future__ import annotations
 import itertools
 import json
 import re
-from pathlib import Path
 
 from support import css_levels, theme_tokens
+from support.js_harness import ASSETS, UI
 
 from jenny.utils.android_assets import _UI_MANIFEST
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
-ASSETS = UI / "assets"
 APP_JS = ASSETS / "home-app.js"
 YOU_JS = ASSETS / "home-you.js"
 CSS = ASSETS / "home-style.css"
@@ -253,7 +250,8 @@ def test_the_room_says_what_happens_to_what_you_write() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         jenny = data["home"]["jenny"]
-        for key in ("rules", "rulesHint", "rulesPlaceholder", "rulesSave",
+        assert data["common"]["save"].strip(), "il Salva della casella (common.save)"
+        for key in ("rules", "rulesHint", "rulesPlaceholder",
                     "rulesSaved", "rulesFailed"):
             assert jenny.get(key, "").strip(), f"home.jenny.{key} manca in {locale}.json"
 
@@ -823,8 +821,10 @@ def test_the_local_history_and_the_exported_backup_are_two_things() -> None:
             assert more.get(key, "").strip(), f"home.backup.more.{key} manca in {locale}.json"
         assert "{when}" in more["fileLast"], "la riga del file non interpola la data"
         history = backup["history"]
-        for key in ("title", "sub", "off", "loading", "showAll", "weekday"):
+        assert data["backup"]["snapshotHistory"].strip(), "il titolo della storia locale"
+        for key in ("sub", "off", "loading", "showAll"):
             assert history.get(key, "").strip(), f"home.backup.history.{key} manca in {locale}.json"
+        assert "{day}" in data["common"]["weekdayAt"], "«giovedi' alle 9:40» (`when.js::nearDay`)"
         assert history["sub"] != history["off"], (
             "la storia locale accesa e spenta si leggono uguali"
         )

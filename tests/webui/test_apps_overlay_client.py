@@ -129,7 +129,7 @@ def test_a_gateway_app_opens_in_a_veil_with_its_frame() -> None:
         assert.equal(veil.className, 'app-frame-overlay');
         assert.ok(veil.classList.contains('visible'));
         assert.ok(veil.innerHTML.includes('Orto &lt;b&gt;'), 'il nome passa da escapeHtml');
-        assert.ok(veil.innerHTML.includes('apps.close'));
+        assert.ok(veil.innerHTML.includes('common.close'));
         const frame = veil.children[0];
         assert.equal(frame.tag, 'iframe');
         assert.equal(frame.attrs.sandbox, 'allow-scripts');

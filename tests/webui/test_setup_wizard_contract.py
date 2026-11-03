@@ -29,13 +29,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, UI, function, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
 WIZARD_JS = ASSETS / "onboarding-wizard.js"
 HOST_JS = ASSETS / "onboarding-app.js"
 FIRST_RUN_JS = ASSETS / "shared" / "first-run.js"
@@ -488,7 +484,7 @@ w.step = 1;
 w.apiBase = 'Http:/10.0.2.2:8765/v1';
 w._goToStep2();
 assert.equal(w.step, 1, 'con un indirizzo storpiato si e andati a chiedere i modelli');
-assert.deepEqual(toasts, ['onboarding.baseUrlInvalid']);
+assert.deepEqual(toasts, ['settings.baseUrlInvalid']);
 w.apiBase = 'Http://10.0.2.2:8765/v1';
 w._goToStep2();
 assert.equal(w.step, 2);

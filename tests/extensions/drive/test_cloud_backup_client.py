@@ -17,6 +17,7 @@ from support.js_harness import function, member, requires_node, run_js
 from .ui_paths import CORE_ASSETS, EXT_UI, locale
 
 CLOUD_JS = (EXT_UI / "cloud-backup.js").read_text(encoding="utf-8")
+UTILS_JS = (CORE_ASSETS / "shared" / "utils.js").read_text(encoding="utf-8")
 DIALOGS_JS = (EXT_UI / "cloud-backup-dialogs.js").read_text(encoding="utf-8")
 WHEN_JS = (CORE_ASSETS / "shared" / "when.js").read_text(encoding="utf-8")
 I18N_JS = (CORE_ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8")
@@ -74,14 +75,14 @@ __TURN_ON__
 __CHOOSE__
 """.replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
-        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText")))
+        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay")))
         .replace("__LATE__", late)
         .replace("__EXCLUSIVE__", function(CLOUD_JS, "_exclusive"))
         .replace("__ERROR_TEXT__", function(CLOUD_JS, "cloudErrorText"))
         .replace("__BLOCKING__", re.search(r"export const CLOUD_BLOCKING = (\[[^\]]+\]);", CLOUD_JS).group(1))
         .replace("__PURE__", "\n".join(function(CLOUD_JS, n) for n in (
             "_startOfDay", "reasonKey", "cloudView", "nightStrip", "dayText",
-            "sizeText", "progressSizes")))
+            "progressSizes")) + "\n" + function(UTILS_JS, "sizeText"))
         .replace("__RETRY__", re.search(r"export const PASSWORD_RETRY = (\[[^\]]+\]);", CLOUD_JS).group(1))
         .replace("__LIST__", function(CLOUD_JS, "_listWithPassword"))
         .replace("__FIND__", function(CLOUD_JS, "findMyCopy"))

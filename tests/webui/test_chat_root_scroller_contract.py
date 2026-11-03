@@ -19,11 +19,9 @@ from __future__ import annotations
 
 import re
 from html.parser import HTMLParser
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI
+
 APP_JS = (ASSETS / "mobile-app.js").read_text(encoding="utf-8")
 CHAT_JS = (ASSETS / "mobile-chat.js").read_text(encoding="utf-8")
 PAGER_JS = (ASSETS / "shared" / "history-pager.js").read_text(encoding="utf-8")
