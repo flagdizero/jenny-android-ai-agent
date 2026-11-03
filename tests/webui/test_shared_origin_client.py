@@ -19,7 +19,7 @@ I18N_JS = (ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8")
 def test_neither_shell_spells_it_by_itself() -> None:
     for name in ("home-chat.js", "mobile-chat.js"):
         src = (ASSETS / name).read_text(encoding="utf-8")
-        assert "originBadgeHtml(" in src, name
+        assert "originBadge(" in src, name
         assert "origin.charAt(0).toUpperCase()" not in src, name
 
 

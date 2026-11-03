@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import re
 
-from support.js_harness import ASSETS, member, requires_node, run_js
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
 HOME_CHAT_JS = ASSETS / "home-chat.js"
 HOME_APP_JS = ASSETS / "home-app.js"
@@ -43,6 +43,8 @@ const sessionManager = { currentChatId: 'default' };
    suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 let allNodes = [];
 function makeNode() {
@@ -79,7 +81,6 @@ function makeChat() {
     syncEmpty() {},
     scrollToBottom() {},
     _resetTurn() {},
-    _originBadge() { return null; },
     _appendMedia() {},
     _delta() {}, _streamEnd() {}, _message() {}, _externalUser() {}, _turnEnd() {},
     // Una riga segue il fondo come il resto del filo (v. `_follow`, banco suo).
@@ -89,7 +90,6 @@ function makeChat() {
     __TAKE_BACK__,
     __NOTE__,
     __APPEND_USER__,
-    __TIME_EL__,
     __APPEND__,
     __BELONGS__,
     __CROSSES__,
@@ -119,7 +119,7 @@ def _harness_src() -> str:
         .replace("__TAKE_BACK__", member(src, "_takeBackPendingSend"))
         .replace("__NOTE__", member(src, "_appendNote"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
-        .replace("__TIME_EL__", member(src, "_timeEl"))
+        .replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode"))
         .replace("__APPEND__", member(src, "_append"))
         .replace("__BELONGS__", member(src, "_belongsHere"))
         .replace("__CROSSES__", member(src, "_crossesTurn"))

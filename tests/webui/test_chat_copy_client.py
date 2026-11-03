@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from support.js_harness import ASSETS, requires_node, run_js
+from support.js_harness import ASSETS, function, requires_node, run_js
 
 CHAT_JS = ASSETS / "mobile-chat.js"
 
@@ -105,6 +105,8 @@ const i18n = { t: (key) => key };
    qui conta dove si posa. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 function bubble(role, ...texts) {
   const msg = el('div');
@@ -134,7 +136,7 @@ function actions(msg) {
     ['chat-meta', 'chat-time'].includes(b.className) ? b.textContent : b.className.split(' ')[1]
   ));
 }
-""".replace("__METHODS__", methods)
+""".replace("__METHODS__", methods).replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode"))
 
 
 def _run_js(script: str) -> None:

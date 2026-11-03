@@ -128,6 +128,21 @@ export class SessionManager extends EventTarget {
     }
     return { thread: data, scope, runStartedAt, stale, generation };
   }
+
+  /** Una pagina di storia della conversazione aperta adesso, per
+   *  `history-pager.js` (`begin`), o `null` se non ce n'e' una. `stale()` e'
+   *  vero da quando la conversazione e' cambiata — anche dopo che la risposta
+   *  e' arrivata, fino al disegno. Casa e officina ne avevano una copia
+   *  ciascuna, e quella della casa guardava solo la finestra della fetch. */
+  historyPage() {
+    const key = this.currentKey;
+    if (!key) return null;
+    const generation = this._switchGen;
+    return {
+      fetch: async (limit, cursor) => (await this.loadThread(key, limit, cursor)).thread,
+      stale: () => generation !== this._switchGen,
+    };
+  }
 }
 
 export const sessionManager = new SessionManager();

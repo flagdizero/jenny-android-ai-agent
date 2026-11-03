@@ -79,6 +79,8 @@ const i18n = { t: (key) => 'i18n:' + key };
    suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 function makeChat() {
   const chat = {
@@ -92,7 +94,6 @@ function makeChat() {
     _follow() {},
     syncEmpty() {},
     scrollToBottom() {},
-    _originBadge() { return null; },
     _appendMedia(node, media) {
       for (const m of media) {
         const el = makeNode();
@@ -105,7 +106,6 @@ function makeChat() {
     __PREPEND__,
     __IN_BATCH__,
     __APPEND_USER__,
-    __TIME_EL__,
     __APPEND_ASSISTANT__,
     __APPEND_BOUNDARY__,
     __APPEND__,
@@ -135,11 +135,11 @@ const trace = (turn) => ({ role: 'tool', kind: 'trace', content: 'read_file: x',
 def _harness() -> str:
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     return (
-        _HARNESS.replace("__BUILD_TURNS__", member(src, "_buildTurns"))
+        _HARNESS.replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode"))
+        .replace("__BUILD_TURNS__", member(src, "_buildTurns"))
         .replace("__PREPEND__", member(src, "prependTurns"))
         .replace("__IN_BATCH__", member(src, "_inBatch"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
-        .replace("__TIME_EL__", member(src, "_timeEl"))
         .replace("__APPEND_ASSISTANT__", member(src, "_appendAssistant"))
         .replace("__APPEND_BOUNDARY__", member(src, "_appendBoundary"))
         .replace("__APPEND__", member(src, "_append"))

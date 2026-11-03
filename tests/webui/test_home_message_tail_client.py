@@ -34,7 +34,6 @@ _METHODS = (
     "_journalMarkOf",
     "_moveOfferOf",
     "_tailOf",
-    "_timeEl",
     "_appendUser",
     "_register",
     "_textOf",
@@ -94,6 +93,8 @@ const i18n = { t: (key) => key };
    suo banco (`test_chat_time_client.py`); qui conta solo se c'e' e dove sta. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 function makeChat() {
   return {
@@ -111,7 +112,6 @@ function makeChat() {
     syncEmpty() {},
     _follow() {},
     _appendMedia() {},
-    _originBadge() { return null; },
     _append(node) { this.el.appendChild(node); return node; },
     __METHODS__,
   };
@@ -132,7 +132,7 @@ const ultima = (chat) => chat.el.children[chat.el.children.length - 1];
 def _harness() -> str:
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     methods = ",\n    ".join(member(src, name) for name in _METHODS)
-    return _HARNESS.replace("__METHODS__", methods) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
+    return _HARNESS.replace("__METHODS__", methods).replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode")) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
 
 
 def _run_js(script: str) -> None:

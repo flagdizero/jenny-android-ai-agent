@@ -25,6 +25,7 @@ def _opened(payload: dict, *, html: bool = False):
         f"""
 {function(UTILS_SRC, "escapeHtml")}
 {function(UTILS_SRC, "sizeText")}
+{function(CHAT_SRC, "highlight")}
 const i18n = {{ locale: 'it', t: (k) => k }};
 const sessionManager = {{ currentKey: 'project:orto' }};
 const api = {{ fetchFilePreview: async () => ({json.dumps(payload)}) }};

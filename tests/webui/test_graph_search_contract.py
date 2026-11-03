@@ -115,6 +115,9 @@ def _harness_dir(tmp_path: Path) -> Path:
         shutil.copy(ASSETS / name, assets / name)
     for name in ("pinch-zoom.js", "horizontal-swipe.js", "cron-view.js", "dom.js", "when.js"):
         shutil.copy(ASSETS / "shared" / name, assets / "shared" / name)
+    # L'anteprima di una pagina passa dal sanificatore del filo (03/11/2026).
+    for name in ("markdown.js",):
+        shutil.copy(ASSETS / "shared" / name, assets / "shared" / name)
     shutil.copy(ASSETS / "shared" / "wiki-search.js", assets / "shared" / "wiki-search.js")
     for name, text in _STUBS.items():
         (assets / "shared" / name).write_text(text, encoding="utf-8")

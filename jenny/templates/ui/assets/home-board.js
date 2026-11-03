@@ -45,6 +45,7 @@ import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js';
+import { sanitizeContent } from './shared/markdown.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 import { metaText, renderBlock } from './home-board-blocks.js';
 import { DrawerNotes } from './home-board-notes.js';
@@ -2113,7 +2114,7 @@ export class HomeBoard {
        trascura, e la passata dopo lo legge. Un conto perso non e' un guasto. */
     rpc.board('preview', this.notebook, { page: path }).catch(() => {});
     const tmp = document.createElement('div');
-    tmp.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(page.html || '') : '';
+    tmp.innerHTML = typeof DOMPurify !== 'undefined' ? sanitizeContent(page.html) : '';
     tmp.querySelector('h1')?.remove();
     const text = (tmp.textContent || page.raw || '').replace(/\s+/g, ' ').trim();
     const short = text.length > PREVIEW_CHARS
