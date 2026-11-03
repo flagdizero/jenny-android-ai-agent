@@ -370,6 +370,13 @@ class Runner:
                      _int((dev.read("memory/.cursor") or "").strip()),
                      _history_floor(dev.read_session("unified:default")))
         last = cursor
+        if scenario.dream_after:
+            # Dream lavora un lotto dal suo cursore (al piu' 20 voci, 16k caratteri):
+            # le voci rimaste indietro sull'emulatore, archivi di /new di prove
+            # precedenti, ci entravano prima di quella dello scenario e la lasciavano
+            # fuori. Il 03/11/2026 erano 19, e tre scenari di Dream erano rossi su due
+            # modelli per questo. Lo scenario misura solo quel che semina.
+            dev.write("memory/.dream_cursor", str(cursor))
         for raw_path, raw_text in scenario.append.items():
             path = scenario.render(raw_path, nonces)
             text = scenario.render(raw_text, nonces)
