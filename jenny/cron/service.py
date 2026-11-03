@@ -1,18 +1,16 @@
 """Cron service for scheduling agent tasks."""
 
 import asyncio
-import json
 import uuid
-from contextlib import contextmanager, suppress
-from dataclasses import asdict
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Literal
 
-from filelock import SoftFileLock, Timeout
 from loguru import logger
 
 from jenny.board.model import CONDITION_OPS
+from jenny.cron import store as cron_store
 from jenny.cron.session_turns import is_bound_cron_job
 from jenny.cron.silence_watchdog import alert_silently_broken_checks
 from jenny.cron.types import (
@@ -33,40 +31,9 @@ from jenny.cron.types import (
 from jenny.runtime import power
 from jenny.session.keys import normalize_user_session_key
 from jenny.utils.clock import now_ms as _now_ms
-from jenny.utils.path import (
-    atomic_write,
-    iter_jsonl,
-    load_with_recovery,
-    rotate_valid_json_backup,
-)
 
 if TYPE_CHECKING:
     from jenny.cron.monitor_followup import MonitorFollowup
-
-_LockClass = SoftFileLock
-# Quanto aspettare il file lock del giornale prima di considerarlo stantio.
-# ``SoftFileLock`` e' un file creato con ``O_EXCL``: un processo ucciso dentro
-# il ``with`` — su Android e' il modo normale in cui il processo finisce — lo
-# lascia li', e senza timeout il prossimo avvio si pianta in ``_load_store``,
-# sincrono sull'event loop, watchdog compreso.
-_LOCK_TIMEOUT_S = 5.0
-
-
-class _LoadedStore(NamedTuple):
-    """Esito di una lettura dello store, ripiego incluso.
-
-    ``recovered_from`` (``"backup"`` | ``"empty"`` | ``None``) viaggia insieme
-    ai job invece di essere registrato subito sul ``RuntimeContext``: chi legge
-    il file non sa se in memoria c'è già uno snapshot più fresco, e avvisare
-    l'utente di una perdita che non c'è stata è un modo lento di far ignorare
-    gli avvisi.
-    """
-
-    jobs: list[CronJob]
-    version: int
-    recovered_from: str | None
-    quarantined: Path | None
-
 
 class CronJobSkippedError(Exception):
     """Raised by cron callbacks when a job was intentionally skipped."""
@@ -74,19 +41,6 @@ class CronJobSkippedError(Exception):
 
 _CRON_MODES: tuple[str, ...] = ("reminder", "monitor")
 
-# Quanti record di esecuzione tenere in ``runs/``. Fino al 24/08/2026 non c'era
-# nessun tetto e nessuna potatura: la directory cresceva per sempre, e i record
-# di un job cancellato restavano li' dopo di lui.
-#
-# **Un conteggio e non un'eta'.** Una scadenza a giorni non protegge da un job
-# che gira ogni minuto; un tetto sul numero si', e vale in entrambi i regimi. A
-# due esecuzioni al giorno (il ritmo misurato sul telefono) sono circa otto
-# mesi; a una ogni cinque minuti, un giorno e mezzo.
-#
-# Si puo' scegliere un numero senza tante cerimonie perche' **quei record non li
-# legge nessuno**: ne' il gateway, ne' le route della WebUI, ne' il client, ne' il
-# tool ``cron``. Sono una traccia per il post-mortem, e basta.
-_RUN_RECORDS_KEEP = 500
 
 
 def _load_session_key(raw: Any) -> str | None:
@@ -361,16 +315,15 @@ def _validate_cron_expr(schedule: CronSchedule) -> None:
         raise ValueError(f"invalid cron expression {schedule.expr!r}: {exc}") from None
 
 
-def read_jobs_file(path: Path) -> list[CronJob]:
-    """I job di uno store letti col parser dello scheduler, senza avviarlo né toccarlo.
+def read_jobs(workspace: Path) -> list[CronJob]:
+    """I job del workspace letti col parser dello scheduler, senza avviarlo né toccarlo.
 
     Per chi non ha lo scheduler in mano (un prompt, una scrittura della bacheca
-    in un thread). Solleva se il file non è JSON; un job che non si legge si salta
-    (lo scheduler, lui, mette da parte lo store intero).
+    in un thread): una lettura del database, sicura da qualunque thread. Un job
+    che non si legge si salta.
     """
-    data = json.loads(path.read_text(encoding="utf-8"))
     jobs: list[CronJob] = []
-    for raw in data.get("jobs") or [] if isinstance(data, dict) else []:
+    for raw in cron_store.load_rows(cron_store.cron_database(workspace)):
         try:
             jobs.append(CronService._parse_job(raw))
         except (KeyError, TypeError, ValueError, AttributeError):
@@ -389,16 +342,18 @@ class CronService:
 
     def __init__(
         self,
-        store_path: Path,
+        workspace: Path,
         on_job: Callable[[CronJob], Coroutine[Any, Any, str | None]] | None = None,
         max_sleep_ms: int = 300_000,  # 5 minutes
     ):
-        self.store_path = store_path
-        self._action_path = store_path.parent / "action.jsonl"
-        self._run_records_dir = store_path.parent / "runs"
-        self._lock = _LockClass(str(self._action_path.parent) + ".lock")
+        # I job stanno nello ``state.sqlite`` di *workspace* (``cron/store.py``).
+        self.workspace = Path(workspace)
+        self._db = cron_store.cron_database(self.workspace)
         self.on_job = on_job
         self._store: CronStore | None = None
+        # Gli id dei job all'ultima lettura (o salvataggio): chi manca da lì in
+        # poi è stato tolto da questa istanza (v. ``_save_store``).
+        self._saved_ids: set[str] = set()
         self._timer_task: asyncio.Task | None = None
         self._running = False
         self._timer_active = False
@@ -458,21 +413,6 @@ class CronService:
         for job in self._store.jobs:
             changed = self._enforce_agent_binding(job) or changed
         return changed
-
-    def _rotate_backup(self) -> None:
-        """Conserva l'ultimo contenuto *valido* come ``jobs.json.bak``."""
-        try:
-            rotate_valid_json_backup(self.store_path)
-        except OSError as e:
-            # Rete di sicurezza, non requisito: il salvataggio vero procede.
-            logger.warning("Could not refresh the cron store backup: {}", e)
-
-    @staticmethod
-    def _parse_jobs(path: Path) -> tuple[list[CronJob], int]:
-        """Parse *path* into ``(jobs, version)``. Solleva se il file non è usabile."""
-        data = json.loads(path.read_text(encoding="utf-8"))
-        version = data.get("version", 1)
-        return [CronService._parse_job(j) for j in data.get("jobs", [])], version
 
     @staticmethod
     def _parse_job(j: dict[str, Any]) -> CronJob:
@@ -538,325 +478,114 @@ class CronService:
             paused_at_ms=j.get("pausedAtMs"),
         )
 
-    def _load_jobs(self) -> _LoadedStore | None:
-        """Load jobs from disk, recovering from ``jobs.json.bak`` when needed.
+    def _load_store(self) -> CronStore:
+        """I job dal database.
 
-        Stessa politica di ``config.json`` e della bacheca, e la stessa funzione
-        (``utils.path.load_with_recovery``): un file illeggibile non deve
-        impedire l'avvio, ma non deve nemmeno sparire in silenzio. Nell'ordine:
-        il file vivo, poi il backup dell'ultimo salvataggio buono (rimesso al
-        suo posto), poi una lista vuota.
-
-        Il ripiego lo *riporta* soltanto: decidere se accettarlo — e quindi se
-        avvisare l'utente — tocca a ``_load_store``, che è l'unico a sapere se
-        esiste già uno snapshot in memoria più fresco del file su disco.
-
-        Returns:
-            ``None`` solo quando il file rotto **non** si è potuto spostare di
-            lato, perché salvarci sopra distruggerebbe l'unica copia rimasta.
-        """
-        got = load_with_recovery(self.store_path, self._parse_jobs, errors=(Exception,))
-        if got.stuck:
-            return None
-        jobs, version = got.value or ([], 1)
-        return _LoadedStore(jobs, version, got.recovered_from, got.quarantined)
-
-    @staticmethod
-    def _record_recovery(kind: str, quarantined: Path) -> None:
-        """Segna sul ``RuntimeContext`` che lo store cron è stato recuperato.
-
-        Import locale come in ``config/loader.py``: ``cron.service`` non deve
-        dipendere dal runtime per caricare dei job.
-        """
-        from jenny.runtime.context import get_runtime_context
-
-        ctx = get_runtime_context()
-        ctx.cron_recovered_from = kind
-        ctx.cron_quarantine_path = quarantined
-
-    def _merge_action(self):
-        if not self._action_path.exists():
-            return
-
-        jobs_map = {j.id: j for j in self._store.jobs}
-
-        def _update(params: dict):
-            j = CronJob.from_dict(params)
-            # Stessa tolleranza che ``_parse_jobs`` applica a jobs.json: il
-            # journal è l'altra porta d'ingresso dallo storage, e senza questa
-            # riga un ``mode`` ignoto entrerebbe verbatim nel modello, violando
-            # il Literal dichiarato in ``CronPayload.mode``.
-            j.payload.mode = _parse_mode(j.payload.mode)
-            jobs_map[j.id] = j
-
-        def _del(params: dict):
-            # Cancellare un job che non c'e' piu' e' un no-op, non un errore: il
-            # giornale si rilegge a **ogni** caricamento finche' il servizio non
-            # parte, e nel frattempo ``register_system_job`` salva lo store senza
-            # quel job. Con ``pop(job_id)`` secco la riga sollevava a ogni giro,
-            # il ``continue`` sotto saltava ``changed = True``, e il giornale non
-            # veniva mai svuotato: un traceback per ogni ``_load_store``, per
-            # sempre (misurato sul telefono il 03/09/2026, primo avvio della
-            # 0.10.0, con la riga «del atlas» del ritiro).
-            if job_id := params.get("job_id"):
-                jobs_map.pop(job_id, None)
-
-        with self._locked():
-            # ``errors="replace"``: un byte non UTF-8 rompe solo la sua riga, che
-            # ``iter_jsonl`` salta; prima la decodifica falliva fuori dal ``try``
-            # e si perdeva tutto il merge.
-            with open(self._action_path, encoding="utf-8", errors="replace") as f:
-                changed = False
-                for action in iter_jsonl(
-                    f, on_bad=lambda line: logger.warning("Cron: unreadable action line {!r}", line[:200])
-                ):
-                    try:
-                        if "action" not in action:
-                            continue
-                        if action["action"] == "del":
-                            _del(action.get("params", {}))
-                        else:
-                            _update(action.get("params", {}))
-                        changed = True
-                    except Exception:
-                        logger.exception("load action line error")
-                        continue
-            self._store.jobs = list(jobs_map.values())
-            if self._running and changed:
-                self._action_path.write_text("", encoding="utf-8")
-                self._save_store()
-        return
-
-    @contextmanager
-    def _locked(self):
-        """Il file lock del giornale, con timeout e recupero del lock stantio.
-
-        Il lock difende ``action.jsonl`` fra istanze; il gateway gira in un
-        solo processo, quindi un lock che non si libera entro
-        ``_LOCK_TIMEOUT_S`` e' di un processo morto e va tolto. Un secondo
-        timeout dopo la rimozione propaga: meglio un avvio che fallisce
-        rumorosamente di uno che resta appeso per sempre.
-        """
-        try:
-            self._lock.acquire(timeout=_LOCK_TIMEOUT_S)
-        except Timeout:
-            logger.warning(
-                "Cron lock {} held for more than {}s: assuming a dead holder and removing it",
-                self._lock.lock_file, _LOCK_TIMEOUT_S,
-            )
-            with suppress(OSError):
-                Path(self._lock.lock_file).unlink()
-            self._lock.acquire(timeout=_LOCK_TIMEOUT_S)
-        try:
-            yield
-        finally:
-            self._lock.release()
-
-    def _load_store(self) -> CronStore | None:
-        """Load jobs from disk. Reloads automatically if file was modified externally.
-        - Reload every time because it needs to merge operations on the jobs object from other instances.
-        - During _on_timer execution, return the existing store to prevent concurrent
-          _load_store calls (e.g. from list_jobs polling) from replacing it mid-execution.
-        - When the on-disk store exists but is unreadable: keep using the
-          previous in-memory ``self._store`` if we already have one (so a
-          transient corruption does not drop live jobs); only the very first
-          load can return ``None`` to signal an unrecoverable state to the
-          caller. Quel primo caricamento avviene in ``register_system_job``
-          (``GatewayContainer.build``), non in ``start``: entrambi devono
-          quindi controllare il ``None``.
+        Si rilegge a ogni chiamata, così quel che un'altra istanza ha salvato si
+        vede; durante ``_on_timer`` invece si tiene lo store in memoria, perché
+        una lettura nel mezzo (il polling di ``list_jobs``) non lo sostituisca
+        a metà esecuzione.
         """
         if self._timer_active and self._store:
             return self._store
-        loaded = self._load_jobs()
-        if loaded is None:
-            # Corrupt store on disk.  Prefer the last good in-memory snapshot
-            # over wiping live jobs; ``_load_jobs`` has already moved the
-            # corrupt file aside with a ``jobs.corrupt-<ts>.json`` suffix.
-            if self._store is not None:
-                return self._store
-            return None
-        if loaded.recovered_from is not None and self._store is not None:
-            # Corruzione arrivata *dopo* un avvio riuscito (su Android: una
-            # lettura parziale, un processo ucciso a metà). Lo snapshot in
-            # memoria è almeno fresco quanto il ``.bak`` e più fresco di una
-            # lista vuota: si tiene quello, e il prossimo salvataggio lo
-            # riscrive su disco. Nessun avviso all'utente, perché qui non ha
-            # perso niente — è il caso in cui il ripiego non serve.
-            return self._store
-        if loaded.recovered_from is not None and loaded.quarantined is not None:
-            self._record_recovery(loaded.recovered_from, loaded.quarantined)
-        self._store = CronStore(version=loaded.version, jobs=loaded.jobs)
-        self._merge_action()
+        jobs: list[CronJob] = []
+        for raw in cron_store.load_rows(self._db):
+            try:
+                jobs.append(self._parse_job(raw))
+            except (KeyError, TypeError, ValueError, AttributeError):
+                logger.error("Cron: job {} unreadable, skipped", raw.get("id"))
+        self._store = CronStore(version=1, jobs=jobs)
+        self._saved_ids = {j.id for j in jobs}
         if self._enforce_store_agent_bindings() and self._running:
             self._save_store()
 
         return self._store
 
     def _save_store(self) -> None:
-        """Save jobs to disk."""
+        """I job in memoria nel database, in una transazione.
+
+        Si tolgono solo i job che c'erano all'ultima lettura e non ci sono più:
+        uno aggiunto nel frattempo da un'altra istanza resta.
+        """
         if not self._store:
             return
+        current = {j.id for j in self._store.jobs}
+        cron_store.save_rows(self._db, [self._job_to_dict(j) for j in self._store.jobs],
+                             removed=self._saved_ids - current)
+        self._saved_ids = current
 
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
-
-        data = {
-            "version": self._store.version,
-            "jobs": [
-                {
-                    "id": j.id,
-                    "name": j.name,
-                    "enabled": j.enabled,
-                    "schedule": {
-                        "kind": j.schedule.kind,
-                        "atMs": j.schedule.at_ms,
-                        "everyMs": j.schedule.every_ms,
-                        "expr": j.schedule.expr,
-                        "tz": j.schedule.tz,
-                        **({"precision": j.schedule.precision} if j.schedule.precision else {}),
-                    },
-                    "payload": {
-                        "kind": j.payload.kind,
-                        "mode": j.payload.mode,
-                        "message": j.payload.message,
-                        "sessionKey": j.payload.session_key,
-                        "originChannel": j.payload.origin_channel,
-                        "originChatId": j.payload.origin_chat_id,
-                        "originMetadata": j.payload.origin_metadata,
-                        # Solo per i cron del quaderno: uno store senza quaderni
-                        # resta identico a prima, byte per byte.
-                        **({"board": j.payload.board} if j.payload.board else {}),
-                        **({"why": j.payload.why} if j.payload.why else {}),
-                        **({"condition": j.payload.condition} if j.payload.condition else {}),
-                    },
-                    "state": {
-                        "nextRunAtMs": j.state.next_run_at_ms,
-                        "lastRunAtMs": j.state.last_run_at_ms,
-                        "lastStatus": j.state.last_status,
-                        "lastError": j.state.last_error,
-                        "consecutiveCouldNotCheck": j.state.consecutive_could_not_check,
-                        "couldNotCheckSinceMs": j.state.could_not_check_since_ms,
-                        "couldNotCheckEscalated": j.state.could_not_check_escalated,
-                        "couldNotCheckEscalatedAtMs": j.state.could_not_check_escalated_at_ms,
-                        "pendingSinceMs": j.state.pending_since_ms,
-                        "conditionNotified": j.state.condition_notified,
-                        "runHistory": [
-                            {
-                                "runAtMs": r.run_at_ms,
-                                "status": r.status,
-                                "durationMs": r.duration_ms,
-                                "error": r.error,
-                            }
-                            for r in j.state.run_history
-                        ],
-                    },
-                    "createdAtMs": j.created_at_ms,
-                    "updatedAtMs": j.updated_at_ms,
-                    "deleteAfterRun": j.delete_after_run,
-                    "pausedAtMs": j.paused_at_ms,
-                }
-                for j in self._store.jobs
-            ]
+    @staticmethod
+    def _job_to_dict(j: CronJob) -> dict[str, Any]:
+        """Un job come riga dello store (lo legge ``_parse_job``)."""
+        return {
+            "id": j.id,
+            "name": j.name,
+            "enabled": j.enabled,
+            "schedule": {
+                "kind": j.schedule.kind,
+                "atMs": j.schedule.at_ms,
+                "everyMs": j.schedule.every_ms,
+                "expr": j.schedule.expr,
+                "tz": j.schedule.tz,
+                **({"precision": j.schedule.precision} if j.schedule.precision else {}),
+            },
+            "payload": {
+                "kind": j.payload.kind,
+                "mode": j.payload.mode,
+                "message": j.payload.message,
+                "sessionKey": j.payload.session_key,
+                "originChannel": j.payload.origin_channel,
+                "originChatId": j.payload.origin_chat_id,
+                "originMetadata": j.payload.origin_metadata,
+                # Solo per i cron del quaderno: uno store senza quaderni
+                # resta identico a prima, byte per byte.
+                **({"board": j.payload.board} if j.payload.board else {}),
+                **({"why": j.payload.why} if j.payload.why else {}),
+                **({"condition": j.payload.condition} if j.payload.condition else {}),
+            },
+            "state": {
+                "nextRunAtMs": j.state.next_run_at_ms,
+                "lastRunAtMs": j.state.last_run_at_ms,
+                "lastStatus": j.state.last_status,
+                "lastError": j.state.last_error,
+                "consecutiveCouldNotCheck": j.state.consecutive_could_not_check,
+                "couldNotCheckSinceMs": j.state.could_not_check_since_ms,
+                "couldNotCheckEscalated": j.state.could_not_check_escalated,
+                "couldNotCheckEscalatedAtMs": j.state.could_not_check_escalated_at_ms,
+                "pendingSinceMs": j.state.pending_since_ms,
+                "conditionNotified": j.state.condition_notified,
+                "runHistory": [
+                    {
+                        "runAtMs": r.run_at_ms,
+                        "status": r.status,
+                        "durationMs": r.duration_ms,
+                        "error": r.error,
+                    }
+                    for r in j.state.run_history
+                ],
+            },
+            "createdAtMs": j.created_at_ms,
+            "updatedAtMs": j.updated_at_ms,
+            "deleteAfterRun": j.delete_after_run,
+            "pausedAtMs": j.paused_at_ms,
         }
 
-        self._rotate_backup()
-        atomic_write(self.store_path, json.dumps(data, indent=2, ensure_ascii=False))
-
-    @staticmethod
-    def _safe_run_record_name(run_id: str) -> str:
-        return "".join(c if c.isalnum() or c in "._-" else "_" for c in run_id)
-
-    def _run_record_paths(self) -> list[Path]:
-        """I file in ``runs/``, o lista vuota se la directory non c'e'.
-
-        Non solleva: la potatura e' igiene, e un problema nell'igiene non deve
-        poter impedire al cron di partire.
-        """
-        try:
-            return [p for p in self._run_records_dir.iterdir() if p.is_file()]
-        except OSError:
-            return []
-
-    @staticmethod
-    def _run_record_sort_key(path: Path) -> int | None:
-        """Il timestamp dentro il nome, o ``None`` se il nome non ha quella forma.
-
-        Il nome e' ``<job_id>_<ms>_<rand>.json`` (v. ``bound_runner``). Si legge
-        **dal nome e non dall'mtime**: e' deterministico, sopravvive a una copia
-        del workspace, e si puo' provare senza toccare l'orologio — che in questo
-        repo e' una regola e non un gusto.
-
-        ``None`` vuol dire «non lo capisco», e quel che non si capisce non si
-        cancella (v. :meth:`_prune_run_records`).
-        """
-        parts = path.stem.split("_")
-        if len(parts) < 2:
-            return None
-        try:
-            return int(parts[1])
-        except ValueError:
-            return None
-
     def _prune_run_records(self) -> int:
-        """Tiene i :data:`_RUN_RECORDS_KEEP` record piu' recenti. Ritorna quanti ne toglie.
-
-        **I file che non hanno la forma attesa restano.** Sono l'unico caso in
-        cui questa funzione non sa che sta guardando, e cancellare per non aver
-        capito e' il modo di trasformare un'igiene in una perdita di dati.
-        """
-        dated = []
-        for path in self._run_record_paths():
-            stamp = self._run_record_sort_key(path)
-            if stamp is not None:
-                dated.append((stamp, path))
-        if len(dated) <= _RUN_RECORDS_KEEP:
-            return 0
-        dated.sort(key=lambda item: item[0], reverse=True)
-        removed = 0
-        for _, path in dated[_RUN_RECORDS_KEEP:]:
-            try:
-                path.unlink()
-                removed += 1
-            except OSError:
-                logger.opt(exception=True).warning(
-                    "Cron: record di esecuzione non rimosso: {}", path.name
-                )
+        """Tiene i ``RUNS_KEEP`` record più recenti. Ritorna quanti ne toglie."""
+        removed = cron_store.prune_runs(self._db)
         if removed:
             logger.info("Cron: potati {} record di esecuzione", removed)
         return removed
 
     def _remove_run_records(self, job_id: str) -> int:
-        """Toglie i record del job *job_id*. Ritorna quanti ne toglie.
-
-        Il confronto e' sul **segmento** dell'id e non su una sottostringa:
-        ``<job_id>_`` col separatore, cosi' un id che sia prefisso di un altro
-        non si porta via i record del vicino.
-        """
-        prefix = f"{job_id}_"
-        removed = 0
-        for path in self._run_record_paths():
-            if not path.name.startswith(prefix):
-                continue
-            try:
-                path.unlink()
-                removed += 1
-            except OSError:
-                logger.opt(exception=True).warning(
-                    "Cron: record di {} non rimosso: {}", job_id, path.name
-                )
-        return removed
+        """Toglie i record del job *job_id*. Ritorna quanti ne toglie."""
+        return cron_store.remove_runs(self._db, job_id)
 
     def write_run_record(self, run_id: str, record: dict[str, Any]) -> None:
         """Write an internal audit record for one cron execution."""
-        name = self._safe_run_record_name(run_id)
-        if not name:
-            name = str(uuid.uuid4())
-        path = self._run_records_dir / f"{name}.json"
-        payload = {
-            **record,
-            "run_id": run_id,
-            "updated_at_ms": _now_ms(),
-        }
-        atomic_write(path, json.dumps(payload, indent=2, ensure_ascii=False))
+        now = _now_ms()
+        payload = {**record, "run_id": run_id, "updated_at_ms": now}
+        cron_store.write_run(self._db, run_id, str(record.get("job_id") or ""), now, payload)
 
     async def start(self) -> None:
         """Start the cron service."""
@@ -866,41 +595,14 @@ class CronService:
         # sul loop del gateway, e ``start`` è l'unico punto di questa classe che
         # gira sicuramente là dentro (vedi ``power.bind_wake_loop``).
         self._wake_event = power.bind_wake_loop() if power.alarm_driven_cron_enabled() else None
-        loaded = self._load_store()
-        if loaded is None:
-            self._running = False
-            raise self._corrupt_store_error()
+        self._load_store()
         self._recompute_next_runs()
         self._save_store()
         self._arm_timer()
-        # Una volta per avvio, che su Android vuol dire spesso. Costa una
-        # ``iterdir`` di qualche centinaio di voci e non puo' fallire il boot.
+        # Una volta per avvio, che su Android vuol dire spesso: non puo' fallire il boot.
         with suppress(Exception):
             self._prune_run_records()
         logger.info("Cron service started with {} jobs", len(self._store.jobs if self._store else []))
-
-    def _corrupt_store_error(self) -> RuntimeError:
-        """Store illeggibile **e** non spostabile: l'unico caso che rifiuta.
-
-        Da 0.6.6 un file rotto non impedisce più l'avvio: ``_load_jobs`` prova
-        il ``.bak``, altrimenti mette il file da parte come ``jobs.corrupt-<ts>.json`` e
-        riparte senza job, registrandolo perché la WebUI lo dica. Quella scelta
-        regge su una condizione precisa — che la copia forense esista davvero.
-
-        Se il rename fallisce, il file rotto è ancora al suo posto e il primo
-        ``_save_store`` ci scriverebbe sopra: i job dell'utente non esisterebbero
-        più da nessuna parte. Lì, e solo lì, non partire è la risposta giusta.
-
-        Vive qui, e non inline in ``start``, perché il primo caricamento non
-        avviene in ``start``: ``GatewayContainer.build`` registra i job di
-        sistema prima, quindi è ``register_system_job`` a vedere per primo il
-        ``None``.
-        """
-        return RuntimeError(
-            f"cron store at {self.store_path} is corrupt and could not be set aside; "
-            "refusing to start, because saving would overwrite the only copy left. "
-            "Move the file out of the way manually and start again."
-        )
 
     def stop(self) -> None:
         """Stop the cron service."""
@@ -1119,9 +821,6 @@ class CronService:
     async def _on_timer(self) -> None:
         """Handle timer tick - run due jobs."""
         self._load_store()
-        # If a hot reload found a corrupt store on disk, ``self._store`` may
-        # still hold the previous, known-good in-memory snapshot.  Keep using
-        # it rather than crashing the timer or wiping live jobs.
         if not self._store:
             self._arm_timer()
             return
@@ -1313,19 +1012,11 @@ class CronService:
             except Exception:  # noqa: BLE001 — il job è già andato, la bacheca è contorno
                 logger.exception("Cron: board not cleaned after one-shot {}", job.id)
 
-    def _append_action(self, action: Literal["add", "del"], params: dict):
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._locked():
-            with open(self._action_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"action": action, "params": params}, ensure_ascii=False) + "\n")
-
     # ========== Public API ==========
 
     def list_jobs(self, include_disabled: bool = False) -> list[CronJob]:
         """List all jobs."""
         store = self._load_store()
-        if store is None:
-            return []
         jobs = store.jobs if include_disabled else [j for j in store.jobs if j.enabled]
         return sorted(jobs, key=lambda j: j.state.next_run_at_ms or float('inf'))
 
@@ -1394,13 +1085,10 @@ class CronService:
             delete_after_run=delete_after_run or schedule.kind == "at",
         )
         self._enforce_agent_binding(job)
-        if self._running:
-            store = self._load_store()
-            store.jobs.append(job)
-            self._save_store()
-            self._arm_timer()
-        else:
-            self._append_action("add", asdict(job))
+        store = self._load_store()
+        store.jobs.append(job)
+        self._save_store()
+        self._arm_timer()
 
         logger.info("Cron: added job '{}' ({})", name, job.id)
         return job
@@ -1453,19 +1141,14 @@ class CronService:
             if job.paused_at_ms is None:
                 job.state.next_run_at_ms = _next_run_with_catch_up(schedule, now)
         job.updated_at_ms = now
-        if self._running:
-            self._save_store()
-            self._arm_timer()
-        else:
-            self._append_action("add", asdict(job))
+        self._save_store()
+        self._arm_timer()
         logger.info("Cron: updated job '{}' ({})", job.name, job.id)
         return job
 
     def register_system_job(self, job: CronJob) -> CronJob:
         """Register an internal system job (idempotent on restart)."""
         store = self._load_store()
-        if store is None:
-            raise self._corrupt_store_error()
         now = _now_ms()
         previous = next((j for j in store.jobs if j.id == job.id), None)
         # Il conto alla rovescia sopravvive al riavvio. Ricalcolarlo qui a ogni
@@ -1515,11 +1198,8 @@ class CronService:
         removed = len(store.jobs) < before
 
         if removed:
-            if self._running:
-                self._save_store()
-                self._arm_timer()
-            else:
-                self._append_action("del", {"job_id": job_id})
+            self._save_store()
+            self._arm_timer()
             # I record di esecuzione sono indicizzati per id del job, e nessuno
             # li potava: restavano dietro al job per sempre. Non e' la
             # reincarnazione che colpiva i progetti (gli id dei job sono opachi,
@@ -1542,8 +1222,7 @@ class CronService:
         La chiama la route dell'officina (``webui/cron_routes.py``), sullo stesso
         servizio che usa il tool ``cron``: e' lo stesso imbuto di scrittura, non
         un secondo scrittore. Stessa protezione di :meth:`remove_job` — un
-        ``system_event`` non e' dell'utente — e stesso modo di persistere:
-        ``jobs.json`` se il servizio gira, il giornale delle azioni se e' fermo.
+        ``system_event`` non e' dell'utente.
 
         - Pausa: spento, senza prossima esecuzione, con ``paused_at_ms``. Un job
           gia' spento per un'altra ragione (``at`` eseguito, job senza sessione)
@@ -1578,12 +1257,8 @@ class CronService:
             job.paused_at_ms = None
             job.state.next_run_at_ms = next_run
         job.updated_at_ms = now
-        if self._running:
-            self._save_store()
-            self._arm_timer()
-        else:
-            # Il giornale tratta come upsert tutto cio' che non e' ``del``.
-            self._append_action("add", asdict(job))
+        self._save_store()
+        self._arm_timer()
         logger.info("Cron: {} job '{}' ({})", "paused" if paused else "resumed", job.name, job.id)
         return "paused" if paused else "resumed"
 
@@ -1600,13 +1275,9 @@ class CronService:
         più. Si riscrivono tutti e due, nello stesso salvataggio, e solo dove
         valgono esattamente il nome vecchio. La sessione interna di un monitor
         (``cron:nb:<nome>/<id>``) si ricava dal link a ogni giro: segue da sola.
-
-        Stesso modo di persistere di :meth:`set_paused`: ``jobs.json`` se il
-        servizio gira, il giornale delle azioni se è fermo (l'avvio, quando la
-        riparazione di un rinomino interrotto arriva prima di ``start``).
         """
         store = self._load_store()
-        if store is None or old == new:
+        if old == new:
             return []
         now = _now_ms()
         moved: list[CronJob] = []
@@ -1629,11 +1300,7 @@ class CronService:
                 moved.append(job)
         if not moved:
             return []
-        if self._running:
-            self._save_store()
-        else:
-            for job in moved:
-                self._append_action("add", asdict(job))
+        self._save_store()
         logger.info("Cron: {} job(s) moved from notebook {} to {}", len(moved), old, new)
         return [job.id for job in moved]
 
@@ -1656,16 +1323,10 @@ class CronService:
         vanno via con lui, per la ragione scritta in :meth:`remove_job`.
         """
         store = self._load_store()
-        if store is None:
-            return False
         before = len(store.jobs)
         store.jobs = [j for j in store.jobs if j.id != job_id]
         if len(store.jobs) == before:
             return False
-        # Salva direttamente, come ``register_system_job`` che gira nella stessa
-        # fase (``GatewayContainer.build``, prima di ``start``): passare dal
-        # giornale delle azioni lascerebbe una riga «del» che il primo
-        # ``_save_store`` della registrazione rende gia' vecchia.
         self._save_store()
         if self._running:
             self._arm_timer()
@@ -1702,12 +1363,10 @@ class CronService:
     def get_job(self, job_id: str) -> CronJob | None:
         """Get a job by ID."""
         store = self._load_store()
-        if store is None:
-            return None
         return next((j for j in store.jobs if j.id == job_id), None)
 
     def persist_job_state(self) -> None:
-        """Scrive su disco lo stato dei job mutato da un chiamante esterno.
+        """Salva lo stato dei job mutato da un chiamante esterno.
 
         Serve al solo caso in cui uno stato cambia **fuori** da un run: il
         verdetto di un monitor delegato arriva col turno d'annuncio del
@@ -1723,15 +1382,8 @@ class CronService:
     def status(self) -> dict:
         """Get service status."""
         store = self._load_store()
-        # I lettori **degradano**, non abortiscono. Una query di stato è la
-        # prima cosa che ``GatewayContainer.build`` chiama, prima ancora di
-        # registrare i job: se decidesse lei di sollevare, il rifiuto
-        # arriverebbe da "quanti job ci sono" invece che da chi quel rifiuto
-        # lo sa spiegare. La decisione di non partire resta di
-        # ``register_system_job`` e ``start``, che dicono anche cosa fare col
-        # file ``jobs.corrupt-<ts>.json``.
         return {
             "enabled": self._running,
-            "jobs": len(store.jobs) if store is not None else 0,
+            "jobs": len(store.jobs),
             "next_wake_at_ms": self._get_next_wake_ms(),
         }

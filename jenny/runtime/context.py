@@ -34,12 +34,6 @@ class RuntimeContext:
     # scelte dall'utente senza dirglielo sarebbe la sorpresa peggiore.
     config_recovered_from: str | None = None
     config_quarantine_path: Path | None = None
-    # Stesso patto per lo store dei job cron: "backup" (recuperato dal .bak) o
-    # "empty" (ripartiti senza job). Serve un avviso distinto da quello della
-    # config perché qui a sparire sono i promemoria che l'utente ha chiesto:
-    # senza dirlo, se ne accorgerebbe solo quando non suonano.
-    cron_recovered_from: str | None = None
-    cron_quarantine_path: Path | None = None
 
 
 _CONTEXT = RuntimeContext()

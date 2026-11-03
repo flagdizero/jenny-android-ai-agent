@@ -954,7 +954,6 @@ def settings_payload(
         "requires_restart": requires_restart,
         "version": _version_payload(),
         "config_recovery": _config_recovery_payload(),
-        "cron_recovery": _cron_recovery_payload(),
     }
     return payload
 
@@ -975,27 +974,6 @@ def _config_recovery_payload() -> dict[str, Any] | None:
     quarantine = ctx.config_quarantine_path
     return {
         "restored_from": ctx.config_recovered_from,
-        "broken_file": str(_safe_expanduser(quarantine)) if quarantine else None,
-    }
-
-
-def _cron_recovery_payload() -> dict[str, Any] | None:
-    """Segnala alla UI che ``cron/jobs.json`` era illeggibile all'avvio.
-
-    Separato da ``config_recovery`` perché la conseguenza è diversa e più
-    concreta: con ``restoredFrom`` a "empty" i promemoria che l'utente aveva
-    creato non ci sono più, e nessuna schermata glielo direbbe — se ne
-    accorgerebbe solo quando non suonano. Il file rotto è conservato accanto,
-    così il recupero a mano resta possibile.
-    """
-    from jenny.runtime.context import get_runtime_context
-
-    ctx = get_runtime_context()
-    if not ctx.cron_recovered_from:
-        return None
-    quarantine = ctx.cron_quarantine_path
-    return {
-        "restored_from": ctx.cron_recovered_from,
         "broken_file": str(_safe_expanduser(quarantine)) if quarantine else None,
     }
 

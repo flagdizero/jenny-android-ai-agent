@@ -375,20 +375,19 @@ def follow_renamed_notebook(cron: Any, old: str, new: str) -> list[str]:
 
 
 def notebook_jobs_on_disk(notebook: str, workspace: Path | None = None) -> list[dict[str, Any]]:
-    """Le istantanee (:func:`job_snapshot`) dei cron del quaderno lette da ``cron/jobs.json``.
+    """Le istantanee (:func:`job_snapshot`) dei cron del quaderno lette dallo store.
 
     Sola lettura e fuori dal loop: chi costruisce il prompt di un turno o della
-    passata del giardiniere non ha lo scheduler in mano, e una lettura del file
-    non gli tocca lo stato (v. :func:`notebook_jobs` per chi lo ha). Il file lo
-    legge il parser dello scheduler, così i job sono quelli che vede lui. Restano
+    passata del giardiniere non ha lo scheduler in mano, e una lettura del
+    database non gli tocca lo stato (v. :func:`notebook_jobs` per chi lo ha). I
+    job li legge il parser dello scheduler, così sono quelli che vede lui. Restano
     i job vivi, accesi o in pausa; un job ``at`` già scattato è spento e non conta.
     """
     from jenny.config.paths import get_workspace_path
-    from jenny.cron.service import read_jobs_file
+    from jenny.cron.service import read_jobs
 
-    path = (workspace or get_workspace_path()) / "cron" / "jobs.json"
     try:
-        jobs = read_jobs_file(path)
+        jobs = read_jobs(workspace or get_workspace_path())
     except Exception:  # noqa: BLE001 — uno store illeggibile è «nessun cron»
         return []
     return [job_snapshot(j) for j in jobs
@@ -529,7 +528,7 @@ def notes_from_jobs(cron_jobs: Any, tz_name: str | None = None) -> list[dict[str
 
 def notes_on_disk(notebook: str, workspace: Path | None = None,
                   tz_name: str | None = None) -> list[dict[str, Any]]:
-    """Le righe dei promemoria del quaderno lette da ``cron/jobs.json``, dalla più vicina.
+    """Le righe dei promemoria del quaderno lette dallo store del cron, dalla più vicina.
 
     Per chi non ha lo scheduler in mano (un prompt, una scrittura della bacheca
     in un thread): come :func:`notebook_jobs_on_disk`. Senza workspace

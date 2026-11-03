@@ -233,7 +233,7 @@ Every line is written by the code, from what was actually done, not by the model
 
 ## Reminders
 
-A notebook's reminders are jobs of the [scheduler](./scheduling.md), like everything that happens "later": they live in `cron/jobs.json` next to the personal chat's, and carry a label that says where they belong — the notebook, and the card when they have one. They come from two places: the ones you add (in a drawer, or for the whole notebook from the board's **+**), and the ones the gardener or Jenny take from what you say — a line that decides or plans something with a date (*repot it around March*) becomes a reminder on the card it is about, or on the whole notebook when it concerns no card in particular, pointing at the page that explains why. You can also ask for one from the personal chat: *remind me to repot the maple in March, in the plants notebook*.
+A notebook's reminders are jobs of the [scheduler](./scheduling.md), like everything that happens "later": they live in the scheduler's list next to the personal chat's, and carry a label that says where they belong — the notebook, and the card when they have one. They come from two places: the ones you add (in a drawer, or for the whole notebook from the board's **+**), and the ones the gardener or Jenny take from what you say — a line that decides or plans something with a date (*repot it around March*) becomes a reminder on the card it is about, or on the whole notebook when it concerns no card in particular, pointing at the page that explains why. You can also ask for one from the personal chat: *remind me to repot the maple in March, in the plants notebook*.
 
 - A **dated** reminder is a job that fires once: at **09:00** (your time zone) on its day, or on the first of the month when only the month is known — or at the exact time you asked for. If the app was not running then, it fires as soon as it is back.
 - It rings in the **notebook's chat**, whichever chat it was asked from, with a notification, and Jenny says **why**: what is due and the reason, taken from the page the reminder points to.
@@ -268,7 +268,7 @@ workspace/wikis/<notebook>/
   raw/photos/          photos added to drawers
 ```
 
-The files under `board/cards/` are summaries of the wiki, and the next board pass rewrites any that are missing or out of date. `board.json` is yours: losing it loses your layout and sections. The notebook's reminders and crons are not in the notebook: they are jobs in `workspace/cron/jobs.json`. The apps placed on a board are not in the notebook: they live in `workspace/apps/`, with their data, and a notebook only points at them.
+The files under `board/cards/` are summaries of the wiki, and the next board pass rewrites any that are missing or out of date. `board.json` is yours: losing it loses your layout and sections. The notebook's reminders and crons are not in the notebook: they are jobs of the scheduler, in Jenny's state database. The apps placed on a board are not in the notebook: they live in `workspace/apps/`, with their data, and a notebook only points at them.
 
 ## See also
 

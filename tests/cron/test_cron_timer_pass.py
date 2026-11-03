@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import json
 import time
 from pathlib import Path
 
 from support.aio import wait_until
+from support.cron import saved_jobs, seed_jobs
 
 from jenny.cron.service import CronService
 from jenny.cron.types import CronSchedule
@@ -49,7 +49,7 @@ def _make_due(service: CronService, *job_ids: str) -> None:
 
 
 def _disk_jobs(path: Path) -> dict[str, dict]:
-    return {j["name"]: j for j in json.loads(path.read_text(encoding="utf-8"))["jobs"]}
+    return {j["name"]: j for j in saved_jobs(path)}
 
 
 # -- Lo stato di ogni job arriva su disco appena il job finisce ----------------
@@ -81,13 +81,13 @@ async def test_a_job_that_ran_is_on_disk_before_the_next_one_starts(tmp_path) ->
 async def test_a_delivered_reminder_does_not_run_again_after_a_kill(tmp_path) -> None:
     """Il riavvio parte da quello che c'era su disco al momento del kill."""
     path = tmp_path / "cron" / "jobs.json"
-    at_kill = tmp_path / "at-kill.json"
+    at_kill: list[list[dict]] = []
     ran: list[str] = []
 
     async def on_job(job):
         ran.append(job.name)
         if job.name == "B":
-            at_kill.write_bytes(path.read_bytes())
+            at_kill.append(saved_jobs(path))
 
     service = CronService(path, on_job=on_job, max_sleep_ms=100)
     await service.start()
@@ -95,11 +95,11 @@ async def test_a_delivered_reminder_does_not_run_again_after_a_kill(tmp_path) ->
         a = service.add_job("A", CronSchedule(kind="at", at_ms=_now() + _HOUR), "remind", **_bound())
         b = service.add_job("B", CronSchedule(kind="every", every_ms=_HOUR), "b", **_bound())
         _make_due(service, a.id, b.id)
-        await _wait_until(lambda: at_kill.exists())
+        await _wait_until(lambda: bool(at_kill))
     finally:
         service.stop()
 
-    path.write_bytes(at_kill.read_bytes())
+    seed_jobs(path, at_kill[0])
     ran.clear()
     restarted = CronService(path, on_job=on_job, max_sleep_ms=100)
     await restarted.start()

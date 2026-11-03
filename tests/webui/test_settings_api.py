@@ -551,29 +551,6 @@ async def test_short_api_key_is_shown_as_present(tmp_path, monkeypatch) -> None:
     assert provider["configured"] is True
 
 
-def test_settings_payload_reports_a_recovered_cron_store(tmp_path) -> None:
-    """Store cron illeggibile all'avvio: la UI deve poterlo dire.
-
-    Il payload è l'unico canale: i job persi non lasciano traccia in nessuna
-    schermata, quindi senza questo campo l'utente scopriva che i suoi
-    promemoria non c'erano più solo quando non suonavano.
-    """
-    from jenny.runtime.context import get_runtime_context
-
-    ctx = get_runtime_context()
-    assert settings_payload()["cron_recovery"] is None
-
-    broken = tmp_path / "jobs.corrupt-20261102T101500Z.json"
-    ctx.cron_recovered_from = "empty"
-    ctx.cron_quarantine_path = broken
-    try:
-        recovery = settings_payload()["cron_recovery"]
-        assert recovery == {"restored_from": "empty", "broken_file": str(broken)}
-    finally:
-        ctx.cron_recovered_from = None
-        ctx.cron_quarantine_path = None
-
-
 # ── L'indirizzo del provider si controlla prima di scriverlo (collaudo 27/09) ─
 
 

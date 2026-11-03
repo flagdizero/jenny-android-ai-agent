@@ -70,7 +70,7 @@ Messages flow through an async `MessageBus` (`jenny/bus/queue.py`) that decouple
 - **WebUI HTTP API** (`jenny/webui/`): The `/api/` route handlers backing the SPA (apps, settings, media, skills, transcript, token usage, workspaces, file preview, etc.), plus gateway service/token wiring.
 - **Jenny Apps** (`jenny/apps/`): Runtime for user-authored mini-apps — `manifest.py`, `executor.py`, `storage.py`, `summary.py`, `http.py`, `proxy.py`, `token.py`. See [Write a mini-app](docs/contribute/write-a-mini-app.md).
 - **Command Router** (`jenny/command/`): Slash command routing and built-in command handlers.
-- **Scheduler** (`jenny/cron/`): everything Jenny does later is a job in `cron/jobs.json`, one-time or recurring, each labelled with where, when, what and why; a periodic check is a recurring `monitor` job. The heartbeat (`HEARTBEAT.md`) was retired on 31/10/2026: `cron/retired_heartbeat.py` tells a user upgrading from 2.0.0, once, which of its checks stopped.
+- **Scheduler** (`jenny/cron/`): everything Jenny does later is a job in `state.sqlite` (`cron/store.py`; until 2.x `cron/jobs.json`, imported once by `db_migration/cron.py`), one-time or recurring, each labelled with where, when, what and why; a periodic check is a recurring `monitor` job. The heartbeat (`HEARTBEAT.md`) was retired on 31/10/2026: `cron/retired_heartbeat.py` tells a user upgrading from 2.0.0, once, which of its checks stopped.
 - **Skills** (`jenny/skills/`): Built-in skill definitions loaded into agent context.
 - **Security** (`jenny/security/`): Workspace policy/access + network SSRF protections.
 

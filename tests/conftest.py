@@ -68,7 +68,7 @@ def _isolate_process_state() -> Generator[None, None, None]:
     La suite passava solo in ordine alfabetico: invertita dava 31 rossi,
     mescolata 17, tutti da stato globale che una prova cambiava e non
     ripristinava — i campi di :class:`RuntimeContext` (``config_recovered_from``,
-    ``cron_recovered_from``, …) e i registri in ``_MODULE_REGISTRIES``. Qui si
+    …) e i registri in ``_MODULE_REGISTRIES``. Qui si
     fotografano prima e si rimettono dopo, per tutti, invece di affidarsi a
     ogni prova perché pulisca: il rosso compariva in un file che non c'entrava.
     """
@@ -91,3 +91,24 @@ def _isolate_process_state() -> Generator[None, None, None]:
         registry = getattr(mod, attr)
         registry.clear()
         registry.update(saved_regs.get((mod_name, attr), {}))
+
+
+@pytest.fixture(autouse=True)
+def _fresh_shared_database(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
+    """Il database di chi usa ``tmp_path`` stesso come workspace riparte vuoto.
+
+    Lo stato in SQLite sta accanto al workspace (``<runtime_root>/db``, e il
+    runtime root è il genitore del workspace): con ``tmp_path`` come workspace
+    finisce nella cartella base della sessione, la stessa per tutte le prove di
+    un processo. Senza questo, i job salvati da una prova comparirebbero nella
+    bacheca di un'altra.
+    """
+    import shutil
+
+    from jenny import db as jdb
+
+    shared = tmp_path_factory.getbasetemp() / "db"
+    shutil.rmtree(shared, ignore_errors=True)
+    yield
+    jdb.close_all()
+    shutil.rmtree(shared, ignore_errors=True)

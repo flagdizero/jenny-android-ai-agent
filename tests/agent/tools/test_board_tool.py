@@ -291,10 +291,9 @@ async def test_show_lists_the_automations_of_cards_and_of_the_notebook(notebook_
                                                                        tmp_path: Path,
                                                                        monkeypatch) -> None:
     """L'editore vede anche i cron: quelli di una scheda e quelli di tutto il quaderno."""
-    import json
+    from support.cron import seed_jobs
 
-    (tmp_path / "cron").mkdir()
-    (tmp_path / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
+    seed_jobs(tmp_path, [
         {"id": "ab12cd34", "name": "Meteo", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": notebook_chat.name, "card": "nuove",
                                "section": "@auto"}}},
@@ -302,7 +301,7 @@ async def test_show_lists_the_automations_of_cards_and_of_the_notebook(notebook_
          "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": notebook_chat.name, "card": "@notebook",
                                "section": "@auto"}}},
-    ]}), encoding="utf-8")
+    ])
     monkeypatch.setattr("jenny.config.paths.get_workspace_path", lambda: tmp_path)
     out = await BoardTool().execute(action="show")
     assert "- `ab12cd34` on `nuove`: Meteo" in out

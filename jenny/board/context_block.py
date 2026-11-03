@@ -69,7 +69,7 @@ _FROM_CONFIG: Any = object()
 
 
 class _Scheduled:
-    """I job del quaderno per un pezzo di prompt: **una** lettura di ``cron/jobs.json``.
+    """I job del quaderno per un pezzo di prompt: **una** lettura dello store del cron.
 
     Fino al 01/11/2026 ogni domanda rileggeva il file (e il fuso dalla config):
     il blocco della bacheca lo apriva una volta per scheda, il cassetto tre

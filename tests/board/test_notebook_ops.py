@@ -51,12 +51,12 @@ def _write(path: Path, text: str) -> None:
 
 
 def _jobs(tmp_path: Path, monkeypatch, jobs: list[dict]) -> None:
-    """I promemoria del quaderno sono job: ``cron/jobs.json`` del workspace."""
-    import json
+    """I promemoria del quaderno sono job: lo store del cron del workspace."""
+    from support.cron import seed_jobs
 
     from jenny.runtime.context import get_runtime_context
 
-    _write(tmp_path / "cron" / "jobs.json", json.dumps({"jobs": jobs}))
+    seed_jobs(tmp_path, jobs)
     monkeypatch.setattr(get_runtime_context(), "workspace_dir", tmp_path)
 
 

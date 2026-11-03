@@ -241,7 +241,7 @@ class BoardPass:
         dividere il prunus» nel diario, non l'ha trovato fra le attese — era un
         cron nel cassetto di un'altra scheda — e l'ha cercato per sei minuti:
         ``grep``, la skill del cron, ``board.json`` riletto quattro volte. Il
-        messaggio e la data si leggono da ``cron/jobs.json``, se si legge; se no
+        messaggio e la data si leggono dallo store del cron, se si legge; se no
         restano il nome e la scheda, che bastano a non aggiungerlo due volte.
         """
         from jenny.board import model

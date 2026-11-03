@@ -14,7 +14,7 @@ Due file, tutti e due dentro la cartella del quaderno (``<quaderno>/board/``):
   cancellare e rigenerare dalla wiki in ogni momento.
 
 I promemoria non stanno qui: dal 31/10/2026 sono job dello scheduler
-(``cron/jobs.json``), legati al quaderno da ``payload.board`` (v.
+(``jenny/cron/store.py``), legati al quaderno da ``payload.board`` (v.
 :mod:`jenny.board.cron_link`).
 
 **La forma è dell'utente, il contenuto è della wiki.** Jenny non sposta, non

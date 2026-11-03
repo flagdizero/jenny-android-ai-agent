@@ -102,11 +102,12 @@ class Runner:
         if dev.has_snapshot():
             raise DeviceError("a snapshot from an earlier run is still there: "
                               "run `behaviour_check.py --restore` first")
-        dev.snapshot()
         # I job di sistema (Dream, giardiniere, orologio dei quaderni) girerebbero
         # in mezzo agli scenari: un Dream a meta' giro riscrive MEMORY.md. Si
-        # spostano di un giorno ad app ferma; la fotografia rimette lo store.
+        # spostano di un giorno ad app ferma; la fotografia (fatta prima, anche
+        # lei ad app ferma) rimette lo store.
         dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
+        dev.snapshot()
         dev.shift_system_jobs(delay_ms=24 * 3600 * 1000)
         dev.restart_app()
         self.base = {path: dev.read(path) for path in RESET_FILES}
@@ -278,7 +279,7 @@ class Runner:
                            verdict: float = 300.0) -> dict[str, Any] | None:
         """Il primo giro del monitor nato in questo giro, e il suo esito finale.
 
-        Si legge ``jobs.json`` (stato e storico del job) e la sessione del
+        Si leggono le righe del job (stato e storico) e la sessione del
         monitor, ``cron_<id>.jsonl``, subito dopo il giro: la sessione si sfoltisce
         a ogni giro, e il primo e' quello che conta. Se il giro ha affidato il
         controllo a un aiutante (``pendingSinceMs``), si aspetta anche il suo
@@ -287,8 +288,7 @@ class Runner:
         dev = self.device
 
         def job() -> dict[str, Any] | None:
-            store = json.loads(dev.read("cron/jobs.json") or "{}")
-            return next((j for j in store.get("jobs", [])
+            return next((j for j in dev.cron_rows()
                          if j.get("id") not in jobs_before
                          and (j.get("payload") or {}).get("mode") == "monitor"), None)
 

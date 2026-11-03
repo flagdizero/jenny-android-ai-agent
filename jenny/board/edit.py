@@ -644,7 +644,7 @@ async def remove_section(root: Path, ref: str, sid: str, *, cron: Any = None) ->
 
 # ── I promemoria: job dello scheduler ────────────────────────────────────────
 #
-# Dal 31/10/2026 un promemoria del quaderno è un job di ``cron/jobs.json``
+# Dal 31/10/2026 un promemoria del quaderno è un job dello scheduler
 # (``cron_link.add_notebook_job``), e ``board/reminders.json`` non c'è più. Un
 # promemoria a data è un singolo: quando suona se ne va, quindi non ci sono
 # attese «fatte», «tolte» o «scadute» da tenere. Uno a condizione è un

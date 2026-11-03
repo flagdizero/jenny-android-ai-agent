@@ -99,7 +99,7 @@ def upcoming_dates(cron: Any, roots: Mapping[str, Any], *, now: datetime,
                    tz_name: str | None) -> list[Upcoming]:
     """I singoli dei quaderni che suonano entro :data:`COMING_UP`, dal più vicino.
 
-    Dallo scheduler vivo, mai da ``jobs.json``: va chiamata sul loop, come
+    Dallo scheduler vivo, mai dallo store letto a parte: va chiamata sul loop, come
     ``cron_link.notebook_jobs``. Un ricorrente (anche a filtro) non è una data e
     resta fuori; uno in pausa non suona — è anche il caso dei job di una scheda
     tolta (``board/removed.py``) — e nemmeno uno di una scheda che non è più

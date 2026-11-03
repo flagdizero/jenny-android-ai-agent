@@ -1,6 +1,6 @@
 """Le attese di ``board/reminders.json`` (fino alla 2.0.0) diventano job dello scheduler.
 
-Dal 31/10/2026 un promemoria del quaderno è un job di ``cron/jobs.json``
+Dal 31/10/2026 un promemoria del quaderno è un job dello scheduler
 (:func:`jenny.board.cron_link.add_notebook_job`), e l'orologio dei quaderni non
 legge più ``reminders.json``. Un'installazione che si aggiorna dalla 2.0.0 ha
 però quel file, con le attese aperte dell'utente: senza questa passata

@@ -527,10 +527,9 @@ class GatewayContainer:
         self._prepare_apps()
         self._wire_ui_events()
 
-        cron_store_path = config.workspace_path / "cron" / "jobs.json"
-        self.cron = CronService(cron_store_path)
+        self.cron = CronService(config.workspace_path)
         # Il seguito dei rinomini ripresi qui sopra: lo scheduler non gira ancora,
-        # quindi lo spostamento va nel suo giornale e si applica a ``start``.
+        # ma salva lo stesso, e ``start`` lo ritrova.
         from jenny.board.cron_link import follow_renamed_notebook
 
         for old_name, new_name in self._resumed_renames:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from support.cron import saved_jobs
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.context import RequestContext
@@ -252,7 +253,9 @@ async def test_cron_tool_basic_set_context_and_execute(tmp_path) -> None:
 
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
-    assert jobs[0].payload.session_key == "websocket:user-789"
+    # Lo store tiene quel che il tool ha scritto; la lettura lo riporta alla
+    # conversazione unica (``cron.service._load_session_key``).
+    assert saved_jobs(tmp_path / "jobs.json")[0]["payload"]["sessionKey"] == "websocket:user-789"
     assert jobs[0].payload.origin_channel == "websocket"
     assert jobs[0].payload.origin_chat_id == "user-789"
 
@@ -320,7 +323,9 @@ async def test_cron_tool_preserves_thread_scoped_session_key(tmp_path) -> None:
 
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
-    assert jobs[0].payload.session_key == "websocket:C123:1700.42"
+    # Lo store tiene quel che il tool ha scritto; la lettura lo riporta alla
+    # conversazione unica (``cron.service._load_session_key``).
+    assert saved_jobs(tmp_path / "jobs.json")[0]["payload"]["sessionKey"] == "websocket:C123:1700.42"
     assert jobs[0].payload.origin_channel == "websocket"
     assert jobs[0].payload.origin_chat_id == "C123"
     assert jobs[0].payload.origin_metadata == {"thread": {"thread_ts": "1700.42"}}

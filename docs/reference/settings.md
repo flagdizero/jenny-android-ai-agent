@@ -246,7 +246,6 @@ Your own scheduled jobs, with what each one did last time and when it runs next.
 | **Tags on the row** | *system*, *speaks only if it has something to report*, *once only*, *paused*, *off*, *does nothing*. They change what the row means: a job that is off with "in 4 minutes" beside it would be a lie. |
 | **Overdue instead of a past date** | Next-run times are stored, not computed on the fly: they are recalculated at startup and after each run. With the scheduler stopped, or right after the phone comes back from a long doze, the stored time is in the past, so the row shows how long ago it was due ("5 min ago"), in the warning colour, instead of a date that looks like the future. |
 | **Armed but does nothing** | A system job survives the setting behind it: switch it off and its job stays scheduled and records `ok`. A notice above the list tells you. |
-| **A rebuilt list** | If `cron/jobs.json` was recovered at startup, the group says so above the list, not just in the notice at the top of the screen: a short list looks like a correct list. |
 | **Times in the job's own timezone** | A job created with an explicit timezone is shown in it, named only when it differs from the phone's, so the panel and what Jenny says in chat never disagree. |
 | **"As of HH:MM", with a Refresh button** | The panel does not poll. On a phone where scheduled work is kept punctual through deep doze, a screen that woke the gateway every few seconds would undo that, so it reads once when you open the drawer and the timestamp says it is a snapshot. |
 

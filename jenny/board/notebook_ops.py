@@ -419,7 +419,7 @@ def _check_board(root: Path, report: CheckReport, pages: set[str]) -> None:
     """Schede con pagine che non ci sono, cassetti che citano pagine che non ci
     sono, promemoria il cui ``why`` non c'è più.
 
-    I promemoria sono job dello scheduler (``cron/jobs.json``): si contano quelli
+    I promemoria sono job dello scheduler (``jenny/cron/store.py``): si contano quelli
     vivi del quaderno, e uno già scattato non c'è più. Il ``why`` lo corregge il
     tool ``board`` (``update_reminder``).
     """

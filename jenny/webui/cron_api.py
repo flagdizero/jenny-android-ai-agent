@@ -264,7 +264,6 @@ def webui_cron_payload(
     riconciliazione richiede.
     """
     from jenny.config.loader import load_config
-    from jenny.runtime.context import get_runtime_context
 
     stamp = now_ms if now_ms is not None else _now_ms()
     if cron is None:
@@ -282,27 +281,12 @@ def webui_cron_payload(
         for job in cron.list_jobs(include_disabled=True)
     ]
 
-    ctx = get_runtime_context()
-    # Lo stesso stato che le impostazioni mostrano in cima alla schermata. Non e'
-    # un doppione: il banner sta sopra una pagina lunga, l'elenco sta piu' in
-    # basso, e chi lo legge deve sapere **di quell'elenco** che e' stato
-    # ricostruito. Da qui non si puo' rispondere "lo store non si legge": se il
-    # primo caricamento fallisse il gateway non partirebbe affatto
-    # (``CronService._corrupt_store_error``), quindi questa WebUI non esisterebbe.
-    recovery = None
-    if getattr(ctx, "cron_recovered_from", None):
-        recovery = {
-            "restored_from": ctx.cron_recovered_from,
-            "broken_file": str(ctx.cron_quarantine_path) if ctx.cron_quarantine_path else None,
-        }
-
     return {
         "available": True,
         "now_ms": stamp,
         "service_running": bool(status.get("enabled")),
         "next_wake_at_ms": status.get("next_wake_at_ms"),
         "default_timezone": default_tz,
-        "recovery": recovery,
         "counts": {
             "total": len(jobs),
             "enabled": sum(1 for j in jobs if j["enabled"]),
