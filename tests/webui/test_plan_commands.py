@@ -83,7 +83,7 @@ async def test_get_and_list_read_the_store(workspace: Path, driver: PlanDriver) 
     assert by_nb["plan"]["id"] == plan.id
     listed = await _rpc(ctx, "plan.list")
     assert listed["plans"] == [{
-        "id": plan.id, "notebook": "piante", "status": "proposed",
+        "id": plan.id, "notebook": "piante", "place": "nb:piante", "status": "proposed",
         "title": "Rifare la wiki", "done": 0, "total": 3,
         "updated_at": listed["plans"][0]["updated_at"],
     }]

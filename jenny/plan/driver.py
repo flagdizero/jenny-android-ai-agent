@@ -1019,6 +1019,8 @@ class PlanDriver:
                 }
         drafting = self.drafting_for(session_key)
         reads = drafting.get("reads") if drafting is not None else 0
+        place = self.place_of(session_key)
+        notebook = place.notebook if place is not None else None
         return render_template(
             "agent/plan_mode.md",
             strip=True,
@@ -1026,6 +1028,8 @@ class PlanDriver:
             revise=bool(revise) and current is not None,
             followup=followup,
             reads=reads if isinstance(reads, int) else 0,
+            notebook=notebook,
+            where="in this notebook" if notebook else "in the personal chat",
         )
 
     # ── tool del modello ───────────────────────────────────────────────────
@@ -1051,7 +1055,7 @@ class PlanDriver:
         """
         slot = self._slot(session_key)
         if slot is None or session_key is None:
-            return "Error: a plan can only be proposed inside a notebook chat."
+            return "Error: a plan can only be proposed inside a notebook chat or the personal chat."
         held = self.held_status(session_key)
         if held is not None:
             return (
@@ -1078,7 +1082,11 @@ class PlanDriver:
                 "what is missing. Then call plan_propose."
             )
         try:
-            proposal = validate_proposal(title, steps, coverage, assumptions)
+            place = self.place_of(session_key)
+            proposal = validate_proposal(
+                title, steps, coverage, assumptions,
+                require_check=place is None or place.traits.machine_check,
+            )
         except PlanValidationError as exc:
             return f"Error: {exc} Fix the plan and call plan_propose again."
         clean_notes = (

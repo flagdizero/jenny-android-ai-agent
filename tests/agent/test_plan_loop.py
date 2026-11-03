@@ -928,3 +928,20 @@ async def test_a_helper_report_of_the_open_step_records_its_gaps(workspace: Path
     extra = driver.store.load(plan.id).steps[0].extra
     assert extra["research_lineages"] == ["rs1"]
     assert extra["gaps"] == {"ed1": ["felce: vaso"]}
+
+
+def test_plan_step_messages_stay_out_of_the_notes_dream_reads() -> None:
+    """Il messaggio di un passo lo scrive il driver: negli appunti del
+    consolidatore sarebbe un «USER:» di istruzioni, e Dream lo leggerebbe come
+    detto dall'utente. Le risposte di Jenny restano."""
+    from jenny.agent.memory import MemoryStore
+    from jenny.session.history_meta import PLAN_STEP_EVENT
+
+    text = MemoryStore._format_messages([
+        {"role": "user", "content": "[Plan — step 1 of 3] Do step 1", "timestamp": "2026-11-03T10:00",
+         INJECTED_EVENT_META: PLAN_STEP_EVENT},
+        {"role": "assistant", "content": "Fatto il passo 1.", "timestamp": "2026-11-03T10:01"},
+        {"role": "user", "content": "Grazie", "timestamp": "2026-11-03T10:02"},
+    ])
+    assert "Do step 1" not in text
+    assert "Fatto il passo 1." in text and "USER: Grazie" in text

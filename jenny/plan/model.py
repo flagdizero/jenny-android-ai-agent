@@ -562,7 +562,8 @@ def _clean_text(value: Any) -> str:
 
 
 def validate_proposal(
-    title: Any, steps: Any, coverage: Any = None, assumptions: Any = None
+    title: Any, steps: Any, coverage: Any = None, assumptions: Any = None,
+    *, require_check: bool = True,
 ) -> Proposal:
     """Controlla una proposta del modello e la ripulisce, o solleva con un messaggio per lui.
 
@@ -681,7 +682,9 @@ def validate_proposal(
             )
         )
 
-    if clean and clean[-1].kind != "check":
+    # *require_check*: il posto ha il controllo a macchina (un quaderno); nella
+    # chat personale non c'è una forma da verificare, e il passo non si chiede.
+    if require_check and clean and clean[-1].kind != "check":
         # Il controllo a macchina di fine piano vive nel passo ``check``: dead
         # link, fonti, bacheca, righe «da cercare», fatti persi, i buchi messi in
         # lista. Era un avviso in coda al risultato (``check_warnings``), e il

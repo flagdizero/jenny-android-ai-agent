@@ -1690,9 +1690,16 @@ class MemoryStore:
 
     @staticmethod
     def _format_messages(messages: list[dict]) -> str:
+        from jenny.session.history_meta import INJECTED_EVENT_META, PLAN_TURN_EVENTS
+
         lines = []
         for message in messages:
             if not message.get("content"):
+                continue
+            # Il messaggio di un passo di un piano lo scrive il driver, non
+            # l'utente: negli appunti (e da lì a Dream) sarebbe un «USER:» lungo
+            # una pagina di istruzioni. Il lavoro del passo resta, nelle risposte.
+            if message.get(INJECTED_EVENT_META) in PLAN_TURN_EVENTS:
                 continue
             tools = f" [tools: {', '.join(message['tools_used'])}]" if message.get("tools_used") else ""
             lines.append(

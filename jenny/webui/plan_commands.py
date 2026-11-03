@@ -9,7 +9,7 @@ l'unica fonte); tutto ciò che muove un piano passa dal driver
 
 Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``):
 
-- ``plan.get {id} | {notebook}`` → ``{ok, plan}``. ``plan`` è ``plan.json`` più
+- ``plan.get {id} | {place} | {notebook}`` → ``{ok, plan}``. ``plan`` è ``plan.json`` più
   ``done`` (passi alle spalle: fatti e saltati), ``total`` (senza i tagliati),
   ``current_step_id``, ``can_rollback``, ``can_undo_rollback``. ``plan.json``
   porta ``coverage: [{id, item, have, missing, strategy, why}]`` (``id``:
@@ -53,7 +53,7 @@ Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``)
 - ``plan.full {id}`` → ``{ok, title, coverage, assumptions, steps: [{id, title,
   detail, kind, status, tag, done_when, covers}]}``: il «piano completo», in sola
   lettura.
-- ``plan.cancel_drafting {notebook}`` → ``{ok, cancelled}``: chiude la
+- ``plan.cancel_drafting {place} | {notebook}`` → ``{ok, cancelled}``: chiude la
   pianificazione in corso (il tasto spento, «Annulla il piano»); ``cancelled``
   è ``false`` se non ce n'era una. Emette ``plan_changed``.
 
@@ -80,7 +80,7 @@ from jenny.plan.model import (
     drafting_view,
     step_counts,
 )
-from jenny.plan.store import PlanNotFoundError, PlanStore, is_plan_id
+from jenny.plan.store import PlanNotFoundError, PlanStore, is_plan_id, slot_id
 from jenny.webui.commands import CommandContext, CommandError
 
 
@@ -126,6 +126,7 @@ def _summary(plan: Any) -> dict[str, Any]:
     return {
         "id": plan.id,
         "notebook": plan.notebook,
+        "place": plan.place,
         "status": plan.status,
         "title": plan.title,
         "done": counts["finished"],
@@ -146,12 +147,12 @@ async def plan_get(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, 
         except PlanNotFoundError as exc:
             raise CommandError("not_found", "no such plan") from exc
         return {"ok": True, "plan": plan_view(plan)}
-    notebook = params.get("notebook")
-    if not isinstance(notebook, str) or not notebook.strip():
-        raise CommandError("bad_request", "id or notebook required")
+    where = _place_param(params)
+    if where is None:
+        raise CommandError("bad_request", "id, place or notebook required")
 
     def _pick() -> Any:
-        plans = store.list_for_notebook(notebook.strip())
+        plans = store.list_for_place(where)
         for plan in plans:
             if plan.is_open:
                 return plan
@@ -170,7 +171,7 @@ async def plan_get(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, 
     return {
         "ok": True,
         "plan": plan_view(plan) if plan is not None else None,
-        "drafting": await asyncio.to_thread(_drafting, store, notebook.strip()),
+        "drafting": await asyncio.to_thread(_drafting, store, where),
     }
 
 
@@ -189,6 +190,21 @@ async def _recheck(ctx: CommandContext, plan: Any) -> Any:
         return await asyncio.to_thread(driver.store.load, plan.id)
     except (PlanError, OSError):
         return plan
+
+
+def _place_param(params: Mapping[str, Any]) -> str | None:
+    """Il posto della richiesta: ``{place}`` (``nb:<nome>``, ``personal``) o il
+    ``{notebook}`` di prima, che vale ``nb:<nome>``."""
+    from jenny.plan.place import place_from_id
+
+    place = params.get("place")
+    if isinstance(place, str) and place.strip():
+        found = place_from_id(place.strip())
+        return found.id if found is not None else None
+    notebook = params.get("notebook")
+    if isinstance(notebook, str) and notebook.strip():
+        return slot_id(notebook.strip())
+    return None
 
 
 def _drafting(store: PlanStore, notebook: str) -> dict[str, Any] | None:
@@ -308,10 +324,10 @@ async def plan_answer(ctx: CommandContext, params: Mapping[str, Any]) -> dict[st
 
 
 async def plan_cancel_drafting(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    notebook = params.get("notebook")
-    if not isinstance(notebook, str) or not notebook.strip():
-        raise CommandError("bad_request", "notebook required")
-    cancelled = await _call(_driver(ctx).cancel_drafting(notebook.strip()))
+    where = _place_param(params)
+    if where is None:
+        raise CommandError("bad_request", "place or notebook required")
+    cancelled = await _call(_driver(ctx).cancel_drafting(where))
     return {"ok": True, "cancelled": bool(cancelled)}
 
 

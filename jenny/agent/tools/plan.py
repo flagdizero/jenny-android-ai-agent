@@ -151,7 +151,7 @@ class PlanProposeTool(PlanTool):
     @property
     def description(self) -> str:
         return (
-            "Propose a step-by-step plan for a big job in this notebook. The user sees it "
+            "Propose a step-by-step plan for a big job in this chat. The user sees it "
             "as a card with Approve and Review; nothing starts until they approve, and then "
             "the code opens the steps one at a time. A new call replaces a plan that is "
             "still only proposed. Call it once, then end your turn."
@@ -199,7 +199,7 @@ class PlanStepDoneTool(PlanTool):
         return (
             "Close the plan step you are working on: it is finished. Call it after the "
             "results of every helper you started for the step are in. The code then "
-            "photographs the notebook and opens the next step by itself."
+            "notes what the step changed and opens the next step by itself."
         )
 
     async def execute(self, note: Any = None, **kwargs: Any) -> str:
