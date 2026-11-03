@@ -112,7 +112,7 @@ def _harness_dir(tmp_path: Path) -> Path:
     # L'etichetta dei cron e il ritmo a parole, che la bacheca disegna (20/10/2026).
     for name in ("home-board-automation.js", "home-board-agenda.js"):
         shutil.copy(ASSETS / name, assets / name)
-    for name in ("pinch-zoom.js", "horizontal-swipe.js", "cron-view.js", "dom.js"):
+    for name in ("pinch-zoom.js", "horizontal-swipe.js", "cron-view.js", "dom.js", "when.js"):
         shutil.copy(ASSETS / "shared" / name, assets / "shared" / name)
     shutil.copy(ASSETS / "shared" / "wiki-search.js", assets / "shared" / "wiki-search.js")
     for name, text in _STUBS.items():

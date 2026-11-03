@@ -23,7 +23,7 @@
 
 import { api } from '../../shared/api-client.js';
 import { i18n } from '../../shared/i18n.js';
-import { dayAndTime, dayOffset } from '../../shared/when.js';
+import { dayOffset, nearDay, shortDate } from '../../shared/when.js';
 import { showRestartDialog, NATIVE_ANSWER_GRACE_MS } from '../../shared/backup-flow.js';
 
 /** Il nome dell'estensione, lato gateway e lato nativo. */
@@ -336,15 +336,7 @@ export function nightStrip(status, now = Date.now(), locale = i18n.locale) {
 /** «oggi alle 3:12» · «ieri alle 3:12» · «domenica alle 3:12» · «3 ott». */
 export function dayText(ms, now = Date.now(), locale = i18n.locale) {
   const at = new Date(Number(ms) || 0);
-  const near = dayAndTime(at, { now, locale, hour: 'numeric' });
-  if (near) return near;
-  const time = at.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  const days = dayOffset(at, now);
-  if (days < 7) {
-    const day = at.toLocaleDateString(locale, { weekday: 'long' });
-    return i18n.t('cloudBackup.when.weekday', { day, time });
-  }
-  return at.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  return nearDay(at, { now, locale }) || shortDate(at, { locale });
 }
 
 /** «5,1 MB» e «8,4 MB» per la barra: tutti e due nell'unità del totale, così

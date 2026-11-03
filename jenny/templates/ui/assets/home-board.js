@@ -40,6 +40,7 @@
  *  non ama le bacheche e per lo screen reader.
  */
 
+import { shortDate } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
@@ -47,7 +48,7 @@ import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 import { metaText, renderBlock } from './home-board-blocks.js';
 import { DrawerNotes } from './home-board-notes.js';
-import { DrawerPhotos, PhotoUrls, photoDate } from './home-board-photos.js';
+import { DrawerPhotos, PhotoUrls } from './home-board-photos.js';
 import { automationRow, rhythmLabel } from './home-board-automation.js';
 import { agendaList, reminderForm } from './home-board-agenda.js';
 import { confirmDialog } from './shared/dialog.js';
@@ -1030,7 +1031,7 @@ export class HomeBoard {
       row.className = 'home-board-postit-row';
       const when = document.createElement('span');
       when.className = 'home-board-postit-when';
-      when.textContent = photoDate(note.created);
+      when.textContent = shortDate(note.created);
       const text = document.createElement('span');
       text.className = 'home-board-postit-text';
       text.textContent = note.text;

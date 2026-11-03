@@ -564,6 +564,7 @@
       "untyped_frame": "I didn't understand the request"
     },
     "todayAt": "today at {time}",
+    "weekdayAt": "{day} at {time}",
     "yesterdayAt": "yesterday at {time}",
     "modelsLoading": "Asking for the list…",
     "modelsNeedKey": "A key is needed before the list can be fetched."
@@ -1513,8 +1514,7 @@
         "sub": "Automatic: puts back a file deleted by mistake. It lives on this phone, though — a lost phone takes it with it.",
         "off": "Off: the only safety net is the backup you export. Turn it back on in the workshop, Memory → Local history.",
         "loading": "One moment…",
-        "showAll": "Show the others ({n})",
-        "weekday": "{day} at {time}"
+        "showAll": "Show the others ({n})"
       }
     },
     "audit": {

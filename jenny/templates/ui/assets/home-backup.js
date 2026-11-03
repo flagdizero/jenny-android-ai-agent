@@ -26,7 +26,7 @@
  */
 
 import { i18n } from './shared/i18n.js';
-import { dayAndTime, dayOffset, whenText } from './shared/when.js';
+import { dayOffset, nearDay, whenText } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
 import { confirmDialog } from './shared/dialog.js';
@@ -47,12 +47,7 @@ export function snapshotWhen(ms, now = Date.now(), locale = i18n.locale) {
   if (dayOffset(at, now) >= 7) {
     return at.toLocaleString(locale, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   }
-  const near = dayAndTime(at, { now, locale, hour: 'numeric' });
-  if (near) return near;
-  const time = at.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  return i18n.t('home.backup.history.weekday', {
-    day: at.toLocaleDateString(locale, { weekday: 'long' }), time,
-  });
+  return nearDay(at, { now, locale });
 }
 
 /** La riga che si legge senza entrare: quando l'hai esportato l'ultima volta.

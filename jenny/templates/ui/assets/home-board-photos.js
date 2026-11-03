@@ -24,6 +24,7 @@
  *  fondo al cassetto, senza un campo per la nota: cinque foto, cinque sezioni.
  */
 
+import { shortDate } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
@@ -56,19 +57,6 @@ async function shrinkPhoto(file) {
 
 
 
-/** «14 ottobre»: la data per esteso, nella pagina d'album e a tutto schermo. */
-function photoDay(iso, locale = i18n.locale) {
-  const at = iso ? new Date(iso) : null;
-  if (!at || Number.isNaN(at.getTime())) return '';
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(at);
-}
-
-/** «14 ott»: il giorno in cui la foto e' stata appuntata. */
-export function photoDate(iso, locale = i18n.locale) {
-  const at = iso ? new Date(iso) : null;
-  if (!at || Number.isNaN(at.getTime())) return '';
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
-}
 
 /** Le immagini di un quaderno come `blob:` (la rotta vuole il segreto, che un
  *  `<img src>` non porterebbe), una volta per percorso: a parita' di percorso
@@ -189,7 +177,7 @@ export class DrawerPhotos {
         img.alt = '';
         const cap = el('span', 'home-photos-cap');
         cap.append(el('span', 'home-photos-cap-text', photo.caption || ' '),
-          el('span', 'home-photos-cap-when', photoDate(photo.created)));
+          el('span', 'home-photos-cap-when', shortDate(photo.created)));
         return [el('span', 'home-photos-tape'), img, cap];
       },
       label: (i) => {
@@ -197,7 +185,7 @@ export class DrawerPhotos {
         return i18n.t('board.photos.deck', {
           n: i + 1, count: n,
           text: photo.caption || i18n.t('board.photos.noNote'),
-          when: photoDate(photo.created),
+          when: shortDate(photo.created),
         });
       },
     });
@@ -332,11 +320,11 @@ export class DrawerPhotos {
   /** Una foto a riposo: l'immagine, la nota su due righe, la data. */
   _tile(photo) {
     const tile = button('home-photos-tile', '', () => this._show({ openId: photo.id }));
-    tile.setAttribute('aria-label', `${photo.caption || i18n.t('board.photos.noNote')}, ${photoDate(photo.created)}`);
+    tile.setAttribute('aria-label', `${photo.caption || i18n.t('board.photos.noNote')}, ${shortDate(photo.created)}`);
     const cap = el('span', `home-photos-tile-text${photo.caption ? '' : ' is-empty'}`,
       photo.caption || i18n.t('board.photos.noNote'));
     tile.append(this._img(photo, 'home-photos-img'), cap,
-      el('span', 'home-photos-tile-when', photoDate(photo.created)));
+      el('span', 'home-photos-tile-when', shortDate(photo.created)));
     return tile;
   }
 
@@ -421,7 +409,7 @@ export class DrawerPhotos {
 
     const side = el('div', 'home-photos-side');
     side.appendChild(el('span', 'home-photos-day',
-      photo ? photoDay(photo.created) : i18n.t('board.photos.now')));
+      photo ? shortDate(photo.created, { month: 'long' }) : i18n.t('board.photos.now')));
     const status = photo ? this._status(photo) : '';
     if (status) {
       const state = el('span', `home-photos-state is-${photo.status}`);
@@ -460,7 +448,7 @@ export class DrawerPhotos {
       urlOf: (path) => this.urls.get(notebook, path),
       words: {
         count: (n, count, card) => i18n.t('board.photos.viewer', { card, n, count }),
-        day: (iso) => photoDay(iso),
+        day: (iso) => shortDate(iso, { month: 'long' }),
         state: (p) => this._status(p),
         close: i18n.t('board.notes.close'),
       },

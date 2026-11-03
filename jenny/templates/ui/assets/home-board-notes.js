@@ -17,6 +17,7 @@
  *  sembrava una nota.
  */
 
+import { shortDate } from './shared/when.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { PinnedDeck } from './home-board-deck.js';
@@ -24,12 +25,6 @@ import { button, el } from './shared/dom.js';
 
 
 
-/** «12 ott»: il giorno in cui la nota e' nata. */
-function noteDate(iso, locale = i18n.locale) {
-  const at = iso ? new Date(iso) : null;
-  if (!at || Number.isNaN(at.getTime())) return '';
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
-}
 
 export class DrawerNotes {
   /**
@@ -93,7 +88,7 @@ export class DrawerNotes {
       drawCard: (i) => {
         const note = this.notes[i];
         const foot = el('span', 'home-notes-card-foot');
-        foot.append(el('span', '', noteDate(note.created)), el('span', '', `${i + 1}/${n}`));
+        foot.append(el('span', '', shortDate(note.created)), el('span', '', `${i + 1}/${n}`));
         return [el('span', 'home-notes-pin'), el('span', 'home-notes-card-text', note.text), foot];
       },
       label: (i) => i18n.t('board.notes.deck', { n: i + 1, count: n, text: this.notes[i].text }),
@@ -166,11 +161,11 @@ export class DrawerNotes {
   /** Una nota a riposo: quattro righe, la data, e «Leggi tutto» se serve. */
   _tile(note) {
     const tile = button('home-notes-tile', '', () => this._show({ openId: note.id }));
-    tile.setAttribute('aria-label', `${note.text}, ${noteDate(note.created)}`);
+    tile.setAttribute('aria-label', `${note.text}, ${shortDate(note.created)}`);
     const foot = el('span', 'home-notes-tile-foot');
     const more = el('span', 'home-notes-more', `${i18n.t('board.notes.readMore')} ›`);
     more.hidden = true;
-    foot.append(el('span', '', noteDate(note.created)), more);
+    foot.append(el('span', '', shortDate(note.created)), more);
     tile.append(el('span', 'home-notes-pin'), el('span', 'home-notes-tile-text', note.text), foot);
     return tile;
   }
@@ -181,7 +176,7 @@ export class DrawerNotes {
     const status = note.status === 'integrated' ? 'integrated' : 'pending';
     const bar = el('div', 'home-notes-bar');
     bar.append(
-      el('span', 'home-notes-when', `${noteDate(note.created)} · ${i18n.t(`board.notes.${status}`)}`),
+      el('span', 'home-notes-when', `${shortDate(note.created)} · ${i18n.t(`board.notes.${status}`)}`),
       button('home-notes-btn is-primary', i18n.t('board.notes.edit'),
         () => this._show({ editId: note.id, draft: note.text })),
       button('home-notes-btn', i18n.t('board.notes.close'), () => this._show({})),

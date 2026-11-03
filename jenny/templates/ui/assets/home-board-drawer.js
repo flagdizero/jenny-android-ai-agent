@@ -37,14 +37,13 @@ import { DrawerPhotos } from './home-board-photos.js';
 import { automationRow } from './home-board-automation.js';
 import { renderBlock } from './home-board-blocks.js';
 import { button, el, icon, writeFailedToast } from './shared/dom.js';
-import { dayAndTime } from './shared/when.js';
+import { dayAndTime, dayOffset, shortDate } from './shared/when.js';
 
 /** «oggi alle 04:12», «ieri», «3 ott»: quando e' stato riscritto il cassetto. */
 function relativeStamp(iso, now = new Date(), locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
-  return dayAndTime(at, { now, locale })
-    || new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
+  return dayAndTime(at, { now, locale }) || shortDate(at, { locale });
 }
 
 /** Le cadenze di un promemoria a condizione («controlla ogni»), la prima e' la
@@ -63,8 +62,7 @@ function everyLabel(when) {
 function untilLabel(date, today = new Date(), locale = i18n.locale) {
   const [y, m, d] = String(date || '').split('-').map(Number);
   if (!y || !m) return '';
-  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const days = Math.round((new Date(y, m - 1, d || 1) - from) / 86_400_000);
+  const days = -dayOffset(new Date(y, m - 1, d || 1), today);
   const abs = Math.abs(days);
   const [n, unit] = abs < 14 ? [days, 'day'] : abs < 60 ? [Math.round(days / 7), 'week']
     : [Math.round(days / 30), 'month'];

@@ -564,6 +564,7 @@
       "untyped_frame": "Non ho capito la richiesta"
     },
     "todayAt": "oggi alle {time}",
+    "weekdayAt": "{day} alle {time}",
     "yesterdayAt": "ieri alle {time}",
     "modelsLoading": "Chiedo l'elenco…",
     "modelsNeedKey": "Serve una chiave per farsi dare l'elenco."
@@ -1513,8 +1514,7 @@
         "sub": "Automatica: rimette a posto un file cancellato per sbaglio. Vive però su questo telefono — di un telefono perso non salva niente.",
         "off": "Spenta: l'unica rete è il backup che esporti tu. Si riaccende in officina, Memoria → Storia locale.",
         "loading": "Un attimo…",
-        "showAll": "Mostra gli altri ({n})",
-        "weekday": "{day} alle {time}"
+        "showAll": "Mostra gli altri ({n})"
       }
     },
     "audit": {

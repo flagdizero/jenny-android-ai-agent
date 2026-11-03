@@ -44,9 +44,6 @@
       "caption": "Le ultime 7 notti: un pallino pieno è una copia riuscita.",
       "aria": "Ultime 7 notti: {copies} con la copia, {missed} senza."
     },
-    "when": {
-      "weekday": "{day} alle {time}"
-    },
     "safe": {
       "title": "Sei al sicuro",
       "sub": "Ultima copia su Google Drive: {when}"

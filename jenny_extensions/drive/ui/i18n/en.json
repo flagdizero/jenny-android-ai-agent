@@ -44,9 +44,6 @@
       "caption": "The last 7 nights: a filled dot is a copy that worked.",
       "aria": "Last 7 nights: {copies} with a copy, {missed} without."
     },
-    "when": {
-      "weekday": "{day} at {time}"
-    },
     "safe": {
       "title": "You're safe",
       "sub": "Last copy on Google Drive: {when}"

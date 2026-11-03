@@ -823,8 +823,9 @@ def test_the_local_history_and_the_exported_backup_are_two_things() -> None:
             assert more.get(key, "").strip(), f"home.backup.more.{key} manca in {locale}.json"
         assert "{when}" in more["fileLast"], "la riga del file non interpola la data"
         history = backup["history"]
-        for key in ("title", "sub", "off", "loading", "showAll", "weekday"):
+        for key in ("title", "sub", "off", "loading", "showAll"):
             assert history.get(key, "").strip(), f"home.backup.history.{key} manca in {locale}.json"
+        assert "{day}" in data["common"]["weekdayAt"], "«giovedi' alle 9:40» (`when.js::nearDay`)"
         assert history["sub"] != history["off"], (
             "la storia locale accesa e spenta si leggono uguali"
         )

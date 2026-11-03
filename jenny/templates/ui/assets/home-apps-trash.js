@@ -9,6 +9,7 @@
  *  si torna indietro.
  */
 
+import { shortDate } from './shared/when.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
@@ -109,7 +110,7 @@ export class HomeAppsTrash {
     const meta = document.createElement('span');
     meta.className = 'apps-trash-meta';
     meta.textContent = i18n.t(entry.records ? 'apps.trashRecords' : 'apps.trashNoData',
-      { count: entry.records || 0, when: this._when(entry.at) });
+      { count: entry.records || 0, when: shortDate(entry.at) });
     text.append(name, meta);
     const restore = document.createElement('button');
     restore.type = 'button';
@@ -123,12 +124,6 @@ export class HomeAppsTrash {
     purge.addEventListener('click', () => this._purge(entry, row));
     row.append(text, restore, purge);
     return row;
-  }
-
-  _when(at) {
-    const d = at ? new Date(at) : null;
-    if (!d || Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short' });
   }
 
   async _restore(entry, row) {
