@@ -178,6 +178,11 @@ def stage(
             "task_id": task_id,
             "created_ms": _now_ms(),
         }
+        # Il registro dell'annulla di chi l'ha scritta (``agent.write_journal``):
+        # installata, la bozza conta come suo lavoro, e il suo annulla la toglie.
+        journal = _current_journal_key()
+        if journal is not None:
+            meta["journal"] = journal
         atomic_write(entry / "meta.json", json.dumps(meta, ensure_ascii=False), fsync_dir=False)
     _notify(root, "staged", staged_id, target_rel)
     return StagedRef(staged_id, target_rel)
@@ -246,7 +251,14 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
             return "missing"
         if sha256_of(target) != expected_sha:
             return "conflict"
-        atomic_write(target, _keep_wiki_id(target, content))
+        journal = _journal_of(root, meta)
+        if journal is not None:
+            journal.touch(target)
+        try:
+            atomic_write(target, _keep_wiki_id(target, content))
+        finally:
+            if journal is not None:
+                journal.settle("install draft")
         # L'utente l'ha guardata e confermata: da qui in poi non è più contenuto
         # non fidato per chi la legge.
         ledger_for(root).clear(meta["target"])
@@ -254,6 +266,32 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
     logger.info("Installed staged change {} into {}", staged_id, meta["target"])
     _notify(root, "installed", staged_id, meta["target"])
     return "installed"
+
+
+def _current_journal_key() -> str | None:
+    from jenny.agent.write_journal import current_journal
+
+    journal = current_journal()
+    return journal.key if journal is not None else None
+
+
+def _journal_of(root: Path, meta: dict[str, Any]):
+    """Il registro in cui va l'installazione: quello di chi ha scritto la bozza.
+
+    L'installazione la fa l'utente dalla casa, fuori dal lavoro che l'ha
+    scritta: il registro si ritrova dalla chiave nella bozza, e si annota a mano
+    perché ``atomic_write`` non passa da nessun recinto.
+    """
+    key = meta.get("journal")
+    if not isinstance(key, str) or not key:
+        return None
+    from jenny.agent.write_journal import journal_for
+
+    try:
+        return journal_for(root, key)
+    except Exception:  # noqa: BLE001 — senza registro si installa lo stesso
+        logger.opt(exception=True).warning("No undo journal for staged change {}", meta["id"])
+        return None
 
 
 def _keep_wiki_id(target: Path, content: bytes) -> bytes:

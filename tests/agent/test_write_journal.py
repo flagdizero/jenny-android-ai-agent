@@ -27,6 +27,7 @@ from jenny.agent.write_journal import (
     KEPT_CHANGED_AFTER,
     KEPT_CHANGED_DURING,
     KEPT_NOT_SAVED,
+    UndoConflictError,
     WriteJournal,
     bind_journal,
     finish_interrupted_undos,
@@ -34,6 +35,7 @@ from jenny.agent.write_journal import (
     objects_dir_for,
     read_undo_state,
     sweep_orphan_journals,
+    undo_set,
 )
 from jenny.board.store import mutate_board
 from jenny.bus.queue import MessageBus
@@ -258,18 +260,18 @@ def test_an_undo_killed_halfway_is_finished_at_boot(ws: Path, monkeypatch) -> No
         _write(wiki / "acero.md", "uno")
         _write(wiki / "felce.md", "due")
     calls = {"n": 0}
-    real = WriteJournal._undo_file
+    real = write_journal._UndoRun._undo_file
 
-    def _dies_on_the_second(self, key, chain, report):
+    def _dies_on_the_second(self, key, chain, report, **kw):
         calls["n"] += 1
         if calls["n"] == 2:
             raise SystemExit("kill")
-        return real(self, key, chain, report)
+        return real(self, key, chain, report, **kw)
 
-    monkeypatch.setattr(WriteJournal, "_undo_file", _dies_on_the_second)
+    monkeypatch.setattr(write_journal._UndoRun, "_undo_file", _dies_on_the_second)
     with pytest.raises(SystemExit):
         policy.journal.undo()
-    monkeypatch.setattr(WriteJournal, "_undo_file", real)
+    monkeypatch.setattr(write_journal._UndoRun, "_undo_file", real)
     state = read_undo_state(ws, _key())
     assert state is not None and state["state"] == "running"
     jdb.close_all()  # un processo nuovo
@@ -445,17 +447,17 @@ def test_a_board_merge_finished_before_a_kill_is_not_redone(board_ws: Path, monk
     with _at_work(policy):
         _write(board_ws / "wikis/piante/wiki/acero.md", "x")
     mutate_board(root, lambda b: b.update(lastSeen="t"))
-    real = WriteJournal._undo_file
+    real = write_journal._UndoRun._undo_file
 
-    def _dies_after_the_board(self, key, chain, report):
-        real(self, key, chain, report)
+    def _dies_after_the_board(self, key, chain, report, **kw):
+        real(self, key, chain, report, **kw)
         if key.endswith("board.json"):
             raise SystemExit("kill")
 
-    monkeypatch.setattr(WriteJournal, "_undo_file", _dies_after_the_board)
+    monkeypatch.setattr(write_journal._UndoRun, "_undo_file", _dies_after_the_board)
     with pytest.raises(SystemExit):
         policy.journal.undo()
-    monkeypatch.setattr(WriteJournal, "_undo_file", real)
+    monkeypatch.setattr(write_journal._UndoRun, "_undo_file", real)
     assert finish_interrupted_undos(board_ws) == 1
     state = read_undo_state(board_ws, _key())
     assert state is not None and state["kept"] == [] and "wikis/piante/board/board.json" in state["restored"]
@@ -666,3 +668,155 @@ def test_binding_none_hides_an_inherited_journal(ws: Path) -> None:
 
 def _entries_of(ws: Path, key: str) -> list[dict]:
     return WriteJournal(ws, key)._read_entries()
+
+
+# -- più registri insieme: il ritorno di un piano ----------------------------
+
+
+def _plan_helpers(ws: Path) -> tuple[_Helper, _Helper]:
+    """Due aiutanti dello stesso piano: il primo cambia acero e felce, il secondo
+    riscrive acero dopo di lui e crea una pagina nuova."""
+    wiki = ws / "wikis/piante/wiki"
+    a, b = _helper(ws, "la", "ta"), _helper(ws, "lb", "tb")
+    with _at_work(a):
+        _write(wiki / "acero.md", "da a")
+        _write(wiki / "felce.md", "da a")
+    with _at_work(b):
+        _write(wiki / "acero.md", "da b")
+        _write(wiki / "nuova.md", "nuova, da b")
+    return a, b
+
+
+def test_two_journals_on_the_same_file_make_one_chain(ws: Path) -> None:
+    before = _tree(ws)
+    a, b = _plan_helpers(ws)
+    into = WriteJournal(ws, journal_key("undo", "p1-1"))
+    report = undo_set([a.journal, b.journal], by="user", into=into)
+    assert report.kept == []
+    assert _tree(ws) == before
+    assert "wikis/piante/wiki/nuova.md" in report.removed
+
+
+def test_the_undo_of_the_undo_puts_the_work_back(ws: Path) -> None:
+    a, b = _plan_helpers(ws)
+    after_work = _tree(ws)
+    into = WriteJournal(ws, journal_key("undo", "p1-1"))
+    undo_set([a.journal, b.journal], into=into)
+    again = WriteJournal(ws, journal_key("undo", "p1-2"))
+    report = undo_set([into], into=again)
+    assert report.kept == []
+    assert _tree(ws) == after_work
+
+
+def test_kept_groups_and_never_stay_as_they_are(ws: Path) -> None:
+    a, b = _plan_helpers(ws)
+    into = WriteJournal(ws, journal_key("undo", "p1-1"))
+    group = {"wikis/piante/wiki/felce.md": "sources"}
+    report = undo_set(
+        [a.journal, b.journal], into=into, keep_groups={"sources"},
+        group_of=lambda p: group.get(p, "pages"),
+        never=lambda p: p.endswith("nuova.md"))
+    wiki = ws / "wikis/piante/wiki"
+    assert (wiki / "felce.md").read_text() == "da a"
+    assert (wiki / "nuova.md").read_text() == "nuova, da b"
+    assert report.excluded == ["wikis/piante/wiki/nuova.md"]
+    outcomes = report.outcomes()
+    assert outcomes["kept"] == ["wikis/piante/wiki/felce.md"]
+    assert outcomes["restored"] == ["wikis/piante/wiki/acero.md"]
+    assert report.to_dict()["counts"]["kept"] == 1
+
+
+def test_the_preview_touches_nothing_and_its_token_guards_the_confirm(ws: Path) -> None:
+    a, b = _plan_helpers(ws)
+    after_work = _tree(ws)
+    preview = undo_set([a.journal, b.journal], dry_run=True)
+    assert _tree(ws) == after_work and preview.dry_run and preview.token
+    into = WriteJournal(ws, journal_key("undo", "p1-1"))
+    for bad in ("nope", "0" * 16):
+        with pytest.raises(UndoConflictError):
+            undo_set([a.journal, b.journal], into=into, token=bad)
+    assert _tree(ws) == after_work
+    (ws / "wikis/piante/wiki/acero.md").write_text("dell'utente, dopo l'anteprima")
+    with pytest.raises(UndoConflictError):
+        undo_set([a.journal, b.journal], into=into, token=preview.token)
+    fresh = undo_set([a.journal, b.journal], dry_run=True)
+    report = undo_set([a.journal, b.journal], into=into, token=fresh.token)
+    assert {"path": "wikis/piante/wiki/acero.md", "reason": KEPT_CHANGED_AFTER} in report.kept
+
+
+def test_a_killed_undo_set_is_finished_at_boot_with_its_choices(ws: Path, monkeypatch) -> None:
+    before = _tree(ws)
+    a, b = _plan_helpers(ws)
+    into = WriteJournal(ws, journal_key("undo", "p1-1"))
+    calls = {"n": 0}
+    real = write_journal._UndoRun._undo_file
+
+    def _dies_on_the_second(self, key, chain, report, **kw):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise SystemExit("kill")
+        return real(self, key, chain, report, **kw)
+
+    monkeypatch.setattr(write_journal._UndoRun, "_undo_file", _dies_on_the_second)
+    with pytest.raises(SystemExit):
+        undo_set([a.journal, b.journal], into=into,
+                 never=lambda p: p.endswith("felce.md"))
+    monkeypatch.setattr(write_journal._UndoRun, "_undo_file", real)
+    jdb.close_all()
+    write_journal._LIVE.clear()
+    assert finish_interrupted_undos(ws) == 1
+    tree = _tree(ws)
+    # La scelta fatta alla partenza vale anche al boot: felce resta.
+    assert tree["wikis/piante/wiki/felce.md"] == "da a"
+    assert tree["wikis/piante/wiki/acero.md"] == before["wikis/piante/wiki/acero.md"]
+    assert "wikis/piante/wiki/nuova.md" not in tree
+
+
+def test_a_file_put_back_before_its_row_gets_a_repair_row(ws: Path, monkeypatch) -> None:
+    a, b = _plan_helpers(ws)
+    into = WriteJournal(ws, journal_key("undo", "p1-1"))
+    real = WriteJournal.settle
+
+    def _dies_once(self, tool=""):
+        if self is into and tool == "undo":
+            monkeypatch.setattr(WriteJournal, "settle", real)
+            self._pending.clear()  # il kill porta via quel che era in memoria
+            raise SystemExit("kill")
+        return real(self, tool)
+
+    monkeypatch.setattr(WriteJournal, "settle", _dies_once)
+    with pytest.raises(SystemExit):
+        undo_set([a.journal, b.journal], into=into)
+    assert finish_interrupted_undos(ws) == 1
+    repaired = [e for e in into._read_entries() if e.get("tool") == "undo"]
+    assert repaired and all("path" in e for e in repaired)
+    report = undo_set([into], into=WriteJournal(ws, journal_key("undo", "p1-2")))
+    assert {"path": "wikis/piante/wiki/acero.md", "reason": KEPT_NOT_SAVED} in report.kept
+
+
+def test_several_journals_need_a_journal_of_their_own(ws: Path) -> None:
+    a, b = _plan_helpers(ws)
+    with pytest.raises(ValueError):
+        undo_set([a.journal, b.journal])
+
+
+# -- le bozze ----------------------------------------------------------------
+
+
+def test_an_installed_draft_is_undone_with_whoever_wrote_it(ws: Path) -> None:
+    """La bozza la scrive l'aiutante, la installa l'utente dalla casa (fuori dal
+    suo lavoro): conta lo stesso come lavoro dell'aiutante."""
+    from jenny.agent import staged_writes
+
+    page = ws / "wikis/piante/wiki/acero.md"
+    original = page.read_text()
+    helper = _helper(ws)
+    with _at_work(helper):
+        ref = staged_writes.stage(ws, "wikis/piante/wiki/acero.md", b"dalla bozza",
+                                  sources=("web",), task_id="t1")
+    meta, _content = staged_writes.read_staged(ws, ref.id)
+    assert meta["journal"] == helper.journal.key
+    assert staged_writes.install(ws, ref.id, staged_writes.sha256_of(page)) == "installed"
+    assert page.read_text() == "dalla bozza"
+    report = WriteJournal(ws, helper.journal.key).undo()
+    assert report.kept == [] and page.read_text() == original

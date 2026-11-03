@@ -115,3 +115,11 @@ def test_the_common_fence_notes_the_before() -> None:
     last = _body(src, "check_write").rstrip().splitlines()[-1]
     assert last.strip().startswith("journal_touch("), last
     assert "current_journal()" in _body(src, "journal_touch")
+
+
+def test_an_installed_draft_is_noted_in_its_writer_journal() -> None:
+    """``staged_writes.install`` scrive con ``atomic_write``, che non passa da
+    nessun recinto: l'annotazione è a mano, sul registro di chi scrisse la bozza."""
+    src = _strip_prose((ROOT / "agent/staged_writes.py").read_text(encoding="utf-8"))
+    body = _body(src, "install")
+    assert "journal.touch(" in body and "journal.settle(" in body

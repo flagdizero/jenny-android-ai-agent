@@ -76,7 +76,7 @@ import threading
 import time
 import zlib
 from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -168,15 +168,31 @@ KEPT_CHANGED_AFTER = "changed_after"
 KEPT_CHANGED_DURING = "changed_during"
 KEPT_NOT_SAVED = "not_saved"
 KEPT_ERROR = "error"
+# Si sarebbe rimesso, ma è in un gruppo che chi annulla ha chiesto di tenere.
+KEPT_GROUP = "kept_group"
+# Non torna mai indietro (il diario di un quaderno): non è un «lasciato».
+KEPT_EXCLUDED = "excluded"
 
 _KEPT_TEXT = {
     KEPT_CHANGED_AFTER: "changed by someone else after the helper",
     KEPT_CHANGED_DURING: "changed by someone else while the helper was working",
     KEPT_NOT_SAVED: "its earlier content was not saved (too large, or the journal was full)",
     KEPT_ERROR: "could not be written back",
+    KEPT_GROUP: "kept on request",
 }
 
 _MISSING: Any = object()
+
+
+class UndoConflictError(Exception):
+    """I file non sono più quelli dell'anteprima: niente è stato rimesso.
+
+    Il gettone dell'anteprima (``undo_set(dry_run=True)``) fotografa le firme dei
+    file che l'annulla toccherebbe; alla conferma si rifà, e se qualcosa è
+    cambiato in mezzo il conto mostrato non è più vero.
+    """
+
+    code = "conflict"
 
 
 class _ConflictError(Exception):
@@ -357,16 +373,39 @@ _OWNERS_LOCK = threading.Lock()
 
 @dataclass(slots=True)
 class UndoReport:
-    """Com'è andato un annulla: rimessi, lasciati (col motivo), chi e quando."""
+    """Com'è andato (o andrebbe, con ``dry_run``) un annulla.
+
+    ``restored`` sono i file tornati com'erano, compresi quelli tolti perché
+    prima non c'erano (anche in ``removed``) e quelli che lo erano già (anche in
+    ``already``). ``kept`` sono quelli lasciati com'erano adesso, col motivo;
+    ``excluded`` quelli che non tornano mai (il diario di un quaderno).
+    """
 
     restored: list[str] = field(default_factory=list)
     kept: list[dict[str, str]] = field(default_factory=list)
     by: str = "user"
     at: float = field(default_factory=time.time)
+    removed: list[str] = field(default_factory=list)
+    already: list[str] = field(default_factory=list)
+    excluded: list[str] = field(default_factory=list)
+    kept_groups: list[str] = field(default_factory=list)
+    token: str | None = None
+    dry_run: bool = False
+    groups: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"restored": list(self.restored), "kept": [dict(k) for k in self.kept],
-                "by": self.by, "at": self.at}
+        data: dict[str, Any] = {
+            "restored": list(self.restored), "kept": [dict(k) for k in self.kept],
+            "by": self.by, "at": self.at, "removed": list(self.removed),
+            "already": list(self.already), "excluded": list(self.excluded),
+            "kept_groups": list(self.kept_groups), "dry_run": self.dry_run,
+        }
+        if self.token is not None:
+            data["token"] = self.token
+        if self.groups:
+            data["groups"] = dict(self.groups)
+            data["counts"] = {k: len(v) for k, v in self.outcomes().items()}
+        return data
 
     @classmethod
     def from_dict(cls, raw: Any) -> UndoReport:
@@ -375,12 +414,34 @@ class UndoReport:
             {"path": str(k.get("path", "")), "reason": str(k.get("reason", ""))}
             for k in raw.get("kept") or [] if isinstance(k, dict)
         ]
+
+        def paths(name: str) -> list[str]:
+            return [str(p) for p in raw.get(name) or [] if isinstance(p, str)]
+
+        groups = raw.get("groups")
         return cls(
-            restored=[str(p) for p in raw.get("restored") or [] if isinstance(p, str)],
-            kept=kept,
-            by=str(raw.get("by") or "user"),
-            at=float(raw.get("at") or 0.0),
+            restored=paths("restored"), kept=kept,
+            by=str(raw.get("by") or "user"), at=float(raw.get("at") or 0.0),
+            removed=paths("removed"), already=paths("already"), excluded=paths("excluded"),
+            kept_groups=paths("kept_groups"),
+            token=raw.get("token") if isinstance(raw.get("token"), str) else None,
+            dry_run=bool(raw.get("dry_run")),
+            groups={str(k): str(v) for k, v in groups.items()} if isinstance(groups, dict) else {},
         )
+
+    def outcomes(self) -> dict[str, list[str]]:
+        """Il resoconto per esiti separati, come lo legge la scheda di un piano:
+        rimessi, tolti, già com'erano, lasciati (cambiati da altri, non salvati),
+        tenuti su richiesta, mai rimessi."""
+        put_back = set(self.removed) | set(self.already)
+        return {
+            "restored": [p for p in self.restored if p not in put_back],
+            "removed": list(self.removed),
+            "already": list(self.already),
+            "left": [k["path"] for k in self.kept if k["reason"] != KEPT_GROUP],
+            "kept": [k["path"] for k in self.kept if k["reason"] == KEPT_GROUP],
+            "excluded": list(self.excluded),
+        }
 
     def summary(self) -> dict[str, Any]:
         """La forma corta per lo snapshot: contatori e i primi file lasciati."""
@@ -760,175 +821,12 @@ class WriteJournal:
     # -- annullare -----------------------------------------------------------
 
     def undo(self, *, by: str = "user") -> UndoReport:
-        """Rimette ogni file com'era prima del lineage, se nessun altro l'ha toccato.
+        """Rimette ogni file com'era prima di questo registro (:func:`undo_set`).
 
-        Per ogni file, la catena delle sue righe: se una riga non comincia dove
-        finiva la precedente qualcuno è passato in mezzo (``changed_during``); se
-        il file adesso non è com'era all'ultima riga qualcuno è passato dopo
-        (``changed_after``). In entrambi i casi il file resta. Altrimenti si
-        rimette il primo «prima»: il contenuto salvato, o niente se non c'era.
-        Prima i file, poi le cartelle dalla più profonda: una cartella nuova si
-        toglie solo se è rimasta vuota.
-
-        Idempotente: un file che è già com'era conta come rimesso. È ciò che
-        permette di finire al boot un annulla interrotto (la riga ``running``).
+        Dopo, le righe e i contenuti non servono più: resta solo il resoconto,
+        finché il lineage non riparte.
         """
-        with _UNDO_LOCK, self._lock:
-            entries = self._read_entries()
-            previous = read_undo_state(self.root, self.key) or {}
-            if not entries and previous.get("state") == "done":
-                # Già annullato (Jenny e il tuo tocco, o due finestre): il
-                # resoconto vero resta quello, non uno vuoto.
-                return UndoReport.from_dict(previous)
-            started = time.time()
-            # Le bacheche già fuse da un giro interrotto: rifonderle darebbe un
-            # conflitto finto (``_revert`` vede «prima» dove aspetta «dopo»).
-            merged = [k for k in previous.get("merged") or [] if isinstance(k, str)] \
-                if previous.get("state") == "running" else []
-            self._undo_state = {"state": "running", "by": by, "started_at": started,
-                                "merged": merged}
-            self._write_undo_state(self._undo_state)
-            report = UndoReport(by=by, at=started)
-            chains: dict[str, list[dict[str, Any]]] = {}
-            for entry in entries:
-                chains.setdefault(entry["path"], []).append(entry)
-            # Le firme dei file che non si possono rimettere (troppo grandi, oltre
-            # i tetti): un file nato dall'aiutante con una di queste firme è la
-            # loro sola copia (una rinomina), e non si cancella.
-            self._only_copies = {
-                str(chain[0].get("before")) for chain in chains.values()
-                if chain[0].get("before") not in (None, DIR)
-                and not (_is_sha(chain[0].get("before"))
-                         and self._has_object(str(chain[0].get("before"))))
-            }
-            files = [p for p in chains if not p.endswith("/")]
-            dirs = sorted((p for p in chains if p.endswith("/")),
-                          key=lambda p: p.count("/"), reverse=True)
-            # Le cartelle che c'erano e sono sparite si rifanno prima dei file.
-            for key in sorted(dirs, key=lambda p: p.count("/")):
-                if chains[key][0].get("before") == DIR:
-                    try:
-                        (self.root / key.rstrip("/")).mkdir(parents=True, exist_ok=True)
-                    except OSError:
-                        pass
-            for key in files:
-                self._undo_file(key, chains[key], report)
-            for key in dirs:
-                self._undo_dir(key, chains[key], report)
-            self._write_undo_state({"state": "done", **report.to_dict()})
-            self._drop_entries()
-            return report
-
-    def _verdict(self, chain: list[dict[str, Any]], now: str | None) -> str | None:
-        """Il motivo per lasciare il file com'è, o ``None`` se si può rimettere."""
-        if any(e.get("shared") for e in chain):
-            return KEPT_CHANGED_DURING
-        for prev, cur in zip(chain, chain[1:]):
-            if cur.get("before") != prev.get("after"):
-                return KEPT_CHANGED_DURING
-        if now != chain[-1].get("after"):
-            return KEPT_CHANGED_AFTER
-        return None
-
-    def _undo_file(self, key: str, chain: list[dict[str, Any]], report: UndoReport) -> None:
-        target = self.root / key
-        first = chain[0].get("before")
-        now = signature(target)
-        if now == first or key in self._undo_state.get("merged", ()):
-            report.restored.append(key)
-            return
-        reason = self._verdict(chain, now)
-        if reason is not None and _mergeable(key) and self._merge_back(key, chain):
-            self._undo_state["merged"].append(key)
-            self._write_undo_state(self._undo_state)
-            report.restored.append(key)
-            return
-        if reason is not None:
-            report.kept.append({"path": key, "reason": reason})
-            return
-        try:
-            if first is None:
-                if now in self._only_copies:
-                    # Spostato qui da un file che non si può rimettere:
-                    # cancellarlo perderebbe l'unica copia.
-                    report.kept.append({"path": key, "reason": KEPT_NOT_SAVED})
-                    return
-                if target.is_symlink() or target.is_file():
-                    target.unlink()
-            elif _is_sha(first) and self._has_object(first):
-                content = _read_object(self.objects, first)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                atomic_write(target, content)
-            else:
-                report.kept.append({"path": key, "reason": KEPT_NOT_SAVED})
-                return
-        except (OSError, ValueError, zlib.error) as e:
-            logger.warning("Subagent undo could not restore {}: {}", target, e)
-            report.kept.append({"path": key, "reason": KEPT_ERROR})
-            return
-        report.restored.append(key)
-
-    def _merge_back(self, key: str, chain: list[dict[str, Any]]) -> bool:
-        """Toglie dalla bacheca di adesso i cambiamenti dell'aiutante, a pezzi.
-
-        Una scrittura alla volta, dall'ultima alla prima: ognuna toglie solo il
-        suo «prima → dopo», quindi quel che altri hanno scritto in mezzo resta.
-        Vero se l'ha fatto; falso (file com'è) se manca un contenuto, se il file
-        non c'era prima o non c'è adesso, o se un pezzo è conteso.
-        """
-        if any(e.get("shared") for e in chain):
-            return False
-        try:
-            pairs = [(self._blob_json(e.get("before")), self._blob_json(e.get("after")))
-                     for e in chain]
-        except (OSError, ValueError, zlib.error):
-            return False
-        from jenny.board.store import rewrite_json
-
-        def change(current: Any) -> Any:
-            if current is None:
-                raise _ConflictError
-            for before, after in reversed(pairs):
-                current = _revert(before, after, current)
-            return current
-
-        try:
-            rewrite_json(self.root / key, change)
-        except (_ConflictError, OSError, ValueError):
-            return False
-        return True
-
-    def _blob_json(self, sig: Any) -> Any:
-        if not _is_sha(sig):
-            raise ValueError("no content for this version")
-        return json.loads(_read_object(self.objects, str(sig)).decode("utf-8"))
-
-    def _undo_dir(self, key: str, chain: list[dict[str, Any]], report: UndoReport) -> None:
-        # Una cartella nuova si toglie se è rimasta vuota; una che c'era è già
-        # stata rifatta in testa. Le cartelle non entrano nel conto dei file: la
-        # casa dice «N file», e una cartella vuota che resta non è lavoro perso.
-        if chain[0].get("before") is not None:
-            return
-        try:
-            (self.root / key.rstrip("/")).rmdir()
-        except OSError:
-            pass
-
-    def _write_undo_state(self, state: dict[str, Any]) -> None:
-        report = {k: v for k, v in state.items() if k not in ("state", "merged", "started_at")}
-        try:
-            with self._db().write() as conn:
-                conn.execute(
-                    "INSERT INTO undos(key, sources, state, started_at, report, merged) "
-                    "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
-                    "sources = excluded.sources, state = excluded.state, "
-                    "started_at = excluded.started_at, report = excluded.report, "
-                    "merged = excluded.merged",
-                    (self.key, json.dumps([self.key]), state.get("state", ""),
-                     state.get("started_at"), json.dumps(report, ensure_ascii=False),
-                     json.dumps(state.get("merged") or [])))
-        except sqlite3.Error as e:
-            logger.warning("Write journal {} could not write its undo state: {}", self.key, e)
+        return undo_set([self], by=by)
 
     def _drop_entries(self) -> None:
         """Dopo un annulla le righe e i contenuti non servono più: resta solo
@@ -946,6 +844,363 @@ class WriteJournal:
         self._paths.clear()
         self._changed = 0
         self._saved_bytes = 0
+
+
+def _token(current: dict[str, str | None]) -> str:
+    """Il gettone di un'anteprima: le firme di adesso dei file che toccherebbe."""
+    payload = json.dumps(sorted(current.items()), ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+
+# Gli esiti di un file in un annulla (``_UndoRun._decide``).
+_EXCLUDED = "excluded"
+_ALREADY = "already"
+_MERGED_BEFORE = "merged_before"
+_KEEP = "keep"
+_MERGE = "merge"
+_REMOVE = "remove"
+_RESTORE = "restore"
+
+
+def undo_set(
+    journals: list[WriteJournal], *, by: str = "user", into: WriteJournal | None = None,
+    keep_groups: Iterable[str] = (), group_of: Any = None, never: Any = None,
+    dry_run: bool = False, token: str | None = None,
+) -> UndoReport:
+    """Rimette i file com'erano prima di *journals*, se nessun altro li ha toccati.
+
+    Le righe di tutti i registri dati, per file e in ordine di ora, fanno una
+    catena sola: due aiutanti dello stesso piano sullo stesso file si annullano
+    insieme. Per ogni catena: se una riga non comincia dove finiva la precedente
+    qualcuno è passato in mezzo (``changed_during``); se il file adesso non è
+    com'era all'ultima riga qualcuno è passato dopo (``changed_after``). In
+    entrambi i casi il file resta (la bacheca si prova a pezzi). Altrimenti si
+    rimette il primo «prima»: il contenuto salvato, o niente se non c'era. Prima
+    i file, poi le cartelle dalla più profonda.
+
+    - *group_of* (percorso → gruppo) e *keep_groups*: i file dei gruppi tenuti
+      restano com'erano adesso (``kept_group``);
+    - *never*: i percorsi che non tornano mai (``excluded``);
+    - *dry_run*: il resoconto senza toccare niente, col ``token`` delle firme di
+      adesso; passato alla conferma, se i file sono cambiati in mezzo
+      :class:`UndoConflictError` e niente si tocca;
+    - *into*: il registro dell'annulla stesso. Ogni file rimesso ci lascia la
+      sua riga, così annullare l'annulla è ``undo_set([into])``. Con *into* i
+      registri annullati restano (il piano può tornarci); senza, le loro righe
+      se ne vanno, e resta solo il resoconto.
+
+    Idempotente: un file che è già com'era conta come rimesso. Lo stato
+    ``running`` si scrive prima del primo file, così un kill a metà si finisce al
+    boot (:func:`finish_interrupted_undos`) con le stesse scelte.
+    """
+    journals = list(journals)
+    if not journals:
+        raise ValueError("nothing to undo")
+    if len(journals) > 1 and into is None and not dry_run:
+        raise ValueError("an undo of several journals needs a journal of its own (into)")
+    run = _UndoRun(journals, by=by, into=into, keep_groups=frozenset(keep_groups),
+                   group_of=group_of, never=never)
+    held = sorted({j.key: j for j in [*journals, *([into] if into else [])]}.items())
+    with _UNDO_LOCK, ExitStack() as stack:
+        for _key, journal in held:
+            stack.enter_context(journal._lock)
+        return run.go(dry_run=dry_run, token=token)
+
+
+class _UndoRun:
+    """Un annulla, dal conto delle catene al resoconto."""
+
+    def __init__(self, journals: list[WriteJournal], *, by: str, into: WriteJournal | None,
+                 keep_groups: frozenset[str], group_of: Any, never: Any) -> None:
+        self.journals = journals
+        self.root = journals[0].root
+        self.objects = journals[0].objects
+        self.keys = [j.key for j in journals]
+        self.by = by
+        self.into = into
+        self.state_key = into.key if into is not None else self.keys[0]
+        self.keep_groups = keep_groups
+        self.group_of = group_of
+        self.never = never
+        self.frozen: dict[str, str] = {}
+        self._undo_state: dict[str, Any] = {}
+        self._only_copies: set[str] = set()
+
+    def _in(self) -> str:
+        return ",".join("?" * len(self.keys))
+
+    def entries(self) -> list[dict[str, Any]]:
+        rows = _undo_db(self.root).read(
+            "SELECT path, before, after, ts, saved, shared, tool, task_id, attempt, step "
+            f"FROM entries WHERE journal IN ({self._in()}) ORDER BY ts, id", self.keys)
+        return [_entry(row) for row in rows]
+
+    def _has_object(self, sha: str) -> bool:
+        rows = _undo_db(self.root).read(
+            f"SELECT 1 FROM objects WHERE sha = ? AND journal IN ({self._in()}) LIMIT 1",
+            (sha, *self.keys))
+        return bool(rows) and _object_path(self.objects, sha).is_file()
+
+    # -- il giro --------------------------------------------------------------
+
+    def go(self, *, dry_run: bool, token: str | None) -> UndoReport:
+        entries = self.entries()
+        previous = read_undo_state(self.root, self.state_key) or {}
+        resuming = previous.get("state") == "running"
+        if not entries and previous.get("state") == "done" and not dry_run:
+            # Già annullato (Jenny e il tuo tocco, o due finestre): il resoconto
+            # vero resta quello, non uno vuoto.
+            return UndoReport.from_dict(previous)
+        chains: dict[str, list[dict[str, Any]]] = {}
+        for entry in entries:
+            chains.setdefault(entry["path"], []).append(entry)
+        files = [p for p in chains if not p.endswith("/")]
+        dirs = sorted((p for p in chains if p.endswith("/")),
+                      key=lambda p: p.count("/"), reverse=True)
+        if resuming and isinstance(previous.get("frozen"), dict):
+            # Le scelte fatte alla partenza (gruppi tenuti, percorsi esclusi): il
+            # boot che finisce l'annulla non ha più chi le aveva chieste.
+            self.frozen = {str(k): str(v) for k, v in previous["frozen"].items()}
+        else:
+            self.frozen = {key: reason for key in files
+                           if (reason := self._choice(key)) is not None}
+        # Le firme dei file che non si possono rimettere (troppo grandi, oltre i
+        # tetti): un file nato dentro questi registri con una di queste firme è la
+        # loro sola copia (una rinomina), e non si cancella.
+        self._only_copies = {
+            str(chain[0].get("before")) for chain in chains.values()
+            if chain[0].get("before") not in (None, DIR)
+            and not (_is_sha(chain[0].get("before"))
+                     and self._has_object(str(chain[0].get("before"))))
+        }
+        merged = [k for k in previous.get("merged") or [] if isinstance(k, str)] \
+            if resuming else []
+        now = {key: signature(self.root / key) for key in files}
+        current = _token(now)
+        report = UndoReport(by=self.by, at=time.time(), dry_run=dry_run,
+                            kept_groups=sorted(self.keep_groups))
+        if dry_run:
+            for key in files:
+                outcome, reason = self._decide(key, chains[key], now[key], merged)
+                self._count(report, key, outcome, reason)
+            report.token = current
+            return report
+        if token is not None and token != current:
+            raise UndoConflictError("the files changed since the preview")
+        self._undo_state = {"state": "running", "by": self.by, "started_at": report.at,
+                            "merged": merged, "frozen": self.frozen}
+        self._write_state(self._undo_state)
+        with bind_journal(self.into):
+            # Le cartelle che c'erano e sono sparite si rifanno prima dei file.
+            for key in sorted(dirs, key=lambda p: p.count("/")):
+                if chains[key][0].get("before") == DIR:
+                    try:
+                        (self.root / key.rstrip("/")).mkdir(parents=True, exist_ok=True)
+                    except OSError:
+                        pass
+            for key in files:
+                self._undo_file(key, chains[key], report, resuming=resuming)
+            for key in dirs:
+                self._undo_dir(key, chains[key])
+        self._write_state({"state": "done", **report.to_dict()})
+        if self.into is None:
+            for journal in self.journals:
+                journal._drop_entries()
+        return report
+
+    def _choice(self, key: str) -> str | None:
+        if self.never is not None and self.never(key):
+            return KEPT_EXCLUDED
+        if self.group_of is not None and self.group_of(key) in self.keep_groups:
+            return KEPT_GROUP
+        return None
+
+    def _decide(self, key: str, chain: list[dict[str, Any]], now: str | None,
+                merged: list[str]) -> tuple[str, str | None]:
+        """Cosa succede a *key*, senza toccarlo."""
+        if self.frozen.get(key) == KEPT_EXCLUDED:
+            return _EXCLUDED, None
+        first = chain[0].get("before")
+        if key in merged:
+            return _MERGED_BEFORE, None
+        if now == first:
+            return _ALREADY, None
+        if self.frozen.get(key) == KEPT_GROUP:
+            return _KEEP, KEPT_GROUP
+        reason = self._verdict(chain, now)
+        if reason is not None:
+            if _mergeable(key) and self._merged_board(key, chain) is not None:
+                return _MERGE, None
+            return _KEEP, reason
+        if first is None:
+            if now in self._only_copies:
+                # Spostato qui da un file che non si può rimettere: cancellarlo
+                # perderebbe l'unica copia.
+                return _KEEP, KEPT_NOT_SAVED
+            return _REMOVE, None
+        if _is_sha(first) and self._has_object(first):
+            return _RESTORE, None
+        return _KEEP, KEPT_NOT_SAVED
+
+    def _count(self, report: UndoReport, key: str, outcome: str, reason: str | None) -> None:
+        if self.group_of is not None:
+            report.groups[key] = str(self.group_of(key))
+        if outcome == _EXCLUDED:
+            report.excluded.append(key)
+        elif outcome == _KEEP:
+            report.kept.append({"path": key, "reason": reason or KEPT_ERROR})
+        else:
+            report.restored.append(key)
+            if outcome == _REMOVE:
+                report.removed.append(key)
+            elif outcome == _ALREADY:
+                report.already.append(key)
+
+    def _verdict(self, chain: list[dict[str, Any]], now: str | None) -> str | None:
+        """Il motivo per lasciare il file com'è, o ``None`` se si può rimettere."""
+        if any(e.get("shared") for e in chain):
+            return KEPT_CHANGED_DURING
+        for prev, cur in zip(chain, chain[1:]):
+            if cur.get("before") != prev.get("after"):
+                return KEPT_CHANGED_DURING
+        if now != chain[-1].get("after"):
+            return KEPT_CHANGED_AFTER
+        return None
+
+    # -- scrivere -------------------------------------------------------------
+
+    def _undo_file(self, key: str, chain: list[dict[str, Any]], report: UndoReport, *,
+                   resuming: bool) -> None:
+        target = self.root / key
+        now = signature(target)
+        outcome, reason = self._decide(key, chain, now, self._undo_state["merged"])
+        if outcome == _ALREADY and resuming:
+            self._repair(key, chain)
+        if outcome in (_EXCLUDED, _ALREADY, _MERGED_BEFORE, _KEEP):
+            self._count(report, key, outcome, reason)
+            return
+        try:
+            if self.into is not None:
+                self.into.touch(target)
+            if outcome == _MERGE:
+                if not self._merge_back(key, chain):
+                    self._count(report, key, _KEEP, self._verdict(chain, now) or KEPT_ERROR)
+                    return
+                self._undo_state["merged"].append(key)
+                self._write_state(self._undo_state)
+            elif outcome == _REMOVE:
+                if target.is_symlink() or target.is_file():
+                    target.unlink()
+            else:
+                content = _read_object(self.objects, str(chain[0].get("before")))
+                target.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write(target, content)
+        except (OSError, ValueError, zlib.error) as e:
+            logger.warning("Undo could not restore {}: {}", target, e)
+            self._count(report, key, _KEEP, KEPT_ERROR)
+            return
+        finally:
+            if self.into is not None:
+                self.into.settle("undo")
+        self._count(report, key, outcome, None)
+
+    def _repair(self, key: str, chain: list[dict[str, Any]]) -> None:
+        """Un file rimesso da un annulla poi ucciso prima della sua riga: la riga
+        si scrive adesso, o annullare l'annulla non lo vedrebbe. Il contenuto di
+        prima dell'annulla non c'è più, quindi la riga dice «non salvato»."""
+        into = self.into
+        first, last = chain[0].get("before"), chain[-1].get("after")
+        if into is None or last == first:
+            return
+        if any(e["path"] == key for e in into._read_entries()):
+            return
+        with into._lock:
+            into._append([{"path": key, "before": last, "after": first, "ts": time.time(),
+                           "saved": False, "tool": "undo"}])
+            into._note_path(key)
+
+    def _merged_board(self, key: str, chain: list[dict[str, Any]]) -> Any:
+        """La bacheca di adesso senza i cambiamenti dei registri, o ``None``."""
+        if any(e.get("shared") for e in chain):
+            return None
+        try:
+            current = json.loads((self.root / key).read_text(encoding="utf-8"))
+            return self._reverted(chain)(current)
+        except (_ConflictError, OSError, ValueError, zlib.error):
+            return None
+
+    def _reverted(self, chain: list[dict[str, Any]]):
+        pairs = [(self._blob_json(e.get("before")), self._blob_json(e.get("after")))
+                 for e in chain]
+
+        def change(current: Any) -> Any:
+            if current is None:
+                raise _ConflictError
+            for before, after in reversed(pairs):
+                current = _revert(before, after, current)
+            return current
+
+        return change
+
+    def _merge_back(self, key: str, chain: list[dict[str, Any]]) -> bool:
+        """Toglie dalla bacheca di adesso i cambiamenti dei registri, a pezzi.
+
+        Una scrittura alla volta, dall'ultima alla prima: ognuna toglie solo il
+        suo «prima → dopo», quindi quel che altri hanno scritto in mezzo resta.
+        Vero se l'ha fatto; falso (file com'è) se manca un contenuto, se il file
+        non c'era prima o non c'è adesso, o se un pezzo è conteso.
+        """
+        if any(e.get("shared") for e in chain):
+            return False
+        try:
+            change = self._reverted(chain)
+        except (OSError, ValueError, zlib.error):
+            return False
+        from jenny.board.store import rewrite_json
+
+        try:
+            rewrite_json(self.root / key, change)
+        except (_ConflictError, OSError, ValueError):
+            return False
+        return True
+
+    def _blob_json(self, sig: Any) -> Any:
+        if not _is_sha(sig):
+            raise ValueError("no content for this version")
+        return json.loads(_read_object(self.objects, str(sig)).decode("utf-8"))
+
+    def _undo_dir(self, key: str, chain: list[dict[str, Any]]) -> None:
+        # Una cartella nuova si toglie se è rimasta vuota; una che c'era è già
+        # stata rifatta in testa. Le cartelle non entrano nel conto dei file: la
+        # casa dice «N file», e una cartella vuota che resta non è lavoro perso.
+        if chain[0].get("before") is not None:
+            return
+        target = self.root / key.rstrip("/")
+        try:
+            if self.into is not None and target.is_dir() and not any(target.iterdir()):
+                self.into.touch(target)
+            target.rmdir()
+        except OSError:
+            pass
+        finally:
+            if self.into is not None:
+                self.into.settle("undo")
+
+    def _write_state(self, state: dict[str, Any]) -> None:
+        report = {k: v for k, v in state.items() if k not in ("state", "merged", "started_at")}
+        try:
+            with _undo_db(self.root).write() as conn:
+                conn.execute(
+                    "INSERT INTO undos(key, sources, state, started_at, report, merged) "
+                    "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
+                    "sources = excluded.sources, state = excluded.state, "
+                    "started_at = excluded.started_at, report = excluded.report, "
+                    "merged = excluded.merged",
+                    (self.state_key, json.dumps(self.keys), state.get("state", ""),
+                     state.get("started_at"), json.dumps(report, ensure_ascii=False),
+                     json.dumps(state.get("merged") or [])))
+        except sqlite3.Error as e:
+            logger.warning("Undo {} could not write its state: {}", self.state_key, e)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1054,11 +1309,12 @@ def finish_interrupted_undos(install_root: Path) -> int:
     """Al boot: finisce gli annulla che un kill ha lasciato a metà. Ritorna quanti.
 
     L'annulla è idempotente (un file già rimesso conta come rimesso), quindi
-    finirlo è rifarlo. Best-effort: un boot non fallisce per questo.
+    finirlo è rifarlo, con le scelte fatte alla partenza (``frozen``).
+    Best-effort: un boot non fallisce per questo.
     """
     try:
         rows = _undo_db(install_root).read(
-            "SELECT key, report FROM undos WHERE state = 'running'")
+            "SELECT key, sources, report FROM undos WHERE state = 'running'")
     except sqlite3.Error as e:
         logger.warning("Could not read interrupted undos: {}", e)
         return 0
@@ -1066,25 +1322,35 @@ def finish_interrupted_undos(install_root: Path) -> int:
     for row in rows:
         try:
             by = str((json.loads(row["report"] or "{}") or {}).get("by") or "user")
-        except ValueError:
-            by = "user"
+            sources = [str(k) for k in json.loads(row["sources"] or "[]")]
+        except (ValueError, AttributeError):
+            by, sources = "user", []
+        key = row["key"]
         try:
-            WriteJournal(install_root, row["key"]).undo(by=by)
+            if not sources or sources == [key]:
+                WriteJournal(install_root, key).undo(by=by)
+            else:
+                undo_set([WriteJournal(install_root, k) for k in sources], by=by,
+                         into=journal_for(install_root, key))
             finished += 1
         except Exception as e:  # noqa: BLE001 — vedi docstring
-            logger.warning("Could not finish interrupted undo {}: {}", row["key"], e)
+            logger.warning("Could not finish interrupted undo {}: {}", key, e)
     return finished
 
 
-def sweep_orphan_journals(install_root: Path, keep: Iterable[str]) -> int:
+def sweep_orphan_journals(install_root: Path, keep: Iterable[str],
+                          keep_keys: Iterable[str] = ()) -> int:
     """Toglie i registri degli aiutanti che non hanno più record. Ritorna quanti.
 
     La vita del registro di un aiutante è quella dei record del suo lineage (TTL
     e potatura di ``subagent_records``): senza record nessuno può più chiedere
-    l'annulla, e le copie sono solo spazio. *keep* sono i lineage vivi. Poi i
-    contenuti salvati che nessuna riga nomina più.
+    l'annulla, e le copie sono solo spazio. *keep* sono i lineage vivi;
+    *keep_keys* i registri che qualcun altro nomina ancora (gli aiutanti dei
+    passi di un piano, che il piano può riportare indietro). I registri che non
+    sono di un aiutante (``plan-*``, ``undo-*``) li toglie chi li ha creati. Poi
+    i contenuti salvati che nessuna riga nomina più.
     """
-    alive = {journal_key(HELPER, k) for k in keep}
+    alive = {journal_key(HELPER, k) for k in keep} | set(keep_keys)
     prefix = f"{HELPER}-"
     try:
         database = _undo_db(install_root)
