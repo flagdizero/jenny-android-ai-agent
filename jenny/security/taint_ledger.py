@@ -7,32 +7,37 @@ pulito, e il percorso «pagina ostile → codice eseguito» passerebbe da un fil
 Qui si ricorda, per path relativo alla radice dell'installazione, chi ha
 contaminato un file; leggerlo marca il lavoro che lo legge.
 
-Forma: ``.jenny/taint_ledger.json`` = ``{"v": 1, "entries": {rel: {"t", "src"}}}``.
-Una voce può essere una cartella (vale per tutto ciò che contiene). Le scritture
-nel registro le fanno solo i lavori non fidati, quindi sono rare; la lettura è
-una ricerca in un dict, in memoria dopo il primo accesso.
+Forma: la tabella ``taint_ledger(path, t, src)`` di ``state.sqlite``, che
+viaggia con gli snapshot: un ripristino riporta file e taint dello stesso
+momento. Una voce può essere una cartella (vale per tutto ciò che contiene). Le
+scritture nel registro le fanno solo i lavori non fidati, quindi sono rare; la
+lettura è una ricerca in un dict, in memoria dopo il primo accesso. Fino alla
+2.x era ``.jenny/taint_ledger.json``; lo importa ``db_migration/staged_taint.py``.
 
 Chi pulisce una voce: una scrittura **completa** fatta da un lavoro fidato (i
 byte ora sono suoi), una scrittura dell'utente dalla WebUI, l'installazione di
 una bozza confermata. Una modifica parziale fatta da un lavoro fidato non
 pulisce: i byte contaminati restano nel file.
 
-Il file stesso è SECRET per i subagent (``subagent_policy``): un lavoro non
-fidato non può cancellare le proprie tracce.
+Il database sta fuori dal workspace: un lavoro non fidato non può cancellare le
+proprie tracce.
 """
 
 from __future__ import annotations
 
-import json
+import sqlite3
 import threading
 import time
 from pathlib import Path
 
 from loguru import logger
 
-from jenny.utils.path import atomic_write
+from jenny.db.schema import Schema
 
-LEDGER_REL = (".jenny", "taint_ledger.json")
+SCHEMA = Schema(
+    "taint",
+    ("CREATE TABLE taint_ledger (path TEXT PRIMARY KEY, t INTEGER NOT NULL, src TEXT);",),
+)
 
 # Tetti: il registro cresce solo con le scritture di lavori non fidati, ma un
 # lavoro che scrive migliaia di file non deve farne un file da megabyte. Oltre
@@ -47,7 +52,6 @@ class TaintLedger:
 
     def __init__(self, root: Path) -> None:
         self._root = Path(root)
-        self._path = self._root.joinpath(*LEDGER_REL)
         self._lock = threading.Lock()
         self._entries: dict[str, dict[str, object]] | None = None
 
@@ -58,15 +62,9 @@ class TaintLedger:
             return self._entries
         entries: dict[str, dict[str, object]] = {}
         try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-            if isinstance(raw, dict) and isinstance(raw.get("entries"), dict):
-                entries = {
-                    k: v for k, v in raw["entries"].items()
-                    if isinstance(k, str) and isinstance(v, dict)
-                }
-        except FileNotFoundError:
-            pass
-        except (OSError, ValueError) as exc:
+            for row in self._db().read("SELECT path, t, src FROM taint_ledger"):
+                entries[row["path"]] = {"t": row["t"], "src": row["src"]}
+        except sqlite3.Error as exc:
             # Un registro illeggibile si ricomincia vuoto: perdere la memoria di
             # un taint è il caso peggiore, ma non deve fermare i tool dei file.
             logger.warning("Taint ledger unreadable, starting empty: {}", exc)
@@ -138,15 +136,24 @@ class TaintLedger:
             for k in oldest[: len(entries) - _MAX_ENTRIES]:
                 entries.pop(k)
 
+    def _db(self):
+        from jenny import db
+
+        database = db.database_for_workspace(self._root, db.STATE)
+        database.require(SCHEMA)
+        return database
+
     def _save(self) -> None:
+        """Il registro in memoria al posto di quello salvato (al più ``_MAX_ENTRIES`` righe)."""
         assert self._entries is not None
         try:
-            atomic_write(
-                self._path,
-                json.dumps({"v": 1, "entries": self._entries}, ensure_ascii=False),
-                fsync_dir=False,
-            )
-        except OSError as exc:
+            with self._db().write() as conn:
+                conn.execute("DELETE FROM taint_ledger")
+                conn.executemany(
+                    "INSERT INTO taint_ledger(path, t, src) VALUES (?, ?, ?)",
+                    [(k, int(v.get("t") or 0), v.get("src")) for k, v in self._entries.items()],
+                )
+        except sqlite3.Error as exc:
             logger.warning("Taint ledger write failed: {}", exc)
 
 

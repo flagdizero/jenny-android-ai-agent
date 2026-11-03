@@ -9,12 +9,12 @@ RPC dell'interfaccia (un tocco dell'utente) la mette al suo posto.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from jenny import db as jdb
 from jenny.agent import staged_writes
 from jenny.agent.tools.apply_patch import ApplyPatchTool
 from jenny.agent.tools.filesystem import EditFileTool, WriteFileTool
@@ -193,11 +193,12 @@ async def test_discard_leaves_the_file_alone(ws: Path) -> None:
 
 
 async def test_drafts_survive_a_restart(ws: Path) -> None:
-    """Su disco: un nuovo processo li ritrova (nessuno stato in memoria)."""
-    staged_writes.stage(ws, "USER.md", b"x", sources=("web_search",), task_id="t")
-    meta = json.loads(next((ws / ".jenny" / "staged").iterdir()).joinpath("meta.json").read_text())
-    assert meta["target"] == "USER.md"
-    assert len(staged_writes.list_staged(ws)) == 1
+    """Salvate: un nuovo processo le ritrova (nessuno stato in memoria)."""
+    ref = staged_writes.stage(ws, "USER.md", b"x", sources=("web_search",), task_id="t")
+    jdb.close_all()  # il processo dopo riapre il database da capo
+    assert (ws / ".jenny" / "staged" / ref.id / "content").read_bytes() == b"x"
+    [meta] = staged_writes.list_staged(ws)
+    assert meta["target"] == "USER.md" and meta["id"] == ref.id
 
 
 async def test_a_subagent_cannot_touch_a_pending_draft(ws: Path) -> None:

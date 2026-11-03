@@ -9,9 +9,12 @@ via di mezzo è questa: la scrittura va in bozza, e solo un tocco dell'utente in
 app la mette al suo posto. Nessun tool del modello raggiunge ``install``: lo
 chiama soltanto la RPC ``staged.install`` della WebUI.
 
-Forma su disco: ``.jenny/staged/<id>/meta.json`` + ``content``. La cartella è
-SECRET per i subagent, quindi un lavoro non fidato non può riscrivere una bozza
-già in attesa né cambiarne la descrizione.
+Forma: il contenuto in ``.jenny/staged/<id>/content`` (un file, come tutto il
+contenuto), la descrizione in una riga di ``state.sqlite`` (``staged_drafts``).
+La cartella è SECRET per i subagent e il database sta fuori dal workspace,
+quindi un lavoro non fidato non può riscrivere una bozza già in attesa né
+cambiarne la descrizione. Fino alla 2.x la descrizione era ``meta.json``
+accanto al contenuto; la importa ``db_migration/staged_taint.py``.
 
 ``install`` verifica che il file di destinazione sia ancora quello visto
 quando la bozza è stata mostrata (``expected_sha``): se nel frattempo è
@@ -23,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sqlite3
 import threading
 import uuid
 from collections.abc import Callable
@@ -33,11 +37,27 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.db.schema import Schema
 from jenny.utils.clock import now_ms as _now_ms
-from jenny.utils.path import atomic_write, read_json
+from jenny.utils.path import atomic_write
 
 STAGED_REL = (".jenny", "staged")
 MAX_PENDING = 50
+
+SCHEMA = Schema(
+    "staged",
+    (
+        """
+        CREATE TABLE staged_drafts (
+          id TEXT PRIMARY KEY,
+          target TEXT NOT NULL,
+          task_id TEXT,
+          created_ms INTEGER NOT NULL,
+          data TEXT NOT NULL
+        );
+        """,
+    ),
+)
 
 _LOCK = threading.Lock()
 
@@ -132,9 +152,51 @@ def sha256_of(path: Path) -> str | None:
         return None
 
 
-def _read_meta(entry: Path) -> dict[str, Any] | None:
-    meta = read_json(entry / "meta.json")
+def _db(root: Path):
+    from jenny import db
+
+    database = db.database_for_workspace(Path(root), db.STATE)
+    database.require(SCHEMA)
+    return database
+
+
+def _meta_of(raw: str) -> dict[str, Any] | None:
+    try:
+        meta = json.loads(raw)
+    except ValueError:
+        return None
     return meta if isinstance(meta, dict) and isinstance(meta.get("target"), str) else None
+
+
+def _read_meta(root: Path, staged_id: str) -> dict[str, Any] | None:
+    rows = _db(root).read("SELECT data FROM staged_drafts WHERE id = ?", (staged_id,))
+    return _meta_of(rows[0]["data"]) if rows else None
+
+
+def _forget(root: Path, staged_id: str) -> None:
+    """Via la riga e il contenuto di una bozza."""
+    with _db(root).write() as conn:
+        conn.execute("DELETE FROM staged_drafts WHERE id = ?", (staged_id,))
+    shutil.rmtree(_dir(root) / staged_id, ignore_errors=True)
+
+
+def pending_journal_keys(root: Path) -> set[str]:
+    """I registri dell'annulla delle bozze in attesa: chi pulisce i registri li tiene.
+
+    Una bozza installata conta come lavoro di chi l'ha scritta: se il suo
+    registro sparisse prima dell'installazione (il record dell'aiutante scade
+    in 7 giorni, la bozza no), il suo annulla non la toglierebbe più.
+    """
+    try:
+        rows = _db(root).read("SELECT data FROM staged_drafts")
+    except sqlite3.Error:
+        return set()
+    keys = set()
+    for row in rows:
+        meta = _meta_of(row["data"]) or {}
+        if isinstance(meta.get("journal"), str) and meta["journal"]:
+            keys.add(meta["journal"])
+    return keys
 
 
 def stage(
@@ -153,16 +215,11 @@ def stage(
     root = Path(root)
     with _LOCK:
         base = _dir(root)
-        existing = None
-        pending = 0
-        if base.is_dir():
-            for entry in base.iterdir():
-                meta = _read_meta(entry)
-                if meta is None:
-                    continue
-                pending += 1
-                if meta.get("target") == target_rel and meta.get("task_id") == task_id:
-                    existing = entry.name
+        database = _db(root)
+        pending = database.read("SELECT count(*) FROM staged_drafts")[0][0]
+        same = database.read("SELECT id FROM staged_drafts WHERE target = ? AND task_id = ?",
+                             (target_rel, task_id))
+        existing = same[0]["id"] if same else None
         if existing is None and pending >= MAX_PENDING:
             raise StagingFullError()
         staged_id = existing or uuid.uuid4().hex[:12]
@@ -185,7 +242,14 @@ def stage(
             meta["journal"] = journal
             if step is not None:
                 meta["journal_step"] = step
-        atomic_write(entry / "meta.json", json.dumps(meta, ensure_ascii=False), fsync_dir=False)
+        with database.write() as conn:
+            conn.execute(
+                "INSERT INTO staged_drafts(id, target, task_id, created_ms, data) "
+                "VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET target = excluded.target, "
+                "task_id = excluded.task_id, created_ms = excluded.created_ms, data = excluded.data",
+                (staged_id, target_rel, task_id, meta["created_ms"],
+                 json.dumps(meta, ensure_ascii=False)),
+            )
     _notify(root, "staged", staged_id, target_rel)
     return StagedRef(staged_id, target_rel)
 
@@ -194,39 +258,34 @@ def list_staged(root: Path) -> list[dict[str, Any]]:
     """Le bozze in attesa, dalla più vecchia. Ognuna con lo sha attuale del file."""
     root = Path(root)
     base = _dir(root)
-    if not base.is_dir():
-        return []
     items: list[dict[str, Any]] = []
-    for entry in base.iterdir():
-        meta = _read_meta(entry)
-        if meta is None or not (entry / "content").is_file():
+    for row in _db(root).read("SELECT id, data FROM staged_drafts ORDER BY created_ms, id"):
+        meta = _meta_of(row["data"])
+        # Una riga senza contenuto (uno snapshot o una mano che l'ha tolto) non
+        # è una bozza che si possa installare.
+        if meta is None or not (base / row["id"] / "content").is_file():
             continue
-        meta["id"] = entry.name
+        meta["id"] = row["id"]
         meta["target_sha256"] = sha256_of(root / meta["target"])
         items.append(meta)
-    items.sort(key=lambda m: m.get("created_ms") or 0)
     return items
 
 
 def read_staged(root: Path, staged_id: str) -> tuple[dict[str, Any], bytes] | None:
     """Meta e contenuto di una bozza, o None se non c'è."""
-    entry = _entry(root, staged_id)
-    if entry is None:
+    if not _is_id(staged_id):
         return None
-    meta = _read_meta(entry)
+    meta = _read_meta(Path(root), staged_id)
     if meta is None:
         return None
     try:
-        return meta, (entry / "content").read_bytes()
+        return meta, (_dir(Path(root)) / staged_id / "content").read_bytes()
     except OSError:
         return None
 
 
-def _entry(root: Path, staged_id: str) -> Path | None:
-    if not staged_id or not staged_id.isalnum():
-        return None
-    entry = _dir(Path(root)) / staged_id
-    return entry if entry.is_dir() else None
+def _is_id(staged_id: str) -> bool:
+    return bool(staged_id) and staged_id.isalnum()
 
 
 def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
@@ -249,7 +308,7 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
             target.relative_to(root.resolve())
         except ValueError:
             logger.warning("Staged change {} points outside the workspace; discarded", staged_id)
-            shutil.rmtree(_dir(root) / staged_id, ignore_errors=True)
+            _forget(root, staged_id)
             return "missing"
         if sha256_of(target) != expected_sha:
             return "conflict"
@@ -265,7 +324,7 @@ def install(root: Path, staged_id: str, expected_sha: str | None) -> str:
         # L'utente l'ha guardata e confermata: da qui in poi non è più contenuto
         # non fidato per chi la legge.
         ledger_for(root).clear(meta["target"])
-        shutil.rmtree(_dir(root) / staged_id, ignore_errors=True)
+        _forget(root, staged_id)
     logger.info("Installed staged change {} into {}", staged_id, meta["target"])
     _notify(root, "installed", staged_id, meta["target"])
     return "installed"
@@ -332,10 +391,11 @@ def discard(root: Path, staged_id: str) -> bool:
     """Butta una bozza. True se c'era."""
     root = Path(root)
     with _LOCK:
-        entry = _entry(root, staged_id)
-        if entry is None:
+        if not _is_id(staged_id):
             return False
-        meta = _read_meta(entry)
-        shutil.rmtree(entry, ignore_errors=True)
+        meta = _read_meta(root, staged_id)
+        if meta is None and not (_dir(root) / staged_id).is_dir():
+            return False
+        _forget(root, staged_id)
     _notify(root, "discarded", staged_id, str((meta or {}).get("target") or ""))
     return True

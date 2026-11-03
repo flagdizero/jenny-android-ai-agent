@@ -156,10 +156,14 @@ async def test_drafts_from_before_the_plan_and_outside_the_notebook_do_not_hold_
 ) -> None:
     before = _stage(workspace)  # di prima dell'Approva
     # Retrodatata: nello stesso millisecondo dell'Approva il confronto sarebbe un pari.
-    meta_path = workspace / ".jenny" / "staged" / before / "meta.json"
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    meta["created_ms"] -= 5_000
-    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    from jenny.agent.staged_writes import _db
+
+    with _db(workspace).write() as conn:
+        meta = json.loads(conn.execute("SELECT data FROM staged_drafts WHERE id = ?",
+                                       (before,)).fetchone()["data"])
+        meta["created_ms"] -= 5_000
+        conn.execute("UPDATE staged_drafts SET data = ?, created_ms = ? WHERE id = ?",
+                     (json.dumps(meta), meta["created_ms"], before))
     plan = await _running(driver)
     _stage(workspace, rel="USER.md")  # fuori dal quaderno
     await driver.step_done(KEY, "fatto")

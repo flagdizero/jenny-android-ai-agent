@@ -1287,9 +1287,13 @@ class SubagentManager:
             keep |= {m.lineage_id for m in self._records.load_running()}
             # I registri che i piani nominano ancora: il ritorno di un piano
             # toglie anche il lavoro degli aiutanti dei suoi passi.
+            from jenny.agent.staged_writes import pending_journal_keys
             from jenny.plan.work import kept_journal_keys
 
-            removed = sweep_orphan_journals(root, keep, kept_journal_keys(root))
+            # E quelli delle bozze in attesa: installata, una bozza è lavoro di
+            # chi l'ha scritta, e il suo annulla la deve poter togliere.
+            removed = sweep_orphan_journals(
+                root, keep, kept_journal_keys(root) | pending_journal_keys(root))
             if removed:
                 logger.info("Swept {} orphan subagent journal(s)", removed)
         except Exception as e:  # noqa: BLE001 — vedi docstring

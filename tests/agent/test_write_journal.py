@@ -553,6 +553,21 @@ def test_orphan_journals_are_swept(ws: Path) -> None:
     assert len(saved()) == 1
 
 
+def test_a_pending_drafts_journal_is_not_swept(ws: Path) -> None:
+    """Il record dell'aiutante scade in 7 giorni, la bozza no: finché aspetta,
+    il registro di chi l'ha scritta resta, o il suo annulla non la toglierebbe."""
+    from jenny.agent import staged_writes
+
+    policy = _helper(ws, "scrittore", "t9")
+    with _at_work(policy):
+        _write(ws / "wikis/piante/wiki/acero.md", "x")
+        staged_writes.stage(ws, "USER.md", b"y", sources=("web_search",), task_id="t9")
+    keys = staged_writes.pending_journal_keys(ws)
+    assert keys == {journal_key(HELPER, "scrittore")}
+    assert sweep_orphan_journals(ws, keep=set(), keep_keys=keys) == 0
+    assert _entries(ws, "scrittore")
+
+
 # -- il giro intero, con il manager ------------------------------------------
 
 
