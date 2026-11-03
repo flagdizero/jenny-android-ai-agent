@@ -2449,17 +2449,6 @@ body {
   margin: 1em 0;
 }
 
-.chat-content img {
-  max-width: 100%;
-  border-radius: var(--radius);
-  margin: 0.5em 0;
-}
-
-.chat-content input[type="checkbox"] {
-  margin-right: 6px;
-  accent-color: var(--accent);
-}
-
 /* Code blocks */
 .chat-code-block {
   position: relative;
@@ -2918,6 +2907,7 @@ body {
 .chat-content img {
   max-width: 100%;
   max-height: 320px;
+  margin: 0.5em 0;
   border-radius: var(--radius);
   cursor: pointer;
 }
@@ -3873,7 +3863,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
 }
 .launcher-row-icon i { font-size: 16px; }
 
-.launcher-row-text {
+.launcher-row-text,
+.remote-peer-text {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; gap: 2px;
 }
@@ -5216,13 +5207,6 @@ dialog.image-lightbox::backdrop { background: transparent; }
   border-top: 0.5px solid var(--border);
 }
 .remote-peer i { font-size: 18px; color: var(--text-muted); }
-.remote-peer-text {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
 .remote-peer-ip { font: 11px var(--font-mono, monospace); color: var(--text-faint); }
 .remote-peer-when { font-size: 12px; color: var(--text-faint); }
 /* Due classi: `.settings-btn-add` sta piu' in basso nel file e, a pari
@@ -5374,7 +5358,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
   border-radius: 999px;
   box-shadow: 0 0 0 1px var(--border-strong);
 }
-.brand-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.brand-text,
+.ssh-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .brand-name {
   display: flex;
   align-items: center;
@@ -5392,7 +5377,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
   font-size: 10px;
   color: var(--ok, var(--text-muted));
 }
-.brand-where {
+.brand-where,
+.ssh-row-where {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
@@ -5400,7 +5386,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.brand-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+.brand-row > i,
+.ssh-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* ── Il pannello di una marca ─────────────────────────────────────────────
    Alto quanto quel che contiene, fino al 75% degli altri cassetti: con
@@ -5527,16 +5514,7 @@ dialog.image-lightbox::backdrop { background: transparent; }
    configurati che falliscono solo al primo comando. Qui costano due parole
    invece di due targhette. */
 .ssh-row { min-height: 52px; }
-.ssh-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ssh-row-name { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
-.ssh-row-where {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .ssh-row-states { flex-shrink: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
 /* Pieno contro vuoto, non solo verde contro giallo: su un tema in cui
    l'accento **e'** il colore del testo due pallini colorati si somigliano. */
@@ -5551,7 +5529,6 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .ssh-mark i { font-size: 12px; }
 .ssh-mark.is-ok { color: var(--ok, var(--text-muted)); }
 .ssh-mark.is-missing { color: var(--warning, var(--text-faint)); }
-.ssh-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* La riga che chiude un gruppo mandando altrove. Fuori dai comandi e in tono
    basso: non e' un'impostazione ne' un bottone, e' un'indicazione. */

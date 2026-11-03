@@ -164,7 +164,8 @@ body.home {
    alto 40px per il dito, e la riga finirebbe staccata dal testo. Lo spazio e
    l'ombra ci sono su tutte le voci, trasparenti: accenderne una non sposta
    niente. */
-.home-strip-name {
+.home-strip-name,
+.home-path-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -390,13 +391,6 @@ body.home {
   color: var(--heading);
 }
 
-.home-path-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-bottom: 4px;
-  box-shadow: inset 0 -2px 0 transparent;
-}
 .home-path-here .home-path-name {
   box-shadow: inset 0 -2px 0 var(--path-line, var(--accent));
 }
@@ -1385,7 +1379,8 @@ body.home {
   gap: 10px;
   justify-content: space-between;
 }
-.home-work-row-label {
+.home-work-row-label,
+.home-photos-cap-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2579,7 +2574,8 @@ body.home {
   border-radius: 3px;
   background: var(--cover);
 }
-.home-who-plate-text {
+.home-who-plate-text,
+.apps-trash-text {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -3381,7 +3377,8 @@ body.home {
 .home-board-block-flat { height: 50%; border-bottom: 0.25cqw dashed var(--slip-line); }
 .home-board-block.is-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8cqw; position: relative; }
 .home-board-block-photo { border-radius: 0.8cqw; overflow: hidden; background: var(--slip-line); }
-.home-board-block-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-board-block-photo img,
+.home-photos-pol-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .home-board-block-label.is-more-photos { position: absolute; right: 0.6cqw; bottom: 0.4cqw; background: var(--board-paper); border-radius: 999px; padding: 0 0.8cqw; }
 
 .home-board-block.is-numbers { display: grid; grid-template-columns: repeat(var(--slip-cols, 3), minmax(0, 1fr)); gap: 1cqw; align-content: center; }
@@ -3610,7 +3607,8 @@ body.home {
 .home-board-postit-row.is-late .home-board-postit-when { color: var(--board-alert); }
 .home-board-postit-row.is-paused { opacity: 0.55; }
 /* Il testo su due righe al massimo: su una sola si leggeva «Rinvaso e inci…». */
-.home-board-postit-text {
+.home-board-postit-text,
+.home-board-autolabel-what {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -3671,15 +3669,6 @@ body.home {
 }
 .home-board-autolabel-rhythm { display: block; font-size: 2.6cqw; font-weight: 700; line-height: 1.05; }
 .home-board-autolabel-rhythm::first-letter { text-transform: uppercase; }
-.home-board-autolabel-what {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: 2.1cqw;
-  font-weight: 700;
-  line-height: 1.15;
-}
 .home-board-autolabel-last { display: block; font-size: 1.75cqw; font-weight: 700; opacity: 0.7; }
 .home-board-autolabel-row.is-paused { opacity: 0.55; }
 .home-board-autolabel-row.is-trouble .home-board-autolabel-last,
@@ -3730,7 +3719,8 @@ body.home {
   background: var(--board-paper);
   box-shadow: 0 3px 7px rgba(0, 0, 0, 0.45);
 }
-.home-board-gallery-photo img {
+.home-board-gallery-photo img,
+.home-photos-img {
   display: block;
   width: 100%;
   aspect-ratio: 1;
@@ -4093,7 +4083,8 @@ body.home {
 
 /* ── Le note dell'utente (`home-board-notes.js`) ──
    Post-it lilla: il giallo e' delle attese. */
-.home-notes { display: flex; flex-direction: column; gap: 6px; width: 210px; }
+.home-notes,
+.home-photos { display: flex; flex-direction: column; gap: 6px; width: 210px; }
 .home-notes-head {
   display: flex;
   align-items: center;
@@ -4215,7 +4206,6 @@ body.home {
    Polaroid di carta bianca fissate con lo scotch: il lilla e' delle note, il
    giallo delle attese. Il mazzetto e' quello delle note (`home-board-deck.js`):
    stesse classi dei posti, carta diversa. */
-.home-photos { display: flex; flex-direction: column; gap: 6px; width: 210px; }
 .home-notes-title.home-photos-title { color: var(--text-muted); }
 .home-photos-deck {
   position: relative;
@@ -4267,13 +4257,6 @@ body.home {
   transform: translate(150px, -18px) rotate(14deg);
   box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55);
 }
-.home-photos-img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
-}
 .home-photos-cap {
   display: flex;
   justify-content: space-between;
@@ -4285,7 +4268,6 @@ body.home {
   font-weight: 700;
   line-height: 1.1;
 }
-.home-photos-cap-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .home-photos-cap-when { flex: none; font-family: var(--font-sans); font-size: 10.5px; opacity: 0.7; }
 /* Lo scotch: carta semitrasparente sul bordo alto, al posto del chiodo. */
 .home-photos-tape {
@@ -4427,7 +4409,6 @@ body.home {
 }
 button.home-photos-pol-img { cursor: zoom-in; }
 button.home-photos-pol-img:active { filter: brightness(0.9); }
-.home-photos-pol-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .home-photos-pol-full {
   position: absolute;
   right: 7px;
@@ -5439,7 +5420,6 @@ dialog.home-photo-viewer[open] { display: flex; }
   padding: 8px 4px;
   border-bottom: 0.5px solid var(--border);
 }
-.apps-trash-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .apps-trash-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .apps-trash-meta { color: var(--text-muted); font-size: 12px; }
 .apps-trash-btn {
