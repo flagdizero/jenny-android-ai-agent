@@ -575,10 +575,10 @@ async def test_publish_says_when_the_screen_changed(personal: Path) -> None:
 
 async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -> None:
     """La bozza è dell'app-builder, la pubblica Jenny: annullare l'aiutante rimette
-    anche l'app viva (``agent.subagent_journal``). Prima l'annulla diceva «rimesso»
+    anche l'app viva (``agent.write_journal``). Prima l'annulla diceva «rimesso»
     — la bozza non c'era più — e l'app restava cambiata."""
-    from jenny.agent.subagent_journal import journal_for
     from jenny.agent.tools.app_tool import AppBuildTool, AppPublishTool
+    from jenny.agent.write_journal import HELPER, journal_for, journal_key
     from jenny.security.subagent_policy import (
         SubagentRunPolicy,
         enter_subagent_policy,
@@ -595,7 +595,7 @@ async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -
               for p in live.rglob("*") if p.is_file()}
 
     policy = SubagentRunPolicy.for_run("t9", ws)
-    policy.journal = journal_for(ws, "lin-b")
+    policy.journal = journal_for(ws, journal_key(HELPER, "lin-b"))
     policy.journal.begin("t9", 1)
     builder = AppBuildTool(origin_session_key="unified:default", lineage_id="lin-b")
     with enter_subagent_policy(policy):

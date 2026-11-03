@@ -235,7 +235,7 @@ class ToolExecutionMixin:
                         finally:
                             # Dentro un aiutante: il «dopo» delle scritture di
                             # questo strumento, per l'annulla
-                            # (``agent.subagent_journal``). Altrove è una no-op.
+                            # (``agent.write_journal``). Altrove è una no-op.
                             settle_writes(tool_call.name)
 
                 batch_results = list(await asyncio.gather(

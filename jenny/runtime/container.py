@@ -462,6 +462,22 @@ class GatewayContainer:
         except Exception:
             logger.opt(exception=True).error("Could not open the state databases")
 
+    def _finish_interrupted_undos(self) -> None:
+        """Un annulla che un kill ha lasciato a metà si finisce adesso.
+
+        Qui e non nel manager degli aiutanti: con l'onboarding non finito
+        l'agente nasce più tardi, e file mezzi rimessi non devono aspettarlo.
+        """
+        from jenny.agent.write_journal import finish_interrupted_undos
+
+        try:
+            finished = finish_interrupted_undos(self.config.workspace_path)
+        except Exception:
+            logger.opt(exception=True).warning("Could not finish interrupted undos")
+            return
+        if finished:
+            logger.info("Finished {} interrupted undo(s)", finished)
+
     def build(self) -> None:
         """Costruisce l'intero grafo di oggetti (composition point)."""
         from jenny.bus.queue import MessageBus
@@ -488,6 +504,7 @@ class GatewayContainer:
         from jenny.db_migration import run_pending
 
         run_pending(self.config.workspace_path)
+        self._finish_interrupted_undos()
 
         # Backpressure su dispositivi memory-constrained (Android): code limitate.
         # I delta di streaming/progress usano try_publish_outbound (scartabili),

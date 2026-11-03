@@ -254,7 +254,7 @@ class AppTool(Tool):
             if refusal := self._throttled(slug):
                 return refusal
             # Dentro un aiutante (l'app-builder): il «prima» della bozza per
-            # l'annulla (``agent.subagent_journal``). Fuori è una no-op.
+            # l'annulla (``agent.write_journal``). Fuori è una no-op.
             from jenny.apps import drafts as _drafts
             from jenny.security.subagent_policy import journal_touch
 
@@ -577,14 +577,14 @@ class AppTool(Tool):
                         "it back to its app-builder with subagent_send.")
         existed = (drafts.app_dir(workspace, slug) / "app.json").is_file()
         # La bozza è dell'app-builder: la sua pubblicazione si annota nel suo
-        # registro (``agent.subagent_journal``), così annullare quell'aiutante
+        # registro (``agent.write_journal``), così annullare quell'aiutante
         # rimette anche l'app viva, se nessuno l'ha toccata dopo. Senza, l'annulla
         # diceva «rimesso» (la bozza non c'era più) e l'app restava cambiata.
         journal = None
         if lineage := builder_for(session, slug):
-            from jenny.agent.subagent_journal import journal_for
+            from jenny.agent.write_journal import HELPER, journal_for, journal_key
 
-            journal = journal_for(workspace, lineage)
+            journal = journal_for(workspace, journal_key(HELPER, lineage))
             journal.touch(drafts.app_dir(workspace, slug), tree=True)
             journal.touch(drafts.draft_dir(workspace, slug), tree=True)
         try:

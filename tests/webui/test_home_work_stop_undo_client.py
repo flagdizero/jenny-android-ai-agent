@@ -5,7 +5,7 @@ Ferma del piano, con «Lasciala lavorare», «Ferma e tieni» e — solo se ha
 cambiato dei file — «Ferma e annulla». Una mini-me ferma che ha cambiato dei
 file offre «Annulla le sue modifiche (N file)», con conferma; fatto l'annulla,
 la bolla dice quanti file sono tornati com'erano e quali no. L'annulla vero lo
-fa il server (``agent/subagent_journal.py``): qui si guarda che la casa chiami
+fa il server (``agent/write_journal.py``): qui si guarda che la casa chiami
 le route giuste e racconti il resoconto.
 """
 

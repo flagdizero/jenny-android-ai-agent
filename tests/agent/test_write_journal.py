@@ -1,6 +1,6 @@
 """Il registro delle scritture di un aiutante, e il suo annulla.
 
-Si fissa la promessa del modulo (``agent.subagent_journal``): l'annulla toglie
+Si fissa la promessa del modulo (``agent.write_journal``): l'annulla toglie
 il lavoro di **quell'**aiutante e di nessun altro. I casi sono quelli del piano:
 un annulla semplice, chi passa dopo, chi passa in mezzo, ``python_exec`` sul
 percorso vero (``run_in_executor``), un annulla interrotto da un kill, un
@@ -15,19 +15,23 @@ from pathlib import Path
 
 import pytest
 
-from jenny.agent import subagent_journal
+from jenny import db as jdb
+from jenny.agent import write_journal
 from jenny.agent.subagent import SubagentManager, SubagentUndoError
-from jenny.agent.subagent_journal import (
+from jenny.agent.tools.python_exec import PythonExecTool
+from jenny.agent.tools.python_exec_builtins import _register_builtin_functions
+from jenny.agent.write_journal import (
+    HELPER,
     KEPT_CHANGED_AFTER,
     KEPT_CHANGED_DURING,
     KEPT_NOT_SAVED,
     WriteJournal,
     finish_interrupted_undos,
-    journal_dir,
+    journal_key,
+    objects_dir_for,
+    read_undo_state,
     sweep_orphan_journals,
 )
-from jenny.agent.tools.python_exec import PythonExecTool
-from jenny.agent.tools.python_exec_builtins import _register_builtin_functions
 from jenny.board.store import mutate_board
 from jenny.bus.queue import MessageBus
 from jenny.config.tool_schemas import PythonExecConfig
@@ -45,6 +49,20 @@ from tests.support.aio import wait_until
 from tests.support.subagent_provider_fakes import fake_provider
 
 
+@pytest.fixture(autouse=True)
+def _close_databases():
+    yield
+    jdb.close_all()
+
+
+def _key(lineage: str = "lin1") -> str:
+    return journal_key(HELPER, lineage)
+
+
+def _entries(ws: Path, lineage: str = "lin1") -> list[dict]:
+    return WriteJournal(ws, _key(lineage))._read_entries()
+
+
 @pytest.fixture
 def ws(tmp_path: Path) -> Path:
     root = tmp_path / "workspace"
@@ -58,7 +76,7 @@ def ws(tmp_path: Path) -> Path:
 def _helper(ws: Path, lineage: str = "lin1", task: str = "t1", attempt: int = 1):
     """Una politica di lavoro col suo registro, come la lega ``_run_subagent``."""
     policy = SubagentRunPolicy.for_run(task, ws)
-    policy.journal = WriteJournal(ws, lineage)
+    policy.journal = WriteJournal(ws, _key(lineage))
     policy.journal.begin(task, attempt)
     return policy
 
@@ -93,9 +111,9 @@ def test_the_journal_notes_before_and_after_only_for_real_changes(ws: Path) -> N
         _write(page, "nuovo")
         check_write(ws / "wikis/piante/wiki/felce.md")  # toccato e non scritto
         settle_writes("apply_patch")
-    lines = (journal_dir(ws, "lin1") / "entries.jsonl").read_text().splitlines()
+    lines = _entries(ws)
     assert len(lines) == 1
-    entry = json.loads(lines[0])
+    entry = lines[0]
     assert entry["path"] == "wikis/piante/wiki/acero.md"
     assert entry["before"] != entry["after"] and entry["saved"] is True
     assert entry["tool"] == "write_file" and entry["task_id"] == "t1"
@@ -191,15 +209,16 @@ def test_a_resumed_lineage_is_undone_as_a_whole(ws: Path) -> None:
     """Fermato al budget e fatto continuare: lo stesso lavoro, un annulla solo."""
     wiki = ws / "wikis/piante/wiki"
     before = _tree(ws)
-    journal = WriteJournal(ws, "lin1")
+    journal = WriteJournal(ws, _key())
     first = SubagentRunPolicy.for_run("t1", ws)
     first.journal = journal
     journal.begin("t1", 1)
     with enter_subagent_policy(first):
         _write(wiki / "acero.md", "primo tentativo")
-    # Un processo nuovo: il registro si rilegge dal disco.
+    # Un processo nuovo: il registro si rilegge dal database.
+    jdb.close_all()
     again = SubagentRunPolicy.for_run("t2", ws)
-    again.journal = WriteJournal(ws, "lin1")
+    again.journal = WriteJournal(ws, _key())
     again.journal.begin("t2", 1)
     with enter_subagent_policy(again):
         _write(wiki / "acero.md", "ripresa")
@@ -210,7 +229,7 @@ def test_a_resumed_lineage_is_undone_as_a_whole(ws: Path) -> None:
 
 
 def test_a_file_too_large_to_copy_is_not_undoable(ws: Path, monkeypatch) -> None:
-    monkeypatch.setattr(subagent_journal, "MAX_BLOB_BYTES", 10)
+    monkeypatch.setattr(write_journal, "MAX_BLOB_BYTES", 10)
     page = ws / "wikis/piante/wiki/acero.md"
     policy = _helper(ws)
     with enter_subagent_policy(policy):
@@ -240,11 +259,12 @@ def test_an_undo_killed_halfway_is_finished_at_boot(ws: Path, monkeypatch) -> No
     with pytest.raises(SystemExit):
         policy.journal.undo()
     monkeypatch.setattr(WriteJournal, "_undo_file", real)
-    state = json.loads((journal_dir(ws, "lin1") / "undo.json").read_text())
-    assert state["state"] == "running"
+    state = read_undo_state(ws, _key())
+    assert state is not None and state["state"] == "running"
+    jdb.close_all()  # un processo nuovo
     assert finish_interrupted_undos(ws) == 1
     assert _tree(ws) == before
-    assert json.loads((journal_dir(ws, "lin1") / "undo.json").read_text())["state"] == "done"
+    assert read_undo_state(ws, _key())["state"] == "done"
 
 
 def test_a_new_folder_copied_in_one_go_is_undone(ws: Path) -> None:
@@ -268,7 +288,7 @@ def test_files_already_in_a_partly_noted_folder_are_never_taken_for_new(
 ) -> None:
     """Oltre ``MAX_DIR_FILES`` la cartella non si annota per intero: un suo file
     non annotato potrebbe esserci stato già, e l'annulla non deve cancellarlo."""
-    monkeypatch.setattr(subagent_journal, "MAX_DIR_FILES", 1)
+    monkeypatch.setattr(write_journal, "MAX_DIR_FILES", 1)
     wiki = ws / "wikis/piante/wiki"
     policy = _helper(ws)
     with enter_subagent_policy(policy):
@@ -351,7 +371,7 @@ def test_a_card_changed_by_both_leaves_the_board_as_it_is(board_ws: Path) -> Non
 
 
 def test_a_card_the_helper_removed_comes_back_in_its_place() -> None:
-    from jenny.agent.subagent_journal import _revert
+    from jenny.agent.write_journal import _revert
 
     before = {"cards": [{"id": "a"}, {"id": "b"}, {"id": "c"}], "orphansSeen": ["x.md"]}
     after = {"cards": [{"id": "a"}, {"id": "c"}], "orphansSeen": ["x.md", "y.md"]}
@@ -382,7 +402,7 @@ def test_touching_an_existing_folder_does_not_hand_its_files_to_the_helper(ws: P
 def test_a_moved_file_that_could_not_be_saved_is_never_deleted(ws: Path, monkeypatch) -> None:
     """Una rinomina di un file troppo grande per il registro: la destinazione è
     l'unica copia, e l'annulla non la cancella."""
-    monkeypatch.setattr(subagent_journal, "MAX_BLOB_BYTES", 10)
+    monkeypatch.setattr(write_journal, "MAX_BLOB_BYTES", 10)
     raw = ws / "wikis/piante/raw"
     raw.mkdir(parents=True)
     (raw / "foto.jpg").write_bytes(b"x" * 100)
@@ -426,8 +446,8 @@ def test_a_board_merge_finished_before_a_kill_is_not_redone(board_ws: Path, monk
         policy.journal.undo()
     monkeypatch.setattr(WriteJournal, "_undo_file", real)
     assert finish_interrupted_undos(board_ws) == 1
-    state = json.loads((journal_dir(board_ws, "lin1") / "undo.json").read_text())
-    assert state["kept"] == [] and "wikis/piante/board/board.json" in state["restored"]
+    state = read_undo_state(board_ws, _key())
+    assert state is not None and state["kept"] == [] and "wikis/piante/board/board.json" in state["restored"]
     assert {k: v for k, v in _board(board_ws).items() if k != "lastSeen"} == {
         k: v for k, v in before.items() if k != "lastSeen"}
 
@@ -485,34 +505,39 @@ async def test_python_exec_writes_are_journaled_through_the_executor(ws: Path) -
 # -- confini -----------------------------------------------------------------
 
 
-def test_the_journal_is_secret_for_helpers(ws: Path) -> None:
+def test_the_journal_lives_outside_the_workspace(ws: Path, tmp_path: Path) -> None:
+    """Fuori dal workspace: un aiutante non ci arriva coi suoi strumenti, e né le
+    foto né il backup lo portano."""
     policy = _helper(ws)
     with enter_subagent_policy(policy):
         _write(ws / "wikis/piante/wiki/acero.md", "x")
-        blob = next((journal_dir(ws, "lin1") / "blobs").iterdir())
-        with pytest.raises(SubagentSecretError):
-            check_read(blob)
-        with pytest.raises(SubagentSecretError):
-            check_write(journal_dir(ws, "lin1") / "entries.jsonl")
-
-
-def test_the_journal_stays_out_of_snapshots_and_backups(ws: Path, tmp_path: Path) -> None:
-    policy = _helper(ws)
-    with enter_subagent_policy(policy):
-        _write(ws / "wikis/piante/wiki/acero.md", "x")
-    # Anche con una lista di esclusioni salvata prima che il registro esistesse.
+    blob = next(p for p in objects_dir_for(ws).rglob("*") if p.is_file())
+    assert ws.resolve() not in blob.resolve().parents
+    assert (ws.parent / "db" / "undo.sqlite").is_file()
     engine = SnapshotEngine(ws, tmp_path / "snaps", exclude_globs=("logs/**",))
     tracked = [rel for rel, _ in engine.iter_tracked_files()]
-    assert tracked and not any(rel.startswith("subagents/journal") for rel in tracked)
+    assert tracked and not any("undo" in rel for rel in tracked)
+
+
+def test_the_old_journal_folder_stays_secret_until_it_is_removed(ws: Path) -> None:
+    old = ws / "subagents" / "journal" / "lin1" / "entries.jsonl"
+    old.parent.mkdir(parents=True)
+    old.write_text("{}", encoding="utf-8")
+    with enter_subagent_policy(_helper(ws)), pytest.raises(SubagentSecretError):
+        check_read(old)
 
 
 def test_orphan_journals_are_swept(ws: Path) -> None:
-    for lineage in ("vivo", "orfano"):
+    for lineage, page in (("vivo", "acero.md"), ("orfano", "felce.md")):
         policy = _helper(ws, lineage, lineage)
         with enter_subagent_policy(policy):
-            _write(ws / "wikis/piante/wiki" / f"{lineage}.md", "x")
+            _write(ws / "wikis/piante/wiki" / page, "x")
+    saved = lambda: [p for p in objects_dir_for(ws).rglob("*") if p.is_file()]  # noqa: E731
+    assert len(saved()) == 2
     assert sweep_orphan_journals(ws, keep={"vivo"}) == 1
-    assert journal_dir(ws, "vivo").is_dir() and not journal_dir(ws, "orfano").exists()
+    assert _entries(ws, "vivo") and not _entries(ws, "orfano")
+    # Il contenuto salvato dall'orfano se ne va con lui; quello del vivo resta.
+    assert len(saved()) == 1
 
 
 # -- il giro intero, con il manager ------------------------------------------

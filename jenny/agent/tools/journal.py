@@ -459,7 +459,7 @@ def append_journal_line(root: Path, stamp: datetime, line: str, *,
     """
     day = day or stamp.date()
     page = wiki_journal_dir(root) / journal_page_name(day)
-    # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
+    # Dentro un aiutante: il «prima» per l'annulla (``agent.write_journal``).
     journal_touch(page)
     return page, append_journal_entry(page, day, f"- {stamp.strftime('%H:%M')} — {line}\n")
 

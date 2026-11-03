@@ -49,15 +49,6 @@ from jenny.agent.subagent_history import (
     history_chars,
     light_resume_messages,
 )
-from jenny.agent.subagent_journal import (
-    UndoReport,
-    WriteJournal,
-    finish_interrupted_undos,
-    journal_for,
-    journal_stats,
-    live_journal,
-    sweep_orphan_journals,
-)
 from jenny.agent.subagent_records import (
     CANCEL_REASON_SHUTDOWN,
     CANCEL_REASON_SUPERSEDED,
@@ -77,6 +68,16 @@ from jenny.agent.tools.context import ToolContext, current_request_context
 from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader, ToolLoadError, declared_tool_name
 from jenny.agent.tools.registry import ToolRegistry
+from jenny.agent.write_journal import (
+    HELPER,
+    UndoReport,
+    WriteJournal,
+    journal_for,
+    journal_key,
+    journal_stats,
+    live_journal,
+    sweep_orphan_journals,
+)
 from jenny.bus.events import (
     INTERNAL_CHANNEL,
     OUTBOUND_META_SUBAGENT_STATUS,
@@ -1117,7 +1118,7 @@ class SubagentManager:
         self._stall_listener: Callable[[str, list[str]], None] | None = None
         # Orologio del freno dei checkpoint; iniettabile dai test.
         self._clock: Callable[[], float] = time.monotonic
-        # I registri delle scritture per l'annulla (``agent.subagent_journal``),
+        # I registri delle scritture per l'annulla (``agent.write_journal``),
         # uno per lineage, condivisi fra i tentativi di questo processo.
         self._journals: dict[str, WriteJournal] = {}
         # File cambiati e ultimo annulla dei lineage dei processi precedenti,
@@ -1267,20 +1268,17 @@ class SubagentManager:
         return Path(self.workspace) if isinstance(self.workspace, (str, Path)) else None
 
     def recover_journals(self) -> None:
-        """Al boot: finisce gli annulla interrotti, poi toglie i registri orfani.
+        """Al boot: toglie i registri dei lineage senza più record.
 
-        Prima gli annulla: un kill a metà annulla ha lasciato file mezzi rimessi,
-        e finirli viene prima di qualunque lavoro nuovo. Poi i registri dei
-        lineage senza più record (TTL e potatura): nessuno può più chiederne
-        l'annulla. Best-effort: un boot non fallisce per questo.
+        TTL e potatura: nessuno può più chiederne l'annulla. Gli annulla rimasti
+        a metà li ha già finiti il container, prima che l'agente nasca
+        (``write_journal.finish_interrupted_undos``). Best-effort: un boot non
+        fallisce per questo.
         """
         root = self._journal_root()
         if root is None:
             return
         try:
-            finished = finish_interrupted_undos(root)
-            if finished:
-                logger.info("Finished {} interrupted subagent undo(s)", finished)
             keep = {r.lineage_id for r in self._records.load_all()}
             keep |= {m.lineage_id for m in self._records.load_running()}
             removed = sweep_orphan_journals(root, keep)
@@ -1297,7 +1295,7 @@ class SubagentManager:
         journal = self._journals.get(lineage_id)
         if journal is None:
             try:
-                journal = journal_for(root, lineage_id)
+                journal = journal_for(root, journal_key(HELPER, lineage_id))
             except Exception as e:  # noqa: BLE001 — senza registro si lavora lo stesso
                 logger.warning("Subagent journal unavailable for {}: {}", lineage_id, e)
                 return None
@@ -1311,13 +1309,14 @@ class SubagentManager:
         if journal is None and (root := self._journal_root()) is not None:
             # Un registro vivo che il manager non ha aperto: la pubblicazione di
             # un'app annota nel registro del suo app-builder (``app_tool``).
-            journal = live_journal(root, lineage_id)
+            journal = live_journal(root, journal_key(HELPER, lineage_id))
         cached = self._journal_cache.get(lineage_id)
         if cached is None:
-            # Dal disco una volta per lineage: l'ultimo annulla sta in ``undo.json``.
+            # Dal database una volta per lineage: l'ultimo annulla sta in ``undos``.
             root = self._journal_root()
             try:
-                cached = journal_stats(root, lineage_id) if root is not None else (0, None)
+                cached = (journal_stats(root, journal_key(HELPER, lineage_id))
+                          if root is not None else (0, None))
             except Exception:  # noqa: BLE001 — uno snapshot non fallisce per il registro
                 cached = (0, None)
             if len(self._journal_cache) > 256:
@@ -2922,7 +2921,7 @@ class SubagentManager:
                 "plan_step": record.spec.plan_step,
                 "stopped_by": record.stopped_by,
                 # File cambiati dal lineage e ancora da annullare, e l'ultimo
-                # annulla (``agent.subagent_journal.UndoReport.summary``).
+                # annulla (``agent.write_journal.UndoReport.summary``).
                 "changes": changes,
                 "undo": undone.summary() if undone is not None else None,
             })
@@ -3703,7 +3702,7 @@ class SubagentManager:
 
         *target_id* è un task id o un lineage id; si annulla tutto il lineage,
         cioè anche i tentativi fatti continuare dopo un budget o un riavvio. Solo
-        i file ancora come li ha lasciati lui (``agent.subagent_journal``): gli
+        i file ancora come li ha lasciati lui (``agent.write_journal``): gli
         altri restano, e il resoconto dice quali e perché.
 
         Rifiuta un aiutante ancora al lavoro: prima si ferma (``cancel_task``),

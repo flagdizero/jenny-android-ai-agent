@@ -53,10 +53,10 @@ DEFAULT_EXCLUDE_GLOBS: tuple[str, ...] = (
 
 # Escluse sempre, anche quando ``exclude_globs`` viene da una config salvata
 # prima che esistessero (la config porta la lista intera, e una voce nuova di
-# ``DEFAULT_EXCLUDE_GLOBS`` non ci arriverebbe). ``subagents/journal`` è il
-# registro dell'annulla degli aiutanti (``agent.subagent_journal``): copie
-# temporanee dei file che un aiutante ha cambiato, che in una foto o in un
-# backup peserebbero per niente, e che un ripristino non deve riportare.
+# ``DEFAULT_EXCLUDE_GLOBS`` non ci arriverebbe). ``subagents/journal`` è dove
+# stava il registro dell'annulla prima di ``undo.sqlite`` (``agent.write_journal``):
+# la migrazione ``undo_cleanup`` la cancella al primo boot, e finché quella non è
+# riuscita le sue copie non devono finire in una foto. Si toglie insieme a lei.
 ALWAYS_EXCLUDED_DIRS: tuple[str, ...] = ("subagents/journal",)
 
 # ``output/`` NON è in quella lista, ed è una scelta, non una dimenticanza.

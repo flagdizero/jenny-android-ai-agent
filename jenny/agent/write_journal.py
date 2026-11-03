@@ -25,26 +25,26 @@ Dream e l'utente non hanno registro.
 un budget, un 429 o un riavvio è lo stesso lavoro, e l'annulla toglie tutto ciò
 che il lineage ha scritto.
 
-**Su disco**, sotto ``<installazione>/subagents/journal/<lineage>/``:
+**La chiave** di un registro è ``journal_key(kind, ident)``: ``helper-<lineage>``
+per un aiutante. Il lineage e non il tentativo: un aiutante fatto continuare
+dopo un budget, un 429 o un riavvio è lo stesso lavoro.
 
-* ``entries.jsonl`` — una riga per file cambiato in uno strumento:
-  ``{"path", "before", "after", "ts", "task_id", "attempt", "tool"}``. ``before``
-  e ``after`` sono firme (:func:`signature`): lo sha256 del contenuto, ``None``
-  se il file non c'era, ``"dir"`` per una cartella. JSONL perché una riga
-  troncata da un kill si salta e il resto resta leggibile.
-* ``blobs/<sha>`` — il contenuto «prima», salvato **solo alla prima** scrittura
-  del lineage su quel file. Le scritture dopo annotano solo le firme, che bastano
-  a riconoscere chi è passato in mezzo. Un ``blobs/`` semplice e non l'archivio
-  dello ``SnapshotEngine``: la vita del registro è quella del lineage, e
-  cancellarlo è togliere una cartella, senza contare riferimenti in uno store
-  condiviso.
-* ``undo.json`` — lo stato dell'annulla: ``running`` mentre rimette i file (al
-  boot si finisce, :func:`finish_interrupted_undos`), ``done`` col resoconto.
+**Su disco**, in ``<runtime_root>/db/undo.sqlite`` (``jenny/db``), fuori dal
+workspace: i tool del modello non ci arrivano, e non entra né nelle foto né nel
+backup (si svuota a un ripristino, ``jenny/db/restore``).
 
-La cartella è SECRET per gli aiutanti (``subagent_policy._SECRET_DIRS``) ed
-esclusa dalle foto e dai backup (``snapshot.engine.ALWAYS_EXCLUDED_DIRS``): sono
-copie temporanee, e un aiutante non deve né leggere i «prima» di un altro né
-riscrivere il proprio registro.
+* ``entries`` — una riga per file cambiato in uno strumento: percorso, ``before``
+  e ``after``, ora del tocco, tentativo, strumento. ``before`` e ``after`` sono
+  firme (:func:`signature`): lo sha256 del contenuto, ``None`` se il file non
+  c'era, ``"dir"`` per una cartella. Le righe di uno strumento entrano in una
+  transazione sola.
+* ``objects`` + ``undo-objects/<hh>/<sha>`` — il contenuto «prima», salvato
+  **solo alla prima** scrittura del registro su quel file (zlib, chiave lo
+  sha256, come lo store degli snapshot). Le scritture dopo annotano solo le
+  firme, che bastano a riconoscere chi è passato in mezzo. Un contenuto che due
+  registri salvano è un file solo; si toglie quando nessuna riga lo nomina più.
+* ``undos`` — lo stato dell'annulla: ``running`` mentre rimette i file (al boot
+  si finisce, :func:`finish_interrupted_undos`), ``done`` col resoconto.
 
 **L'annulla, file per file** (:meth:`WriteJournal.undo`). Si rimette il primo
 «prima» solo se il file è ancora esattamente come l'ha lasciato l'aiutante, e
@@ -72,9 +72,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
+import sqlite3
 import threading
 import time
+import zlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -83,11 +84,58 @@ from typing import Any
 from loguru import logger
 
 from jenny.config.paths import DEFAULT_WIKIS_DIR
-from jenny.utils.helpers import safe_filename
-from jenny.utils.path import append_lines_durable, atomic_write, iter_jsonl, read_json
+from jenny.db.schema import Schema
+from jenny.utils.path import atomic_write
 
-#: Dove stanno i registri, relativo alla radice dell'installazione.
-JOURNAL_REL = ("subagents", "journal")
+#: Le tabelle del diario in ``undo.sqlite``.
+SCHEMA = Schema("undo", (
+    """
+    CREATE TABLE journals (
+      key TEXT PRIMARY KEY,
+      created_at REAL NOT NULL,
+      task_id TEXT,
+      attempt INTEGER
+    );
+    CREATE TABLE entries (
+      id INTEGER PRIMARY KEY,
+      journal TEXT NOT NULL REFERENCES journals(key) ON DELETE CASCADE,
+      ts REAL NOT NULL,
+      path TEXT NOT NULL,
+      before TEXT,
+      after TEXT,
+      saved INTEGER,
+      shared INTEGER NOT NULL DEFAULT 0,
+      tool TEXT,
+      task_id TEXT,
+      attempt INTEGER,
+      step TEXT
+    );
+    CREATE INDEX entries_journal ON entries(journal, path, ts);
+    CREATE INDEX entries_path ON entries(path, ts);
+    CREATE TABLE objects (
+      journal TEXT NOT NULL REFERENCES journals(key) ON DELETE CASCADE,
+      sha TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      PRIMARY KEY (journal, sha)
+    );
+    CREATE INDEX objects_sha ON objects(sha);
+    CREATE TABLE undos (
+      key TEXT PRIMARY KEY,
+      sources TEXT NOT NULL,
+      state TEXT NOT NULL,
+      started_at REAL,
+      report TEXT,
+      merged TEXT NOT NULL DEFAULT '[]'
+    );
+    """,
+))
+
+HELPER = "helper"
+
+
+def journal_key(kind: str, ident: str) -> str:
+    """La chiave di un registro: l'unico posto che la compone."""
+    return f"{kind}-{ident}"
 
 #: Firma di una cartella. Una cartella non ha contenuto da salvare: quel che
 #: conta è se c'era (per toglierla vuota, o rifarla).
@@ -213,21 +261,36 @@ def _revert_by_id(before: list, after: list, now: list) -> list:
     return out
 
 
-_ENTRIES = "entries.jsonl"
-_UNDO = "undo.json"
-_BLOBS = "blobs"
-
 #: Un annulla alla volta per processo: due annulla su lineage diversi che
 #: toccano lo stesso file devono vedere l'uno il risultato dell'altro.
 _UNDO_LOCK = threading.Lock()
 
 
-def journal_root(install_root: Path) -> Path:
-    return Path(install_root).joinpath(*JOURNAL_REL)
+def _undo_db(workspace: Path):
+    from jenny import db
+
+    database = db.database_for_workspace(workspace, db.UNDO)
+    database.require(SCHEMA)
+    return database
 
 
-def journal_dir(install_root: Path, lineage_id: str) -> Path:
-    return journal_root(install_root) / (safe_filename(lineage_id) or "_")
+def objects_dir_for(workspace: Path) -> Path:
+    from jenny.db.restore import UNDO_OBJECTS_DIR_NAME
+    from jenny.snapshot.locations import db_dir_for
+
+    return db_dir_for(workspace) / UNDO_OBJECTS_DIR_NAME
+
+
+def _object_path(objects: Path, sha: str) -> Path:
+    return objects / sha[:2] / sha
+
+
+def _read_object(objects: Path, sha: str) -> bytes:
+    """Il contenuto salvato di *sha*, verificato: mai un contenuto sbagliato."""
+    content = zlib.decompress(_object_path(objects, sha).read_bytes())
+    if hashlib.sha256(content).hexdigest() != sha:
+        raise ValueError(f"saved content {sha[:12]} does not match its hash")
+    return content
 
 
 def _is_sha(sig: str | None) -> bool:
@@ -270,6 +333,9 @@ class _Pending:
     before: str | None
     content: bytes | None = None
     shared: bool = False
+    # L'ora del tocco, non del «dopo»: due registri che scrivono lo stesso file
+    # uno dopo l'altro si mettono in fila per quando hanno scritto davvero.
+    ts: float = 0.0
     # Una cartella di cui si conosce tutto il contenuto al tocco (nuova, o
     # annotata per intero): al «dopo» ogni file che ci si trova e non era
     # annotato è nato in questo strumento. Una cartella annotata solo in parte
@@ -333,15 +399,14 @@ class UndoReport:
 
 
 class WriteJournal:
-    """Il registro di un lineage. Uno per processo e per lineage (il manager li
-    tiene), condiviso fra i suoi tentativi; thread-safe, perché ``python_exec``
-    tocca i file dal suo thread."""
+    """Un registro. Uno per processo e per chiave (:func:`journal_for` li
+    tiene), condiviso fra i tentativi di un lineage; thread-safe, perché
+    ``python_exec`` tocca i file dal suo thread."""
 
-    def __init__(self, install_root: Path, lineage_id: str) -> None:
+    def __init__(self, install_root: Path, key: str) -> None:
         self.root = Path(install_root).resolve()
-        self.lineage_id = lineage_id
-        self.dir = journal_dir(self.root, lineage_id)
-        self._skip = journal_root(self.root).resolve()
+        self.key = key
+        self.objects = objects_dir_for(self.root)
         self._lock = threading.RLock()
         self._pending: dict[str, _Pending] = {}
         self._pending_bytes = 0
@@ -367,29 +432,35 @@ class WriteJournal:
 
     # -- stato ---------------------------------------------------------------
 
+    def _db(self):
+        return _undo_db(self.root)
+
     def _load(self) -> None:
         for entry in self._read_entries():
             path = entry["path"]
             if path not in self._seen:
                 self._note_path(path)
-        blobs = self.dir / _BLOBS
-        if blobs.is_dir():
-            try:
-                self._saved_bytes = sum(p.stat().st_size for p in blobs.iterdir() if p.is_file())
-            except OSError:
-                pass
+        try:
+            rows = self._db().read(
+                "SELECT COALESCE(SUM(size), 0) FROM objects WHERE journal = ?", (self.key,))
+            self._saved_bytes = int(rows[0][0])
+        except sqlite3.Error as e:
+            logger.warning("Write journal {} unreadable: {}", self.key, e)
 
     def _read_entries(self) -> list[dict[str, Any]]:
-        path = self.dir / _ENTRIES
         try:
-            raw = path.read_text(encoding="utf-8")
-        except FileNotFoundError:
+            rows = self._db().read(
+                "SELECT path, before, after, ts, saved, shared, tool, task_id, attempt, step "
+                "FROM entries WHERE journal = ? ORDER BY ts, id", (self.key,))
+        except sqlite3.Error as e:
+            logger.warning("Write journal {} unreadable: {}", self.key, e)
             return []
-        except OSError as e:
-            logger.warning("Subagent journal unreadable {}: {}", path, e)
-            return []
-        return [entry for entry in iter_jsonl(raw.splitlines())
-                if isinstance(entry.get("path"), str)]
+        return [_entry(row) for row in rows]
+
+    def _has_object(self, sha: str) -> bool:
+        rows = self._db().read(
+            "SELECT 1 FROM objects WHERE journal = ? AND sha = ?", (self.key, sha))
+        return bool(rows) and _object_path(self.objects, sha).is_file()
 
     def begin(self, task_id: str, attempt: int) -> None:
         """Un tentativo nuovo del lineage comincia a lavorare.
@@ -400,13 +471,11 @@ class WriteJournal:
         with self._lock:
             self.task_id = task_id
             self.attempt = attempt
-        undo = self.dir / _UNDO
-        state = read_undo_state(self.dir)
-        if state is not None and state.get("state") == "done":
-            try:
-                undo.unlink()
-            except OSError:
-                pass
+        try:
+            with self._db().write() as conn:
+                conn.execute("DELETE FROM undos WHERE key = ? AND state = 'done'", (self.key,))
+        except sqlite3.Error as e:
+            logger.warning("Write journal {} could not reset its undo: {}", self.key, e)
 
     def _note_path(self, key: str) -> None:
         self._seen.add(key)
@@ -441,8 +510,6 @@ class WriteJournal:
         try:
             rel = path.relative_to(self.root)
         except ValueError:
-            return None
-        if path == self._skip or self._skip in path.parents:
             return None
         return rel.as_posix() if rel.parts else None
 
@@ -535,7 +602,7 @@ class WriteJournal:
                     content = None
                 else:
                     self._pending_bytes += len(content)
-        pending = _Pending(before=before, content=content, walk=before is None)
+        pending = _Pending(before=before, content=content, walk=before is None, ts=time.time())
         self._pending[rel] = pending
         key = str(target)
         with _OWNERS_LOCK:
@@ -583,7 +650,7 @@ class WriteJournal:
                     "path": rel + ("/" if DIR in (p.before, after) else ""),
                     "before": p.before,
                     "after": after,
-                    "ts": time.time(),
+                    "ts": p.ts or time.time(),
                     "task_id": self.task_id,
                     "attempt": self.attempt,
                 }
@@ -627,7 +694,7 @@ class WriteJournal:
                     if child_rel is None or child_rel in pending or child_rel in found:
                         continue
                     found.add(child_rel)
-                    born.append((child_rel, _Pending(before=None)))
+                    born.append((child_rel, _Pending(before=None, ts=p.ts)))
                     if len(born) >= MAX_DIR_FILES:
                         return born
         return born
@@ -642,29 +709,47 @@ class WriteJournal:
         return self._save_blob(p.before, p.content)
 
     def _save_blob(self, sha: str, content: bytes) -> bool:
-        blob = self.dir / _BLOBS / sha
-        if blob.exists():
+        if self._has_object(sha):
             return True
         if hashlib.sha256(content).hexdigest() != sha:
             # Cambiato fra la firma e la lettura: non è il contenuto di quella firma.
             return False
         if self._saved_bytes + len(content) > MAX_LINEAGE_BYTES:
             return False
+        blob = _object_path(self.objects, sha)
         try:
-            atomic_write(blob, content, fsync_dir=False)
-        except OSError as e:
-            logger.warning("Subagent journal could not save {}: {}", blob, e)
+            if not blob.is_file():
+                atomic_write(blob, zlib.compress(content), fsync_dir=False)
+            with self._db().write() as conn:
+                self._ensure_row(conn)
+                conn.execute("INSERT OR IGNORE INTO objects(journal, sha, size) VALUES (?, ?, ?)",
+                             (self.key, sha, len(content)))
+        except (OSError, sqlite3.Error) as e:
+            logger.warning("Write journal {} could not save {}: {}", self.key, sha[:12], e)
             return False
         self._saved_bytes += len(content)
         return True
 
+    def _ensure_row(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            "INSERT INTO journals(key, created_at, task_id, attempt) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET task_id = excluded.task_id, "
+            "attempt = excluded.attempt",
+            (self.key, time.time(), self.task_id or None, self.attempt or None))
+
     def _append(self, entries: list[dict[str, Any]]) -> None:
-        path = self.dir / _ENTRIES
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            append_lines_durable(path, [json.dumps(e, ensure_ascii=False) for e in entries])
-        except OSError as e:
-            logger.warning("Subagent journal could not write {}: {}", path, e)
+            with self._db().write() as conn:
+                self._ensure_row(conn)
+                conn.executemany(
+                    "INSERT INTO entries(journal, ts, path, before, after, saved, shared, tool, "
+                    "task_id, attempt, step) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [(self.key, e["ts"], e["path"], e.get("before"), e.get("after"),
+                      None if "saved" not in e else int(bool(e["saved"])),
+                      int(bool(e.get("shared"))), e.get("tool"), e.get("task_id") or None,
+                      e.get("attempt"), e.get("step")) for e in entries])
+        except sqlite3.Error as e:
+            logger.warning("Write journal {} could not write its entries: {}", self.key, e)
 
     # -- annullare -----------------------------------------------------------
 
@@ -680,11 +765,11 @@ class WriteJournal:
         toglie solo se è rimasta vuota.
 
         Idempotente: un file che è già com'era conta come rimesso. È ciò che
-        permette di finire al boot un annulla interrotto (``undo.json``).
+        permette di finire al boot un annulla interrotto (la riga ``running``).
         """
         with _UNDO_LOCK, self._lock:
             entries = self._read_entries()
-            previous = read_undo_state(self.dir) or {}
+            previous = read_undo_state(self.root, self.key) or {}
             if not entries and previous.get("state") == "done":
                 # Già annullato (Jenny e il tuo tocco, o due finestre): il
                 # resoconto vero resta quello, non uno vuoto.
@@ -708,7 +793,7 @@ class WriteJournal:
                 str(chain[0].get("before")) for chain in chains.values()
                 if chain[0].get("before") not in (None, DIR)
                 and not (_is_sha(chain[0].get("before"))
-                         and (self.dir / _BLOBS / str(chain[0].get("before"))).is_file())
+                         and self._has_object(str(chain[0].get("before"))))
             }
             files = [p for p in chains if not p.endswith("/")]
             dirs = sorted((p for p in chains if p.endswith("/")),
@@ -764,13 +849,14 @@ class WriteJournal:
                     return
                 if target.is_symlink() or target.is_file():
                     target.unlink()
-            elif _is_sha(first) and (blob := self.dir / _BLOBS / first).is_file():
+            elif _is_sha(first) and self._has_object(first):
+                content = _read_object(self.objects, first)
                 target.parent.mkdir(parents=True, exist_ok=True)
-                atomic_write(target, blob.read_bytes())
+                atomic_write(target, content)
             else:
                 report.kept.append({"path": key, "reason": KEPT_NOT_SAVED})
                 return
-        except OSError as e:
+        except (OSError, ValueError, zlib.error) as e:
             logger.warning("Subagent undo could not restore {}: {}", target, e)
             report.kept.append({"path": key, "reason": KEPT_ERROR})
             return
@@ -789,7 +875,7 @@ class WriteJournal:
         try:
             pairs = [(self._blob_json(e.get("before")), self._blob_json(e.get("after")))
                      for e in chain]
-        except (OSError, ValueError):
+        except (OSError, ValueError, zlib.error):
             return False
         from jenny.board.store import rewrite_json
 
@@ -809,7 +895,7 @@ class WriteJournal:
     def _blob_json(self, sig: Any) -> Any:
         if not _is_sha(sig):
             raise ValueError("no content for this version")
-        return json.loads((self.dir / _BLOBS / str(sig)).read_text(encoding="utf-8"))
+        return json.loads(_read_object(self.objects, str(sig)).decode("utf-8"))
 
     def _undo_dir(self, key: str, chain: list[dict[str, Any]], report: UndoReport) -> None:
         # Una cartella nuova si toglie se è rimasta vuota; una che c'era è già
@@ -823,51 +909,104 @@ class WriteJournal:
             pass
 
     def _write_undo_state(self, state: dict[str, Any]) -> None:
+        report = {k: v for k, v in state.items() if k not in ("state", "merged", "started_at")}
         try:
-            atomic_write(self.dir / _UNDO, json.dumps(state, ensure_ascii=False))
-        except OSError as e:
-            logger.warning("Subagent journal could not write undo state: {}", e)
+            with self._db().write() as conn:
+                conn.execute(
+                    "INSERT INTO undos(key, sources, state, started_at, report, merged) "
+                    "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
+                    "sources = excluded.sources, state = excluded.state, "
+                    "started_at = excluded.started_at, report = excluded.report, "
+                    "merged = excluded.merged",
+                    (self.key, json.dumps([self.key]), state.get("state", ""),
+                     state.get("started_at"), json.dumps(report, ensure_ascii=False),
+                     json.dumps(state.get("merged") or [])))
+        except sqlite3.Error as e:
+            logger.warning("Write journal {} could not write its undo state: {}", self.key, e)
 
     def _drop_entries(self) -> None:
         """Dopo un annulla le righe e i contenuti non servono più: resta solo
-        ``undo.json`` col resoconto, finché il lineage non riparte."""
+        la riga dell'annulla col resoconto, finché il lineage non riparte."""
         try:
-            (self.dir / _ENTRIES).unlink()
-        except OSError:
-            pass
-        shutil.rmtree(self.dir / _BLOBS, ignore_errors=True)
+            with self._db().write() as conn:
+                shas = [r[0] for r in conn.execute(
+                    "SELECT sha FROM objects WHERE journal = ?", (self.key,))]
+                conn.execute("DELETE FROM entries WHERE journal = ?", (self.key,))
+                conn.execute("DELETE FROM objects WHERE journal = ?", (self.key,))
+            _drop_unreferenced(self.root, shas)
+        except sqlite3.Error as e:
+            logger.warning("Write journal {} could not drop its entries: {}", self.key, e)
         self._seen.clear()
         self._paths.clear()
         self._changed = 0
         self._saved_bytes = 0
 
 
-# I registri vivi del processo, uno per lineage: il manager e lo strumento
+def _entry(row: sqlite3.Row) -> dict[str, Any]:
+    """Una riga del diario come dizionario, con le chiavi di sempre."""
+    entry: dict[str, Any] = {"path": row["path"], "before": row["before"],
+                             "after": row["after"], "ts": row["ts"]}
+    for name in ("task_id", "attempt", "tool", "step"):
+        if row[name] is not None:
+            entry[name] = row[name]
+    if row["saved"] is not None:
+        entry["saved"] = bool(row["saved"])
+    if row["shared"]:
+        entry["shared"] = True
+    return entry
+
+
+def _drop_unreferenced(workspace: Path, shas: Iterable[str]) -> None:
+    """Toglie i contenuti salvati che nessun registro nomina più."""
+    database = _undo_db(workspace)
+    objects = objects_dir_for(workspace)
+    for sha in set(shas):
+        if not database.read("SELECT 1 FROM objects WHERE sha = ? LIMIT 1", (sha,)):
+            _object_path(objects, sha).unlink(missing_ok=True)
+
+
+# I registri vivi del processo, uno per chiave: il manager e lo strumento
 # ``app`` (che annota nel registro dell'app-builder la pubblicazione della sua
 # bozza) devono scrivere nello stesso oggetto, o i conti in memoria divergono.
 _LIVE: dict[tuple[str, str], WriteJournal] = {}
 _LIVE_LOCK = threading.Lock()
 
 
-def journal_for(install_root: Path, lineage_id: str) -> WriteJournal:
-    """Il registro vivo di *lineage_id*, creato (e riletto dal disco) alla prima richiesta."""
-    key = (str(Path(install_root).resolve()), lineage_id)
+def journal_for(install_root: Path, key: str) -> WriteJournal:
+    """Il registro vivo di *key*, creato (e riletto dal database) alla prima richiesta."""
+    live = (str(Path(install_root).resolve()), key)
     with _LIVE_LOCK:
-        journal = _LIVE.get(key)
+        journal = _LIVE.get(live)
         if journal is None:
-            journal = _LIVE[key] = WriteJournal(install_root, lineage_id)
+            journal = _LIVE[live] = WriteJournal(install_root, key)
         return journal
 
 
-def live_journal(install_root: Path, lineage_id: str) -> WriteJournal | None:
-    """Il registro vivo di *lineage_id*, se questo processo ne ha uno."""
+def live_journal(install_root: Path, key: str) -> WriteJournal | None:
+    """Il registro vivo di *key*, se questo processo ne ha uno."""
     with _LIVE_LOCK:
-        return _LIVE.get((str(Path(install_root).resolve()), lineage_id))
+        return _LIVE.get((str(Path(install_root).resolve()), key))
 
 
-def read_undo_state(directory: Path) -> dict[str, Any] | None:
-    raw = read_json(directory / _UNDO)
-    return raw if isinstance(raw, dict) else None
+def read_undo_state(install_root: Path, key: str) -> dict[str, Any] | None:
+    """L'ultimo annulla di *key*: ``{"state", "by", "started_at", "merged", …resoconto}``."""
+    try:
+        rows = _undo_db(install_root).read(
+            "SELECT state, started_at, report, merged FROM undos WHERE key = ?", (key,))
+    except sqlite3.Error:
+        return None
+    if not rows:
+        return None
+    row = rows[0]
+    try:
+        report = json.loads(row["report"] or "{}")
+        merged = json.loads(row["merged"] or "[]")
+    except ValueError:
+        report, merged = {}, []
+    out: dict[str, Any] = dict(report) if isinstance(report, dict) else {}
+    out.update(state=row["state"], started_at=row["started_at"],
+               merged=merged if isinstance(merged, list) else [])
+    return out
 
 
 def finish_interrupted_undos(install_root: Path) -> int:
@@ -876,55 +1015,72 @@ def finish_interrupted_undos(install_root: Path) -> int:
     L'annulla è idempotente (un file già rimesso conta come rimesso), quindi
     finirlo è rifarlo. Best-effort: un boot non fallisce per questo.
     """
-    root = journal_root(install_root)
-    finished = 0
     try:
-        dirs = [d for d in root.iterdir() if d.is_dir()] if root.is_dir() else []
-    except OSError:
+        rows = _undo_db(install_root).read(
+            "SELECT key, report FROM undos WHERE state = 'running'")
+    except sqlite3.Error as e:
+        logger.warning("Could not read interrupted undos: {}", e)
         return 0
-    for directory in dirs:
-        state = read_undo_state(directory)
-        if state is None or state.get("state") != "running":
-            continue
+    finished = 0
+    for row in rows:
         try:
-            WriteJournal(install_root, directory.name).undo(by=str(state.get("by") or "user"))
+            by = str((json.loads(row["report"] or "{}") or {}).get("by") or "user")
+        except ValueError:
+            by = "user"
+        try:
+            WriteJournal(install_root, row["key"]).undo(by=by)
             finished += 1
         except Exception as e:  # noqa: BLE001 — vedi docstring
-            logger.warning("Could not finish interrupted undo in {}: {}", directory, e)
+            logger.warning("Could not finish interrupted undo {}: {}", row["key"], e)
     return finished
 
 
 def sweep_orphan_journals(install_root: Path, keep: Iterable[str]) -> int:
-    """Toglie i registri dei lineage che non hanno più record. Ritorna quanti.
+    """Toglie i registri degli aiutanti che non hanno più record. Ritorna quanti.
 
-    La vita di un registro è quella dei record del suo lineage (TTL e potatura
-    di ``subagent_records``): senza record nessuno può più chiedere l'annulla, e
-    le copie sono solo spazio.
+    La vita del registro di un aiutante è quella dei record del suo lineage (TTL
+    e potatura di ``subagent_records``): senza record nessuno può più chiedere
+    l'annulla, e le copie sono solo spazio. *keep* sono i lineage vivi. Poi i
+    contenuti salvati che nessuna riga nomina più.
     """
-    root = journal_root(install_root)
-    alive = {safe_filename(k) or "_" for k in keep}
-    removed = 0
+    alive = {journal_key(HELPER, k) for k in keep}
+    prefix = f"{HELPER}-"
     try:
-        dirs = [d for d in root.iterdir() if d.is_dir()] if root.is_dir() else []
-    except OSError:
+        database = _undo_db(install_root)
+        known = {r[0] for r in database.read("SELECT key FROM journals")} | {
+            r[0] for r in database.read("SELECT key FROM undos")}
+        gone = sorted(k for k in known if k.startswith(prefix) and k not in alive)
+        if gone:
+            with database.write() as conn:
+                for key in gone:
+                    conn.execute("DELETE FROM journals WHERE key = ?", (key,))
+                    conn.execute("DELETE FROM undos WHERE key = ?", (key,))
+        referenced = {r[0] for r in database.read("SELECT DISTINCT sha FROM objects")}
+    except sqlite3.Error as e:
+        logger.warning("Could not sweep the write journals: {}", e)
         return 0
-    for directory in dirs:
-        if directory.name in alive:
-            continue
-        shutil.rmtree(directory, ignore_errors=True)
-        removed += 1
+    objects = objects_dir_for(install_root)
+    if objects.is_dir():
+        for shard in objects.iterdir():
+            if not shard.is_dir():
+                continue
+            for blob in shard.iterdir():
+                if blob.name not in referenced:
+                    blob.unlink(missing_ok=True)
     with _LIVE_LOCK:
-        for key in [k for k in _LIVE if safe_filename(k[1]) not in alive]:
-            del _LIVE[key]
-    return removed
+        for live in [k for k in _LIVE if k[1].startswith(prefix) and k[1] not in alive]:
+            del _LIVE[live]
+    return len(gone)
 
 
-def journal_stats(install_root: Path, lineage_id: str) -> tuple[int, UndoReport | None]:
-    """File cambiati e ultimo annulla di un lineage, letti dal disco."""
-    directory = journal_dir(install_root, lineage_id)
-    if not directory.is_dir():
+def journal_stats(install_root: Path, key: str) -> tuple[int, UndoReport | None]:
+    """File cambiati e ultimo annulla di un registro, letti dal database."""
+    try:
+        rows = _undo_db(install_root).read(
+            "SELECT COUNT(DISTINCT path) FROM entries WHERE journal = ? AND path NOT LIKE '%/'",
+            (key,))
+    except sqlite3.Error:
         return 0, None
-    journal = WriteJournal(install_root, lineage_id)
-    state = read_undo_state(directory)
+    state = read_undo_state(install_root, key)
     report = UndoReport.from_dict(state) if state and state.get("state") == "done" else None
-    return journal.changed_files, report
+    return int(rows[0][0]), report

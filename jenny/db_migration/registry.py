@@ -54,4 +54,8 @@ class Migration:
 
 def migrations() -> tuple[Migration, ...]:
     """L'elenco, letto a ogni boot: un modulo per archivio, in ordine."""
-    return ()
+    from jenny.db_migration import undo_cleanup
+
+    return (
+        Migration("undo_cleanup", remove_after="2.3.0", run=undo_cleanup.run),
+    )

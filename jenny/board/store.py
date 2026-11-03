@@ -101,7 +101,7 @@ def _read_with_recovery(path: Path) -> Any | None:
 def _write(path: Path, data: Any) -> None:
     """Scrittura atomica, ruotando prima il ``.bak`` sull'ultimo contenuto valido."""
     # Dentro un aiutante (l'editore dei quaderni): il «prima» per l'annulla
-    # (``agent.subagent_journal``). Fuori è una no-op. Il ``.bak`` no: è la copia
+    # (``agent.write_journal``). Fuori è una no-op. Il ``.bak`` no: è la copia
     # di rotazione dell'ultimo contenuto valido, non il lavoro di qualcuno.
     journal_touch(path)
     try:
@@ -114,7 +114,7 @@ def _write(path: Path, data: Any) -> None:
 def rewrite_json(path: Path, change: Callable[[Any], Any]) -> None:
     """Riscrive la bacheca o le attese con ``change(contenuto di adesso)``.
 
-    Per l'annulla di un aiutante (``agent.subagent_journal``), che toglie il suo
+    Per l'annulla di un aiutante (``agent.write_journal``), che toglie il suo
     cambiamento da quel che c'è adesso: lettura e scrittura sotto il lock degli
     altri scrittori, così un tocco dell'utente arrivato nel frattempo non va
     perso. Se *change* solleva non si scrive niente. Nessuna normalizzazione:

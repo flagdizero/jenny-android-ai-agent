@@ -612,7 +612,7 @@ class SshTransferTool(_SshToolMixin, Tool):
                 logger.info("ssh_transfer up {} -> {}:{}", local_path, host, remote_path)
                 return f"Uploaded {local_path} to {host}:{remote_path} ({sent} bytes)."
 
-            # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
+            # Dentro un aiutante: il «prima» per l'annulla (``agent.write_journal``).
             journal_touch(local)
             local.parent.mkdir(parents=True, exist_ok=True)
             # Il cap sul download lo applica il backend, due volte: sulla

@@ -52,7 +52,7 @@ from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.security.taint_ledger import ledger_for
 
 if TYPE_CHECKING:
-    from jenny.agent.subagent_journal import WriteJournal
+    from jenny.agent.write_journal import WriteJournal
 
 # I file di configurazione nella radice del workspace: ``config.json``, il suo
 # ``.bak``, i temporanei dello store e le copie in quarantena. Il listing della
@@ -71,8 +71,9 @@ _SECRET_DIRS = (
     # Le bozze in attesa della conferma dell'utente (``agent.staged_writes``):
     # un lavoro non fidato non riscrive una bozza già mostrata.
     (".jenny", "staged"),
-    # Il registro delle scritture degli aiutanti (``agent.subagent_journal``):
-    # un aiutante non legge i «prima» di un altro, e non riscrive il proprio.
+    # Dove stava il registro dell'annulla prima di ``undo.sqlite``
+    # (``agent.write_journal``), finché la migrazione ``undo_cleanup`` non l'ha
+    # cancellato: un aiutante non legge i «prima» di un altro. Si toglie con lei.
     ("subagents", "journal"),
 )
 
@@ -191,7 +192,7 @@ class SubagentRunPolicy:
     # Bozze messe in attesa da questo lavoro (``agent.staged_writes``): path
     # relativo → id. L'annuncio dice a Jenny quante ce ne sono.
     staged: dict[str, str] = field(default_factory=dict)
-    # Il registro delle scritture del lineage (``agent.subagent_journal``), per
+    # Il registro delle scritture del lineage (``agent.write_journal``), per
     # l'annulla: ``check_write`` e ``journal_touch`` ci annotano il «prima»,
     # ``settle_writes`` il «dopo». ``None`` nei test che non lo legano.
     journal: WriteJournal | None = field(default=None, repr=False)

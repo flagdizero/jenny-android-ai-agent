@@ -53,7 +53,7 @@ RECENT_KEYS = {
     # raggruppata per passo (``plan_id``/``plan_step``).
     "resumable", "handled_at", "plan_id", "plan_step",
     # Chi l'ha fermata, i file ancora da annullare e l'ultimo annulla
-    # (``agent.subagent_journal``).
+    # (``agent.write_journal``).
     "stopped_by", "changes", "undo",
 }
 

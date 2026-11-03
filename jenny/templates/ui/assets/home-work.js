@@ -31,7 +31,7 @@
  *  se tenere quel che ha fatto o annullarlo. Una mini-me ferma (fermata da te o
  *  da Jenny, inceppata, senza fiato, interrotta) che ha cambiato dei file ha
  *  «Annulla le sue modifiche (N file)». L'annulla lo fa il server
- *  (`agent/subagent_journal.py`): rimette solo i file ancora come li ha
+ *  (`agent/write_journal.py`): rimette solo i file ancora come li ha
  *  lasciati lei, e la bolla dice quanti e quali no.
  *
  *  **Dove sta.** Le bolle in corso stanno nel «posto vivo» in fondo al filo

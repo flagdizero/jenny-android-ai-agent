@@ -190,7 +190,7 @@ class DownloadFileTool(Tool):
         # ``downloads/`` sta nella radice del turno: dal passo T4.4 «dove posso
         # scrivere» ha una sola risposta, e un tool con destinazione fissa non e'
         # un'eccezione. Dentro un aiutante: il «prima» per l'annulla
-        # (``agent.subagent_journal``); la cartella prima di crearla, il file
+        # (``agent.write_journal``); la cartella prima di crearla, il file
         # prima di scriverlo.
         downloads_dir = current_write_root(self._workspace) / DOWNLOADS_SUBDIR
         if not downloads_dir.exists():
