@@ -32,6 +32,7 @@ tutto questo tace: i tool del piano restano nascosti e nessun hook gira.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
@@ -78,6 +79,14 @@ PLAN_STALE_META = "_plan_stale"
 def is_plan_turn(metadata: Mapping[str, Any] | None) -> bool:
     """Il turno l'ha aperto il driver: un passo o il suo promemoria."""
     return isinstance(metadata, Mapping) and metadata.get(INJECTED_EVENT_META) in PLAN_TURN_EVENTS
+
+
+def _is_step_work(metadata: Mapping[str, Any] | None) -> bool:
+    """Il turno è lavoro di un passo: il passo, il promemoria, o il resoconto di
+    un aiutante del passo (che porta il piano nei metadati)."""
+    return is_plan_turn(metadata) or (
+        isinstance(metadata, Mapping) and bool(metadata.get(PLAN_ID_META))
+    )
 
 
 def _notebook_of_turn(session_key: str) -> str | None:
@@ -186,6 +195,7 @@ class LoopPlanMixin:
     if TYPE_CHECKING:
         tools: ToolRegistry
         _pending_queues: dict[str, Any]
+        bus: Any
 
     plan_driver: PlanDriver | None = None
 
@@ -331,7 +341,7 @@ class LoopPlanMixin:
             place = driver.place_of(session_key)
             if (
                 place is not None and not place.traits.answer_by_chat
-                and is_plan_turn(turn_metadata)
+                and _is_step_work(turn_metadata)
             ):
                 # Nella chat personale arriva di tutto (la mascotte, le notifiche,
                 # Telegram): un messaggio a metà passo non entra nel turno del
@@ -361,6 +371,15 @@ class LoopPlanMixin:
         if driver is None or not driver.step_message_current(pending_msg.metadata):
             return "drop"
         if is_cron_turn(turn_metadata):
+            return "defer"
+        place = driver.place_of(session_key) if session_key else None
+        if place is not None and not place.traits.answer_by_chat and not _is_step_work(
+            turn_metadata
+        ):
+            # Il rovescio della regola sopra: un passo che si apre mentre gira un
+            # turno di chat (la mascotte passata davanti, v. ``_plan_turn_ended``)
+            # aspetta la fine di quel turno. Dentro non avrebbe i suoi tool, e la
+            # risposta andrebbe a chi ha scritto, non al piano.
             return "defer"
         return "inject"
 
@@ -479,6 +498,26 @@ class LoopPlanMixin:
         except Exception:  # noqa: BLE001
             logger.opt(exception=True).warning("Plan pre-turn hook failed for {}", session_key)
 
+    async def _let_waiting_messages_go_first(self, session_key: str, queue: Any) -> None:
+        """I messaggi rimasti in coda nel turno di un passo vanno sul bus adesso.
+
+        Nella chat personale un messaggio a metà passo aspetta la fine del turno
+        (``_plan_injection``). Ripubblicato nel ``finally`` del turno, arrivava
+        dopo il passo seguente, che il gancio di fine turno apre prima: e
+        aspettava di nuovo, passo dopo passo, fino alla fine del piano (la
+        mascotte senza risposta per tutto il piano, provato sul telefono il
+        03/11/2026). Qui il turno lascia la sua coda — chi arriva da ora apre un
+        task che aspetta il lock della sessione — e i messaggi passano davanti.
+        """
+        if self._pending_queues.get(session_key) is queue:
+            self._pending_queues.pop(session_key, None)
+        while True:
+            try:
+                item = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            await self.bus.publish_inbound(item)
+
     async def _plan_turn_ended(
         self, msg: InboundMessage, session_key: str, *, stop_reason: str = ""
     ) -> None:
@@ -493,11 +532,15 @@ class LoopPlanMixin:
             return
         queue = self._pending_queues.get(session_key)
         pending = queue is not None and not queue.empty()
+        meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+        if pending and _is_step_work(meta):
+            place = driver.place_of(session_key)
+            if place is not None and not place.traits.answer_by_chat:
+                await self._let_waiting_messages_go_first(session_key, queue)
         # Il rifiuto del provider blocca il passo solo se il turno era il lavoro
         # del passo: il suo messaggio, il promemoria o il resoconto di un suo
         # aiutante. Un turno di chat dell'utente rifiutato durante il piano non
         # dice niente del passo, e il promemoria (una richiesta diversa) resta.
-        meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
         if stop_reason == "provider_refused" and not (
             is_plan_turn(meta) or meta.get(INJECTED_EVENT_META) == SUBAGENT_RESULT_EVENT
         ):

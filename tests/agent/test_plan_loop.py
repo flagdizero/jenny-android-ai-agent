@@ -1017,3 +1017,51 @@ async def test_in_the_personal_chat_a_message_waits_for_the_whole_step_turn(
     assert loop._plan_injection(mascot, step_turn, "unified:default") == "defer", (
         "il passo è chiuso, ma il turno è ancora il suo")
     assert loop._plan_injection(mascot, {}, "unified:default") == "inject", "fuori dal passo"
+
+
+async def test_in_the_personal_chat_the_waiting_message_goes_before_the_next_step(
+    tmp_path: Path,
+) -> None:
+    """A fine turno del passo il messaggio rimasto in coda va sul bus prima che
+    il gancio apra il passo seguente; e il passo seguente, arrivato mentre gira
+    il turno di quel messaggio, aspetta lui. Fino al 03/11/2026 la mascotte
+    aspettava la fine dell'intero piano (provato sul telefono)."""
+    from jenny.agent.loop_plan import LoopPlanMixin
+    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+    from tests.support.plan import FakeBus, FakeHost, propose
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    bus = FakeBus()
+    driver = PlanDriver(PlanStore.for_workspace(workspace), bus, FakeHost(workspace),
+                        personal_plans=True)
+    steps = [{"title": "Uno", "detail": "x", "kind": "write", "done_when": "x"},
+             {"title": "Due", "detail": "x", "kind": "other", "done_when": "x"}]
+    assert "card" in await propose(driver, "Prova", steps, key="unified:default")
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+
+    loop = LoopPlanMixin()
+    loop.plan_driver = driver
+    loop.bus = bus
+    queue: asyncio.Queue = asyncio.Queue()
+    loop._pending_queues = {"unified:default": queue}
+    mascot = InboundMessage(channel="floating", sender_id="u", chat_id="shade", content="ciao")
+    queue.put_nowait(mascot)
+    step_turn = InboundMessage(
+        channel="system", sender_id="plan", chat_id="websocket:default", content="passo 1",
+        session_key_override="unified:default",
+        metadata={INJECTED_EVENT_META: PLAN_STEP_EVENT, PLAN_ID_META: plan.id,
+                  PLAN_STEP_META: "s1"})
+    await driver.step_done("unified:default", "fatto")
+    bus.inbound.clear()
+
+    await loop._plan_turn_ended(step_turn, "unified:default")
+
+    assert bus.inbound[0] is mascot, "il messaggio in attesa per primo"
+    step2 = bus.inbound[1]
+    assert step2.metadata.get(PLAN_STEP_META) == "s2"
+    assert "unified:default" not in loop._pending_queues, "la coda è lasciata"
+    assert loop._plan_injection(step2, {}, "unified:default") == "defer", (
+        "il passo aspetta il turno della mascotte")
+    assert loop._plan_injection(step2, step_turn.metadata, "unified:default") == "inject"
