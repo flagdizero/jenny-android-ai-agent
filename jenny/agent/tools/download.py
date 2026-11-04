@@ -40,7 +40,7 @@ from jenny.security.subagent_policy import journal_touch
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
-    current_workspace_scope,
+    current_write_root,
 )
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.utils.helpers import detect_image_mime, ensure_dir, safe_filename
@@ -146,20 +146,6 @@ class DownloadFileTool(Tool):
         # Client iniettabile per i test (httpx.MockTransport).
         self._client = client
 
-    def _downloads_root(self) -> Path:
-        """La radice sotto cui sta ``downloads/``: quella del turno.
-
-        Chiede a ``WorkspaceScope.write_root()`` invece di leggere
-        ``project_path``: dal passo T4.4 «dove posso scrivere» ha una sola
-        risposta, e un tool con destinazione fissa non e' un'eccezione — e' solo
-        uno che non ha un percorso da validare contro quella radice.
-
-        Senza uno scope legato — sessioni interne, test — resta il workspace del
-        costruttore, che è anche la radice del turno in quel caso.
-        """
-        scope = current_workspace_scope()
-        return scope.write_root() if scope is not None else self._workspace
-
     async def execute(self, url: str, filename: str | None = None, **kwargs: Any) -> str:
         # Prima della rete, non dopo: scaricare 20 MB per poi rifiutare la
         # scrittura sarebbe traffico buttato. La destinazione di questo tool e'
@@ -201,11 +187,15 @@ class DownloadFileTool(Tool):
             if ext:
                 name += ext
 
-        # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``);
-        # la cartella prima di crearla, il file prima di scriverlo.
-        if not (self._downloads_root() / DOWNLOADS_SUBDIR).exists():
-            journal_touch(self._downloads_root() / DOWNLOADS_SUBDIR)
-        downloads_dir = ensure_dir(self._downloads_root() / DOWNLOADS_SUBDIR)
+        # ``downloads/`` sta nella radice del turno: dal passo T4.4 «dove posso
+        # scrivere» ha una sola risposta, e un tool con destinazione fissa non e'
+        # un'eccezione. Dentro un aiutante: il «prima» per l'annulla
+        # (``agent.write_journal``); la cartella prima di crearla, il file
+        # prima di scriverlo.
+        downloads_dir = current_write_root(self._workspace) / DOWNLOADS_SUBDIR
+        if not downloads_dir.exists():
+            journal_touch(downloads_dir)
+        ensure_dir(downloads_dir)
         target = _unique_path(downloads_dir, name)
         journal_touch(target)
         try:

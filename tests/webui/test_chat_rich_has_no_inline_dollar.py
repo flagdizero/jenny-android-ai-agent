@@ -10,16 +10,16 @@ argomento.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CHAT = ROOT / "jenny" / "templates" / "ui" / "assets" / "mobile-chat.js"
+from support.js_harness import ASSETS
+
+CHAT = ASSETS / "mobile-chat.js"
 
 
 def _calls(source: str) -> list[str]:
     """Gli argomenti di ogni ``renderRich(...)``, con le parentesi bilanciate."""
     out = []
-    for m in re.finditer(r"\brenderRich\(", source):
+    for m in re.finditer(r"\b(?:renderRich|renderReplyExtras)\(", source):
         depth, i = 1, m.end()
         while depth:
             depth += {"(": 1, ")": -1}.get(source[i], 0)
@@ -33,3 +33,10 @@ def test_every_chat_render_passes_only_the_container() -> None:
     assert len(calls) >= 6, "le chiamate non si trovano piu'"
     for args in calls:
         assert "," not in args and "inlineDollar" not in args, args
+
+
+def test_the_shared_reply_pass_passes_only_the_container() -> None:
+    """Quattro delle chiamate della chat passano da `renderReplyExtras`: anche
+    la sua, dentro, non accende il dollaro."""
+    reply = (CHAT.parent / "shared" / "reply.js").read_text(encoding="utf-8")
+    assert _calls(reply) == ["node", "node"], _calls(reply)

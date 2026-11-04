@@ -19,15 +19,10 @@ il tasto per tornare in casa stia in **un posto solo**.
 
 from __future__ import annotations
 
-import json
 import re
-from pathlib import Path
 
 import pytest
-
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI, locale
 
 HEADER = (ASSETS / "mobile-header.js").read_text(encoding="utf-8")
 SETTINGS = (ASSETS / "mobile-settings.js").read_text(encoding="utf-8")
@@ -39,7 +34,7 @@ LANGUAGES = ("it", "en")
 
 
 def _i18n(language: str) -> dict:
-    return json.loads((ASSETS / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+    return locale(language)
 
 
 # ── Le stringhe ──────────────────────────────────────────────────────────────

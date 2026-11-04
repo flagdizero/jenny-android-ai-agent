@@ -28,7 +28,6 @@ contati ma non mostrati no.
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,17 +36,23 @@ from typing import Any
 from jenny.security.subagent_policy import SubagentSecretError
 from jenny.security.subagent_policy import check_read as check_subagent_read
 from jenny.security.workspace_policy import is_path_within
-from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, iter_wiki_pages, page_chars
+from jenny.utils.helpers import clip
+from jenny.utils.wiki_paths import (
+    FRONTMATTER_RE,
+    WIKI_INDEX_FILENAME,
+    fold,
+    is_research_layout,
+    iter_wiki_pages,
+    page_chars,
+    read_wiki_map,
+)
 
 # ── Le regole condivise con ``lint_wiki.py`` (copie: v. la docstring) ────────
 
 # Il vocabolario di ``state:``. Copia di ``lint_wiki.PAGE_STATES``.
 PAGE_STATES = frozenset({"open", "hypothesis", "decided", "done"})
-# Le cartelle che dichiarano il layout di ricerca. Copia di ``RESEARCH_SUBDIRS``.
-RESEARCH_SUBDIRS = ("concepts", "entities", "summaries")
-# Il frontmatter tollerante del lint (BOM, riga vuota prima, ``---`` finale senza
-# a capo): un 🔴 su un file corretto costa la credibilità dei 🔴 veri.
-_FRONTMATTER_RE = re.compile(r"^﻿?\s*---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
+# Le cartelle del layout di ricerca e la sua regola: ``utils.wiki_paths``
+# (``RESEARCH_SUBDIRS``, ``is_research_layout``), copie di quelle del lint.
 _WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 _CODE_FENCE_RE = re.compile(
     r"^[ \t]*(`{3,}|~{3,})[^\n]*(?:\n.*?)?(?:^[ \t]*\1[ \t]*$|\Z)",
@@ -125,7 +130,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any] | None, int]:
     e due parser diversi darebbero due risposte a «questa pagina ha uno stato?».
     La riga d'inizio (1 = la riga del primo ``---``) serve ai numeri di riga.
     """
-    match = _FRONTMATTER_RE.match(text)
+    match = FRONTMATTER_RE.match(text)
     if not match:
         return None, 0
     start = text[: match.start(1)].count("\n")  # righe prima del corpo
@@ -191,14 +196,6 @@ def _key_line(text: str, start: int, key: str, needle: str = "") -> int:
     return key_line or start + 1
 
 
-def is_research_layout(wiki_dir: Path) -> bool:
-    """Una biblioteca di ricerca, letta dalle **pagine** (la regola del lint)."""
-    return any(
-        (wiki_dir / name).is_dir() and any(p.is_file() for p in (wiki_dir / name).rglob("*.md"))
-        for name in RESEARCH_SUBDIRS
-    )
-
-
 def _wiki_md_files(wiki_dir: Path) -> list[Path]:
     """Ogni ``.md`` sotto ``wiki/``, nascosti esclusi: quelli dove un link può stare."""
     if not wiki_dir.is_dir():
@@ -224,7 +221,7 @@ class _Links:
     def resolve(self, target: str) -> Path | None:
         target = target.strip()
         if target not in self._cache:
-            from jenny.webui.wiki import resolve_wikilink
+            from jenny.utils.wiki_paths import resolve_wikilink
 
             self._cache[target] = resolve_wikilink(self._root, target) if target else None
         return self._cache[target]
@@ -386,10 +383,7 @@ def check_notebook(root: Path, *, expect: Mapping[str, Any] | None = None,
 
     index = wiki_dir / WIKI_INDEX_FILENAME
     if index.is_file():
-        try:
-            size = len(index.read_text(encoding="utf-8").strip())
-        except (OSError, UnicodeDecodeError):
-            size = 0
+        size = len(read_wiki_map(root))
         if size > MAP_TARGET_CHARS:
             found.append(Defect("map_over", _rel(root, index), 0,
                                 f"the map is {size} characters, over {MAP_TARGET_CHARS}: "
@@ -425,7 +419,7 @@ def _check_board(root: Path, report: CheckReport, pages: set[str]) -> None:
     """Schede con pagine che non ci sono, cassetti che citano pagine che non ci
     sono, promemoria il cui ``why`` non c'è più.
 
-    I promemoria sono job dello scheduler (``cron/jobs.json``): si contano quelli
+    I promemoria sono job dello scheduler (``jenny/cron/store.py``): si contano quelli
     vivi del quaderno, e uno già scattato non c'è più. Il ``why`` lo corregge il
     tool ``board`` (``update_reminder``).
     """
@@ -561,13 +555,8 @@ def render_check(report: CheckReport, *, limit: int, max_chars: int) -> str:
 # ── map ──────────────────────────────────────────────────────────────────────
 
 
-def _fold(text: str) -> str:
-    """Minuscolo e senza accenti: «Città» e «citta» sono la stessa parola qui."""
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
-
-
 def _terms_regex(terms: Iterable[str]) -> re.Pattern[str] | None:
-    folded = sorted({_fold(t).strip() for t in terms if _fold(str(t)).strip()}, key=len,
+    folded = sorted({fold(t).strip() for t in terms if fold(str(t)).strip()}, key=len,
                     reverse=True)
     if not folded:
         return None
@@ -670,8 +659,8 @@ def map_notebook(root: Path, subjects: list[Term], topics: list[Term],
             continue
         spent += size
         searched += 1
-        folded_text = _fold(text)
-        stem = _fold(path.stem.replace("-", " ").replace("_", " "))
+        folded_text = fold(text)
+        stem = fold(path.stem.replace("-", " ").replace("_", " "))
         # Prima il file intero, una ricerca per termine: le righe si scorrono
         # solo per i soggetti e gli argomenti che il file nomina davvero.
         topic_in = [t.regex.search(folded_text) is not None for t in topics]
@@ -685,7 +674,7 @@ def map_notebook(root: Path, subjects: list[Term], topics: list[Term],
         lines = text.split("\n")
         folded = folded_text.split("\n")
         if len(folded) != len(lines):  # una piegatura che cambia le righe: riga per riga
-            folded = [_fold(line) for line in lines]
+            folded = [fold(line) for line in lines]
         rel = _rel(root, path)
         topic_hits = [[i for i, f in enumerate(folded) if t.regex.search(f)] if topic_in[ti]
                       else [] for ti, t in enumerate(topics)]
@@ -778,7 +767,7 @@ def resolve_inside(root: Path, raw: str) -> Path | None:
 
 def _extract(text: str, mode: str, lines: int) -> tuple[str, int | None]:
     if mode == "frontmatter":
-        match = _FRONTMATTER_RE.match(text)
+        match = FRONTMATTER_RE.match(text)
         if match:
             return text[: match.end()].rstrip("\n"), text[: match.end()].count("\n") + 1
         heading = next((ln for ln in text.split("\n") if ln.startswith("# ")), "")
@@ -791,7 +780,7 @@ def _extract(text: str, mode: str, lines: int) -> tuple[str, int | None]:
 
 def _short(raw: str, limit: int = 80) -> str:
     """Un percorso ripetuto nella risposta, accorciato: è testo del modello, non del file."""
-    return raw if len(raw) <= limit else raw[: limit - 1] + "…"
+    return clip(raw, limit)
 
 
 def _read_capped(path: Path, max_bytes: int) -> tuple[str, bool]:

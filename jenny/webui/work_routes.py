@@ -18,6 +18,7 @@ from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
 from jenny.channels.http_utils import http_error, http_json_response, parse_query, query_first
+from jenny.session.keys import project_name
 from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 
@@ -33,7 +34,7 @@ def chat_id_for_session_key(raw: str | None) -> str | None:
         return None
     if key == f"websocket:{WEBUI_DEFAULT_CHAT_ID}":
         return WEBUI_DEFAULT_CHAT_ID
-    if key.startswith("project:") and len(key) > len("project:"):
+    if project_name(key):
         return key
     return None
 

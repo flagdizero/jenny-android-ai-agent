@@ -21,7 +21,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from support.gateway_http import make_request
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS
+from support.kotlin_source import ANDROID_SRC, read_code, read_source
 from websockets.http11 import Request as WsRequest
 
 from jenny.channels.http_utils import check_api_secret, http_error, http_json_response, parse_query
@@ -35,12 +36,8 @@ from jenny.webui.settings_routes import WebUISettingsRouter
 
 _SECRET = "s3cr3t-diagnostics"
 
-ROOT = Path(__file__).resolve().parents[2]
-_UI_ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
-_MAIN_ACTIVITY = (
-    ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny"
-    / "MainActivity.kt"
-)
+_UI_ASSETS = ASSETS
+_MAIN_ACTIVITY = ANDROID_SRC / "MainActivity.kt"
 
 
 @pytest.fixture
@@ -219,8 +216,6 @@ _UI_KEYS = (
     "gapDays",
     "gapHours",
     "gapMinutes",
-    "gapToday",
-    "gapYesterday",
     "gapOn",
     "oemHint",
     "oemButton",
@@ -250,8 +245,7 @@ def test_the_time_formats_keep_their_placeholders(locale: str) -> None:
     assert "{days}" in battery["gapDays"] and "{hours}" in battery["gapDays"]
     assert "{hours}" in battery["gapHours"] and "{minutes}" in battery["gapHours"]
     assert "{minutes}" in battery["gapMinutes"]
-    for key in ("gapToday", "gapYesterday", "gapOn"):
-        assert "{time}" in battery[key]
+    assert "{time}" in battery["gapOn"]
     assert "{date}" in battery["gapOn"]
     assert "{minutes}" in battery["gapsHint"]
     assert "{brand}" in battery["oemLink"]
@@ -343,7 +337,10 @@ def test_every_attempt_is_guarded() -> None:
     """Un component name morto solleva: un crash qui sarebbe peggio del guasto
     che stiamo segnalando."""
     body = _kotlin_fun("startFirstWorking")
+    assert "Intents.tryStart(this, it," in body, "un tentativo che non passa dal try comune"
+    assert "startActivity(" not in body
 
-    launch = body.index("startActivity(intent)")
-    assert body.index("try {") < launch
-    assert "catch (e: Exception)" in body[launch:]
+    intents = read_code("Intents")
+    start = intents[intents.index("fun tryStart(") : intents.index("fun appDetails(")]
+    launch = start.index("ctx.startActivity(intent)")
+    assert "catch (e: Exception)" in start[launch:]

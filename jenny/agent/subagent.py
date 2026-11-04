@@ -21,6 +21,7 @@ from jenny.agent.hook import (
     CompositeHook,
     ToolResultHookContext,
 )
+from jenny.agent.progress_events import tool_family
 from jenny.agent.runner import AgentRunner, AgentRunSpec
 from jenny.agent.subagent_activity import (
     KIND_ERROR,
@@ -48,15 +49,6 @@ from jenny.agent.subagent_history import (
     history_chars,
     light_resume_messages,
 )
-from jenny.agent.subagent_journal import (
-    UndoReport,
-    WriteJournal,
-    finish_interrupted_undos,
-    journal_for,
-    journal_stats,
-    live_journal,
-    sweep_orphan_journals,
-)
 from jenny.agent.subagent_records import (
     CANCEL_REASON_SHUTDOWN,
     CANCEL_REASON_SUPERSEDED,
@@ -76,6 +68,17 @@ from jenny.agent.tools.context import ToolContext, current_request_context
 from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader, ToolLoadError, declared_tool_name
 from jenny.agent.tools.registry import ToolRegistry
+from jenny.agent.write_journal import (
+    HELPER,
+    UndoReport,
+    WriteJournal,
+    bind_journal,
+    journal_for,
+    journal_key,
+    journal_stats,
+    live_journal,
+    sweep_orphan_journals,
+)
 from jenny.bus.events import (
     INTERNAL_CHANNEL,
     OUTBOUND_META_SUBAGENT_STATUS,
@@ -98,7 +101,7 @@ from jenny.security.workspace_access import (
 )
 from jenny.session.history_meta import INJECTED_EVENT_META
 from jenny.session.turn_visibility import resolve_turn_visibility
-from jenny.utils.helpers import truncate_text
+from jenny.utils.helpers import clip, truncate_text
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.runtime import (
     BUDGET_NOTICE_EVENT,
@@ -952,8 +955,7 @@ def _task_head(task: str) -> str:
     """La prima riga del compito, quanto basta a riconoscerlo."""
     text = (task or "").strip()
     head = text.splitlines()[0] if text else ""
-    if len(head) > _ANNOUNCE_TASK_CHARS:
-        head = head[:_ANNOUNCE_TASK_CHARS].rstrip() + "…"
+    head = clip(head, _ANNOUNCE_TASK_CHARS)
     if head != text:
         head += " (the full brief is in your spawn call)"
     return head
@@ -1115,9 +1117,12 @@ class SubagentManager:
         # (il driver dei piani: un risveglio tenuto non deve aspettare chi non
         # va piu avanti). V. :meth:`set_stall_listener`.
         self._stall_listener: Callable[[str, list[str]], None] | None = None
+        # Chi vuole sapere in quale registro dell'annulla lavora un aiutante di un
+        # passo (il driver dei piani). V. :meth:`set_journal_listener`.
+        self._journal_listener: Callable[[str, str, str], None] | None = None
         # Orologio del freno dei checkpoint; iniettabile dai test.
         self._clock: Callable[[], float] = time.monotonic
-        # I registri delle scritture per l'annulla (``agent.subagent_journal``),
+        # I registri delle scritture per l'annulla (``agent.write_journal``),
         # uno per lineage, condivisi fra i tentativi di questo processo.
         self._journals: dict[str, WriteJournal] = {}
         # File cambiati e ultimo annulla dei lineage dei processi precedenti,
@@ -1267,23 +1272,28 @@ class SubagentManager:
         return Path(self.workspace) if isinstance(self.workspace, (str, Path)) else None
 
     def recover_journals(self) -> None:
-        """Al boot: finisce gli annulla interrotti, poi toglie i registri orfani.
+        """Al boot: toglie i registri dei lineage senza più record.
 
-        Prima gli annulla: un kill a metà annulla ha lasciato file mezzi rimessi,
-        e finirli viene prima di qualunque lavoro nuovo. Poi i registri dei
-        lineage senza più record (TTL e potatura): nessuno può più chiederne
-        l'annulla. Best-effort: un boot non fallisce per questo.
+        TTL e potatura: nessuno può più chiederne l'annulla. Gli annulla rimasti
+        a metà li ha già finiti il container, prima che l'agente nasca
+        (``write_journal.finish_interrupted_undos``). Best-effort: un boot non
+        fallisce per questo.
         """
         root = self._journal_root()
         if root is None:
             return
         try:
-            finished = finish_interrupted_undos(root)
-            if finished:
-                logger.info("Finished {} interrupted subagent undo(s)", finished)
             keep = {r.lineage_id for r in self._records.load_all()}
             keep |= {m.lineage_id for m in self._records.load_running()}
-            removed = sweep_orphan_journals(root, keep)
+            # I registri che i piani nominano ancora: il ritorno di un piano
+            # toglie anche il lavoro degli aiutanti dei suoi passi.
+            from jenny.agent.staged_writes import pending_journal_keys
+            from jenny.plan.work import kept_journal_keys
+
+            # E quelli delle bozze in attesa: installata, una bozza è lavoro di
+            # chi l'ha scritta, e il suo annulla la deve poter togliere.
+            removed = sweep_orphan_journals(
+                root, keep, kept_journal_keys(root) | pending_journal_keys(root))
             if removed:
                 logger.info("Swept {} orphan subagent journal(s)", removed)
         except Exception as e:  # noqa: BLE001 — vedi docstring
@@ -1297,7 +1307,7 @@ class SubagentManager:
         journal = self._journals.get(lineage_id)
         if journal is None:
             try:
-                journal = journal_for(root, lineage_id)
+                journal = journal_for(root, journal_key(HELPER, lineage_id))
             except Exception as e:  # noqa: BLE001 — senza registro si lavora lo stesso
                 logger.warning("Subagent journal unavailable for {}: {}", lineage_id, e)
                 return None
@@ -1311,13 +1321,14 @@ class SubagentManager:
         if journal is None and (root := self._journal_root()) is not None:
             # Un registro vivo che il manager non ha aperto: la pubblicazione di
             # un'app annota nel registro del suo app-builder (``app_tool``).
-            journal = live_journal(root, lineage_id)
+            journal = live_journal(root, journal_key(HELPER, lineage_id))
         cached = self._journal_cache.get(lineage_id)
         if cached is None:
-            # Dal disco una volta per lineage: l'ultimo annulla sta in ``undo.json``.
+            # Dal database una volta per lineage: l'ultimo annulla sta in ``undos``.
             root = self._journal_root()
             try:
-                cached = journal_stats(root, lineage_id) if root is not None else (0, None)
+                cached = (journal_stats(root, journal_key(HELPER, lineage_id))
+                          if root is not None else (0, None))
             except Exception:  # noqa: BLE001 — uno snapshot non fallisce per il registro
                 cached = (0, None)
             if len(self._journal_cache) > 256:
@@ -1519,6 +1530,16 @@ class SubagentManager:
         Come per :meth:`set_limit_provider`, il manager non sa cosa sia un piano.
         """
         self._stall_listener = fn
+
+    def set_journal_listener(self, fn: Callable[[str, str, str], None] | None) -> None:
+        """Inietta chi ascolta i registri degli aiutanti dei piani.
+
+        ``fn(plan_id, step_id, journal_key)`` a ogni tentativo che parte per un
+        passo — nuovo, rimandato con ``subagent_send``, ripreso: è il lavoro del
+        passo, e il ritorno del piano lo toglie. Lo cabla il driver attraverso il
+        suo ospite (``LoopPlanHost.watch_helper_journals``).
+        """
+        self._journal_listener = fn
 
     def helper_plan_step(self, task_id: str) -> tuple[str | None, str | None] | None:
         """Piano e passo per cui lavora (o ha lavorato) *task_id*, se lo si sa ancora.
@@ -1881,6 +1902,9 @@ class SubagentManager:
         # coda a una sua copia, e il checkpoint ne porta solo la parte nuova.
         initial: list[dict[str, Any]] = []
         run_policy: list[SubagentRunPolicy] = []
+        # Il registro del tentativo, tenuto qui e non solo nel contesto: il
+        # ``finally`` sotto sta fuori dal blocco che lo lega.
+        run_journal: list[WriteJournal] = []
 
         async def _on_checkpoint(payload: dict) -> None:
             phase = payload.get("phase", status.phase)
@@ -1959,17 +1983,27 @@ class SubagentManager:
                 task_id, Path(self.workspace), seed=spec.taint_seed, task=spec.task,
             )
             # Il registro delle scritture del lineage, per l'annulla: i recinti
-            # di scrittura ci annotano il «prima», il runner il «dopo».
-            policy.journal = self._journal_for(status.lineage_id or task_id)
-            if policy.journal is not None:
-                policy.journal.begin(task_id, status.attempt)
+            # di scrittura ci annotano il «prima», il runner il «dopo». Col passo
+            # del piano, se lavora per uno: il ritorno di un passo toglie il suo.
+            journal = self._journal_for(status.lineage_id or task_id)
+            if journal is not None:
+                journal.begin(task_id, status.attempt)
                 # Un lineage che riparte dopo un annulla non è più «annullato».
                 self._journal_cache.pop(status.lineage_id, None)
+                run_journal.append(journal)
+                if spec.plan_id and spec.plan_step and self._journal_listener is not None:
+                    try:
+                        self._journal_listener(spec.plan_id, spec.plan_step, journal.key)
+                    except Exception:  # noqa: BLE001 — il lavoro parte comunque
+                        logger.opt(exception=True).warning(
+                            "Subagent [{}]: plan {} not told about its journal",
+                            task_id, spec.plan_id)
             self._run_policies[task_id] = policy
             initial.extend(messages)
             run_policy.append(policy)
             max_iterations = self._type_max_iterations(atype)
-            with enter_workspace_scope(workspace_scope), enter_subagent_policy(policy):
+            with (enter_workspace_scope(workspace_scope), enter_subagent_policy(policy),
+                  bind_journal(journal, step=spec.plan_step)):
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
                     tools=tools,
@@ -2143,8 +2177,8 @@ class SubagentManager:
         finally:
             # Le scritture dello strumento interrotto (una cancellazione arriva
             # a metà di un tool): il runner non è arrivato al suo «dopo».
-            if run_policy and run_policy[0].journal is not None:
-                run_policy[0].journal.settle()
+            if run_journal:
+                run_journal[0].settle()
             self._run_policies.pop(task_id, None)
             self._close_browser_session(status.lineage_id)
             if not marker.done():
@@ -2851,6 +2885,10 @@ class SubagentManager:
                 "elapsed_s": round(max(0.0, now - st.started_at), 1),
                 "idle_s": round(max(0.0, now - st.last_progress_at), 1),
                 "last_tool": self._last_tool_name(st.tool_events),
+                # Cosa sta facendo, a parole della casa (``progress_events``).
+                "last_tool_family": (
+                    tool_family(last) if (last := self._last_tool_name(st.tool_events)) else None
+                ),
                 "tool_events": self._snapshot_tool_events(st.tool_events),
                 # Il passo del piano per cui lavora, se lavora per un piano: la
                 # casa raggruppa gli aiutanti per passo.
@@ -2918,7 +2956,7 @@ class SubagentManager:
                 "plan_step": record.spec.plan_step,
                 "stopped_by": record.stopped_by,
                 # File cambiati dal lineage e ancora da annullare, e l'ultimo
-                # annulla (``agent.subagent_journal.UndoReport.summary``).
+                # annulla (``agent.write_journal.UndoReport.summary``).
                 "changes": changes,
                 "undo": undone.summary() if undone is not None else None,
             })
@@ -3699,7 +3737,7 @@ class SubagentManager:
 
         *target_id* è un task id o un lineage id; si annulla tutto il lineage,
         cioè anche i tentativi fatti continuare dopo un budget o un riavvio. Solo
-        i file ancora come li ha lasciati lui (``agent.subagent_journal``): gli
+        i file ancora come li ha lasciati lui (``agent.write_journal``): gli
         altri restano, e il resoconto dice quali e perché.
 
         Rifiuta un aiutante ancora al lavoro: prima si ferma (``cancel_task``),

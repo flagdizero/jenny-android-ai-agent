@@ -32,14 +32,13 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
 from jenny.session.history_meta import INJECTED_EVENT_META
 from jenny.session.keys import SUBAGENT_SESSION_PREFIX, subagent_session_key
-from jenny.utils.helpers import merge_message_content
+from jenny.utils.helpers import content_text, merge_message_content
 
 if TYPE_CHECKING:  # pragma: no cover - solo per i type checker
     from jenny.session.manager import SessionManager
@@ -259,18 +258,19 @@ class SubagentHistoryStore:
         return self.ttl_s <= 0 or moment - entry.saved_at <= self.ttl_s
 
     def file_size(self, lineage_id: str) -> int | None:
-        """Byte del file della storia di *lineage_id*, o ``None`` se non c'e.
+        """Byte della storia salvata di *lineage_id*, o ``None`` se non c'e.
 
-        Un ``stat``, nessuna lettura: il checkpoint lo usa per allungare il
-        proprio intervallo quando la storia diventa grande.
+        Una riga di testa, nessun messaggio letto: il checkpoint lo usa per
+        allungare il proprio intervallo quando la storia diventa grande.
         """
-        path = self._path_for(subagent_session_key(lineage_id))
-        if path is None:
+        stats = getattr(self._sessions, "stats", None)
+        if not callable(stats):
             return None
         try:
-            return path.stat().st_size
-        except OSError:
+            found = stats(subagent_session_key(lineage_id))
+        except Exception:  # noqa: BLE001 — una misura mancata non ferma il checkpoint
             return None
+        return None if found is None else found[1]
 
     def entry_of(self, lineage_id: str, *, now: float | None = None) -> tuple[str, float] | None:
         """``(kind, saved_at)`` della storia di *lineage_id* entro TTL, o ``None``.
@@ -349,17 +349,17 @@ class SubagentHistoryStore:
     # ------------------------------------------------------------------
 
     def drop(self, lineage_id: str) -> None:
-        """Elimina la storia di un lineage (file + cache + indice)."""
+        """Elimina la storia di un lineage (sessione salvata + cache + indice)."""
         self._index.pop(lineage_id, None)
         if self._sessions is None:
             return
         key = subagent_session_key(lineage_id)
-        path = self._path_for(key)
-        if path is not None:
+        delete = getattr(self._sessions, "delete", None)
+        if callable(delete):
             try:
-                path.unlink(missing_ok=True)
-            except OSError as e:
-                logger.warning("Could not delete subagent history {}: {}", path, e)
+                delete(key)
+            except Exception as e:  # noqa: BLE001 — la pulizia non propaga
+                logger.warning("Could not delete subagent history {}: {}", key, e)
         self._invalidate(key)
 
     def prune(self, *, now: float | None = None) -> list[str]:
@@ -414,24 +414,6 @@ class SubagentHistoryStore:
             if isinstance(m, dict) and isinstance(m.get("role"), str) and m["role"]
         ]
 
-    def _sessions_dir(self) -> Path | None:
-        sessions = self._sessions
-        if sessions is None:
-            return None
-        try:
-            return Path(sessions.sessions_dir)
-        except (TypeError, AttributeError):  # doppio di test senza sessions_dir
-            return None
-
-    def _path_for(self, key: str) -> Path | None:
-        directory = self._sessions_dir()
-        if directory is None or self._sessions is None:
-            return None
-        try:
-            return directory / f"{self._sessions.safe_key(key)}.jsonl"
-        except (TypeError, AttributeError):
-            return None
-
     def _invalidate(self, key: str) -> None:
         sessions = self._sessions
         if sessions is None:
@@ -444,31 +426,25 @@ class SubagentHistoryStore:
     def _reconcile(self) -> None:
         """Registra una volta per processo le storie lasciate da un processo morto.
 
-        Su Android il gateway viene ucciso spesso: senza questa passata i file
-        ``subagent_*.jsonl`` di ieri non sarebbero nell'indice e nessuna potatura
-        li toccherebbe piu. Le storie senza timestamp leggibile vengono eliminate
+        Su Android il gateway viene ucciso spesso: senza questa passata le
+        storie ``subagent:`` di ieri non sarebbero nell'indice e nessuna potatura
+        le toccherebbe piu. Le storie senza timestamp leggibile vengono eliminate
         subito: sono comunque irriprendibili (vedi :meth:`load`).
         """
         if self._reconciled or self._sessions is None:
             return
         self._reconciled = True
-        directory = self._sessions_dir()
-        if directory is None:
-            return
-        try:
-            stem_prefix = self._sessions.safe_key(SUBAGENT_SESSION_PREFIX)
-        except (TypeError, AttributeError):
-            return
-        try:
-            paths = sorted(directory.glob(f"{stem_prefix}*.jsonl"))
-        except OSError as e:
-            logger.warning("Subagent history dir unreadable {}: {}", directory, e)
-            return
+        list_keys = getattr(self._sessions, "list_keys", None)
         reader = getattr(self._sessions, "read_session_metadata", None)
-        if not callable(reader):
+        if not callable(list_keys) or not callable(reader):
             return
-        for path in paths:
-            lineage_id = path.stem[len(stem_prefix):]
+        try:
+            keys = list_keys(SUBAGENT_SESSION_PREFIX)
+        except Exception as e:  # noqa: BLE001 — un elenco mancato non ferma il boot
+            logger.warning("Subagent histories unreadable: {}", e)
+            return
+        for key in keys:
+            lineage_id = key[len(SUBAGENT_SESSION_PREFIX):]
             if not lineage_id or lineage_id in self._index:
                 continue
             try:
@@ -528,19 +504,6 @@ _LIGHT_RESUME_NOTE = (
     "no longer here. {files}Before you change a file, read it again: what you remember "
     "of it may be out of date.]"
 )
-
-
-def _text_of(content: Any) -> str:
-    """Il testo di un ``content``, stringa o lista di blocchi."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "\n".join(
-            str(block.get("text") or "")
-            for block in content
-            if isinstance(block, dict) and block.get("type") == "text"
-        )
-    return ""
 
 
 def _call_arguments(call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -644,10 +607,10 @@ def light_resume_messages(
             if m.get(INJECTED_EVENT_META):
                 continue
             content = m.get("content")
-            if isinstance(content, list) or _text_of(content).strip():
+            if isinstance(content, list) or content_text(content).strip():
                 _push("user", content)
         elif role == "assistant" and not m.get("tool_calls"):
-            text = _text_of(m.get("content")).strip()
+            text = content_text(m.get("content")).strip()
             if text:
                 _push("assistant", text)
     # Serve un brief in testa e almeno un resoconto: senza, non c'e' nulla da

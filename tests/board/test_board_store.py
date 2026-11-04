@@ -106,6 +106,20 @@ def test_a_corrupt_board_recovers_from_the_backup(tmp_path):
     assert [c["id"] for c in board["cards"]] == ["acero"]
     # Il file rotto e' messo da parte, non cancellato.
     assert list(path.parent.glob("board.corrupt-*.json"))
+    # E il .bak torna al suo posto: la lettura dopo non trova un quaderno vuoto.
+    assert [c["id"] for c in read_board(tmp_path)["cards"]] == ["acero"]
+
+
+def test_a_corrupt_board_that_cannot_be_set_aside_is_not_written_over(tmp_path, monkeypatch):
+    mutate_board(tmp_path, lambda b: b["cards"].append(_card("acero")))
+    path = board_path(tmp_path)
+    path.write_text("{ not json")
+    monkeypatch.setattr("jenny.utils.path.quarantine", lambda _path: None)
+    monkeypatch.setattr("jenny.board.store.quarantine", lambda _path: None, raising=False)
+
+    with pytest.raises(OSError):
+        mutate_board(tmp_path, lambda b: b["cards"].append(_card("fico")))
+    assert path.read_text() == "{ not json"
 
 
 def test_jenny_cannot_move_add_or_remove_cards(tmp_path):

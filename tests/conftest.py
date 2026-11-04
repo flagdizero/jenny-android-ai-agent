@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+from pathlib import Path
 from typing import Generator
 
 import pytest
@@ -68,7 +69,7 @@ def _isolate_process_state() -> Generator[None, None, None]:
     La suite passava solo in ordine alfabetico: invertita dava 31 rossi,
     mescolata 17, tutti da stato globale che una prova cambiava e non
     ripristinava — i campi di :class:`RuntimeContext` (``config_recovered_from``,
-    ``cron_recovered_from``, …) e i registri in ``_MODULE_REGISTRIES``. Qui si
+    …) e i registri in ``_MODULE_REGISTRIES``. Qui si
     fotografano prima e si rimettono dopo, per tutti, invece di affidarsi a
     ogni prova perché pulisca: il rosso compariva in un file che non c'entrava.
     """
@@ -91,3 +92,43 @@ def _isolate_process_state() -> Generator[None, None, None]:
         registry = getattr(mod, attr)
         registry.clear()
         registry.update(saved_regs.get((mod_name, attr), {}))
+
+
+@pytest.fixture
+def tmp_path(tmp_path: Path) -> Path:
+    """Una cartella dentro quella della prova: il suo genitore e' solo di questa prova.
+
+    Lo stato in SQLite sta nel genitore del workspace (``runtime_root_for``), e
+    molte prove usano ``tmp_path`` stesso come workspace: con la ``tmp_path`` di
+    pytest il genitore era la cartella base del processo, la stessa per tutte le
+    prove. ``_fresh_shared_database`` la svuotava fra una prova e l'altra, ma un
+    salvataggio rimasto in coda dalla prova prima la riscriveva a prova dopo gia'
+    partita: il 04/11/2026, su 3.12, una sessione ``project:piante`` di un'altra
+    prova faceva rispondere a una cancellazione che il quaderno c'era.
+    """
+    # Col nome della prova, come la cartella di pytest: chi cerca il nome del
+    # genitore lo vuole riconoscibile, non una lettera che sta in ogni percorso.
+    nested = tmp_path / tmp_path.name
+    nested.mkdir()
+    return nested
+
+
+@pytest.fixture(autouse=True)
+def _fresh_shared_database(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
+    """Il database di chi usa ``tmp_path`` stesso come workspace riparte vuoto.
+
+    Lo stato in SQLite sta accanto al workspace (``<runtime_root>/db``, e il
+    runtime root è il genitore del workspace): con ``tmp_path`` come workspace
+    finisce nella cartella base della sessione, la stessa per tutte le prove di
+    un processo. Senza questo, i job salvati da una prova comparirebbero nella
+    bacheca di un'altra.
+    """
+    import shutil
+
+    from jenny import db as jdb
+
+    shared = tmp_path_factory.getbasetemp() / "db"
+    shutil.rmtree(shared, ignore_errors=True)
+    yield
+    jdb.close_all()
+    shutil.rmtree(shared, ignore_errors=True)

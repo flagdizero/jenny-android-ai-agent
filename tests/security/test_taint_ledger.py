@@ -9,7 +9,6 @@ completa fatta da un lavoro fidato o dall'utente.
 
 from __future__ import annotations
 
-import json
 import threading
 from pathlib import Path
 
@@ -182,8 +181,7 @@ def test_many_files_in_one_folder_collapse_into_the_folder(ws: Path) -> None:
     for i in range(60):
         (ws / "out" / f"f{i}.txt").write_text("x")
         ledger.record(f"out/f{i}.txt", "web_search")
-    entries = json.loads((ws / ".jenny" / "taint_ledger.json").read_text())["entries"]
-    assert list(entries) == ["out"]
+    assert _saved(ledger) == ["out"]
     assert ledger.source_of("out/f3.txt") == "web_search"
 
 
@@ -194,8 +192,7 @@ def test_the_ledger_is_capped(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None
         (ws / f"d{i}").mkdir()
         (ws / f"d{i}" / "f").write_text("x")
         ledger.record(f"d{i}/f", "web_search")
-    entries = json.loads((ws / ".jenny" / "taint_ledger.json").read_text())["entries"]
-    assert len(entries) == 10
+    assert len(_saved(ledger)) == 10
 
 
 def test_entries_of_missing_files_are_dropped_on_load(ws: Path) -> None:
@@ -224,11 +221,19 @@ def test_concurrent_writers_lose_nothing(ws: Path) -> None:
     assert all(TaintLedger(ws).source_of(f"t{i}/f") for i in range(40))
 
 
-def test_an_unreadable_ledger_starts_empty(ws: Path) -> None:
-    path = ws / ".jenny" / "taint_ledger.json"
-    path.parent.mkdir(parents=True)
-    path.write_text("{non json")
+def test_an_unreadable_ledger_starts_empty(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sqlite3
+
+    def broken(self):  # type: ignore[no-untyped-def]
+        raise sqlite3.DatabaseError("file is not a database")
+
+    monkeypatch.setattr(TaintLedger, "_db", broken)
     assert TaintLedger(ws).source_of("out/x") is None
+
+
+def _saved(ledger: TaintLedger) -> list[str]:
+    """I percorsi come li ha salvati il registro."""
+    return [r["path"] for r in ledger._db().read("SELECT path FROM taint_ledger ORDER BY path")]
 
 
 @pytest.mark.parametrize("code", [

@@ -407,12 +407,14 @@ def test_the_interrupted_turn_journal_follows_the_rename(workspace) -> None:
 
     _notebook(workspace, OLD)
     sessions = SessionManager(workspace)
-    old_journal = sessions.turn_journal_path(f"project:{OLD}")
-    old_journal.write_text('{"_type": "turn_journal", "stamp": "x"}\n', encoding="utf-8")
+    chat = sessions.get_or_create(f"project:{OLD}")
+    chat.add_message("user", "ciao")
+    sessions.save(chat)
+    sessions.turn_reset(f"project:{OLD}", "x", ['{"role": "user", "content": "a meta"}'])
 
     outcome, _ = _rename(workspace)
 
     assert outcome["chat_moved"] is True
-    assert not old_journal.exists(), "il diario e' rimasto sotto il nome vecchio"
-    new_journal = sessions.turn_journal_path(f"project:{NEW}")
-    assert new_journal.read_text(encoding="utf-8").startswith('{"_type": "turn_journal"')
+    assert sessions.turn_read(f"project:{OLD}") == (None, []), (
+        "il diario e' rimasto sotto il nome vecchio")
+    assert sessions.turn_read(f"project:{NEW}")[0] == "x"

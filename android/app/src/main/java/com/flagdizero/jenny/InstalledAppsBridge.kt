@@ -9,7 +9,6 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
-import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import org.json.JSONArray
@@ -84,49 +83,23 @@ class InstalledAppsBridge(context: Context) {
     }
 
     fun launchApp(packageName: String): Boolean {
-        val pm = appContext.packageManager
-        val intent = pm.getLaunchIntentForPackage(packageName) ?: return false
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return try {
-            appContext.startActivity(intent)
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch $packageName", e)
-            false
-        }
+        val intent = appContext.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        return Intents.tryStart(
+            appContext, intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), TAG, "app $packageName",
+        )
     }
 
     /** Launch the system uninstall dialog for [packageName]. */
-    fun uninstallApp(packageName: String): Boolean {
-        val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return try {
-            appContext.startActivity(intent)
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to uninstall $packageName", e)
-            false
-        }
-    }
+    fun uninstallApp(packageName: String): Boolean = Intents.tryStart(
+        appContext,
+        Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        TAG,
+        "uninstall of $packageName",
+    )
 
-    /** Open the system "App info" settings screen for [packageName]. */
-    fun openAppInfo(packageName: String): Boolean {
-        val intent = Intent(
-            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            Uri.parse("package:$packageName"),
-        )
-        // Un task suo, non quello di Impostazioni. Con il solo NEW_TASK l'affinita'
-        // la faceva entrare nel task di Impostazioni gia' aperto, e Indietro
-        // tornava alla schermata lasciata li' (sul Titan 2, «Rete e Internet»)
-        // invece che a Jenny. NEW_DOCUMENT le da' un task per pacchetto: Indietro
-        // lo chiude e torna a chi l'ha aperta, e riaprirla non ne accumula altri.
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
-        return try {
-            appContext.startActivity(intent)
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to open app info for $packageName", e)
-            false
-        }
-    }
+    /** Open the system "App info" settings screen for [packageName]: in a task
+     *  of its own, see [Intents.appDetails]. */
+    fun openAppInfo(packageName: String): Boolean =
+        Intents.tryStart(appContext, Intents.appDetails(packageName), TAG, "app info for $packageName")
 }

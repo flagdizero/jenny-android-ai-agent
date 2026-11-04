@@ -26,11 +26,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI, member, requires_node, run_js, run_module
 
 pytestmark = requires_node
 
@@ -355,6 +351,13 @@ def _run(
             "}\n",
             encoding="utf-8",
         )
+        # La scrittura delle pagine viaggia sul filo (`rpc.saveHomePages`): il
+        # finto la passa al client finto qui sotto, che la ricorda.
+        (root / "shared" / "rpc-client.js").write_text(
+            "import { api } from './api-client.js';\n"
+            "export const rpc = { saveHomePages: (s, o) => api.saveHomePages(s, o) };\n",
+            encoding="utf-8",
+        )
         # Gli avvisi: si ricordano, per dire se un guasto e' stato detto.
         (root / "shared" / "utils.js").write_text(
             "export function showToast(text, type) {\n"
@@ -384,7 +387,7 @@ def _run(
             # `_refuses`: la prossima scrittura fallisce, come un gateway
             # che risponde 500 o un filo caduto.
             "  _refuses: false,\n"
-            "  async savePages(s, o) {\n"
+            "  async saveHomePages(s, o) {\n"
             "    if (this._refuses) throw new Error('Pages write failed: 500');\n"
             "    this.writes.push(s); this.ordini.push(o);\n"
             "    this._list = s; this._order = o;\n"

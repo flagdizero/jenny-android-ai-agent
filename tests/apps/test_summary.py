@@ -32,7 +32,7 @@ class TestBuildAppsSummary:
         _write_app(tmp_path)
         summary = build_apps_summary(tmp_path)
         assert "**Note** (`note`)" in summary
-        assert "`note_add_note`" in summary
+        assert "actions: `add_note(testo)`" in summary
         assert "`apps/note/data/`" in summary
         assert "AGENT.md" not in summary
 
@@ -89,7 +89,7 @@ def test_in_a_notebook_the_placed_apps_come_first_and_the_others_are_read_only(t
         "id": "etf", "title": "ETF", "pos": {"x": 1, "y": 1}, "app": {"slug": "etf"}}))
     summary = build_apps_summary(tmp_path, notebook_root=root)
     placed, others = summary.split("Other apps")
-    assert "`etf_add`" in placed and "spesa" not in placed
+    assert "actions: `add()`" in placed and "spesa" not in placed
     assert "Spesa (`spesa`)" in others and "read-only" in others
     # E le app nuove si fanno da qui: Jenny mandava l'utente nella chat personale.
     assert "is made from this chat too" in others

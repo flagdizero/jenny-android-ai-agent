@@ -792,7 +792,7 @@ object FloatingOverlayController {
             if (wanted == mascotPx) return@post
             mascotPx = wanted
             appContext?.let { ctx ->
-                ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                prefs(ctx)
                     .edit().putInt(PREF_SIZE, wanted).apply()
                 applyMascotSize(ctx)
             }
@@ -834,7 +834,7 @@ object FloatingOverlayController {
             if (wanted == palette) return@post
             palette = wanted
             appContext?.let { ctx ->
-                ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                prefs(ctx)
                     .edit().putString(PREF_PALETTE, wanted.store()).apply()
             }
             applyPalette()
@@ -872,7 +872,7 @@ object FloatingOverlayController {
             if (wanted == userBubble) return@post
             userBubble = wanted
             appContext?.let { ctx ->
-                ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                prefs(ctx)
                     .edit().putString(PREF_BUBBLE, json).apply()
             }
             renderHistory()
@@ -3196,15 +3196,18 @@ object FloatingOverlayController {
         return dp(ctx, NAV_FALLBACK_DP)
     }
 
+    /** Le preferenze della mascotte flottante (`jenny_floating`). */
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
     private fun loadParkPosition(ctx: Context) {
-        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val prefs = prefs(ctx)
         if (mascotPx <= 0) mascotPx = prefs.getInt(PREF_SIZE, 0)
         storedPalette(prefs.getString(PREF_PALETTE, null))?.let { palette = it }
         parseBubble(prefs.getString(PREF_BUBBLE, null))?.let { userBubble = it }
     }
 
     private fun saveParkPosition(ctx: Context) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs(ctx)
             .edit()
             // La taglia può essere arrivata dalla SPA prima che ci fosse un
             // contesto con cui scriverla: qui c'è di sicuro.

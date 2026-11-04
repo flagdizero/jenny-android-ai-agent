@@ -11,13 +11,16 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import sqlite3
 import subprocess
 import tarfile
+import tempfile
 import time
 import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 PACKAGE = "com.flagdizero.jenny"
@@ -28,9 +31,13 @@ PERSONAL_CHAT = "default"
 #: Quel che uno scenario puo' cambiare, fotografato a inizio suite e rimesso a
 #: fine suite. Le sessioni si rimettono a app ferma: il gateway le tiene in
 #: memoria e un file riscritto sotto i suoi piedi verrebbe sovrascritto.
-SNAPSHOT_PATHS = ("memory", "USER.md", "SOUL.md", "AGENTS.md", "skills", "cron",
-                  "sessions", "wikis", ".jenny/staged")
+SNAPSHOT_PATHS = ("memory", "USER.md", "SOUL.md", "AGENTS.md", "skills",
+                  "wikis", ".jenny/staged")
 SNAPSHOT_FILE = "files/behaviour_snapshot.tar"
+#: Lo stato in SQLite (i job del cron, ``jenny/cron/store.py``): accanto al
+#: workspace, fotografato e rimesso col resto, sempre ad app ferma.
+STATE_DB = "files/db/state.sqlite"
+STATE_SNAPSHOT_FILE = "files/behaviour_state.sqlite"
 
 
 class DeviceError(RuntimeError):
@@ -151,6 +158,12 @@ class Device:
     # -- snapshot -------------------------------------------------------------
 
     def snapshot(self) -> None:
+        """Fotografa workspace e stato. Va fatta ad app ferma: lo stato è un
+        database aperto, e una copia a metà scrittura non si riaprirebbe."""
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "state.sqlite"
+            self.pull_state(local)
+            self.sh(f"cat > {STATE_SNAPSHOT_FILE}", input_bytes=local.read_bytes())
         present = [p for p in SNAPSHOT_PATHS
                    if self.sh(f"test -e {WORKSPACE}/{p} && echo y", check=False).strip() == "y"]
         self.sh(f"cd {WORKSPACE} && tar cf ../../{SNAPSHOT_FILE} {' '.join(present)}")
@@ -168,10 +181,120 @@ class Device:
         self.adb("shell", "am", "force-stop", PACKAGE)
         paths = " ".join(SNAPSHOT_PATHS)
         self.sh(f"cd {WORKSPACE} && rm -rf {paths} && tar xf ../../{SNAPSHOT_FILE}")
-        self.sh(f"rm -f {SNAPSHOT_FILE}")
+        self.sh(f"rm -f {STATE_DB}-wal {STATE_DB}-shm && cp {STATE_SNAPSHOT_FILE} {STATE_DB}")
+        self.sh(f"rm -f {SNAPSHOT_FILE} {STATE_SNAPSHOT_FILE}")
         self.restart_app()
 
     # -- job di sistema --------------------------------------------------------
+
+    def pull_state(self, dest: Path) -> None:
+        """Una copia di ``state.sqlite`` in *dest*, col suo ``-wal`` dentro."""
+        for suffix in ("", "-wal"):
+            command = f"cat {STATE_DB}{suffix} 2>/dev/null"
+            proc = subprocess.run(
+                ["adb", "-s", self.serial, "exec-out", f"run-as {PACKAGE} sh -c '{command}'"],
+                capture_output=True, check=False)
+            target = Path(f"{dest}{suffix}")
+            target.unlink(missing_ok=True)
+            if proc.stdout or not suffix:
+                target.write_bytes(proc.stdout)
+        conn = sqlite3.connect(dest)
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("PRAGMA journal_mode=DELETE")
+        finally:
+            conn.close()
+
+    def push_state(self, source: Path) -> None:
+        """Rimette *source* al posto di ``state.sqlite``. Solo ad app ferma."""
+        self.sh(f"rm -f {STATE_DB}-wal {STATE_DB}-shm && cat > {STATE_DB}",
+                input_bytes=source.read_bytes())
+
+    def cron_rows(self) -> list[dict[str, Any]]:
+        """I job come li ha salvati lo scheduler."""
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "state.sqlite"
+            self.pull_state(local)
+            conn = sqlite3.connect(local)
+            try:
+                rows = conn.execute("SELECT data FROM cron_jobs ORDER BY pos").fetchall()
+            except sqlite3.OperationalError:
+                rows = []
+            finally:
+                conn.close()
+        return [json.loads(r[0]) for r in rows]
+
+    def _state_query(self, fn):
+        """*fn(conn)* su una copia di ``state.sqlite``, presa ad app accesa (sola lettura)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "state.sqlite"
+            self.pull_state(local)
+            conn = sqlite3.connect(local)
+            conn.row_factory = sqlite3.Row
+            try:
+                return fn(conn)
+            except sqlite3.OperationalError:
+                return None
+            finally:
+                conn.close()
+
+    def read_session(self, key: str) -> str:
+        """La sessione *key* nella forma JSONL di prima (metadati, poi un messaggio
+        per riga), o ``""``: gli scenari la leggono così."""
+        def query(conn):  # type: ignore[no-untyped-def]
+            head = conn.execute("SELECT * FROM sessions WHERE key = ?", (key,)).fetchone()
+            if head is None:
+                return ""
+            meta = {"_type": "metadata", "key": key, "created_at": head["created_at"],
+                    "updated_at": head["updated_at"], "metadata": json.loads(head["metadata"]),
+                    "last_consolidated": head["last_consolidated"]}
+            rows = conn.execute("SELECT data FROM session_messages WHERE key = ? ORDER BY seq",
+                                (key,)).fetchall()
+            return "\n".join([json.dumps(meta, ensure_ascii=False), *[r[0] for r in rows]]) + "\n"
+
+        return self._state_query(query) or ""
+
+    def session_stamp(self, key: str) -> tuple:
+        """``(versione, messaggi)`` della sessione: cambia a ogni salvataggio."""
+        rows = self._state_query(lambda conn: conn.execute(
+            "SELECT version, count FROM sessions WHERE key = ?", (key,)).fetchall())
+        return tuple(rows[0]) if rows else ()
+
+    def session_keys(self, prefix: str = "") -> list[str]:
+        rows = self._state_query(lambda conn: conn.execute(
+            "SELECT key FROM sessions WHERE substr(key, 1, ?) = ?", (len(prefix), prefix)
+        ).fetchall())
+        return [r[0] for r in rows or []]
+
+    def write_session(self, key: str, text: str) -> None:
+        """Mette la sessione *key* (in forma JSONL) nel database, ad app ferma, e la riapre."""
+        lines = [json.loads(line) for line in text.splitlines() if line.strip()]
+        meta = next((r for r in lines if r.get("_type") == "metadata"), {})
+        messages = [r for r in lines if r.get("_type") != "metadata"]
+        self.adb("shell", "am", "force-stop", PACKAGE)
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "state.sqlite"
+            self.pull_state(local)
+            conn = sqlite3.connect(local)
+            try:
+                conn.execute("DELETE FROM session_messages WHERE key = ?", (key,))
+                conn.execute(
+                    "INSERT INTO sessions(key, created_at, updated_at, metadata, last_consolidated,"
+                    " version, count, bytes) VALUES (?, ?, ?, ?, ?, 1, ?, 0) ON CONFLICT(key) DO "
+                    "UPDATE SET created_at = excluded.created_at, updated_at = excluded.updated_at,"
+                    " metadata = excluded.metadata, last_consolidated = excluded.last_consolidated,"
+                    " version = sessions.version + 1, count = excluded.count",
+                    (key, meta.get("created_at"), meta.get("updated_at"),
+                     json.dumps(meta.get("metadata") or {}, ensure_ascii=False),
+                     int(meta.get("last_consolidated") or 0), len(messages)))
+                conn.executemany(
+                    "INSERT INTO session_messages(key, seq, data) VALUES (?, ?, ?)",
+                    [(key, i, json.dumps(m, ensure_ascii=False)) for i, m in enumerate(messages)])
+                conn.commit()
+            finally:
+                conn.close()
+            self.push_state(local)
+        self.restart_app()
 
     def shift_system_jobs(self, *, delay_ms: int | None = None,
                           only: tuple[str, ...] = ()) -> dict[str, int]:
@@ -184,23 +307,32 @@ class Device:
         store in memoria e lo riscrive. Ritorna l'ultimo ``lastRunAtMs`` di
         ciascuno, per riconoscere il giro dopo.
         """
-        store = json.loads(self.read("cron/jobs.json") or "{}")
         now = int(time.time() * 1000)
         last: dict[str, int] = {}
-        for job in store.get("jobs", []):
-            if (job.get("payload") or {}).get("kind") != "system_event":
-                continue
-            if only and job.get("id") not in only:
-                continue
-            state = job.setdefault("state", {})
-            last[str(job.get("id"))] = int(state.get("lastRunAtMs") or 0)
-            state["nextRunAtMs"] = now - 1000 if delay_ms is None else now + delay_ms
-        self.write("cron/jobs.json", json.dumps(store, ensure_ascii=False, indent=2))
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "state.sqlite"
+            self.pull_state(local)
+            conn = sqlite3.connect(local)
+            try:
+                for job_id, data in conn.execute("SELECT id, data FROM cron_jobs").fetchall():
+                    job = json.loads(data)
+                    if (job.get("payload") or {}).get("kind") != "system_event":
+                        continue
+                    if only and job_id not in only:
+                        continue
+                    state = job.setdefault("state", {})
+                    last[str(job_id)] = int(state.get("lastRunAtMs") or 0)
+                    state["nextRunAtMs"] = now - 1000 if delay_ms is None else now + delay_ms
+                    conn.execute("UPDATE cron_jobs SET data = ? WHERE id = ?",
+                                 (json.dumps(job, ensure_ascii=False, sort_keys=True), job_id))
+                conn.commit()
+            finally:
+                conn.close()
+            self.push_state(local)
         return last
 
     def job_last_run(self, job_id: str) -> int:
-        store = json.loads(self.read("cron/jobs.json") or "{}")
-        for job in store.get("jobs", []):
+        for job in self.cron_rows():
             if job.get("id") == job_id:
                 return int((job.get("state") or {}).get("lastRunAtMs") or 0)
         return 0

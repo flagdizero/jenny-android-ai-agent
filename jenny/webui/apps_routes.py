@@ -18,6 +18,7 @@ from urllib.parse import unquote
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
+from jenny.apps.drafts import app_dir
 from jenny.apps.manifest import ACTION_NAME_RE
 from jenny.apps.manifest import SLUG_RE as APP_SLUG_RE
 from jenny.channels.http_utils import (
@@ -122,9 +123,6 @@ class AppsRoutes:
             return self._static(request, path)
         if path == "/api/webui/apps":
             return self._list(request)
-        m = re.match(r"^/api/webui/apps/([^/]+)/delete$", path)
-        if m:
-            return await self._delete(request, m.group(1))
         m = re.match(r"^/api/webui/apps/([^/]+)/view$", path)
         if m:
             return await self._view(request, m.group(1))
@@ -163,7 +161,7 @@ class AppsRoutes:
         mime = MEDIA_MIMES.get(Path(name).suffix.lower())
         if mime is None or _MEDIA_NAME_RE.match(name) is None:
             return http_error(400, "invalid media name")
-        media = self._get_workspace_root() / "apps" / slug / "data" / MEDIA_DIR
+        media = app_dir(self._get_workspace_root(), slug) / "data" / MEDIA_DIR
         candidate = media / name
         if not is_path_within(candidate, media) or not candidate.is_file():
             return http_error(404, "not found")
@@ -185,31 +183,6 @@ class AppsRoutes:
         from jenny.webui.apps_api import list_apps_payload
 
         return http_json_response(list_apps_payload(self._get_workspace_root()))
-
-    async def _delete(self, request: WsRequest, raw_slug: str) -> Response:
-        if not self._check_api_token(request):
-            return http_error(401, "Unauthorized")
-        disabled = self._check_apps_enabled()
-        if disabled is not None:
-            return disabled
-        slug = unquote(raw_slug)
-        if not slug or APP_SLUG_RE.match(slug) is None:
-            return http_error(400, "invalid app slug")
-        from jenny.webui.apps_api import delete_app
-
-        try:
-            outcome = delete_app(self._get_workspace_root(), slug)
-        except ValueError:
-            return http_error(400, "invalid app slug")
-        except FileNotFoundError:
-            return http_error(404, "app not found")
-        except Exception as e:
-            self._log.warning("app delete {} failed: {}", slug, e)
-            return http_error(500, "internal error")
-        from jenny.webui.home_pages import detach_pages_quietly
-
-        await detach_pages_quietly("app", slug, log=self._log)
-        return http_json_response(outcome)
 
     def _resolve_view_app(self, raw_slug: str) -> tuple[str, str] | Response:
         """``(slug, base_url)`` per una vista esterna, o il ``Response`` d'errore."""

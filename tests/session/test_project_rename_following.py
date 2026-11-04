@@ -32,6 +32,7 @@ l'invariante vera — uno stato a metà è scritto e finibile — ha i suoi test
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -226,34 +227,54 @@ async def test_the_destination_check_covers_every_trace_not_just_the_first(
 
 
 def _all_traces(loop: AgentLoop, key: str) -> list[Path]:
-    """Tutte, ``.segments`` compresa: è una directory, non un file."""
+    """Tutte: la sessione e il verbale (righe del database) e il thread legacy (file)."""
+    from jenny.session.keys import webui_transcript_key
+    from jenny.webui.transcript_store import append_transcript_object
+
+    chat = loop.sessions.get_or_create(key)
+    chat.add_message("user", "ciao")
+    loop.sessions.save(chat)
+    loop.sessions.invalidate(key)
+    append_transcript_object(webui_transcript_key(key), {"event": "user", "text": "ciao"})
     made = []
     for path in project_trace_paths(loop.workspace, key):
         path.parent.mkdir(parents=True, exist_ok=True)
-        if path.suffix == ".segments":
-            path.mkdir()
-        else:
-            path.write_text("{}\n", encoding="utf-8")
+        path.write_text("{}\n", encoding="utf-8")
         made.append(path)
     return made
 
 
-def _rename_that_breaks(nth: int, *, and_cannot_go_back: bool):
-    """Un ``Path.rename`` che rompe all'*n*-esimo spostamento in avanti."""
-    real = Path.rename
-    seen = {"forward": 0}
+def _whole(loop: AgentLoop, key: str) -> bool:
+    """Ogni traccia di *key* c'è: sessione, verbale, file."""
+    from jenny.session.keys import webui_transcript_key
+    from jenny.webui.transcript_store import has_webui_transcript
 
-    def fake(self: Path, target):  # type: ignore[no-untyped-def]
-        going_forward = "project_dst" in Path(target).name
-        if going_forward:
-            seen["forward"] += 1
-            if seen["forward"] == nth:
-                raise OSError(28, "No space left on device")
-        elif and_cannot_go_back:
-            raise OSError(13, "Permission denied")
-        return real(self, target)
+    return (loop.sessions.exists(key) and has_webui_transcript(webui_transcript_key(key))
+            and all(p.exists() for p in project_trace_paths(loop.workspace, key)))
 
-    return fake
+
+def _none(loop: AgentLoop, key: str) -> bool:
+    """Nessuna traccia di *key*."""
+    from jenny.session.keys import webui_transcript_key
+    from jenny.webui.transcript_store import has_webui_transcript
+
+    return (not loop.sessions.exists(key)
+            and not has_webui_transcript(webui_transcript_key(key))
+            and not any(p.exists() for p in project_trace_paths(loop.workspace, key)))
+
+
+def _move_that_breaks(patch, *, and_cannot_go_back: bool) -> None:
+    """Lo spostamento del verbale fallisce dopo quello della sessione; con
+    *and_cannot_go_back* fallisce anche il ritorno indietro della sessione."""
+    import jenny.session.project_rename as rename_mod
+
+    real_session = rename_mod._move_session
+    patch.setattr(rename_mod, "_move_transcript", lambda workspace, old, new: False)
+    if and_cannot_go_back:
+        def session(workspace, old, new):  # type: ignore[no-untyped-def]
+            return False if old.endswith(":dst") else real_session(workspace, old, new)
+
+        patch.setattr(rename_mod, "_move_session", session)
 
 
 async def test_an_error_halfway_rolls_back_and_says_nothing_moved(
@@ -261,18 +282,18 @@ async def test_an_error_halfway_rolls_back_and_says_nothing_moved(
 ) -> None:
     """Terzo di cinque: quel che era partito torna, e il giornale si chiude."""
     _wiki(tmp_path, "src")
-    made = _all_traces(loop, "project:src")
-    monkeypatch.setattr(Path, "rename", _rename_that_breaks(3, and_cannot_go_back=False))
+    _all_traces(loop, "project:src")
+    _move_that_breaks(monkeypatch, and_cannot_go_back=False)
 
     moved, why = follow_renamed_project(loop.workspace, "project:src", "project:dst")
 
     assert moved is False
-    assert why == "moving the conversation's files failed, so nothing was moved"
-    assert all(p.exists() for p in made), (
+    assert why == "moving the conversation failed, so nothing was moved"
+    assert _whole(loop, "project:src"), (
         "le due tracce già partite devono essere tornate indietro: metà sotto un nome "
         "e metà sotto l'altro è la chat vuota con la memoria di un'altra"
     )
-    assert [p for p in project_trace_paths(loop.workspace, "project:dst") if p.exists()] == []
+    assert _none(loop, "project:dst")
     assert pending_project_renames(loop.workspace) == [], (
         "tornato indietro del tutto: non resta niente da riparare"
     )
@@ -295,7 +316,7 @@ async def test_a_move_stopped_halfway_is_written_down_and_finished(
     # smonterebbe anche il ``get_webui_dir`` della fixture — e le tracce webui
     # tornerebbero a puntare fuori da ``tmp_path``, dove il test le cerca.
     with monkeypatch.context() as breaks:
-        breaks.setattr(Path, "rename", _rename_that_breaks(3, and_cannot_go_back=True))
+        _move_that_breaks(breaks, and_cannot_go_back=True)
         moved, why = follow_renamed_project(loop.workspace, "project:src", "project:dst")
 
     assert moved is False
@@ -308,9 +329,8 @@ async def test_a_move_stopped_halfway_is_written_down_and_finished(
     completed = repair_pending_project_renames(loop.workspace)
 
     assert completed == [("project:src", "project:dst")]
-    assert [p for p in project_trace_paths(loop.workspace, "project:src") if p.exists()] == []
-    dst = project_trace_paths(loop.workspace, "project:dst")
-    assert len([p for p in dst if p.exists()]) == len(dst)
+    assert _none(loop, "project:src")
+    assert _whole(loop, "project:dst")
     assert pending_project_renames(loop.workspace) == []
 
 
@@ -324,31 +344,30 @@ async def test_a_process_killed_between_two_renames_is_repaired_at_the_next_boot
     ``rename``, ed è per quello stato che il giornale esiste.
     """
     _wiki(tmp_path, "src")
-    old = project_trace_paths(loop.workspace, "project:src")
-    new = project_trace_paths(loop.workspace, "project:dst")
     _all_traces(loop, "project:src")
     import json
 
-    (tmp_path / "sessions").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "sessions" / ".project-rename-pending.json").write_text(
+    from jenny.session import store as session_store
+
+    (tmp_path / ".jenny").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".jenny" / "project-rename-pending.json").write_text(
         json.dumps([{"old": "project:src", "new": "project:dst"}]), encoding="utf-8"
     )
-    for i in (0, 1):
-        new[i].parent.mkdir(parents=True, exist_ok=True)
-        old[i].rename(new[i])
+    # Il processo muore dopo la sessione, prima del verbale e del file.
+    session_store.rename(loop.sessions._db, "project:src", "project:dst")
 
     completed = repair_pending_project_renames(loop.workspace)
 
     assert completed == [("project:src", "project:dst")]
-    assert [p for p in old if p.exists()] == []
-    assert len([p for p in new if p.exists()]) == len(new)
+    assert _none(loop, "project:src")
+    assert _whole(loop, "project:dst")
     assert pending_project_renames(loop.workspace) == []
 
 
 async def test_repairing_nothing_is_a_no_op(loop: AgentLoop, tmp_path: Path) -> None:
     """Il costo al boot quando non c'è niente da fare: una lettura che non trova."""
     assert repair_pending_project_renames(loop.workspace) == []
-    assert not (tmp_path / "sessions" / ".project-rename-pending.json").exists()
+    assert not (tmp_path / ".jenny" / "project-rename-pending.json").exists()
 
 
 async def test_a_completed_move_leaves_nothing_to_repair(
@@ -365,7 +384,7 @@ async def test_a_completed_move_leaves_nothing_to_repair(
     dst = project_trace_paths(loop.workspace, "project:dst")
     assert len([p for p in dst if p.exists()]) == len(dst)
     assert pending_project_renames(loop.workspace) == []
-    assert not (tmp_path / "sessions" / ".project-rename-pending.json").exists()
+    assert not (tmp_path / ".jenny" / "project-rename-pending.json").exists()
 
 
 async def test_a_chat_that_never_recorded_an_id_gets_the_plain_refusal(
@@ -472,8 +491,9 @@ async def test_the_turn_that_lands_after_it_does_not_resurrect_the_old_name(
     assert [p for p in project_trace_paths(loop.workspace, "project:nuovo") if p.exists()] == [], (
         "un file sotto il nome nuovo qui vuol dire che la storia si e' divisa in due"
     )
-    survived = project_trace_paths(loop.workspace, "project:vecchio")[0]
-    assert "quel che stavo dicendo" in survived.read_text(encoding="utf-8"), (
+    assert not loop.sessions.exists("project:nuovo")
+    survived = loop.sessions.read_session_file("project:vecchio")
+    assert "quel che stavo dicendo" in str(survived["messages"]), (
         "e lo scambio appena concluso deve stare dove sta tutto il resto"
     )
 
@@ -534,7 +554,7 @@ async def test_a_move_stopped_halfway_does_not_claim_nothing_is_lost(
     (tmp_path / "wikis" / "src").rename(tmp_path / "wikis" / "dst")
 
     with monkeypatch.context() as breaks:
-        breaks.setattr(Path, "rename", _rename_that_breaks(3, and_cannot_go_back=True))
+        _move_that_breaks(breaks, and_cannot_go_back=True)
         refused = await loop._refuse_missing_project(_msg(), "project:src")
 
     assert refused is True
@@ -580,10 +600,10 @@ async def test_a_refusal_with_nothing_moved_still_says_nothing_is_lost(
             await loop._refuse_missing_project(_msg(), "project:src")
         else:
             with monkeypatch.context() as breaks:
-                breaks.setattr(Path, "rename", _rename_that_breaks(3, and_cannot_go_back=False))
+                _move_that_breaks(breaks, and_cannot_go_back=False)
                 await loop._refuse_missing_project(_msg(), "project:src")
 
-    assert all(p.exists() for p in made), "presupposto: non si e' mosso niente"
+    assert made and _whole(loop, "project:src"), "presupposto: non si e' mosso niente"
     assert pending_project_renames(loop.workspace) == []
     assert "Nothing is lost" in published[0]
     assert "renaming it back" in published[0], "e la via di uscita resta detta"
@@ -592,8 +612,11 @@ async def test_a_refusal_with_nothing_moved_still_says_nothing_is_lost(
 # ── L'elenco delle tracce ────────────────────────────────────────────────
 
 
-def test_the_trace_list_covers_the_three_that_move(loop: AgentLoop) -> None:
-    """La quarta traccia vive **dentro** la cartella, quindi si è già spostata da sé.
+def test_the_trace_list_covers_the_files_that_move(loop: AgentLoop) -> None:
+    """La traccia che vive **dentro** la cartella si è già spostata da sé.
+
+    I record degli aiutanti non sono più un file col nome della chat: stanno in
+    ``state.sqlite`` e li sposta una query (v. il test qui sotto).
 
     ``<progetto>/.jenny/tool-results/project_<nome>/`` viaggia col rinomino; il
     suo nome resta quello vecchio e ``_cleanup_tool_result_buckets`` lo rimuove
@@ -602,10 +625,33 @@ def test_the_trace_list_covers_the_three_that_move(loop: AgentLoop) -> None:
     """
     paths = project_trace_paths(loop.workspace, "project:palestra")
     kinds = {p.parent.name for p in paths}
-    assert "sessions" in kinds
     assert "webui" in kinds
-    assert "records" in kinds
     assert all("project_palestra" in p.name for p in paths)
+
+
+def test_the_helpers_records_follow_the_chat(tmp_path: Path) -> None:
+    from jenny.agent.subagent_records import (
+        SubagentRecord,
+        SubagentRecordStore,
+        SubagentSpec,
+    )
+    from jenny.session.project_rename import follow_renamed_project
+
+    ws = tmp_path / "workspace"
+    from jenny.session.manager import SessionManager
+
+    sessions = SessionManager(ws)
+    chat = sessions.get_or_create("project:palestra")
+    chat.add_message("user", "ciao")
+    sessions.save(chat)
+    store = SubagentRecordStore(ws)
+    store.append(SubagentRecord(
+        task_id="t1", lineage_id="t1", attempt=1, state="done", ended_at=time.time(),
+        spec=SubagentSpec(task="x", label="x", session_key="project:palestra")))
+    assert follow_renamed_project(ws, "project:palestra", "project:corsa") == (True, None)
+    [moved] = store.load("project:corsa")
+    assert moved.spec.session_key == "project:corsa"
+    assert store.load("project:palestra") == []
 
 
 # ── T4.15 — non si insegue dentro un nome che nessuno puo' riaprire ──────
@@ -694,7 +740,7 @@ async def test_the_refusal_leaves_no_journal_entry_open(
     await loop._refuse_missing_project(_msg(), "project:vecchio")
 
     assert pending_project_renames(loop.workspace) == []
-    assert not (tmp_path / "sessions" / ".project-rename-pending.json").exists()
+    assert not (tmp_path / ".jenny" / "project-rename-pending.json").exists()
 
     # E l'avvio dopo non completa niente: e' la seconda meta' della stessa
     # asserzione, e la sola che prova che il rifiuto non e' un rinvio.

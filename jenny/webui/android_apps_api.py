@@ -8,7 +8,6 @@ user picks an app from the WebUI, the agent is not involved.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 
@@ -69,61 +68,29 @@ async def webui_android_apps_payload() -> dict[str, Any]:
     context = get_android_context()
     if context is None:
         return {"apps": []}
+    raw = await _BRIDGE.call(_get_bridge, context, "listInstalledApps", timeout=_LIST_TIMEOUT_S)
     try:
-        bridge = await _get_bridge(context)
-        raw = await asyncio.wait_for(
-            asyncio.to_thread(bridge.listInstalledApps), timeout=_LIST_TIMEOUT_S
-        )
-        apps = json.loads(raw)
-    except Exception:
-        logger.opt(exception=True).warning("Failed to list installed Android apps")
+        return {"apps": json.loads(raw)}
+    except (TypeError, ValueError):
+        # ``None`` è un guasto del bridge, già loggato con la sua traccia.
+        if raw is not None:
+            logger.warning("Installed Android apps unreadable: {!r}", str(raw)[:80])
         return {"apps": [], "error": "unavailable"}
-    return {"apps": apps}
 
 
 async def launch_android_app(package_name: str) -> bool:
     """Launch an installed app by package name. Returns False on any failure."""
-    context = get_android_context()
-    if context is None:
-        return False
-    try:
-        bridge = await _get_bridge(context)
-        launched = await asyncio.wait_for(
-            asyncio.to_thread(bridge.launchApp, package_name), timeout=_LAUNCH_TIMEOUT_S
-        )
-    except Exception:
-        logger.opt(exception=True).warning("Failed to launch Android app {}", package_name)
-        return False
-    return bool(launched)
+    return bool(await _BRIDGE.call(_get_bridge, get_android_context(), "launchApp",
+                                   package_name, timeout=_LAUNCH_TIMEOUT_S, default=False))
 
 
 async def uninstall_android_app(package_name: str) -> bool:
     """Open the system uninstall dialog for an app. Returns False on any failure."""
-    context = get_android_context()
-    if context is None:
-        return False
-    try:
-        bridge = await _get_bridge(context)
-        ok = await asyncio.wait_for(
-            asyncio.to_thread(bridge.uninstallApp, package_name), timeout=_UNINSTALL_TIMEOUT_S
-        )
-    except Exception:
-        logger.opt(exception=True).warning("Failed to uninstall Android app {}", package_name)
-        return False
-    return bool(ok)
+    return bool(await _BRIDGE.call(_get_bridge, get_android_context(), "uninstallApp",
+                                   package_name, timeout=_UNINSTALL_TIMEOUT_S, default=False))
 
 
 async def open_android_app_info(package_name: str) -> bool:
     """Open the system "App info" screen for an app. Returns False on any failure."""
-    context = get_android_context()
-    if context is None:
-        return False
-    try:
-        bridge = await _get_bridge(context)
-        ok = await asyncio.wait_for(
-            asyncio.to_thread(bridge.openAppInfo, package_name), timeout=_APP_INFO_TIMEOUT_S
-        )
-    except Exception:
-        logger.opt(exception=True).warning("Failed to open app info for {}", package_name)
-        return False
-    return bool(ok)
+    return bool(await _BRIDGE.call(_get_bridge, get_android_context(), "openAppInfo",
+                                   package_name, timeout=_APP_INFO_TIMEOUT_S, default=False))

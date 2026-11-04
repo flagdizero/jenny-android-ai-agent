@@ -36,14 +36,14 @@ MIGRATED_DIRNAME = ".migrated"
 
 
 def _taken(workspace: Path) -> set[str]:
+    from jenny.apps.drafts import DRAFTS_DIRNAME
+    from jenny.apps.trash import trashed_slugs
+
     apps = Path(workspace) / "apps"
-    names: set[str] = set()
-    for sub in (apps, apps / ".drafts"):
+    names = trashed_slugs(workspace)
+    for sub in (apps, apps / DRAFTS_DIRNAME):
         if sub.is_dir():
             names |= {p.name for p in sub.iterdir() if p.is_dir()}
-    trash = apps / ".trash"
-    if trash.is_dir():
-        names |= {p.name.rsplit("-", 1)[0] for p in trash.iterdir()}
     return names
 
 
@@ -169,14 +169,13 @@ def migrate_notebook(workspace: Path, root: Path) -> int:
 
 def migrate_micro_apps(workspace: Path) -> int:
     """Tutti i quaderni. Idempotente; un quaderno rotto non ferma gli altri."""
-    from jenny.board.placements import _wikis_dirs
+    from jenny.config.paths import get_wikis_path
     from jenny.utils.wiki_paths import discover_wiki_roots
 
     total = 0
-    for wikis in _wikis_dirs(workspace):
-        for name, root in sorted(discover_wiki_roots(wikis).items()):
-            try:
-                total += migrate_notebook(workspace, root)
-            except Exception:  # noqa: BLE001
-                logger.opt(exception=True).error("Micro apps of {} not migrated", name)
+    for name, root in sorted(discover_wiki_roots(get_wikis_path(workspace)).items()):
+        try:
+            total += migrate_notebook(workspace, root)
+        except Exception:  # noqa: BLE001
+            logger.opt(exception=True).error("Micro apps of {} not migrated", name)
     return total

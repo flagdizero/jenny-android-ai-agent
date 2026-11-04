@@ -9,18 +9,14 @@ from urllib.parse import unquote, urlparse
 
 from jenny.security.workspace_access import WorkspaceScope
 from jenny.security.workspace_policy import WorkspaceBoundaryError, resolve_allowed_path
+from jenny.utils.errors import StatusError
 from jenny.utils.wiki_paths import is_wiki_root
 
 MAX_FILE_PREVIEW_BYTES = 384 * 1024
 
 
-class WebUIFilePreviewError(ValueError):
+class WebUIFilePreviewError(StatusError, ValueError):
     """Raised when a file cannot be previewed through the WebUI."""
-
-    def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
-        self.status = status
-        self.message = message
 
 
 def file_preview_payload(
@@ -38,27 +34,27 @@ def file_preview_payload(
 
     path = _clean_preview_path(raw_path)
     if not path:
-        raise WebUIFilePreviewError(400, "missing path")
+        raise WebUIFilePreviewError("missing path", 400)
     if len(path) > 4096:
-        raise WebUIFilePreviewError(400, "path is too long")
+        raise WebUIFilePreviewError("path is too long", 400)
 
     try:
         resolved = _resolve_preview_file(path, scope.project_path)
     except FileNotFoundError as e:
-        raise WebUIFilePreviewError(404, "file not found") from e
+        raise WebUIFilePreviewError("file not found", 404) from e
     except WorkspaceBoundaryError as e:
-        raise WebUIFilePreviewError(403, "file is outside the current workspace") from e
+        raise WebUIFilePreviewError("file is outside the current workspace", 403) from e
     except OSError as e:
-        raise WebUIFilePreviewError(400, "invalid path") from e
+        raise WebUIFilePreviewError("invalid path", 400) from e
 
     try:
         with open(resolved, "rb") as f:
             raw = f.read(max_bytes + 1)
     except OSError as e:
-        raise WebUIFilePreviewError(500, "failed to read file") from e
+        raise WebUIFilePreviewError("failed to read file", 500) from e
 
     if b"\0" in raw[:4096]:
-        raise WebUIFilePreviewError(415, "binary files cannot be previewed")
+        raise WebUIFilePreviewError("binary files cannot be previewed", 415)
 
     truncated = len(raw) > max_bytes
     preview_bytes = raw[:max_bytes]

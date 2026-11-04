@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import asyncio
 
-from jenny.bus.events import OutboundMessage
+from support.bus import FakeBus
+
 from jenny.runtime.delivery import ChannelDeliverer
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
@@ -126,14 +127,9 @@ async def test_a_monitor_alert_reaches_the_unified_session_end_to_end(
     consegna, il deliverer la inoltra all'hook del loop, la riga finisce in
     ``unified:default`` — non nella sessione del monitor che l'ha prodotta."""
     loop = loop_factory()
-    published: list[OutboundMessage] = []
-
-    class _Bus:
-        async def publish_outbound(self, msg: OutboundMessage) -> None:
-            published.append(msg)
-
+    bus = FakeBus()
     deliverer = ChannelDeliverer(
-        bus=_Bus(),
+        bus=bus,
         session_manager=loop.sessions,
         record_hook=lambda: loop.record_channel_delivery,
     )
@@ -159,8 +155,8 @@ async def test_a_monitor_alert_reaches_the_unified_session_end_to_end(
     # L'avviso, e dietro il ``turn_end`` che chiude il turno WebUI che ha
     # aperto (v. ``ChannelDeliverer._close_webui_turn``): il turno silenzioso
     # che l'ha prodotto non ne emette nessuno.
-    assert [m.content for m in published] == [ALERT, ""]
-    assert published[1].metadata.get("_turn_end") is True
+    assert [m.content for m in bus.outbound] == [ALERT, ""]
+    assert bus.outbound[1].metadata.get("_turn_end") is True
     unified = loop.sessions.get_or_create(UNIFIED_SESSION_KEY).messages
     assert [m["content"] for m in unified] == [ALERT]
     assert loop.sessions.get_or_create("cron:rain-check").messages == []

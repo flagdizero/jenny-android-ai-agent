@@ -59,6 +59,7 @@ from loguru import logger
 
 from jenny.agent.gardener import GardenerStore
 from jenny.agent.gardener_state import GardenerState, JournalDelta, read_state
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import project_session_key
 from jenny.utils.wiki_paths import discover_wiki_roots
 
@@ -255,7 +256,7 @@ def pick_project(
     min_hours_between_passes: int,
     sessions: Any,
     active_session_keys: Collection[str] = (),
-    wikis_dir_name: str = "wikis",
+    wikis_dir_name: str = DEFAULT_WIKIS_DIR,
     now: datetime | None = None,
 ) -> GardenerPick | None:
     """Il progetto da giardinare adesso, o ``None`` se nessuno è pronto.

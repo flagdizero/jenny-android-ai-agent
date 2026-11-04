@@ -14,6 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from support.js_harness import ASSETS
+
 from jenny.agent.board_pass import BoardPass, board_needs_pass, run_board_pass
 from jenny.agent.board_tools import BoardPassState, build_board_tools
 from jenny.board import model
@@ -243,28 +245,27 @@ def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
 
     L'11/10/2026 sull'emulatore la passata trovo' «promemoria per novembre» nel
     diario, le attese dicevano «nessuna» — era un cron nel cassetto — e lo cerco'
-    per sei minuti. Nome, messaggio, data e ambito vengono da ``cron/jobs.json``,
+    per sei minuti. Nome, messaggio, data e ambito vengono dallo store del cron,
     che dal 20/10/2026 è l'unica cosa che dice se un cron esiste."""
-    import json
+    from support.cron import seed_jobs
 
     ws, root = _notebook(tmp_path)
     _seed_board(root)
-    (ws / "cron").mkdir()
-    (ws / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
-        {"id": "ab12cd34", "name": "Travaso", "enabled": True,
+    seed_jobs(ws, [
+        {"id": "ab12cd34", "name": "Travaso", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"message": "Ricorda il travaso\n dell'acero.",
                      "board": {"notebook": root.name, "card": "acero", "section": "@auto"}},
          "state": {"nextRunAtMs": 1803974400000}},
-        {"id": "ef56ab78", "name": "Gelo", "enabled": True,
+        {"id": "ef56ab78", "name": "Gelo", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"message": "avvisa se gela",
                      "board": {"notebook": root.name, "card": "@notebook", "section": "@auto"}}},
-        {"id": "aa11bb22", "name": "Altrove", "enabled": True,
+        {"id": "aa11bb22", "name": "Altrove", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": "altro", "card": "acero", "section": "@auto"}}},
         {"id": "cc33dd44", "name": "Rinvaso", "enabled": True,
          "schedule": {"kind": "at", "atMs": 4_070_908_800_000, "precision": "day"},
          "payload": {"message": "Rinvaso",
                      "board": {"notebook": root.name, "card": "acero", "section": "@auto"}}},
-    ]}), encoding="utf-8")
+    ])
     bp = BoardPass(root, ws)
     prompt = bp.build_prompt(bp.build_state(), journal="- 18:46 — promemoria per marzo: travaso.")
     block = prompt.split("## Already scheduled", 1)[1].split("\n## ", 1)[0]
@@ -275,7 +276,10 @@ def test_a_cron_in_a_drawer_is_listed_as_already_scheduled(tmp_path) -> None:
     assert "Altrove" not in block
     assert "Reminders already on the list" not in prompt
     # Uno store illeggibile non rompe la passata.
-    (ws / "cron" / "jobs.json").write_text("{rotto", encoding="utf-8")
+    from jenny.cron.store import cron_database
+
+    with cron_database(ws).write() as conn:
+        conn.execute("UPDATE cron_jobs SET data = '{rotto'")
     assert "Travaso" not in BoardPass(root, ws).build_prompt(bp.build_state(), journal="x")
 
 
@@ -470,7 +474,7 @@ async def test_a_failing_model_still_stamps_the_pass(tmp_path) -> None:
 def test_glyphs_are_known_icon_names() -> None:
     """Il glifo di una scheda lo sceglie il modello da un elenco chiuso: ogni
     nome dell'elenco deve esistere nel set di icone che la casa porta con se'."""
-    css = (Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "vendor"
+    css = (ASSETS / "vendor"
            / "@tabler" / "icons-webfont@3.19.0" / "dist" / "tabler-icons.min.css").read_text()
     for name in model.GLYPHS:
         assert f".ti-{name}:before" in css, name

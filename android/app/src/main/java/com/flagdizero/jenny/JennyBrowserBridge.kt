@@ -68,6 +68,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
         private const val PROFILE_NAME = "jenny-browser-session"
         private const val SETTLE_QUIET_MS = 400L
+        private const val NOT_STARTED = "the browser did not open: the page never started loading"
 
         /**
          * Il cancello di [open] e di [evaluate]: chi tocca la pagina (il main
@@ -83,8 +84,8 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         /**
          * Tetto della cache dei verdetti per host. I nomi li sceglie la pagina
          * (`JennyBrowserGuard.blocked` è visibile a ogni frame): senza tetto,
-         * una pagina che chiede nomi casuali in un ciclo la fa crescere fino
-         * alla fine della sessione. Oltre il tetto esce il meno usato di
+         * una pagina che chiede nomi casuali in un ciclo la fa crescere finché
+         * il processo vive. Oltre il tetto esce il meno usato di
          * recente: un verdetto perso si ricalcola, non si sbaglia.
          */
         private const val MAX_HOST_VERDICTS = 256
@@ -141,6 +142,235 @@ class JennyBrowserBridge(context: Context, slot: Int) {
          * main thread, quindi senza sincronizzazione.
          */
         private val leftoverProfilesHandled = HashSet<String>()
+
+        // -------------------------------------------------------------- guardia
+        //
+        // Di processo e non di sessione: la usano tutte le sessioni e la WebView
+        // della ricerca ([blockedResponse]), e il verdetto su un nome non
+        // dipende da chi lo chiede.
+
+        // LRU con tetto (v. MAX_HOST_VERDICTS); letta e scritta da più thread
+        // (IO di Chromium, JavaBridge, Python), sempre sotto il suo monitor.
+        private val hostVerdicts = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) =
+                size > MAX_HOST_VERDICTS
+        }
+
+        private val lastWarnAt = AtomicLong(0L)
+        private val suppressedWarnings = AtomicInteger(0)
+
+        /**
+         * L'IPv4 che un indirizzo IPv6 porta dentro, nelle forme che arrivano a un
+         * IPv4 vero: IPv4-mapped (`::ffff:a.b.c.d`), NAT64 (`64:ff9b::a.b.c.d`,
+         * che un DNS64 restituisce per un nome solo IPv4) e 6to4 (`2002:AABB:CCDD::`,
+         * l'IPv4 nei due gruppi dopo il prefisso). Per ognuna il verdetto e' quello
+         * dell'IPv4 incapsulato: `64:ff9b::7f00:1` e' il loopback, e `2002:c0a8:101::`
+         * la LAN. `null` se l'indirizzo non ne porta.
+         */
+        private fun embeddedIpv4(b: ByteArray): ByteArray? {
+            fun zero(range: IntRange) = range.all { b[it] == 0.toByte() }
+            return when {
+                zero(0..9) && b[10] == 0xFF.toByte() && b[11] == 0xFF.toByte() -> b.copyOfRange(12, 16)
+                b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
+                    b[3] == 0x9B.toByte() && zero(4..11) -> b.copyOfRange(12, 16)
+                b[0] == 0x20.toByte() && b[1] == 0x02.toByte() -> b.copyOfRange(2, 6)
+                else -> null
+            }
+        }
+
+        private fun isBlockedAddress(addr: InetAddress): Boolean {
+            if (addr.isLoopbackAddress || addr.isLinkLocalAddress ||
+                addr.isSiteLocalAddress || addr.isAnyLocalAddress || addr.isMulticastAddress) return true
+            when (addr) {
+                is Inet4Address -> {
+                    val b = addr.address
+                    val v = ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or
+                        ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
+                    for ((net, bits) in BLOCKED_V4) {
+                        val n = InetAddress.getByName(net).address
+                        val nv = ((n[0].toInt() and 0xFF) shl 24) or ((n[1].toInt() and 0xFF) shl 16) or
+                            ((n[2].toInt() and 0xFF) shl 8) or (n[3].toInt() and 0xFF)
+                        val mask = if (bits == 0) 0 else (-1 shl (32 - bits))
+                        if ((v and mask) == (nv and mask)) return true
+                    }
+                }
+                is Inet6Address -> {
+                    val b = addr.address
+                    // fc00::/7 (unique local) — fe80::/10 lo copre già isLinkLocalAddress
+                    if ((b[0].toInt() and 0xFE) == 0xFC) return true
+                    // ::/96: `::` e le IPv4-compatibili, deprecate. `::127.0.0.1` e'
+                    // il loopback in una forma che `isLoopbackAddress` non riconosce
+                    // (vale solo per `::1`); come in Python, l'intera /96 non e' mai
+                    // un server.
+                    if ((0..11).all { b[it] == 0.toByte() }) return true
+                    // ::ffff:0:0:0/96, la forma «tradotta» di SIIT (::ffff:0:a.b.c.d):
+                    // non e' una IPv4-mapped, e fuori da un traduttore non porta a
+                    // nessun server. Come in Python, bloccata intera.
+                    if ((0..7).all { b[it] == 0.toByte() } && b[8] == 0xFF.toByte() &&
+                        b[9] == 0xFF.toByte() && b[10] == 0.toByte() && b[11] == 0.toByte()) return true
+                    // 64:ff9b:1::/48, il NAT64 di uso locale: il prefisso li' non ha
+                    // lunghezza fissa, quindi l'IPv4 dentro non si sa estrarre.
+                    if (b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
+                        b[3] == 0x9B.toByte() && b[4] == 0x00.toByte() && b[5] == 0x01.toByte()) return true
+                    embeddedIpv4(b)?.let { return isBlockedAddress(InetAddress.getByAddress(it)) }
+                }
+            }
+            return false
+        }
+
+        /** Verdetto per hostname, con cache. Risolve: **mai dal main thread**. */
+        private fun isBlockedHost(host: String): Boolean {
+            cachedVerdict(host)?.let { return it }
+            val verdict = try {
+                InetAddress.getAllByName(host).any { isBlockedAddress(it) }
+            } catch (e: Exception) {
+                // Il nome lo sceglie la pagina: un avviso per ogni nome nuovo
+                // sarebbe un log che la pagina scrive a piacere.
+                warnThrottled("DNS failed (${e.javaClass.simpleName}): host blocked")
+                // In dubbio si blocca, ma non si ricorda: la cache è di processo,
+                // e un calo di rete terrebbe fuori la ricerca fino al riavvio.
+                return true
+            }
+            synchronized(hostVerdicts) { hostVerdicts[host] = verdict }
+            return verdict
+        }
+
+        private fun cachedVerdict(host: String): Boolean? = synchronized(hostVerdicts) { hostVerdicts[host] }
+
+        /**
+         * Un `Log.w` al massimo ogni [WARN_INTERVAL_MS], con il numero di quelli
+         * taciuti nel frattempo. Per le voci che una pagina visitata può far
+         * ripetere quanto vuole: nomi irrisolvibili, connessioni dirette rifiutate.
+         */
+        private fun warnThrottled(message: String) {
+            val now = System.currentTimeMillis()
+            val last = lastWarnAt.get()
+            if (now - last < WARN_INTERVAL_MS || !lastWarnAt.compareAndSet(last, now)) {
+                suppressedWarnings.incrementAndGet()
+                return
+            }
+            val skipped = suppressedWarnings.getAndSet(0)
+            Log.w(TAG, if (skipped > 0) "$message (+$skipped similar suppressed)" else message)
+        }
+
+        /** Controllo sincrono, senza DNS: è tutto ciò che si può fare sul main thread. */
+        private fun isBlockedLiteral(uri: Uri): Boolean {
+            val host = uri.host ?: return true
+            val scheme = (uri.scheme ?: "").lowercase()
+            if (scheme != "http" && scheme != "https") return true
+            if (!host.any { it.isDigit() || it == ':' }) return false   // non è un IP letterale
+            return try { isBlockedAddress(InetAddress.getByName(host)) } catch (e: Exception) { false }
+        }
+
+        /**
+         * Il verdetto sulle richieste HTTP, senza stato di sessione: lo usano la
+         * sessione di browser ([blockedResponseFor]) e la WebView della ricerca e
+         * del fetch (`AgenticSearchBridge`), che fino al 02/11/2026 non aveva
+         * nessuna guardia e lasciava a una pagina scaricata da `web_fetch` le
+         * sottorisorse verso la LAN. `null` vuol dire «lascia passare».
+         * [onHostBlocked] gira quando a fermare la richiesta è l'host (non lo
+         * schema): è lì che la sessione si annota l'indirizzo per dirlo al modello.
+         * Gira su un thread di lavoro: qui il DNS si può risolvere.
+         */
+        internal fun blockedResponse(uri: Uri, onHostBlocked: () -> Unit): WebResourceResponse? {
+            val scheme = (uri.scheme ?: "").lowercase()
+            if (scheme != "http" && scheme != "https") {
+                return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+            }
+            val host = uri.host ?: return null
+            if (isBlockedHost(host)) {
+                // Una pagina può chiedere mille sotto-risorse private in un ciclo.
+                warnThrottled("request to a private or unresolvable host blocked")
+                onHostBlocked()
+                return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+            }
+            return null
+        }
+
+        // I DNS chiesti dalla guardia lato pagina, fuori dal thread JavaBridge (v.
+        // GUARD_DNS_TIMEOUT_MS). Due thread e una coda corta: una pagina che
+        // chiede mille nomi non crea mille thread, e una coda piena vuol dire
+        // «bloccato». Di processo, come la cache: lo usano tutte le WebView.
+        private val guardDns = ThreadPoolExecutor(
+            2, 2, 30L, TimeUnit.SECONDS, ArrayBlockingQueue(32),
+        ) { r -> Thread(r, "jenny-browser-guard-dns").apply { isDaemon = true } }
+            .apply { allowCoreThreadTimeOut(true) }
+
+        // La guardia di rete lato pagina, letta una volta: v.
+        // installNetworkGuardOnMain. R.raw e non getIdentifier, per lo stesso
+        // motivo di `agentJs`. Solo main thread, quindi senza sincronizzazione.
+        private var networkGuardSource: String? = null
+
+        private fun networkGuardJs(context: Context): String =
+            networkGuardSource ?: context.applicationContext.resources
+                .openRawResource(R.raw.browser_network_guard)
+                .bufferedReader().use { it.readText() }
+                .also { networkGuardSource = it }
+
+        /**
+         * La domanda che la guardia lato pagina fa prima di aprire un WebSocket (o
+         * un WebTransport): questo host sta dentro la rete del telefono? È lo
+         * **stesso** verdetto, con la stessa cache, di `shouldInterceptRequest`.
+         *
+         * Visibile a ogni pagina che le due WebView aprono, ed è voluto: dice soltanto
+         * «bloccato o irrisolvibile» di un nome che la pagina ha già in mano, cioè
+         * quel che una `fetch` verso quel nome le direbbe comunque.
+         *
+         * Gira sul thread JavaBridge, e il JS della pagina aspetta la risposta
+         * (il costruttore di `WebSocket` è sincrono): un DNS lento lì congelava la
+         * pagina per tutta la sua durata. Il verdetto in cache risponde subito;
+         * altrimenti il DNS va su [guardDns] e si aspetta al massimo
+         * [GUARD_DNS_TIMEOUT_MS] — poi «bloccato», e la risoluzione arriva in
+         * cache da sola. Coda piena: «bloccato» anche lì.
+         */
+        private class NetworkGuard {
+            @JavascriptInterface
+            fun blocked(host: String): Boolean {
+                val h = host.trim().removePrefix("[").removeSuffix("]")
+                if (h.isEmpty()) return true
+                val verdict = cachedVerdict(h) ?: try {
+                    guardDns.submit(Callable { isBlockedHost(h) })
+                        .get(GUARD_DNS_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                } catch (e: Exception) {
+                    // Timeout, coda piena o interruzione: nel dubbio si blocca.
+                    true
+                }
+                if (verdict) warnThrottled("direct connection refused (WebSocket/WebTransport)")
+                return verdict
+            }
+        }
+
+        /**
+         * Le connessioni che `shouldInterceptRequest` non vede: WebSocket,
+         * WebTransport, WebRTC. Chromium le apre fuori dal percorso delle richieste
+         * HTTP, quindi il filtro sugli indirizzi privati non le fermava — una
+         * pagina visitata dall'agente poteva parlare coi servizi della LAN su
+         * `ws://192.168.x.y`.
+         *
+         * Rimedio parziale e dichiarato come tale: uno script iniettato a inizio
+         * documento (`res/raw/browser_network_guard.js`) avvolge i costruttori nei
+         * frame della pagina. Non copre i Worker né un frame in cui lo script non
+         * arriva — v. il commento in testa allo script, che elenca i limiti.
+         * Senza `DOCUMENT_START_SCRIPT` la guardia non c'è, e lo si scrive nel log
+         * invece di fingere.
+         *
+         * Di processo come il verdetto: la installano la sessione di browser e la
+         * WebView della ricerca e del fetch (`AgenticSearchBridge`), che fino al
+         * 02/11/2026 caricava pagine col JavaScript acceso e nessuna guardia per
+         * le connessioni dirette.
+         */
+        internal fun installNetworkGuardOnMain(wv: WebView, context: Context) {
+            if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                Log.w(TAG, "No DOCUMENT_START_SCRIPT: WebSocket/WebRTC to the LAN stay unguarded")
+                return
+            }
+            try {
+                wv.addJavascriptInterface(NetworkGuard(), "JennyBrowserGuard")
+                WebViewCompat.addDocumentStartJavaScript(wv, networkGuardJs(context), setOf("*"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Browser network guard not installed", e)
+            }
+        }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -158,24 +388,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     private val loading = AtomicBoolean(false)
     private val lastError = AtomicReference<String?>(null)
     private val lastFinishAt = AtomicReference(0L)
-    // LRU con tetto (v. MAX_HOST_VERDICTS); letta e scritta da più thread
-    // (IO di Chromium, JavaBridge, Python), sempre sotto il suo monitor.
-    private val hostVerdicts = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) =
-            size > MAX_HOST_VERDICTS
-    }
-
-    // I DNS chiesti dalla guardia lato pagina, fuori dal thread JavaBridge (v.
-    // GUARD_DNS_TIMEOUT_MS). Due thread e una coda corta: una pagina che
-    // chiede mille nomi non crea mille thread, e una coda piena vuol dire
-    // «bloccato».
-    private val guardDns = ThreadPoolExecutor(
-        2, 2, 30L, TimeUnit.SECONDS, ArrayBlockingQueue(32),
-    ) { r -> Thread(r, "jenny-browser-guard-dns").apply { isDaemon = true } }
-        .apply { allowCoreThreadTimeOut(true) }
-
-    private val lastWarnAt = AtomicLong(0L)
-    private val suppressedWarnings = AtomicInteger(0)
 
     // L'ultimo indirizzo rifiutato dalla guardia. Serve a **dirlo**: un blocco
     // muto lascia il modello davanti a un about:blank vuoto, che sembra un sito
@@ -210,13 +422,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
             .bufferedReader().use { it.readText() }
     }
 
-    // La guardia di rete lato pagina: v. installNetworkGuardOnMain. Stesso
-    // motivo di R.raw qui sopra.
-    private val networkGuardJs: String by lazy {
-        appContext.resources.openRawResource(R.raw.browser_network_guard)
-            .bufferedReader().use { it.readText() }
-    }
-
     /** Dominio registrabile, per confronto di perimetro. Euristica, v. sopra. */
     private fun registrable(host: String): String {
         val labels = host.lowercase().trimEnd('.').split('.')
@@ -224,109 +429,6 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         val lastTwo = labels.takeLast(2).joinToString(".")
         val take = if (lastTwo in TWO_LEVEL_SUFFIXES) 3 else 2
         return labels.takeLast(take).joinToString(".")
-    }
-
-    // ------------------------------------------------------------------ guardia
-
-    /**
-     * L'IPv4 che un indirizzo IPv6 porta dentro, nelle forme che arrivano a un
-     * IPv4 vero: IPv4-mapped (`::ffff:a.b.c.d`), NAT64 (`64:ff9b::a.b.c.d`,
-     * che un DNS64 restituisce per un nome solo IPv4) e 6to4 (`2002:AABB:CCDD::`,
-     * l'IPv4 nei due gruppi dopo il prefisso). Per ognuna il verdetto e' quello
-     * dell'IPv4 incapsulato: `64:ff9b::7f00:1` e' il loopback, e `2002:c0a8:101::`
-     * la LAN. `null` se l'indirizzo non ne porta.
-     */
-    private fun embeddedIpv4(b: ByteArray): ByteArray? {
-        fun zero(range: IntRange) = range.all { b[it] == 0.toByte() }
-        return when {
-            zero(0..9) && b[10] == 0xFF.toByte() && b[11] == 0xFF.toByte() -> b.copyOfRange(12, 16)
-            b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
-                b[3] == 0x9B.toByte() && zero(4..11) -> b.copyOfRange(12, 16)
-            b[0] == 0x20.toByte() && b[1] == 0x02.toByte() -> b.copyOfRange(2, 6)
-            else -> null
-        }
-    }
-
-    private fun isBlockedAddress(addr: InetAddress): Boolean {
-        if (addr.isLoopbackAddress || addr.isLinkLocalAddress ||
-            addr.isSiteLocalAddress || addr.isAnyLocalAddress || addr.isMulticastAddress) return true
-        when (addr) {
-            is Inet4Address -> {
-                val b = addr.address
-                val v = ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or
-                    ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
-                for ((net, bits) in BLOCKED_V4) {
-                    val n = InetAddress.getByName(net).address
-                    val nv = ((n[0].toInt() and 0xFF) shl 24) or ((n[1].toInt() and 0xFF) shl 16) or
-                        ((n[2].toInt() and 0xFF) shl 8) or (n[3].toInt() and 0xFF)
-                    val mask = if (bits == 0) 0 else (-1 shl (32 - bits))
-                    if ((v and mask) == (nv and mask)) return true
-                }
-            }
-            is Inet6Address -> {
-                val b = addr.address
-                // fc00::/7 (unique local) — fe80::/10 lo copre già isLinkLocalAddress
-                if ((b[0].toInt() and 0xFE) == 0xFC) return true
-                // ::/96: `::` e le IPv4-compatibili, deprecate. `::127.0.0.1` e'
-                // il loopback in una forma che `isLoopbackAddress` non riconosce
-                // (vale solo per `::1`); come in Python, l'intera /96 non e' mai
-                // un server.
-                if ((0..11).all { b[it] == 0.toByte() }) return true
-                // ::ffff:0:0:0/96, la forma «tradotta» di SIIT (::ffff:0:a.b.c.d):
-                // non e' una IPv4-mapped, e fuori da un traduttore non porta a
-                // nessun server. Come in Python, bloccata intera.
-                if ((0..7).all { b[it] == 0.toByte() } && b[8] == 0xFF.toByte() &&
-                    b[9] == 0xFF.toByte() && b[10] == 0.toByte() && b[11] == 0.toByte()) return true
-                // 64:ff9b:1::/48, il NAT64 di uso locale: il prefisso li' non ha
-                // lunghezza fissa, quindi l'IPv4 dentro non si sa estrarre.
-                if (b[0] == 0x00.toByte() && b[1] == 0x64.toByte() && b[2] == 0xFF.toByte() &&
-                    b[3] == 0x9B.toByte() && b[4] == 0x00.toByte() && b[5] == 0x01.toByte()) return true
-                embeddedIpv4(b)?.let { return isBlockedAddress(InetAddress.getByAddress(it)) }
-            }
-        }
-        return false
-    }
-
-    /** Verdetto per hostname, con cache. Risolve: **mai dal main thread**. */
-    private fun isBlockedHost(host: String): Boolean {
-        cachedVerdict(host)?.let { return it }
-        val verdict = try {
-            InetAddress.getAllByName(host).any { isBlockedAddress(it) }
-        } catch (e: Exception) {
-            // Il nome lo sceglie la pagina: un avviso per ogni nome nuovo
-            // sarebbe un log che la pagina scrive a piacere.
-            warnThrottled("DNS failed (${e.javaClass.simpleName}): host blocked")
-            true   // in dubbio si blocca
-        }
-        synchronized(hostVerdicts) { hostVerdicts[host] = verdict }
-        return verdict
-    }
-
-    private fun cachedVerdict(host: String): Boolean? = synchronized(hostVerdicts) { hostVerdicts[host] }
-
-    /**
-     * Un `Log.w` al massimo ogni [WARN_INTERVAL_MS], con il numero di quelli
-     * taciuti nel frattempo. Per le voci che una pagina visitata può far
-     * ripetere quanto vuole: nomi irrisolvibili, connessioni dirette rifiutate.
-     */
-    private fun warnThrottled(message: String) {
-        val now = System.currentTimeMillis()
-        val last = lastWarnAt.get()
-        if (now - last < WARN_INTERVAL_MS || !lastWarnAt.compareAndSet(last, now)) {
-            suppressedWarnings.incrementAndGet()
-            return
-        }
-        val skipped = suppressedWarnings.getAndSet(0)
-        Log.w(TAG, if (skipped > 0) "$message (+$skipped similar suppressed)" else message)
-    }
-
-    /** Controllo sincrono, senza DNS: è tutto ciò che si può fare sul main thread. */
-    private fun isBlockedLiteral(uri: Uri): Boolean {
-        val host = uri.host ?: return true
-        val scheme = (uri.scheme ?: "").lowercase()
-        if (scheme != "http" && scheme != "https") return true
-        if (!host.any { it.isDigit() || it == ':' }) return false   // non è un IP letterale
-        return try { isBlockedAddress(InetAddress.getByName(host)) } catch (e: Exception) { false }
     }
 
     // ------------------------------------------------------------------ ciclo di vita
@@ -353,68 +455,8 @@ class JennyBrowserBridge(context: Context, slot: Int) {
                 Log.e(TAG, "Browser profile not attached", e)
             }
         }
-        installNetworkGuardOnMain(wv)
+        installNetworkGuardOnMain(wv, appContext)
         webView = wv
-    }
-
-    /**
-     * La domanda che la guardia lato pagina fa prima di aprire un WebSocket (o
-     * un WebTransport): questo host sta dentro la rete del telefono? È lo
-     * **stesso** verdetto, con la stessa cache, di `shouldInterceptRequest`.
-     *
-     * Visibile a ogni pagina che la sessione apre, ed è voluto: dice soltanto
-     * «bloccato o irrisolvibile» di un nome che la pagina ha già in mano, cioè
-     * quel che una `fetch` verso quel nome le direbbe comunque.
-     *
-     * Gira sul thread JavaBridge, e il JS della pagina aspetta la risposta
-     * (il costruttore di `WebSocket` è sincrono): un DNS lento lì congelava la
-     * pagina per tutta la sua durata. Il verdetto in cache risponde subito;
-     * altrimenti il DNS va su [guardDns] e si aspetta al massimo
-     * [GUARD_DNS_TIMEOUT_MS] — poi «bloccato», e la risoluzione arriva in
-     * cache da sola. Coda piena: «bloccato» anche lì.
-     */
-    private inner class NetworkGuard {
-        @JavascriptInterface
-        fun blocked(host: String): Boolean {
-            val h = host.trim().removePrefix("[").removeSuffix("]")
-            if (h.isEmpty()) return true
-            val verdict = cachedVerdict(h) ?: try {
-                guardDns.submit(Callable { isBlockedHost(h) })
-                    .get(GUARD_DNS_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            } catch (e: Exception) {
-                // Timeout, coda piena o interruzione: nel dubbio si blocca.
-                true
-            }
-            if (verdict) warnThrottled("direct connection refused (WebSocket/WebTransport)")
-            return verdict
-        }
-    }
-
-    /**
-     * Le connessioni che `shouldInterceptRequest` non vede: WebSocket,
-     * WebTransport, WebRTC. Chromium le apre fuori dal percorso delle richieste
-     * HTTP, quindi il filtro sugli indirizzi privati non le fermava — una
-     * pagina visitata dall'agente poteva parlare coi servizi della LAN su
-     * `ws://192.168.x.y`.
-     *
-     * Rimedio parziale e dichiarato come tale: uno script iniettato a inizio
-     * documento (`res/raw/browser_network_guard.js`) avvolge i costruttori nei
-     * frame della pagina. Non copre i Worker né un frame in cui lo script non
-     * arriva — v. il commento in testa allo script, che elenca i limiti.
-     * Senza `DOCUMENT_START_SCRIPT` la guardia non c'è, e lo si scrive nel log
-     * invece di fingere.
-     */
-    private fun installNetworkGuardOnMain(wv: WebView) {
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            Log.w(TAG, "No DOCUMENT_START_SCRIPT: WebSocket/WebRTC to the LAN stay unguarded")
-            return
-        }
-        try {
-            wv.addJavascriptInterface(NetworkGuard(), "JennyBrowserGuard")
-            WebViewCompat.addDocumentStartJavaScript(wv, networkGuardJs, setOf("*"))
-        } catch (e: Exception) {
-            Log.e(TAG, "Browser network guard not installed", e)
-        }
     }
 
     /**
@@ -442,25 +484,12 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     }
 
     /**
-     * Il verdetto sulle richieste HTTP, in un posto solo: la pagina
-     * ([sessionClient]) e i suoi service worker ([guardServiceWorkersOnMain]).
-     * `null` vuol dire «lascia passare». Gira su un thread di lavoro: qui il
-     * DNS si può risolvere.
+     * Il verdetto della sessione: quello di processo ([blockedResponse]), più
+     * l'indirizzo rifiutato annotato per dirlo al modello. Lo chiedono la
+     * pagina ([sessionClient]) e i suoi service worker ([guardServiceWorkersOnMain]).
      */
-    private fun blockedResponseFor(uri: Uri, isMainFrame: Boolean): WebResourceResponse? {
-        val scheme = (uri.scheme ?: "").lowercase()
-        if (scheme != "http" && scheme != "https") {
-            return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-        }
-        val host = uri.host ?: return null
-        if (isBlockedHost(host)) {
-            // Una pagina può chiedere mille sotto-risorse private in un ciclo.
-            warnThrottled("request to a private or unresolvable host blocked")
-            if (isMainFrame) lastBlocked.set(uri.toString())
-            return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-        }
-        return null
-    }
+    private fun blockedResponseFor(uri: Uri, isMainFrame: Boolean): WebResourceResponse? =
+        blockedResponse(uri) { if (isMainFrame) lastBlocked.set(uri.toString()) }
 
     /**
      * Butta il profilo rimasto su disco da un processo precedente, **prima**
@@ -698,12 +727,15 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         }
         if (!done.await(timeoutSeconds, TimeUnit.SECONDS)) {
             if (gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
-                return """{"error":"evaluateJavascript timed out after ${timeoutSeconds}s: the page was not touched"}"""
+                return errorJson("evaluateJavascript timed out after ${timeoutSeconds}s: the page was not touched")
             }
             // Il cancello l'ha gia' preso il main: lo script e' partito, e un
             // `act` puo' aver cliccato. Dirlo, invece di un «timeout» che
             // suona come «non e' successo niente».
-            return """{"error":"evaluateJavascript timed out after ${timeoutSeconds}s: the script started without answering, the page may have changed"}"""
+            return errorJson(
+                "evaluateJavascript timed out after ${timeoutSeconds}s: " +
+                    "the script started without answering, the page may have changed",
+            )
         }
         return out.get()
     }
@@ -721,7 +753,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     /** Apre [url] e aspetta che la pagina si sia posata. */
     fun open(url: String, timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS): String {
         val uri = Uri.parse(url)
-        if (isBlockedLiteral(uri)) return """{"error":"address not allowed"}"""
+        if (isBlockedLiteral(uri)) return errorJson("address not allowed")
         lastBlocked.set(null)
         // Un browser_open e' un atto esplicito: il perimetro si rifa' **dopo**,
         // sull'indirizzo dove la pagina si e' posata davvero. Fino ad allora il
@@ -776,17 +808,17 @@ class JennyBrowserBridge(context: Context, slot: Int) {
         // `loadUrl` che solleva quando questo thread sta gia' aspettando.
         if (!started && gate.compareAndSet(GATE_OPEN, GATE_ABANDONED)) {
             openInFlight.set(false)
-            return """{"error":"the browser did not open: the page never started loading"}"""
+            return errorJson(NOT_STARTED)
         }
         val settled = awaitSettled(timeoutSeconds)
         openInFlight.set(false)
         if (gate.get() == GATE_FAILED) {
-            return """{"error":"the browser did not open: the page never started loading"}"""
+            return errorJson(NOT_STARTED)
         }
         lastBlocked.getAndSet(null)?.let {
-            return """{"error":${quote(describeBlock(it))}}"""
+            return errorJson(describeBlock(it))
         }
-        lastError.get()?.let { return """{"error":${quote(it)}}""" }
+        lastError.get()?.let { return errorJson(it) }
         val (u, t) = currentUrlAndTitle()
         // Il recinto si pianta dove si e' finiti, non dove si era chiesto, e
         // solo qui: la pagina nuova si e' posata. Senza un host (lettura
@@ -830,4 +862,7 @@ class JennyBrowserBridge(context: Context, slot: Int) {
     }
 
     private fun quote(s: String): String = org.json.JSONObject.quote(s)
+
+    /** `{"error":"…"}`, la risposta che Python legge come un fallimento. */
+    private fun errorJson(message: String): String = """{"error":${quote(message)}}"""
 }

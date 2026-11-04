@@ -1,8 +1,10 @@
 """Tests for Dream memory consolidation — build_dream_prompt and cursor management."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.memory import MemoryStore
 from jenny.agent.tools.file_state import FileStates
@@ -13,6 +15,38 @@ from jenny.security.workspace_access import (
     reset_workspace_scope,
 )
 from jenny.utils.prompt_templates import render_template
+
+
+def _dream_provider(chat_with_retry=None) -> MagicMock:
+    """Il provider di un turno di Dream: strumenti sì, 4096 token di risposta.
+
+    Di norma risponde ``done`` e si ferma. Una risposta vera, non un
+    ``MagicMock``: di un mock anche ``has_tool_calls`` è un mock, cioè vero, e il
+    runner girava tutte le sue duecento iterazioni (quasi due secondi a test) su
+    un turno che doveva durarne una.
+    """
+    provider = make_provider(bare=True)
+    provider.supports_tools = True
+    provider.generation = MagicMock(max_tokens=4096)
+    provider.chat_with_retry = chat_with_retry or AsyncMock(
+        return_value=LLMResponse(content="done", finish_reason="stop", tool_calls=[], usage={})
+    )
+    return provider
+
+
+def _dream_loop(tmp_path, **kwargs):
+    """Un ``AgentLoop`` con sessioni, subagent e consolidatore finti, per ``process_direct``."""
+    loop = make_loop(
+        tmp_path, model=None, context_window_tokens=8000, provider=_dream_provider(),
+        patches=(
+            "jenny.agent.loop.SessionManager",
+            "jenny.agent.loop.SubagentManager",
+            "jenny.agent.loop.Consolidator",
+        ),
+        **kwargs,
+    )
+    loop.consolidator.maybe_consolidate_by_tokens = AsyncMock()
+    return loop
 
 
 @pytest.fixture
@@ -1049,40 +1083,10 @@ class TestEphemeralDirect:
     @pytest.fixture
     def _make_loop(self, tmp_path):
         """Factory fixture that builds a minimal AgentLoop with mocked deps."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from jenny.agent.loop import AgentLoop
-        from jenny.agent.memory import MemoryStore
-        from jenny.bus.queue import MessageBus
-
         store = MemoryStore(tmp_path)
         store.soul_file.write_text("# Soul", encoding="utf-8")
         store.memory_file.write_text("# Memory", encoding="utf-8")
-
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
-        provider.supports_tools = True
-        provider.generation = MagicMock(max_tokens=4096)
-        provider.chat_with_retry = AsyncMock(
-            return_value=LLMResponse(content="done", tool_calls=[], finish_reason="stop", usage={})
-        )
-
-        with (
-            patch("jenny.agent.loop.SessionManager"),
-            patch("jenny.agent.loop.SubagentManager") as mock_sub,
-            patch("jenny.agent.loop.Consolidator") as mock_consolidator_cls,
-        ):
-            mock_sub.return_value.cancel_by_session = AsyncMock(return_value=0)
-            mock_consolidator_cls.return_value.maybe_consolidate_by_tokens = AsyncMock()
-            loop = AgentLoop(
-                bus=bus,
-                provider=provider,
-                workspace=tmp_path,
-                context_window_tokens=8000,
-            )
-
-        return loop, store
+        return _dream_loop(tmp_path), store
 
     async def test_ephemeral_skips_raw_archive(self, tmp_path, _make_loop):
         """When ephemeral=True, raw_archive must not be called."""
@@ -1176,11 +1180,6 @@ class TestEphemeralDirect:
 
     async def test_dream_turn_can_skip_unbatched_recent_history(self, tmp_path):
         """Dream must only see the batch selected by build_dream_prompt."""
-        from unittest.mock import MagicMock
-
-        from jenny.agent.loop import AgentLoop
-        from jenny.bus.queue import MessageBus
-
         store = MemoryStore(tmp_path)
         for i in range(60):
             store.append_history(f"entry-{i + 1:02d}")
@@ -1191,21 +1190,14 @@ class TestEphemeralDirect:
         assert cursor == 20
 
         captured: dict[str, list[dict]] = {}
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
-        provider.supports_tools = True
-        provider.generation = MagicMock(max_tokens=4096)
 
         async def chat_with_retry(**kwargs):
             captured["messages"] = kwargs["messages"]
             return LLMResponse(content="done", finish_reason="stop")
 
-        provider.chat_with_retry = chat_with_retry
-        loop = AgentLoop(
-            bus=MessageBus(),
-            provider=provider,
-            workspace=tmp_path,
-            context_window_tokens=8000,
+        loop = make_loop(
+            tmp_path, model=None, context_window_tokens=8000,
+            provider=_dream_provider(chat_with_retry),
         )
 
         await loop.process_direct(
@@ -1240,24 +1232,7 @@ class TestEphemeralHooks:
     @pytest.fixture
     def _make_loop_with_spy(self, tmp_path):
         """Build an AgentLoop with a spy hook to verify hook firing behavior."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
         from jenny.agent.hook import AgentHook
-        from jenny.agent.loop import AgentLoop
-        from jenny.bus.queue import MessageBus
-
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
-        provider.supports_tools = True
-        provider.generation = MagicMock(max_tokens=4096)
-        # Una risposta vera, non un ``MagicMock``: di un mock anche
-        # ``has_tool_calls`` è un mock, cioè vero, e il runner girava tutte le
-        # sue duecento iterazioni (quasi due secondi a test) su un turno che
-        # doveva durarne una.
-        provider.chat_with_retry = AsyncMock(
-            return_value=LLMResponse(content="done", finish_reason="stop", tool_calls=[], usage={})
-        )
 
         spy = MagicMock(spec=AgentHook)
         spy.wants_streaming.return_value = False
@@ -1270,22 +1245,7 @@ class TestEphemeralHooks:
         spy.before_iteration = AsyncMock()
         spy.after_iteration = AsyncMock()
 
-        with (
-            patch("jenny.agent.loop.SessionManager"),
-            patch("jenny.agent.loop.SubagentManager") as mock_sub,
-            patch("jenny.agent.loop.Consolidator") as mock_consolidator_cls,
-        ):
-            mock_sub.return_value.cancel_by_session = AsyncMock(return_value=0)
-            mock_consolidator_cls.return_value.maybe_consolidate_by_tokens = AsyncMock()
-            loop = AgentLoop(
-                bus=bus,
-                provider=provider,
-                workspace=tmp_path,
-                context_window_tokens=8000,
-                hooks=[spy],
-            )
-
-        return loop, spy
+        return _dream_loop(tmp_path, hooks=[spy]), spy
 
     async def test_extra_hooks_skipped_when_ephemeral(self, tmp_path, _make_loop_with_spy):
         """When ephemeral=True, extra hooks must not fire."""

@@ -14,12 +14,10 @@ buco in mezzo: qui si dice solo di no.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from support.home_dom import requires_jsdom, run_home
-from support.js_harness import function, requires_node, run_js
+from support.js_harness import ASSETS, function, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 READER_JS = ASSETS / "home-reader.js"
 CONTENT_LINK_JS = ASSETS / "shared" / "content-link.js"
 

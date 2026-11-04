@@ -16,25 +16,40 @@ lato da sola. Qui il contratto che tiene in piedi quella misura.
 
 from __future__ import annotations
 
+import itertools
 import re
 from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME = ASSETS / "home-style.css"
 SHOP = ASSETS / "mobile-style.css"
 
 _TABLES = ((HOME, ".home-reader-body"), (HOME, ".home-block"), (SHOP, ".chat-content"))
 
 
+def _expand(selector: str) -> set[str]:
+    """`:is(.a, .b) :is(th, td)` → le quattro forme semplici: dal 02/11/2026 la
+    scatola della tabella e' una regola per le tre superfici (`mobile-style.css`,
+    caricato da tutti e due i gusci)."""
+    parts = []
+    for part in re.findall(r":is\([^)]*\)|\S+", " ".join(selector.split())):
+        inner = re.fullmatch(r":is\((.*)\)", part)
+        parts.append([x.strip() for x in inner.group(1).split(",")] if inner else [part])
+    return {" ".join(c) for c in itertools.product(*parts)}
+
+
 def _body(path: Path, selector: str) -> str:
+    """Le dichiarazioni per *selector* nel foglio *path*, piu' quelle delle
+    regole comuni di `mobile-style.css` (che la casa carica prima del suo)."""
     out = []
-    for selectors, body, context in css_levels.rules(path.read_text(encoding="utf-8")):
-        if context:
-            continue
-        if selector in {" ".join(s.split()) for s in selectors.split(",")}:
-            out.append(body)
+    for sheet in dict.fromkeys((SHOP, path)):
+        for selectors, body, context in css_levels.rules(sheet.read_text(encoding="utf-8")):
+            if context:
+                continue
+            if any(selector in _expand(s) for s in re.split(r",(?![^(]*\))", selectors)):
+                out.append(body)
     return "\n".join(out)
 
 

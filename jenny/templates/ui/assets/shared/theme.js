@@ -6,6 +6,7 @@
  */
 
 import { AppState } from './state.js';
+import { writeStorage } from './utils.js';
 
 // `desc`/`reply` are the mini-conversation preview copy shown on each theme
 // card in the settings picker — the card *is* the preview, so the copy leans
@@ -118,7 +119,7 @@ export function themeTokens() {
    questi si legge col nome di adesso (e lo riscrive `setTheme`). */
 export const MIGRATION = { dark: 'chanel', light: 'stone', match: 'chanel', fumetto: 'comic', pietra: 'stone' };
 
-export function getTheme(id) {
+function getTheme(id) {
   return THEMES.find(t => t.id === id) || null;
 }
 
@@ -308,7 +309,7 @@ function syncFloatingBubble() {
 }
 
 /** Toggle the dark/light syntax stylesheets (highlight.js + CodeMirror). */
-export function applySyntaxTheme(scheme) {
+function applySyntaxTheme(scheme) {
   for (const [id, s] of [
     ['hljs-theme-dark', 'dark'], ['hljs-theme-light', 'light'],
     ['cm-theme-dark', 'dark'], ['cm-theme-light', 'light'],
@@ -323,11 +324,7 @@ export function setTheme(id) {
   document.documentElement.setAttribute('data-theme', theme.id);
   // Una preferenza: se lo storage la rifiuta, il tema si applica lo stesso
   // e al prossimo avvio si riparte dal default.
-  try {
-    localStorage.setItem('tc-theme', theme.id);
-  } catch (_) {
-    /* storage non disponibile */
-  }
+  writeStorage('tc-theme', theme.id);
   AppState.theme = theme.id;
   applySyntaxTheme(theme.scheme);
   syncNativeBars(theme.scheme);

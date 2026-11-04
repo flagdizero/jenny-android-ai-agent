@@ -11,9 +11,10 @@ vecchio il link andava da x 276 a 374 e il riquadro cominciava a 321; col nuovo,
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-_CSS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "home-style.css"
+from support.js_harness import ASSETS
+
+_CSS = ASSETS / "home-style.css"
 
 
 def _rule(selector: str) -> str:

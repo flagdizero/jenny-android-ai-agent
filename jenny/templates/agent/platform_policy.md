@@ -10,12 +10,6 @@
 - Remote machines are reachable only through the app-level SSH tools (alias-based — see the ssh skill). There is no `ssh` binary to fall back to.
 {% endif %}
 - **The workspace is a hard boundary.** Every tool{% if has('python_exec') %} and every `python_exec` path operation{% endif %} is refused outside it — reads, writes and *enumeration* alike (`os.listdir`, `os.scandir`, `glob`). The one exemption is the Chaquopy runtime extract root, which the sandbox detects by itself; you never need to name it.
-{% if has('web_search') %}
-- Use `web_search` as the primary tool for web lookups; it uses the native WebView and avoids bot detection.
-{% endif %}
-{% if has('python_exec') %}
-- Only fall back to the `http_get`/`http_post` builtins inside `python_exec` when the web tools are unavailable. Raw HTTP clients (`httpx`, `urllib`) are not importable there.
-{% endif %}
 - The app is a mobile-first WebView interface. Keep outputs concise.
 {% if has('python_exec') %}
 - Environment variables are limited: `PATH`, `LANG`, `PYTHONPATH`.

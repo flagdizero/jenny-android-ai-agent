@@ -276,12 +276,13 @@ async def _helper_killed_mid_run(
 ) -> tuple[Path, str, str]:
     """Fa lavorare un aiutante, «uccide il processo» e ritorna il disco di quel momento.
 
-    Il kill e una copia del workspace mentre l'aiutante e fermo a meta: e cio che
-    trova il processo successivo. L'aiutante del primo manager poi si chiude, ma
-    su un disco che il secondo non vede.
+    Il kill e una copia del disco (workspace e ``db/`` accanto) mentre
+    l'aiutante e fermo a meta: e cio che trova il processo successivo.
+    L'aiutante del primo manager poi si chiude, ma su un disco che il secondo
+    non vede.
     """
-    live = tmp_path / "live"
-    live.mkdir()
+    live = tmp_path / "live" / "workspace"
+    live.mkdir(parents=True)
     sm = _manager(live)
     clock = _Clock()
     sm._clock = clock
@@ -305,21 +306,21 @@ async def _helper_killed_mid_run(
     await asyncio.wait_for(paused.wait(), timeout=5)
     # Il segnaposto e scritto in un thread, in parallelo al run.
     for _ in range(200):
-        if list((live / "subagents" / "running").glob("*.json")):
+        if _running(live):
             break
         await asyncio.sleep(0.01)
-    dead = tmp_path / "after-kill"
-    shutil.copytree(live, dead)
+    dead = tmp_path / "after-kill" / "workspace"
+    shutil.copytree(live.parent, dead.parent)
     await sm.drain(timeout_s=0.01)
     return dead, task_id, lineage
 
 
 async def test_a_helper_killed_mid_run_is_resumable_after_the_restart(tmp_path: Path) -> None:
     disk, task_id, lineage = await _helper_killed_mid_run(tmp_path, rounds_before_kill=2)
-    assert list((disk / "subagents" / "running").glob("*.json"))
+    assert _running(disk)
 
     sm = _manager(disk)
-    assert not list((disk / "subagents" / "running").glob("*.json"))
+    assert not _running(disk)
     assert sm.interrupted_helpers(SESSION) == [{
         "task_id": task_id, "lineage_id": lineage, "label": "maple care",
         "agent_type": "writer", "plan_id": "plan-7", "plan_step": "step-2",
@@ -398,7 +399,7 @@ async def test_a_marker_whose_record_was_written_is_just_cleared(tmp_path: Path)
 
     sm2 = _manager(tmp_path)
     assert [r.state for r in sm2.list_records(SESSION)] == ["done"]
-    assert not list((tmp_path / "subagents" / "running").glob("*.json"))
+    assert not _running(tmp_path)
 
 
 async def test_an_orderly_shutdown_keeps_the_checkpoint(tmp_path: Path) -> None:
@@ -425,7 +426,7 @@ async def test_an_orderly_shutdown_keeps_the_checkpoint(tmp_path: Path) -> None:
     assert entry is not None and entry[0] == KIND_INTERRUPTED
     [record] = sm.list_records(SESSION)
     assert record.cancel_reason == CANCEL_REASON_SHUTDOWN and record.resumable
-    assert not list((tmp_path / "subagents" / "running").glob("*.json"))
+    assert not _running(tmp_path)
     assert [h["lineage_id"] for h in _manager(tmp_path).interrupted_helpers(SESSION)] == [
         lineage
     ]
@@ -552,3 +553,11 @@ def test_the_interrupted_kind_survives_a_restart(tmp_path: Path) -> None:
     fresh = SubagentHistoryStore(SessionManager(tmp_path))
     assert (fresh.entry_of("a") or ("",))[0] == KIND_INTERRUPTED
     assert (fresh.entry_of("b") or ("",))[0] == KIND_BUDGET
+
+
+def _running(workspace: Path) -> list[str]:
+    """I segnaposti dei tentativi in corso salvati per *workspace*."""
+    from jenny.agent.subagent_records import subagents_database
+
+    return [r["task_id"] for r in
+            subagents_database(workspace).read("SELECT task_id FROM subagent_running")]

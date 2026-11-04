@@ -148,7 +148,7 @@ export const OUT_SHIFT_RATIO = DOCK_RATIO - OUT_RATIO;
 export const ART_HEIGHT_RATIO = 0.73;
 
 /** Porta i rapporti al CSS, che di suo non sa moltiplicare costanti JS. */
-export function applyDockAnchors() {
+function applyDockAnchors() {
   const style = document.documentElement.style;
   style.setProperty('--jenny-dock', String(DOCK_RATIO));
   style.setProperty('--jenny-out', String(OUT_RATIO));

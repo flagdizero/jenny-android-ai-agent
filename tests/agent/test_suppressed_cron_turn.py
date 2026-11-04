@@ -3,7 +3,7 @@
 Prima di questa feature il silenzio da un lavoro schedulato era **impossibile**:
 un turno che finiva senza contenuto veniva sostituito con
 ``EMPTY_FINAL_RESPONSE_MESSAGE`` (``jenny/agent/runner.py``, ``_finish_on_blank``)
-e quel placeholder veniva consegnato in chat. ``suppress_response`` disattiva
+e quel placeholder veniva consegnato in chat. ``silent`` disattiva
 quella sostituzione (``jenny/agent/turn_states.py``, ``_state_save``) e azzera
 l'outbound (``_state_respond``).
 
@@ -21,15 +21,15 @@ essere contrabbandato dentro il dict metadata del chiamante.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop, TurnContext, TurnState
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.turn_types import TurnDisposition
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import CRON_MONITOR_META, CRON_TRIGGER_META
 from jenny.providers.base import LLMResponse
 from jenny.runtime.user_text import say
@@ -43,15 +43,9 @@ MONITOR_SESSION_KEY = "cron:job-m"
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok"))
-    return AgentLoop(
-        bus=MessageBus(),
-        provider=provider,
-        workspace=tmp_path,
-        model="test-model",
-    )
+    return make_loop(tmp_path, provider=provider, context_window_tokens=None)
 
 
 def _cron_metadata(*, monitor: bool) -> dict:
@@ -84,7 +78,6 @@ def _ctx(
     )
     ctx.session = loop.sessions.get_or_create(session_key)
     ctx.silent = suppress
-    ctx.suppress_response = suppress
     ctx.final_content = final_content
     ctx.turn_latency_ms = 0
     return ctx
@@ -138,7 +131,6 @@ class TestSuppressionComesFromTheTurnVisibility:
         ctx = await self._captured_ctx(loop, monkeypatch, _cron_metadata(monitor=True))
 
         assert ctx.silent is True
-        assert ctx.suppress_response is True
 
     async def test_a_reminder_cron_message_starts_a_visible_turn(
         self, loop: AgentLoop, monkeypatch: pytest.MonkeyPatch
@@ -152,7 +144,6 @@ class TestSuppressionComesFromTheTurnVisibility:
         )
 
         assert ctx.silent is False
-        assert ctx.suppress_response is False
 
     async def test_a_user_message_starts_a_visible_turn(
         self, loop: AgentLoop, monkeypatch: pytest.MonkeyPatch
@@ -162,7 +153,6 @@ class TestSuppressionComesFromTheTurnVisibility:
         )
 
         assert ctx.silent is False
-        assert ctx.suppress_response is False
 
     async def test_internal_work_on_a_user_channel_is_silent_without_a_flag(
         self, loop: AgentLoop, monkeypatch: pytest.MonkeyPatch

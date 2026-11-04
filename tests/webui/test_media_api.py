@@ -231,7 +231,7 @@ def test_sign_or_stage_returns_none_and_logs_on_copy_failure(
     def boom(*args, **kwargs):
         raise OSError("disco pieno")
 
-    monkeypatch.setattr("jenny.webui.media_api.shutil.copyfile", boom)
+    monkeypatch.setattr("jenny.utils.path.shutil.copyfile", boom)
 
     result = sign_or_stage_media_path(
         outside, secret=_SECRET, media_dir=_media_dir(media_root), logger=logger

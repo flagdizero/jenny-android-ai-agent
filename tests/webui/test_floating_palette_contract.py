@@ -22,16 +22,13 @@ tenere allineati. Qui si prova il giro intero, che nessun compilatore vede:
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS, requires_node, run_js
+from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 THEME_JS = ASSETS / "shared" / "theme.js"
 SPA_CSS = ASSETS / "mobile-style.css"
-ANDROID = ROOT / "android/app/src/main/java/com/flagdizero/jenny"
+ANDROID = ANDROID_SRC
 
 
 # I sei token che vestono la finestra, nell'ordine in cui viaggiano sul ponte.
@@ -62,9 +59,10 @@ globalThis.getComputedStyle = () => ({
 def _run_js(script: str) -> str:
     source = (
         _SHELL
-        + THEME_JS.read_text(encoding="utf-8").replace(
-            "import { AppState } from './state.js';", ""
-        )
+        + THEME_JS.read_text(encoding="utf-8")
+        .replace("import { AppState } from './state.js';", "")
+        .replace("import { writeStorage } from './utils.js';",
+                 "const writeStorage = (k, v) => { try { localStorage.setItem(k, v); } catch {} };")
         + "\nimport assert from 'node:assert/strict';\n"
         + script
     )

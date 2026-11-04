@@ -40,7 +40,7 @@ export const SIDE_MARGIN = (1 - 0.45) / 2;
 export const FIGURE_FROM_EDGE = 1 - OUT_RATIO - SIDE_MARGIN;
 
 /** L'aria fra le righe e lei, in px. */
-export const BREATH = 6;
+const BREATH = 6;
 
 /** La sagoma da lasciarle nell'ultimo blocco, o `null` se non serve.
  *
@@ -64,7 +64,7 @@ export function shapeOf({ size, padRight, distance, blockHeight }) {
 }
 
 /** I due float. Il nome della classe sul blocco e' anche il segno per toglierli. */
-export const SHAPED = 'has-jenny-shape';
+const SHAPED = 'has-jenny-shape';
 /** L'ultima cosa del filo subito sopra la fascia: la sua coda scende nella
  *  fascia, e una scatola si scansa da lei (home-style.css). */
 export const AT_BAND = 'home-at-band';

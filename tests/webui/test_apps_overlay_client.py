@@ -18,10 +18,9 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from support.js_harness import requires_node, run_module
+from support.js_harness import ASSETS, member, requires_node, run_module
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+API_JS = (ASSETS / "shared" / "api-client.js").read_text(encoding="utf-8")
 
 pytestmark = requires_node
 
@@ -33,7 +32,12 @@ _NEIGHBORS = {
         "  async appToken(slug) { return 'app-' + slug; },\n"
         # Il telefono, non un altro dispositivo: v. test_home_remote_phone_only_client.
         "  async isRemote() { return false; },\n"
-        "};\n"
+        # Le due rotte della vista esterna, vere, sopra la `fetch` del banco.
+        "  _fetch(url) { return fetch(url); },\n"
+        + ",\n".join(
+            member(API_JS, n).strip() for n in ("getAppView", "closeAppView")
+        )
+        + "\n};\n"
     ),
     "utils.js": """
 export function escapeHtml(s) {
@@ -125,7 +129,7 @@ def test_a_gateway_app_opens_in_a_veil_with_its_frame() -> None:
         assert.equal(veil.className, 'app-frame-overlay');
         assert.ok(veil.classList.contains('visible'));
         assert.ok(veil.innerHTML.includes('Orto &lt;b&gt;'), 'il nome passa da escapeHtml');
-        assert.ok(veil.innerHTML.includes('apps.close'));
+        assert.ok(veil.innerHTML.includes('common.close'));
         const frame = veil.children[0];
         assert.equal(frame.tag, 'iframe');
         assert.equal(frame.attrs.sandbox, 'allow-scripts');

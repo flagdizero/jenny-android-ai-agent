@@ -34,17 +34,16 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.bus.events import OutboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, OutboundMessage
 from jenny.providers.opencode import conversation_scope
 from jenny.session.keys import (
-    WEBUI_CHANNEL,
     project_session_key,
     webui_chat_id,
     webui_transcript_key,
 )
 from jenny.utils.prompt_templates import render_template
 from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
-from jenny.webui.transcript_store import read_transcript_lines
+from jenny.webui.transcript_store import has_webui_transcript
 
 # Quanto aspettare il modello prima della frase fissa. Il saluto e' la prima
 # cosa che si legge nel quaderno: oltre questo tempo una frase fissa subito
@@ -135,7 +134,7 @@ def _is_empty(session_manager: Any, session_key: str) -> bool:
     session = session_manager.get_or_create(session_key)
     if session.messages:
         return False
-    return not read_transcript_lines(webui_transcript_key(session_key))
+    return not has_webui_transcript(webui_transcript_key(session_key))
 
 
 async def greet_project(
@@ -186,13 +185,13 @@ async def greet_project(
     chat_id = webui_chat_id(session_key)
     turn_id = f"greeting:{uuid.uuid4().hex}"
     await bus.publish_outbound(OutboundMessage(
-        channel=WEBUI_CHANNEL,
+        channel=WEBSOCKET_CHANNEL,
         chat_id=chat_id,
         content=text,
         metadata={WEBUI_TURN_METADATA_KEY: turn_id},
     ))
     await bus.publish_outbound(OutboundMessage(
-        channel=WEBUI_CHANNEL,
+        channel=WEBSOCKET_CHANNEL,
         chat_id=chat_id,
         content="",
         metadata={WEBUI_TURN_METADATA_KEY: turn_id, "_turn_end": True},

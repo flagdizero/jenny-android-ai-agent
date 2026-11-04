@@ -120,7 +120,13 @@ class Script:
         if found and self.close_steps:
             n = int(found.group(1))
             page = self.workspace / "wikis" / "piante" / "wiki" / f"passo{n}.md"
+            # Come la scriverebbe un tool del turno: dai recinti, che la annotano
+            # nel registro del piano legato al turno del passo.
+            from jenny.security.subagent_policy import check_write, settle_writes
+
+            check_write(page)
             page.write_text(f"passo {n}\n", encoding="utf-8")
+            settle_writes("write_file")
             return _call("plan_step_done", note=f"passo {n} scritto")
         return LLMResponse(content="Va bene.")
 
@@ -187,23 +193,47 @@ async def _planning(loop: AgentLoop, content: str, **metadata: Any) -> Any:
 # ── quali tool si vedono ─────────────────────────────────────────────────────
 
 
-async def test_plan_tools_are_hidden_in_an_ordinary_turn(workspace: Path) -> None:
+async def test_plan_tools_stay_listed_and_refuse_outside_their_turn(workspace: Path) -> None:
+    """Dove si pianifica i tool del piano sono nella lista a ogni turno: cambiarla
+    a meta' chat faceva ripagare la conversazione al provider (dal 03/11/2026).
+    Fuori dal loro turno rispondono col motivo, senza girare."""
+    from jenny.agent.loop_plan import NO_STEP_REFUSAL, NOT_PLANNING_REFUSAL, has_plans
+
     script = Script(workspace)
-    loop, _ = _loop(workspace, script)
+    loop, driver = _loop(workspace, script)
     await loop._process_message(_user("ciao"), session_key=KEY)
-    assert not (script.offered[-1] & PLAN_TOOLS)
+    assert PLAN_TOOLS <= script.offered[-1]
+    verdict = loop._plan_tool_filter(_user("ciao"), KEY)
+    assert verdict("plan_propose") == NOT_PLANNING_REFUSAL
+    assert all(verdict(name) == NO_STEP_REFUSAL for name in PLAN_STEP_TOOLS)
     await loop._process_message(
         InboundMessage(channel="websocket", sender_id="u", chat_id="default", content="ciao"),
     )
-    assert not (script.offered[-1] & PLAN_TOOLS)
+    personal = has_plans("unified:default", driver)
+    assert bool(script.offered[-1] & PLAN_TOOLS) is personal
 
 
-async def test_the_planning_turn_offers_only_plan_propose(workspace: Path) -> None:
+async def test_a_refused_plan_tool_answers_without_running(workspace: Path) -> None:
+    from jenny.agent.loop_plan import NO_STEP_REFUSAL
+    from jenny.session.manager import Session
+
+    loop, _ = _loop(workspace, Script(workspace))
+    view = loop._turn_tool_view(_user("ciao"), Session(key=KEY), KEY, silent=False)
+    assert view is not None and "plan_step_done" in view.tool_names
+    tool, _params, error = view.prepare_call("plan_step_done", {"note": "x"})
+    assert tool is None and error == NO_STEP_REFUSAL
+    assert NO_STEP_REFUSAL in await view.execute("plan_step_done", {"note": "x"})
+
+
+async def test_the_planning_turn_keeps_the_tool_list_of_the_chat(workspace: Path) -> None:
     script = Script(workspace)
     loop, driver = _loop(workspace, script)
+    await loop._process_message(_user("ciao"), session_key=KEY)
+    ordinary = script.offered[-1]
+    script.offered.clear()
+    script.prompts.clear()
     await _planning(loop, "Rifai la wiki")
-    assert "plan_propose" in script.offered[0]
-    assert not (script.offered[0] & PLAN_STEP_TOOLS)
+    assert script.offered[0] == ordinary
     assert "[Planning turn]" in script.prompts[0]
     plan = driver.store.open_plan_for("piante")
     assert plan is not None and plan.status == "proposed"
@@ -232,7 +262,6 @@ async def test_a_step_turn_offers_the_step_tools_and_persists_no_user_bubble(
     assert step_msg.metadata[INJECTED_EVENT_META] == PLAN_STEP_EVENT
     outcome = await loop._process_message(step_msg)
     assert PLAN_STEP_TOOLS <= script.offered[-1]
-    assert "plan_propose" not in script.offered[-1]
     assert "Step 1: Scrivo acero" in script.prompts[-1]
     # La lista del piano è anche nel contesto del turno.
     assert 'Plan "Rifare la wiki"' in script.prompts[-1]
@@ -287,7 +316,6 @@ async def test_propose_approve_and_three_steps_to_done(workspace: Path) -> None:
     plan = driver.store.load(plan.id)
     assert [s.status for s in plan.steps] == ["done"] * 4
     assert [s.note for s in plan.steps] == [f"passo {n} scritto" for n in range(1, 5)]
-    assert plan.photos["start"] and plan.photos["end"]
     assert driver.step_files(plan.id, "s2")["added"] == ["wiki/passo2.md"]
     assert driver.changes(plan.id)["added"] == [
         "wiki/passo1.md", "wiki/passo2.md", "wiki/passo3.md", "wiki/passo4.md",
@@ -591,9 +619,11 @@ async def test_a_cron_turn_during_a_step_neither_sees_nor_judges_it(workspace: P
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)
     plan, _ = await _approved(loop, driver)
+    from jenny.agent.loop_plan import NO_STEP_REFUSAL
+
     cron = _cron()
+    assert loop._plan_tool_filter(cron, KEY)("plan_step_done") == NO_STEP_REFUSAL
     await _dispatch(loop, cron)
-    assert not (script.offered[-1] & PLAN_STEP_TOOLS)
     assert cron.metadata[WORKSPACE_READONLY_METADATA_KEY] is True
     # Nessun promemoria: la fine di un cron non giudica il passo.
     assert loop.bus.inbound.empty()
@@ -721,7 +751,8 @@ async def test_the_answer_to_a_question_is_still_a_planning_turn(workspace: Path
     after = _user("grazie")
     await loop._plan_before_turn(after, KEY)
     await loop._process_message(after, session_key=KEY)
-    assert "plan_propose" not in script.offered[-1]
+    # La stessa lista: fuori dalla pianificazione ``plan_propose`` risponde col motivo.
+    assert script.offered[-1] == script.offered[-2]
     assert "[Planning turn]" not in script.prompts[-1]
 
 
@@ -739,8 +770,11 @@ async def test_the_planning_turn_counts_its_reads(workspace: Path) -> None:
 
 
 async def test_no_web_while_planning(workspace: Path) -> None:
-    """In un turno di pianificazione il web non si vede (l'agente in modalità core
-    lo avrebbe): una pagina letta adesso contaminerebbe gli aiutanti dei passi."""
+    """In un turno di pianificazione il web non gira (l'agente in modalità core
+    lo avrebbe): una pagina letta adesso contaminerebbe gli aiutanti dei passi.
+    Resta nella lista, e risponde col motivo."""
+    from jenny.agent.loop_plan import PLANNING_REFUSAL
+
     loop, driver = _loop(workspace, Script(workspace))
     await driver.start_drafting(KEY)
     planning = loop._plan_tool_filter(_user("x"), KEY)
@@ -750,7 +784,7 @@ async def test_no_web_while_planning(workspace: Path) -> None:
     )
     for name in ("web_search", "web_fetch", "browser_open", "download_file", "python_exec",
                  "write_stdin"):
-        assert planning(name) is True
+        assert planning(name) == PLANNING_REFUSAL
         assert plain(name) is None
     assert planning("read_file") is None and planning("plan_propose") is False
 
@@ -923,3 +957,140 @@ async def test_a_helper_report_of_the_open_step_records_its_gaps(workspace: Path
     extra = driver.store.load(plan.id).steps[0].extra
     assert extra["research_lineages"] == ["rs1"]
     assert extra["gaps"] == {"ed1": ["felce: vaso"]}
+
+
+def test_plan_step_messages_stay_out_of_the_notes_dream_reads() -> None:
+    """Il messaggio di un passo lo scrive il driver: negli appunti del
+    consolidatore sarebbe un «USER:» di istruzioni, e Dream lo leggerebbe come
+    detto dall'utente. Le risposte di Jenny restano."""
+    from jenny.agent.memory import MemoryStore
+    from jenny.session.history_meta import PLAN_STEP_EVENT
+
+    text = MemoryStore._format_messages([
+        {"role": "user", "content": "[Plan — step 1 of 3] Do step 1", "timestamp": "2026-11-03T10:00",
+         INJECTED_EVENT_META: PLAN_STEP_EVENT},
+        {"role": "assistant", "content": "Fatto il passo 1.", "timestamp": "2026-11-03T10:01"},
+        {"role": "user", "content": "Grazie", "timestamp": "2026-11-03T10:02"},
+    ])
+    assert "Do step 1" not in text
+    assert "Fatto il passo 1." in text and "USER: Grazie" in text
+
+
+async def test_in_the_personal_chat_only_turns_about_the_step_see_its_tools(
+    tmp_path: Path,
+) -> None:
+    """Nella chat personale arriva di tutto: un messaggio dalla mascotte a metà
+    passo non vede i tool del passo; il turno del passo e il resoconto di un suo
+    aiutante (che porta piano e passo) sì. Trovato sul telefono il 03/11/2026:
+    il resoconto non li vedeva, e il passo si chiudeva solo al promemoria."""
+    from jenny.agent.loop_plan import LoopPlanMixin
+    from jenny.bus.events import InboundMessage
+    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META, PlanDriver
+    from jenny.plan.store import PlanStore
+    from tests.support.plan import FakeBus, FakeHost, propose
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    driver = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), FakeHost(workspace),
+                        personal_plans=True)
+    steps = [{"title": "Uno", "detail": "x", "kind": "write", "done_when": "x"},
+             {"title": "Due", "detail": "x", "kind": "other", "done_when": "x"}]
+    assert "card" in await propose(driver, "Prova", steps, key="unified:default")
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+
+    loop = LoopPlanMixin()
+    loop.plan_driver = driver
+
+    def sees(metadata: dict) -> bool:
+        msg = InboundMessage(channel="websocket", sender_id="u", chat_id="default",
+                             content="x", metadata=metadata)
+        return loop._plan_tool_filter(msg, "unified:default")("plan_step_done") is False
+
+    assert not sees({}), "un messaggio di chat a metà passo"
+    assert sees({PLAN_ID_META: plan.id, PLAN_STEP_META: "s1"}), "il resoconto di un aiutante"
+    assert not sees({PLAN_ID_META: plan.id, PLAN_STEP_META: "s2"}), "un passo che non è aperto"
+
+
+async def test_in_the_personal_chat_a_message_waits_for_the_whole_step_turn(
+    tmp_path: Path,
+) -> None:
+    """Un messaggio dalla mascotte a metà del turno di un passo aspetta la fine
+    del turno, anche dopo che il passo si è chiuso: il rimandato si ricontrolla
+    a ogni giro, e fino al 03/11/2026 a passo chiuso entrava nella coda del
+    turno del passo (provato sul telefono), con la risposta in chat e non nel
+    fumetto."""
+    from jenny.agent.loop_plan import LoopPlanMixin
+    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+    from tests.support.plan import FakeBus, FakeHost, propose
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    driver = PlanDriver(PlanStore.for_workspace(workspace), FakeBus(), FakeHost(workspace),
+                        personal_plans=True)
+    steps = [{"title": "Uno", "detail": "x", "kind": "write", "done_when": "x"},
+             {"title": "Due", "detail": "x", "kind": "other", "done_when": "x"}]
+    assert "card" in await propose(driver, "Prova", steps, key="unified:default")
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+
+    loop = LoopPlanMixin()
+    loop.plan_driver = driver
+    step_turn = {INJECTED_EVENT_META: PLAN_STEP_EVENT, PLAN_ID_META: plan.id,
+                 PLAN_STEP_META: "s1"}
+    mascot = InboundMessage(channel="floating", sender_id="u", chat_id="shade", content="ciao")
+
+    assert loop._plan_injection(mascot, step_turn, "unified:default") == "defer"
+    await driver.step_done("unified:default", "fatto")
+    assert not driver.step_open("unified:default")
+    assert loop._plan_injection(mascot, step_turn, "unified:default") == "defer", (
+        "il passo è chiuso, ma il turno è ancora il suo")
+    assert loop._plan_injection(mascot, {}, "unified:default") == "inject", "fuori dal passo"
+
+
+async def test_in_the_personal_chat_the_waiting_message_goes_before_the_next_step(
+    tmp_path: Path,
+) -> None:
+    """A fine turno del passo il messaggio rimasto in coda va sul bus prima che
+    il gancio apra il passo seguente; e il passo seguente, arrivato mentre gira
+    il turno di quel messaggio, aspetta lui. Fino al 03/11/2026 la mascotte
+    aspettava la fine dell'intero piano (provato sul telefono)."""
+    from jenny.agent.loop_plan import LoopPlanMixin
+    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+    from tests.support.plan import FakeBus, FakeHost, propose
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    bus = FakeBus()
+    driver = PlanDriver(PlanStore.for_workspace(workspace), bus, FakeHost(workspace),
+                        personal_plans=True)
+    steps = [{"title": "Uno", "detail": "x", "kind": "write", "done_when": "x"},
+             {"title": "Due", "detail": "x", "kind": "other", "done_when": "x"}]
+    assert "card" in await propose(driver, "Prova", steps, key="unified:default")
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+
+    loop = LoopPlanMixin()
+    loop.plan_driver = driver
+    loop.bus = bus
+    queue: asyncio.Queue = asyncio.Queue()
+    loop._pending_queues = {"unified:default": queue}
+    mascot = InboundMessage(channel="floating", sender_id="u", chat_id="shade", content="ciao")
+    queue.put_nowait(mascot)
+    step_turn = InboundMessage(
+        channel="system", sender_id="plan", chat_id="websocket:default", content="passo 1",
+        session_key_override="unified:default",
+        metadata={INJECTED_EVENT_META: PLAN_STEP_EVENT, PLAN_ID_META: plan.id,
+                  PLAN_STEP_META: "s1"})
+    await driver.step_done("unified:default", "fatto")
+    bus.inbound.clear()
+
+    await loop._plan_turn_ended(step_turn, "unified:default")
+
+    assert bus.inbound[0] is mascot, "il messaggio in attesa per primo"
+    step2 = bus.inbound[1]
+    assert step2.metadata.get(PLAN_STEP_META) == "s2"
+    assert "unified:default" not in loop._pending_queues, "la coda è lasciata"
+    assert loop._plan_injection(step2, {}, "unified:default") == "defer", (
+        "il passo aspetta il turno della mascotte")
+    assert loop._plan_injection(step2, step_turn.metadata, "unified:default") == "inject"

@@ -5,10 +5,12 @@ il driver apre ogni passo, Jenny lo chiude con uno di questi. Nessuno di loro
 approva, ferma o torna indietro: quelle sono decisioni dell'utente, e passano
 dalle RPC ``plan.*`` che nessun tool raggiunge.
 
-**Si vedono solo quando servono** (``AgentLoop._turn_tool_view``):
+**Girano solo quando servono** (``AgentLoop._turn_tool_view``):
 ``plan_propose`` nel turno di pianificazione (il tasto Piano, metadato
-``plan_mode``), gli altri tre quando la sessione ha un passo ``now``. Fuori da
-un piano non esistono: non costano prompt e non tentano il modello.
+``plan_mode``), gli altri tre quando la sessione ha un passo ``now``. Fino al
+03/11/2026 fuori da lì non comparivano; ora restano nella lista delle chat dove
+si pianifica e rispondono col motivo (``loop_plan._plan_tool_filter``), perché
+una lista che cambia a metà chat fa ripagare la conversazione al provider.
 
 Il driver lo lega il composition root dopo aver costruito l'agente
 (:meth:`PlanTool.bind_driver`), come la callback del tool ``message``: i tool
@@ -60,84 +62,53 @@ class PlanTool(Tool):
         return ctx.session_key if ctx is not None else None
 
 
+# Descrizioni corte apposta (dal 03/11/2026): lo schema viaggia in ogni turno
+# delle chat dove si pianifica (``loop_plan._plan_tool_filter`` lo tiene nella
+# lista, per la cache del provider), e come riempirlo lo spiega il blocco del
+# turno di pianificazione (``templates/agent/plan_mode.md``), che arriva solo li'.
+# Erano 3,6k caratteri; il blocco diceva gia' le stesse cose.
 @tool_parameters(
     tool_parameters_schema(
-        title=StringSchema("The whole job in a few words (one line, at most 80 characters)."),
+        title=StringSchema("The whole job, one line."),
         steps=ArraySchema(
             ObjectSchema(
-                title=StringSchema(
-                    "What the user reads on the plan card: their language and words, one "
-                    "line, at most 60 characters."
-                ),
-                detail=StringSchema(
-                    "For you: exactly what you will do in this step, which pages or files, "
-                    "and how you will know it is done. You read it again when the step "
-                    "starts, maybe after a restart."
-                ),
-                done_when=StringSchema(
-                    "When this step is done, with the quality bar, e.g. \"every page has at "
-                    "least 3 concrete facts with their source; 'not documented' only after "
-                    "a search that found nothing, with the queries tried\"."
-                ),
+                title=StringSchema("What the user reads on the card: their words, ≤60 chars."),
+                detail=StringSchema("For you: what you will do, on which pages or files."),
+                done_when=StringSchema("When the step is done, with its quality bar."),
                 kind=StringSchema("The kind of step.", enum=list(STEP_KINDS)),
-                same_as=StringSchema(
-                    "When revising a proposal: the id of the previous version's step this "
-                    "one comes from.",
-                    nullable=True,
-                ),
+                same_as=StringSchema("Revising: the previous version's step id.", nullable=True),
                 covers=ArraySchema(
-                    StringSchema("A coverage id: c1 is the first coverage entry, c2 the second."),
-                    description=(
-                        "Research steps only: the ids of the coverage entries this step "
-                        "searches. Every `web` entry must be in the covers of a research step."
-                    ),
+                    StringSchema("A coverage id."),
+                    description="Only for research steps: the coverage ids they search.",
                 ),
                 expect=ObjectSchema(
-                    folders=StringSchema(
-                        "A glob of folders inside the notebook, e.g. \"wiki/plants/*\"."
-                    ),
-                    files=ArraySchema(
-                        StringSchema("A file name each folder must have, e.g. \"index\"."),
-                    ),
-                    description=(
-                        "Check step only, optional: the shape the job must leave, when it "
-                        "has a fixed one. The code checks it at the end and lists what is "
-                        "missing. Without `folders`, `files` are paths from the notebook root."
-                    ),
+                    folders=StringSchema("A glob of folders, e.g. \"wiki/plants/*\"."),
+                    files=ArraySchema(StringSchema("A file each folder must have.")),
+                    description="Check step only, optional: the shape the job must leave.",
                 ),
                 required=["title", "detail", "done_when"],
             ),
-            description=f"The steps, in order: {MIN_STEPS} to {MAX_STEPS}.",
+            description=f"{MIN_STEPS} to {MAX_STEPS} steps, in order.",
         ),
         coverage=ArraySchema(
             ObjectSchema(
-                item=StringSchema("One thing the job needs, e.g. a page to write."),
-                have=StringSchema("What the notebook already has for it (you read it)."),
+                item=StringSchema("One thing the job needs."),
+                have=StringSchema("What is there for it."),
                 missing=StringSchema("What is missing."),
                 strategy=StringSchema(
-                    "How the plan fills it: notebook (the notebook is enough), web (a "
-                    "research step searches it and lists its id in `covers`), leave (it "
-                    "stays uncovered: say why). Never ask: ask the user before proposing.",
+                    "How it is covered.",
                     enum=[c for c in COVERAGE_STRATEGIES if c != "ask"],
                 ),
-                why=StringSchema("Why this strategy; required for leave."),
+                why=StringSchema("Why; required for leave."),
                 required=["item", "have", "missing", "strategy"],
             ),
-            description=(
-                "What the job needs, item by item, and how each is covered. The entries "
-                "get the ids c1, c2, ... in this order."
-            ),
+            description="What the job needs, item by item; ids c1, c2, ... in this order.",
         ),
         assumptions=ArraySchema(
             StringSchema("One short sentence."),
-            description=(
-                "Optional: the decisions you took on your own (what is deleted, what is "
-                "kept, rules for numbers). Approving the plan approves them."
-            ),
+            description="Decisions you took on your own; approving the plan approves them.",
         ),
-        notes=StringSchema(
-            "Optional: anything the user should know before approving.", nullable=True
-        ),
+        notes=StringSchema("Anything the user should know before approving.", nullable=True),
         required=["title", "steps", "coverage"],
     )
 )
@@ -150,11 +121,18 @@ class PlanProposeTool(PlanTool):
 
     @property
     def description(self) -> str:
+        # La prima frase dice quando NON si usa: dal 03/11/2026 il tool è nella
+        # lista a ogni turno delle chat dove si pianifica, e «voglio un piano» detto
+        # in chat lo faceva chiamare (sempre con Haiku) invece di proporre il
+        # quaderno o il tasto Piano.
         return (
-            "Propose a step-by-step plan for a big job in this notebook. The user sees it "
-            "as a card with Approve and Review; nothing starts until they approve, and then "
-            "the code opens the steps one at a time. A new call replaces a plan that is "
-            "still only proposed. Call it once, then end your turn."
+            "Only in a planning turn, which the user starts with the Plan button (that turn's "
+            "message says so). Anywhere else the call is refused: if the user asks for a plan, "
+            "answer them, and tell them about the Plan button. In a planning turn: propose a "
+            "step-by-step plan for a big job in this chat. The user sees it as a card with "
+            "Approve and Review; nothing starts until they approve, and then the code opens "
+            "the steps one at a time. A new call replaces a plan that is still only proposed. "
+            "Call it once, then end your turn."
         )
 
     async def execute(
@@ -199,7 +177,7 @@ class PlanStepDoneTool(PlanTool):
         return (
             "Close the plan step you are working on: it is finished. Call it after the "
             "results of every helper you started for the step are in. The code then "
-            "photographs the notebook and opens the next step by itself."
+            "notes what the step changed and opens the next step by itself."
         )
 
     async def execute(self, note: Any = None, **kwargs: Any) -> str:

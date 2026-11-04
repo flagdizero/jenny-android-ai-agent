@@ -12,16 +12,14 @@ Qui il bersaglio sono proprio i commenti, quindi si legge il sorgente grezzo.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-
-ANDROID_SRC = Path(__file__).resolve().parents[1] / "android/app/src/main/java/com/flagdizero/jenny"
+from support.kotlin_source import all_kotlin
 
 
 def test_no_kdoc_is_followed_by_another_kdoc() -> None:
     # Tutti i source set: ``main`` e quelli dei flavor (``src/play``, ``src/foss``).
-    files = sorted(ANDROID_SRC.parents[4].glob("*/java/com/flagdizero/jenny/*.kt"))
+    files = all_kotlin()
     if not files:
         pytest.skip("sorgente Android non presente in questo checkout")
     orphans = []

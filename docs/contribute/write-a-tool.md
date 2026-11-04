@@ -85,7 +85,7 @@ These are programming errors: deterministic, reproducible on every boot, and cat
 
 After adding a tool, check `loader.failures` (or the startup log) rather than assuming "no crash" means "registered".
 
-Jenny App actions (`<slug>_<action>`, see [Write a mini-app](write-a-mini-app.md)) are re-synced into the same registry every turn and follow a *different* rule: a name colliding with a built-in tool is skipped with a warning rather than raising, so a malformed or malicious app manifest can't crash the gateway or shadow a core tool.
+Jenny App actions (see [Write a mini-app](write-a-mini-app.md)) all run through one tool, `use_app`, which `AppToolsSyncer` keeps in the same registry, re-synced every turn. It follows a *different* rule: if another tool already holds the name, the apps are left unreachable with a warning rather than raising, so a malformed or malicious app manifest can't crash the gateway or shadow a core tool.
 
 ## Anatomy of a tool
 

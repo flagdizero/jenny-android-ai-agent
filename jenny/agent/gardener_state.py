@@ -46,7 +46,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, read_json
 from jenny.utils.wiki_paths import wiki_journal_dir
 
 # Lo stato, relativo alla radice del progetto.
@@ -372,10 +372,7 @@ def read_state(root: Path) -> GardenerState:
     salterebbe righe in silenzio.
     """
     path = gardener_state_file(root)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return GardenerState()
+    data = read_json(path)
     if not isinstance(data, dict) or data.get("version") != _STATE_VERSION:
         if data:
             logger.warning("gardener: unrecognized state in {}, re-reading from the start", path)

@@ -14,16 +14,12 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, function, locale, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
 HOME_APP_JS = ASSETS / "home-app.js"
 WIRE_ERROR_JS = ASSETS / "shared" / "wire-error.js"
-I18N = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -46,6 +42,8 @@ const sessionManager = { currentChatId: 'default' };
    suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 let allNodes = [];
 function makeNode() {
@@ -82,7 +80,6 @@ function makeChat() {
     syncEmpty() {},
     scrollToBottom() {},
     _resetTurn() {},
-    _originBadge() { return null; },
     _appendMedia() {},
     _delta() {}, _streamEnd() {}, _message() {}, _externalUser() {}, _turnEnd() {},
     // Una riga segue il fondo come il resto del filo (v. `_follow`, banco suo).
@@ -92,7 +89,6 @@ function makeChat() {
     __TAKE_BACK__,
     __NOTE__,
     __APPEND_USER__,
-    __TIME_EL__,
     __APPEND__,
     __BELONGS__,
     __CROSSES__,
@@ -112,7 +108,7 @@ const thread = (chat) => chat.el.children.map((n) => {
 
 
 def _harness_src() -> str:
-    words = json.loads((I18N / "it.json").read_text(encoding="utf-8"))
+    words = locale("it")
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     return (
         _HARNESS.replace("__WORDS__", json.dumps({"common": words["common"]}, ensure_ascii=False))
@@ -122,12 +118,12 @@ def _harness_src() -> str:
         .replace("__TAKE_BACK__", member(src, "_takeBackPendingSend"))
         .replace("__NOTE__", member(src, "_appendNote"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
-        .replace("__TIME_EL__", member(src, "_timeEl"))
+        .replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode"))
         .replace("__APPEND__", member(src, "_append"))
         .replace("__BELONGS__", member(src, "_belongsHere"))
         .replace("__CROSSES__", member(src, "_crossesTurn"))
         .replace("__HANDLE_FRAME__", member(src, "handleFrame"))
-    )
+    ) + "\n" + (ASSETS / "shared" / "turns.js").read_text(encoding="utf-8").replace("export ", "") + "\n" + re.search(r"(?m)^const HOME_TURN_SCOPED = .*;$", HOME_CHAT_JS.read_text(encoding="utf-8")).group(0)
 
 
 def _run_js(script: str) -> None:

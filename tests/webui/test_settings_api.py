@@ -266,11 +266,15 @@ def test_settings_payload_includes_token_usage_summary(
     config = Config()
     save_config(config, config_path)
     monkeypatch.setattr(get_runtime_context(), "config_path", config_path)
-    monkeypatch.setattr("jenny.agent.token_usage.get_webui_dir", lambda: tmp_path / "webui")
+    monkeypatch.setattr("jenny.agent.token_usage._workspace", lambda: tmp_path / "workspace")
 
     from jenny.agent.token_usage import record_token_usage
 
-    record_token_usage({"prompt_tokens": 10, "completion_tokens": 5})
+    # Il fuso della config, come l'hook vero: senza, la riga va nel giorno del
+    # telefono e il riepilogo la cerca in quello di UTC — fra mezzanotte e
+    # l'una (ora italiana) non la trovava.
+    timezone_name = load_config(config_path).agents.defaults.timezone
+    record_token_usage({"prompt_tokens": 10, "completion_tokens": 5}, timezone_name=timezone_name)
 
     payload = settings_payload()
 
@@ -545,29 +549,6 @@ async def test_short_api_key_is_shown_as_present(tmp_path, monkeypatch) -> None:
     assert provider["api_key_hint"]
     assert "EMPTY" not in provider["api_key_hint"]
     assert provider["configured"] is True
-
-
-def test_settings_payload_reports_a_recovered_cron_store(tmp_path) -> None:
-    """Store cron illeggibile all'avvio: la UI deve poterlo dire.
-
-    Il payload è l'unico canale: i job persi non lasciano traccia in nessuna
-    schermata, quindi senza questo campo l'utente scopriva che i suoi
-    promemoria non c'erano più solo quando non suonavano.
-    """
-    from jenny.runtime.context import get_runtime_context
-
-    ctx = get_runtime_context()
-    assert settings_payload()["cron_recovery"] is None
-
-    broken = tmp_path / "jobs.json.corrupt-123"
-    ctx.cron_recovered_from = "empty"
-    ctx.cron_quarantine_path = broken
-    try:
-        recovery = settings_payload()["cron_recovery"]
-        assert recovery == {"restored_from": "empty", "broken_file": str(broken)}
-    finally:
-        ctx.cron_recovered_from = None
-        ctx.cron_quarantine_path = None
 
 
 # ── L'indirizzo del provider si controlla prima di scriverlo (collaudo 27/09) ─

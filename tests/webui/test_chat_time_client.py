@@ -8,11 +8,8 @@ fissato: il resto dei banchi lo finge, e misura solo dove l'ora si posa.
 
 from __future__ import annotations
 
-from pathlib import Path
+from support.js_harness import ASSETS, requires_node, run_js
 
-from support.js_harness import requires_node, run_js
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_TIME_JS = ASSETS / "shared" / "chat-time.js"
 
 pytestmark = requires_node

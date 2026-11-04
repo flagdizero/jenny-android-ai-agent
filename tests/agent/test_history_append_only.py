@@ -14,12 +14,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.base import Tool
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse, ToolCallRequest
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
@@ -46,12 +47,10 @@ class _Probe(Tool):
 
 
 def _loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.supports_progress_deltas = False
     provider.generation.max_tokens = 4096
-    loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path,
-                     model="test-model")
+    loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
     loop.tools.register(_Probe())
     return loop

@@ -98,7 +98,7 @@ def _num(value: Any) -> float | None:
 
 
 def _b_value(b, latest, records, section, now):
-    from jenny.board.sections import records_view
+    from jenny.apps.summary_view import records_view
 
     trend = []
     if b.get("trend") and records:

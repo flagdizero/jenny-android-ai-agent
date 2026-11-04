@@ -40,26 +40,29 @@
  *  non ama le bacheche e per lo screen reader.
  */
 
+import { shortDate } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js';
+import { sanitizeContent } from './shared/markdown.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
 import { metaText, renderBlock } from './home-board-blocks.js';
 import { DrawerNotes } from './home-board-notes.js';
-import { DrawerPhotos, PhotoUrls, photoDate } from './home-board-photos.js';
+import { DrawerPhotos, PhotoUrls } from './home-board-photos.js';
 import { automationRow, rhythmLabel } from './home-board-automation.js';
 import { agendaList, reminderForm } from './home-board-agenda.js';
 import { confirmDialog } from './shared/dialog.js';
+import { writeFailedToast } from './shared/dom.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
-export const LONG_PRESS_MS = 450;
-export const DRAG_THRESHOLD_PX = 6;
+const LONG_PRESS_MS = 450;
+const DRAG_THRESHOLD_PX = 6;
 /* L'etichetta di un filo acceso sta al 62% verso l'altro capo: a meta' finiva
    sotto la scheda sollevata. */
-export const LABEL_AT = 0.62;
+const LABEL_AT = 0.62;
 /* L'anteprima di una pagina fuori bacheca: le prime righe, non la pagina. */
-export const PREVIEW_CHARS = 170;
+const PREVIEW_CHARS = 170;
 
 /** Il colore della «foto» di una polaroid, da quello che la scheda e'.
  *
@@ -93,7 +96,7 @@ export function whenLabel(when, locale = i18n.locale) {
 }
 
 /** Un istante in breve, per i fogli della bacheca: «dom 25, 18:30». */
-export function shortStamp(iso, locale = i18n.locale) {
+function shortStamp(iso, locale = i18n.locale) {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
   try {
@@ -110,7 +113,7 @@ export function shortStamp(iso, locale = i18n.locale) {
  *  In pausa lo dice per primo; poi un monitor che non riesce a guardare (va
  *  detto, o il suo silenzio sembra un «niente da dire»); poi l'ultimo esito, o
  *  l'ultimo giro muto. Un monitor che non ha ancora girato dice come lavora. */
-export function autoLastLine(job, locale = i18n.locale) {
+function autoLastLine(job, locale = i18n.locale) {
   if (job.paused) return i18n.t('board.cron.paused');
   if (job.couldNotCheck > 0) return i18n.t('board.auto.trouble', { count: job.couldNotCheck });
   const result = job.result;
@@ -129,7 +132,7 @@ export function autoLastLine(job, locale = i18n.locale) {
 }
 
 /** Il giorno di *d* come `AAAA-MM-GG`, nell'ora di chi guarda (non in UTC). */
-export function localDay(d = new Date()) {
+function localDay(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
@@ -185,8 +188,7 @@ export function sinceText(row) {
   /* Lo stato di un'app arriva come parola chiave (`alarm`, `stale`…): la
      frase la dice nella lingua di chi guarda. */
   if (row?.kind === 'app_event') params.state = i18n.t(`board.app.event.${row.state}`);
-  const text = i18n.t(key, params);
-  return text === key ? i18n.t('board.since.kind.other') : text;
+  return i18n.tOr(key, i18n.t('board.since.kind.other'), params);
 }
 
 /* Il muro, in percento dello schermo (come le posizioni): dall'origine fino a
@@ -891,7 +893,7 @@ export class HomeBoard {
       await api.runAppAction(slug, action, params || {});
     } catch (err) {
       console.warn('home.board: strip action failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.slip.failed'), 'error');
+      writeFailedToast(err, 'board.slip.failed');
     }
     this.refreshApp(slug);
   }
@@ -1029,7 +1031,7 @@ export class HomeBoard {
       row.className = 'home-board-postit-row';
       const when = document.createElement('span');
       when.className = 'home-board-postit-when';
-      when.textContent = photoDate(note.created);
+      when.textContent = shortDate(note.created);
       const text = document.createElement('span');
       text.className = 'home-board-postit-text';
       text.textContent = note.text;
@@ -1101,7 +1103,7 @@ export class HomeBoard {
       data = await api.getBoardCard(this.notebook, cardId);
     } catch (err) {
       console.warn('home.board: card failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.failed'), 'error');
+      writeFailedToast(err, 'board.failed');
       return;
     }
     view.render(data);
@@ -1115,7 +1117,7 @@ export class HomeBoard {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.board: ${method} failed`, err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
+      writeFailedToast(err, 'board.section.failed');
       return false;
     }
     try {
@@ -1368,7 +1370,7 @@ export class HomeBoard {
         rpc.board('move', this.notebook, { kind, id: item.id, x: item.pos.x, y: item.pos.y })
           .catch((err) => {
             console.warn('home.board: move failed', err);
-            showToast(i18n.t(err?.code === 'plan_running' ? 'home.plan.lock' : 'board.moveFailed'), 'error');
+            writeFailedToast(err, 'board.moveFailed');
             this.load(this.notebook);
           });
       }
@@ -1481,7 +1483,7 @@ export class HomeBoard {
     bar.append(act('square-x', 'board.card.remove', () => this.removeCard(card.id, card.title)));
     const close = act('x', 'board.card.close', () => this.setFocus(null));
     close.classList.add('is-close');
-    close.setAttribute('aria-label', i18n.t('board.card.close'));
+    close.setAttribute('aria-label', i18n.t('common.close'));
     close.querySelector('span').remove();
     bar.appendChild(close);
     if (bar.parentNode !== this.canvas) this.canvas.appendChild(bar);
@@ -1594,7 +1596,7 @@ export class HomeBoard {
     this._nameSheet({
       title: i18n.t('board.card.renameTitle'),
       value: current || '',
-      submit: i18n.t('board.card.save'),
+      submit: i18n.t('common.save'),
       send: async (title) => {
         await rpc.board('card.rename', this.notebook, { id: cardId, title });
         await this.load(this.notebook);
@@ -1695,7 +1697,7 @@ export class HomeBoard {
         this.sheet.close();
       } catch (err) {
         console.warn('home.board: card failed', err);
-        showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.failed'), 'error');
+        writeFailedToast(err, err?.code === 'conflict' ? 'board.card.full' : 'board.card.failed');
         ok.disabled = false;
       }
     };
@@ -1723,7 +1725,7 @@ export class HomeBoard {
       await rpc.board('card.remove', notebook, { id: cardId });
     } catch (err) {
       console.warn('home.board: remove failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.card.failed'), 'error');
+      writeFailedToast(err, 'board.card.failed');
       return;
     }
     if (this.focus === cardId) this.focus = null;
@@ -1733,7 +1735,7 @@ export class HomeBoard {
         await rpc.board('card.restore', notebook, { id: cardId });
       } catch (err) {
         console.warn('home.board: restore failed', err);
-        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'board.card.restoreFailed'),
+        showToast(i18n.t(err?.code === 'conflict' ? 'board.card.full' : 'apps.restoreFailed'),
           'error');
         return;
       }
@@ -1743,7 +1745,7 @@ export class HomeBoard {
           ?.classList.add('is-appearing');
         this.reveal(cardId);
       }
-    }, { label: i18n.t('board.card.undo') });
+    }, { label: i18n.t('apps.undo') });
   }
 
   /** I fili: sempre visibili, sottili e senza scritte; quelli della scheda
@@ -1920,7 +1922,7 @@ export class HomeBoard {
       await rpc.board(method, this.notebook, params);
     } catch (err) {
       console.warn(`home.board: ${method} failed`, err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.section.failed'), 'error');
+      writeFailedToast(err, 'board.section.failed');
       return;
     }
     this.sheet.close();
@@ -1978,7 +1980,7 @@ export class HomeBoard {
       await rpc.board('suggestion.respond', this.notebook, { id: s.id, answer, near: this.viewCenter() });
     } catch (err) {
       console.warn('home.board: respond failed', err);
-      showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t(err?.code === 'conflict' ? 'board.envelope.full' : 'board.envelope.failed'), 'error');
+      writeFailedToast(err, err?.code === 'conflict' ? 'board.envelope.full' : 'board.envelope.failed');
       box.querySelectorAll('button').forEach((b) => { b.disabled = false; });
       return;
     }
@@ -2112,7 +2114,7 @@ export class HomeBoard {
        trascura, e la passata dopo lo legge. Un conto perso non e' un guasto. */
     rpc.board('preview', this.notebook, { page: path }).catch(() => {});
     const tmp = document.createElement('div');
-    tmp.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(page.html || '') : '';
+    tmp.innerHTML = typeof DOMPurify !== 'undefined' ? sanitizeContent(page.html) : '';
     tmp.querySelector('h1')?.remove();
     const text = (tmp.textContent || page.raw || '').replace(/\s+/g, ' ').trim();
     const short = text.length > PREVIEW_CHARS
@@ -2129,7 +2131,7 @@ export class HomeBoard {
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'home-board-btn';
-    close.textContent = i18n.t('board.preview.close');
+    close.textContent = i18n.t('common.close');
     close.addEventListener('click', () => this.sheet.close());
     const want = document.createElement('button');
     want.type = 'button';
@@ -2144,7 +2146,7 @@ export class HomeBoard {
       } catch (err) {
         console.warn('home.board: want failed', err);
         want.disabled = false;
-        showToast(err?.code === 'plan_running' ? i18n.t('home.plan.lock') : i18n.t('board.envelope.failed'), 'error');
+        writeFailedToast(err, 'board.envelope.failed');
       }
     });
     actions.append(close, want);

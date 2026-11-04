@@ -32,7 +32,6 @@ from jenny.agent.tools.schema import ObjectSchema, StringSchema, tool_parameters
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
-    current_workspace_scope,
 )
 
 _MAX_FAILURES = 6
@@ -255,7 +254,7 @@ class AppTool(Tool):
             if refusal := self._throttled(slug):
                 return refusal
             # Dentro un aiutante (l'app-builder): il «prima» della bozza per
-            # l'annulla (``agent.subagent_journal``). Fuori è una no-op.
+            # l'annulla (``agent.write_journal``). Fuori è una no-op.
             from jenny.apps import drafts as _drafts
             from jenny.security.subagent_policy import journal_touch
 
@@ -289,7 +288,7 @@ class AppTool(Tool):
         if action == "place":
             return await self._place(workspace, slug, session, kw)
         if action == "trash":
-            return self._trash(workspace, slug, session)
+            return await self._trash(workspace, slug, session)
         return "Unknown action: use draft, edit, show, run, place or trash."
 
     # -- scrivere -----------------------------------------------------------
@@ -578,14 +577,14 @@ class AppTool(Tool):
                         "it back to its app-builder with subagent_send.")
         existed = (drafts.app_dir(workspace, slug) / "app.json").is_file()
         # La bozza è dell'app-builder: la sua pubblicazione si annota nel suo
-        # registro (``agent.subagent_journal``), così annullare quell'aiutante
+        # registro (``agent.write_journal``), così annullare quell'aiutante
         # rimette anche l'app viva, se nessuno l'ha toccata dopo. Senza, l'annulla
         # diceva «rimesso» (la bozza non c'era più) e l'app restava cambiata.
         journal = None
         if lineage := builder_for(session, slug):
-            from jenny.agent.subagent_journal import journal_for
+            from jenny.agent.write_journal import HELPER, journal_for, journal_key
 
-            journal = journal_for(workspace, lineage)
+            journal = journal_for(workspace, journal_key(HELPER, lineage))
             journal.touch(drafts.app_dir(workspace, slug), tree=True)
             journal.touch(drafts.draft_dir(workspace, slug), tree=True)
         try:
@@ -806,23 +805,23 @@ class AppTool(Tool):
     async def _place(self, workspace: Path, slug: str, session: str, kw: dict[str, Any]) -> str:
         from jenny.apps.drafts import app_dir
         from jenny.board.placements import placements
-        from jenny.utils.wiki_paths import discover_wiki_roots, is_wiki_root
+        from jenny.security.workspace_access import current_notebook_root
+        from jenny.utils.wiki_paths import discover_wiki_roots
 
         if not (app_dir(workspace, slug) / "app.json").is_file():
             return f"No app `{slug}`: write it with action=draft first."
+        from jenny.session.keys import is_project_session_key
+
         root = None
-        if session.startswith("project:"):
-            scope = current_workspace_scope()
-            root = scope.write_root() if scope is not None else None
-            if root is None or not is_wiki_root(root):
+        if is_project_session_key(session):
+            root = current_notebook_root()
+            if root is None:
                 return "This notebook has no folder I can find."
         else:
             name = kw.get("notebook")
-            from jenny.board.placements import _wikis_dirs
+            from jenny.config.paths import get_wikis_path
 
-            roots: dict[str, Path] = {}
-            for wikis in _wikis_dirs(workspace):
-                roots.update(discover_wiki_roots(wikis))
+            roots = discover_wiki_roots(get_wikis_path(workspace))
             if not isinstance(name, str) or name not in roots:
                 names = ", ".join(sorted(roots)) or "none"
                 return f"Say which notebook (`notebook`): {names}."
@@ -844,19 +843,17 @@ class AppTool(Tool):
         return (f"Placed {where}. The notebook's chat can now use `{slug}`; a tap on the card "
                 "opens the app.")
 
-    def _trash(self, workspace: Path, slug: str, session: str) -> str:
-        from jenny.apps.trash import trash_app
+    async def _trash(self, workspace: Path, slug: str, session: str) -> str:
+        from jenny.apps.trash import delete_app
+        from jenny.session.keys import is_project_session_key
 
-        if session.startswith("project:"):
+        if is_project_session_key(session):
             return ("Not from a notebook: deleting an app is the user's call, from the App page "
                     "or the personal chat. Nothing was deleted.")
         try:
-            entry = trash_app(workspace, slug)
+            entry = await delete_app(workspace, slug)
         except (FileNotFoundError, ValueError) as exc:
             return f"Not deleted: {exc}"
-        drafts = workspace / "apps" / ".drafts" / slug
-        if drafts.exists():
-            shutil.rmtree(drafts)
         return (f"`{slug}` is in the trash ({entry}), data included. The user can put it back "
                 "from the Trash row at the bottom of the App page.")
 

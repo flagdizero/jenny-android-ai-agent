@@ -9,19 +9,17 @@ impossibile.
 Il record e volutamente piccolo (~1-2 KB): porta spec, stato finale,
 ``stop_reason`` e un riassunto del risultato, non la storia dei messaggi.
 
-Formato: un file JSONL per session key sotto
-``<workspace>/subagents/records/<safe_session_key>.jsonl``, riscritto in modo
-atomico a ogni transizione terminale (append + prune). Il JSONL e scelto
-proprio per la tolleranza: una riga troncata o corrotta viene saltata e il
-resto dello storico resta leggibile, perche il gateway deve poter bootare
-comunque.
+Dove: tre tabelle di ``state.sqlite`` (lo stato che viaggia con gli snapshot e
+il backup), ``subagent_records`` per gli esiti, ``subagent_running`` per i
+segnaposti e ``subagent_digests`` per l'attività (``subagent_activity``). Fino
+alla 2.x erano file sotto ``<workspace>/subagents/``; li importa una volta
+``jenny/db_migration/subagents.py``.
 
-Un tentativo **in corso** lascia invece un *segnaposto* a parte, un file JSON
-per task sotto ``<workspace>/subagents/running/<task_id>.json``, scritto alla
-partenza e tolto quando il record terminale e su disco. Non sta nel JSONL dei
-record perche quello per contratto porta solo esiti: chi lo legge (snapshot,
-``find``, ``mark_handled``) non deve imparare a saltare i vivi. Un segnaposto
-che sopravvive al processo e la prova che l'aiutante e morto con lui: al boot
+Un tentativo **in corso** lascia un *segnaposto* a parte, scritto alla partenza
+e tolto quando il record terminale e salvato. Non sta fra i record perche
+quelli per contratto portano solo esiti: chi li legge (``find``,
+``mark_handled``) non deve imparare a saltare i vivi. Un segnaposto che
+sopravvive al processo e la prova che l'aiutante e morto con lui: al boot
 ``SubagentManager`` lo trasforma in un record terminale (v.
 :meth:`SubagentRecordStore.load_running`).
 """
@@ -29,6 +27,7 @@ che sopravvive al processo e la prova che l'aiutante e morto con lui: al boot
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -41,12 +40,12 @@ from jenny.agent.agent_types import (
     coerce_agent_type,
     validate_agent_type,
 )
+from jenny.db.schema import Schema
 from jenny.security.workspace_access import (
     WorkspaceScope,
     workspace_sandbox_status,
 )
-from jenny.utils.helpers import safe_filename, truncate_text
-from jenny.utils.path import atomic_write
+from jenny.utils.helpers import truncate_text
 
 # Stati coarse-grained del ciclo di vita di un subagent. Restano distinti da
 # ``SubagentStatus.phase`` (fine-grained, già consumato altrove): il phase dice
@@ -179,18 +178,87 @@ MAX_RECORDS_PER_SESSION = 20
 RECORD_TTL_S = 7 * 24 * 60 * 60
 MAX_RESULT_SUMMARY_CHARS = 800
 
-# Guardia: un file record oltre questa soglia e patologico (non lo produciamo
-# mai), quindi lo ignoriamo invece di caricarlo in memoria.
-_MAX_RECORD_FILE_BYTES = 2_000_000
-
-_RECORDS_DIRNAME = "records"
-# Segnaposti dei tentativi in corso (v. docstring del modulo).
-_RUNNING_DIRNAME = "running"
-# Radice di tutto cio che i subagent lasciano su disco. Pubblica perche la
-# condivide ``jenny/agent/subagent_activity.py``, che ci mette la sua
-# sottodirectory ``activity/``: due letterali "subagents" separati sarebbero
-# due directory diverse al primo refuso.
+# La cartella dove stava tutto cio che i subagent lasciavano su disco, e dove
+# resta la loro storia (``subagent_history``, fino alla 4f) e il resto che la
+# politica degli aiutanti tiene privato.
 SUBAGENTS_DIRNAME = "subagents"
+
+SCHEMA = Schema(
+    "subagents",
+    (
+        """
+        CREATE TABLE subagent_records (
+          task_id TEXT PRIMARY KEY,
+          session_key TEXT NOT NULL,
+          ended_at REAL NOT NULL,
+          data TEXT NOT NULL
+        );
+        CREATE INDEX subagent_records_session ON subagent_records(session_key);
+        CREATE TABLE subagent_running (
+          task_id TEXT PRIMARY KEY,
+          started_at REAL NOT NULL,
+          data TEXT NOT NULL
+        );
+        CREATE TABLE subagent_digests (
+          task_id TEXT PRIMARY KEY,
+          data TEXT NOT NULL
+        );
+        """,
+    ),
+    # Negli snapshot: i record di una conversazione cambiano insieme, un digest
+    # si scrive una volta sola.
+    shards={"subagent_records": "session_key", "subagent_digests": "task_id"},
+)
+
+
+def subagents_database(workspace: Any):
+    """Lo ``state.sqlite`` di *workspace* con le tabelle degli aiutanti, o ``None``.
+
+    ``None`` per un workspace che non è un percorso (un doppio nei test, il
+    bootstrap prima che esista): lo store va costruibile anche lì.
+    """
+    if not isinstance(workspace, (str, Path)):
+        return None
+    from jenny import db
+
+    database = db.database_for_workspace(Path(workspace), db.STATE)
+    database.require(SCHEMA)
+    return database
+
+
+def rename_session_records(workspace: Any, old_key: str, new_key: str) -> int:
+    """I record di *old_key* passano a *new_key* (il rinomino di un progetto).
+
+    Anche dentro il record: ``spec.session_key`` dice dove riportare l'esito di
+    un rilancio, e un nome vecchio lo manderebbe a una chat che non c'è più.
+    """
+    database = subagents_database(workspace)
+    if database is None or old_key == new_key:
+        return 0
+    with database.write() as conn:
+        rows = conn.execute("SELECT task_id, data FROM subagent_records WHERE session_key = ?",
+                            (old_key,)).fetchall()
+        for row in rows:
+            data = json.loads(row["data"])
+            data["session_key"] = new_key
+            if isinstance(data.get("spec"), dict):
+                data["spec"]["session_key"] = new_key
+            conn.execute("UPDATE subagent_records SET session_key = ?, data = ? WHERE task_id = ?",
+                         (new_key, json.dumps(data, ensure_ascii=False), row["task_id"]))
+    return len(rows)
+
+
+def delete_session_records(workspace: Any, session_key: str) -> int:
+    """Toglie i record di *session_key* e i loro digest (un progetto cancellato)."""
+    database = subagents_database(workspace)
+    if database is None:
+        return 0
+    with database.write() as conn:
+        ids = [r["task_id"] for r in conn.execute(
+            "SELECT task_id FROM subagent_records WHERE session_key = ?", (session_key,))]
+        conn.executemany("DELETE FROM subagent_digests WHERE task_id = ?", [(i,) for i in ids])
+        conn.execute("DELETE FROM subagent_records WHERE session_key = ?", (session_key,))
+    return len(ids)
 
 # Marcatore della nota correttiva iniettata da un rilancio: appesa al task
 # originale invece di sostituirlo, cosi il lineage resta lo stesso lavoro.
@@ -409,10 +477,10 @@ class SubagentRecord:
     started_at: float = field(default_factory=time.time)
     ended_at: float = field(default_factory=time.time)
     # Puntatore al digest di attivita (``jenny/agent/subagent_activity.py``), che
-    # vive in un file suo sotto ``<workspace>/subagents/activity/``. Qui stanno
-    # solo le due misure, non gli eventi: il record va riscritto per intero a
-    # ogni transizione terminale, quindi infilarci il digest renderebbe ogni
-    # transizione una riscrittura da centinaia di KB. Con questi due campi la UI
+    # vive in una riga sua (``subagent_digests``). Qui stanno solo le due
+    # misure, non gli eventi: il record va riscritto a ogni transizione
+    # terminale, quindi infilarci il digest renderebbe ogni transizione una
+    # riscrittura da centinaia di KB. Con questi due campi la UI
     # decide se offrire o nascondere il blocco "cosa ha fatto davvero" **senza
     # aprire il file**.
     activity_events: int = 0
@@ -515,11 +583,11 @@ class SubagentRecord:
 
 
 class SubagentRecordStore:
-    """Store JSONL bounded dei record terminali, uno per session key.
+    """I record terminali degli aiutanti, al più ``max_per_session`` per session key.
 
-    Scritture atomiche con fsync (come ``agent/memory.py`` e
-    ``session/manager.py``): l'ultimo esito e proprio quello che serve dopo un
-    kill improvviso, quindi non puo restare in page cache.
+    Righe di ``state.sqlite``: ogni scrittura è una transazione, quindi l'ultimo
+    esito — proprio quello che serve dopo un kill improvviso — c'è intero o non
+    c'è.
     """
 
     def __init__(
@@ -537,119 +605,101 @@ class SubagentRecordStore:
         self.max_per_session = max(1, max_per_session)
         self.ttl_s = ttl_s
         # Chi cancella il digest di un record potato. Tipizzato per protocollo e
-        # non per import: il modulo dell'attivita importa da qui (per la dir
-        # ``subagents/``), quindi l'import inverso sarebbe un ciclo.
+        # non per import: il modulo dell'attivita importa da qui, quindi
+        # l'import inverso sarebbe un ciclo.
         self._digests = digest_store
 
-    # -- paths ---------------------------------------------------------------
-
     @property
-    def root(self) -> Path | None:
-        try:
-            return Path(self._workspace) / SUBAGENTS_DIRNAME / _RECORDS_DIRNAME
-        except TypeError:
-            return None
-
-    def _path_for(self, session_key: str) -> Path | None:
-        root = self.root
-        if root is None:
-            return None
-        stem = safe_filename(session_key.replace(":", "_")) or "unknown"
-        return root / f"{stem}.jsonl"
-
-    @property
-    def running_root(self) -> Path | None:
-        # Solo un percorso vero: il segnaposto si scrive alla *partenza* di ogni
-        # aiutante, e un workspace finto (un ``MagicMock`` nei test) diventava un
-        # percorso relativo, con cartelle ``MagicMock/mock/<id>/`` nella
-        # directory corrente.
-        if not isinstance(self._workspace, (str, Path)):
-            return None
-        return Path(self._workspace) / SUBAGENTS_DIRNAME / _RUNNING_DIRNAME
-
-    def _running_path(self, task_id: str) -> Path | None:
-        root = self.running_root
-        stem = safe_filename(task_id)
-        if root is None or not stem:
-            return None
-        return root / f"{stem}.json"
+    def _db(self):
+        return subagents_database(self._workspace)
 
     # -- tentativi in corso ---------------------------------------------------
 
     def mark_running(self, record: SubagentRecord) -> None:
         """Scrive il segnaposto di un tentativo che parte (``state="running"``).
 
-        Con fsync: serve proprio dopo un kill, quindi non puo restare in page
-        cache. ~1-2 KB, una volta per tentativo. Solleva sugli errori di I/O: il
-        chiamante decide (``SubagentManager`` logga e prosegue).
+        Solleva sugli errori del database: il chiamante decide
+        (``SubagentManager`` logga e prosegue).
         """
-        path = self._running_path(record.task_id)
-        if path is None:
+        database = self._db
+        if database is None or not record.task_id:
             return
-        atomic_write(path, json.dumps(record.to_dict(), ensure_ascii=False))
+        with database.write() as conn:
+            conn.execute(
+                "INSERT INTO subagent_running(task_id, started_at, data) VALUES (?, ?, ?) "
+                "ON CONFLICT(task_id) DO UPDATE SET started_at = excluded.started_at, "
+                "data = excluded.data",
+                (record.task_id, record.started_at,
+                 json.dumps(record.to_dict(), ensure_ascii=False)),
+            )
 
     def clear_running(self, task_id: str) -> None:
         """Toglie il segnaposto di *task_id*. Non solleva."""
-        path = self._running_path(task_id)
-        if path is None:
+        database = self._db
+        if database is None:
             return
         try:
-            path.unlink(missing_ok=True)
-        except OSError as e:
-            logger.warning("Could not delete running marker {}: {}", path, e)
+            with database.write() as conn:
+                conn.execute("DELETE FROM subagent_running WHERE task_id = ?", (task_id,))
+        except sqlite3.Error as e:
+            logger.warning("Could not delete running marker {}: {}", task_id, e)
 
     def load_running(self) -> list[SubagentRecord]:
-        """I segnaposti rimasti su disco, dal piu vecchio al piu nuovo.
+        """I segnaposti rimasti, dal piu vecchio al piu nuovo.
 
         Letto al boot, prima che parta qualunque aiutante: ogni voce e quindi un
-        tentativo morto col processo precedente. Un file illeggibile si cancella
-        (non dice piu niente di utile) e non ferma gli altri.
+        tentativo morto col processo precedente. Una riga illeggibile si toglie
+        (non dice piu niente di utile) e non ferma le altre.
         """
-        root = self.running_root
-        if root is None:
-            return []
-        try:
-            paths = sorted(root.glob("*.json"))
-        except OSError as e:
-            logger.warning("Subagent running dir unreadable {}: {}", root, e)
+        database = self._db
+        if database is None:
             return []
         out: list[SubagentRecord] = []
-        for path in paths:
+        bad: list[str] = []
+        for row in database.read("SELECT task_id, data FROM subagent_running"):
             try:
-                if path.stat().st_size > _MAX_RECORD_FILE_BYTES:
-                    raise ValueError("running marker too large")
-                out.append(SubagentRecord.from_dict(json.loads(path.read_text(encoding="utf-8"))))
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as e:
-                logger.warning("Dropping unreadable running marker {}: {}", path, e)
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+                out.append(SubagentRecord.from_dict(json.loads(row["data"])))
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning("Dropping unreadable running marker {}: {}", row["task_id"], e)
+                bad.append(row["task_id"])
+        if bad:
+            with database.write() as conn:
+                conn.executemany("DELETE FROM subagent_running WHERE task_id = ?",
+                                 [(i,) for i in bad])
         out.sort(key=lambda r: r.started_at)
         return out
 
     # -- read ----------------------------------------------------------------
 
+    def _rows(self, where: str = "", params: tuple = ()) -> dict[str, list[SubagentRecord]]:
+        """I record per session key; una riga illeggibile si salta."""
+        database = self._db
+        if database is None:
+            return {}
+        out: dict[str, list[SubagentRecord]] = {}
+        bad = 0
+        for row in database.read(f"SELECT session_key, data FROM subagent_records {where}",
+                                 params):
+            try:
+                record = SubagentRecord.from_dict(json.loads(row["data"]))
+            except (json.JSONDecodeError, ValueError, TypeError):
+                bad += 1
+                continue
+            out.setdefault(row["session_key"], []).append(record)
+        if bad:
+            logger.warning("Skipped {} corrupt subagent record(s)", bad)
+        return out
+
     def load(self, session_key: str, *, now: float | None = None) -> list[SubagentRecord]:
         """Record vivi (entro TTL) di una session key, dal piu vecchio al piu nuovo."""
-        path = self._path_for(session_key)
-        if path is None:
-            return []
-        return self._prune(self._read_file(path), now=now)
+        rows = self._rows("WHERE session_key = ?", (session_key,))
+        return self._prune(rows.get(session_key, []), now=now)
 
     def load_all(self, *, now: float | None = None) -> list[SubagentRecord]:
         """Tutti i record vivi, su tutte le session key."""
-        root = self.root
-        if root is None:
-            return []
         records: list[SubagentRecord] = []
-        try:
-            paths = sorted(root.glob("*.jsonl"))
-        except OSError as e:
-            logger.warning("Subagent record dir unreadable {}: {}", root, e)
-            return []
-        for path in paths:
-            records.extend(self._prune(self._read_file(path), now=now))
+        for _key, group in sorted(self._rows().items()):
+            records.extend(self._prune(group, now=now))
         return records
 
     def find(self, target_id: str) -> SubagentRecord | None:
@@ -666,35 +716,6 @@ class SubagentRecordStore:
             return None
         return max(matches, key=lambda r: (r.attempt, r.ended_at))
 
-    def _read_file(self, path: Path) -> list[SubagentRecord]:
-        try:
-            if not path.is_file():
-                return []
-            if path.stat().st_size > _MAX_RECORD_FILE_BYTES:
-                logger.warning("Subagent record file too large, ignoring: {}", path)
-                return []
-            raw = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
-            logger.warning("Subagent record file unreadable {}: {}", path, e)
-            return []
-
-        records: list[SubagentRecord] = []
-        skipped = 0
-        for line in raw.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(SubagentRecord.from_dict(json.loads(line)))
-            except (json.JSONDecodeError, ValueError, TypeError):
-                # Riga troncata da un kill a meta scrittura o record di una
-                # versione incompatibile: la si salta, il resto dello storico
-                # resta valido e il gateway boota comunque.
-                skipped += 1
-        if skipped:
-            logger.warning("Skipped {} corrupt subagent record(s) in {}", skipped, path)
-        return records
-
     # -- write ---------------------------------------------------------------
 
     def mark_handled(
@@ -703,60 +724,59 @@ class SubagentRecordStore:
         """Scrive ``handled_at`` sul record di *task_id*, se c'e e non l'ha gia.
 
         Ritorna il record (aggiornato o gia marcato), o ``None`` se non esiste.
-        Con *session_key* legge solo il file di quella chiave; senza, li scorre
-        tutti (record di un processo precedente: il chiamante lo fa fuori dal
-        loop).
         Il primo istante vince: un resoconto consegnato due volte non deve
-        spostare l'ora in cui Jenny l'ha avuto, e non riscrivere il file a ogni
-        doppione risparmia una scrittura con fsync su un telefono.
+        spostare l'ora in cui Jenny l'ha avuto. *session_key* resta per i
+        chiamanti: la riga si trova comunque per id.
         """
-        root = self.root
-        if root is None or not task_id:
+        database = self._db
+        if database is None or not task_id:
             return None
-        if session_key is not None:
-            # La chiave nota: un file solo, invece di tutti.
-            known = self._path_for(session_key)
-            paths = [known] if known is not None else []
-        else:
-            try:
-                paths = sorted(root.glob("*.jsonl"))
-            except OSError as e:
-                logger.warning("Subagent record dir unreadable {}: {}", root, e)
+        with database.write() as conn:
+            row = conn.execute("SELECT data FROM subagent_records WHERE task_id = ?",
+                               (task_id,)).fetchone()
+            if row is None:
                 return None
-        for path in paths:
-            records = self._read_file(path)
-            found = next((r for r in records if r.task_id == task_id), None)
-            if found is None:
-                continue
+            try:
+                found = SubagentRecord.from_dict(json.loads(row["data"]))
+            except (json.JSONDecodeError, ValueError, TypeError):
+                return None
             if found.handled_at is not None:
                 return found
             found.handled_at = at
-            payload = "".join(
-                json.dumps(r.to_dict(), ensure_ascii=False) + "\n" for r in records
-            )
-            atomic_write(path, payload)
+            conn.execute("UPDATE subagent_records SET data = ? WHERE task_id = ?",
+                         (json.dumps(found.to_dict(), ensure_ascii=False), task_id))
             return found
-        return None
 
     def append(self, record: SubagentRecord, *, now: float | None = None) -> None:
-        """Aggiunge un record e riscrive il file potato (TTL + cap).
+        """Aggiunge un record e pota la sua session key (TTL + cap).
 
-        La potatura porta con se il digest di attivita dei record che escono: un
-        file orfano su un telefono e una perdita lenta che nessuno va a guardare.
+        La potatura porta con se il digest di attivita dei record che escono.
         La cancellazione avviene **dopo** la scrittura, cosi una scrittura
-        fallita non porta via dei digest che il file su disco considera ancora
-        vivi.
+        fallita non porta via dei digest di record ancora vivi.
         """
-        path = self._path_for(record.session_key)
-        if path is None:
+        database = self._db
+        if database is None:
             return
-        records = self._read_file(path)
-        records.append(record)
-        kept = self._prune(records, now=now)
-        payload = "".join(
-            json.dumps(r.to_dict(), ensure_ascii=False) + "\n" for r in kept
-        )
-        atomic_write(path, payload)
+        with database.write() as conn:
+            conn.execute(
+                "INSERT INTO subagent_records(task_id, session_key, ended_at, data) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(task_id) DO UPDATE SET "
+                "session_key = excluded.session_key, ended_at = excluded.ended_at, "
+                "data = excluded.data",
+                (record.task_id, record.session_key, record.ended_at,
+                 json.dumps(record.to_dict(), ensure_ascii=False)),
+            )
+            records = []
+            for row in conn.execute("SELECT data FROM subagent_records WHERE session_key = ?",
+                                    (record.session_key,)):
+                try:
+                    records.append(SubagentRecord.from_dict(json.loads(row["data"])))
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    continue
+            kept = self._prune(records, now=now)
+            alive = {r.task_id for r in kept}
+            conn.executemany("DELETE FROM subagent_records WHERE task_id = ?",
+                             [(r.task_id,) for r in records if r.task_id not in alive])
         self._drop_pruned_digests(records, kept)
 
     def _drop_pruned_digests(

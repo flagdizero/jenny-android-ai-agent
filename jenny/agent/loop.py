@@ -42,9 +42,11 @@ from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.tools.self import MyTool
 from jenny.agent.turn_epochs import TurnEpochs, TurnToken
 from jenny.agent.turn_persistence import (
+    SKIP_USER_PERSIST_META,
     FollowupState,
     TurnPersistenceMixin,
     record_sent_content,
+    should_persist_user_message,
 )
 from jenny.agent.turn_states import StateHandlersMixin
 from jenny.agent.turn_types import (
@@ -56,7 +58,8 @@ from jenny.agent.turn_types import (
 from jenny.agent.turn_types import (
     StateTraceEntry as StateTraceEntry,
 )
-from jenny.bus.events import INTERNAL_CHANNEL, InboundMessage, OutboundMessage
+from jenny.agent.write_journal import reset_journal, set_journal
+from jenny.bus.events import INTERNAL_CHANNEL, WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
 from jenny.bus.progress import build_bus_progress_callback
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import (
@@ -64,15 +67,16 @@ from jenny.bus.runtime_events import (
     RuntimeEventPublisher,
 )
 from jenny.command import CommandContext, CommandRouter, register_builtin_commands
+from jenny.config.paths import DEFAULT_WIKIS_DIR, wikis_dir_name
 from jenny.config.schema import AgentDefaults
 from jenny.cron.session_turns import (
     cron_history_overrides,
 )
-from jenny.providers.base import LLMProvider
+from jenny.providers.base import LLMProvider, LLMRuntime
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
 from jenny.runtime.power import keep_awake
-from jenny.runtime.screen import has_screen, screen_runtime_lines
+from jenny.runtime.screen import screen_runtime_lines
 from jenny.runtime.user_text import say
 from jenny.security.subagent_policy import (
     bind_turn_taint,
@@ -85,7 +89,6 @@ from jenny.security.workspace_access import (
     bind_workspace_scope,
     reset_workspace_scope,
 )
-from jenny.session import turn_continuation
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     MID_TURN_META,
@@ -95,9 +98,10 @@ from jenny.session.history_meta import (
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
-    PROJECT_SESSION_PREFIX,
     is_project_session_key,
     is_valid_project_name,
+    project_name,
+    project_session_key,
     session_key_for_channel,
 )
 from jenny.session.manager import Session, SessionManager, scrub_lone_surrogates
@@ -112,8 +116,7 @@ from jenny.session.turn_visibility import (
     mark_silent_turn,
     resolve_turn_visibility,
 )
-from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, reserved_output_tokens
-from jenny.utils.llm_runtime import LLMRuntime
+from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, clip, reserved_output_tokens
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_migration import restore_wiki_id
 from jenny.utils.wiki_paths import find_wiki_by_id, wiki_id, wiki_schema_file
@@ -168,7 +171,7 @@ def _shown_folder_name(name: str) -> str:
     ``WebSocketChannel._refuse_invalid_project`` tronca per la stessa ragione.
     """
     flat = " ".join(name.split()).replace("`", "'")
-    return flat if len(flat) <= 80 else flat[:79] + "…"
+    return clip(flat, 80)
 
 
 def _new_turn_id(session_key: str) -> str:
@@ -283,7 +286,7 @@ class AgentLoop(
         max_messages: int = 120,
         hooks: list[AgentHook] | None = None,
         disabled_skills: list[str] | None = None,
-        projects_subdir: str = "wikis",
+        projects_subdir: str = DEFAULT_WIKIS_DIR,
         wikis_enabled: bool = True,
         tools_config: ToolsConfig | None = None,
         runtime_events: RuntimeEventBus | None = None,
@@ -533,7 +536,7 @@ class AgentLoop(
             extract_document_text=config.extract_document_text,
             timezone=defaults.timezone,
             disabled_skills=defaults.disabled_skills,
-            projects_subdir=config.wiki.wikis_dir,
+            projects_subdir=wikis_dir_name(config),
             wikis_enabled=config.wiki.enabled,
             session_ttl_minutes=defaults.session_ttl_minutes,
             compact_projects_when_idle=defaults.compact_projects_when_idle,
@@ -584,7 +587,7 @@ class AgentLoop(
         # Jenny App actions — manifest-driven, kept in sync per turn
         from jenny.agent.tools.app_actions import AppToolsSyncer
 
-        self._app_tools_syncer = AppToolsSyncer(Path(self.workspace), bus=self.bus)
+        self._app_tools_syncer = AppToolsSyncer(Path(self.workspace))
         app_tools, _changed = self._app_tools_syncer.sync(self.tools)
         if app_tools:
             registered.append(f"apps:{len(app_tools)}")
@@ -693,7 +696,7 @@ class AgentLoop(
 
         Returns True if the message was persisted.
         """
-        if not turn_continuation.should_persist_user_message(msg.metadata):
+        if not should_persist_user_message(msg.metadata):
             return False
         media_paths = [p for p in (msg.media or []) if isinstance(p, str) and p]
         has_text = isinstance(msg.content, str) and msg.content.strip()
@@ -722,17 +725,31 @@ class AgentLoop(
     ) -> ToolRegistry | None:
         """Il registro di questo turno, o ``None`` se e' quello del loop intero.
 
-        Fuori restano, solo quando il turno non li puo' usare: le azioni che
-        **scrivono** delle app non posate sulla bacheca di questo quaderno (le
-        letture restano: da qui un'app non posata si legge,
-        ``apps/permissions.py``); ``recall_history``, che nei quaderni rifiuta;
-        ``nothing_to_report``, che serve solo a un giro silenzioso. Il resto
-        e' il registro del loop, vivo (``ToolRegistryView``).
+        **La lista non cambia dentro una chat** (dal 03/11/2026). Sta in testa a
+        quel che il provider tiene in cache: un turno con un tool in piu' o in
+        meno ripagava tutta la conversazione (entrando in pianificazione, 21,6k
+        token su 29,8k sul telefono di prova; il tocco sulla mascotte o una
+        risposta da Telegram, ~70%). Quindi:
+
+        - fuori dalla lista resta solo quel che dipende dalla **chat**:
+          ``recall_history`` nei quaderni (rifiuta), ``notebook`` fuori da un
+          quaderno, ``screen`` e ``suggest_notebook`` fuori dalla chat personale,
+          i tool del piano dove non si pianifica, ``nothing_to_report`` fuori
+          dai giri silenziosi;
+        - quel che dipende dal **turno** resta nella lista e risponde col motivo:
+          ``screen`` senza un tocco sulla mascotte e ``suggest_notebook`` fuori
+          dall'app lo fanno da se'; i tool del piano e quelli che la
+          pianificazione chiude li rifiuta la vista (``loop_plan.py``), perche'
+          da soli accetterebbero.
+
+        Le azioni delle app passano tutte da ``use_app``: la posa e la sola
+        lettura le controlla l'esecutore (``apps/permissions.py``).
         """
-        from jenny.agent.tools.app_actions import AppActionTool
         from jenny.agent.tools.registry import ToolRegistryView
+        from jenny.session.keys import is_personal_session_key
 
         in_project = is_project_session_key(session_key)
+        personal = is_personal_session_key(session_key)
         root: Path | None = None
         if in_project:
             from jenny.utils.wiki_paths import is_wiki_root
@@ -740,43 +757,26 @@ class AgentLoop(
             root = self.workspace_scopes.for_message(msg, session.metadata).project_path
             if root is not None and not is_wiki_root(root):
                 root = None
-        # La bacheca si rilegge quando cambia: un'app posata a meta' turno
-        # (``app action=place``) si usa subito.
-        board: dict[str, Any] = {"sig": object(), "placed": set()}
-
-        def placed() -> set[str]:
-            if root is None:
-                return set()
-            from jenny.board.placements import placed_slugs
-            from jenny.board.store import board_path
-
-            try:
-                sig: Any = board_path(root).stat().st_mtime_ns
-            except OSError:
-                sig = None
-            if sig != board["sig"]:
-                board.update(sig=sig, placed=set(placed_slugs(root)))
-            return board["placed"]
-
         # I tool del piano a lista: il proprio filtro, che legge lo stato del
         # piano una volta per turno (``loop_plan.py``).
-        plan_hidden = self._plan_tool_filter(msg, session_key)
+        plan_verdict = self._plan_tool_filter(msg, session_key)
 
-        def hidden(name: str, tool: Any) -> bool:
-            plan_verdict = plan_hidden(name)
-            if plan_verdict is not None:
-                return plan_verdict
+        def hidden(name: str, _tool: Any) -> bool:
+            verdict = plan_verdict(name)
+            if verdict is not None:
+                return verdict is True
             if name == "nothing_to_report":
                 return not silent
             # Lo schermo si legge solo nel turno nato da un tocco sulla
-            # mascotte, che ne porta la lettura (``runtime/screen.py``): da
-            # Telegram, da un promemoria o dall'app non c'e' niente da vedere.
+            # mascotte (``runtime/screen.py``), che arriva nella chat personale:
+            # negli altri turni di quella chat il tool risponde che non c'e'
+            # niente da leggere.
             if name == "screen":
-                return not has_screen(msg.metadata)
-            # «Ci spostiamo?» ha senso solo dove c'e' un tasto da toccare: la
-            # chat personale, nell'app (non Telegram, non una notifica).
+                return not personal
+            # «Ci spostiamo?» e' un tasto sotto la risposta nella chat personale;
+            # da Telegram o da una notifica il tool risponde che non si puo'.
             if name == "suggest_notebook":
-                return in_project or silent or msg.channel != "websocket"
+                return in_project or silent
             # ``notebook`` lavora solo nella chat di un quaderno (fuori risponde
             # «not from here»): ~2,9k caratteri di schema in ogni turno della
             # chat personale, per uno strumento che li' non puo' servire. La
@@ -785,14 +785,16 @@ class AgentLoop(
                 return root is None
             if not in_project:
                 return False
-            if name == "recall_history":
-                return True
-            return (isinstance(tool, AppActionTool) and not tool.read_only
-                    and tool._slug not in placed())
+            return name == "recall_history"
 
-        if not any(hidden(n, self.tools.get(n)) for n in self.tools.tool_names):
+        def refused(name: str, _tool: Any) -> str | None:
+            verdict = plan_verdict(name)
+            return verdict if isinstance(verdict, str) else None
+
+        names = self.tools.tool_names
+        if not any(hidden(n, None) or refused(n, None) for n in names):
             return None
-        return ToolRegistryView(self.tools, hidden)
+        return ToolRegistryView(self.tools, hidden, refused)
 
     def _build_initial_messages(
         self,
@@ -935,7 +937,7 @@ class AgentLoop(
             )
             return False
 
-        name = key[len(PROJECT_SESSION_PREFIX):]
+        name = project_name(key)
         logger.warning(
             "Reincarnated project: session {} belongs to wiki {}, the folder "
             "is now {}; turn refused", key, recorded, current,
@@ -943,19 +945,7 @@ class AgentLoop(
         await self.bus.publish_outbound(OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
-            content=(
-                f"This conversation belongs to a different `{name}` from the one that "
-                "is there now.\n\nThe folder was replaced — deleted and created again, "
-                "or restored from somewhere else — so what I remember here is another "
-                "project's. I have not read your message and I have changed nothing, "
-                "because answering out of the wrong history is the one mistake you "
-                "could not check.\n\nTwo ways out. If the folder now at `"
-                f"{name}` is the one you want, delete that project from the workspace "
-                "file browser — hold it and pick Delete — and create it again: that "
-                "clears this history too, and tells you what it is removing first. If "
-                "instead the old folder should come back, put it back and this chat is "
-                "exactly where you left it."
-            ),
+            content=say("project.reincarnated", name=name),
             metadata={**dict(msg.metadata or {}), "render_as": "text"},
         ))
         return True
@@ -990,7 +980,7 @@ class AgentLoop(
             root = None
         if root is not None and root.is_dir():
             return False
-        name = key[len(PROJECT_SESSION_PREFIX):]
+        name = project_name(key)
         if key in self._pending_queues:
             # Un turno di questa chat e' **in volo**, e la riparazione gli
             # sposterebbe i file sotto le mani: quando quel turno finisce, il suo
@@ -1018,14 +1008,7 @@ class AgentLoop(
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content=(
-                    f"The folder for project `{name}` is not there any more, and I am "
-                    "still finishing the previous message in this chat, so I have not "
-                    "read this one.\n\nI will look for where the folder went as soon as "
-                    "that is done — send this again then. If you renamed the folder, "
-                    f"renaming it back to `{name}` also fixes it. Or pick another "
-                    "project, or the personal chat, from the chip above the message box."
-                ),
+                content=say("project.missing_busy", name=name),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return True
@@ -1039,12 +1022,7 @@ class AgentLoop(
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content=(
-                    f"The folder `{name}` was renamed to `{outcome.moved_to}`, so I moved "
-                    "this conversation's history there — nothing was lost, and I have not "
-                    f"read your message.\n\nOpen `{outcome.moved_to}` from the chip above "
-                    "the message box and it is all where you left it."
-                ),
+                content=say("project.renamed", name=name, moved_to=outcome.moved_to),
                 metadata={**dict(msg.metadata or {}), "render_as": "text"},
             ))
             return True
@@ -1063,37 +1041,11 @@ class AgentLoop(
             # Il solo rifiuto che sa dove e' finita la cartella. Non passa da
             # ``detail``: la si nomina, e si dice la regola invece di rimandare
             # l'utente al chip, che quella cartella non la elenca (T4.1).
-            content = (
-                f"The folder for project `{name}` is not there any more, so this "
-                "conversation has nothing to work on and I have not read your message.\n\n"
-                f"I found where it went — it is now called `{outcome.unopenable}` — but "
-                "that cannot be the name of a conversation, so I left this chat's history "
-                f"under `{name}` rather than moving it somewhere nothing could open it. "
-                "Nothing is lost.\n\nRename the folder using letters, numbers, dot, dash "
-                "and underscore only, no spaces and no accents, and this chat follows it "
-                f"— renaming it back to `{name}` works too. Then pick the project from the "
-                "chip above the message box."
-            )
+            content = say("project.unopenable", name=name, unopenable=outcome.unopenable)
         elif self._project_history_is_split(key):
-            content = (
-                f"The folder for project `{name}` is not there any more, so this "
-                "conversation has nothing to work on and I have not read your message.\n\n"
-                f"I could not move this conversation to where the folder went{detail}. So "
-                "part of its history is under a new name and part is still under the old "
-                "one — nothing has been deleted, but the chat is not all in one place "
-                "until those two halves are joined. Restart me and that happens on the "
-                "way up; then open the project from the chip above the message box."
-            )
+            content = say("project.split", name=name, detail=detail)
         else:
-            content = (
-                f"The folder for project `{name}` is not there any more, so this "
-                "conversation has nothing to work on and I have not read your message.\n\n"
-                f"I could not find where it went{detail}. Nothing is lost: the chat is still "
-                "here, and it comes back as soon as the folder does. If you renamed it, "
-                f"renaming it back to `{name}` is the fix — a project's address is its folder "
-                "name. Otherwise pick another project, or the personal chat, from the chip "
-                "above the message box."
-            )
+            content = say("project.missing", name=name, detail=detail)
         await self.bus.publish_outbound(OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
@@ -1191,7 +1143,7 @@ class AgentLoop(
                             "name of a conversation",
                     unopenable=shown,
                 )
-            new_key = f"{PROJECT_SESSION_PREFIX}{target.name}"
+            new_key = project_session_key(target.name)
             # La sessione e' in cache e i suoi file stanno per cambiare nome:
             # tenerla vorrebbe dire riscriverla al vecchio nome al primo salvataggio.
             self.sessions.invalidate(key)
@@ -1202,7 +1154,7 @@ class AgentLoop(
             # fallirebbe con «notebook gone» e consegnerebbe al nome vecchio.
             from jenny.board.cron_link import follow_renamed_notebook
 
-            follow_renamed_notebook(self.cron_service, key[len(PROJECT_SESSION_PREFIX):],
+            follow_renamed_notebook(self.cron_service, project_name(key),
                                     target.name)
             return ProjectFollowOutcome(moved_to=target.name)
         except Exception:
@@ -1622,6 +1574,11 @@ class AgentLoop(
         turn_taint_token = bind_turn_taint(
             turn_taint_for(in_view, metadata, SUBAGENT_TAINT_META, TOOL_TAINT_META)
         )
+        # Un turno di un passo di un piano scrive nel registro del piano
+        # (``plan.work``), col passo: il ritorno toglie il suo lavoro. Gli
+        # aiutanti che lancia scrivono nei loro (``_run_subagent`` li lega).
+        plan_journal, plan_step = self._plan_journal_of(metadata)
+        journal_token = set_journal(plan_journal, step=plan_step)
         async def _on_context_overflow(new_window: int) -> None:
             """Called by the runner when a context_length error occurs.
 
@@ -1650,7 +1607,7 @@ class AgentLoop(
                             replay_max_messages=self._max_messages,
                         )
                 except Exception:
-                    logger.debug("Post-overflow compaction failed", exc_info=True)
+                    logger.opt(exception=True).debug("Post-overflow compaction failed")
 
         try:
             result = await self.runner.run(AgentRunSpec(
@@ -1685,6 +1642,7 @@ class AgentLoop(
                 closed_reasoning_flagged=session is not None,
             ))
         finally:
+            reset_journal(journal_token)
             reset_turn_taint(turn_taint_token)
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)
@@ -2048,10 +2006,9 @@ class AgentLoop(
                                     key,
                                 )
                         except Exception:
-                            logger.debug(
+                            logger.opt(exception=True).debug(
                                 "Could not restore checkpoint for cancelled session {}",
                                 session_key,
-                                exc_info=True,
                             )
                     raise
                 except Exception as exc:
@@ -2145,7 +2102,7 @@ class AgentLoop(
         silent = self._is_silent_turn(msg, key)
         if silent:
             mark_silent_turn(msg.metadata)
-        elif channel == "websocket":
+        elif channel == WEBSOCKET_CHANNEL:
             # Un turno della WebUI ha l'id che il client manda col messaggio; un
             # turno di sistema non ha un messaggio del client, e senza id la
             # rilettura non accorpa (``home-chat.js``): la frase e il file del
@@ -2744,7 +2701,6 @@ class AgentLoop(
             # durante il turno. Non c'e un token sentinella da parsare ne una
             # chiamata LLM in piu.
             silent=silent,
-            suppress_response=silent,
             # Risolto QUI, una volta, non piu in basso: il registry di questo
             # turno decide due cose che devono coincidere — cosa il modello puo
             # chiamare e cosa il prompt gli dichiara di avere. Finche la
@@ -2878,8 +2834,9 @@ class AgentLoop(
             if not had_injections or stop_reason == "empty_final_response":
                 return None
 
-        preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
-        logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
+        logger.info(
+            "Response to {}:{}: {}", msg.channel, msg.sender_id, clip(final_content, 120)
+        )
 
         meta = dict(msg.metadata or {})
         # ``_streamed`` dice al dispatcher "i client l'hanno già visto arrivare a
@@ -3002,7 +2959,7 @@ class AgentLoop(
             try:
                 forget(session_key)
             except Exception:  # noqa: BLE001 — la pulizia non deve rompere la chiusura del turno
-                logger.debug("python_exec globals of {} not released", session_key, exc_info=True)
+                logger.opt(exception=True).debug("python_exec globals of {} not released", session_key)
 
     def forget_file_reads(self, session_key: str) -> None:
         """Dichiara che *session_key* non contiene piu' il contenuto di nessun file.
@@ -3051,7 +3008,6 @@ class AgentLoop(
         questi ci scrive lascia una chat sotto il nome vecchio, senza cartella.
         """
         from jenny.agent.gardener import passes_in_flight
-        from jenny.session.keys import project_session_key
 
         keys = dict.fromkeys(self._pending_queues)
         keys.update(dict.fromkeys(self.subagents.active_origin_session_keys()))
@@ -3143,7 +3099,7 @@ class AgentLoop(
         """
         metadata = dict(metadata or {})
         if not persist_user_message:
-            metadata[turn_continuation.SKIP_USER_PERSIST_META] = True
+            metadata[SKIP_USER_PERSIST_META] = True
         if visibility is TurnVisibility.SILENT:
             mark_silent_turn(metadata)
         msg = InboundMessage(

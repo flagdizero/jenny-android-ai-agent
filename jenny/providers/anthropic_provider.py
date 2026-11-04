@@ -41,6 +41,7 @@ from jenny.providers.endpoint_budget import (
     read_timeout_s,
     request_timeout_s,
 )
+from jenny.providers.message_repair import sanitize_empty_content
 from jenny.providers.opencode import session_headers
 from jenny.providers.tool_ids import dedupe_tool_ids, unique_tool_ids_in_history
 
@@ -222,7 +223,7 @@ class AnthropicProvider(AnthropicConversionMixin, LLMProvider):
         # conversazione resta murata finché non la si cancella. Su una history
         # sana è un no-op.
         prepared = unique_tool_ids_in_history(
-            self._sanitize_empty_content(messages),
+            sanitize_empty_content(messages),
             fresh_id=_gen_tool_id,
             derive_id=derive_tool_id,
         )

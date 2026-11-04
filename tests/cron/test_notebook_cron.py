@@ -90,6 +90,18 @@ async def test_a_card_that_is_not_there_is_named_back(notebook, tmp_path) -> Non
     assert CronService(store).list_jobs() == []
 
 
+async def test_a_card_is_found_without_its_accents_as_on_the_board_tool(notebook, tmp_path) -> None:
+    """«ciliegio» trova «Ciliégio» come la trova il tool della bacheca: una sola ricerca."""
+    _ws, root = notebook
+    mutate_board(root, lambda b: b["cards"].append(
+        {"id": "pianta-1", "title": "Ciliégio", "pages": [], "pos": {"x": 30, "y": 1}}))
+    store = tmp_path / "jobs.json"
+    out = await _tool(store).execute(action="add", card="ciliegio", message="annaffia",
+                                     every_seconds=3600)
+    assert "on the card «Ciliégio»" in out
+    assert CronService(store).list_jobs()[0].payload.board["card"] == "pianta-1"
+
+
 async def test_a_board_without_cards_takes_a_whole_notebook_cron(notebook, tmp_path) -> None:
     _ws, root = notebook
     mutate_board(root, lambda b: b.__setitem__("cards", []))

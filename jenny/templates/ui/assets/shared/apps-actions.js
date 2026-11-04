@@ -246,7 +246,7 @@ export class AppsActions {
     overlay.innerHTML = `
       <div class="app-frame-header">
         <span class="app-frame-title">${escapeHtml(app.name || slug)}</span>
-        <button class="app-frame-close" title="${i18n.t('apps.close')}"><i class="ti ti-x"></i></button>
+        <button class="app-frame-close" title="${i18n.t('common.close')}"><i class="ti ti-x"></i></button>
       </div>
     `;
     overlay.appendChild(iframe);
@@ -271,15 +271,12 @@ export class AppsActions {
     }
     let url;
     try {
-      const res = await fetch(`/api/webui/apps/${encodeURIComponent(slug)}/view`, {
-        headers: { 'Authorization': `Bearer ${api.getSecret()}` },
-      });
-      const body = await res.json().catch(() => ({}));
+      const { ok, status, body } = await api.getAppView(slug);
       if (body.error === 'phone_only') {
         showToast(i18n.t('apps.viewPhoneOnly', { name: app?.name || slug }));
         return;
       }
-      if (!res.ok || !body.url) throw new Error(body.error || `HTTP ${res.status}`);
+      if (!ok || !body.url) throw new Error(body.error || `HTTP ${status}`);
       url = body.url;
     } catch (e) {
       showToast(i18n.t('apps.viewProxyFailed', { error: String(e.message || e) }), 'error');
@@ -330,9 +327,7 @@ export class AppsActions {
        normale. Se questo fetch non arriva (processo ucciso, rete interna giù)
        ci pensa l'idle timeout lato Python — non resta aperto per sempre. */
     if (open.external) {
-      fetch(`/api/webui/apps/${encodeURIComponent(open.slug)}/view/close`, {
-        headers: { 'Authorization': `Bearer ${api.getSecret()}` },
-      }).catch(() => {});
+      api.closeAppView(open.slug).catch(() => {});
     }
   }
   handleBack() {
@@ -522,7 +517,7 @@ export class AppsActions {
       ...(app.section
         ? [{ icon: 'ti-layout-board', label: i18n.t('apps.place'), action: 'place' }] : []),
       { icon: 'ti-edit', label: i18n.t('apps.edit'), action: 'edit' },
-      { icon: 'ti-trash', label: i18n.t('apps.delete'), action: 'delete', danger: true },
+      { icon: 'ti-trash', label: i18n.t('common.delete'), action: 'delete', danger: true },
     ];
 
     const actionsEl = document.getElementById('jenny-app-sheet-actions');
@@ -568,10 +563,10 @@ export class AppsActions {
          si rimette anche dopo. */
       let trashed = null;
       try {
-        trashed = (await api.deleteJennyApp(slug))?.trashed || null;
+        trashed = (await rpc.apps('delete', { slug }))?.trashed || null;
         await this.source.loadJennyApps();
         /* Il gateway ha tolto anche la sua pagina, se ne aveva una (v.
-           `apps_api.delete_app`): qui la casa lo deve sapere, o resterebbe un
+           `apps_commands.apps_delete`): qui la casa lo deve sapere, o resterebbe un
            pagina verso un'app che non c'e' piu'. */
         await this.shell?.homePages?.()?.reload();
       } catch {

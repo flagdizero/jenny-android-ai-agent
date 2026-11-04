@@ -8,7 +8,15 @@ import pytest
 from support.agent import make_loop
 from support.runner import make_spec
 
+from jenny.agent.history_repair import (
+    BACKFILL_CONTENT,
+    MICROCOMPACT_KEEP_RECENT,
+    backfill_missing_tool_results,
+    drop_orphan_tool_results,
+    microcompact,
+)
 from jenny.providers.base import LLMResponse
+from jenny.providers.message_repair import enforce_role_alternation
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 
@@ -144,7 +152,6 @@ def test_snip_history_reserves_budget_for_tool_definitions(monkeypatch):
 
 async def test_backfill_missing_tool_results_inserts_error():
     """Orphaned tool_use (no matching tool_result) should get a synthetic error."""
-    from jenny.agent.runner import _BACKFILL_CONTENT, AgentRunner
 
     messages = [
         {"role": "user", "content": "hi"},
@@ -158,17 +165,16 @@ async def test_backfill_missing_tool_results_inserts_error():
         },
         {"role": "tool", "tool_call_id": "call_a", "name": "python_exec", "content": "ok"},
     ]
-    result = AgentRunner._backfill_missing_tool_results(messages)
+    result = backfill_missing_tool_results(messages)
     tool_msgs = [m for m in result if m.get("role") == "tool"]
     assert len(tool_msgs) == 2
     backfilled = [m for m in tool_msgs if m.get("tool_call_id") == "call_b"]
     assert len(backfilled) == 1
-    assert backfilled[0]["content"] == _BACKFILL_CONTENT
+    assert backfilled[0]["content"] == BACKFILL_CONTENT
     assert backfilled[0]["name"] == "read_file"
 
 
 def test_drop_orphan_tool_results_removes_unmatched_tool_messages():
-    from jenny.agent.runner import AgentRunner
 
     messages = [
         {"role": "system", "content": "system"},
@@ -185,7 +191,7 @@ def test_drop_orphan_tool_results_removes_unmatched_tool_messages():
         {"role": "assistant", "content": "after tool"},
     ]
 
-    cleaned = AgentRunner._drop_orphan_tool_results(messages)
+    cleaned = drop_orphan_tool_results(messages)
 
     assert cleaned == [
         {"role": "system", "content": "system"},
@@ -205,7 +211,6 @@ def test_drop_orphan_tool_results_removes_unmatched_tool_messages():
 @pytest.mark.asyncio
 async def test_backfill_noop_when_complete():
     """Complete message chains should not be modified."""
-    from jenny.agent.runner import AgentRunner
 
     messages = [
         {"role": "user", "content": "hi"},
@@ -219,7 +224,7 @@ async def test_backfill_noop_when_complete():
         {"role": "tool", "tool_call_id": "call_x", "name": "python_exec", "content": "done"},
         {"role": "assistant", "content": "all good"},
     ]
-    result = AgentRunner._backfill_missing_tool_results(messages)
+    result = backfill_missing_tool_results(messages)
     assert result is messages  # same object — no copy
 
 
@@ -264,7 +269,6 @@ async def test_runner_drops_orphan_tool_results_before_model_request():
 async def test_backfill_repairs_model_context_without_shifting_save_turn_boundary(tmp_path):
     """Historical backfill should not duplicate old tail messages on persist."""
     from jenny.agent.loop import AgentLoop
-    from jenny.agent.runner import _BACKFILL_CONTENT
     from jenny.bus.events import InboundMessage
     from jenny.bus.queue import MessageBus
 
@@ -316,7 +320,7 @@ async def test_backfill_repairs_model_context_without_shifting_save_turn_boundar
         if message.get("role") == "tool" and message.get("tool_call_id") == "call_missing"
     ]
     assert len(synthetic) == 1
-    assert synthetic[0]["content"] == _BACKFILL_CONTENT
+    assert synthetic[0]["content"] == BACKFILL_CONTENT
 
     session_after = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
     assert [
@@ -348,7 +352,7 @@ async def test_backfill_repairs_model_context_without_shifting_save_turn_boundar
 @pytest.mark.asyncio
 async def test_runner_backfill_only_mutates_model_context_not_returned_messages():
     """Runner should repair orphaned tool calls for the model without rewriting result.messages."""
-    from jenny.agent.runner import _BACKFILL_CONTENT, AgentRunner
+    from jenny.agent.runner import AgentRunner
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -392,7 +396,7 @@ async def test_runner_backfill_only_mutates_model_context_not_returned_messages(
         if message.get("role") == "tool" and message.get("tool_call_id") == "call_missing"
     ]
     assert len(synthetic) == 1
-    assert synthetic[0]["content"] == _BACKFILL_CONTENT
+    assert synthetic[0]["content"] == BACKFILL_CONTENT
 
     assert [
         {
@@ -428,11 +432,10 @@ async def test_runner_backfill_only_mutates_model_context_not_returned_messages(
 
 @pytest.mark.asyncio
 async def test_microcompact_replaces_old_tool_results():
-    """Once a full batch is past _MICROCOMPACT_KEEP_RECENT, it is summarized at once."""
+    """Once a full batch is past MICROCOMPACT_KEEP_RECENT, it is summarized at once."""
     from jenny.agent.history_repair import MICROCOMPACT_BATCH
-    from jenny.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
-    total = _MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH
+    total = MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH
     long_content = "x" * 600
     messages: list[dict] = [{"role": "system", "content": "sys"}]
     for i in range(total):
@@ -446,22 +449,21 @@ async def test_microcompact_replaces_old_tool_results():
             "content": long_content,
         })
 
-    result = AgentRunner._microcompact(messages)
+    result = microcompact(messages)
     tool_msgs = [m for m in result if m.get("role") == "tool"]
     stale_count = MICROCOMPACT_BATCH
     compacted = [m for m in tool_msgs if "omitted from context" in str(m.get("content", ""))]
     preserved = [m for m in tool_msgs if m.get("content") == long_content]
     assert len(compacted) == stale_count
-    assert len(preserved) == _MICROCOMPACT_KEEP_RECENT
+    assert len(preserved) == MICROCOMPACT_KEEP_RECENT
 
 
 @pytest.mark.asyncio
 async def test_microcompact_preserves_short_results():
     """Short tool results (< _MICROCOMPACT_MIN_CHARS) should not be replaced."""
     from jenny.agent.history_repair import MICROCOMPACT_BATCH
-    from jenny.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
-    total = _MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH + 5
+    total = MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH + 5
     messages: list[dict] = []
     for i in range(total):
         messages.append({
@@ -474,7 +476,7 @@ async def test_microcompact_preserves_short_results():
             "content": "short",
         })
 
-    result = AgentRunner._microcompact(messages)
+    result = microcompact(messages)
     assert result is messages  # no copy needed — all stale results are short
 
 
@@ -482,9 +484,8 @@ async def test_microcompact_preserves_short_results():
 async def test_microcompact_skips_non_compactable_tools():
     """Non-compactable tools (e.g. 'message') should never be replaced."""
     from jenny.agent.history_repair import MICROCOMPACT_BATCH
-    from jenny.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
-    total = _MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH + 5
+    total = MICROCOMPACT_KEEP_RECENT + MICROCOMPACT_BATCH + 5
     long_content = "y" * 1000
     messages: list[dict] = []
     for i in range(total):
@@ -498,14 +499,13 @@ async def test_microcompact_skips_non_compactable_tools():
             "content": long_content,
         })
 
-    result = AgentRunner._microcompact(messages)
+    result = microcompact(messages)
     assert result is messages  # no compactable tools found
 
 
 def test_governance_repairs_orphans_after_snip():
     """After _snip_history clips an assistant+tool_calls, the second
-    _drop_orphan_tool_results pass must clean up the resulting orphans."""
-    from jenny.agent.runner import AgentRunner
+    drop_orphan_tool_results pass must clean up the resulting orphans."""
 
     # Simulate snipping that keeps only the tail: drop the assistant with
     # tool_calls but keep its tool result (orphan).
@@ -517,7 +517,7 @@ def test_governance_repairs_orphans_after_snip():
         {"role": "user", "content": "new msg"},
     ]
 
-    cleaned = AgentRunner._drop_orphan_tool_results(snipped)
+    cleaned = drop_orphan_tool_results(snipped)
     # The orphan tool result should be removed.
     assert not any(
         m.get("role") == "tool" and m.get("tool_call_id") == "tc_old"
@@ -527,8 +527,7 @@ def test_governance_repairs_orphans_after_snip():
 
 def test_governance_fallback_still_repairs_orphans():
     """When full governance fails, the fallback must still run
-    _drop_orphan_tool_results and _backfill_missing_tool_results."""
-    from jenny.agent.runner import AgentRunner
+    drop_orphan_tool_results and backfill_missing_tool_results."""
 
     # Messages with an orphan tool result (no matching assistant tool_call).
     messages = [
@@ -538,8 +537,8 @@ def test_governance_fallback_still_repairs_orphans():
         {"role": "assistant", "content": "hi"},
     ]
 
-    repaired = AgentRunner._drop_orphan_tool_results(messages)
-    repaired = AgentRunner._backfill_missing_tool_results(repaired)
+    repaired = drop_orphan_tool_results(messages)
+    repaired = backfill_missing_tool_results(repaired)
     # Orphan tool result should be gone.
     assert not any(m.get("tool_call_id") == "orphan_tc" for m in repaired)
 def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
@@ -652,10 +651,9 @@ def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
     assert isinstance(trimmed, list)
     # Must have at least system.
     assert any(m.get("role") == "system" for m in trimmed)
-    # The _enforce_role_alternation safety net must be able to fix whatever
+    # The enforce_role_alternation safety net must be able to fix whatever
     # _snip_history returns here — verify it produces a valid sequence.
-    from jenny.providers.base import LLMProvider
-    fixed = LLMProvider._enforce_role_alternation(trimmed)
+    fixed = enforce_role_alternation(trimmed)
     non_system = [m for m in fixed if m["role"] != "system"]
     if non_system:
         assert non_system[0]["role"] in ("user", "tool"), (

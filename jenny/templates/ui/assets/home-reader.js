@@ -41,6 +41,7 @@ import {
   findContentAnchor,
   openOutsideWebView,
 } from './shared/content-link.js';
+import { writeFailedToast } from './shared/dom.js';
 
 /** Un link markdown relativo risolto contro la pagina che lo contiene.
  *
@@ -171,8 +172,8 @@ export class HomeReader {
   /** Le parole dei due bottoni in basso. Chiamata all'avvio e a ogni cambio
    *  di lingua: sono scritte solo qui, mai nell'HTML. */
   applyTranslations() {
-    if (this.saveBtn) this.saveBtn.textContent = i18n.t('home.reader.save');
-    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('home.reader.cancel');
+    if (this.saveBtn) this.saveBtn.textContent = i18n.t('common.save');
+    if (this.cancelBtn) this.cancelBtn.textContent = i18n.t('common.cancel');
   }
 
   /** Chiude o riapre le pagine del quaderno alla modifica, con la riga che lo
@@ -288,7 +289,7 @@ export class HomeReader {
       }
       /* Un piano ha preso il quaderno mentre scrivevi: il testo resta
          nell'editor, e la riga in cima dice perche' non si salva. */
-      showToast(i18n.t(err?.code === 'plan_running' ? 'home.plan.lock' : 'home.reader.saveFailed'), 'error');
+      writeFailedToast(err, 'home.reader.saveFailed');
       return;
     }
     this.editing = false;

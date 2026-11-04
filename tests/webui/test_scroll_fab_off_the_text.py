@@ -11,9 +11,10 @@ sua altezza.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-_CSS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "home-style.css"
+from support.js_harness import ASSETS
+
+_CSS = ASSETS / "home-style.css"
 
 
 def _px(rule: str, prop: str) -> str:

@@ -18,15 +18,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
-from jenny.webui.wiki import build_graph, read_pages
+from jenny.webui.wiki import build_graph_from_pages, read_pages
 from jenny.webui.wiki_search import SearchIndex, pack_index, tokenize
 
-SEARCH_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "wiki-search.js"
-)
+SEARCH_JS = ASSETS / "shared" / "wiki-search.js"
 
 
 pytestmark = requires_node
@@ -45,7 +42,7 @@ def _wire(tmp_path: Path, pages: dict[str, str]) -> tuple[dict, list[str]]:
         full.parent.mkdir(parents=True, exist_ok=True)
         full.write_text(content, encoding="utf-8")
     docs = read_pages(pages_dir)
-    graph = build_graph(pages_dir.parent)
+    graph = build_graph_from_pages(read_pages(pages_dir.parent / "wiki"))
     wire = pack_index(SearchIndex.from_pages(docs, graph), "v1")
     return wire, [n.id for n in graph.nodes]
 

@@ -17,9 +17,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from support.js_harness import requires_node, run_module
+from support.js_harness import ASSETS, requires_node, run_module
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 pytestmark = requires_node
 
 _FAKE_WS = """
@@ -209,4 +208,19 @@ def test_a_frame_answer_is_taken_only_from_that_frame_and_nonce() -> None:
       assert.equal(await requestFrameHtml(null, 30), null);
       assert.equal(await requestFrameHtml(frame, 500), '<ul><li>latte</li></ul>');
       assert.equal(winListeners.size, 0);
+    """)
+
+
+def test_a_room_under_the_chat_is_not_described_as_disabled() -> None:
+    """Con la chat sopra (``home-over.js``) le stanze sotto sono ``inert``: per
+    chi guarda sono coperte, non spente. L'officina lo toglieva, la casa no, e
+    Jenny leggeva la stanza come disabilitata. Lo toglie la potatura condivisa."""
+    _run("""
+      nodes['home-reader'].outerHTML = '<section id="home-reader" class="home-beneath" inert="">una pagina</section>';
+      app.view = 'reader';
+      app.chatOver = true;
+      const { payload } = await ask('i1');
+      assert.equal(payload.over, 'chat');
+      assert.match(payload.html, /una pagina/);
+      assert.doesNotMatch(payload.html, /inert/);
     """)

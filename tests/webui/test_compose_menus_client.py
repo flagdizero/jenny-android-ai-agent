@@ -20,11 +20,9 @@ aggiungono è una riga a testa.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 STATE_JS = ASSETS / "shared" / "state.js"
 SCOPE_JS = ASSETS / "shared" / "scope-chip.js"
 COMMANDS_JS = ASSETS / "shared" / "commands-chip.js"

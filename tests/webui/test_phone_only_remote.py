@@ -20,25 +20,23 @@ import asyncio
 import gzip
 import inspect
 import re
-from pathlib import Path
+
+# Il generatore di porte libere sta in `tests/channels` (pytest mette nel path
+# solo la cartella del test): lo stesso dei banchi del canale.
+import sys  # noqa: E402
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from support.js_harness import ROOT
+from support.ws_channel import make_ws_channel
 
 from jenny.channels import ws_remote
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketConfig
 from jenny.channels.ws_remote import RemoteListener
 from jenny.webui import apps_routes, settings_routes, static_cache, ws_http
-from jenny.webui.gateway_services import build_gateway_services
 from jenny.webui.phone_only import PHONE_ONLY_ROUTES
-
-ROOT = Path(__file__).resolve().parents[2]
-
-# Il generatore di porte libere sta in `tests/channels` (pytest mette nel path
-# solo la cartella del test): lo stesso dei banchi del canale.
-import sys  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests" / "channels"))
 from port_alloc import free_port  # noqa: E402
@@ -61,11 +59,7 @@ def rig(bus, monkeypatch):
         "enabled": True, "allowFrom": ["*"], "host": "127.0.0.1", "port": port, "path": "/",
         "tokenIssueSecret": "master-secret", "websocketRequiresToken": True,
     })
-    gateway = build_gateway_services(
-        config=cfg, bus=bus, session_manager=None, workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False, runtime_model_name=None,
-    )
-    ch = WebSocketChannel(cfg, bus, gateway=gateway)
+    ch = make_ws_channel(cfg, bus)
     ch._remote = RemoteListener(
         serve=ch._serve_remote, port=remote_port, detect=lambda: ("127.0.0.1",), poll_s=3600,
     )
@@ -235,8 +229,11 @@ def test_every_route_that_reaches_a_phone_action_refuses_remote_callers() -> Non
             body = m.group(0)
             if any(a in body for a in actions):
                 found.append(m.group(1))
-                assert "refuse_if_remote()" in body, f"{module.__name__}.{m.group(1)} non rifiuta da fuori"
-    assert len(found) >= 8, found
+                # A mano, o dal tronco comune delle scritture (``pre=``).
+                refuses = "refuse_if_remote()" in body or "pre=refuse_if_remote" in body
+                assert refuses, f"{module.__name__}.{m.group(1)} non rifiuta da fuori"
+    # Sei metodi: le tre route delle app del telefono sono un metodo solo dal 02/11/2026.
+    assert len(found) >= 6, found
     assert len(PHONE_ONLY_ROUTES) == 8
 
 

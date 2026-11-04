@@ -24,16 +24,14 @@ la propria copia.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import re
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, locale, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 MODEL_JS = ASSETS / "home-model.js"
 BRAND_JS = ASSETS / "shared" / "provider-brand.js"
+CATALOG_JS = ASSETS / "shared" / "model-catalog.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -47,35 +45,7 @@ const { getProviderBrand } = await import('__BRAND_URL__');
 const TRANSLATIONS = __TRANSLATIONS__;
 const i18n = { locale: 'it', translations: TRANSLATIONS, __T__ };
 
-function makeEl(tag) {
-  const el = {
-    tag,
-    className: '',
-    textContent: '',
-    value: '',
-    placeholder: '',
-    hidden: false,
-    dataset: {},
-    attrs: {},
-    style: {},
-    children: [],
-    listeners: {},
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type, fn) { (el.listeners[type] ||= []).push(fn); },
-    appendChild(child) { el.children.push(child); return child; },
-    replaceChildren(...fresh) { el.children = fresh; },
-    focus() { el.focused = true; },
-    classList: {
-      add(n) { if (!el.classList.contains(n)) el.className = (el.className + ' ' + n).trim(); },
-      remove(n) {
-        el.className = String(el.className).split(' ').filter((x) => x && x !== n).join(' ');
-      },
-      contains(n) { return String(el.className).split(' ').includes(n); },
-      toggle(n, on) { if (on) el.classList.add(n); else el.classList.remove(n); },
-    },
-  };
-  return el;
-}
+__MAKE_EL__
 
 const nodi = {};
 const document = {
@@ -91,10 +61,12 @@ const requested = [];
 const saves = [];
 let brokenSave = false;
 let lastPayload = null;
+/* Una promessa che tiene in volo il salvataggio, finche' il banco la scioglie. */
+let hold = null;
 const toasts = [];
 
 const api = {
-  getProviderModels(provider) {
+  providerModels(provider) {
     requested.push(provider);
     const c = catalogs[provider];
     if (c === undefined) return Promise.reject(new Error('niente elenco'));
@@ -103,6 +75,7 @@ const api = {
   updateSettings(params) {
     saves.push({ type: 'settings', ...params });
     if (brokenSave) return Promise.reject(new Error('rifiutato'));
+    if (hold) return hold.then(() => lastPayload);
     return Promise.resolve(lastPayload);
   },
   updateProvider(params) {
@@ -113,7 +86,13 @@ const api = {
 };
 
 function showToast(msg, type) { toasts.push([msg, type]); }
+/* I due comandi della stanza sul filo, che qui passano per i finti di sopra. */
+const rpc = {
+  providerModels: ({ provider }) => api.providerModels(provider),
+  updateProvider: (params) => api.updateProvider(params),
+};
 
+__CATALOGS__
 __SHORT_BRAND__
 __TILE_NAMES__
 __MODEL_VALUE__
@@ -130,7 +109,6 @@ class HomeModel {
   __TOGGLE_KEY_EDIT__
   __SAVE_KEY__
   __PROVIDER__
-  __FINGERPRINT__
   __APPLY__
   __LOAD_MODELS__
   __PAINT__
@@ -196,13 +174,22 @@ function tileEls() {
 """
 
 
+def _inline(path) -> str:
+    """Un modulo condiviso dentro il banco: senza ``import`` (``api``, ``i18n`` e
+    ``showToast`` sono i finti di sopra) e senza ``export``."""
+    src = path.read_text(encoding="utf-8")
+    return re.sub(r"^import .*?;\n", "", src, flags=re.M | re.S).replace("export ", "")
+
+
 def _harness() -> str:
     src = MODEL_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
+        _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
+        .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__BRAND_URL__", BRAND_JS.as_uri())
+        .replace("__CATALOGS__", _inline(CATALOG_JS))
         .replace("__SHORT_BRAND__", function(src, "shortBrand"))
         .replace("__TILE_NAMES__", function(src, "tileNames"))
         .replace("__MODEL_VALUE__", function(src, "modelValue"))
@@ -217,7 +204,6 @@ def _harness() -> str:
         .replace("__TOGGLE_KEY_EDIT__", member(src, "toggleKeyEdit"))
         .replace("__SAVE_KEY__", member(src, "saveKey"))
         .replace("__PROVIDER__", member(src, "_provider"))
-        .replace("__FINGERPRINT__", member(src, "_fingerprint"))
         .replace("__APPLY__", member(src, "_apply"))
         .replace("__LOAD_MODELS__", member(src, "_loadModels"))
         .replace("__PAINT__", member(src, "_paint"))
@@ -341,6 +327,28 @@ def test_a_model_that_did_not_save_leaves_the_room_as_it_was() -> None:
     """)
 
 
+def test_one_choice_at_a_time_and_a_restart_is_said() -> None:
+    """Due tocchi di fila facevano due scritture, e il toast diceva «adesso
+    risponde questo» anche quando il cambio valeva dal prossimo avvio. La
+    scelta e' la stessa dell'officina: ``switchModel`` in
+    ``shared/model-catalog.js``."""
+    _run_js("""
+      const data = settings([{ name: 'groq' }], 'groq', 'llama-3.3-70b');
+      const s = await room(data, { groq: { status: 'available', models: [{ id: 'a' }, { id: 'b' }] } });
+      let release;
+      hold = new Promise((r) => { release = r; });
+      lastPayload = settings(data.providers, 'groq', 'a', { requires_restart: true });
+      const first = s.pickModel('a');
+      await s.pickModel('b');
+      release();
+      await first;
+      hold = null;
+
+      assert.equal(saves.length, 1, 'un secondo tocco in volo ha scritto: ' + JSON.stringify(saves));
+      assert.deepEqual(toasts, [[TRANSLATIONS.it.settings.brandModelSavedRestart, 'success']]);
+    """)
+
+
 # ── L'elenco dei modelli ────────────────────────────────────────────────────
 
 
@@ -413,7 +421,7 @@ def test_a_catalogue_that_arrives_late_does_not_paint_over_the_one_you_read() ->
       for (const k of Object.keys(nodi)) delete nodi[k];
       requested.length = 0;
       const s = new HomeModel({});
-      api.getProviderModels = (p) => {
+      api.providerModels = (p) => {
         requested.push(p);
         if (p === 'groq') return expected.then(() => ({ status: 'available', models: [{ id: 'tardi' }] }));
         return Promise.resolve({ status: 'available', models: [{ id: 'subito' }] });
@@ -438,7 +446,7 @@ def test_an_empty_list_says_why() -> None:
     _run_js("""
       const data = settings([{ name: 'groq' }], 'groq', '');
       await room(data, { groq: { status: 'not_configured', models: [], message: 'Configure this provider.' } });
-      assert.equal(nodi['home-models-note'].textContent, i18n.t('home.model.needsKey'));
+      assert.equal(nodi['home-models-note'].textContent, i18n.t('common.modelsNeedKey'));
       assert.equal(nodi['home-models-note'].hidden, false);
 
       await room(data, { groq: { status: 'missing_api_base', models: [] } });

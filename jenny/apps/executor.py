@@ -1,6 +1,6 @@
 """Single entry point to execute a Jenny App action.
 
-Shared by the WebUI actions route and the agent-facing AppActionTool: both
+Shared by the WebUI actions route and the agent-facing ``use_app`` tool: both
 resolve the app, validate params against the manifest's JSON Schema, and
 dispatch to the storage or http executor.
 """
@@ -26,14 +26,11 @@ from jenny.apps.storage import (
     StorageError,
     execute_storage_action,
 )
+from jenny.utils.errors import StatusError
 
 
-class AppActionError(Exception):
+class AppActionError(StatusError):
     """Structured action failure; ``status`` maps to an HTTP-ish code."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 def resolve_action(app: LoadedApp, action_name: str) -> AppAction:
@@ -69,12 +66,10 @@ async def execute_action(
     *,
     http_timeout_s: float = DEFAULT_TIMEOUT_S,
     max_collection_bytes: int = DEFAULT_MAX_COLLECTION_BYTES,
-    announce: bool = True,
 ) -> dict:
     """Execute one action of one app; returns a JSON-safe result dict.
 
-    With *announce* a storage write tells the WebUI (``jenny/apps/notify.py``);
-    the app's own tool passes ``False`` because it announces by itself.
+    A storage write tells the WebUI (``jenny/apps/notify.py``), whoever made it.
 
     Raises AppActionError with a readable message and an HTTP-ish status on
     any failure. Never half-executes: validation happens before any write.
@@ -98,7 +93,7 @@ async def execute_action(
                 from jenny.apps.reader import schedule_reader
 
                 schedule_reader(workspace, slug)
-            elif action.op != "query" and announce:
+            elif action.op != "query":
                 # Senza lettore il riassunto si legge dai dati: la polaroid e lo
                 # schermo aperto possono rileggersi subito.
                 from jenny.apps.notify import data_changed
@@ -106,10 +101,20 @@ async def execute_action(
                 await data_changed(slug)
             return result
         if (action.method or "GET").upper() != "GET":
-            # Un'azione http che cambia qualcosa (annaffia, registra) segue la
-            # stessa regola della posa delle azioni storage.
+            # Un'azione http che cambia qualcosa (annaffia, registra) segue le
+            # stesse regole delle azioni storage: la sola lettura e la posa.
+            # La sola lettura non la lasciava passare fino al 03/11/2026: una
+            # pianificazione poteva accendere l'irrigazione. A differenza di
+            # ``ssh_exec`` (che scrive su un'altra macchina e resta aperto),
+            # qui si cambia lo stato di un'app dell'utente.
             from jenny.apps.permissions import write_refusal
+            from jenny.security.workspace_access import (
+                READONLY_TOOL_REFUSAL,
+                current_turn_is_readonly,
+            )
 
+            if current_turn_is_readonly():
+                raise AppActionError(READONLY_TOOL_REFUSAL, status=403)
             refusal = write_refusal(app.dir)
             if refusal is not None:
                 raise AppActionError(refusal, status=403)

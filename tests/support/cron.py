@@ -5,23 +5,14 @@ superficie di Jenny li chiamava — il tool ``cron`` fa add/list/remove, le rott
 WebUI sono in sola lettura per scelta — e i test li usavano soprattutto per
 *preparare* uno stato. Gli stati invece esistono davvero: un job spento è quello
 che resta di un ``at`` già eseguito, e una scadenza passata a processo morto è
-il caso che il catch-up esiste per coprire. Qui si scrivono sul disco come li
-scrive il servizio.
-
-**Come li scrive dipende da se gira.** Un servizio avviato salva ``jobs.json``;
-uno fermo non lo tocca e accoda l'azione al giornale (``action.jsonl``), che
-ogni caricamento riapplica finché qualcuno che gira non lo assorbe. Un
-``_save_store`` da fermo verrebbe quindi riscritto dall'``add`` ancora nel
-giornale al primo caricamento. Il giornale tratta tutto ciò che non è ``del``
-come un upsert: la riga si accoda come ``add``, lo stesso verbo di
-``add_job`` da fermo.
+il caso che il catch-up esiste per coprire. Qui si salvano come li salva il
+servizio.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -34,10 +25,7 @@ def _job_in_store(service: Any, job_id: str) -> Any:
 
 
 def _persist(service: Any, job: Any) -> None:
-    if service._running:
-        service._save_store()
-    else:
-        service._append_action("add", asdict(job))
+    service._save_store()
 
 
 def disable_job(service: Any, job_id: str) -> Any:
@@ -62,17 +50,32 @@ def reschedule_job(service: Any, job_id: str, schedule: Any, next_run_at_ms: int
 
 @asynccontextmanager
 async def running_cron(workspace: Path) -> AsyncIterator[Any]:
-    """Un ``CronService`` avviato su ``<workspace>/cron/jobs.json``, fermato all'uscita.
+    """Un ``CronService`` avviato sul workspace, fermato all'uscita.
 
-    Avviato, e non solo costruito: chi legge i job dal file (``cron_link.
-    notebook_jobs_on_disk``, i prompt, la bacheca fuori dal loop) trova
-    ``jobs.json`` scritto, come in produzione.
+    Avviato, e non solo costruito: chi legge i job per conto suo (``cron_link.
+    notebook_jobs_on_disk``, i prompt, la bacheca fuori dal loop) li trova
+    salvati, come in produzione.
     """
     from jenny.cron.service import CronService
 
-    service = CronService(Path(workspace) / "cron" / "jobs.json")
+    service = CronService(Path(workspace))
     await service.start()
     try:
         yield service
     finally:
         service.stop()
+
+
+def seed_jobs(workspace: Path, jobs: list[dict[str, Any]]) -> None:
+    """Righe di job già salvate (la forma di ``CronService._job_to_dict``, anche
+    vecchia o monca), come le troverebbe uno scheduler che parte."""
+    from jenny.cron import store as cron_store
+
+    cron_store.save_rows(cron_store.cron_database(Path(workspace)), jobs)
+
+
+def saved_jobs(workspace: Path) -> list[dict[str, Any]]:
+    """Le righe dei job come le ha salvate lo scheduler."""
+    from jenny.cron import store as cron_store
+
+    return cron_store.load_rows(cron_store.cron_database(Path(workspace)))

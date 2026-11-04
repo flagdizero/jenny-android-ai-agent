@@ -140,10 +140,7 @@ export class UpdateFlow {
 
     let payload = null;
     try {
-      /* GET e non POST: v. `start()` per il motivo. */
-      const res = await api._fetch('/api/updates/check');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      payload = await res.json();
+      payload = await api.checkUpdates();
     } catch (_) {
       payload = null;
     }
@@ -197,14 +194,9 @@ export class UpdateFlow {
 
     let result;
     try {
-      /* GET e non POST, come ogni altra scrittura di questa WebUI: il server
-         HTTP e' quello di `websockets`, e `Request.parse` rifiuta qualunque
-         metodo diverso da GET *prima* che la richiesta arrivi al router — un
-         POST qui non fallirebbe con un 405, fallirebbe con la connessione
-         chiusa. */
-      const res = await api._fetch('/api/updates/install');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      result = await res.json();
+      /* Una GET, come ogni scrittura di questa WebUI: il perche' sta in
+         `api-client.js` (`_getJson`). */
+      result = await api.installUpdate();
     } catch (err) {
       if (this._stale(gen) || !this.state) return;
       /* Connessione caduta a installazione gia' avviata: e' il riavvio, non un
@@ -301,9 +293,7 @@ export class UpdateFlow {
     if (this._stale(gen)) return;
     let status;
     try {
-      const res = await api._fetch('/api/updates/status');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      status = await res.json();
+      status = await api.getUpdateStatus();
     } catch (_) {
       /* Un polling che fallisce non e' un'installazione fallita: durante
          l'installazione il gateway *sparisce*, ed e' il caso normale. Si

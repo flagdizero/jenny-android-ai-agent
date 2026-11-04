@@ -29,7 +29,6 @@ un file di indice sarebbe una seconda verità da tenere allineata.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -47,6 +46,8 @@ from jenny.agent.tools.schema import (
     tool_parameters_schema,
 )
 from jenny.security.workspace_access import current_tool_workspace
+from jenny.utils.helpers import clip
+from jenny.utils.path import iter_jsonl
 
 # Una pagina dell'elenco, in caratteri. Sotto i 16.000 di ``max_tool_result_chars``
 # di proposito: oltre, il risultato finisce in un file e il modello ne vede solo
@@ -161,6 +162,30 @@ def _page_number(page: Any) -> int:
         return 1
 
 
+class _RecallTool(Tool):
+    """Quel che ``recall`` e ``recall_history`` hanno in comune: dove leggono e chi li ha.
+
+    Solo l'agente principale. È lì che succede "ti ricordi quando…", e sono
+    tool di sola lettura. A Dream non vanno: il suo prompt si è già dimostrato
+    sensibile alla superficie che gli si aggiunge, e la cronologia ce l'ha in
+    ingresso.
+    """
+
+    _scopes = {"core", "orchestrator"}
+
+    def __init__(self, workspace: str | Path):
+        self._root = Path(workspace)
+        self._memory_dir = self._root / "memory"
+
+    @classmethod
+    def create(cls, ctx: Any) -> Tool:
+        return cls(workspace=ctx.workspace)
+
+    @property
+    def read_only(self) -> bool:
+        return True
+
+
 @tool_parameters(
     tool_parameters_schema(
         query=ArraySchema(StringSchema("A word to search for"), description=_QUERY_DESCRIPTION),
@@ -171,21 +196,8 @@ def _page_number(page: Any) -> int:
         page=IntegerSchema(description=_PAGE_DESCRIPTION, minimum=1),
     )
 )
-class MemoryRecallTool(Tool):
+class MemoryRecallTool(_RecallTool):
     """Cerca o sfoglia l'archivio, e apre le voci che il modello ha riconosciuto."""
-
-    # Solo l'agente principale. È lì che succede "ti ricordi quando…", ed è un
-    # tool di sola lettura. A Dream non va: il suo prompt si è già dimostrato
-    # sensibile alla superficie che gli si aggiunge.
-    _scopes = {"core", "orchestrator"}
-
-    def __init__(self, workspace: str | Path):
-        self._root = Path(workspace)
-        self._memory_dir = self._root / "memory"
-
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        return cls(workspace=ctx.workspace)
 
     @property
     def name(self) -> str:
@@ -207,10 +219,6 @@ class MemoryRecallTool(Tool):
             "This holds facts that were kept and later demoted; for details of a "
             "past conversation that Dream did not keep, use recall_history."
         )
-
-    @property
-    def read_only(self) -> bool:
-        return True
 
     async def execute(
         self,
@@ -376,15 +384,8 @@ def _read_history(memory_dir: Path) -> list[dict[str, Any]]:
         except OSError as exc:
             logger.warning("{} illeggibile: {}", path.name, exc)
             continue
-        for line in raw.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(rec, dict) and rec.get("content"):
+        for rec in iter_jsonl(raw.splitlines()):
+            if rec.get("content"):
                 by_cursor[rec.get("cursor")] = rec
     out = list(by_cursor.values())
     out.sort(key=_cursor_key, reverse=True)
@@ -402,8 +403,7 @@ def _history_index_line(rec: dict[str, Any]) -> str:
     notes = [n.strip() for n in content.splitlines() if n.strip()]
     head = notes[0] if notes else ""
     head = head.lstrip("- ").strip()
-    if len(head) > _HISTORY_SNIPPET_CHARS:
-        head = head[: _HISTORY_SNIPPET_CHARS - 1].rstrip() + "…"
+    head = clip(head, _HISTORY_SNIPPET_CHARS)
     # Il conteggio delle altre note non è decorazione: tre quarti delle voci ne
     # hanno più di una (74 su 108, misurate), quindi senza questo il modello
     # crederebbe che la voce sia solo la sua prima riga.
@@ -458,21 +458,8 @@ def _source_excerpt(root: Path, ref: Any) -> str:
         page=IntegerSchema(description=_PAGE_DESCRIPTION, minimum=1),
     )
 )
-class HistoryRecallTool(Tool):
+class HistoryRecallTool(_RecallTool):
     """Elenca gli appunti della conversazione, e apre le voci che il modello ha riconosciuto."""
-
-    # Gli stessi di ``recall``, e per la stessa ragione: è lì che succede "ti
-    # ricordi quando…". A Dream non va — il suo prompt si è già dimostrato
-    # sensibile alla superficie aggiunta, e la cronologia ce l'ha in ingresso.
-    _scopes = {"core", "orchestrator"}
-
-    def __init__(self, workspace: str | Path):
-        self._root = Path(workspace)
-        self._memory_dir = self._root / "memory"
-
-    @classmethod
-    def create(cls, ctx: Any) -> Tool:
-        return cls(workspace=ctx.workspace)
 
     @property
     def name(self) -> str:
@@ -491,10 +478,6 @@ class HistoryRecallTool(Tool):
             "was tried before. recall holds facts that were kept and later demoted from the "
             "identity files; this holds the notes on everything, kept or not."
         )
-
-    @property
-    def read_only(self) -> bool:
-        return True
 
     async def execute(
         self,
@@ -637,4 +620,193 @@ class HistoryRecallTool(Tool):
         return header + "\n\n" + "\n".join(pages[page - 1])
 
 
-TOOLS = [MemoryRecallTool, HistoryRecallTool]
+# ---------------------------------------------------------------------------
+# recall_chat: le parole esatte dette in chat
+# ---------------------------------------------------------------------------
+#
+# Il terzo posto dove ricordare, dopo i fatti (``recall``) e gli appunti
+# (``recall_history``): le parole della chat come la WebUI le ha mostrate,
+# cercate nell'indice di ``webui.chat_index``. Serve per quel che un riassunto
+# perde — un numero, un nome, un link, la frase precisa — e per quel che non è
+# finito negli appunti. Come Hermes (``session_search``), il prompt dice di
+# cercare qui prima di chiedere all'utente di ripetere.
+#
+# **Il recinto è quello di ``recall_history``**: dalla chat di un quaderno si
+# vede solo quella chat, perché una sessione di progetto scrive nel progetto
+# (pagine, diario, a volte un repository pubblico) e la chat personale non ci
+# deve finire. Dalla chat personale si cerca in tutte: è lo stesso utente.
+
+_CHAT_HITS = 40
+_CHAT_TURN_MAX_CHARS = 12_000
+_CHAT_USER_LINE_CHARS = 200
+_CHAT_MESSAGE_MAX_CHARS = 2_000
+
+
+def _chat_label(key: str) -> str:
+    from jenny.session.keys import project_name, webui_chat_id
+
+    name = project_name(webui_chat_id(key))
+    return f"notebook {name}" if name else "personal chat"
+
+
+def _chat_when(at: Any) -> str:
+    from datetime import datetime
+
+    if not isinstance(at, int) or isinstance(at, bool):
+        return "date unknown"
+    return datetime.fromtimestamp(at / 1000).strftime("%Y-%m-%d %H:%M")
+
+
+def _chat_cursor(key: str, turn: int) -> str:
+    return f"{turn}@{key}"
+
+
+def _parse_chat_cursor(cursor: str) -> tuple[str, int] | None:
+    turn, _, key = str(cursor).strip().partition("@")
+    try:
+        return key, int(turn)
+    except ValueError:
+        return None
+
+
+@tool_parameters(
+    tool_parameters_schema(
+        query=ArraySchema(StringSchema("A word to search for"), description=_QUERY_DESCRIPTION),
+        cursors=ArraySchema(
+            StringSchema("Cursor of an exchange from a search, e.g. '412@websocket:default'"),
+            description="Open these exchanges in full, with the one before and after.",
+        ),
+    )
+)
+class ChatRecallTool(_RecallTool):
+    """Cerca le parole dette in chat, e apre gli scambi che il modello ha riconosciuto."""
+
+    @property
+    def name(self) -> str:
+        return "recall_chat"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Search the exact words of past chats with the user: what they wrote and what you "
+            "answered, as the chat showed them, back to the first conversation. Pass `query` "
+            "with words in both Italian and English (each word also matches longer words that "
+            "start with it); you get the matching exchanges, best first, each with its date, "
+            "its chat and a cursor. Call it again with `cursors` to read those exchanges in "
+            "full. It comes last: first recall (facts), then recall_history (the notes on past "
+            "conversations, where most details are, names and numbers included); use this one "
+            "when those two found nothing, or for the exact wording, and before asking the user "
+            "to repeat something they take for granted. In a notebook's chat it searches only "
+            "that notebook's chat."
+        )
+
+    async def execute(
+        self,
+        query: list[str] | None = None,
+        cursors: list[str] | None = None,
+        **kwargs: Any,
+    ) -> str:
+        import asyncio
+
+        keys = self._keys()
+        if cursors:
+            return await asyncio.to_thread(self._open, cursors, keys)
+        if query:
+            return await asyncio.to_thread(self._search, query, keys)
+        return "Pass `query` with the words to look for, or `cursors` from a search to open."
+
+    def _keys(self) -> list[str] | None:
+        """Le chat che questo turno può leggere: ``None`` vuol dire tutte."""
+        from jenny.session.keys import project_session_key, webui_transcript_key
+
+        scoped = current_tool_workspace(self._root).project_path
+        if scoped is None:
+            return None
+        try:
+            same = Path(scoped).resolve() == self._root.resolve()
+        except OSError:
+            same = False
+        if same:
+            return None
+        return [webui_transcript_key(project_session_key(Path(scoped).name))]
+
+    def _search(self, query: list[str], keys: list[str] | None) -> str:
+        from jenny.webui import chat_index
+
+        terms = query_terms(query)
+        if not terms:
+            return "The query has no word of three letters or more to search for."
+        total, hits = chat_index.search(self._root, terms, keys=keys, limit=_CHAT_HITS)
+        if not hits:
+            return _NO_MATCH.format(terms=", ".join(terms)).replace(
+                "or browse the list without a query", "or try recall_history for the notes")
+        by_turn: dict[tuple[str, int], list[Any]] = {}
+        for hit in hits:
+            by_turn.setdefault((hit.key, hit.turn), []).append(hit)
+        asked: dict[tuple[str, int], str] = {}
+        for key in {k for k, _t in by_turn}:
+            turns = [t for k, t in by_turn if k == key]
+            for text in chat_index.turn_texts(self._root, key, turns):
+                if text.role == chat_index.USER:
+                    asked.setdefault((key, text.turn), text.text)
+        blocks: list[str] = []
+        used = 0
+        for (key, turn), found in by_turn.items():
+            lines = [f"[{_chat_cursor(key, turn)}] {_chat_when(found[0].at)}, {_chat_label(key)}"]
+            if (key, turn) in asked and not any(h.role == chat_index.USER for h in found):
+                lines.append(f"  user: {clip(asked[(key, turn)], _CHAT_USER_LINE_CHARS)}")
+            for hit in found:
+                who = "user" if hit.role == chat_index.USER else "you"
+                lines.append(f"  {who}: {hit.snippet}")
+            block = "\n".join(lines)
+            if blocks and used + len(block) > _INDEX_MAX_CHARS:
+                break
+            blocks.append(block)
+            used += len(block)
+        header = (
+            f"{total} messages match {', '.join(terms)}; the best {len(hits)} are in "
+            f"{len(by_turn)} exchanges, best first, matching words in [brackets]. Call "
+            "recall_chat again with the cursors you want in full."
+        )
+        if len(blocks) < len(by_turn):
+            header += f" Only the first {len(blocks)} exchanges fit here."
+        return header + "\n\n" + "\n\n".join(blocks)
+
+    def _open(self, cursors: list[str], keys: list[str] | None) -> str:
+        from jenny.webui import chat_index
+
+        parts: list[str] = []
+        used = 0
+        bad: list[str] = []
+        for raw in cursors:
+            parsed = _parse_chat_cursor(raw)
+            if parsed is None or (keys is not None and parsed[0] not in keys):
+                bad.append(str(raw))
+                continue
+            key, turn = parsed
+            texts = chat_index.turn_texts(self._root, key, [turn - 1, turn, turn + 1])
+            if not any(t.turn == turn for t in texts):
+                bad.append(str(raw))
+                continue
+            lines = [f"[{_chat_cursor(key, turn)}] {_chat_label(key)}, with the exchange "
+                     "before and after:"]
+            for text in texts:
+                who = "user" if text.role == chat_index.USER else "you"
+                mark = " <<" if text.turn == turn else ""
+                lines.append(f"{_chat_when(text.at)} {who}{mark}: "
+                             f"{clip(text.text, _CHAT_MESSAGE_MAX_CHARS)}")
+            block = "\n".join(lines)
+            if parts and used + len(block) > _CHAT_TURN_MAX_CHARS:
+                parts.append("(stopped here: the rest would not fit in one answer — ask for "
+                             "fewer cursors)")
+                break
+            parts.append(block)
+            used += len(block)
+        if bad:
+            # Un cursore che non c'è si dice: tacerlo fa concludere che lo scambio non esiste.
+            parts.append(f"No exchange to open for {', '.join(bad)}: use the cursors a search "
+                         "of this chat returned.")
+        return "\n\n".join(parts)
+
+
+TOOLS = [MemoryRecallTool, HistoryRecallTool, ChatRecallTool]

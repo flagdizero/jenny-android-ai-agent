@@ -29,9 +29,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.bus.events import OUTBOUND_META_WORK_STATUS, OutboundMessage
-
-WEBSOCKET_CHANNEL = "websocket"
+from jenny.bus.events import OUTBOUND_META_WORK_STATUS, WEBSOCKET_CHANNEL, OutboundMessage
 
 # Al massimo un aggiornamento ogni tanti secondi per lo stesso lavoro: una
 # passata che scrive dieci file di fila non manda dieci frame. Le transizioni

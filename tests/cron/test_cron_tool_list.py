@@ -364,7 +364,9 @@ async def test_add_job_binds_current_session_key(tmp_path) -> None:
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
-    assert job.payload.session_key == "websocket:chat-1"
+    # Riletto dallo store: una chiave del canale torna la conversazione unica
+    # (``_load_session_key``), e l'attaccamento alla chat resta nell'origine.
+    assert job.payload.session_key == "unified:default"
     assert job.payload.origin_channel == "websocket"
     assert job.payload.origin_chat_id == "chat-1"
     assert job.payload.origin_metadata == {}
@@ -432,7 +434,7 @@ async def test_add_job_captures_owner_and_origin_without_legacy_delivery_fields(
 
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
-    assert jobs[0].payload.session_key == "websocket:C99:111.222"
+    assert jobs[0].payload.session_key == "unified:default"
     assert jobs[0].payload.origin_channel == "websocket"
     assert jobs[0].payload.origin_chat_id == "C99"
     assert jobs[0].payload.origin_metadata == meta

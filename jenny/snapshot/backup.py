@@ -39,14 +39,18 @@ from jenny.snapshot.locations import (
     backup_staging_dir_for,
     runtime_root_for,
 )
-from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
 from jenny.snapshot.types import SnapshotManifest, is_snapshot_id, unsafe_entry_reason
+from jenny.utils.clock import now_ms as _now_ms
 
 if TYPE_CHECKING:
     from jenny.snapshot.service import SnapshotService
 
 BACKUP_FORMAT_VERSION = 1
 IMPORT_STAGED_FILENAME = f"import{BACKUP_FILE_EXTENSION}"
+# Lo stato in SQLite (``jenny/db``), accanto a ``tree/`` e ``snapshots/``. Il
+# formato non cambia versione: chi non conosce questa voce la salta, come ogni
+# nome fuori da quei due, e un backup senza di lei lascia lo stato com'è.
+BACKUP_STATE_ENTRY = "db/state.sqlite"
 # I temporanei di export/import: in staging, fuori dal workspace (quindi fuori
 # dagli snapshot), e con un suffisso che la rotazione degli export non tocca.
 _PART_SUFFIX = ".part"
@@ -168,7 +172,7 @@ class BackupManager:
         with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as archive:
             metadata = {
                 "format_version": BACKUP_FORMAT_VERSION,
-                "exported_at_ms": int(time.time() * 1000),
+                "exported_at_ms": _now_ms(),
                 "jenny_version": _jenny_version(),
             }
             archive.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False))
@@ -179,6 +183,7 @@ class BackupManager:
                     archive.write(full, f"tree/{rel}", compress_type=_compress_type_for(rel))
                 except OSError:
                     logger.warning("Backup export: skipping vanished file {}", rel)
+            self._add_state(archive)
             snapshots_dir = self._engine.snapshots_dir
             if snapshots_dir.is_dir():
                 for item in sorted(snapshots_dir.rglob("*")):
@@ -188,6 +193,20 @@ class BackupManager:
                             archive.write(item, f"snapshots/{rel}")
                         except OSError:
                             logger.warning("Backup export: skipping vanished file {}", rel)
+
+    def _add_state(self, archive: zipfile.ZipFile) -> None:
+        """Lo stato in SQLite (``jenny/db``): una copia coerente, non il file vivo.
+
+        Il diario dell'annulla no: vale solo per i file di questo telefono.
+        """
+        from jenny import db
+
+        copy = self._staging / f"state{_PART_SUFFIX}"
+        try:
+            db.database(self._runtime_root, db.STATE).backup_to(copy)
+            archive.write(copy, BACKUP_STATE_ENTRY)
+        finally:
+            copy.unlink(missing_ok=True)
 
     # -- import -----------------------------------------------------------------
 
@@ -205,22 +224,30 @@ class BackupManager:
         async with self._lock:
             zip_part = self._staging / _IMPORT_ZIP_PART
             try:
+                # Fuori dallo staging: una password sbagliata non svuota l'albero
+                # di un ripristino già pronto.
                 await decrypt_file(passphrase, source, zip_part)
-                metadata = await asyncio.to_thread(self._extract_backup, zip_part)
+                metadata = await self._service.stage_restore(
+                    lambda _staged: asyncio.to_thread(self._extract_backup, zip_part),
+                    source="backup_file",
+                )
             finally:
                 zip_part.unlink(missing_ok=True)
-            # Fotografa lo stato corrente PRIMA di impegnare il restore.
-            await self._service.snapshot_now("pre_restore")
-            staged_dir = self._runtime_root / STAGED_WORKSPACE_DIR_NAME
-            await asyncio.to_thread(write_staging_sanity, staged_dir)
-            write_marker(self._runtime_root, source="backup_file")
+            # Il file scelto dall'utente, copiato qui dal selettore: il ripristino
+            # e' pronto, e per riprovare il selettore lo ricopia. Fino al 04/11/2026
+            # restava per sempre, grande quanto il backup (432 MB sul telefono di
+            # prova). Solo quello: un export ancora in staging non si tocca, e una
+            # password sbagliata (sopra, prima di arrivare qui) lascia il file.
+            if source == self.import_staged_path.resolve():
+                source.unlink(missing_ok=True)
             logger.info("Backup import staged; restart required to apply")
             return {"metadata": metadata}
 
     def _validated_staged_file(self, staged_path: str) -> Path:
+        from jenny.security.workspace_policy import is_path_within
+
         candidate = Path(staged_path).resolve()
-        staging = self._staging.resolve()
-        if not candidate.is_relative_to(staging):
+        if not is_path_within(candidate, self._staging, path_resolved=True):
             raise BackupError("staged file must live inside the backup staging directory")
         if not candidate.is_file():
             raise FileNotFoundError(f"staged backup file not found: {candidate.name}")
@@ -254,6 +281,17 @@ class BackupManager:
                 metadata = json.loads(archive.read("metadata.json").decode("utf-8"))
             except (ValueError, UnicodeDecodeError) as exc:
                 raise BackupError("backup metadata.json is unreadable") from exc
+
+            if BACKUP_STATE_ENTRY in names:
+                from jenny.db.restore import StagedStateError, stage_state
+
+                try:
+                    with archive.open(BACKUP_STATE_ENTRY) as src:
+                        stage_state(self._runtime_root, src)
+                except StagedStateError as exc:
+                    shutil.rmtree(staged_ws, ignore_errors=True)
+                    shutil.rmtree(staged_snap, ignore_errors=True)
+                    raise BackupError(f"backup archive {BACKUP_STATE_ENTRY}: {exc}") from exc
 
             extracted_tree = 0
             for name in names:
@@ -304,13 +342,13 @@ class BackupManager:
         """
         async with self._lock:
             manifest = await asyncio.to_thread(self._engine.load_manifest, snapshot_id)
-            # Fotografa lo stato corrente: il restore resta sempre annullabile.
-            await self._service.snapshot_now("pre_restore")
-            staged_dir = self._runtime_root / STAGED_WORKSPACE_DIR_NAME
-            await asyncio.to_thread(shutil.rmtree, staged_dir, True)
-            await asyncio.to_thread(self._engine.restore_snapshot, snapshot_id, staged_dir)
-            await asyncio.to_thread(write_staging_sanity, staged_dir)
-            write_marker(self._runtime_root, source="snapshot", snapshot_id=snapshot_id)
+            await self._service.stage_restore(
+                lambda staged: asyncio.to_thread(
+                    self._engine.restore_snapshot, snapshot_id, staged
+                ),
+                source="snapshot",
+                snapshot_id=snapshot_id,
+            )
             logger.info(
                 "Snapshot restore staged ({}); restart required to apply", snapshot_id[:12]
             )

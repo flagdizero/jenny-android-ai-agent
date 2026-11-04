@@ -18,7 +18,7 @@ from jenny.plan.driver import PlanDriver
 from jenny.plan.store import PlanStore
 from jenny.runtime.context import get_runtime_context
 from jenny.webui.commands import CommandContext, CommandError, dispatch_command
-from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_file
+from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, plan_write, propose, write_file
 
 
 @pytest.fixture()
@@ -71,8 +71,14 @@ async def _proposed(driver: PlanDriver) -> Any:
 async def test_get_and_list_read_the_store(workspace: Path, driver: PlanDriver) -> None:
     ctx = _ctx(workspace, driver)
     assert await _rpc(ctx, "plan.get", notebook="piante") == {
-        "ok": True, "plan": None, "drafting": None,
+        "ok": True, "plan": None, "drafting": None, "enabled": True,
     }
+    # La chat personale ha piani solo quando il driver li permette (l'orchestratore).
+    personal = await _rpc(ctx, "plan.get", place="personal")
+    assert personal["plan"] is None and personal["enabled"] is False
+    driver.personal_plans = True
+    assert (await _rpc(ctx, "plan.get", place="personal"))["enabled"] is True
+    driver.personal_plans = False
     plan = await _proposed(driver)
     got = await _rpc(ctx, "plan.get", id=plan.id)
     assert got["plan"]["status"] == "proposed"
@@ -83,7 +89,7 @@ async def test_get_and_list_read_the_store(workspace: Path, driver: PlanDriver) 
     assert by_nb["plan"]["id"] == plan.id
     listed = await _rpc(ctx, "plan.list")
     assert listed["plans"] == [{
-        "id": plan.id, "notebook": "piante", "status": "proposed",
+        "id": plan.id, "notebook": "piante", "place": "nb:piante", "status": "proposed",
         "title": "Rifare la wiki", "done": 0, "total": 3,
         "updated_at": listed["plans"][0]["updated_at"],
     }]
@@ -120,11 +126,12 @@ async def test_the_whole_card_lifecycle_over_rpc(
         await _rpc(ctx, "plan.discard", id=plan.id)
     assert info.value.code == "bad_state"
 
-    write_file(workspace / "wikis" / "piante", "wiki/acero.md", "nuova")
+    plan_write(driver, "wiki/acero.md", "nuova")
     await driver.step_done(KEY, "scritta")
     await driver.on_turn_end(KEY, {})
     files = await _rpc(ctx, "plan.step_files", id=plan.id, step="s1")
-    assert files == {"ok": True, "added": ["wiki/acero.md"], "changed": [], "removed": []}
+    assert files == {"ok": True, "added": ["wiki/acero.md"], "changed": [], "removed": [],
+                     "groups": {"wiki/acero.md": "pages"}}
 
     await driver.blocked(KEY, "Quale acero?")
     assert await _rpc(ctx, "plan.answer", id=plan.id, text="Il rosso") == {"ok": True}

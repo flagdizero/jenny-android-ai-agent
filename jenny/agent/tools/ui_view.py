@@ -121,8 +121,8 @@ class UiViewTool(Tool, ContextAware):
                     "describe it from the shell HTML only."
                 )
             lines.append(
-                "the open app's actions are already available to you as tools named "
-                "`<slug>_<action>`."
+                "the open app's actions are already available to you through `use_app` "
+                "(`app` = its slug)."
             )
 
         html = payload.get("html")

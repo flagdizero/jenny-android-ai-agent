@@ -10,6 +10,7 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.session import store
 from jenny.session.history_meta import (
     CHECKPOINT_META,
     COMPACTED_META,
@@ -18,7 +19,6 @@ from jenny.session.history_meta import (
 )
 from jenny.utils.helpers import (
     channel_delivery_aware_user_start,
-    ensure_dir,
     estimate_message_tokens,
     find_legal_message_start,
     image_placeholder_text,
@@ -26,7 +26,6 @@ from jenny.utils.helpers import (
     recent_message_start_index,
     safe_filename,
 )
-from jenny.utils.path import atomic_write
 
 FILE_MAX_MESSAGES = 2000
 
@@ -393,176 +392,51 @@ class Session:
         )
 
 
-@dataclass
-class _ParsedSessionFile:
-    """Risultato grezzo di una passata sul file JSONL di sessione."""
-
-    metadata_record: dict[str, Any] = field(default_factory=dict)
-    first_record_is_metadata: bool = False
-    messages: list[dict[str, Any]] = field(default_factory=list)
-    skipped: int = 0
-
-
-def _parse_session_file(
-    path: Path,
-    *,
-    tolerant: bool,
-    first_record_only: bool = False,
-) -> _ParsedSessionFile:
-    """Passata unica sul file JSONL di sessione, condivisa da tutti i lettori.
-
-    ``tolerant`` salta le righe non decodificabili contandole invece di
-    propagare l'errore (path di riparazione); altrimenti un JSON malformato
-    propaga al chiamante. ``first_record_only`` si ferma dopo il primo record
-    non vuoto, per la lettura della sola metadata. Il record ``_type=="metadata"``
-    piu' recente vince; l'estrazione dei singoli campi resta ai chiamanti perche'
-    le loro politiche su date e fallback divergono.
-    """
-    result = _ParsedSessionFile()
-    seen_record = False
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            if tolerant:
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    result.skipped += 1
-                    continue
-            else:
-                data = json.loads(line)
-            is_metadata = data.get("_type") == "metadata"
-            if not seen_record:
-                seen_record = True
-                result.first_record_is_metadata = is_metadata
-            if is_metadata:
-                result.metadata_record = data
-            else:
-                result.messages.append(data)
-            if first_record_only:
-                break
-    return result
-
-
 class SessionManager:
-    """
-    Manages conversation sessions.
+    """Le conversazioni, righe di ``state.sqlite`` (``session.store``).
 
-    Sessions are stored as JSONL files in the sessions directory.
+    Una sessione si carica una volta e resta in cache; un salvataggio scrive
+    solo i messaggi cambiati o nuovi, in una transazione: una conversazione da
+    duemila messaggi non si riscrive più intera a ogni checkpoint.
     """
 
     def __init__(self, workspace: Path):
         self.workspace = workspace
-        self.sessions_dir = ensure_dir(self.workspace / "sessions")
         self._cache: dict[str, Session] = {}
+        # Per chiave: (versione, impronte dei messaggi) come li ha salvati o
+        # letti questa istanza. ``save`` scrive solo quel che ne differisce.
+        self._saved: dict[str, tuple[int, list[int]]] = {}
+
+    @property
+    def _db(self):
+        return store.session_database(self.workspace)
 
     @staticmethod
     def safe_key(key: str) -> str:
-        """Public helper used by HTTP handlers to map an arbitrary key to a stable filename stem."""
+        """*key* in forma di nome di file (i verbali della WebUI sono ancora file)."""
         return safe_filename(key.replace(":", "_"))
 
-    def _get_session_path(self, key: str) -> Path:
-        """Get the file path for a session."""
-        return self.sessions_dir / f"{self.safe_key(key)}.jsonl"
-
-    def turn_journal_path(self, key: str) -> Path:
-        """Il diario del turno in corso di *key*, accanto al suo file di sessione.
-
-        Lo scrive il checkpoint del turno (v. ``TurnPersistenceMixin``): i
-        messaggi già chiusi del turno, in append. L'estensione non è ``.jsonl``
-        di proposito, perché chi elenca le sessioni non lo scambi per una.
-        """
-        return self.sessions_dir / f"{self.safe_key(key)}.turn-journal"
-
     def get_or_create(self, key: str) -> Session:
-        """
-        Get an existing session or create a new one.
-
-        Args:
-            key: Session key (usually channel:chat_id).
-
-        Returns:
-            The session.
-        """
+        """La sessione *key*, dalla cache o dal database, o una nuova vuota."""
         if key in self._cache:
             return self._cache[key]
-
-        session = self._load(key)
-        if session is None:
-            session = Session(key=key)
-
+        session = self._load(key) or Session(key=key)
         self._cache[key] = session
         return session
 
     def _load(self, key: str) -> Session | None:
-        """Load a session from disk."""
-        path = self._get_session_path(key)
-
-        if not path.exists():
+        loaded = store.load(self._db, key)
+        if loaded is None:
             return None
-
-        try:
-            parsed = _parse_session_file(path, tolerant=False)
-            meta = parsed.metadata_record
-            created_raw = meta.get("created_at")
-            updated_raw = meta.get("updated_at")
-            return Session(
-                key=key,
-                messages=parsed.messages,
-                created_at=(
-                    datetime.fromisoformat(created_raw) if created_raw else datetime.now()
-                ),
-                updated_at=(
-                    datetime.fromisoformat(updated_raw) if updated_raw else datetime.now()
-                ),
-                metadata=meta.get("metadata", {}),
-                last_consolidated=meta.get("last_consolidated", 0),
-            )
-        except Exception as e:
-            logger.warning("Failed to load session {}: {}", key, e)
-            repaired = self._repair(key)
-            if repaired is not None:
-                logger.info("Recovered session {} from corrupt file ({} messages)", key, len(repaired.messages))
-            return repaired
-
-    def _repair(self, key: str) -> Session | None:
-        """Attempt to recover a session from a corrupt JSONL file."""
-        path = self._get_session_path(key)
-        if not path.exists():
-            return None
-
-        try:
-            parsed = _parse_session_file(path, tolerant=True)
-            if parsed.skipped:
-                logger.warning("Skipped {} corrupt lines in session {}", parsed.skipped, key)
-
-            meta = parsed.metadata_record
-            metadata = meta.get("metadata", {})
-            if not parsed.messages and not metadata:
-                return None
-
-            created_at: datetime | None = None
-            updated_at: datetime | None = None
-            if meta.get("created_at"):
-                with suppress(ValueError, TypeError):
-                    created_at = datetime.fromisoformat(meta["created_at"])
-            if meta.get("updated_at"):
-                with suppress(ValueError, TypeError):
-                    updated_at = datetime.fromisoformat(meta["updated_at"])
-
-            return Session(
-                key=key,
-                messages=parsed.messages,
-                created_at=created_at or datetime.now(),
-                updated_at=updated_at or datetime.now(),
-                metadata=metadata,
-                last_consolidated=meta.get("last_consolidated", 0),
-            )
-        except Exception as e:
-            logger.warning("Repair failed for session {}: {}", key, e)
-            return None
+        self._saved[key] = (loaded["version"], loaded["known"])
+        return Session(
+            key=key,
+            messages=loaded["messages"],
+            created_at=_when(loaded["created_at"]),
+            updated_at=_when(loaded["updated_at"]),
+            metadata=loaded["metadata"],
+            last_consolidated=loaded["last_consolidated"],
+        )
 
     @staticmethod
     def _session_payload(session: Session) -> dict[str, Any]:
@@ -575,142 +449,119 @@ class SessionManager:
         }
 
     def save(self, session: Session, *, fsync: bool = False) -> None:
-        """Save a session to disk atomically.
+        """Salva *session*: i metadati e i messaggi cambiati, in una transazione.
 
-        When *fsync* is ``True`` the final file and its parent directory are
-        explicitly flushed to durable storage.  This is intentionally off by
-        default (the OS page-cache is sufficient for normal operation) but
-        should be enabled during graceful shutdown so that filesystems with
-        write-back caching (e.g. rclone VFS, NFS, FUSE mounts) do not lose
-        the most recent writes.
+        *fsync* resta per i chiamanti dello spegnimento: una transazione chiusa
+        è già sul disco quanto basta (``synchronous=NORMAL`` in WAL).
         """
-        path = self._get_session_path(session.key)
         try:
-            atomic_write(path, self._serialize(session), fsync_file=fsync, fsync_dir=fsync)
+            self._write(session)
         except UnicodeEncodeError:
-            # Un surrogato isolato arrivato da una porta che non ripulisce:
-            # si ripulisce la sessione **in
-            # memoria**, cosi' cache e disco restano uguali, e si riscrive.
-            # Senza, ogni salvataggio successivo falliva allo stesso modo.
+            # Un surrogato isolato arrivato da una porta che non ripulisce: si
+            # ripulisce la sessione **in memoria**, cosi' cache e database restano
+            # uguali, e si riscrive. Senza, ogni salvataggio successivo falliva.
             logger.warning(
                 "Session {} carried a lone UTF-16 surrogate; replaced with U+FFFD", session.key,
             )
             session.messages = _scrub_value(session.messages)
             session.metadata = _scrub_value(session.metadata)
-            atomic_write(path, self._serialize(session), fsync_file=fsync, fsync_dir=fsync)
+            self._write(session)
         self._cache[session.key] = session
 
-    @staticmethod
-    def _serialize(session: Session) -> str:
-        metadata_line = {
-            "_type": "metadata",
-            "key": session.key,
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat(),
-            "metadata": session.metadata,
-            "last_consolidated": session.last_consolidated
-        }
-        lines = [json.dumps(metadata_line, ensure_ascii=False) + "\n"]
-        for msg in session.messages:
-            lines.append(json.dumps(msg, ensure_ascii=False) + "\n")
-        return "".join(lines)
+    def _write(self, session: Session) -> None:
+        lines = [json.dumps(m, ensure_ascii=False) for m in session.messages]
+        version, known = self._saved.get(session.key, (None, None))
+        saved = store.save(
+            self._db, session.key,
+            created_at=session.created_at.isoformat(),
+            updated_at=session.updated_at.isoformat(),
+            metadata=json.dumps(session.metadata, ensure_ascii=False),
+            last_consolidated=session.last_consolidated,
+            lines=lines, known=known, known_version=version,
+        )
+        self._saved[session.key] = saved
 
     def flush_all(self) -> int:
-        """Re-save every cached session with fsync for durable shutdown.
+        """Risalva ogni sessione in cache, per uno spegnimento ordinato.
 
-        Returns the number of sessions flushed.  Errors on individual
-        sessions are logged but do not prevent other sessions from being
-        flushed.
-
-        Una sessione **vuota e mai salvata** non si scrive: niente messaggi,
-        niente metadati, nessun file su disco. È quella che ``get_or_create``
-        inventa per chi ha solo guardato — l'inseguimento di un progetto
-        rinominato, il controllo sull'id della wiki, l'umore della mascotte —
-        e che resta in cache dopo che il rinomino o la cancellazione l'aveva
-        invalidata. Scriverla allo spegnimento faceva risorgere
-        ``project_<vecchio>.jsonl``, e quel file orfano bastava a rifiutare un
-        rinomino all'indietro con ``name_taken``. Non si perde niente: una
-        sessione così, riletta, è identica a una che non esiste
-        (v. anche ``_repair``, che un file senza messaggi né metadati lo tratta
-        come assente).
+        Una sessione **vuota e mai salvata** non si scrive: è quella che
+        ``get_or_create`` inventa per chi ha solo guardato — l'inseguimento di
+        un progetto rinominato, il controllo sull'id della wiki — e che resta in
+        cache dopo che il rinomino o la cancellazione l'aveva invalidata.
+        Scriverla allo spegnimento faceva risorgere la sessione del nome
+        vecchio, e bastava a rifiutare un rinomino all'indietro con
+        ``name_taken``.
         """
         flushed = 0
         for key, session in list(self._cache.items()):
             try:
-                if (
-                    not session.messages
-                    and not session.metadata
-                    and not self._get_session_path(key).exists()
-                ):
+                if not session.messages and not session.metadata and not self.exists(key):
                     continue
                 self.save(session, fsync=True)
                 flushed += 1
             except Exception:
-                logger.warning("Failed to flush session {}", key, exc_info=True)
+                logger.opt(exception=True).warning("Failed to flush session {}", key)
         return flushed
 
     def invalidate(self, key: str) -> None:
         """Remove a session from the in-memory cache."""
         self._cache.pop(key, None)
+        self._saved.pop(key, None)
 
     def read_session_file(self, key: str) -> dict[str, Any] | None:
-        """Load a session from disk without caching; intended for read-only HTTP endpoints.
+        """La sessione senza metterla in cache, per le rotte in sola lettura.
 
-        Returns ``{"key", "created_at", "updated_at", "metadata", "messages"}`` or
-        ``None`` when the session file does not exist or fails to parse.
+        ``{"key", "created_at", "updated_at", "metadata", "messages"}``, o ``None``.
         """
-        path = self._get_session_path(key)
-        if not path.exists():
+        loaded = store.load(self._db, key)
+        if loaded is None:
             return None
-        try:
-            parsed = _parse_session_file(path, tolerant=False)
-            meta = parsed.metadata_record
-            return {
-                "key": meta.get("key") or key,
-                "created_at": meta.get("created_at"),
-                "updated_at": meta.get("updated_at"),
-                "metadata": meta.get("metadata", {}),
-                "messages": parsed.messages,
-            }
-        except Exception as e:
-            logger.warning("Failed to read session {}: {}", key, e)
-            repaired = self._repair(key)
-            if repaired is not None:
-                logger.info("Recovered read-only session view {} from corrupt file", key)
-                return self._session_payload(repaired)
-            return None
+        return {k: loaded[k] for k in ("key", "created_at", "updated_at", "metadata",
+                                       "messages")}
 
     def read_session_metadata(self, key: str) -> dict[str, Any] | None:
-        """Load only the metadata record from a session file.
-
-        This is used by WebUI routes that need session-level metadata but not the
-        full conversation transcript.
-        """
-        path = self._get_session_path(key)
-        if not path.exists():
+        """Solo i metadati della sessione (senza i messaggi), o ``None``."""
+        found = store.head(self._db, key)
+        if found is None:
             return None
-        try:
-            parsed = _parse_session_file(path, tolerant=False, first_record_only=True)
-            if not parsed.first_record_is_metadata:
-                return None
-            meta = parsed.metadata_record
-            metadata = meta.get("metadata", {})
-            return {
-                "key": meta.get("key") or key,
-                "created_at": meta.get("created_at"),
-                "updated_at": meta.get("updated_at"),
-                "metadata": metadata if isinstance(metadata, dict) else {},
-            }
-        except Exception as e:
-            logger.warning("Failed to read session metadata {}: {}", key, e)
-            repaired = self._repair(key)
-            if repaired is not None:
-                logger.info("Recovered read-only session metadata {} from corrupt file", key)
-                return {
-                    "key": repaired.key,
-                    "created_at": repaired.created_at.isoformat(),
-                    "updated_at": repaired.updated_at.isoformat(),
-                    "metadata": repaired.metadata,
-                }
-            return None
+        return {k: found[k] for k in ("key", "created_at", "updated_at", "metadata")}
 
+    # -- elenchi e ciclo di vita (chi prima guardava i file) ----------------
+
+    def exists(self, key: str) -> bool:
+        return store.head(self._db, key) is not None
+
+    def stats(self, key: str) -> tuple[int, int] | None:
+        """``(messaggi, byte)`` della sessione salvata, o ``None``."""
+        found = store.head(self._db, key)
+        return None if found is None else (found["count"], found["bytes"])
+
+    def list_keys(self, prefix: str = "") -> list[str]:
+        """Le chiavi salvate che cominciano con *prefix*, dalla meno recente."""
+        return store.keys(self._db, prefix)
+
+    def delete(self, key: str) -> bool:
+        """Toglie la sessione salvata e la dimentica. True se c'era."""
+        self.invalidate(key)
+        return store.delete(self._db, key)
+
+    # -- il diario del turno in corso (``TurnPersistenceMixin``) --------------
+
+    def turn_reset(self, key: str, stamp: str, lines: list[str]) -> None:
+        store.turn_reset(self._db, key, stamp, lines)
+
+    def turn_append(self, key: str, start: int, lines: list[str]) -> None:
+        store.turn_append(self._db, key, start, lines)
+
+    def turn_read(self, key: str) -> tuple[str | None, list[str]]:
+        return store.turn_read(self._db, key)
+
+    def turn_drop(self, key: str) -> None:
+        store.turn_drop(self._db, key)
+
+
+def _when(raw: Any) -> datetime:
+    if isinstance(raw, str) and raw:
+        with suppress(ValueError):
+            return datetime.fromisoformat(raw)
+    return datetime.now()

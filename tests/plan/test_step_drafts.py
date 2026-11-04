@@ -69,6 +69,19 @@ def _stage(workspace: Path, text: str = "id: piante\nregole nuove\n", rel: str =
     return ref.id
 
 
+def _stage_in_step(driver: PlanDriver, workspace: Path) -> str:
+    """Una bozza scritta dal turno del passo: porta con sé il registro del piano,
+    e installata conta come lavoro del passo."""
+    from jenny.agent.write_journal import bind_journal
+    from jenny.plan.model import current_step
+    from jenny.plan.work import plan_journal
+
+    plan = driver.store.open_plan_for("piante")
+    step = current_step(plan)
+    with bind_journal(plan_journal(workspace, plan), step=step.id):
+        return _stage(workspace)
+
+
 def _steps_opened(bus: FakeBus) -> list[str]:
     return [
         m.metadata["plan_step"] for m in bus.inbound
@@ -80,7 +93,7 @@ async def test_a_step_with_a_draft_waits_and_closes_when_it_is_installed(
     driver: PlanDriver, workspace: Path, bus: FakeBus
 ) -> None:
     plan = await _running(driver)
-    draft = _stage(workspace)
+    draft = _stage_in_step(driver, workspace)
     text = await driver.step_done(KEY, "Nuovo AGENTS.md")
     assert "the change is waiting for the user's approval; the step will close when they decide" in text
     plan = driver.store.load(plan.id)
@@ -100,7 +113,7 @@ async def test_a_step_with_a_draft_waits_and_closes_when_it_is_installed(
     step = plan.steps[0]
     assert step.status == "done"
     assert step.note == "Nuovo AGENTS.md — change installed"
-    # La bozza installata è lavoro del passo: è nella sua foto «dopo».
+    # La bozza installata è lavoro del passo: è nel registro del piano, col passo.
     assert step.extra["files"] == {"added": 0, "changed": 1, "removed": 0}
     assert plan.steps[1].status == "now"
 
@@ -143,10 +156,14 @@ async def test_drafts_from_before_the_plan_and_outside_the_notebook_do_not_hold_
 ) -> None:
     before = _stage(workspace)  # di prima dell'Approva
     # Retrodatata: nello stesso millisecondo dell'Approva il confronto sarebbe un pari.
-    meta_path = workspace / ".jenny" / "staged" / before / "meta.json"
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    meta["created_ms"] -= 5_000
-    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    from jenny.agent.staged_writes import _db
+
+    with _db(workspace).write() as conn:
+        meta = json.loads(conn.execute("SELECT data FROM staged_drafts WHERE id = ?",
+                                       (before,)).fetchone()["data"])
+        meta["created_ms"] -= 5_000
+        conn.execute("UPDATE staged_drafts SET data = ?, created_ms = ? WHERE id = ?",
+                     (json.dumps(meta), meta["created_ms"], before))
     plan = await _running(driver)
     _stage(workspace, rel="USER.md")  # fuori dal quaderno
     await driver.step_done(KEY, "fatto")

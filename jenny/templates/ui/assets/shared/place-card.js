@@ -21,16 +21,16 @@
 
 /* Il lato di una tessera Web Mercator, e lo zoom della cartolina: le vie con i
    nomi, qualche isolato attorno. */
-export const TILE = 256;
-export const CARD_ZOOM = 16;
+const TILE = 256;
+const CARD_ZOOM = 16;
 const MIN_ZOOM = 3;
 
 /* L'area della mappa, in px CSS: deve combaciare con `.place-card-art` e
    `.place-list-map` in `mobile-style.css`. La cartolina e' larga al massimo 312
    e la lista 330; in una colonna piu' stretta il mosaico resta centrato e i bordi
    si tagliano in modo simmetrico, cosi' il punto resta in mezzo. */
-export const CARD_ART = { w: 312, h: 138 };
-export const LIST_ART = { w: 330, h: 104 };
+const CARD_ART = { w: 312, h: 138 };
+const LIST_ART = { w: 330, h: 104 };
 
 /* «Sei qui»: il posto e' entro la precisione del fix (mai meno di 30 m, che e'
    l'ordine di un GPS buono in citta') e il fix ha meno di dieci minuti. */
@@ -139,7 +139,7 @@ function placeIn(el) {
 /* ── Geometria ── */
 
 /** Distanza in metri fra due punti (haversine). */
-export function distanceM(a, b) {
+function distanceM(a, b) {
   const rad = Math.PI / 180;
   const dLat = (b.lat - a.lat) * rad;
   const dLng = (b.lng - a.lng) * rad;

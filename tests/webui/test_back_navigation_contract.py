@@ -22,12 +22,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS
+from support.kotlin_source import ANDROID_SRC, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "mobile-app.js"
-MAIN_ACTIVITY = ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny" / "MainActivity.kt"
+MAIN_ACTIVITY = ANDROID_SRC / "MainActivity.kt"
 
 
 def _app() -> str:
@@ -175,20 +174,29 @@ def test_closing_a_dialog_goes_through_a_cancelable_event() -> None:
     ``showRestartDialog`` (backup-flow) fa ``preventDefault()`` sul ``cancel``
     apposta: dopo un restore il riavvio non è opzionale. Back, Home ed Esc devono
     avere la stessa semantica di Esc nativo, non un potere in più: passano tutti
-    e tre da ``_dismissTopDialog``.
+    e tre da ``dismissTopDialog`` (``shared/dialog.js``, lo stesso della casa).
     """
-    body = _method(_app(), "_dismissTopDialog")
+    dialog_js = (ASSETS / "shared" / "dialog.js").read_text(encoding="utf-8")
+    body = re.search(r"\nexport function dismissTopDialog\(\) \{(.*?)\n\}", dialog_js, re.S)
+    assert body, "dismissTopDialog non trovato"
+    body = body.group(1)
     assert "new Event('cancel', { cancelable: true })" in body
     assert ".close()" in body, "chi non rifiuta va comunque chiuso"
     assert "if (top.dispatchEvent" in body, "close() solo se il cancel non è stato prevenuto"
 
     layers = _method(_app(), "_overlayLayers")
-    assert "this._dismissTopDialog()" in layers
+    assert "dismissTopDialog()" in layers
+    home = (ASSETS / "home-app.js").read_text(encoding="utf-8")
+    assert "if (dismissTopDialog()) return true;" in _method(home, "_closeOverlays")
 
     backup = (ASSETS / "shared" / "backup-flow.js").read_text(encoding="utf-8")
-    assert "addEventListener('cancel', (e) => e.preventDefault())" in backup, (
+    restart = backup[backup.index("export function showRestartDialog") :]
+    assert "cancelText: null" in restart, (
         "sparito il dialog non annullabile: il giro via evento `cancel` non ha più motivo di esistere"
     )
+    form = dialog_js[dialog_js.index("export function formDialog") :]
+    form = form[: form.index("\n}\n")]
+    assert "e.preventDefault();" in form and "if (cancellable && !dialog.dataset.busy)" in form
 
 
 def test_escape_is_the_same_chain_as_the_hardware_back() -> None:

@@ -15,9 +15,7 @@ import textwrap
 from pathlib import Path
 
 from support.home_dom import requires_jsdom, run_home
-from support.js_harness import requires_node, run_module
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS, requires_node, run_module
 
 pytestmark = requires_node
 

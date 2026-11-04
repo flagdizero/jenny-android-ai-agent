@@ -24,10 +24,10 @@ from jenny.bus.runtime_events import (
 )
 from jenny.config.schema import Config
 from jenny.cron.session_turns import monitor_session_key
+from jenny.providers.base import LLMRuntime
 from jenny.session import webui_turns as wt
 from jenny.session.manager import Session, SessionManager
 from jenny.session.turn_visibility import silent_turn_metadata
-from jenny.utils.llm_runtime import LLMRuntime
 
 # Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
 MONITOR_SESSION_KEY = monitor_session_key("rain-check")
@@ -245,25 +245,23 @@ async def test_turn_completed_reads_the_mood_and_publishes_the_frame(tmp_path):
 async def test_no_token_usage_is_recorded(tmp_path):
     """La fonte ``mascot`` resta per lo storico, ma nessuno ci scrive piu'.
 
-    Si guarda il file dei token, non una funzione sostituita: un
+    Si guardano i conti salvati, non una funzione sostituita: un
     ``monkeypatch`` su ``jenny.agent.token_usage.record_token_usage`` non vede
     chi l'ha importata per nome (``from … import record_token_usage``), e il
-    test restava verde con il file scritto.
+    test restava verde con i conti scritti.
     """
-    from jenny.agent.token_usage import token_usage_state_path
+    from jenny.agent.token_usage import read_token_usage_state
     from jenny.config.paths import set_workspace_dir
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     set_workspace_dir(workspace)  # ripristinato dalla fixture di tests/conftest.py
-    usage_file = token_usage_state_path()
-    assert workspace in usage_file.parents
 
     coordinator, bus, scheduled, provider, event = _mood_coordinator(tmp_path)
     await coordinator._handle_turn_completed_event(event)
     await _run_scheduled(scheduled)
     assert bus.publish_outbound.await_count == 2, "l'umore non e' partito: prova vuota"
-    assert not usage_file.exists()
+    assert read_token_usage_state()["days"] == {}
 
 
 @pytest.mark.parametrize("reply", ["Promemoria impostato.", "Buongiorno ☀️ oggi piove"])

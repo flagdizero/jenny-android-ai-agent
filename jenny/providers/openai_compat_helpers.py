@@ -17,8 +17,6 @@ from urllib.parse import urlsplit
 
 from jenny.providers.body_merge import deep_merge
 from jenny.providers.endpoint_budget import (
-    DEFAULT_REQUEST_TIMEOUT_S,
-    LOCAL_REQUEST_TIMEOUT_S,
     is_local_endpoint,
     request_timeout_s,
 )
@@ -57,12 +55,6 @@ _MIMO_THINKING_MODELS: frozenset[str] = frozenset({
     "mimo-v2-pro",
     "mimo-v2-omni",
 })
-# Budget HTTP e riconoscimento loopback vivono in ``providers/endpoint_budget.py``,
-# condivisi con l'Anthropic provider. Gli alias preservano i call-site e i test
-# che importano questi nomi da qui.
-_OPENAI_COMPAT_REQUEST_TIMEOUT_S = DEFAULT_REQUEST_TIMEOUT_S
-_LOCAL_REQUEST_TIMEOUT_S = LOCAL_REQUEST_TIMEOUT_S
-
 # DeepSeek V4: thinking acceso di default (effort ``high``), si spegne con
 # ``{"thinking": {"type": "disabled"}}`` (api-docs.deepseek.com/guides/thinking_mode,
 # letto il 05/09/2026). Senza questa riga ``reasoning_effort="none"`` non

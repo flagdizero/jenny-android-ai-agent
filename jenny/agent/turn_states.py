@@ -18,13 +18,14 @@ from loguru import logger
 
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.tools.nothing_to_report import NothingToReportTool
-from jenny.agent.turn_persistence import record_sent_content
+from jenny.agent.turn_persistence import prepare_save_boundary, record_sent_content
 from jenny.agent.turn_types import TurnState
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
 from jenny.runtime.user_text import say
-from jenny.session import turn_continuation
 from jenny.utils.document import extract_documents, prepare_attachments
+from jenny.utils.helpers import clip
 
 if TYPE_CHECKING:
     import asyncio
@@ -41,9 +42,9 @@ if TYPE_CHECKING:
     from jenny.bus.queue import MessageBus
     from jenny.bus.runtime_events import RuntimeEventPublisher
     from jenny.command import CommandRouter
+    from jenny.providers.base import LLMRuntime
     from jenny.security.workspace_access import WorkspaceScopeResolver
     from jenny.session.manager import Session, SessionManager
-    from jenny.utils.llm_runtime import LLMRuntime
 
 
 class StateHandlersMixin:
@@ -157,8 +158,9 @@ class StateHandlersMixin:
             ctx.msg = dataclasses.replace(msg, content=new_content, media=image_only)
             msg = ctx.msg
 
-        preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-        logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
+        logger.info(
+            "Processing message from {}:{}: {}", msg.channel, msg.sender_id, clip(msg.content, 80)
+        )
 
         # Session is already fetched by the caller (_process_message) but
         # ensure it exists in case this handler is invoked independently.
@@ -228,7 +230,7 @@ class StateHandlersMixin:
 
             await self.bus.publish_outbound(
                 OutboundMessage(
-                    channel="websocket",
+                    channel=WEBSOCKET_CHANNEL,
                     chat_id="webui",
                     content="",
                     metadata={"_apps_list_changed": True},
@@ -417,11 +419,11 @@ class StateHandlersMixin:
         return "ok"
 
     async def _state_save(self, ctx: TurnContext) -> str:
-        turn_continuation.prepare_save_boundary(ctx)
+        prepare_save_boundary(ctx)
 
         if (
             (ctx.final_content is None or not ctx.final_content.strip())
-            and not ctx.suppress_response
+            and not ctx.silent
         ):
             ctx.final_content = say("turn.empty")
 
@@ -446,7 +448,7 @@ class StateHandlersMixin:
         # cui ``_process_message`` costruisce il ``TurnOutcome``, e prima
         # viaggiava contrabbandato nei metadata inbound.
         ctx.spoke_via_tool = self._message_tool_spoke(ctx.tools)
-        if ctx.suppress_response:
+        if ctx.silent:
             ctx.outbound = None
             return "ok"
         ctx.outbound = self._assemble_outbound(

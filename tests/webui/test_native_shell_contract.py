@@ -17,19 +17,18 @@ c'è un emulatore in CI, e queste sono proprietà del codice, non del runtime.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS
+from support.kotlin_source import ANDROID_MAIN, read_source
 
-ROOT = Path(__file__).resolve().parents[2]
-ANDROID = ROOT / "android" / "app" / "src" / "main"
+ANDROID = ANDROID_MAIN
 JAVA = ANDROID / "java" / "com" / "flagdizero" / "jenny"
 MANIFEST = ANDROID / "AndroidManifest.xml"
 MAIN_ACTIVITY = JAVA / "MainActivity.kt"
 NOTIFIER = JAVA / "NotifierBridge.kt"
 LAYOUT = ANDROID / "res" / "layout" / "activity_main.xml"
-UI_ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+UI_ASSETS = ASSETS
 
 
 def _main_activity() -> str:
@@ -299,7 +298,10 @@ def test_only_our_open_chat_clears_the_alerts() -> None:
     assert "getStringExtra(EXTRA_OPEN_CHAT_TOKEN)" in check
     assert "MessageDigest.isEqual(" in check
     token = _code_only(_fun_body(kotlin, "openChatToken"))
-    assert "SecureRandom()" in token and "Context.MODE_PRIVATE" in token
+    assert "SecureRandom()" in token and "JennyPrefs.of(context)" in token
+    # Le preferenze dell'app sono private (``JennyPrefs``).
+    prefs = read_source("JennyPrefs")
+    assert "Context.MODE_PRIVATE" in prefs
     for fun in ("onNewIntent", "onCreate"):
         body = _code_only(_fun_body(kotlin, fun))
         assert "isOurOpenChat(this, intent)" in body, f"{fun} non controlla il gettone"

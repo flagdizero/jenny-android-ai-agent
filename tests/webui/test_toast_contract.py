@@ -19,8 +19,8 @@ import re
 from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 SHOP = ASSETS / "mobile-style.css"
 HOME = ASSETS / "home-style.css"
 

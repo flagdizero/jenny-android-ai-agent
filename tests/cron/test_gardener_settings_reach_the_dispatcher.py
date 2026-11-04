@@ -159,7 +159,7 @@ async def test_the_two_clocks_written_after_startup_reach_the_next_tick(
 
 
 def _cron(tmp_path: Path) -> CronService:
-    return CronService(store_path=tmp_path / "cron" / "jobs.json")
+    return CronService(tmp_path / "workspace")
 
 
 def _gardener_job(cron: CronService):

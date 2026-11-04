@@ -38,10 +38,9 @@ WebUI non ha un runner JS con DOM.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
+
 CHAT_JS = ASSETS / "mobile-chat.js"
 WS_JS = ASSETS / "shared" / "ws-manager.js"
 

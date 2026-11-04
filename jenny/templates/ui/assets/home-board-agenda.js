@@ -10,20 +10,9 @@
  */
 
 import { i18n } from './shared/i18n.js';
+import { button, el } from './shared/dom.js';
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
-function button(className, text, onClick) {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
 /** Le attese, dalla più vicina: quando, cosa, «Fatto» e «Togli».
  *
@@ -68,7 +57,7 @@ export function reminderForm({ onSave, onCancel }) {
   monthBox.type = 'checkbox';
   month.append(monthBox, document.createTextNode(i18n.t('board.section.reminderMonth')));
   const actions = el('div', 'home-board-actions');
-  const save = el('button', 'home-board-btn is-primary', i18n.t('board.section.save'));
+  const save = el('button', 'home-board-btn is-primary', i18n.t('common.save'));
   save.type = 'submit';
   actions.append(button('home-board-btn', i18n.t('common.cancel'), () => onCancel()), save);
   form.append(what, when, month, actions);

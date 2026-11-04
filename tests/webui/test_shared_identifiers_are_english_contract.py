@@ -10,11 +10,10 @@ quindi si sono rinominati senza migrazione. Qui si tiene che non tornino.
 
 from __future__ import annotations
 
-import json
 import re
 
 import pytest
-from support.js_harness import ASSETS
+from support.js_harness import ASSETS, locale
 
 _GONE = {
     "shared/skills-view.js": ("integrataBloccata", "tuaBloccata"),
@@ -35,7 +34,7 @@ def test_the_italian_names_are_gone(path: str) -> None:
 
 def test_the_skill_keys_have_their_english_names_in_both_languages() -> None:
     for loc in ("it", "en"):
-        skills = json.loads((ASSETS / "i18n" / f"{loc}.json").read_text(encoding="utf-8"))["skills"]
+        skills = locale(loc)["skills"]
         for key in ("builtIn", "builtInLocked", "yoursLocked"):
             assert skills.get(key), (loc, key)
         assert not {k for k in skills if re.search(r"Bloccata|^integrate$", k)}, loc

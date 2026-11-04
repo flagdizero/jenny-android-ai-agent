@@ -34,13 +34,20 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import locale, member, requires_node, run_js
+from support.js_harness import (
+    ASSETS,
+    FAKE_MENU_ELEMENT,
+    function,
+    locale,
+    member,
+    requires_node,
+    run_js,
+)
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHIP_JS = ASSETS / "shared" / "scope-chip.js"
 LIST_JS = ASSETS / "shared" / "conversation-list.js"
+WHEN_SRC = (ASSETS / "shared" / "when.js").read_text(encoding="utf-8")
 I18N_JS = ASSETS / "shared" / "i18n.js"
 CSS = ASSETS / "mobile-style.css"
 
@@ -62,7 +69,8 @@ def _const(source: str, name: str) -> str:
 _HARNESS = """
 import assert from 'node:assert/strict';
 
-const { ConversationList, ago } = await import('__LIST_URL__');
+const { ConversationList } = await import('__LIST_URL__');
+__AGO_FN__
 __HINT_KEYS__
 
 /* La `t()` vera di `i18n.js` sulle traduzioni vere: la nota va letta come la
@@ -77,30 +85,7 @@ const i18n = {
 /* Un elemento è quel poco che la tendina tocca — più due registri: gli
    attributi scritti e i listener montati. Il secondo è il test di "non
    tappabile": una riga che non ascolta niente non può promettere niente. */
-function makeEl(tag) {
-  const el = {
-    tag,
-    className: '',
-    textContent: '',
-    children: [],
-    dataset: {},
-    attrs: {},
-    listeners: [],
-    appendChild(child) { el.children.push(child); return child; },
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type) { el.listeners.push(type); },
-    scrollIntoView() {},
-    querySelector() { return makeEl('span'); },
-  };
-  el.classList = {
-    add(c) { el.className = (el.className + ' ' + c).trim(); },
-  };
-  Object.defineProperty(el, 'innerHTML', {
-    get() { return ''; },
-    set(v) { if (v === '') el.children.length = 0; },
-  });
-  return el;
-}
+__MAKE_EL__
 const document = { createElement: (tag) => makeEl(tag) };
 
 // Tutto il testo scritto nella tendina, in ordine di comparsa.
@@ -182,10 +167,13 @@ def _harness() -> str:
         # La mappa motivo→chiave e' passata in `conversation-list.js` col resto
         # di quel che i due gusci dividono: `reason` arriva dal server e la sua
         # traduzione e' una sola.
-        _HARNESS.replace("__HINT_KEYS__",
+        _HARNESS.replace("__MAKE_EL__", FAKE_MENU_ELEMENT)
+        .replace("__HINT_KEYS__",
                          _const(LIST_JS.read_text(encoding="utf-8"),
                                 "UNOPENABLE_HINT_KEYS"))
         .replace("__LIST_URL__", LIST_JS.as_uri())
+        # `ago` sta in `when.js`, sulla `i18n` del banco.
+        .replace("__AGO_FN__", "\n".join(function(WHEN_SRC, n) for n in ("dayOffset", "ago")))
         .replace("__PROJECTS__", member(src, "_projects"))
         .replace("__UNOPENABLE__", member(src, "_unopenable"))
         .replace("__LOAD_FAILED__", member(src, "_loadFailed"))

@@ -18,14 +18,19 @@
 import { wsManager } from './ws-manager.js';
 
 // Cap per blocco HTML (il backend rifiuta comunque payload oltre 256 KB).
-export const HTML_CAP = 48 * 1024;
+const HTML_CAP = 48 * 1024;
 // Elementi rimossi dalla potatura: rumore inutile al modello o troppo pesanti.
 const STRIP_SELECTOR = 'script, style, link, svg, template, noscript';
 
 /* Pota una stringa HTML: rimuove script/style/svg ecc. e commenti, tronca gli
    attributi lunghi (src/href, data-URI base64), comprime lo spazio, cappa. */
-export function pruneHtml(htmlString) {
+function pruneHtml(htmlString) {
   if (!htmlString) return '';
+  /* L'`inert` della radice: con la chat aperta sopra, la vista sotto lo porta
+     (`home-over.js`, `MobileApp.openChatOver`). Per chi la usa e' coperta, non
+     spenta, e nell'HTML Jenny la leggerebbe come disabilitata. Fuori dal
+     parser, che in node non c'e'. */
+  htmlString = htmlString.replace(/^(<[^>]*?)\sinert(="")?/, '$1');
   let out;
   try {
     const doc = new DOMParser().parseFromString(htmlString, 'text/html');

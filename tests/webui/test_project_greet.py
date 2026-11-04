@@ -61,7 +61,7 @@ class _Provider:
 
 @pytest.fixture(autouse=True)
 def _no_transcript(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(module, "read_transcript_lines", lambda key: [])
+    monkeypatch.setattr(module, "has_webui_transcript", lambda key: False)
 
 
 async def _greet(
@@ -156,7 +156,7 @@ async def test_a_conversation_picked_up_is_not_greeted(tmp_path: Path) -> None:
 async def test_a_transcript_without_a_session_still_counts_as_a_story(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(module, "read_transcript_lines", lambda key: [{"event": "user"}])
+    monkeypatch.setattr(module, "has_webui_transcript", lambda key: True)
     out, _, bus = await _greet(tmp_path, provider=_Provider())
     assert out["greeted"] is False and bus.out == []
 

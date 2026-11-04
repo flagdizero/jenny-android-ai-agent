@@ -30,9 +30,12 @@ CONTAINER = Path(__file__).resolve().parents[2] / "jenny" / "runtime" / "contain
 
 
 def _registered_system_job_ids() -> set[str]:
-    """Gli ``id`` letterali passati a ``register_system_job(CronJob(id=...))``."""
+    """Gli ``id`` letterali passati a ``register_system_job(CronJob(id=...))``,
+    più i lavoratori che il container registra con ``refresh_system_job``."""
+    from jenny.runtime.cron_dispatch import SYSTEM_WORKERS
+
     tree = ast.parse(CONTAINER.read_text(encoding="utf-8"))
-    found: set[str] = set()
+    found: set[str] = set(SYSTEM_WORKERS)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -48,25 +51,6 @@ def _registered_system_job_ids() -> set[str]:
                 if kw.arg == "id" and isinstance(kw.value, ast.Constant):
                     found.add(str(kw.value.value))
     return found
-
-
-def _retired_system_job_ids() -> set[str]:
-    """Il contenuto di ``_RETIRED_SYSTEM_JOBS``, letto dallo stesso sorgente."""
-    tree = ast.parse(CONTAINER.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        targets = []
-        if isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        elif isinstance(node, ast.Assign):
-            targets = node.targets
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id == "_RETIRED_SYSTEM_JOBS":
-                value = node.value
-                if isinstance(value, (ast.Tuple, ast.List)):
-                    return {
-                        str(el.value) for el in value.elts if isinstance(el, ast.Constant)
-                    }
-    return set()
 
 
 def test_the_ast_reader_actually_finds_something() -> None:
@@ -93,17 +77,14 @@ def test_every_registered_system_job_can_present_itself() -> None:
 def test_the_table_has_no_rows_for_jobs_nobody_registers() -> None:
     """L'altra direzione: una riga per un job che non esiste piu' e' testo morto.
 
-    I ritirati sono l'eccezione dichiarata — il loro job sparisce dallo store al
-    primo avvio della versione che li ritira, e nel frattempo il fallback dice di
-    loro la cosa giusta — quindi non devono avere una riga.
+    I ritirati non devono averne una: è la mancanza della riga che li fa ritirare
+    (``GatewayContainer._retire_orphan_system_jobs``), e nel frattempo il fallback
+    dice di loro la cosa giusta.
     """
     registered = _registered_system_job_ids()
     stale = sorted(set(SYSTEM_JOB_PURPOSES) - registered)
     assert not stale, f"righe in SYSTEM_JOB_PURPOSES per job non registrati: {stale}"
-
-    retired = _retired_system_job_ids()
-    assert retired, "_RETIRED_SYSTEM_JOBS non letto: il controllo sotto passerebbe a vuoto"
-    overlap = sorted(retired & set(SYSTEM_JOB_PURPOSES))
+    overlap = sorted({"atlas", "heartbeat"} & set(SYSTEM_JOB_PURPOSES))
     assert not overlap, f"job ritirati con una riga di presentazione: {overlap}"
 
 

@@ -11,11 +11,9 @@ trasparente attorno al bottone.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support import css_levels
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
 
 _TARGETS = (
     ("mobile-style.css", ".drawer-close"),

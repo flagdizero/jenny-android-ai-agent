@@ -1,20 +1,20 @@
 """Il turno in volo sta nel diario del turno, non nei metadati della sessione.
 
-Il checkpoint si scrive due volte per iterazione, e ogni scrittura riscrive il
-file di sessione intero. Con le iterazioni già chiuse del turno dentro il
-checkpoint, un turno di *n* iterazioni riscriveva ogni risultato di tool circa
-*n* volte: I/O quadratico nella lunghezza del turno, con un tetto di 200
-iterazioni. Il diario riceve in append solo i messaggi nuovi.
+Il checkpoint si scrive due volte per iterazione, e i metadati della sessione
+sono una riga sola che si riscrive intera. Con le iterazioni già chiuse del
+turno dentro il checkpoint, un turno di *n* iterazioni riscriveva ogni
+risultato di tool circa *n* volte: I/O quadratico nella lunghezza del turno,
+con un tetto di 200 iterazioni. Il diario riceve in append solo i messaggi nuovi.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
+import sqlite3
 
-import jenny.session.manager as session_manager
 from jenny.bus.events import InboundMessage
 from jenny.providers.base import LLMResponse, ToolCallRequest
+from jenny.session import store as session_store
 from jenny.session.manager import SessionManager
 from tests.support.agent import make_loop, make_provider
 from tests.support.aio import wait_until
@@ -43,14 +43,14 @@ async def _start(tmp_path, monkeypatch, steps: int = STEPS):
     for i in range(1, steps + 1):
         (tmp_path / f"f{i}.txt").write_text(chr(ord("a") + i % 26) * RESULT_CHARS, "utf-8")
     saves: list[int] = []
-    original = session_manager.atomic_write
+    original = session_store.save
 
-    def counting(path, data, **kwargs):
-        if path.name.startswith("unified_default"):
-            saves.append(len(data))
-        return original(path, data, **kwargs)
+    def counting(database, key, **kwargs):  # type: ignore[no-untyped-def]
+        if key == KEY:
+            saves.append(len(kwargs["metadata"]))
+        return original(database, key, **kwargs)
 
-    monkeypatch.setattr(session_manager, "atomic_write", counting)
+    monkeypatch.setattr(session_store, "save", counting)
     provider = make_provider()
     step = {"n": 0}
     hang = asyncio.Event()
@@ -73,10 +73,8 @@ async def _stop(task):
 async def test_checkpoint_saves_do_not_grow_with_the_turn(tmp_path, monkeypatch):
     loop, task, saves = await _start(tmp_path, monkeypatch)
     try:
-        on_disk = json.loads(
-            (tmp_path / "sessions" / "unified_default.jsonl").read_text("utf-8").splitlines()[0]
-        )
-        checkpoint = on_disk["metadata"][loop._RUNTIME_CHECKPOINT_KEY]
+        saved = SessionManager(tmp_path).read_session_metadata(KEY)
+        checkpoint = saved["metadata"][loop._RUNTIME_CHECKPOINT_KEY]
         assert "prior_messages" not in checkpoint
         assert checkpoint["prior_journal"]["count"] == 2 * (STEPS - 1)
         # Ogni salvataggio del turno porta al più l'iterazione in volo: il
@@ -90,7 +88,7 @@ async def test_checkpoint_saves_do_not_grow_with_the_turn(tmp_path, monkeypatch)
 async def test_a_kill_restores_the_whole_turn_from_the_journal(tmp_path, monkeypatch):
     loop, task, _saves = await _start(tmp_path, monkeypatch)
     try:
-        # Un processo nuovo: niente in memoria, solo i file.
+        # Un processo nuovo: niente in memoria, solo il database.
         fresh = make_loop(tmp_path, provider=make_provider())
         session = SessionManager(tmp_path).get_or_create(KEY)
         assert fresh._restore_runtime_checkpoint(session)
@@ -100,7 +98,7 @@ async def test_a_kill_restores_the_whole_turn_from_the_journal(tmp_path, monkeyp
         results = [m for m in session.messages if m.get("role") == "tool"]
         assert len(results) == STEPS
         assert all(len(str(m["content"])) >= RESULT_CHARS for m in results)
-        assert not fresh.sessions.turn_journal_path(KEY).exists()
+        assert fresh.sessions.turn_read(KEY) == (None, [])
     finally:
         await _stop(task)
 
@@ -108,10 +106,9 @@ async def test_a_kill_restores_the_whole_turn_from_the_journal(tmp_path, monkeyp
 async def test_a_journal_from_another_turn_is_not_restored(tmp_path, monkeypatch):
     loop, task, _saves = await _start(tmp_path, monkeypatch, steps=3)
     try:
-        path = loop.sessions.turn_journal_path(KEY)
-        lines = path.read_text("utf-8").splitlines()
-        stale = json.dumps({"_type": "turn_journal", "stamp": "a-different-turn"})
-        path.write_text("\n".join([stale, *lines[1:]]) + "\n", "utf-8")
+        with loop.sessions._db.write() as conn:
+            conn.execute("UPDATE session_turns SET stamp = 'a-different-turn' WHERE key = ?",
+                         (KEY,))
 
         session = SessionManager(tmp_path).get_or_create(KEY)
         assert loop._restore_runtime_checkpoint(session)
@@ -124,10 +121,10 @@ async def test_a_journal_from_another_turn_is_not_restored(tmp_path, monkeypatch
 
 
 async def test_an_unwritable_journal_keeps_the_turn_inline(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        SessionManager, "turn_journal_path",
-        lambda self, key: tmp_path / "missing-dir" / "journal",
-    )
+    def broken(self, key, stamp, lines):  # type: ignore[no-untyped-def]
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(SessionManager, "turn_reset", broken)
     loop, task, _saves = await _start(tmp_path, monkeypatch, steps=3)
     try:
         checkpoint = loop.sessions.get_or_create(KEY).metadata[loop._RUNTIME_CHECKPOINT_KEY]

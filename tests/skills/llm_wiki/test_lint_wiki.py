@@ -374,10 +374,10 @@ def test_the_ceiling_matches_the_one_the_prompt_uses(lint_wiki):
     così il giorno che uno cambia il test lo dice invece di lasciare un lint che
     avvisa alla soglia sbagliata."""
     source = (
-        Path(__file__).resolve().parents[3] / "jenny" / "agent" / "context.py"
+        Path(__file__).resolve().parents[3] / "jenny" / "utils" / "wiki_paths.py"
     ).read_text(encoding="utf-8")
 
-    assert f"_PROJECT_MAP_MAX_CHARS = {lint_wiki.MAP_MAX_CHARS}" in source
+    assert f"WIKI_MAP_MAX_CHARS = {lint_wiki.MAP_MAX_CHARS}" in source
 
 
 # ── E le pagine pure, con una differenza ─────────────────────────────────────
@@ -579,7 +579,7 @@ def test_a_wiki_without_a_journal_says_nothing_about_one(lint_wiki, tmp_path, ca
 
 def test_a_link_the_app_resolves_is_not_reported_dead(lint_wiki, tmp_path, capsys):
     """**Misurato sul telefono il 23/08.** Chi risolve i link davvero
-    (``webui/wiki.py::resolve_wikilink``) prova esatto, poi ``.md``, poi
+    (``utils/wiki_paths.py::resolve_wikilink``) prova esatto, poi ``.md``, poi
     **case-insensitive**, poi lo stem. Il lint confrontava con `==` sensibile
     alle maiuscole, quindi segnalava come morto un link che l'app apre.
 
@@ -1734,7 +1734,7 @@ def test_the_lint_and_the_app_resolve_a_link_the_same_way(lint_wiki, tmp_path):
     quello che diceva che andava bene. Qui i due verdetti si confrontano forma
     per forma, con l'esito atteso scritto in `_LINK_CASES`.
     """
-    from jenny.webui.wiki import resolve_wikilink
+    from jenny.utils.wiki_paths import resolve_wikilink
 
     root = _split_wiki(tmp_path)
     pages_dir = root / "wiki"
@@ -1753,10 +1753,10 @@ def test_the_two_order_rules_are_the_same_rule(lint_wiki):
     """`suffix_rank` è copiato in due file perché lo script non può importare il
     package. Se uno dei due cambia, l'accordo si rompe in silenzio su una wiki
     con due pagine omonime — un caso che nessuna fixture piccola incontra."""
-    from jenny.webui.wiki import _suffix_rank
+    from jenny.utils.wiki_paths import suffix_rank
 
     for p in (Path("wiki/a/nota.md"), Path("wiki/nota.md"), Path("wiki/b/z/nota.md")):
-        assert lint_wiki.suffix_rank(p) == _suffix_rank(p)
+        assert lint_wiki.suffix_rank(p) == suffix_rank(p)
 
 
 def test_a_folder_relative_link_is_not_reported_dead(lint_wiki, tmp_path, capsys):
@@ -1811,7 +1811,7 @@ def test_the_form_the_guide_gives_to_copy_is_a_form_both_sides_open(lint_wiki, t
     risolveva nell'app: la forma raccomandata rendeva un link morto sul telefono,
     e il lint — l'unico che poteva accorgersene — la accettava per stem.
     """
-    from jenny.webui.wiki import resolve_wikilink
+    from jenny.utils.wiki_paths import resolve_wikilink
 
     links = _guide_split_example_links()
     assert links, "il blocco d'esempio della guida non contiene più wikilink"
@@ -1838,7 +1838,7 @@ def test_a_link_that_leaves_the_pages_dir_is_dead_and_the_lint_says_how_to_fix_i
     lint perché *esisteva* una pagina con quello stem (il summary stesso). Venti
     link di questa forma stanno sulle wiki vere. Ora si segnalano, con il rimedio.
     """
-    from jenny.webui.wiki import resolve_wikilink
+    from jenny.utils.wiki_paths import resolve_wikilink
 
     root = _library(tmp_path)
     (root / "raw" / "notes").mkdir(parents=True)

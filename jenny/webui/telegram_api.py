@@ -29,8 +29,8 @@ def _new_pairing_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
-# Menu comandi del bot (setMyCommands), localizzato come le _BOT_STRINGS del
-# canale. Descrizioni 1-256 caratteri per vincolo Telegram.
+# Menu comandi del bot (setMyCommands), localizzato come i testi ``telegram.*``
+# di ``runtime/user_text.py``. Descrizioni 1-256 caratteri per vincolo Telegram.
 _BOT_COMMANDS: dict[str, list[dict[str, str]]] = {
     "it": [
         {"command": "start", "description": "Guida rapida"},

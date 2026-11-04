@@ -49,7 +49,6 @@ from jenny.config.tool_schemas import PythonExecConfig  # re-export (def in conf
 from jenny.security.subagent_policy import StagedWriteRequiredError
 from jenny.security.subagent_policy import check_read as _check_subagent_read
 from jenny.security.subagent_policy import check_write as _check_subagent_write
-from jenny.security.subagent_policy import current_subagent_policy as _current_subagent_policy
 from jenny.security.subagent_policy import must_stage as _must_stage_subagent_write
 from jenny.security.subagent_policy import note_move as _note_subagent_move
 from jenny.security.subagent_policy import note_write as _note_subagent_write
@@ -3326,10 +3325,12 @@ async def run_python_async(
     ident_cell: list[int | None] = [None]
     done_cell = [False]
 
-    # Dentro un aiutante il registro dell'annulla conta questo thread: dopo una
-    # cancellazione può continuare a scrivere, e l'annulla lo aspetta.
-    _policy = _current_subagent_policy()
-    journal = _policy.journal if _policy is not None else None
+    # Il registro dell'annulla legato (un aiutante, un turno di un piano) conta
+    # questo thread: dopo una cancellazione può continuare a scrivere, e
+    # l'annulla lo aspetta.
+    from jenny.agent.write_journal import current_journal
+
+    journal = current_journal()
 
     def _run():
         ident_cell[0] = threading.get_ident()
@@ -3558,10 +3559,10 @@ class PythonExecTool(PythonExecGateMixin, Tool):
         un file piccolo per progetto aperto in questo processo.
         """
         from jenny.security.workspace_access import current_workspace_scope
-        from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+        from jenny.session.keys import is_project_session_key, project_name
 
         current = (
-            session_key[len(PROJECT_SESSION_PREFIX):]
+            project_name(session_key)
             if session_key and is_project_session_key(session_key) else None
         )
         scope = current_workspace_scope()
@@ -3574,7 +3575,7 @@ class PythonExecTool(PythonExecGateMixin, Tool):
             if not is_project_session_key(key):
                 continue
             owner = self.namespace.session_owner(key)
-            identity = _project_identity(projects_dir / key[len(PROJECT_SESSION_PREFIX):])
+            identity = _project_identity(projects_dir / project_name(key))
             if identity is None or (owner is not None and owner != identity):
                 self.namespace.forget_session(key)
         if current and session_key:

@@ -20,7 +20,7 @@ from support.gateway_http import make_handler
 from websockets.http11 import Headers
 from websockets.http11 import Request as WsRequest
 
-from jenny.webui.wiki import build_graph, read_pages
+from jenny.webui.wiki import build_graph_from_pages, read_pages
 from jenny.webui.wiki_search import (
     SearchIndex,
     WikiSearchService,
@@ -52,7 +52,7 @@ def _make_wiki(wikis_dir: Path, name: str, pages: dict[str, str]) -> Path:
 
 def _index_for(pages_dir: Path):
     pages = read_pages(pages_dir)
-    graph = build_graph(pages_dir.parent)
+    graph = build_graph_from_pages(read_pages(pages_dir.parent / "wiki"))
     return pages, graph, SearchIndex.from_pages(pages, graph)
 
 

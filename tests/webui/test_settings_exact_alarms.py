@@ -21,21 +21,17 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 import pytest
-from support.kotlin_source import read_source
+from support.js_harness import ASSETS
+from support.kotlin_source import ANDROID_SRC, read_source
 
 from jenny.config.schema import KEEP_AWAKE_MODES
 
-ROOT = Path(__file__).resolve().parents[2]
-_UI_ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+_UI_ASSETS = ASSETS
 _SETTINGS_JS = _UI_ASSETS / "mobile-settings.js"
 _STYLE_CSS = _UI_ASSETS / "mobile-style.css"
-_MAIN_ACTIVITY = (
-    ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "flagdizero" / "jenny"
-    / "MainActivity.kt"
-)
+_MAIN_ACTIVITY = ANDROID_SRC / "MainActivity.kt"
 
 
 def _js() -> str:
@@ -80,17 +76,18 @@ def test_the_request_is_a_no_op_below_android_12() -> None:
     # `return false` pure, ma il no-op finisce sulle versioni sbagliate.
     guard = body.index("if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false")
     # La guardia sta prima di qualunque tentativo di aprire la schermata.
-    assert guard < body.index("startActivity")
+    assert guard < body.index("Intents.tryStart(")
 
 
 def test_the_request_never_takes_the_webview_down() -> None:
     source = _kotlin()
     body = source[source.index("fun requestExactAlarmPermission()") :][:1200]
 
-    launch = body.index("startActivity(intent)")
+    # Il tentativo passa da `Intents.tryStart`, che non solleva: il try e il
+    # catch stanno li' (v. `test_every_attempt_is_guarded`).
+    launch = body.index("Intents.tryStart(this@MainActivity, intent,")
     assert "runOnUiThread" in body[:launch]
-    assert body.rindex("try {", 0, launch) < launch
-    assert "catch (e: Exception)" in body[launch:]
+    assert "startActivity(" not in body
 
 
 # -- richiesta del permesso: UI ----------------------------------------------
@@ -192,7 +189,7 @@ def test_an_unknown_mode_prints_nothing_instead_of_the_raw_key() -> None:
     match = re.search(r"_keepAwakeCost\(mode\) \{\n(.*?)\n  \}", _js(), re.S)
     assert match, "_keepAwakeCost non trovata in mobile-settings.js"
 
-    assert "text === key ? '' : text" in match.group(1)
+    assert "return i18n.tOr(`settings.battery.keepAwakeCost.${mode}`);" in match.group(1)
 
 
 def test_the_cost_line_can_wrap() -> None:

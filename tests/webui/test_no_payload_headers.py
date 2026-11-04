@@ -19,11 +19,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from support.js_harness import ASSETS
+
 _REPO = Path(__file__).resolve().parents[2]
 _SCANNED = (
     (_REPO / "jenny" / "webui", "*.py"),
     (_REPO / "jenny" / "channels", "*.py"),
-    (_REPO / "jenny" / "templates" / "ui" / "assets", "*.js"),
+    (ASSETS, "*.js"),
 )
 
 # Header con un payload dentro: ``X-Jenny-<qualcosa>-Data``.

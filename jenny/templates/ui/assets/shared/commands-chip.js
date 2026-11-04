@@ -29,7 +29,7 @@ import { i18n } from './i18n.js';
 import { sessionManager } from './session-manager.js';
 import { armComposeMenu, claimComposeMenu } from './state.js';
 
-export class CommandsChip {
+class CommandsChip {
   constructor() {
     this.el = document.getElementById('commands-chip');
     this.menu = document.getElementById('commands-menu');
@@ -152,9 +152,7 @@ export class CommandsChip {
    *  tradotto deve comparire *con la sua descrizione*, non con
    *  `commands./foo.title` stampato in faccia all'utente. */
   _text(command, field, fallback) {
-    const key = `commands.${command.replace('/', '')}.${field}`;
-    const value = i18n.t(key);
-    return value === key ? (fallback || '') : value;
+    return i18n.tOr(`commands.${command.replace('/', '')}.${field}`, fallback || '');
   }
 
   _renderMenu() {

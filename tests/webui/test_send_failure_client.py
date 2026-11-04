@@ -19,15 +19,11 @@ funzioni sono state chiamate: il difetto è tutto in quella differenza.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, locale, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 WIRE_ERROR_JS = ASSETS / "shared" / "wire-error.js"
-I18N = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -116,7 +112,7 @@ const thread = (chat) => chat.chatArea.children.map((n) => {
 
 
 def _harness_src() -> str:
-    words = json.loads((I18N / "it.json").read_text(encoding="utf-8"))
+    words = locale("it")
     src = CHAT_JS.read_text(encoding="utf-8")
     return (
         _HARNESS.replace("__WORDS__", json.dumps({"common": words["common"], "chat": words["chat"]},

@@ -38,14 +38,17 @@ import { i18n } from './shared/i18n.js';
 import { setupLongPress } from './shared/longpress.js';
 import { Flower } from './home-flower.js';
 
-/* Da quale famiglia e' ogni strumento. Tabella e non una catena di if perche'
-   e' un dizionario, e perche' e' l'unico posto da aggiornare quando nasce uno
-   strumento nuovo. Chi non e' in elenco non sparisce: cade sul vocabolario
-   generico, che dice "mi do da fare" invece di mentire su cosa sta facendo. */
+/* Da quale famiglia e' ogni strumento **lo dice il filo**: ogni tool event porta
+   la sua `family` (`jenny/agent/progress_events.py::TOOL_FAMILIES`), e la
+   tabella vera sta la', accanto agli strumenti. Questa e' il ripiego per un
+   evento che non la porta — uno registrato prima del 02/11/2026, riletto dalla
+   storia — e non si aggiorna piu': uno strumento nuovo ha la sua famiglia sul
+   server. Chi non e' in elenco cade sul vocabolario generico, che dice "mi do
+   da fare" invece di mentire su cosa sta facendo. */
 export const FAMILY_BY_TOOL = {
   // Legge: guarda qualcosa che gia' esiste, senza toccarlo.
   read_file: 'read', list_dir: 'read', get_source: 'read', recall: 'read',
-  recall_history: 'read', memory: 'read', ui_view: 'read', my: 'read',
+  recall_history: 'read', recall_chat: 'read', memory: 'read', ui_view: 'read', my: 'read',
   subagent_status: 'read', list_exec_sessions: 'read', update_status: 'read',
   ssh_hosts: 'read', get_recent_logs: 'read',
   // Il quaderno a colpo d'occhio (check, map, read_many): quasi sempre letture.
@@ -70,6 +73,15 @@ export const FAMILY_BY_TOOL = {
 };
 
 const FALLBACK_FAMILY = 'busy';
+
+/** La famiglia di un evento: quella che porta, o la tabella, o il generico.
+ *  *event* e' un tool event (`{ name, family }`) o un nome solo. */
+export function familyOf(event) {
+  if (event && typeof event === 'object') {
+    return event.family || FAMILY_BY_TOOL[event.name] || FALLBACK_FAMILY;
+  }
+  return FAMILY_BY_TOOL[event] || FALLBACK_FAMILY;
+}
 
 /* Mezzo secondo prima di comparire: una risposta che arriva subito non deve
    far lampeggiare niente. */
@@ -171,8 +183,7 @@ export class ActivityLine {
     // succedendo adesso, e prenderlo per buono farebbe raccontare il passato.
     const started = events.filter((e) => e && e.phase === 'start' && e.name);
     if (!started.length) return;
-    const name = started[started.length - 1].name;
-    this._setFamily(FAMILY_BY_TOOL[name] || FALLBACK_FAMILY);
+    this._setFamily(familyOf(started[started.length - 1]));
   }
 
   /** La risposta sta arrivando: la riga si toglie di mezzo. */

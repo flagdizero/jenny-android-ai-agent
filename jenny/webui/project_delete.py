@@ -45,13 +45,20 @@ from jenny.session.project_traces import (
     delete_project_traces,
     describe_project_traces,
 )
+from jenny.utils.errors import CodedError
 from jenny.utils.wiki_paths import is_wiki_root
 from jenny.webui.wiki_registry import refresh_wiki_registry
 from jenny.webui.workspace_files import os_error_text
 
 
-class ProjectDeleteError(Exception):
-    """Cancellazione non riuscita, con un messaggio mostrabile all'utente."""
+class ProjectDeleteError(CodedError):
+    """Cancellazione non riuscita, con un messaggio mostrabile all'utente.
+
+    «Non c'e'» e' ``not_found``, come per il rinomino; gli altri ``bad_request``.
+    """
+
+    def __init__(self, message: str, *, code: str = "bad_request") -> None:
+        super().__init__(code, message)
 
 
 def _tree_files(root: Path) -> int:
@@ -85,46 +92,6 @@ def describe_project(*, wikis_dir: Path, workspace: Path, name: str) -> dict[str
     }
 
 
-def remove_notebook_crons(cron: Any, name: str) -> list[str]:
-    """Toglie i cron legati alle schede del quaderno *name*; ritorna gli id tolti.
-
-    Un cron chiesto nella chat di un quaderno porta ``payload.board =
-    {notebook, card, section}`` (``jenny/board/cron_link.py``). Cancellato il
-    quaderno restava nello store, e a ogni giro falliva con «notebook gone»
-    (``cron/bound_runner.py``) — per sempre, perche' nessuno poteva piu' aprire il
-    cassetto da cui si toglieva. Anche quelli in pausa (le schede nel cestino):
-    il cestino se ne va col quaderno.
-
-    **Sul loop, non nel thread della cancellazione**: il servizio cron riarma il
-    suo timer con l'event loop corrente, e da un thread di lavoro solleva «no
-    running event loop» (lo stesso motivo per cui ``board/edit.py`` mette in
-    pausa i cron delle schede sul loop). Un job che non si toglie non fa
-    fallire niente: il quaderno e' gia' cancellato, e il job si toglie a mano.
-    """
-    if cron is None:
-        return []
-    removed: list[str] = []
-    try:
-        jobs = cron.list_jobs(include_disabled=True)
-    except Exception:  # noqa: BLE001 — uno store illeggibile non ferma la cancellazione
-        logger.opt(exception=True).warning("Cron jobs of notebook {} not listed", name)
-        return []
-    for job in jobs:
-        link = getattr(job.payload, "board", None) or {}
-        if link.get("notebook") != name:
-            continue
-        try:
-            if cron.remove_job(job.id) == "removed":
-                removed.append(job.id)
-        except Exception:  # noqa: BLE001 — si prova il prossimo
-            logger.opt(exception=True).warning(
-                "Cron job {} of notebook {} not removed", job.id, name,
-            )
-    if removed:
-        logger.info("Removed {} cron job(s) of deleted notebook {}", len(removed), name)
-    return removed
-
-
 def delete_project(
     *,
     wikis_dir: Path,
@@ -155,7 +122,7 @@ def delete_project(
             f"a folder named {name} is in the way: it exists but is not a project"
         )
     if not root.exists() and not traces_before.exists:
-        raise ProjectDeleteError(f"no project named {name}")
+        raise ProjectDeleteError(f"no project named {name}", code="not_found")
 
     orphan = not root.exists()
 

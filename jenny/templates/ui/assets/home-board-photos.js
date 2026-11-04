@@ -24,11 +24,13 @@
  *  fondo al cassetto, senza un campo per la nota: cinque foto, cinque sezioni.
  */
 
+import { shortDate } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { i18n } from './shared/i18n.js';
 import { confirmDialog } from './shared/dialog.js';
 import { PinnedDeck } from './home-board-deck.js';
 import { openPhotoViewer } from './home-photo-viewer.js';
+import { button, el, icon } from './shared/dom.js';
 
 /* Il lato lungo di una foto mandata al server: il telefono ne fa di 4000 px, e
    in un cassetto largo 590 ne servono meno di un terzo. */
@@ -37,7 +39,7 @@ const PHOTO_MAX_SIDE = 1600;
 const DECK_LOADED = 3;
 
 /** Riduce una foto prima di mandarla: JPEG, lato lungo `PHOTO_MAX_SIDE`. */
-export async function shrinkPhoto(file) {
+async function shrinkPhoto(file) {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
@@ -53,33 +55,8 @@ export async function shrinkPhoto(file) {
   return { mime: 'image/jpeg', data: btoa(binary) };
 }
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
-function button(className, text, onClick) {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
-/** «14 ottobre»: la data per esteso, nella pagina d'album e a tutto schermo. */
-export function photoDay(iso, locale = i18n.locale) {
-  const at = iso ? new Date(iso) : null;
-  if (!at || Number.isNaN(at.getTime())) return '';
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(at);
-}
-
-/** «14 ott»: il giorno in cui la foto e' stata appuntata. */
-export function photoDate(iso, locale = i18n.locale) {
-  const at = iso ? new Date(iso) : null;
-  if (!at || Number.isNaN(at.getTime())) return '';
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at);
-}
 
 /** Le immagini di un quaderno come `blob:` (la rotta vuole il segreto, che un
  *  `<img src>` non porterebbe), una volta per percorso: a parita' di percorso
@@ -200,7 +177,7 @@ export class DrawerPhotos {
         img.alt = '';
         const cap = el('span', 'home-photos-cap');
         cap.append(el('span', 'home-photos-cap-text', photo.caption || ' '),
-          el('span', 'home-photos-cap-when', photoDate(photo.created)));
+          el('span', 'home-photos-cap-when', shortDate(photo.created)));
         return [el('span', 'home-photos-tape'), img, cap];
       },
       label: (i) => {
@@ -208,7 +185,7 @@ export class DrawerPhotos {
         return i18n.t('board.photos.deck', {
           n: i + 1, count: n,
           text: photo.caption || i18n.t('board.photos.noNote'),
-          when: photoDate(photo.created),
+          when: shortDate(photo.created),
         });
       },
     });
@@ -294,9 +271,7 @@ export class DrawerPhotos {
     list.appendChild(el('p', 'home-notes-sub', `${this.title} · ${i18n.t('board.photos.hint')}`));
     const grid = el('div', 'home-photos-grid');
     const add = button('home-photos-new', '', () => this.compose());
-    const icon = el('i', 'ti ti-camera-plus');
-    icon.setAttribute('aria-hidden', 'true');
-    add.append(icon, el('span', '', i18n.t('board.photos.new')));
+    add.append(icon('ti-camera-plus'), el('span', '', i18n.t('board.photos.new')));
     grid.appendChild(add);
     for (const photo of this.photos) grid.appendChild(this._tile(photo));
     list.appendChild(grid);
@@ -343,30 +318,24 @@ export class DrawerPhotos {
   /** Una foto a riposo: l'immagine, la nota su due righe, la data. */
   _tile(photo) {
     const tile = button('home-photos-tile', '', () => this._show({ openId: photo.id }));
-    tile.setAttribute('aria-label', `${photo.caption || i18n.t('board.photos.noNote')}, ${photoDate(photo.created)}`);
+    tile.setAttribute('aria-label', `${photo.caption || i18n.t('board.photos.noNote')}, ${shortDate(photo.created)}`);
     const cap = el('span', `home-photos-tile-text${photo.caption ? '' : ' is-empty'}`,
       photo.caption || i18n.t('board.photos.noNote'));
     tile.append(this._img(photo, 'home-photos-img'), cap,
-      el('span', 'home-photos-tile-when', photoDate(photo.created)));
+      el('span', 'home-photos-tile-when', shortDate(photo.created)));
     return tile;
   }
 
   _status(photo) {
-    if (photo.status === 'integrated') return i18n.t('board.photos.integrated');
-    if (photo.status === 'pending') return i18n.t('board.photos.pending');
+    if (photo.status === 'integrated') return i18n.t('board.wiki.integrated');
+    if (photo.status === 'pending') return i18n.t('board.wiki.pending');
     return '';
-  }
-
-  _icon(name) {
-    const icon = el('i', `ti ti-${name}`);
-    icon.setAttribute('aria-hidden', 'true');
-    return icon;
   }
 
   /** Un comando della colonna accanto alla polaroid: icona e parole. */
   _act(className, iconName, text, onClick) {
     const b = button(`home-photos-act${className ? ` ${className}` : ''}`, '', onClick);
-    b.append(this._icon(iconName), el('span', '', text));
+    b.append(icon(`ti-${iconName}`), el('span', '', text));
     return b;
   }
 
@@ -385,11 +354,11 @@ export class DrawerPhotos {
       const i = this.photos.indexOf(photo);
       const go = (k) => () => this._show({ openId: this.photos[k].id });
       const prev = button('home-photos-step', '', go(i - 1));
-      prev.appendChild(this._icon('chevron-left'));
+      prev.appendChild(icon('ti-chevron-left'));
       prev.setAttribute('aria-label', i18n.t('board.photos.prev'));
       prev.disabled = i === 0;
       const next = button('home-photos-step', '', go(i + 1));
-      next.appendChild(this._icon('chevron-right'));
+      next.appendChild(icon('ti-chevron-right'));
       next.setAttribute('aria-label', i18n.t('board.photos.next'));
       next.disabled = i === this.photos.length - 1;
       const pager = el('span', 'home-photos-pager');
@@ -413,7 +382,7 @@ export class DrawerPhotos {
     shot.appendChild(img);
     if (photo && !editing) {
       shot.setAttribute('aria-label', i18n.t('board.photos.full'));
-      shot.appendChild(el('span', 'home-photos-pol-full')).appendChild(this._icon('arrows-maximize'));
+      shot.appendChild(el('span', 'home-photos-pol-full')).appendChild(icon('ti-arrows-maximize'));
     }
     const cap = el('div', 'home-photos-pol-cap');
     if (editing) {
@@ -432,7 +401,7 @@ export class DrawerPhotos {
 
     const side = el('div', 'home-photos-side');
     side.appendChild(el('span', 'home-photos-day',
-      photo ? photoDay(photo.created) : i18n.t('board.photos.now')));
+      photo ? shortDate(photo.created, { month: 'long' }) : i18n.t('board.photos.now')));
     const status = photo ? this._status(photo) : '';
     if (status) {
       const state = el('span', `home-photos-state is-${photo.status}`);
@@ -442,7 +411,7 @@ export class DrawerPhotos {
     side.appendChild(el('span', 'home-photos-rule'));
     const acts = el('div', 'home-photos-acts');
     if (editing) {
-      const save = button('home-photos-save', i18n.t('board.section.save'), () => this._save(photo));
+      const save = button('home-photos-save', i18n.t('common.save'), () => this._save(photo));
       save.disabled = this._saving;
       acts.append(save, this._act('is-quiet', 'x', i18n.t('common.cancel'),
         () => this._show(photo ? { openId: photo.id } : {})));
@@ -471,9 +440,9 @@ export class DrawerPhotos {
       urlOf: (path) => this.urls.get(notebook, path),
       words: {
         count: (n, count, card) => i18n.t('board.photos.viewer', { card, n, count }),
-        day: (iso) => photoDay(iso),
+        day: (iso) => shortDate(iso, { month: 'long' }),
         state: (p) => this._status(p),
-        close: i18n.t('board.notes.close'),
+        close: i18n.t('common.close'),
       },
       onIndex: (i) => {
         if (!this.openId || this.editId || this.photos[i]?.id === this.openId) return;

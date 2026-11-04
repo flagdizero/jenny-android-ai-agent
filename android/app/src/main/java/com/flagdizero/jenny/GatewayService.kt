@@ -1,13 +1,10 @@
 package com.flagdizero.jenny
 
-import android.Manifest
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
 import android.os.Build
@@ -15,7 +12,6 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -351,7 +347,10 @@ class GatewayService : Service() {
         // esistere anche se l'avvio del gateway fallisce a metà, perché è
         // proprio quello il guasto che deve saper riparare. `Watchdog.arm`
         // legge le impostazioni dalle prefs (default se Python non le ha mai
-        // spinte), quindi non ha bisogno che il runtime sia su.
+        // spinte), quindi non ha bisogno che il runtime sia su. La fotografia
+        // del battito va presa prima del battito nuovo: è il «prima» del buco
+        // che Python registra all'avvio.
+        Watchdog.takeGapProbe(this)
         Watchdog.noteAlive(this)
         Watchdog.arm(this)
         // Accanto al watchdog e per la stessa ragione: la rete deve esistere
@@ -771,17 +770,10 @@ class GatewayService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val manager = getSystemService(NotificationManager::class.java)
-        val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            getString(R.string.gateway_channel_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = getString(R.string.gateway_channel_description)
-            setSound(null, null)
-            enableVibration(false)
-        }
-        manager.createNotificationChannel(channel)
+        JennyChannels.ensure(
+            this, NOTIFICATION_CHANNEL_ID, R.string.gateway_channel_name,
+            R.string.gateway_channel_description, NotificationManager.IMPORTANCE_LOW, silent = true,
+        )
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(getString(R.string.gateway_notification_title))
@@ -797,23 +789,10 @@ class GatewayService : Service() {
     /**
      * Tap sulla notifica → apre Jenny. È l'unica via di rientro sempre visibile
      * quando l'app non è il launcher attivo, e senza questo intent la notifica
-     * persistente non fa assolutamente niente al tocco.
-     *
-     * Intent esplicito e senza categoria: MainActivity è `singleTask` e riporta
-     * a galla il task esistente via `onNewIntent`, che simula la pressione di
-     * Home (tornando in chat) solo per gli intent con `CATEGORY_HOME`. Toccare
-     * la notifica lascia quindi l'utente dov'era.
+     * persistente non fa assolutamente niente al tocco. Lascia l'utente
+     * dov'era: v. [JennyChannels.openJenny].
      */
-    private fun openUiIntent(): PendingIntent {
-        val intent = Intent(this, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return PendingIntent.getActivity(
-            this,
-            OPEN_UI_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
+    private fun openUiIntent(): PendingIntent = JennyChannels.openJenny(this, OPEN_UI_REQUEST_CODE)
 
     /**
      * Porta il service in foreground. Ritorna se al ritorno CI SIAMO — non se
@@ -909,7 +888,7 @@ class GatewayService : Service() {
         }
     }
 
-    private fun hasLocationPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
+    // FINE o COARSE, come il tool: con la sola posizione approssimativa il tipo
+    // `location` serve lo stesso, e Android lo concede.
+    private fun hasLocationPermission(): Boolean = LocationBridge.hasPermission(this)
 }

@@ -149,7 +149,9 @@ async def test_the_clock_migrates_on_its_pass(tmp_path) -> None:
         {"id": "r-x", "card": "acero", "text": "Travaso", "state": "open",
          "when": {"kind": "date", "date": "2030-01-01", "precision": "day"}},
     ])
-    line = await run_reminders(None, ws, cron=cron)
+    # Solo il giro che lo chiede (il primo di ogni avvio, v. ``CronDispatcher``).
+    assert await run_reminders(None, ws, cron=cron) is None
+    line = await run_reminders(None, ws, cron=cron, migrate_legacy=True)
     assert line is not None and "1 reminders migrated" in line
     assert [j.name for j in cron.list_jobs()] == ["Travaso"]
-    assert await run_reminders(None, ws, cron=cron) is None
+    assert await run_reminders(None, ws, cron=cron, migrate_legacy=True) is None

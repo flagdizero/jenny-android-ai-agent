@@ -25,9 +25,7 @@ import re
 from pathlib import Path
 
 import pytest
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
 
 # I file che definiscono una classe con metodi privati: quelli in cui la
 # domanda ha senso. `shared/` entra pure lui — `update-flow.js` e'

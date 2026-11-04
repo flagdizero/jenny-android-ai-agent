@@ -5,7 +5,7 @@
    l'aveva usato restava fermo sulla lingua scelta allora, senza piu' un modo
    di cambiarla. Se tornera' una scelta per-app sara' `android:localeConfig`,
    che ricrea l'Activity: un cambio a caldo non serve. */
-export class I18n {
+class I18n {
   constructor() {
     this.locale = this.detectLocale();
     this.translations = {};
@@ -65,6 +65,14 @@ export class I18n {
     }
     return value;
   }
+
+  /** *key* tradotta, o *fallback* se la traduzione non c'e': un valore nuovo
+   *  del server (uno stato, un comando, un motivo) arriva prima dei file
+   *  i18n, e `t` stamperebbe la chiave grezza a schermo. */
+  tOr(key, fallback = '', params) {
+    const text = this.t(key, params);
+    return text === key ? fallback : text;
+  }
 }
 
 /** Fonde *extra* dentro *base*: le foglie di *extra* vincono, i rami si uniscono. */
@@ -81,3 +89,7 @@ function _deepMerge(base, extra) {
 }
 
 export const i18n = new I18n();
+
+/** Il traduttore da passare a chi ne vuole uno (`describeSchedule`,
+ *  `humanizeDuration`, `skillsSummary`, ...): erano sette lambda uguali. */
+export const tr = (key, params) => i18n.t(key, params);

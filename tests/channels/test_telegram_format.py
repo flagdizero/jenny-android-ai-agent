@@ -73,3 +73,11 @@ def test_split_hard_cut_without_boundaries() -> None:
 def test_default_limit_is_telegram_max() -> None:
     chunks = split_message("y" * (TELEGRAM_MAX_LEN + 10))
     assert len(chunks) == 2
+
+
+def test_wiki_links_become_words_as_in_notifications() -> None:
+    """``[[pagina]]`` arrivava su Telegram con le parentesi: la regola è quella
+    di ``utils.plain_text`` (etichetta, o nome della pagina a parole)."""
+    out = markdown_to_telegram_html("Vedi [[piano-concordato]] e [[orto/semine|le semine]].")
+    assert out == "Vedi piano concordato e le semine."
+    assert markdown_to_telegram_html("`[[resta]]`") == "<code>[[resta]]</code>"

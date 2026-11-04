@@ -7,7 +7,7 @@
  */
 
 import { api } from './api-client.js';
-import { i18n } from './i18n.js';
+import { i18n, tr } from './i18n.js';
 import { openOutsideWebView } from './content-link.js';
 import { placeTarget, renderPlaces } from './place-card.js';
 
@@ -70,7 +70,7 @@ function dark() {
 }
 
 const deps = {
-  t: (key, params) => i18n.t(key, params),
+  t: tr,
   lastFix,
   tileUrl,
   dark,

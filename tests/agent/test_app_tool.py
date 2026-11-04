@@ -100,8 +100,8 @@ async def test_a_new_app_is_live_at_once_with_its_tools(personal: Path) -> None:
     assert find_app(ws, "spesa") is not None
     assert not (ws / "apps" / ".drafts" / "spesa").exists()
     registry = ToolRegistry()
-    AppToolsSyncer(ws).sync(registry)
-    assert registry.get("spesa_add") is not None
+    names, _changed = AppToolsSyncer(ws).sync(registry)
+    assert "spesa.add" in names and registry.get("use_app") is not None
     await execute_action(ws, "spesa", "add", {"what": "latte", "done": False})
     view = summary_view(ws, find_app(ws, "spesa"), {})
     assert (view["value"], view["rows"]) == (1, [{"what": "latte"}])
@@ -499,9 +499,9 @@ async def test_a_published_app_brings_its_tools_into_the_same_turn(personal: Pat
     await _builder("unified:default").execute(
         action="draft", slug="portafoglio",
         files={"app.json": json.dumps(PORTAFOGLIO), "run.py": SUM})
-    assert registry.get("portafoglio_set_quote") is None
+    assert "portafoglio" not in syncer.apps()
     await publisher.execute(action="publish", slug="portafoglio")
-    assert registry.get("portafoglio_set_quote") is not None
+    assert "portafoglio" in syncer.apps() and registry.get("use_app") is not None
 
 
 def test_startup_publishes_only_migrated_drafts(ws: Path) -> None:
@@ -575,10 +575,10 @@ async def test_publish_says_when_the_screen_changed(personal: Path) -> None:
 
 async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -> None:
     """La bozza è dell'app-builder, la pubblica Jenny: annullare l'aiutante rimette
-    anche l'app viva (``agent.subagent_journal``). Prima l'annulla diceva «rimesso»
+    anche l'app viva (``agent.write_journal``). Prima l'annulla diceva «rimesso»
     — la bozza non c'era più — e l'app restava cambiata."""
-    from jenny.agent.subagent_journal import journal_for
     from jenny.agent.tools.app_tool import AppBuildTool, AppPublishTool
+    from jenny.agent.write_journal import HELPER, bind_journal, journal_for, journal_key
     from jenny.security.subagent_policy import (
         SubagentRunPolicy,
         enter_subagent_policy,
@@ -595,10 +595,10 @@ async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -
               for p in live.rglob("*") if p.is_file()}
 
     policy = SubagentRunPolicy.for_run("t9", ws)
-    policy.journal = journal_for(ws, "lin-b")
-    policy.journal.begin("t9", 1)
+    journal = journal_for(ws, journal_key(HELPER, "lin-b"))
+    journal.begin("t9", 1)
     builder = AppBuildTool(origin_session_key="unified:default", lineage_id="lin-b")
-    with enter_subagent_policy(policy):
+    with enter_subagent_policy(policy), bind_journal(journal):
         out = await builder.execute(action="set", slug="portafoglio", key="reader.every",
                                     value="1440")
         settle_writes("app")
@@ -607,7 +607,7 @@ async def test_undoing_the_builder_puts_the_published_app_back(personal: Path) -
     assert "`portafoglio` is updated" in out, out
     assert json.loads((live / "app.json").read_text())["reader"]["every"] == 1440
 
-    report = policy.journal.undo(by="jenny")
+    report = journal.undo(by="jenny")
     assert report.kept == [], report.kept
     after = {p.relative_to(live).as_posix(): p.read_bytes()
              for p in live.rglob("*") if p.is_file()}

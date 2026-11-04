@@ -26,12 +26,9 @@ Asserzioni sul sorgente, nello stile del resto di ``tests/webui/``.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.kotlin_source import read_source
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS, ROOT
+from support.kotlin_source import ANDROID_SRC, read_source
 
 
 def _src(name: str) -> str:
@@ -570,7 +567,7 @@ def test_the_gesture_margin_chain_is_unbroken() -> None:
     esattamente quegli otto pixel a separare "scorre" da "l'interfaccia
     collassa"). Questo test è il nodo che li tiene insieme.
     """
-    kotlin = read_source(ROOT / "android/app/src/main/java/com/flagdizero/jenny/MainActivity.kt")
+    kotlin = read_source(ANDROID_SRC / "MainActivity.kt")
     assert "fun getBottomGestureInset()" in kotlin
     # Raggiunto solo per reflection: senza l'annotazione la WebView non lo vede,
     # e R8 in release non avrebbe motivo di tenerlo.
@@ -1080,3 +1077,16 @@ def test_the_grid_hides_text_without_hiding_it_from_talkback() -> None:
     assert block, "la regola che nasconde i testi secondari non c'e'"
     assert "clip-path: inset(50%)" in block.group(1)
     assert "display: none" not in block.group(1)
+
+
+def test_the_app_page_has_its_own_class_not_the_board_drawer_s() -> None:
+    """``.home-drawer`` era due cose: il cassetto della bacheca
+    (``home-board-drawer.js``) e la pagina App. La pagina ereditava la cornice
+    del cassetto (20 px di lato, 16 fra i pezzi, il contenitore per le query) e
+    ``#launcher-sheet`` doveva disfarla."""
+    html = (ROOT / "jenny" / "templates" / "ui" / "index.html").read_text(encoding="utf-8")
+    sheet = re.search(r'<div [^>]*id="launcher-sheet"[^>]*>', html).group(0)
+    assert 'class="home-launcher"' in sheet, sheet
+    css = _src("home-style.css")
+    assert len(re.findall(r"^\.home-drawer \{", css, re.M)) == 1, "un .home-drawer solo: la bacheca"
+    assert not re.search(r"^#launcher-sheet \{[^}]*\bgap: 0", css, re.M), "una cornice da disfare"

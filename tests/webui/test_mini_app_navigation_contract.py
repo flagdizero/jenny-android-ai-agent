@@ -29,10 +29,9 @@ Asserzioni sul sorgente, nello stile di
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS, ROOT
+
 SDK_JS = ASSETS / "apps" / "jenny-sdk.js"
 APPS_JS = ASSETS / "shared" / "apps-actions.js"
 SKILL_DIR = ROOT / "jenny" / "skills" / "app-creator"
@@ -138,7 +137,7 @@ def test_go_back_dismisses_the_topmost_dialog_before_the_screen() -> None:
     )
     body = _fn(_sdk(), "closeTopDialog")
     assert "new Event('cancel', { cancelable: true })" in body, (
-        "semantica di Esc: chi rifiuta la chiusura va rispettato, come _dismissTopDialog nella SPA"
+        "semantica di Esc: chi rifiuta la chiusura va rispettato, come dismissTopDialog nella SPA"
     )
     assert "return true" in body, "la pressione è consumata anche se la chiusura è stata rifiutata"
 

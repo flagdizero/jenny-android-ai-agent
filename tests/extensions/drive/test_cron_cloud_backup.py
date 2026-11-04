@@ -34,6 +34,12 @@ class _FakeAgent:
     async def process_direct(self, prompt: str, **kwargs: Any):
         self.calls.append({"prompt": prompt, **kwargs})
 
+    async def process_direct_outcome(self, prompt: str, **kwargs: Any):
+        from jenny.agent.turn_types import TurnOutcome
+
+        self.calls.append({"prompt": prompt, **kwargs})
+        return TurnOutcome.spoke_via_tool()
+
 
 class _FakeCron:
     monitor_followup = None

@@ -27,29 +27,24 @@ from jenny.webui.transcript_recorder import (
 )
 from jenny.webui.transcript_replay import replay_transcript_to_ui_messages
 
-# Store layer (persistenza JSONL/segmenti). Re-export: gli importatori esterni e i
+# Store layer (righe di ``state.sqlite``). Re-export: gli importatori esterni e i
 # test continuano a leggere questi simboli da ``webui.transcript``. L'alias ridondante
 # marca i re-export che non hanno un chiamante interno (ruff non li pota).
 from jenny.webui.transcript_store import (
     _TRANSCRIPT_ACTIVE_CHUNK_ID,
+    _has_active_chunk,
     _is_session_boundary_row,
     _is_user_transcript_row,
     _read_chunk_turns,
     _read_segment_manifest_entries,
-    _rebuild_segment_manifest,
-    _rotate_active_transcript_if_needed,
     _split_transcript_turns,
     read_transcript_lines,
-    webui_transcript_path,
 )
 from jenny.webui.transcript_store import (
     append_transcript_object as append_transcript_object,
 )
 from jenny.webui.transcript_store import (
     delete_webui_transcript as delete_webui_transcript,
-)
-from jenny.webui.transcript_store import (
-    webui_transcript_segments_dir as webui_transcript_segments_dir,
 )
 
 WEBUI_TRANSCRIPT_SCHEMA_VERSION = 3
@@ -149,7 +144,6 @@ class _ChunkCache:
 def _chunk_turn_refs(
     session_key: str, cache: _ChunkCache | None = None
 ) -> list[_TranscriptChunkRef]:
-    _rotate_active_transcript_if_needed(session_key)
     cache = cache or _ChunkCache(session_key)
     refs: list[_TranscriptChunkRef] = []
     ordinal = 0
@@ -160,7 +154,7 @@ def _chunk_turn_refs(
             continue
         refs.append(_TranscriptChunkRef(chunk_id, ordinal, turn_count, int(entry["user_count"])))
         ordinal += turn_count
-    if webui_transcript_path(session_key).is_file():
+    if _has_active_chunk(session_key):
         active_turns = cache.turns(_TRANSCRIPT_ACTIVE_CHUNK_ID)
         active_turn_count = len(active_turns)
         if active_turn_count > 0:
@@ -245,7 +239,6 @@ def _select_transcript_page(
     *,
     limit: int | None,
     before: str | None,
-    _manifest_rebuilt: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     page_limit = _coerce_page_limit(limit)
     cache = _ChunkCache(session_key)
@@ -266,18 +259,6 @@ def _select_transcript_page(
         if local_upper <= 0:
             continue
         turns = cache.turns(chunk.chunk_id)
-        if (
-            chunk.chunk_id != _TRANSCRIPT_ACTIVE_CHUNK_ID
-            and len(turns) != chunk.turn_count
-            and not _manifest_rebuilt
-        ):
-            _rebuild_segment_manifest(session_key)
-            return _select_transcript_page(
-                session_key,
-                limit=limit,
-                before=before,
-                _manifest_rebuilt=True,
-            )
         local_upper = min(local_upper, len(turns))
         for turn_index in range(local_upper - 1, -1, -1):
             ordinal = chunk.start_ordinal + turn_index

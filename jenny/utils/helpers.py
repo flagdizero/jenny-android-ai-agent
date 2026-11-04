@@ -264,8 +264,9 @@ def ensure_dir(path: Path) -> Path:
 
 def current_time_str(timezone: str | None = None) -> str:
     """Return the current time string."""
-    tz = safe_zoneinfo(timezone) if timezone else None
-    now = datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    from jenny.utils.clock import local_now
+
+    now = local_now(timezone)
     offset = now.strftime("%z")
     offset_fmt = f"{offset[:3]}:{offset[3:]}" if len(offset) == 5 else offset
     tz_name = timezone or (time.strftime("%Z") or "UTC")
@@ -338,6 +339,19 @@ def safe_filename(name: str) -> str:
 def image_placeholder_text(path: str | None, *, empty: str = "[image]") -> str:
     """Build an image placeholder string."""
     return f"[image: {path}]" if path else empty
+
+
+def clip(text: str, limit: int) -> str:
+    """*text* in non più di *limit* caratteri, con «…» al posto di quel che manca.
+
+    Per anteprime, log ed elenchi: era scritto a mano in una quindicina di posti,
+    con ``n`` o ``n-1``, con ``…`` o ``...``, togliendo o no lo spazio prima dei
+    puntini. Per un risultato che il modello deve sapere troncato c'è
+    :func:`truncate_text`, che lo dice per esteso.
+    """
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
 
 
 def truncate_text(text: str, max_chars: int) -> str:
@@ -457,6 +471,23 @@ def find_legal_message_start(messages: list[dict[str, Any]]) -> int:
                 start = i + 1
                 declared.clear()
     return start
+
+
+def content_text(content: Any) -> str:
+    """Il testo di un ``content``, stringa o lista di blocchi; il resto vale ``""``.
+
+    Tollerante, al contrario di :func:`stringify_text_blocks`: i blocchi che non
+    sono testo (immagini, tool) si saltano invece di far tornare ``None``.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            str(block.get("text") or "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return ""
 
 
 def stringify_text_blocks(content: list[dict[str, Any]]) -> str | None:

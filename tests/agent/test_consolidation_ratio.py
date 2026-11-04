@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
-from jenny.bus.queue import MessageBus
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import GenerationSettings, LLMResponse
 from jenny.pydantic_compat import ValidationError
@@ -18,19 +18,16 @@ def _make_loop(
     context_window_tokens: int = 200,
     consolidation_ratio: float = 0.5,
 ) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation = GenerationSettings(max_tokens=0)
     provider.estimate_prompt_tokens.return_value = (estimated_tokens, "test-counter")
     _response = LLMResponse(content="ok", tool_calls=[])
     provider.chat_with_retry = AsyncMock(return_value=_response)
     provider.chat_stream_with_retry = AsyncMock(return_value=_response)
 
-    loop = AgentLoop(
-        bus=MessageBus(),
+    loop = make_loop(
+        tmp_path,
         provider=provider,
-        workspace=tmp_path,
-        model="test-model",
         context_window_tokens=context_window_tokens,
         consolidation_ratio=consolidation_ratio,
     )

@@ -13,14 +13,13 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_types import TurnDisposition
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse, ToolCallRequest
 from tests.support.agent import make_loop, make_provider
 
@@ -29,11 +28,10 @@ KEY = "unified:default"
 
 
 def _loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation = SimpleNamespace(max_tokens=4096)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Test title"))
-    loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
+    loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
     return loop
 

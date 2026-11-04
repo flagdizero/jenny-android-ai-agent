@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -53,14 +52,15 @@ from jenny.security.subagent_policy import must_stage as must_stage_subagent_wri
 from jenny.security.subagent_policy import note_write as note_subagent_write
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
+    current_notebook_root,
     current_turn_is_readonly,
-    current_workspace_scope,
 )
 from jenny.security.workspace_policy import (
     is_path_within,
     refuse_board_write,
     resolve_allowed_path,
 )
+from jenny.utils.path import append_with_header
 from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME
 
 _READS = ("check", "map", "read_many")
@@ -180,14 +180,9 @@ class _NotebookTool(Tool):
 
     def _root(self) -> Path | None:
         from jenny.session.keys import is_project_session_key
-        from jenny.utils.wiki_paths import is_wiki_root
 
         key = self._origin or current_request_session_key() or ""
-        if not is_project_session_key(key):
-            return None
-        scope = current_workspace_scope()
-        root = scope.write_root() if scope is not None else None
-        return root if root is not None and is_wiki_root(root) else None
+        return current_notebook_root() if is_project_session_key(key) else None
 
     async def execute(self, action: str = "", **kw: Any) -> str:
         if action not in self._actions:
@@ -321,12 +316,12 @@ class _NotebookTool(Tool):
         if failed:
             # La traccia è scritta prima: chi la rilegge deve sapere quali sono
             # ancora al loro posto.
-            _append(trace_path, f"\nNot removed (still in place): {'; '.join(failed)}\n")
+            append_with_header(trace_path, f"\nNot removed (still in place): {'; '.join(failed)}\n")
         if not removed:
             return "Nothing was removed: " + "; ".join(failed), []
         emptied = _prune_empty_folders(root, [p for rel, p in targets if rel in removed])
         if emptied:
-            _append(trace_path, f"\nEmpty folders removed: {', '.join(emptied)}\n")
+            append_with_header(trace_path, f"\nEmpty folders removed: {', '.join(emptied)}\n")
         # Le pagine sono già sparite: un guasto della bacheca non deve far credere
         # il contrario, né lasciare il resto della risposta per strada.
         taken: dict[str, list[str]] = {}
@@ -375,15 +370,15 @@ class _NotebookTool(Tool):
         si leggono e riscrivono a vicenda, quindi nessuna perde la sezione
         dell'altra.
         """
-        from jenny.utils.helpers import safe_zoneinfo
+        from jenny.utils.clock import local_now
 
-        now = datetime.now(safe_zoneinfo(self._timezone or "UTC"))
+        now = local_now(self._timezone)
         rel = f"{_TRACE_DIR}/{now:%Y-%m-%d}.md"
         path = _fenced(root, root / rel)
         section = [f"\n## {now:%H:%M} — {len(targets)} page(s)\n", f"Reason: {reason}\n"]
         section.extend(ops.page_trace(root, p) for _, p in targets)
         path.parent.mkdir(parents=True, exist_ok=True)
-        created = _append(path, "\n".join(section),
+        created = append_with_header(path, "\n".join(section),
                           header=f"# Pages removed — {now:%Y-%m-%d}\n")
         # Un file nuovo è tutto di questo lavoro; un'aggiunta no (v. ``note_write``).
         note_subagent_write(path, full=created)
@@ -430,15 +425,6 @@ class NotebookEditTool(_NotebookTool):
             "in raw/removed/; the board, drawers and reminders follow). Delete only when the "
             "request or the plan step says so."
         )
-
-
-def _append(path: Path, text: str, *, header: str = "") -> bool:
-    """Appende *text* a *path* in una scrittura sola; *header* solo se il file
-    nasce adesso. Restituisce se l'ha creato."""
-    with open(path, "a", encoding="utf-8") as fh:
-        created = fh.tell() == 0
-        fh.write((header if created else "") + text)
-    return created
 
 
 def _forget_taint(path: Path) -> None:

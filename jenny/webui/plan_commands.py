@@ -9,7 +9,7 @@ l'unica fonte); tutto ciò che muove un piano passa dal driver
 
 Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``):
 
-- ``plan.get {id} | {notebook}`` → ``{ok, plan}``. ``plan`` è ``plan.json`` più
+- ``plan.get {id} | {place} | {notebook}`` → ``{ok, plan}``. ``plan`` è ``plan.json`` più
   ``done`` (passi alle spalle: fatti e saltati), ``total`` (senza i tagliati),
   ``current_step_id``, ``can_rollback``, ``can_undo_rollback``. ``plan.json``
   porta ``coverage: [{id, item, have, missing, strategy, why}]`` (``id``:
@@ -34,26 +34,26 @@ Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``)
   (``plan.stop`` con ``then: "rollback"`` aggiunge ``report``, o
   ``rollback_error: {code, message}`` se il piano si è fermato ma il ritorno
   è stato rifiutato: si può chiedere dopo con ``plan.rollback``).
-- ``plan.step_files {id, step}`` → ``{ok, added, changed, removed}``: la foto
-  prima e quella dopo del passo.
+- ``plan.step_files {id, step}`` → ``{ok, added, changed, removed, groups:
+  {path: group}}``: le righe dei registri del piano scritte per quel passo.
 - ``plan.changes {id}`` → ``{ok, added, changed, removed, groups: {path:
-  group}}``: la foto A e la B (in corsa, l'ultima foto di un passo).
+  group}}``: le righe di tutti i registri del piano.
 - ``plan.rollback_preview {id}`` → ``{ok, report, expect_end}``: il conto del
   ritorno senza toccare niente. ``report`` ha le liste ``restored``,
   ``removed``, ``already``, ``left``, ``kept``, ``excluded``, i loro
-  ``counts``, e ``groups: {group: {esito: quanti}}``. ``expect_end`` è l'id
-  della foto del quaderno **su cui è stato fatto questo conto** (non la foto B
-  del piano, che dopo il Ferma non cambia più): il client lo rimanda tale e
-  quale a ``plan.rollback``.
+  ``counts``, ``groups: {group: {esito: quanti}}``, ``group_of: {path:
+  group}`` e ``keepable`` (i gruppi che si possono tenere). ``expect_end`` è il
+  gettone delle firme dei file **su cui è stato fatto questo conto**: il client
+  lo rimanda tale e quale a ``plan.rollback``.
 - ``plan.rollback {id, keep: [group], expect_end}``, ``plan.undo_rollback {id}``
   → ``{ok, report}`` (``plan.rollback`` anche ``discarded_drafts: [{id,
-  target}]``: le bozze del piano ancora in attesa, buttate col ritorno). ``plan.rollback`` rifà la foto del quaderno: se non è
-  ``expect_end``, il quaderno è cambiato dopo il conto e la risposta è
-  ``conflict`` (si rilegge l'anteprima).
+  target}]``: le bozze del piano ancora in attesa, buttate col ritorno).
+  ``plan.rollback`` rifà il gettone: se non è ``expect_end``, i file sono
+  cambiati dopo il conto e la risposta è ``conflict`` (si rilegge l'anteprima).
 - ``plan.full {id}`` → ``{ok, title, coverage, assumptions, steps: [{id, title,
   detail, kind, status, tag, done_when, covers}]}``: il «piano completo», in sola
   lettura.
-- ``plan.cancel_drafting {notebook}`` → ``{ok, cancelled}``: chiude la
+- ``plan.cancel_drafting {place} | {notebook}`` → ``{ok, cancelled}``: chiude la
   pianificazione in corso (il tasto spento, «Annulla il piano»); ``cancelled``
   è ``false`` se non ce n'era una. Emette ``plan_changed``.
 
@@ -80,7 +80,7 @@ from jenny.plan.model import (
     drafting_view,
     step_counts,
 )
-from jenny.plan.store import PlanNotFoundError, PlanStore, is_plan_id
+from jenny.plan.store import PlanNotFoundError, PlanStore, is_plan_id, slot_id
 from jenny.webui.commands import CommandContext, CommandError
 
 
@@ -126,6 +126,7 @@ def _summary(plan: Any) -> dict[str, Any]:
     return {
         "id": plan.id,
         "notebook": plan.notebook,
+        "place": plan.place,
         "status": plan.status,
         "title": plan.title,
         "done": counts["finished"],
@@ -146,12 +147,12 @@ async def plan_get(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, 
         except PlanNotFoundError as exc:
             raise CommandError("not_found", "no such plan") from exc
         return {"ok": True, "plan": plan_view(plan)}
-    notebook = params.get("notebook")
-    if not isinstance(notebook, str) or not notebook.strip():
-        raise CommandError("bad_request", "id or notebook required")
+    where = _place_param(params)
+    if where is None:
+        raise CommandError("bad_request", "id, place or notebook required")
 
     def _pick() -> Any:
-        plans = store.list_for_notebook(notebook.strip())
+        plans = store.list_for_place(where)
         for plan in plans:
             if plan.is_open:
                 return plan
@@ -167,10 +168,14 @@ async def plan_get(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, 
     plan = await asyncio.to_thread(_pick)
     if plan is not None:
         plan = await _recheck(ctx, plan)
+    driver = _driver_or_none(ctx)
     return {
         "ok": True,
         "plan": plan_view(plan) if plan is not None else None,
-        "drafting": await asyncio.to_thread(_drafting, store, notebook.strip()),
+        "drafting": await asyncio.to_thread(_drafting, store, where),
+        # La chat personale ha piani solo con l'orchestratore (``PlanDriver``):
+        # senza, la scheda non mostra il tasto Piano.
+        "enabled": where.startswith("nb:") or bool(getattr(driver, "personal_plans", False)),
     }
 
 
@@ -189,6 +194,21 @@ async def _recheck(ctx: CommandContext, plan: Any) -> Any:
         return await asyncio.to_thread(driver.store.load, plan.id)
     except (PlanError, OSError):
         return plan
+
+
+def _place_param(params: Mapping[str, Any]) -> str | None:
+    """Il posto della richiesta: ``{place}`` (``nb:<nome>``, ``personal``) o il
+    ``{notebook}`` di prima, che vale ``nb:<nome>``."""
+    from jenny.plan.place import place_from_id
+
+    place = params.get("place")
+    if isinstance(place, str) and place.strip():
+        found = place_from_id(place.strip())
+        return found.id if found is not None else None
+    notebook = params.get("notebook")
+    if isinstance(notebook, str) and notebook.strip():
+        return slot_id(notebook.strip())
+    return None
 
 
 def _drafting(store: PlanStore, notebook: str) -> dict[str, Any] | None:
@@ -308,10 +328,10 @@ async def plan_answer(ctx: CommandContext, params: Mapping[str, Any]) -> dict[st
 
 
 async def plan_cancel_drafting(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
-    notebook = params.get("notebook")
-    if not isinstance(notebook, str) or not notebook.strip():
-        raise CommandError("bad_request", "notebook required")
-    cancelled = await _call(_driver(ctx).cancel_drafting(notebook.strip()))
+    where = _place_param(params)
+    if where is None:
+        raise CommandError("bad_request", "place or notebook required")
+    cancelled = await _call(_driver(ctx).cancel_drafting(where))
     return {"ok": True, "cancelled": bool(cancelled)}
 
 

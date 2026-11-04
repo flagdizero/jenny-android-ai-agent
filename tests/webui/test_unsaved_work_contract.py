@@ -35,13 +35,13 @@ runner JS con DOM.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
+
 WORKSPACE_JS = ASSETS / "mobile-workspace.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 BACKUP_JS = ASSETS / "shared" / "backup-flow.js"
+DIALOG_JS = ASSETS / "shared" / "dialog.js"
 
 _METHOD_START = re.compile(r"\n  (?:async )?([A-Za-z_]\w*)\([^)]*\)\s*\{")
 
@@ -144,9 +144,12 @@ def test_the_passphrase_dialog_always_settles_its_promise() -> None:
     ``close``, che copre ogni via d'uscita, non solo ``cancel``."""
     source = BACKUP_JS.read_text(encoding="utf-8")
     prompt = source[source.index("export function promptPassphrase"):source.index("export function showRestartDialog")]
+    assert "return formDialog({" in prompt, "la passphrase non passa piu' da formDialog"
 
-    assert "dialog.addEventListener('close', () => done(null));" in prompt
-    assert "if (settled) return;" in prompt, (
+    form = DIALOG_JS.read_text(encoding="utf-8")
+    form = form[form.index("export function formDialog"):form.index("export function dismissTopDialog")]
+    assert "dialog.addEventListener('close', () => done(null));" in form
+    assert "if (settled) return;" in form, (
         "senza il guard la doppia risoluzione richiuderebbe/rimuoverebbe un dialog già smontato"
     )
     assert "_busy = false" in source, "sparita la mutua esclusione: questa cintura andrebbe ripensata"
@@ -165,19 +168,24 @@ def test_an_in_flight_provider_save_cannot_be_dismissed() -> None:
     save = methods["_saveProvider"]
 
     assert "async _saveProvider(" in source, "senza await non esiste nemmeno la finestra da proteggere"
-    assert "dialog.dataset.busy = '1';" in save
-    assert "b.disabled = true;" in save, "i bottoni restano premibili durante la richiesta"
-    assert "} finally {" in save and "delete dialog.dataset.busy;" in save, (
-        "il flag va ripulito anche quando la richiesta fallisce, altrimenti il dialog non si chiude più"
+    assert "await rpc.updateProvider(" in save
+    dialog = methods["_showAddProviderDialog"]
+    assert "return this._saveProvider(" in dialog, (
+        "formDialog deve aspettare il salvataggio: e' la sua Promise a tenerlo occupato"
     )
 
-    dialog = methods["_showAddProviderDialog"]
-    assert "if (dialog.dataset.busy) e.preventDefault();" in dialog, (
+    # La finestra occupata, una volta per tutte in `formDialog` (il
+    # comportamento lo prova `test_form_dialog_client.py`).
+    form = DIALOG_JS.read_text(encoding="utf-8")
+    form = form[form.index("export function formDialog"):form.index("export function dismissTopDialog")]
+    assert "dialog.dataset.busy = '1';" in form
+    assert "b.disabled = busy;" in form, "i bottoni restano premibili durante la richiesta"
+    assert "} finally {" in form and "setBusy(false);" in form, (
+        "il flag va ripulito anche quando la richiesta fallisce, altrimenti il dialog non si chiude più"
+    )
+    assert "if (cancellable && !dialog.dataset.busy) done(null);" in form, (
         "il rifiuto del congedo è ciò che tiene in vita i campi durante il salvataggio"
     )
-    # Fuori dalla finestra di salvataggio, scartare i campi su un cancel è la
-    # semantica normale di una modale annullabile: non si tocca.
-    assert "dialog.addEventListener('close', () => dialog.remove());" in dialog
 
 
 def test_the_workspace_never_lists_service_files() -> None:

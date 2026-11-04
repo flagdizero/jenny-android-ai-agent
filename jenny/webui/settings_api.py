@@ -7,8 +7,6 @@ settings payload shape and the allowlisted config mutations exposed to WebUI.
 from __future__ import annotations
 
 import asyncio
-import os
-import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -35,6 +33,7 @@ from jenny.providers.tls import CaBundleError, build_ssl_context
 from jenny.security.workspace_access import workspace_sandbox_status
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.keys import UNIFIED_SESSION_KEY
+from jenny.utils.errors import StatusError
 from jenny.utils.helpers import validate_timezone_name
 
 # Fasi che il layer di installazione può dichiarare. Serve a non far arrivare
@@ -279,10 +278,6 @@ async def run_update_check() -> dict[str, Any]:
     return {"status": _check_outcome(version), "version": version}
 
 
-# Il tool android_web supporta solo Bing (android_web.py rifiuta ogni altro
-# valore): il motore è quindi una costante, non un flag selezionabile.
-_ANDROID_WEB_SEARCH_ENGINE = "bing"
-
 WELCOME_TEMPLATES: dict[str, str] = {
     "it": "Ciao sono {bot_name} e da oggi vivo sul tuo smartphone, molto piacere!",
     "en": "Hi, I'm {bot_name} and from today I live on your smartphone. Nice to meet you!",
@@ -291,7 +286,6 @@ WELCOME_TEMPLATES: dict[str, str] = {
 # Tupla e non `set`: la UI ne fa un menu', e l'ordine di un `set` non e'
 # garantito fra due esecuzioni. Il controllo `in` costa uguale su due voci.
 _CONTEXT_WINDOW_TOKEN_OPTIONS = (65_536, 131_072, 262_144)
-_ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Vocabolario accettato dal layer provider (``openai_compat_provider._build_kwargs``
 # normalizza "minimum" in "minimal"). La select della WebUI ne espone un
 # sottoinsieme; l'API accetta tutto ciò che il provider sa gestire.
@@ -307,22 +301,8 @@ class _Unset:
 _UNSET = _Unset()
 
 
-class WebUISettingsError(ValueError):
+class WebUISettingsError(StatusError, ValueError):
     """User-facing settings validation failure."""
-
-    def __init__(self, message: str, *, status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status = status
-
-
-def _query_first_alias(query: QueryParams, *names: str) -> str | None:
-    """Il primo valore fra più nomi accettati (snake_case e camelCase)."""
-    for name in names:
-        value = query_first(query, name)
-        if value is not None:
-            return value
-    return None
 
 
 # ── Applicatori generici ─────────────────────────────────────────────────────
@@ -376,7 +356,7 @@ def _apply_int(
     *names: str,
 ) -> bool:
     """Scrive un intero su *target* se la query lo porta. ``True`` = cambiato."""
-    raw = _query_first_alias(query, *names)
+    raw = query_first(query, *names)
     if raw is None:
         return False
     value = _parse_int(raw, names[0], model, attr)
@@ -387,7 +367,7 @@ def _apply_int(
 
 
 def _apply_bool(query: QueryParams, target: Any, attr: str, *names: str) -> bool:
-    raw = _query_first_alias(query, *names)
+    raw = query_first(query, *names)
     if raw is None:
         return False
     value = _parse_bool(raw, names[0])
@@ -413,7 +393,7 @@ def _apply_str(
     valore va bene, ed è come timezone e nome del provider fanno il loro
     controllo senza che questa funzione li conosca.
     """
-    raw = _query_first_alias(query, *names)
+    raw = query_first(query, *names)
     if raw is None:
         return False
     value = raw.strip()
@@ -430,20 +410,9 @@ def _apply_str(
 def _resolve_env_placeholders(value: str | None) -> str | None:
     if not value:
         return None
-    missing = False
+    from jenny.config.loader import expand_env
 
-    def replace(match: re.Match[str]) -> str:
-        nonlocal missing
-        env_value = os.environ.get(match.group(1))
-        if env_value is None:
-            missing = True
-            return ""
-        return env_value
-
-    resolved = _ENV_REF_RE.sub(replace, value).strip()
-    if missing and not resolved:
-        return None
-    return resolved or None
+    return expand_env(value, strict=False).strip() or None
 
 
 def _model_id_from_row(row: Any) -> str | None:
@@ -934,7 +903,6 @@ def settings_payload(
             "tool_hint_max_length": defaults.tool_hint_max_length,
         },
         "web_search": {
-            "search_engine": android_web_search.search_engine,
             "max_results": android_web_search.max_results,
             "timeout": android_web_search.timeout,
             "fetch_max_chars": android_web_fetch.max_chars,
@@ -986,7 +954,6 @@ def settings_payload(
         "requires_restart": requires_restart,
         "version": _version_payload(),
         "config_recovery": _config_recovery_payload(),
-        "cron_recovery": _cron_recovery_payload(),
     }
     return payload
 
@@ -1007,27 +974,6 @@ def _config_recovery_payload() -> dict[str, Any] | None:
     quarantine = ctx.config_quarantine_path
     return {
         "restored_from": ctx.config_recovered_from,
-        "broken_file": str(_safe_expanduser(quarantine)) if quarantine else None,
-    }
-
-
-def _cron_recovery_payload() -> dict[str, Any] | None:
-    """Segnala alla UI che ``cron/jobs.json`` era illeggibile all'avvio.
-
-    Separato da ``config_recovery`` perché la conseguenza è diversa e più
-    concreta: con ``restoredFrom`` a "empty" i promemoria che l'utente aveva
-    creato non ci sono più, e nessuna schermata glielo direbbe — se ne
-    accorgerebbe solo quando non suonano. Il file rotto è conservato accanto,
-    così il recupero a mano resta possibile.
-    """
-    from jenny.runtime.context import get_runtime_context
-
-    ctx = get_runtime_context()
-    if not ctx.cron_recovered_from:
-        return None
-    quarantine = ctx.cron_quarantine_path
-    return {
-        "restored_from": ctx.cron_recovered_from,
         "broken_file": str(_safe_expanduser(quarantine)) if quarantine else None,
     }
 
@@ -1076,7 +1022,7 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         changed = True
 
     context_window_tokens = _parse_context_window_tokens(
-        _query_first_alias(query, "context_window_tokens", "contextWindowTokens")
+        query_first(query, "context_window_tokens", "contextWindowTokens")
     )
     if (
         context_window_tokens is not None
@@ -1089,7 +1035,7 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
     # ma qui non c'era nessun ramo a raccoglierli: la richiesta arrivava,
     # ``changed`` restava False, e il client mostrava "Saved!" perché la risposta
     # è 200 comunque. Erano campi decorativi.
-    max_tokens = _parse_max_tokens(_query_first_alias(query, "max_tokens", "maxTokens"))
+    max_tokens = _parse_max_tokens(query_first(query, "max_tokens", "maxTokens"))
     if max_tokens is not None and defaults.max_tokens != max_tokens:
         defaults.max_tokens = max_tokens
         changed = True
@@ -1105,7 +1051,7 @@ def _apply_agent_settings(config: Config, query: QueryParams) -> tuple[bool, boo
         ("reasoning_effort", ("reasoning_effort", "reasoningEffort")),
         ("main_reasoning_effort", ("main_reasoning_effort", "mainReasoningEffort")),
     ):
-        effort = _parse_reasoning_effort(_query_first_alias(query, *aliases))
+        effort = _parse_reasoning_effort(query_first(query, *aliases))
         if not isinstance(effort, _Unset) and getattr(defaults, field) != effort:
             setattr(defaults, field, effort)
             changed = True
@@ -1374,14 +1320,7 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
             setattr(fetch_config, attr, value)
             changed = True
 
-    search_engine = query_first(query, "search_engine")
-    if search_engine is not None:
-        search_engine = search_engine.strip().lower()
-        if search_engine != _ANDROID_WEB_SEARCH_ENGINE:
-            raise WebUISettingsError("unknown search engine")
-        set_search_value("search_engine", search_engine)
-
-    max_results = _query_first_alias(query, "max_results", "maxResults")
+    max_results = query_first(query, "max_results", "maxResults")
     if max_results is not None:
         set_search_value(
             "max_results",
@@ -1394,7 +1333,7 @@ def _apply_web_search_settings(config: Config, query: QueryParams) -> bool:
             "timeout", _parse_int(timeout, "timeout", AndroidWebSearchConfig, "timeout")
         )
 
-    fetch_max_chars = _query_first_alias(query, "fetch_max_chars", "fetchMaxChars")
+    fetch_max_chars = query_first(query, "fetch_max_chars", "fetchMaxChars")
     if fetch_max_chars is not None:
         try:
             parsed_fetch_max_chars = int(fetch_max_chars)
@@ -1506,7 +1445,7 @@ async def update_power_settings(query: QueryParams) -> dict[str, Any]:
     changed: dict[str, bool] = {}
 
     def _apply(config: Config) -> bool:
-        keep_awake = _parse_keep_awake(_query_first_alias(query, "keep_awake", "keepAwake"))
+        keep_awake = _parse_keep_awake(query_first(query, "keep_awake", "keepAwake"))
         if keep_awake is None or config.power.keep_awake == keep_awake:
             changed["required"] = False
             return False

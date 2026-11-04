@@ -38,7 +38,6 @@ Tre cose che questo modulo sa e che vale scrivere:
 
 from __future__ import annotations
 
-import json
 import re
 import time
 from collections.abc import Collection, Iterator
@@ -70,15 +69,20 @@ from jenny.agent.internal_run import (
 # modulo si tirerebbe dentro ``internal_run`` — v. la docstring di
 # ``jenny/agent/wiki_provenance.py``.
 from jenny.agent.wiki_provenance import _provenance_guard
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import GARDENER_SESSION_PREFIX
 from jenny.session.turn_visibility import silent_progress
-from jenny.utils.helpers import safe_zoneinfo
+from jenny.utils.clock import local_now
+from jenny.utils.path import append_with_header
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_paths import (
     WIKI_INDEX_FILENAME,
+    WIKI_MAP_MAX_CHARS,
     is_wiki_root,
     iter_wiki_pages,
+    notebook_dir,
     page_chars_if_over,
+    read_wiki_map,
     wiki_journal_dir,
 )
 
@@ -106,18 +110,13 @@ _MAX_AGENTS_CHARS = 4000
 
 # Il bersaglio della mappa, in caratteri. **Non è un numero scelto qui**: è la
 # soglia oltre la quale il blocco di progetto smette di iniettare la mappa
-# intera a ogni turno (``jenny/agent/context.py::_PROJECT_MAP_MAX_CHARS``, e il
-# lint di T5 tiene lo stesso numero). Oltre, il modello vede la testa della
-# mappa e nient'altro: su una wiki reale da 12.298 caratteri di mappa il
-# troncamento lascia **5 pagine su 51** fra quelle che la mappa
-# nomina. L'elenco nudo delle stesse 51 costerebbe 1.495 caratteri — il tetto è
-# giusto, ed è la prosa nella mappa a non doverci stare.
-#
-# È duplicato e non importato perché ``jenny/agent/context.py`` tira dentro
-# mezzo repo (v. la nota su ``_CRON_TOOL_NAME`` lì) e questo modulo lo
-# importerebbe per un intero: i due numeri li tiene uguali un test, come già
-# fa il lint.
-MAP_TARGET_CHARS = 2000
+# intera a ogni turno (``utils.wiki_paths.WIKI_MAP_MAX_CHARS``, la stessa del
+# blocco e del lint di T5). Oltre, il modello vede la testa della mappa e
+# nient'altro: su una wiki reale da 12.298 caratteri di mappa il troncamento
+# lascia **5 pagine su 51** fra quelle che la mappa nomina. L'elenco nudo delle
+# stesse 51 costerebbe 1.495 caratteri — il tetto è giusto, ed è la prosa nella
+# mappa a non doverci stare.
+MAP_TARGET_CHARS = WIKI_MAP_MAX_CHARS
 
 
 def page_ceiling() -> int:
@@ -131,7 +130,7 @@ def page_ceiling() -> int:
     prompt nomina, ed è il numero con cui questa passata decide **quali** pagine
     la regola riguarda.
 
-    **Importato e non copiato**, al contrario di :data:`MAP_TARGET_CHARS`: la
+    **Importato e non copiato**, come :data:`MAP_TARGET_CHARS`: la
     soglia è la stessa in tre posti — il blocco di progetto che la paga, il lint
     della wiki (``PAGE_MAX_CHARS``) e da qui il prompt — e una quarta copia
     sarebbe una quarta cosa da tenere allineata. **E' questa funzione il lettore
@@ -140,8 +139,7 @@ def page_ceiling() -> int:
     ``_FsTool._wiki_page_ceiling_note``, cosi' l'avviso che un tool di scrittura
     dà e l'annotazione che questa passata si mette nel prompt non possono parlare
     di due soglie diverse. L'import sta **dentro la
-    funzione** per la ragione scritta sopra a ``MAP_TARGET_CHARS``:
-    ``jenny/agent/context.py`` tira dentro mezzo repo, e questo modulo lo
+    funzione** perché ``jenny/agent/context.py`` tira dentro mezzo repo, e questo modulo lo
     caricherebbe all'import per un intero. Dentro la funzione si paga alla prima
     chiamata (poi è ``sys.modules``) e si legge l'attributo ogni volta, che è
     anche quel che rende la condivisione **provabile** invece che dichiarata.
@@ -346,7 +344,7 @@ class GardenerStore:
 
     @classmethod
     def for_project(
-        cls, workspace: Path, name: str, *, wikis_dir_name: str = "wikis"
+        cls, workspace: Path, name: str, *, wikis_dir_name: str = DEFAULT_WIKIS_DIR
     ) -> "GardenerStore | None":
         """Lo store del progetto *name*, o ``None`` se quella cartella non è un progetto.
 
@@ -354,13 +352,11 @@ class GardenerStore:
         avvolgere ogni giro in un ``try``, e quello che risponde a un comando ha
         un rifiuto da scrivere, non un errore da propagare.
         """
-        root = (workspace / wikis_dir_name / name).resolve(strict=False)
-        wikis_root = (workspace / wikis_dir_name).resolve(strict=False)
         # Il nome arriva da una chiave di sessione o da un argomento di comando:
-        # un ``..`` non deve poter far uscire la passata dalla cartella dei
-        # progetti (stessa guardia di ``WorkspaceScopeResolver.for_project``).
-        if root == wikis_root or wikis_root not in root.parents:
-            logger.warning("gardener: {} cade fuori da {}", name, wikis_root)
+        # un ``..`` non deve poter far uscire la passata dalla cartella dei progetti.
+        root = notebook_dir(workspace / wikis_dir_name, name)
+        if root is None:
+            logger.warning("gardener: {} cade fuori da {}", name, workspace / wikis_dir_name)
             return None
         if not is_wiki_root(root):
             return None
@@ -504,15 +500,15 @@ class GardenerStore:
     def map_chars(self) -> int:
         """La misura della mappa, in caratteri. ``0`` se non c'è o non si legge.
 
-        La stessa misura che il blocco di progetto confronta col suo tetto, cioè
-        il file **spogliato** ai bordi (``strip``) e non la sua dimensione su
-        disco: due numeri diversi per la stessa cosa sarebbero il modo di far
-        potare una passata che non doveva, o di non farla potare quando doveva.
+        La stessa misura, dallo stesso lettore (:func:`read_wiki_map`), che il
+        blocco di progetto confronta col suo tetto: il file **spogliato** ai
+        bordi e non la sua dimensione su disco. Due numeri diversi per la stessa
+        cosa sarebbero il modo di far potare una passata che non doveva, o di
+        non farla potare quando doveva — e fino al 02/11/2026 un indice in
+        latin-1 qui misurava 0 mentre il prompt lo mostrava, quindi non veniva
+        potato mai.
         """
-        try:
-            return len(self.map_path.read_text(encoding="utf-8").strip())
-        except (OSError, UnicodeDecodeError):
-            return 0
+        return len(read_wiki_map(self.root))
 
     def map_needs_pruning(self, state: GardenerState | None = None) -> bool:
         """Se la mappa, **da sola**, vale una passata.
@@ -862,14 +858,13 @@ class GardenerStore:
     def _stamp(self, timezone: str | None) -> datetime:
         """L'istante della passata, nel fuso in cui il modello legge l'ora.
 
-        Stessa forma di ``JournalAppendTool._stamp`` (passo B18), e per le stesse
-        due ragioni. ``safe_zoneinfo`` e non ``ZoneInfo``: su Android il database
-        tzdata può mancare, e non si perde una riga di registro per un fuso.
+        Come ``JournalAppendTool._stamp``: ``local_now``, che su Android regge
+        anche senza il database tzdata — non si perde una riga di registro per
+        un fuso.
         """
         if self._now is not None:
             return self._now()
-        tz = safe_zoneinfo(timezone) if timezone else None
-        return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+        return local_now(timezone)
 
     def log_pass(
         self,
@@ -981,68 +976,16 @@ class GardenerStore:
         if flag:
             entry += f"- flagged: {flag}\n"
         try:
-            page.parent.mkdir(parents=True, exist_ok=True)
-            fresh = not page.exists()
-            with page.open("a", encoding="utf-8") as fh:
-                if fresh:
-                    fh.write(f"# {day.isoformat()}\n\n")
-                fh.write(entry)
+            append_with_header(page, entry, header=f"# {day.isoformat()}\n\n")
         except OSError as exc:
             # Il log è una traccia, non il lavoro: se non si scrive, la passata
             # resta valida e il cursore avanza comunque.
             logger.warning("gardener: log not written to {}: {}", page, exc)
 
 
-def _lines_backwards(path: Path, *, chunk: int = 64 * 1024) -> Iterator[str]:
-    """Le righe di *path* dalla fine verso l'inizio, un blocco alla volta.
-
-    Serve a ``read_recent_user_messages``, che vuole **la coda** di un file che
-    arriva a 8 MB (``transcript_store._MAX_TRANSCRIPT_FILE_BYTES``): leggerlo in
-    avanti significa parsarlo tutto per buttarne via il 99% a ogni passata.
-
-    Si divide sui byte e si decodifica **per riga intera**: nessuna sequenza
-    UTF-8 multibyte contiene ``0x0A``, quindi tagliare su ``b"\\n"`` non può
-    spezzare un carattere a metà. Il resto del blocco (la prima riga, che
-    continua nel blocco precedente) si porta indietro e si unisce là.
-    """
-    with path.open("rb") as fh:
-        fh.seek(0, 2)
-        pos = fh.tell()
-        head = b""
-        while pos > 0:
-            step = min(chunk, pos)
-            pos -= step
-            fh.seek(pos)
-            parts = (fh.read(step) + head).split(b"\n")
-            head = parts[0]
-            for raw in reversed(parts[1:]):
-                yield raw.decode("utf-8", "replace")
-        if head:
-            yield head.decode("utf-8", "replace")
-
-
-def _user_said_backwards(path: Path) -> Iterator[str]:
-    """I messaggi dell'utente in *path*, dal più recente al più vecchio."""
-    for raw in _lines_backwards(path):
-        raw = raw.strip()
-        if not raw or "user" not in raw:
-            # Filtro grezzo prima di parsare: un transcript e' fatto in gran
-            # parte di delta, e parsarli tutti per buttarli costa.
-            #
-            # **Soprainsieme, e non quasi-esatto.** Prima cercava ``'"user"'``
-            # con le virgolette, che e' quasi la condizione finale — e siccome
-            # ``json.dumps`` scappa le virgolette nei testi, nessuna riga di
-            # ragionamento realistica poteva passare qui. Risultato: il controllo
-            # vero sotto era irraggiungibile, quindi **non provabile** (tre
-            # mutazioni di fila sopravvissute prima di capirlo). Un filtro grezzo
-            # deve ammettere piu' del necessario e lasciar decidere il controllo
-            # vero; il prezzo e' parsare i delta che nominano l'utente, che e' una
-            # minoranza.
-            continue
-        try:
-            row = json.loads(raw)
-        except ValueError:
-            continue
+def _user_said(records) -> Iterator[str]:
+    """I messaggi dell'utente fra *records*, nell'ordine dato."""
+    for row in records:
         if row.get("event") != "user" and row.get("role") != "user":
             continue
         text = row.get("text") or row.get("content")
@@ -1060,51 +1003,34 @@ def read_recent_user_messages(
 
     Letti dal codice e messi nel prompt, **non** esposti come file: la cassetta
     del giardiniere resta chiusa sulla cartella del progetto, e il transcript sta
-    fuori (``.jenny/webui/``). Allargargli la superficie di lettura per questa
-    cosa sola sarebbe pagare in permessi quel che si puo' pagare in prompt.
+    fuori, in ``state.sqlite`` (``webui/transcript_store``). Allargargli la
+    superficie di lettura per questa cosa sola sarebbe pagare in permessi quel
+    che si puo' pagare in prompt.
 
-    Il transcript non e' il registro del modello: la compattazione riscrive
-    ``sessions/``, non questo file. E' per questo che serve — e' il solo posto
-    dove resta quel che l'utente ha detto davvero.
+    Il transcript non e' il registro del modello: la compattazione riscrive la
+    sessione, non il transcript. E' per questo che serve — e' il solo posto dove
+    resta quel che l'utente ha detto davvero.
 
-    **Si legge dal fondo** (``_lines_backwards``), e si smette appena la finestra
-    è piena: la coda è tutto quel che serve, il file attivo arriva a 8 MB, e
-    prima si parsava da riga uno accumulando ogni messaggio dell'utente della
-    storia del progetto per poi tenerne quaranta. Il costo era per passata e per
-    progetto.
-
-    **E il taglio dice la verità anche quando il file è ruotato.** Superati gli
-    8 MB, ``transcript_store`` sposta i turni vecchi in
-    ``<key>.segments/NNNNNN.jsonl`` e lascia sul posto solo la coda: la
-    finestra risultava allora «intera» — ``truncated=False`` — mentre metà
-    conversazione era in un altro file. Un segmento esiste solo perché una
-    rotazione è avvenuta, e ogni turno comincia con un messaggio dell'utente
-    (``_split_transcript_turns``), quindi la sua presenza *è* la prova che
-    esistono messaggi più vecchi.
+    **Si legge dal fondo**, a blocchi, e si smette appena la finestra è piena:
+    la coda è tutto quel che serve, e il verbale di un progetto può essere
+    lungo. ``truncated`` dice se prima della finestra c'erano altri messaggi.
     """
     from jenny.session.keys import project_session_key, webui_transcript_key
-    from jenny.webui.transcript_store import (
-        webui_transcript_path,
-        webui_transcript_segments_dir,
-    )
+    from jenny.webui.transcript_store import iter_transcript_backwards
 
     try:
-        key = webui_transcript_key(project_session_key(name))
-        path = webui_transcript_path(key)
-        rotated = any(webui_transcript_segments_dir(key).glob("*.jsonl"))
+        records = iter_transcript_backwards(webui_transcript_key(project_session_key(name)))
     except Exception:  # noqa: BLE001 — senza transcript il controllo salta, non rompe
-        return [], False
-    if not path.is_file():
         return [], False
 
     # Il tetto in caratteri toglie **dalla testa**: i messaggi piu' recenti sono
     # quelli che la cattura puo' aver mancato adesso. Da qui il verso della
     # lettura, che e' anche il verso in cui si spende il budget.
     kept: list[str] = []
-    truncated = rotated
+    truncated = False
     total = 0
     try:
-        for message in _user_said_backwards(path):
+        for message in _user_said(records):
             if len(kept) >= limit:
                 # Un messaggio in piu' del tetto: e' come si sa che ce n'erano
                 # altri, senza tenerli.
@@ -1115,7 +1041,7 @@ def read_recent_user_messages(
                 truncated = True
                 break
             kept.append(message)
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001 — senza transcript il controllo salta, non rompe
         logger.warning("gardener: transcript di {} illeggibile: {}", name, exc)
         return [], False
 
@@ -1125,8 +1051,8 @@ def read_recent_user_messages(
         # scrive una riga (v. ``GardenerStore.log_pass``).
         logger.info(
             "gardener: cross-check window for {} is truncated "
-            "({} messages kept{})",
-            name, len(kept), ", transcript rotated" if rotated else "",
+            "({} messages kept)",
+            name, len(kept),
         )
     return list(reversed(kept)), truncated
 
@@ -1883,7 +1809,7 @@ def _prune_sessions(agent: Any, session_key: str | None = None) -> None:
     """Ripulisce quel che la passata ha lasciato dietro: i file e la memoria.
 
     **La chiave della passata si dimentica subito** (T2.5), e non fra dieci
-    passate. ``prune_internal_sessions`` tiene i dieci ``gardener_*.jsonl`` più
+    passate. ``prune_internal_sessions`` tiene le dieci sessioni ``gardener:`` più
     recenti e ``evict_pruned_sessions`` sgombera per le chiavi *potate* il lock,
     i task e la cache delle sessioni — quindi ``_session_locks`` è limitato per
     costruzione, non cresce all'infinito. Ma quella strada non passa da
@@ -1912,11 +1838,10 @@ def _prune_sessions(agent: Any, session_key: str | None = None) -> None:
     (``agent/subagent_history.py``).
     """
     sessions = getattr(agent, "sessions", None)
-    sessions_dir = getattr(sessions, "sessions_dir", None)
     if session_key and hasattr(agent, "forget_file_reads"):
         agent.forget_file_reads(session_key)
-    if sessions_dir is None:
+    if not callable(getattr(sessions, "list_keys", None)):
         return
-    pruned = prune_internal_sessions(sessions_dir, "gardener")
+    pruned = prune_internal_sessions(sessions, "gardener")
     if pruned and hasattr(agent, "evict_pruned_sessions"):
         agent.evict_pruned_sessions(pruned)

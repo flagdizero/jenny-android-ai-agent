@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 _HASH_RE = re.compile(r"\A[0-9a-f]{64}\Z")
+
+# Dove lo stato in SQLite entra in uno snapshot (``jenny/db/shards``): voci di
+# manifest come le altre, che però non sono file del workspace. Il motore non
+# traccia mai un file vero con questo nome, e i conteggi mostrati non le
+# contano.
+STATE_ENTRY_DIR = ".jenny-state"
+
+
+def is_state_entry(path: str) -> bool:
+    return path.startswith(STATE_ENTRY_DIR + "/")
 
 
 def is_snapshot_id(value: object) -> bool:
@@ -37,6 +47,24 @@ def unsafe_entry_reason(path: str, hash_hex: str) -> str | None:
     if not _HASH_RE.match(hash_hex):
         return f"unsafe blob hash {hash_hex!r} for {path!r}"
     return None
+
+def entry_target(root: Path, path: str) -> Path:
+    """Dove la voce di manifest *path* (``a/b.md``, sempre con ``/``) sta sotto *root*."""
+    return root / Path(*path.split("/"))
+
+
+def entry_problem(root: Path, path: str, hash_hex: str) -> str | None:
+    """:func:`unsafe_entry_reason`, più il percorso **risolto** sotto *root* (già risolta).
+
+    Il confronto sul percorso risolto copre anche un link simbolico che nessun
+    controllo sulla stringa vedrebbe. È la guardia di chi materializza un
+    manifest non fidato: il ripristino di uno snapshot e quello dal Drive.
+    """
+    reason = unsafe_entry_reason(path, hash_hex)
+    if reason is None and not entry_target(root, path).resolve().is_relative_to(root):
+        reason = f"unsafe path {path!r} leaves the destination"
+    return reason
+
 
 # Trigger riconosciuti per uno snapshot. La stringa finisce nel manifest e
 # nella UI (badge tradotto via i18n lato client).
@@ -86,11 +114,11 @@ class SnapshotManifest:
 
     @property
     def file_count(self) -> int:
-        return len(self.files)
+        return sum(1 for entry in self.files if not is_state_entry(entry.path))
 
     @property
     def total_bytes(self) -> int:
-        return sum(entry.size for entry in self.files)
+        return sum(entry.size for entry in self.files if not is_state_entry(entry.path))
 
     def to_dict(self) -> dict[str, Any]:
         return {

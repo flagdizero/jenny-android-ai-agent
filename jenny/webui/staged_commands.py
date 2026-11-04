@@ -14,22 +14,11 @@ import difflib
 from collections.abc import Mapping
 from typing import Any
 
-from jenny.webui.commands import CommandContext, CommandError
+from jenny.webui.commands import CommandContext, CommandError, required_str
 
 # Una diff più lunga si tronca: la scheda deve restare leggibile su un
 # telefono, e chi vuole tutto può aprire il file dopo averla scartata.
 _MAX_DIFF_CHARS = 64_000
-
-
-async def _run(fn: Any, *args: Any, **kwargs: Any) -> Any:
-    return await asyncio.to_thread(fn, *args, **kwargs)
-
-
-def _staged_id(params: Mapping[str, Any]) -> str:
-    value = params.get("id")
-    if not isinstance(value, str) or not value:
-        raise CommandError("bad_request", "id required")
-    return value
 
 
 def _diff(root: Any, meta: dict[str, Any], content: bytes) -> tuple[str, bool]:
@@ -73,7 +62,7 @@ def _list(root: Any) -> list[dict[str, Any]]:
 
 async def staged_list(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Le bozze in attesa, dalla più vecchia, ognuna con la sua diff."""
-    return {"ok": True, "staged": await _run(_list, ctx.get_workspace_root())}
+    return {"ok": True, "staged": await asyncio.to_thread(_list, ctx.get_workspace_root())}
 
 
 async def staged_install(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -88,7 +77,7 @@ async def staged_install(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     expected = params.get("target_sha256")
     if expected is not None and not isinstance(expected, str):
         raise CommandError("bad_request", "target_sha256 must be a string or null")
-    outcome = await _run(install, ctx.get_workspace_root(), _staged_id(params), expected)
+    outcome = await asyncio.to_thread(install, ctx.get_workspace_root(), required_str(params, "id"), expected)
     if outcome == "missing":
         raise CommandError("not_found", "no such draft")
     if outcome == "conflict":
@@ -100,7 +89,7 @@ async def staged_discard(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     """Butta una bozza: il file resta com'era."""
     from jenny.agent.staged_writes import discard
 
-    if not await _run(discard, ctx.get_workspace_root(), _staged_id(params)):
+    if not await asyncio.to_thread(discard, ctx.get_workspace_root(), required_str(params, "id")):
         raise CommandError("not_found", "no such draft")
     return {"ok": True}
 

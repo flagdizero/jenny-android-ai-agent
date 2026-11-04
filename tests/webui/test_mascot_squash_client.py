@@ -9,12 +9,10 @@ resti, e che ogni deformazione torni a 1 da se'.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-SQUASH_JS = ROOT / "jenny" / "templates" / "ui" / "assets" / "shared" / "mascot-squash.js"
+SQUASH_JS = ASSETS / "shared" / "mascot-squash.js"
 
 pytestmark = requires_node
 

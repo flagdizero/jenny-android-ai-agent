@@ -115,6 +115,33 @@ async def test_import_streams_back_byte_identical(
     assert not list(manager.import_staged_path.parent.glob("*.part"))
 
 
+async def test_the_imported_file_goes_once_the_restore_is_ready(
+    tmp_path: Path, backend: _RecordingBackend
+) -> None:
+    """Copiato dal selettore, grande quanto il backup: restava per sempre (04/11/2026)."""
+    manager = _manager(tmp_path / "data")
+    staged = Path((await manager.export_backup(_PASS))["staged_path"])
+    manager.import_staged_path.write_bytes(staged.read_bytes())
+
+    await manager.stage_import(str(manager.import_staged_path), _PASS)
+
+    assert not manager.import_staged_path.exists()
+    assert staged.exists()  # l'export in staging non si tocca
+
+
+async def test_a_wrong_passphrase_leaves_the_imported_file(
+    tmp_path: Path, backend: _RecordingBackend
+) -> None:
+    manager = _manager(tmp_path / "data")
+    staged = Path((await manager.export_backup(_PASS))["staged_path"])
+    manager.import_staged_path.write_bytes(staged.read_bytes())
+
+    with pytest.raises(Exception):
+        await manager.stage_import(str(manager.import_staged_path), "not-the-passphrase")
+
+    assert manager.import_staged_path.exists()
+
+
 async def test_a_failed_export_keeps_the_previous_one(
     tmp_path: Path, backend: _RecordingBackend, monkeypatch: pytest.MonkeyPatch
 ) -> None:

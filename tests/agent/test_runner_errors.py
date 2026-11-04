@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from support.runner import make_spec
 
+from jenny.agent.context_governor import extract_context_limit, is_context_length_error
 from jenny.providers.anthropic_provider import AnthropicProvider
 from jenny.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
@@ -313,7 +314,6 @@ def test_anthropic_context_overflow_error_is_detected_as_context_length_error():
     automatic shrink-and-retry recovery kicks in for Anthropic, not just OpenAI's
     ``context_length_exceeded`` error code shape.
     """
-    from jenny.agent.runner import AgentRunner
 
     payload = {
         "type": "error",
@@ -331,8 +331,8 @@ def test_anthropic_context_overflow_error_is_detected_as_context_length_error():
     assert response.error_code is None
     assert "prompt is too long" in (response.content or "").lower()
 
-    assert AgentRunner._is_context_length_error(response) is True
-    assert AgentRunner._extract_context_limit(response) == 200000
+    assert is_context_length_error(response) is True
+    assert extract_context_limit(response) == 200000
 
 
 def test_anthropic_unrelated_invalid_request_error_is_not_misdetected():
@@ -341,7 +341,6 @@ def test_anthropic_unrelated_invalid_request_error_is_not_misdetected():
     ``invalid_request_error`` alone would be far too broad, since Anthropic uses
     that error type for many unrelated validation failures.
     """
-    from jenny.agent.runner import AgentRunner
 
     payload = {
         "type": "error",
@@ -353,13 +352,12 @@ def test_anthropic_unrelated_invalid_request_error_is_not_misdetected():
     response = AnthropicProvider._handle_error(_FakeAPIError(payload))
 
     assert response.error_type == "invalid_request_error"
-    assert AgentRunner._is_context_length_error(response) is False
+    assert is_context_length_error(response) is False
 
 
 def test_openai_context_length_exceeded_still_detected():
     """Guard against regressions in the pre-existing OpenAI-shaped detection
     while extending the matcher for Anthropic."""
-    from jenny.agent.runner import AgentRunner
 
     response = LLMResponse(
         content=(
@@ -371,5 +369,5 @@ def test_openai_context_length_exceeded_still_detected():
         error_code="context_length_exceeded",
     )
 
-    assert AgentRunner._is_context_length_error(response) is True
-    assert AgentRunner._extract_context_limit(response) == 8192
+    assert is_context_length_error(response) is True
+    assert extract_context_limit(response) == 8192

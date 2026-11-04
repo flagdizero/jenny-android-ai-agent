@@ -40,6 +40,7 @@ from jenny.utils.file_edit_events import (
     build_file_edit_start_event,
     prepare_file_edit_trackers,
 )
+from jenny.utils.helpers import clip
 from jenny.utils.runtime import repeated_external_lookup_error
 
 if TYPE_CHECKING:
@@ -234,7 +235,7 @@ class ToolExecutionMixin:
                         finally:
                             # Dentro un aiutante: il «dopo» delle scritture di
                             # questo strumento, per l'annulla
-                            # (``agent.subagent_journal``). Altrove è una no-op.
+                            # (``agent.write_journal``). Altrove è una no-op.
                             settle_writes(tool_call.name)
 
                 batch_results = list(await asyncio.gather(
@@ -696,6 +697,6 @@ class ToolExecutionMixin:
         detail = detail.replace("\n", " ").strip()
         if not detail:
             detail = "(empty)"
-        elif len(detail) > 120:
-            detail = detail[:120] + "..."
+        else:
+            detail = clip(detail, 120)
         return result, {"name": tool_call.name, "status": "ok", "detail": detail}, None

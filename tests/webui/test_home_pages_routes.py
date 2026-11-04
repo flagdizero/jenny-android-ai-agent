@@ -351,23 +351,64 @@ async def test_deleting_an_app_takes_its_page_and_only_its_page(env) -> None:
         {"id": "p2", "kind": "app", "ref": "lampo"},
         {"id": "p3", "kind": "conversation", "ref": "project:orto"},
     ])
-    req = _request("/api/webui/apps/orto/delete")
-    reply = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
+    from jenny.webui.apps_commands import apps_delete
 
-    assert reply.status_code == 200
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    reply = await apps_delete(ctx, {"slug": "orto"})
+
+    assert reply["deleted"] is True
     assert not (env.workspace / "apps" / "orto").exists()
     # Solo l'app: un quaderno che si chiama come lei e' un'altra cosa.
     assert [p["id"] for p in _pages_on_disk(env)] == ["p2", "p3"]
 
 
-async def test_a_failed_app_delete_leaves_the_pages_alone(env) -> None:
-    """Un'app che non c'e' e' un 404, e le pagine non si toccano: la pagina
-    se ne va **con** la cosa, non al posto suo."""
-    await _with_pages(env, [{"id": "p1", "kind": "app", "ref": "orto"}])
-    req = _request("/api/webui/apps/orto/delete")
-    reply = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
+async def test_the_two_deletes_of_an_app_do_the_same_thing(env) -> None:
+    """«Elimina» dalla pagina App e ``app action=trash`` dalla chat personale: in
+    tutti e due i casi l'app va nel cestino, la sua bozza sparisce e la pagina
+    della casa che portava a lei si toglie."""
+    from jenny.agent.tools.app_tool import AppTool
+    from jenny.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
+    from jenny.webui.apps_commands import apps_delete
 
-    assert reply.status_code == 404
+    for slug in ("orto", "lampo"):
+        (env.workspace / "apps" / slug).mkdir(parents=True)
+        (env.workspace / "apps" / ".drafts" / slug).mkdir(parents=True)
+    await _with_pages(env, [
+        {"id": "p1", "kind": "app", "ref": "orto"},
+        {"id": "p2", "kind": "app", "ref": "lampo"},
+    ])
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    assert (await apps_delete(ctx, {"slug": "orto"}))["deleted"] is True
+    req = bind_request_context(RequestContext(channel="websocket", chat_id="unified:default",
+                                              session_key="unified:default"))
+    try:
+        out = await AppTool().execute(action="trash", slug="lampo")
+    finally:
+        reset_request_context(req)
+    assert "in the trash" in out, out
+
+    for slug in ("orto", "lampo"):
+        assert not (env.workspace / "apps" / slug).exists()
+        assert not (env.workspace / "apps" / ".drafts" / slug).exists(), slug
+    assert _pages_on_disk(env) == []
+
+
+async def test_a_failed_app_delete_leaves_the_pages_alone(env) -> None:
+    """Un'app che non c'e' e' un ``not_found``, e le pagine non si toccano: la
+    pagina se ne va **con** la cosa, non al posto suo."""
+    from jenny.webui.apps_commands import apps_delete
+    from jenny.webui.commands import CommandError
+
+    await _with_pages(env, [{"id": "p1", "kind": "app", "ref": "orto"}])
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    with pytest.raises(CommandError) as refused:
+        await apps_delete(ctx, {"slug": "orto"})
+
+    assert refused.value.code == "not_found"
     assert [p["id"] for p in _pages_on_disk(env)] == ["p1"]
 
 
@@ -431,10 +472,11 @@ async def test_a_page_that_cannot_be_taken_does_not_undo_the_delete(env, monkeyp
         raise RuntimeError("disco pieno")
 
     monkeypatch.setattr(home_pages, "detach_pages_of", _broken)
+    from jenny.webui.apps_commands import apps_delete
+
     (env.workspace / "apps" / "orto").mkdir(parents=True)
-    req = _request("/api/webui/apps/orto/delete")
-    reply = await env.handler.apps_routes.dispatch(req, req.path.split("?")[0])
-    assert reply.status_code == 200
+    ctx = SimpleNamespace(get_workspace_root=lambda: env.workspace)
+    assert (await apps_delete(ctx, {"slug": "orto"}))["deleted"] is True
 
 
 async def test_a_delete_does_not_reach_across_kinds(env) -> None:

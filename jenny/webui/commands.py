@@ -21,6 +21,7 @@ trasportare contenuto: framed, UTF-8, autenticato all'handshake.
 from __future__ import annotations
 
 import asyncio
+import importlib
 from collections.abc import Awaitable, Callable, Collection, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -29,7 +30,9 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.channels.http_utils import query_first
 from jenny.security.workspace_policy import is_path_within
+from jenny.utils.errors import CodedError
 from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
 from jenny.webui.workspace_files import os_error_text
 
@@ -44,7 +47,7 @@ MAX_WRITE_BYTES = 1_000_000
 MAX_PROJECT_SEED_CHARS = 500
 
 
-class CommandError(Exception):
+class CommandError(CodedError):
     """Errore di un comando, con un codice che il trasporto sa tradurre.
 
     I codici sono un insieme chiuso — ``bad_request``, ``forbidden``,
@@ -72,11 +75,6 @@ class CommandError(Exception):
     vecchio); e ``rollback_failed``: un ritorno partito si è fermato a metà per
     un errore del disco, il quaderno è in parte tornato, e riprovare è sicuro.
     """
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 @dataclass(frozen=True)
@@ -137,7 +135,8 @@ class CommandContext:
 Command =Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
 
 
-def _require_str(params: Mapping[str, Any], key: str) -> str:
+def required_str(params: Mapping[str, Any], key: str) -> str:
+    """Il parametro *key*, una stringa non vuota; altrimenti ``bad_request``."""
     value = params.get(key)
     if not isinstance(value, str) or not value.strip():
         raise CommandError("bad_request", f"{key} required")
@@ -161,29 +160,28 @@ def _require_workspace_flag(attr: str, code: str, message: str) -> None:
         raise CommandError(code, message)
 
 
-def _require_wiki_enabled(*, fail_closed: bool = False) -> None:
-    """``config.wiki.enabled``, con lo stesso fail-open storico della route.
+def wiki_refusal() -> str | None:
+    """Il cancello «wiki attiva», fail-**closed**: ``None`` se si passa, se no perché no.
 
-    A differenza del workspace, una config illeggibile qui non blocca: la route
-    HTTP si comportava così (``except Exception: pass``) e la wiki non è un gate
-    di sicurezza sul filesystem, è una feature che può essere spenta.
-
-    *fail_closed* è per ``audit.create``, che viene da una route
-    (``/api/audit/create``) il cui gate era già passato a fail-closed
-    (``WikiRoutes._check_wiki_enabled``): spostarla sul WebSocket non deve
-    riaprirlo.
+    L'unico, per la RPC (:func:`_require_wiki_enabled`) e per le route HTTP
+    (``WikiRoutes._check_wiki_enabled``). Fino al 02/11/2026 erano due, e la RPC
+    su una config illeggibile lasciava passare (salvo ``audit.create``) mentre
+    la route chiudeva. Illeggibile e spenta restano distinguibili.
     """
     from jenny.config.loader import load_config
 
     try:
         enabled = bool(load_config().wiki.enabled)
     except Exception:
-        if fail_closed:
-            logger.exception("wiki gate: could not read config; refusing")
-            raise CommandError("unavailable", "wiki is unavailable") from None
-        return
-    if not enabled:
-        raise CommandError("unavailable", "wiki is disabled")
+        logger.exception("wiki gate: could not read config; refusing")
+        return "wiki is unavailable"
+    return None if enabled else "wiki is disabled"
+
+
+def _require_wiki_enabled() -> None:
+    refusal = wiki_refusal()
+    if refusal is not None:
+        raise CommandError("unavailable", refusal)
 
 
 def _skill_scripts_dir(ctx: CommandContext) -> Path:
@@ -192,13 +190,9 @@ def _skill_scripts_dir(ctx: CommandContext) -> Path:
 
 
 def _wikis_dir(ctx: CommandContext) -> Path:
-    from jenny.config.loader import load_config
+    from jenny.config.paths import get_wikis_path
 
-    try:
-        subdir = load_config().wiki.wikis_dir
-    except Exception:
-        subdir = "wikis"
-    return ctx.get_workspace_root() / subdir
+    return get_wikis_path(ctx.get_workspace_root())
 
 
 def _is_live_config(path: Path) -> bool:
@@ -300,7 +294,7 @@ async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dic
     """
     from jenny.webui.workspace_files import validate_path, write_file
 
-    rel_path = _require_str(params, "path")
+    rel_path = required_str(params, "path")
     content = params.get("content", "")
     if not isinstance(content, str):
         raise CommandError("bad_request", "content must be a string")
@@ -395,13 +389,9 @@ def _notebooks_dir(workspace_root: Path) -> Path:
     cartella per due nomi, e un confronto testuale fra le due forme direbbe di
     no a ogni domanda.
     """
-    try:
-        from jenny.config.loader import load_config
+    from jenny.config.paths import get_wikis_path
 
-        subdir = load_config().wiki.wikis_dir or "wikis"
-    except Exception:  # noqa: BLE001 — senza config si usa il nome di default
-        subdir = "wikis"
-    return (workspace_root / subdir).resolve()
+    return get_wikis_path(workspace_root).resolve()
 
 
 def _delete_refusal(workspace_root: Path, target: Path) -> str | None:
@@ -461,7 +451,7 @@ def _notebooks_inside(workspace_root: Path, target: Path) -> list[str]:
     from jenny.utils.wiki_paths import is_wiki_root
 
     wikis_dir = _notebooks_dir(workspace_root)
-    if wikis_dir != target and target not in wikis_dir.parents:
+    if not is_path_within(wikis_dir, target, path_resolved=True):
         return []
     try:
         return sorted(child.name for child in wikis_dir.iterdir() if is_wiki_root(child))
@@ -548,7 +538,7 @@ async def workspace_delete(ctx: CommandContext, params: Mapping[str, Any]) -> di
     """
     from jenny.webui.workspace_files import delete_path, validate_entry_path
 
-    rel_path = _require_str(params, "path")
+    rel_path = required_str(params, "path")
     _require_workspace_flag("enabled", "unavailable", "workspace is disabled")
     _require_workspace_flag("allow_delete", "forbidden", "workspace deletes are disabled")
 
@@ -571,8 +561,8 @@ async def workspace_rename(ctx: CommandContext, params: Mapping[str, Any]) -> di
     """
     from jenny.webui.workspace_files import rename_path, validate_entry_path
 
-    old_rel = _require_str(params, "old_path")
-    new_rel = _require_str(params, "new_path")
+    old_rel = required_str(params, "old_path")
+    new_rel = required_str(params, "new_path")
     _require_workspace_flag("enabled", "unavailable", "workspace is disabled")
     # Rinominare cambia il disco quanto scrivere: la rotta di prima non lo
     # chiedeva.
@@ -602,7 +592,7 @@ async def workspace_copy(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     """
     from jenny.webui.workspace_files import copy_path, free_copy_name, validate_path
 
-    src_rel = _require_str(params, "path")
+    src_rel = required_str(params, "path")
     dest_rel = params.get("dest")
     if dest_rel is not None and (not isinstance(dest_rel, str) or not dest_rel.strip()):
         raise CommandError("bad_request", "dest must be a non-empty string")
@@ -719,7 +709,7 @@ def _wiki_page_file(ctx: CommandContext, wiki_name: str, page_path: str) -> Path
     ``resolve()``, che è il solo cancello che vede un link simbolico —
     ``safe_wiki_page_path`` guarda la stringa e un symlink non risale.
     """
-    from jenny.webui.wiki import discover_wikis
+    from jenny.utils.wiki_paths import discover_wikis
 
     wikis = discover_wikis(_wikis_dir(ctx))
     if wiki_name not in wikis:
@@ -811,8 +801,8 @@ async def page_write(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
     e le due del workspace — questo riscrive una pagina, cioè esattamente ciò che
     ``workspace.allow_write`` esiste per governare.
     """
-    wiki_name = _require_str(params, "wiki")
-    page_path = _require_str(params, "page")
+    wiki_name = required_str(params, "wiki")
+    page_path = required_str(params, "page")
     content = params.get("content")
     if not isinstance(content, str):
         raise CommandError("bad_request", "content must be a string")
@@ -868,7 +858,8 @@ async def audit_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict[s
     (503). ``sel_start``/``sel_end`` sono offset nel **markdown sorgente**: il
     file lo rilegge il server, come faceva la route.
     """
-    from jenny.webui.wiki import create_audit, discover_wikis
+    from jenny.utils.wiki_paths import discover_wikis
+    from jenny.webui.wiki import create_audit
 
     wiki_name = params.get("wiki")
     target = params.get("target", "")
@@ -883,7 +874,7 @@ async def audit_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict[s
     if size > MAX_WRITE_BYTES:
         raise CommandError("too_large", f"comment too large ({size} > {MAX_WRITE_BYTES} bytes)")
 
-    _require_wiki_enabled(fail_closed=True)
+    _require_wiki_enabled()
 
     wikis = discover_wikis(_wikis_dir(ctx))
     if not isinstance(wiki_name, str) or not wiki_name or wiki_name not in wikis:
@@ -944,18 +935,18 @@ async def project_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     superficie ``/api/`` non sa trasportarlo (v. la docstring del modulo).
     """
     from jenny.session.keys import is_valid_project_name
-    from jenny.webui.project_create import ProjectCreateError, create_project
+    from jenny.webui.project_create import create_project
 
     # La forma del nome la decide ``jenny.session.keys``, che e' anche chi la
     # applica a ogni ``chat_id`` in arrivo: un nome che qui passasse e li' no
     # creerebbe un progetto che non si puo' aprire.
-    name = _require_str(params, "name").strip()
+    name = required_str(params, "name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
 
     # Una riga: gli a-capo vengono richiusi invece di far fallire il comando, che
     # su una tastiera mobile e' quel che l'utente si aspetta.
-    seed = " ".join(_require_str(params, "seed").split())
+    seed = " ".join(required_str(params, "seed").split())
     if not seed:
         raise CommandError("bad_request", "seed required")
     if len(seed) > MAX_PROJECT_SEED_CHARS:
@@ -982,8 +973,8 @@ async def project_create(ctx: CommandContext, params: Mapping[str, Any]) -> dict
             # bottoni. V. la docstring di ``project_create``.
             conversation=_conversation_choice(params),
         )
-    except ProjectCreateError as exc:
-        raise CommandError("bad_request", str(exc)) from exc
+    except CodedError as exc:
+        raise CommandError(exc.code, exc.message) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
@@ -1002,7 +993,7 @@ async def project_greet(ctx: CommandContext, params: Mapping[str, Any]) -> dict[
     from jenny.utils.wiki_paths import discover_wiki_roots, read_wiki_scope
     from jenny.webui.project_greet import greet_project
 
-    name = _require_str(params, "name").strip()
+    name = required_str(params, "name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
     _require_wiki_enabled()
@@ -1053,14 +1044,11 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     e' **distruttiva**, e questa e' la superficie autenticata all'handshake che
     la WebView usa per le operazioni che cambiano il disco.
     """
+    from jenny.board.cron_link import remove_notebook_crons
     from jenny.session.keys import is_valid_project_name, project_session_key
-    from jenny.webui.project_delete import (
-        ProjectDeleteError,
-        delete_project,
-        remove_notebook_crons,
-    )
+    from jenny.webui.project_delete import delete_project
 
-    name = _require_str(params, "name").strip()
+    name = required_str(params, "name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
 
@@ -1084,8 +1072,8 @@ async def project_delete(ctx: CommandContext, params: Mapping[str, Any]) -> dict
             name=name,
             invalidate_session=ctx.invalidate_session,
         )
-    except ProjectDeleteError as exc:
-        raise CommandError("bad_request", str(exc)) from exc
+    except CodedError as exc:
+        raise CommandError(exc.code, exc.message) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
     # I cron delle sue schede se ne vanno con lui: restando, fallirebbero a ogni
@@ -1116,10 +1104,10 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     verso il nome vecchio si disegna «non c'e' piu'».
     """
     from jenny.session.keys import is_valid_project_name, project_session_key
-    from jenny.webui.project_rename import ProjectRenameError, rename_project
+    from jenny.webui.project_rename import rename_project
 
-    name = _require_str(params, "name").strip()
-    new_name = _require_str(params, "new_name").strip()
+    name = required_str(params, "name").strip()
+    new_name = required_str(params, "new_name").strip()
     if not is_valid_project_name(name):
         raise CommandError("bad_request", "invalid project name")
     if not is_valid_project_name(new_name):
@@ -1147,8 +1135,10 @@ async def project_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict
             new_name=new_name,
             invalidate_session=ctx.invalidate_session,
         )
-    except ProjectRenameError as exc:
-        raise CommandError(exc.code, str(exc)) from exc
+    except CodedError as exc:
+        # Qui e non solo in ``dispatch_command``: il comando si chiama anche da
+        # solo, e i suoi rifiuti attesi hanno un codice che il client dice.
+        raise CommandError(exc.code, exc.message) from exc
     except OSError as exc:
         raise CommandError("bad_request", os_error_text(exc)) from exc
 
@@ -1289,23 +1279,6 @@ async def home_pages_set(ctx: CommandContext, params: Mapping[str, Any]) -> dict
 # dov'era (``settings_api``, ``telegram_api``, ``ssh_api``): qui si traduce solo
 # il trasporto.
 
-# ``WebUISettingsError.status`` → codice di ``CommandError``. Un 502 (Telegram o
-# il provider irraggiungibili) e un 503 dicono entrambi «adesso non si puo'».
-_SETTINGS_STATUS_CODES = {
-    400: "bad_request",
-    403: "forbidden",
-    404: "not_found",
-    409: "conflict",
-    413: "too_large",
-    502: "unavailable",
-    503: "unavailable",
-}
-
-
-def _settings_error(exc: Any) -> CommandError:
-    return CommandError(_SETTINGS_STATUS_CODES.get(exc.status, "bad_request"), exc.message)
-
-
 def _as_query(params: Mapping[str, Any], keys: Collection[str]) -> dict[str, list[str]]:
     """I parametri RPC nella forma ``QueryParams`` che le funzioni dei settings
     leggono (``{nome: [valore]}``). Solo *keys*; ``None`` diventa la stringa
@@ -1349,13 +1322,10 @@ async def settings_provider_models(
     scheda del provider chiedono i modelli con la chiave appena digitata,
     prima di salvarla. Sola lettura, e advisory: non tocca la config.
     """
-    from jenny.webui.settings_api import WebUISettingsError, provider_models_payload
+    from jenny.webui.settings_api import provider_models_payload
 
     query = _as_query(params, ("provider", "api_key", "api_base", "format"))
-    try:
-        payload = await asyncio.to_thread(provider_models_payload, query)
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    payload = await asyncio.to_thread(provider_models_payload, query)
     # Diagnostica: il fetch modelli non solleva sugli esiti applicativi
     # (not_configured/error/unsupported), e senza questa riga una lista vuota
     # resterebbe invisibile nel log (era nella rotta).
@@ -1379,22 +1349,19 @@ async def settings_provider_update(
     il fingerprint del provider attivo decide da se' se c'e' qualcosa da
     ricostruire.
     """
-    from jenny.webui.settings_api import WebUISettingsError, update_provider
+    from jenny.webui.settings_api import update_provider
 
     query = _as_query(
         params, ("name", "format", "api_key", "api_base", "ca_bundle", "ca_bundle_clear")
     )
     # Solo i campi valorizzati, come la rotta: ``ca_bundle_clear`` e' un segnale
     # a parte proprio perche' la stringa vuota qui vuol dire «non toccare».
-    data: dict[str, str] = {"name": (query.get("name") or [""])[0]}
+    data: dict[str, str] = {"name": query_first(query, "name") or ""}
     for key in ("format", "api_key", "api_base", "ca_bundle", "ca_bundle_clear"):
-        value = (query.get(key) or [""])[0]
+        value = query_first(query, key) or ""
         if value:
             data[key] = value
-    try:
-        payload = await update_provider(data)
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    payload = await update_provider(data)
     _fire(ctx.on_settings_changed, "on_settings_changed")
     return payload
 
@@ -1402,16 +1369,12 @@ async def settings_provider_update(
 async def telegram_save(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Salva il token del bot Telegram (lo valida con ``getMe``) e riavvia il
     canale. Era ``GET /api/telegram/save?token=…``."""
-    from jenny.webui.settings_api import WebUISettingsError
     from jenny.webui.telegram_api import save_telegram_token
 
     token = params.get("token", "")
     if not isinstance(token, str):
         raise CommandError("bad_request", "token must be a string")
-    try:
-        payload = await save_telegram_token(token)
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    payload = await save_telegram_token(token)
     _fire(ctx.on_telegram_changed, "on_telegram_changed")
     return payload
 
@@ -1426,13 +1389,9 @@ async def ssh_host_save(ctx: CommandContext, params: Mapping[str, Any]) -> dict[
     """Crea o aggiorna un host SSH — con la sua password, se ne ha una. Era
     ``GET /api/settings/ssh/host/save?password=…``. ``password`` assente vuol
     dire «tieni quella salvata», come prima."""
-    from jenny.webui.settings_api import WebUISettingsError
     from jenny.webui.ssh_api import save_ssh_host
 
-    try:
-        return await save_ssh_host(_as_query(params, _SSH_HOST_KEYS))
-    except WebUISettingsError as exc:
-        raise _settings_error(exc) from None
+    return await save_ssh_host(_as_query(params, _SSH_HOST_KEYS))
 
 
 # I campi dell'onboarding, come li legge ``settings_api.save_onboarding``.
@@ -1453,7 +1412,7 @@ async def onboarding_save(ctx: CommandContext, params: Mapping[str, Any]) -> dic
     from jenny.webui import settings_api
 
     query = _as_query(params, _ONBOARDING_KEYS)
-    data = {key: (query.get(key) or [""])[0] for key in _ONBOARDING_KEYS}
+    data = {key: query_first(query, key) or "" for key in _ONBOARDING_KEYS}
     # La chiave non si logga: solo la sua lunghezza, come faceva la rotta.
     logger.info(
         "[onboarding] received: provider_name={!r} format={!r} model={!r} api_key_len={} "
@@ -1472,7 +1431,7 @@ async def onboarding_save(ctx: CommandContext, params: Mapping[str, Any]) -> dic
         )
     except settings_api.WebUISettingsError as exc:
         logger.warning("[onboarding] settings error: {}", exc.message)
-        raise _settings_error(exc) from None
+        raise
     logger.info("[onboarding] success: chat_id={}", payload.get("chat_id"))
     return payload
 
@@ -1587,6 +1546,21 @@ def _notebooks_of_paths(ctx: CommandContext, paths: list[Any]) -> list[str]:
     return names
 
 
+# Le famiglie di comandi che stanno in un modulo loro, che importa da questo:
+# caricate al primo uso, per non chiudere un cerchio d'import all'avvio.
+# Prefisso → (modulo, tabella).
+_COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
+    # La scheda del piano a lista: solo l'interfaccia approva, ferma e torna indietro.
+    "plan": ("jenny.webui.plan_commands", "PLAN_COMMANDS"),
+    # Le scritture della bacheca.
+    "board": ("jenny.webui.board_commands", "BOARD_COMMANDS"),
+    # «Elimina» e il cestino delle app.
+    "apps": ("jenny.webui.apps_commands", "APPS_COMMANDS"),
+    # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
+    "staged": ("jenny.webui.staged_commands", "STAGED_COMMANDS"),
+}
+
+
 async def dispatch_command(
     ctx: CommandContext,
     method: str,
@@ -1598,29 +1572,10 @@ async def dispatch_command(
     traceback non deve mai raggiungere il client.
     """
     handler = COMMANDS.get(method)
-    if handler is None and method.startswith("plan."):
-        # La scheda del piano a lista: solo l'interfaccia approva, ferma e torna
-        # indietro (``plan_commands.py``).
-        from jenny.webui.plan_commands import PLAN_COMMANDS
-
-        handler = PLAN_COMMANDS.get(method)
-    if handler is None and method.startswith("board."):
-        # Le scritture della bacheca stanno in un modulo loro, che importa da
-        # questo: caricate qui, al primo uso, per non chiudere un cerchio
-        # d'import all'avvio.
-        from jenny.webui.board_commands import BOARD_COMMANDS
-
-        handler = BOARD_COMMANDS.get(method)
-    if handler is None and method.startswith("apps."):
-        # Il cestino delle app e le risposte alla prova: stesso motivo.
-        from jenny.webui.apps_commands import APPS_COMMANDS
-
-        handler = APPS_COMMANDS.get(method)
-    if handler is None and method.startswith("staged."):
-        # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
-        from jenny.webui.staged_commands import STAGED_COMMANDS
-
-        handler = STAGED_COMMANDS.get(method)
+    family = _COMMAND_FAMILIES.get(method.partition(".")[0])
+    if handler is None and family is not None:
+        module, table = family
+        handler = getattr(importlib.import_module(module), table).get(method)
     if handler is None:
         raise CommandError("bad_request", f"unknown method: {method}")
     _refuse_held_notebook(ctx, method, params)
@@ -1628,6 +1583,10 @@ async def dispatch_command(
         return await handler(ctx, params)
     except CommandError:
         raise
+    except CodedError as exc:
+        # Un rifiuto atteso di un modulo fuori dalla WebUI (la bacheca, il
+        # rinomino): il suo codice, tradotto qui una volta per tutti i comandi.
+        raise CommandError(exc.code, exc.message) from exc
     except Exception as exc:
         logger.exception("command {} failed", method)
         raise CommandError("internal", "command failed") from exc

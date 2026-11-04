@@ -15,11 +15,9 @@ sopra, o incollata al contrario — e quello si vede solo leggendo il filo.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
 
 
@@ -74,11 +72,15 @@ const renderMarkdown = (t) => t;
    `test_rich_surfaces_contract.py`. */
 const renderRich = () => {};
 const renderPlacesIn = () => {};
+const renderReplyExtras = (n) => { renderRich(n); renderPlacesIn(n); };
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 const i18n = { t: (key) => 'i18n:' + key };
 /* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
    suo banco (`test_chat_time_client.py`); qui conta solo se c'e'. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 function makeChat() {
   const chat = {
@@ -92,7 +94,6 @@ function makeChat() {
     _follow() {},
     syncEmpty() {},
     scrollToBottom() {},
-    _originBadge() { return null; },
     _appendMedia(node, media) {
       for (const m of media) {
         const el = makeNode();
@@ -105,7 +106,6 @@ function makeChat() {
     __PREPEND__,
     __IN_BATCH__,
     __APPEND_USER__,
-    __TIME_EL__,
     __APPEND_ASSISTANT__,
     __APPEND_BOUNDARY__,
     __APPEND__,
@@ -135,11 +135,11 @@ const trace = (turn) => ({ role: 'tool', kind: 'trace', content: 'read_file: x',
 def _harness() -> str:
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     return (
-        _HARNESS.replace("__BUILD_TURNS__", member(src, "_buildTurns"))
+        _HARNESS.replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode"))
+        .replace("__BUILD_TURNS__", member(src, "_buildTurns"))
         .replace("__PREPEND__", member(src, "prependTurns"))
         .replace("__IN_BATCH__", member(src, "_inBatch"))
         .replace("__APPEND_USER__", member(src, "_appendUser"))
-        .replace("__TIME_EL__", member(src, "_timeEl"))
         .replace("__APPEND_ASSISTANT__", member(src, "_appendAssistant"))
         .replace("__APPEND_BOUNDARY__", member(src, "_appendBoundary"))
         .replace("__APPEND__", member(src, "_append"))
@@ -148,7 +148,7 @@ def _harness() -> str:
         .replace("__TEXT__", member(src, "_textOf"))
         .replace("__JOURNAL_MARK__", member(src, "_journalMarkOf"))
         .replace("__MOVE_OFFER__", member(src, "_moveOfferOf"))
-    ) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
+    ) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers") + "\n" + (ASSETS / "shared" / "turns.js").read_text(encoding="utf-8").replace("export ", "")
 
 
 def _run_js(script: str) -> None:

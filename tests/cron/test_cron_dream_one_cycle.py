@@ -201,15 +201,18 @@ async def test_a_raising_cycle_releases_the_guard(tmp_path: Path) -> None:
     agent = _GatedAgent(tmp_path, memory)
     dispatcher = _dispatcher(agent)
 
-    # ``sessions_dir`` non è un path: ``prune_dream_sessions`` esplode.
-    agent.sessions = SimpleNamespace(sessions_dir=None)
+    # Un elenco che esplode: ``prune_dream_sessions`` solleva.
+    def _boom(_prefix):  # type: ignore[no-untyped-def]
+        raise RuntimeError("database rotto")
+
+    agent.sessions = SimpleNamespace(list_keys=_boom)
 
     with pytest.raises(Exception):
         await dispatcher.dispatch(_DREAM_JOB)
 
     assert not dream_cycle._CYCLE_IN_FLIGHT
     # E la prova osservabile: il tick dopo parte.
-    agent.sessions = SimpleNamespace(sessions_dir=tmp_path)
+    agent.sessions = SimpleNamespace(list_keys=lambda _prefix: [])
     assert await dispatcher.dispatch(_DREAM_JOB) is None
     assert agent.turns == 2
 

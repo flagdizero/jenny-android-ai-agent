@@ -34,10 +34,7 @@ from __future__ import annotations
 
 import copy
 import json
-import os
-import threading
 from collections.abc import Callable
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +52,7 @@ from jenny.board.model import (
     ownership_violations,
 )
 from jenny.security.subagent_policy import journal_touch
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, load_with_recovery, path_lock, rotate_valid_json_backup
 
 
 class BoardOwnershipError(Exception):
@@ -64,16 +61,6 @@ class BoardOwnershipError(Exception):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("; ".join(problems))
         self.problems = problems
-
-
-_LOCKS: dict[str, threading.Lock] = {}
-_LOCKS_GUARD = threading.Lock()
-
-
-def _lock_for(path: Path) -> threading.Lock:
-    key = str(path.resolve(strict=False))
-    with _LOCKS_GUARD:
-        return _LOCKS.setdefault(key, threading.Lock())
 
 
 def board_dir(project_root: Path) -> Path:
@@ -90,10 +77,6 @@ def card_summary_path(project_root: Path, card_id: str) -> Path:
     return board_dir(project_root) / CARDS_DIR / f"{card_id}.json"
 
 
-def _backup(path: Path) -> Path:
-    return path.with_name(path.name + ".bak")
-
-
 def _read_json(path: Path) -> Any:
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
@@ -102,57 +85,42 @@ def _read_json(path: Path) -> Any:
 def _read_with_recovery(path: Path) -> Any | None:
     """Il JSON di *path*; se è rotto, quello del ``.bak``; se manca, ``None``.
 
-    Un file rotto non si cancella: si mette da parte con un nome che dice quando
-    (``board.corrupt-<istante>.json``), come fa la config — serve a capire cosa
-    è successo, e la prossima scrittura ripartirà dal ``.bak``.
+    La rete di config e cron (``utils.path.load_with_recovery``): il file rotto
+    si mette da parte con un nome che dice quando (``board.corrupt-<istante>.json``)
+    e il ``.bak`` torna al suo posto. Prima non tornava, e dalla seconda lettura
+    il quaderno risultava senza bacheca. Se il file rotto non si sposta, niente
+    lo deve sovrascrivere: si rifiuta con un ``OSError``, lettura compresa,
+    perché la lettura qui è il primo passo di ogni scrittura.
     """
-    if not path.exists():
-        return None
-    try:
-        return _read_json(path)
-    except (OSError, ValueError) as exc:
-        logger.error("board: {} is unreadable ({}); falling back to the backup", path, exc)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        try:
-            os.replace(path, path.with_name(f"{path.stem}.corrupt-{stamp}{path.suffix}"))
-        except OSError:
-            pass
-    try:
-        return _read_json(_backup(path))
-    except (OSError, ValueError):
-        return None
+    got = load_with_recovery(path, _read_json)
+    if got.stuck:
+        raise OSError(f"board: {path} is unreadable and could not be set aside")
+    return got.value
 
 
 def _write(path: Path, data: Any) -> None:
     """Scrittura atomica, ruotando prima il ``.bak`` sull'ultimo contenuto valido."""
     # Dentro un aiutante (l'editore dei quaderni): il «prima» per l'annulla
-    # (``agent.subagent_journal``). Fuori è una no-op. Il ``.bak`` no: è la copia
+    # (``agent.write_journal``). Fuori è una no-op. Il ``.bak`` no: è la copia
     # di rotazione dell'ultimo contenuto valido, non il lavoro di qualcuno.
     journal_touch(path)
-    if path.exists():
-        try:
-            content = path.read_text(encoding="utf-8")
-            json.loads(content)
-        except (OSError, ValueError):
-            content = None
-        if content is not None:
-            try:
-                atomic_write(_backup(path), content, fsync_dir=False)
-            except OSError as exc:
-                logger.warning("board: backup of {} not refreshed: {}", path, exc)
+    try:
+        rotate_valid_json_backup(path)
+    except OSError as exc:
+        logger.warning("board: backup of {} not refreshed: {}", path, exc)
     atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
 def rewrite_json(path: Path, change: Callable[[Any], Any]) -> None:
     """Riscrive la bacheca o le attese con ``change(contenuto di adesso)``.
 
-    Per l'annulla di un aiutante (``agent.subagent_journal``), che toglie il suo
+    Per l'annulla di un aiutante (``agent.write_journal``), che toglie il suo
     cambiamento da quel che c'è adesso: lettura e scrittura sotto il lock degli
     altri scrittori, così un tocco dell'utente arrivato nel frattempo non va
     perso. Se *change* solleva non si scrive niente. Nessuna normalizzazione:
     il contenuto è già quello che uno scrittore normale aveva lasciato.
     """
-    with _lock_for(path):
+    with path_lock(path):
         current = _read_json(path) if path.exists() else None
         _write(path, change(current))
 
@@ -172,7 +140,7 @@ def _mutate(
 ) -> dict[str, Any]:
     if actor not in (USER, JENNY):
         raise ValueError(f"unknown actor {actor!r}")
-    with _lock_for(path):
+    with path_lock(path):
         current = normalize(_read_with_recovery(path))
         before = copy.deepcopy(current)
         if apply(current) is False:
@@ -229,7 +197,7 @@ def write_card_summary(project_root: Path, card_id: str, summary: dict[str, Any]
     path = card_summary_path(project_root, card_id)
     data = normalize_card_summary(summary, card_id) or {"card": card_id}
     journal_touch(path)
-    with _lock_for(path):
+    with path_lock(path):
         atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
     return data
 

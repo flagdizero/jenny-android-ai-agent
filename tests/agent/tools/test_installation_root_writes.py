@@ -42,6 +42,7 @@ from jenny.apps.storage import StorageError, execute_storage_action
 from jenny.security.workspace_access import (
     WorkspaceScopeResolver,
     build_workspace_scope,
+    current_write_root,
     enter_workspace_scope,
 )
 
@@ -67,9 +68,8 @@ def _action(op: str) -> AppAction:
 
 def test_downloads_lands_inside_the_project(install: Path) -> None:
     project = _project(install)
-    tool = DownloadFileTool(str(install))
     with enter_workspace_scope(build_workspace_scope(project, "restricted")):
-        root = tool._downloads_root()
+        root = current_write_root(install)
     assert root == project, (
         "prima del passo 6 era la radice dell'installazione, cioè una scrittura fuori "
         "dal progetto che il confine non vedeva passare"
@@ -78,14 +78,13 @@ def test_downloads_lands_inside_the_project(install: Path) -> None:
 
 
 def test_the_personal_chat_still_downloads_into_the_installation(install: Path) -> None:
-    tool = DownloadFileTool(str(install))
     with enter_workspace_scope(build_workspace_scope(install, "full")):
-        assert tool._downloads_root() == install
+        assert current_write_root(install) == install
 
 
 def test_without_a_bound_scope_it_falls_back_to_the_constructor(install: Path) -> None:
     """Sessioni interne e test: là la radice del turno *è* quella del costruttore."""
-    assert DownloadFileTool(str(install))._downloads_root() == install
+    assert current_write_root(install) == install
 
 
 async def test_a_download_is_refused_in_read_only_before_the_network(install: Path) -> None:

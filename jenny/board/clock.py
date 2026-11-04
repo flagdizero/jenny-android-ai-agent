@@ -30,6 +30,7 @@ from loguru import logger
 
 from jenny.board import model
 from jenny.board.store import mutate_board, read_board
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 
 # Il passo dell'orologio: un quarto d'ora (decisione del 05/10/2026). E' anche
 # l'intervallo minimo di un lettore (``micro.MIN_EVERY_MINUTES``).
@@ -39,10 +40,9 @@ CLOCK_EVERY_MS = 15 * 60 * 1000
 def _local_now(timezone_name: str | None, now: datetime | None) -> datetime:
     if now is not None:
         return now
-    from jenny.utils.helpers import safe_zoneinfo
+    from jenny.utils.clock import local_now
 
-    tz = safe_zoneinfo(timezone_name) if timezone_name else None
-    return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    return local_now(timezone_name)
 
 
 def watch_app_sections(workspace: Path, root: Path, *, timezone_name: str | None = None) -> int:
@@ -96,10 +96,11 @@ async def run_reminders(
     agent: Any,
     workspace: Path,
     *,
-    wikis_dir_name: str = "wikis",
+    wikis_dir_name: str = DEFAULT_WIKIS_DIR,
     timezone_name: str | None = None,
     now: datetime | None = None,
     cron: Any = None,
+    migrate_legacy: bool = False,
 ) -> str | None:
     """Un giro dell'orologio su tutti i quaderni. Torna una riga per il log del cron.
 
@@ -107,6 +108,9 @@ async def run_reminders(
     più di una settimana. *agent* non serve più (nessun annuncio parte da qui) e
     resta nella firma per chi chiama. *cron* è il servizio dei job: serve a
     buttare i job delle schede tolte (:func:`jenny.board.removed.purge_removed_cards`).
+    Con *migrate_legacy* porta anche i ``reminders.json`` della 2.0.0 nello
+    scheduler: il dispatcher lo chiede al primo giro di ogni avvio, non a ogni
+    quarto d'ora (v. :mod:`jenny.board.legacy_reminders`).
     """
     from jenny.board.legacy_reminders import migrate_legacy_reminders
     from jenny.board.removed import purge_removed_cards
@@ -129,8 +133,9 @@ async def run_reminders(
         if read_board(root) is None:
             continue
         try:
-            migrated += migrate_legacy_reminders(root, cron, timezone_name=timezone_name,
-                                                 now=current)
+            if migrate_legacy:
+                migrated += migrate_legacy_reminders(root, cron, timezone_name=timezone_name,
+                                                     now=current)
         except Exception:  # noqa: BLE001 — un quaderno rotto non ferma gli altri
             logger.exception("reminders: legacy reminders of {} not migrated", name)
         try:

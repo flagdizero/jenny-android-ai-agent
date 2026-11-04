@@ -11,19 +11,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from support.bus import FakeBus as FakeBus  # i test del piano la prendono da qui
+
 KEY = "project:piante"
-
-
-class FakeBus:
-    def __init__(self) -> None:
-        self.inbound: list[Any] = []
-        self.outbound: list[Any] = []
-
-    async def publish_inbound(self, msg: Any) -> None:
-        self.inbound.append(msg)
-
-    async def publish_outbound(self, msg: Any) -> None:
-        self.outbound.append(msg)
 
 
 class FakeHost:
@@ -117,3 +107,26 @@ STEPS = [
     {"title": "Controllo i link", "detail": "Ogni link della wiki porta a una pagina.",
      "kind": "check", "done_when": "Zero link morti."},
 ]
+
+
+def plan_write(driver: Any, rel: str, text: str | None, *, notebook: str = "piante") -> Path:
+    """Una scrittura del passo aperto (o del piano), come la fa il suo lavoro:
+    nel registro del piano, col passo. *text* ``None`` toglie il file."""
+    from jenny.agent.write_journal import bind_journal
+    from jenny.plan.model import current_step
+    from jenny.plan.work import plan_journal
+
+    plan = driver.store.open_plan_for(notebook)
+    assert plan is not None, "no open plan"
+    step = current_step(plan)
+    journal = plan_journal(driver.store.workspace, plan)
+    path = driver.store.workspace / "wikis" / notebook / rel
+    with bind_journal(journal, step=step.id if step is not None else None):
+        journal.touch(path)
+        if text is None:
+            path.unlink()
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        journal.settle("write_file")
+    return path

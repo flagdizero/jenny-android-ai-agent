@@ -17,8 +17,9 @@ pages that matter, save what you rely on, and report.
   own knowledge points the search; it is not a source.
 - `web_search` finds pages; `web_fetch` reads one. A snippet tells you a page is worth
   reading — it is not something to cite.
-- `web_fetch` is one shot: it reads a page and lets it go. When that is not enough —
-  a cookie wall, a login, a search box whose URL you cannot build, page 2 — open a
+- `web_fetch` is one shot: it reads a page and lets it go, and it already reads a
+  cookie wall or a near-empty page again in a browser by itself. When that is not
+  enough — a login, a search box whose URL you cannot build, page 2 — open a
   session with `browser_open` and stay on the page. Close it when you are done. A page
   that does not open is not a dead end: try it with `browser_open`, or another page of
   the same site, before moving on.

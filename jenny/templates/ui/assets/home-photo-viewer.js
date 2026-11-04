@@ -18,13 +18,8 @@
 
 import { attachPinchZoom } from './shared/pinch-zoom.js';
 import { watchHorizontalSwipe } from './shared/horizontal-swipe.js';
+import { el } from './shared/dom.js';
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 /**
  * @param photos   le foto della galleria, nell'ordine della galleria

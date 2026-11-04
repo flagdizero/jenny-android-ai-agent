@@ -16,11 +16,9 @@ montaggio diventi uno.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 WORKSPACE_JS = ASSETS / "mobile-workspace.js"
 
 pytestmark = requires_node

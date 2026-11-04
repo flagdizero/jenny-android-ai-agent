@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -54,7 +55,7 @@ def get_data_dir() -> Path:
         legacy_dir = workspace / legacy_name
         if not data_dir.exists() and legacy_dir.exists():
             legacy_dir.rename(data_dir)
-            logger.info("Migrated runtime data directory %s -> .jenny", legacy_name)
+            logger.info("Migrated runtime data directory {} -> .jenny", legacy_name)
     return ensure_dir(data_dir)
 
 
@@ -91,6 +92,32 @@ def get_workspace_path() -> Path:
         "Workspace directory is not configured. "
         "Call set_workspace_dir() before get_workspace_path()."
     )
+
+
+# Il nome di serie della cartella dei quaderni, quello dello scaffold.
+DEFAULT_WIKIS_DIR = "wikis"
+
+
+def wikis_dir_name(config: Any = None) -> str:
+    """Il nome della cartella dei quaderni, ``config.wiki.wikis_dir``.
+
+    ``"wikis"`` se non è scritto o se la config non si legge: è il nome dello
+    scaffold. Con *config* non rilegge il file. L'unico posto che lo decide: era
+    scritto a mano in nove.
+    """
+    try:
+        if config is None:
+            from jenny.config.loader import load_config
+
+            config = load_config()
+        return getattr(config.wiki, "wikis_dir", "") or DEFAULT_WIKIS_DIR
+    except Exception:  # noqa: BLE001 — senza config, il nome di serie
+        return DEFAULT_WIKIS_DIR
+
+
+def get_wikis_path(workspace: Path | None = None, *, config: Any = None) -> Path:
+    """La cartella dei quaderni: ``<workspace>/<wikis_dir_name()>``."""
+    return (workspace if workspace is not None else get_workspace_path()) / wikis_dir_name(config)
 
 
 def get_runtime_subdir(name: str) -> Path:

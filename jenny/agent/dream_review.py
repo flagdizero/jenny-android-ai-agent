@@ -128,9 +128,9 @@ def review_session_key() -> str:
     Il prefisso ``dream:`` non è cosmesi ed è la ragione per cui la chiave è
     coniata così e non come ``review:...``: ``is_internal_session_key`` lo copre
     già (quindi la sessione non compare negli elenchi user-facing) e
-    ``MemoryStore.prune_dream_sessions`` globba ``dream_*.jsonl`` (quindi il file
-    viene ripulito dal meccanismo esistente). Con un prefisso tutto suo ogni
-    review pass lascerebbe dietro un file di sessione per sempre, e servirebbe un
+    ``MemoryStore.prune_dream_sessions`` pota le chiavi ``dream:`` (quindi la
+    sessione viene ripulita dal meccanismo esistente). Con un prefisso tutto suo
+    ogni review pass lascerebbe dietro una sessione per sempre, e servirebbe un
     secondo pruner che nessuno si ricorderebbe di scrivere.
     """
     return f"dream:review-{datetime.now():%Y%m%d-%H%M%S}"

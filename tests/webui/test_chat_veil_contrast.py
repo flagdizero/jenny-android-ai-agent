@@ -20,11 +20,10 @@ di questo: e' margine, non e' il conto.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from support import theme_tokens
+from support.js_harness import ASSETS
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 MOBILE_CSS = ASSETS / "mobile-style.css"
 HOME_CSS = ASSETS / "home-style.css"
 

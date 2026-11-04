@@ -1,11 +1,10 @@
 import asyncio
 import functools
-import json
 import time
 
 import pytest
 from support.aio import other_tasks, settle_tasks, wait_until
-from support.cron import disable_job
+from support.cron import disable_job, saved_jobs, seed_jobs
 
 from jenny.cron.service import CronJobSkippedError, CronService
 from jenny.cron.types import CronJob, CronJobSilencedError, CronPayload, CronSchedule
@@ -170,30 +169,21 @@ async def test_unbound_agent_jobs_are_disabled_on_add(tmp_path) -> None:
 
 def test_unbound_agent_jobs_are_disabled_on_load(tmp_path) -> None:
     store_path = tmp_path / "cron" / "jobs.json"
-    store_path.parent.mkdir(parents=True)
-    store_path.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "jobs": [
-                    {
-                        "id": "unbound-1",
-                        "name": "Unbound reminder",
-                        "enabled": True,
-                        "schedule": {"kind": "every", "everyMs": 60_000},
-                        "payload": {
-                            "kind": "agent_turn",
-                            "message": "check status",
-                        },
-                        "state": {"nextRunAtMs": 1},
-                        "createdAtMs": 1,
-                        "updatedAtMs": 1,
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+    seed_jobs(store_path, [
+        {
+            "id": "unbound-1",
+            "name": "Unbound reminder",
+            "enabled": True,
+            "schedule": {"kind": "every", "everyMs": 60_000},
+            "payload": {
+                "kind": "agent_turn",
+                "message": "check status",
+            },
+            "state": {"nextRunAtMs": 1},
+            "createdAtMs": 1,
+            "updatedAtMs": 1,
+        }
+    ])
 
     job = CronService(store_path).get_job("unbound-1")
 
@@ -222,11 +212,10 @@ def test_add_job_preserves_origin_delivery_context(tmp_path) -> None:
     assert job.payload.origin_chat_id == "C123"
     assert job.payload.origin_metadata == metadata
 
-    raw = json.loads((tmp_path / "cron" / "action.jsonl").read_text(encoding="utf-8"))
-    payload = raw["params"]["payload"]
-    assert payload["origin_channel"] == "websocket"
-    assert payload["origin_chat_id"] == "C123"
-    assert payload["origin_metadata"] == metadata
+    payload = saved_jobs(tmp_path / "cron" / "jobs.json")[0]["payload"]
+    assert payload["originChannel"] == "websocket"
+    assert payload["originChatId"] == "C123"
+    assert payload["originMetadata"] == metadata
 
     reloaded = service.get_job(job.id)
     assert reloaded is not None
@@ -267,8 +256,7 @@ async def test_origin_survives_reload_and_a_legacy_key_is_migrated(tmp_path) -> 
     finally:
         service.stop()
 
-    raw = json.loads(store_path.read_text(encoding="utf-8"))
-    payload = raw["jobs"][0]["payload"]
+    payload = saved_jobs(store_path)[0]["payload"]
     assert payload["sessionKey"] == "websocket:C123:1234567890.123456"
     assert payload["originChannel"] == "websocket"
     assert payload["originChatId"] == "C123"
@@ -287,7 +275,6 @@ async def test_legacy_payload_with_channel_meta_key_still_loads(tmp_path) -> Non
     """Payload persistiti da versioni precedenti con la chiave rimossa
     ``channelMeta`` devono caricarsi senza errori (extra ignorato)."""
     store_path = tmp_path / "cron" / "jobs.json"
-    store_path.parent.mkdir(parents=True, exist_ok=True)
     legacy = {
         "version": 1,
         "jobs": [
@@ -306,7 +293,7 @@ async def test_legacy_payload_with_channel_meta_key_still_loads(tmp_path) -> Non
             }
         ],
     }
-    store_path.write_text(json.dumps(legacy), encoding="utf-8")
+    seed_jobs(store_path, legacy["jobs"])
 
     reloaded = CronService(store_path).get_job("legacy01")
     assert reloaded is not None
@@ -568,8 +555,7 @@ async def test_run_history_persisted_to_disk(tmp_path) -> None:
     )
     await service.run_job(job.id)
 
-    raw = json.loads(store_path.read_text())
-    history = raw["jobs"][0]["state"]["runHistory"]
+    history = saved_jobs(store_path)[0]["state"]["runHistory"]
     assert len(history) == 1
     assert history[0]["status"] == "ok"
     assert "runAtMs" in history[0]
@@ -973,36 +959,9 @@ async def test_list_jobs_during_on_job_does_not_cause_stale_reload(tmp_path) -> 
     assert execution_count == 2
 
     # Verify next_run_at_ms was persisted correctly (in the future)
-    raw = json.loads(store_path.read_text())
-    for j in raw["jobs"]:
+    for j in saved_jobs(store_path):
         next_run = j["state"]["nextRunAtMs"]
         assert next_run is not None
         assert next_run > now_ms, f"Job '{j['name']}' next_run should be in the future"
 
 
-def test_a_stale_cron_lock_does_not_hang_the_store(tmp_path, monkeypatch):
-    """Un ``cron.lock`` lasciato da un processo morto viene tolto, non aspettato per sempre.
-
-    ``SoftFileLock`` e' un file creato con ``O_EXCL``: un kill dentro il
-    ``with`` lo lascia li', e senza timeout ``_load_store`` — sincrono, chiamato
-    da ``register_system_job`` al boot — bloccava l'event loop intero.
-    """
-    from jenny.cron import service as service_module
-
-    monkeypatch.setattr(service_module, "_LOCK_TIMEOUT_S", 0.2)
-    store_path = tmp_path / "cron" / "jobs.json"
-    store_path.parent.mkdir(parents=True)
-    # Il giornale esiste (vuoto): e' cio' che fa passare ``_load_store`` dal lock.
-    (store_path.parent / "action.jsonl").write_text("", encoding="utf-8")
-    stale_lock = tmp_path / "cron.lock"
-    stale_lock.write_text("", encoding="utf-8")
-    service = CronService(store_path)
-    assert service._lock.lock_file == str(stale_lock)
-
-    started = time.monotonic()
-    store = service._load_store()
-
-    assert store is not None
-    assert time.monotonic() - started < 2.0
-    assert not service._lock.is_locked
-    assert not stale_lock.exists()

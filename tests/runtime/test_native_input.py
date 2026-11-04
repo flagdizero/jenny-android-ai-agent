@@ -10,27 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import pathlib
 
 import pytest
 from support.aio import wait_until
-from support.kotlin_source import read_source
+from support.bus import FakeBus
+from support.kotlin_source import ANDROID_SRC, read_source
 
-from jenny.bus.events import NOTIFICATION_CHANNEL, InboundMessage
+from jenny.bus.events import NOTIFICATION_CHANNEL
 from jenny.runtime import native_input as ni
 from jenny.session.keys import UNIFIED_SESSION_KEY
-
-
-class _FakeBus:
-    """Bus minimo: registra gli inbound e segnala l'arrivo."""
-
-    def __init__(self) -> None:
-        self.inbound: list[InboundMessage] = []
-        self.arrived = asyncio.Event()
-
-    async def publish_inbound(self, msg: InboundMessage) -> None:
-        self.inbound.append(msg)
-        self.arrived.set()
 
 
 @pytest.fixture(autouse=True)
@@ -41,8 +29,8 @@ def _clean_state():
     ni.reset_native_input()
 
 
-async def _bound() -> _FakeBus:
-    bus = _FakeBus()
+async def _bound() -> FakeBus:
+    bus = FakeBus()
     assert ni.bind_native_input(bus) is True
     return bus
 
@@ -129,9 +117,7 @@ class TestBoundaryWithKotlin:
 
     @staticmethod
     def _gateway_service() -> str:
-        repo = pathlib.Path(__file__).resolve().parents[2]
-        kt = repo / "android/app/src/main/java/com/flagdizero/jenny/GatewayService.kt"
-        return read_source(kt)
+        return read_source(ANDROID_SRC / "GatewayService.kt")
 
     def test_kotlin_calls_this_module(self):
         assert 'getModule("jenny.runtime.native_input")' in self._gateway_service()
@@ -308,7 +294,7 @@ class TestDelivery:
     async def test_the_rebind_moves_the_bus(self):
         """Un gateway che riparte nello stesso processo non deve consegnare al vecchio."""
         old = await _bound()
-        fresh = _FakeBus()
+        fresh = FakeBus()
         ni.bind_native_input(fresh)
         ni.on_native_text("dopo il riavvio")
         await asyncio.wait_for(fresh.arrived.wait(), 2)

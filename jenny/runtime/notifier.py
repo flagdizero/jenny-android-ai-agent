@@ -23,17 +23,16 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from loguru import logger
-
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
 from jenny.runtime.user_text import current_bot_name, say
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
-    WEBUI_CHANNEL,
     is_project_session_key,
+    project_name,
     session_key_for_channel,
 )
+from jenny.utils.helpers import clip
 from jenny.utils.plain_text import plain_text
 from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
@@ -87,7 +86,7 @@ def alert_conversation(chat_id: str | None) -> str | None:
     """
     if not chat_id:
         return None
-    key = session_key_for_channel(WEBUI_CHANNEL, chat_id)
+    key = session_key_for_channel(WEBSOCKET_CHANNEL, chat_id)
     return key if is_project_session_key(key) else None
 
 
@@ -137,14 +136,12 @@ def alert_fields(
     else:
         title = bot
         if conversation:
-            title = f"{bot} · {conversation[len(PROJECT_SESSION_PREFIX):]}"
+            title = f"{bot} · {project_name(conversation)}"
         tag = "message"
     if conversation:
         tag = f"{conversation}{CONVERSATION_TAG_SEPARATOR}{tag}"
 
-    body = " ".join(plain_text(content).split())
-    if len(body) > _BODY_MAX_CHARS:
-        body = body[: _BODY_MAX_CHARS - 1] + "…"
+    body = clip(" ".join(plain_text(content).split()), _BODY_MAX_CHARS)
     if not body:
         body = say("notify.new_message")
     return title, body, tag
@@ -199,18 +196,11 @@ async def post_alert(
     )
     if thread:
         tag = thread
-    try:
-        bridge = await _get_bridge(context)
-        # La risposta a un messaggio scritto nella WebUI tace con l'app davanti,
-        # un avviso solo con la sua chat a schermo: v. ``is_app_reply``.
-        post = bridge.postReply if is_app_reply(metadata) else bridge.postAlert
-        posted = await asyncio.wait_for(
-            asyncio.to_thread(post, title, body, tag), timeout=_ALERT_TIMEOUT_S
-        )
-    except Exception:
-        logger.opt(exception=True).warning("Failed to post system alert (tag={})", tag)
-        return False
-    return bool(posted)
+    # La risposta a un messaggio scritto nella WebUI tace con l'app davanti,
+    # un avviso solo con la sua chat a schermo: v. ``is_app_reply``.
+    method = "postReply" if is_app_reply(metadata) else "postAlert"
+    return bool(await _BRIDGE.call(_get_bridge, context, method, title, body, tag,
+                                   timeout=_ALERT_TIMEOUT_S, default=False))
 
 
 def notify_delivery(

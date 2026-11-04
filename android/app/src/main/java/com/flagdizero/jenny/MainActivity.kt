@@ -88,7 +88,6 @@ class MainActivity : AppCompatActivity() {
         private const val NATIVE_PORT_JS = "JennyNativePort"
         private const val RETRY_DELAY_MS = 500L
         private const val MAX_RETRIES = 30
-        private const val PREFS_NAME = "jenny"
         private const val PREF_BOOT_TO_CHAT = "boot_to_chat"
         // L'ultimo tema scelto nella WebUI, come colori già risolti: v.
         // applyBootPalette. Li scrivono setThemeBars e setFloatingPalette.
@@ -185,7 +184,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_OPEN_CHAT_TOKEN = "open_chat_token"
 
         private fun openChatToken(context: Context): String = synchronized(this) {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val prefs = JennyPrefs.of(context)
             prefs.getString(PREF_OPEN_CHAT_TOKEN, null) ?: run {
                 val bytes = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
                 val fresh = bytes.joinToString("") { "%02x".format(it) }
@@ -478,11 +477,7 @@ class MainActivity : AppCompatActivity() {
      *  (`elapsedRealtime`), 0 se nessuna è in volo. */
     private var locationAskedFromUiAt = 0L
 
-    private fun hasLocationPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
+    private fun hasLocationPermission(): Boolean = LocationBridge.hasPermission(this)
 
     private fun launchLocationRequest() {
         locationPermissionLauncher.launch(
@@ -493,16 +488,7 @@ class MainActivity : AppCompatActivity() {
     /** La scheda di Jenny nelle impostazioni di Android: dove si concede un
      *  permesso che l'app non può più chiedere. */
     private fun openAppDetailsSettings() {
-        try {
-            startActivity(
-                Intent(
-                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:$packageName")
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "App details settings could not be opened", e)
-        }
+        Intents.tryStart(this, Intents.appDetails(packageName), TAG, "app details settings")
     }
 
     // ── Launcher: la griglia app deve seguire i cambi di pacchetto ──
@@ -838,7 +824,7 @@ class MainActivity : AppCompatActivity() {
      * **Solo dal thread UI.**
      */
     private fun applyBootPalette() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val prefs = JennyPrefs.of(this)
         val bg = prefs.getInt(PREF_BOOT_BG, DEFAULT_BG)
         val text = prefs.getInt(PREF_BOOT_TEXT, DEFAULT_TEXT)
         val accent = prefs.getInt(PREF_BOOT_ACCENT, DEFAULT_ACCENT)
@@ -992,9 +978,7 @@ class MainActivity : AppCompatActivity() {
             ensureLocationPermission()
             return
         }
-        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-        if (!granted) {
+        if (!JennyChannels.canPostNotifications(this)) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             ensureLocationPermission()
@@ -1264,7 +1248,7 @@ class MainActivity : AppCompatActivity() {
         // vista salvata. Il flag viene scritto da restartApp() con commit()
         // sincrono: il localStorage della WebView non sopravvive al kill
         // (persistenza asincrona di Chromium), le SharedPreferences sì.
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val prefs = JennyPrefs.of(this)
         val bootToChat = prefs.getBoolean(PREF_BOOT_TO_CHAT, false)
         if (bootToChat) prefs.edit().putBoolean(PREF_BOOT_TO_CHAT, false).apply()
         // `openChatOnLoad` è l'altra sorgente: il tap su un alert arrivato con
@@ -1754,10 +1738,7 @@ class MainActivity : AppCompatActivity() {
 
         /** True se l'app è già esente dall'ottimizzazione batteria (doze). */
         @JavascriptInterface
-        fun isBatteryExempt(): Boolean {
-            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
-            return pm.isIgnoringBatteryOptimizations(packageName)
-        }
+        fun isBatteryExempt(): Boolean = PowerBridge(this@MainActivity).isBatteryExempt()
 
         /** True se il device ha cambiato build dall'ultimo avvio dell'app.
          *
@@ -1797,7 +1778,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun latchSystemUpdate() = synchronized(this) {
         if (systemUpdateLatch != null) return@synchronized
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val prefs = JennyPrefs.of(this)
         val seen = prefs.getString(PREF_LAST_FINGERPRINT, null)
         val current = Build.FINGERPRINT ?: ""
         val changed = seen != null && seen != current
@@ -1919,7 +1900,7 @@ class MainActivity : AppCompatActivity() {
          */
         fun getLauncherUsage(): String =
             try {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                JennyPrefs.of(this@MainActivity)
                     .getString(PREF_LAUNCHER_USAGE, "") ?: ""
             } catch (e: Exception) {
                 Log.w(TAG, "launcher usage unreadable (${e.javaClass.simpleName})")
@@ -1941,7 +1922,7 @@ class MainActivity : AppCompatActivity() {
          */
         fun setLauncherUsage(json: String) {
             try {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                JennyPrefs.of(this@MainActivity)
                     .edit().putString(PREF_LAUNCHER_USAGE, json).commit()
             } catch (e: Exception) {
                 // Un ordine che non si ricorda di questo avvio è meno grave di
@@ -1993,7 +1974,7 @@ class MainActivity : AppCompatActivity() {
             FloatingOverlayController.setPalette(surface, border, text, hint, accent, onAccent)
             // Testo e accento servono anche alla schermata d'avvio (v.
             // applyBootPalette). Un valore illeggibile lascia quello di prima.
-            val edit = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            val edit = JennyPrefs.of(this@MainActivity).edit()
             for ((key, value) in listOf(
                 PREF_BOOT_TEXT to text,
                 PREF_BOOT_ACCENT to accent,
@@ -2063,7 +2044,7 @@ class MainActivity : AppCompatActivity() {
                 Log.w(TAG, "setThemeBars: unparseable color, bars left as they are")
                 return
             }
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            JennyPrefs.of(this@MainActivity).edit()
                 .putInt(PREF_BOOT_BG, color)
                 .putBoolean(PREF_BOOT_LIGHT, scheme == "light")
                 .apply()
@@ -2293,7 +2274,7 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "restartApp requested (pending restore)")
             // commit() sincrono (non apply): il processo muore tra ~650ms e la
             // scrittura DEVE essere già su disco. Vedi buildGatewayUrl().
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            JennyPrefs.of(this@MainActivity)
                 .edit().putBoolean(PREF_BOOT_TO_CHAT, true).commit()
             // Niente CLEAR_TASK: essendo l'app la HOME, il sistema la rilancia
             // già da solo dopo il kill; l'alarm (inesatto, può arrivare secondi
@@ -2378,15 +2359,11 @@ class MainActivity : AppCompatActivity() {
          *  cron e promemoria e rallenta il long-poll Telegram. */
         fun requestBatteryExemption() {
             runOnUiThread {
-                try {
-                    val intent = Intent(
-                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Uri.parse("package:$packageName")
-                    )
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Battery exemption request failed", e)
-                }
+                val intent = Intent(
+                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName")
+                )
+                Intents.tryStart(this@MainActivity, intent, TAG, "battery exemption request")
             }
         }
 
@@ -2415,11 +2392,7 @@ class MainActivity : AppCompatActivity() {
             )
             val reachable = canResolve(intent)
             runOnUiThread {
-                try {
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Exact alarm permission request failed", e)
-                }
+                Intents.tryStart(this@MainActivity, intent, TAG, "exact alarm permission request")
             }
             return reachable
         }
@@ -2522,19 +2495,10 @@ class MainActivity : AppCompatActivity() {
      * package che l'Activity ce l'ha eccome, e lanciarla resta permesso.
      */
     private fun startFirstWorking(candidates: List<Intent>) {
-        for (intent in candidates) {
-            try {
-                startActivity(intent)
-                return
-            } catch (e: Exception) {
-                Log.w(
-                    TAG,
-                    "Battery settings screen unavailable: " +
-                        "${intent.component ?: intent.action} (${e.javaClass.simpleName})"
-                )
-            }
+        val opened = candidates.any {
+            Intents.tryStart(this, it, TAG, "battery settings screen ${it.component ?: it.action}")
         }
-        Log.w(TAG, "No battery settings screen could be opened on this device")
+        if (!opened) Log.w(TAG, "No battery settings screen could be opened on this device")
     }
 
     // ── Backup: helper I/O (thread di background + callback JS) ──

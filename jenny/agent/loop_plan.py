@@ -23,8 +23,8 @@ recinto, ``notebook_cron_session_key``): il suo prompt non è una risposta a un
 piano bloccato, la sua fine non giudica il passo, e i tool del passo non li
 vede. Finché il piano tiene il quaderno gira in sola lettura: per la stessa
 ragione per cui il giardiniere salta i quaderni tenuti (``pick_project``),
-quel che scrivesse finirebbe nelle foto come lavoro del piano, e «Torna a
-prima» lo cancellerebbe.
+quel che scrivesse sopra un file del piano lo terrebbe fuori da «Torna a
+prima».
 
 Senza driver (i test che non lo montano, l'agente prima del composition root)
 tutto questo tace: i tool del piano restano nascosti e nessun hook gira.
@@ -32,6 +32,7 @@ tutto questo tace: i tool del piano restano nascosti e nessun hook gira.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
@@ -41,6 +42,7 @@ from loguru import logger
 from jenny.agent.hook import AgentHook, ToolResultHookContext
 from jenny.cron.session_turns import is_cron_turn
 from jenny.plan.driver import (
+    PLAN_ANSWER_META,
     PLAN_FOLLOWUP_META,
     PLAN_ID_META,
     PLAN_MODE_META,
@@ -79,6 +81,14 @@ def is_plan_turn(metadata: Mapping[str, Any] | None) -> bool:
     return isinstance(metadata, Mapping) and metadata.get(INJECTED_EVENT_META) in PLAN_TURN_EVENTS
 
 
+def _is_step_work(metadata: Mapping[str, Any] | None) -> bool:
+    """Il turno è lavoro di un passo: il passo, il promemoria, o il resoconto di
+    un aiutante del passo (che porta il piano nei metadati)."""
+    return is_plan_turn(metadata) or (
+        isinstance(metadata, Mapping) and bool(metadata.get(PLAN_ID_META))
+    )
+
+
 def _notebook_of_turn(session_key: str) -> str | None:
     """Il quaderno del recinto di un turno: la sua chat, o una sessione di un suo cron."""
     return notebook_of(session_key) or notebook_of_cron_session(session_key)
@@ -99,6 +109,22 @@ PLANNING_HIDDEN_TOOLS: frozenset[str] = frozenset(
     {*UNTRUSTED_TOOLS, "download_file", "python_exec", "write_stdin", "list_exec_sessions"}
 )
 
+#: Le risposte dei tool del piano fuori dal loro turno, e di quelli che la
+#: pianificazione chiude: restano nella lista (v. ``_plan_tool_filter``).
+NOT_PLANNING_REFUSAL = (
+    "Not now: a plan is proposed only while the user is planning (they start it with the Plan "
+    "button). Do not propose a plan; answer the user."
+)
+NO_STEP_REFUSAL = (
+    "Not now: no plan step is open in this turn, so there is nothing to close. Answer this "
+    "message; the plan's steps go on in their own turns."
+)
+PLANNING_REFUSAL = (
+    "Not while planning: a plan is being prepared, and the web and code do not run now (what "
+    "they read would reach every helper of the plan's steps). Put what needs looking up in the "
+    "plan, as a step of its own."
+)
+
 #: Le letture che contano come «ha guardato il quaderno» (``PlanDriver.propose``).
 #: ``board`` solo con ``show``: le altre azioni scrivono, e in sola lettura sono
 #: comunque rifiutate. ``notebook`` con ogni azione tranne ``remove_pages``
@@ -106,19 +132,27 @@ PLANNING_HIDDEN_TOOLS: frozenset[str] = frozenset(
 PLANNING_READ_TOOLS: frozenset[str] = frozenset({"read_file", "list_dir", "grep", "find_files"})
 
 
+def has_plans(session_key: str | None, driver: PlanDriver | None) -> bool:
+    """Nella sessione si può pianificare: la chat di un quaderno, o quella
+    personale quando il driver la permette (``PlanDriver.place_of``)."""
+    if driver is None:
+        return bool(session_key) and is_project_session_key(session_key or "")
+    return driver.place_of(session_key) is not None
+
+
 def is_planning_turn(
     metadata: Mapping[str, Any] | None,
     session_key: str,
     driver: PlanDriver | None = None,
 ) -> bool:
-    """Un turno di pianificazione, nella chat di un quaderno (fuori non vale).
+    """Un turno di pianificazione, dove si può pianificare (fuori non vale).
 
     Lo è il turno del tasto Piano (``plan_mode`` nei metadati) e, con il
     *driver*, ogni turno di una sessione che ha una pianificazione in corso:
     la risposta dell'utente a una domanda di Jenny non porta il tasto, ed è
     pianificazione lo stesso. I turni di un passo e quelli di un cron no.
     """
-    if not is_project_session_key(session_key):
+    if not has_plans(session_key, driver):
         return False
     if isinstance(metadata, Mapping) and metadata.get(PLAN_MODE_META) is True:
         return True
@@ -177,6 +211,7 @@ class LoopPlanMixin:
     if TYPE_CHECKING:
         tools: ToolRegistry
         _pending_queues: dict[str, Any]
+        bus: Any
 
     plan_driver: PlanDriver | None = None
 
@@ -190,20 +225,53 @@ class LoopPlanMixin:
             if isinstance(tool, PlanTool):
                 tool.bind_driver(driver)
 
+    # ── il registro dell'annulla ──────────────────────────────────────────────
+
+    def _plan_journal_of(self, metadata: Mapping[str, Any] | None) -> tuple[Any, str | None]:
+        """Il registro del piano e il passo, per un turno di un passo; ``(None, None)``.
+
+        Solo un turno con un passo aperto: lì Jenny lavora per il piano, e quel
+        che scrive (le scritture dirette, le bozze installate dopo) è del passo.
+        """
+        driver = self.plan_driver
+        meta = metadata or {}
+        plan_id, step_id = meta.get(PLAN_ID_META), meta.get(PLAN_STEP_META)
+        if driver is None or not isinstance(plan_id, str) or not isinstance(step_id, str):
+            return None, None
+        from jenny.agent.write_journal import journal_for
+        from jenny.plan.work import plan_journal_key
+
+        try:
+            return journal_for(driver.store.workspace, plan_journal_key(plan_id)), step_id
+        except Exception:  # noqa: BLE001 — senza registro il turno lavora lo stesso
+            logger.opt(exception=True).warning("Plan {}: no undo journal for the turn", plan_id)
+            return None, None
+
     # ── tool ────────────────────────────────────────────────────────────────
 
     def _plan_tool_filter(
         self, msg: InboundMessage, session_key: str
-    ) -> Callable[[str], bool | None]:
+    ) -> Callable[[str], bool | str | None]:
         """Il pezzo del piano nel filtro dei tool del turno.
 
         Ritorna una funzione nome → ``True`` (nascosto), ``False`` (visibile),
-        ``None`` (non è un tool del piano: decide il resto del filtro). Lo stato
-        del piano si legge **una volta**, qui: il filtro gira a ogni lettura del
-        registro, e un passo chiuso a metà turno lascia i tool visibili fino alla
-        fine del turno — sono loro stessi a rispondere che non c'è più niente.
+        una frase (nella lista, ma la chiamata risponde con quella), ``None``
+        (non è un tool del piano: decide il resto del filtro). Lo stato del piano
+        si legge **una volta**, qui: il filtro gira a ogni lettura del registro,
+        e un passo chiuso a metà turno lascia i tool visibili fino alla fine del
+        turno — sono loro stessi a rispondere che non c'è più niente.
+
+        **Nascosti solo dove non si pianifica mai** (dal 03/11/2026): dove si
+        può pianificare i tool del piano restano nella lista a ogni turno, e
+        fuori dal loro turno rispondono col motivo. Lo stesso per quelli che la
+        pianificazione chiude. Nasconderli per turno cambiava la lista a metà
+        chat, e il provider ripagava tutta la conversazione (v.
+        ``AgentLoop._turn_tool_view``). Il rifiuto sta qui e non nei tool:
+        ``plan_step_done`` da un turno di chat chiuderebbe il passo, e il web
+        in pianificazione contaminerebbe la sessione.
         """
         driver = self.plan_driver
+        here = has_plans(session_key, driver)
         planning = driver is not None and is_planning_turn(msg.metadata, session_key, driver)
         # Un cron non apre né chiude passi: i tool del passo non li vede.
         step_open = (
@@ -211,17 +279,31 @@ class LoopPlanMixin:
             and not is_cron_turn(msg.metadata)
             and driver.step_open(session_key)
         )
+        if step_open and driver is not None:
+            # Nella chat personale un turno di chat (la mascotte, una notifica)
+            # non chiude il passo: solo un turno che parla del passo aperto (il
+            # suo messaggio, il promemoria, il resoconto di un suo aiutante, che
+            # porta piano e passo) o la risposta data dalla scheda.
+            place = driver.place_of(session_key)
+            meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+            if place is not None and not place.traits.answer_by_chat:
+                step_open = (driver.step_message_current(meta)
+                             or bool(meta.get(PLAN_ANSWER_META)))
 
-        def plan_hidden(name: str) -> bool | None:
+        def plan_verdict(name: str) -> bool | str | None:
             if name == PLAN_PROPOSE_TOOL:
-                return not planning
+                if not here:
+                    return True
+                return False if planning else NOT_PLANNING_REFUSAL
             if name in PLAN_STEP_TOOLS:
-                return not step_open
+                if not here:
+                    return True
+                return False if step_open else NO_STEP_REFUSAL
             if planning and name in PLANNING_HIDDEN_TOOLS:
-                return True
+                return PLANNING_REFUSAL
             return None
 
-        return plan_hidden
+        return plan_verdict
 
     # ── contesto ────────────────────────────────────────────────────────────
 
@@ -284,9 +366,22 @@ class LoopPlanMixin:
         """
         if not is_plan_turn(pending_msg.metadata):
             driver = self.plan_driver
-            if driver is None or not session_key or not is_project_session_key(session_key):
+            if driver is None or not session_key or not has_plans(session_key, driver):
                 return "inject"
             meta = pending_msg.metadata if isinstance(pending_msg.metadata, Mapping) else {}
+            place = driver.place_of(session_key)
+            if (
+                place is not None and not place.traits.answer_by_chat
+                and _is_step_work(turn_metadata)
+            ):
+                # Nella chat personale arriva di tutto (la mascotte, le notifiche,
+                # Telegram): un messaggio a metà passo non entra nel turno del
+                # passo, aspetta e diventa un turno suo. Per tutto il turno, non
+                # solo finché il passo è aperto: il messaggio rimandato si
+                # ricontrolla a ogni giro, e chiuso il passo sarebbe entrato
+                # nella coda del turno — con la risposta in chat invece che nel
+                # fumetto (trovato sul telefono il 03/11/2026).
+                return "defer"
             if (
                 pending_msg.channel != "system"
                 and not meta.get(INJECTED_EVENT_META)
@@ -307,6 +402,15 @@ class LoopPlanMixin:
         if driver is None or not driver.step_message_current(pending_msg.metadata):
             return "drop"
         if is_cron_turn(turn_metadata):
+            return "defer"
+        place = driver.place_of(session_key) if session_key else None
+        if place is not None and not place.traits.answer_by_chat and not _is_step_work(
+            turn_metadata
+        ):
+            # Il rovescio della regola sopra: un passo che si apre mentre gira un
+            # turno di chat (la mascotte passata davanti, v. ``_plan_turn_ended``)
+            # aspetta la fine di quel turno. Dentro non avrebbe i suoi tool, e la
+            # risposta andrebbe a chi ha scritto, non al piano.
             return "defer"
         return "inject"
 
@@ -354,7 +458,7 @@ class LoopPlanMixin:
             return
         if is_plan_turn(msg.metadata) or is_cron_turn(msg.metadata):
             return
-        if not is_project_session_key(session_key) or driver.drafting_for(session_key) is None:
+        if not has_plans(session_key, driver) or driver.drafting_for(session_key) is None:
             return
         msg.metadata[PLAN_MODE_META] = True
         msg.metadata[WORKSPACE_READONLY_METADATA_KEY] = True
@@ -371,7 +475,7 @@ class LoopPlanMixin:
         meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
         if driver is None or meta.get(INJECTED_EVENT_META) != SUBAGENT_RESULT_EVENT:
             return
-        if not is_project_session_key(session_key):
+        if not has_plans(session_key, driver):
             return
         try:
             await driver.note_helper_result(session_key, meta.get("subagent_task_id"))
@@ -390,7 +494,7 @@ class LoopPlanMixin:
         meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
         if driver is None or meta.get(INJECTED_EVENT_META) != SUBAGENT_RESULT_EVENT:
             return
-        if not is_project_session_key(session_key) or not driver.plan_running(session_key):
+        if not has_plans(session_key, driver) or not driver.plan_running(session_key):
             return
         try:
             await driver.note_step_report(
@@ -418,19 +522,39 @@ class LoopPlanMixin:
                 msg.metadata[WORKSPACE_READONLY_METADATA_KEY] = True
                 logger.info("Cron turn in held notebook {} runs read-only", notebook)
             return
-        if not is_project_session_key(session_key):
+        if not has_plans(session_key, driver):
             return
         try:
             await driver.before_user_turn(session_key, msg.metadata)
         except Exception:  # noqa: BLE001
             logger.opt(exception=True).warning("Plan pre-turn hook failed for {}", session_key)
 
+    async def _let_waiting_messages_go_first(self, session_key: str, queue: Any) -> None:
+        """I messaggi rimasti in coda nel turno di un passo vanno sul bus adesso.
+
+        Nella chat personale un messaggio a metà passo aspetta la fine del turno
+        (``_plan_injection``). Ripubblicato nel ``finally`` del turno, arrivava
+        dopo il passo seguente, che il gancio di fine turno apre prima: e
+        aspettava di nuovo, passo dopo passo, fino alla fine del piano (la
+        mascotte senza risposta per tutto il piano, provato sul telefono il
+        03/11/2026). Qui il turno lascia la sua coda — chi arriva da ora apre un
+        task che aspetta il lock della sessione — e i messaggi passano davanti.
+        """
+        if self._pending_queues.get(session_key) is queue:
+            self._pending_queues.pop(session_key, None)
+        while True:
+            try:
+                item = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            await self.bus.publish_inbound(item)
+
     async def _plan_turn_ended(
         self, msg: InboundMessage, session_key: str, *, stop_reason: str = ""
     ) -> None:
         """*stop_reason*: come è finito il giro del modello (``TurnOutcome``), o vuoto."""
         driver = self.plan_driver
-        if driver is None or not is_project_session_key(session_key):
+        if driver is None or not has_plans(session_key, driver):
             return
         if isinstance(msg.metadata, dict) and msg.metadata.get(PLAN_STALE_META):
             return
@@ -439,11 +563,15 @@ class LoopPlanMixin:
             return
         queue = self._pending_queues.get(session_key)
         pending = queue is not None and not queue.empty()
+        meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
+        if pending and _is_step_work(meta):
+            place = driver.place_of(session_key)
+            if place is not None and not place.traits.answer_by_chat:
+                await self._let_waiting_messages_go_first(session_key, queue)
         # Il rifiuto del provider blocca il passo solo se il turno era il lavoro
         # del passo: il suo messaggio, il promemoria o il resoconto di un suo
         # aiutante. Un turno di chat dell'utente rifiutato durante il piano non
         # dice niente del passo, e il promemoria (una richiesta diversa) resta.
-        meta = msg.metadata if isinstance(msg.metadata, Mapping) else {}
         if stop_reason == "provider_refused" and not (
             is_plan_turn(meta) or meta.get(INJECTED_EVENT_META) == SUBAGENT_RESULT_EVENT
         ):

@@ -172,6 +172,18 @@ export async function copyToClipboard(text) {
   }
 }
 
+/** «8,4 MB», nel formato numerico di *locale* (di solito `i18n.locale`): la
+ *  virgola in italiano, i GB oltre il miliardo, mai meno di «1 kB». Era della
+ *  copia su Drive; l'officina scriveva «8.4 KB» col punto anche in italiano
+ *  (le istantanee) e contava a 1024 senza MB (l'anteprima di un file). */
+export function sizeText(bytes, locale) {
+  const n = Number(bytes) || 0;
+  const fmt = (v, unit) => `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(v)} ${unit}`;
+  if (n >= 1e9) return fmt(n / 1e9, 'GB');
+  if (n >= 1e6) return fmt(n / 1e6, 'MB');
+  return fmt(Math.max(1, Math.round(n / 1e3)), 'kB');
+}
+
 /** Vero se *reason* e' un fallimento della rete, e non un errore qualunque.
  *
  *  `fetch` rifiuta con un `TypeError` quando la richiesta non parte o non

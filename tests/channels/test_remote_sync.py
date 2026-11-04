@@ -22,26 +22,19 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import websockets
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OutboundMessage
 from jenny.channels import ws_remote
 from jenny.channels.dispatcher import WebSocketDispatcher
 from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
 from jenny.channels.ws_remote import RemoteListener
-from jenny.webui.gateway_services import build_gateway_services
 from jenny.webui.transcript_replay import replay_transcript_to_ui_messages
 from jenny.webui.transcript_store import (
     append_transcript_object,
     read_transcript_lines,
     transcript_revision,
 )
-
-
-@pytest.fixture()
-def bus() -> MagicMock:
-    b = MagicMock()
-    b.publish_inbound = AsyncMock()
-    return b
 
 
 @pytest.fixture()
@@ -61,15 +54,7 @@ def _channel(bus: Any, port: int) -> WebSocketChannel:
         "websocketRequiresToken": True,
     }
     parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(parsed, bus, gateway=gateway)
+    return make_ws_channel(parsed, bus)
 
 
 async def _start(ch: WebSocketChannel, remote_port: int) -> asyncio.Task[None]:

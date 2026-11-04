@@ -25,10 +25,9 @@ from jenny.utils.android_assets import _UI_MANIFEST
 pytest.importorskip("PIL", reason="Pillow non è una dipendenza del progetto")
 
 from PIL import Image, ImageChops  # noqa: E402
+from support.js_harness import ASSETS, ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "android" / "image_source"
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 CANVAS = 3000
 EXPORT_SIZE = 768
 

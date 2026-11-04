@@ -29,16 +29,13 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import member, requires_node, run_js
+from support.js_harness import ASSETS, UI, function, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
 WIZARD_JS = ASSETS / "onboarding-wizard.js"
 HOST_JS = ASSETS / "onboarding-app.js"
 FIRST_RUN_JS = ASSETS / "shared" / "first-run.js"
+DIALOG_JS = ASSETS / "shared" / "dialog.js"
 HOME_JS = ASSETS / "home-app.js"
 WORKSHOP_JS = ASSETS / "mobile-app.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
@@ -390,10 +387,13 @@ def _render_step1(fields: str) -> str:
     finto che accetta i listener."""
     source = _wizard()
     shared = (ASSETS / "shared" / "api-base.js").read_text(encoding="utf-8")
-    consts = "\n".join(
-        re.search(rf"^const {name} = .*?;$", source, re.S | re.M).group(0)
-        for name in ("DEFAULT_API_BASE", "PLACEHOLDER_SUFFIX")
-    ) + "\n" + re.search(r"^export (const NO_AUTOCORRECT = .*?;)$", shared, re.M).group(1)
+    # Gli indirizzi predefiniti stanno in `shared/api-base.js`, gli stessi
+    # dell'officina (dal 02/11/2026); si leggono di li' per nome.
+    consts = "\n".join([
+        re.search(r"^const PLACEHOLDER_SUFFIX = .*?;$", source, re.S | re.M).group(0),
+        re.search(r"^export (const DEFAULT_API_BASE = .*?;)$", shared, re.S | re.M).group(1),
+        re.search(r"^export (const NO_AUTOCORRECT = .*?;)$", shared, re.M).group(1),
+    ])
     return run_js(
         "const i18n = { t: (k) => k };\n"
         "const escapeHtml = (s) => String(s);\n"
@@ -484,7 +484,7 @@ w.step = 1;
 w.apiBase = 'Http:/10.0.2.2:8765/v1';
 w._goToStep2();
 assert.equal(w.step, 1, 'con un indirizzo storpiato si e andati a chiedere i modelli');
-assert.deepEqual(toasts, ['onboarding.baseUrlInvalid']);
+assert.deepEqual(toasts, ['settings.baseUrlInvalid']);
 w.apiBase = 'Http://10.0.2.2:8765/v1';
 w._goToStep2();
 assert.equal(w.step, 2);
@@ -507,6 +507,7 @@ def test_back_closes_the_restore_passphrase_before_the_step() -> None:
         "}\n"
         "let open = [];\n"
         "globalThis.document = { querySelectorAll: () => open.filter((d) => d.open) };\n"
+        f"{function(DIALOG_JS.read_text(encoding='utf-8'), 'dismissTopDialog')}\n"
         "class H {\n"
         f"{member(_host(), 'handleHardwareBack')}\n"
         "}\n"

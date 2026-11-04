@@ -35,7 +35,8 @@ NODE = shutil.which("node")
 requires_node = pytest.mark.skipif(NODE is None, reason="node non disponibile")
 
 ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+UI = ROOT / "jenny" / "templates" / "ui"
+ASSETS = UI / "assets"
 I18N_DIR = ASSETS / "i18n"
 
 
@@ -102,6 +103,97 @@ def function(source: str, name: str, *, strip_export: bool = True) -> str:
     return text.removeprefix("export ") if strip_export else text
 
 
+# Il finto elemento delle stanze della casa (``home-*.js``): un oggetto con
+# attributi, listener per tipo, figli e un ``classList`` che regge
+# ``add``/``remove``/``contains``/``toggle``. Era ricopiato in ogni banco con un
+# campo in più o in meno; qui ha l'unione dei campi, tutti passivi: un banco
+# che non li legge non se ne accorge. Un ``#fragment`` versa i suoi figli in
+# chi lo appende, come un ``DocumentFragment``. Si mette nello script al posto
+# del segnaposto ``__MAKE_EL__``.
+FAKE_ELEMENT = r"""
+function makeEl(tag) {
+  const el = {
+    tag,
+    className: '',
+    textContent: '',
+    value: '',
+    placeholder: '',
+    href: '',
+    hidden: false,
+    disabled: false,
+    dataset: {},
+    attrs: {},
+    style: {},
+    children: [],
+    listeners: {},
+    isFragment: tag === '#fragment',
+    setAttribute(k, v) { el.attrs[k] = v; },
+    addEventListener(type, fn) { (el.listeners[type] ||= []).push(fn); },
+    appendChild(child) {
+      if (child.isFragment) { el.children.push(...child.children); child.children = []; }
+      else el.children.push(child);
+      return child;
+    },
+    replaceChildren(...fresh) { el.children = fresh; },
+    focus() { el.focused = true; },
+    classList: {
+      add(n) { if (!el.classList.contains(n)) el.className = (el.className + ' ' + n).trim(); },
+      remove(n) {
+        el.className = String(el.className).split(' ').filter((x) => x && x !== n).join(' ');
+      },
+      contains(n) { return String(el.className).split(' ').includes(n); },
+      toggle(n, on) { if (on) el.classList.add(n); else el.classList.remove(n); },
+    },
+  };
+  return el;
+}
+"""
+
+# Il finto elemento delle tendine (la scelta del quaderno, i comandi): una riga
+# ricorda gli attributi scritti, i *tipi* dei listener montati (``listeners``:
+# una riga che non ascolta niente non è una scelta) e l'ultimo gestore per tipo
+# (``handlers``). ``innerHTML = ''`` svuota i figli come nel DOM vero, e
+# ``querySelector`` dà sempre uno ``span`` nuovo. Segnaposto ``__MAKE_EL__``.
+FAKE_MENU_ELEMENT = r"""
+function makeEl(tag) {
+  const el = {
+    tag,
+    className: '',
+    textContent: '',
+    children: [],
+    dataset: {},
+    attrs: {},
+    listeners: [],
+    handlers: {},
+    appendChild(child) { el.children.push(child); return child; },
+    setAttribute(k, v) { el.attrs[k] = v; },
+    addEventListener(type, fn) { el.listeners.push(type); el.handlers[type] = fn; },
+    scrollIntoView() {},
+    querySelector() { return makeEl('span'); },
+  };
+  el.classList = {
+    add(c) { el.className = (el.className + ' ' + c).trim(); },
+    remove() {},
+  };
+  Object.defineProperty(el, 'innerHTML', {
+    get() { return ''; },
+    set(v) { if (v === '') el.children.length = 0; },
+  });
+  return el;
+}
+"""
+
+
 def locale(name: str) -> dict:
     """Il dizionario i18n *name* (``it``, ``en``) com'è nel pacchetto."""
     return json.loads((I18N_DIR / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def i18n_helpers() -> str:
+    """Per un ``i18n`` finto: il ``tOr`` vero di ``shared/i18n.js``, da mettere
+    dentro l'oggetto (``const i18n = { t, ...tOr }``), e la riga che definisce
+    ``tr`` accanto. Il codice dei gusci usa tutti e due dal 03/11/2026."""
+    return member((ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8"), "tOr")
+
+
+I18N_TR = "const tr = (key, params) => i18n.t(key, params);"

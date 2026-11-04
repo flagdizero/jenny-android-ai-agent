@@ -8,7 +8,7 @@ aperta sopra un'altra pagina — un «Conferma» che cancellava un quaderno da
 una stanza in cui non eri piu'. E la chat che ci stava
 sotto contava come vista, cancellando avvisi mai letti.
 
-Come l'officina (``mobile-app.js``, ``_dismissTopDialog``): il dialogo si
+Come l'officina (``shared/dialog.js``, ``dismissTopDialog``): il dialogo si
 congeda con la semantica di Esc — l'evento ``cancel`` — cosi' chi aspettava la
 risposta la riceve, ed e' un no.
 """

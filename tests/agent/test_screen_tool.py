@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
 from jenny.agent.tools import screen as tool_mod
 from jenny.agent.tools.context import RequestContext, bind_request_context, reset_request_context
@@ -28,7 +28,7 @@ from tests.agent.test_prompt_matches_offered_tools import (  # noqa: F401
 )
 
 REPO = Path(__file__).resolve().parents[2]
-KT = REPO / "android/app/src/main/java/com/flagdizero/jenny"
+KT = ANDROID_SRC
 
 SUMMARY = {
     "id": "snap-1", "takenAt": 1_760_000_000_000, "app": "Chrome",
@@ -133,13 +133,28 @@ async def test_the_bubble_turn_with_a_reading_offers_the_tool(workspace: Path) -
     ("websocket", {}),
     ("telegram", {}),
 ])
-async def test_every_other_turn_hides_the_tool(workspace: Path, channel, metadata) -> None:  # noqa: F811
+async def test_every_other_turn_keeps_the_tool_and_it_says_there_is_nothing(
+    workspace: Path, channel, metadata,  # noqa: F811
+) -> None:
     """Da Telegram, da un promemoria o dall'app, o dal fumetto senza lettura:
-    non c'è uno schermo da guardare, e il tool non si offre."""
+    non c'è uno schermo da guardare. Il tool resta nella lista della chat
+    personale (cambiarla a metà chat faceva ripagare la conversazione al
+    provider, dal 03/11/2026) e risponde che non c'è niente da leggere."""
     loop, captured = _loop_with_capture(workspace)
     loop.tools.register(ScreenTool())
     await loop._process_message(InboundMessage(
         channel=channel, sender_id="u", chat_id="default", content="ciao", metadata=metadata))
+    assert "screen" in _offered_names(captured)
+    out = await ScreenTool().execute()
+    assert "No screen reading in this turn" in str(out)
+
+
+async def test_a_notebook_chat_does_not_list_the_screen(workspace: Path) -> None:  # noqa: F811
+    loop, captured = _loop_with_capture(workspace)
+    loop.tools.register(ScreenTool())
+    (workspace / "wikis" / "soldi" / "wiki").mkdir(parents=True)
+    await loop._process_message(InboundMessage(
+        channel="websocket", sender_id="u", chat_id="project:soldi", content="ciao"))
     assert "screen" not in _offered_names(captured)
 
 

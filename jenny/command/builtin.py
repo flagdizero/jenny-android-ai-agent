@@ -13,7 +13,7 @@ from jenny import __version__
 from jenny.bus.events import OutboundMessage
 from jenny.command.router import CommandContext, CommandRouter
 from jenny.runtime.user_text import say
-from jenny.utils.helpers import build_status_content
+from jenny.utils.helpers import build_status_content, clip, content_text
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -451,7 +451,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             # cinque punti in cui era stata scritta. Toglierla non perde una misura
             # — ne toglie una finta.
             await asyncio.to_thread(store.compact_history)
-            pruned_keys = prune_dream_sessions(loop.sessions.sessions_dir)
+            pruned_keys = prune_dream_sessions(loop.sessions)
             if pruned_keys:
                 loop.evict_pruned_sessions(pruned_keys)
         await loop.bus.publish_outbound(OutboundMessage(
@@ -620,7 +620,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     dentro il progetto, come per ``journal_append``, e le manopole stanno in
     Impostazioni: restava solo un comando che significava tre cose.
     """
-    from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+    from jenny.session.keys import is_project_session_key, project_name
 
     loop = ctx.loop
     msg = ctx.msg
@@ -631,7 +631,7 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
         # dei rifiuti del passo 6, e la stessa forma del rifiuto di
         # ``journal_append`` fuori da un progetto.
         return _reply(msg, _gardener_no_target())
-    target = ctx.key[len(PROJECT_SESSION_PREFIX):]
+    target = project_name(ctx.key)
     # La bolla di lavoro della home: compare adesso, cresce mentre la passata
     # lavora, e alla fine diventa il resoconto (v. ``runtime/work_status.py``).
     # I due testi qui sotto restano per chi la bolla non ce l'ha — l'officina,
@@ -649,10 +649,11 @@ async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:
     async def _run():
         from jenny.agent.gardener import GardenerStore, report_gardener_outcome, run_gardener
         from jenny.config.loader import load_config
+        from jenny.config.paths import wikis_dir_name
 
         try:
             config = load_config()
-            wikis_dir = getattr(getattr(config, "wiki", None), "wikis_dir", "wikis") or "wikis"
+            wikis_dir = wikis_dir_name(config)
             store = GardenerStore.for_project(
                 config.workspace_path, target, wikis_dir_name=wikis_dir
             )
@@ -857,15 +858,10 @@ def _format_history_message(msg: dict) -> str | None:
     role = msg.get("role")
     if role not in ("user", "assistant"):
         return None
-    content = msg.get("content") or ""
-    if isinstance(content, list):
-        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
-        content = " ".join(parts)
-    content = str(content).strip()
+    content = content_text(msg.get("content")).strip()
     if not content:
         return None
-    if len(content) > _HISTORY_MAX_CONTENT_CHARS:
-        content = content[:_HISTORY_MAX_CONTENT_CHARS] + "…"
+    content = clip(content, _HISTORY_MAX_CONTENT_CHARS)
     label = say("cmd.history.you") if role == "user" else say("cmd.history.bot")
     return f"{label}: {content}"
 

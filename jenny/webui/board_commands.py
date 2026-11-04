@@ -43,14 +43,14 @@ _PHOTO_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
 
 def _project(ctx: CommandContext, params: Mapping[str, Any]) -> Path:
-    from jenny.utils.wiki_paths import discover_wiki_roots
+    from jenny.utils.wiki_paths import is_wiki_root, notebook_dir
 
-    _require_wiki_enabled(fail_closed=True)
+    _require_wiki_enabled()
     name = params.get("wiki")
-    roots = discover_wiki_roots(_wikis_dir(ctx))
-    if not isinstance(name, str) or name not in roots:
+    root = notebook_dir(_wikis_dir(ctx), name) if isinstance(name, str) else None
+    if root is None or not is_wiki_root(root):
         raise CommandError("bad_request", "wiki required")
-    return roots[name]
+    return root
 
 
 def _card_id(params: Mapping[str, Any], key: str = "card") -> str:
@@ -74,35 +74,15 @@ def _need_card(board: dict[str, Any], card_id: str) -> dict[str, Any]:
     return card
 
 
-async def _run(fn: Any, *args: Any, **kwargs: Any) -> Any:
-    """Su disco, quindi fuori dal loop; un ``CommandError`` torna com'è, un
-    rifiuto di :mod:`jenny.board.edit` diventa il ``CommandError`` col suo codice."""
-    try:
-        return await asyncio.to_thread(fn, *args, **kwargs)
-    except edit.BoardEditError as exc:
-        raise CommandError(exc.code, exc.message) from exc
-
-
-async def _edit(pending: Any) -> Any:
-    """Una scrittura async di :mod:`jenny.board.edit` (quelle che toccano i cron):
-    il suo rifiuto diventa il ``CommandError`` col suo codice, come in :func:`_run`."""
-    try:
-        return await pending
-    except edit.BoardEditError as exc:
-        raise CommandError(exc.code, exc.message) from exc
-
-
 def _cron(ctx: CommandContext) -> Any:
     return ctx.get_cron_service() if ctx.get_cron_service is not None else None
 
 
 def _timezone() -> str | None:
-    try:
-        from jenny.config.loader import load_config
+    """Il fuso dell'utente: ``cron_link.user_timezone``, l'unico che lo legge."""
+    from jenny.board.cron_link import user_timezone
 
-        return load_config().agents.defaults.timezone or None
-    except Exception:  # noqa: BLE001 — l'ora locale del sistema è il ripiego
-        return None
+    return user_timezone()
 
 
 # ── lastSeen / lastOpened ────────────────────────────────────────────────────
@@ -128,7 +108,7 @@ async def board_seen(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
         _card_id(params)
     if not (root / "board" / "board.json").exists():
         return {"ok": True}
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True, "at": stamp}
 
 
@@ -155,13 +135,13 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
         def apply(board: dict[str, Any]) -> None:
             _need_card(board, item)["pos"] = pos
 
-        await _run(mutate_board, root, apply)
+        await asyncio.to_thread(mutate_board, root, apply)
     elif kind in _NOTEBOOK_POS and params.get("id") == model.NOTEBOOK:
         # Il post-it e l'etichetta di tutto il quaderno: il posto sta sulla bacheca.
         def apply_notebook(board: dict[str, Any]) -> None:
             board[_NOTEBOOK_POS[kind]] = pos
 
-        await _run(mutate_board, root, apply_notebook)
+        await asyncio.to_thread(mutate_board, root, apply_notebook)
     elif kind in _ATTACHED_POS:
         # Il post-it delle attese, l'etichetta dei cron, quello lilla delle note, la
         # galleria: l'id e' quello della scheda, il posto e' un campo suo.
@@ -170,7 +150,7 @@ async def board_move(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str
         def apply_attached(board: dict[str, Any]) -> None:
             _need_card(board, card_id)[_ATTACHED_POS[kind]] = pos
 
-        await _run(mutate_board, root, apply_attached)
+        await asyncio.to_thread(mutate_board, root, apply_attached)
     else:
         raise CommandError("bad_request", "kind must be card, postit, auto, notes or photos")
     return {"ok": True}
@@ -198,7 +178,7 @@ async def board_card_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict
         # Una scheda che **e'** un'app: la polaroid porta il suo valore.
         return await _card_from_app(ctx, root, app, params)
     glyph = params.get("glyph") if isinstance(params.get("glyph"), str) else ""
-    made, _redraw = await _run(edit.add_card, root, params.get("title"), glyph=glyph,
+    made, _redraw = await asyncio.to_thread(edit.add_card, root, params.get("title"), glyph=glyph,
                                near=_near(params))
     return {"ok": True, "card": {"id": made["id"], "title": made["title"], "pos": made["pos"]}}
 
@@ -229,11 +209,11 @@ async def _card_from_app(ctx: CommandContext, root: Path, app: Mapping[str, Any]
     slug, app_params = _app_params(workspace, app.get("slug"), app.get("params"))
     title = model.clean_text(params.get("title"), model.MAX_TITLE) or None
     try:
-        where = await _run(place_app, root, slug, params=app_params, near=_near(params),
+        where = await asyncio.to_thread(place_app, root, slug, params=app_params, near=_near(params),
                            title=title, workspace=workspace, link=params.get("link") or None)
     except ValueError as exc:
         raise CommandError("conflict", str(exc)) from exc
-    board = await _run(read_board, root)
+    board = await asyncio.to_thread(read_board, root)
     card = next((c for c in reversed((board or {}).get("cards") or [])
                  if (c.get("app") or {}).get("slug") == slug), None)
     return {"ok": True, "where": where,
@@ -244,21 +224,21 @@ async def _card_from_app(ctx: CommandContext, root: Path, app: Mapping[str, Any]
 async def board_card_rename(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Il nome di una scheda diventa dell'utente: Jenny non lo riscrive più."""
     root = _project(ctx, params)
-    await _run(edit.rename_card, root, _card_id(params, "id"), params.get("title"))
+    await asyncio.to_thread(edit.rename_card, root, _card_id(params, "id"), params.get("title"))
     return {"ok": True}
 
 
 async def board_card_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli una scheda, con un Annulla: v. :func:`jenny.board.edit.remove_card`."""
     root = _project(ctx, params)
-    entry = await _edit(edit.remove_card(root, _card_id(params, "id"), cron=_cron(ctx)))
+    entry = await edit.remove_card(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True, "title": entry["card"]["title"]}
 
 
 async def board_card_restore(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """L'Annulla di «Togli»: v. :func:`jenny.board.edit.restore_card`."""
     root = _project(ctx, params)
-    await _edit(edit.restore_card(root, _card_id(params, "id"), cron=_cron(ctx)))
+    await edit.restore_card(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -285,8 +265,8 @@ async def board_suggestion_respond(
     :func:`jenny.board.edit.respond_suggestion`."""
     root = _project(ctx, params)
     sid = _card_id(params, "id")
-    await _edit(edit.respond_suggestion(root, sid, str(params.get("answer")), near=_near(params),
-                                        workspace=ctx.get_workspace_root(), cron=_cron(ctx)))
+    await edit.respond_suggestion(root, sid, str(params.get("answer")), near=_near(params),
+                                        workspace=ctx.get_workspace_root(), cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -295,7 +275,7 @@ async def board_connection_remove(
 ) -> dict[str, Any]:
     """Togliere un filo: l'utente sempre, Jenny mai (propone)."""
     root = _project(ctx, params)
-    await _run(edit.disconnect, root, _card_id(params, "a"), _card_id(params, "b"))
+    await asyncio.to_thread(edit.disconnect, root, _card_id(params, "a"), _card_id(params, "b"))
     return {"ok": True}
 
 
@@ -317,7 +297,7 @@ async def board_offboard_want(ctx: CommandContext, params: Mapping[str, Any]) ->
         })
         return None
 
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True}
 
 
@@ -337,7 +317,7 @@ async def board_preview(ctx: CommandContext, params: Mapping[str, Any]) -> dict[
         board["previews"] = previews
 
     if (root / "board" / "board.json").exists():
-        await _run(mutate_board, root, apply)
+        await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True}
 
 
@@ -345,11 +325,11 @@ async def _resolve_page(root: Path, page: Any) -> str:
     """Il percorso vero di una pagina, anche da un bersaglio di link senza ``.md``."""
     from jenny.board.view import wiki_titles
 
-    titles = await _run(wiki_titles, root)
+    titles = await asyncio.to_thread(wiki_titles, root)
     if isinstance(page, str) and page not in titles and ".." not in page:
-        from jenny.webui.wiki import resolve_wikilink
+        from jenny.utils.wiki_paths import resolve_wikilink
 
-        resolved = await _run(resolve_wikilink, root, page)
+        resolved = await asyncio.to_thread(resolve_wikilink, root, page)
         if resolved is not None:
             page = resolved.relative_to(root / "wiki").as_posix()
     if not isinstance(page, str) or page not in titles:
@@ -374,16 +354,16 @@ async def board_fix(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
         raise CommandError("bad_request", "text required")
     if len(text.encode("utf-8")) > 8000:
         raise CommandError("too_large", "correction too long")
-    board = await _run(read_board, root)
+    board = await asyncio.to_thread(read_board, root)
     card = model.card_by_id(board or {}, card_id)
-    summary = await _run(read_card_summary, root, card_id)
+    summary = await asyncio.to_thread(read_card_summary, root, card_id)
     if card is None or summary is None:
         raise CommandError("not_found", "card not found")
     section = next((s for s in summary["sections"] if s["title"] == section_title), None)
     if section is None:
         raise CommandError("not_found", "section not found")
     try:
-        result = await _run(
+        result = await asyncio.to_thread(
             create_correction, root, card_id=card_id, card_title=card["title"],
             section=section_title, sources=section["sources"], old_text=section["text"],
             correction=text,
@@ -414,7 +394,7 @@ async def board_section_add(ctx: CommandContext, params: Mapping[str, Any]) -> d
         raise CommandError("bad_request",
                            "an app is a card of its own: use board.card.add with app and link")
     if kind == "note":
-        sid = await _run(edit.add_note, root, card_id, params.get("text"),
+        sid = await asyncio.to_thread(edit.add_note, root, card_id, params.get("text"),
                          timezone_name=_timezone())
     elif kind == "reminder":
         # Come ``board.reminder.add`` con la scheda: dal cassetto, il promemoria è suo.
@@ -429,7 +409,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
     from jenny.board.sections import PHOTOS_DIR
     from jenny.utils.path import atomic_write
 
-    await _run(edit.card_id_of, root, card_id)
+    await asyncio.to_thread(edit.card_id_of, root, card_id)
     mime = params.get("mime")
     data = params.get("data")
     if mime not in _PHOTO_EXT or not isinstance(data, str):
@@ -442,7 +422,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
         raise CommandError("too_large", "photo too large")
     name = f"{card_id}-{model.now_iso()[:19].replace(':', '').replace('-', '')}"
     rel = f"{PHOTOS_DIR}/{name}{_PHOTO_EXT[mime]}"
-    await _run(atomic_write, root / rel, raw)
+    await asyncio.to_thread(atomic_write, root / rel, raw)
     section = {"kind": "photo", "created": model.now_iso(), "path": rel,
                "caption": model.clean_text(params.get("caption"), model.MAX_TEXT)}
     # Con una nota, la foto è anche una riga [said] del diario (prima della
@@ -452,7 +432,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
         from jenny.board.sections import journal_note
 
         try:
-            section["journalLine"] = await _run(
+            section["journalLine"] = await asyncio.to_thread(
                 journal_note, root, section["caption"], photo=rel, timezone_name=_timezone())
         except OSError as exc:
             logger.warning("board: photo note not journaled in {}: {}", root.name, exc)
@@ -462,7 +442,7 @@ async def _add_photo(root: Path, card_id: str, params: Mapping[str, Any]) -> str
         section["id"] = model.unique_id("s-photo", [s["id"] for s in card["userSections"]])
         card["userSections"].append(section)
 
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return str(section["id"])
 
 
@@ -471,7 +451,7 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
     root = _project(ctx, params)
     card_id = _card_id(params)
     sid = _card_id(params, "id")
-    board = await _run(read_board, root)
+    board = await asyncio.to_thread(read_board, root)
     card = model.card_by_id(board or {}, card_id)
     if card is None:
         raise CommandError("not_found", "card not found")
@@ -479,10 +459,10 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
     if section is None:
         raise CommandError("not_found", "section not found")
     if section["kind"] == "note":
-        await _run(edit.update_note, root, card_id, sid, params.get("text"),
+        await asyncio.to_thread(edit.update_note, root, card_id, sid, params.get("text"),
                    timezone_name=_timezone())
     elif section["kind"] == "photo":
-        await _run(edit.update_photo_caption, root, card_id, sid, params.get("text"),
+        await asyncio.to_thread(edit.update_photo_caption, root, card_id, sid, params.get("text"),
                    timezone_name=_timezone())
     else:
         # Un promemoria si corregge per id (``board.reminder.update``): è un job.
@@ -493,8 +473,8 @@ async def board_section_update(ctx: CommandContext, params: Mapping[str, Any]) -
 async def board_section_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli una sezione. La wiki non cambia: togliere è una scelta di forma."""
     root = _project(ctx, params)
-    await _edit(edit.remove_section(root, _card_id(params), _card_id(params, "id"),
-                                    cron=_cron(ctx)))
+    await edit.remove_section(root, _card_id(params), _card_id(params, "id"),
+                                    cron=_cron(ctx))
     return {"ok": True}
 
 
@@ -511,7 +491,7 @@ async def board_section_reorder(ctx: CommandContext, params: Mapping[str, Any]) 
         rank = {sid: i for i, sid in enumerate(order)}
         card["userSections"].sort(key=lambda s: rank.get(s["id"], len(rank)))
 
-    await _run(mutate_board, root, apply)
+    await asyncio.to_thread(mutate_board, root, apply)
     return {"ok": True}
 
 
@@ -531,9 +511,9 @@ def _every_ms(params: Mapping[str, Any]) -> Any:
 
 async def _add_reminder(ctx: CommandContext, root: Path, card: str,
                         params: Mapping[str, Any]) -> str:
-    return await _edit(edit.add_reminder(
+    return await edit.add_reminder(
         root, card, params.get("text"), params.get("when"), cron=_cron(ctx),
-        every_ms=_every_ms(params), why=params.get("why"), timezone_name=_timezone()))
+        every_ms=_every_ms(params), why=params.get("why"), timezone_name=_timezone())
 
 
 async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -553,8 +533,8 @@ async def board_reminder_add(ctx: CommandContext, params: Mapping[str, Any]) -> 
 async def board_reminder_done(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Un promemoria fatto: v. :func:`jenny.board.edit.close_reminder`."""
     root = _project(ctx, params)
-    await _edit(edit.close_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
-                                    timezone_name=_timezone()))
+    await edit.close_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+                                    timezone_name=_timezone())
     return {"ok": True}
 
 
@@ -562,17 +542,33 @@ async def board_reminder_update(ctx: CommandContext, params: Mapping[str, Any]) 
     """Correggi un promemoria dal calendario di cura, per id: ``text``, ``when``,
     ``every_ms`` (solo per uno a condizione)."""
     root = _project(ctx, params)
-    await _edit(edit.update_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
+    await edit.update_reminder(root, _card_id(params, "id"), cron=_cron(ctx),
                                      text=params.get("text"), when=params.get("when"),
-                                     every_ms=_every_ms(params), timezone_name=_timezone()))
+                                     every_ms=_every_ms(params), timezone_name=_timezone())
     return {"ok": True}
 
 
 async def board_reminder_drop(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Togli un promemoria dal calendario di cura: v. :func:`jenny.board.edit.drop_reminder`."""
     root = _project(ctx, params)
-    await _edit(edit.drop_reminder(root, _card_id(params, "id"), cron=_cron(ctx)))
+    await edit.drop_reminder(root, _card_id(params, "id"), cron=_cron(ctx))
     return {"ok": True}
+
+
+def _notebook_job(ctx: CommandContext, root: Path, params: Mapping[str, Any]) -> tuple[Any, str]:
+    """Lo scheduler e l'id del job ``params["job"]``, se è legato a questo quaderno.
+
+    Il cassetto tocca solo i cron del suo quaderno, non la sveglia della chat
+    personale: ``not_found`` per tutti gli altri.
+    """
+    job_id = _card_id(params, "job")
+    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
+    if cron is None:
+        raise CommandError("unavailable", "scheduler not running")
+    job = cron.get_job(job_id)
+    if job is None or job.notebook != root.name:
+        raise CommandError("not_found", "job not found in this notebook")
+    return cron, job_id
 
 
 async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -581,15 +577,11 @@ async def board_cron_pause(ctx: CommandContext, params: Mapping[str, Any]) -> di
     Solo un job legato a questo quaderno: il cassetto non mette in pausa la
     sveglia della chat personale.
     """
+    from jenny.board.cron_link import set_job_paused
+
     root = _project(ctx, params)
-    job_id = _card_id(params, "job")
-    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
-    if cron is None:
-        raise CommandError("unavailable", "scheduler not running")
-    job = cron.get_job(job_id)
-    if job is None or (job.payload.board or {}).get("notebook") != root.name:
-        raise CommandError("not_found", "job not found in this notebook")
-    result = cron.set_paused(job_id, params.get("paused") is True)
+    cron, job_id = _notebook_job(ctx, root, params)
+    result = await set_job_paused(cron, job_id, params.get("paused") is True)
     return {"ok": True, "result": result}
 
 
@@ -602,13 +594,7 @@ async def board_cron_remove(ctx: CommandContext, params: Mapping[str, Any]) -> d
     from jenny.board.cron_link import detach_job
 
     root = _project(ctx, params)
-    job_id = _card_id(params, "job")
-    cron = ctx.get_cron_service() if ctx.get_cron_service is not None else None
-    if cron is None:
-        raise CommandError("unavailable", "scheduler not running")
-    job = cron.get_job(job_id)
-    if job is None or (job.payload.board or {}).get("notebook") != root.name:
-        raise CommandError("not_found", "job not found in this notebook")
+    cron, job_id = _notebook_job(ctx, root, params)
     result = await detach_job(cron, job_id)
     if result != "removed":
         raise CommandError("conflict", f"cron not removed: {result}")

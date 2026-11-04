@@ -85,7 +85,12 @@ class AgenticSearchBridge(context: Context) {
 
     private fun ensureWebView() {
         if (webView != null) return
-        webView = HiddenWebView.create(appContext, TAG, logSource = true)
+        val wv = HiddenWebView.create(appContext, TAG, logSource = true)
+        // `fetchUrl` carica pagine qualunque col JavaScript acceso: senza la
+        // guardia lato pagina potevano aprire `ws://` verso la LAN, che
+        // `shouldInterceptRequest` non vede.
+        JennyBrowserBridge.installNetworkGuardOnMain(wv, appContext)
+        webView = wv
     }
 
     /**
@@ -208,6 +213,21 @@ class AgenticSearchBridge(context: Context) {
                         if (webView === view) webView = null
                         view?.destroy()
                         return true
+                    }
+
+                    // La stessa guardia della sessione di browser: una pagina
+                    // scaricata qui gira col suo JavaScript, e senza filtro le
+                    // sue sottorisorse e i suoi redirect arrivavano alla LAN.
+                    // Il controllo di Python sull'URL finale resta, ma vede
+                    // solo la pagina, non quel che la pagina chiede.
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): android.webkit.WebResourceResponse? {
+                        val uri = request?.url ?: return null
+                        return JennyBrowserBridge.blockedResponse(uri) {
+                            if (request.isForMainFrame) errorRef.set("address not allowed")
+                        }
                     }
 
                     override fun onReceivedError(

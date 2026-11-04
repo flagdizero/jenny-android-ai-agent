@@ -32,13 +32,18 @@ from jenny.agent.tools.schema import (
     tool_parameters_schema,
 )
 from jenny.board import edit, model
-from jenny.board.cron_link import is_note, note_words, notebook_jobs_on_disk, notes_on_disk
+from jenny.board.cron_link import (
+    note_words,
+    notebook_jobs_on_disk,
+    notes_on_disk,
+    snapshot_is_note,
+)
 from jenny.board.drawers import DrawerError, as_list, page_text, pages_fingerprint, write_drawer
 from jenny.board.store import read_board, read_card_summary
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
+    current_notebook_root,
     current_turn_is_readonly,
-    current_workspace_scope,
 )
 
 _WRITES = (
@@ -157,14 +162,9 @@ class BoardTool(Tool):
 
     def _root(self) -> Path | None:
         from jenny.session.keys import is_project_session_key
-        from jenny.utils.wiki_paths import is_wiki_root
 
         key = self._origin or current_request_session_key() or ""
-        if not is_project_session_key(key):
-            return None
-        scope = current_workspace_scope()
-        root = scope.write_root() if scope is not None else None
-        return root if root is not None and is_wiki_root(root) else None
+        return current_notebook_root() if is_project_session_key(key) else None
 
     async def execute(self, action: str = "", **kw: Any) -> str:
         root = self._root()
@@ -442,7 +442,7 @@ def show(root: Path) -> str:
     # I cron che si ripetono li tiene lo scheduler: qui si vedono, li cambia il
     # tool ``cron``. I promemoria sono job anche loro, ma stanno qui sopra.
     jobs = [j for j in notebook_jobs_on_disk(root.name)
-            if not is_note(j["kind"], j["condition"])]
+            if not snapshot_is_note(j)]
     if jobs:
         lines += ["", "Automations (the cron tool changes them):"]
         lines += [f"- `{j['id']}` {_where(j['scope'])}: {j['name']}"

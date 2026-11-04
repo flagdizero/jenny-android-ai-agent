@@ -10,6 +10,7 @@
     "launcher": "App drawer"
   },
   "chat": {
+    "file": "file",
     "placeholder": "Ask something…",
     "attach": "Attach",
     "send": "Send",
@@ -18,7 +19,6 @@
     "copy": "Copy",
     "copied": "Copied!",
     "copyFailed": "Copy failed",
-    "close": "Close",
     "filesModified": "{count} files modified",
     "online": "online",
     "offline": "offline",
@@ -157,7 +157,6 @@
     "idle": "Idle"
   },
   "settings": {
-    "save": "Save",
     "saved": "Saved!",
     "webSearch": "Web Search",
     "memory": {
@@ -227,7 +226,6 @@
     "addProvider": "Add provider",
     "noProviders": "No providers configured.",
     "edit": "Edit",
-    "delete": "Delete",
     "failedToLoad": "Failed to load settings",
     "nameAndKeyRequired": "Name and API Key are required",
     "providerSaved": "Provider saved",
@@ -285,11 +283,9 @@
       "generateKey": "Generate key",
       "regenerateKey": "Regenerate key",
       "regenerateConfirm": "Regenerate the key for {alias}? The one already installed on the server will stop working.",
-      "keyGenerated": "Key generated",
       "publicKeyHint": "Paste this line into ~/.ssh/authorized_keys on the server. The private key stays on the phone.",
       "copy": "Copy",
       "copied": "Public key copied",
-      "copyFailed": "Copy failed",
       "verify": "Verify fingerprint",
       "verifying": "Reading the fingerprint…",
       "fingerprintTitle": "Host fingerprint",
@@ -319,7 +315,6 @@
     "namePlaceholder": "My Provider",
     "format": "Format",
     "openaiCompat": "OpenAI Compatible",
-    "anthropicCompat": "Anthropic Compatible",
     "apiKey": "API Key",
     "apiKeyPlaceholder": "sk-...",
     "apiKeyKeepBlank": "Leave blank to keep the stored key",
@@ -331,7 +326,6 @@
     "noKey": "(no key)",
     "brandAddress": "Address",
     "brandKey": "Key",
-    "searchEngine": "Search engine",
     "maxResults": "Max results",
     "maxResultsPlaceholder": "1 – 10",
     "timeoutSec": "Timeout (sec)",
@@ -363,8 +357,6 @@
       "neverChecked": "The first update check hasn't run yet.",
       "stale": "Since then the checks start but never reach the server: the last one that worked is still the one from {when}. While that lasts, you wouldn't hear about a new version.",
       "staleNever": "No successful check on record. If it stays that way after a \"Check now\", the mechanism isn't working and you wouldn't hear about a new version.",
-      "whenToday": "today at {time}",
-      "whenYesterday": "yesterday at {time}",
       "whenDays": "{days} days ago"
     },
     "usage": {
@@ -414,8 +406,6 @@
       "gapDays": "{days}d {hours}h",
       "gapHours": "{hours}h {minutes}m",
       "gapMinutes": "{minutes}m",
-      "gapToday": "today at {time}",
-      "gapYesterday": "yesterday at {time}",
       "gapOn": "{date} at {time}",
       "oemHint": "The outages above are not a Jenny fault: the phone's battery manager shuts her down while the screen is off. No line of app code can prevent it — the restriction has to be lifted by hand, in the manufacturer's own settings.",
       "oemButton": "Open the manufacturer's settings",
@@ -525,8 +515,6 @@
     "brandFormat": "Format",
     "brandCaBundle": "CA certificate",
     "brandCaBundleNone": "none",
-    "brandModelsLoading": "Asking for the list…",
-    "brandModelsNeedKey": "A key is needed before the list can be fetched.",
     "brandModelsNeedBase": "This brand has no address yet: Edit adds it.",
     "brandModelsFailed": "The list did not arrive.",
     "brandModelSaved": "This one answers now",
@@ -569,21 +557,25 @@
       "unknown": "Something went wrong",
       "unknown_type": "I didn't understand the request",
       "untyped_frame": "I didn't understand the request"
-    }
+    },
+    "todayAt": "today at {time}",
+    "weekdayAt": "{day} at {time}",
+    "yesterdayAt": "yesterday at {time}",
+    "modelsLoading": "Asking for the list…",
+    "modelsNeedKey": "A key is needed before the list can be fetched.",
+    "save": "Save",
+    "delete": "Delete"
   },
   "dialog": {
-    "confirm": "Confirm",
-    "cancel": "Cancel"
+    "confirm": "Confirm"
   },
   "workspace": {
     "root": "workspace",
-    "save": "Save",
     "saved": "Saved",
     "newFile": "New file",
     "newFolder": "New folder",
     "rename": "Rename",
     "clone": "Clone",
-    "delete": "Delete",
     "download": "Download",
     "new": "New",
     "fileName": "File name:",
@@ -640,10 +632,8 @@
     "invalidManifest": "invalid manifest",
     "open": "Open",
     "edit": "Edit",
-    "delete": "Delete",
     "uninstall": "Uninstall",
     "appInfo": "App info",
-    "close": "Close",
     "brokenConfirm": "The app \"{name}\" is broken: {error}. Ask Jenny to fix it?",
     "brokenPrompt": "The app \"{slug}\" is broken with this error: {error}. Can you fix it?",
     "uninstalled": "{name} uninstalled",
@@ -771,7 +761,6 @@
   },
   "cron": {
     "asOf": "As of {time}",
-    "refresh": "Refresh",
     "empty": "Nothing scheduled.",
     "notStarted": "Scheduling has not started yet: this happens during first-time setup.",
     "failed": "Cannot read the scheduling status.",
@@ -857,7 +846,6 @@
   "onboarding": {
     "selectFormat": "Choose your provider format",
     "selectFormatDesc": "Most LLM services speak one of these formats.",
-    "openaiCompat": "OpenAI Compatible",
     "openaiCompatHint": "OpenAI, Groq, DeepSeek, Ollama, vLLM, OpenRouter, Together, Fireworks...",
     "anthropicCompat": "Anthropic Compatible",
     "anthropicCompatHint": "Claude models via Anthropic Messages API",
@@ -868,9 +856,6 @@
     "apiKeyPlaceholderOpenai": "sk-...",
     "apiKeyPlaceholderAnthropic": "sk-ant-...",
     "providerNameHint": "The name you'll see in Settings",
-    "apiKey": "API Key",
-    "baseUrl": "Base URL",
-    "baseUrlInvalid": "That address is not a web address: it must start with http:// or https://.",
     "baseUrlHint": "Leave default if unsure",
     "selectModel": "Choose a model",
     "searchModels": "Search models",
@@ -880,7 +865,6 @@
     "orCustomModel": "Or type a custom model name",
     "botName": "Assistant name",
     "launch": "Launch",
-    "back": "Back",
     "next": "Next",
     "configuring": "Configuring your bot...",
     "configuringDesc": "Setting up provider and creating your first chat",
@@ -929,6 +913,7 @@
     "ago": {
       "now": "just now",
       "minutes": "{n} min ago",
+      "hour": "1 h ago",
       "hours": "{n} h ago",
       "yesterday": "yesterday",
       "days": "{n} days ago"
@@ -1027,10 +1012,10 @@
       "untitled": "Plan",
       "steps": "{count} steps",
       "stepsCut": "{count} of {total} steps",
-      "photoLine": "Before starting, the app takes a {bold}: it's the point you can always go back to.",
-      "photoWord": "photo of the notebook",
-      "photoTaken": "notebook photo {time}",
-      "photoTakenNoTime": "notebook photo taken",
+      "photoLine": "Before starting, the app marks a {bold}: it's the point you can always go back to.",
+      "photoWord": "starting point",
+      "photoTaken": "starting point {time}",
+      "photoTakenNoTime": "starting point marked",
       "version": "v{version}",
       "reviewing": "revising",
       "progress": "{done} of {total}",
@@ -1204,7 +1189,7 @@
         "rollbackFailed": "Going back stopped halfway: the notebook may be only partly restored. Trying again is safe."
       }
     },
-    "empty":"Nothing here yet.\nGo ahead.",
+    "empty": "Nothing here yet.\nGo ahead.",
     "emptyNotebook": "The notebook is here, the conversation isn’t.\nWhat you write here stays here.",
     "placeholder": "Write to {name}",
     "placeholderNotebook": "Write to {name}, in the notebook",
@@ -1287,7 +1272,6 @@
       "undoActionMany": "Undo her changes ({count} files)",
       "stopFailed": "I couldn't stop her.",
       "undoFailed": "I couldn't undo it.",
-      "sheetClose": "Close",
       "undone": {
         "you": "Undone: {count} files put back as they were before her.",
         "youOne": "Undone: 1 file put back as it was before her.",
@@ -1401,7 +1385,6 @@
     },
     "attach": "Attach",
     "removeAttachment": "Remove attachment",
-    "closeImage": "Close",
     "workshop": "Workshop",
     "back": {
       "chat": "back to the chat",
@@ -1436,7 +1419,6 @@
       "rules": "The rules you gave her",
       "rulesHint": "This one stays yours: she reads it every turn and never rewrites it. The rest of her character is hers, and you can read it in the workshop.",
       "rulesPlaceholder": "For example: call me by name, and no emoji.",
-      "rulesSave": "Save",
       "rulesSaved": "Saved",
       "rulesFailed": "I could not save what you wrote."
     },
@@ -1446,7 +1428,6 @@
       "loadFailed": "I could not read the list: what you see may be incomplete.",
       "newNotebook": "New notebook",
       "search": "Search notebooks…",
-      "clearSearch": "Clear search",
       "inUse": "In use",
       "archive": "Archive",
       "archiveHint": "untouched for over a month",
@@ -1466,8 +1447,6 @@
     "reader": {
       "failed": "I could not open this page.",
       "edit": "Edit",
-      "save": "Save",
-      "cancel": "Cancel",
       "saved": "Saved.",
       "saveFailed": "I couldn't save this page.",
       "conflict": "Jenny changed this page while you were editing it. Reload it? What you wrote here will be lost.",
@@ -1478,17 +1457,12 @@
       "who": "Who answers",
       "none": "not set up yet",
       "models": "{provider} models",
-      "saved": "This one answers now",
-      "failed": "I could not change it.",
-      "loading": "Asking for the list…",
-      "needsKey": "A key is needed before the list can be fetched.",
       "needsBase": "This provider has no address yet: set it in the workshop.",
       "listFailed": "The list did not arrive. The one in use is still the one above.",
       "key": "Key",
       "keyNone": "none",
       "keyAdd": "Add",
       "keyChange": "Replace",
-      "keySave": "Save",
       "keySaved": "Key saved",
       "keyFailed": "I couldn't save the key.",
       "keyPlaceholder": "paste the key here",
@@ -1515,14 +1489,10 @@
         "restoreSub": "Replaces everything with what's in the file, then restarts."
       },
       "history": {
-        "title": "Local history",
         "sub": "Automatic: puts back a file deleted by mistake. It lives on this phone, though — a lost phone takes it with it.",
         "off": "Off: the only safety net is the backup you export. Turn it back on in the workshop, Memory → Local history.",
         "loading": "One moment…",
-        "showAll": "Show the others ({n})",
-        "today": "today at {time}",
-        "yesterday": "yesterday at {time}",
-        "weekday": "{day} at {time}"
+        "showAll": "Show the others ({n})"
       }
     },
     "audit": {
@@ -1530,7 +1500,6 @@
       "title": "What's wrong here",
       "placeholder": "What's wrong, and why.",
       "send": "Send",
-      "cancel": "Cancel",
       "failed": "I couldn't report it.",
       "needComment": "Write what's wrong.",
       "empty": "Pick the piece of text to report first.",
@@ -1697,15 +1666,12 @@
     },
     "preview": {
       "notOnBoard": "This page isn't on the board: I use it for my own work. If you need it here, tell me.",
-      "close": "Close",
       "want": "I want it on the board",
       "wanted": "I'll see to it on the next pass."
     },
     "drawer": {
       "loading": "Looking…",
       "failed": "I couldn't open this drawer.",
-      "today": "today at {time}",
-      "yesterday": "yesterday at {time}",
       "pagesOne": "Drawer · 1 wiki page",
       "pagesMany": "Drawer · {count} wiki pages",
       "updated": "updated {when}",
@@ -1782,7 +1748,6 @@
       "removeConfirm": "Remove this section? The wiki does not change.",
       "moveUp": "Move up",
       "failed": "I couldn't save it.",
-      "save": "Save",
       "reminderWhat": "What?",
       "reminderWhen": "When?",
       "reminderMonth": "Month only",
@@ -1800,8 +1765,7 @@
         "micro": "App",
         "cron": "Cron"
       },
-      "addFab": "Add to the drawer",
-      "close": "Close"
+      "addFab": "Add to the drawer"
     },
     "micro": {
       "what": "What do you want to see, or do?",
@@ -1845,15 +1809,11 @@
       "create": "Create",
       "rename": "Rename",
       "renameTitle": "Rename the card",
-      "save": "Save",
       "remove": "Remove from the board",
       "removed": "“{title}” removed from the board",
-      "undo": "Undo",
-      "restoreFailed": "I couldn't put it back",
       "full": "The board is full: remove something first",
       "failed": "That didn't work, try again",
       "actions": "Actions on the card {title}",
-      "close": "Close",
       "what": "What goes in it?",
       "whatNothing": "Nothing for now",
       "appPlaced": "“{name}” is on the board, next to {card}"
@@ -1890,10 +1850,7 @@
       "readMore": "Read all",
       "deck": "Note {n} of {count}: {text}. Tap for the next one.",
       "edit": "Edit",
-      "close": "Close",
       "removeConfirm": "Remove this note? What already went into the wiki stays.",
-      "integrated": "✓ in the wiki",
-      "pending": "waiting for the wiki",
       "placeholder": "For example: it stays on the south windowsill only in winter."
     },
     "photos": {
@@ -1905,8 +1862,6 @@
       "placeholder": "A few words about this photo",
       "noteLabel": "The photo's note",
       "now": "Now",
-      "integrated": "✓ in the wiki",
-      "pending": "waiting for the wiki",
       "removeConfirm": "Remove this photo from the card? The file stays with the notebook's material, and what already went into the wiki stays.",
       "full": "See the whole photo, full screen",
       "back": "All photos",
@@ -1955,6 +1910,10 @@
       "reminder": "A reminder for the whole notebook",
       "automation": "An automation: ask Jenny",
       "automationPrompt": "An automation in this notebook: every "
+    },
+    "wiki": {
+      "integrated": "✓ in the wiki",
+      "pending": "waiting for the wiki"
     }
   },
   "place": {

@@ -59,7 +59,7 @@ export const MOTIONS = {
 };
 
 /* Le variabili da cui il CSS legge la durata del gesto di ogni canale. */
-export const MOTION_VARS = { lean: '--jenny-lean-ms', squash: '--jenny-squash-ms' };
+const MOTION_VARS = { lean: '--jenny-lean-ms', squash: '--jenny-squash-ms' };
 
 /** I due canali dei gesti di un elemento. */
 export class MotionChannels {

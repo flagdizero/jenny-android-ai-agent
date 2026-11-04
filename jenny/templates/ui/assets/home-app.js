@@ -65,11 +65,11 @@ import { readStorage, showToast, writeStorage } from './shared/utils.js';
 import { api } from './shared/api-client.js';
 import { isFirstRun } from './shared/first-run.js';
 import { ImageHandler } from './shared/image-handler.js';
-import { confirmDialog, promptDialog } from './shared/dialog.js';
-import { botName } from './shared/bot-name.js';
+import { confirmDialog, dismissTopDialog, isQuestionDialog, promptDialog } from './shared/dialog.js';
+import { DEFAULT_BOT_NAME, botName } from './shared/bot-name.js';
 import { rpc } from './shared/rpc-client.js';
 import { clearSelection, releaseSelectionOnBlur } from './shared/selection.js';
-import { i18n } from './shared/i18n.js';
+import { i18n, tr } from './shared/i18n.js';
 import { HomeAppsTrash } from './home-apps-trash.js';
 import { HomeStaged } from './home-staged.js';
 import { HomePlan } from './home-plan.js';
@@ -81,8 +81,6 @@ import './shared/theme.js';
    da se' e la maggior parte delle cadute dura meno di un battito: annunciarle
    tutte vorrebbe dire far lampeggiare una riga d'allarme mentre non e' successo
    niente. Si parla solo se il silenzio dura. */
-/* Lo stesso ripiego del server e di `shared/bot-name.js`. */
-const DEFAULT_BOT_NAME = 'Jenny';
 const WIRE_GRACE_MS = 2_500;
 
 /* Dove appoggia i piedi Jenny fuori dalla chat, in px dal fondo. Nella chat il
@@ -100,10 +98,6 @@ const FLOOR_NO_COMPOSER = 66;
 const PLACE_KEY = 'home-place';
 /* Oltre, il posto e' di un altro momento: si riparte dalla chat. */
 const PLACE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-
-/* Il nome di lei finche' le impostazioni non hanno detto il suo: lo stesso
-   ripiego del server (`settings_api`, `bot_name or "Jenny"`). E' un nome
-   proprio, non una frase da tradurre. */
 
 /* Le stanze oltre la conversazione, e dove si atterra premendo Indietro una
    volta. La catena e' lineare e sta **in un posto solo**: `_setView` la usa per
@@ -128,38 +122,9 @@ const BACK_TO = {
   backup: 'settings',
 };
 
-/* I fogli che stanno sopra le pagine, nel top layer (`showModal()`): quelli
-   di una pressione lunga — un quaderno dai Quaderni, un'app dal cassetto — e
-   quello di «Segnala». Scritti una volta: li leggono sia chi chiede se c'e'
-   qualcosa sopra (`hasOverlayAbove`) sia chi li chiude (`_closeOverlays`), e
-   due elenchi separati divergevano al primo foglio nuovo. */
-/* Anche i fogli del piano a lista (`home-plan.js`), che si aprono dalla sua scheda. */
-const LONG_PRESS_SHEETS = ['home-notebook-sheet', 'jenny-app-sheet', 'android-app-sheet', 'apps-trash-sheet', 'home-plan-sheet'];
-/* Il foglio della bacheca: «dall'ultima volta», la busta, la ricerca,
-   l'anteprima di una pagina, «aggiungi sezione». */
-const BOARD_SHEET = 'home-board-sheet';
-
 /* Le stanze di un quaderno: da qui Jenny apre la chat **del quaderno**, da
    ogni altro posto quella personale (v. `_summonKey`). */
 const NOTEBOOK_ROOMS = ['board', 'drawer', 'reader'];
-const REPORT_SHEET = 'home-audit-dialog';
-
-/* I dialoghi condivisi con l'officina (`shared/dialog.js`): «Elimina
-   quaderno?», «Nuovo nome per …», il dettaglio. Si aprono *da* una scheda o da
-   una pagina, quindi stanno sopra a tutto il resto, e Indietro li chiude per
-   primi. */
-const SHARED_DIALOGS = [
-  'oc-confirm-dialog', 'oc-prompt-dialog', 'oc-detail-dialog',
-  /* Le due finestre di `shared/backup-flow.js`, che si costruiscono al volo
-     invece di stare nel DOM: la passphrase e il riavvio dopo un ripristino.
-     Mancavano, e nella stanza Backup Indietro passava sotto la passphrase —
-     via la stanza, la domanda restava aperta sopra Impostazioni (visto
-     sull'emulatore il 29/09/2026). Il riavvio rifiuta `cancel`, quindi la
-     pressione e' consumata senza chiuderlo: e' quel che deve fare. */
-  'oc-backup-passphrase-dialog', 'oc-backup-restart-dialog',
-  /* E quelli delle estensioni, che li aggiungono con `registerSharedDialog`
-     quando si montano (`shared/extensions.js`). */
-];
 
 class HomeApp {
   constructor() {
@@ -275,6 +240,14 @@ class HomeApp {
         send: this.send,
       },
       currentNotebook: () => projectNameOf(sessionManager.currentKey),
+      /* Il posto dei piani della chat a schermo (`jenny/plan/place.py`): il
+         quaderno, o la chat personale. */
+      currentPlace: () => {
+        const key = sessionManager.currentKey;
+        const notebook = projectNameOf(key);
+        if (notebook) return `nb:${notebook}`;
+        return key && key === sessionManager.personalKey ? 'personal' : null;
+      },
       onChange: () => this.chat.liveChanged(),
       onLockChange: () => {
         this._applyPlanLock();
@@ -562,11 +535,11 @@ class HomeApp {
     prepareExtensions();
     await i18n.load(i18n.locale);
     this._applyTranslations();
-    /* Le estensioni di questa build (`shared/extensions.js`): i ganci che la
-       casa offre sono la pagina Backup e i dialoghi che Indietro chiude. */
+    /* Le estensioni di questa build (`shared/extensions.js`): il gancio che la
+       casa offre e' la pagina Backup. I loro dialoghi Indietro li chiude da se',
+       come ogni `<dialog>` aperto. */
     mountExtensions('home', {
       homeBackup: this.backupRoom,
-      registerSharedDialog: (id) => { if (!SHARED_DIALOGS.includes(id)) SHARED_DIALOGS.push(id); },
     });
 
     // La barra di selezione che riappariva al rientro: v. `releaseSelectionOnBlur`.
@@ -869,7 +842,7 @@ class HomeApp {
    */
   async createNotebook(initial = '') {
     const name = await createProjectFlow({
-      t: (key, vars) => i18n.t(key, vars),
+      t: tr,
       known: this.who.known,
       initial: typeof initial === 'string' ? initial : '',
     });
@@ -1789,7 +1762,7 @@ class HomeApp {
   _composerActive() {
     /* Con la chat sopra la pagina il campo e' li', davanti a tutto il resto
        della casa: lo coprono solo un foglio, un dialogo o l'immagine. */
-    if (this.chatOver) return !this._sheetOpen() && !document.querySelector('dialog[open], .image-lightbox');
+    if (this.chatOver) return !document.querySelector('dialog[open], .image-lightbox');
     if (this.view !== 'chat' || !this._hasComposer(this._entry)) return false;
     if (this.homePages?.goneHere?.()) return false;
     if (this.hasOverlayAbove()) return false;
@@ -1800,9 +1773,7 @@ class HomeApp {
    *  tasto: da pagina, e' vivo mentre la guardi — anche sotto una scheda aperta
    *  sopra, o sotto una app che ha lanciato. */
   hasOverlayAbove() {
-    for (const id of [...SHARED_DIALOGS, ...LONG_PRESS_SHEETS, REPORT_SHEET, BOARD_SHEET]) {
-      if (document.getElementById(id)?.open) return true;
-    }
+    if (this._sheetOpen()) return true;
     /* La chat sopra la pagina anche: il cassetto non deve prendersi i tasti
        scritti nel suo campo. */
     return Boolean(this._appActions?.isAppOpen()) || Boolean(this.strip?.sorting)
@@ -1810,12 +1781,10 @@ class HomeApp {
   }
 
   /* Un foglio della casa e' aperto: un dialogo condiviso, una scheda di una
-     pressione lunga, «Segnala», il foglio della bacheca. */
+     pressione lunga, «Segnala», il foglio della bacheca, «Fermala» — ogni
+     `<dialog>` aperto. */
   _sheetOpen() {
-    for (const id of [...SHARED_DIALOGS, ...LONG_PRESS_SHEETS, REPORT_SHEET, BOARD_SHEET]) {
-      if (document.getElementById(id)?.open) return true;
-    }
-    return false;
+    return Boolean(document.querySelector('dialog[open]'));
   }
 
   /* La stanza a schermo la dice un attributo su `.home-shell`, e il resto lo
@@ -2208,44 +2177,20 @@ class HomeApp {
    *  schermo, non una scelta fra candidati.
    */
   _closeOverlays({ editor = true } = {}) {
-    /* Prima di tutto i dialoghi condivisi, che si aprono sopra le schede e
-       sopra le pagine. Si congedano con la semantica di Esc, come fa
-       l'officina (`_dismissTopDialog`): l'evento `cancel`, annullabile, e
-       `close()` solo se nessuno l'ha rifiutato — cosi' chi aspettava la
-       risposta la riceve, ed e' un no. Mancavano: Indietro portava via la
-       pagina sotto «Elimina quaderno?», e la domanda restava aperta sopra
-       un'altra. */
-    for (const id of SHARED_DIALOGS) {
-      const dialog = document.getElementById(id);
-      if (dialog?.open) {
-        if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
-        return true;
-      }
-    }
-    /* L'immagine ingrandita: si apre anche *dalla* chat sopra la pagina, e le
-       sta davanti (115 contro 112), quindi si chiude prima di lei. E dal
-       14/10/2026 si apre anche *dal* foglio della bacheca (una foto della
-       galleria), come dialog sopra di lui: per questo viene prima dei fogli.
-       Prima Indietro chiudeva il foglio e lasciava aperta la foto. */
+    /* Prima di tutto i `<dialog>`: fogli e domande, aperti con `showModal()`,
+       stanno nel top layer sopra ogni altra cosa — il piu' in alto per primo
+       (`dismissTopDialog`). Si congedano con la semantica di Esc, come in
+       officina: chi aspettava una risposta riceve un no. Fra loro c'e' anche la
+       foto della galleria a tutto schermo, aperta *dal* foglio della bacheca e
+       quindi sopra di lui: si chiude prima del foglio. */
+    if (dismissTopDialog()) return true;
+    /* L'immagine ingrandita della chat: si apre anche *dalla* chat sopra la
+       pagina, e le sta davanti (115 contro 112), quindi si chiude prima di lei. */
     const lightbox = document.querySelector('.image-lightbox');
     if (lightbox) {
       if (typeof lightbox.__jennyClose === 'function') lightbox.__jennyClose();
       else lightbox.remove();
       return true;
-    }
-    /* Poi i fogli che si aprono con una pressione lunga: quello di
-       un quaderno **dai** Quaderni, e i due delle app **dal** cassetto (Open,
-       Edit, Delete). Sono `<dialog>` con `showModal()`: stanno nel top layer,
-       sopra tutto, e il loro commento in `apps-actions.js` lo dice — Indietro
-       chiude prima loro. Visto sul telefono il 23/09/2026, quando mancavano:
-       Indietro chiudeva il cassetto sotto e lasciava il foglio aperto sopra
-       la chat, Delete compreso. */
-    for (const id of [...LONG_PRESS_SHEETS, BOARD_SHEET]) {
-      const sheet = document.getElementById(id);
-      if (sheet?.open) {
-        sheet.close();
-        return true;
-      }
     }
     /* La chat sopra la pagina (dal 05/10/2026, al posto della minichat): sta
        sopra le mini-app, perche' Jenny si apre anche li', quindi si chiude
@@ -2285,16 +2230,6 @@ class HomeApp {
        riporta alla chat. Una pressione, un cambiamento visibile. */
     if (this._entry?.kind === 'drawer' && this.launcher?.search?.value) {
       this.launcher.dismiss();
-      return true;
-    }
-    /* Il foglio di «Segnala»: `showModal()`, quindi top layer come le schede.
-       Un `<dialog>` modale si chiude da se' con Escape, ma qui Indietro arriva
-       dal guscio nativo come un evento suo e nessuno lo traduce in Escape:
-       senza questa riga la pressione uscirebbe dalla *stanza* lasciando il
-       foglio aperto sopra un'altra. */
-    const sheet = document.getElementById(REPORT_SHEET);
-    if (sheet?.open) {
-      sheet.close();
       return true;
     }
     return false;
@@ -2432,13 +2367,14 @@ class HomeApp {
   }
 
   /* Chiude i fogli di un momento, tutti: quelli di una pressione lunga, il
-     foglio della bacheca, «Segnala» e l'immagine ingrandita. Non i dialoghi
-     condivisi, che sono domande; non l'app aperta, che il velo copre e
-     ritrova. */
+     foglio della bacheca, «Segnala», «Fermala» e l'immagine ingrandita. Non le
+     domande (`isQuestionDialog`), a cui qualcuno aspetta la risposta; non
+     l'app aperta, che il velo copre e ritrova. */
   _closeSheets() {
-    for (const id of [...LONG_PRESS_SHEETS, BOARD_SHEET, REPORT_SHEET]) {
-      const sheet = document.getElementById(id);
-      if (sheet?.open) sheet.close();
+    for (const sheet of document.querySelectorAll('dialog[open]')) {
+      if (isQuestionDialog(sheet)) continue;
+      if (typeof sheet.__jennyClose === 'function') sheet.__jennyClose();
+      else sheet.close();
     }
     const lightbox = document.querySelector('.image-lightbox');
     if (!lightbox) return;

@@ -29,12 +29,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "mobile-app.js"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 SWIPE_JS = ASSETS / "shared" / "horizontal-swipe.js"

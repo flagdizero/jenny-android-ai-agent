@@ -11,10 +11,10 @@ rifarebbe partire.
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 
 import pytest
+from support.cron import saved_jobs, seed_jobs
 
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronPayload, CronSchedule
@@ -153,17 +153,16 @@ async def test_a_store_written_before_the_pause_reads_as_not_paused(tmp_path, ru
         name="acqua", schedule=CronSchedule(kind="every", every_ms=_HOUR), message="bevi", **_bound()
     )
     path = tmp_path / "cron" / "jobs.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
-    for j in data["jobs"]:
+    rows = saved_jobs(path)
+    for j in rows:
         j.pop("pausedAtMs", None)
-    path.write_text(json.dumps(data), encoding="utf-8")
+    seed_jobs(path, rows)
 
     assert CronService(path).get_job(job.id).paused_at_ms is None
 
 
-async def test_a_stopped_service_journals_the_pause(tmp_path, running) -> None:
-    """Da fermo il servizio non salva ``jobs.json``: accoda al giornale, come
-    ``remove_job``, e il primo caricamento lo riapplica."""
+async def test_a_stopped_service_saves_the_pause(tmp_path, running) -> None:
+    """Anche da fermo il servizio salva: chi gira la ritrova alla lettura dopo."""
     path = tmp_path / "cron" / "jobs.json"
     live = running
     job = live.add_job(

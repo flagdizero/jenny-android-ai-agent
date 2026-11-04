@@ -8,27 +8,16 @@ uno.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from support.ws_channel import make_ws_channel
+
+from jenny.channels.websocket import WebSocketChannel
 
 
 def _channel() -> WebSocketChannel:
-    bus = MagicMock()
-    bus.publish_inbound = AsyncMock()
-    cfg = {"enabled": True, "allowFrom": ["*"], "websocketRequiresToken": False}
-    gateway = build_gateway_services(
-        config=WebSocketConfig.model_validate(cfg),
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway)
+    channel = make_ws_channel()
     channel._handle_message = AsyncMock()  # type: ignore[method-assign]
     return channel
 
@@ -55,9 +44,12 @@ async def test_review_carries_the_plan_id() -> None:
     assert meta["plan_revise"] == "p_0123456789ab"
 
 
-async def test_plan_outside_a_notebook_is_ignored() -> None:
+async def test_plan_in_the_personal_chat_is_a_planning_turn_too() -> None:
+    """La chat personale può avere piani (con l'orchestratore): il flag passa, e
+    se lì i piani non ci sono lo decide il driver. Trovato sul telefono il
+    03/11/2026: il canale lo buttava, e il tasto Piano non apriva niente."""
     meta = await _metadata({"chat_id": "default", "content": "piano", "plan": True})
-    assert "plan_mode" not in meta and "readonly" not in meta
+    assert meta["plan_mode"] is True and meta["readonly"] is True
 
 
 async def test_only_true_turns_it_on() -> None:

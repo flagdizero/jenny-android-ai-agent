@@ -93,10 +93,8 @@ TOOLS_DIR = ROOT / "agent" / "tools"
 # scopo invece di lasciarlo implicito: il silenzio su di loro somiglia troppo a
 # una dimenticanza.
 _EXTRA_SCANNED = (
+    "apps/executor.py",
     "apps/storage.py",
-    "session/manager.py",
-    "webui/transcript_store.py",
-    "agent/subagent_records.py",
     "config/store.py",
 )
 
@@ -156,6 +154,10 @@ _DETECTORS = {
 _ASKS_FOR_ITSELF = {
     "agent/tools/download.py": "destinazione fissa: <installazione>/downloads/",
     "apps/storage.py": "app_dir viene dalla radice dell'installazione, non dal turno",
+    "apps/executor.py": (
+        "un'azione http che non e' GET cambia lo stato di un'app dell'utente fuori dai file "
+        "(annaffia, accendi): non e' ssh_exec, e in sola lettura si rifiuta"
+    ),
     "agent/tools/cron.py": "scrive cron/jobs.json, che non è un file dell'utente",
     "agent/tools/app_update.py": "installa un APK: non è una scrittura, è una sostituzione",
     "agent/tools/journal.py": (
@@ -213,22 +215,6 @@ _OUT_OF_SCOPE = {
     # in sola lettura l'interruttore deve proteggere la conversazione, non
     # romperla. Se questi si chiudessero, il turno che promette «non cambio
     # niente» perderebbe i messaggi dell'utente.
-    "session/manager.py": (
-        "è il magazzino delle sessioni: ci scrive il gateway per persistere la "
-        "conversazione, non un tool su richiesta del modello. Chiuderlo perderebbe "
-        "il turno stesso"
-    ),
-    "webui/transcript_store.py": (
-        "il transcript è il verbale del turno, non un suo effetto: un turno in sola "
-        "lettura va comunque registrato, o l'interruttore cancellerebbe la prova di "
-        "cosa è stato chiesto"
-    ),
-    "agent/subagent_records.py": (
-        "contabilità di ciclo di vita dei subagent (`subagents/records/*.jsonl`), "
-        "scritta dal runtime e non dal modello. Il lavoro delegato *è* già coperto: "
-        "`spawn` copia lo scope del turno nella spec e il run lo rilega, quindi un "
-        "subagent nato in sola lettura è in sola lettura"
-    ),
     "config/store.py": (
         "è il funnel della configurazione, e nessun tool lo chiama: i chiamanti sono "
         "le rotte /api delle Impostazioni, i comandi slash e il restore. Quelle sono "
@@ -434,6 +420,28 @@ async def _probe_app_storage(root: Path, readonly: bool) -> str:
     return repr(result)
 
 
+async def _probe_app_http(root: Path, readonly: bool) -> str:
+    from unittest.mock import patch
+
+    from jenny.apps.executor import execute_action
+
+    app_dir = root / "apps" / "orto"
+    app_dir.mkdir(parents=True)
+    (app_dir / "app.json").write_text(json.dumps({
+        "name": "Orto", "description": "Irrigazione",
+        "server": {"baseUrl": "http://192.168.1.50:8080"},
+        "actions": [{"name": "annaffia", "description": "Apre l'acqua", "kind": "http",
+                     "method": "POST", "path": "/water"}],
+    }), encoding="utf-8")
+
+    async def _no_network(*_a: Any, **_k: Any) -> dict:
+        return {"ok": True}
+
+    with _turn(root, readonly), patch("jenny.apps.executor.execute_http_action", _no_network):
+        result = await execute_action(root, "orto", "annaffia", {})
+    return repr(result)
+
+
 class _FakeCron:
     """Servizio cron minimo: registra invece di programmare."""
 
@@ -586,6 +594,7 @@ async def _probe_ssh(root: Path, readonly: bool) -> str:
 _PROBES: dict[str, Probe] = {
     "agent/tools/download.py": _probe_download,
     "apps/storage.py": _probe_app_storage,
+    "apps/executor.py": _probe_app_http,
     "agent/tools/cron.py": _probe_cron,
     "agent/tools/app_update.py": _probe_app_update,
     "agent/tools/journal.py": _probe_journal,

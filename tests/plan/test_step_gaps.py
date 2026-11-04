@@ -522,19 +522,19 @@ async def test_listed_gaps_are_deduplicated_against_the_file_and_each_other(
     ]
 
 
-async def test_the_list_is_written_inside_the_step_before_its_photo(
+async def test_the_list_is_written_as_work_of_the_step(
     driver: PlanDriver, workspace: Path
 ) -> None:
-    """Il file è lavoro del passo: c'è prima della foto «dopo», così il ritorno
-    del piano lo toglie con il resto."""
+    """Il file è lavoro del passo: sta nel registro del piano col passo, così il
+    ritorno del piano lo toglie con il resto."""
     plan = await _to_step_two(driver, await _approve(driver))
     await _report(driver, plan, _GAPS, step="s2")
     await driver.step_done(KEY, "presto")
     assert "closed" in await driver.step_done(KEY, "fatto")
-    plan = driver.store.load(plan.id)
-    assert plan.steps[1].photo_after is None and _open_gaps_file(workspace)
+    assert _open_gaps_file(workspace)
     await driver.on_turn_end(KEY, {})
-    assert driver.store.load(plan.id).steps[1].photo_after
+    files = driver.step_files(plan.id, "s2")
+    assert "raw/notes/open-gaps.md" in files["added"]
 
 
 async def test_the_view_counts_the_open_gaps_of_the_step(driver: PlanDriver) -> None:

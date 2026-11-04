@@ -2388,13 +2388,25 @@ body {
    si stringe sotto le parole che contiene: nessuna parola spezzata a meta'
    in una cella, e la pagina resta ferma. La stessa resa in tre posti — la
    chat e il lettore della casa, la chat dell'officina — perche' e' la stessa
-   tabella. `fit-content`: la scatola e'
-   larga quanto la tabella, cosi' il bordo non gira attorno a un vuoto. */
-.chat-content table {
+   tabella: per questo e' **una regola**, qui, nel foglio che tutti e due i
+   gusci caricano (prima era scritta tre volte, uguale). `fit-content`: la
+   scatola e' larga quanto la tabella, cosi' il bordo non gira attorno a un
+   vuoto. Il resto — bordi, corpo, intestazioni — e' di ogni superficie. */
+:is(.chat-content, .home-block, .home-reader-body) table {
   display: block;
   width: fit-content;
   max-width: 100%;
   overflow-x: auto;
+}
+/* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
+   nelle celle no, o la cella si stringe fino a una lettera per riga. */
+:is(.chat-content, .home-block, .home-reader-body) :is(th, td) {
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.chat-content table {
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12px;
@@ -2405,12 +2417,7 @@ body {
 
 .chat-content th, .chat-content td {
   padding: 6px 8px;
-  text-align: left;
   border-bottom: 1px solid var(--border);
-  /* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
-     qui no, o la cella si stringe fino a una lettera per riga. */
-  overflow-wrap: break-word;
-  word-break: normal;
 }
 
 .chat-content th {
@@ -2440,17 +2447,6 @@ body {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1em 0;
-}
-
-.chat-content img {
-  max-width: 100%;
-  border-radius: var(--radius);
-  margin: 0.5em 0;
-}
-
-.chat-content input[type="checkbox"] {
-  margin-right: 6px;
-  accent-color: var(--accent);
 }
 
 /* Code blocks */
@@ -2897,7 +2893,7 @@ body {
   cursor: pointer;
 }
 
-.chat-file-chip-name {
+.media-file-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2911,6 +2907,7 @@ body {
 .chat-content img {
   max-width: 100%;
   max-height: 320px;
+  margin: 0.5em 0;
   border-radius: var(--radius);
   cursor: pointer;
 }
@@ -3866,7 +3863,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
 }
 .launcher-row-icon i { font-size: 16px; }
 
-.launcher-row-text {
+.launcher-row-text,
+.remote-peer-text {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; gap: 2px;
 }
@@ -4178,6 +4176,13 @@ dialog.image-lightbox::backdrop { background: transparent; }
   justify-content: flex-end;
   gap: 8px;
 }
+/* Il modulo in una finestra (`formDialog`): il titolo, una riga di spiegazione
+   sotto, e i bottoni staccati dai campi. Erano cinque stili in linea uguali. */
+.oc-dialog-title { margin: 0 0 16px; font-size: 15px; font-weight: 600; }
+.oc-dialog-title:has(+ .oc-dialog-note) { margin-bottom: 8px; }
+.oc-dialog-note { margin: 0 0 12px; font-size: 12px; color: var(--text-faint); }
+.oc-dialog-form .oc-dialog-buttons { margin-top: 16px; }
+.oc-dialog-form .oc-dialog-note + .oc-dialog-buttons { margin-top: 0; }
 .oc-btn {
   padding: 8px 16px;
   border-radius: var(--radius-sm);
@@ -5202,13 +5207,6 @@ dialog.image-lightbox::backdrop { background: transparent; }
   border-top: 0.5px solid var(--border);
 }
 .remote-peer i { font-size: 18px; color: var(--text-muted); }
-.remote-peer-text {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
 .remote-peer-ip { font: 11px var(--font-mono, monospace); color: var(--text-faint); }
 .remote-peer-when { font-size: 12px; color: var(--text-faint); }
 /* Due classi: `.settings-btn-add` sta piu' in basso nel file e, a pari
@@ -5360,7 +5358,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
   border-radius: 999px;
   box-shadow: 0 0 0 1px var(--border-strong);
 }
-.brand-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.brand-text,
+.ssh-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .brand-name {
   display: flex;
   align-items: center;
@@ -5378,7 +5377,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
   font-size: 10px;
   color: var(--ok, var(--text-muted));
 }
-.brand-where {
+.brand-where,
+.ssh-row-where {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
@@ -5386,7 +5386,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.brand-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
+.brand-row > i,
+.ssh-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* ── Il pannello di una marca ─────────────────────────────────────────────
    Alto quanto quel che contiene, fino al 75% degli altri cassetti: con
@@ -5513,16 +5514,7 @@ dialog.image-lightbox::backdrop { background: transparent; }
    configurati che falliscono solo al primo comando. Qui costano due parole
    invece di due targhette. */
 .ssh-row { min-height: 52px; }
-.ssh-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ssh-row-name { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
-.ssh-row-where {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .ssh-row-states { flex-shrink: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
 /* Pieno contro vuoto, non solo verde contro giallo: su un tema in cui
    l'accento **e'** il colore del testo due pallini colorati si somigliano. */
@@ -5537,7 +5529,6 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .ssh-mark i { font-size: 12px; }
 .ssh-mark.is-ok { color: var(--ok, var(--text-muted)); }
 .ssh-mark.is-missing { color: var(--warning, var(--text-faint)); }
-.ssh-row > i { flex-shrink: 0; font-size: 16px; color: var(--text-faint); }
 
 /* La riga che chiude un gruppo mandando altrove. Fuori dai comandi e in tono
    basso: non e' un'impostazione ne' un bottone, e' un'indicazione. */
@@ -5908,14 +5899,27 @@ dialog.image-lightbox::backdrop { background: transparent; }
   cursor: pointer;
   transition: background 0.25s cubic-bezier(.25,.1,.25,1), border-color 0.25s cubic-bezier(.25,.1,.25,1), box-shadow 0.25s cubic-bezier(.25,.1,.25,1), transform 0.25s cubic-bezier(.34,1.56,.64,1);
   margin-top: 4px;
+  background: var(--overlay);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+
+.settings-btn-add:hover {
+  background: var(--overlay-strong);
+  color: var(--text);
+  transform: scale(1.03);
+}
+.settings-btn-add:active { transform: scale(0.97); }
 
 /* Il bottone principale di un gruppo: pieno d'accento, a tutta larghezza.
    Modificatore e non sostituzione di `.settings-btn-add`: gli altri cinque usi
    (genera chiave, verifica, copia, crea istantanea, aggiungi host) sono azioni
    secondarie, e sei bottoni pieni sulla stessa pagina non ne fanno risaltare
    nessuno. `--on-accent` e non il bianco: con un accento chiaro (Chanel) il
-   bianco su bianco non si legge. */
+   bianco su bianco non si legge. Dopo `.settings-btn-add` e il suo `:hover`:
+   a pari specificita' vince l'ultima, e qui deve vincere il pieno. */
 .settings-btn-full {
   width: 100%;
   min-height: 38px;
@@ -5931,22 +5935,6 @@ dialog.image-lightbox::backdrop { background: transparent; }
   gap: 6px;
 }
 .settings-btn-full:active { opacity: .85; }
-
-
-.settings-btn-add {
-  background: var(--overlay);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.settings-btn-add:hover {
-  background: var(--overlay-strong);
-  color: var(--text);
-  transform: scale(1.03);
-}
-.settings-btn-add:active { transform: scale(0.97); }
 
 
 /* Bottone segmented condiviso (lingua, taglia mascotte, ...): in lista

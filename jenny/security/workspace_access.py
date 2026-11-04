@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from loguru import logger
 
+from jenny.bus.events import WEBSOCKET_CHANNEL
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.config.runtime_env import (
     WORKSPACE_SANDBOX_ENFORCED_ENV,
     WORKSPACE_SANDBOX_ENFORCED_LEGACY_ENV,
@@ -19,10 +21,13 @@ from jenny.config.runtime_env import (
 )
 from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
     is_project_session_key,
     notebook_of_cron_session,
+    project_name,
+    project_session_key,
 )
+from jenny.utils.errors import StatusError
+from jenny.utils.wiki_paths import notebook_dir
 
 WorkspaceAccessMode = Literal["restricted", "full"]
 WORKSPACE_SCOPE_METADATA_KEY = "workspace_scope"
@@ -52,15 +57,8 @@ _CURRENT_WORKSPACE_SCOPE: ContextVar["WorkspaceScope | None"] = ContextVar(
 )
 
 
-class WorkspaceScopeError(ValueError):
+class WorkspaceScopeError(StatusError, ValueError):
     """Raised when a requested WebUI workspace scope is invalid."""
-
-    status = 400
-
-    def __init__(self, message: str, *, status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status = status
 
 
 @dataclass(frozen=True)
@@ -211,12 +209,12 @@ class WorkspaceScopeResolver:
 
     default_workspace: str | Path
     default_restrict_to_workspace: bool
-    scoped_channel: str = "websocket"
+    scoped_channel: str = WEBSOCKET_CHANNEL
     # Sottocartella che ospita i progetti, relativa al workspace. Un progetto
     # *e'* una wiki: non esiste una
     # ``projects/`` separata. Configurabile perche' lo e' ``config.wiki.wikis_dir``,
     # e chi costruisce il resolver la passa da li'.
-    projects_subdir: str = "wikis"
+    projects_subdir: str = DEFAULT_WIKIS_DIR
 
     @property
     def sandbox_status(self) -> WorkspaceSandboxStatus:
@@ -264,7 +262,7 @@ class WorkspaceScopeResolver:
             scope = self.for_project(session_key)
         elif notebook is not None:
             # Il turno di un cron del quaderno: lo stesso recinto della sua chat.
-            scope = self.for_project(f"{PROJECT_SESSION_PREFIX}{notebook}")
+            scope = self.for_project(project_session_key(notebook))
         else:
             scope = resolve_effective_workspace_scope(
                 message_metadata=message_metadata,
@@ -293,13 +291,12 @@ class WorkspaceScopeResolver:
         fallback silenzioso metterebbe il lavoro di un progetto nel workspace
         personale. Trasformarlo in un rifiuto detto a voce e' il passo 6.
         """
-        name = session_key[len(PROJECT_SESSION_PREFIX):]
-        root = _safe_expanduser(self.default_workspace).resolve(strict=False)
-        project = (root / self.projects_subdir / name).resolve(strict=False)
+        name = project_name(session_key)
+        projects_root = _safe_expanduser(self.default_workspace) / self.projects_subdir
         # Il nome arriva da una session key, che a sua volta arriva da un client:
         # un ``..`` non deve poter far uscire lo scope dalla cartella dei progetti.
-        projects_root = (root / self.projects_subdir).resolve(strict=False)
-        if project == projects_root or projects_root not in project.parents:
+        project = notebook_dir(projects_root, name)
+        if project is None:
             logger.warning(
                 "project session {} resolves outside {}; falling back to the default scope",
                 session_key,
@@ -592,6 +589,30 @@ def enter_workspace_scope(scope: "WorkspaceScope | None") -> "Iterator[None]":
 
 def current_workspace_scope() -> WorkspaceScope | None:
     return _CURRENT_WORKSPACE_SCOPE.get()
+
+
+def current_write_root(default: Path) -> Path:
+    """La radice di scrittura del turno (``WorkspaceScope.write_root``), o *default*.
+
+    Senza uno scope legato — sessioni interne, test — resta *default*, il
+    workspace del costruttore di chi chiede, che in quel caso e' anche la radice
+    del turno.
+    """
+    scope = current_workspace_scope()
+    return scope.write_root() if scope is not None else default
+
+
+def current_notebook_root() -> Path | None:
+    """La cartella del quaderno di questo turno, o ``None`` se il turno non e' in uno.
+
+    E' la radice di scrittura del turno quando e' un quaderno: lo stesso confine
+    di ogni altra scrittura, quindi da un quaderno non si arriva a un altro.
+    """
+    from jenny.utils.wiki_paths import is_wiki_root
+
+    scope = current_workspace_scope()
+    root = scope.write_root() if scope is not None else None
+    return root if root is not None and is_wiki_root(root) else None
 
 
 def current_tool_workspace(

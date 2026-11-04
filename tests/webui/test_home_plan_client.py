@@ -11,9 +11,8 @@ spenta e il quaderno chiuso, e che il ritorno indietro mandi i gruppi tenuti.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from support.home_dom import requires_jsdom, run_home
+from support.js_harness import ASSETS
 
 pytestmark = requires_jsdom
 
@@ -55,7 +54,7 @@ const toNotebook = async () => {
 """
 
 
-_VENDOR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets" / "vendor"
+_VENDOR = ASSETS / "vendor"
 # DOMPurify e marked veri: senza, `md()` esce col testo scappato e i backtick restano.
 _MARKDOWN_BOOT = f"""
 import {{ createRequire }} from 'node:module';
@@ -165,7 +164,7 @@ assert.equal($('home-input').placeholder, P.placeholderDrafting);
 rpcAnswers['plan.cancel_drafting'] = () => { drafting = null; return { ok: true, cancelled: true }; };
 document.querySelector('[data-plan-action="cancel-drafting"]').click();
 await tick(40);
-assert.deepEqual(rpcs('plan.cancel_drafting')[0].params, { notebook: 'orto' });
+assert.deepEqual(rpcs('plan.cancel_drafting')[0].params, { place: 'nb:orto' });
 assert.equal(toggle.getAttribute('aria-pressed'), 'false');
 assert.equal(document.querySelector('.home-plan-hint').hidden, true);
 // Spegnere il tasto mentre pianifica e' annullare.
@@ -635,11 +634,16 @@ current = plan({ status: 'done', done: 3, can_rollback: true,
   steps: [step('s1', 'A', { status: 'done' }), step('s2', 'B', { status: 'done' }),
     step('s3', 'C', { status: 'done' })] });
 rpcAnswers['plan.changes'] = () => ({ ok: true, added: ['wiki/new.md', 'raw/research/x.md'],
-  changed: ['wiki/index.md'], removed: ['wiki/old.md'], groups: {} });
+  changed: ['wiki/index.md'], removed: ['wiki/old.md'],
+  groups: { 'wiki/new.md': 'pages', 'raw/research/x.md': 'sources', 'wiki/index.md': 'pages',
+    'wiki/old.md': 'pages' } });
 rpcAnswers['plan.rollback_preview'] = () => ({ ok: true, expect_end: 'B1', report: {
   restored: ['wiki/old.md', 'wiki/index.md'], removed: ['wiki/new.md', 'raw/research/x.md'],
   left: ['wiki/acero.md'], kept: [], already: [], excluded: [],
-  counts: { restored: 2, removed: 2, left: 1, kept: 0, already: 0, excluded: 0 } } });
+  counts: { restored: 2, removed: 2, left: 1, kept: 0, already: 0, excluded: 0 },
+  group_of: { 'wiki/old.md': 'pages', 'wiki/index.md': 'pages', 'wiki/new.md': 'pages',
+    'raw/research/x.md': 'sources', 'wiki/acero.md': 'pages' },
+  keepable: ['pages', 'sources'] } });
 rpcAnswers['plan.rollback'] = () => ({ ok: true, report: { counts: { restored: 2, removed: 1 } } });
 await toNotebook();
 await tick(30);
@@ -1427,7 +1431,10 @@ assert.equal(sheet().open, false, 'chiusa la chat, il foglio non resta sopra la 
 def test_the_changes_sheet_names_pages_by_their_path_in_the_group() -> None:
     run_home(_HEAD + """
 current = plan({ status: 'done', done: 3, steps: [step('s1', 'A', { status: 'done' })] });
-rpcAnswers['plan.changes'] = () => ({ ok: true, groups: {},
+rpcAnswers['plan.changes'] = () => ({ ok: true,
+  groups: { 'wiki/entities/Acero/substrato.md': 'pages', 'wiki/entities/Fico/substrato.md': 'pages',
+    'raw/research/2026-10-23-acero.md': 'sources', 'wiki/index.md': 'pages',
+    'wiki/entities/Acero/index.md': 'pages' },
   added: ['wiki/entities/Acero/substrato.md', 'wiki/entities/Fico/substrato.md', 'raw/research/2026-10-23-acero.md'],
   changed: ['wiki/index.md', 'wiki/entities/Acero/index.md'], removed: [] });
 await toNotebook();
@@ -1560,3 +1567,30 @@ def test_block_markdown_in_a_coverage_line_flows_inline() -> None:
     for tag in ("p", "ul", "ol", "li", "h1", "h3", "pre"):
         assert tag in rule.split("{", 1)[0], tag
     assert "display: inline" in rule and "font-size: inherit" in rule
+
+
+def test_the_personal_chat_has_the_plan_toggle_only_when_the_gateway_allows_it() -> None:
+    """Il piano nella chat principale c'è solo con l'orchestratore (`plan.get` →
+    `enabled`). Lì un piano che corre non spegne la chat: non tiene niente, e la
+    mascotte e le notifiche ci scrivono comunque."""
+    run_home(_HEAD + """
+let enabled = false;
+rpcAnswers['plan.get'] = () => ({ ok: true, plan: current, drafting, enabled });
+const toggle = () => document.querySelector('.home-plan-toggle');
+await app.plan.refresh();
+await tick(20);
+assert.equal(toggle().hidden, true, 'senza permesso il tasto non c\\'e\\'');
+assert.deepEqual(rpcs('plan.get').at(-1).params, { place: 'personal' });
+enabled = true;
+await app.plan.refresh();
+await tick(20);
+assert.equal(toggle().hidden, false, 'col permesso il tasto c\\'e\\'');
+current = plan({ id: 'pp', notebook: '', place: 'personal', session_key: 'unified:default',
+  status: 'running', current_step_id: 's1',
+  steps: [step('s1', 'Tidy the recipes', { status: 'now' }), step('s2', 'Sort the apps')] });
+await app.plan.refresh();
+await tick(20);
+assert.ok(card(), 'la scheda del piano personale');
+assert.equal($('home-input').disabled, false, 'la chat resta accesa');
+assert.ok(!document.querySelector('.home-field').classList.contains('is-plan-off'));
+""")

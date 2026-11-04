@@ -24,6 +24,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from support.gateway_http import make_request
+from support.js_harness import ASSETS
 from websockets.http11 import Request as WsRequest
 
 from jenny import __version__
@@ -686,7 +687,7 @@ class TestTheStringsTheUIAsksFor:
     alle impostazioni. Questo è il posto dove quella dimenticanza si nota.
     """
 
-    _UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+    _UI = ASSETS
 
     def _keys_used_by_the_settings_page(self) -> set[str]:
         """Ogni file della WebUI, non piu' solo la pagina delle impostazioni.
@@ -757,8 +758,7 @@ class TestThePromptOutcomeIsTerminal:
     """
 
     _SOURCE = (
-        Path(__file__).resolve().parents[2]
-        / "jenny" / "templates" / "ui" / "assets" / "shared" / "update-flow.js"
+        ASSETS / "shared" / "update-flow.js"
     ).read_text(encoding="utf-8")
 
     def _body_of(self, name: str) -> str:

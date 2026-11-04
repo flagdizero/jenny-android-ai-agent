@@ -33,7 +33,7 @@ That roster of seven is the full set across all agents; no single agent holds it
 
 One deliberate exception: Jenny's own Python source (`jenny/`) is exposed **read-only** to the agent when `tools.file.exposePackageSource` is `true` (default), so it can inspect the framework it runs on. It is never writable through this path.
 
-The boundary also works in the other direction, to keep things *out*. The SSH private keys and `known_hosts` live in `<filesDir>/ssh`, **beside** the workspace rather than inside it, precisely so that no file tool can reach them — unlike `config.json`, which sits in the workspace and which the agent can therefore already read. The cost is paid by the user, not by the model: snapshots and encrypted backups only walk the workspace root, so a restore brings back the host list without the keys (see [SSH access](../using/ssh.md)).
+The boundary also works in the other direction, to keep things *out*. The SSH private keys and `known_hosts` live in `<filesDir>/ssh`, **beside** the workspace rather than inside it, precisely so that no file tool can reach them — unlike `config.json`, which sits in the workspace and which the agent can therefore already read. The cost is paid by the user, not by the model: snapshots and encrypted backups only walk the workspace root, so a restore brings back the host list without the keys (see [SSH access](../using/ssh.md)). Jenny's state databases sit beside the workspace too, in `<filesDir>/db`, for the same reason: `undo.sqlite`, which holds earlier contents of files that helpers and plans changed so they can be put back, is out of every file tool's reach and never leaves the phone (not in snapshots, not in backups, emptied by a restore); `state.sqlite` goes into the encrypted backup as a consistent copy, and into every snapshot as text pieces that only the snapshot engine writes (`.jenny-state/`, never a workspace file).
 
 **That protection is exactly as conditional as this level is.** Living outside the workspace only helps while `security.restrictToWorkspace` is `true`, which is what makes the path policy reject anything above the workspace root in the first place. Turn it off and `<filesDir>/ssh` becomes an ordinary readable directory: `read_file` can print the private key, and `python_exec`'s file helpers can too. Nothing else in the SSH design compensates for that — the key is protected by a path check, not by encryption or by an OS boundary. If you turn `restrictToWorkspace` off, assume the SSH private key is readable by the model.
 
@@ -106,12 +106,12 @@ The refusal is an ordinary answer, not an error, and tells the job to report wha
 
 **J2 — files Jenny loads on her own become drafts.** An untrusted job does not write `cron/`, `skills/`, `AGENTS.md`, `SOUL.md`, `USER.md`, `memory/` or `sessions/` (nor a notebook's `AGENTS.md`, `memory/`, `skills/`): those run or steer Jenny later with nobody watching. `write_file`, `edit_file` and `apply_patch` save the change as a draft, and the home chat shows a card with the file, where the job's content came from, the changes, and **Install** / **Discard**. Only your tap installs it — through a WebUI command no tool of the model can reach — and only if the file is still the one the card showed. `python_exec` cannot draft (an `open` can append, rename or truncate), so there it is refused with a pointer to the file tools.
 
-**How the taint travels.** A file written by an untrusted job is recorded in `.jenny/taint_ledger.json`, and whoever reads it later — with `read_file`, `grep`, `open` or `import` — becomes untrusted too; a full rewrite by a trusted job, your own save from the WebUI, or an installed draft clears it. An untrusted job's result reaches Jenny between `BEGIN/END UNTRUSTED SUBAGENT RESULT` markers, with its sources, as data. The same holds for what Jenny reads herself: a `web_search`, `web_fetch` or `browser_*` result, a `screen` reading, or an `http_get`/`http_post` response inside her own `python_exec`, taints her turn at once, and the results of that round of tools carry the sources in the session. While such a row is in the unconsolidated part of the conversation, what Jenny starts — a subagent, a message to a running one, a relaunch with a note, a reminder — is born untrusted, with no task sites at the junction. A resumed job inherits the taint its saved history recorded. The taint expires when the conversation is consolidated past it.
+**How the taint travels.** A file written by an untrusted job is recorded in the taint ledger (a table of `state.sqlite`, out of every file tool's reach, restored together with the files by a snapshot), and whoever reads it later — with `read_file`, `grep`, `open` or `import` — becomes untrusted too; a full rewrite by a trusted job, your own save from the WebUI, or an installed draft clears it. An untrusted job's result reaches Jenny between `BEGIN/END UNTRUSTED SUBAGENT RESULT` markers, with its sources, as data. The same holds for what Jenny reads herself: a `web_search`, `web_fetch` or `browser_*` result, a `screen` reading, or an `http_get`/`http_post` response inside her own `python_exec`, taints her turn at once, and the results of that round of tools carry the sources in the session. While such a row is in the unconsolidated part of the conversation, what Jenny starts — a subagent, a message to a running one, a relaunch with a note, a reminder — is born untrusted, with no task sites at the junction. A resumed job inherits the taint its saved history recorded. The taint expires when the conversation is consolidated past it.
 
 **What stays open — read this before relying on it.**
 
 - Code inside `python_exec` is not sandboxed (Level 4). A raw thread reached through `asyncio` internals carries none of these checks, nor does the C-level `_socket.socket` type; patching a shared module through `sys.modules` outlives the job. With `security.restrictToWorkspace` off, `python_exec` has no path guard at all, this policy's included.
-- `web_fetch` follows redirects inside the WebView before the final address is checked.
+- The WebView behind `web_fetch` and `web_search` has the browser's HTTP check (every redirect and subresource) and its document-start script, but not the service-worker client: it runs on the default profile, whose controller belongs to the WebUI, so the requests of a service worker that a fetched page registers are not filtered.
 - An untrusted job that is *not* private can still put what it read into a URL (a GET); it holds nothing of yours to leak, but the task text and the files it reads are not checked for sensitivity beyond the list above. DNS lookups by the job's code are not filtered. `os.environ` is not wrapped.
 - Laundering through memory: an untrusted result Jenny discusses can reach `history.jsonl` at consolidation, then Dream, then `MEMORY.md`, which is loaded into every prompt. Dream treats its inputs as notes, not commands, but no code enforces it.
 - `journal_append`, a notebook's pages and an app's `AGENT.md` written by an untrusted job are not drafted.
@@ -226,7 +226,9 @@ refactor.
   (`jenny/security/network.py`): besides the private, loopback and link-local ranges it refuses
   multicast, broadcast, `::/96`, the site-local `fec0::/10`, SIIT-translated `::ffff:0:0:0/96`
   and local-use NAT64 `64:ff9b:1::/48`, and it reads IPv4-mapped, NAT64 `64:ff9b::/96` and
-  6to4 `2002::/16` addresses as the IPv4 they carry.
+  6to4 `2002::/16` addresses as the IPv4 they carry. The same HTTP check and the same
+  document-start script, with the same cache, guard the WebView behind `web_fetch` and
+  `web_search` (`AgenticSearchBridge.kt`); its service workers are not covered (see above).
   Not covered:
   `WebSocket` inside a worker, DNS rebinding between the check and the connection, and WebViews
   too old for document-start scripts or multiple profiles. It stops an ordinary page, not one
@@ -265,7 +267,8 @@ refactor.
   of a project shows the personal history. The other direction is open by design: your
   identity (`SOUL.md`, `USER.md`) travels into every project, and `recall_history`, called from
   the personal chat, can read the journals of every project, including entries that are never
-  shown in any prompt. Personal is not secret from a project, and a project is not secret from
+  shown in any prompt; `recall_chat`, from the personal chat, searches the exact words of every
+  project's chat, and from a project only that project's. Personal is not secret from a project, and a project is not secret from
   the personal chat. See [Memory](../using/memory.md).
 - **The read-only turn** is an instruction backed by tool refusals, not a containment control:
   code in `python_exec` that starts a raw thread escapes it, together with the workspace path

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from support.aio import wait_until
 
 from jenny.apps import reader
 from jenny.board import micro as mc
@@ -54,6 +55,30 @@ async def test_a_good_run_writes_a_reading_and_waits_its_turn(tmp_path) -> None:
     assert (last["moisture"], last["online"], last["_source"]) == (38, True, "hub, alle 14:01")
     # Non tocca di nuovo prima di trenta minuti.
     assert await _run(tmp_path, now=NOW + timedelta(minutes=10), force=False) is None
+
+
+async def test_a_reading_waits_for_the_collection_lock_of_the_app_actions(tmp_path) -> None:
+    """Il lettore scrive ``readings.jsonl`` sotto lo stesso lock delle azioni dell'app.
+
+    Fino al 02/11/2026 lo riscriveva per conto suo (con un temporaneo dal nome
+    fisso), e un ``append`` dell'app in mezzo poteva andare perso.
+    """
+    import asyncio
+
+    from jenny.apps import storage
+
+    d = _app(tmp_path, GOOD)
+    lock = storage._lock_for(storage._collection_path(d, "readings"))
+    await lock.acquire()
+    try:
+        task = asyncio.create_task(_run(tmp_path))
+        # Il giro si ferma in coda al lock (o, senza lock, finisce e scrive).
+        await wait_until(lambda: task.done() or bool(getattr(lock, "_waiters", None)))
+        assert not (d / "data" / "readings.jsonl").exists()
+    finally:
+        lock.release()
+    assert (await task)["status"] == "ok"
+    assert reader.read_readings(d)[-1]["moisture"] == 38
 
 
 @pytest.mark.parametrize("ret, why", [
@@ -199,10 +224,10 @@ def test_shapes_have_their_rules() -> None:
     assert ok["view"] == "progress"
 
 
-def test_readings_are_compacted(tmp_path) -> None:
+async def test_readings_are_compacted(tmp_path) -> None:
     n = mc._COMPACT_AFTER + 200
     for i in range(n):
-        reader.append_readings(tmp_path, [{"moisture": i}], key=None,
+        await reader.append_readings(tmp_path, [{"moisture": i}], key=None,
                                now=NOW - timedelta(hours=n - i))
     kept = reader.read_readings(tmp_path)
     assert len(kept) <= mc._COMPACT_AFTER
@@ -212,12 +237,12 @@ def test_readings_are_compacted(tmp_path) -> None:
     assert len(days) == len(set(days))
 
 
-def test_a_year_of_daily_readings_survives_compaction(tmp_path) -> None:
+async def test_a_year_of_daily_readings_survives_compaction(tmp_path) -> None:
     """Un andamento a 12 mesi nasce dalle letture del lettore stesso: fino al
     07/10/2026 se ne teneva una al giorno solo per 31 giorni."""
     n = 4 * 200  # ogni 6 ore per 200 giorni
     for i in range(n):
-        reader.append_readings(tmp_path, [{"moisture": i % 100}], key=None,
+        await reader.append_readings(tmp_path, [{"moisture": i % 100}], key=None,
                                now=NOW - timedelta(hours=6 * (n - i)))
     kept = reader.read_readings(tmp_path)
     oldest = datetime.fromisoformat(kept[0]["ts"])

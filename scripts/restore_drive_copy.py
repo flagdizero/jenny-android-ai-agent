@@ -6,7 +6,10 @@ Per il giorno in cui non c'è un telefono su cui reinstallarla, o si vuole solo
 rileggere un ricordo: scarichi la cartella «Jenny» dal tuo Drive (dal sito,
 tasto destro → Scarica, poi estrai lo zip), e con la password della copia
 questo script ricostruisce il workspace in una cartella normale — memoria,
-quaderni, conversazioni, file — leggibile con qualunque editor.
+quaderni, conversazioni, file — leggibile con qualunque editor. Lo stato
+(job, aiutanti, conversazioni in SQLite) viaggia nella copia a pezzi: lo script
+lo rimette insieme in ``jenny-state.sqlite``, dentro la stessa cartella, da
+aprire con qualunque client SQLite.
 
 Uso::
 
@@ -119,7 +122,30 @@ async def _main(args: argparse.Namespace) -> int:
         except CloudBackupError as exc:
             raise SystemExit(f"\nLa copia è danneggiata: {exc}") from None
         print(f"\nFatto: {manifest.file_count} file.")
+        state_db = _rebuild_state(out)
+        if state_db is not None:
+            print(f"Lo stato è in {state_db}.")
     return 0
+
+
+def _rebuild_state(out: Path) -> Path | None:
+    """I pezzi dello stato (``.jenny-state/``) rimessi insieme in un database."""
+    import shutil
+
+    from jenny.db.shards import ShardsError, build
+    from jenny.snapshot.types import STATE_ENTRY_DIR
+
+    pieces = out / STATE_ENTRY_DIR
+    if not pieces.is_dir():
+        return None
+    dest = out / "jenny-state.sqlite"
+    try:
+        build(pieces, dest)
+    except ShardsError as exc:
+        print(f"Lo stato non si è potuto ricostruire ({exc}): restano i pezzi in {pieces}.")
+        return None
+    shutil.rmtree(pieces)
+    return dest
 
 
 def main() -> int:

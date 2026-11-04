@@ -22,12 +22,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, ROOT, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 SETTINGS_JS = ASSETS / "mobile-settings.js"
 APP_JS = ASSETS / "mobile-app.js"
 WORKSHOP = ROOT / "jenny" / "templates" / "ui" / "workshop.html"
@@ -284,17 +281,22 @@ def test_choosing_the_model_saves_model_and_brand_together() -> None:
     workshop = _src("mobile-settings.js")
     pick = re.search(r"(?s)\n  async _pickBrandModel\(.*?\n  \}\n", workshop)
     assert pick, "l'officina non sceglie piu' il modello da «Chi pensa»"
-    assert "api.updateSettings({ model, default_provider: provider })" in pick.group(0), (
-        "l'officina non salva piu' modello e marca insieme"
+    assert "switchModel(provider, model)" in pick.group(0), (
+        "l'officina non sceglie piu' con la scrittura condivisa"
     )
-    assert pick.group(0).count("api.updateSettings(") == 1, (
+    switch = _src("shared/model-catalog.js")
+    switch = switch[switch.index("export async function switchModel(") :]
+    assert "api.updateSettings({ model, default_provider: provider })" in switch, (
+        "la scelta non salva piu' modello e marca insieme"
+    )
+    assert switch.count("api.updateSettings(") == 1, (
         "modello e marca in due chiamate: fra l'una e l'altra la config non risponde"
     )
-    assert "getProviderModels" in workshop, "i gruppi di «Chi pensa» non chiedono l'elenco"
+    assert "rpc.providerModels(" in workshop, "i gruppi di «Chi pensa» non chiedono l'elenco"
 
     home = _home("home-model.js")
-    assert "getProviderModels" in home, "la casa non chiede piu' l'elenco dei modelli"
-    assert "default_provider: provider" in home, (
+    assert "rpc.providerModels(" in home, "la casa non chiede piu' l'elenco dei modelli"
+    assert "switchModel(this.viewing, model)" in home, (
         "la casa non salva piu' modello e marca insieme: e' il punto del redesign"
     )
     for field in ("dlg-api-base", "dlg-ca-bundle", "dlg-provider-format"):
@@ -322,7 +324,7 @@ def test_adding_a_brand_finishes_the_job() -> None:
         "una marca in uso non deve poter cambiare chi risponde"
     )
     save = re.search(r"(?s)async _saveProvider\(.*?\n  \}", src).group(0)
-    i = save.index("api.updateProvider(")
+    i = save.index("rpc.updateProvider(")
     j = save.index("api.updateSettings(")
     assert i < j, (
         "la marca si attiva prima di esistere: se la prima scrittura fallisce, "

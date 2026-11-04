@@ -14,11 +14,16 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import COORDINATION_FLAGS, INTERNAL_CHANNEL, OutboundMessage
+from jenny.bus.events import (
+    COORDINATION_FLAGS,
+    INTERNAL_CHANNEL,
+    WEBSOCKET_CHANNEL,
+    OutboundMessage,
+)
 from jenny.cron.session_turns import CRON_MIRROR_META
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
     is_project_session_key,
+    project_name,
     session_key_for_channel,
 )
 from jenny.session.turn_visibility import is_silent_turn
@@ -31,8 +36,6 @@ if TYPE_CHECKING:
 # Firma dell'hook di registrazione fornito dall'AgentLoop
 # (``AgentLoop.record_channel_delivery``).
 RecordHook = Callable[..., Awaitable[None]]
-
-WEBSOCKET_CHANNEL = "websocket"
 
 # Un testo che apre con un blocco markdown (titolo, elenco, citazione, codice):
 # il prefisso sulla stessa riga lo romperebbe, quindi va sulla riga sopra.
@@ -47,7 +50,7 @@ def notebook_of_delivery(session_key: str) -> str | None:
     """
     if not is_project_session_key(session_key):
         return None
-    return session_key[len(PROJECT_SESSION_PREFIX):] or None
+    return project_name(session_key) or None
 
 
 def with_notebook_prefix(content: str, notebook: str | None, *, has_media: bool = False) -> str:

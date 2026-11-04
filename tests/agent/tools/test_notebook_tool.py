@@ -30,13 +30,13 @@ from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader
 from jenny.agent.tools.notebook import NotebookEditTool, NotebookReadTool
 from jenny.agent.tools.registry import ToolRegistry
-from jenny.board import notify
 from jenny.board.store import (
     mutate_board,
     read_board,
     write_card_summary,
 )
 from jenny.config.schema import ToolsConfig
+from jenny.runtime import ui_events
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     bind_workspace_scope,
@@ -105,12 +105,13 @@ def notebook_chat(root: Path):
 def announced():
     seen: list[str] = []
 
-    async def collect(name: str) -> None:
-        seen.append(name)
+    async def collect(event: dict) -> None:
+        if event.get("_board_changed"):
+            seen.append(event["notebook"])
 
-    notify.set_notifier(collect)
+    ui_events.set_publisher(collect)
     yield seen
-    notify.set_notifier(None)
+    ui_events.set_publisher(None)
 
 
 # ── Le due facce ─────────────────────────────────────────────────────────────
@@ -306,6 +307,33 @@ async def test_the_trace_passes_the_same_fences(notebook_chat: Path, monkeypatch
     assert out.startswith("Error: nothing was removed — the trace could not be written")
     assert seen == ["wiki", "removed"]
     assert (notebook_chat / "wiki" / "pino.md").exists()
+
+
+@pytest.fixture
+def far_east_clock(monkeypatch):
+    """Il telefono a UTC+14: l'ora locale non coincide mai con quella UTC."""
+    import time
+
+    monkeypatch.setenv("TZ", "Etc/GMT-14")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+async def test_without_a_timezone_the_trace_keeps_the_phone_s_clock(
+    notebook_chat: Path, far_east_clock
+) -> None:
+    """Senza ``timezone`` in config vale il fuso del telefono, come per tutti gli
+    altri (``utils.clock.local_now``), non UTC."""
+    from datetime import datetime, timezone
+
+    await NotebookEditTool().execute(action="remove_pages", pages=["wiki/pino.md"], reason="x")
+    [trace] = (notebook_chat / "raw" / "removed").glob("*.md")
+    hour = re.search(r"^## (\d{2}):\d{2} ", trace.read_text(encoding="utf-8"), re.M).group(1)
+    local, utc = datetime.now().astimezone(), datetime.now(timezone.utc)
+    assert hour == f"{local:%H}" != f"{utc:%H}"
+    assert trace.stem == f"{local:%Y-%m-%d}"
 
 
 async def test_remove_pages_is_refused_in_a_read_only_turn(root: Path) -> None:

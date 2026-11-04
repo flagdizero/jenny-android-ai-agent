@@ -164,7 +164,8 @@ body.home {
    alto 40px per il dito, e la riga finirebbe staccata dal testo. Lo spazio e
    l'ombra ci sono su tutte le voci, trasparenti: accenderne una non sposta
    niente. */
-.home-strip-name {
+.home-strip-name,
+.home-path-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -390,13 +391,6 @@ body.home {
   color: var(--heading);
 }
 
-.home-path-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-bottom: 4px;
-  box-shadow: inset 0 -2px 0 transparent;
-}
 .home-path-here .home-path-name {
   box-shadow: inset 0 -2px 0 var(--path-line, var(--accent));
 }
@@ -1385,7 +1379,8 @@ body.home {
   gap: 10px;
   justify-content: space-between;
 }
-.home-work-row-label {
+.home-work-row-label,
+.home-photos-cap-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2009,7 +2004,15 @@ body.home {
   font-size: 15.5px;
   font-weight: 600;
 }
-.home-block a { color: var(--text-accent); }
+/* Quel che la chat e il lettore della casa dicono uguale del markdown: il
+   colore dei link, il codice dentro un blocco, il corpo della tabella e il
+   bordo delle celle. Il resto (margini, titoli, codice in riga) e' di ognuno:
+   una risposta in chat e una pagina di quaderno si leggono a misure diverse.
+   La scatola della tabella e' comune anche all'officina (`mobile-style.css`). */
+:is(.home-block, .home-reader-body) a { color: var(--text-accent); }
+:is(.home-block, .home-reader-body) pre code { padding: 0; background: none; }
+:is(.home-block, .home-reader-body) table { border-collapse: collapse; font-size: 13px; }
+:is(.home-block, .home-reader-body) :is(th, td) { border: 1px solid var(--border); }
 .home-block code {
   padding: 1px 5px;
   border-radius: var(--radius-sm);
@@ -2024,33 +2027,13 @@ body.home {
   background: var(--surface-2);
   overflow-x: auto;
 }
-.home-block pre code { padding: 0; background: none; }
 .home-block blockquote {
   margin: 0 0 8px;
   padding-left: 10px;
   border-left: 2px solid var(--border);
   color: var(--text-muted);
 }
-/* Una tabella non si stringe sotto il proprio contenuto: senza `display:block`
-   deborda dal messaggio come faceva il `<pre>`, e scorre il filo invece di lei.
-   Resa comune con il lettore e con l'officina: v. `.home-reader-body table`. */
-.home-block table {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.home-block th, .home-block td {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  text-align: left;
-  /* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
-     qui no, o la cella si stringe fino a una lettera per riga. */
-  overflow-wrap: break-word;
-  word-break: normal;
-}
+.home-block th, .home-block td { padding: 4px 8px; }
 
 /* ── Da dove e' entrato ── */
 
@@ -2084,13 +2067,20 @@ body.home {
 }
 
 .home-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
   font-size: 12.5px;
-  text-decoration: none;
+  cursor: pointer;
 }
+.home-file:active { background: var(--overlay); }
 
 /* ── Il confine di un contesto azzerato ── */
 
@@ -2584,7 +2574,8 @@ body.home {
   border-radius: 3px;
   background: var(--cover);
 }
-.home-who-plate-text {
+.home-who-plate-text,
+.apps-trash-text {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -3386,7 +3377,8 @@ body.home {
 .home-board-block-flat { height: 50%; border-bottom: 0.25cqw dashed var(--slip-line); }
 .home-board-block.is-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8cqw; position: relative; }
 .home-board-block-photo { border-radius: 0.8cqw; overflow: hidden; background: var(--slip-line); }
-.home-board-block-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-board-block-photo img,
+.home-photos-pol-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .home-board-block-label.is-more-photos { position: absolute; right: 0.6cqw; bottom: 0.4cqw; background: var(--board-paper); border-radius: 999px; padding: 0 0.8cqw; }
 
 .home-board-block.is-numbers { display: grid; grid-template-columns: repeat(var(--slip-cols, 3), minmax(0, 1fr)); gap: 1cqw; align-content: center; }
@@ -3615,7 +3607,8 @@ body.home {
 .home-board-postit-row.is-late .home-board-postit-when { color: var(--board-alert); }
 .home-board-postit-row.is-paused { opacity: 0.55; }
 /* Il testo su due righe al massimo: su una sola si leggeva «Rinvaso e inci…». */
-.home-board-postit-text {
+.home-board-postit-text,
+.home-board-autolabel-what {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -3676,15 +3669,6 @@ body.home {
 }
 .home-board-autolabel-rhythm { display: block; font-size: 2.6cqw; font-weight: 700; line-height: 1.05; }
 .home-board-autolabel-rhythm::first-letter { text-transform: uppercase; }
-.home-board-autolabel-what {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: 2.1cqw;
-  font-weight: 700;
-  line-height: 1.15;
-}
 .home-board-autolabel-last { display: block; font-size: 1.75cqw; font-weight: 700; opacity: 0.7; }
 .home-board-autolabel-row.is-paused { opacity: 0.55; }
 .home-board-autolabel-row.is-trouble .home-board-autolabel-last,
@@ -3735,7 +3719,8 @@ body.home {
   background: var(--board-paper);
   box-shadow: 0 3px 7px rgba(0, 0, 0, 0.45);
 }
-.home-board-gallery-photo img {
+.home-board-gallery-photo img,
+.home-photos-img {
   display: block;
   width: 100%;
   aspect-ratio: 1;
@@ -4098,7 +4083,8 @@ body.home {
 
 /* ── Le note dell'utente (`home-board-notes.js`) ──
    Post-it lilla: il giallo e' delle attese. */
-.home-notes { display: flex; flex-direction: column; gap: 6px; width: 210px; }
+.home-notes,
+.home-photos { display: flex; flex-direction: column; gap: 6px; width: 210px; }
 .home-notes-head {
   display: flex;
   align-items: center;
@@ -4220,7 +4206,6 @@ body.home {
    Polaroid di carta bianca fissate con lo scotch: il lilla e' delle note, il
    giallo delle attese. Il mazzetto e' quello delle note (`home-board-deck.js`):
    stesse classi dei posti, carta diversa. */
-.home-photos { display: flex; flex-direction: column; gap: 6px; width: 210px; }
 .home-notes-title.home-photos-title { color: var(--text-muted); }
 .home-photos-deck {
   position: relative;
@@ -4272,13 +4257,6 @@ body.home {
   transform: translate(150px, -18px) rotate(14deg);
   box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55);
 }
-.home-photos-img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  background: color-mix(in srgb, var(--board-ink) 12%, var(--board-paper));
-}
 .home-photos-cap {
   display: flex;
   justify-content: space-between;
@@ -4290,7 +4268,6 @@ body.home {
   font-weight: 700;
   line-height: 1.1;
 }
-.home-photos-cap-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .home-photos-cap-when { flex: none; font-family: var(--font-sans); font-size: 10.5px; opacity: 0.7; }
 /* Lo scotch: carta semitrasparente sul bordo alto, al posto del chiodo. */
 .home-photos-tape {
@@ -4432,7 +4409,6 @@ body.home {
 }
 button.home-photos-pol-img { cursor: zoom-in; }
 button.home-photos-pol-img:active { filter: brightness(0.9); }
-.home-photos-pol-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .home-photos-pol-full {
   position: absolute;
   right: 7px;
@@ -4934,9 +4910,11 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-drawer-app-sign.is-empty .home-drawer-app-dot { background: var(--text-faint); }
 .home-drawer-spark polyline { fill: none; stroke: var(--text-muted); stroke-width: 1.4; }
 /* Un'app col lettore: i valori secondari a chip, e il guasto. Con il codice
-   fermo il valore resta, in grigio: e' l'ultimo buono, con la sua eta'. */
+   fermo il valore resta, in grigio: e' l'ultimo buono, con la sua eta'.
+   `home-drawer-reading` e non `home-drawer-chip`: quello e' il bottone-link
+   verso una pagina, e con lo stesso nome questa regola ristilava anche lui. */
 .home-drawer-micro-extras { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
-.home-drawer-chip {
+.home-drawer-reading {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -4946,8 +4924,8 @@ dialog.home-photo-viewer[open] { display: flex; }
   background: var(--surface);
   font-size: 13px;
 }
-.home-drawer-chip-label { color: var(--text-muted); }
-.home-drawer-chip-value { color: var(--text); font-weight: 500; }
+.home-drawer-reading-label { color: var(--text-muted); }
+.home-drawer-reading-value { color: var(--text); font-weight: 500; }
 .home-drawer-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
@@ -4974,8 +4952,8 @@ dialog.home-photo-viewer[open] { display: flex; }
   white-space: nowrap;
 }
 .home-drawer-tile-value { color: var(--text); font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
-.home-drawer-tile-value.is-yes, .home-drawer-chip-value.is-yes { color: var(--board-done); }
-.home-drawer-tile-value.is-no, .home-drawer-chip-value.is-no { color: var(--text-faint); }
+.home-drawer-tile-value.is-yes, .home-drawer-reading-value.is-yes { color: var(--board-done); }
+.home-drawer-tile-value.is-no, .home-drawer-reading-value.is-no { color: var(--text-faint); }
 .home-drawer-progress { display: flex; flex-direction: column; gap: 6px; }
 .home-drawer-progress-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
 .home-drawer-progress-fill { height: 100%; background: var(--board-done); }
@@ -5120,7 +5098,7 @@ dialog.home-photo-viewer[open] { display: flex; }
    a mano, centrata e in `cqw`, sul foglio del modulo si leggeva appena e andava
    a capo — jenny_s22, 01/11/2026). */
 .home-board-row.is-every { align-items: center; }
-.home-board-form-label {
+.home-board-row.is-every > .home-board-form-label {
   flex: none;
   color: var(--text);
   font-size: 14px;
@@ -5337,7 +5315,6 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-reader-body ul,
 .home-reader-body ol { margin: 8px 0; padding-left: 22px; }
 .home-reader-body li { margin: 3px 0; }
-.home-reader-body a { color: var(--text-accent); }
 
 .home-reader-body code {
   padding: 1px 4px;
@@ -5353,8 +5330,6 @@ dialog.home-photo-viewer[open] { display: flex; }
   background: var(--overlay);
 }
 
-.home-reader-body pre code { padding: 0; background: none; }
-
 .home-reader-body blockquote {
   margin: 8px 0;
   padding-left: 12px;
@@ -5364,30 +5339,11 @@ dialog.home-photo-viewer[open] { display: flex; }
 
 .home-reader-body img { max-width: 100%; height: auto; border-radius: 8px; }
 
-/* Una tabella larga scorre **di lato da sola**, dentro la sua scatola, e non
-   si stringe sotto le parole che contiene: nessuna parola spezzata a meta'
-   in una cella, e la pagina resta ferma. La stessa resa in tre posti — la
-   chat e il lettore della casa, la chat dell'officina — perche' e' la stessa
-   tabella. `fit-content`: la scatola e'
-   larga quanto la tabella, cosi' il bordo non gira attorno a un vuoto. */
-.home-reader-body table {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  font-size: 13px;
-}
+/* La tabella del lettore: la scatola e il bordo sono quelli comuni (v.
+   `:is(.chat-content, .home-block, .home-reader-body) table` in
+   `mobile-style.css`, e qui sopra accanto a `.home-block`). */
 .home-reader-body th,
-.home-reader-body td {
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  text-align: left;
-  /* Il contenitore spezza ovunque (`overflow-wrap: anywhere`/`word-break`):
-     qui no, o la cella si stringe fino a una lettera per riga. */
-  overflow-wrap: break-word;
-  word-break: normal;
-}
+.home-reader-body td { padding: 5px 8px; }
 
 /* Il ripiego senza DOMPurify: il markdown scappato, che si legge male ma non
    mente. */
@@ -5415,11 +5371,12 @@ dialog.home-photo-viewer[open] { display: flex; }
    Il cassetto, senza le cose di un foglio: prende l'altezza della pagina, e
    in fondo lascia il posto a Jenny come le impostazioni. */
 
-.home-drawer {
+.home-launcher {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 4px 0 0;
   outline: none;
 }
 
@@ -5429,14 +5386,10 @@ dialog.home-photo-viewer[open] { display: flex; }
    cinque colonne. Le celle sono le righe dell'officina (`.launcher-row`, stesso
    `option`, stesso tocco lungo), vestite qui da cella: le regole stanno tutte
    sotto `#launcher-sheet`, che esiste solo in casa, perche' mobile-style.css lo
-   carica anche l'officina e `.home-drawer` e' anche il cassetto della bacheca.
+   carica anche l'officina.
    Le cinque colonne sono `GRID_COLS` in `mobile-launcher.js`: ↑↓ saltano di
    tante voci, e le due cifre devono restare uguali. */
 
-/* `.home-drawer` porta anche la cornice del cassetto della bacheca (20 px di
-   lato, 16 fra i pezzi): qui si sommava a quella del campo e della griglia, e
-   su 432 px di altezza costava quasi una fila di icone. */
-#launcher-sheet { padding: 4px 0 0; gap: 0; }
 /* Il cestino delle app, in fondo alla griglia: una riga sobria, che c'e' solo
    quando qualcosa e' stato eliminato. */
 .launcher-trash {
@@ -5467,7 +5420,6 @@ dialog.home-photo-viewer[open] { display: flex; }
   padding: 8px 4px;
   border-bottom: 0.5px solid var(--border);
 }
-.apps-trash-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .apps-trash-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .apps-trash-meta { color: var(--text-muted); font-size: 12px; }
 .apps-trash-btn {

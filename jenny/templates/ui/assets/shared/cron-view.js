@@ -149,7 +149,7 @@ export function describeSchedule(schedule, { tr, locale, timeZone } = {}) {
  *  La forma la calcola il server (`cronexpr.shape`, lo stesso interprete che fa
  *  scattare i job): qui non c'è un secondo parser. `null` quando l'espressione
  *  non ha una forma comune, e allora si mostra com'è. */
-export function describeShape(shape, { tr, locale } = {}) {
+function describeShape(shape, { tr, locale } = {}) {
   if (!shape?.pattern) return null;
   if (shape.pattern === 'minutes' && shape.every) {
     return tr('cron.schedule.every', { every: humanizeDuration(shape.every * 60_000, { tr, locale }) });
@@ -207,7 +207,7 @@ function listOf(items, locale) {
  *
  *  `precision` (solo per un `at`): `day` toglie l'ora e mette l'anno, `month`
  *  dice solo mese e anno («marzo 2027»). Assente vale l'ora esatta. */
-export function formatAbsolute(ms, { locale, timeZone, precision } = {}) {
+function formatAbsolute(ms, { locale, timeZone, precision } = {}) {
   if (!Number.isFinite(ms)) return '';
   const date = new Date(ms);
   const opts = PRECISION_FORMAT[precision] ?? PRECISION_FORMAT.exact;
@@ -287,7 +287,7 @@ const CONDITION_OP = { '<': '<', '<=': '≤', '>': '>', '>=': '≥', '==': '=', 
  *
  *  Il campo è un nome dell'app, non una parola dell'interfaccia: si mostra com'è.
  *  Un numero passa da `Intl.NumberFormat`, per la stessa virgola di `unit`. */
-export function conditionText(condition, { locale } = {}) {
+function conditionText(condition, { locale } = {}) {
   if (!condition?.field || !condition.op) return null;
   const op = CONDITION_OP[condition.op] ?? condition.op;
   let value = condition.value;

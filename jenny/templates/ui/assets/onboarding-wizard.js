@@ -14,8 +14,9 @@ import { TelegramPairingWidget } from './shared/telegram-pairing.js';
 import { BatteryExemptionCard } from './shared/battery-exemption.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 // Con l'autocorrezione accesa «http://» diventava «Http:/» e partiva cosi'.
-import { NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
+import { DEFAULT_API_BASE, NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
 import { MOTIONS, MotionChannels } from './shared/mascot-motion.js';
+import { DEFAULT_BOT_NAME } from './shared/bot-name.js';
 
 /* ── Mini Jenny sul footer ──
    Decorativa, fuori da #onboarding-content (che viene ri-renderizzato a ogni
@@ -38,13 +39,6 @@ const REWAVE_EVERY_MS = 5000; // ogni tanto risaluta
    dallo schiacciamento all'allungo. */
 const GETUP_SWAP_MS = Math.round(MOTIONS.squash.getup * 0.35);
 
-/* Base URL di default per formato: mostrata come placeholder nello step 1 e
-   usata davvero quando il campo resta vuoto (fetch modelli e salvataggio). */
-const DEFAULT_API_BASE = {
-  'openai_compat': 'https://api.openai.com/v1',
-  'anthropic': 'https://api.anthropic.com',
-};
-
 /* Il suffisso delle chiavi i18n dei segnaposto dello step 1, per formato: il
    nome e la chiave d'esempio erano quelli di Claude anche scegliendo OpenAI. */
 const PLACEHOLDER_SUFFIX = {
@@ -64,7 +58,7 @@ export class OnboardingController {
     this.apiKey = '';
     this.apiBase = '';
     this.model = '';
-    this.botName = 'Jenny';
+    this.botName = DEFAULT_BOT_NAME;
     this.models = [];
     // Formato, chiave e indirizzo con cui e' stata chiesta la lista dello step
     // 2: se al ritorno sono cambiati, il modello scelto era di un altro
@@ -157,7 +151,7 @@ export class OnboardingController {
         <div class="format-cards">
           <button class="format-card${this.format === 'openai_compat' ? ' selected' : ''}" data-format="openai_compat">
             <i class="ti ti-brand-openai" aria-hidden="true"></i>
-            <span class="format-label">${i18n.t('onboarding.openaiCompat')}</span>
+            <span class="format-label">${i18n.t('settings.openaiCompat')}</span>
             <span class="format-hint">${i18n.t('onboarding.openaiCompatHint')}</span>
           </button>
           <button class="format-card${this.format === 'anthropic' ? ' selected' : ''}" data-format="anthropic">
@@ -244,18 +238,18 @@ export class OnboardingController {
           <span class="onboarding-hint">${i18n.t('onboarding.providerNameHint')}</span>
         </div>
         <div class="onboarding-field">
-          <label class="onboarding-label" for="api-key">${i18n.t('onboarding.apiKey')}</label>
+          <label class="onboarding-label" for="api-key">${i18n.t('settings.apiKey')}</label>
           <input type="password" class="onboarding-input" id="api-key" ${NO_AUTOCORRECT} data-lpignore="true"
                  placeholder="${i18n.t(`onboarding.apiKeyPlaceholder${suffix}`)}" value="${escapeHtml(this.apiKey)}">
         </div>
         <div class="onboarding-field">
-          <label class="onboarding-label" for="api-base">${i18n.t('onboarding.baseUrl')}</label>
+          <label class="onboarding-label" for="api-base">${i18n.t('settings.baseUrl')}</label>
           <input type="url" inputmode="url" class="onboarding-input" id="api-base" ${NO_AUTOCORRECT}
                  placeholder="${escapeHtml(defaults[this.format] || '')}" value="${escapeHtml(this.apiBase)}">
           <span class="onboarding-hint">${i18n.t('onboarding.baseUrlHint')}</span>
         </div>
         <div class="onboarding-nav">
-          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-1">${i18n.t('onboarding.back')}</button>
+          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-1">${i18n.t('header.back')}</button>
           <button class="onboarding-btn onboarding-btn-primary" id="btn-next-1" ${canContinue ? '' : 'disabled'}>${i18n.t('onboarding.next')}</button>
         </div>
       </div>`;
@@ -308,7 +302,7 @@ export class OnboardingController {
     // indirizzo che non esiste; «Http://» si corregge da solo.
     const base = normalizeApiBase(this.apiBase);
     if (base.error) {
-      showToast(i18n.t('onboarding.baseUrlInvalid'), 'error');
+      showToast(i18n.t('settings.baseUrlInvalid'), 'error');
       this.contentEl?.querySelector('#api-base')?.focus();
       return;
     }
@@ -338,7 +332,10 @@ export class OnboardingController {
 
     try {
       const apiBase = this.apiBase || DEFAULT_API_BASE[this.format] || '';
-      const resp = await api.getProviderModels(this.providerName || this.format, this.apiKey, apiBase, this.format);
+      const { rpc } = await import('./shared/rpc-client.js');
+      const resp = await rpc.providerModels({
+        provider: this.providerName || this.format, apiKey: this.apiKey, apiBase, format: this.format,
+      });
       if (token !== this._modelsToken) return;
       this.models = (resp.models || []).map(m => m.id || m);
       // Il backend risponde 200 anche quando la lista è vuota (credenziale
@@ -383,7 +380,7 @@ export class OnboardingController {
         </div>
         <div class="onboarding-summary" id="summary-display" style="display:none"></div>
         <div class="onboarding-nav">
-          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-2">${i18n.t('onboarding.back')}</button>
+          <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-2">${i18n.t('header.back')}</button>
           <button class="onboarding-btn onboarding-btn-primary" id="btn-launch" ${this.model ? '' : 'disabled'}>${i18n.t('onboarding.launch')}</button>
         </div>
       </div>`;
@@ -490,7 +487,7 @@ export class OnboardingController {
 
   _goBackToStep1() {
     const nameEl = this.contentEl?.querySelector('#bot-name');
-    if (nameEl) this.botName = nameEl.value.trim() || 'Jenny';
+    if (nameEl) this.botName = nameEl.value.trim() || DEFAULT_BOT_NAME;
     this._modelsToken++;
     this.step = 1;
     this.render();
@@ -502,7 +499,7 @@ export class OnboardingController {
     if (this.saving) return;
     this.saving = true;
 
-    this.botName = this.contentEl.querySelector('#bot-name').value.trim() || 'Jenny';
+    this.botName = this.contentEl.querySelector('#bot-name').value.trim() || DEFAULT_BOT_NAME;
     const model = this.model;
     if (!model) {
       showToast(i18n.t('onboarding.selectOrEnterModel'), 'error');
@@ -512,7 +509,8 @@ export class OnboardingController {
 
     this._showLoadingOverlay();
     try {
-      const result = await api.saveOnboarding({
+      const { rpc } = await import('./shared/rpc-client.js');
+      const result = await rpc.saveOnboarding({
         provider_name: this.providerName,
         format: this.format,
         api_key: this.apiKey,

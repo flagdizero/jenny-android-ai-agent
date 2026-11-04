@@ -2,10 +2,10 @@ from unittest.mock import patch, sentinel
 
 import pytest
 
-from jenny.providers.endpoint_budget import read_timeout_s
-from jenny.providers.openai_compat_helpers import (
-    _LOCAL_REQUEST_TIMEOUT_S,
-    _OPENAI_COMPAT_REQUEST_TIMEOUT_S,
+from jenny.providers.endpoint_budget import (
+    DEFAULT_REQUEST_TIMEOUT_S,
+    LOCAL_REQUEST_TIMEOUT_S,
+    read_timeout_s,
 )
 from jenny.providers.openai_compat_provider import OpenAICompatProvider
 
@@ -35,7 +35,7 @@ async def test_openai_compat_provider_sets_timeout_on_http_client() -> None:
     # Endpoint in loopback: il limite è quello lungo, perché il prompt
     # processing di un model server locale può durare minuti. La read copre in
     # più il budget del primo token.
-    assert client_kwargs["timeout"].connect == _LOCAL_REQUEST_TIMEOUT_S
+    assert client_kwargs["timeout"].connect == LOCAL_REQUEST_TIMEOUT_S
     assert client_kwargs["timeout"].read == read_timeout_s(local=True)
     assert client_kwargs["limits"].keepalive_expiry == 0
     assert provider._http_client is sentinel.http_client
@@ -54,7 +54,7 @@ async def test_openai_compat_provider_keeps_the_tight_timeout_for_remote() -> No
         await provider._ensure_client()
 
     timeout = mock_http_client.call_args.kwargs["timeout"]
-    assert timeout.connect == _OPENAI_COMPAT_REQUEST_TIMEOUT_S
+    assert timeout.connect == DEFAULT_REQUEST_TIMEOUT_S
     assert timeout.read == read_timeout_s(local=False)
 
 
@@ -94,4 +94,4 @@ async def test_a_malformed_timeout_falls_back_to_the_default(monkeypatch, bad: s
     )
     await provider._ensure_client()
 
-    assert provider._http_client.timeout.connect == _OPENAI_COMPAT_REQUEST_TIMEOUT_S
+    assert provider._http_client.timeout.connect == DEFAULT_REQUEST_TIMEOUT_S

@@ -1,31 +1,154 @@
 """Storage layer for the WebUI display transcript (estratto da ``transcript.py``).
 
-Incapsula tutta la persistenza JSONL su disco: path helper, primitive di
-lettura/scrittura, il layer a segmenti + manifest con rotazione del file attivo,
-e le due utility pure (`_is_user_transcript_row`, `_split_transcript_turns`) da cui
-dipende. Nessuna logica di replay/rendering vive qui: è il solo strato di I/O.
+Il verbale di una conversazione — tutto quel che la WebUI ha mostrato, riletto
+uguale alla riapertura — sta in ``state.sqlite``: una riga per frame
+(``transcript_rows``), con il numero del turno a cui appartiene. Un turno finisce
+con il suo ``turn_end``. Fino alla 2.x era ``.jenny/webui/<chiave>.jsonl``, che
+oltre 8 MB ruotava i turni vecchi in segmenti numerati con un manifest; lo
+importa ``jenny/db_migration/transcripts.py``.
+
+Per la paginazione (``transcript.py``) i turni si leggono a gruppi, i *chunk*:
+:data:`TURNS_PER_CHUNK` turni ciascuno, e l'ultimo — quello dove si scrive — si
+chiama :data:`_TRANSCRIPT_ACTIVE_CHUNK_ID`. Nessuna logica di replay/rendering
+vive qui: è il solo strato di persistenza.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import secrets
-import shutil
+import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
-from jenny.config.paths import get_webui_dir
-from jenny.session.manager import SessionManager
-from jenny.utils.path import append_lines_durable, atomic_write
+from jenny.db.schema import Schema
 
-_MAX_TRANSCRIPT_FILE_BYTES = 8 * 1024 * 1024
-_TARGET_ACTIVE_TRANSCRIPT_BYTES = _MAX_TRANSCRIPT_FILE_BYTES // 2
-_TRANSCRIPT_SEGMENT_MANIFEST_VERSION = 2
+# Un frame oltre questa misura non si salva: il verbale non deve portarsi dentro
+# un file intero arrivato per sbaglio come testo.
+_MAX_TRANSCRIPT_LINE_BYTES = 8 * 1024 * 1024
+TURNS_PER_CHUNK = 50
 _TRANSCRIPT_ACTIVE_CHUNK_ID = "active"
-_TRANSCRIPT_SEGMENT_RE = re.compile(r"^\d{6}\.jsonl$")
+
+SCHEMA = Schema(
+    "transcripts",
+    (
+        """
+        CREATE TABLE transcripts (
+          key TEXT PRIMARY KEY,
+          next_seq INTEGER NOT NULL DEFAULT 0,
+          turn INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE transcript_rows (
+          key TEXT NOT NULL,
+          seq INTEGER NOT NULL,
+          turn INTEGER NOT NULL,
+          data TEXT NOT NULL,
+          PRIMARY KEY (key, seq)
+        ) WITHOUT ROWID;
+        CREATE INDEX transcript_rows_turn ON transcript_rows(key, turn);
+        """,
+        # Fin dove i turni di un verbale sono già compatti (``compact_turn``).
+        """
+        CREATE TABLE transcript_compacted (
+          key TEXT PRIMARY KEY,
+          through_turn INTEGER NOT NULL
+        );
+        """,
+    ),
+    # Negli snapshot: un pezzo per chunk di turni, così i turni vecchi restano
+    # lo stesso blob mentre la coda cresce.
+    shards={
+        "transcripts": "key",
+        "transcript_rows": f"key || '/' || (turn / {TURNS_PER_CHUNK})",
+        "transcript_compacted": "key",
+    },
+)
+
+# -- i pezzetti dello streaming ---------------------------------------------------
+#
+# Un turno arriva a pezzetti: un ``delta`` o un ``reasoning_delta`` per ogni
+# chunk del provider. Nel verbale erano il 95% delle righe (287 mila su 303 mila
+# sul telefono di prova, il 03/11/2026, e 52 dei 67 MB di dati). Il replay li
+# incolla comunque (``transcript_replay``: i ``delta`` consecutivi fanno un testo,
+# i ``reasoning_delta`` consecutivi un ragionamento), quindi a turno chiuso si
+# fondono: un frame per tratto, col testo di tutti e gli altri campi dell'ultimo
+# (il replay tiene il ``turn_seq`` dell'ultimo pezzo). Misurato sui dati veri: il
+# replay è identico su tutti i 2056 turni, e 8 volte più veloce. Il turno in corso
+# resta a pezzetti: una WebUI che si riconnette a metà lo rivede come prima.
+_FUSIBLE_EVENTS = frozenset({"delta", "reasoning_delta"})
+# I campi che cambiano da un pezzetto all'altro dello stesso tratto.
+_PER_CHUNK_FIELDS = frozenset({"text", "at", "turn_seq", "ts"})
+
+
+def _same_stretch(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    if a.get("event") != b.get("event") or a.get("event") not in _FUSIBLE_EVENTS:
+        return False
+    if not isinstance(a.get("text"), str) or not isinstance(b.get("text"), str):
+        return False
+    return ({k: v for k, v in a.items() if k not in _PER_CHUNK_FIELDS}
+            == {k: v for k, v in b.items() if k not in _PER_CHUNK_FIELDS})
+
+
+def fuse_frames(
+    frames: list[tuple[int, dict[str, Any]]],
+) -> list[tuple[int, dict[str, Any], list[int]]]:
+    """I tratti da fondere di un turno: ``(seq tenuta, frame fuso, seq da togliere)``.
+
+    *frames* sono ``(seq, frame)`` in ordine. Un frame che non si fonde con niente
+    non compare.
+    """
+    out: list[tuple[int, dict[str, Any], list[int]]] = []
+    i = 0
+    while i < len(frames):
+        j = i + 1
+        while j < len(frames) and _same_stretch(frames[j - 1][1], frames[j][1]):
+            j += 1
+        if j - i > 1:
+            stretch = [frame for _seq, frame in frames[i:j]]
+            fused = dict(stretch[-1], text="".join(f["text"] for f in stretch))
+            out.append((frames[i][0], fused, [seq for seq, _f in frames[i + 1:j]]))
+        i = j
+    return out
+
+
+def compact_turn(conn: Any, session_key: str, turn: int) -> int:
+    """Fonde i pezzetti del turno *turn* di *session_key*; ritorna quante righe ha tolto.
+
+    Dentro la transazione di chi chiama. Rifarla non cambia niente.
+    """
+    frames: list[tuple[int, dict[str, Any]]] = []
+    for row in conn.execute("SELECT seq, data FROM transcript_rows WHERE key = ? AND turn = ? "
+                            "ORDER BY seq", (session_key, turn)):
+        try:
+            record = json.loads(row["data"])
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            frames.append((row["seq"], record))
+    removed = 0
+    for seq, fused, dropped in fuse_frames(frames):
+        conn.execute("UPDATE transcript_rows SET data = ? WHERE key = ? AND seq = ?",
+                     (_record_json_line(fused), session_key, seq))
+        conn.executemany("DELETE FROM transcript_rows WHERE key = ? AND seq = ?",
+                         [(session_key, s) for s in dropped])
+        removed += len(dropped)
+    return removed
+
+
+def _note_compacted(conn: Any, session_key: str, turn: int) -> None:
+    """Il segnalibro avanza solo di un turno alla volta: ``through_turn`` vuol dire
+    «tutti i turni fino a qui», e i turni di prima di questa versione li compatta
+    :func:`compact_closed_turns`, che lo porta avanti lei."""
+    row = conn.execute("SELECT through_turn FROM transcript_compacted WHERE key = ?",
+                       (session_key,)).fetchone()
+    through = row["through_turn"] if row else -1
+    if through == turn - 1:
+        conn.execute("INSERT INTO transcript_compacted(key, through_turn) VALUES (?, ?) "
+                     "ON CONFLICT(key) DO UPDATE SET through_turn = excluded.through_turn",
+                     (session_key, turn))
 
 
 def _is_user_transcript_row(row: dict[str, Any]) -> bool:
@@ -56,280 +179,163 @@ def _split_transcript_turns(lines: list[dict[str, Any]]) -> list[list[dict[str, 
     return turns
 
 
-def webui_transcript_path(session_key: str) -> Path:
-    stem = SessionManager.safe_key(session_key)
-    return get_webui_dir() / f"{stem}.jsonl"
-
-
-def webui_transcript_segments_dir(session_key: str) -> Path:
-    stem = SessionManager.safe_key(session_key)
-    return get_webui_dir() / f"{stem}.segments"
-
-
-def _webui_transcript_manifest_path(session_key: str) -> Path:
-    return webui_transcript_segments_dir(session_key) / "manifest.json"
-
-
-def _legacy_webui_thread_path(session_key: str) -> Path:
-    stem = SessionManager.safe_key(session_key)
-    return get_webui_dir() / f"{stem}.json"
-
-
 def _record_json_line(record: dict[str, Any]) -> str:
     return json.dumps(record, ensure_ascii=False, separators=(",", ":"))
 
 
-def _read_transcript_file(path: Path) -> list[dict[str, Any]]:
-    lines_out: list[dict[str, Any]] = []
-    try:
-        with open(path, encoding="utf-8") as f:
-            for line_no, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    logger.warning("bad jsonl at {} line {}", path, line_no)
-                    continue
-                if isinstance(obj, dict):
-                    lines_out.append(obj)
-    except OSError as e:
-        logger.warning("read transcript failed {}: {}", path, e)
-        return []
-    return lines_out
+# -- dove ---------------------------------------------------------------------
 
 
-def _records_bytes(records: list[dict[str, Any]]) -> int:
-    total = 0
-    for record in records:
-        total += len(_record_json_line(record).encode("utf-8")) + 1
-    return total
+def _workspace() -> Path:
+    """Il workspace dei verbali, ricavato dalla loro cartella di sempre.
+
+    ``.jenny/webui`` sta dentro il workspace; i test spostano quella cartella
+    altrove per isolarsi, e allora la cartella stessa fa da workspace.
+    """
+    from jenny.config.paths import get_webui_dir
+
+    webui = Path(get_webui_dir())
+    return webui.parent.parent if webui.parent.name == ".jenny" else webui
 
 
-def _flatten_turns(turns: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    return [record for turn in turns for record in turn]
+def _db(workspace: Path | None = None):
+    """Il database dei verbali: quello di *workspace*, o del workspace globale.
+
+    *workspace* lo passa chi lavora su un workspace preciso (``project_traces``,
+    ``project_rename``), come per le sessioni: senza, la cancellazione di un
+    quaderno guardava il verbale del workspace globale e le sessioni del suo
+    (04/11/2026: nei test, un verbale ``project:piante`` di un'altra prova). Sul
+    telefono i due coincidono.
+    """
+    from jenny import db
+
+    database = db.database_for_workspace(Path(workspace) if workspace else _workspace(), db.STATE)
+    database.require(SCHEMA)
+    return database
 
 
-def _write_records_to_path(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines: list[str] = []
-    for row in rows:
-        raw = _record_json_line(row)
-        if len(raw.encode("utf-8")) > _MAX_TRANSCRIPT_FILE_BYTES:
-            raise ValueError("webui transcript line too large")
-        lines.append(raw + "\n")
-    atomic_write(path, "".join(lines))
+def _rows(where: str, params: tuple) -> list[tuple[int, dict[str, Any]]]:
+    """``(turno, frame)`` del verbale, in ordine; una riga illeggibile si salta."""
+    out: list[tuple[int, dict[str, Any]]] = []
+    for row in _db().read(f"SELECT turn, data FROM transcript_rows WHERE {where} ORDER BY seq",
+                          params):
+        try:
+            record = json.loads(row["data"])
+        except ValueError:
+            logger.warning("bad transcript row ({} chars)", len(row["data"]))
+            continue
+        if isinstance(record, dict):
+            out.append((row["turn"], record))
+    return out
 
 
-def _segment_file_path(session_key: str, segment_id: str) -> Path:
-    return webui_transcript_segments_dir(session_key) / f"{segment_id}.jsonl"
+# -- chunk, per la paginazione --------------------------------------------------
 
 
-def _segment_ids_on_disk(session_key: str) -> list[str]:
-    directory = webui_transcript_segments_dir(session_key)
-    if not directory.is_dir():
-        return []
-    return sorted(
-        path.stem
-        for path in directory.iterdir()
-        if path.is_file() and _TRANSCRIPT_SEGMENT_RE.fullmatch(path.name)
-    )
+def _last_chunk(session_key: str) -> int | None:
+    rows = _db().read("SELECT max(turn) AS turn FROM transcript_rows WHERE key = ?",
+                      (session_key,))
+    turn = rows[0]["turn"] if rows else None
+    return None if turn is None else int(turn) // TURNS_PER_CHUNK
 
 
-def _segment_manifest_entry(session_key: str, segment_id: str) -> dict[str, Any]:
-    path = _segment_file_path(session_key, segment_id)
-    lines = _read_transcript_file(path)
-    return {
-        "id": segment_id,
-        "bytes": path.stat().st_size if path.exists() else 0,
-        "turn_count": len(_split_transcript_turns(lines)),
-        "user_count": sum(1 for line in lines if _is_user_transcript_row(line)),
-    }
-
-
-def _non_negative_int(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        return None
-    return value
-
-
-def _normalize_manifest_entry(session_key: str, entry: Any) -> dict[str, Any] | None:
-    if not isinstance(entry, dict):
-        return None
-    segment_id = entry.get("id")
-    if not isinstance(segment_id, str) or not _TRANSCRIPT_SEGMENT_RE.fullmatch(f"{segment_id}.jsonl"):
-        return None
-    segment_path = _segment_file_path(session_key, segment_id)
-    values = {
-        key: _non_negative_int(entry.get(key))
-        for key in ("bytes", "turn_count", "user_count")
-    }
-    if not segment_path.is_file() or values["bytes"] != segment_path.stat().st_size:
-        return None
-    if values["turn_count"] is None or values["user_count"] is None:
-        return None
-    return {
-        "id": segment_id,
-        "bytes": values["bytes"],
-        "turn_count": values["turn_count"],
-        "user_count": values["user_count"],
-    }
-
-
-def _write_segment_manifest(session_key: str, segment_ids: list[str]) -> None:
-    directory = webui_transcript_segments_dir(session_key)
-    directory.mkdir(parents=True, exist_ok=True)
-    data = {
-        "version": _TRANSCRIPT_SEGMENT_MANIFEST_VERSION,
-        "segments": [_segment_manifest_entry(session_key, segment_id) for segment_id in segment_ids],
-    }
-    path = _webui_transcript_manifest_path(session_key)
-    # Il temporaneo di ``atomic_write`` ha nome unico per chiamata (due scrittori
-    # concorrenti sullo stesso manifest non se lo portano via a vicenda) e resta
-    # invisibile a ``_segment_ids_on_disk``, che filtra per regex.
-    atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
-
-
-def _rebuild_segment_manifest(session_key: str) -> list[str]:
-    segment_ids = _segment_ids_on_disk(session_key)
-    if segment_ids:
-        _write_segment_manifest(session_key, segment_ids)
-    else:
-        _webui_transcript_manifest_path(session_key).unlink(missing_ok=True)
-    return segment_ids
-
-
-def _rebuilt_segment_manifest_entries(session_key: str) -> list[dict[str, Any]]:
-    return [_segment_manifest_entry(session_key, segment_id) for segment_id in _rebuild_segment_manifest(session_key)]
+def _has_active_chunk(session_key: str) -> bool:
+    return _last_chunk(session_key) is not None
 
 
 def _read_segment_manifest_entries(session_key: str) -> list[dict[str, Any]]:
-    directory = webui_transcript_segments_dir(session_key)
-    if not directory.is_dir():
+    """I chunk prima di quello attivo: ``{id, bytes, turn_count, user_count}``."""
+    last = _last_chunk(session_key)
+    if last is None or last == 0:
         return []
-    path = _webui_transcript_manifest_path(session_key)
-    if not path.is_file():
-        return _rebuilt_segment_manifest_entries(session_key)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        raw_segments = data.get("segments") if isinstance(data, dict) else None
-        if data.get("version") != _TRANSCRIPT_SEGMENT_MANIFEST_VERSION or not isinstance(raw_segments, list):
-            return _rebuilt_segment_manifest_entries(session_key)
-        entries: list[dict[str, Any]] = []
-        for entry in raw_segments:
-            normalized = _normalize_manifest_entry(session_key, entry)
-            if normalized is None:
-                return _rebuilt_segment_manifest_entries(session_key)
-            entries.append(normalized)
-        if [entry["id"] for entry in entries] != _segment_ids_on_disk(session_key):
-            return _rebuilt_segment_manifest_entries(session_key)
-        return entries
-    except (OSError, json.JSONDecodeError, TypeError, AttributeError):
-        return _rebuilt_segment_manifest_entries(session_key)
-
-
-def _read_segment_ids(session_key: str) -> list[str]:
-    return [entry["id"] for entry in _read_segment_manifest_entries(session_key)]
-
-
-def _append_segment_turns(session_key: str, turns: list[list[dict[str, Any]]]) -> None:
-    if not turns:
-        return
-    segment_ids = _read_segment_ids(session_key)
-    next_id = int(segment_ids[-1]) + 1 if segment_ids else 1
-    batch: list[list[dict[str, Any]]] = []
-    batch_bytes = 0
-    for turn in turns:
-        turn_bytes = _records_bytes(turn)
-        if batch and batch_bytes + turn_bytes > _MAX_TRANSCRIPT_FILE_BYTES:
-            segment_id = f"{next_id:06d}"
-            _write_records_to_path(_segment_file_path(session_key, segment_id), _flatten_turns(batch))
-            segment_ids.append(segment_id)
-            next_id += 1
-            batch = []
-            batch_bytes = 0
-        batch.append(turn)
-        batch_bytes += turn_bytes
-    if batch:
-        segment_id = f"{next_id:06d}"
-        _write_records_to_path(_segment_file_path(session_key, segment_id), _flatten_turns(batch))
-        segment_ids.append(segment_id)
-    _write_segment_manifest(session_key, segment_ids)
-
-
-def _rotate_active_transcript_if_needed(session_key: str) -> None:
-    path = webui_transcript_path(session_key)
-    if not path.is_file():
-        return
-    try:
-        if path.stat().st_size <= _MAX_TRANSCRIPT_FILE_BYTES:
-            return
-    except OSError:
-        return
-
-    lines = _read_transcript_file(path)
-    if not lines:
-        return
-    turns = _split_transcript_turns(lines)
-    if len(turns) <= 1:
-        return
-
-    keep_start = len(turns) - 1
-    keep_bytes = 0
-    for idx in range(len(turns) - 1, -1, -1):
-        turn_bytes = _records_bytes(turns[idx])
-        if idx == len(turns) - 1 or keep_bytes + turn_bytes <= _TARGET_ACTIVE_TRANSCRIPT_BYTES:
-            keep_start = idx
-            keep_bytes += turn_bytes
-            continue
-        break
-
-    moved = turns[:keep_start]
-    kept = turns[keep_start:]
-    if not moved:
-        return
-    _append_segment_turns(session_key, moved)
-    _write_records_to_path(path, _flatten_turns(kept))
-
-
-def _chunk_ids(session_key: str) -> list[str]:
-    _rotate_active_transcript_if_needed(session_key)
-    ids = _read_segment_ids(session_key)
-    if webui_transcript_path(session_key).is_file():
-        ids.append(_TRANSCRIPT_ACTIVE_CHUNK_ID)
-    return ids
+    rows = _db().read(
+        f"SELECT turn / {TURNS_PER_CHUNK} AS chunk, count(DISTINCT turn) AS turns, "
+        "sum(length(data)) AS bytes, sum(CASE WHEN json_extract(data, '$.event') = 'user' "
+        "OR json_extract(data, '$.role') = 'user' THEN 1 ELSE 0 END) AS users "
+        f"FROM transcript_rows WHERE key = ? AND turn < ? GROUP BY chunk ORDER BY chunk",
+        (session_key, last * TURNS_PER_CHUNK),
+    )
+    return [{"id": f"{r['chunk']:06d}", "bytes": int(r["bytes"] or 0),
+             "turn_count": int(r["turns"]), "user_count": int(r["users"] or 0)} for r in rows]
 
 
 def _read_chunk_turns(session_key: str, chunk_id: str) -> list[list[dict[str, Any]]]:
     if chunk_id == _TRANSCRIPT_ACTIVE_CHUNK_ID:
-        path = webui_transcript_path(session_key)
+        last = _last_chunk(session_key)
+        if last is None:
+            return []
+        chunk = last
     else:
-        path = _segment_file_path(session_key, chunk_id)
-    if not path.is_file():
-        return []
-    return _split_transcript_turns(_read_transcript_file(path))
+        try:
+            chunk = int(chunk_id)
+        except ValueError:
+            return []
+    rows = _rows("key = ? AND turn >= ? AND turn < ?",
+                 (session_key, chunk * TURNS_PER_CHUNK, (chunk + 1) * TURNS_PER_CHUNK))
+    turns: dict[int, list[dict[str, Any]]] = {}
+    for turn, record in rows:
+        turns.setdefault(turn, []).append(record)
+    return [turns[t] for t in sorted(turns)]
 
 
 def read_transcript_lines(session_key: str) -> list[dict[str, Any]]:
-    lines: list[dict[str, Any]] = []
-    for chunk_id in _chunk_ids(session_key):
-        if chunk_id == _TRANSCRIPT_ACTIVE_CHUNK_ID:
-            lines.extend(_read_transcript_file(webui_transcript_path(session_key)))
-        else:
-            lines.extend(_read_transcript_file(_segment_file_path(session_key, chunk_id)))
-    return lines
+    return [record for _turn, record in _rows("key = ?", (session_key,))]
 
 
-def _append_to_active_transcript(session_key: str, obj: dict[str, Any]) -> None:
-    raw = _record_json_line(obj)
-    if len(raw.encode("utf-8")) > _MAX_TRANSCRIPT_FILE_BYTES:
-        msg = "webui transcript line too large"
-        raise ValueError(msg)
-    path = webui_transcript_path(session_key)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Un ``fsync`` fallito non fa fallire il turno: la riga è nel file.
-    append_lines_durable(path, [raw], tolerate_fsync_error=True)
+def iter_transcript_backwards(session_key: str, *, block: int = 200) -> Iterator[dict[str, Any]]:
+    """I frame del verbale dal più recente al più vecchio, *block* alla volta.
+
+    Chi vuole la coda (il giardiniere) smette quando ne ha abbastanza, senza
+    leggere un verbale lungo per intero.
+    """
+    before: int | None = None
+    while True:
+        rows = _db().read(
+            "SELECT seq, data FROM transcript_rows WHERE key = ? AND (? IS NULL OR seq < ?) "
+            "ORDER BY seq DESC LIMIT ?", (session_key, before, before, block))
+        if not rows:
+            return
+        for row in rows:
+            try:
+                record = json.loads(row["data"])
+            except ValueError:
+                continue
+            if isinstance(record, dict):
+                yield record
+        before = rows[-1]["seq"]
+
+
+# -- chi segue i verbali ----------------------------------------------------------
+#
+# L'indice di ricerca delle chat (``webui/chat_index``) si tiene in pari da qui:
+# questo modulo è l'unico che scrive i verbali. Sta in un altro database, quindi
+# non nella stessa transazione: se un aggiornamento manca (un kill in mezzo), lo
+# rimette in pari la riconciliazione dell'indice. Un errore qui non ferma mai la
+# scrittura del verbale.
+
+
+def _follow(action: str, *args: str) -> None:
+    try:
+        from jenny.webui import chat_index
+
+        getattr(chat_index, action)(_workspace(), *args)
+    except Exception:  # noqa: BLE001 — l'indice si rimette in pari da solo
+        logger.opt(exception=True).warning("Chat index: {} failed", action)
+
+
+def _turn_closed(session_key: str) -> None:
+    _follow("turn_closed", session_key)
+
+
+def _transcript_dropped(session_key: str) -> None:
+    _follow("transcript_dropped", session_key)
+
+
+def _transcript_renamed(old_key: str, new_key: str) -> None:
+    _follow("transcript_renamed", old_key, new_key)
+
+
+# -- scrivere -------------------------------------------------------------------
 
 
 # La revisione di ogni filo: quante righe ci sono entrate da quando il gateway
@@ -352,29 +358,105 @@ def _bump_revision(session_key: str) -> None:
 
 
 def append_transcript_object(session_key: str, obj: dict[str, Any]) -> None:
-    _append_to_active_transcript(session_key, obj)
+    """Un frame in coda al verbale, nel turno in corso; un ``turn_end`` lo chiude."""
+    raw = _record_json_line(obj)
+    if len(raw.encode("utf-8")) > _MAX_TRANSCRIPT_LINE_BYTES:
+        msg = "webui transcript line too large"
+        raise ValueError(msg)
+    with _db().write() as conn:
+        row = conn.execute("SELECT next_seq, turn FROM transcripts WHERE key = ?",
+                           (session_key,)).fetchone()
+        seq, turn = (row["next_seq"], row["turn"]) if row else (0, 0)
+        conn.execute("INSERT INTO transcript_rows(key, seq, turn, data) VALUES (?, ?, ?, ?)",
+                     (session_key, seq, turn, raw))
+        closes = obj.get("event") == "turn_end"
+        conn.execute(
+            "INSERT INTO transcripts(key, next_seq, turn) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET next_seq = excluded.next_seq, turn = excluded.turn",
+            (session_key, seq + 1, turn + 1 if closes else turn),
+        )
+        if closes:
+            compact_turn(conn, session_key, turn)
+            _note_compacted(conn, session_key, turn)
     _bump_revision(session_key)
-    if obj.get("event") == "turn_end":
-        _rotate_active_transcript_if_needed(session_key)
+    if closes:
+        _turn_closed(session_key)
 
 
-def delete_webui_transcript(session_key: str) -> bool:
-    removed = False
-    for path in (webui_transcript_path(session_key), _legacy_webui_thread_path(session_key)):
-        if not path.is_file():
-            continue
-        try:
-            path.unlink()
-            removed = True
-        except OSError as e:
-            logger.warning("Failed to delete webui transcript {}: {}", path, e)
-    segments_dir = webui_transcript_segments_dir(session_key)
-    if segments_dir.is_dir():
-        try:
-            shutil.rmtree(segments_dir)
-            removed = True
-        except OSError as e:
-            logger.warning("Failed to delete webui transcript segments {}: {}", segments_dir, e)
+def delete_webui_transcript(session_key: str, *, workspace: Path | None = None) -> bool:
+    with _db(workspace).write() as conn:
+        removed = conn.execute("DELETE FROM transcripts WHERE key = ?",
+                               (session_key,)).rowcount > 0
+        removed = conn.execute("DELETE FROM transcript_rows WHERE key = ?",
+                               (session_key,)).rowcount > 0 or removed
+        conn.execute("DELETE FROM transcript_compacted WHERE key = ?", (session_key,))
     if removed:
+        _transcript_dropped(session_key)
         _bump_revision(session_key)
     return removed
+
+
+def rename_webui_transcript(old_key: str, new_key: str, *,
+                            workspace: Path | None = None) -> bool:
+    """Il verbale di *old_key* passa a *new_key*. False se *new_key* ne ha già uno
+    o *old_key* non ne ha."""
+    with _db(workspace).write() as conn:
+        if conn.execute("SELECT 1 FROM transcripts WHERE key = ?", (new_key,)).fetchone():
+            return False
+        if not conn.execute("SELECT 1 FROM transcripts WHERE key = ?", (old_key,)).fetchone():
+            return False
+        conn.execute("UPDATE transcripts SET key = ? WHERE key = ?", (new_key, old_key))
+        conn.execute("UPDATE transcript_rows SET key = ? WHERE key = ?", (new_key, old_key))
+        conn.execute("DELETE FROM transcript_compacted WHERE key = ?", (new_key,))
+        conn.execute("UPDATE transcript_compacted SET key = ? WHERE key = ?", (new_key, old_key))
+    _transcript_renamed(old_key, new_key)
+    _bump_revision(old_key)
+    _bump_revision(new_key)
+    return True
+
+
+def compact_closed_turns(*, batch: int = 10, pause: float = 0.02) -> int:
+    """Compatta i turni chiusi che non lo sono ancora; ritorna quante righe ha tolto.
+
+    Al boot, in un thread: i verbali di prima di questa versione, quelli
+    importati dalla migrazione e quelli riportati da uno snapshot vecchio. Il
+    segnalibro (``transcript_compacted``) la fa costare una query quando non c'è
+    niente da fare. A lotti di *batch* turni, ognuno una transazione, e fra un
+    lotto e l'altro *pause* secondi: il lock di scrittura non è equo, e senza la
+    pausa questo thread lo riprendeva prima che chi aspettava si svegliasse —
+    sul telefono, il 03/11/2026, una richiesta della casa ha aspettato tutti i
+    16 secondi della prima passata.
+    """
+
+    database = _db()
+    removed = 0
+    for row in database.read(
+        "SELECT t.key, t.turn, coalesce(c.through_turn, -1) AS through FROM transcripts t "
+        "LEFT JOIN transcript_compacted c ON c.key = t.key WHERE t.turn - 1 > "
+        "coalesce(c.through_turn, -1)"
+    ):
+        key, closed, done = row["key"], int(row["turn"]) - 1, int(row["through"])
+        while done < closed:
+            last = min(done + batch, closed)
+            with database.write() as conn:
+                for turn in range(done + 1, last + 1):
+                    removed += compact_turn(conn, key, turn)
+                conn.execute(
+                    "INSERT INTO transcript_compacted(key, through_turn) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET through_turn = excluded.through_turn",
+                    (key, last))
+            done = last
+            time.sleep(pause)
+    if removed:
+        logger.info("Transcripts: fused {} streaming rows", removed)
+    return removed
+
+
+def transcript_bytes(session_key: str, *, workspace: Path | None = None) -> int:
+    rows = _db(workspace).read("SELECT sum(length(data)) FROM transcript_rows WHERE key = ?",
+                      (session_key,))
+    return int(rows[0][0] or 0) if rows else 0
+
+
+def has_webui_transcript(session_key: str, *, workspace: Path | None = None) -> bool:
+    return bool(_db(workspace).read("SELECT 1 FROM transcripts WHERE key = ?", (session_key,)))

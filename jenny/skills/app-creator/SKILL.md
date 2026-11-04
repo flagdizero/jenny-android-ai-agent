@@ -158,8 +158,8 @@ If an endpoint needs auth, it cannot be used yet — say so (see Secrets).
 > Does that work, or shall we change something?
 
 Slug rules: lowercase alphanumeric with single hyphens, max 32 chars, folder named exactly
-after the slug. Action names: snake_case, unique within the app — the agent will see them as
-tools named `<slug>_<action>`.
+after the slug. Action names: snake_case, unique within the app — the agent runs them with
+`use_app app=<slug> action=<action>`, and sees them listed as `action(param, optional?)`.
 
 ### Phase 4: Draft the App
 

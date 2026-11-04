@@ -20,14 +20,9 @@ rimasta.
 
 from __future__ import annotations
 
-from pathlib import Path
+from support.js_harness import ASSETS, requires_node, run_js
 
-from support.js_harness import requires_node, run_js
-
-STORE_JS = (
-    Path(__file__).resolve().parents[2]
-    / "jenny" / "templates" / "ui" / "assets" / "shared" / "launcher-usage-store.js"
-)
+STORE_JS = ASSETS / "shared" / "launcher-usage-store.js"
 RANK_JS = STORE_JS.parent / "launcher-rank.js"
 
 

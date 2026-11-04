@@ -64,16 +64,3 @@ async def test_a_project_copy_that_cannot_be_synced_keeps_the_session(tmp_path: 
     assert failed, "la copia nel progetto non e' passata dal fsync"
     reloaded = SessionManager(store.workspace).get_or_create("project:palestra")
     assert len(reloaded.messages) == 20, "senza la copia su disco la coda non si tronca"
-
-
-def test_the_transcript_tolerates_an_fsync_failure(tmp_path: Path, monkeypatch) -> None:
-    from jenny.webui import transcript_store
-
-    monkeypatch.setattr(transcript_store, "webui_transcript_path",
-                        lambda key: tmp_path / "transcripts" / f"{key}.jsonl")
-    failed = _fail_fsync_for(monkeypatch, "transcripts")
-
-    transcript_store.append_transcript_object("websocket:default", {"event": "message", "text": "ciao"})
-
-    assert failed
-    assert "ciao" in (tmp_path / "transcripts" / "websocket:default.jsonl").read_text(encoding="utf-8")

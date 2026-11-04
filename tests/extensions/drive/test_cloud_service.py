@@ -25,7 +25,7 @@ from jenny_extensions.drive.cloud_service import (
     CloudBackupService,
     CloudUnavailableError,
 )
-from jenny_extensions.drive.cloud_sink import MemorySink
+from tests.extensions.drive.memory_sink import MemorySink
 
 pytest.importorskip("cryptography")
 
@@ -367,6 +367,87 @@ async def test_new_phone_opens_the_copy_with_the_password_and_restores(tmp_path:
     assert marker["source"] == "cloud" and marker["snapshot_id"] == snapshot_id
     # Lo stato di prima resta raggiungibile dalla storia locale.
     assert new.snapshots.engine.list_snapshots(limit=1)[0]["trigger"] == "pre_restore"
+
+
+async def test_the_copy_on_drive_carries_the_state_too(tmp_path: Path) -> None:
+    """Lo stato in SQLite viaggia a pezzi dentro lo snapshot: Drive lo porta su
+    come i file, e il telefono nuovo lo ritrova pronto per lo scambio."""
+    import sqlite3
+
+    from jenny import db as jdb
+    from jenny.db import shards
+    from jenny.db.schema import Schema
+    from jenny.snapshot.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
+
+    kv = Schema("kv", ("CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT);",))
+    old = _env(tmp_path / "old")
+    state = jdb.database(old.runtime, jdb.STATE)
+    state.require(kv)
+    with state.write() as conn:
+        conn.execute("INSERT INTO kv VALUES ('job', 'ogni mattina')")
+    old.snapshots.engine._extra_entries = lambda: shards.export(state)
+    try:
+        await old.service.enable(PW)
+        await old.service.run()
+        snapshot_id = old.snapshots.engine.head_id()
+        new = _env(tmp_path / "new", sink=old.sink)
+        assert await new.service.unlock(PW) == {"ok": True}
+        staged = await new.service.stage_restore(snapshot_id)
+        assert staged["ok"] and staged["file_count"] == 2
+        assert not (new.runtime / STAGED_WORKSPACE_DIR_NAME / ".jenny-state").exists()
+        conn = sqlite3.connect(new.runtime / STAGED_DB_DIR_NAME / "state.sqlite")
+        try:
+            assert conn.execute("SELECT v FROM kv").fetchall() == [("ogni mattina",)]
+        finally:
+            conn.close()
+    finally:
+        jdb.close_all()
+
+
+async def test_a_drive_restore_and_a_local_one_never_fill_the_staging_together(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Le due strade scrivono lo stesso ``workspace_staged``: una alla volta.
+
+    Prima ognuna aveva il suo lock, e un ripristino locale partito mentre il
+    Drive scaricava svuotava e riempiva l'albero sotto di lui: il marker diceva
+    «cloud» su un albero misto.
+    """
+    from jenny.snapshot.backup import BackupManager
+
+    sink, _key, snapshot_id = await _old_phone_backup(tmp_path)
+    new = _env(tmp_path / "new", sink=sink)
+    assert await new.service.unlock(PW) == {"ok": True}
+    local_id = (await new.snapshots.snapshot_now("manual")).id
+    events: list[str] = []
+
+    real_restore = CloudRepository.restore
+
+    async def slow_restore(self, *args, **kwargs):
+        events.append("drive:start")
+        result = await real_restore(self, *args, **kwargs)
+        for _ in range(20):
+            await asyncio.sleep(0)
+        events.append("drive:end")
+        return result
+
+    monkeypatch.setattr(CloudRepository, "restore", slow_restore)
+    real_local = SnapshotEngine.restore_snapshot
+
+    def recorded_local(self, *args, **kwargs):
+        events.append("local:start")
+        return real_local(self, *args, **kwargs)
+
+    monkeypatch.setattr(SnapshotEngine, "restore_snapshot", recorded_local)
+
+    async def local_later():
+        await asyncio.sleep(0)
+        return await BackupManager(new.snapshots).stage_snapshot_restore(local_id)
+
+    drive, _local = await asyncio.gather(new.service.stage_restore(snapshot_id), local_later())
+
+    assert drive["ok"]
+    assert events.index("drive:end") == events.index("drive:start") + 1, events
 
 
 async def test_no_copy_on_drive_is_said_plainly(tmp_path: Path) -> None:

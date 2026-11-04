@@ -40,3 +40,16 @@ export function chatTimeIso(ms) {
   const value = Number(ms);
   return Number.isFinite(value) && value > 0 ? new Date(value).toISOString() : '';
 }
+
+/** Il `<time>` con l'ora di *ms* e la data intera in `datetime`, o `null` se
+ *  non e' un'ora: una cronologia che la sessione non sa datare resta senza,
+ *  invece di prendere un'ora inventata. *cls* e' la classe del guscio. */
+export function chatTimeNode(ms, cls) {
+  const text = chatTime(ms);
+  if (!text) return null;
+  const el = document.createElement('time');
+  el.className = cls;
+  el.dateTime = chatTimeIso(ms);
+  el.textContent = text;
+  return el;
+}

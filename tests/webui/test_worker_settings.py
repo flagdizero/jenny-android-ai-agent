@@ -407,7 +407,7 @@ async def test_a_read_only_request_rotates_no_backup(config_path) -> None:
     """Una richiesta che non cambia niente non deve far ruotare il ``.bak``: il
     backup è la rete di salvataggio di ``config.json``, e riempirlo con copie
     identiche vuol dire perdere la sola versione che serviva."""
-    from jenny.config.loader import _backup_path
+    from jenny.utils.path import backup_path as _backup_path
 
     before = config_path.read_bytes()
 

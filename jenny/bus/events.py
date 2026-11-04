@@ -4,8 +4,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from jenny.session.keys import session_key_for_channel
-
 # Optional ``OutboundMessage.metadata`` key for structured, channel-agnostic UI
 # payloads. Value is JSON-serializable with at least ``kind``; rich clients may
 # render it and other channels may ignore unknown keys.
@@ -52,6 +50,12 @@ OUTBOUND_META_WORK_START = "_work_start"
 # without depending on the gateway entry-point.
 INTERNAL_CHANNEL = "internal"
 
+# Channel name della WebUI: il WebSocket, ``WebSocketChannel.name``. E' l'unico
+# canale su cui un ``chat_id`` puo' nominare un quaderno
+# (``session.keys.session_key_for_channel``), e il bersaglio di ogni avviso alla
+# casa. Il prefisso ``websocket:`` di un trascritto (``session.keys``) ne deriva.
+WEBSOCKET_CHANNEL = "websocket"
+
 # Channel name della tendina delle notifiche Android: la superficie da cui si
 # risponde a un alert senza aprire l'app. Sta qui, accanto a
 # ``INTERNAL_CHANNEL`` e per lo stesso motivo, perché lo importano i due lati
@@ -82,6 +86,11 @@ COORDINATION_FLAGS = (
 )
 
 
+def is_coordination(metadata: dict[str, Any] | None) -> bool:
+    """Il messaggio è un marcatore della vista WebUI, non un testo da consegnare."""
+    return bool(metadata) and any(metadata.get(flag) for flag in COORDINATION_FLAGS)
+
+
 @dataclass
 class InboundMessage:
     """Message received from a chat channel."""
@@ -110,6 +119,9 @@ class InboundMessage:
         accanto alla conversazione a cui appartiene, con il suo consolidamento
         e il suo riassunto.
         """
+        # Pigro: ``session.keys`` importa da qui il nome del canale WebUI.
+        from jenny.session.keys import session_key_for_channel
+
         return self.session_key_override or session_key_for_channel(
             self.channel, self.chat_id
         )

@@ -23,27 +23,24 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
+from support.agent import make_loop, make_provider
 from support.aio import drain_nowait
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.tools.message import MessageTool
 from jenny.agent.turn_types import TurnOutcome
 from jenny.bus.events import InboundMessage, OutboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse
 from jenny.session.keys import UNIFIED_SESSION_KEY
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.generation = SimpleNamespace(max_tokens=4096)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="done"))
-    return AgentLoop(
-        bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model"
-    )
+    return make_loop(tmp_path, provider=provider, context_window_tokens=None)
 
 
 def _drain(loop: AgentLoop) -> list[OutboundMessage]:

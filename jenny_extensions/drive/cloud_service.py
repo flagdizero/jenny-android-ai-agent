@@ -33,7 +33,9 @@ from loguru import logger
 from jenny.snapshot.crypto import DEFAULT_KDF_ITERATIONS
 from jenny.snapshot.locations import runtime_root_for
 from jenny.snapshot.store import hash_content
-from jenny.utils.path import atomic_write
+from jenny.snapshot.types import entry_target
+from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud import (
     MASTER_KEY_LEN,
@@ -147,11 +149,7 @@ class CloudBackupService:
     # -- stato ------------------------------------------------------------------
 
     def _read_status(self) -> dict[str, Any]:
-        try:
-            data = json.loads((self._state_dir / _STATUS_FILE).read_text("utf-8"))
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) else {}
+        return read_json_dict(self._state_dir / _STATUS_FILE)
 
     def _write_status(self, **changes: Any) -> None:
         status = self._read_status()
@@ -232,7 +230,7 @@ class CloudBackupService:
                     sink, key, password,
                     iterations=self._password_iterations, backend=self._backend,
                 )
-                    self._write_status(password_set_ms=int(time.time() * 1000))
+                    self._write_status(password_set_ms=_now_ms())
                 elif not await has_sealed_key(sink):
                     self._write_status(password_set_ms=0)
             except DriveConsentError:
@@ -241,7 +239,7 @@ class CloudBackupService:
                 await _close(sink)
             await self._set_provider(PROVIDER_DRIVE)
             # Da qui conta l'attesa della prima copia, e l'avviso se non arriva.
-            self._write_status(enabled_at_ms=int(time.time() * 1000), alerted_ms=0)
+            self._write_status(enabled_at_ms=_now_ms(), alerted_ms=0)
             logger.info("Cloud backup enabled ({})", PROVIDER_DRIVE)
         return {"ok": True, **self.status()}
 
@@ -297,7 +295,7 @@ class CloudBackupService:
         except (DriveError, CloudBackupError, OSError) as exc:
             logger.warning("Cloud backup run failed: {}", exc)
             return self._fail(f"{type(exc).__name__}: {exc}")
-        now = int(time.time() * 1000)
+        now = _now_ms()
         copies = [
             t for t in self._read_status().get("recent_copies_ms") or []
             if isinstance(t, int) and now - t < COPIES_KEEP_MS
@@ -342,7 +340,7 @@ class CloudBackupService:
         riuscita (o dall'accensione, se non ce n'è mai stata una) e per questa
         serie non si è ancora avvisato: chi chiama lo porta all'utente.
         """
-        now = now_ms if now_ms is not None else int(time.time() * 1000)
+        now = now_ms if now_ms is not None else _now_ms()
         if self._get_provider() != PROVIDER_DRIVE:
             return {"action": "off", "alert": None}
         stored = self._read_status()
@@ -411,7 +409,7 @@ class CloudBackupService:
             if bad:
                 self._mark_damaged()
                 return {"ok": False, "error": "mismatch", "files": bad[:20]}
-            self._write_status(last_verified_ms=int(time.time() * 1000))
+            self._write_status(last_verified_ms=_now_ms())
             return {
                 "ok": True,
                 "snapshot_created_at_ms": snapshots[0].created_at_ms,
@@ -449,7 +447,7 @@ class CloudBackupService:
                 return {"ok": False, "error": "consent_needed"}
             finally:
                 await _close(sink)
-            self._write_status(password_set_ms=int(time.time() * 1000))
+            self._write_status(password_set_ms=_now_ms())
         logger.info("Cloud backup password set")
         return {"ok": True, **self.status()}
 
@@ -476,7 +474,7 @@ class CloudBackupService:
             finally:
                 await _close(sink)
             await asyncio.to_thread(self._write_key, key)
-            self._write_status(password_set_ms=int(time.time() * 1000))
+            self._write_status(password_set_ms=_now_ms())
         logger.info("Cloud backup key unlocked with the password")
         return {"ok": True}
 
@@ -511,19 +509,14 @@ class CloudBackupService:
     async def stage_restore(self, snapshot_id: str) -> dict[str, Any]:
         """Prepara il ripristino di una copia su Drive; lo scambio avviene al riavvio.
 
-        Stesso protocollo del ripristino da file o da snapshot locale: albero in
-        ``workspace_staged``, conteggio di controllo, marker per ultimo. Lo stato
-        di adesso viene fotografato prima (``pre_restore``): anche un ripristino
-        dal cloud resta annullabile dalla storia locale.
+        Lo stesso protocollo, e lo stesso lock, del ripristino da file o da
+        snapshot locale (``SnapshotService.stage_restore``): l'albero lo riempie
+        il download, la foto ``pre_restore`` lo rende annullabile dalla storia
+        locale, il marker viene per ultimo.
         """
-        from jenny.snapshot.locations import STAGED_WORKSPACE_DIR_NAME, runtime_root_for
-        from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
-
         key = self._read_key()
         if key is None:
             return {"ok": False, "error": "missing_key"}
-        runtime_root = runtime_root_for(self._snapshots.engine.root)
-        staged = runtime_root / STAGED_WORKSPACE_DIR_NAME
         async with self._lock:
             sink = await self._sink()
             try:
@@ -531,20 +524,18 @@ class CloudBackupService:
                 match = [s for s in await repo.list_snapshots() if s.id == snapshot_id]
                 if not match:
                     return {"ok": False, "error": "no_such_copy"}
-                await self._snapshots.snapshot_now("pre_restore")
-                await asyncio.to_thread(shutil.rmtree, staged, True)
-                manifest = await repo.restore(match[0], staged)
+                manifest = await self._snapshots.stage_restore(
+                    lambda staged: repo.restore(match[0], staged),
+                    source="cloud",
+                    snapshot_id=snapshot_id,
+                )
             except DriveConsentError:
-                await asyncio.to_thread(shutil.rmtree, staged, True)
                 return {"ok": False, "error": "consent_needed"}
             except (DriveError, CloudBackupError, OSError) as exc:
-                await asyncio.to_thread(shutil.rmtree, staged, True)
                 logger.warning("Cloud restore failed: {}", exc)
                 return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
             finally:
                 await _close(sink)
-            await asyncio.to_thread(write_staging_sanity, staged)
-            write_marker(runtime_root, source="cloud", snapshot_id=snapshot_id)
         logger.info("Cloud restore staged ({}); restart required", snapshot_id[:12])
         return {
             "ok": True,
@@ -556,19 +547,19 @@ class CloudBackupService:
         """La copia remota è rotta: lo stato lo dice, e la prossima la rifà da capo."""
         self._write_status(
             last_error="verify_mismatch",
-            last_failure_ms=int(time.time() * 1000),
+            last_failure_ms=_now_ms(),
             force_fresh=True,
         )
 
     def _fail(self, error: str) -> dict[str, Any]:
-        self._write_status(last_failure_ms=int(time.time() * 1000), last_error=error[:500])
+        self._write_status(last_failure_ms=_now_ms(), last_error=error[:500])
         return {"ok": False, "error": error}
 
 
 def _mismatches(root: Path, entries: list[Any]) -> list[str]:
     bad = []
     for entry in entries:
-        path = root / Path(*entry.path.split("/"))
+        path = entry_target(root, entry.path)
         try:
             if hash_content(path.read_bytes()) != entry.hash:
                 bad.append(entry.path)

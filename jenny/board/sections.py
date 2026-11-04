@@ -21,16 +21,11 @@ queste sono dell'utente, e ognuna ha la sua verità altrove:
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from jenny.board import model
-
 PHOTOS_DIR = "raw/photos"
-
-# Quanti punti al più ha l'andamento di una sezione mini app: uno al giorno.
-_TREND_POINTS = 31
 
 
 def _note_integrated(ref: str, cursor: Mapping[str, int]) -> bool:
@@ -55,11 +50,6 @@ def _gardener_cursor(project_root: Path) -> dict[str, int]:
         return dict(read_state(project_root).cursor)
     except Exception:  # noqa: BLE001 — una nota «in attesa» è il ripiego onesto
         return {}
-
-
-def _record_time(record: Mapping[str, Any]) -> datetime | None:
-    stamp = model.parse_iso(record.get("ts"))
-    return stamp.astimezone(timezone.utc) if stamp else None
 
 
 def app_section_view(
@@ -96,68 +86,6 @@ def app_section_view(
     return summary_view(workspace, app, params, now=now)
 
 
-def records_view(
-    records: list[dict[str, Any]],
-    *,
-    field_name: str,
-    latest: str = "ts",
-    alarm: Mapping[str, Any] | None = None,
-    stale_after_minutes: int | None = None,
-    trend_days: int = 0,
-    now: datetime | None = None,
-) -> dict[str, Any]:
-    """Lo stato di una serie di letture: l'ultimo valore, l'allarme, il dato fermo, l'andamento.
-
-    **Un solo motore** per le sezioni mini app, che i record vengano da una
-    collezione dell'app o dalle letture del suo lettore (``readings.jsonl``): stessi
-    record ``{id, ts, ...}``, stessi stati, stesso andamento — cosi' la vista, gli
-    eventi di diario e le attese a condizione non sanno chi ha prodotto il dato.
-    ``record`` e' l'ultima lettura intera, per chi vuole anche gli altri campi.
-    """
-    if not records:
-        return {"state": "empty", "value": None, "at": "", "trend": [], "record": None}
-
-    def order(record: Mapping[str, Any]) -> tuple[int, float, str]:
-        return model.instant_order(record.get(latest))
-
-    # A parita' d'ora vince l'ultima scritta: ``max`` tiene la prima, e due
-    # letture nello stesso secondo (una prova e la versione nuova) mostravano
-    # quella vecchia.
-    last = max(reversed(records), key=order)
-    value = last.get(field_name)
-    at = _record_time(last)
-    current = now or datetime.now(timezone.utc)
-    state = "ok"
-    # L'allarme guarda il *suo* campo dell'ultima lettura, non quello mostrato:
-    # ``{"field": "online", "op": "==", "value": false}`` su una striscia
-    # dell'umidità confrontava l'umidità con ``false``, e non scattava mai.
-    if alarm and model.compare(
-        last.get(alarm.get("field") or field_name), alarm["op"], alarm["value"]
-    ):
-        state = "alarm"
-    if stale_after_minutes and (
-        at is None or current - at > timedelta(minutes=stale_after_minutes)
-    ):
-        state = "stale"
-    trend: list[Any] = []
-    if trend_days:
-        since = current - timedelta(days=trend_days)
-        daily: dict[str, Any] = {}
-        for record in sorted(records, key=order):
-            stamp = _record_time(record)
-            if stamp is None or stamp < since:
-                continue
-            daily[stamp.date().isoformat()] = record.get(field_name)
-        trend = [v for v in daily.values() if isinstance(v, (int, float))][-_TREND_POINTS:]
-    return {
-        "state": state,
-        "value": value,
-        "at": at.isoformat(timespec="seconds") if at else "",
-        "trend": trend,
-        "record": last,
-    }
-
-
 def app_field_value(
     workspace: Path,
     slug: str,
@@ -192,19 +120,15 @@ def journal_event(
     non qualcosa che l'utente ha detto, quindi non potrà mai giustificare una
     pagina più forte di ``open``.
     """
-    from jenny.agent.tools.journal import INFERRED_MARKER, append_journal_entry
-    from jenny.utils.helpers import safe_zoneinfo
-    from jenny.utils.wiki_paths import journal_page_name, wiki_journal_dir
+    from jenny.agent.tools.journal import INFERRED_MARKER, append_journal_line
+    from jenny.utils.clock import local_now
 
-    tz = safe_zoneinfo(timezone_name) if timezone_name else None
-    stamp = datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    stamp = local_now(timezone_name)
     value = view.get("value")
     reading = f", {view.get('label')} {value}{view.get('unit') or ''}" if value is not None else ""
     since = f", last data {view.get('at')}" if view.get("at") else ""
     text = f"{view.get('name') or view.get('slug')} on {card_title}: {view.get('state')}{reading}{since}"
-    page = wiki_journal_dir(project_root) / journal_page_name(stamp.date())
-    number = append_journal_entry(page, stamp.date(),
-                                  f"- {stamp:%H:%M} — {INFERRED_MARKER} {text[:400]}\n")
+    page, number = append_journal_line(project_root, stamp, f"{INFERRED_MARKER} {text[:400]}")
     return f"{page.relative_to(project_root).as_posix()}:{number}"
 
 
@@ -295,17 +219,13 @@ def journal_note(project_root: Path, text: str, *, photo: str | None = None,
     ``(photo: raw/photos/…)``: lo stesso in ogni lingua, perché il giardiniere
     la riconosce dalla forma e non dalle parole.
     """
-    from jenny.agent.tools.journal import SAID_MARKER, append_journal_entry
-    from jenny.utils.helpers import safe_zoneinfo
-    from jenny.utils.wiki_paths import journal_page_name, wiki_journal_dir
+    from jenny.agent.tools.journal import SAID_MARKER, append_journal_line
+    from jenny.utils.clock import local_now
 
-    tz = safe_zoneinfo(timezone_name) if timezone_name else None
-    stamp = datetime.now(tz=tz) if tz else datetime.now().astimezone()
-    day = stamp.date()
-    page = wiki_journal_dir(project_root) / journal_page_name(day)
+    stamp = local_now(timezone_name)
     line = " ".join(text.split())[:500]
     if photo:
         line = f"{line} (photo: {photo})"
-    number = append_journal_entry(page, day, f"- {stamp:%H:%M} — {SAID_MARKER} {line}\n")
+    page, number = append_journal_line(project_root, stamp, f"{SAID_MARKER} {line}")
     return f"{page.relative_to(project_root).as_posix()}:{number}"
 

@@ -56,7 +56,7 @@ from jenny.security.subagent_policy import journal_touch
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
     current_turn_is_readonly,
-    current_workspace_scope,
+    current_write_root,
 )
 from jenny.security.workspace_policy import (
     WorkspaceBoundaryError,
@@ -550,15 +550,6 @@ class SshTransferTool(_SshToolMixin, Tool):
     def create(cls, ctx: Any) -> Tool:
         return cls(workspace=ctx.workspace)
 
-    def _turn_root(self) -> Path:
-        """La cartella del turno: ``write_root()`` dello scope legato, o il workspace.
-
-        Senza uno scope legato — sessioni interne, test — resta il workspace del
-        costruttore, che in quel caso è anche la radice del turno.
-        """
-        scope = current_workspace_scope()
-        return scope.write_root() if scope is not None else self._workspace
-
     async def execute(
         self,
         host: str,
@@ -591,7 +582,7 @@ class SshTransferTool(_SshToolMixin, Tool):
             # `SOUL.md`. `up` legge, e la lettura resta aperta
             # sull'installazione come per `read_file`; il percorso relativo
             # parte comunque dalla cartella del turno.
-            base = self._turn_root()
+            base = current_write_root(self._workspace)
             local = resolve_allowed_path(
                 local_path,
                 workspace=base,
@@ -621,7 +612,7 @@ class SshTransferTool(_SshToolMixin, Tool):
                 logger.info("ssh_transfer up {} -> {}:{}", local_path, host, remote_path)
                 return f"Uploaded {local_path} to {host}:{remote_path} ({sent} bytes)."
 
-            # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
+            # Dentro un aiutante: il «prima» per l'annulla (``agent.write_journal``).
             journal_touch(local)
             local.parent.mkdir(parents=True, exist_ok=True)
             # Il cap sul download lo applica il backend, due volte: sulla

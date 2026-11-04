@@ -8,7 +8,6 @@ from jenny.webui.transcript import (
     build_webui_thread_response,
     read_transcript_lines,
     replay_transcript_to_ui_messages,
-    webui_transcript_segments_dir,
 )
 
 
@@ -21,9 +20,9 @@ def test_append_and_read_roundtrip(tmp_path, monkeypatch) -> None:
     assert lines[0]["text"] == "hello"
 
 
-def _force_small_transcript_budget(monkeypatch, *, limit: int = 520, target: int = 260) -> None:
-    monkeypatch.setattr("jenny.webui.transcript_store._MAX_TRANSCRIPT_FILE_BYTES", limit)
-    monkeypatch.setattr("jenny.webui.transcript_store._TARGET_ACTIVE_TRANSCRIPT_BYTES", target)
+def _force_small_chunks(monkeypatch, *, turns: int = 2) -> None:
+    """Pochi turni per chunk, così sei turni fanno tre chunk e la paginazione li attraversa."""
+    monkeypatch.setattr("jenny.webui.transcript_store.TURNS_PER_CHUNK", turns)
 
 
 def _append_numbered_turn(key: str, chat_id: str, idx: int) -> None:
@@ -39,8 +38,11 @@ def _append_numbered_turn(key: str, chat_id: str, idx: int) -> None:
 
 
 def _write_segmented_turns(tmp_path, monkeypatch, key: str, chat_id: str, count: int) -> None:
+    from jenny.webui.transcript import delete_webui_transcript
+
     monkeypatch.setattr("jenny.config.paths.get_data_dir", lambda: tmp_path)
-    _force_small_transcript_budget(monkeypatch)
+    _force_small_chunks(monkeypatch)
+    delete_webui_transcript(key)
     for idx in range(1, count + 1):
         _append_numbered_turn(key, chat_id, idx)
 
@@ -57,13 +59,13 @@ def _numbered_turn_texts(start: int, end: int) -> list[str]:
     ]
 
 
-def test_segmented_transcript_rotation_preserves_full_history(tmp_path, monkeypatch) -> None:
+def test_a_transcript_in_several_chunks_reads_whole(tmp_path, monkeypatch) -> None:
+    from jenny.webui.transcript_store import _read_segment_manifest_entries
+
     key = "websocket:segmented"
     _write_segmented_turns(tmp_path, monkeypatch, key, "segmented", 6)
 
-    segment_dir = webui_transcript_segments_dir(key)
-    assert segment_dir.is_dir()
-    assert (segment_dir / "manifest.json").is_file()
+    assert [e["turn_count"] for e in _read_segment_manifest_entries(key)] == [2, 2]
 
     lines = read_transcript_lines(key)
     contents = [str(line.get("text") or "") for line in lines if line.get("event") in {"user", "message"}]
@@ -115,77 +117,15 @@ def test_page_cursor_survives_active_rotation_after_latest_page(
     assert _message_contents(older) == _numbered_turn_texts(4, 5)
 
 
-def test_segment_manifest_can_be_rebuilt_when_missing_or_corrupt(tmp_path, monkeypatch) -> None:
-    key = "websocket:manifest"
-    _write_segmented_turns(tmp_path, monkeypatch, key, "manifest", 4)
-
-    manifest = webui_transcript_segments_dir(key) / "manifest.json"
-    manifest.write_text("{not json", encoding="utf-8")
-
-    lines = read_transcript_lines(key)
-
-    assert len([line for line in lines if line.get("event") == "user"]) == 4
-    assert manifest.read_text(encoding="utf-8").lstrip().startswith("{")
-
-
-def test_concurrent_manifest_writers_do_not_share_tmp(tmp_path, monkeypatch) -> None:
-    """Regressione: il tmp del manifest aveva un nome deterministico.
-
-    Due scrittori concorrenti sullo stesso manifest condividevano
-    ``manifest.json.tmp``: l'``os.replace`` del primo portava via l'inode
-    mentre il secondo ci stava ancora scrivendo, lasciando un manifest
-    troncato (o ``FileNotFoundError``). Suffisso uuid per chiamata.
-    """
-    import json
-    import threading
-
-    from jenny.webui.transcript_store import _segment_ids_on_disk, _write_segment_manifest
-
-    key = "websocket:manifest-race"
-    _write_segmented_turns(tmp_path, monkeypatch, key, "manifest-race", 6)
-    segment_ids = _segment_ids_on_disk(key)
-    assert segment_ids
-
-    errors: list[BaseException] = []
-    barrier = threading.Barrier(8)
-
-    def _writer() -> None:
-        try:
-            barrier.wait()
-            for _ in range(20):
-                _write_segment_manifest(key, segment_ids)
-        except BaseException as exc:  # noqa: BLE001 - raccolta per l'asserzione
-            errors.append(exc)
-
-    threads = [threading.Thread(target=_writer) for _ in range(8)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert errors == []
-    directory = webui_transcript_segments_dir(key)
-    # Manifest integro (JSON completo) e nessun temporaneo orfano.
-    data = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-    assert [entry["id"] for entry in data["segments"]] == segment_ids
-    assert list(directory.glob("*.tmp")) == []
-
-
-def test_delete_webui_transcript_removes_segments(tmp_path, monkeypatch) -> None:
-    from jenny.webui.transcript import delete_webui_transcript, webui_transcript_path
-    from jenny.webui.transcript_store import _legacy_webui_thread_path
+def test_delete_webui_transcript_removes_every_chunk(tmp_path, monkeypatch) -> None:
+    from jenny.webui.transcript import delete_webui_transcript
 
     key = "websocket:delete-segments"
     _write_segmented_turns(tmp_path, monkeypatch, key, "delete-segments", 4)
-    legacy_path = _legacy_webui_thread_path(key)
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_path.write_text('{"messages":[]}', encoding="utf-8")
 
-    assert webui_transcript_segments_dir(key).is_dir()
     assert delete_webui_transcript(key) is True
-    assert not legacy_path.exists()
-    assert not webui_transcript_path(key).exists()
-    assert not webui_transcript_segments_dir(key).exists()
+    assert read_transcript_lines(key) == []
+    assert delete_webui_transcript(key) is False
 
 
 def test_build_response_reports_fork_boundary_from_legacy_marker(tmp_path, monkeypatch) -> None:

@@ -32,7 +32,7 @@ const DESC_SUB = 4;
  *  combinanti, minuscolo — ma riscritta qui invece di importata: quel modulo si
  *  porta dietro tutto lo smontaggio dell'indice della wiki (`atob`, inflate),
  *  e il cassetto lo pagherebbe all'avvio per quattro righe. */
-export function normalizeText(value) {
+function normalizeText(value) {
   return String(value ?? '')
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
@@ -41,7 +41,7 @@ export function normalizeText(value) {
 
 /** La query in termini. Più termini sono in **AND**: "gm mail" trova "Gmail"
  *  solo se entrambi hanno un riscontro, ciascuno anche in un campo diverso. */
-export function splitTerms(query) {
+function splitTerms(query) {
   return normalizeText(query).split(/\s+/).filter(Boolean);
 }
 
@@ -74,7 +74,7 @@ function fieldScore(haystack, term, exact, prefix, word, sub) {
  *
  *  @param {{name?: string, description?: string, searchText?: string}} entry
  */
-export function scoreEntry(entry, terms) {
+function scoreEntry(entry, terms) {
   if (!terms.length) return 0;
   const name = normalizeText(entry.name);
   /* `searchText` è il testo secondario cercabile della voce, che non coincide

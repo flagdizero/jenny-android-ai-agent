@@ -17,10 +17,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from support.js_harness import requires_node, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS, ROOT, requires_node, run_module
 
 pytestmark = requires_node
 
@@ -158,6 +155,7 @@ def _run(body: str) -> None:
         (root / "shared").mkdir()
         shutil.copy(ASSETS / "home-strip.js", root / "home-strip.js")
         shutil.copy(ASSETS / "shared" / "spines.js", root / "shared" / "spines.js")
+        shutil.copy(ASSETS / "shared" / "bot-name.js", root / "shared" / "bot-name.js")
         shutil.copy(ASSETS / "shared" / "conversation-list.js", root / "shared" / "conversation-list.js")
         for name, text in _NEIGHBORS.items():
             (root / "shared" / name).write_text(text, encoding="utf-8")

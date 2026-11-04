@@ -7,28 +7,15 @@ Exercises the conn_id plumbing (ready event + message metadata), the new
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
-from jenny.webui.gateway_services import build_gateway_services
+from support.ws_channel import make_ws_channel
+
+from jenny.channels.websocket import WebSocketChannel
 
 
 def _make_channel(ui_query=None) -> WebSocketChannel:
-    bus = MagicMock()
-    bus.publish_inbound = AsyncMock()
-    cfg = {"enabled": True, "allowFrom": ["*"], "websocketRequiresToken": False}
-    parsed = WebSocketConfig.model_validate(cfg)
-    gateway = build_gateway_services(
-        config=parsed,
-        bus=bus,
-        session_manager=None,
-        workspace_path=Path.cwd(),
-        default_restrict_to_workspace=False,
-        runtime_model_name=None,
-
-    )
-    channel = WebSocketChannel(cfg, bus, gateway=gateway, ui_query=ui_query)
+    channel = make_ws_channel(ui_query=ui_query)
     channel._handle_message = AsyncMock()  # type: ignore[method-assign]
     return channel
 

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from jenny.board.cron_link import remove_notebook_crons
 from jenny.webui import commands
 from jenny.webui import project_delete as module
 from jenny.webui.commands import CommandError
@@ -33,6 +34,54 @@ async def test_the_command_refuses_while_someone_writes_there(
         await commands.project_delete(ctx, {"name": "piante"})
     assert err.value.code == "conflict"
     assert touched == []
+
+
+async def test_a_notebook_that_is_not_there_is_not_found_as_for_the_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Il rinomino diceva ``not_found``, la cancellazione ``bad_request``: lo
+    stesso «non c'è» con due codici."""
+    monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
+    (tmp_path / "wikis").mkdir()
+    ctx = SimpleNamespace(
+        get_workspace_root=lambda: tmp_path,
+        invalidate_session=lambda k: None,
+        busy_session_keys=lambda: (),
+    )
+    for command, params in ((commands.project_delete, {"name": "piante"}),
+                            (commands.project_rename, {"name": "piante", "new_name": "orto"})):
+        with pytest.raises(CommandError) as err:
+            await command(ctx, params)
+        assert err.value.code == "not_found", command.__name__
+
+
+async def test_the_delete_looks_at_the_transcript_of_its_own_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un verbale con lo stesso nome in un altro workspace non e' una traccia di questo.
+
+    Le sessioni si cercavano nel workspace passato e il verbale in quello globale:
+    il 04/11/2026, su 3.12, il verbale ``project:piante`` di un'altra prova faceva
+    rispondere che il quaderno c'era.
+    """
+    from jenny.session.keys import project_session_key, webui_transcript_key
+    from jenny.webui import transcript_store
+
+    other = tmp_path / "other" / "workspace"
+    other.mkdir(parents=True)
+    monkeypatch.setattr(transcript_store, "_workspace", lambda: other)
+    transcript_store.append_transcript_object(
+        webui_transcript_key(project_session_key("piante")), {"event": "user", "text": "ciao"})
+    monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
+    mine = tmp_path / "mine" / "workspace"
+    (mine / "wikis").mkdir(parents=True)
+    ctx = SimpleNamespace(get_workspace_root=lambda: mine, invalidate_session=lambda k: None,
+                          busy_session_keys=lambda: ())
+    with pytest.raises(CommandError) as err:
+        await commands.project_delete(ctx, {"name": "piante"})
+    assert err.value.code == "not_found"
+    assert transcript_store.has_webui_transcript(
+        webui_transcript_key(project_session_key("piante")))
 
 
 async def test_another_notebook_busy_does_not_stop_the_delete(
@@ -172,4 +221,4 @@ async def test_the_delete_removes_the_cron_jobs_of_its_cards(
 
 
 def test_without_a_cron_service_nothing_is_removed() -> None:
-    assert module.remove_notebook_crons(None, "piante") == []
+    assert remove_notebook_crons(None, "piante") == []

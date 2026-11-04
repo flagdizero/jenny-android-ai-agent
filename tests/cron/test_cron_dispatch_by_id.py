@@ -73,3 +73,21 @@ async def test_a_system_job_is_routed_by_its_id(routed, worker) -> None:
     await dispatcher._dispatch(job)
 
     assert calls == [worker]
+
+
+async def test_legacy_reminders_are_migrated_on_the_first_clock_tick_only(monkeypatch) -> None:
+    """I ``reminders.json`` della 2.0.0 si guardano al primo giro di ogni avvio, non ogni 15'."""
+    asked: list[bool] = []
+
+    async def run_reminders(*_a, migrate_legacy: bool = False, **_k):
+        asked.append(migrate_legacy)
+
+    monkeypatch.setattr("jenny.board.clock.run_reminders", run_reminders)
+    monkeypatch.setattr("jenny.config.loader.load_config", lambda: SimpleNamespace(
+        wiki=SimpleNamespace(enabled=True),
+        agents=SimpleNamespace(defaults=SimpleNamespace(timezone="UTC"))))
+    dispatcher = CronDispatcher(get_agent=lambda: SimpleNamespace(), config=MagicMock(),
+                                cron=MagicMock())
+    for _ in range(3):
+        await dispatcher._run_reminders(SimpleNamespace())
+    assert asked == [True, False, False]

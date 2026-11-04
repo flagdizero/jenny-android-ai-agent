@@ -29,7 +29,6 @@ from websockets.http11 import Response
 if TYPE_CHECKING:
     from jenny.webui.wiki_search import WikiSearchService
 
-from loguru import logger
 
 from jenny.channels.http_utils import (
     http_error,
@@ -38,7 +37,7 @@ from jenny.channels.http_utils import (
     query_first,
 )
 from jenny.security.workspace_policy import is_path_within
-from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, safe_wiki_page_path
+from jenny.utils.wiki_paths import WIKI_INDEX_FILENAME, WIKIS_REGISTRY_FILENAME, safe_wiki_page_path
 
 # Chiavi frontmatter esposte al client in ``/api/page``. Tutto il resto (URL
 # sorgente, provenance, slug/flag interni) resta lato server: il frontmatter
@@ -183,34 +182,16 @@ class WikiRoutes:
         return self._search_service
 
     def _get_wikis_dir(self) -> Path:
-        from jenny.config.loader import load_config
+        from jenny.config.paths import get_wikis_path
 
-        try:
-            wikis_subdir = load_config().wiki.wikis_dir
-        except Exception:
-            wikis_subdir = "wikis"
-        return self._get_workspace_root() / wikis_subdir
+        return get_wikis_path(self._get_workspace_root())
 
     def _check_wiki_enabled(self) -> Response | None:
-        """Verifica ``config.wiki.enabled``, fail-**closed**.
+        """Il cancello «wiki attiva» (``commands.wiki_refusal``, fail-closed) come 503."""
+        from jenny.webui.commands import wiki_refusal
 
-        Era ``except Exception: pass``, cioè un errore di config faceva passare
-        la richiesta su tutte e otto le rotte che questo gate protegge. Terza
-        istanza della stessa forma: ``apps_routes`` l'aveva identica,
-        ``workspace_routes._require_workspace_flag`` invece risponde 503 nello
-        stesso caso e spiega nella docstring perché deve. I due esiti restano
-        distinguibili — illeggibile e spento non sono la stessa cosa.
-        """
-        from jenny.config.loader import load_config
-
-        try:
-            enabled = load_config().wiki.enabled
-        except Exception:
-            logger.exception("wiki gate: could not read config; refusing")
-            return http_error(503, "wiki is unavailable")
-        if not enabled:
-            return http_error(503, "wiki is disabled")
-        return None
+        refusal = wiki_refusal()
+        return None if refusal is None else http_error(503, refusal)
 
     # -- dispatch --
 
@@ -233,7 +214,7 @@ class WikiRoutes:
         err = self._check_wiki_enabled()
         if err:
             return err
-        from jenny.webui.wiki import discover_wikis
+        from jenny.utils.wiki_paths import discover_wikis
 
         query = parse_query(request.path)
         wiki_name = query_first(query, "wiki") or ""
@@ -284,7 +265,8 @@ class WikiRoutes:
         err = self._check_wiki_enabled()
         if err:
             return err
-        from jenny.webui.wiki import create_renderer, discover_wikis, resolve_wikilink
+        from jenny.utils.wiki_paths import discover_wikis, resolve_wikilink
+        from jenny.webui.wiki import create_renderer
 
         query = parse_query(request.path)
         wiki_name = query_first(query, "wiki") or ""
@@ -293,7 +275,7 @@ class WikiRoutes:
         wikis = discover_wikis(wikis_dir)
 
         if not wiki_name:
-            full = wikis_dir / "_index.md"
+            full = wikis_dir / WIKIS_REGISTRY_FILENAME
             current_wiki = None
             wiki_root_for_renderer = wikis_dir
             containment_root = wikis_dir
@@ -349,7 +331,7 @@ class WikiRoutes:
         if current_wiki:
             rel_page = str(full.relative_to(wikis[wiki_name])).replace(os.sep, "/")
         else:
-            rel_page = "_index.md"
+            rel_page = WIKIS_REGISTRY_FILENAME
 
         board_links = None
         if current_wiki:

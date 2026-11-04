@@ -13,11 +13,8 @@ della casa.
 
 from __future__ import annotations
 
-from pathlib import Path
+from support.js_harness import ASSETS, member, requires_node, run_js
 
-from support.js_harness import member, requires_node, run_js
-
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 APP_JS = ASSETS / "home-app.js"
 
 pytestmark = requires_node

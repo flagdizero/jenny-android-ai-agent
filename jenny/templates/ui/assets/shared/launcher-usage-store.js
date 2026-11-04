@@ -23,7 +23,7 @@
  */
 
 /** La chiave, unica e condivisa con `UsageRanking`. */
-export const USAGE_KEY = 'launcher-usage';
+const USAGE_KEY = 'launcher-usage';
 
 /** Il ponte c'è e sa fare questo mestiere? Le due funzioni si chiedono
  *  entrambe: un ponte più vecchio dell'app ha la prima e non la seconda, e

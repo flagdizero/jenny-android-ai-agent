@@ -24,11 +24,9 @@ la WebUI non ha un runner con DOM, ma queste due funzioni non lo toccano.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
 
@@ -54,6 +52,7 @@ def _harness() -> str:
     return f"""
 import assert from 'node:assert/strict';
 
+{(ASSETS / 'shared' / 'turns.js').read_text(encoding='utf-8').replace('export ', '')}
 const ChatController = {{ TURN_SCOPED_EVENTS: {_turn_scoped_events(chat)} }};
 
 function makeChat() {{

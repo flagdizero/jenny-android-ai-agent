@@ -1,9 +1,11 @@
 """Android-only web tools backed by a hidden WebView.
 
-These tools replace the HTTP-based ``web_search`` and ``web_fetch`` tools on
-Android. They use a real Chrome WebView instance so they bypass bot detection
-that blocks raw HTTP clients. They are enabled only when an Android Context is
-available; on any other platform they simply do not register.
+``web_search`` runs the search page in a hidden WebView, where a raw HTTP client
+would meet bot detection. ``web_fetch`` tries a plain GET first (an HTML page
+with real text needs nothing more), renders the page in the WebView when it
+does not, and reads a near-empty page or a cookie wall again in a browser
+session. They are enabled only when an Android Context is available; on any
+other platform they simply do not register.
 """
 
 from __future__ import annotations
@@ -117,16 +119,10 @@ def reset_android_web_state() -> None:
     fresh event loop (e.g. after a gateway restart within the same process)
     raises "bound to a different event loop" the moment it's acquired again.
     """
-    global _BRIDGE_INSTANCE, _BRIDGE_LOCK, _SEARCH_STALLED_UNTIL
+    global _BRIDGE_LOCK, _SEARCH_STALLED_UNTIL
     _BRIDGE_LOCK = asyncio.Lock()
     _SEARCH_STALLED_UNTIL = 0.0
-    if _BRIDGE_INSTANCE is not None:
-        try:
-            _BRIDGE_INSTANCE.destroy()
-        except Exception:
-            logger.opt(exception=True).debug("Failed to destroy stale Android WebView bridge")
-        finally:
-            _BRIDGE_INSTANCE = None
+    destroy_bridge()
 
 
 def _normalize(text: str) -> str:
@@ -240,7 +236,6 @@ async def _bridge_search(
     context: Any,
     query: str,
     max_results: int,
-    search_engine: str = "bing",
     timeout: int = 30,
 ) -> list[dict[str, Any]]:
     """Call Kotlin bridge and parse JSON results.
@@ -250,8 +245,6 @@ async def _bridge_search(
     Kotlin-side timeout, so a stuck WebView can never block the gateway loop.
     """
     logger.debug("_bridge_search: getting bridge for query='{}'", query)
-    if search_engine != "bing":
-        raise ValueError(f"Unsupported Android search engine: {search_engine}")
     global _SEARCH_STALLED_UNTIL
     async with _BRIDGE_LOCK:
         # Dentro il lock: anche chi era in coda dietro al timeout lo vede.
@@ -450,7 +443,6 @@ class AndroidWebSearchTool(AndroidWebGateMixin, Tool):
         return cls(
             android_context=ctx.android_context,
             max_results=ctx.config.android_web.search.max_results,
-            search_engine=ctx.config.android_web.search.search_engine,
             timeout=ctx.config.android_web.search.timeout,
         )
 
@@ -458,12 +450,10 @@ class AndroidWebSearchTool(AndroidWebGateMixin, Tool):
         self,
         android_context: Any,
         max_results: int = 8,
-        search_engine: str = "bing",
         timeout: int = 30,
     ):
         self.android_context = android_context
         self.max_results = max_results
-        self.search_engine = search_engine
         self.timeout = timeout
 
     @property
@@ -482,7 +472,6 @@ class AndroidWebSearchTool(AndroidWebGateMixin, Tool):
                 self.android_context,
                 query,
                 n,
-                search_engine=self.search_engine,
                 timeout=self.timeout,
             )
             return _format_results(query, results, n)
@@ -619,7 +608,9 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
     description = (
         "Fetch a URL and extract readable content (HTML → markdown/text). "
         "Use this after web_search to read a specific result page in full. "
-        "Uses the native Android WebView for reliable access. "
+        "Tries a plain request first and renders the page in the Android WebView when it "
+        "needs scripting; a near-empty page or a cookie wall is read again in a browser "
+        "session by itself. "
         "Output is capped at maxChars (default 50 000)."
     )
 
@@ -726,13 +717,13 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
             )
 
         # The WebView follows redirects/JS navigation itself (real Chromium,
-        # not httpx) with no per-hop SSRF check, so by the time we get here
-        # the request may already have landed on a loopback/RFC1918/link-local
-        # address — this can only catch it after the fact (reduce blast
-        # radius by not returning the fetched content) and cannot prevent the
-        # WebView from having already made that request. A real fix needs a
-        # Kotlin-side WebViewClient.shouldOverrideUrlLoading/
-        # shouldInterceptRequest hook that re-validates each navigation.
+        # not httpx). Every request it makes, main frame and subresources,
+        # passes the browser session's private-address guard
+        # (``AgenticSearchBridge`` → ``JennyBrowserBridge.blockedResponse``),
+        # which refuses it before it leaves. This check on the final URL is the
+        # second layer, on the Python side of the same rules: it keeps the
+        # content of a page that still ended on a blocked address out of the
+        # model's context.
         final_ok, final_error = await validate_url_target_async(final_url)
         if not final_ok:
             logger.warning(

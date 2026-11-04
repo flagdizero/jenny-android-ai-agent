@@ -20,10 +20,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from support.js_harness import requires_node, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS, requires_node, run_module
 
 pytestmark = requires_node
 
@@ -31,9 +28,6 @@ pytestmark = requires_node
 _NEIGHBORS = {
     "api-client.js": """
 export const api = {
-  cancellate: [],
-  trashId: null,
-  async deleteJennyApp(slug) { this.cancellate.push(slug); return this.trashId ? { deleted: true, trashed: this.trashId } : undefined; },
   getSecret() { return 'ok'; },
 };
 """,
@@ -44,7 +38,21 @@ export function showToast(text, type) { notices.push([text, type]); }
 export const undos = [];
 export function showUndo(text, onUndo) { undos.push([text, onUndo]); return () => {}; }
 """,
-    "rpc-client.js": "export const rpc = { calls: [], async apps(m, p) { this.calls.push([m, p]); return { ok: true }; } };\n",
+    "rpc-client.js": """
+export const rpc = {
+  calls: [],
+  cancellate: [],
+  trashId: null,
+  async apps(m, p) {
+    if (m === 'delete') {
+      this.cancellate.push(p.slug);
+      return this.trashId ? { ok: true, deleted: true, trashed: this.trashId } : { ok: true };
+    }
+    this.calls.push([m, p]);
+    return { ok: true };
+  },
+};
+""",
     "dialog.js": "export async function confirmDialog() { return true; }\n",
     "i18n.js": "export const i18n = { t: (k) => k };\n",
     "ws-manager.js": "export const wsManager = { on() {}, off() {}, request() {} };\n",
@@ -102,6 +110,7 @@ def _run(body: str, *, app: dict, pages: str | None) -> None:
             f"""
             const {{ AppsActions }} = await import('./shared/apps-actions.js');
             const {{ api }} = await import('./shared/api-client.js');
+            const {{ rpc }} = await import('./shared/rpc-client.js');
             const {{ notices }} = await import('./shared/utils.js');
             const calls = [];
             const APP = {json.dumps(app)};
@@ -239,7 +248,7 @@ def test_deleting_an_app_rereads_the_pages() -> None:
     resterebbe un pallino verso un'app che non c'e' piu'."""
     _run(
         "await actions._handleJennySheetAction('delete', APP);\n"
-        "assert.deepEqual(api.cancellate, ['orto']);\n"
+        "assert.deepEqual(rpc.cancellate, ['orto']);\n"
         "assert.ok(calls.some((c) => c[0] === 'ricarica'), 'le pagine non sono state rilette');\n",
         app=GARDEN,
         pages=_door("pending"),
@@ -250,7 +259,7 @@ def test_deleting_from_the_workshop_needs_no_pages() -> None:
     """Senza porta la cancellazione va come prima, senza inciampare."""
     _run(
         "await actions._handleJennySheetAction('delete', APP);\n"
-        "assert.deepEqual(api.cancellate, ['orto']);\n"
+        "assert.deepEqual(rpc.cancellate, ['orto']);\n"
         "assert.deepEqual(notices.at(-1), ['apps.appDeleted', 'success']);\n",
         app=GARDEN,
         pages=None,
@@ -279,11 +288,10 @@ def test_deleting_goes_to_the_trash_with_an_undo_and_no_question() -> None:
     """Dal 06/10/2026 «Elimina» non chiede: sposta nel cestino, e l'Annulla lo
     rimette con ``apps.restore``."""
     _run(
-        "api.trashId = 'orto-20261006T101500Z';\n"
+        "rpc.trashId = 'orto-20261006T101500Z';\n"
         "const { undos } = await import('./shared/utils.js');\n"
-        "const { rpc } = await import('./shared/rpc-client.js');\n"
         "await actions._handleJennySheetAction('delete', APP);\n"
-        "assert.deepEqual(api.cancellate, ['orto']);\n"
+        "assert.deepEqual(rpc.cancellate, ['orto']);\n"
         "assert.equal(undos.length, 1);\n"
         "assert.equal(undos[0][0], 'apps.trashed');\n"
         "await undos[0][1]();\n"

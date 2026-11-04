@@ -326,9 +326,11 @@ class TestDegradeToRestart:
         _completing_runner(sm)
         lineage = await _spawn_and_settle(sm, task="write the report")
 
-        path = tmp_path / "sessions" / f"subagent_{lineage}.jsonl"
-        assert path.is_file()
-        path.write_text("{ truncated", encoding="utf-8")
+        sessions = sm._history._sessions
+        assert sessions.exists(f"subagent:{lineage}")
+        with sessions._db.write() as conn:
+            conn.execute("UPDATE session_messages SET data = '{ truncated' WHERE key = ?",
+                         (f"subagent:{lineage}",))
 
         with pytest.raises(SubagentSendError, match="no longer saved"):
             await sm.send(lineage, "change the title")

@@ -23,9 +23,10 @@ from jenny.agent.tools.context import (
 from jenny.agent.tools.file_state import FileStates
 from jenny.agent.tools.loader import ToolLoader
 from jenny.agent.tools.registry import ToolRegistry
-from jenny.board import model, notify
+from jenny.board import model
 from jenny.board.store import mutate_board, read_board, read_card_summary
 from jenny.config.schema import ToolsConfig
+from jenny.runtime import ui_events
 from jenny.security.workspace_access import (
     bind_workspace_scope,
     build_workspace_scope,
@@ -87,12 +88,13 @@ def _notes(cron) -> list[dict]:
 def announced(monkeypatch):
     seen: list[str] = []
 
-    async def collect(name: str) -> None:
-        seen.append(name)
+    async def collect(event: dict) -> None:
+        if event.get("_board_changed"):
+            seen.append(event["notebook"])
 
-    notify.set_notifier(collect)
+    ui_events.set_publisher(collect)
     yield seen
-    notify.set_notifier(None)
+    ui_events.set_publisher(None)
 
 
 @pytest.mark.parametrize("scope", ["core", "orchestrator", "subagent", "apps", "remote"])
@@ -245,6 +247,9 @@ async def test_the_editor_is_told_what_a_removal_paused(notebook_chat: Path) -> 
             link = {"notebook": notebook_chat.name, "card": "nuove", "section": "@auto"}
             return [SimpleNamespace(id="j1", payload=SimpleNamespace(board=link))]
 
+        def jobs_of_notebook(self, notebook: str) -> list:
+            return [j for j in self.list_jobs() if j.payload.board["notebook"] == notebook]
+
     cron = _Cron()
     tool = BoardTool(cron=cron)
     out = await tool.execute(action="remove_card", card="nuove")
@@ -286,17 +291,17 @@ async def test_show_lists_the_automations_of_cards_and_of_the_notebook(notebook_
                                                                        tmp_path: Path,
                                                                        monkeypatch) -> None:
     """L'editore vede anche i cron: quelli di una scheda e quelli di tutto il quaderno."""
-    import json
+    from support.cron import seed_jobs
 
-    (tmp_path / "cron").mkdir()
-    (tmp_path / "cron" / "jobs.json").write_text(json.dumps({"jobs": [
-        {"id": "ab12cd34", "name": "Meteo", "enabled": True,
+    seed_jobs(tmp_path, [
+        {"id": "ab12cd34", "name": "Meteo", "enabled": True, "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": notebook_chat.name, "card": "nuove",
                                "section": "@auto"}}},
         {"id": "ef56ab78", "name": "Gelo", "pausedAtMs": 1, "enabled": False,
+         "schedule": {"kind": "every", "everyMs": 3_600_000},
          "payload": {"board": {"notebook": notebook_chat.name, "card": "@notebook",
                                "section": "@auto"}}},
-    ]}), encoding="utf-8")
+    ])
     monkeypatch.setattr("jenny.config.paths.get_workspace_path", lambda: tmp_path)
     out = await BoardTool().execute(action="show")
     assert "- `ab12cd34` on `nuove`: Meteo" in out

@@ -384,7 +384,7 @@ def _decided_cap_reason(
 
 # Tetto della mappa, in caratteri. **Non è un numero scelto qui**: è la soglia
 # oltre la quale il blocco di progetto smette di iniettare la mappa intera in
-# ogni turno (``jenny/agent/context.py::_PROJECT_MAP_MAX_CHARS``). Oltre, il
+# ogni turno (``jenny/utils/wiki_paths.py::WIKI_MAP_MAX_CHARS``). Oltre, il
 # resto della mappa esiste ma l'agente non lo vede senza aprire il file — quindi
 # è un avviso che vale per **tutti** i layout, perché la mappa la riceve ogni
 # progetto.
@@ -392,7 +392,7 @@ def _decided_cap_reason(
 # La copia è deliberata e non si può togliere: questo script gira anche fuori
 # dall'app e non importa ``jenny``. Quel che tiene i due numeri uguali è
 # ``tests/skills/llm_wiki/test_lint_wiki.py::test_the_ceiling_matches_the_one_the_prompt_uses``,
-# che legge ``context.py`` come testo (T3.12).
+# che legge ``utils/wiki_paths.py`` come testo (T3.12).
 MAP_MAX_CHARS = 2000
 
 # Tetto della **singola pagina**, in caratteri, e per la stessa ragione della
@@ -726,7 +726,7 @@ def slugify(name: str) -> str:
 
 
 def slug_path(ref: str) -> str:
-    """`slugify` segmento per segmento, come ``wiki.py::_normalize_page_path``
+    """`slugify` segmento per segmento, come ``wiki_paths.py::_normalize_page_path``
     (che poi aggiunge `.md`: qui le chiavi sono senza estensione)."""
     return "/".join(slugify(part) for part in ref.split("/"))
 
@@ -735,7 +735,7 @@ def load_pages(wiki_dir: Path) -> dict[str, Path]:
     """Indice dei nomi con cui una pagina è raggiungibile.
 
     **Le chiavi sono minuscole, e la ragione arriva dal campo.** Chi risolve i
-    link davvero — ``jenny/webui/wiki.py::resolve_wikilink`` — prova esatto, poi
+    link davvero — ``jenny/utils/wiki_paths.py::resolve_wikilink`` — prova esatto, poi
     ``.md``, poi **case-insensitive**, poi lo stem. Il lint confrontava con
     `==` sensibile alle maiuscole, quindi segnalava come morto un link che l'app
     apre senza problemi.
@@ -800,7 +800,7 @@ def load_pages(wiki_dir: Path) -> dict[str, Path]:
 def suffix_rank(path: Path) -> tuple[int, str]:
     """Ordine di preferenza fra più pagine che finiscono per lo stesso path.
 
-    Copia di ``jenny/webui/wiki.py::_suffix_rank``, parola per parola: vince la
+    Copia di ``jenny/utils/wiki_paths.py::suffix_rank``, parola per parola: vince la
     più vicina alla radice, a pari profondità la prima in ordine alfabetico. Lo
     script non può importare il package, quindi la regola sta scritta due volte
     e un test (`tests/skills/llm_wiki/test_lint_wiki.py`) confronta le due
@@ -828,7 +828,7 @@ def page_for_link(pages: dict[str, Path], link: str) -> Path | None:
     formato del taccuino usa e che l'app risolve davvero.
     """
     link = link.strip()
-    if link.startswith("wiki/"):  # come `_strip_wiki_prefix` dell'app
+    if link.startswith("wiki/"):  # come `strip_wiki_prefix` dell'app
         link = link[5:]
     if link.endswith(".md"):  # le chiavi di `load_pages` sono senza estensione
         link = link[:-3]

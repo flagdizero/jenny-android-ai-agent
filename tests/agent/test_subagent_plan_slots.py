@@ -29,6 +29,7 @@ from jenny.bus.events import OUTBOUND_META_SUBAGENT_STATUS
 from jenny.bus.queue import MessageBus
 from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
 from jenny.session.manager import SessionManager
+from tests.support.aio import wait_until
 
 PLAN_KEY = "project:piante"
 
@@ -365,11 +366,12 @@ async def test_a_mark_on_a_record_from_a_previous_process_goes_off_loop(tmp_path
     reborn = _manager(tmp_path)
     assert task_id not in reborn._record_keys
     assert reborn.mark_handled(task_id) is True
-    for _ in range(200):
-        if reborn._records.load("unified:default")[-1].handled_at is not None:
-            break
-        await asyncio.sleep(0.01)
-    assert reborn._records.load("unified:default")[-1].handled_at is not None
+    # La scrittura va in un thread: con un worker per core può superare i 2 s
+    # del vecchio giro a mano, e il test cadeva solo nella suite intera.
+    await wait_until(
+        lambda: reborn._records.load("unified:default")[-1].handled_at is not None,
+        timeout=15,
+    )
     assert task_id in reborn._record_keys
 
 

@@ -249,8 +249,8 @@ class AnthropicConversionMixin:
         3. The conversation cannot start with an ``assistant`` turn — the
            first message must be ``user``.
 
-        Rules 2 and 3 mirror ``LLMProvider._enforce_role_alternation`` in
-        ``base.py``, which applies the equivalent invariants to OpenAI-compat
+        Rules 2 and 3 mirror ``enforce_role_alternation`` in
+        ``message_repair.py``, which applies the equivalent invariants to OpenAI-compat
         providers.  The only Anthropic-specific wrinkle: ``tool_use`` blocks
         live inside ``content`` (not a separate ``tool_calls`` field) and are
         invalid inside ``user`` turns, so the recovery paths below must skip
@@ -386,8 +386,9 @@ class AnthropicConversionMixin:
 
         new_tools = tools
         if tools:
+            # Sull'ultimo tool: prima il segno andava anche al confine fra i tool
+            # propri e quelli MCP, che questo fork non ha piu'.
             new_tools = list(tools)
-            for idx in cls._tool_cache_marker_indices(new_tools):
-                new_tools[idx] = {**new_tools[idx], "cache_control": marker}
+            new_tools[-1] = {**new_tools[-1], "cache_control": marker}
 
         return system, new_msgs, new_tools

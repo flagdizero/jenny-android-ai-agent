@@ -12,21 +12,24 @@ import hashlib
 import json
 import os
 import threading
-import time
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
 from loguru import logger
 
 from jenny.snapshot.store import get_blob, iter_blob_hashes, object_path, put_blob
 from jenny.snapshot.types import (
+    STATE_ENTRY_DIR,
     FileEntry,
     SnapshotManifest,
+    entry_problem,
+    entry_target,
     is_snapshot_id,
-    unsafe_entry_reason,
+    is_state_entry,
 )
-from jenny.utils.path import atomic_write
+from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.path import atomic_write, read_json_dict
 
 # Esclusioni di default (path POSIX relativi alla radice del workspace).
 # Le directory runtime reali (store snapshot, staging) vengono escluse anche
@@ -52,11 +55,22 @@ DEFAULT_EXCLUDE_GLOBS: tuple[str, ...] = (
 
 # Escluse sempre, anche quando ``exclude_globs`` viene da una config salvata
 # prima che esistessero (la config porta la lista intera, e una voce nuova di
-# ``DEFAULT_EXCLUDE_GLOBS`` non ci arriverebbe). ``subagents/journal`` è il
-# registro dell'annulla degli aiutanti (``agent.subagent_journal``): copie
-# temporanee dei file che un aiutante ha cambiato, che in una foto o in un
-# backup peserebbero per niente, e che un ripristino non deve riportare.
-ALWAYS_EXCLUDED_DIRS: tuple[str, ...] = ("subagents/journal",)
+# ``DEFAULT_EXCLUDE_GLOBS`` non ci arriverebbe). ``subagents/journal`` è dove
+# stava il registro dell'annulla prima di ``undo.sqlite`` (``agent.write_journal``):
+# la migrazione ``undo_cleanup`` la cancella al primo boot, e finché quella non è
+# riuscita le sue copie non devono finire in una foto. Si toglie insieme a lei.
+# ``.jenny-state`` è il posto dello stato in SQLite dentro uno snapshot
+# (``STATE_ENTRY_DIR``): lo scrive il motore, mai un file vero del workspace.
+ALWAYS_EXCLUDED_DIRS: tuple[str, ...] = ("subagents/journal", STATE_ENTRY_DIR)
+
+# Una cartella ``<nome>.migrated`` è la copia che una migrazione verso SQLite
+# lascia per 30 giorni (``jenny/db_migration``: ``sessions.migrated``,
+# ``.jenny/webui.migrated``, ``cron.migrated``…). I suoi dati sono già nello stato,
+# che lo snapshot porta a pezzi: tenerla avrebbe messo gli stessi dati due volte
+# in ogni foto e in ogni ``.jbk`` (72 MB sul telefono di prova, il 03/11/2026).
+# Solo le cartelle: i pochi ``*.json.migrated`` pesano kB, e un file dell'utente
+# non deve sparire da un backup per come si chiama.
+MIGRATED_DIR_SUFFIX = ".migrated"
 
 # ``output/`` NON è in quella lista, ed è una scelta, non una dimenticanza.
 #
@@ -103,8 +117,12 @@ class SnapshotEngine:
         *,
         exclude_globs: Iterable[str] = DEFAULT_EXCLUDE_GLOBS,
         exclude_dirs: Iterable[Path] = (),
+        extra_entries: Callable[[], Iterable[tuple[str, bytes]]] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
+        # Voci che non sono file del workspace: lo stato in SQLite a pezzi
+        # (``jenny/db/shards``), che il composition root collega qui.
+        self._extra_entries = extra_entries
         self.snapshots_dir = Path(snapshots_dir)
         self.objects_dir = self.snapshots_dir / "objects"
         self.manifests_dir = self.snapshots_dir / "manifests"
@@ -132,6 +150,8 @@ class SnapshotEngine:
             return None
 
     def _is_excluded_dir(self, rel: str, name: str) -> bool:
+        if name.endswith(MIGRATED_DIR_SUFFIX):
+            return True
         for prefix in self._exclude_prefixes:
             if rel == prefix or rel.startswith(prefix + "/"):
                 return True
@@ -219,7 +239,7 @@ class SnapshotEngine:
         rispetto a un hash sbagliato. Lo accendono le foto dei piani, che ne
         fanno una per passo: senza, ogni foto rilegge tutto il quaderno.
         """
-        created_at_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+        created_at_ms = now_ms if now_ms is not None else _now_ms()
         parent = self.head_id()
         parent_manifest: SnapshotManifest | None = None
         if parent is not None:
@@ -251,6 +271,7 @@ class SnapshotEngine:
             entries.append(
                 FileEntry(path=rel, hash=blob_hash, size=len(content), mtime_ns=st.st_mtime_ns)
             )
+        entries.extend(self._state_entries())
 
         if parent_manifest is not None:
             same = {e.path: e.hash for e in parent_manifest.files} == {
@@ -286,6 +307,28 @@ class SnapshotEngine:
             manifest.total_bytes,
         )
         return manifest
+
+    def _state_entries(self) -> list[FileEntry]:
+        """Lo stato a pezzi, come voci del manifest.
+
+        Se l'export fallisce lo snapshot si fa lo stesso, senza stato: la storia
+        dei file non si ferma per un database rotto, e il ripristino di uno
+        snapshot senza stato lascia quello di adesso.
+        """
+        if self._extra_entries is None:
+            return []
+        try:
+            extra = list(self._extra_entries())
+        except Exception:
+            logger.opt(exception=True).error("Snapshot: the state could not be exported")
+            return []
+        entries = []
+        for path, content in extra:
+            if not is_state_entry(path):
+                raise ValueError(f"extra snapshot entry outside {STATE_ENTRY_DIR}: {path!r}")
+            blob_hash = put_blob(self.objects_dir, content)
+            entries.append(FileEntry(path=path, hash=blob_hash, size=len(content), mtime_ns=0))
+        return entries
 
     def _reusable_entries(self, parent: SnapshotManifest | None) -> dict[str, FileEntry]:
         """Le voci di *parent* il cui hash si può riusare senza rileggere il file.
@@ -366,23 +409,15 @@ class SnapshotEngine:
         manifest = self.load_manifest(snapshot_id)
         dest_dir = Path(dest_dir)
         # Tutte le voci prima di scrivere la prima: un manifest importato da un
-        # ``.jbk`` e' dato non fidato, e un ``..`` usciva dallo staging. Il
-        # confronto sul percorso risolto copre anche un link simbolico che
-        # nessun controllo sulla stringa vedrebbe.
+        # ``.jbk`` e' dato non fidato, e un ``..`` usciva dallo staging.
         root = dest_dir.resolve()
         for entry in manifest.files:
-            reason = unsafe_entry_reason(entry.path, entry.hash)
-            if reason is None:
-                resolved = (root / Path(*entry.path.split("/"))).resolve()
-                if not resolved.is_relative_to(root):
-                    reason = f"unsafe path {entry.path!r} leaves the destination"
-            if reason is not None:
+            if (reason := entry_problem(root, entry.path, entry.hash)) is not None:
                 raise ValueError(f"snapshot {snapshot_id[:12]}: {reason}")
         dest_dir.mkdir(parents=True, exist_ok=True)
         for entry in manifest.files:
             content = get_blob(self.objects_dir, entry.hash)
-            target = dest_dir / Path(*entry.path.split("/"))
-            atomic_write(target, content, fsync_dir=False)
+            atomic_write(entry_target(dest_dir, entry.path), content, fsync_dir=False)
         return manifest
 
     # -- retention / gc -----------------------------------------------------
@@ -403,7 +438,7 @@ class SnapshotEngine:
         ``max_age_days`` giorni (se impostato; 0/None = per sempre) vengono
         eliminati del tutto.
         """
-        now = now_ms if now_ms is not None else int(time.time() * 1000)
+        now = now_ms if now_ms is not None else _now_ms()
         snapshots = self.list_snapshots()
         keep_ids = {s["id"] for s in snapshots[:keep_recent]}
         threshold_ms = now - thin_after_days * 86_400_000
@@ -440,10 +475,7 @@ class SnapshotEngine:
         referenced: set[str] = set()
         if self.manifests_dir.is_dir():
             for manifest_path in self.manifests_dir.glob("*.json"):
-                try:
-                    data = json.loads(manifest_path.read_text("utf-8"))
-                except (OSError, ValueError):
-                    continue
+                data = read_json_dict(manifest_path)
                 for entry in data.get("files", []):
                     referenced.add(str(entry.get("hash", "")))
 

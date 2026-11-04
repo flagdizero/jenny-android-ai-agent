@@ -19,12 +19,12 @@ import re
 from pathlib import Path
 
 from support.gateway_http import make_handler
+from support.js_harness import UI
 
 from jenny.command.specs import BUILTIN_COMMAND_SPECS, SCOPES
 
-_UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
 _TABLER_CSS = (
-    _UI / "assets" / "vendor" / "@tabler" / "icons-webfont@3.19.0" / "dist" / "tabler-icons.min.css"
+    UI / "assets" / "vendor" / "@tabler" / "icons-webfont@3.19.0" / "dist" / "tabler-icons.min.css"
 )
 
 

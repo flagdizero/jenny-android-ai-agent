@@ -17,9 +17,6 @@ from loguru import logger
 
 from jenny.providers import retry_notice
 from jenny.providers.message_repair import (
-    SYNTHETIC_USER_CONTENT,
-    enforce_role_alternation,
-    sanitize_empty_content,
     strip_image_content,
     strip_image_content_inplace,
 )
@@ -317,7 +314,6 @@ class GenerationSettings:
 
 
 # Ri-esportato da message_repair per retro-compatibilità (era definito qui).
-_SYNTHETIC_USER_CONTENT = SYNTHETIC_USER_CONTENT
 
 
 class LLMProvider(ABC):
@@ -355,45 +351,6 @@ class LLMProvider(ABC):
         self.api_key = api_key
         self.api_base = api_base
         self.generation: GenerationSettings = GenerationSettings()
-
-    # Normalizzazione messaggi estratta in ``providers/message_repair.py``.
-    # Delegatori statici sottili: preservano i call-site interni/provider e i
-    # test che invocano ``LLMProvider._enforce_role_alternation(...)`` ecc.
-    @staticmethod
-    def _sanitize_empty_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return sanitize_empty_content(messages)
-
-    @staticmethod
-    def _tool_name(tool: dict[str, Any]) -> str:
-        """Extract tool name from either OpenAI or Anthropic-style tool schemas."""
-        name = tool.get("name")
-        if isinstance(name, str):
-            return name
-        fn = tool.get("function")
-        if isinstance(fn, dict):
-            fname = fn.get("name")
-            if isinstance(fname, str):
-                return fname
-        return ""
-
-    @classmethod
-    def _tool_cache_marker_indices(cls, tools: list[dict[str, Any]]) -> list[int]:
-        """Return cache marker indices: builtin/MCP boundary and tail index."""
-        if not tools:
-            return []
-
-        tail_idx = len(tools) - 1
-        last_builtin_idx: int | None = None
-        for i in range(tail_idx, -1, -1):
-            if not cls._tool_name(tools[i]).startswith("mcp_"):
-                last_builtin_idx = i
-                break
-
-        ordered_unique: list[int] = []
-        for idx in (last_builtin_idx, tail_idx):
-            if idx is not None and idx not in ordered_unique:
-                ordered_unique.append(idx)
-        return ordered_unique
 
     @staticmethod
     def _sanitize_request_messages(
@@ -542,18 +499,6 @@ class LLMProvider(ABC):
             "error_retry_after_s": cls._extract_retry_after_from_headers(headers),
             "error_should_retry": should_retry,
         }
-
-    @staticmethod
-    def _enforce_role_alternation(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return enforce_role_alternation(messages)
-
-    @staticmethod
-    def _strip_image_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
-        return strip_image_content(messages)
-
-    @staticmethod
-    def _strip_image_content_inplace(messages: list[dict[str, Any]]) -> bool:
-        return strip_image_content_inplace(messages)
 
     async def _safe_chat(self, **kwargs: Any) -> LLMResponse:
         """Call chat() and convert unexpected exceptions to error responses."""
@@ -971,7 +916,7 @@ class LLMProvider(ABC):
                 identical_error_count = 1 if error_key else 0
 
             if not self._is_transient_response(response):
-                stripped = self._strip_image_content(original_messages)
+                stripped = strip_image_content(original_messages)
                 if stripped is not None and stripped != kw["messages"]:
                     logger.warning(
                         "Non-transient LLM error with image content, retrying without images"
@@ -982,7 +927,7 @@ class LLMProvider(ABC):
                     # Permanently strip images from the original messages so
                     # subsequent iterations do not repeat the error-retry cycle.
                     if result.finish_reason != "error":
-                        self._strip_image_content_inplace(original_messages)
+                        strip_image_content_inplace(original_messages)
                         result.images_stripped = True
                     return result
                 return response
@@ -1036,3 +981,11 @@ class LLMProvider(ABC):
     def get_default_model(self) -> str:
         """Get the default model for this provider."""
         pass
+
+
+@dataclass(frozen=True)
+class LLMRuntime:
+    """Il provider attivo e il suo modello, passati insieme."""
+
+    provider: LLMProvider
+    model: str

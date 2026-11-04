@@ -100,6 +100,25 @@ def test_exclusions(tmp_path: Path) -> None:
     assert not any("__pycache__" in p or p.endswith(".tmp") for p in paths)
 
 
+def test_the_copies_a_migration_leaves_are_not_tracked(tmp_path: Path) -> None:
+    """``sessions.migrated/`` e ``.jenny/webui.migrated/`` hanno dati che lo
+    stato porta già: fuori dalle foto e dal ``.jbk``. Un file che si chiama così
+    resta."""
+    _make_workspace(tmp_path)
+    (tmp_path / "sessions.migrated").mkdir()
+    (tmp_path / "sessions.migrated" / "unified_default.jsonl").write_text("{}", encoding="utf-8")
+    (tmp_path / ".jenny" / "webui.migrated").mkdir(parents=True)
+    (tmp_path / ".jenny" / "webui.migrated" / "websocket_default.jsonl").write_text(
+        "{}", encoding="utf-8")
+    (tmp_path / "note.migrated").write_text("mia", encoding="utf-8")
+
+    manifest = _engine(tmp_path).create_snapshot(trigger="manual", now_ms=1000)
+    assert manifest is not None
+    paths = {e.path for e in manifest.files}
+    assert not any(".migrated/" in p for p in paths)
+    assert "note.migrated" in paths
+
+
 def test_output_dir_is_tracked(tmp_path: Path) -> None:
     """``output/`` resta DENTRO gli snapshot: contiene lavoro finito, non scarti.
 

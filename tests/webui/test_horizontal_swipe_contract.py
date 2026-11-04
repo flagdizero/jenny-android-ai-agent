@@ -27,10 +27,9 @@ modo per dirlo e' che **nessun altro file ascolta `touchmove`**. Misurato il
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
+
 MODULE = ASSETS / "shared" / "horizontal-swipe.js"
 
 # `apps/` e' nell'elenco dal 22/09/2026: da quel giorno il kit che ogni Jenny

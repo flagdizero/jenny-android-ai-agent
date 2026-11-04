@@ -13,7 +13,7 @@ from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 from websockets.http11 import Request as WsRequest
 
-from jenny.bus.events import InboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.config.paths import get_uploads_dir
 from jenny.config.schema import Base
@@ -48,7 +48,7 @@ from jenny.channels.subagent_activity_wire import (
     normalize_since,
     normalize_task_id,
 )
-from jenny.channels.ws_logging import websockets_server_logger
+from jenny.channels.ws_logging import redirect_lib_logging, websockets_server_logger
 from jenny.channels.ws_parsing import (
     _MAX_FILE_BYTES,
     _MAX_FILES_PER_MESSAGE,
@@ -64,9 +64,9 @@ from jenny.channels.ws_parsing import (
 from jenny.channels.ws_remote import RemoteListener, auth_secret, server_listening
 from jenny.channels.ws_sender import OutboundSenderMixin
 from jenny.session.keys import (
-    PROJECT_SESSION_PREFIX,
     is_project_chat_id,
     is_valid_project_name,
+    project_name,
 )
 from jenny.utils.media_decode import (
     FileSizeExceeded,
@@ -148,7 +148,7 @@ class WebSocketConfig(Base):
 class WebSocketChannel(OutboundSenderMixin):
     """Run a local WebSocket server; forward text/JSON messages to the message bus."""
 
-    name = "websocket"
+    name = WEBSOCKET_CHANNEL
 
     def __init__(
         self,
@@ -387,8 +387,6 @@ class WebSocketChannel(OutboundSenderMixin):
     # -- Server lifecycle and connection ingress ---------------------------
 
     async def start(self) -> None:
-        from jenny.utils.logging_bridge import redirect_lib_logging
-
         redirect_lib_logging("websockets", level="WARNING")
         ws_logger = websockets_server_logger()
 
@@ -598,7 +596,8 @@ class WebSocketChannel(OutboundSenderMixin):
                         detail="frame without a type", reason="untyped_frame",
                     )
         except Exception as e:
-            self.logger.warning("connection loop error (client={}): {}", client_id, e, exc_info=True)
+            self.logger.opt(exception=True).warning(
+                "connection loop error (client={}): {}", client_id, e)
         finally:
             self._cleanup_connection(connection)
 
@@ -741,7 +740,7 @@ class WebSocketChannel(OutboundSenderMixin):
         raw = envelope.get("chat_id")
         if not isinstance(raw, str) or not is_project_chat_id(raw):
             return WEBUI_DEFAULT_CHAT_ID
-        if not is_valid_project_name(raw[len(PROJECT_SESSION_PREFIX):]):
+        if not is_valid_project_name(project_name(raw)):
             return None
         return raw
 
@@ -867,13 +866,16 @@ class WebSocketChannel(OutboundSenderMixin):
             if envelope.get(WORKSPACE_READONLY_METADATA_KEY) is True:
                 metadata[WORKSPACE_READONLY_METADATA_KEY] = True
             # Il tasto Piano: apre una pianificazione, che propone la lista e
-            # non tocca niente (``jenny/plan/driver.py``). Solo nella chat di un
-            # quaderno: un piano fotografa un quaderno, e fuori non ce n'e' uno.
+            # non tocca niente (``jenny/plan/driver.py``). Nella chat di un
+            # quaderno e in quella personale: se lì i piani ci sono lo decide il
+            # driver (``PlanDriver.place_of``, la personale solo con
+            # l'orchestratore), e un turno marcato dove non ci sono resta un turno
+            # normale in sola lettura — il client ha solo ristretto se stesso.
             # La sola lettura la impone il server, non la fiducia nel client. I
             # messaggi dopo, finche' la pianificazione dura, arrivano senza il
             # flag: li marca il driver (``PlanDriver._settle_drafting``), perche'
             # lo stato e' suo e non del client.
-            if envelope.get("plan") is True and is_project_chat_id(cid):
+            if envelope.get("plan") is True:
                 metadata["plan_mode"] = True
                 metadata[WORKSPACE_READONLY_METADATA_KEY] = True
                 revise = envelope.get("plan_revise")

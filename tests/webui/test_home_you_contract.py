@@ -10,18 +10,16 @@ dentro senza dire niente.
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
-from pathlib import Path
 
 from support import css_levels, theme_tokens
+from support.js_harness import ASSETS, UI
 
 from jenny.utils.android_assets import _UI_MANIFEST
 
-ROOT = Path(__file__).resolve().parents[2]
-UI = ROOT / "jenny" / "templates" / "ui"
 INDEX = UI / "index.html"
-ASSETS = UI / "assets"
 APP_JS = ASSETS / "home-app.js"
 YOU_JS = ASSETS / "home-you.js"
 CSS = ASSETS / "home-style.css"
@@ -252,7 +250,8 @@ def test_the_room_says_what_happens_to_what_you_write() -> None:
     for locale in ("it", "en"):
         data = json.loads((I18N / f"{locale}.json").read_text(encoding="utf-8"))
         jenny = data["home"]["jenny"]
-        for key in ("rules", "rulesHint", "rulesPlaceholder", "rulesSave",
+        assert data["common"]["save"].strip(), "il Salva della casella (common.save)"
+        for key in ("rules", "rulesHint", "rulesPlaceholder",
                     "rulesSaved", "rulesFailed"):
             assert jenny.get(key, "").strip(), f"home.jenny.{key} manca in {locale}.json"
 
@@ -269,10 +268,24 @@ def _rule(css: str, selector: str) -> str:
     """
     bodies = []
     for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        names = {s.strip().splitlines()[-1].strip() for s in selectors.split(",") if s.strip()}
+        names = set()
+        for s in re.split(r",(?![^(]*\))", selectors):
+            if not s.strip():
+                continue
+            names |= _expand_is(s.strip().splitlines()[-1].strip())
         if selector in names:
             bodies.append(body)
     return "\n".join(bodies)
+
+
+def _expand_is(selector: str) -> set[str]:
+    """`:is(.a, .b) a` vale `.a a` e `.b a`: le regole che casa e officina
+    dicono uguali stanno in una (v. la tipografia del markdown)."""
+    parts = []
+    for part in re.findall(r":is\([^)]*\)|\S+", " ".join(selector.split())):
+        inner = re.fullmatch(r":is\((.*)\)", part)
+        parts.append([x.strip() for x in inner.group(1).split(",")] if inner else [part])
+    return {" ".join(c) for c in itertools.product(*parts)}
 
 
 def test_she_is_on_top_of_everything_in_the_house() -> None:
@@ -753,7 +766,12 @@ def test_the_update_round_has_exactly_one_view_now() -> None:
     for view, source in (("la casa", home), ("l'workshop", workshop)):
         routes = re.findall(r"/api/updates/\w+", source)
         assert not routes, f"{view} parla da sola con {sorted(set(routes))}"
-    assert re.findall(r"/api/updates/\w+", flow), "il flusso non chiama piu' nessuna rotta"
+    # Le chiama il client (`api-client.js`), per conto del flusso: via i suoi
+    # metodi, non `_fetch` da fuori.
+    assert all(f"api.{m}()" in flow for m in ("checkUpdates", "installUpdate", "getUpdateStatus")), (
+        "il flusso non chiama piu' nessuna rotta"
+    )
+    assert "api._fetch(" not in flow
 
     # E la tabella delle fasi resta una.
     assert flow.count("phaseDownloading") == 1
@@ -803,8 +821,10 @@ def test_the_local_history_and_the_exported_backup_are_two_things() -> None:
             assert more.get(key, "").strip(), f"home.backup.more.{key} manca in {locale}.json"
         assert "{when}" in more["fileLast"], "la riga del file non interpola la data"
         history = backup["history"]
-        for key in ("title", "sub", "off", "loading", "showAll", "today", "yesterday", "weekday"):
+        assert data["backup"]["snapshotHistory"].strip(), "il titolo della storia locale"
+        for key in ("sub", "off", "loading", "showAll"):
             assert history.get(key, "").strip(), f"home.backup.history.{key} manca in {locale}.json"
+        assert "{day}" in data["common"]["weekdayAt"], "«giovedi' alle 9:40» (`when.js::nearDay`)"
         assert history["sub"] != history["off"], (
             "la storia locale accesa e spenta si leggono uguali"
         )

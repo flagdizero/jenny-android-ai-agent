@@ -32,12 +32,11 @@ import re
 from pathlib import Path
 
 import pytest
+from support.js_harness import ASSETS, ROOT
 
 from jenny.channels.subagent_activity_wire import ACTIVITY_FRAME_EVENT
 
-ROOT = Path(__file__).resolve().parents[2]
 CHANNELS = ROOT / "jenny" / "channels"
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 
 # Eventi che il client non deve ascoltare, ognuno con il suo perché. Chi ne
 # aggiunge uno qui lo fa sapendolo; un evento nuovo senza ascoltatore fa rosso.
@@ -124,6 +123,8 @@ def _emitted_events() -> set[str]:
     src = "".join(p.read_text(encoding="utf-8") for p in sorted(CHANNELS.glob("*.py")))
     names = set(re.findall(r'"event"\s*:\s*"([a-z_]+)"', src))
     names |= set(re.findall(r'_send_event\(\s*[\w.]+\s*,\s*"([a-z_]+)"', src, re.S))
+    # Gli avvisi di aggiornamento: ``_broadcast("board_changed", notebook=...)``.
+    names |= set(re.findall(r'_broadcast\(\s*"([a-z_]+)"', src))
     names.add(ACTIVITY_FRAME_EVENT)
     return names
 

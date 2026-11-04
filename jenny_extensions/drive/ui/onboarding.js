@@ -44,7 +44,7 @@ export function renderWelcome(slot, { fileButton, fileHint } = {}) {
  *  ripristinata ha già i provider, quindi il guscio riparte dalla casa e il
  *  wizard non si rivede. Ogni intoppo è una frase sotto il bottone, che resta
  *  lì per riprovare. */
-export async function findCloudCopy(slot, btn) {
+async function findCloudCopy(slot, btn) {
   if (btn.disabled) return;
   const status = slot.querySelector('#onboarding-met-status');
   const say = (text) => {

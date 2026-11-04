@@ -30,9 +30,9 @@ WebUI non ha un runner JS con DOM.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
+
 CHAT_JS = ASSETS / "mobile-chat.js"
 MASCOT_JS = ASSETS / "shared" / "jenny-mascot.js"
 
@@ -51,8 +51,14 @@ def _method(source: str, name: str) -> str:
 
 
 def test_a_failing_native_bridge_is_reported_not_papered_over() -> None:
-    source = CHAT_JS.read_text(encoding="utf-8")
-    body = _method(source, "_openMediaFile")
+    # Uno per casa e officina, dal 02/11/2026 (`shared/media.js`), e cosi' la
+    # pastiglia che lo chiama (`renderMediaList`).
+    assert "renderMediaList(" in CHAT_JS.read_text(encoding="utf-8")
+    source = (ASSETS / "shared" / "media.js").read_text(encoding="utf-8")
+    assert "addEventListener('click', () => openMediaFile(entry))" in source
+    body = re.search(r"\nexport async function openMediaFile\(entry\) \{(.*?)\n\}", source, re.S)
+    assert body, "openMediaFile non trovato"
+    body = body.group(1)
 
     assert "const bridge = window.JennyNative;" in body
     assert "typeof bridge.openFile === 'function'" in body, (

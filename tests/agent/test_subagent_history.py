@@ -39,8 +39,7 @@ class TestSaveLoad:
     def test_history_lives_under_the_subagent_session_prefix(self, tmp_path: Path) -> None:
         store, sessions = _store(tmp_path)
         store.save("L1", "unified:default", _MESSAGES)
-        files = [p.name for p in sessions.sessions_dir.glob("*.jsonl")]
-        assert files == ["subagent_L1.jsonl"]
+        assert sessions.list_keys() == ["subagent:L1"]
         assert subagent_session_key("L1").startswith(SUBAGENT_SESSION_PREFIX)
 
     def test_save_invalidates_the_session_cache(self, tmp_path: Path) -> None:
@@ -75,7 +74,7 @@ class TestExpiry:
         store, sessions = _store(tmp_path)
         store.save("L1", "o", _MESSAGES, now=time.time() - HISTORY_TTL_S - 60)
         assert store.load("L1") is None
-        assert not (sessions.sessions_dir / "subagent_L1.jsonl").exists()
+        assert not sessions.exists("subagent:L1")
 
     def test_within_ttl_survives(self, tmp_path: Path) -> None:
         store, _ = _store(tmp_path)
@@ -85,31 +84,31 @@ class TestExpiry:
     def test_missing_timestamp_counts_as_expired(self, tmp_path: Path) -> None:
         store, sessions = _store(tmp_path)
         store.save("L1", "o", _MESSAGES)
-        path = sessions.sessions_dir / "subagent_L1.jsonl"
-        lines = path.read_text(encoding="utf-8").splitlines()
-        meta = json.loads(lines[0])
-        meta["metadata"].pop("saved_at")
-        path.write_text(
-            "\n".join([json.dumps(meta)] + lines[1:]) + "\n", encoding="utf-8"
-        )
+        meta = sessions.read_session_metadata("subagent:L1")["metadata"]
+        meta.pop("saved_at")
+        with sessions._db.write() as conn:
+            conn.execute("UPDATE sessions SET metadata = ? WHERE key = 'subagent:L1'",
+                         (json.dumps(meta),))
         assert store.load("L1") is None
 
-    def test_garbage_file_degrades_to_none(self, tmp_path: Path) -> None:
-        """Un file corrotto porta al rilancio, non a un'eccezione."""
+    def test_garbage_rows_degrade_to_none(self, tmp_path: Path) -> None:
+        """Righe rotte portano al rilancio, non a un'eccezione."""
         store, sessions = _store(tmp_path)
-        (sessions.sessions_dir / "subagent_L1.jsonl").write_text(
-            "{not json at all\n\x00\x00", encoding="utf-8"
-        )
+        with sessions._db.write() as conn:
+            conn.execute("INSERT INTO sessions(key, metadata) VALUES ('subagent:L1', '{rotto')")
+            conn.execute("INSERT INTO session_messages(key, seq, data) "
+                         "VALUES ('subagent:L1', 0, 'non json')")
         assert store.load("L1") is None
 
     def test_history_without_usable_messages_is_dropped(self, tmp_path: Path) -> None:
         store, sessions = _store(tmp_path)
         store.save("L1", "o", _MESSAGES)
-        path = sessions.sessions_dir / "subagent_L1.jsonl"
-        meta = path.read_text(encoding="utf-8").splitlines()[0]
-        path.write_text(meta + "\n" + json.dumps({"no_role": 1}) + "\n", encoding="utf-8")
+        with sessions._db.write() as conn:
+            conn.execute("DELETE FROM session_messages WHERE key = 'subagent:L1'")
+            conn.execute("INSERT INTO session_messages(key, seq, data) VALUES "
+                         "('subagent:L1', 0, ?)", (json.dumps({"no_role": 1}),))
         assert store.load("L1") is None
-        assert not path.exists()
+        assert not sessions.exists("subagent:L1")
 
 
 class TestRetentionCap:
@@ -122,8 +121,8 @@ class TestRetentionCap:
         for i in range(total):
             store.save(f"L{i}", "unified:default", _MESSAGES, now=base + i)
 
-        alive = sorted(p.name for p in sessions.sessions_dir.glob("subagent_*.jsonl"))
-        assert alive == sorted(f"subagent_L{i}.jsonl" for i in range(2, total))
+        alive = sorted(sessions.list_keys("subagent:"))
+        assert alive == sorted(f"subagent:L{i}" for i in range(2, total))
         assert store.load("L0") is None
         assert store.load(f"L{total - 1}") == _MESSAGES
 
@@ -251,5 +250,5 @@ class TestKeys:
 
         store, sessions = _store(tmp_path)
         store.save("L1", "o", _MESSAGES)
-        assert MemoryStore.prune_dream_sessions(sessions.sessions_dir, keep=0) == []
+        assert MemoryStore.prune_dream_sessions(sessions, keep=0) == []
         assert store.load("L1") == _MESSAGES

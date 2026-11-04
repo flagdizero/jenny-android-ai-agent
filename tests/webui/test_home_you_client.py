@@ -24,16 +24,12 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, FAKE_ELEMENT, function, locale, member, requires_node, run_js
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 YOU_JS = ASSETS / "home-you.js"
 THEME_JS = ASSETS / "shared" / "theme.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
-I18N_DIR = ASSETS / "i18n"
 
 
 pytestmark = requires_node
@@ -53,36 +49,7 @@ const i18n = { locale: 'it', translations: TRANSLATIONS, __T__ };
 /* Il nome di lei (`shared/bot-name.js`): qui quello di partenza. */
 const botName = { get: () => 'Jenny', set() {}, onChange() { return () => {}; } };
 
-function makeEl(tag) {
-  const el = {
-    tag,
-    className: '',
-    textContent: '',
-    hidden: false,
-    dataset: {},
-    attrs: {},
-    style: {},
-    children: [],
-    listeners: {},
-    isFragment: tag === '#fragment',
-    setAttribute(k, v) { el.attrs[k] = v; },
-    addEventListener(type, fn) { (el.listeners[type] ||= []).push(fn); },
-    appendChild(child) {
-      if (child.isFragment) { el.children.push(...child.children); child.children = []; }
-      else el.children.push(child);
-      return child;
-    },
-    classList: {
-      add(n) { if (!el.classList.contains(n)) el.className = (el.className + ' ' + n).trim(); },
-      remove(n) {
-        el.className = String(el.className).split(' ').filter((x) => x && x !== n).join(' ');
-      },
-      contains(n) { return String(el.className).split(' ').includes(n); },
-      toggle(n, on) { if (on) el.classList.add(n); else el.classList.remove(n); },
-    },
-  };
-  return el;
-}
+__MAKE_EL__
 
 const nodi = {};
 const document = {
@@ -132,9 +99,10 @@ function room() {
 def _harness() -> str:
     src = YOU_JS.read_text(encoding="utf-8")
     theme = THEME_JS.read_text(encoding="utf-8")
-    it = json.loads((I18N_DIR / "it.json").read_text(encoding="utf-8"))
+    it = locale("it")
     return (
-        _HARNESS.replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
+        _HARNESS.replace("__MAKE_EL__", FAKE_ELEMENT)
+        .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__THEMES__", _const_block(theme, "THEMES"))
         .replace("__SWATCH__", function(src, "swatchGradient"))

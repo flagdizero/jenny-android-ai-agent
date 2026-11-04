@@ -22,12 +22,12 @@ misura davvero la catena prompt → esito → stato → prompt del giro dopo.
 
 from __future__ import annotations
 
-import json
 from functools import cache
 from pathlib import Path
 from typing import Any
 
 import pytest
+from support.cron import saved_jobs
 from support.sessions import FakeSessions
 
 from jenny.agent.tools.registry import ToolRegistry
@@ -657,8 +657,7 @@ class TestPersistedState:
         service, job_id, _agent = _monitor(tmp_path)
         await _cycles(service, job_id, MONITOR_ESCALATE_AFTER_FAILURES)
 
-        raw = json.loads((tmp_path / "cron" / "jobs.json").read_text(encoding="utf-8"))
-        state = raw["jobs"][0]["state"]
+        state = saved_jobs(tmp_path / "cron" / "jobs.json")[0]["state"]
         assert state["lastStatus"] == "could_not_check"
         assert state["consecutiveCouldNotCheck"] == MONITOR_ESCALATE_AFTER_FAILURES
         assert state["couldNotCheckEscalated"] is True

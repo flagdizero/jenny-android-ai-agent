@@ -47,6 +47,7 @@ from jenny.agent.memory_archive import ArchivedEntry, archive_entry
 from jenny.agent.memory_search import similarity
 from jenny.agent.tools.base import Tool
 from jenny.agent.tools.file_state import FileStates
+from jenny.utils.helpers import clip
 from jenny.utils.path import atomic_write
 
 if TYPE_CHECKING:
@@ -305,7 +306,7 @@ def _summarize(text: str, limit: int = 60) -> str:
     """Prima riga della voce, accorciata, per elenchi e messaggi d'errore."""
     first = text.strip().splitlines()[0] if text.strip() else ""
     first = re.sub(r"^[-*][ \t]+", "", first).strip()
-    return first if len(first) <= limit else first[: limit - 1] + "…"
+    return clip(first, limit)
 
 
 def _as_bullet(text: str) -> str:

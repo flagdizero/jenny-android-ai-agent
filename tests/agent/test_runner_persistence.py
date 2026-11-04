@@ -6,6 +6,7 @@ import os
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from support.runner import empty_tools, make_spec
 
 from jenny.providers.base import LLMResponse, ToolCallRequest
@@ -123,8 +124,14 @@ def test_persist_tool_result_logs_cleanup_failures(monkeypatch, tmp_path):
     assert warnings and "Failed to clean stale tool result buckets" in warnings[0]
 
 
-async def test_read_file_result_is_not_offloaded(tmp_path):
-    """read_file must not trigger generic offloading (prevents persist->read->persist loops)."""
+@pytest.mark.parametrize("tool_name", ["read_file", "web_fetch"])
+async def test_self_bounded_results_are_not_offloaded(tmp_path, tool_name):
+    """read_file and web_fetch bound their own output, so no generic offloading.
+
+    read_file is the recovery path for persisted results (persist->read->persist
+    loops). web_fetch promises up to ``max_chars`` (50,000 by default): offloaded,
+    it reached the model as a 1,200-character preview of a page it asked for.
+    """
     from jenny.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -136,7 +143,7 @@ async def test_read_file_result_is_not_offloaded(tmp_path):
         if call_count["n"] == 1:
             return LLMResponse(
                 content="reading",
-                tool_calls=[ToolCallRequest(id="call_rf", name="read_file", arguments={"path": "big.txt"})],
+                tool_calls=[ToolCallRequest(id="call_rf", name=tool_name, arguments={"path": "big.txt"})],
                 usage={"prompt_tokens": 5, "completion_tokens": 3},
             )
         captured_second_call[:] = messages

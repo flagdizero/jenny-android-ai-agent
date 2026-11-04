@@ -32,7 +32,7 @@ from jenny.utils.helpers import (
     strip_think,
     truncate_text,
 )
-from jenny.utils.path import append_lines_durable, atomic_write
+from jenny.utils.path import append_lines_durable, atomic_write, iter_jsonl
 from jenny.utils.prompt_templates import render_template
 
 # Separatore fra il template di Dream e il batch di storia, dentro il prompt che
@@ -995,13 +995,7 @@ class MemoryStore:
         entries: list[dict[str, Any]] = []
         with suppress(FileNotFoundError):
             with open(self.history_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            continue
+                entries = list(iter_jsonl(f))
 
         return entries
 
@@ -1696,9 +1690,16 @@ class MemoryStore:
 
     @staticmethod
     def _format_messages(messages: list[dict]) -> str:
+        from jenny.session.history_meta import INJECTED_EVENT_META, PLAN_TURN_EVENTS
+
         lines = []
         for message in messages:
             if not message.get("content"):
+                continue
+            # Il messaggio di un passo di un piano lo scrive il driver, non
+            # l'utente: negli appunti (e da lì a Dream) sarebbe un «USER:» lungo
+            # una pagina di istruzioni. Il lavoro del passo resta, nelle risposte.
+            if message.get(INJECTED_EVENT_META) in PLAN_TURN_EVENTS:
                 continue
             tools = f" [tools: {', '.join(message['tools_used'])}]" if message.get("tools_used") else ""
             lines.append(
@@ -1744,9 +1745,9 @@ class MemoryStore:
         return f"{DREAM_SESSION_PREFIX}{datetime.now():%Y%m%d-%H%M%S}"
 
     @classmethod
-    def prune_dream_sessions(cls, sessions_dir: Path, *, keep: int = 10) -> list[str]:
-        """Remove the oldest Dream session files, keeping only the N most recent."""
-        return cls.prune_internal_sessions(sessions_dir, "dream", keep=keep)
+    def prune_dream_sessions(cls, sessions: Any, *, keep: int = 10) -> list[str]:
+        """Remove the oldest Dream sessions, keeping only the N most recent."""
+        return cls.prune_internal_sessions(sessions, "dream", keep=keep)
 
 
 # ---------------------------------------------------------------------------

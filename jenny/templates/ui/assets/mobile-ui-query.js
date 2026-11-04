@@ -24,11 +24,7 @@ export class UiQueryResponder extends ShellResponder {
     /* Dalla tabella, non dall'id costruito: `view-cervello` non esiste, e
        per i tre cassetti Jenny riceveva un HTML vuoto. */
     const container = viewElement(view);
-    /* Con la chat aperta sopra (05/10/2026) la vista e' inerte: per chi la
-       usa e' solo coperta, non spenta, e un `inert` nell'HTML la farebbe
-       leggere a Jenny come disabilitata. */
-    const outer = container ? container.outerHTML.replace(/^(<[^>]*?)\sinert(="")?/, '$1') : '';
-    const html = this._pruneHtml(outer);
+    const html = this._pruneHtml(container ? container.outerHTML : '');
 
     const payload = { view, drawer, html };
     /* La chat e' aperta sopra la vista: `view` e l'HTML restano quelli sotto,

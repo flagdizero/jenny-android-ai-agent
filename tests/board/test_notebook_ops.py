@@ -51,12 +51,12 @@ def _write(path: Path, text: str) -> None:
 
 
 def _jobs(tmp_path: Path, monkeypatch, jobs: list[dict]) -> None:
-    """I promemoria del quaderno sono job: ``cron/jobs.json`` del workspace."""
-    import json
+    """I promemoria del quaderno sono job: lo store del cron del workspace."""
+    from support.cron import seed_jobs
 
     from jenny.runtime.context import get_runtime_context
 
-    _write(tmp_path / "cron" / "jobs.json", json.dumps({"jobs": jobs}))
+    seed_jobs(tmp_path, jobs)
     monkeypatch.setattr(get_runtime_context(), "workspace_dir", tmp_path)
 
 
@@ -195,12 +195,14 @@ def test_the_shared_constants_stay_equal(lint_wiki) -> None:
     from jenny.agent.gardener import MAP_TARGET_CHARS, page_ceiling
 
     assert ops.PAGE_STATES == lint_wiki.PAGE_STATES
-    assert ops.RESEARCH_SUBDIRS == lint_wiki.RESEARCH_SUBDIRS
+    from jenny.utils.wiki_paths import RESEARCH_SUBDIRS
+
+    assert RESEARCH_SUBDIRS == lint_wiki.RESEARCH_SUBDIRS
     assert page_ceiling() == lint_wiki.PAGE_MAX_CHARS
     assert MAP_TARGET_CHARS == lint_wiki.MAP_MAX_CHARS
     assert ops._WIKILINK_RE.pattern == lint_wiki.WIKILINK_RE.pattern
     for text in ("---\nstate: open\n---\n", "\ufeff\n---\nstate: open\n---", "# no\n"):
-        assert bool(ops._FRONTMATTER_RE.match(text)) == bool(lint_wiki.FRONTMATTER_RE.match(text))
+        assert bool(ops.FRONTMATTER_RE.match(text)) == bool(lint_wiki.FRONTMATTER_RE.match(text))
 
 
 def test_check_gives_the_line_and_writes_nothing(broken: Path) -> None:
@@ -261,6 +263,19 @@ def test_map_counts_subject_by_topic_with_file_and_line(tmp_path: Path) -> None:
     assert "- wiki/acero.md:3 — Il substrato è acido." in out
     assert "- raw/notes/misto.md:1 —" in out
     assert "Empty cells (1): Acero × acqua" in out
+
+
+def test_map_finds_subjects_that_are_not_in_the_latin_alphabet(tmp_path: Path) -> None:
+    """La piegatura toglie gli accenti, non le lettere: un ``encode("ascii")``
+    riduceva «Москва» e «東京» alla stringa vuota, e il soggetto spariva."""
+    root = tmp_path / "q"
+    _write(root / "wiki" / "viaggio.md", "# Viaggio\n\nМосква d'inverno, poi 東京.\nStraße.\n")
+    subjects = ops.parse_terms([{"name": "Москва"}, {"name": "東京"}, {"name": "Straße"}],
+                               "aliases")
+    assert [s.name for s in subjects] == ["Москва", "東京", "Straße"]
+    out = ops.map_notebook(root, subjects, ops.parse_terms(["viaggio"], "keywords"),
+                           ["wiki"], per_cell=3, max_chars=12000)
+    assert "| 東京 (1) | 1 |" in out and "| Straße (1) | 1 |" in out
 
 
 def test_read_many_splits_the_budget_and_says_what_it_cut(tmp_path: Path) -> None:

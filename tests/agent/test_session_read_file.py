@@ -36,10 +36,3 @@ def test_read_session_file_does_not_populate_cache(tmp_path: Path) -> None:
 def test_read_session_file_missing(tmp_path: Path) -> None:
     sm = SessionManager(tmp_path)
     assert sm.read_session_file("nope:none") is None
-
-
-def test_safe_key_matches_internal_path(tmp_path: Path) -> None:
-    sm = SessionManager(tmp_path)
-    key = "websocket:abc/def"
-    expected = sm._get_session_path(key).name
-    assert SessionManager.safe_key(key) + ".jsonl" == expected

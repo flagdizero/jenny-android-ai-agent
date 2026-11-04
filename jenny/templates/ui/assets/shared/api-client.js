@@ -276,12 +276,6 @@ class ApiClient {
     return token;
   }
 
-  async deleteJennyApp(slug) {
-    const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/delete`);
-    if (!res.ok) throw new Error(`Jenny app delete failed: ${res.status}`);
-    return res.json();
-  }
-
 
   /** Progetti dello scope chip: un progetto e' una wiki, quindi e' l'elenco
    *  delle wiki. Ritorna `{ dir, projects: [{ name, modified }] }`. */
@@ -311,21 +305,6 @@ class ApiClient {
     const res = await this._fetch(`/api/graph?wiki=${encodeURIComponent(wiki)}`);
     if (!res.ok) throw new Error(`Graph failed: ${res.status}`);
     return res.json();
-  }
-
-  /** Crea un riscontro ancorato a un punto di una pagina.
-   *
-   *  `selStart`/`selEnd` sono offset nel **markdown sorgente**. Il server si
-   *  rilegge il file da solo e calcola le tre ancore: il vecchio client gli
-   *  mandava anche `rawMarkdown` e la rotta lo **ignorava**.
-   *
-   *  Viaggia sul WebSocket (`rpc.createAudit`, comando `audit.create`): il
-   *  commento e' testo libero, e fino al 26/09/2026 stava nella query di una
-   *  GET, sotto il tetto di 8192 byte della riga di richiesta. Import
-   *  **dinamico** per la stessa ragione di `savePages`. */
-  async createAudit({ wiki, target, selStart, selEnd, comment }) {
-    const { rpc } = await import('./rpc-client.js');
-    return rpc.createAudit({ wiki, target, selStart, selEnd, comment });
   }
 
   /** La bacheca di un quaderno, gia' risolta dal server: schede coi loro
@@ -385,6 +364,47 @@ class ApiClient {
     const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/media/${encodeURIComponent(name)}`);
     if (!res.ok) throw new Error(`App media failed: ${res.status}`);
     return URL.createObjectURL(await res.blob());
+  }
+
+  /** La vista esterna di una Jenny App (`view_kind: external`): l'indirizzo del
+   *  proxy del telefono che la serve. Torna `{ ok, status, body }` e non lancia:
+   *  `body.error === 'phone_only'` (aperta da un altro dispositivo) e' una
+   *  risposta da dire, non un guasto. Passa da `_fetch`, cioe' dal nuovo login
+   *  su un 401: fino al 02/11/2026 `apps-actions.js` chiamava `fetch` col
+   *  segreto in mano, e un segreto scaduto era «proxy non partito». */
+  async getAppView(slug) {
+    const res = await this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/view`);
+    const body = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, body };
+  }
+
+  /** Chiude il proxy della vista esterna di *slug*. Se non arriva ci pensa
+   *  l'idle timeout lato Python. */
+  closeAppView(slug) {
+    return this._fetch(`/api/webui/apps/${encodeURIComponent(slug)}/view/close`);
+  }
+
+  /* Le tre rotte dell'aggiornamento (`update-flow.js`). GET e non POST, come
+     ogni altra scrittura di questa WebUI: il server HTTP e' quello di
+     `websockets`, che rifiuta ogni altro metodo prima del router. Erano
+     `api._fetch(...)` chiamato da fuori: un metodo privato usato come
+     pubblico. */
+  async _getJson(url, label) {
+    const res = await this._fetch(url);
+    if (!res.ok) throw new Error(`${label} failed: ${res.status}`);
+    return res.json();
+  }
+
+  checkUpdates() {
+    return this._getJson('/api/updates/check', 'Update check');
+  }
+
+  installUpdate() {
+    return this._getJson('/api/updates/install', 'Update install');
+  }
+
+  getUpdateStatus() {
+    return this._getJson('/api/updates/status', 'Update status');
   }
 
   /** Esegue un'azione di una Jenny App da fuori della sua cornice: i verbi di
@@ -457,28 +477,6 @@ class ApiClient {
     return res.json();
   }
 
-  /* Rinomina, cancellazione e copia viaggiano sul WebSocket (`rpc`, comandi
-     `workspace.rename`/`delete`/`copy`): cambiano il disco, e fino al
-     26/09/2026 erano GET su /api/, che e' per letture e parametri corti,
-     e un `<img src>` con il token nell'indirizzo poteva farli partire. Stanno qui con
-     la stessa firma perche' i chiamanti non cambino; l'errore porta il `code`
-     del comando e il messaggio del server. Import **dinamico** per la stessa
-     ragione di `savePages`. */
-  async renameWorkspace(oldPath, newPath) {
-    const { rpc } = await import('./rpc-client.js');
-    return rpc.renameWorkspace(oldPath, newPath);
-  }
-
-  async deleteWorkspace(path) {
-    const { rpc } = await import('./rpc-client.js');
-    return rpc.deleteWorkspace(path);
-  }
-
-  async copyWorkspace(path, dest) {
-    const { rpc } = await import('./rpc-client.js');
-    return rpc.copyWorkspace(path, dest);
-  }
-
   // ── Session APIs ──
 
   async fetchWebuiThread(key, { limit = 160, before = null } = {}) {
@@ -498,19 +496,6 @@ class ApiClient {
     return res.json();
   }
 
-  /* I quattro metodi che portano un segreto — `getProviderModels`,
-     `updateProvider`, `saveTelegramToken`, `saveSshHost` — viaggiano sul
-     WebSocket (`rpc`): la chiave API, il token del bot e la password SSH
-     stavano nella query di una GET, cioe' nella riga di richiesta che log e
-     traceback vedono. Firma e forma della risposta sono
-     quelle di prima, cosi' i chiamanti non cambiano; l'errore porta il
-     messaggio del server e il `code` del comando. Import **dinamico** per la
-     stessa ragione di `savePages`. */
-  async getProviderModels(provider, apiKey, apiBase, format) {
-    const { rpc } = await import('./rpc-client.js');
-    return rpc.providerModels({ provider, apiKey, apiBase, format });
-  }
-
   _postWithQuery(url, params) {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
@@ -523,20 +508,6 @@ class ApiClient {
     const res = await this._postWithQuery('/api/settings/update', params);
     if (!res.ok) throw new Error(`Settings update failed: ${res.status}`);
     return res.json();
-  }
-
-  /* Il messaggio del server arriva nell'errore: il backend rifiuta il
-     salvataggio spiegando *quale* file CA non ha potuto leggere e dove, e uno
-     stato secco trasformerebbe quella spiegazione in un mistero. I valori vuoti
-     si scartano come faceva `_postWithQuery`: la stringa vuota vuol dire «non
-     toccare», e `ca_bundle_clear` e' il segnale a parte per svuotare. */
-  async updateProvider(params) {
-    const { rpc } = await import('./rpc-client.js');
-    const clean = {};
-    for (const [k, v] of Object.entries(params || {})) {
-      if (v !== null && v !== undefined && v !== '') clean[k] = String(v);
-    }
-    return rpc.updateProvider(clean);
   }
 
   async deleteProvider(params) {
@@ -645,22 +616,6 @@ class ApiClient {
     return this._sshCall('/api/settings/ssh/update', params);
   }
 
-  // `params` accetta anche `auth` ('key' | 'password') e, solo con
-  // `auth: 'password'`, la password in chiaro. Viaggia sul WebSocket (comando
-  // `ssh.host.save`), non piu' nella query: v. il commento su
-  // `getProviderModels`. Va omessa — non passata vuota — quando l'utente non
-  // l'ha ridigitata, perché assente significa "tieni quella salvata". Il valore
-  // non va mai loggato né tenuto in giro: la risposta non lo rimanda indietro
-  // (porta `has_password`, un booleano) proprio perché non esista una copia da
-  // cui possa ricomparire. I valori `null` diventano stringa vuota come in
-  // `_sshCall`: un campo svuotato deve arrivare vuoto.
-  async saveSshHost(params) {
-    const { rpc } = await import('./rpc-client.js');
-    const clean = {};
-    for (const [k, v] of Object.entries(params || {})) clean[k] = v == null ? '' : String(v);
-    return rpc.saveSshHost(clean);
-  }
-
   async deleteSshHost(alias) {
     return this._sshCall('/api/settings/ssh/host/delete', { alias });
   }
@@ -682,23 +637,6 @@ class ApiClient {
     return this._sshCall('/api/settings/ssh/host-key/accept', params);
   }
 
-  /* La prima chiave API dell'utente: viaggia sul WebSocket come gli altri
-     segreti (v. `getProviderModels`), non nella query di una GET. Stessa firma
-     e stessa risposta di prima; l'errore porta il messaggio del server. */
-  async saveOnboarding(params) {
-    const { rpc } = await import('./rpc-client.js');
-    return rpc.saveOnboarding({
-      provider_name: params.provider_name || params.provider || '',
-      format: params.format || '',
-      api_key: params.api_key || '',
-      api_base: params.api_base || '',
-      model: params.model || '',
-      bot_name: params.bot_name || '',
-      bot_icon: params.bot_icon || '',
-      locale: params.locale || '',
-    });
-  }
-
   // ── Telegram APIs ──
 
   async _telegramGet(url) {
@@ -712,13 +650,6 @@ class ApiClient {
 
   async getTelegramStatus() {
     return this._telegramGet('/api/telegram/status');
-  }
-
-  /* Il token sul WebSocket (comando `telegram.save`), non nella query: v. il
-     commento su `getProviderModels`. */
-  async saveTelegramToken(token) {
-    const { rpc } = await import('./rpc-client.js');
-    return rpc.saveTelegramToken(token);
   }
 
   async unpairTelegram() {
@@ -762,26 +693,15 @@ class ApiClient {
   /** `{pages, order, fixed, max, kinds}`. Il tetto arriva dal server e non se lo tiene
    *  scritto il client: due copie di quel numero divergerebbero, e la seconda
    *  si scoprirebbe solo quando un salvataggio viene rifiutato. */
+  /*  Le scritture che portano contenuto, un segreto o cambiano il disco
+      (le pagine della casa, i file del workspace, le chiavi, un riscontro)
+      viaggiano sul WebSocket: i chiamanti usano `rpc` (`rpc-client.js`)
+      direttamente. Fino al 02/11/2026 qui c'erano dei metodi omonimi che non
+      facevano che inoltrare. */
   async getPages() {
     const res = await this._fetch('/api/home/pages');
     if (!res.ok) throw new Error(`Pages read failed: ${res.status}`);
     return res.json();
-  }
-
-  /** Le pagine aggiunte **e** l'ordine di tutte, fisse comprese: `{ok,
-   *  pages, order}` torna com'e' stato salvato. L'ordine deve nominare
-   *  ogni pagina una volta sola, o il server lo rifiuta (`bad_request`) e qui
-   *  si lancia l'errore, con il suo `code`.
-   *
-   *  Resta qui perche' e' la gemella di `getPages`, ma la scrittura viaggia
-   *  sul WebSocket (`rpc.saveHomePages`): `/api/` e' per letture e parametri
-   *  corti, e fino al 25/09/2026 questa era una GET col
-   *  JSON nell'indirizzo. Import **dinamico**: `ws-manager.js` importa questo
-   *  modulo, e uno statico chiuderebbe il cerchio al caricamento. */
-  async savePages(pages, order) {
-    const { rpc } = await import('./rpc-client.js');
-    const body = await rpc.saveHomePages(pages, order);
-    return { ok: body.ok, pages: body.pages, order: body.order };
   }
 
   /* «Il file e' stato salvato davvero». Il gateway non puo' saperlo: lui

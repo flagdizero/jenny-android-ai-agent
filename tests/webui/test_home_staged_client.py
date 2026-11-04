@@ -10,9 +10,9 @@ tocco, e che un conflitto lo dice invece di scrivere.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from support.home_dom import requires_jsdom, run_home
+from support.js_harness import ASSETS
 
 pytestmark = requires_jsdom
 
@@ -108,8 +108,7 @@ assert.match(text(card().querySelector('.home-staged-why')), new RegExp(S.toolRe
 def test_the_card_rows_wrap_long_paths() -> None:
     """Il foglio vero applicato alla scheda vera: lo stile calcolato della riga
     va a capo dentro le parole (un percorso lungo non esce dal bordo)."""
-    css = (Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
-           / "home-style.css").read_text(encoding="utf-8")
+    css = (ASSETS / "home-style.css").read_text(encoding="utf-8")
     run_home(_HEAD + f"""
 const style = document.createElement('style');
 style.textContent = {json.dumps(css)};

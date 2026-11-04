@@ -1,17 +1,16 @@
 """Tests for auto compact (idle TTL) feature."""
 
 import asyncio
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 from support.aio import settle_tasks
 
 from jenny.agent.loop import AgentLoop
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.command import CommandContext
 from jenny.config.schema import AgentDefaults
 from jenny.providers.base import LLMResponse
@@ -24,20 +23,11 @@ def _make_loop(
     session_ttl_minutes: int = 15,
 ) -> AgentLoop:
     """Create a minimal AgentLoop for testing."""
-    bus = MessageBus()
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.estimate_prompt_tokens.return_value = (10_000, "test")
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok", tool_calls=[]))
     provider.generation.max_tokens = 4096
-    loop = AgentLoop(
-        bus=bus,
-        provider=provider,
-        workspace=tmp_path,
-        model="test-model",
-        context_window_tokens=128_000,
-        session_ttl_minutes=session_ttl_minutes,
-    )
+    loop = make_loop(tmp_path, provider=provider, session_ttl_minutes=session_ttl_minutes)
     loop.tools.get_definitions = MagicMock(return_value=[])
     return loop
 
@@ -301,12 +291,9 @@ class TestAutoCompact:
         session.add_message("user", "hello")
         loop.sessions.save(session)
         loop.sessions.invalidate(UNIFIED_SESSION_KEY)
-        path = loop.sessions._get_session_path(UNIFIED_SESSION_KEY)
-        lines = path.read_text(encoding="utf-8").splitlines()
-        assert '"updated_at"' in lines[0]
-        meta = json.loads(lines[0])
-        meta["updated_at"] = "yesterday-ish"
-        path.write_text("\n".join([json.dumps(meta), *lines[1:]]) + "\n", encoding="utf-8")
+        with loop.sessions._db.write() as conn:
+            conn.execute("UPDATE sessions SET updated_at = 'yesterday-ish' WHERE key = ?",
+                         (UNIFIED_SESSION_KEY,))
 
         scheduled: list = []
         loop.auto_compact.check_expired(scheduled.append, active_session_keys=())

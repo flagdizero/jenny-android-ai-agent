@@ -19,11 +19,9 @@ come in ``test_message_bubble_client.py``.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, function, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 
 
@@ -51,6 +49,7 @@ def _harness() -> str:
     methods = ",\n    ".join(_method(chat, name) for name in _METHODS)
     return """
 import assert from 'node:assert/strict';
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 
 /* ── DOM minimo ──────────────────────────────────────────────────────────────
    Solo ciò che questi metodi toccano. `appendChild` **sposta** un figlio che è
@@ -106,6 +105,8 @@ const i18n = { t: (key) => key };
    qui conta dove si posa. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 function bubble(role, ...texts) {
   const msg = el('div');
@@ -135,7 +136,7 @@ function actions(msg) {
     ['chat-meta', 'chat-time'].includes(b.className) ? b.textContent : b.className.split(' ')[1]
   ));
 }
-""".replace("__METHODS__", methods)
+""".replace("__METHODS__", methods).replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode"))
 
 
 def _run_js(script: str) -> None:

@@ -27,6 +27,7 @@
  */
 
 import { api } from './shared/api-client.js';
+import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
 import { watchHorizontalSwipe } from './shared/horizontal-swipe.js';
@@ -223,7 +224,7 @@ export class HomePages {
     const where = this.order[this.index];
     let saved;
     try {
-      saved = await api.savePages(pages, normalizeOrder(order, pages, this.fixed));
+      saved = await rpc.saveHomePages(pages, normalizeOrder(order, pages, this.fixed));
     } catch (err) {
       console.warn('home.homePages: pages not saved', err);
       showToast(i18n.t('home.pages.saveFailed'), 'error');

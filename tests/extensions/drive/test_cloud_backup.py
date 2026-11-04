@@ -30,10 +30,10 @@ from jenny_extensions.drive.cloud import (
 )
 from jenny_extensions.drive.cloud_sink import (
     LocalDirSink,
-    MemorySink,
     RemoteNotFoundError,
     split_key,
 )
+from tests.extensions.drive.memory_sink import MemorySink
 
 pytest.importorskip("cryptography")
 
@@ -327,12 +327,10 @@ async def test_state_records_the_last_success(tmp_path: Path) -> None:
     assert repo.read_state() == {}
 
     await repo.backup(engine, manifest.id)
-    repo.record_failure("boom")
 
     state = repo.read_state()
     assert state["last_snapshot_id"] == manifest.id
     assert state["last_success_ms"] > 0
-    assert state["last_error"] == "boom"
 
 
 def test_snapshot_names_and_keys() -> None:

@@ -35,11 +35,12 @@ from loguru import logger
 from jenny.session.keys import is_valid_project_name, project_session_key
 from jenny.session.project_rename import follow_renamed_project, pending_project_renames
 from jenny.session.project_traces import describe_project_traces
+from jenny.utils.errors import CodedError
 from jenny.utils.wiki_paths import is_wiki_root
 from jenny.webui.wiki_registry import refresh_wiki_registry
 
 
-class ProjectRenameError(Exception):
+class ProjectRenameError(CodedError):
     """Un rifiuto che si puo' dire all'utente. Niente e' stato toccato.
 
     ``code`` e' il codice di ``CommandError`` con cui il comando lo inoltra. I due
@@ -50,8 +51,7 @@ class ProjectRenameError(Exception):
     """
 
     def __init__(self, message: str, *, code: str = "bad_request") -> None:
-        super().__init__(message)
-        self.code = code
+        super().__init__(code, message)
 
 
 def rename_project(

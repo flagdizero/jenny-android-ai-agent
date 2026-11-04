@@ -5,37 +5,17 @@ import functools
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
 from port_alloc import free_port, wait_listening
+from support.ws_channel import make_ws_channel
 
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketChannel
 from jenny.session.manager import Session, SessionManager
-from jenny.webui.gateway_services import GatewayServices, build_gateway_services
 
 _AUTH_SECRET = "test-secret"
-
-
-def _make_handler(
-    cfg: dict[str, Any] | WebSocketConfig,
-    bus: Any,
-    *,
-    session_manager: SessionManager | None = None,
-    workspace_path: Path | None = None,
-    runtime_model_name: Any | None = None,
-) -> GatewayServices:
-    config = WebSocketConfig.model_validate(cfg) if isinstance(cfg, dict) else cfg
-    workspace = workspace_path or Path.cwd()
-    return build_gateway_services(
-        config=config,
-        bus=bus,
-        session_manager=session_manager,
-        workspace_path=workspace,
-        default_restrict_to_workspace=False,
-        runtime_model_name=runtime_model_name,
-    )
 
 
 def _ch(
@@ -58,20 +38,12 @@ def _ch(
         "tokenIssueSecret": _AUTH_SECRET,
     }
     cfg.update(extra)
-    gateway = _make_handler(
+    return make_ws_channel(
         cfg, bus,
         session_manager=session_manager,
         workspace_path=workspace_path,
         runtime_model_name=runtime_model_name,
     )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
-
-
-@pytest.fixture()
-def bus() -> MagicMock:
-    b = MagicMock()
-    b.publish_inbound = AsyncMock()
-    return b
 
 
 async def _http_get(
@@ -308,14 +280,13 @@ async def test_session_routes_reject_non_websocket_keys(
         )
         assert msgs.status_code == 404
 
-        doomed = sm._get_session_path("other-channel:C123")
-        assert doomed.exists()
+        assert sm.exists("other-channel:C123")
         deny_delete = await _http_get(
             f"http://127.0.0.1:{port}/api/sessions/other-channel:C123/delete",
             headers=auth,
         )
         assert deny_delete.status_code == 404
-        assert doomed.exists()
+        assert sm.exists("other-channel:C123")
     finally:
         await channel.stop()
         await server_task

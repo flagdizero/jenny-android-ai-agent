@@ -10,7 +10,7 @@ from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import ContextAware, RequestContext
 from jenny.agent.tools.path_utils import resolve_workspace_path
 from jenny.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
-from jenny.bus.events import OutboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, OutboundMessage
 from jenny.config.paths import get_workspace_path
 from jenny.cron.could_not_check import is_only_markers
 from jenny.security.subagent_policy import is_config_file
@@ -43,7 +43,7 @@ def _unusable_silent_alert(content: str, *, has_media: bool) -> str | None:
     - il **marcatore di protocollo** (``CHECK_OK 1`` il 16, 17 e 23 agosto,
       ``CHECK_OK`` il 23). È il caso peggiore dei tre, perché sbaglia due volte:
       l'utente riceve una parola d'ordine interna, e il verdetto non viene
-      registrato — ``parse_ok_marks`` legge il testo finale del turno, non
+      registrato — ``has_mark(…, CHECK_OK)`` legge il testo finale del turno, non
       l'argomento di un tool, quindi la voce del task resta in sospeso come se
       il modello non si fosse pronunciato;
     - la **parola nuda** (``silent`` il 24, ``x`` il 17 e il 22, ``boh`` il 16,
@@ -335,8 +335,8 @@ class MessageTool(Tool, ContextAware):
         channel = channel or default_channel
         explicit_chat_id = chat_id
         if (
-            default_channel == "websocket"
-            and channel == "websocket"
+            default_channel == WEBSOCKET_CHANNEL
+            and channel == WEBSOCKET_CHANNEL
             and explicit_chat_id is not None
             and str(explicit_chat_id).strip() != ""
             and str(explicit_chat_id).strip() != str(default_chat_id).strip()

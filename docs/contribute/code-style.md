@@ -33,7 +33,7 @@ Pyright runs in `basic` mode (`pyrightconfig.json`, `include: ["jenny"]`, exclud
 
 ```bash
 # BLOCKING subset — must stay error-clean:
-npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
+npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 
 # Full perimeter — informational, never fails the build:
 npx pyright || true

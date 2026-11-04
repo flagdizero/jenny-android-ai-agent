@@ -30,11 +30,9 @@ testo si perde — e c'è un doppio minimo di `document`/`requestAnimationFrame`
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 CHAT_JS = ASSETS / "mobile-chat.js"
 
 
@@ -105,6 +103,8 @@ const renderMarkdown = (text) => text;
    `test_vendor_contract.py`, e come disegnano `test_rich_content_client.py`. */
 const renderRich = () => {};
 const renderPlacesIn = () => {};
+const renderReplyExtras = (n) => { renderRich(n); renderPlacesIn(n); };
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 
 function makeChat() {
   return {

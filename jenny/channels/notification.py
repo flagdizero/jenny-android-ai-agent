@@ -28,10 +28,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from loguru import logger
-
-from jenny.bus.events import COORDINATION_FLAGS, NOTIFICATION_CHANNEL, OutboundMessage
-from jenny.channels.non_streaming import NonStreamingChannelMixin
+from jenny.bus.events import NOTIFICATION_CHANNEL
+from jenny.channels.non_streaming import FinalTextChannel
 from jenny.runtime.native_input import NATIVE_THREAD_KEY
 from jenny.runtime.notifier import post_alert
 
@@ -64,72 +62,22 @@ def _thread_of(metadata: dict[str, Any]) -> str:
     return REPLY_THREAD_TAG
 
 
-class NotificationChannel(NonStreamingChannelMixin):
-    """Consegna la risposta come alert di sistema Android."""
+class NotificationChannel(FinalTextChannel):
+    """Consegna la risposta come alert di sistema Android.
+
+    Niente spinner né tool hint in una tendina: l'unica cosa che ha senso
+    postare è il messaggio finale. Gli alert già postati restano allo
+    spegnimento del gateway, di proposito: un avviso che l'utente non ha ancora
+    letto non deve sparire perché il servizio si è riavviato. A ripulirli c'è
+    ``NotifierBridge.clearAlerts`` quando la chat arriva a schermo, che è il
+    momento in cui sono davvero stati letti.
+    """
 
     name = NOTIFICATION_CHANNEL
-    # Niente spinner né tool hint in una tendina: l'unica cosa che ha senso
-    # postare è il messaggio finale.
-    send_progress = False
-    send_tool_hints = False
-    show_reasoning = False
-    # Un solo tentativo. ``post_alert`` non solleva mai — cattura tutto e
-    # ritorna un booleano — quindi il retry del dispatcher non scatterebbe per
-    # un fallimento di consegna; scatterebbe solo per un errore *qui*, e
-    # ripetere vorrebbe dire postare due volte lo stesso alert.
-    send_max_retries = 1
+    target = "the shade"
 
-    async def start(self) -> None:
-        """Nessuna connessione da aprire: la tendina c'è già."""
-        return None
-
-    async def stop(self) -> None:
-        """Nessuna connessione da chiudere. Gli alert già postati restano.
-
-        Non si cancellano allo spegnimento del gateway di proposito: un avviso
-        che l'utente non ha ancora letto non deve sparire perché il servizio si
-        è riavviato. A ripulirli c'è ``NotifierBridge.clearAlerts`` quando la
-        chat arriva a schermo, che è il momento in cui sono davvero stati letti.
-        """
-        return None
-
-    async def send(
-        self,
-        msg: OutboundMessage,
-        *,
-        only_conns: list[Any] | None = None,
-        skip_persist: bool = False,
-    ) -> list[Any]:
-        """Posta il messaggio finale come alert. Ritorna sempre ``[]``.
-
-        Nessun fan-out parziale da tracciare (la tendina è una sola) e nessuna
-        persistenza: la riga del transcript la scrive il mirror sulla vista
-        WebUI, che è la vista canonica della conversazione. Per lo stesso motivo
-        *skip_persist* non ha niente da saltare.
-
-        Gli eventi di coordinamento — ``_turn_end`` e i suoi fratelli — arrivano
-        fin qui perché non portano nessuno dei flag di streaming su cui il
-        dispatcher smista prima, e vanno scartati: sono marcatori della vista
-        WebUI, e postarli farebbe squillare una notifica vuota a ogni fine turno.
-        """
-        meta = msg.metadata or {}
-        if any(meta.get(flag) for flag in COORDINATION_FLAGS):
-            return []
-        content = (msg.content or "").strip()
-        if not content:
-            return []
-        if msg.media:
-            # Un alert è testo. Gli allegati restano nella conversazione — la
-            # WebUI li mostra — e qui si annota che non sono passati di qua,
-            # invece di far finta che il messaggio fosse completo.
-            logger.info(
-                "Notification channel: {} media attachment(s) not sent to the shade",
-                len(msg.media),
-            )
-        posted = await post_alert(content, meta, thread=_thread_of(meta))
-        if not posted:
-            # Esito normale e non un errore: l'app in primo piano sopprime
-            # l'alert perché la risposta è già a schermo in chat.
-            logger.info("Notification channel: alert not posted (foreground or no bridge)")
-        return []
-
+    async def _deliver(self, content: str, metadata: dict[str, Any]) -> bool:
+        """Posta l'alert sul filo da cui è arrivata la domanda. ``False`` è un
+        esito normale: l'app in primo piano sopprime l'alert perché la risposta
+        è già a schermo in chat."""
+        return await post_alert(content, metadata, thread=_thread_of(metadata))

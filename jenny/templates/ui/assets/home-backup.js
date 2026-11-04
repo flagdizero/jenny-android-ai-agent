@@ -26,37 +26,28 @@
  */
 
 import { i18n } from './shared/i18n.js';
-import { whenText } from './shared/when.js';
+import { dayOffset, nearDay, whenText } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
 import { confirmDialog } from './shared/dialog.js';
+import { iconHtml } from './shared/dom.js';
 import {
-  runExportFlow, runImportFlow, runSnapshotRestore, backupNativeAvailable,
+  runExportFlow, runImportFlow, runSnapshotRestore, backupNativeAvailable, snapshotDetail,
 } from './shared/backup-flow.js';
 
 /* Quanti snapshot si vedono aprendo la storia: di solito si cerca «prima di
    stamattina», non tre settimane fa. Gli altri dietro «Mostra gli altri». */
 const HISTORY_FIRST = 8;
-const DAY_MS = 86400000;
-
-const icon = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 
 /** Quando e' stato fatto uno snapshot: «oggi alle 9:40», «martedì alle 9:40»;
  *  piu' vecchio di una settimana, giorno e ora («3 ott, 9:40») — due snapshot
  *  dello stesso giorno devono restare distinguibili. */
 export function snapshotWhen(ms, now = Date.now(), locale = i18n.locale) {
   const at = new Date(Number(ms) || 0);
-  const day0 = (d) => { const c = new Date(d); c.setHours(0, 0, 0, 0); return c.getTime(); };
-  const days = Math.round((day0(now) - day0(at)) / DAY_MS);
-  if (days >= 7) {
+  if (dayOffset(at, now) >= 7) {
     return at.toLocaleString(locale, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   }
-  const time = at.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  if (days <= 0) return i18n.t('home.backup.history.today', { time });
-  if (days === 1) return i18n.t('home.backup.history.yesterday', { time });
-  return i18n.t('home.backup.history.weekday', {
-    day: at.toLocaleDateString(locale, { weekday: 'long' }), time,
-  });
+  return nearDay(at, { now, locale });
 }
 
 /** La riga che si legge senza entrare: quando l'hai esportato l'ultima volta.
@@ -73,7 +64,7 @@ export function backupValue(backup) {
 /** Una riga della pagina: icona, titolo, sottotitolo, e il segno a destra.
  *  Esportata perche' le righe di un'estensione siano uguali alle nostre. */
 export function rowHtml(iconName, label, sub, go = 'chevron-right') {
-  return `${icon(iconName)}<span>${escapeHtml(label)}${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`
+  return `${iconHtml(iconName)}<span>${escapeHtml(label)}${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`
     + `<i class="ti ti-${go} home-backup-go" aria-hidden="true"></i>`;
 }
 
@@ -229,12 +220,10 @@ export class HomeBackup {
     const now = Date.now();
     const rows = shown.map((s) => {
       const when = snapshotWhen(s.created_at_ms, now);
-      const key = `backup.trigger.${s.trigger}`;
-      const trigger = i18n.t(key) === key ? s.trigger : i18n.t(key);
-      const detail = `${trigger}${s.label ? ` · ${s.label}` : ''} · ${s.file_count} ${i18n.t('backup.files')}`;
+      const detail = snapshotDetail(s);
       return `<button class="home-history-snap" type="button" data-snapshot="${escapeHtml(s.id)}" data-when="${escapeHtml(when)}">`
         + `<span>${escapeHtml(when)}<small>${escapeHtml(detail)}</small></span>`
-        + `${icon('restore')}</button>`;
+        + `${iconHtml('restore')}</button>`;
     }).join('');
     const more = !h.all && h.snapshots.length > HISTORY_FIRST
       ? `<button class="home-history-snap is-more" type="button" data-history-all>${escapeHtml(i18n.t('home.backup.history.showAll', { n: h.snapshots.length - HISTORY_FIRST }))}</button>`
@@ -293,7 +282,7 @@ export class HomeBackup {
          scambiata per questa: la riga dice cos'e' e cosa **non** e'. Spenta,
          gli snapshot gia' fatti restano, e si sfogliano lo stesso. */
       const on = this.backup?.snapshots_enabled !== false;
-      this.historyBtn.innerHTML = rowHtml('history', i18n.t('home.backup.history.title'),
+      this.historyBtn.innerHTML = rowHtml('history', i18n.t('backup.snapshotHistory'),
         i18n.t(on ? 'home.backup.history.sub' : 'home.backup.history.off'),
         this._history ? 'chevron-up' : 'chevron-down');
       this.historyBtn.setAttribute('aria-expanded', String(!!this._history));

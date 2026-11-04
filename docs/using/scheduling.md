@@ -48,7 +48,7 @@ You don't create these from a screen — you just ask, in plain language, and Je
 - "List my reminders."
 - "Cancel the pizza reminder."
 
-Everything Jenny does for you later is one of **two kinds of job**, and both live in the same list (`cron/jobs.json` in the workspace):
+Everything Jenny does for you later is one of **two kinds of job**, and both live in the same list (in Jenny's state database, see [Where the list lives](#where-the-list-lives)):
 
 | Kind | How you'd phrase it | Behavior |
 |---|---|---|
@@ -119,15 +119,11 @@ When you ask Jenny to list reminders, you'll also see jobs you didn't create: **
 
 Earlier versions also had a **heartbeat**: a checklist in `HEARTBEAT.md` that one built-in job went through every 30 minutes. It is gone. Each of those checks is now a recurring job of its own, usually a monitor, with its own interval — ask Jenny to set one up for each line you still want. A `HEARTBEAT.md` left in your workspace is no longer run: the first time a scheduled job runs after the update, Jenny tells you once in chat which checks it held and asks which ones you want back, and the file is renamed `HEARTBEAT.md.retired`.
 
-### If the reminder list itself gets damaged
+### Where the list lives
 
-Your reminders live in one file, `cron/jobs.json` inside the workspace, and a phone can leave a file unreadable — storage trouble, or the system killing the process mid-write.
+Your jobs live in Jenny's state database (`state.sqlite`, next to the workspace), not in a file of their own. Every change is saved whole or not at all, so a killed process or a full disk cannot leave half a list behind. The database travels with every snapshot, the copy on Google Drive and the backup file: restoring any of them brings your reminders back as they were at that moment.
 
-Since 0.6.6 that file is handled the same way as `config.json`. Jenny keeps the previous good copy as `cron/jobs.json.bak` and refreshes it before every save. If the live file can't be read at startup, the backup is used and promoted; if there's no usable backup either, the unreadable file is set aside as `cron/jobs.json.corrupt-<timestamp>` and Jenny starts with **no reminders at all**. Either way the app comes online, and the workshop shows a notice at the top of its drawers saying which of the two happened and where the broken file went.
-
-That notice matters more here than it does for settings. A reminder that has stopped existing looks exactly like a reminder that hasn't come due yet, so without being told, you'd find out when it didn't go off. If you see the "started with none" version, your own reminders need recreating — the system jobs above come back on their own.
-
-The workshop's **Hands → When she acts on her own** is where you check the outcome: it lists your jobs, and repeats the recovery notice above the list itself, because further down the screen a short list of reminders looks exactly like a correct one. See [Settings → When she acts on her own](../reference/settings.md#when-she-acts-on-her-own).
+Versions before the database kept the list in `cron/jobs.json` in the workspace. The first start after the update moves it into the database and leaves the old folder as `cron.migrated/` for 30 days, in case you go back to the older app. That folder stays on the phone: snapshots and backup files leave it out, since the database already carries the same jobs.
 
 The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
 
@@ -173,7 +169,7 @@ Jenny has the same controls from her side: she can check on a subagent's status,
 - Subagents use the same model/provider as your main agent and consume tokens like a full turn — delegating is not free.
 - `/stop` leaves running subagents alone: it ends the current turn, and each subagent is stopped from its own bubble. `/stop all` disowns every subagent running for that chat: their in-flight work is abandoned, and if one finishes anyway after being disowned, its stale result is silently discarded rather than injected into the chat.
 - A subagent that goes quiet for longer than `agents.defaults.subagentStallThresholdSeconds` (default 180s) is flagged as stalled. It is never cancelled for you: relaunching is a decision, and a subagent that starts making progress again is un-flagged on its own.
-- If the app process dies while a subagent is working, its conversation is saved every 30 seconds or so as it works, and the home chat offers **Let her continue** from the last saved point, for up to 6 hours (an `app-builder` is the exception: it starts over). Besides that, a small record of each attempt (task, outcome, result summary) stays under `workspace/subagents/records/`, for the last 20 attempts per chat and 7 days. See [Helpers](helpers.md#when-a-helper-is-interrupted).
+- If the app process dies while a subagent is working, its conversation is saved every 30 seconds or so as it works, and the home chat offers **Let her continue** from the last saved point, for up to 6 hours (an `app-builder` is the exception: it starts over). Besides that, a small record of each attempt (task, outcome, result summary) stays in Jenny's state database, for the last 20 attempts per chat and 7 days. See [Helpers](helpers.md#when-a-helper-is-interrupted).
 
 ## Android notifications
 

@@ -146,6 +146,9 @@ def _report(results, args) -> None:
     print()
     _print_summary(table, baseline.get("rates", {}))
     out_dir = Path(args.out) if args.out else Path("/tmp")
+    # Tre ore di giri finivano qui con un FileNotFoundError, i tassi stampati e le
+    # risposte perse, se la cartella di ``--out`` non c'era ancora (03/11/2026).
+    out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"behaviour-{time.strftime('%Y%m%d-%H%M%S')}.json"
     runs = [r.__dict__ | {"checks": [c.__dict__ for c in r.checks]} for r in results]
     out.write_text(json.dumps(runs, ensure_ascii=False, indent=1, default=str))

@@ -7,12 +7,16 @@ Una cartella come quella che Drive dà scaricando «Jenny» (stessa forma della
 from __future__ import annotations
 
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from jenny.db import shards
+from jenny.db.database import Database
+from jenny.db.schema import Schema
 from jenny.snapshot.engine import SnapshotEngine
 from jenny_extensions.drive.cloud import CloudRepository, generate_master_key, seal_key
 from jenny_extensions.drive.cloud_sink import LocalDirSink
@@ -30,8 +34,15 @@ async def _drive_folder(tmp_path: Path) -> tuple[Path, bytes, Path]:
     (ws / "memory").mkdir(parents=True)
     (ws / "memory" / "MEMORY.md").write_text("ricordi", encoding="utf-8")
     (ws / "foto.jpg").write_bytes(os.urandom(5000))
-    engine = SnapshotEngine(ws, tmp_path / "snapshots")
+    # Lo stato a pezzi, come nel composition root: un database con una riga.
+    state = Database(tmp_path / "db" / "state.sqlite", name="state")
+    state.require(Schema("kv", ("CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT);",)))
+    with state.write() as conn:
+        conn.execute("INSERT INTO kv VALUES ('job', 'ogni mattina')")
+    engine = SnapshotEngine(ws, tmp_path / "snapshots",
+                            extra_entries=lambda: shards.export(state))
     manifest = engine.create_snapshot(trigger="cloud")
+    state.close()
     key = generate_master_key()
     drive = tmp_path / "Jenny"
     repo = await CloudRepository.open(
@@ -61,6 +72,13 @@ async def test_list_and_restore_with_the_password(tmp_path: Path) -> None:
     assert done.returncode == 0, done.stderr
     assert (out / "memory" / "MEMORY.md").read_text(encoding="utf-8") == "ricordi"
     assert (out / "foto.jpg").read_bytes() == (ws / "foto.jpg").read_bytes()
+    # Lo stato torna come database, non come pezzi sparsi nella cartella.
+    assert not (out / ".jenny-state").exists()
+    conn = sqlite3.connect(out / "jenny-state.sqlite")
+    try:
+        assert conn.execute("SELECT v FROM kv").fetchall() == [("ogni mattina",)]
+    finally:
+        conn.close()
 
 
 async def test_a_wrong_password_says_so(tmp_path: Path) -> None:

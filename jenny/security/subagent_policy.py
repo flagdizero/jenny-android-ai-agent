@@ -45,19 +45,16 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.security.taint_ledger import ledger_for
 
-if TYPE_CHECKING:
-    from jenny.agent.subagent_journal import WriteJournal
-
 # I file di configurazione nella radice del workspace: ``config.json``, il suo
-# ``.bak``, i temporanei dello store e le copie in quarantena. Sono gli stessi
-# nomi che il listing della WebUI nasconde
-# (``webui/workspace_files._DEFAULT_INTERNAL_PATTERNS``) e che il
-# ``FileProvider`` Kotlin rifiuta di condividere.
+# ``.bak``, i temporanei dello store e le copie in quarantena. Il listing della
+# WebUI li nasconde con questi stessi nomi
+# (``webui/workspace_files._DEFAULT_INTERNAL_PATTERNS``), e il ``FileProvider``
+# Kotlin rifiuta di condividerli.
 CONFIG_FILE_PATTERNS = ("config.json*", "config.corrupt-*.json")
 
 # Cartelle (relative alla radice) che contengono copie di ``config.json``.
@@ -70,8 +67,9 @@ _SECRET_DIRS = (
     # Le bozze in attesa della conferma dell'utente (``agent.staged_writes``):
     # un lavoro non fidato non riscrive una bozza già mostrata.
     (".jenny", "staged"),
-    # Il registro delle scritture degli aiutanti (``agent.subagent_journal``):
-    # un aiutante non legge i «prima» di un altro, e non riscrive il proprio.
+    # Dove stava il registro dell'annulla prima di ``undo.sqlite``
+    # (``agent.write_journal``), finché la migrazione ``undo_cleanup`` non l'ha
+    # cancellato: un aiutante non legge i «prima» di un altro. Si toglie con lei.
     ("subagents", "journal"),
 )
 
@@ -98,6 +96,10 @@ _PRIVATE_FILES = ("USER.md", "SOUL.md")
 _PRIVATE_DIRS = (
     ("memory",),
     ("sessions",),
+    # Le conversazioni di prima del database, per i 30 giorni in cui la
+    # migrazione le tiene (``db_migration/sessions.py``).
+    ("sessions.migrated",),
+    (".jenny", "webui.migrated"),
     (".jenny", "webui"),
     (".jenny", "ssh_jobs"),
     ("subagents",),
@@ -190,10 +192,6 @@ class SubagentRunPolicy:
     # Bozze messe in attesa da questo lavoro (``agent.staged_writes``): path
     # relativo → id. L'annuncio dice a Jenny quante ce ne sono.
     staged: dict[str, str] = field(default_factory=dict)
-    # Il registro delle scritture del lineage (``agent.subagent_journal``), per
-    # l'annulla: ``check_write`` e ``journal_touch`` ci annotano il «prima»,
-    # ``settle_writes`` il «dopo». ``None`` nei test che non lo legano.
-    journal: WriteJournal | None = field(default=None, repr=False)
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @classmethod
@@ -294,7 +292,7 @@ def _project_relative(parts: tuple[str, ...]) -> tuple[str, ...]:
     Un quaderno ha la sua ``memory/`` e i suoi ``downloads/``: valgono come
     quelli dell'installazione. Si riconosce dalla posizione, senza I/O.
     """
-    if len(parts) >= 3 and parts[0] == "wikis":
+    if len(parts) >= 3 and parts[0] == DEFAULT_WIKIS_DIR:
         return parts[2:]
     return ()
 
@@ -558,51 +556,57 @@ def note_move(src: str | Path, dst: str | Path) -> None:
 
 
 def check_write(path: str | Path, *, tree: bool = False) -> None:
-    """Controlla una scrittura di un subagent; no-op fuori da un subagent.
+    """Controlla una scrittura di un subagent, e annota il «prima» per l'annulla.
 
-    È anche il punto in cui il registro dell'annulla annota il «prima»: ogni
-    via di scrittura di un aiutante — i tool dei file, ``python_exec``, le
-    cancellazioni del quaderno — passa da qui subito prima di scrivere. Una
+    Due cose distinte. I recinti (file segreti, codice di sistema) valgono solo
+    dentro un subagent. L'annotazione vale per chiunque abbia un registro
+    legato (``agent.write_journal.bind_journal``): un aiutante, il turno di
+    Jenny in un piano. Ogni via di scrittura — i tool dei file, ``python_exec``,
+    le cancellazioni del quaderno — passa da qui subito prima di scrivere. Una
     scrittura poi non fatta (un rifiuto, un'anteprima) non lascia righe:
     ``settle_writes`` annota solo i file cambiati davvero. *tree*: chi toglie o
     sposta una cartella intera (v. ``WriteJournal.touch``).
     """
     policy = current_subagent_policy()
-    if policy is None:
-        return
-    parts = policy.relative(path)
-    if parts is None:
-        return
-    if _is_secret(parts):
-        raise SubagentSecretError("/".join(parts))
-    if _is_system_code(parts):
-        raise SubagentSystemCodeError("/".join(parts))
-    if policy.journal is not None:
-        policy.journal.touch(path, tree=tree)
+    if policy is not None:
+        parts = policy.relative(path)
+        if parts is None:
+            return
+        if _is_secret(parts):
+            raise SubagentSecretError("/".join(parts))
+        if _is_system_code(parts):
+            raise SubagentSystemCodeError("/".join(parts))
+    journal_touch(path, tree=tree)
 
 
 def journal_touch(path: str | Path, *, tree: bool = False) -> None:
-    """Annota il «prima» di una scrittura che non passa da :func:`check_write`.
+    """Annota il «prima» di una scrittura nel registro legato, se c'è.
 
-    Per gli imbuti che hanno recinti propri — la bacheca di un quaderno, le
-    bozze delle app — e che un aiutante raggiunge con i suoi strumenti. No-op
-    fuori da un subagent.
+    Da sola per gli imbuti che hanno recinti propri — la bacheca di un
+    quaderno, le bozze delle app — e che un aiutante raggiunge con i suoi
+    strumenti. Senza registro legato non fa niente.
     """
-    policy = current_subagent_policy()
-    if policy is not None and policy.journal is not None:
-        policy.journal.touch(path, tree=tree)
+    # Dentro la funzione: ``jenny.agent`` al primo import carica il loop, che
+    # importa questo modulo.
+    from jenny.agent.write_journal import current_journal
+
+    journal = current_journal()
+    if journal is not None:
+        journal.touch(path, tree=tree)
 
 
 def settle_writes(tool: str = "") -> None:
     """Annota il «dopo» delle scritture dello strumento appena finito.
 
     La chiama il runner dopo ogni strumento, riuscito o no: anche un
-    ``python_exec`` che solleva a metà può aver scritto. No-op fuori da un
-    subagent.
+    ``python_exec`` che solleva a metà può aver scritto. Senza registro legato
+    non fa niente.
     """
-    policy = current_subagent_policy()
-    if policy is not None and policy.journal is not None:
-        policy.journal.settle(tool)
+    from jenny.agent.write_journal import current_journal
+
+    journal = current_journal()
+    if journal is not None:
+        journal.settle(tool)
 
 
 # ---------------------------------------------------------------------------

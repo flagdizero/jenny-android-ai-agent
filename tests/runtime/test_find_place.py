@@ -167,3 +167,50 @@ class TestCachedLocation:
         location._CURRENT = _here()
         assert location.cached_location(LocationConfig(enable=False)) is None
         assert location.cached_location(LocationConfig()) is location._CURRENT
+
+
+class TestTheBridgeNeverRaisesOrHangs:
+    """Ogni altro utente dei ponti Kotlin chiama su un thread, con un tetto, e
+    torna un default: la posizione era l'unica che poteva sollevare o restare
+    appesa, e con lei il turno che l'aveva chiesta."""
+
+    async def test_a_bridge_that_cannot_be_built_finds_nothing(self, monkeypatch):
+        monkeypatch.setattr(location, "get_android_context", lambda: object())
+
+        def broken():
+            raise RuntimeError("no LocationBridge")
+
+        monkeypatch.setattr(location, "_resolve_bridge_class", broken)
+        assert await location.find_places("Via del Pratello 48") == []
+
+    async def test_a_geocoder_that_hangs_finds_nothing_in_time(self, monkeypatch):
+        class Stuck:
+            def findPlaces(self, *args):  # noqa: N802
+                time.sleep(1)
+
+            def getLastKnown(self):  # noqa: N802
+                time.sleep(1)
+
+        _on_phone(monkeypatch, Stuck())
+        monkeypatch.setattr(location, "_BRIDGE_TIMEOUT_S", 0.05, raising=False)
+        start = time.monotonic()
+        assert await location.find_places("Via del Pratello 48") == []
+        assert await location.get_location(LocationConfig(), precise=False) is None
+        assert time.monotonic() - start < 0.8
+
+    async def test_a_reverse_geocode_that_hangs_leaves_the_fix_without_a_place(
+        self, monkeypatch
+    ):
+        class Slow:
+            def getLastKnown(self):  # noqa: N802
+                return f"44.4924;11.3472;5.0;{int(time.time() * 1000)};gps"
+
+            def reverseGeocode(self, lat, lng):  # noqa: N802
+                time.sleep(1)
+
+        _on_phone(monkeypatch, Slow())
+        monkeypatch.setattr(location, "_BRIDGE_TIMEOUT_S", 0.05, raising=False)
+        start = time.monotonic()
+        fix = await location.get_location(LocationConfig(), precise=False)
+        assert fix is not None and fix.place is None
+        assert time.monotonic() - start < 0.8

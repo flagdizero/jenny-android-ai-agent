@@ -28,10 +28,10 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from jenny.cron.could_not_check import (
+    OK_MARKER,
     WARNED_MARKER,
     could_not_check_reason,
-    parse_ok_marks,
-    parse_warned_marks,
+    has_mark,
 )
 from jenny.cron.silence_watchdog import alert_silently_broken_checks
 from jenny.cron.types import CronJobState
@@ -146,7 +146,7 @@ class MonitorFollowup:
         reason = could_not_check_reason(final_text)
         # Un risultato detto all'utente è un controllo che ha girato, anche senza
         # dichiararlo: il guasto, se c'è, lo dice ``checked=false`` e vince sopra.
-        ok = bool(parse_ok_marks(final_text)) or spoke
+        ok = has_mark(final_text, OK_MARKER) or spoke
         if reason is None and not ok:
             logger.debug("Monitor follow-up: no verdict for job {}", job.id)
             return
@@ -158,7 +158,7 @@ class MonitorFollowup:
             state.consecutive_could_not_check += 1
             if state.could_not_check_since_ms is None:
                 state.could_not_check_since_ms = self._now_ms()
-            if parse_warned_marks(final_text):
+            if has_mark(final_text, WARNED_MARKER):
                 state.could_not_check_escalated = True
                 state.could_not_check_escalated_at_ms = self._now_ms()
             logger.warning(

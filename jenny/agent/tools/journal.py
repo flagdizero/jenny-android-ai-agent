@@ -42,6 +42,7 @@ from loguru import logger
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import current_request_context
 from jenny.agent.tools.schema import StringSchema, tool_parameters_schema
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.security.subagent_policy import (
     current_subagent_policy,
     current_turn_taint,
@@ -49,11 +50,14 @@ from jenny.security.subagent_policy import (
 )
 from jenny.security.workspace_access import (
     READONLY_TOOL_REFUSAL,
+    current_notebook_root,
     current_turn_is_readonly,
     current_workspace_scope,
 )
-from jenny.session.keys import PROJECT_SESSION_PREFIX, UNIFIED_SESSION_KEY
-from jenny.utils.helpers import safe_zoneinfo
+from jenny.session.keys import UNIFIED_SESSION_KEY, project_session_key
+from jenny.utils.clock import local_now
+from jenny.utils.helpers import clip
+from jenny.utils.path import append_with_header
 from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal_dir
 
 # Non c'e' un progetto: il rifiuto dice **dove** vive il diario invece di dire
@@ -326,21 +330,18 @@ class JournalAppendTool(Tool):
         return roots[notebook], ""
 
     def _notebooks(self) -> dict[str, Path]:
-        from jenny.board.placements import _wikis_dirs
+        from jenny.config.paths import get_wikis_path
         from jenny.utils.wiki_paths import discover_wiki_roots
 
         workspace = Path(getattr(self._memory, "workspace", "") or ".")
-        roots: dict[str, Path] = {}
-        for wikis in _wikis_dirs(workspace):
-            with suppress(OSError):
-                roots.update(discover_wiki_roots(wikis))
-        return roots
+        with suppress(OSError):
+            return discover_wiki_roots(get_wikis_path(workspace))
+        return {}
 
     async def _personal(self, fact: str, attribution: str) -> str:
         """Una riga del diario personale: un fatto che non e' di nessun quaderno."""
         request = current_request_context()
-        content = fact if len(fact) <= _MIRROR_MAX_CHARS else (
-            fact[: _MIRROR_MAX_CHARS - 1].rstrip() + "…")
+        content = clip(fact, _MIRROR_MAX_CHARS)
         try:
             await asyncio.to_thread(
                 self._memory.append_history, content,
@@ -366,28 +367,25 @@ class JournalAppendTool(Tool):
         dal proprio fuso il fatto entrava nel diario con un'ora che non è quella
         in cui è stato detto.
 
-        ``safe_zoneinfo`` e non ``ZoneInfo``: su Android il database tzdata può
+        ``local_now`` (``safe_zoneinfo``) e non ``ZoneInfo``: su Android il database tzdata può
         mancare, e una cattura che solleva è un fatto perduto.
         """
         if self._now is not None:
             return self._now()
-        tz = safe_zoneinfo(self._timezone) if self._timezone else None
-        return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+        return local_now(self._timezone)
 
     async def _append(self, root: Path, line: str, *, text: str = "",
                       attribution: str = "") -> str:
         # Un colpo d'orologio, due usi: la pagina e l'ora della riga.
         stamp = self._stamp()
         day = self._today() if self._today is not None else stamp.date()
-        page = wiki_journal_dir(root) / journal_page_name(day)
         entry = f"- {stamp.strftime('%H:%M')} — {line}\n"
-        # Dentro un aiutante: il «prima» per l'annulla (``agent.subagent_journal``).
-        # La copia nel diario personale (``_mirror``) resta: è la memoria.
-        journal_touch(page)
+        # La copia nel diario personale (``_mirror``) resta fuori dall'annulla:
+        # è la memoria.
         try:
-            lineno = append_journal_entry(page, day, entry)
+            page, lineno = append_journal_line(root, stamp, line, day=day)
         except OSError as exc:
-            logger.warning("journal_append on {} failed: {}", page, exc)
+            logger.warning("journal_append on {} failed: {}", root.name, exc)
             return f"Could not append to the journal: {exc}"
 
         logger.info("journal_append: {} <- {}", page.name, line[:60])
@@ -421,12 +419,11 @@ class JournalAppendTool(Tool):
             where = page
         request = current_request_context()
         session_key = request.session_key if request is not None else None
-        content = text if len(text) <= _MIRROR_MAX_CHARS else (
-            text[: _MIRROR_MAX_CHARS - 1].rstrip() + "…")
+        content = clip(text, _MIRROR_MAX_CHARS)
         try:
             await asyncio.to_thread(
                 store.append_history, content,
-                session_key=session_key or f"{PROJECT_SESSION_PREFIX}{root.name}",
+                session_key=session_key or project_session_key(root.name),
                 kind=attribution, about=root.name, ref=f"{where.as_posix()}:{lineno}",
                 untrusted=bool(current_turn_taint()),
             )
@@ -446,14 +443,25 @@ def append_journal_entry(page: Path, day: date, entry: str) -> int:
     vale anche contro se stessi, e una riscrittura potrebbe perdere quel che un
     altro scrittore ha appeso nel frattempo.
     """
-    page.parent.mkdir(parents=True, exist_ok=True)
-    fresh = not page.exists()
-    with page.open("a", encoding="utf-8") as fh:
-        if fresh:
-            fh.write(f"# {day.isoformat()}\n\n")
-        fh.write(entry)
+    append_with_header(page, entry, header=f"# {day.isoformat()}\n\n")
     with page.open(encoding="utf-8") as fh:
         return sum(1 for _ in fh)
+
+
+def append_journal_line(root: Path, stamp: datetime, line: str, *,
+                        day: date | None = None) -> tuple[Path, int]:
+    """La riga ``- HH:MM — line`` nel diario del quaderno *root*; torna pagina e numero.
+
+    L'unica strada per una riga scritta dal codice o dal tool: la pagina del
+    giorno (*day*, di serie quello di *stamp*), il «prima» per l'annulla di un
+    aiutante (``journal_touch``) e :func:`append_journal_entry`. La usano il tool
+    ``journal_append`` e le righe della bacheca (``board/sections.py``).
+    """
+    day = day or stamp.date()
+    page = wiki_journal_dir(root) / journal_page_name(day)
+    # Dentro un aiutante: il «prima» per l'annulla (``agent.write_journal``).
+    journal_touch(page)
+    return page, append_journal_entry(page, day, f"- {stamp.strftime('%H:%M')} — {line}\n")
 
 
 # ── «Ci spostiamo?» ──────────────────────────────────────────────────────────
@@ -512,11 +520,9 @@ class SuggestNotebookTool(Tool):
         name = (notebook or "").strip()
         line = " ".join((context or "").split())
         request = current_request_context()
-        scope = current_workspace_scope()
-        own = scope.write_root() if scope is not None else None
-        if own is not None and is_wiki_root(own):
+        if current_notebook_root() is not None:
             return "You are already in a notebook: there is nowhere to move. Nothing was offered."
-        if request is not None and request.channel != "websocket":
+        if request is not None and request.channel != WEBSOCKET_CHANNEL:
             return ("A notebook opens only in the app, not from here. Nothing was offered: "
                     "go on in this conversation.")
         if current_subagent_policy() is not None:
@@ -527,8 +533,7 @@ class SuggestNotebookTool(Tool):
             return f"No notebook named '{name}' (existing: {known}). Nothing was offered."
         if not line:
             return "Say in `context` what you were working on: it is what the notebook picks up."
-        if len(line) > _MIRROR_MAX_CHARS:
-            line = line[: _MIRROR_MAX_CHARS - 1].rstrip() + "…"
+        line = clip(line, _MIRROR_MAX_CHARS)
         try:
             await asyncio.to_thread(
                 self._memory.append_history, f"From the personal chat: {line}",

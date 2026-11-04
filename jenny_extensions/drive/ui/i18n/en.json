@@ -44,11 +44,6 @@
       "caption": "The last 7 nights: a filled dot is a copy that worked.",
       "aria": "Last 7 nights: {copies} with a copy, {missed} without."
     },
-    "when": {
-      "today": "today at {time}",
-      "yesterday": "yesterday at {time}",
-      "weekday": "{day} at {time}"
-    },
     "safe": {
       "title": "You're safe",
       "sub": "Last copy on Google Drive: {when}"
@@ -63,7 +58,6 @@
     "blocked": {
       "title": "The copy has stopped",
       "sub": "Last copy: {when}",
-      "subNever": "No copy has worked yet",
       "calm": "As soon as it's fixed I'll make a copy straight away. Meanwhile everything is still here on the phone."
     },
     "first": {
@@ -131,7 +125,6 @@
       "setPassword": "Choose a password"
     },
     "more": {
-      "off": "Turn off the Drive copy",
       "offSub": "The copy that's there stays in your Drive.",
       "password": "The copy's password",
       "passwordSub": "Change it whenever you like: the old one isn't needed, and the copies already made will open with the new one."
@@ -148,8 +141,7 @@
       "nopass": "no password"
     },
     "damaged": {
-      "title": "The last copy doesn't open properly",
-      "sub": "Last copy on Google Drive: {when}"
+      "title": "The last copy doesn't open properly"
     },
     "nopass": {
       "title": "The copy has no password",

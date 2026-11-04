@@ -23,13 +23,8 @@ from typing import Any
 from loguru import logger
 
 from jenny import __logo__, __version__
+from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.config.schema import Config
-
-# Id dei job di sistema che una versione precedente registrava e questa non
-# esegue piu'. ``build`` li ritira dallo store prima di registrare i vivi (v. il
-# commento sul posto e ``CronService.retire_system_job``). Per id e non per
-# nome: un promemoria dell'utente puo' chiamarsi come vuole.
-_RETIRED_SYSTEM_JOBS: tuple[str, ...] = ("atlas", "heartbeat")
 
 
 class GatewayContainer:
@@ -333,11 +328,11 @@ class GatewayContainer:
         A regime costa zero scritture: la migrazione e' idempotente e a wiki
         gia' a posto non tocca niente. V. ``utils/wiki_migration.py``.
         """
+        from jenny.config.paths import get_wikis_path
         from jenny.utils.wiki_migration import migrate_wikis
 
-        wiki_cfg = getattr(self.config, "wiki", None)
-        wikis_dir = getattr(wiki_cfg, "wikis_dir", "wikis") or "wikis"
-        migrate_wikis(self.config.workspace_path / wikis_dir, self.config.workspace_path)
+        workspace = self.config.workspace_path
+        migrate_wikis(get_wikis_path(workspace, config=self.config), workspace)
 
     def _repair_pending_renames(self) -> None:
         """Finisce i rinomini di progetto interrotti a metà.
@@ -357,7 +352,7 @@ class GatewayContainer:
         metà", è "un rinomino a metà contro **nessun gateway**". Un rinomino
         lasciato aperto lo riprova l'avvio dopo; un gateway che non parte no.
         """
-        from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
+        from jenny.session.keys import is_project_session_key, project_name
         from jenny.session.project_rename import repair_pending_project_renames
 
         self._resumed_renames = []
@@ -370,79 +365,53 @@ class GatewayContainer:
                     old_key, new_key,
                 )
                 if is_project_session_key(old_key) and is_project_session_key(new_key):
-                    self._resumed_renames.append((old_key[len(PROJECT_SESSION_PREFIX):],
-                                                  new_key[len(PROJECT_SESSION_PREFIX):]))
+                    self._resumed_renames.append((project_name(old_key),
+                                                  project_name(new_key)))
         except Exception:
             logger.opt(exception=True).error(
                 "Ripresa dei rinomini di progetto in sospeso fallita; il gateway "
                 "parte comunque e il prossimo avvio riprova"
             )
 
-    def _wire_app_notifier(self) -> None:
-        """«I dati di un'app sono cambiati» va sulla WebUI (``jenny/apps/notify.py``):
-        una scrittura dallo schermo o un lettore che ricalcola aggiornano la
-        polaroid sulla bacheca e lo schermo aperto."""
-        from jenny.apps.notify import set_notifier
-        from jenny.bus.events import OutboundMessage
+    def _wire_ui_events(self) -> None:
+        """Gli avvisi «la casa è cambiata» vanno sulla WebUI (``runtime/ui_events``).
 
-        bus = self.bus
-
-        async def announce(slug: str) -> None:
-            await bus.publish_outbound(OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_app_data_changed": True, "app_slug": slug},
-            ))
-
-        set_notifier(announce)
-
-    def _wire_board_notifier(self) -> None:
-        """«La bacheca è cambiata» va sulla WebUI (``jenny/board/notify.py``): una
-        scrittura che non viene dalla bacheca stessa — l'editore, un'app posata,
-        la passata del giardiniere — ridisegna la bacheca aperta."""
-        from jenny.board.notify import set_notifier
-        from jenny.bus.events import OutboundMessage
-
-        bus = self.bus
-
-        async def announce(notebook: str) -> None:
-            await bus.publish_outbound(OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_board_changed": True, "notebook": notebook},
-            ))
-
-        set_notifier(announce)
-
-    def _wire_staged_notifier(self) -> None:
-        """«Le bozze in attesa sono cambiate» va sulla WebUI (``agent.staged_writes``).
-
-        L'avviso può arrivare da un thread (le RPC fanno il disco fuori dal
-        loop), quindi si rientra nel loop con ``call_soon_threadsafe``.
+        Una scrittura che non viene dalla bacheca o dallo schermo stesso — l'editore,
+        un'app posata, la passata del giardiniere, un lettore che ricalcola, le
+        bozze di un subagent — ridisegna quel che è aperto. L'avviso delle bozze
+        può arrivare da un thread (le RPC fanno il disco fuori dal loop), quindi
+        rientra nel loop con ``call_soon_threadsafe``.
         """
         import asyncio
 
         from jenny.agent.staged_writes import StagedChange, add_change_listener
         from jenny.bus.events import OutboundMessage
+        from jenny.runtime import ui_events
 
         bus = self.bus
+
+        async def publish(event: dict[str, Any]) -> None:
+            await bus.publish_outbound(OutboundMessage(
+                channel=WEBSOCKET_CHANNEL, chat_id="webui", content="", metadata=event,
+            ))
+
+        ui_events.set_publisher(publish)
         try:
             gateway_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
         except RuntimeError:  # ``build()`` chiamata fuori dal loop (i test)
             gateway_loop = None
 
-        def announce(change: StagedChange) -> None:
-            message = OutboundMessage(
-                channel="websocket", chat_id="webui", content="",
-                metadata={"_staged_changed": True, "count": change.count},
-            )
+        def staged(change: StagedChange) -> None:
+            event = {"_staged_changed": True, "count": change.count}
             try:
-                asyncio.get_running_loop().create_task(bus.publish_outbound(message))
+                asyncio.get_running_loop().create_task(ui_events.emit(event))
             except RuntimeError:
                 if (target := gateway_loop) is not None:
                     target.call_soon_threadsafe(
-                        lambda: target.create_task(bus.publish_outbound(message))
+                        lambda: target.create_task(ui_events.emit(event))
                     )
 
-        add_change_listener(announce)
+        add_change_listener(staged)
 
     def _prepare_apps(self) -> None:
         """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
@@ -476,6 +445,88 @@ class GatewayContainer:
             logger.opt(exception=True).error(
                 "Preparazione delle app fallita; il gateway parte comunque")
 
+    def _open_databases(self) -> None:
+        """Apre lo stato in SQLite (``jenny/db``) prima di chiunque lo usi.
+
+        Prima dell'agente di proposito: con l'onboarding non finito l'agente
+        nasce dopo (``_wait_and_create_agent``), quando il cron gira già, e
+        quel che va ripreso al boot non deve aspettarlo. Un database che non si
+        apre non ferma il gateway: lo dice il log, e l'archivio che lo usa
+        fallisce lui.
+        """
+        from jenny import db
+        from jenny.snapshot.locations import runtime_root_for
+
+        try:
+            db.open_all(runtime_root_for(self.config.workspace_path))
+        except Exception:
+            logger.opt(exception=True).error("Could not open the state databases")
+
+    def _finish_interrupted_undos(self) -> None:
+        """Un annulla che un kill ha lasciato a metà si finisce adesso.
+
+        Qui e non nel manager degli aiutanti: con l'onboarding non finito
+        l'agente nasce più tardi, e file mezzi rimessi non devono aspettarlo.
+        """
+        from jenny.agent.write_journal import finish_interrupted_undos
+
+        try:
+            finished = finish_interrupted_undos(self.config.workspace_path)
+        except Exception:
+            logger.opt(exception=True).warning("Could not finish interrupted undos")
+            return
+        if finished:
+            logger.info("Finished {} interrupted undo(s)", finished)
+
+    # Dopo quante righe tolte vale un ``VACUUM`` dello stato: la prima passata sui
+    # verbali di prima della fusione (287 mila righe sul telefono di prova) sì, i
+    # turni rimasti di un giorno no.
+    _VACUUM_AFTER_ROWS = 50_000
+    # Quanto aspetta la manutenzione dopo l'avvio. Partita insieme all'avvio, la
+    # prima passata sui verbali (16 s sul telefono di prova) faceva aspettare
+    # 4,5 s la chat e i progetti che la casa carica per primi (misurato il
+    # 03/11/2026); un minuto dopo la casa ha già caricato.
+    _MAINTENANCE_DELAY_S = 60.0
+
+    async def _database_maintenance(self) -> None:
+        """Dopo l'avvio, in un thread e senza fermarlo: i verbali compatti, lo
+        spazio che torna, l'indice delle chat in pari. Non solleva."""
+        workspace = self.config.workspace_path
+        await asyncio.sleep(self._MAINTENANCE_DELAY_S)
+
+        def run() -> None:
+            import shutil
+
+            from jenny import db
+            from jenny.webui import chat_index
+            from jenny.webui.transcript_store import compact_closed_turns
+
+            try:
+                removed = compact_closed_turns()
+            except Exception:
+                logger.opt(exception=True).warning("Could not compact the transcripts")
+                removed = 0
+            if removed >= self._VACUUM_AFTER_ROWS:
+                state = db.database_for_workspace(workspace, db.STATE)
+                try:
+                    size = state.path.stat().st_size
+                    free = shutil.disk_usage(state.path.parent).free
+                    if free > size * 2:
+                        state.vacuum()
+                        logger.info("State database vacuumed: {} -> {} bytes",
+                                    size, state.path.stat().st_size)
+                    else:
+                        logger.warning("State database not vacuumed: {} bytes free, {} needed",
+                                       free, size * 2)
+                except Exception:
+                    logger.opt(exception=True).warning("Could not vacuum the state database")
+            try:
+                chat_index.reconcile(workspace)
+            except Exception:
+                logger.opt(exception=True).warning("Could not bring the chat index up to date")
+
+        await asyncio.to_thread(run)
+
     def build(self) -> None:
         """Costruisce l'intero grafo di oggetti (composition point)."""
         from jenny.bus.queue import MessageBus
@@ -495,6 +546,14 @@ class GatewayContainer:
             __logo__, __version__, self.port,
         )
         self._sync_templates()
+        self._open_databases()
+        # L'unica porta dello strumento di migrazione (``jenny/db_migration``,
+        # da cancellare fra qualche versione): dopo i database, prima di chiunque
+        # li usi. Non solleva.
+        from jenny.db_migration import run_pending
+
+        run_pending(self.config.workspace_path)
+        self._finish_interrupted_undos()
 
         # Backpressure su dispositivi memory-constrained (Android): code limitate.
         # I delta di streaming/progress usano try_publish_outbound (scartabili),
@@ -515,14 +574,11 @@ class GatewayContainer:
         self.session_manager = SessionManager(config.workspace_path)
         self._repair_pending_renames()
         self._prepare_apps()
-        self._wire_app_notifier()
-        self._wire_board_notifier()
-        self._wire_staged_notifier()
+        self._wire_ui_events()
 
-        cron_store_path = config.workspace_path / "cron" / "jobs.json"
-        self.cron = CronService(cron_store_path)
+        self.cron = CronService(config.workspace_path)
         # Il seguito dei rinomini ripresi qui sopra: lo scheduler non gira ancora,
-        # quindi lo spostamento va nel suo giornale e si applica a ``start``.
+        # ma salva lo stesso, e ``start`` lo ritrova.
         from jenny.board.cron_link import follow_renamed_notebook
 
         for old_name, new_name in self._resumed_renames:
@@ -531,7 +587,9 @@ class GatewayContainer:
         # Versioning locale del workspace: snapshot automatici di sistema.
         # Lo store vive FUORI dal workspace (sibling), così lo swap atomico
         # del ripristino non porta via la storia insieme al workspace.
+        from jenny import db
         from jenny.config.paths import get_data_dir
+        from jenny.db import shards
         from jenny.snapshot.engine import SnapshotEngine
         from jenny.snapshot.locations import snapshots_dir_for
         from jenny.snapshot.service import SnapshotService
@@ -544,6 +602,11 @@ class GatewayContainer:
                 # Esclusione per path reale: vale anche quando il runtime dir
                 # ha ancora il nome legacy (.minijenny).
                 exclude_dirs=(get_data_dir() / "logs",),
+                # Lo stato in SQLite viaggia con ogni snapshot, a pezzi: così la
+                # storia locale e Drive lo riportano insieme ai file.
+                extra_entries=lambda: shards.export(
+                    db.database_for_workspace(config.workspace_path, db.STATE)
+                ),
             ),
             config.snapshots,
         )
@@ -622,45 +685,23 @@ class GatewayContainer:
             extension_jobs=self._extension_job_runners(),
         ).dispatch
 
-        # I lavoratori periodici che questa versione **non esegue piu'**. Il loro
-        # job e' ancora scritto nello store di chi aggiorna — e' cosi' che la
-        # registrazione sotto e' idempotente al riavvio — e senza il suo ramo nel
-        # dispatcher scatterebbe nel vuoto a ogni scadenza, per sempre. Si
-        # ritira per id, prima di registrare i vivi. Elenco chiuso: chi toglie un
-        # lavoratore aggiunge il suo id qui, e nessun altro punto lo conosce.
-        for retired in _RETIRED_SYSTEM_JOBS:
-            self.cron.retire_system_job(retired)
+        # I lavoratori periodici che questa versione **non esegue piu'** (``atlas``,
+        # ``heartbeat``) e quelli di un'estensione che questa build non ha: il loro
+        # job e' ancora scritto nello store, e senza un ramo nel dispatcher
+        # scatterebbe nel vuoto a ogni scadenza, per sempre. Si ritirano prima di
+        # registrare i vivi.
         self._retire_orphan_system_jobs()
 
-        # Register Dream system job (idempotent on restart).
-        dream_cfg = config.agents.defaults.dream
-        if dream_cfg.enabled:
-            self.cron.register_system_job(CronJob(
-                id="dream",
-                name="dream",
-                schedule=dream_cfg.build_schedule(),
-                payload=CronPayload(kind="system_event"),
-            ))
-            logger.info("Dream: {}", dream_cfg.describe_schedule())
-        else:
-            logger.info("Dream: disabled")
+        # Dream e il giardiniere (idempotente al riavvio): la stessa registrazione
+        # che li ri-arma da Impostazioni, ``refresh_system_job``. Nessuno snapshot
+        # prima del giardiniere: **aggiunge e promuove**, non riscrive, e non tocca
+        # né il diario (il suo input) né AGENTS.md — a differenza di Dream, che
+        # riscrive memoria irrecuperabile.
+        from jenny.runtime.cron_dispatch import SYSTEM_WORKERS, refresh_system_job
 
-        # Register the Gardener system job (idempotent on restart). Nessuno
-        # snapshot pre-run: il giardiniere **aggiunge e promuove**, non riscrive,
-        # e non tocca né il diario (il suo input) né AGENTS.md. Quel che scrive
-        # sono pagine nuove sotto wiki/, che l'utente può correggere leggendole —
-        # a differenza di Dream, che riscrive memoria irrecuperabile.
-        gardener_cfg = config.agents.defaults.gardener
-        if gardener_cfg.enabled:
-            self.cron.register_system_job(CronJob(
-                id="gardener",
-                name="gardener",
-                schedule=gardener_cfg.build_schedule(),
-                payload=CronPayload(kind="system_event"),
-            ))
-            logger.info("Gardener: {}", gardener_cfg.describe_schedule())
-        else:
-            logger.info("Gardener: disabled")
+        for worker in SYSTEM_WORKERS:
+            armed = refresh_system_job(self.cron, worker, config=config)
+            logger.info("{}: {}", worker.capitalize(), armed or "disabled")
 
         # L'orologio dei quaderni: le micro app dei cassetti, le attese delle
         # bacheche e gli eventi delle sezioni, un giro ogni quarto d'ora su tutti
@@ -786,7 +827,9 @@ class GatewayContainer:
         from jenny.session.plan_probe import set_plan_probe
 
         driver = PlanDriver(
-            PlanStore.for_workspace(config.workspace_path), self.bus, LoopPlanHost(agent)
+            PlanStore.for_workspace(config.workspace_path), self.bus, LoopPlanHost(agent),
+            # Il piano nella chat principale c'è solo quando scrivono gli aiutanti.
+            personal_plans=bool(getattr(agent, "orchestrator_mode", False)),
         )
         try:
             paused = driver.recover()
@@ -897,13 +940,14 @@ class GatewayContainer:
             from jenny.runtime.floating import apply_floating_config
             await apply_floating_config()
             # Buco di attività attraversato prima di questo avvio. Va misurato
-            # adesso e non più tardi: la fotografia lasciata da MainActivity è
+            # adesso e non più tardi: la fotografia lasciata da GatewayService è
             # l'unico posto in cui il "prima" sopravvive alla morte del
             # processo, e nessun altro la consuma.
             from jenny.runtime.gap_history import record_startup_gap
             await record_startup_gap()
             await self.cron.start()
             await self.snapshot.start()
+            self._maintenance = asyncio.create_task(self._database_maintenance())
             tasks = [self.channels.start()]
             if self._agent:
                 tasks.append(self._agent.run())
@@ -947,3 +991,7 @@ class GatewayContainer:
                 await self.snapshot.snapshot_now("shutdown")
             except Exception:
                 logger.exception("Shutdown snapshot failed")
+            # Per ultimi: fino a qui chiunque sopra può ancora scrivere lo stato.
+            from jenny import db
+
+            db.close_all()

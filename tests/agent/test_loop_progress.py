@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from support.agent import make_loop
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.progress_events import (
@@ -14,10 +14,9 @@ from jenny.agent.progress_events import (
 from jenny.bus.events import InboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import TurnCompleted
-from jenny.providers.base import LLMResponse, ToolCallRequest
+from jenny.providers.base import LLMResponse, LLMRuntime, ToolCallRequest
 from jenny.runtime.user_text import say
 from jenny.session.webui_turns import WebuiTurnCoordinator
-from jenny.utils.llm_runtime import LLMRuntime
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
@@ -72,6 +71,7 @@ class TestToolEventProgress:
                     "phase": "start",
                     "call_id": "call1",
                     "name": "custom_tool",
+                    "family": "busy",
                     "arguments": {"path": "foo.txt"},
                     "result": None,
                     "error": None,
@@ -87,6 +87,7 @@ class TestToolEventProgress:
                     "phase": "end",
                     "call_id": "call1",
                     "name": "custom_tool",
+                    "family": "busy",
                     "arguments": {"path": "foo.txt"},
                     "result": "ok",
                     "error": None,
@@ -246,10 +247,8 @@ class TestToolEventProgress:
     @pytest.mark.asyncio
     async def test_bus_progress_forwards_tool_events_to_outbound_metadata(self, tmp_path: Path) -> None:
         """When run() handles a bus message, _tool_events lands in OutboundMessage metadata."""
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = _make_loop(tmp_path)
+        bus = loop.bus
 
         tool_call = ToolCallRequest(id="tc1", name="python_exec", arguments={"code": "pass"})
         calls = iter([
@@ -293,10 +292,8 @@ class TestToolEventProgress:
 
     @pytest.mark.asyncio
     async def test_bus_progress_forwards_file_edit_events_without_channel_branch(self, tmp_path: Path) -> None:
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = _make_loop(tmp_path)
+        bus = loop.bus
         edit_events = [{
             "call_id": "call-write",
             "tool": "write_file",
@@ -420,13 +417,15 @@ class TestToolEventProgress:
         tmp_path: Path,
     ) -> None:
         """Non-streaming channels should get one final reply, not token progress spam."""
-        bus = MessageBus()
-        provider = MagicMock()
+        provider = make_provider("custom-provider/gpt-5.5", bare=True)
         provider.supports_progress_deltas = True
-        provider.get_default_model.return_value = "custom-provider/gpt-5.5"
         provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Hello", tool_calls=[]))
         provider.chat_stream_with_retry = AsyncMock()
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="custom-provider/gpt-5.5")
+        loop = make_loop(
+            tmp_path, model="custom-provider/gpt-5.5", context_window_tokens=None,
+            provider=provider,
+        )
+        bus = loop.bus
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
 
@@ -610,11 +609,10 @@ class TestToolEventProgress:
 
     @pytest.mark.asyncio
     async def test_websocket_dispatch_publishes_final_turn_end_marker(self, tmp_path: Path) -> None:
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
+        provider = make_provider(bare=True)
         provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Done", tool_calls=[]))
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
+        bus = loop.bus
         _attach_webui_runtime_events(loop, bus)
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
@@ -645,10 +643,8 @@ class TestToolEventProgress:
         self,
         tmp_path: Path,
     ) -> None:
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = _make_loop(tmp_path)
+        bus = loop.bus
         _attach_webui_runtime_events(loop, bus)
 
         async def raise_from_turn(*_args, **_kwargs):
@@ -689,11 +685,10 @@ class TestToolEventProgress:
         altre richieste né altri frame (``_session_updated`` di scope
         ``metadata`` era l'annuncio di quel titolo).
         """
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
+        provider = make_provider(bare=True)
         provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Done", tool_calls=[]))
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
+        bus = loop.bus
         _attach_webui_runtime_events(loop, bus)
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
@@ -730,10 +725,9 @@ class TestToolEventProgress:
         della mascotte) che parte dopo un ``/model`` a metà deve parlare con il
         modello che ha scritto la risposta, non con quello appena scelto.
         """
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = _make_loop(tmp_path)
+        provider = loop.provider
+        bus = loop.bus
         _attach_webui_runtime_events(loop, bus)
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
@@ -778,11 +772,10 @@ class TestToolEventProgress:
         mascotte — e il test lo fissa perché misurato il 05/09/2026: l'ipotesi
         "i comandi non emettono l'evento" era falsa.
         """
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
+        provider = make_provider(bare=True)
         provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Done", tool_calls=[]))
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
+        bus = loop.bus
         _attach_webui_runtime_events(loop, bus)
 
         completed: list[TurnCompleted] = []
@@ -806,11 +799,10 @@ class TestToolEventProgress:
 
     @pytest.mark.asyncio
     async def test_non_websocket_dispatch_does_not_publish_turn_end_marker(self, tmp_path: Path) -> None:
-        bus = MessageBus()
-        provider = MagicMock()
-        provider.get_default_model.return_value = "test-model"
+        provider = make_provider(bare=True)
         provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="Done", tool_calls=[]))
-        loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model")
+        loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
+        bus = loop.bus
         loop.tools.get_definitions = MagicMock(return_value=[])
         loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
 

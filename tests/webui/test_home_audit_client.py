@@ -17,9 +17,8 @@ import json
 import re
 from pathlib import Path
 
-from support.js_harness import function, locale, member, requires_node, run_js, run_module
+from support.js_harness import ASSETS, function, locale, member, requires_node, run_js, run_module
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 AUDIT_JS = ASSETS / "home-audit.js"
 APP_JS = ASSETS / "home-app.js"
 API_JS = ASSETS / "shared" / "api-client.js"
@@ -90,12 +89,12 @@ def test_the_client_does_not_send_the_markdown_the_route_ignores() -> None:
     Oggi il trasporto e' il WebSocket e non avrebbe il tetto della riga di
     richiesta, ma resta una pagina intera spedita a vuoto a ogni segnalazione.
     """
-    for path, pattern in ((API_JS, r"async createAudit\(.*?\n  \}"),
-                          (RPC_JS, r"createAudit\(.*?\n  \},")):
-        m = re.search(pattern, path.read_text(encoding="utf-8"), re.S)
-        assert m, f"createAudit non trovata in {path.name}"
-        assert "rawMarkdown" not in m.group(0)
-        assert "raw" not in m.group(0).replace("rawMarkdown", "")
+    m = re.search(r"createAudit\(.*?\n  \},", RPC_JS.read_text(encoding="utf-8"), re.S)
+    assert m, "createAudit non trovata in rpc-client.js"
+    assert "rawMarkdown" not in m.group(0)
+    assert "raw" not in m.group(0).replace("rawMarkdown", "")
+    # La casa la chiama da `rpc`, senza un inoltro in `api` (via dal 02/11/2026).
+    assert "createAudit" not in API_JS.read_text(encoding="utf-8")
 
 
 _FAKE_WS = """
@@ -111,7 +110,7 @@ export const wsManager = {
 
 _AUDIT_ENTRY = r"""
 import assert from 'node:assert/strict';
-import { api } from './api-client.js';
+import { rpc } from './rpc-client.js';
 import { wsManager, requests } from './ws-manager.js';
 
 let fetched = 0;
@@ -121,7 +120,7 @@ const comment = 'Non \u00e8 cos\u00ec: per\u00f2 la citt\u00e0 gi\u00e0 lo sa \u
 assert.ok(encodeURIComponent(comment).length > 8192);
 
 wsManager.outcome = async () => ({ id: 'a1', filename: 'f.md', path: 'audit/f.md' });
-const created = await api.createAudit({
+const created = await rpc.createAudit({
   wiki: 'orto', target: 'semina.md', selStart: 3, selEnd: 9, comment,
 });
 assert.equal(created.id, 'a1');
@@ -136,7 +135,7 @@ wsManager.outcome = async () => {
   throw err;
 };
 await assert.rejects(
-  api.createAudit({ wiki: 'orto', target: 'x.md', selStart: 0, selEnd: 1, comment: 'c' }),
+  rpc.createAudit({ wiki: 'orto', target: 'x.md', selStart: 0, selEnd: 1, comment: 'c' }),
   (err) => err.code === 'not_found',
 );
 console.log('ok');
@@ -187,7 +186,7 @@ def test_nothing_in_the_flow_asks_for_a_severity() -> None:
     assert "severity" not in m.group(1)
 
     for lang in ("it", "en"):
-        data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        data = locale(lang)
         assert "sev" not in data["home"]["audit"], lang
 
 
@@ -364,7 +363,7 @@ const document = {
 /* `audit.create`: ricorda gli invii, e risponde quando il caso lo lascia. */
 const posted = [];
 let release = null;
-const api = {
+const rpc = {
   createAudit(data) {
     posted.push(data);
     return new Promise((r) => { release = () => r({ id: 'a' + posted.length }); });

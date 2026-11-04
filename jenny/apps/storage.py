@@ -12,6 +12,7 @@ import json
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from loguru import logger
 
@@ -22,7 +23,8 @@ from jenny.security.workspace_access import (
     current_workspace_scope,
 )
 from jenny.session.keys import is_project_session_key
-from jenny.utils.path import atomic_write
+from jenny.utils.errors import StatusError
+from jenny.utils.path import append_lines_durable, atomic_write, iter_jsonl
 from jenny.utils.wiki_paths import is_wiki_root
 
 DEFAULT_QUERY_LIMIT = 200
@@ -31,12 +33,8 @@ DEFAULT_MAX_COLLECTION_BYTES = 5_000_000
 _LOCKS: dict[str, asyncio.Lock] = {}
 
 
-class StorageError(Exception):
+class StorageError(StatusError):
     """Structured storage failure; ``status`` maps to an HTTP-ish code."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 def _lock_for(path: Path) -> asyncio.Lock:
@@ -69,24 +67,11 @@ def _collection_path(app_dir: Path, collection: str) -> Path:
 def _read_records(path: Path) -> list[dict]:
     if not path.is_file():
         return []
-    records: list[dict] = []
-    skipped = 0
+    bad: list[str] = []
     with open(path, encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                skipped += 1
-                continue
-            if isinstance(record, dict):
-                records.append(record)
-            else:
-                skipped += 1
-    if skipped:
-        logger.warning("Skipped {} corrupt line(s) in {}", skipped, path)
+        records = list(iter_jsonl(f, on_bad=bad.append))
+    if bad:
+        logger.warning("Skipped {} corrupt line(s) in {}", len(bad), path)
     return records
 
 
@@ -106,19 +91,6 @@ def _check_size(path: Path, max_bytes: int) -> None:
         raise StorageError(
             f"collection '{path.stem}' exceeds the {max_bytes} byte limit", status=413
         )
-
-
-def _ends_without_newline(path: Path) -> bool:
-    """Il file esiste, non e' vuoto e l'ultimo byte non e' un a capo."""
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, 2)
-            if f.tell() == 0:
-                return False
-            f.seek(-1, 2)
-            return f.read(1) != b"\n"
-    except FileNotFoundError:
-        return False
 
 
 def _new_record(params: dict) -> dict:
@@ -194,6 +166,35 @@ def _rewrite(path: Path, records: list[dict]) -> None:
     atomic_write(path, content)
 
 
+async def edit_collection(
+    app_dir: Path,
+    collection: str,
+    change: Callable[[list[dict]], tuple[list[dict], bool]],
+) -> list[dict]:
+    """Legge, cambia e scrive una collezione sotto il lock delle azioni dell'app.
+
+    Per chi scrive i dati di un'app senza passare da un'azione: il lettore
+    (``jenny/apps/reader.py``), che fino al 02/11/2026 riscriveva
+    ``readings.jsonl`` per conto suo, fuori da questo lock. *change* riceve i
+    record e torna quelli nuovi, piu' se sono **solo cresciuti in coda**: allora
+    si aggiungono le righe nuove, altrimenti il file si riscrive intero. Torna i
+    record dopo il cambio.
+    """
+    path = _collection_path(app_dir, collection)
+    async with _lock_for(path):
+        records = _read_records(path)
+        before = len(records)
+        after, grown = change(records)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not grown:
+            _rewrite(path, after)
+        elif len(after) > before:
+            append_lines_durable(
+                path, [_dump(r) for r in after[before:]], tolerate_fsync_error=True
+            )
+        return after
+
+
 def _require_id(params: dict) -> str:
     record_id = params.get("id")
     if not isinstance(record_id, str) or not record_id:
@@ -239,14 +240,9 @@ async def execute_storage_action(
             _check_size(path, max_bytes)
             record = _new_record(params)
             path.parent.mkdir(parents=True, exist_ok=True)
-            # Un append interrotto (processo ucciso) lascia l'ultima riga senza a
-            # capo, e il record nuovo le si attaccava: la riga unita non si legge
-            # piu', e spariva anche lui. L'a capo la chiude; resta una riga rotta
-            # che la lettura salta e segnala, come prima.
-            lead = "\n" if _ends_without_newline(path) else ""
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(lead + _dump(record) + "\n")
-                f.flush()
+            # La coda rotta di un append interrotto la chiude
+            # ``append_lines_durable``; un fsync fallito non fa fallire l'azione.
+            append_lines_durable(path, [_dump(record)], tolerate_fsync_error=True)
             return {"ok": True, "record": record}
 
         if action.op == "query":

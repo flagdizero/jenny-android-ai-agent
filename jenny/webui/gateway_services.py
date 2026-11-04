@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from loguru import logger as default_logger
 
+from jenny.config.paths import wikis_dir_name
 from jenny.webui.commands import CommandContext
 from jenny.webui.media_gateway import WebUIMediaGateway
 from jenny.webui.transcript import WebUITranscriptRecorder
@@ -90,7 +91,7 @@ def build_gateway_services(
         # La stessa cartella che il picker elenca (``/api/projects``) e che il
         # turno risolve: se le tre divergono, il chip mostra progetti che lo
         # scope non trova.
-        projects_subdir=getattr(getattr(config, "wiki", None), "wikis_dir", "wikis"),
+        projects_subdir=wikis_dir_name(config),
     )
     http = GatewayHTTPHandler(
         config=config,

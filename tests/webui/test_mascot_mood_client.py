@@ -32,14 +32,12 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
-from support.js_harness import requires_node, run_js
+from support.js_harness import ASSETS, requires_node, run_js
 
 from jenny.session.mascot_mood import MOODS, NEUTRAL_MOOD
 from jenny.utils.android_assets import _UI_MANIFEST
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 JENNY_JS = ASSETS / "shared" / "jenny-mascot.js"
 MOTION_JS = ASSETS / "shared" / "mascot-motion.js"
 

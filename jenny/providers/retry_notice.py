@@ -1,20 +1,19 @@
-"""Le righe d'attesa del retry: il testo inglese e la sua traduzione, in un posto solo.
+"""Le righe d'attesa del retry: scritte in inglese, riconosciute, tradotte.
 
 Il provider le scrive in inglese (vanno anche nei log e non conosce la lingua di
 chi legge); arrivano all'utente come riga di progresso nella WebUI, dove un
 inglese in mezzo a un'interfaccia italiana stonava. Il dispatcher, che conosce
 la lingua dell'agente, le traduce con :func:`localize` prima di consegnarle.
-Modelli e traduzioni stanno qui accanto, così una frase cambiata da una parte
-non smette in silenzio di essere riconosciuta dall'altra (lo prova un test).
+Le frasi, nelle due lingue, sono le chiavi ``retry.*`` di ``runtime/user_text``;
+qui restano i modelli che riconoscono l'inglese, e un test prova che una frase
+cambiata non smetta in silenzio di essere riconosciuta.
 """
 
 from __future__ import annotations
 
 import re
 
-_WAITING = "Model request failed, {kind} in {seconds}s (attempt {attempt})."
-_STOPPED = "Persistent retry stopped after {count} identical errors."
-_GAVE_UP = "Model request failed after {attempts} attempts, giving up."
+from jenny.runtime.user_text import say
 
 _PATTERNS = (
     ("waiting", re.compile(
@@ -25,50 +24,35 @@ _PATTERNS = (
     ("gave_up", re.compile(r"Model request failed after (?P<attempts>\d+) attempts, giving up\.")),
 )
 
-_TRANSLATIONS: dict[str, dict[str, str]] = {
-    "it": {
-        "waiting.retry": "Il modello non risponde: riprovo fra {seconds} s (tentativo {attempt}).",
-        "waiting.persistent retry": (
-            "Il modello non risponde: riprovo ancora fra {seconds} s (tentativo {attempt})."
-        ),
-        "stopped": "Smetto di riprovare: {count} errori uguali di fila.",
-        "gave_up": "Il modello non ha risposto dopo {attempts} tentativi: mi fermo.",
-    },
-}
-
-
 def waiting(seconds: int, attempt: int, *, persistent: bool) -> str:
     """«Riprovo fra N secondi»: la riga che scorre durante l'attesa."""
-    kind = "persistent retry" if persistent else "retry"
-    return _WAITING.format(kind=kind, seconds=seconds, attempt=attempt)
+    key = "retry.waiting_persistent" if persistent else "retry.waiting"
+    return say(key, "en", seconds=seconds, attempt=attempt)
 
 
 def stopped(count: int) -> str:
     """Il retry a oltranza si ferma dopo *count* errori identici."""
-    return _STOPPED.format(count=count)
+    return say("retry.stopped", "en", count=count)
 
 
 def gave_up(attempts: int) -> str:
     """Il retry standard ha finito i tentativi."""
-    return _GAVE_UP.format(attempts=attempts)
+    return say("retry.gave_up", "en", attempts=attempts)
 
 
 def localize(text: str, language: str | None) -> str:
-    """*text* nella lingua *language*, se è una riga d'attesa e la lingua ha una traduzione.
+    """*text* nella lingua *language*, se è una riga d'attesa.
 
-    Qualunque altro testo, o una lingua senza traduzione, torna com'è.
+    Qualunque altro testo torna com'è; una lingua senza traduzione dà l'inglese,
+    cioè il testo stesso.
     """
-    table = _TRANSLATIONS.get((language or "").strip().lower())
-    if not table:
+    parsed = parse(text)
+    if parsed is None:
         return text
-    for name, pattern in _PATTERNS:
-        match = pattern.fullmatch(text.strip())
-        if match is None:
-            continue
-        fields = match.groupdict()
-        key = f"{name}.{fields.pop('kind')}" if name == "waiting" else name
-        return table[key].format(**fields)
-    return text
+    name, fields = parsed
+    if name == "waiting":
+        name = "waiting_persistent" if fields.pop("kind") == "persistent retry" else "waiting"
+    return say(f"retry.{name}", (language or "").strip().lower() or "en", **fields)
 
 
 def parse(text: str) -> tuple[str, dict[str, str]] | None:

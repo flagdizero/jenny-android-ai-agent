@@ -15,12 +15,12 @@ import re
 from pathlib import Path
 
 from support import css_levels
+from support.js_harness import ASSETS, UI
 
-UI_DIR = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-CHAT_JS = UI_DIR / "assets" / "mobile-chat.js"
-DIALOG_JS = UI_DIR / "assets" / "shared" / "dialog.js"
-WORKSHOP_HTML = UI_DIR / "workshop.html"
-CSS = UI_DIR / "assets" / "mobile-style.css"
+CHAT_JS = UI / "assets" / "mobile-chat.js"
+DIALOG_JS = UI / "assets" / "shared" / "dialog.js"
+WORKSHOP_HTML = UI / "workshop.html"
+CSS = UI / "assets" / "mobile-style.css"
 
 
 def _chat() -> str:
@@ -321,8 +321,7 @@ def test_the_watch_is_resumed_from_the_cursor_we_already_have() -> None:
     assert watch, "_watchSubagent non trovato"
     assert "sendSubagentWatch(stream.taskId, stream.cursor)" in watch.group(1)
     ws = (
-        Path(__file__).resolve().parents[2]
-        / "jenny" / "templates" / "ui" / "assets" / "shared" / "ws-manager.js"
+        ASSETS / "shared" / "ws-manager.js"
     ).read_text(encoding="utf-8")
     assert "'subagent_watch'" in ws and "'subagent_unwatch'" in ws
     assert "task_id: String(taskId)" in ws
@@ -587,8 +586,7 @@ def test_every_subagent_string_exists_in_both_locales() -> None:
     for locale in ("en", "it"):
         data = json.loads(
             (
-                Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-                / "assets" / "i18n" / f"{locale}.json"
+                ASSETS / "i18n" / f"{locale}.json"
             ).read_text(encoding="utf-8")
         )
         for key in sorted(used):

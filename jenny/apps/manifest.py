@@ -20,6 +20,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from jenny.board.model import CONDITION_OPS
+
 # I nomi validi di app, azioni e collezioni: una sola copia, qui (il validatore
 # della skill che li duplicava e' uno stub dal 07/10/2026).
 SLUG_RE = re.compile(r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
@@ -35,9 +37,9 @@ MAX_SLUG_LEN = 32
 # cleartext dell'APK rifiuta un iframe verso un ``http://`` non-loopback, quindi
 # "incornicia il mio server" non era esprimibile in nessun modo.
 VIEW_KINDS = {"external"}
-# Gli operatori di un allarme della sezione compatta. Gli stessi delle attese a
-# condizione della bacheca (``jenny/board/model.py::CONDITION_OPS``).
-SECTION_OPS = {"<", "<=", ">", ">=", "==", "!="}
+# Gli operatori di un allarme della sezione compatta: quelli delle attese a
+# condizione della bacheca, la stessa tupla.
+SECTION_OPS = CONDITION_OPS
 SECTION_PARAM_RE = re.compile(r"\A[a-z][a-zA-Z0-9_]*\Z")
 MAX_SECTION_TREND_DAYS = 31
 
@@ -168,6 +170,18 @@ def action_param_schema(action: AppAction) -> dict:
         "required": required,
         "additionalProperties": False,
     }
+
+
+def action_signature(action: AppAction) -> str:
+    """``add_todo(text, due?)``: the action as the prompt lists it.
+
+    The parameters are those of the full schema (``action_param_schema``), so
+    the ``id`` a storage write needs is there too; optional ones end in ``?``.
+    """
+    schema = action_param_schema(action)
+    required = list(schema["required"])
+    optional = [name for name in schema["properties"] if name not in required]
+    return f"{action.name}({', '.join(required + [f'{name}?' for name in optional])})"
 
 
 def _parse_action(raw: object, index: int, has_server: bool) -> AppAction:
@@ -662,7 +676,9 @@ def find_app(workspace: Path, slug: str) -> LoadedApp | None:
     """Load a single app by slug, or None when the folder doesn't exist."""
     if not SLUG_RE.match(slug):
         return None
-    app_dir = Path(workspace) / "apps" / slug
+    from jenny.apps.drafts import app_dir as live_dir
+
+    app_dir = live_dir(workspace, slug)
     if not app_dir.is_dir():
         return None
     return load_app(app_dir)

@@ -38,6 +38,17 @@ class LocationBridge(context: Context) {
     companion object {
         private const val TAG = "LocationBridge"
 
+        /** La posizione è concessa, precisa o approssimativa: il bridge le
+         *  accetta tutte e due. La chiede anche `MainActivity`, prima di
+         *  aprire la richiesta del permesso. */
+        fun hasPermission(context: Context): Boolean =
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
         /** Se il telefono sa cercare un posto per nome. Senza i servizi Google
          *  il Geocoder può mancare, e allora `find_place` non si registra
          *  (`geocoder_available` in jenny/runtime/location.py). */
@@ -52,15 +63,7 @@ class LocationBridge(context: Context) {
     private val appContext = context.applicationContext
     private val lm = appContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
 
-    private fun hasPermission(): Boolean {
-        val fine = ContextCompat.checkSelfPermission(
-            appContext, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(
-            appContext, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        return fine || coarse
-    }
+    private fun hasPermission(): Boolean = hasPermission(appContext)
 
     private fun format(loc: Location?): String? {
         if (loc == null) return null

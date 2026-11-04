@@ -114,8 +114,8 @@ _PLATFORM_FACTS: list[tuple[str, str, str]] = [
     ),
     (
         "agent/tool_contract.md",
-        "web_fetch renderizza in un browser: i plain-text tornano vuoti",
-        r"renders the URL in a real browser",
+        "web_fetch dà un documento solo per le pagine HTML: i plain-text tornano vuoti",
+        r"returns a document only for HTML pages",
     ),
     (
         "agent/tool_contract.md",
@@ -200,8 +200,10 @@ def test_untrusted_httpx_claim_is_not_reintroduced() -> None:
 
     allowed = set(PythonExecConfig().allowed_modules)
     assert "httpx" not in allowed and "urllib" not in allowed
-    policy = _template("agent/platform_policy.md")
-    assert "not importable" in policy
+    # Il fatto sta in ``tool_contract.md``, accanto alla regola che lo usa:
+    # ``platform_policy.md`` ripeteva la stessa riga nello stesso prompt.
+    contract = _template("agent/tool_contract.md")
+    assert "not importable there" in contract
 
 
 # ---------------------------------------------------------------------------

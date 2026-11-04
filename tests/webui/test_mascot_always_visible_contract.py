@@ -11,10 +11,8 @@ la ritrova accesa e pulita.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-UI = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui"
-ASSETS = UI / "assets"
+from support.js_harness import ASSETS, UI
 
 
 def test_the_visibility_keys_are_dead_keys() -> None:

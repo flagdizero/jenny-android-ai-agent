@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from support.sessions import FakeSessions
 
 from jenny.cron.retired_heartbeat import (
     HEARTBEAT_FILE,
@@ -53,11 +54,15 @@ class _Agent:
     def __init__(self, *, fail: bool = False) -> None:
         self.calls: list[tuple[str, dict]] = []
         self._fail = fail
+        self.sessions = FakeSessions(shared=True)
 
-    async def process_direct(self, prompt: str, **kwargs) -> None:
+    async def process_direct_outcome(self, prompt: str, **kwargs):
+        from jenny.agent.turn_types import TurnOutcome
+
         self.calls.append((prompt, kwargs))
         if self._fail:
             raise RuntimeError("provider down")
+        return TurnOutcome.spoke_via_tool()
 
 
 def test_the_empty_template_has_no_checks() -> None:

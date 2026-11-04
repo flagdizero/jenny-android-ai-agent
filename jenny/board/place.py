@@ -22,12 +22,22 @@ from jenny.board.store import mutate_board
 
 
 def find_card(board: dict[str, Any], ref: str) -> dict[str, Any] | None:
-    """Una scheda per id o per titolo (senza badare a maiuscole e accenti)."""
-    card = model.card_by_id(board, ref)
+    """Una scheda per id o per titolo (senza badare a maiuscole e accenti).
+
+    L'unica ricerca per nome delle schede: la usano la bacheca, la posa delle app e
+    il tool cron, cosi' «ciliegio» trova «Ciliégio» da tutte le strade. Prima l'id;
+    poi lo slug del titolo, ma solo se una scheda sola ce l'ha: con due «Rosa» non
+    sceglie a caso, e il chiamante elenca le schede (con gli id) per farla scegliere.
+    """
+    ref = str(ref or "").strip()
+    card = model.card_by_id(board, ref) if model.is_valid_id(ref) else None
     if card is not None:
         return card
-    want = model.slugify(ref)
-    return next((c for c in board["cards"] if model.slugify(c["title"]) == want), None)
+    want = model.slugify(ref, fallback="")
+    if not want:
+        return None
+    matches = [c for c in board["cards"] if model.slugify(c["title"], fallback="") == want]
+    return matches[0] if len(matches) == 1 else None
 
 
 def tie(board: dict[str, Any], a: str, b: str, by: str = model.USER) -> bool:
@@ -93,7 +103,9 @@ def place_app(root: Path, slug: str, *, params: dict[str, Any] | None = None,
         if link:
             other = find_card(board, str(link))
             if other is None:
-                titles = ", ".join(f"«{c['title']}»" for c in board["cards"]) or "none"
+                titles = ", ".join(
+                    f"«{c['title']}» ({c['id']})" for c in board["cards"]
+                ) or "none"
                 raise ValueError(f"No card {link!r} on this board (cards: {titles}).")
         if model.is_full(board, notes):
             raise ValueError("The board is full: the user has to remove a card first.")
@@ -132,39 +144,38 @@ def refresh_app_cards(workspace: Path, slug: str | None = None) -> int:
     aggiornamento, le schede che la mostrano prendono la taglia nuova. Senza
     *slug*, tutte le app di tutti i quaderni.
     """
-    from jenny.board.placements import _wikis_dirs
+    from jenny.config.paths import get_wikis_path
     from jenny.utils.wiki_paths import discover_wiki_roots
 
     sizes: dict[str, str | None] = {}
     changed = 0
-    for wikis in _wikis_dirs(workspace):
-        for _name, root in sorted(discover_wiki_roots(wikis).items()):
-            from jenny.board.store import read_board
+    for _name, root in sorted(discover_wiki_roots(get_wikis_path(workspace)).items()):
+        from jenny.board.store import read_board
 
-            board = read_board(root)
-            if board is None:
+        board = read_board(root)
+        if board is None:
+            continue
+        todo = []
+        for card in board["cards"]:
+            app = card.get("app")
+            if not isinstance(app, dict) or (slug is not None and app.get("slug") != slug):
                 continue
-            todo = []
-            for card in board["cards"]:
-                app = card.get("app")
-                if not isinstance(app, dict) or (slug is not None and app.get("slug") != slug):
+            want = sizes.setdefault(app["slug"], app_size(workspace, app["slug"]))
+            if card.get("size") != want:
+                todo.append((card["id"], want))
+        if not todo:
+            continue
+
+        def apply(b: dict[str, Any], todo=todo) -> None:
+            for card_id, want in todo:
+                card = model.card_by_id(b, card_id)
+                if card is None:
                     continue
-                want = sizes.setdefault(app["slug"], app_size(workspace, app["slug"]))
-                if card.get("size") != want:
-                    todo.append((card["id"], want))
-            if not todo:
-                continue
+                if want:
+                    card["size"] = want
+                else:
+                    card.pop("size", None)
 
-            def apply(b: dict[str, Any], todo=todo) -> None:
-                for card_id, want in todo:
-                    card = model.card_by_id(b, card_id)
-                    if card is None:
-                        continue
-                    if want:
-                        card["size"] = want
-                    else:
-                        card.pop("size", None)
-
-            mutate_board(root, apply)
-            changed += len(todo)
+        mutate_board(root, apply)
+        changed += len(todo)
     return changed

@@ -208,7 +208,11 @@ STAGE_1 = [
         name="english_reply_over_italian_content",
         stage=1, area="language",
         # Nessuna frase del prompt lo promette: e' una sonda, non una sorveglianza.
-        # La prima misura (11/10/2026, DeepSeek) ha risposto in italiano.
+        # La prima misura (11/10/2026, DeepSeek) ha risposto in italiano. Il 04/11/2026,
+        # con un workspace dell'emulatore tutto in italiano (persona, memoria, appunti),
+        # 0/3 su due modelli; una frase in identity.md («rispondi nella lingua
+        # dell'ultimo messaggio»), anche in grassetto e con l'esempio, non l'ha spostata
+        # (DeepSeek 0/3, Haiku 1/3), e un USER.md neutro nemmeno: misura il workspace.
         promise="una domanda in inglese ha risposta in inglese anche se il file letto e' in italiano",
         files={"output/nota-{n}.md":
                "# Riunione di condominio\n\nSi è deciso di rifare il tetto entro la primavera. "
@@ -749,7 +753,7 @@ def _repotting_session() -> list[tuple[str, str]]:
 
 
 def _task_state(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    session = next((v for k, v in obs.files.items() if k.startswith("sessions/")), "") or ""
+    session = next((v for k, v in obs.files.items() if k.startswith("session:")), "") or ""
     meta = next((json.loads(line) for line in session.splitlines()
                  if '"_type": "metadata"' in line), {})
     summary = str(((meta.get("metadata") or {}).get("_last_summary") or {}).get("text") or "")
@@ -772,7 +776,7 @@ COMPACTION = [
         seed_session=_repotting_session(),
         turns=["Finito con le piante! Dammi la lista dei vasi da ricontrollare la settimana "
                "prossima."],
-        check=_task_state, read_after=("sessions/project_bh-{p}.jsonl",), kind="probe",
+        check=_task_state, read_after=("session:project:bh-{p}",), kind="probe",
         calibration_note="vietare il segno [ephemeral] in consolidator_archive.md non sposta "
                          "niente (12/10/2026, 3/3 e 3/3 su DeepSeek e Haiku): le segnalazioni "
                          "arrivano al riassunto come [durable] o [skip], e il riassunto tiene "
@@ -1133,6 +1137,9 @@ LATER = [
     Scenario(
         name="day_without_time_after_bad_history",
         stage=1, area="cron", chat="notebook",
+        # Il 04/11/2026 l'ora copiata era sempre 09:00, quella delle chiamate di prima.
+        # Dire nella descrizione di ``time`` che quelle chiamate vecchie portano un'ora
+        # mai detta non ha cambiato niente oltre il rumore (0-2/3): non c'e'.
         promise="una sessione che ha gia' inventato l'ora due volte non la inventa la terza",
         seed_session=[*_seed_day_with_invented_time("2027-03-03", "potare il {n}", "c1"),
                       *_seed_day_with_invented_time("2027-03-20", "concimare il {n}", "c2")],

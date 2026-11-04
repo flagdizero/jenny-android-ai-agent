@@ -21,10 +21,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from support.js_harness import requires_node, run_module
-
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS, requires_node, run_module
 
 pytestmark = requires_node
 
@@ -136,7 +133,11 @@ def test_every_family_in_the_row_has_a_pose() -> None:
     silenzio: il fiore direbbe «mi do da fare» mentre la parola dice altro."""
     source = (ASSETS / "home-activity.js").read_text(encoding="utf-8")
     table = source.split("const FAMILY_BY_TOOL = {", 1)[1].split("};", 1)[0]
-    families = set(re.findall(r":\s*'([a-z]+)'", table)) | {"think", "busy"}
+    from jenny.agent.progress_events import TOOL_FAMILIES
+
+    families = (
+        set(re.findall(r":\s*'([a-z]+)'", table)) | set(TOOL_FAMILIES.values()) | {"think", "busy"}
+    )
     pose = set(
         re.findall(
             r"^  ([a-z]+): \{$",

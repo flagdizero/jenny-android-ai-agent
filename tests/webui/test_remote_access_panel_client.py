@@ -14,7 +14,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from support.js_harness import ASSETS, requires_node, run_module
+from support.js_harness import ASSETS, function, requires_node, run_module
 
 pytestmark = requires_node
 
@@ -25,9 +25,9 @@ _NEIGHBORS = {
     "export const rpc = { remote: async (m, p) => { calls.push([m, p]); return replies[m]; } };\n",
     "i18n.js": "export const i18n = { locale: 'it', "
     "t: (k, p) => p ? `${k}${JSON.stringify(p)}` : k };\n",
-    "utils.js": "export const toasts = []; export const clip = [];\n"
-    "export function showToast(m) { toasts.push(m); }\n"
-    "export async function copyToClipboard(t) { clip.push(t); return true; }\n"
+    "utils.js": "export const toasts = []; export const clip = []; export const clipOk = { value: true };\n"
+    "export function showToast(m, kind) { toasts.push(kind ? [m, kind] : m); }\n"
+    "export async function copyToClipboard(t) { clip.push(t); return clipOk.value; }\n"
     "export function escapeHtml(s) { return String(s).replace(/&/g, '&amp;')"
     ".replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;'); }\n",
     "dialog.js": "export const dialogs = []; export let answer = 'ok';\n"
@@ -35,13 +35,21 @@ _NEIGHBORS = {
     "export async function detailDialog(o) { dialogs.push(o); return answer; }\n",
 }
 
+# Il Copia vero, sui vicini finti di sopra.
+_NEIGHBORS["reply.js"] = (
+    "import { i18n } from './i18n.js';\n"
+    "import { copyToClipboard, showToast } from './utils.js';\n"
+    "export "
+    + function((ASSETS / "shared" / "reply.js").read_text(encoding="utf-8"), "copyWithToast")
+)
+
 _PRELUDE = """
 import assert from 'node:assert/strict';
 globalThis.window = globalThis;
 globalThis.setTimeout = () => 0;
 globalThis.clearTimeout = () => {};
 const { rpc, calls, replies } = await import('./shared/rpc-client.js');
-const { clip, toasts } = await import('./shared/utils.js');
+const { clip, clipOk, toasts } = await import('./shared/utils.js');
 const { dialogs, setAnswer } = await import('./shared/dialog.js');
 const { launched } = await import('./shared/api-client.js');
 const mod = await import('./mobile-remote-access.js');
@@ -214,5 +222,21 @@ def test_actions_copy_rotate_and_turning_off_from_outside() -> None:
 
         await panel._action('open-ts');
         assert.deepEqual(launched, ['com.tailscale.ipn']);
+        """
+    )
+
+
+def test_a_failed_copy_of_the_link_is_said() -> None:
+    """«Copia link» diceva solo il successo: in una WebView dove la copia non
+    riesce il tocco sembrava aver funzionato."""
+    _run(
+        """
+        const { panel } = await panelWith(ON);
+        clipOk.value = false;
+        await panel._action('copy');
+        assert.deepEqual(toasts, [['chat.copyFailed', 'error']]);
+        clipOk.value = true;
+        await panel._action('copy');
+        assert.deepEqual(toasts.at(-1), ['settings.remote.copied', 'success']);
         """
     )

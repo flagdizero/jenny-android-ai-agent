@@ -15,15 +15,11 @@ Il Kotlin non gira in CI: la regola si fissa sul sorgente, come in
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-from support.kotlin_source import read_source
+from support.kotlin_source import ANDROID_SRC, read_source
 
-BRIDGE = (
-    Path(__file__).resolve().parents[2]
-    / "android/app/src/main/java/com/flagdizero/jenny/JennyBrowserBridge.kt"
-)
+BRIDGE = ANDROID_SRC / "JennyBrowserBridge.kt"
 
 
 def _open_body() -> str:
@@ -43,7 +39,7 @@ def test_open_reads_whether_the_page_started() -> None:
     refusal = "if (!started && gate.compareAndSet(GATE_OPEN, GATE_ABANDONED))"
     assert refusal in body
     before_wait = body.split("awaitSettled(", 1)[0]
-    assert '"error"' in before_wait.split(refusal, 1)[1], (
+    assert "errorJson(" in before_wait.split(refusal, 1)[1], (
         "senza partenza si risponde con un errore prima di aspettare il caricamento"
     )
 

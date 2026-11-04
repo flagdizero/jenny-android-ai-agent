@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from jenny.apps import notify
 from jenny.apps.executor import execute_action
 from jenny.apps.reader import run_reader
+from jenny.runtime import ui_events
 
 LIST = {
     "name": "Spesa", "description": "x",
@@ -33,12 +33,13 @@ TOTAL = {
 def heard(monkeypatch) -> list[str]:
     out: list[str] = []
 
-    async def note(slug: str) -> None:
-        out.append(slug)
+    async def note(event: dict) -> None:
+        if event.get("_app_data_changed"):
+            out.append(event["app_slug"])
 
-    notify.set_notifier(note)
+    ui_events.set_publisher(note)
     yield out
-    notify.set_notifier(None)
+    ui_events.set_publisher(None)
 
 
 def _app(ws: Path, slug: str, manifest: dict, run: str | None = None) -> None:
@@ -52,9 +53,6 @@ def _app(ws: Path, slug: str, manifest: dict, run: str | None = None) -> None:
 async def test_a_write_from_the_screen_is_announced(tmp_path: Path, heard) -> None:
     _app(tmp_path, "spesa", LIST)
     await execute_action(tmp_path, "spesa", "add", {"what": "latte"})
-    assert heard == ["spesa"]
-    # Il tool di Jenny avvisa da se': niente doppione.
-    await execute_action(tmp_path, "spesa", "add", {"what": "uova"}, announce=False)
     assert heard == ["spesa"]
 
 

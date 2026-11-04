@@ -30,10 +30,8 @@ Asserzioni sul sorgente, nello stile del resto di ``tests/webui/``.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+from support.js_harness import ASSETS
 
 
 def _src(name: str) -> str:
@@ -110,13 +108,11 @@ def test_the_provider_dialog_cancel_button_respects_the_busy_guard() -> None:
     """Era l'ultima via per perdere la chiave API a metà salvataggio: Esc e il
     tasto Indietro passano dal ``cancel`` annullabile, il bottone no."""
     source = _src("mobile-settings.js")
-    handler = re.search(
-        r"#dlg-provider-cancel'\)\.addEventListener\('click', \(\) => \{(.*?)\n    \}\);",
-        source,
-        re.S,
-    )
-    assert handler, "handler di Annulla non trovato"
-    assert "new Event('cancel', { cancelable: true })" in handler.group(1)
+    dialog = source[source.index("_showAddProviderDialog(existingProvider) {") :]
+    assert "formDialog({" in dialog[: dialog.index("\n  }\n")], "il provider non passa da formDialog"
+    form = _src("shared/dialog.js")
+    form = form[form.index("export function formDialog") :]
+    assert "cancelBtn?.addEventListener('click', () => { if (!dialog.dataset.busy) done(null); });" in form
 
 
 def test_the_discard_confirm_drops_the_soft_keyboard_first() -> None:

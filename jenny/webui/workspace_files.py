@@ -10,6 +10,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+from jenny.security.subagent_policy import CONFIG_FILE_PATTERNS
 from jenny.utils.path import atomic_write
 
 # Oltre ai dotfile, questi sono stato/implementazione del runtime (non
@@ -45,13 +46,12 @@ from jenny.utils.path import atomic_write
 _DEFAULT_INTERNAL_PATTERNS = [
     ".*",
     "*.tmp",
-    "config.json*",
-    "config.corrupt-*.json",
+    *CONFIG_FILE_PATTERNS,
     "update_state.json",
     "__pycache__", "__pycache__/**", "*/__pycache__/**",
     "agent", "agent/**",
     "cron", "cron/**",
-    "sessions", "sessions/**",
+    "sessions", "sessions/**", "sessions.migrated", "sessions.migrated/**",
     "ui", "ui/**",
 ]
 

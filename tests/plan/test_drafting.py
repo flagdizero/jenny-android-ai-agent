@@ -73,7 +73,7 @@ async def test_question_answer_proposal_the_answer_is_still_planning(
     first: dict[str, Any] = {PLAN_MODE_META: True, WORKSPACE_READONLY_METADATA_KEY: True}
     await driver.before_user_turn(KEY, first)
     assert driver.drafting_for(KEY) is not None
-    assert _changed(bus)[-1] == {"_plan_changed": True, "notebook": "piante", "plan_id": ""}
+    assert _changed(bus)[-1] == {"_plan_changed": True, "place": "nb:piante", "notebook": "piante", "plan_id": ""}
     assert PLAN_FOLLOWUP_META not in first
     await driver.note_read(KEY)
 
@@ -129,7 +129,7 @@ async def test_cancel_ends_it_and_says_whether_there_was_one(
     bus.outbound.clear()
     assert await driver.cancel_drafting("piante") is True
     assert driver.drafting_for(KEY) is None
-    assert _changed(bus) == [{"_plan_changed": True, "notebook": "piante", "plan_id": ""}]
+    assert _changed(bus) == [{"_plan_changed": True, "place": "nb:piante", "notebook": "piante", "plan_id": ""}]
     assert await driver.cancel_drafting("piante") is False
     meta: dict[str, Any] = {}
     await driver.before_user_turn(KEY, meta)
@@ -202,7 +202,7 @@ async def test_plan_get_carries_drafting_next_to_the_plan(
 ) -> None:
     ctx = _ctx(workspace, driver)
     got = await dispatch_command(ctx, "plan.get", {"notebook": "piante"})
-    assert got == {"ok": True, "plan": None, "drafting": None}
+    assert got == {"ok": True, "plan": None, "drafting": None, "enabled": True}
     await start_drafting(driver, reads=2)
     got = await dispatch_command(ctx, "plan.get", {"notebook": "piante"})
     assert got["plan"] is None
@@ -273,19 +273,19 @@ def test_plan_propose_offers_covers_on_steps() -> None:
 
 
 async def test_an_old_plan_reads_with_empty_new_fields(workspace: Path, driver: PlanDriver) -> None:
-    """Un ``plan.json`` di prima: copertura e assunzioni vuote, ``done_when`` vuoto,
+    """Un piano di prima: copertura e assunzioni vuote, ``done_when`` vuoto,
     un blocco senza ``kind`` è una domanda senza bozze."""
     await start_drafting(driver)
     await driver.propose(KEY, "Rifare la wiki", STEPS, coverage=COVERAGE)
     plan = driver.store.open_plan_for("piante")
-    path = driver.store.plan_dir(plan.id) / "plan.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = plan.to_dict()
     for key in ("coverage", "assumptions"):
         data.pop(key)
     for step in data["steps"]:
         step.pop("done_when")
     data["blocked"] = {"step": "s1", "question": "Quale?", "reason": "question", "at": "x"}
-    path.write_text(json.dumps(data), encoding="utf-8")
+    with driver.store._db.write() as conn:
+        conn.execute("UPDATE plans SET data = ? WHERE id = ?", (json.dumps(data), plan.id))
     got = await dispatch_command(_ctx(workspace, driver), "plan.get", {"id": plan.id})
     view = got["plan"]
     assert view["coverage"] == [] and view["assumptions"] == []

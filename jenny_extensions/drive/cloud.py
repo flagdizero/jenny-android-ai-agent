@@ -54,7 +54,6 @@ import hashlib
 import json
 import secrets
 import struct
-import time
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -72,9 +71,10 @@ from jenny.snapshot.crypto import (
 )
 from jenny.snapshot.crypto_backends.base import CryptoAuthError, CryptoBackend
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.store import BlobCorruptError, hash_content, object_path
-from jenny.snapshot.types import SnapshotManifest, is_snapshot_id, unsafe_entry_reason
-from jenny.utils.path import atomic_write
+from jenny.snapshot.store import hash_content, read_verified_blob
+from jenny.snapshot.types import SnapshotManifest, entry_problem, entry_target, is_snapshot_id
+from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud_sink import RemoteNotFoundError, RemoteSink
 
@@ -364,11 +364,8 @@ class CloudRepository:
 
     def read_state(self) -> dict[str, Any]:
         """L'esito degli ultimi giri, per la spia «Al sicuro»."""
-        try:
-            data = json.loads((self._state_dir / _STATE_FILE).read_text("utf-8"))
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) and data.get("repo_id") == self.repo_id else {}
+        data = read_json_dict(self._state_dir / _STATE_FILE)
+        return data if data.get("repo_id") == self.repo_id else {}
 
     def _write_state(self, **changes: Any) -> None:
         state = self.read_state()
@@ -475,7 +472,7 @@ class CloudRepository:
         in_pack = 0
         try:
             for blob_hash in needed:
-                raw = await asyncio.to_thread(_read_verified_raw, engine.objects_dir, blob_hash)
+                raw, _ = await asyncio.to_thread(read_verified_blob, engine.objects_dir, blob_hash)
                 if writer is None:
                     writer = _PackWriter(self._tmp_dir())
                 await asyncio.to_thread(writer.add, blob_hash, raw)
@@ -513,7 +510,7 @@ class CloudRepository:
         await self._sink.put_bytes(snapshot_key(manifest), sealed)
         sent += len(sealed)
         self._write_state(
-            last_success_ms=int(time.time() * 1000),
+            last_success_ms=_now_ms(),
             last_snapshot_id=snapshot_id,
             last_snapshot_created_at_ms=manifest.created_at_ms,
         )
@@ -560,7 +557,7 @@ class CloudRepository:
                 self._passphrase,
                 zlib.compress(json.dumps({
                     "pack": pack_id,
-                    "at": int(time.time() * 1000),
+                    "at": _now_ms(),
                     "blobs": writer.entries,
                 }).encode()),
                 iterations=_KDF_ITERATIONS,
@@ -576,10 +573,6 @@ class CloudRepository:
         self._seen_indexes.add(f"{pack_id}.jix")
         await asyncio.to_thread(self._save_cache)
         return size
-
-    def record_failure(self, error: str) -> None:
-        """Annota un giro fallito: la spia conta da ``last_success_ms``, non da qui."""
-        self._write_state(last_failure_ms=int(time.time() * 1000), last_error=error[:500])
 
     # -- ripristino ---------------------------------------------------------------
 
@@ -612,12 +605,7 @@ class CloudRepository:
         dest_dir = Path(dest_dir)
         root = dest_dir.resolve()
         for entry in manifest.files:
-            reason = unsafe_entry_reason(entry.path, entry.hash)
-            if reason is None:
-                resolved = (root / Path(*entry.path.split("/"))).resolve()
-                if not resolved.is_relative_to(root):
-                    reason = f"unsafe path {entry.path!r} leaves the destination"
-            if reason is not None:
+            if (reason := entry_problem(root, entry.path, entry.hash)) is not None:
                 raise CloudBackupError(f"snapshot {snapshot.id[:12]}: {reason}")
 
         await self.refresh_index()
@@ -682,22 +670,6 @@ class _PackWriter:
         self.path.unlink(missing_ok=True)
 
 
-def _read_verified_raw(objects_dir: Path, blob_hash: str) -> bytes:
-    """I byte del blob così come sono nello store (zlib), verificati contro l'hash.
-
-    Spedire un blob corrotto vorrebbe dire scoprirlo al ripristino, cioè
-    quando non c'è più l'originale.
-    """
-    raw = object_path(objects_dir, blob_hash).read_bytes()
-    try:
-        content = zlib.decompress(raw)
-    except zlib.error as exc:
-        raise BlobCorruptError(f"blob {blob_hash} is not valid zlib data") from exc
-    if hash_content(content) != blob_hash:
-        raise BlobCorruptError(f"blob {blob_hash} content does not match its hash")
-    return raw
-
-
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -723,4 +695,4 @@ def _extract_blobs(
             if hash_content(content) != blob_hash:
                 raise CloudBackupError(f"blob {blob_hash[:12]} does not match its hash")
             for rel in paths_by_hash[blob_hash]:
-                atomic_write(dest_dir / Path(*rel.split("/")), content, fsync_dir=False)
+                atomic_write(entry_target(dest_dir, rel), content, fsync_dir=False)

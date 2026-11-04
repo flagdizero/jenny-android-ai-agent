@@ -2,7 +2,7 @@
 
 ``api.getProviderModels``/``updateProvider``/
 ``saveTelegramToken``/``saveSshHost`` mettevano il segreto nella query di una
-GET. Ora sono comandi RPC (``settings.provider.models``/``update``,
+GET. Ora sono comandi RPC, chiamati da ``rpc`` direttamente dal 02/11/2026 (``settings.provider.models``/``update``,
 ``telegram.save``, ``ssh.host.save``) con la stessa firma: qui si prova che
 nessuna ``fetch`` parte, che i parametri arrivano com'erano (vuoti scartati per
 il provider, ``null`` → ``''`` per l'SSH, ``password`` omessa se omessa) e che
@@ -34,7 +34,7 @@ export const wsManager = {
 
 _ENTRY = """
 import assert from 'node:assert/strict';
-import { api } from './api-client.js';
+import { rpc } from './rpc-client.js';
 import { wsManager, requests } from './ws-manager.js';
 
 const fetched = [];
@@ -42,16 +42,16 @@ globalThis.fetch = async (url) => { fetched.push(String(url)); throw new Error('
 
 wsManager.outcome = async (method) => ({ method });
 
-await api.getProviderModels('openai', 'sk-segreta', '', 'openai_compat');
-await api.updateProvider({
+await rpc.providerModels({ provider: 'openai', apiKey: 'sk-segreta', apiBase: '', format: 'openai_compat' });
+await rpc.updateProvider({
   name: 'p', format: 'openai_compat', api_key: 'sk-segreta', api_base: '',
   ca_bundle: null, ca_bundle_clear: '',
 });
-await api.saveTelegramToken('123:segreto');
-await api.saveSshHost({ alias: 'nas', host: 'h', username: 'u', description: null,
+await rpc.saveTelegramToken('123:segreto');
+await rpc.saveSshHost({ alias: 'nas', host: 'h', username: 'u', description: null,
   auth: 'password', password: 'segreta' });
-await api.saveSshHost({ alias: 'nas', host: 'h', username: 'u', auth: 'password' });
-await api.saveOnboarding({ provider: 'openai', format: 'openai_compat', api_key: 'sk-prima',
+await rpc.saveSshHost({ alias: 'nas', host: 'h', username: 'u', auth: 'password' });
+await rpc.saveOnboarding({ provider: 'openai', format: 'openai_compat', api_key: 'sk-prima',
   model: 'gpt-x', bot_name: 'Jenny', locale: 'it' });
 
 assert.deepEqual(requests, [
@@ -72,8 +72,8 @@ wsManager.outcome = async () => {
   err.code = 'bad_request';
   throw err;
 };
-await assert.rejects(api.saveTelegramToken('x'), /telegram token rejected: Unauthorized/);
-await assert.rejects(api.updateProvider({ name: 'p' }), (e) => e.code === 'bad_request');
+await assert.rejects(rpc.saveTelegramToken('x'), /telegram token rejected: Unauthorized/);
+await assert.rejects(rpc.updateProvider({ name: 'p' }), (e) => e.code === 'bad_request');
 console.log('ok');
 """
 

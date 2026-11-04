@@ -102,11 +102,12 @@ class Runner:
         if dev.has_snapshot():
             raise DeviceError("a snapshot from an earlier run is still there: "
                               "run `behaviour_check.py --restore` first")
-        dev.snapshot()
         # I job di sistema (Dream, giardiniere, orologio dei quaderni) girerebbero
         # in mezzo agli scenari: un Dream a meta' giro riscrive MEMORY.md. Si
-        # spostano di un giorno ad app ferma; la fotografia rimette lo store.
+        # spostano di un giorno ad app ferma; la fotografia (fatta prima, anche
+        # lei ad app ferma) rimette lo store.
         dev.adb("shell", "am", "force-stop", "com.flagdizero.jenny")
+        dev.snapshot()
         dev.shift_system_jobs(delay_ms=24 * 3600 * 1000)
         dev.restart_app()
         self.base = {path: dev.read(path) for path in RESET_FILES}
@@ -134,6 +135,11 @@ class Runner:
         created: list[str] = []
         jobs_before = self._job_ids()
         usage_before = self._usage()
+        # L'archivio della memoria non sta fra i file che ogni giro rimette
+        # (``RESET_FILES``): i fatti che Dream archivia in un giro restavano, e il
+        # 03/11/2026 ``recall_superseded`` trovava sei «barista al caffe' ...» lasciati
+        # da ``dream_replace_links_versions`` e non sapeva quale fosse il vero.
+        archive_before = set(dev.listdir("memory/archive"))
         try:
             if scenario.chat == "personal":
                 self._fresh_personal_session()
@@ -147,10 +153,10 @@ class Runner:
                 prelude_calls = self._prelude(scenario, nonces, project)
             if scenario.chat == "notebook":
                 chat_id = f"project:{project}"
-                session_file = f"sessions/project_{project}.jsonl"
+                session_file = f"project:{project}"
             else:
                 chat_id = PERSONAL_CHAT
-                session_file = "sessions/unified_default.jsonl"
+                session_file = "unified:default"
             if scenario.seed_session:
                 self._seed_session(scenario, nonces, session_file,
                                    f"project:{project}" if project else "unified:default")
@@ -159,20 +165,23 @@ class Runner:
             for index, turn in enumerate(scenario.turns):
                 if index and scenario.wait_subagents:
                     self._wait_subagents_done(session_file)
-                last_turn_start = len(_rows(dev.read(session_file) or ""))
+                last_turn_start = len(_rows(dev.read_session(session_file)))
                 outcome = dev.turn(scenario.render(turn, nonces), chat_id=chat_id)
                 replies.append(outcome.reply)
                 timed_out = timed_out or outcome.timed_out
                 if _PROVIDER_FAILED.search(outcome.reply):
                     raise ProviderDownError(outcome.reply.splitlines()[-1][:200])
             if scenario.final_reply_after_subagents:
-                self._wait_subagents_done(session_file)
-                final = [r for r in _rows(dev.read(session_file) or "")
+                # Un ricercatore sul web dell'emulatore passa i 5 minuti (332 s il
+                # 03/11/2026): con il tetto di prima la risposta finale non arrivava, e
+                # lo scenario misurava il tempo del banco invece del deposito.
+                self._wait_subagents_done(session_file, timeout=900.0)
+                final = [r for r in _rows(dev.read_session(session_file))
                          if r.get("role") == "assistant" and isinstance(r.get("content"), str)
                          and r["content"].strip()]
                 if final:
                     replies.append(final[-1]["content"])
-            rows = _rows(dev.read(session_file) or "")
+            rows = _rows(dev.read_session(session_file))
             extra: dict[str, Any] = {
                 "last_turn_calls": observation_from_rows(rows[last_turn_start:], []).tool_calls,
                 "prelude_calls": prelude_calls,
@@ -182,18 +191,22 @@ class Runner:
             if scenario.monitor_after:
                 extra["monitor"] = self._first_monitor_run(jobs_before)
             if scenario.dream_after:
-                before_sessions = set(dev.listdir("sessions"))
+                before_sessions = set(dev.session_keys("dream:"))
                 extra.update(self._dream_now())
                 # Le chiamate di Dream, per capire un giro rosso senza rifarlo.
-                new = sorted(f for f in set(dev.listdir("sessions")) - before_sessions
-                             if f.startswith("dream"))
-                dream_rows = [r for f in new for r in _rows(dev.read(f"sessions/{f}") or "")]
+                new = sorted(set(dev.session_keys("dream:")) - before_sessions)
+                dream_rows = [r for k in new for r in _rows(dev.read_session(k))]
                 rows = rows + dream_rows
                 extra["dream_sessions"] = new
             files: dict[str, str | None] = {}
             for raw in scenario.read_after:
                 path = scenario.render(raw, nonces)
-                if path.endswith("/"):
+                if path.startswith("session:"):
+                    # Una sessione, dal database: dal 03/11/2026 ``sessions/*.jsonl``
+                    # non esiste piu', e il controllo che la leggeva come file la
+                    # trovava vuota (``compacted`` sempre NO).
+                    files[path] = dev.read_session(path.removeprefix("session:"))
+                elif path.endswith("/"):
                     # Una cartella: ogni file che contiene, letto per intero.
                     for name in dev.listdir(path.rstrip("/")):
                         files[path + name] = dev.read(path + name)
@@ -210,6 +223,8 @@ class Runner:
             result.error = f"{type(exc).__name__}: {exc}"
         finally:
             self._cleanup(jobs_before, project, created)
+            for name in sorted(set(dev.listdir("memory/archive")) - archive_before):
+                dev.remove(f"memory/archive/{name}")
             result.cost = _usage_delta(usage_before, self._usage())
             result.seconds = round(time.monotonic() - start, 1)
         return result
@@ -237,7 +252,7 @@ class Runner:
     def _fresh_personal_session(self) -> None:
         dev = self.device
         before = _max_cursor(dev.read("memory/history.jsonl") or "")
-        rows = _rows(dev.read("sessions/unified_default.jsonl") or "")
+        rows = _rows(dev.read_session("unified:default"))
         dev.turn("/new")
         if any(r.get("role") in ("user", "assistant") and not r.get("_command") for r in rows):
             self._wait_for_entry(before)
@@ -278,7 +293,7 @@ class Runner:
                            verdict: float = 300.0) -> dict[str, Any] | None:
         """Il primo giro del monitor nato in questo giro, e il suo esito finale.
 
-        Si legge ``jobs.json`` (stato e storico del job) e la sessione del
+        Si leggono le righe del job (stato e storico) e la sessione del
         monitor, ``cron_<id>.jsonl``, subito dopo il giro: la sessione si sfoltisce
         a ogni giro, e il primo e' quello che conta. Se il giro ha affidato il
         controllo a un aiutante (``pendingSinceMs``), si aspetta anche il suo
@@ -287,8 +302,7 @@ class Runner:
         dev = self.device
 
         def job() -> dict[str, Any] | None:
-            store = json.loads(dev.read("cron/jobs.json") or "{}")
-            return next((j for j in store.get("jobs", [])
+            return next((j for j in dev.cron_rows()
                          if j.get("id") not in jobs_before
                          and (j.get("payload") or {}).get("mode") == "monitor"), None)
 
@@ -306,7 +320,7 @@ class Runner:
         first_status = runs[0].get("status") if runs else None
 
         def calls() -> list[str]:
-            rows = _rows(dev.read(f"sessions/cron_{found['id']}.jsonl") or "")
+            rows = _rows(dev.read_session(f"cron:{found['id']}"))
             return [c.name for c in observation_from_rows(rows, []).tool_calls]
 
         # Subito: il giro dopo sfoltisce la sessione e porterebbe via questo.
@@ -369,8 +383,15 @@ class Runner:
         # dal prompt (``# Recent History``) e lo scenario misurerebbe altro.
         cursor = max(_max_cursor(dev.read("memory/history.jsonl") or ""),
                      _int((dev.read("memory/.cursor") or "").strip()),
-                     _history_floor(dev.read("sessions/unified_default.jsonl") or ""))
+                     _history_floor(dev.read_session("unified:default")))
         last = cursor
+        if scenario.dream_after:
+            # Dream lavora un lotto dal suo cursore (al piu' 20 voci, 16k caratteri):
+            # le voci rimaste indietro sull'emulatore, archivi di /new di prove
+            # precedenti, ci entravano prima di quella dello scenario e la lasciavano
+            # fuori. Il 03/11/2026 erano 19, e tre scenari di Dream erano rossi su due
+            # modelli per questo. Lo scenario misura solo quel che semina.
+            dev.write("memory/.dream_cursor", str(cursor))
         for raw_path, raw_text in scenario.append.items():
             path = scenario.render(raw_path, nonces)
             text = scenario.render(raw_text, nonces)
@@ -392,25 +413,25 @@ class Runner:
         acceso li' scriverebbe a meta' del turno osservato) e se ne restituiscono
         le chiamate, per distinguere un rosso di qua da un fatto mai annotato di la'.
         """
-        session_file = f"sessions/project_{project}.jsonl"
+        session_file = f"project:{project}"
         for turn in scenario.notebook_prelude:
             outcome = self.device.turn(scenario.render(turn, nonces), chat_id=f"project:{project}")
             if _PROVIDER_FAILED.search(outcome.reply):
                 raise ProviderDownError(outcome.reply.splitlines()[-1][:200])
         self._wait_subagents_done(session_file)
-        rows = _rows(self.device.read(session_file) or "")
+        rows = _rows(self.device.read_session(session_file))
         return observation_from_rows(rows, []).tool_calls
 
     def _seed_session(self, scenario: Scenario, nonces: Mapping[str, str], session_file: str,
                       key: str) -> None:
-        """La conversazione di ``seed_session`` sul file, metadati di prima compresi.
+        """La conversazione di ``seed_session`` nel database, metadati di prima compresi.
 
         I messaggi sono datati a un minuto l'uno dall'altro, finendo un minuto fa:
         per il gateway e' una sessione appena usata, non una da compattare per
         inattivita'.
         """
         dev = self.device
-        rows = _rows(dev.read(session_file) or "")
+        rows = [json.loads(line) for line in dev.read_session(session_file).splitlines() if line]
         meta = next((r for r in rows if r.get("_type") == "metadata"), None) or {
             "_type": "metadata", "key": key, "metadata": {},
             "created_at": datetime.now().isoformat(),
@@ -430,7 +451,7 @@ class Runner:
             lines.append(json.dumps({
                 "role": role, "content": scenario.render(text, nonces), "timestamp": stamp,
             }, ensure_ascii=False))
-        dev.write(session_file, "\n".join(lines) + "\n")
+        dev.write_session(session_file, "\n".join(lines) + "\n")
 
     def _filler(self) -> str:
         """Un MEMORY.md oltre il tetto di Dream (``memoryBudgetChars``, 3.000 di default)."""
@@ -474,7 +495,7 @@ class Runner:
                 running = _running_subagents(self.device.http_get("/api/subagents"))
             except Exception:  # noqa: BLE001
                 running = []
-            current = self.device.mtime_size(session_file)
+            current = self.device.session_stamp(session_file)
             if current != last:
                 last, quiet_since = current, time.monotonic()
             if not running and time.monotonic() - quiet_since > 15:
@@ -522,10 +543,13 @@ class Runner:
         return {str(j.get("id")) for j in jobs or [] if isinstance(j, dict) and j.get("id")}
 
     def _usage(self) -> dict[str, int]:
+        # Dal 03/11/2026 i token stanno in ``state.sqlite`` (``token_usage_days``, un
+        # giorno per riga): il file di prima non c'e' piu', e il costo usciva sempre 0.
         try:
-            state = json.loads(self.device.read(".jenny/webui/token-usage.json") or "{}")
-            day = state["days"][sorted(state["days"])[-1]]
-        except (KeyError, IndexError, json.JSONDecodeError):
+            raw = self.device._state_query(lambda conn: conn.execute(
+                "SELECT data FROM token_usage_days ORDER BY day DESC LIMIT 1").fetchone())
+            day = json.loads(raw[0]) if raw else {}
+        except (TypeError, IndexError, json.JSONDecodeError):
             return {}
         return {k: int(day.get(k) or 0) for k in ("prompt_tokens", "cached_tokens",
                                                    "completion_tokens", "requests")}

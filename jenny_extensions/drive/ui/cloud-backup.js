@@ -23,6 +23,7 @@
 
 import { api } from '../../shared/api-client.js';
 import { i18n } from '../../shared/i18n.js';
+import { dayOffset, nearDay, shortDate } from '../../shared/when.js';
 import { showRestartDialog, NATIVE_ANSWER_GRACE_MS } from '../../shared/backup-flow.js';
 
 /** Il nome dell'estensione, lato gateway e lato nativo. */
@@ -52,7 +53,7 @@ export function cloudWithPassword(name, password) {
   return api._backupPost(`/api/backup/cloud/${name}`, { password });
 }
 
-export function cloudRestore(snapshotId) {
+function cloudRestore(snapshotId) {
   return api._backupPost('/api/backup/cloud/restore', { snapshot_id: snapshotId });
 }
 
@@ -236,17 +237,10 @@ export function restoreCopy(snapshotId) {
  *  il bottone grande è il gesto che serve. */
 export const CLOUD_BLOCKING = ['consent_needed', 'missing_key', 'wrong_key'];
 
-const DAY_MS = 86400000;
-
 function _startOfDay(ms) {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
   return d.getTime();
-}
-
-/** Giorni di calendario fra due istanti (non 24 h: «domenica → giovedì» è 4). */
-export function calendarDays(fromMs, toMs) {
-  return Math.round((_startOfDay(toMs) - _startOfDay(fromMs)) / DAY_MS);
 }
 
 /** Il motivo da mostrare, fra quelli che la pagina sa spiegare. */
@@ -288,7 +282,7 @@ export function cloudView(status, now = Date.now()) {
   const since = last || Number(s.enabled_at_ms) || now;
   if (now - since >= CLOUD_LATE_MS) {
     return {
-      kind: 'late', tone: 'warn', last, days: Math.max(3, calendarDays(since, now)),
+      kind: 'late', tone: 'warn', last, days: Math.max(3, dayOffset(since, now)),
       reason: reasonKey(code), action: 'copyNow',
       alerted: (Number(s.alerted_ms) || 0) > since,
     };
@@ -342,15 +336,7 @@ export function nightStrip(status, now = Date.now(), locale = i18n.locale) {
 /** «oggi alle 3:12» · «ieri alle 3:12» · «domenica alle 3:12» · «3 ott». */
 export function dayText(ms, now = Date.now(), locale = i18n.locale) {
   const at = new Date(Number(ms) || 0);
-  const time = at.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  const days = calendarDays(at.getTime(), now);
-  if (days <= 0) return i18n.t('cloudBackup.when.today', { time });
-  if (days === 1) return i18n.t('cloudBackup.when.yesterday', { time });
-  if (days < 7) {
-    const day = at.toLocaleDateString(locale, { weekday: 'long' });
-    return i18n.t('cloudBackup.when.weekday', { day, time });
-  }
-  return at.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  return nearDay(at, { now, locale }) || shortDate(at, { locale });
 }
 
 /** «5,1 MB» e «8,4 MB» per la barra: tutti e due nell'unità del totale, così
@@ -362,11 +348,3 @@ export function progressSizes(done, total, locale = i18n.locale) {
   return { done: fmt(Math.min(Number(done) || 0, t)), total: fmt(t) };
 }
 
-/** «8,4 MB», nel formato numerico della lingua. */
-export function sizeText(bytes, locale = i18n.locale) {
-  const n = Number(bytes) || 0;
-  const fmt = (v, unit) => `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(v)} ${unit}`;
-  if (n >= 1e9) return fmt(n / 1e9, 'GB');
-  if (n >= 1e6) return fmt(n / 1e6, 'MB');
-  return fmt(Math.max(1, Math.round(n / 1e3)), 'kB');
-}

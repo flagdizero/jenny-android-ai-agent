@@ -65,20 +65,6 @@ def list_apps_payload(workspace: Path) -> dict:
     return {"apps": apps}
 
 
-def delete_app(workspace: Path, slug: str) -> dict:
-    """«Elimina» un'app: la sposta nel cestino (``apps/.trash/``), dati compresi.
-
-    Fino al 06/10/2026 era ``rmtree``, senza ritorno. Adesso si rimette con
-    ``apps.restore`` e si butta davvero solo con ``apps.purge`` (v.
-    :mod:`jenny.apps.trash`). ``ValueError`` per uno slug non valido,
-    ``FileNotFoundError`` se l'app non c'e'.
-    """
-    from jenny.apps.trash import trash_app
-
-    trashed = trash_app(workspace, slug)
-    return {"deleted": True, "trashed": trashed}
-
-
 async def execute_app_action_payload(
     workspace: Path,
     slug: str,

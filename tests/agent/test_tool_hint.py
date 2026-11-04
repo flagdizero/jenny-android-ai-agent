@@ -111,20 +111,6 @@ class TestToolHintKnownTools:
         assert result == "fetch https://example.com/page"
 
 
-class TestToolHintMCP:
-    """Test MCP tools are abbreviated to server::tool format."""
-
-    def test_mcp_standard_format(self):
-        result = _hint([_tc("mcp_4_5v_mcp__analyze_image", {"imageSource": "https://img.jpg", "prompt": "describe"})])
-        assert "4_5v" in result
-        assert "analyze_image" in result
-
-    def test_mcp_simple_name(self):
-        result = _hint([_tc("mcp_github__create_issue", {"title": "Bug fix"})])
-        assert "github" in result
-        assert "create_issue" in result
-
-
 class TestToolHintFallback:
     """Test unknown tools fall back to original behavior."""
 

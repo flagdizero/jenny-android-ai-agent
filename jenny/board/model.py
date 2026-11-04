@@ -123,7 +123,6 @@ SUGGESTION_KINDS = (
 # all'avvio (``jenny/apps/migrate_micro.py``) la trovi e la faccia diventare
 # una sezione ``app``.
 SECTION_KINDS = ("note", "reminder", "app", "photo", "micro", "cron")
-PRECISIONS = ("day", "month")
 CONDITION_OPS = ("<", "<=", ">", ">=", "==", "!=")
 
 # I glifi che una scheda puo' portare: icone del set della casa (Tabler 3.19),
@@ -879,7 +878,7 @@ def ownership_violations(
 # ── I promemoria della bacheca ───────────────────────────────────────────────
 #
 # Dal 31/10/2026 un promemoria del quaderno è un job dello scheduler
-# (``cron/jobs.json``), come ogni cosa «più tardi»: un singolo a data, o un
+# (``jenny/cron/store.py``), come ogni cosa «più tardi»: un singolo a data, o un
 # ricorrente con un filtro ``condition``. Il file ``reminders.json`` non c'è
 # più. La bacheca ne mostra una **riga** (``{id, card, text, when}``, v.
 # ``jenny/board/cron_link.py::note_of``), e qui stanno le funzioni pure su

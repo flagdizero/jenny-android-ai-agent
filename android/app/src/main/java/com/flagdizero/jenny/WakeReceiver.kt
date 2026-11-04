@@ -79,9 +79,7 @@ class WakeReceiver : BroadcastReceiver() {
         private const val ACTION_EXACT_ALARM_STATE_CHANGED =
             "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
 
-        /** Stesso file di preferenze di `Watchdog` e `AlarmClockFallback`: una
-         *  sola `SharedPreferences` per app, chiavi nuove e basta. */
-        private const val PREFS_NAME = "jenny"
+        /** Nel file di preferenze dell'app ([JennyPrefs]). */
         private const val KEY_EXACT_ALARMS_GRANTED = "exactAlarmsGranted"
 
         /** Valore che significa "non l'ho mai guardato": distinto sia da
@@ -188,7 +186,6 @@ class WakeReceiver : BroadcastReceiver() {
             }
         }
 
-        private fun prefs(appContext: Context) =
-            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        private fun prefs(appContext: Context) = JennyPrefs.of(appContext)
     }
 }

@@ -32,6 +32,7 @@ from loguru import logger
 
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
+from jenny.utils.clock import now_ms as _now_ms
 
 _BRIDGE = BridgeCache("com.flagdizero.jenny.LocationBridge")
 
@@ -53,6 +54,11 @@ _TASKS: set[asyncio.Task[Any]] = set()
 _REFRESH_INFLIGHT = False
 
 _GEOCODE_PRECISION = 4  # ~11 m di risoluzione sulla chiave di cache
+
+# Il tetto di una chiamata al bridge che non accende il GPS (last-known, geocoder):
+# lo stesso degli altri bridge, perché un ``Geocoder`` che non risponde non deve
+# tenere fermo il turno che ha chiesto la posizione.
+_BRIDGE_TIMEOUT_S = 10
 
 
 @dataclass(frozen=True)
@@ -129,19 +135,18 @@ def _parse_fix(raw: Any, *, source: str) -> LocationFix | None:
     )
 
 
-async def _reverse_geocode(bridge: Any, lat: float, lng: float) -> str | None:
+async def _reverse_geocode(context: Any, lat: float, lng: float) -> str | None:
     """Reverse-geocoding via ``Geocoder`` nativo, con cache sulle coordinate
-    arrotondate. Best-effort: ritorna ``None`` su qualunque errore."""
+    arrotondate. Best-effort: ritorna ``None`` su qualunque errore (non in cache)."""
     key = (round(lat, _GEOCODE_PRECISION), round(lng, _GEOCODE_PRECISION))
     cached = _GEOCODE_CACHE.get(key)
     if cached is not None:
         return cached or None
-    try:
-        place = await asyncio.to_thread(bridge.reverseGeocode, lat, lng)
-    except Exception:  # noqa: BLE001
-        logger.opt(exception=True).debug("Reverse-geocode failed for {},{}", lat, lng)
+    place = await _BRIDGE.call(_get_bridge, context, "reverseGeocode", lat, lng,
+                               timeout=_BRIDGE_TIMEOUT_S, level="DEBUG")
+    if place is None:
         return None
-    place = (place or "").strip()
+    place = str(place).strip()
     if len(_GEOCODE_CACHE) >= _GEOCODE_CACHE_MAX:
         _GEOCODE_CACHE.clear()
     _GEOCODE_CACHE[key] = place
@@ -154,28 +159,19 @@ async def _fetch_fix(cfg: Any, *, precise: bool) -> LocationFix | None:
     Ritorna ``None`` fuori da Android, senza permesso, o su qualunque errore.
     """
     context = get_android_context()
-    if context is None:
-        return None
-    try:
-        bridge = await _get_bridge(context)
-        if precise:
-            timeout = getattr(cfg, "fresh_timeout_s", 15)
-            raw = await asyncio.wait_for(
-                asyncio.to_thread(bridge.getFresh, int(timeout * 1000)),
-                timeout=timeout + 5,
-            )
-            source = "gps"
-        else:
-            raw = await asyncio.to_thread(bridge.getLastKnown)
-            source = "last-known"
-    except Exception:  # noqa: BLE001
-        logger.opt(exception=True).debug("LocationBridge fix failed (precise={})", precise)
-        return None
-
+    if precise:
+        timeout = getattr(cfg, "fresh_timeout_s", 15)
+        raw = await _BRIDGE.call(_get_bridge, context, "getFresh", int(timeout * 1000),
+                                 timeout=timeout + 5, level="DEBUG")
+        source = "gps"
+    else:
+        raw = await _BRIDGE.call(_get_bridge, context, "getLastKnown",
+                                 timeout=_BRIDGE_TIMEOUT_S, level="DEBUG")
+        source = "last-known"
     fix = _parse_fix(raw, source=source)
     if fix is None:
         return None
-    place = await _reverse_geocode(bridge, fix.latitude, fix.longitude)
+    place = await _reverse_geocode(context, fix.latitude, fix.longitude)
     if place:
         fix = LocationFix(
             latitude=fix.latitude,
@@ -251,15 +247,11 @@ def record_telegram_location(chat_id: str, fix: LocationFix) -> None:
 async def build_telegram_fix(cfg: Any, lat: float, lng: float) -> LocationFix:
     """Costruisce un ``LocationFix`` da coordinate Telegram, reverse-geocodando
     se possibile. Timestamp = adesso (l'utente l'ha appena condivisa)."""
-    now_ms = int(time.time() * 1000)
+    now_ms = _now_ms()
     place: str | None = None
     context = get_android_context()
     if context is not None and cfg is not None and getattr(cfg, "enable", True):
-        try:
-            bridge = await _get_bridge(context)
-            place = await _reverse_geocode(bridge, lat, lng)
-        except Exception:  # noqa: BLE001
-            logger.opt(exception=True).debug("Telegram location geocode failed")
+        place = await _reverse_geocode(context, lat, lng)
     return LocationFix(
         latitude=lat,
         longitude=lng,
@@ -380,7 +372,6 @@ async def find_places(query: str, near: LocationFix | None = None) -> list[Place
     context = get_android_context()
     if context is None or not query.strip():
         return []
-    bridge = await _get_bridge(context)
     attempts: list[tuple[float, float, float, float]] = []
     if near is not None:
         attempts.append(
@@ -393,12 +384,10 @@ async def find_places(query: str, near: LocationFix | None = None) -> list[Place
         )
     attempts.append((0.0, 0.0, 0.0, 0.0))  # tutto zero = nessun riquadro
     for box in attempts:
-        try:
-            raw = await asyncio.to_thread(
-                bridge.findPlaces, query.strip(), _FIND_MAX_RESULTS, *box
-            )
-        except Exception:  # noqa: BLE001
-            logger.opt(exception=True).debug("findPlaces failed")
+        raw = await _BRIDGE.call(_get_bridge, context, "findPlaces", query.strip(),
+                                 _FIND_MAX_RESULTS, *box, timeout=_BRIDGE_TIMEOUT_S,
+                                 default=False, level="DEBUG")
+        if raw is False:  # il bridge ha fallito: un secondo giro fallirebbe uguale
             return []
         matches = _parse_matches(raw)
         if matches:

@@ -391,8 +391,8 @@ class TestThinkingSignal:
         await hook.emit_reasoning("word " * 4000)
         event = log.tail("t1")[0]
         assert len(event["summary"]) <= MAX_SUMMARY_CHARS
-        # Il taglio e nostro, non del cap del log: nessun "..." aggiunto sopra.
-        assert not event["summary"].endswith("...")
+        # Il taglio e nostro, non del cap del log: nessun «…» aggiunto sopra.
+        assert not event["summary"].endswith(("...", "…"))
 
     async def test_thinking_counts_as_progress(self, monkeypatch):
         clock = {"now": 1000.0}
@@ -555,13 +555,13 @@ class TestSubagentWiring:
         record = records[0]
         assert record.has_activity_digest
 
-        path = sm.digests.path_for(record.task_id)
-        assert path is not None and path.is_file()
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        # I contatori del record devono descrivere il file che c'e davvero:
+        raw = _digest_raw(sm, record.task_id)
+        assert raw is not None
+        payload = json.loads(raw)
+        # I contatori del record devono descrivere il digest che c'e davvero:
         # e con quelli che la UI decide se offrire il blocco, senza aprirlo.
         assert record.activity_events == len(payload["events"])
-        assert record.activity_bytes == len(path.read_text(encoding="utf-8").encode())
+        assert record.activity_bytes == len(raw.encode())
 
         kinds = [e["kind"] for e in payload["events"]]
         assert KIND_PHASE in kinds
@@ -589,9 +589,7 @@ class TestSubagentWiring:
         await sm.spawn("research something", session_key="s1")
         await _settle(sm)
         record = sm.list_records("s1")[0]
-        path = sm.digests.path_for(record.task_id)
-        assert path is not None
-        events = json.loads(path.read_text(encoding="utf-8"))["events"]
+        events = json.loads(_digest_raw(sm, record.task_id))["events"]
         assert any(e["kind"] == KIND_ERROR for e in events)
 
     async def test_a_crash_records_only_the_exception_class(self, tmp_path: Path):
@@ -604,9 +602,7 @@ class TestSubagentWiring:
         await sm.spawn("research something", session_key="s1")
         await _settle(sm)
         record = sm.list_records("s1")[0]
-        path = sm.digests.path_for(record.task_id)
-        assert path is not None
-        raw = path.read_text(encoding="utf-8")
+        raw = _digest_raw(sm, record.task_id)
         assert "crashed (ValueError)" in raw
         assert "/private/path" not in raw
 
@@ -625,12 +621,10 @@ class TestSubagentWiring:
         await sm.cancel_task(task_id, grace_s=0.5)
         await _settle(sm)
         record = sm.list_records("s1")[0]
-        path = sm.digests.path_for(record.task_id)
-        assert path is not None
         # Una cancellazione non passa dai rami di ``_run_subagent``: senza
         # l'evento scritto dove la provenienza viene decisa, il digest finirebbe
         # senza dire come il lavoro e finito.
-        assert f"cancelled ({CANCEL_REASON_USER})" in path.read_text(encoding="utf-8")
+        assert f"cancelled ({CANCEL_REASON_USER})" in _digest_raw(sm, record.task_id)
 
     async def test_a_publishing_failure_does_not_kill_the_subagent(self, tmp_path: Path):
         sm = _manager(tmp_path)
@@ -672,7 +666,7 @@ class TestTransportSurface:
         """Contratto verso il transport: questi due nomi, non altri."""
         sm = _manager(tmp_path)
         assert isinstance(sm.activity, SubagentActivityLog)
-        assert sm.digests.root == tmp_path / "subagents" / "activity"
+        assert sm.digests._db is not None
 
     def test_the_record_store_can_delete_digests(self, tmp_path: Path):
         sm = _manager(tmp_path)
@@ -692,11 +686,11 @@ class TestOrphanSweep:
         seed.digests.write("orphan", [
             {"kind": KIND_PHASE, "summary": "starting up"},
         ])
-        assert seed.digests.path_for("orphan").is_file()
+        assert _digest_raw(seed, "orphan") is not None
 
         reborn = _manager(tmp_path)
-        assert reborn.digests.path_for("orphan").is_file() is False
-        assert reborn.digests.path_for("kept").is_file() is True
+        assert _digest_raw(reborn, "orphan") is None
+        assert _digest_raw(reborn, "kept") is not None
 
     def test_the_sweep_never_blocks_a_boot(self, tmp_path: Path):
         sm = _manager(tmp_path)
@@ -763,3 +757,9 @@ class AgentHookSpy:
 
     async def after_execute_tool(self, context) -> None:
         self.seen += 1
+
+
+def _digest_raw(sm, task_id: str) -> str | None:
+    """Il digest come l'ha salvato lo store, o ``None``."""
+    rows = sm.digests._db.read("SELECT data FROM subagent_digests WHERE task_id = ?", (task_id,))
+    return rows[0]["data"] if rows else None

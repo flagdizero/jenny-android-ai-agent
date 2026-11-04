@@ -155,7 +155,7 @@ def snip_history(
                 if non_system[idx].get("role") == "user":
                     kept = non_system[idx:]
                     break
-            # If no user exists at all, _enforce_role_alternation
+            # If no user exists at all, enforce_role_alternation
             # will insert a synthetic one as a safety net.
         start = find_legal_message_start(kept)
         if start:

@@ -14,20 +14,19 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import suppress
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from port_alloc import free_port
 from support.aio import wait_until
+from support.ws_channel import make_ws_channel
 
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.channels.dispatcher import WebSocketDispatcher
-from jenny.channels.websocket import WebSocketChannel, WebSocketConfig
+from jenny.channels.websocket import WebSocketChannel
 from jenny.config.schema import Config
-from jenny.webui.gateway_services import build_gateway_services
 
 WORDS = [f"parola{i} " for i in range(40)]
 FULL = "".join(WORDS)
@@ -94,12 +93,7 @@ def _ws_channel(bus: MessageBus) -> WebSocketChannel:
         "enabled": True, "allowFrom": ["*"], "host": "127.0.0.1", "port": free_port(),
         "path": "/ws", "websocketRequiresToken": False, "streaming": True,
     }
-    gateway = build_gateway_services(
-        config=WebSocketConfig.model_validate(cfg), bus=bus, session_manager=None,
-        workspace_path=Path.cwd(), default_restrict_to_workspace=False,
-        runtime_model_name=None,
-    )
-    return WebSocketChannel(cfg, bus, gateway=gateway)
+    return make_ws_channel(cfg, bus)
 
 
 async def test_the_webui_receives_the_whole_text_after_drops() -> None:
@@ -119,12 +113,17 @@ async def test_the_webui_receives_the_whole_text_after_drops() -> None:
     task = asyncio.create_task(dispatcher._dispatch_outbound())
     try:
         await publishing
+        # Il tetto e' largo apposta: lo ``stream_end`` arriva di sicuro, ma il
+        # dispatcher scrive anche il verbale (SQLite, in un thread), e sotto il
+        # carico della suite intera i 2 s di prima non bastavano (03/11/2026,
+        # «condizione non raggiunta in 2.0s», mai da solo). Se arriva prima,
+        # l'attesa finisce prima.
         await wait_until(
             lambda: any(
                 json.loads(c.args[0]).get("event") == "stream_end"
                 for c in ws.send.await_args_list
             ),
-            timeout=2.0,
+            timeout=15.0,
         )
     finally:
         task.cancel()

@@ -118,11 +118,16 @@ def test_the_open_questions_of_the_map_still_reach_the_turn(tmp_path) -> None:
 
 
 def _jobs(tmp_path: Path, monkeypatch, jobs: list[dict]) -> None:
-    """I cron del quaderno stanno nello scheduler: ``cron/jobs.json`` del workspace."""
-    import json
+    """I cron del quaderno stanno nello scheduler: lo store del cron del workspace.
 
-    (tmp_path / "cron").mkdir(exist_ok=True)
-    (tmp_path / "cron" / "jobs.json").write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
+    Un job senza ``schedule`` è un ricorrente: lo store vero ne ha sempre una, e
+    il parser dello scheduler salta un job che non ce l'ha.
+    """
+    from support.cron import seed_jobs
+
+    for job in jobs:
+        job.setdefault("schedule", {"kind": "every", "everyMs": 3_600_000})
+    seed_jobs(tmp_path, jobs)
     monkeypatch.setattr("jenny.config.paths.get_workspace_path", lambda: tmp_path)
 
 

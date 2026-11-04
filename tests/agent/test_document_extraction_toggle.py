@@ -3,22 +3,20 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.agent import make_loop, make_provider
 
 from jenny.agent.loop import AgentLoop, TurnContext, TurnState
 from jenny.bus.events import InboundMessage
-from jenny.bus.queue import MessageBus
 from jenny.providers.base import LLMResponse
 
 
 def _make_loop(tmp_path: Path, extract_document_text: bool = True) -> AgentLoop:
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
+    provider = make_provider(bare=True)
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(content="ok"))
-    return AgentLoop(
-        bus=MessageBus(),
+    return make_loop(
+        tmp_path,
         provider=provider,
-        workspace=tmp_path,
-        model="test-model",
+        context_window_tokens=None,
         extract_document_text=extract_document_text,
     )
 
@@ -26,9 +24,7 @@ def _make_loop(tmp_path: Path, extract_document_text: bool = True) -> AgentLoop:
 def test_should_extract_document_text_is_off_by_default(tmp_path: Path) -> None:
     """Il default vero, quello di ``AgentLoop`` e della config: spento. Il
     ``_make_loop`` di questo file lo accende, per le prove che seguono."""
-    provider = MagicMock()
-    provider.get_default_model.return_value = "test-model"
-    loop = AgentLoop(bus=MessageBus(), provider=provider, workspace=tmp_path, model="test-model")
+    loop = make_loop(tmp_path, context_window_tokens=None, bare=True)
     assert loop._should_extract_document_text() is False
 
 

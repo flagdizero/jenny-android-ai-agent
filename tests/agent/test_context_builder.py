@@ -1030,7 +1030,7 @@ class TestAppsSummarySection:
 
         prompt = _builder(tmp_path).build_system_prompt()
         assert "# Jenny Apps" in prompt
-        assert "`note_add_note`" in prompt
+        assert "`add_note(testo)`" in prompt
         assert "apps/note/AGENT.md" in prompt
 
     def test_apps_section_absent_without_apps(self, tmp_path):

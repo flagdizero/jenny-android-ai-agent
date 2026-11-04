@@ -109,3 +109,41 @@ def test_a_paused_reminder_is_a_marked_row_and_nobody_s_next() -> None:
     assert model.next_note(notes, "acero")["id"] == "r2"
     # Senza la riga in pausa non c'è un prossimo.
     assert model.next_note([by_id["p1"]], "acero") is None
+
+
+@pytest.mark.parametrize("name", ["../fuori", "casa/../../fuori", "", ".", "casa/wiki"])
+def test_a_notebook_name_never_leaves_the_notebooks_folder(tmp_path: Path, monkeypatch,
+                                                           name: str) -> None:
+    """Il nome arriva dal modello (``cron`` dalla chat personale): un ``..`` non
+    deve attaccare un job, e le scritture della sua bacheca, fuori da ``wikis/``."""
+    from jenny.runtime.context import get_runtime_context
+
+    workspace = tmp_path / "workspace"
+    (workspace / "wikis" / "casa" / "wiki").mkdir(parents=True)
+    (workspace / "fuori" / "wiki").mkdir(parents=True)
+    (workspace / "wikis" / "casa" / "wiki" / "wiki").mkdir()
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", workspace)
+    assert cron_link.notebook_root(name) is None
+    assert cron_link.notebook_root("casa") == (workspace / "wikis" / "casa").resolve()
+
+
+def test_a_link_without_a_notebook_is_not_the_notebook_called_none(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """``str(None)`` è ``"None"``: un legame senza quaderno ritrovava un quaderno
+    con quel nome, e ci scriveva l'esito e ne leggeva la pagina del perché."""
+    from jenny.cron.bound_runner import _why_page
+    from jenny.cron.types import CronJob, CronPayload
+    from jenny.runtime.context import get_runtime_context
+
+    workspace = tmp_path / "workspace"
+    root = workspace / "wikis" / "None"
+    (root / "wiki").mkdir(parents=True)
+    (root / "wiki" / "perche.md").write_text("Il perché.", encoding="utf-8")
+    mutate_board(root, lambda b: None)
+    monkeypatch.setattr(get_runtime_context(), "workspace_dir", workspace)
+    link = {"card": cron_link.NOTEBOOK_CARD, "section": cron_link.NO_SECTION}
+
+    assert not cron_link.link_alive(link)
+    job = CronJob(id="j1", name="x", payload=CronPayload(board=link, why="perche.md"))
+    assert _why_page(job) == ""

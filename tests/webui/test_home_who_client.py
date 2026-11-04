@@ -35,10 +35,8 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from support.js_harness import locale, member, requires_node, run_module
+from support.js_harness import ASSETS, locale, member, requires_node, run_module
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
 WHO_JS = ASSETS / "home-who.js"
 I18N_JS = ASSETS / "shared" / "i18n.js"
 
@@ -232,7 +230,7 @@ def _run(body: str) -> None:
         root = Path(tmp)
         (root / "shared").mkdir()
         shutil.copy(WHO_JS, root / "home-who.js")
-        for name in ("conversation-list.js", "spines.js", "type-ahead.js"):
+        for name in ("conversation-list.js", "spines.js", "type-ahead.js", "when.js"):
             shutil.copy(ASSETS / "shared" / name, root / "shared" / name)
         for name, text in _neighbors().items():
             (root / "shared" / name).write_text(text, encoding="utf-8")

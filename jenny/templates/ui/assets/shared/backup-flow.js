@@ -10,7 +10,8 @@
 
 import { api } from './api-client.js';
 import { i18n } from './i18n.js';
-import { showToast } from './utils.js';
+import { showToast, sizeText } from './utils.js';
+import { formDialog } from './dialog.js';
 
 // ── Callback dal nativo ─────────────────────────────────────────────────
 const _pending = { export: null, import: null };
@@ -99,93 +100,70 @@ export function restartApp() {
   if (window.JennyNative?.restartApp) window.JennyNative.restartApp();
 }
 
+/** «manuale · prima di un ripristino · 42 file»: la riga sotto la data di uno
+ *  snapshot, la stessa in casa e in officina (che la scrivevano ciascuna a
+ *  modo suo). *size*: anche quanto pesa, dove c'e' posto (l'officina). */
+export function snapshotDetail(s, { size = false } = {}) {
+  const parts = [i18n.tOr(`backup.trigger.${s.trigger}`, s.trigger)];
+  if (s.label) parts.push(s.label);
+  parts.push(`${s.file_count} ${i18n.t('backup.files')}`);
+  if (size && s.total_bytes != null) parts.push(sizeText(s.total_bytes, i18n.locale));
+  return parts.join(' · ');
+}
+
 // ── Dialog passphrase ───────────────────────────────────────────────────
 
 /** Chiede la passphrase; con confirm=true richiede la doppia digitazione.
- *  Risolve con la stringa o null se annullato. */
+ *  Risolve con la stringa o null se annullato. L'id lo cercano i banchi;
+ *  Indietro la trova da se', come ogni `<dialog>` aperto
+ *  (`dialog.js::dismissTopDialog`), e ogni chiusura risolve: una Promise
+ *  appesa lascerebbe `_busy` a true, ed export, import e restore morti in
+ *  silenzio per tutta la vita della pagina. */
 export function promptPassphrase({ confirm = false } = {}) {
-  return new Promise((resolve) => {
-    const dialog = document.createElement('dialog');
-    dialog.className = 'oc-dialog';
-    // L'id lo legge la casa (`SHARED_DIALOGS` in home-app.js): senza, Indietro
-    // non lo vedeva e portava via la stanza sotto, lasciando la domanda aperta.
-    dialog.id = 'oc-backup-passphrase-dialog';
-    dialog.innerHTML = `
-      <div class="oc-dialog-inner">
-        <h3 style="margin:0 0 8px;font-size:15px;font-weight:600">${i18n.t('backup.passphraseTitle')}</h3>
-        ${confirm ? `<p style="margin:0 0 12px;font-size:12px;color:var(--text-faint)">${i18n.t('backup.passphraseHint')}</p>` : ''}
-        <div class="settings-field">
-          <label class="settings-label">${i18n.t('backup.passphrase')}</label>
-          <input type="password" class="settings-input" id="bk-pass" autocomplete="off" />
-        </div>
-        ${confirm ? `
-        <div class="settings-field">
-          <label class="settings-label">${i18n.t('backup.passphraseConfirm')}</label>
-          <input type="password" class="settings-input" id="bk-pass2" autocomplete="off" />
-        </div>` : ''}
-        <div class="oc-dialog-buttons" style="margin-top:16px">
-          <button class="oc-btn oc-btn-cancel" id="bk-cancel">${i18n.t('common.cancel')}</button>
-          <button class="oc-btn oc-btn-confirm" id="bk-ok">${i18n.t('dialog.confirm')}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(dialog);
-
-    let settled = false;
-    const done = (value) => {
-      if (settled) return;
-      settled = true;
-      dialog.close();
-      dialog.remove();
-      resolve(value);
-    };
-    dialog.querySelector('#bk-cancel').addEventListener('click', () => done(null));
-    dialog.addEventListener('cancel', () => done(null));
-    // Cintura: qualunque chiusura che non passi da `cancel` — un close()
-    // diretto, un form method="dialog", una rimozione dal DOM da parte di
-    // terzi — deve comunque risolvere la Promise. Una Promise che resta
-    // appesa lascia `_busy` a true per tutta la vita della pagina, ed export,
-    // import e restore muoiono in silenzio da lì in avanti. È la stessa
-    // cintura che confirmDialog/detailDialog/promptDialog hanno già.
-    dialog.addEventListener('close', () => done(null));
-    dialog.querySelector('#bk-ok').addEventListener('click', () => {
+  return formDialog({
+    id: 'oc-backup-passphrase-dialog',
+    title: i18n.t('backup.passphraseTitle'),
+    okText: i18n.t('dialog.confirm'),
+    cancelText: i18n.t('common.cancel'),
+    bodyHtml: `
+      ${confirm ? `<p class="oc-dialog-note">${i18n.t('backup.passphraseHint')}</p>` : ''}
+      <div class="settings-field">
+        <label class="settings-label">${i18n.t('backup.passphrase')}</label>
+        <input type="password" class="settings-input" id="bk-pass" autocomplete="off" />
+      </div>
+      ${confirm ? `
+      <div class="settings-field">
+        <label class="settings-label">${i18n.t('backup.passphraseConfirm')}</label>
+        <input type="password" class="settings-input" id="bk-pass2" autocomplete="off" />
+      </div>` : ''}`,
+    setup: (dialog) => setTimeout(() => dialog.querySelector('#bk-pass')?.focus(), 0),
+    onOk: (dialog) => {
       const pass = dialog.querySelector('#bk-pass').value;
       if (!pass) {
         showToast(i18n.t('backup.passphraseRequired'), 'error');
-        return;
+        return undefined;
       }
-      if (confirm) {
-        const pass2 = dialog.querySelector('#bk-pass2').value;
-        if (pass !== pass2) {
-          showToast(i18n.t('backup.passphraseMismatch'), 'error');
-          return;
-        }
+      if (confirm && pass !== dialog.querySelector('#bk-pass2').value) {
+        showToast(i18n.t('backup.passphraseMismatch'), 'error');
+        return undefined;
       }
-      done(pass);
-    });
-    dialog.showModal();
-    dialog.querySelector('#bk-pass').focus();
+      return pass;
+    },
   });
 }
 
-/** Dialog finale non annullabile: il restore è pronto, serve riavviare. */
+/** Dialog finale non annullabile: il restore è pronto, serve riavviare.
+ *  Stesso id-contratto della passphrase: Indietro lo trova, e la pressione e'
+ *  consumata senza chiudere niente. */
 export function showRestartDialog() {
-  const dialog = document.createElement('dialog');
-  dialog.className = 'oc-dialog';
-  // Stesso id-contratto della passphrase: Indietro lo trova, `cancel` qui
-  // sotto lo rifiuta, e la pressione e' consumata senza chiudere niente.
-  dialog.id = 'oc-backup-restart-dialog';
-  dialog.innerHTML = `
-    <div class="oc-dialog-inner">
-      <h3 style="margin:0 0 8px;font-size:15px;font-weight:600">${i18n.t('backup.restartTitle')}</h3>
-      <p style="margin:0 0 12px;font-size:12px;color:var(--text-faint)">${i18n.t('backup.restartDesc')}</p>
-      <div class="oc-dialog-buttons">
-        <button class="oc-btn oc-btn-confirm" id="bk-restart">${i18n.t('backup.restartNow')}</button>
-      </div>
-    </div>`;
-  document.body.appendChild(dialog);
-  dialog.addEventListener('cancel', (e) => e.preventDefault());
-  dialog.querySelector('#bk-restart').addEventListener('click', () => restartApp());
-  dialog.showModal();
+  formDialog({
+    id: 'oc-backup-restart-dialog',
+    title: i18n.t('backup.restartTitle'),
+    bodyHtml: `<p class="oc-dialog-note">${i18n.t('backup.restartDesc')}</p>`,
+    okText: i18n.t('backup.restartNow'),
+    cancelText: null,
+    onOk: () => { restartApp(); return undefined; },
+  });
 }
 
 // ── Flussi completi ─────────────────────────────────────────────────────

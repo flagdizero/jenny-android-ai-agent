@@ -264,7 +264,7 @@ class SshJobStore:
         jobs: dict[str, SshJob] = {}
         try:
             raw = json.loads(self.path.read_text("utf-8")) if self.path.exists() else []
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError) as exc:
             # Il registro non è la verità: la verità sono i processi sul server.
             # Meglio ripartire vuoti che rifiutarsi di lanciare nuovi job.
             logger.error("ssh job store unreadable, starting empty: {}", exc)

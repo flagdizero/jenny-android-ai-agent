@@ -20,7 +20,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from jenny.utils.helpers import truncate_head_tail
+from jenny.utils.helpers import clip, truncate_head_tail
 
 DEFAULT_YIELD_MS = 1000
 MAX_YIELD_MS = 30_000
@@ -114,9 +114,7 @@ class _PythonSession:
         if function:
             self._description = f"python_exec(function={function!r})"
         else:
-            code_preview = (code or "").replace("\n", " ")
-            if len(code_preview) > 100:
-                code_preview = code_preview[:99] + "..."
+            code_preview = clip((code or "").replace("\n", " "), 100)
             self._description = f"python_exec(code={code_preview!r})"
 
         # Start execution in background thread (non-daemon so Android/Chaquopy
@@ -678,9 +676,7 @@ class ListExecSessionsTool(_ExecSessionTool):
                 return "No active exec sessions."
             lines = []
             for info in sessions:
-                command = " ".join(info.command.split())
-                if len(command) > 120:
-                    command = command[:119] + "..."
+                command = clip(" ".join(info.command.split()), 120)
                 status = "exited" if info.returncode is not None else "running"
                 lines.append(
                     f"{info.session_id} | {status} | elapsed={info.elapsed_s:.1f}s "

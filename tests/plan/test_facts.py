@@ -15,7 +15,7 @@ from jenny.plan.driver import PlanDriver
 from jenny.plan.facts import MAX_LOST, extract_facts, lost_facts
 from jenny.plan.store import PlanStore
 from jenny.session.history_meta import INJECTED_EVENT_META, PLAN_STEP_EVENT
-from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, propose, write_file
+from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, plan_write, propose, write_file
 
 # ── estrazione ──────────────────────────────────────────────────────────────
 
@@ -160,7 +160,7 @@ async def test_the_check_step_lists_the_facts_the_plan_lost(
     await _approve(driver, STEPS)
     await _close(driver)
     # Il passo di scrittura riscrive la pagina e perde la temperatura.
-    write_file(workspace / "wikis" / "piante", "wiki/felce.md", "# Felce\n\n- Umidità 60–80 %\n")
+    plan_write(driver, "wiki/felce.md", "# Felce\n\n- Umidità 60–80 %\n")
     await _close(driver)
     research, write, check = _step_messages(bus)
     assert _LOST_HEADER not in research.content and _LOST_HEADER not in write.content
@@ -197,7 +197,7 @@ async def test_a_delete_step_that_loses_a_fact_is_refused_once(
     plan = await _approve(driver, _DELETE)
     await _close(driver)
     nb = workspace / "wikis" / "piante"
-    (nb / "wiki" / "felce.md").unlink()
+    plan_write(driver, "wiki/felce.md", None)
     text = await driver.step_done(KEY, "felce via")
     assert text.startswith("Not closed yet") and "2 fact(s)" in text
     assert "16-24°c" in text and "60-80%" in text
@@ -215,8 +215,8 @@ async def test_a_delete_step_that_loses_nothing_closes_at_once(
     plan = await _approve(driver, _DELETE)
     await _close(driver)
     nb = workspace / "wikis" / "piante"
-    write_file(nb, "wiki/felce2.md", (nb / "wiki" / "felce.md").read_text(encoding="utf-8"))
-    (nb / "wiki" / "felce.md").unlink()
+    plan_write(driver, "wiki/felce2.md", (nb / "wiki" / "felce.md").read_text(encoding="utf-8"))
+    plan_write(driver, "wiki/felce.md", None)
     assert "closed" in await driver.step_done(KEY, "spostata")
     assert "lost_gate" not in driver.store.load(plan.id).steps[1].extra
 
@@ -234,7 +234,7 @@ async def test_a_capped_list_says_the_total(
     nb = workspace / "wikis" / "piante"
     write_file(nb, "wiki/vasi.md", "\n".join(f"- vaso {n}: {n} cm" for n in range(1, 51)))
     await _approve(driver, STEPS)
-    write_file(nb, "wiki/vasi.md", "# Vasi\n")
+    plan_write(driver, "wiki/vasi.md", "# Vasi\n")
     await _close(driver)
     await _close(driver)
     check = _step_messages(bus)[-1]

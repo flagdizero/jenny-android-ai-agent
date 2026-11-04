@@ -7,6 +7,10 @@ quattro volte, con l'esito che la copia produce: ``android_apps_api`` è rimasta
 **senza reset** per un po', cioè con la possibilità di un bridge stale dopo un
 restart del gateway (v. il docstring di ``reset_installed_apps_state``).
 
+Lo stesso per la chiamata (:meth:`BridgeCache.call`: su un thread, con un tetto,
+un default e un log), che fino al 02/11/2026 era scritta a mano dieci volte — e
+la posizione, l'unica senza tetto, poteva tenere fermo un turno.
+
 ``agent.tools.android_web`` **non** passa da qui, e non è una dimenticanza: il suo
 bridge non si prende il lock per la sola costruzione ma per l'intera operazione,
 perché la WebView nascosta condivide il processo renderer Chromium con quella
@@ -17,8 +21,10 @@ semantica diversa, non un parametro.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
+
+from loguru import logger
 
 
 class BridgeCache:
@@ -83,3 +89,35 @@ class BridgeCache:
                     f"Failed to construct {self.simple_name}: {exc}"
                 ) from exc
             return self.instance
+
+    async def call(
+        self,
+        get: Callable[[Any], Awaitable[Any]],
+        context: Any,
+        method: str,
+        *args: Any,
+        timeout: float,
+        default: Any = None,
+        level: str = "WARNING",
+    ) -> Any:
+        """Chiama ``method(*args)`` del bridge su un thread, con un tetto. Mai solleva.
+
+        Torna *default* fuori da Android (*context* ``None``) e su qualunque
+        guasto — il bridge che non si costruisce, un'eccezione Kotlin, il tetto
+        superato — loggato a *level* con la traccia. Su un thread perché
+        l'attraversamento Chaquopy è bloccante e siamo sul loop del gateway; col
+        tetto perché può restare bloccato quanto il GIL resta preso.
+
+        *get* è il ``_get_bridge`` del modulo chiamante, e non ``self.get``: è il
+        seam su cui i test montano il finto bridge (v. :meth:`get`).
+        """
+        if context is None:
+            return default
+        try:
+            bridge = await get(context)
+            return await asyncio.wait_for(
+                asyncio.to_thread(getattr(bridge, method), *args), timeout=timeout
+            )
+        except Exception:  # noqa: BLE001 — v. docstring
+            logger.opt(exception=True).log(level, "{}.{} failed", self.simple_name, method)
+            return default

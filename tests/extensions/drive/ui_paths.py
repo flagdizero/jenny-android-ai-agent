@@ -6,8 +6,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from support.js_harness import ASSETS
+
 ROOT = Path(__file__).resolve().parents[3]
-CORE_ASSETS = ROOT / "jenny" / "templates" / "ui" / "assets"
+CORE_ASSETS = ASSETS
 EXT_UI = ROOT / "jenny_extensions" / "drive" / "ui"
 
 

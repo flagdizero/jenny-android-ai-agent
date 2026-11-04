@@ -213,7 +213,6 @@ Defaults — allowed: `os`, `sys`, `pathlib`, `json`, `re`, `math`, `datetime`, 
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `tools.androidWeb.enable` | bool | `true` | Registers `web_search`, `web_fetch` **and the five `browser_*` tools**. It is the only switch: there is no per-half toggle — `search.enable` / `fetch.enable` do not exist in the schema, so writing them changes nothing. |
-| `tools.androidWeb.search.searchEngine` | string | `"bing"` | The only supported value; the settings endpoint rejects anything else. |
 | `tools.androidWeb.search.maxResults` | int | `8` | Results per search. The UI validates 1–10. |
 | `tools.androidWeb.search.timeout` | int | `15` | Seconds per search. The UI validates 1–120. After a search runs out of time, every search gives up at once for the next minute. |
 | `tools.androidWeb.fetch.timeout` | int | `15` | Seconds per page read; a page that does not arrive in time is retried in the browser. |
@@ -379,7 +378,7 @@ Settings that belong to an extension, one object per extension name. Extensions 
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `apps.enabled` | bool | `true` | Enables the Jenny Apps runtime and the dynamic `<slug>_<action>` tools it registers. |
+| `apps.enabled` | bool | `true` | Enables the Jenny Apps runtime and the `use_app` tool that runs their actions. |
 | `apps.httpTimeoutS` | float 1–120 | `20.0` | Timeout for an app's outbound HTTP proxy calls. |
 | `apps.maxCollectionBytes` | int | `5000000` | Per-collection storage ceiling (5 MB). Writes past it fail with `413`. |
 

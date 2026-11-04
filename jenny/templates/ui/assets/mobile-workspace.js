@@ -43,10 +43,9 @@ function workspaceErrorText(err) {
 function fileHelpText(path) {
   const key = FILE_HELP_KEYS[path];
   if (!key) return '';
-  const text = i18n.t(key);
-  // i18n.t() ritorna la chiave grezza quando manca la traduzione: meglio
-  // niente sheet che "workspace.fileHelp.agents" stampato addosso all'utente.
-  return text === key ? '' : text;
+  // Meglio niente sheet che "workspace.fileHelp.agents" stampato addosso
+  // all'utente.
+  return i18n.tOr(key);
 }
 
 // ── Apple-style SVG icons for grid view ──
@@ -509,7 +508,7 @@ export class WorkspaceController {
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'ws-save-btn';
-      saveBtn.textContent = i18n.t('workspace.save');
+      saveBtn.textContent = i18n.t('common.save');
       saveBtn.addEventListener('click', () => this.saveFile());
       bar.appendChild(saveBtn);
     }
@@ -657,7 +656,7 @@ export class WorkspaceController {
       }
       actions.push({ icon: 'ti-edit', label: i18n.t('workspace.rename'), action: 'rename' });
       actions.push({ icon: 'ti-copy', label: i18n.t('workspace.clone'), action: 'clone' });
-      actions.push({ icon: 'ti-trash', label: i18n.t('workspace.delete'), action: 'delete', danger: true });
+      actions.push({ icon: 'ti-trash', label: i18n.t('common.delete'), action: 'delete', danger: true });
     }
 
     this._openSheet(
@@ -738,7 +737,7 @@ export class WorkspaceController {
         const base = parentPath(path);
         const newPath = base ? `${base}/${newName}` : newName;
         try {
-          await api.renameWorkspace(path, newPath);
+          await rpc.renameWorkspace(path, newPath);
           if (this.currentPath === path) {
             this.currentPath = newPath;
           }
@@ -750,7 +749,7 @@ export class WorkspaceController {
       }
       case 'clone': {
         try {
-          await api.copyWorkspace(path);
+          await rpc.copyWorkspace(path);
           await this.navigateTo(this.currentDir);
         } catch (err) {
           showToast(workspaceErrorText(err), 'error');
@@ -777,7 +776,7 @@ export class WorkspaceController {
         const confirmed = await confirmDialog(i18n.t('workspace.deleteConfirm', { name: info.name }));
         if (!confirmed) return;
         try {
-          await api.deleteWorkspace(path);
+          await rpc.deleteWorkspace(path);
           if (this.currentPath === path || this.currentPath.startsWith(path + '/')) {
             // Il file aperto è stato appena eliminato su richiesta esplicita:
             // non c'è più niente da salvare, quindi niente conferma di scarto
@@ -1071,19 +1070,19 @@ export class WorkspaceController {
          flag lo faceva credere: la conferma di uscita non sarebbe comparsa.
          Il bottone torna attivo per salvarlo. */
       if (this.currentPath !== path || this.editor?.getValue() !== content) {
-        if (btn) { btn.textContent = i18n.t('workspace.save'); btn.disabled = false; }
+        if (btn) { btn.textContent = i18n.t('common.save'); btn.disabled = false; }
         return;
       }
       this._dirty = false;
       if (btn) { btn.textContent = i18n.t('workspace.saved'); btn.classList.remove('dirty'); }
-      setTimeout(() => { if (btn) btn.textContent = i18n.t('workspace.save'); }, 2000);
+      setTimeout(() => { if (btn) btn.textContent = i18n.t('common.save'); }, 2000);
     } catch (err) {
       // Il motivo va mostrato, non inghiottito: un bottone che dice solo
       // "Errore" ha tenuto nascosto per mesi un salvataggio che non poteva
       // riuscire (contenuto in un header HTTP, v. ws-manager.request).
       showToast(workspaceErrorText(err), 'error');
       const btn = document.querySelector('.ws-save-btn');
-      if (btn) { btn.textContent = i18n.t('workspace.save'); btn.disabled = false; }
+      if (btn) { btn.textContent = i18n.t('common.save'); btn.disabled = false; }
     }
   }
 
@@ -1124,7 +1123,7 @@ export class WorkspaceController {
     this.editor.on('change', () => {
       this._dirty = true;
       const btn = document.querySelector('.ws-save-btn');
-      if (btn) { btn.textContent = i18n.t('workspace.save'); btn.disabled = false; btn.classList.add('dirty'); }
+      if (btn) { btn.textContent = i18n.t('common.save'); btn.disabled = false; btn.classList.add('dirty'); }
     });
   }
 

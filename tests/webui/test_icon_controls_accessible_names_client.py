@@ -61,7 +61,7 @@ class Fake {{
 const f = new Fake();
 root.innerHTML =
   f._field('Max results', 'number', 'ws_max', 5, '5') +
-  f._select('Search engine', 'ws_engine', 'bing', ['bing']) +
+  f._select('Reasoning', 'reasoning_effort', 'low', ['low', 'high']) +
   f._numberField('MEMORY.md', 'memory_budget_chars', {{ value: 3000, min: 0 }});
 const rows = [...root.querySelectorAll('.settings-row')].map((row) => {{
   const label = row.querySelector('label.settings-label');
@@ -77,7 +77,7 @@ console.log(JSON.stringify({{ rows, unique: new Set(ids).size === ids.length }})
 """)
     assert result["rows"] == [
         {"label": "Max results", "bound": True, "id": "settings-ws_max"},
-        {"label": "Search engine", "bound": True, "id": "settings-ws_engine"},
+        {"label": "Reasoning", "bound": True, "id": "settings-reasoning_effort"},
         {"label": "MEMORY.md", "bound": True, "id": "settings-worker-memory_budget_chars"},
     ], "una riga dell'officina ha un'etichetta che non nomina il suo controllo"
     assert result["unique"]

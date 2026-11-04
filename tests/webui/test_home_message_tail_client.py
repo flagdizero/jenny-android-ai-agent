@@ -21,11 +21,9 @@ il disegno tocca.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from support.js_harness import function, member, requires_node, run_js
+from support.js_harness import ASSETS, function, member, requires_node, run_js
 
-ASSETS = Path(__file__).resolve().parents[2] / "jenny" / "templates" / "ui" / "assets"
 HOME_CHAT_JS = ASSETS / "home-chat.js"
 HOME_CSS = ASSETS / "home-style.css"
 
@@ -36,7 +34,6 @@ _METHODS = (
     "_journalMarkOf",
     "_moveOfferOf",
     "_tailOf",
-    "_timeEl",
     "_appendUser",
     "_register",
     "_textOf",
@@ -89,11 +86,15 @@ const renderMarkdown = (t) => t;
    `test_rich_surfaces_contract.py`. */
 const renderRich = () => {};
 const renderPlacesIn = () => {};
+const renderReplyExtras = (n) => { renderRich(n); renderPlacesIn(n); };
+const latencyText = (ms) => (ms / 1000).toFixed(1) + 's';
 const i18n = { t: (key) => key };
 /* L'ora sotto i messaggi: il formato e' di `shared/chat-time.js`, che ha il
    suo banco (`test_chat_time_client.py`); qui conta solo se c'e' e dove sta. */
 const chatTime = (ms) => (ms ? '11:26' : '');
 const chatTimeIso = (ms) => (ms ? new Date(ms).toISOString() : '');
+__CHAT_TIME_NODE__
+const originBadge = () => null;
 
 function makeChat() {
   return {
@@ -111,7 +112,6 @@ function makeChat() {
     syncEmpty() {},
     _follow() {},
     _appendMedia() {},
-    _originBadge() { return null; },
     _append(node) { this.el.appendChild(node); return node; },
     __METHODS__,
   };
@@ -132,7 +132,7 @@ const ultima = (chat) => chat.el.children[chat.el.children.length - 1];
 def _harness() -> str:
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
     methods = ",\n    ".join(member(src, name) for name in _METHODS)
-    return _HARNESS.replace("__METHODS__", methods) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
+    return _HARNESS.replace("__METHODS__", methods).replace("__CHAT_TIME_NODE__", function((ASSETS / "shared" / "chat-time.js").read_text(encoding="utf-8"), "chatTimeNode")) + "\n" + function(src, "journalNotes") + "\n" + function(src, "moveOffers")
 
 
 def _run_js(script: str) -> None:
@@ -396,6 +396,9 @@ def test_history_keeps_the_seconds() -> None:
     """La cronologia li ha: se `_buildTurns` li butta, riaprire l'app toglie il
     tempo a tutto quello che è già stato detto."""
     src = HOME_CHAT_JS.read_text(encoding="utf-8")
-    assert "msg.latencyMs" in member(src, "_buildTurns"), (
+    # La spina dorsale dei turni e' comune con l'officina (`shared/turns.js`).
+    assert "groupTurns(messages" in member(src, "_buildTurns")
+    turns = (HOME_CHAT_JS.parent / "shared" / "turns.js").read_text(encoding="utf-8")
+    assert "current.latencyMs = msg.latencyMs" in turns, (
         "_buildTurns scarta i secondi: dopo una ricarica la coda resta muta"
     )

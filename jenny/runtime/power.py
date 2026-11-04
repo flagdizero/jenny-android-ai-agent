@@ -121,19 +121,8 @@ async def _call(method: str, *args: Any) -> bool:
     ``False``. Nessun chiamante deve dover proteggere una chiamata di power
     management — se fallisce, si degrada al comportamento senza wakelock.
     """
-    context = get_android_context()
-    if context is None:
-        return False
-    try:
-        bridge = await _get_bridge(context)
-        result = await asyncio.wait_for(
-            asyncio.to_thread(getattr(bridge, method), *args),
-            timeout=_CALL_TIMEOUT_S,
-        )
-    except Exception:  # noqa: BLE001
-        logger.opt(exception=True).debug("PowerBridge.{} failed", method)
-        return False
-    return bool(result)
+    return bool(await _BRIDGE.call(_get_bridge, get_android_context(), method, *args,
+                                   timeout=_CALL_TIMEOUT_S, default=False, level="DEBUG"))
 
 
 def _power_config() -> Any:
