@@ -172,7 +172,10 @@ class Runner:
                 if _PROVIDER_FAILED.search(outcome.reply):
                     raise ProviderDownError(outcome.reply.splitlines()[-1][:200])
             if scenario.final_reply_after_subagents:
-                self._wait_subagents_done(session_file)
+                # Un ricercatore sul web dell'emulatore passa i 5 minuti (332 s il
+                # 03/11/2026): con il tetto di prima la risposta finale non arrivava, e
+                # lo scenario misurava il tempo del banco invece del deposito.
+                self._wait_subagents_done(session_file, timeout=900.0)
                 final = [r for r in _rows(dev.read_session(session_file))
                          if r.get("role") == "assistant" and isinstance(r.get("content"), str)
                          and r["content"].strip()]
