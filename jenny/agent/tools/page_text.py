@@ -291,3 +291,126 @@ def extract(html_content: str, base_url: str = "") -> str:
         listed = "\n".join(f"- {t}: {u}" for u, t in renderer.links.items())
         text = f"{text}\n\nLinks:\n{listed}"
     return text
+
+
+# ── Quanto della pagina va al modello ─────────────────────────────────────────
+#
+# Il testo intero sta nel file (``save_fetched_page``); al modello va una
+# finestra. Con ``focus`` i blocchi che c'entrano, in ordine di pagina; senza,
+# l'inizio e la fine, come Hermes (75/25): l'inizio di un articolo dice cosa
+# contiene, la fine spesso conclude.
+
+_FOCUS_CHARS = 4_000
+_HEAD_SHARE = 0.75
+_WORD = re.compile(r"[a-z0-9]+")
+_NUMBER = re.compile(r"\d")
+# Un prezzo raramente sta accanto alla parola «prezzo»: nelle schede è un
+# «350,45€» da solo. Quando *focus* chiede un prezzo, conta la cifra con la valuta.
+_PRICE_WORDS = frozenset({"prezz", "price", "prices", "costo", "cost", "costs", "euro", "offer"})
+_PRICE = re.compile(r"\d[\d.,]*\s?(?:€|eur\b|euro)|[€$£]\s?\d", re.I)
+# Un blocco corto accanto a uno scelto viene con lui: di solito è l'etichetta o
+# il valore («Fotocamera» / «200 MP con OIS»).
+_NEIGHBOUR_CHARS = 300
+
+
+def _fold(text: str) -> str:
+    """Minuscole e senza accenti: «capacità» trova «capacita»."""
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+def _stems(focus: str) -> set[str]:
+    """Le parole di *focus*, accorciate: «prezzi» e «prezzo» hanno la stessa radice."""
+    words = {w for w in _WORD.findall(_fold(focus)) if len(w) >= 3 or w.isdigit()}
+    return {w[:5] if len(w) >= 6 else w for w in words}
+
+
+def _blocks(text: str) -> list[tuple[str, str]]:
+    """(titolo più vicino, blocco) per ogni paragrafo, riga di tabella o voce."""
+    out: list[tuple[str, str]] = []
+    heading = ""
+    for block in re.split(r"\n\s*\n", text):
+        block = block.strip()
+        if not block:
+            continue
+        if block.startswith("#"):
+            heading = block.splitlines()[0]
+            rest = "\n".join(block.splitlines()[1:]).strip()
+            if not rest:
+                continue
+            block = rest
+        out.append((heading, block))
+    return out
+
+
+def _score(block: str, heading: str, stems: set[str]) -> float:
+    words = _WORD.findall(_fold(block))
+    hits = sum(min(3, sum(1 for w in words if w.startswith(s))) for s in stems)
+    if stems & _PRICE_WORDS and _PRICE.search(block):
+        hits += 2
+    if not hits:
+        return 0.0
+    in_heading = sum(1 for s in stems if s in _fold(heading))
+    # Un dato è quasi sempre un numero: a parità di parole vince il blocco che ne ha.
+    return hits + in_heading + (0.5 if _NUMBER.search(block) else 0.0)
+
+
+def focused(text: str, focus: str, budget: int = _FOCUS_CHARS) -> str:
+    """I blocchi di *text* che parlano di *focus*, in ordine di pagina; ``""`` se nessuno."""
+    stems = _stems(focus)
+    body = text.split("\n\nLinks:\n", 1)[0]
+    blocks = _blocks(body)
+    if not stems or not blocks:
+        return ""
+    ranked = sorted(
+        (i for i in range(len(blocks)) if _score(blocks[i][1], blocks[i][0], stems) > 0),
+        key=lambda i: -_score(blocks[i][1], blocks[i][0], stems),
+    )
+    chosen: set[int] = set()
+    used = 0
+    for i in ranked:
+        group = [i] + [j for j in (i - 1, i + 1)
+                       if 0 <= j < len(blocks) and len(blocks[j][1]) <= _NEIGHBOUR_CHARS]
+        new = [j for j in group if j not in chosen]
+        size = sum(len(blocks[j][1]) + len(blocks[j][0]) + 2 for j in new)
+        if used + size > budget and chosen:
+            continue
+        chosen.update(new)
+        used += size
+    if not chosen:
+        return ""
+    lines: list[str] = []
+    title = body.splitlines()[0] if body.startswith("# ") else ""
+    if title:
+        lines.append(title)
+    last_heading = None
+    shown: set[str] = set()
+    for i in sorted(chosen):
+        heading, block = blocks[i]
+        if block in shown:
+            continue
+        shown.add(block)
+        if heading and heading != last_heading and heading != title:
+            lines.append(heading)
+        last_heading = heading
+        lines.append(block[:budget])
+    return "\n\n".join(lines)
+
+
+def head_and_tail(text: str, limit: int) -> tuple[str, bool]:
+    """L'inizio e la fine di *text* entro *limit* caratteri, tagliati a fine riga."""
+    if len(text) <= limit:
+        return text, False
+    head_size = int(limit * _HEAD_SHARE)
+    head = text[:head_size].rsplit("\n", 1)[0]
+    tail = text[len(text) - (limit - head_size):].split("\n", 1)[-1]
+    omitted = len(text) - len(head) - len(tail)
+    return f"{head}\n\n[… {omitted} characters not shown …]\n\n{tail}", True
+
+
+def outline(text: str, limit: int = 40) -> str:
+    """I titoli di *text* col loro numero di riga, per leggere a pezzi il file salvato."""
+    rows = [f"{n}: {line}" for n, line in enumerate(text.splitlines(), 1) if line.startswith("#")]
+    return "\n".join(rows[:limit])

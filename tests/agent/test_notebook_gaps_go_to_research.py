@@ -156,16 +156,37 @@ def test_the_researcher_saves_a_notebooks_sources_verbatim_in_raw_research() -> 
 
 
 def test_the_researcher_reads_what_the_notebook_has_and_stops_when_sources_agree() -> None:
-    """Le due regole che accorciano un ricercatore senza togliere ampiezza: nella
+    """Le regole che accorciano un ricercatore senza togliere ampiezza: nella
     prova A del 24/10 alcuni ripartivano da zero su temi già in ``raw/research/``,
     e tutti leggevano ancora dopo che tre fonti dicevano la stessa cosa."""
     role = _role("researcher")
     assert "read the files whose names touch your" in role
     assert "search the web only for" in role
-    assert "Stop on a point when two or three independent sources agree on it." in role
-    assert "where they disagree, where they are silent" in role
-    # Nessun tetto fisso: la regola di arresto è l'accordo, non un numero.
-    assert "There is no quota of searches or pages" in role
+    assert "stop on a point when two or three agree" in role
+
+
+def test_the_researcher_matches_the_depth_to_the_question() -> None:
+    """Il 04/11/2026 «3 telefoni sotto 300 €» ha fatto 163 pagine: la regola dei
+    quaderni («2-3 fonti per ogni punto», «no quota») valeva per tutto, anche per
+    i mAh di una scheda. Le fonti dipendono dal tipo di dato, la profondità dalla
+    domanda, e il budget lo dà chi lancia."""
+    role = " ".join(_role("researcher").split())
+    assert "The task says how deep to go." in role
+    assert "one, the most authoritative you find" in role
+    assert "Stop when every fact has a source of the right kind" in role
+    assert "no quota" not in role
+    # La ricetta delle piante non è più la ricetta di ogni ricerca.
+    assert "nurseries" not in role and "botanical" not in role
+    # Una pagina letta si rilegge dal file, non dal web.
+    assert "Do not fetch it again." in role
+
+
+def test_the_plan_briefs_researchers_with_a_depth_and_a_budget() -> None:
+    from jenny.utils.prompt_templates import render_template
+
+    text = " ".join(render_template("agent/plan_mode.md", notebook=True, where="x").split())
+    assert "no cap on searches or pages" not in text
+    assert "how deep to go" in text and "`steps` in `spawn`" in text
 
 
 @pytest.mark.parametrize("name", ["writer", "notebook-editor"])

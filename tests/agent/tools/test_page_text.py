@@ -102,3 +102,44 @@ def test_nothing_to_say_is_an_empty_string():
     assert page_text.extract("") == ""
     assert page_text.extract("<html><body><script>x()</script></body></html>") == ""
     assert page_text.extract("<p>x</p>" * (page_text._MAX_HTML_CHARS // 8 + 1)) == ""
+
+
+# ── Quanto della pagina va al modello ─────────────────────────────────────────
+
+
+def test_focus_finds_a_price_that_stands_alone() -> None:
+    """In una scheda il prezzo è un «350,45€» da solo, senza la parola «prezzo»."""
+    text = ("# Telefono X\n\nDescrizione del telefono e dei suoi colori.\n\n350,45€\n\n"
+            "CONSEGNA GRATIS | IVA inclusa\n\n" + "Altro testo senza dati utili.\n\n" * 50)
+    out = page_text.focused(text, "prezzo venditore")
+    assert "350,45€" in out and "CONSEGNA GRATIS" in out
+    assert out.startswith("# Telefono X")
+
+
+def test_focus_matches_words_in_other_forms_and_without_accents() -> None:
+    text = "# Guida\n\n## Capacità\n\nLa capacita della batteria e di 5000 mAh.\n\nAltro."
+    assert "5000 mAh" in page_text.focused(text, "capacità batterie")
+
+
+def test_focus_keeps_the_page_order_and_the_budget() -> None:
+    blocks = [f"## Parte {i}\n\nIl prezzo del modello {i} è {100 + i} €." for i in range(200)]
+    out = page_text.focused("# Lista\n\n" + "\n\n".join(blocks), "prezzo", budget=1_000)
+    assert len(out) <= 1_100
+    numbers = [int(n) for n in __import__("re").findall(r"modello (\d+)", out)]
+    assert numbers == sorted(numbers)
+
+
+def test_focus_without_a_match_is_empty() -> None:
+    assert page_text.focused("# Guida\n\nSolo luce e acqua.", "prezzo batteria") == ""
+
+
+def test_head_and_tail_keeps_the_start_and_the_end() -> None:
+    text = "\n".join(f"riga {i}" for i in range(5_000))
+    out, cut = page_text.head_and_tail(text, 2_000)
+    assert cut and out.startswith("riga 0") and out.endswith("riga 4999")
+    assert "characters not shown" in out and len(out) <= 2_060
+    assert page_text.head_and_tail("corto", 2_000) == ("corto", False)
+
+
+def test_the_outline_gives_each_heading_its_line() -> None:
+    assert page_text.outline("# A\n\ntesto\n\n## B\n") == "1: # A\n5: ## B"

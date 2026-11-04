@@ -333,6 +333,9 @@ class SubagentSpec:
     # lavoro dello stesso passo, e la casa raggruppa gli aiutanti per passo.
     plan_id: str | None = None
     plan_step: str | None = None
+    # I passi chiesti da chi ha lanciato (``spawn steps``); ``None`` = il default
+    # del tipo. Nella spec perché un rilancio ha lo stesso budget.
+    steps: int | None = None
 
     def __post_init__(self) -> None:
         # Il tipo si valida qui, alla costruzione della spec, e non piu in la:
@@ -386,6 +389,7 @@ class SubagentSpec:
             "taint_seed": list(self.taint_seed),
             "plan_id": self.plan_id,
             "plan_step": self.plan_step,
+            "steps": self.steps,
         }
 
     @classmethod
@@ -424,6 +428,13 @@ class SubagentSpec:
             # Chiavi aggiunte il 24/10/2026: un record precedente non le ha.
             plan_id=raw.get("plan_id") if isinstance(raw.get("plan_id"), str) else None,
             plan_step=raw.get("plan_step") if isinstance(raw.get("plan_step"), str) else None,
+            # Dal 04/11/2026: un record precedente non la ha, e vale il default del tipo.
+            steps=(
+                raw["steps"]
+                if isinstance(raw.get("steps"), int) and not isinstance(raw.get("steps"), bool)
+                and raw["steps"] > 0
+                else None
+            ),
         )
 
 

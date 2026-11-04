@@ -12,6 +12,7 @@ senza cicli.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from jenny.utils.helpers import persisted_tool_result_path
@@ -173,7 +174,28 @@ def _omitted_placeholder(name: str, content: str) -> str:
     path = persisted_tool_result_path(content)
     if path:
         return f"[{name} result omitted from context; full output still at {path}]"
+    page = _saved_page(content) if name == "web_fetch" else None
+    if page is not None:
+        # «call the tool again» qui era un invito: il 04/11/2026 un aiutante ha
+        # riscaricato 42 volte pagine che aveva già letto.
+        url, saved, size = page
+        return (f"[web_fetch {url}: {size} chars, out of your context; the whole page is in "
+                f"{saved}. Use your notes, or read_file the part you need — do not fetch it "
+                "again]")
     if name in SIDE_EFFECT_TOOLS:
         return (f"[{name} result omitted from context; the call above shows what ran — "
                 "do not run it again only to see its output]")
     return f"[{name} result omitted from context; call the tool again if you need it]"
+
+
+def _saved_page(content: str) -> tuple[str, str, int] | None:
+    """(URL, file, caratteri) di un risultato di ``web_fetch`` salvato su file."""
+    try:
+        data = json.loads(content)
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("savedTo"), str):
+        return None
+    size = data.get("totalChars")
+    return (str(data.get("url") or ""), data["savedTo"],
+            size if isinstance(size, int) else len(str(data.get("text") or "")))

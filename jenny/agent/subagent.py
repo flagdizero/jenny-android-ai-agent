@@ -1597,6 +1597,7 @@ class SubagentManager:
         *,
         agent_type: str = DEFAULT_AGENT_TYPE,
         quick: bool = False,
+        steps: int | None = None,
     ) -> str:
         """Spawn a subagent to execute a task in the background.
 
@@ -1618,6 +1619,7 @@ class SubagentManager:
             # Un compito scritto mentre un risultato non fidato è in vista nasce
             # contaminato (``security.subagent_policy``, taint del turno).
             taint_seed=current_turn_taint(),
+            steps=steps if steps and steps > 0 else None,
         )
         plan_id, plan_step = _plan_metadata()
         if plan_id or plan_step:
@@ -1948,6 +1950,7 @@ class SubagentManager:
             tools = self._build_tools(workspace=root, tools_config=cfg, agent_type=atype,
                                       origin_session_key=spec.session_key,
                                       lineage_id=status.lineage_id or None)
+            max_iterations = self._run_max_iterations(atype, spec.steps)
             system_prompt = self._build_subagent_prompt(
                 workspace=root,
                 agent_type=atype,
@@ -1955,6 +1958,7 @@ class SubagentManager:
                 # Lo scope della spec, non l'ambiente: il prompt si costruisce
                 # qui fuori, il ``with`` che lega e' piu' sotto.
                 workspace_scope=workspace_scope,
+                max_iterations=max_iterations,
             )
             messages: list[dict[str, Any]]
             if resume_messages:
@@ -2001,7 +2005,6 @@ class SubagentManager:
             self._run_policies[task_id] = policy
             initial.extend(messages)
             run_policy.append(policy)
-            max_iterations = self._type_max_iterations(atype)
             with (enter_workspace_scope(workspace_scope), enter_subagent_policy(policy),
                   bind_journal(journal, step=spec.plan_step)):
                 result = await self.runner.run(AgentRunSpec(
@@ -2603,6 +2606,16 @@ class SubagentManager:
             return self.max_iterations
         return min(agent_type.max_iterations, self.max_iterations)
 
+    def _run_max_iterations(self, agent_type: AgentType, steps: int | None) -> int:
+        """I passi di un lavoro: quelli chiesti allo spawn, o il default del tipo.
+
+        Mai oltre il tetto del tipo e quello configurato
+        (:meth:`_type_max_iterations`): ``steps`` stringe, non allarga.
+        """
+        ceiling = self._type_max_iterations(agent_type)
+        wanted = steps or agent_type.default_iterations
+        return min(wanted, ceiling) if wanted else ceiling
+
     def _build_subagent_prompt(
         self,
         workspace: Path | None = None,
@@ -2610,6 +2623,7 @@ class SubagentManager:
         *,
         workspace_scope: WorkspaceScope | None = None,
         tool_names: list[str] | None = None,
+        max_iterations: int | None = None,
     ) -> str:
         """Build a focused system prompt for the subagent.
 
@@ -2711,8 +2725,8 @@ class SubagentManager:
             readonly=not (bound_scope is None or bound_scope.writable),
             # Il budget di chiamate del tipo, quello che il run usera davvero: un
             # aiutante che non sa di averne uno si ferma a meta di una lettura.
-            max_iterations=(
-                self._type_max_iterations(agent_type)
+            max_iterations=max_iterations or (
+                self._run_max_iterations(agent_type, None)
                 if agent_type is not None else self.max_iterations
             ),
             skills_summary=skills_summary or "",

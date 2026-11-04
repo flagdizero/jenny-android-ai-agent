@@ -15,6 +15,7 @@ from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import ContextAware, RequestContext, current_request_context
 from jenny.agent.tools.schema import (
     BooleanSchema,
+    IntegerSchema,
     NumberSchema,
     StringSchema,
     tool_parameters_schema,
@@ -77,6 +78,16 @@ if TYPE_CHECKING:
                 "Set it only when the task really is short — a long job in the "
                 "reserved slot defeats the purpose."
             ),
+        ),
+        steps=IntegerSchema(
+            description=(
+                "How many model calls the subagent may make: its budget. Match it to the "
+                "job — about two per page for a researcher, plus a few; a quick lookup needs "
+                "a handful. Without it the type's default applies (25 for a researcher); it "
+                "never goes past the type's ceiling."
+            ),
+            minimum=1,
+            maximum=60,
         ),
         temperature=NumberSchema(
             description=(
@@ -173,6 +184,7 @@ class SpawnTool(Tool, ContextAware):
         agent_type: str | None = None,
         quick: bool = False,
         app: str | None = None,
+        steps: int | None = None,
         **kwargs: Any,
     ) -> str:
         """Spawn a subagent to execute the given task."""
@@ -239,6 +251,7 @@ class SpawnTool(Tool, ContextAware):
                 workspace_scope=current_workspace_scope(),
                 agent_type=agent_type or DEFAULT_AGENT_TYPE,
                 quick=bool(quick),
+                steps=_positive_int(steps),
             )
         except UnknownAgentTypeError as e:
             # Il modello inventa un tipo: l'errore torna come testo con l'elenco
@@ -263,6 +276,15 @@ class SpawnTool(Tool, ContextAware):
                 f"Cannot spawn subagent: concurrency limit reached "
                 f"({e.running}/{e.limit} running). {hint}"
             )
+
+
+def _positive_int(value: Any) -> int | None:
+    """``steps`` come arriva dal modello: un intero positivo, o niente."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
 
 
 # Registrazione esplicita dei tool di questo modulo (Fase 5.3): il

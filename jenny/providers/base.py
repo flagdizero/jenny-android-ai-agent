@@ -4,8 +4,8 @@ import asyncio
 import json
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable
-from contextlib import suppress
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -346,6 +346,13 @@ class LLMProvider(ABC):
     # passa da ``__init__`` (i finti dei test) li ha.
     _inflight = 0
     _close_requested = False
+
+    # Quante richieste il provider regge insieme: ``None`` = nessun limite. Chi
+    # lo sa lo dichiara (il gateway della Play, dal livello dell'abbonamento);
+    # oltre, le richieste aspettano un posto invece di prendersi un 429 (v.
+    # ``providers/request_slots.py``).
+    max_concurrent_requests: int | None = None
+    _request_slots: Any = None
 
     def __init__(self, api_key: str | None = None, api_base: str | None = None):
         self.api_key = api_key
@@ -859,6 +866,20 @@ class LLMProvider(ABC):
             if self._close_requested and self._inflight == 0:
                 await self._close_http_client()
 
+    @asynccontextmanager
+    async def _request_slot(self, *, background: bool) -> AsyncIterator[None]:
+        limit = self.max_concurrent_requests
+        if not limit or limit < 1:
+            yield
+            return
+        from jenny.providers.request_slots import RequestSlots
+
+        slots = self._request_slots
+        if slots is None or slots.limit != limit:
+            slots = self._request_slots = RequestSlots(limit)
+        async with slots.hold(background):
+            yield
+
     async def _run_with_retry_loop(
         self,
         call: Callable[..., Awaitable[LLMResponse]],
@@ -881,7 +902,9 @@ class LLMProvider(ABC):
         identical_error_count = 0
         while True:
             attempt += 1
-            response = await call(**kw)
+            # Il posto vale per il tentativo, non per l'attesa che lo segue.
+            async with self._request_slot(background=retry_mode == "background"):
+                response = await call(**kw)
             if response.finish_reason != "error":
                 return response
             last_response = response

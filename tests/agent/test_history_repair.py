@@ -205,6 +205,17 @@ class TestMicrocompact:
     def _placeholder(self, tool_name: str) -> str:
         return f"[{tool_name} result omitted from context; call the tool again if you need it]"
 
+    def test_a_saved_web_page_points_to_its_file_not_to_a_new_fetch(self):
+        """Il 04/11/2026 «call the tool again» ha fatto riscaricare 42 pagine già lette."""
+        import json
+
+        page = json.dumps({"url": "https://example.com/a", "savedTo": "/w/.jenny/tool-results/web/a.md",
+                           "totalChars": 9000, "text": "x" * MICROCOMPACT_MIN_CHARS})
+        messages = [_tool(str(i), content=page, name="web_fetch") for i in range(self.FIRST_BATCH)]
+        stub = microcompact(messages)[0]["content"]
+        assert "/w/.jenny/tool-results/web/a.md" in stub and "9000 chars" in stub
+        assert "do not fetch it again" in stub and "call the tool again" not in stub
+
     def test_below_first_batch_is_noop(self):
         tool_name = "read_file"
         messages = [

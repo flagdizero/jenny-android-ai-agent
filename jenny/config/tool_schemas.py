@@ -101,7 +101,7 @@ class AndroidWebFetchConfig(Base):
     andate in timeout, e ognuna costava il timeout pieno piu' il ripiego.
     """
 
-    max_chars: int = 20000
+    max_chars: int = 12000
     timeout: int = Field(default=15, ge=1, le=120)
 
 
