@@ -52,6 +52,8 @@ Releases before 1.0 are described only on their
 - Asked to change what a helper just finished (a title for the poem it wrote), Jenny sends
   the change back to that same helper, which still has its work at hand, instead of starting a
   new one.
+- After restoring a backup from a file, the copy of that file the app had made (as big as the
+  backup) is removed; it used to stay on the phone for good.
 - An app action that switches something on (watering the plants, a light) no longer runs
   while a plan is being prepared or while writing is turned off.
 - Undoing a plan's rollback that was interrupted by a restart puts back every file; one could

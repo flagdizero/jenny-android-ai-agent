@@ -233,6 +233,13 @@ class BackupManager:
                 )
             finally:
                 zip_part.unlink(missing_ok=True)
+            # Il file scelto dall'utente, copiato qui dal selettore: il ripristino
+            # e' pronto, e per riprovare il selettore lo ricopia. Fino al 04/11/2026
+            # restava per sempre, grande quanto il backup (432 MB sul telefono di
+            # prova). Solo quello: un export ancora in staging non si tocca, e una
+            # password sbagliata (sopra, prima di arrivare qui) lascia il file.
+            if source == self.import_staged_path.resolve():
+                source.unlink(missing_ok=True)
             logger.info("Backup import staged; restart required to apply")
             return {"metadata": metadata}
 
