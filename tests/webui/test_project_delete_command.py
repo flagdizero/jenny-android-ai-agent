@@ -55,6 +55,35 @@ async def test_a_notebook_that_is_not_there_is_not_found_as_for_the_rename(
         assert err.value.code == "not_found", command.__name__
 
 
+async def test_the_delete_looks_at_the_transcript_of_its_own_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un verbale con lo stesso nome in un altro workspace non e' una traccia di questo.
+
+    Le sessioni si cercavano nel workspace passato e il verbale in quello globale:
+    il 04/11/2026, su 3.12, il verbale ``project:piante`` di un'altra prova faceva
+    rispondere che il quaderno c'era.
+    """
+    from jenny.session.keys import project_session_key, webui_transcript_key
+    from jenny.webui import transcript_store
+
+    other = tmp_path / "other" / "workspace"
+    other.mkdir(parents=True)
+    monkeypatch.setattr(transcript_store, "_workspace", lambda: other)
+    transcript_store.append_transcript_object(
+        webui_transcript_key(project_session_key("piante")), {"event": "user", "text": "ciao"})
+    monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
+    mine = tmp_path / "mine" / "workspace"
+    (mine / "wikis").mkdir(parents=True)
+    ctx = SimpleNamespace(get_workspace_root=lambda: mine, invalidate_session=lambda k: None,
+                          busy_session_keys=lambda: ())
+    with pytest.raises(CommandError) as err:
+        await commands.project_delete(ctx, {"name": "piante"})
+    assert err.value.code == "not_found"
+    assert transcript_store.has_webui_transcript(
+        webui_transcript_key(project_session_key("piante")))
+
+
 async def test_another_notebook_busy_does_not_stop_the_delete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

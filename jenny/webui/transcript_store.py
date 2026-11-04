@@ -198,10 +198,18 @@ def _workspace() -> Path:
     return webui.parent.parent if webui.parent.name == ".jenny" else webui
 
 
-def _db():
+def _db(workspace: Path | None = None):
+    """Il database dei verbali: quello di *workspace*, o del workspace globale.
+
+    *workspace* lo passa chi lavora su un workspace preciso (``project_traces``,
+    ``project_rename``), come per le sessioni: senza, la cancellazione di un
+    quaderno guardava il verbale del workspace globale e le sessioni del suo
+    (04/11/2026: nei test, un verbale ``project:piante`` di un'altra prova). Sul
+    telefono i due coincidono.
+    """
     from jenny import db
 
-    database = db.database_for_workspace(_workspace(), db.STATE)
+    database = db.database_for_workspace(Path(workspace) if workspace else _workspace(), db.STATE)
     database.require(SCHEMA)
     return database
 
@@ -375,8 +383,8 @@ def append_transcript_object(session_key: str, obj: dict[str, Any]) -> None:
         _turn_closed(session_key)
 
 
-def delete_webui_transcript(session_key: str) -> bool:
-    with _db().write() as conn:
+def delete_webui_transcript(session_key: str, *, workspace: Path | None = None) -> bool:
+    with _db(workspace).write() as conn:
         removed = conn.execute("DELETE FROM transcripts WHERE key = ?",
                                (session_key,)).rowcount > 0
         removed = conn.execute("DELETE FROM transcript_rows WHERE key = ?",
@@ -388,10 +396,11 @@ def delete_webui_transcript(session_key: str) -> bool:
     return removed
 
 
-def rename_webui_transcript(old_key: str, new_key: str) -> bool:
+def rename_webui_transcript(old_key: str, new_key: str, *,
+                            workspace: Path | None = None) -> bool:
     """Il verbale di *old_key* passa a *new_key*. False se *new_key* ne ha già uno
     o *old_key* non ne ha."""
-    with _db().write() as conn:
+    with _db(workspace).write() as conn:
         if conn.execute("SELECT 1 FROM transcripts WHERE key = ?", (new_key,)).fetchone():
             return False
         if not conn.execute("SELECT 1 FROM transcripts WHERE key = ?", (old_key,)).fetchone():
@@ -443,11 +452,11 @@ def compact_closed_turns(*, batch: int = 10, pause: float = 0.02) -> int:
     return removed
 
 
-def transcript_bytes(session_key: str) -> int:
-    rows = _db().read("SELECT sum(length(data)) FROM transcript_rows WHERE key = ?",
+def transcript_bytes(session_key: str, *, workspace: Path | None = None) -> int:
+    rows = _db(workspace).read("SELECT sum(length(data)) FROM transcript_rows WHERE key = ?",
                       (session_key,))
     return int(rows[0][0] or 0) if rows else 0
 
 
-def has_webui_transcript(session_key: str) -> bool:
-    return bool(_db().read("SELECT 1 FROM transcripts WHERE key = ?", (session_key,)))
+def has_webui_transcript(session_key: str, *, workspace: Path | None = None) -> bool:
+    return bool(_db(workspace).read("SELECT 1 FROM transcripts WHERE key = ?", (session_key,)))

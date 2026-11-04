@@ -135,9 +135,9 @@ def describe_project_traces(workspace: Path, session_key: str) -> TraceReport:
 
     try:
         transcript_key = webui_transcript_key(session_key)
-        if has_webui_transcript(transcript_key):
+        if has_webui_transcript(transcript_key, workspace=workspace):
             files += 1
-            total += transcript_bytes(transcript_key)
+            total += transcript_bytes(transcript_key, workspace=workspace)
     except Exception:  # noqa: BLE001 — il verbale non contato resta fuori dal conto
         pass
     return TraceReport(files=files, bytes=total, messages=messages)
@@ -174,7 +174,7 @@ def delete_project_traces(workspace: Path, session_key: str) -> list[str]:
     from jenny.webui.transcript_store import delete_webui_transcript
 
     try:
-        if delete_webui_transcript(webui_transcript_key(session_key)):
+        if delete_webui_transcript(webui_transcript_key(session_key), workspace=workspace):
             removed.append("transcript")
     except Exception:  # noqa: BLE001 — come una traccia che resiste: si dice e si va avanti
         logger.opt(exception=True).error("Verbale non rimosso per {}", session_key)

@@ -269,7 +269,7 @@ def _move_that_breaks(patch, *, and_cannot_go_back: bool) -> None:
     import jenny.session.project_rename as rename_mod
 
     real_session = rename_mod._move_session
-    patch.setattr(rename_mod, "_move_transcript", lambda old, new: False)
+    patch.setattr(rename_mod, "_move_transcript", lambda workspace, old, new: False)
     if and_cannot_go_back:
         def session(workspace, old, new):  # type: ignore[no-untyped-def]
             return False if old.endswith(":dst") else real_session(workspace, old, new)
