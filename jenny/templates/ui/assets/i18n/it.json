@@ -331,7 +331,7 @@
     "timeoutSec": "Timeout (sec)",
     "timeoutPlaceholder": "1 – 120",
     "fetchMaxChars": "Caratteri max fetch",
-    "fetchMaxCharsPlaceholder": "1000 – 200000",
+    "fetchMaxCharsPlaceholder": "1000 – 20000",
     "loading": "Caricamento...",
     "update": {
       "available": "È disponibile la versione {version}.",
