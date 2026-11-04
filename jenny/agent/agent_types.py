@@ -75,6 +75,9 @@ class AgentType:
     tools: frozenset[str] | None
     temperature: float | None = None
     max_iterations: int | None = None
+    # I passi quando chi lancia non ne chiede (``spawn steps``); ``None`` = il
+    # tetto. Il tetto resta ``max_iterations``: ``steps`` non lo supera mai.
+    default_iterations: int | None = None
     model: str | None = None
     scopes: tuple[str, ...] = ("subagent",)
     requires: frozenset[str] | None = None
@@ -105,7 +108,11 @@ _AGENT_TYPES: tuple[AgentType, ...] = (
             *_FS_READ, "write_file",
         )),
         temperature=0.2,
+        # 60 è il tetto, non l'obiettivo: il 04/11/2026 un piano «3 telefoni sotto
+        # 300 €» ha fatto 24-55 passi per aiutante e 163 pagine. Il budget lo
+        # sceglie chi lancia (``spawn steps``), proporzionato alla domanda.
         max_iterations=60,
+        default_iterations=25,
         requires=frozenset(("web_search", "web_fetch")),
     ),
     # Sintesi/wiki/docs da materiale gia raccolto: nessuna rete, ne diretta

@@ -2,8 +2,9 @@
 
 import asyncio
 import json
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -890,8 +891,8 @@ class TestFetchReadsDirectlyFirst:
 class TestFetchReturnsTheArticle:
     """``web_fetch`` passa il corpo della pagina, entro un tetto che il modello non alza."""
 
-    async def _fetch(self, page: str, **kwargs):
-        tool = AndroidWebFetchTool(android_context=object(), timeout=5, max_chars=50000)
+    async def _fetch(self, page: str, tool: AndroidWebFetchTool | None = None, **kwargs):
+        tool = tool or AndroidWebFetchTool(android_context=object(), timeout=5, max_chars=50000)
         with patch.object(android_web, "_direct_fetch",
                           return_value=(page, "https://example.com/a")):
             return await tool.execute("https://example.com/a", **kwargs)
@@ -910,7 +911,43 @@ class TestFetchReturnsTheArticle:
         out = json.loads(await self._fetch(page, maxChars=60000))
         assert out["truncated"] is True
         banner = len(android_web._UNTRUSTED_BANNER) + 2
-        assert len(out["text"]) == banner + android_web._FETCH_CEILING
+        # Inizio e fine della pagina, più la riga che dice quanto manca in mezzo.
+        assert len(out["text"]) <= banner + android_web._FETCH_CEILING + 60
+        assert "characters not shown" in out["text"]
+
+    async def test_the_whole_page_is_saved_and_a_second_read_comes_from_the_file(
+        self, monkeypatch, tmp_path
+    ):
+        """Il 04/11/2026 un aiutante ha riscaricato 42 volte pagine già lette."""
+        _allow_public(monkeypatch)
+        tool = AndroidWebFetchTool(android_context=object(), timeout=5, max_chars=50000,
+                                   workspace=str(tmp_path))
+        page = ("<html><body><article><h1>Guida</h1>" + "<p>Calathea: luce filtrata.</p>" * 900
+                + "<h2>Prezzo</h2><p>Costa 24,90 € al vivaio.</p></article></body></html>")
+        first = json.loads(await self._fetch(page, tool=tool))
+        saved = Path(first["savedTo"])
+        assert saved.is_file() and "24,90 €" in saved.read_text()
+        assert ".jenny/tool-results/web/" in saved.as_posix()
+        assert first["truncated"] is True and "Prezzo" in first["outline"]
+
+        refetch = AsyncMock(side_effect=AssertionError("the page was already read"))
+        with patch.object(android_web, "_direct_fetch", refetch):
+            again = json.loads(await tool.execute("https://example.com/a"))
+            focused = json.loads(await tool.execute("https://example.com/a", focus="prezzo"))
+        assert again["alreadyRead"] is True and again["savedTo"] == str(saved)
+        assert "read_file" in again["text"]
+        assert "24,90 €" in focused["text"] and focused["focusMatched"] is True
+
+    async def test_focus_returns_the_parts_that_match(self, monkeypatch, tmp_path):
+        _allow_public(monkeypatch)
+        page = ("<html><body><main><h1>Telefono X</h1>"
+                + "<p>Una descrizione lunga del design, dei colori e della confezione.</p>" * 200
+                + "<h2>Batteria</h2><p>La batteria da 5.000 mAh dura due giorni.</p>"
+                + "</main></body></html>")
+        out = json.loads(await self._fetch(page, focus="batteria mAh"))
+        assert "5.000 mAh" in out["text"]
+        assert len(out["text"]) < 1_000
+        assert out["focusMatched"] is True
 
     async def test_a_failing_extractor_falls_back_to_the_whole_page(self, monkeypatch):
         _allow_public(monkeypatch)

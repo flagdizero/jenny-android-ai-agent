@@ -387,6 +387,35 @@ def test_type_max_iterations_can_only_narrow_the_configured_cap(tmp_path: Path) 
     assert mgr._type_max_iterations(AGENT_TYPES["operator"]) == 25
 
 
+def test_steps_from_spawn_narrow_the_budget_and_never_widen_it(tmp_path: Path) -> None:
+    """Il budget lo sceglie chi lancia; il tetto del tipo resta la cintura."""
+    from unittest.mock import MagicMock
+
+    from jenny.agent.subagent import SubagentManager
+    from jenny.bus.queue import MessageBus
+
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    mgr = SubagentManager(provider=provider, workspace=tmp_path, bus=MessageBus(),
+                          max_tool_result_chars=16_000)
+    researcher = AGENT_TYPES["researcher"]
+    assert mgr._run_max_iterations(researcher, None) == researcher.default_iterations == 25
+    assert mgr._run_max_iterations(researcher, 12) == 12
+    assert mgr._run_max_iterations(researcher, 500) == researcher.max_iterations == 60
+    # Un tipo senza default proprio parte dal tetto, come prima.
+    assert mgr._run_max_iterations(AGENT_TYPES["coder"], None) == mgr._type_max_iterations(
+        AGENT_TYPES["coder"])
+
+
+def test_steps_survive_a_record_round_trip() -> None:
+    spec = SubagentSpec(task="t", label="l", agent_type="researcher", steps=14)
+    assert SubagentSpec.from_dict(spec.to_dict()).steps == 14
+    old = spec.to_dict()
+    del old["steps"]
+    assert SubagentSpec.from_dict(old).steps is None
+    assert SubagentSpec.from_dict({**old, "steps": True}).steps is None
+
+
 @pytest.mark.asyncio
 async def test_run_subagent_uses_type_defaults_and_prompt(tmp_path: Path) -> None:
     import time
@@ -425,6 +454,12 @@ async def test_run_subagent_uses_type_defaults_and_prompt(tmp_path: Path) -> Non
     assert seen["max_iterations"] == AGENT_TYPES["analyst"].max_iterations
     assert "web_search" not in seen["tools"]
     assert "Role: analyst" in str(seen["system"])
+
+    # Con ``steps`` il run e il prompt dicono lo stesso budget.
+    spec = SubagentSpec(task="analyse", label="l", agent_type="analyst", steps=7)
+    await mgr._run_subagent("s2", spec, status)
+    assert seen["max_iterations"] == 7
+    assert "Your budget is 7 model calls." in str(seen["system"])
 
 
 @pytest.mark.asyncio
@@ -467,3 +502,20 @@ def test_every_type_has_a_prompt_template() -> None:
     for name, atype in AGENT_TYPES.items():
         rendered = render_template(atype.prompt_template, strip=True)
         assert f"Role: {name}" in rendered
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("given, passed", [(12, 12), ("12", 12), (0, None), (None, None), ("x", None)])
+async def test_spawn_passes_the_steps_it_was_given(given, passed) -> None:
+    from jenny.agent.tools.spawn import SpawnTool
+
+    class Manager:
+        seen: dict = {}
+
+        async def spawn(self, **kwargs):
+            Manager.seen = kwargs
+            return "spawned"
+
+    tool = SpawnTool(Manager())  # type: ignore[arg-type]
+    assert await tool.execute(task="look up", agent_type="researcher", steps=given) == "spawned"
+    assert Manager.seen["steps"] == passed

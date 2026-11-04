@@ -643,6 +643,37 @@ def maybe_persist_tool_result(
     )
 
 
+# Le pagine lette da ``web_fetch``, una per URL, accanto agli output salvati dei
+# tool: stessa cartella, quindi stesso marchio di contenuto non fidato per chi le
+# legge (``subagent_policy._is_untrusted_src``) e stessa pulizia dei bucket.
+_WEB_PAGES_BUCKET = "web"
+
+
+def save_fetched_page(workspace: Path | str | None, url: str, text: str) -> Path | None:
+    """Il testo intero di una pagina letta, su file: ``None`` se non c'è dove.
+
+    Il 04/11/2026 un aiutante ha riaperto 42 volte una pagina che aveva già
+    letto: uscita dal contesto, l'unico modo di rivederla era riscaricarla.
+    Col file la rilegge solo nel pezzo che gli serve (``read_file``).
+    """
+    if not workspace:
+        return None
+    import hashlib
+    from urllib.parse import urlsplit
+
+    root = ensure_dir(Path(workspace) / _TOOL_RESULTS_DIR / _WEB_PAGES_BUCKET)
+    host = safe_filename(urlsplit(url).hostname or "page")[:40] or "page"
+    digest = hashlib.sha256(url.encode("utf-8", "replace")).hexdigest()[:12]
+    path = root / f"{host}-{digest}.md"
+    atomic_write(path, text)
+    cutoff = time.time() - _TOOL_RESULT_RETENTION_SECS
+    for old in root.iterdir():
+        with suppress(OSError):
+            if old.is_file() and old.stat().st_mtime < cutoff:
+                old.unlink()
+    return path
+
+
 def build_assistant_message(
     content: str | None,
     tool_calls: list[dict[str, Any]] | None = None,
