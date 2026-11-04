@@ -198,7 +198,12 @@ class Runner:
             files: dict[str, str | None] = {}
             for raw in scenario.read_after:
                 path = scenario.render(raw, nonces)
-                if path.endswith("/"):
+                if path.startswith("session:"):
+                    # Una sessione, dal database: dal 03/11/2026 ``sessions/*.jsonl``
+                    # non esiste piu', e il controllo che la leggeva come file la
+                    # trovava vuota (``compacted`` sempre NO).
+                    files[path] = dev.read_session(path.removeprefix("session:"))
+                elif path.endswith("/"):
                     # Una cartella: ogni file che contiene, letto per intero.
                     for name in dev.listdir(path.rstrip("/")):
                         files[path + name] = dev.read(path + name)
@@ -535,10 +540,13 @@ class Runner:
         return {str(j.get("id")) for j in jobs or [] if isinstance(j, dict) and j.get("id")}
 
     def _usage(self) -> dict[str, int]:
+        # Dal 03/11/2026 i token stanno in ``state.sqlite`` (``token_usage_days``, un
+        # giorno per riga): il file di prima non c'e' piu', e il costo usciva sempre 0.
         try:
-            state = json.loads(self.device.read(".jenny/webui/token-usage.json") or "{}")
-            day = state["days"][sorted(state["days"])[-1]]
-        except (KeyError, IndexError, json.JSONDecodeError):
+            raw = self.device._state_query(lambda conn: conn.execute(
+                "SELECT data FROM token_usage_days ORDER BY day DESC LIMIT 1").fetchone())
+            day = json.loads(raw[0]) if raw else {}
+        except (TypeError, IndexError, json.JSONDecodeError):
             return {}
         return {k: int(day.get(k) or 0) for k in ("prompt_tokens", "cached_tokens",
                                                    "completion_tokens", "requests")}

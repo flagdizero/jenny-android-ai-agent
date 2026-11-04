@@ -749,7 +749,7 @@ def _repotting_session() -> list[tuple[str, str]]:
 
 
 def _task_state(obs: Observation, n: Mapping[str, str]) -> list[Check]:
-    session = next((v for k, v in obs.files.items() if k.startswith("sessions/")), "") or ""
+    session = next((v for k, v in obs.files.items() if k.startswith("session:")), "") or ""
     meta = next((json.loads(line) for line in session.splitlines()
                  if '"_type": "metadata"' in line), {})
     summary = str(((meta.get("metadata") or {}).get("_last_summary") or {}).get("text") or "")
@@ -772,7 +772,7 @@ COMPACTION = [
         seed_session=_repotting_session(),
         turns=["Finito con le piante! Dammi la lista dei vasi da ricontrollare la settimana "
                "prossima."],
-        check=_task_state, read_after=("sessions/project_bh-{p}.jsonl",), kind="probe",
+        check=_task_state, read_after=("session:project:bh-{p}",), kind="probe",
         calibration_note="vietare il segno [ephemeral] in consolidator_archive.md non sposta "
                          "niente (12/10/2026, 3/3 e 3/3 su DeepSeek e Haiku): le segnalazioni "
                          "arrivano al riassunto come [durable] o [skip], e il riassunto tiene "

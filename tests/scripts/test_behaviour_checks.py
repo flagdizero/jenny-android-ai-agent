@@ -261,13 +261,13 @@ def test_the_early_flags_fall_outside_the_replayed_window() -> None:
 
 def test_task_state_needs_the_compaction_and_the_early_flags() -> None:
     nonces = {"p": "p1", "m": "zafkril", "k": "mirlo", "o": "brenta"}
-    session = {"sessions/project_bh-p1.jsonl":
+    session = {"session:project:bh-p1":
                json.dumps({"_type": "metadata", "last_consolidated": 15}) + "\n"}
     reply = "Da ricontrollare: zafkril (rosmarino), mirlo (salvia), brenta (oleandro)."
     assert all(_ok("compaction_keeps_task_state", _obs(reply, files=session), nonces).values())
     lost = _ok("compaction_keeps_task_state", _obs("Solo brenta.", files=session), nonces)
     assert not lost["early_flags_kept"] and lost["late_flag_kept"]
-    fresh = {"sessions/project_bh-p1.jsonl": json.dumps({"_type": "metadata"}) + "\n"}
+    fresh = {"session:project:bh-p1": json.dumps({"_type": "metadata"}) + "\n"}
     assert not _ok("compaction_keeps_task_state", _obs(reply, files=fresh), nonces)["compacted"]
 
 
