@@ -44,6 +44,10 @@ Give the pages to notebook-editor helpers, grouped by subject (a helper takes a 
 
 Done when: {{ step.done_when }}
 {% endif %}
+{% if step.kind == "check" and personal %}
+
+No machine checks this result: you are the check. Take every number and fact of the result (the document, the table) and compare it with the file in `raw/` or the source it cites. Fix what does not match — yourself, or with `subagent_send` to the helper that wrote it. In the step note say what you compared and what you corrected. With little material read it yourself; with a lot, give it to a helper.
+{% endif %}
 {% endif %}
 {% if covers %}
 

@@ -83,6 +83,7 @@ from jenny.plan.place import PlanPlace, notebook_place, place_from_id, place_of_
 from jenny.plan.store import PlanConflictError, PlanNotFoundError, PlanStore, slot_id
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
+    PLAN_DONE_EVENT,
     PLAN_REMINDER_EVENT,
     PLAN_STEP_EVENT,
     PLAN_TURN_EVENTS,
@@ -1718,7 +1719,7 @@ class PlanDriver:
             for item in lineage_items:
                 if item not in items:
                     items.append(item)
-        root = self.host.notebook_root(plan.notebook)
+        root = self._notebook_root(plan)
         if root is None:
             logger.warning("Plan {}: notebook root missing, {} gap(s) not listed", plan.id, len(items))
             return 0
@@ -2850,7 +2851,8 @@ class PlanDriver:
         if step.kind == "check":
             audit = await asyncio.to_thread(self._run_audit, plan, step)
             if audit is not None:
-                if not audit.findings and not (lost and lost.total):
+                # Un controllo che non ha visto pagine non ha controllato niente.
+                if not audit.findings and not (lost and lost.total) and audit.pages > 0:
                     await self._close_by_machine(plan, step_id, audit)
                     return
                 plan = await self._note_machine(plan, step_id, _machine_view(audit, round_=1))
@@ -2894,7 +2896,7 @@ class PlanDriver:
         sono proprio il lavoro del piano. Un errore qui non ferma l'Approva: la
         base è vuota, e il controllo chiederà anche i difetti di prima.
         """
-        root = self.host.notebook_root(plan.notebook)
+        root = self._notebook_root(plan)
         if root is None:
             return [], []
         try:
@@ -2903,6 +2905,18 @@ class PlanDriver:
             logger.opt(exception=True).warning("Plan {}: audit baseline not computed", plan.id)
             return [], []
 
+    def _notebook_root(self, plan: Plan) -> Path | None:
+        """La cartella del quaderno del piano; ``None`` per un piano della chat personale.
+
+        ``host.notebook_root("")`` non dà ``None``: dà la cartella dei quaderni.
+        Il 04/11/2026 il passo «Controllo i numeri» di un piano personale ha
+        controllato quella, ha trovato 0 pagine e si è chiuso da solo con «tutto a
+        posto», senza che nessuno guardasse le cifre.
+        """
+        if not plan.notebook:
+            return None
+        return self.host.notebook_root(plan.notebook)
+
     def _run_audit(self, plan: Plan, step: Step) -> Audit | None:
         """Il controllo a macchina del quaderno, in un thread; ``None`` se non si può fare.
 
@@ -2910,7 +2924,7 @@ class PlanDriver:
         motivo di chiederlo al modello. ``None`` (quaderno sparito, errore) fa
         aprire il passo come prima, col controllo affidato al modello.
         """
-        root = self.host.notebook_root(plan.notebook)
+        root = self._notebook_root(plan)
         if root is None:
             return None
         try:
@@ -3044,6 +3058,31 @@ class PlanDriver:
         logger.info("Plan {} done", plan.id)
         await self._changed(plan)
         await self._prune()
+        # Un piano finiva in silenzio: il 04/11/2026 l'ultimo passo si è chiuso
+        # da solo e la risposta alla domanda l'utente ha dovuto chiederla.
+        try:
+            await self.bus.publish_inbound(self._done_message(plan))
+        except Exception:  # noqa: BLE001 — il piano è finito comunque
+            logger.opt(exception=True).warning("Plan {}: closing turn not sent", plan.id)
+
+    def _done_message(self, plan: Plan) -> InboundMessage:
+        """Il turno che chiude un piano finito: la risposta all'utente, in chat."""
+        from jenny.utils.prompt_templates import render_template
+
+        steps = [
+            {"n": index, "title": s.title, "mark": _MARKS.get(s.status, "·"),
+             "note": s.note if s.status in ("done", "skipped") else None}
+            for index, s in enumerate(_active_steps(plan), start=1)
+        ]
+        return InboundMessage(
+            channel="system",
+            sender_id="plan",
+            chat_id=f"websocket:{plan.session_key}",
+            content=render_template("agent/plan_done.md", strip=True, title=plan.title,
+                                    steps=steps),
+            session_key_override=plan.session_key,
+            metadata={INJECTED_EVENT_META: PLAN_DONE_EVENT, PLAN_ID_META: plan.id},
+        )
 
     def _step_message(
         self,
@@ -3079,7 +3118,11 @@ class PlanDriver:
                 "title": step.title,
                 "detail": step.detail,
                 "done_when": step.done_when,
+                "kind": step.kind,
             },
+            # Senza quaderno il passo di verifica non ha una macchina dietro
+            # (:meth:`_notebook_root`): la verifica la fa il turno.
+            personal=not plan.notebook,
             # Le voci di copertura che il passo di ricerca deve cercare, con
             # cosa manca: il ``detail`` le può parafrasare, e questa è la lista
             # esatta che la validazione ha legato al passo (prova 2: voci web
@@ -3400,7 +3443,7 @@ class PlanDriver:
         """
         from jenny.runtime.user_text import say
 
-        root = self.host.notebook_root(plan.notebook)
+        root = self._notebook_root(plan)
         if root is None:
             return
         try:

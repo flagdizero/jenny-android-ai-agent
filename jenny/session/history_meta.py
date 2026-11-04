@@ -112,12 +112,21 @@ PLAN_REMINDER_EVENT = "plan_reminder"
 #: I due eventi del piano, per chi deve riconoscere un turno aperto dal driver.
 PLAN_TURN_EVENTS = frozenset({PLAN_STEP_EVENT, PLAN_REMINDER_EVENT})
 
+#: Il turno con cui il driver chiude un piano finito: Jenny risponde in chat alla
+#: domanda da cui il piano è nato. Non è un turno di passo (nessun passo aperto,
+#: niente da contare), ma resta un testo scritto dal codice.
+PLAN_DONE_EVENT = "plan_done"
+
+#: Ogni turno che il driver apre, per chi deve saltarne il testo (gli appunti).
+PLAN_DRIVER_EVENTS = PLAN_TURN_EVENTS | {PLAN_DONE_EVENT}
+
 _INJECTED_EVENTS = frozenset({
     SUBAGENT_RESULT_EVENT,
     GOAL_CONTINUE_EVENT,
     LENGTH_RECOVERY_EVENT,
     PLAN_STEP_EVENT,
     PLAN_REMINDER_EVENT,
+    PLAN_DONE_EVENT,
 })
 
 

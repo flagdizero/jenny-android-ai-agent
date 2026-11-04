@@ -1182,3 +1182,84 @@ async def test_personal_plans_need_the_orchestrator(driver: PlanDriver) -> None:
     text = await propose(driver, "Riordino", _PERSONAL_STEPS, key=PERSONAL_KEY)
     assert text.startswith("Error"), text
     assert driver.store.open_plan_for("personal") is None
+
+
+# ── un piano che risponde ───────────────────────────────────────────────────
+
+_PERSONAL_CHECKED = [
+    {"title": "Scrivo il confronto", "detail": "Un writer scrive la tabella.",
+     "kind": "write", "done_when": "La tabella c'è."},
+    {"title": "Controllo i numeri", "detail": "Ogni numero con la sua fonte.",
+     "kind": "check", "done_when": "Ogni numero ha la sua fonte."},
+]
+
+
+def _injected(bus: FakeBus, event: str) -> list[Any]:
+    return [m for m in bus.inbound if m.metadata.get(INJECTED_EVENT_META) == event]
+
+
+async def test_a_personal_check_is_a_real_turn_not_a_machine_close(
+    workspace: Path, host: FakeHost, bus: FakeBus
+) -> None:
+    """Il 04/11/2026 il controllo di un piano personale ha guardato la cartella dei
+    quaderni, trovato 0 pagine e chiuso il passo con «tutto a posto»."""
+    driver = PlanDriver(PlanStore.for_workspace(workspace), bus, host, personal_plans=True)
+    assert "card" in await propose(driver, "Confronto", _PERSONAL_CHECKED, key=PERSONAL_KEY)
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+    assert "closed" in await driver.step_done(PERSONAL_KEY, "scritta")
+    await driver.on_turn_end(PERSONAL_KEY, {})
+
+    plan = driver.store.load(plan.id)
+    check = plan.steps[-1]
+    assert plan.status == "running" and check.status == "now"
+    assert "machine_check" not in check.extra
+    message = _injected(bus, PLAN_STEP_EVENT)[-1].content
+    assert "you are the check" in message and "`raw/`" in message
+
+
+async def test_a_check_that_saw_no_pages_never_closes_by_itself(
+    workspace: Path, host: FakeHost, bus: FakeBus
+) -> None:
+    from jenny.plan import driver as driver_module
+    from jenny.plan.audit import Audit
+
+    driver = PlanDriver(PlanStore.for_workspace(workspace), bus, host)
+    driver._run_audit = lambda plan, step: Audit(pages=0)  # type: ignore[method-assign]
+    assert "card" in await propose(driver, "Rifare la wiki", STEPS)
+    plan = driver.store.open_plan_for("piante")
+    await driver.approve(plan.id, plan.version, [])
+    for _ in range(len(STEPS) - 1):
+        assert "closed" in await driver.step_done(KEY, "fatto")
+        await driver.on_turn_end(KEY, {})
+    plan = driver.store.load(plan.id)
+    assert plan.status == "running" and plan.steps[-1].status == "now"
+    assert driver_module.PLAN_DONE_EVENT not in {
+        m.metadata.get(INJECTED_EVENT_META) for m in bus.inbound}
+
+
+async def test_a_finished_plan_opens_a_turn_that_answers_the_user(
+    workspace: Path, host: FakeHost, bus: FakeBus
+) -> None:
+    """Un piano finiva in silenzio: la risposta l'utente doveva chiederla."""
+    from jenny.plan.driver import PLAN_ID_META
+    from jenny.session.history_meta import PLAN_DONE_EVENT, is_synthetic_history_row
+
+    driver = PlanDriver(PlanStore.for_workspace(workspace), bus, host, personal_plans=True)
+    assert "card" in await propose(driver, "Riordino", _PERSONAL_STEPS, key=PERSONAL_KEY)
+    plan = driver.store.open_plan_for("personal")
+    await driver.approve(plan.id, plan.version, [])
+    assert not _injected(bus, PLAN_DONE_EVENT)
+    assert "closed" in await driver.step_done(PERSONAL_KEY, "riscritte")
+    await driver.on_turn_end(PERSONAL_KEY, {})
+    await driver.step_skip(PERSONAL_KEY, "in ordine")
+    await driver.on_turn_end(PERSONAL_KEY, {})
+
+    assert driver.store.load(plan.id).status == "done"
+    [done] = _injected(bus, PLAN_DONE_EVENT)
+    assert done.session_key_override == PERSONAL_KEY
+    assert done.metadata[PLAN_ID_META] == plan.id
+    assert "[Plan — done]" in done.content and "answer" in done.content
+    assert "Sistemo acero e pane — riscritte" in done.content
+    # In storia è un testo del codice, non una bolla dell'utente.
+    assert is_synthetic_history_row({"role": "user", INJECTED_EVENT_META: PLAN_DONE_EVENT})
