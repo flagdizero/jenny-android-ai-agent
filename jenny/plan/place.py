@@ -24,6 +24,7 @@ from jenny.board.model import BOARD_DIR
 from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import UNIFIED_SESSION_KEY, is_project_session_key, project_name
 from jenny.utils.wiki_paths import JOURNAL_DIRNAME
+from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 PERSONAL = "personal"
 NOTEBOOK_PREFIX = "nb:"
@@ -93,6 +94,17 @@ class PlanPlace:
     def prefix(self) -> str:
         """Il pezzo di percorso del quaderno nel workspace (vuoto in personale)."""
         return f"{DEFAULT_WIKIS_DIR}/{self.notebook}/" if self.notebook else ""
+
+    @property
+    def chat_id(self) -> str:
+        """La chat della WebUI dove parla il piano.
+
+        In un quaderno è la chiave stessa (``project:<nome>``); la chat personale
+        invece è ``default``, non ``unified:default``: un turno mandato lì
+        finiva in una trascrizione che la casa non mostra (prova del 04/11/2026,
+        le risposte del piano scritte nella sessione e mai viste).
+        """
+        return self.session_key if self.notebook else WEBUI_DEFAULT_CHAT_ID
 
     def shown(self, rel: str) -> str:
         """*rel* (relativo al workspace) come lo mostra la scheda."""

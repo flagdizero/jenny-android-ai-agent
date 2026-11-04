@@ -1258,6 +1258,12 @@ async def test_a_finished_plan_opens_a_turn_that_answers_the_user(
     assert driver.store.load(plan.id).status == "done"
     [done] = _injected(bus, PLAN_DONE_EVENT)
     assert done.session_key_override == PERSONAL_KEY
+    # La chat della casa è ``default``: su ``unified:default`` la risposta
+    # finiva in una trascrizione che nessuno vede (prova del 04/11/2026).
+    assert done.chat_id == "websocket:default"
+    assert {m.chat_id for m in _step_messages(bus)} == {"websocket:default"}
+    # Una risposta sola: i passi non la danno (prima arrivava due volte).
+    assert "Do not answer the user's question in a step" in _step_messages(bus)[-1].content
     assert done.metadata[PLAN_ID_META] == plan.id
     assert "[Plan — done]" in done.content and "answer" in done.content
     assert "Sistemo acero e pane — riscritte" in done.content
