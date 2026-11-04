@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+from pathlib import Path
 from typing import Generator
 
 import pytest
@@ -91,6 +92,25 @@ def _isolate_process_state() -> Generator[None, None, None]:
         registry = getattr(mod, attr)
         registry.clear()
         registry.update(saved_regs.get((mod_name, attr), {}))
+
+
+@pytest.fixture
+def tmp_path(tmp_path: Path) -> Path:
+    """Una cartella dentro quella della prova: il suo genitore e' solo di questa prova.
+
+    Lo stato in SQLite sta nel genitore del workspace (``runtime_root_for``), e
+    molte prove usano ``tmp_path`` stesso come workspace: con la ``tmp_path`` di
+    pytest il genitore era la cartella base del processo, la stessa per tutte le
+    prove. ``_fresh_shared_database`` la svuotava fra una prova e l'altra, ma un
+    salvataggio rimasto in coda dalla prova prima la riscriveva a prova dopo gia'
+    partita: il 04/11/2026, su 3.12, una sessione ``project:piante`` di un'altra
+    prova faceva rispondere a una cancellazione che il quaderno c'era.
+    """
+    # Col nome della prova, come la cartella di pytest: chi cerca il nome del
+    # genitore lo vuole riconoscibile, non una lettera che sta in ogni percorso.
+    nested = tmp_path / tmp_path.name
+    nested.mkdir()
+    return nested
 
 
 @pytest.fixture(autouse=True)
