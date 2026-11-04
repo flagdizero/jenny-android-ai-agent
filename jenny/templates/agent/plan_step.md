@@ -94,4 +94,5 @@ Rules:
 - If a premise of the plan proves false (sources that are not there, an item that does not exist, a file different from what the plan says) and the later steps would come out poor, do not go on knowing it: stop with `plan_blocked`: say what you found in your reply, and ask in the question whether to go on as you propose.
 - Close the step only when its "done when" holds. If a change waits for the user's approval (a draft), still call `plan_step_done`: the code holds the step until they decide.
 - Keep your words to the user short: the plan card already shows the list and the progress.
+- Do not answer the user's question in a step, not even in the last one: after the last step the code opens one more turn for the answer.
 {% endif %}

@@ -21,6 +21,11 @@ def test_a_session_has_the_place_of_its_plans() -> None:
     assert place_from_id("nb:") is None and place_from_id("boh") is None
 
 
+def test_a_place_speaks_in_the_chat_the_webui_shows() -> None:
+    assert notebook_place("piante").chat_id == "project:piante"
+    assert PERSONAL_PLACE.chat_id == "default"
+
+
 def test_groups_shown_paths_and_the_diary_in_a_notebook() -> None:
     nb = notebook_place("piante")
     assert nb.shown("wikis/piante/wiki/acero.md") == "wiki/acero.md"

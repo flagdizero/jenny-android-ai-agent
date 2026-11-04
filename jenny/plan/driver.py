@@ -1686,7 +1686,7 @@ class PlanDriver:
             InboundMessage(
                 channel="system",
                 sender_id="plan",
-                chat_id=f"websocket:{plan.session_key}",
+                chat_id=f"websocket:{place_of(plan).chat_id}",
                 content=content,
                 session_key_override=plan.session_key,
                 metadata={
@@ -2328,7 +2328,7 @@ class PlanDriver:
             InboundMessage(
                 channel="websocket",
                 sender_id="user",
-                chat_id=plan.session_key,
+                chat_id=place_of(plan).chat_id,
                 content=text.strip(),
                 metadata=metadata,
             )
@@ -3077,7 +3077,7 @@ class PlanDriver:
         return InboundMessage(
             channel="system",
             sender_id="plan",
-            chat_id=f"websocket:{plan.session_key}",
+            chat_id=f"websocket:{place_of(plan).chat_id}",
             content=render_template("agent/plan_done.md", strip=True, title=plan.title,
                                     steps=steps),
             session_key_override=plan.session_key,
@@ -3157,9 +3157,9 @@ class PlanDriver:
         return InboundMessage(
             channel="system",
             sender_id="plan",
-            # ``websocket:project:<nome>``: il turno di sistema lo divide in
-            # canale e chat, e la risposta va alla chat del quaderno.
-            chat_id=f"websocket:{plan.session_key}",
+            # ``websocket:<chat>``: il turno di sistema lo divide in canale e
+            # chat, e la risposta va alla chat del posto (:attr:`PlanPlace.chat_id`).
+            chat_id=f"websocket:{place_of(plan).chat_id}",
             content=content,
             session_key_override=plan.session_key,
             metadata={
