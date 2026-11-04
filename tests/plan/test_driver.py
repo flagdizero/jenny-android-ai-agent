@@ -1048,7 +1048,7 @@ def test_the_planning_prompt_sizes_steps_with_numbers_and_the_notebook_tool() ->
     assert "the code runs it" in text and "`expect`" in text
     assert "`covers`" in text
     assert "not a file" in text, "il resoconto del piano e' la nota e il messaggio finale"
-    assert "up to 5 when the items are many" in text
+    assert "one coherent group per researcher, up to 5" in text
     assert "notebook-editor helper with `remove_pages`" in text
     assert "up to two researcher" not in text
     assert "`notebook map`" in text and "`notebook read_many`" in text
