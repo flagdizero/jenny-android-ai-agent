@@ -48,7 +48,7 @@ _SYSTEM_PROMPT_TEMPLATES = [
     "agent/project.md",
     "agent/readonly.md", "agent/project_init.md", "agent/tidy.md",
     "agent/orchestrator.md", "agent/tool_inventory.md",
-    "agent/plan_mode.md", "agent/plan_step.md",
+    "agent/plan_mode.md", "agent/plan_step.md", "agent/plan_done.md",
     "agent/_snippets/untrusted_content.md",
     "agent/types/researcher.md", "agent/types/writer.md", "agent/types/coder.md",
     "agent/types/analyst.md", "agent/types/sysadmin.md", "agent/types/operator.md",

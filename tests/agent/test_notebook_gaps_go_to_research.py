@@ -262,3 +262,35 @@ def test_the_editor_is_shown_the_reader_shape_with_linked_sources() -> None:
     assert "translated into the page's language" in role
     # L'esempio resta in inglese (la regola di AGENTS.md): la lingua la dice il testo.
     assert "written in the notebook's language" in role
+
+
+def test_the_writer_opens_with_the_answer_and_one_value_per_cell() -> None:
+    """Il 04/11/2026 il documento di un confronto apriva con la tabella: il verdetto
+    l'utente ha dovuto chiederlo."""
+    role = _role("writer")
+    assert "Open with the answer." in role
+    assert "if you need X, take A" in role
+    assert "A table holds one value per cell." in role
+    assert "the values are not comparable" in role
+
+
+def test_a_price_is_the_reference_price_not_an_offer() -> None:
+    """Il POCO stava sotto i 300 € solo da un venditore del marketplace, ed è finito in rosa."""
+    role = _role("researcher")
+    assert "A price is the reference price" in role
+    assert "never as the price" in role
+    assert "judged on the reference price" in role
+    for shop in ("Amazon", "MediaWorld", "Unieuro"):
+        assert shop not in role
+
+
+def test_the_plan_quotes_the_question_and_ends_with_an_answer() -> None:
+    from jenny.utils.prompt_templates import render_template
+
+    personal = " ".join(render_template("agent/plan_mode.md", notebook=False, where="x").split())
+    assert "quotes the user's question" in personal
+    assert "judged on the reference price" in personal
+    assert "answer the user's question in the chat" in personal
+    assert "every number compared with the file or source" in personal
+    notebook = " ".join(render_template("agent/plan_mode.md", notebook=True, where="x").split())
+    assert "the answer you give in the chat" in notebook

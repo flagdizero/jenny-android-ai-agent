@@ -324,6 +324,32 @@ async def test_propose_approve_and_three_steps_to_done(workspace: Path) -> None:
     assert len(steps_seen) == 4
 
 
+async def test_a_finished_plan_ends_with_an_answer_turn_and_no_user_bubble(
+    workspace: Path,
+) -> None:
+    """Il 04/11/2026 un piano è finito in silenzio: la risposta l'utente ha dovuto chiederla."""
+    from jenny.session.history_meta import PLAN_DONE_EVENT
+    from jenny.webui.transcript import _session_user_event
+
+    script = Script(workspace)
+    loop, driver = _loop(workspace, script)
+    task = await _run(loop)
+    try:
+        await loop.bus.publish_inbound(_user("Rifai la wiki", plan_mode=True, readonly=True))
+        await wait_until(lambda: driver.store.open_plan_for("piante") is not None, timeout=5)
+        await wait_until(lambda: KEY not in loop._pending_queues, timeout=5)
+        plan = driver.store.open_plan_for("piante")
+        await driver.approve(plan.id, plan.version, [])
+        await wait_until(lambda: any("[Plan — done]" in p for p in script.prompts), timeout=10)
+        await wait_until(lambda: KEY not in loop._pending_queues, timeout=5)
+    finally:
+        await _stop(loop, task)
+    session = loop.sessions.get_or_create(KEY)
+    row = next(m for m in session.messages if m.get(INJECTED_EVENT_META) == PLAN_DONE_EVENT)
+    assert row["role"] == "user" and _session_user_event(KEY, row) is None
+    assert sum("[Plan — done]" in p for p in script.prompts) == 1
+
+
 async def test_a_stalled_step_is_reminded_once_then_blocked(workspace: Path) -> None:
     script = Script(workspace, close_steps=False)
     loop, driver = _loop(workspace, script)

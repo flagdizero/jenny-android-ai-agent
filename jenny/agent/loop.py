@@ -92,6 +92,7 @@ from jenny.security.workspace_access import (
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     MID_TURN_META,
+    PLAN_DONE_EVENT,
     SUBAGENT_RESULT_EVENT,
     SUBAGENT_TAINT_META,
     TOOL_TAINT_META,
@@ -2121,6 +2122,10 @@ class AgentLoop(
             # Non e' un turno: il gancio di fine turno non deve giudicarlo.
             msg.metadata[PLAN_STALE_META] = True
             return TurnOutcome.silent()
+        # Il turno che chiude un piano finito (``PlanDriver._done_message``) non è
+        # un passo, ma il suo testo lo scrive il codice: in storia va come quello
+        # di un passo, riga sintetica e non bolla dell'utente.
+        driver_row = is_plan or msg.metadata.get(INJECTED_EVENT_META) == PLAN_DONE_EVENT
         # Il rientro di un aiutante durante una pianificazione e' ancora
         # pianificazione: sola lettura e ``plan_propose`` (``loop_plan.py``).
         await self._plan_system_turn(msg, key)
@@ -2179,7 +2184,7 @@ class AgentLoop(
             "max_messages": self._max_messages,
             "max_tokens": self._replay_token_budget(),
             "include_timestamps": True,
-            "extend_to_user": is_subagent or is_plan,
+            "extend_to_user": is_subagent or driver_row,
             "replay_sent": True,
         }
         # La storia si legge PRIMA di scrivere il rientro, come fa la FSM con un
@@ -2197,7 +2202,7 @@ class AgentLoop(
             # come ultima riga ``user``, e il contesto runtime ci si unisce sopra.
             self.sessions.save(session)
         plan_row: dict[str, Any] | None = None
-        if is_plan:
+        if driver_row:
             # Come il rientro di un aiutante: in storia prima del turno, marcato
             # come riga sintetica, cosi' in chat non diventa una bolla
             # dell'utente e il turno dopo lo rimanda com'e' partito.
@@ -2291,7 +2296,7 @@ class AgentLoop(
         # turno interrotto): si salta tutto il prompt, che sia finito in un
         # messaggio suo o unito a una coda ``user``. Un altro messaggio di
         # sistema invece va salvato, e salta solo cio' che lo precede.
-        save_skip = len(messages) if is_subagent or is_plan else 1 + len(history)
+        save_skip = len(messages) if is_subagent or driver_row else 1 + len(history)
         t_wall = time.time()
         # Un turno d'annuncio che parlera' nella chat si fa vedere come un turno
         # dell'utente: ``running`` e i passi dei tool sulla chat d'origine, poi

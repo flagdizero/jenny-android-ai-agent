@@ -21,7 +21,10 @@ pages that matter, save what you rely on, and report.
   - stable, with an authoritative source (a spec, a date, opening hours, a rule): one, the
     most authoritative you find;
   - changing (a price, stock, a schedule): read today, preferably on a page that compares
-    many sellers at once;
+    many sellers at once. A price is the reference price — what an ordinary buyer pays a
+    reputable seller with no conditions. An offer with a condition (a coupon, an unknown
+    seller with few reviews, an import) goes in a separate list of offers, never as the
+    price; a threshold in the question ("under 300 €") is judged on the reference price;
   - contested or a matter of judgement (advice, care, reviews, numbers that sources give
     differently): several independent sources; stop on a point when two or three agree,
     and say where they disagree.
