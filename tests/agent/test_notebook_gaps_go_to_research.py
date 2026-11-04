@@ -186,7 +186,7 @@ def test_the_plan_briefs_researchers_with_a_depth_and_a_budget() -> None:
 
     text = " ".join(render_template("agent/plan_mode.md", notebook=True, where="x").split())
     assert "no cap on searches or pages" not in text
-    assert "how deep to go" in text and "`steps` in `spawn`" in text
+    assert "how deep to go" in text and "in `spawn`, `steps`" in text
 
 
 @pytest.mark.parametrize("name", ["writer", "notebook-editor"])
@@ -294,3 +294,34 @@ def test_the_plan_quotes_the_question_and_ends_with_an_answer() -> None:
     assert "every number compared with the file or source" in personal
     notebook = " ".join(render_template("agent/plan_mode.md", notebook=True, where="x").split())
     assert "the answer you give in the chat" in notebook
+
+
+def test_the_plan_uses_as_few_researchers_as_the_job_needs() -> None:
+    """Il 04/11/2026 tre telefoni hanno avuto 5 researcher e 62 pagine: due per la rosa
+    «da angoli diversi», poi uno per modello. Era la ricetta dei quaderni sulle piante."""
+    from jenny.utils.prompt_templates import render_template
+
+    for notebook in (True, False):
+        text = " ".join(render_template("agent/plan_mode.md", notebook=notebook, where="x").split())
+        assert "Use as few researchers as the job needs." in text
+        assert "a comparison is one research" in text
+        assert "Choosing a shortlist and finding its data are one research" in text
+        assert "Never two researchers on the same question" in text
+        assert "one budget of pages for all its researchers together" in text
+        assert "or up to 5 when the items are many" not in text
+
+
+def test_verbatim_sources_only_in_a_notebook() -> None:
+    """Gli estratti parola per parola si pagano come uscita: servono all'archivio di un
+    quaderno, non a un confronto nella chat personale."""
+    from jenny.utils.prompt_templates import render_template
+
+    notebook = " ".join(render_template("agent/plan_mode.md", notebook=True, where="x").split())
+    personal = " ".join(render_template("agent/plan_mode.md", notebook=False, where="x").split())
+    assert "saves what it finds verbatim" in notebook
+    assert "saves what it finds verbatim" not in personal
+    assert "saves notes, not passages" in personal
+    role = _role("researcher")
+    assert "Outside a notebook, save notes, not passages" in role
+    assert "copied **verbatim**, never your summary" in role  # i quaderni restano com'erano
+    assert "A budget of pages is a ceiling, not a goal" in role

@@ -12,7 +12,9 @@ pages that matter, save what you rely on, and report.
   a budget of pages: match it. A quick comparison is not a reference page, and neither is a
   question about health or money. When the task gives no depth, read as a careful person
   would for that question — not as much as you can. Every step resends everything you have
-  read so far, so each extra page costs more than the last.
+  read so far, so each extra page costs more than the last. **A budget of pages is a
+  ceiling, not a goal**: when you reach it, stop and hand over what you have and what is
+  still missing.
 - **Before searching, list the facts you need and the page that most likely holds many of
   them at once**: a spec sheet, a price comparator, a full review, an official page, a
   well-sourced guide. One page that answers five facts beats five pages that answer one.
@@ -49,9 +51,12 @@ pages that matter, save what you rely on, and report.
 - **Stop when every fact has a source of the right kind**, or when the budget runs out:
   then hand over what you have and what is still missing, with the queries you tried. If
   you run out of steps you can be continued, and you keep what you have.
-- When the material is long, write it with `write_file` into the output directory named
-  in the Workspace section below — never into the workspace root — and reference that
-  path in your answer instead of pasting everything back.
+- **Outside a notebook, save notes, not passages**: for each fact the value, the URL and the
+  date you read it, and the source's own words only for a fact that sources give
+  differently. The whole text of every page you read is already in its `savedTo` file.
+  Write the notes with `write_file` into the output directory named in the Workspace
+  section below — never into the workspace root — and reference that path in your answer
+  instead of pasting everything back.
 - **Inside a notebook** (the Workspace section says you are working inside one project),
   there is no output directory: what you read is the notebook's material, and it goes where
   that notebook keeps outside material — its `AGENTS.md` and folders say; in the usual layout,
