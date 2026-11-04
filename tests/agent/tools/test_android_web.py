@@ -887,6 +887,38 @@ class TestFetchReadsDirectlyFirst:
         assert out["extractor"] == "webview"
 
 
+class TestFetchReturnsTheArticle:
+    """``web_fetch`` passa il corpo della pagina, entro un tetto che il modello non alza."""
+
+    async def _fetch(self, page: str, **kwargs):
+        tool = AndroidWebFetchTool(android_context=object(), timeout=5, max_chars=50000)
+        with patch.object(android_web, "_direct_fetch",
+                          return_value=(page, "https://example.com/a")):
+            return await tool.execute("https://example.com/a", **kwargs)
+
+    async def test_the_menu_stays_out(self, monkeypatch):
+        _allow_public(monkeypatch)
+        page = _LONG_ARTICLE.replace(
+            "<body>", '<body><nav><a href="/tv">Televisori in offerta</a></nav>')
+        out = json.loads(await self._fetch(page))
+        assert "luce filtrata" in out["text"]
+        assert "Televisori" not in out["text"]
+
+    async def test_max_chars_cannot_raise_the_ceiling(self, monkeypatch):
+        _allow_public(monkeypatch)
+        page = "<html><body><article>" + "<p>" + "parola " * 9000 + "</p></article></body></html>"
+        out = json.loads(await self._fetch(page, maxChars=60000))
+        assert out["truncated"] is True
+        banner = len(android_web._UNTRUSTED_BANNER) + 2
+        assert len(out["text"]) == banner + android_web._FETCH_CEILING
+
+    async def test_a_failing_extractor_falls_back_to_the_whole_page(self, monkeypatch):
+        _allow_public(monkeypatch)
+        monkeypatch.setattr(android_web.page_text, "extract", Mock(side_effect=RecursionError))
+        out = json.loads(await self._fetch(_LONG_ARTICLE))
+        assert "luce filtrata" in out["text"]
+
+
 _KOTLIN_TIMEOUT = json.dumps({"error": "WebView timeout after 30s for https://www.bing.com/search?q=x"})
 
 

@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 from loguru import logger
 
+from jenny.agent.tools import page_text
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
 from jenny.config.tool_schemas import AndroidWebBrowserConfig
@@ -162,6 +163,21 @@ def _to_markdown(html_content: str) -> str:
     text = re.sub(r"</(p|div|section|article)>", "\n\n", text, flags=re.I)
     text = re.sub(r"<(br|hr)\s*/?>", "\n", text, flags=re.I)
     return _normalize(_strip_tags(text))
+
+
+# Il tetto di una pagina, sopra quello di ``config.json``: i config esistenti
+# hanno ``maxChars: 50000`` scritto per esteso, e un default cambiato non li tocca.
+_FETCH_CEILING = 20_000
+
+
+def _article_or_page(html_content: str, base_url: str) -> str:
+    """Il corpo della pagina (``page_text``); la conversione intera se non lo trova."""
+    try:
+        text = page_text.extract(html_content, base_url)
+    except Exception:  # un tampone non deve rompere la lettura
+        logger.exception("page_text failed for {}", base_url)
+        text = ""
+    return text or _to_markdown(html_content)
 
 
 def _format_results(query: str, items: list[dict[str, Any]], n: int) -> str:
@@ -611,7 +627,8 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
         "Tries a plain request first and renders the page in the Android WebView when it "
         "needs scripting; a near-empty page or a cookie wall is read again in a browser "
         "session by itself. "
-        "Output is capped at maxChars (default 50 000)."
+        "Returns the main text of the page (the article, without menus and footers) and "
+        "the links in it. Output is capped at 20 000 characters; maxChars can only lower it."
     )
 
     @classmethod
@@ -656,7 +673,10 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
     ) -> Any:
         url = url.strip(" \t\r\n`\"'")
         extract_mode = kwargs.pop("extractMode", extract_mode)
-        max_chars = int(kwargs.pop("maxChars", max_chars) or self.max_chars)
+        # ``maxChars`` può solo abbassare il tetto: nella ricerca del 04/11/2026 il
+        # modello chiedeva da sé 60 000 caratteri a pagina.
+        requested = int(kwargs.pop("maxChars", max_chars) or self.max_chars)
+        max_chars = min(requested, self.max_chars, _FETCH_CEILING)
 
         from jenny.security.network import validate_url_target_async
 
@@ -742,7 +762,7 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
         try:
             source = "webview" if direct is None else "direct"
             if extract_mode == "markdown":
-                text = _to_markdown(html_content)
+                text = _article_or_page(html_content, final_url)
                 extractor = source
             else:
                 text = _normalize(_strip_tags(html_content))
