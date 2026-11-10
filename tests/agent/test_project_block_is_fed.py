@@ -187,7 +187,7 @@ def test_every_variable_the_two_templates_declare_is_fed(tmp_path, monkeypatch) 
     """
     project = _wiki(tmp_path)
     context_fed = _fed_vars(monkeypatch, "jenny.agent.context")
-    subagent_fed = _fed_vars(monkeypatch, "jenny.agent.subagent")
+    subagent_fed = _fed_vars(monkeypatch, "jenny.agent.subagent_prompt")
 
     ContextBuilder(tmp_path).build_system_prompt(
         workspace=project, session_key="project:casa"

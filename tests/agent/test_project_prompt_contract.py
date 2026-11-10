@@ -482,7 +482,7 @@ def test_the_two_callers_pass_the_flag_explicitly() -> None:
     # Il turno vero lo provano dal vivo, nei due versi,
     # ``test_readonly_prompt_contract::test_read_only_removes_the_capture_rule``
     # e ``::test_a_writable_turn_has_the_capture_rule_and_no_read_only_block``.
-    for module, expected in (("subagent.py", "capture=False"),):
+    for module, expected in (("subagent_prompt.py", "capture=False"),):
         src = (SRC / "agent" / module).read_text(encoding="utf-8")
         assert expected in src, f"{module}: manca {expected}"
 

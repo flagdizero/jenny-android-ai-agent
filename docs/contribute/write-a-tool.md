@@ -156,7 +156,7 @@ So a tool with `_scopes = {"core", "subagent"}` — the common case for the writ
 
 `Tool._scopes` defaults to `{"core"}` (`jenny/agent/tools/base.py`), which with the shipped default config means **no agent at all** — so leaving it unset is almost never what you want.
 
-Subagents are blind to the main conversation history and get their own scoped `ToolsConfig` — the scoped load is `loader.load(ctx, registry, scope="subagent", allow=…)` in `jenny/agent/subagent.py`. Keep that in mind if your tool's `enabled()`/`create()` assumes the full config shape.
+Subagents are blind to the main conversation history and get their own scoped `ToolsConfig` — the scoped load is `loader.load(ctx, registry, scope="subagent", allow=…)` in `jenny/agent/subagent_toolbox.py`. Keep that in mind if your tool's `enabled()`/`create()` assumes the full config shape.
 
 ## The config toggle pattern
 

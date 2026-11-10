@@ -672,7 +672,7 @@ class ContextBuilder:
                     plan_running=plan_running_in_session(session_key),
                     # La politica di cattura vale per **questo** turno, quello in
                     # cui c'e' un utente che dice qualcosa. Un subagent riceve lo
-                    # stesso file con ``capture=False`` (v. ``agent/subagent.py``):
+                    # stesso file con ``capture=False`` (v. ``agent/subagent_prompt.py``):
                     # non ha un utente, e la sua materia prima e' il prompt che
                     # gli ha scritto l'agente principale. Se catturasse, nel
                     # diario finirebbe il suo ragionamento intermedio — e il
