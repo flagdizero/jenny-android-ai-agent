@@ -13,7 +13,9 @@ from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
 from jenny.board.cron_link import last_message_text, link_alive, record_result, scope_of
 from jenny.bus.events import (
+    FLOATING_CHANNEL,
     WEBSOCKET_CHANNEL,
+    WEBUI_DEFAULT_CHAT_ID,
     WEBUI_MESSAGE_SOURCE_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
     InboundMessage,
@@ -144,6 +146,15 @@ def origin_delivery_context(job: CronJob) -> tuple[str, str, dict[str, Any]]:
     payload = job.payload
     if not payload.origin_channel or not payload.origin_chat_id:
         raise ValueError(f"cron job {job.id} is missing origin delivery context")
+    if payload.origin_channel == FLOATING_CHANNEL:
+        # Chiesto alla mascotte flottante. Il suo fumetto si disegna solo nella
+        # finestra aperta, e quando il job scatta è chiusa da un pezzo: la
+        # consegna cadeva nel vuoto, e la copia nella chat non suonava perché
+        # marcata come eco di un altro canale. Il fumetto è una vista della chat
+        # personale: il promemoria arriva lì, come uno chiesto dall'app. Deciso
+        # alla consegna e non alla creazione, così vale anche per i job già
+        # nello store.
+        return WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID, {}
     return payload.origin_channel, payload.origin_chat_id, dict(payload.origin_metadata or {})
 
 
