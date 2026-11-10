@@ -103,7 +103,7 @@ async def test_a_started_personal_plan_refuses_a_second_one_by_its_place(
 
 
 def test_the_rollback_notes_name_what_went_back() -> None:
-    from jenny.plan.driver import _rollback_note, _undo_note
+    from jenny.plan.driver_rollback import _rollback_note, _undo_note
     from jenny.plan.model import Plan
 
     def plan(place: str, notebook: str) -> Plan:

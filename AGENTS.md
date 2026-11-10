@@ -82,7 +82,7 @@ Messages flow through an async `MessageBus` (`jenny/bus/queue.py`) that decouple
 
 ### Decomposed subsystems (mixins/leaf modules)
 
-Large classes are split into focused mixins/leaf modules composed via MRO (behavior-identical): `AgentLoop` ← `turn_states`/`turn_persistence`/`loop_provider`/`loop_tasks`/`loop_plan` (+ `turn_types`); `AgentRunner` ← `request_execution`/`tool_execution` (+ `context_governor`, `usage_accounting`, `history_repair`, `tool_error_policy`); `OpenAICompatProvider` ← `openai_compat_parsing` (+ `openai_compat_helpers`); `AnthropicProvider` ← `anthropic_conversion`; `WebSocketChannel` ← `ws_sender` (+ `ws_parsing`); `transcript` → `transcript_store`/`transcript_recorder`/`transcript_replay`/`transcript_markdown`/`transcript_tool_events`; `ws_http` → `*_routes` families.
+Large classes are split into focused mixins/leaf modules composed via MRO (behavior-identical): `AgentLoop` ← `turn_states`/`turn_persistence`/`loop_provider`/`loop_tasks`/`loop_plan` (+ `turn_types`); `PlanDriver` ← `driver_drafting`/`driver_held`/`driver_drafts`/`driver_check`/`driver_rollback` (+ `driver_common`); `AgentRunner` ← `request_execution`/`tool_execution` (+ `context_governor`, `usage_accounting`, `history_repair`, `tool_error_policy`); `OpenAICompatProvider` ← `openai_compat_parsing` (+ `openai_compat_helpers`); `AnthropicProvider` ← `anthropic_conversion`; `WebSocketChannel` ← `ws_sender` (+ `ws_parsing`); `transcript` → `transcript_store`/`transcript_recorder`/`transcript_replay`/`transcript_markdown`/`transcript_tool_events`; `ws_http` → `*_routes` families.
 
 ### Config & security
 
