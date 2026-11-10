@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from loguru import logger
 
+from jenny.agent.tools.result import is_error_text
 from jenny.session.history_meta import INJECTED_EVENT_META
 from jenny.session.keys import SUBAGENT_SESSION_PREFIX, subagent_session_key
 from jenny.utils.helpers import content_text, merge_message_content
@@ -532,7 +533,7 @@ def _written_items(history: list[dict[str, Any]]) -> tuple[list[str], list[str],
         for m in history
         if m.get("role") == "tool"
         and isinstance(m.get("content"), str)
-        and m["content"].lstrip().startswith("Error")
+        and is_error_text(m["content"].lstrip())
     }
     files: list[str] = []
     removed: list[str] = []

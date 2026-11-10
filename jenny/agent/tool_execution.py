@@ -26,7 +26,7 @@ from jenny.agent.progress_events import (
     on_progress_accepts_file_edit_events,
 )
 from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
-from jenny.agent.tools.result import ToolResult
+from jenny.agent.tools.result import ToolResult, is_error_text, render_for_model
 from jenny.config.runtime_env import tool_timeout_s
 from jenny.providers.base import ToolCallRequest
 from jenny.security.subagent_policy import (
@@ -629,16 +629,9 @@ class ToolExecutionMixin:
         # strutturato verrebbe reso): senza srotolamento il dataclass grezzo
         # finirebbe nella history e json.dumps fallirebbe.
         if isinstance(result, ToolResult):
-            rendered = result.render()
-            if not result.ok:
-                msg = rendered if isinstance(rendered, str) else (
-                    result.error.message if result.error else "tool failed"
-                )
-                result = msg if msg.startswith("Error") else f"Error: {msg}"
-            else:
-                result = rendered
+            result = render_for_model(result)
 
-        if isinstance(result, str) and result.startswith("Error"):
+        if is_error_text(result):
             if file_edit_trackers and progress_callback is not None:
                 await invoke_file_edit_progress(
                     progress_callback,
