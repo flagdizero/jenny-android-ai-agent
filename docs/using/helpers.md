@@ -2,7 +2,7 @@
 
 Jenny hands most real work to **helpers**, smaller copies of herself she calls *mini-mes*: one researches, one writes an app, one edits a notebook. While a helper works, the chat stays free for you. This page covers what you see of a helper in the home's chat, and the three things you can do with one: stop it, put back what it changed, and let it continue after an interruption.
 
-Why Jenny delegates at all, the kinds of helper and what each may touch: [Scheduling and proactivity → Subagents](scheduling.md#subagents-spawn).
+Why Jenny delegates at all, the kinds of helper and what each may touch: [Scheduling and proactivity → Helpers](scheduling.md#helpers-spawn).
 
 ## What a helper looks like
 
@@ -73,6 +73,6 @@ Any other failure offers **Get her back up**, which starts the job again from th
 
 ## See also
 
-- [Scheduling and proactivity → Subagents](scheduling.md#subagents-spawn): kinds of helper, drafts waiting for approval, steering from the workshop.
+- [Scheduling and proactivity → Helpers](scheduling.md#helpers-spawn): kinds of helper, drafts waiting for approval, steering from the workshop.
 - [Plans](plans.md): helpers working one step at a time, with every file they write noted so the plan can go back.
 - [Security model](../internals/security-model.md#subagents-and-untrusted-content): what a helper that read the web may and may not change.

@@ -15,7 +15,7 @@
     "attach": "Attach",
     "send": "Send",
     "wsError": "WebSocket not connected. Waiting for reconnection...",
-    "agentRunning": "Agent running",
+    "agentRunning": "Jenny is working",
     "copy": "Copy",
     "copied": "Copied!",
     "copyFailed": "Copy failed",
@@ -220,7 +220,7 @@
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Reasoning Effort",
     "mainReasoningEffort": "Jenny's reasoning",
-    "mainReasoningEffortSame": "Same as helpers",
+    "mainReasoningEffortSame": "Same as the mini-mes",
     "addProvider": "Add provider",
     "noProviders": "No providers configured.",
     "edit": "Edit",
@@ -381,7 +381,7 @@
       },
       "keepAwakeCost": {
         "off": "Best battery life, but scheduled work and reminders can slip by hours.",
-        "turns": "Wakes the processor for a turn, a cron job or an SSH command, then releases it: costs nothing at rest.",
+        "turns": "Wakes the processor for a turn, a reminder, an automation or an SSH command, then releases it: costs nothing at rest.",
         "always": "Nothing ever slips, but it drains battery constantly: it makes sense for a phone on charge."
       },
       "keepAwakeHint": "The exemption tells Android not to throttle Jenny; this choice decides whether Jenny keeps the processor awake herself. With the screen off the CPU suspends and timers stop firing.",
@@ -522,12 +522,12 @@
     "firstModelPlaceholder": "e.g. deepseek-v4.1-flash",
     "firstModelLater": "You'll pick the model when you switch to this brand.",
     "baseUrlInvalid": "That address is not a web address: it must start with http:// or https://.",
-    "firstModelHint": "A brand with no working model is not a brand that exists. You change it later from the house.",
+    "firstModelHint": "A brand with no working model is not a brand that exists. You change it later from the home.",
     "firstModelRequired": "To use it now, the first model is needed.",
     "useNow": "Use it now",
     "providerSavedAndActive": "Saved, and it answers now",
     "providerSavedNotActive": "Brand saved, but not activated: {error}",
-    "updatesLiveInHome": "Checking for and installing updates happens in the house, under «Updates».",
+    "updatesLiveInHome": "Checking for and installing updates happens in the home, under «Updates».",
     "addProviderHint": "Name, format, endpoint, key and the first model. A brand without a working model is not a brand you have.",
     "answersNow": "answers",
     "contextWindow": "Context window"
@@ -594,7 +594,7 @@
     "folderEmpty": "This folder is empty",
     "fileHelp": {
       "open": "Open in the editor anyway",
-      "agents": "The working conventions of this workspace: project preferences and the ways of doing things that keep coming back. Sections show up as you agree them with Jenny; a heading with nothing under it does not belong here.\n\nNot here: facts about you (USER.md), personality and behaviour rules (SOUL.md), project context (memory/MEMORY.md), procedures with concrete steps and output formats (Skills, in the Apps section).",
+      "agents": "The working conventions of this workspace: project preferences and the ways of doing things that keep coming back. Sections show up as you agree them with Jenny; a heading with nothing under it does not belong here.\n\nNot here: facts about you (USER.md), personality and behaviour rules (SOUL.md), project context (memory/MEMORY.md), procedures with concrete steps and output formats (Skills, in Settings → Workshop → Hands).",
       "user": "What Jenny knows about you: identity, language, communication style, habits and interests. It fills in as she learns, so there is nothing to pre-write.\n\nNot here: project context (memory/MEMORY.md), behaviour rules (SOUL.md), repeatable procedures (Skills). Nor the time, the timezone or where you are: the runtime measures those on its own every turn, while a copy written here has nobody to refresh it and is out of date the moment it is saved.",
       "soul": "Who Jenny is and how she behaves: her character, the way she talks, what she does and what she will never do. Plus the standing rules you have given her — how to address you, what to steer clear of, where to tread carefully.\n\nDream, the consolidation pass that runs after conversations, is what maintains it: a correction you make in passing ends up here. You can read it and fix it, but you rarely need to write here by hand.\n\nNot here: facts about you (USER.md), working conventions (AGENTS.md), repeatable procedures (Skills). Nor how the app itself behaves: what a tool accepts, what the sandbox refuses, where a limit sits — that is the same on every install, and the system prompt already tells her.",
       "memory": "Long-term memory: what has to survive from one session to the next — project context, useful facts, notes worth keeping.\n\nDream, the consolidation pass that runs after conversations, is what maintains it. You can read it and correct it, but you rarely need to write here by hand.\n\nNot here: facts about you (USER.md), working conventions (AGENTS.md), repeatable procedures (Skills)."
@@ -606,7 +606,8 @@
     "deleteProjectBusy": "I'm still working in “{name}”: delete it once I've finished.",
     "deletedProject": "Notebook “{name}” deleted, conversation included",
     "nameTaken": "Something already has this name: pick another.",
-    "changedOnDisk": "The file changed since you opened it: nothing was saved. Close the editor and reopen it to see how it is now."
+    "changedOnDisk": "The file changed since you opened it: nothing was saved. Close the editor and reopen it to see how it is now.",
+    "planRunning": "A plan is working on this notebook: wait for it to finish, or stop it from the home."
   },
   "launcher": {
     "kindSkill": "Skill",
@@ -758,7 +759,7 @@
   },
   "cron": {
     "asOf": "As of {time}",
-    "empty": "Nothing scheduled.",
+    "empty": "No reminders and no automations.",
     "notStarted": "Scheduling has not started yet: this happens during first-time setup.",
     "failed": "Cannot read the scheduling status.",
     "unit": {
@@ -810,7 +811,7 @@
       "noNext": "no next run",
       "runs": "Recent runs",
       "noRuns": "No runs recorded.",
-      "text": "Reminder text",
+      "text": "What it has to do",
       "paused": "paused",
       "pausedSince": "Paused since {when}: it does not run until you resume it.",
       "inNotebook": "It lives in the notebook {place}: you find it on its board too.",
@@ -901,7 +902,7 @@
     "createFailed": "Could not create: {error}",
     "createRejected": "I could not create “{name}”: either it already exists, or a folder with that name is in the way and is not a notebook.",
     "createSeedTooLong": "The intro line is too long: shorten it and try again.",
-    "createWikiOff": "Wikis are switched off in config.json (wiki.enabled), and a notebook is a wiki: turn them back on there and try again.",
+    "createWikiOff": "Notebooks are switched off in config.json (wiki.enabled): turn them back on there and try again.",
     "createInternal": "Creation failed on a gateway error. Try again.",
     "created": "Notebook “{name}” created",
     "askAbout": "Ask something about {name}...",
@@ -1417,7 +1418,7 @@
       "rulesSaved": "Saved",
       "rulesFailed": "I could not save what you wrote."
     },
-    "backHome": "Back to the house",
+    "backHome": "Back home",
     "who": {
       "none": "No notebooks yet.",
       "loadFailed": "I could not read the list: what you see may be incomplete.",
@@ -1618,8 +1619,8 @@
         "reminder_due": "It's time: {text}.",
         "app_event": "{title}: {app} is {state}.",
         "other": "Something changed on the board.",
-        "micro_kept": "{title}: the micro app {app} is in the drawer and runs on its own.",
-        "micro_fixed": "{title}: I fixed the micro app {app}.",
+        "micro_kept": "{title}: the mini app {app} is in the drawer and runs on its own.",
+        "micro_fixed": "{title}: I fixed the mini app {app}.",
         "cron_result": "{title}: {app} has something to tell you.",
         "cron_result_notebook": "{app} has something to tell you."
       }
@@ -1758,7 +1759,7 @@
         "photo": "Photo",
         "other": "Other",
         "micro": "App",
-        "cron": "Cron"
+        "cron": "Automation"
       },
       "addFab": "Add to the drawer"
     },
@@ -1791,7 +1792,7 @@
       "costs": "Jenny does it (uses the model)",
       "last": "Last result ({when}): {text}",
       "quiet": "Last run {when}: nothing to tell you.",
-      "changePrompt": "In the {card} drawer, the cron «{name}»: I'd like ",
+      "changePrompt": "In the {card} drawer, the automation «{name}»: I'd like ",
       "prompt": "In the {card} drawer, every ",
       "removeConfirm": "Remove «{name}»? Jenny stops doing it.",
       "changeNotebookPrompt": "In the automations of the whole notebook, «{name}»: I'd like "
@@ -1908,7 +1909,7 @@
     },
     "wiki": {
       "integrated": "✓ in the wiki",
-      "pending": "waiting for the wiki"
+      "pending": "to be worked into the notebook"
     }
   },
   "place": {

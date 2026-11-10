@@ -15,7 +15,7 @@
     "attach": "Allega",
     "send": "Manda",
     "wsError": "WebSocket non connesso. In attesa di riconnessione...",
-    "agentRunning": "Agent in esecuzione",
+    "agentRunning": "Jenny sta lavorando",
     "copy": "Copia",
     "copied": "Copiato!",
     "copyFailed": "Copia non riuscita",
@@ -220,7 +220,7 @@
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Sforzo di ragionamento",
     "mainReasoningEffort": "Ragionamento di Jenny",
-    "mainReasoningEffortSame": "Come gli aiutanti",
+    "mainReasoningEffortSame": "Come le mini-me",
     "addProvider": "Aggiungi provider",
     "noProviders": "Nessun provider configurato.",
     "edit": "Modifica",
@@ -381,7 +381,7 @@
       },
       "keepAwakeCost": {
         "off": "Batteria al massimo, ma lavori programmati e promemoria possono slittare di ore.",
-        "turns": "Sveglia il processore per un turno, un cron o un comando SSH, poi lo rilascia: a riposo non costa niente.",
+        "turns": "Sveglia il processore per un turno, un promemoria, un'automazione o un comando SSH, poi lo rilascia: a riposo non costa niente.",
         "always": "Niente ritardi, ma consuma batteria di continuo: ha senso per un telefono in carica."
       },
       "keepAwakeHint": "L'esenzione dice ad Android di non rallentare Jenny; questa scelta decide se Jenny tiene sveglio il processore da sé. A schermo spento la CPU si sospende e i timer non scattano.",
@@ -594,7 +594,7 @@
     "folderEmpty": "Questa cartella è vuota",
     "fileHelp": {
       "open": "Apri comunque nell'editor",
-      "agents": "Le convenzioni di lavoro di questo workspace: preferenze di progetto e modi di procedere che si ripetono. Le sezioni compaiono man mano che le concordi con Jenny; un titolo senza niente sotto non ci sta bene.\n\nNon qui: i fatti su di te (USER.md), il carattere e le regole di comportamento (SOUL.md), il contesto dei progetti (memory/MEMORY.md), le procedure con passi e formati precisi (le Skill, nella sezione App).",
+      "agents": "Le convenzioni di lavoro di questo workspace: preferenze di progetto e modi di procedere che si ripetono. Le sezioni compaiono man mano che le concordi con Jenny; un titolo senza niente sotto non ci sta bene.\n\nNon qui: i fatti su di te (USER.md), il carattere e le regole di comportamento (SOUL.md), il contesto dei progetti (memory/MEMORY.md), le procedure con passi e formati precisi (le Skill, in Impostazioni → Officina → Mani).",
       "user": "Quello che Jenny sa di te: identità, lingua, stile di comunicazione, abitudini e interessi. Si riempie man mano che ti conosce, non c'è niente da precompilare.\n\nNon qui: il contesto dei progetti (memory/MEMORY.md), le regole di comportamento (SOUL.md), le procedure ripetibili (le Skill). E nemmeno ora, fuso orario o posizione: il runtime li misura da sé a ogni turno, mentre una copia scritta qui non la aggiorna nessuno ed è già vecchia appena salvata.",
       "soul": "Chi è Jenny e come si comporta: il carattere, il modo di parlare, quello che fa e quello che non fa mai. E le regole fisse che le hai dato tu — come rivolgersi a te, cosa evitare, dove andarci piano.\n\nLo mantiene Dream, la consolidazione che gira dopo le conversazioni: una correzione che le fai a voce finisce qui. Puoi leggerlo e sistemarlo, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill). E nemmeno come si comporta l'app: cosa accetta uno strumento, cosa rifiuta la sandbox, dov'è un limite — è uguale su ogni installazione e glielo dice già il prompt di sistema.",
       "memory": "La memoria a lungo termine: quello che deve restare da una sessione all'altra — contesto dei progetti, fatti utili, note da ricordare.\n\nLa mantiene Dream, la consolidazione che gira dopo le conversazioni. Puoi leggerla e correggerla, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill)."
@@ -606,7 +606,8 @@
     "deleteProjectBusy": "Sto ancora lavorando in «{name}»: eliminalo quando ho finito.",
     "deletedProject": "Quaderno “{name}” eliminato, conversazione compresa",
     "nameTaken": "C’è già qualcosa con questo nome: scegline un altro.",
-    "changedOnDisk": "Il file è cambiato da quando l’hai aperto: non ho salvato niente. Chiudi l’editor e riaprilo per vedere com’è ora."
+    "changedOnDisk": "Il file è cambiato da quando l’hai aperto: non ho salvato niente. Chiudi l’editor e riaprilo per vedere com’è ora.",
+    "planRunning": "Un piano sta lavorando su questo quaderno: aspetta che finisca, o fermalo dalla casa."
   },
   "launcher": {
     "kindSkill": "Skill",
@@ -758,7 +759,7 @@
   },
   "cron": {
     "asOf": "Aggiornato alle {time}",
-    "empty": "Nessuna attività programmata.",
+    "empty": "Nessun promemoria e nessuna automazione.",
     "notStarted": "La programmazione non è ancora partita: succede durante la configurazione iniziale.",
     "failed": "Non riesco a leggere lo stato della programmazione.",
     "unit": {
@@ -810,7 +811,7 @@
       "noNext": "nessuna scadenza",
       "runs": "Ultime esecuzioni",
       "noRuns": "Nessuna esecuzione registrata.",
-      "text": "Testo del promemoria",
+      "text": "Cosa deve fare",
       "paused": "in pausa",
       "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi.",
       "inNotebook": "Sta nel quaderno {place}: lo trovi anche sulla sua bacheca.",
@@ -901,7 +902,7 @@
     "createFailed": "Creazione fallita: {error}",
     "createRejected": "Non ho potuto creare “{name}”: o esiste già, o una cartella con quel nome è di mezzo e non è un quaderno.",
     "createSeedTooLong": "La riga di presentazione è troppo lunga: accorciala e riprova.",
-    "createWikiOff": "Le wiki sono spente in config.json (wiki.enabled), e un quaderno è una wiki: riaccendile lì e riprova.",
+    "createWikiOff": "I quaderni sono spenti in config.json (wiki.enabled): riaccendili lì e riprova.",
     "createInternal": "Creazione non riuscita per un errore del gateway. Riprova.",
     "created": "Quaderno “{name}” creato",
     "askAbout": "Chiedi qualcosa su {name}...",
@@ -1618,8 +1619,8 @@
         "reminder_due": "È il momento: {text}.",
         "app_event": "{title}: {app} è {state}.",
         "other": "Qualcosa è cambiato in bacheca.",
-        "micro_kept": "{title}: la micro app {app} è nel cassetto e gira da sola.",
-        "micro_fixed": "{title}: ho sistemato la micro app {app}.",
+        "micro_kept": "{title}: la mini app {app} è nel cassetto e gira da sola.",
+        "micro_fixed": "{title}: ho sistemato la mini app {app}.",
         "cron_result": "{title}: {app} ha qualcosa da dirti.",
         "cron_result_notebook": "{app} ha qualcosa da dirti."
       }
@@ -1693,7 +1694,7 @@
     },
     "reminder": {
       "done": "Fatto",
-      "edit": "Correggi",
+      "edit": "Modifica",
       "drop": "Togli",
       "dropConfirm": "Togliere «{text}»?",
       "actions": "Altro su «{text}»"
@@ -1758,7 +1759,7 @@
         "photo": "Foto",
         "other": "Altro",
         "micro": "App",
-        "cron": "Cron"
+        "cron": "Automazione"
       },
       "addFab": "Aggiungi al cassetto"
     },
@@ -1791,7 +1792,7 @@
       "costs": "lo fa Jenny (usa il modello)",
       "last": "Ultimo esito ({when}): {text}",
       "quiet": "Ultimo giro {when}: niente da dirti.",
-      "changePrompt": "Nel cassetto {card}, il cron «{name}»: vorrei ",
+      "changePrompt": "Nel cassetto {card}, l'automazione «{name}»: vorrei ",
       "prompt": "Nel cassetto {card}, ogni ",
       "removeConfirm": "Togliere «{name}»? Jenny smette di farlo.",
       "changeNotebookPrompt": "Nelle automazioni di tutto il quaderno, «{name}»: vorrei "
@@ -1908,7 +1909,7 @@
     },
     "wiki": {
       "integrated": "✓ nella wiki",
-      "pending": "in attesa della wiki"
+      "pending": "da integrare nel quaderno"
     }
   },
   "place": {

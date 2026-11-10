@@ -120,6 +120,7 @@ class Home {{
   _applyBotName() {{}}
   {member(src, "_openSettings", prefixes=("async ",))}
   {_member(src, "_paintSettings")}
+  {_member(src, "_withRuntimeModel")}
   {_member(src, "_askSettings")}
 }}
 const home = new Home();

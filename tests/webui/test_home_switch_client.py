@@ -416,6 +416,7 @@ class App {
   __GO_BACK_ONE_ROOM__
   __OPEN_SETTINGS__
   __PAINT_SETTINGS__
+  __WITH_RUNTIME_MODEL__
   __CHAT_NAME__
   __HAS_COMPOSER__
   __PLACE_JENNY__
@@ -528,6 +529,7 @@ def _harness() -> str:
         .replace("__GO_BACK_ONE_ROOM__", member(src, "goBackOneRoom"))
         .replace("__OPEN_SETTINGS__", member(src, "_openSettings"))
         .replace("__PAINT_SETTINGS__", member(src, "_paintSettings"))
+        .replace("__WITH_RUNTIME_MODEL__", member(src, "_withRuntimeModel"))
         .replace("__CHAT_NAME__", member(src, "_chatName"))
         .replace("__HAS_COMPOSER__", member(src, "_hasComposer"))
         .replace("__PLACE_JENNY__", member(src, "_placeJenny"))

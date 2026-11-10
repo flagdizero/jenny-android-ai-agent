@@ -120,7 +120,7 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "[preset]",
         scope="personal",
         scope_note=(
-            "It switches the preset for the whole installation, not for one project."
+            "It switches the preset for the whole installation, not for one notebook."
         ),
     ),
     BuiltinCommandSpec(
@@ -140,16 +140,16 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "sparkles",
         scope="personal",
         scope_note=(
-            "It consolidates the personal memory. A project conversation feeds it only with "
+            "It consolidates the personal memory. A notebook conversation feeds it only with "
             "what it says about you, and only into USER.md: the rest stays in that "
-            "project's pages."
+            "notebook's pages."
         ),
     ),
     BuiltinCommandSpec(
         "/gardener",
         "Run the gardener",
         (
-            "Inside a project: turn its new journal lines into pages and update its map — or, "
+            "Inside a notebook: turn its new journal lines into pages and update its map — or, "
             "with nothing new to promote, bring an oversized map back under its ceiling. The "
             "periodic pass is set in Settings → Workshop → Memory."
         ),
@@ -165,13 +165,13 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "List enabled skills and their descriptions.",
         "puzzle",
         scope="personal",
-        scope_note="It lists what the installation has, not what this project holds.",
+        scope_note="It lists what the installation has, not what this notebook holds.",
     ),
     BuiltinCommandSpec(
         "/tidy",
         "Tidy this project's wiki",
         (
-            "Inside a project: restructure its wiki now — split what has outgrown the per-turn "
+            "Inside a notebook: restructure its wiki now — split what has outgrown the per-turn "
             "budget, move prose out of an oversized map, realign the page list. Runs in this "
             "conversation, with its pages and your answers in hand; the gardener's periodic pass "
             "cannot do that."
@@ -182,7 +182,7 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
     BuiltinCommandSpec(
         "/init",
         "Write this project's instructions",
-        "Inside a project: read the wiki and write its AGENTS.md.",
+        "Inside a notebook: read the wiki and write its AGENTS.md.",
         "file-pencil",
         scope="project",
     ),

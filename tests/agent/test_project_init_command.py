@@ -133,7 +133,7 @@ async def test_outside_a_project_it_refuses_instead_of_running_a_turn(
 
     assert expanded is None, "None vuol dire «già risposto»: nessun turno parte"
     assert published and PROJECT_INIT_COMMAND in published[0]
-    assert "project" in published[0].lower(), "il rifiuto deve dire dove funziona"
+    assert "notebook" in published[0].lower(), "il rifiuto deve dire dove funziona"
 
 
 def test_it_is_not_a_router_command(tmp_path: Path) -> None:

@@ -122,7 +122,7 @@ def test_a_line_that_does_not_name_a_command_has_no_spec(line: str) -> None:
 def test_a_project_command_outside_says_how_to_get_in() -> None:
     text = refusal(_spec("/tidy"))
 
-    assert "not a project" in text
+    assert "not a notebook" in text
     assert "from Notebooks" in text
     assert "/tidy" in text
 
@@ -154,7 +154,7 @@ async def test_a_project_command_outside_is_refused_not_run(router) -> None:
     out = await router.dispatch(_ctx("/gardener", UNIFIED_SESSION_KEY))
 
     assert out is not None
-    assert "not a project" in out.content
+    assert "not a notebook" in out.content
 
 
 async def test_the_prefix_tier_is_gated_before_the_arguments_are_prepared(router) -> None:
