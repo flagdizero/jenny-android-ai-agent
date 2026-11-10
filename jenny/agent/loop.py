@@ -1234,6 +1234,7 @@ class AgentLoop(
             prompt = render_template(
                 "agent/project_init.md",
                 instructions_path=str(existing or root / "AGENTS.md"),
+                orchestrator=self.orchestrator_mode,
             )
         except Exception as exc:
             # Workspace sincronizzato da una versione precedente, o template
@@ -1323,6 +1324,9 @@ class AgentLoop(
                 page_count=len(entries),
                 page_max=f"{ceiling:,}",
                 notebook=notebook,
+                # L'orchestratore non ha ``python_exec`` né un tool che scrive:
+                # la ricetta gli dice chi scrive e con cosa si controlla.
+                orchestrator=self.orchestrator_mode,
                 pages_over="\n".join(
                     f"  - `{rel}` — **{chars:,} characters, over the {ceiling:,} budget**"
                     for rel, chars in over

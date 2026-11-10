@@ -6,6 +6,11 @@ root is a state nobody chose, and every reader can then only pick one and warn.
 
 First read: `wiki/index.md`, the pages under `wiki/`, the most recent files in
 `log/`, and that file itself if it already exists. Then write it.
+{% if orchestrator %}
+You have no tool that writes a file in this chat: once you have read the folder and know what the
+file must say, spawn one `notebook-editor` with the exact text and that exact path. The reading and
+the judgement below stay yours; only the write is delegated.
+{% endif %}
 
 What belongs in it:
 

@@ -169,3 +169,19 @@ def test_help_lists_it() -> None:
     from jenny.command.builtin import build_help_text
 
     assert PROJECT_INIT_COMMAND in build_help_text()
+
+
+@pytest.mark.parametrize("orchestrator", [False, True])
+async def test_the_orchestrator_is_told_who_writes_the_file(
+    tmp_path: Path, orchestrator: bool
+) -> None:
+    """In modalità orchestratore la chat non ha un tool che scrive un file:
+    «Then write it» da solo ordina una chiamata che lì non esiste."""
+    loop = _loop(tmp_path)
+    loop.orchestrator_mode = orchestrator
+    _wiki(tmp_path, "prova", None)
+
+    expanded = await loop._expand_project_init(_msg(), "project:prova")
+
+    assert expanded is not None
+    assert ("`notebook-editor`" in expanded.content) is orchestrator

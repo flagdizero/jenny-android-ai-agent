@@ -19,6 +19,13 @@ below. The injector does not care which layout a page is in.
 **Follow the structure you find.** The folder is the authority, not your preference: put new pages
 where this project's organisation says they go, and open a new subfolder only when a group of pages
 has clearly earned one.
+{% if orchestrator %}
+**In this chat you read and decide; a `notebook-editor` writes.** You have no tool that writes a
+page or runs code here. Read the recipe and the pages, settle with the user what has to be settled,
+then spawn one `notebook-editor` with the moves spelled out — which text goes from which page to
+which page, word for word — and the measurements below. Do not ask it to "tidy the wiki": it does
+what the task says and nothing else, so a vague task moves nothing or moves the wrong thing.
+{% endif %}
 
 ## What the measurements say, right now
 
@@ -73,6 +80,12 @@ right here to answer it.
 
 ## When you are done
 
+{% if orchestrator %}
+The log line — `## [HH:MM] compile | <what moved where>` — is part of the `notebook-editor`'s task:
+name it there. When its report comes back, run `notebook action=check` and paste its literal output
+into your reply. It covers the structural checks, not the full lint: say so, instead of calling the
+wiki clean.
+{% else %}
 Write the log line — `## [HH:MM] compile | <what moved where>` — and run the lint, pasting its
 literal output into your reply:
 
@@ -85,6 +98,7 @@ python_exec(
 
 The path there is absolute on purpose: `working_dir` puts you inside the scripts folder, and the
 workspace-relative form this project uses everywhere else would not resolve from there.
+{% endif %}
 
 If the wiki was already in good shape, say so in one line and change nothing. A tidy that moves
 nothing is a correct outcome, and inventing work to justify the command is the one failure this

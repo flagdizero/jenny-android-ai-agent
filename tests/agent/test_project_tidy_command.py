@@ -464,3 +464,26 @@ async def test_no_heading_or_bullet_is_glued_to_the_line_before_it(
         if line.startswith("## ") and i > 0 and lines[i - 1].strip()
     ]
     assert not orphans, f"{kind}: titoli senza riga vuota davanti: {orphans}"
+
+
+# ── L'orchestratore non ha gli strumenti del prompt ──────────────────────────
+
+
+@pytest.mark.parametrize("orchestrator", [False, True])
+async def test_the_prompt_orders_only_tools_the_chat_has(
+    tmp_path: Path, orchestrator: bool
+) -> None:
+    """In modalità orchestratore la chat non ha ``python_exec`` né un tool che
+    scrive una pagina: un prompt che ordina di lanciare il lint con
+    ``python_exec`` chiede una chiamata che non esiste. Lì scrive un
+    ``notebook-editor``, e il controllo è ``notebook action=check``."""
+    loop = _loop(tmp_path)
+    loop.orchestrator_mode = orchestrator
+    _wiki(tmp_path)
+
+    prompt = await _prompt(loop)
+
+    assert ("python_exec" in prompt) is not orchestrator
+    assert ("`notebook-editor`" in prompt) is orchestrator
+    assert ("notebook action=check" in prompt) is orchestrator
+    assert "## [HH:MM] compile |" in prompt
