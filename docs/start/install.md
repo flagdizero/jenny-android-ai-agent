@@ -49,10 +49,10 @@ needs a computer, not just the phone.
 | Requirement | Notes |
 |---|---|
 | A computer with the repository cloned | `git clone` of the project |
-| JDK 17 | Required to run the Gradle 8.9 build |
+| JDK 17 | Required to run the Gradle 8.11 build |
 | Android SDK Platform 34 | Via Android Studio, or a standalone `cmdline-tools` install |
 | `adb` | Ships with the Android SDK platform-tools |
-| A phone or tablet running Android 8.0 (API 26) or newer | `minSdk` is 26, `targetSdk`/`compileSdk` is 34 |
+| A phone or tablet running Android 8.0 (API 26) or newer | `minSdk` is 26, `targetSdk`/`compileSdk` is 36 |
 | USB debugging enabled on the device, and the device visible to `adb` | See below |
 | Network access on the first build | Gradle downloads the Chaquopy Python 3.11 runtime and every wheel in `requirements-android.lock.txt` (17 pinned packages, direct and transitive) the first time you build |
 

@@ -9,8 +9,8 @@ Jenny ships as an Android APK with an embedded Python 3.11 runtime (via [Chaquop
 | Requirement | Notes |
 |---|---|
 | The repository cloned | `git clone` of this repo |
-| JDK 17 | Runs the Gradle 8.9 build (`android/gradle/wrapper/gradle-wrapper.properties` pins Gradle 8.9) |
-| Android SDK Platform 34 | `compileSdk`/`targetSdk` are both 34; install via Android Studio or a standalone `cmdline-tools` setup |
+| JDK 17 | Runs the Gradle 8.11 build (`android/gradle/wrapper/gradle-wrapper.properties` pins Gradle 8.11.1) |
+| Android SDK Platform 36 | `compileSdk`/`targetSdk` are both 36; install via Android Studio or a standalone `cmdline-tools` setup |
 | `adb` | Ships with the SDK's `platform-tools` |
 | A device or emulator running Android 8.0 (API 26) or newer | `minSdk` is 26 |
 | USB debugging enabled and the device authorized to your machine | Settings → About phone → tap "Build number" seven times → Developer options → USB debugging |
