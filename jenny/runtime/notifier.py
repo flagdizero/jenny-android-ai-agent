@@ -225,3 +225,17 @@ def notify_delivery(
         return
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
+
+
+def notify_alarm(text: str, label: str) -> None:
+    """Un allarme a zero token: una notifica scritta dal codice, senza turno.
+
+    Per i guasti che devono arrivare proprio quando il modello non risponde (il
+    giardiniere fermo, Dream fermo, un controllo che fallisce in silenzio, la
+    copia che non parte). *label* è l'etichetta che l'utente legge **e** il tag
+    che accorpa gli allarmi (``cron:<label>``): lo stesso allarme deve portare
+    sempre la stessa, e due allarmi diversi mai.
+    """
+    notify_delivery(
+        text, {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": label}}
+    )

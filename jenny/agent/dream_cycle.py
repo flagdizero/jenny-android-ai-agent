@@ -372,8 +372,7 @@ def _alert_stuck(stuck: int) -> None:
     ``jenny/agent`` non dipende da ``jenny/runtime``, e una riga di allarme non
     è una buona ragione per cominciare.
     """
-    from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
-    from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.notifier import notify_alarm
     from jenny.runtime.user_text import say
 
     # «Officina → Memoria» e non «Impostazioni → Officina → Memoria»: i numeri
@@ -382,10 +381,7 @@ def _alert_stuck(stuck: int) -> None:
     # La frase è quella per l'utente, nella sua lingua. Il tag deriva
     # dall'etichetta (``cron:Memoria``/``cron:Memory``): basta che sia sempre lo
     # stesso per questo allarme, e a lingua fissata lo è.
-    notify_delivery(
-        say("alarm.dream_stuck", stuck=stuck),
-        {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": say("alarm.dream_label")}},
-    )
+    notify_alarm(say("alarm.dream_stuck", stuck=stuck), say("alarm.dream_label"))
 
 
 def format_budget(report: Sequence["FileBudget"]) -> str:

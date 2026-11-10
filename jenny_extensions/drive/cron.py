@@ -65,13 +65,12 @@ async def run(host: ExtensionHost) -> str | None:
         return None
     agent = host.get_agent()
     if agent is None:
-        from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
-        from jenny.runtime.notifier import notify_delivery
+        from jenny.runtime.notifier import notify_alarm
 
-        notify_delivery(
+        notify_alarm(
             "Jenny has not been able to save her copy to Google Drive for "
             f"{alert['days']} days. Open Settings → Backup.",
-            {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": "Backup"}},
+            "Backup",
         )
         return None
     from jenny.runtime.cron_dispatch import run_silent_alert_turn

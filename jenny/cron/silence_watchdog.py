@@ -28,8 +28,6 @@ guardare*; il dettaglio — quale controllo, da quanti run, se e quando all'uten
 
 from __future__ import annotations
 
-from typing import Any
-
 from loguru import logger
 
 from jenny.cron.could_not_check import ESCALATE_AFTER_FAILURES
@@ -145,17 +143,10 @@ def alert_silently_broken_checks(
     if not checks:
         return []
 
-    from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
-    from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.notifier import notify_alarm
     from jenny.runtime.user_text import say
 
-    metadata: dict[str, Any] = {
-        WEBUI_MESSAGE_SOURCE_METADATA_KEY: {
-            "kind": "cron",
-            "label": say("alarm.check_label", name=job_name),
-        }
-    }
-    notify_delivery(format_silence_alarm(job_name, checks), metadata)
+    notify_alarm(format_silence_alarm(job_name, checks), say("alarm.check_label", name=job_name))
     logger.error(
         "Cron: {} check(s) in job '{}' have been failing unreported: {}",
         len(checks),
