@@ -102,7 +102,6 @@ class AgenticSearchBridge(context: Context) {
     fun searchBing(query: String, maxResults: Int, timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS): String {
         val encoded = Uri.encode(query)
         val url = "https://www.bing.com/search?q=$encoded"
-        Log.d(TAG, "searchBing ENTER: query=$query maxResults=$maxResults timeout=$timeoutSeconds")
 
         val js = """
             (function() {
@@ -146,7 +145,6 @@ class AgenticSearchBridge(context: Context) {
             }.toString()
         }
 
-        Log.d(TAG, "Bing search response length: ${result.length}")
         return result
     }
 
@@ -155,7 +153,6 @@ class AgenticSearchBridge(context: Context) {
      * Returns a JSON object: { "html": "...", "finalUrl": "..." }.
      */
     fun fetchUrl(url: String, timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS): String {
-        Log.d(TAG, "fetchUrl ENTER: url=$url timeout=$timeoutSeconds")
         val js = """
             JSON.stringify({
                 html: document.documentElement.outerHTML,
@@ -169,7 +166,6 @@ class AgenticSearchBridge(context: Context) {
      * Destroy the hidden WebView and release resources.
      */
     fun destroy() {
-        Log.d(TAG, "Destroying bridge")
         handler.post {
             webView?.stopLoading()
             webView?.destroy()
@@ -182,7 +178,6 @@ class AgenticSearchBridge(context: Context) {
      * Runs on the main thread and blocks the calling thread.
      */
     private fun evaluateOnPage(url: String, js: String, timeoutSeconds: Long): String {
-        Log.d(TAG, "evaluateOnPage ENTER: url=$url timeout=$timeoutSeconds")
         val latch = CountDownLatch(1)
         val ref = AtomicReference<String>("")
         val errorRef = AtomicReference<String?>(null)
@@ -195,7 +190,6 @@ class AgenticSearchBridge(context: Context) {
             // `MainHop`). Si registra come errore e si sblocca l'attesa: il
             // chiamante risponde subito con l'errore invece di aspettare il tetto.
             try {
-                Log.d(TAG, "evaluateOnPage: setting up WebViewClient and loading URL")
                 ensureWebView()
                 val wv = webView!!
                 wv.webViewClient = object : WebViewClient() {
@@ -250,30 +244,23 @@ class AgenticSearchBridge(context: Context) {
                     ) {
                         if (request?.isForMainFrame != false) {
                             val status = errorResponse?.statusCode ?: -1
-                            val msg = "WebView HTTP error: $status for ${request?.url ?: url}"
-                            Log.e(TAG, msg)
-                            errorRef.set(msg)
+                            // Lo stato di una pagina, non un guasto dell'app: un
+                            // avviso, e senza l'indirizzo, come il resto del log.
+                            Log.w(TAG, "WebView HTTP error: $status")
+                            errorRef.set("WebView HTTP error: $status for ${request?.url ?: url}")
                             latch.countDown()
                         }
                     }
 
-                    override fun onPageStarted(view: WebView?, startedUrl: String?, favicon: android.graphics.Bitmap?) {
-                        Log.d(TAG, "onPageStarted: $startedUrl")
-                    }
-
                     override fun onPageFinished(view: WebView?, finishedUrl: String?) {
-                        Log.d(TAG, "onPageFinished: $finishedUrl (error=${errorRef.get()})")
                         if (errorRef.get() != null) {
                             latch.countDown()
                             return
                         }
-                        Log.d(TAG, "evaluateOnPage: running evaluateJavascript")
                         view?.evaluateJavascript(readUnlessStale(js)) { value ->
                             if (value == STALE_RESULT) {
-                                Log.d(TAG, "onPageFinished ignored: $finishedUrl is the previous page")
                                 return@evaluateJavascript
                             }
-                            Log.d(TAG, "evaluateJavascript callback: value length=${value?.length ?: 0} null=${value == null}")
                             ref.set(value ?: "")
                             latch.countDown()
                         }
@@ -294,14 +281,12 @@ class AgenticSearchBridge(context: Context) {
                 val sameDocument = current != null && url.contains('#') &&
                     current.substringBefore('#') == url.substringBefore('#')
                 if (current == null || sameDocument) {
-                    Log.d(TAG, "evaluateOnPage: calling loadUrl($url)")
                     wv.loadUrl(url)
                 } else {
                     var loading = false
                     val load = Runnable {
                         if (!loading) {
                             loading = true
-                            Log.d(TAG, "evaluateOnPage: calling loadUrl($url)")
                             wv.loadUrl(url)
                         }
                     }
@@ -309,7 +294,6 @@ class AgenticSearchBridge(context: Context) {
                     wv.evaluateJavascript(MARK_STALE_JS) { load.run() }
                     handler.postDelayed(load, MARK_STALE_FALLBACK_MS)
                 }
-                Log.d(TAG, "evaluateOnPage: loadUrl returned (post)")
             } catch (e: Exception) {
                 Log.e(TAG, "evaluateOnPage failed on the main thread", e)
                 errorRef.set("WebView unavailable: ${e.javaClass.simpleName}: ${e.message}")
@@ -317,9 +301,7 @@ class AgenticSearchBridge(context: Context) {
             }
         }
 
-        Log.d(TAG, "evaluateOnPage: waiting on latch...")
         val completed = latch.await(timeoutSeconds, TimeUnit.SECONDS)
-        Log.d(TAG, "evaluateOnPage: latch completed=$completed error=${errorRef.get()}")
 
         if (errorRef.get() != null) {
             handler.post { webView?.stopLoading() }
@@ -329,14 +311,12 @@ class AgenticSearchBridge(context: Context) {
         }
         if (!completed) {
             handler.post { webView?.stopLoading() }
-            val msg = "WebView timeout after ${timeoutSeconds}s for $url"
-            Log.w(TAG, msg)
+            Log.w(TAG, "WebView timeout after ${timeoutSeconds}s")
             return JSONObject().apply {
-                put("error", msg)
+                put("error", "WebView timeout after ${timeoutSeconds}s for $url")
             }.toString()
         }
 
-        Log.d(TAG, "evaluateOnPage EXIT: ref length=${ref.get().length}")
         return ref.get()
     }
 }

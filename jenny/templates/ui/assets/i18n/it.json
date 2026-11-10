@@ -200,8 +200,6 @@
     "system": "Sistema",
     "configRecoveredBackup": "Le impostazioni sono state recuperate dall'ultimo backup valido: all'avvio config.json non era leggibile.",
     "configRecoveredDefaults": "config.json non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita dai valori predefiniti — la chiave API va rimessa. Il file illeggibile è stato messo da parte qui:",
-    "cronRecoveredBackup": "I promemoria programmati sono stati recuperati dall'ultimo backup valido: all'avvio l'elenco dei job non era leggibile. Controlla che ci siano tutti.",
-    "cronRecoveredEmpty": "L'elenco dei promemoria programmati non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita senza nessuno: quelli che avevi creato non suoneranno più e vanno ricreati. Il file illeggibile è stato messo da parte qui:",
     "themeLabel": "Tema",
     "mascotSize": "Dimensione mascotte",
     "mascotSizeSmall": "Piccola",
@@ -640,7 +638,6 @@
     "uninstalledMany": "Disinstallate: {names}",
     "launchFailed": "Impossibile avviare {name}: forse è stata disinstallata o disattivata.",
     "deleteFailed": "Eliminazione non riuscita",
-    "appDeleted": "App eliminata",
     "editAppPrompt": "Voglio modificare la Jenny App \"{name}\" (slug: {slug}). Puoi aiutarmi?",
     "chatAboutApp": "Parliamo dell'app \"{name}\": {text}",
     "frameCleartextBlocked": "{host} non si carica: usa http e la policy di rete dell'app permette il traffico in chiaro solo verso il gateway locale. Servono un server in https, oppure un'app di tipo vista esterna.",
@@ -802,9 +799,7 @@
     "banner": {
       "stopped": "Lo scheduler è fermo: le scadenze qui sotto non sono state rimesse, e quelle passate restano nel passato.",
       "inertOne": "{name} è armato ma non fa niente: la configurazione lo dice spento.",
-      "inertMany": "{names} sono armati ma non fanno niente: la configurazione li dice spenti.",
-      "recoveredBackup": "Questo elenco è stato ricostruito dall'ultimo backup valido all'avvio. Controlla che ci siano tutti.",
-      "recoveredEmpty": "All'avvio l'elenco non era leggibile e non c'era un backup utilizzabile: i promemoria che avevi creato non ci sono più."
+      "inertMany": "{names} sono armati ma non fanno niente: la configurazione li dice spenti."
     },
     "job": {
       "protected": "di sistema",
@@ -1012,10 +1007,10 @@
       "untitled": "Piano",
       "steps": "{count} passi",
       "stepsCut": "{count} passi su {total}",
-      "photoLine": "Prima di cominciare l'app segna un {bold}: è il punto a cui puoi sempre tornare.",
-      "photoWord": "punto di partenza",
-      "photoTaken": "punto di partenza {time}",
-      "photoTakenNoTime": "punto di partenza segnato",
+      "startLine": "Prima di cominciare l'app segna un {bold}: è il punto a cui puoi sempre tornare.",
+      "startWord": "punto di partenza",
+      "startTaken": "punto di partenza {time}",
+      "startTakenNoTime": "punto di partenza segnato",
       "version": "v{version}",
       "reviewing": "in revisione",
       "progress": "{done} di {total}",

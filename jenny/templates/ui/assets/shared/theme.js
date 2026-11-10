@@ -5,48 +5,30 @@
  * binary light/dark signal (syntax highlighting, app iframes).
  */
 
-import { AppState } from './state.js';
 import { writeStorage } from './utils.js';
 
-// `desc`/`reply` are the mini-conversation preview copy shown on each theme
-// card in the settings picker — the card *is* the preview, so the copy leans
-// evocative, not technical.
 export const THEMES = [
   { id: 'chanel',    label: 'Chanel',        scheme: 'dark',
     accent: '#f4f1ea', onAccent: '#141414',
-    swatch: ['#141414', '#1e1e1e', '#c8a96a'],
-    desc: "Bianco e nero couture, un filo d'oro solo dove conta.",
-    reply: 'Il lusso non alza mai la voce.' },
+    swatch: ['#141414', '#1e1e1e', '#c8a96a'] },
   { id: 'synthwave', label: "Synthwave '84", scheme: 'dark',
     accent: '#f92aad', onAccent: '#ffffff',
-    swatch: ['#111013', '#f92aad', '#03edf9'],
-    desc: 'Neon rosa sul nero, ogni luce lascia la scia.',
-    reply: 'Massimo carattere — per chi non ha paura.' },
+    swatch: ['#111013', '#f92aad', '#03edf9'] },
   { id: 'kyoto',     label: 'Jenny Kyoto',   scheme: 'dark',
     accent: '#b2543f', onAccent: '#f5efe4',
-    swatch: ['#201d1a', '#2b2723', '#b2543f'],
-    desc: 'Terra, ruggine e angoli smussati a mano, come ceramica riparata.',
-    reply: 'La quiete non chiede attenzione.' },
+    swatch: ['#201d1a', '#2b2723', '#b2543f'] },
   { id: 'sticker',   label: 'Jenny Sticker', scheme: 'dark',
     accent: '#a78bfa', onAccent: '#1c1523',
-    swatch: ['#17131c', '#a78bfa', '#ffd23f'],
-    desc: 'Ogni messaggio è un adesivo ritagliato: bordo bianco, ombra dura, rotazione imperfetta.',
-    reply: 'La chat come il retro di un laptop.' },
+    swatch: ['#17131c', '#a78bfa', '#ffd23f'] },
   { id: 'comic',   label: 'Jenny Fumetto', scheme: 'light',
     accent: '#1b1820', onAccent: '#faf6ef',
-    swatch: ['#faf6ef', '#1b1820', '#7c5cff'],
-    desc: 'China su carta, retini e nuvolette: ogni risposta è una vignetta.',
-    reply: 'La tua chat è una tavola da leggere.' },
+    swatch: ['#faf6ef', '#1b1820', '#7c5cff'] },
   { id: 'y2k',       label: 'Jenny Y2K',     scheme: 'light',
     accent: '#f56ab5', onAccent: '#ffffff',
-    swatch: ['#f7e0f8', '#f56ab5', '#b76bf0'],
-    desc: 'Gradienti lucidi, gloss bubblegum, bordi bianchi.',
-    reply: 'Il duemila come ce lo eravamo promesso.' },
+    swatch: ['#f7e0f8', '#f56ab5', '#b76bf0'] },
   { id: 'stone',     label: 'Jenny Pietra',  scheme: 'light',
     accent: '#8c6f4e', onAccent: '#f4f1ec',
-    swatch: ['#eae6df', '#37332c', '#8c6f4e'],
-    desc: 'Travertino, bronzo e serif romani, luce di mezzogiorno.',
-    reply: "Solida come un'idea scolpita bene." },
+    swatch: ['#eae6df', '#37332c', '#8c6f4e'] },
 ];
 
 export const DEFAULT_THEME = 'synthwave';
@@ -325,7 +307,6 @@ export function setTheme(id) {
   // Una preferenza: se lo storage la rifiuta, il tema si applica lo stesso
   // e al prossimo avvio si riparte dal default.
   writeStorage('tc-theme', theme.id);
-  AppState.theme = theme.id;
   applySyntaxTheme(theme.scheme);
   syncNativeBars(theme.scheme);
   syncFloatingPalette();

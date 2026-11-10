@@ -200,8 +200,6 @@
     "system": "System",
     "configRecoveredBackup": "Settings were restored from the last good backup: config.json could not be read at startup.",
     "configRecoveredDefaults": "config.json could not be read and there was no usable backup, so Jenny started on defaults — your API key needs setting up again. The unreadable file was kept aside:",
-    "cronRecoveredBackup": "Your scheduled reminders were restored from the last good backup: the job list could not be read at startup. Check that they are all there.",
-    "cronRecoveredEmpty": "The scheduled reminder list could not be read and there was no usable backup, so Jenny started with none: the ones you had created will not fire again and need recreating. The unreadable file was kept aside:",
     "themeLabel": "Theme",
     "mascotSize": "Mascot size",
     "mascotSizeSmall": "Small",
@@ -640,7 +638,6 @@
     "uninstalledMany": "Uninstalled: {names}",
     "launchFailed": "Could not start {name} — it may have been uninstalled or disabled.",
     "deleteFailed": "Delete failed",
-    "appDeleted": "App deleted",
     "editAppPrompt": "I want to edit the Jenny App \"{name}\" (slug: {slug}). Can you help me?",
     "chatAboutApp": "Let's talk about the app \"{name}\": {text}",
     "frameCleartextBlocked": "{host} will not load: it is plain http, and the app's network policy allows cleartext only to the local gateway. It needs an https server, or an external-view app.",
@@ -802,9 +799,7 @@
     "banner": {
       "stopped": "The scheduler is stopped: the times below have not been recomputed, and past ones stay in the past.",
       "inertOne": "{name} is armed but does nothing: your settings have it switched off.",
-      "inertMany": "{names} are armed but do nothing: your settings have them switched off.",
-      "recoveredBackup": "This list was rebuilt from the last good backup at startup. Check that everything is here.",
-      "recoveredEmpty": "At startup the list was unreadable and there was no usable backup: the reminders you had created are gone."
+      "inertMany": "{names} are armed but do nothing: your settings have them switched off."
     },
     "job": {
       "protected": "system",
@@ -1012,10 +1007,10 @@
       "untitled": "Plan",
       "steps": "{count} steps",
       "stepsCut": "{count} of {total} steps",
-      "photoLine": "Before starting, the app marks a {bold}: it's the point you can always go back to.",
-      "photoWord": "starting point",
-      "photoTaken": "starting point {time}",
-      "photoTakenNoTime": "starting point marked",
+      "startLine": "Before starting, the app marks a {bold}: it's the point you can always go back to.",
+      "startWord": "starting point",
+      "startTaken": "starting point {time}",
+      "startTakenNoTime": "starting point marked",
       "version": "v{version}",
       "reviewing": "revising",
       "progress": "{done} of {total}",

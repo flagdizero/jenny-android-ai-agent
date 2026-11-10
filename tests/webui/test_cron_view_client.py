@@ -361,7 +361,6 @@ def test_the_banner_prefers_the_explanation_that_covers_the_whole_list() -> None
       const inert = [{ name: 'dream', effective: 'inert' }];
       console.log(JSON.stringify({
         unavailable: pickBanner({ available: false }),
-        recovered: pickBanner({ available: true, recovery: { restored_from: 'empty' } }),
         stopped: pickBanner({ available: true, service_running: false, jobs: inert }),
         inert: pickBanner({ available: true, service_running: true, jobs: inert }),
         fine: pickBanner({ available: true, service_running: true, jobs: [] }),
@@ -370,8 +369,6 @@ def test_the_banner_prefers_the_explanation_that_covers_the_whole_list() -> None
     banners = json.loads(out)
 
     assert banners["unavailable"] == {"kind": "unavailable"}
-    assert banners["recovered"]["kind"] == "recovered"
-    assert banners["recovered"]["restoredFrom"] == "empty"
     assert banners["stopped"] == {"kind": "stopped"}
     assert banners["inert"] == {"kind": "inert", "jobs": ["dream"]}
     assert banners["fine"] is None

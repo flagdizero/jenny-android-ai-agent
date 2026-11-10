@@ -1,6 +1,6 @@
 /** La casa — la fascia in fondo al filo, e la sagoma di Jenny sopra di lei.
  *
- *  Prende il posto di `shared/jenny-gap.js` (06/10/2026). Quello misurava quali
+ *  Prende il posto di `shared/jenny-gap.js`, tolto il 06/10/2026. Quello misurava quali
  *  messaggi le finissero dietro e dava loro un margine **a scorrimento fermo**:
  *  ogni volta che ti fermavi, le righe vicino a lei tornavano a capo sotto il
  *  dito, e la riga che stavi leggendo cambiava posto. Qui niente dipende da

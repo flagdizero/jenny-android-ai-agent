@@ -44,6 +44,15 @@ export function iconHtml(name) {
   return `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 }
 
+/** La riga «c'è un piano in corso» sopra le pagine e la bacheca di un quaderno
+ *  tenuto da un piano: visibile, col lucchetto e il testo, se *locked*;
+ *  nascosta e vuota altrimenti. */
+export function lockLine(line, locked) {
+  line.hidden = !locked;
+  line.replaceChildren();
+  if (locked) line.append(icon('ti-lock'), el('span', null, i18n.t('home.plan.lock')));
+}
+
 /** Il toast di una scrittura rifiutata: «c'è un piano in corso» se è quello
  *  (`plan_running`: un piano tiene il quaderno), altrimenti *fallbackKey*.
  *  Stava scritto a mano in quattordici posti della bacheca e del lettore. */

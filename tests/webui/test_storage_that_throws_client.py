@@ -33,7 +33,8 @@ def test_the_state_module_loads_without_storage() -> None:
     run_js(
         _THROWING
         + f"const {{ AppState }} = await import('{(ASSETS / 'shared' / 'state.js').as_uri()}');\n"
-        "assert.equal(AppState.theme, 'synthwave');\n"
+        "assert.equal(AppState.currentMode, 'chat');\n"
+        "assert.equal(AppState.readonlyTurn, false);\n"
     )
 
 

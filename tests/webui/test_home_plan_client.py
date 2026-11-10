@@ -242,7 +242,7 @@ assert.ok(card(), 'la scheda compare nel posto vivo');
 assert.match(text(card()), /Rebuild the wiki/);
 assert.match(text(card()), new RegExp(P.tag.trash), 'un passo che cancella porta il cestino');
 assert.match(text(card()), new RegExp(P.tag.new), 'il tag della versione nuova');
-assert.match(text(card()), new RegExp(P.photoWord), 'la foto e\\' una riga, non un passo');
+assert.match(text(card()), new RegExp(P.startWord), 'il punto di partenza e\\' una riga, non un passo');
 assert.equal(card().querySelectorAll('.home-plan-item').length, 3);
 // Tolgo il passo 2: barrato, e l'Approva conta i passi rimasti.
 card().querySelector('[data-step-id="s2"] .home-plan-box').click();

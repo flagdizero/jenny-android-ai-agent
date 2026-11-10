@@ -1210,10 +1210,9 @@ export class LauncherController {
        altrove. Il click resta delegato sulla lista (v. il costruttore); questo
        sta sulla riga perche' `setupLongPress` vuole l'elemento. */
     setupLongPress(row, () => this._actions?.detailEntry(entry));
-    /* Semantica giusta dalla nascita, non aggiunta dopo — la stessa regola che
-       la scheda Apps ha poi adottato per le sue tre stanze (`mobile-apps.js`),
-       dove le righe nascono `<button>` invece di essere `<div>` a cui si
-       riappiccicano `tabindex` e `role` a ogni ridisegno.
+    /* Semantica giusta dalla nascita, non aggiunta dopo: la riga nasce col suo
+       ruolo, invece di essere un `<div>` a cui si riappiccicano `tabindex` e
+       `role` a ogni ridisegno.
 
        `option` e non `button` (4.5): una lista di risultati con una selezione
        attiva è un `listbox` — l'elenco lo dichiara, la riga ne è una voce, e

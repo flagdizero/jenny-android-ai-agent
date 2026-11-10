@@ -212,16 +212,15 @@ export class ChatController {
     // `_applyTurnBoundary`). null = nessun turno in corso.
     this._currentTurnId = null;
     this._toolStates = {};
-    this._goalBanner = null;
-    this._goalTimer = null;
+    this._runBanner = null;
+    this._runTimer = null;
 
     /* Cursore, chiavistello e bottone della pagina precedente stanno nel modulo
        condiviso con la casa (`shared/history-pager.js`): qui restano gli
        appigli, cioe' le tre cose che i due gusci fanno in modo diverso — dove si
        ascolta lo scroll, come si chiede una pagina, come la si disegna.
-       `historyCursor` / `hasMoreHistory` / `isLoadingHistory` restano leggibili
-       col loro nome (v. gli accessori sotto): li legge il resync della
-       riconnessione, e i test li nominano. */
+       `hasMoreHistory` / `isLoadingHistory` restano leggibili col loro nome
+       (v. gli accessori sotto): il resync della riconnessione legge il secondo. */
     /* L'ultimo invio, finché il gateway non ha dimostrato di averlo preso.
        `null` = non c'è niente da riprendere. */
     this._pendingSend = null;
@@ -692,7 +691,7 @@ export class ChatController {
        esattamente il caso in cui questo accade — quindi la chiusura del turno
        la fa chi butta la vista. */
     this._resetStreamState();
-    this._clearGoalBanner();
+    this._clearRunBanner();
     this.chatArea.innerHTML = '';
     this.identityEl = null;
     this._ensureIdentity();
@@ -841,13 +840,10 @@ export class ChatController {
 
   /* Lo stato della paginazione vive nel modulo condiviso, ma il suo nome qui è
      pubblico: `isLoadingHistory` lo legge `_resyncThreadAfterReconnect` per non
-     far partire una fetch sopra un'altra, e `historyCursor` / `hasMoreHistory`
-     li scrive il caricamento iniziale. Tre accessori invece di tre campi: i
-     punti di lettura restano quelli di prima, la verità sta in un posto solo. */
-  get historyCursor() { return this._pager.cursor; }
-
-  set historyCursor(value) { this._pager.cursor = value || null; }
-
+     far partire una fetch sopra un'altra, e `hasMoreHistory` lo scrive il
+     caricamento iniziale. Due accessori invece di due campi: i punti di lettura restano
+     quelli di prima, la verità sta in un posto solo. Il cursore non ha un
+     nome suo: chi lo vuole legge `_pager.cursor`. */
   get hasMoreHistory() { return this._pager.hasMore; }
 
   set hasMoreHistory(value) { this._pager.hasMore = !!value; }
@@ -2123,38 +2119,38 @@ export class ChatController {
       ? (startedAt || Date.now() / 1000)
       : null;
     if (status === 'running') {
-      if (!this._goalBanner) {
-        this._goalBanner = document.createElement('div');
-        this._goalBanner.className = 'chat-goal-banner';
-        this._goalBanner.innerHTML = `<i class="ti ti-loader-2" aria-hidden="true"></i><span>${i18n.t('chat.agentRunning')}</span><span class="chat-goal-timer"></span>`;
-        this.chatArea.appendChild(this._goalBanner);
+      if (!this._runBanner) {
+        this._runBanner = document.createElement('div');
+        this._runBanner.className = 'chat-run-banner';
+        this._runBanner.innerHTML = `<i class="ti ti-loader-2" aria-hidden="true"></i><span>${i18n.t('chat.agentRunning')}</span><span class="chat-run-timer"></span>`;
+        this.chatArea.appendChild(this._runBanner);
       }
-      if (this._goalTimer) clearInterval(this._goalTimer);
-      const timerEl = this._goalBanner.querySelector('.chat-goal-timer');
+      if (this._runTimer) clearInterval(this._runTimer);
+      const timerEl = this._runBanner.querySelector('.chat-run-timer');
       const start = startedAt ? startedAt * 1000 : Date.now();
-      this._goalTimer = setInterval(() => {
+      this._runTimer = setInterval(() => {
         const elapsed = Math.floor((Date.now() - start) / 1000);
         if (timerEl) timerEl.textContent = elapsed + 's';
       }, 1000);
       this.scrollToBottom();
     } else {
-      this._clearGoalBanner();
+      this._clearRunBanner();
     }
   }
 
   /* Toglie il banner "agent running" e ferma il suo cronometro.
      Chiamato dal `goal_status: idle` — e da chi butta la vista, perché il nodo
-     muore col DOM ma `_goalBanner` no: restando non-null il banner non verrebbe
+     muore col DOM ma `_runBanner` no: restando non-null il banner non verrebbe
      mai più ricreato (v. la guardia in `_handleGoalStatus`) e l'intervallo
      continuerebbe a battere su un nodo staccato. */
-  _clearGoalBanner() {
-    if (this._goalTimer) {
-      clearInterval(this._goalTimer);
-      this._goalTimer = null;
+  _clearRunBanner() {
+    if (this._runTimer) {
+      clearInterval(this._runTimer);
+      this._runTimer = null;
     }
-    if (this._goalBanner) {
-      this._goalBanner.remove();
-      this._goalBanner = null;
+    if (this._runBanner) {
+      this._runBanner.remove();
+      this._runBanner = null;
     }
   }
 

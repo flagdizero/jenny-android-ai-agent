@@ -2,9 +2,8 @@
 
 Erano copiati in testa a dieci moduli, e le copie divergevano su `null` come
 testo. Qui la regola, e il controllo che nessuno se li riscriva in casa.
-`home-plan.js` resta fuori finché l'altra sessione lo ridisegna, e
-`shared/place-card.js` costruisce in un documento che riceve (`doc`), non in
-quello della pagina.
+`shared/place-card.js` resta fuori: costruisce in un documento che riceve
+(`doc`), non in quello della pagina.
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ import re
 from support.js_harness import ASSETS, function, requires_node, run_js
 
 DOM_JS = (ASSETS / "shared" / "dom.js").read_text(encoding="utf-8")
-EXEMPT = {"home-plan.js", "shared/place-card.js", "shared/dom.js"}
+EXEMPT = {"shared/place-card.js", "shared/dom.js"}
 
 
 def _modules():
@@ -53,7 +52,7 @@ def test_helpers() -> None:
         "const toasts = [];\n"
         "const showToast = (m, kind) => toasts.push([m, kind]);\n"
         "const i18n = { t: (k) => `t:${k}` };\n"
-        + "\n".join(function(DOM_JS, n) for n in ("el", "button", "icon", "iconHtml", "writeFailedToast"))
+        + "\n".join(function(DOM_JS, n) for n in ("el", "button", "icon", "iconHtml", "lockLine", "writeFailedToast"))
         + """
 assert.equal(el('p', 'a', null).textContent, undefined, 'null non e\\u2019 un testo');
 assert.equal(el('p', '', 'x').className, undefined);
@@ -70,5 +69,15 @@ writeFailedToast({ code: 'conflict' }, 'board.failed');
 writeFailedToast(null, 'board.failed');
 assert.deepEqual(toasts, [['t:home.plan.lock', 'error'], ['t:board.failed', 'error'],
   ['t:board.failed', 'error']]);
+const line = { hidden: false, kids: ['vecchio'], replaceChildren() { this.kids = []; },
+  append(...k) { this.kids.push(...k); } };
+lockLine(line, true);
+assert.equal(line.hidden, false);
+assert.deepEqual(line.kids.map((k) => [k.tag, k.className, k.textContent]),
+  [['i', 'ti ti-lock', undefined], ['span', undefined, 't:home.plan.lock']]);
+assert.equal(line.kids[0].attrs['aria-hidden'], 'true');
+lockLine(line, false);
+assert.equal(line.hidden, true);
+assert.deepEqual(line.kids, []);
 """
     )

@@ -573,10 +573,6 @@ export class AppsActions {
         showToast(i18n.t('apps.deleteFailed'), 'error');
         return;
       }
-      if (!trashed) {
-        showToast(i18n.t('apps.appDeleted'), 'success');
-        return;
-      }
       showUndo(i18n.t('apps.trashed', { name: app.name || slug }), async () => {
         try {
           await rpc.apps('restore', { id: trashed });

@@ -271,9 +271,6 @@ export function formatWhen(ms, { nowMs, tr, locale, timeZone, precision } = {}) 
  *  di lui la stessa spiegazione andrebbe ripetuta su ogni riga. */
 export function pickBanner(payload) {
   if (!payload || payload.available === false) return { kind: 'unavailable' };
-  if (payload.recovery) {
-    return { kind: 'recovered', restoredFrom: payload.recovery.restored_from };
-  }
   if (payload.service_running === false) return { kind: 'stopped' };
   const inert = (payload.jobs ?? []).filter((j) => j.effective === 'inert');
   if (inert.length) return { kind: 'inert', jobs: inert.map((j) => j.name) };

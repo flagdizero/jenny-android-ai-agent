@@ -55,7 +55,7 @@ function drawer(name) {
  *  Quella di un cassetto senza soprascritta ne' sottotitolo (la vista sta gia'
  *  dentro l'officina, e dirglielo di nuovo non aggiunge niente), e il nome e'
  *  «Console», la stessa stringa della voce del dock (`nav.console` in
- *  officina.html) — una parola sola per due posti, cosi' non possono divergere.
+ *  workshop.html) — una parola sola per due posti, cosi' non possono divergere.
  *
  *  Come `drawer`, e' una funzione perche' si ricostruisce intera a ogni
  *  cambio di lingua: riassegnare il solo titolo lasciava il pill con la
