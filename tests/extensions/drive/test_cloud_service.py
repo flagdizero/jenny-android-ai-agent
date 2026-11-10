@@ -626,6 +626,23 @@ async def test_a_damaged_copy_is_found_said_and_redone(tmp_path: Path) -> None:
     assert (tmp_path / "back" / "USER.md").read_text(encoding="utf-8") == "l'utente"
 
 
+async def test_a_key_that_does_not_open_the_copy_is_not_a_damaged_copy(tmp_path: Path) -> None:
+    """La copia è sana e la chiave del telefono è un'altra: ``verify`` lo dice
+    con il codice di ``run``, e non la segna rotta (che la farebbe ricaricare
+    da capo appena la chiave torna giusta)."""
+    env = _env(tmp_path)
+    await env.service.enable(PW)
+    await env.service.run()
+    good = env.service.key_path.read_bytes()
+    env.service.key_path.write_bytes(bytes(b ^ 0xFF for b in good))
+
+    checked = await env.service.verify()
+
+    assert checked == {"ok": False, "error": "wrong_key"}
+    status = env.service.status()
+    assert status["last_error"] == "" and not status.get("force_fresh")
+
+
 async def test_a_check_that_could_not_finish_is_not_a_damaged_copy(tmp_path: Path) -> None:
     env = _env(tmp_path)
     await env.service.enable(PW)

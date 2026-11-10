@@ -393,6 +393,13 @@ class CloudBackupService:
                 bad = await asyncio.to_thread(_mismatches, work, manifest.files)
             except DriveConsentError:
                 return {"ok": False, "error": "consent_needed"}
+            except WrongKeyError:
+                # La chiave di questo telefono non apre la copia: non è rotta, e
+                # segnarla rotta farebbe ricaricare tutto alla prossima. Gli
+                # stessi codici di ``run``.
+                return {"ok": False, "error": "wrong_key"}
+            except RepoNotFoundError:
+                return {"ok": False, "error": "backup_missing"}
             except CloudBackupError as exc:
                 # La copia c'è ma non si ricostruisce (pacco rovinato, blob che
                 # manca o non torna): è rotta, non irraggiungibile.

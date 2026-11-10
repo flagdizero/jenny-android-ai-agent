@@ -1797,6 +1797,14 @@ async def _run_board(
         )
     finally:
         _prune_sessions(agent, session_key)
+    if aborted and outcome.status == "done":
+        # L'utente è tornato mentre la bacheca scriveva, e le scritture dopo sono
+        # state rifiutate: il modello ha chiuso il giro, ma la passata non è
+        # «fatta». Il timbro resta (``BoardPass.finish``): la bacheca riprova
+        # dopo il freno, non al battito dopo, con l'utente ancora lì.
+        logger.warning("gardener: the board pass over {} yielded to the user — {}",
+                       store.name, aborted[0])
+        return "incomplete"
     return outcome.status
 
 
