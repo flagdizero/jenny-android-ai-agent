@@ -30,7 +30,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from jenny.snapshot.locations import STAGED_DB_DIR_NAME, db_dir_for_runtime_root
+from jenny.utils.locations import STAGED_DB_DIR_NAME, db_dir_for_runtime_root
 
 STATE_FILE = "state.sqlite"
 UNDO_FILE = "undo.sqlite"
@@ -77,7 +77,7 @@ def stage_state_from_tree(runtime_root: Path, tree: Path) -> bool:
     """
     from jenny import db
     from jenny.db.shards import ShardsError, build
-    from jenny.snapshot.types import STATE_ENTRY_DIR
+    from jenny.utils.locations import STATE_ENTRY_DIR
 
     shards_dir = Path(tree) / STATE_ENTRY_DIR
     try:

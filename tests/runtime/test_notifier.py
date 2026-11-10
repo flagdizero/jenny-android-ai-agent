@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
+from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 from jenny.runtime import notifier, user_text
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 
 class _FakeBridge:

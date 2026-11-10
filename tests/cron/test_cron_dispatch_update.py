@@ -18,13 +18,13 @@ from unittest.mock import MagicMock
 import pytest
 from support.sessions import FakeSessions
 
+from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 from jenny.config.loader import get_config_path, save_config
 from jenny.config.schema import Config
 from jenny.runtime import cron_dispatch
 from jenny.runtime.cron_dispatch import UPDATE_SESSION_KEY, CronDispatcher
 from jenny.runtime.update_check import UpdateInfo
 from jenny.session.turn_visibility import TurnVisibility
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _UPDATE_JOB = SimpleNamespace(
     name="update_check", id="update_check", payload=SimpleNamespace(kind="system_event")

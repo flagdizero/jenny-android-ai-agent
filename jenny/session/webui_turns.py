@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import INTERNAL_CHANNEL, WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
+from jenny.bus.events import (
+    INTERNAL_CHANNEL,
+    WEBSOCKET_CHANNEL,
+    WEBUI_DEFAULT_CHAT_ID,
+    InboundMessage,
+    OutboundMessage,
+)
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import (
     RuntimeEventBus,
@@ -25,7 +31,6 @@ from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.manager import Session, SessionManager
 from jenny.session.mascot_mood import NEUTRAL_MOOD, last_reply, mood_from_reply
 from jenny.session.turn_visibility import resolve_turn_visibility
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 if TYPE_CHECKING:
     from jenny.config.schema import Config

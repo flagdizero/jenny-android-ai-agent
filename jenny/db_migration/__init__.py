@@ -49,7 +49,7 @@ def run_pending(workspace: Path, *, now: float | None = None,
     Non solleva mai: una migrazione che fallisce non ferma il gateway.
     """
     from jenny import db
-    from jenny.snapshot.locations import runtime_root_for
+    from jenny.utils.locations import runtime_root_for
 
     runtime_root = runtime_root_for(workspace)
     ctx = MigrationContext(

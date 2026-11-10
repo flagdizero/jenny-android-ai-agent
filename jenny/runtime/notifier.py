@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from jenny.bus.events import WEBSOCKET_CHANNEL
+from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_MESSAGE_SOURCE_METADATA_KEY
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
 from jenny.runtime.user_text import current_bot_name, say
@@ -34,7 +34,6 @@ from jenny.session.keys import (
 )
 from jenny.utils.helpers import clip
 from jenny.utils.plain_text import plain_text
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _BRIDGE = BridgeCache("com.flagdizero.jenny.NotifierBridge")
 

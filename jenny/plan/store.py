@@ -44,7 +44,7 @@ from jenny.plan.model import (
     tag_new_version,
 )
 from jenny.session.keys import project_session_key
-from jenny.snapshot.locations import plans_dir_for
+from jenny.utils.locations import plans_dir_for
 
 _PLAN_ID_RE = re.compile(r"\Ap_[0-9a-f]{12}\Z")
 
@@ -128,7 +128,7 @@ class PlanStore:
 
     def __init__(self, plans_dir: Path, *, workspace: Path | None = None) -> None:
         # ``plans_dir`` è dove stavano i piani prima del database: serve solo a
-        # trovare il workspace, accanto (``snapshot.locations``).
+        # trovare il workspace, accanto (``utils.locations``).
         self.plans_dir = Path(plans_dir)
         # Il workspace dei registri dell'annulla (``plan.work``), e del
         # database dove i piani stanno insieme a loro.

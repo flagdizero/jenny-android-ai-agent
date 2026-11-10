@@ -59,6 +59,19 @@ from jenny.plan.audit import (
     wiki_texts,
 )
 from jenny.plan.facts import LostFacts, lost_facts
+from jenny.plan.meta import (
+    PLAN_ANSWER_META,
+    PLAN_FOLLOWUP_META,
+    PLAN_ID_META,
+    PLAN_MODE_META,
+    PLAN_NOTES_META,
+    PLAN_PROPOSE_TOOL,
+    PLAN_REVISE_META,
+    PLAN_STEP_META,
+    PLAN_STEP_TOOLS,
+    PLAN_TOOL_NAMES,
+    PLAN_WAKE_META,
+)
 from jenny.plan.model import (
     HELD_STATUSES,
     OPEN_STATUSES,
@@ -90,28 +103,6 @@ from jenny.session.history_meta import (
 )
 from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
 from jenny.utils.path import atomic_write
-
-#: I quattro tool del modello. Stanno qui perché a decidere quando si vedono è
-#: il driver (``AgentLoop`` chiede :meth:`PlanDriver.step_open`).
-PLAN_PROPOSE_TOOL = "plan_propose"
-PLAN_STEP_TOOLS: frozenset[str] = frozenset({"plan_step_done", "plan_step_skip", "plan_blocked"})
-PLAN_TOOL_NAMES: frozenset[str] = frozenset({PLAN_PROPOSE_TOOL, *PLAN_STEP_TOOLS})
-
-#: Metadati del messaggio: il turno di pianificazione (il tasto Piano), la
-#: revisione di una proposta, la risposta a un piano bloccato.
-PLAN_MODE_META = "plan_mode"
-PLAN_REVISE_META = "plan_revise"
-PLAN_ANSWER_META = "plan_answer"
-PLAN_ID_META = "plan_id"
-PLAN_STEP_META = "plan_step"
-#: Messo dal server su un turno della pianificazione in corso che il client
-#: non ha marcato (la risposta a una domanda di Jenny): il blocco del turno lo
-#: dice al modello, che non ricomincia da capo.
-PLAN_FOLLOWUP_META = "_plan_drafting_followup"
-
-#: Le note di sistema che il modello legge al turno dopo (un ritorno indietro):
-#: stanno nei metadati della sessione, e il loop le consuma nel contesto.
-PLAN_NOTES_META = "plan_notes"
 
 # Lo stato del promemoria di un passo, nell'``extra`` del passo: ``sent`` è
 # partito e il suo turno non è ancora finito, ``used`` è stato speso. Un solo
@@ -224,10 +215,6 @@ _MARKS = {
 #: comunque. È la garanzia contro un aiutante lento ma vivo, che il watchdog
 #: non marca ``stalled``.
 HELD_WAKE_AFTER_S = 600.0
-#: Messo dal driver sul turno di risveglio: ``stalled`` (i fratelli rimasti sono
-#: tutti fermi) o ``timeout`` (il tetto di sopra). Il turno è un turno di passo
-#: (``PLAN_STEP_EVENT``): stessa verifica di freschezza, stessi tool.
-PLAN_WAKE_META = "plan_wake"
 #: Il testo del risveglio. Inglese, come ogni testo per il modello.
 HELD_WAKE_TEXT = (
     "[Plan — helper results waiting]\n\n"

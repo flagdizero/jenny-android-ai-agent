@@ -162,8 +162,8 @@ def _register_builtin_functions(
         from jenny.security.subagent_policy import check_read
 
         if not restrict_to_workspace:
-            from jenny.security.workspace_policy import _safe_expanduser
-            resolved = _safe_expanduser(path).resolve()
+            from jenny.utils.path import safe_expanduser
+            resolved = safe_expanduser(path).resolve()
         else:
             from jenny.agent.tools.python_exec import _path_guard_bypass
             from jenny.security.workspace_policy import resolve_allowed_path

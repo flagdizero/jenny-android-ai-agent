@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.bus.events import WEBSOCKET_CHANNEL, InboundMessage
-from jenny.plan.driver import PLAN_NOTES_META
+from jenny.plan.meta import PLAN_NOTES_META
 from jenny.session.keys import project_session_key
 
 if TYPE_CHECKING:

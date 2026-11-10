@@ -41,7 +41,8 @@ from loguru import logger
 
 from jenny.agent.hook import AgentHook, ToolResultHookContext
 from jenny.cron.session_turns import is_cron_turn
-from jenny.plan.driver import (
+from jenny.plan.driver import PlanDriver, notebook_of
+from jenny.plan.meta import (
     PLAN_ANSWER_META,
     PLAN_FOLLOWUP_META,
     PLAN_ID_META,
@@ -52,8 +53,6 @@ from jenny.plan.driver import (
     PLAN_STEP_META,
     PLAN_STEP_TOOLS,
     PLAN_TOOL_NAMES,
-    PlanDriver,
-    notebook_of,
 )
 from jenny.security.subagent_policy import UNTRUSTED_TOOLS
 from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
@@ -417,7 +416,7 @@ class LoopPlanMixin:
     @staticmethod
     def _persist_plan_turn(session: Session, msg: InboundMessage) -> dict[str, Any]:
         """Scrive in storia il turno di passo, marcato come riga sintetica."""
-        from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+        from jenny.plan.meta import PLAN_ID_META, PLAN_STEP_META
 
         meta = msg.metadata if isinstance(msg.metadata, dict) else {}
         session.add_message(

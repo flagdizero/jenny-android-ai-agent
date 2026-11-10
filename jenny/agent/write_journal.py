@@ -296,7 +296,7 @@ def _undo_db(workspace: Path):
 
 def objects_dir_for(workspace: Path) -> Path:
     from jenny.db.restore import UNDO_OBJECTS_DIR_NAME
-    from jenny.snapshot.locations import db_dir_for
+    from jenny.utils.locations import db_dir_for
 
     return db_dir_for(workspace) / UNDO_OBJECTS_DIR_NAME
 

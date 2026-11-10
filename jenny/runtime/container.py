@@ -455,7 +455,7 @@ class GatewayContainer:
         fallisce lui.
         """
         from jenny import db
-        from jenny.snapshot.locations import runtime_root_for
+        from jenny.utils.locations import runtime_root_for
 
         try:
             db.open_all(runtime_root_for(self.config.workspace_path))
@@ -591,8 +591,8 @@ class GatewayContainer:
         from jenny.config.paths import get_data_dir
         from jenny.db import shards
         from jenny.snapshot.engine import SnapshotEngine
-        from jenny.snapshot.locations import snapshots_dir_for
         from jenny.snapshot.service import SnapshotService
+        from jenny.utils.locations import snapshots_dir_for
 
         self.snapshot = SnapshotService(
             SnapshotEngine(

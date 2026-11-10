@@ -15,11 +15,11 @@ from typing import Any
 
 import pytest
 
+from jenny.bus.events import WEBUI_TURN_METADATA_KEY
 from jenny.session.manager import Session
 from jenny.webui import commands
 from jenny.webui import project_greet as module
 from jenny.webui.commands import CommandError
-from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
 
 class _Sessions:

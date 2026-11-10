@@ -343,7 +343,7 @@ async def _old_phone_backup(tmp_path: Path) -> tuple[MemorySink, bytes, str]:
 
 
 async def test_new_phone_opens_the_copy_with_the_password_and_restores(tmp_path: Path) -> None:
-    from jenny.snapshot.locations import MARKER_FILE_NAME, STAGED_WORKSPACE_DIR_NAME
+    from jenny.utils.locations import MARKER_FILE_NAME, STAGED_WORKSPACE_DIR_NAME
 
     sink, key, snapshot_id = await _old_phone_backup(tmp_path)
     new = _env(tmp_path / "new", sink=sink)
@@ -377,7 +377,7 @@ async def test_the_copy_on_drive_carries_the_state_too(tmp_path: Path) -> None:
     from jenny import db as jdb
     from jenny.db import shards
     from jenny.db.schema import Schema
-    from jenny.snapshot.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
+    from jenny.utils.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
 
     kv = Schema("kv", ("CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT);",))
     old = _env(tmp_path / "old")
@@ -527,7 +527,7 @@ async def test_the_password_never_reaches_disk(tmp_path: Path) -> None:
 
 
 async def test_restoring_an_unknown_copy_writes_nothing(tmp_path: Path) -> None:
-    from jenny.snapshot.locations import MARKER_FILE_NAME
+    from jenny.utils.locations import MARKER_FILE_NAME
 
     sink, _key, _ = await _old_phone_backup(tmp_path)
     new = _env(tmp_path / "new", sink=sink)

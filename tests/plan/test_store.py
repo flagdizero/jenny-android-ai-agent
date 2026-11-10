@@ -16,7 +16,7 @@ from jenny.plan.store import (
     PlanStore,
     is_plan_id,
 )
-from jenny.snapshot.locations import plans_dir_for
+from jenny.utils.locations import plans_dir_for
 
 
 def _proposal(*titles: str):

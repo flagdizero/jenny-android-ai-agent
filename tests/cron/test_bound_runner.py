@@ -21,7 +21,12 @@ from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.turn_types import TurnOutcome
-from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.bus.events import (
+    WEBUI_MESSAGE_SOURCE_METADATA_KEY,
+    WEBUI_TURN_METADATA_KEY,
+    InboundMessage,
+    OutboundMessage,
+)
 from jenny.cron.bound_runner import (
     CRON_WAKELOCK_TIMEOUT_S,
     MONITOR_KEEP_RECENT_MESSAGES,
@@ -39,7 +44,6 @@ from jenny.cron.types import CronJob, CronJobSilencedError, CronPayload
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import is_silent_turn
 from jenny.utils.prompt_templates import render_template
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 
 def _bound_job(

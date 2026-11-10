@@ -12,7 +12,13 @@ from loguru import logger
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.turn_types import TurnOutcome
 from jenny.board.cron_link import last_message_text, link_alive, record_result, scope_of
-from jenny.bus.events import WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
+from jenny.bus.events import (
+    WEBSOCKET_CHANNEL,
+    WEBUI_MESSAGE_SOURCE_METADATA_KEY,
+    WEBUI_TURN_METADATA_KEY,
+    InboundMessage,
+    OutboundMessage,
+)
 from jenny.cron.condition import describe as describe_condition
 from jenny.cron.condition import read_condition
 from jenny.cron.could_not_check import (
@@ -46,7 +52,6 @@ from jenny.session.keys import notebook_cron_session_key
 from jenny.session.turn_visibility import mark_silent_turn
 from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.prompt_templates import render_template
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 # Coda di storico tenuta nella sessione isolata di un monitor: un monitor gira
 # all'infinito e senza potatura la sua sessione cresce senza limite.

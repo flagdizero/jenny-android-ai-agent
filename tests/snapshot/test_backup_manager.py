@@ -18,11 +18,11 @@ import pytest
 from jenny.config.schema import SnapshotConfig
 from jenny.snapshot.backup import BackupError, BackupManager
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.locations import (
+from jenny.snapshot.service import SnapshotService
+from jenny.utils.locations import (
     STAGED_SNAPSHOTS_DIR_NAME,
     STAGED_WORKSPACE_DIR_NAME,
 )
-from jenny.snapshot.service import SnapshotService
 
 _METADATA = json.dumps({"format_version": 1}).encode("utf-8")
 

@@ -11,20 +11,7 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-
-def _safe_expanduser(path: str | Path) -> Path:
-    """Return an expanded path, gracefully handling platforms without HOME."""
-    p = Path(path)
-    try:
-        return p.expanduser()
-    except (RuntimeError, OSError):
-        if p.is_absolute():
-            return p.resolve()
-        first = str(p)
-        if first.startswith("~"):
-            return Path(first[1:].lstrip("/") if first.startswith("~/") else "")
-        return p
-
+from jenny.utils.path import safe_expanduser
 
 WORKSPACE_BOUNDARY_NOTE = (
     " (this is a hard policy boundary, not a transient failure; "
@@ -218,9 +205,9 @@ def is_app_code_path(path: str | Path) -> bool:
 
 def _resolve_path(path: str | Path, workspace: str | Path | None = None, *, strict: bool = False) -> Path:
     """Resolve *path*, interpreting relative paths against *workspace* when set."""
-    candidate = _safe_expanduser(path)
+    candidate = safe_expanduser(path)
     if not candidate.is_absolute() and workspace is not None:
-        candidate = _safe_expanduser(workspace) / candidate
+        candidate = safe_expanduser(workspace) / candidate
     try:
         return candidate.resolve(strict=strict)
     except RuntimeError:
@@ -241,9 +228,9 @@ def _resolve_path(path: str | Path, workspace: str | Path | None = None, *, stri
 
 def _resolve_logical_path(path: str | Path, workspace: str | Path | None = None) -> Path:
     """Return an absolute normalized path without following symlinks."""
-    candidate = _safe_expanduser(path)
+    candidate = safe_expanduser(path)
     if not candidate.is_absolute() and workspace is not None:
-        candidate = _safe_expanduser(workspace) / candidate
+        candidate = safe_expanduser(workspace) / candidate
     return Path(os.path.abspath(candidate))
 
 
@@ -287,7 +274,7 @@ def _resolved_root(root: str | Path) -> Path:
     cached = _ROOT_RESOLVE_CACHE.get(key)
     if cached is not None:
         return cached
-    resolved = _safe_expanduser(root).resolve(strict=False)
+    resolved = safe_expanduser(root).resolve(strict=False)
     if len(_ROOT_RESOLVE_CACHE) >= _ROOT_RESOLVE_CACHE_MAX:
         # Limite di crescita: la cache è un'ottimizzazione, non uno stato.
         _ROOT_RESOLVE_CACHE.clear()
@@ -306,7 +293,7 @@ def _is_path_within(path: str | Path, root: str | Path, *, path_resolved: bool =
         if path_resolved:
             resolved_path = path if isinstance(path, Path) else Path(path)
         else:
-            resolved_path = _safe_expanduser(path).resolve(strict=False)
+            resolved_path = safe_expanduser(path).resolve(strict=False)
         resolved_root = _resolved_root(root)
         resolved_path.relative_to(resolved_root)
         return True
@@ -335,9 +322,9 @@ def is_path_within(path: str | Path, root: str | Path, *, path_resolved: bool = 
         resolved_path = (
             (path if isinstance(path, Path) else Path(path))
             if path_resolved
-            else _safe_expanduser(path).resolve(strict=False)
+            else safe_expanduser(path).resolve(strict=False)
         )
-        resolved_root = _safe_expanduser(root).resolve(strict=False)
+        resolved_root = safe_expanduser(root).resolve(strict=False)
         resolved_path.relative_to(resolved_root)
         return True
     except (OSError, RuntimeError, TypeError, ValueError):
@@ -410,7 +397,7 @@ def resolve_allowed_path(
     # `resolved` viene già da `_resolve_path(..., strict=False)`, cioè da una
     # `Path.resolve()`: dichiararlo evita un secondo `realpath` identico.
     if not _is_path_allowed(resolved, roots, path_resolved=True) and not exact_allowed:
-        boundary = _safe_expanduser(allowed_root) if allowed_root is not None else "allowed files"
+        boundary = safe_expanduser(allowed_root) if allowed_root is not None else "allowed files"
         raise WorkspaceBoundaryError(
             f"Path {path} is outside allowed directory {boundary}"
             + WORKSPACE_BOUNDARY_NOTE

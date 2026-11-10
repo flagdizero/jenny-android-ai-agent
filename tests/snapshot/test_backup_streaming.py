@@ -24,8 +24,8 @@ from jenny.snapshot.crypto import (
     decrypt_file,
 )
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.locations import STAGED_WORKSPACE_DIR_NAME
 from jenny.snapshot.service import SnapshotService
+from jenny.utils.locations import STAGED_WORKSPACE_DIR_NAME
 
 pytest.importorskip("cryptography")
 

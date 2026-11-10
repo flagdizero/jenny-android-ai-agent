@@ -19,7 +19,6 @@ from jenny.config.runtime_env import (
     WORKSPACE_SANDBOX_ENFORCED_LEGACY_ENV,
     WORKSPACE_SANDBOX_PROVIDER_ENV,
 )
-from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.keys import (
     is_project_session_key,
     notebook_of_cron_session,
@@ -27,6 +26,7 @@ from jenny.session.keys import (
     project_session_key,
 )
 from jenny.utils.errors import StatusError
+from jenny.utils.path import safe_expanduser
 from jenny.utils.wiki_paths import notebook_dir
 
 WorkspaceAccessMode = Literal["restricted", "full"]
@@ -292,7 +292,7 @@ class WorkspaceScopeResolver:
         personale. Trasformarlo in un rifiuto detto a voce e' il passo 6.
         """
         name = project_name(session_key)
-        projects_root = _safe_expanduser(self.default_workspace) / self.projects_subdir
+        projects_root = safe_expanduser(self.default_workspace) / self.projects_subdir
         # Il nome arriva da una session key, che a sua volta arriva da un client:
         # un ``..`` non deve poter far uscire lo scope dalla cartella dei progetti.
         project = notebook_dir(projects_root, name)
@@ -410,7 +410,7 @@ def workspace_sandbox_status(
 ) -> WorkspaceSandboxStatus:
     """Return how workspace restriction is enforced in the current host."""
 
-    workspace_root = str(_safe_expanduser(workspace).resolve(strict=False))
+    workspace_root = str(safe_expanduser(workspace).resolve(strict=False))
     provider = _env_system_provider(environ)
     if not restrict_to_workspace:
         return WorkspaceSandboxStatus(
@@ -455,7 +455,7 @@ def build_workspace_scope(
     access_mode: str,
 ) -> WorkspaceScope:
     mode = _normalize_access_mode(access_mode)
-    root = _safe_expanduser(project_path).resolve(strict=False)
+    root = safe_expanduser(project_path).resolve(strict=False)
     restrict = mode == "restricted"
     return WorkspaceScope(
         project_path=root,
@@ -495,13 +495,13 @@ def validate_workspace_scope_payload(
 
     raw_path = raw.get("project_path") or raw.get("path")
     if raw_path is None or raw_path == "":
-        raw_path = str(_safe_expanduser(default_workspace).resolve(strict=False))
+        raw_path = str(safe_expanduser(default_workspace).resolve(strict=False))
     if not isinstance(raw_path, str):
         raise WorkspaceScopeError("project_path must be a string")
     if "\0" in raw_path:
         raise WorkspaceScopeError("project_path contains invalid characters")
 
-    project = _safe_expanduser(raw_path)
+    project = safe_expanduser(raw_path)
     if not project.is_absolute():
         raise WorkspaceScopeError("project_path must be absolute")
     project = project.resolve(strict=False)
@@ -626,7 +626,7 @@ def current_tool_workspace(
     project_path = (
         scope.project_path
         if scope is not None
-        else _safe_expanduser(default_workspace) if default_workspace is not None else None
+        else safe_expanduser(default_workspace) if default_workspace is not None else None
     )
     restrict = (
         scope.restrict_to_workspace

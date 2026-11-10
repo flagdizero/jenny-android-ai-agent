@@ -372,9 +372,9 @@ def _alert_stuck(stuck: int) -> None:
     ``jenny/agent`` non dipende da ``jenny/runtime``, e una riga di allarme non
     è una buona ragione per cominciare.
     """
+    from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
     from jenny.runtime.notifier import notify_delivery
     from jenny.runtime.user_text import say
-    from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
     # «Officina → Memoria» e non «Impostazioni → Officina → Memoria»: i numeri
     # stanno nel cassetto Memoria dell'officina, e il notifier tronca a 200

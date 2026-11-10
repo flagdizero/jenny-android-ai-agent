@@ -26,7 +26,12 @@ from urllib.parse import urlparse
 
 from loguru import logger
 
-from jenny.bus.events import InboundMessage, OutboundMessage, is_coordination
+from jenny.bus.events import (
+    WEBUI_TURN_METADATA_KEY,
+    InboundMessage,
+    OutboundMessage,
+    is_coordination,
+)
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import TurnRunStatusChanged
 from jenny.channels.http_utils import secret_matches
@@ -43,7 +48,6 @@ from jenny.config.schema import TelegramConfig
 from jenny.runtime.power import keep_awake
 from jenny.runtime.user_text import say
 from jenny.utils.media_decode import FileSizeExceeded, save_bytes
-from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
 # Limite prudente sul testo grezzo: la conversione HTML può allungare il chunk.
 _RAW_CHUNK_LIMIT = 3500

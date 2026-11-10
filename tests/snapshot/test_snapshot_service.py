@@ -161,7 +161,7 @@ async def test_start_sweeps_old_safety_copies(tmp_path: Path) -> None:
     """All'avvio il servizio ripulisce le copie di sicurezza scadute dei restore."""
     import os
 
-    from jenny.snapshot.locations import SAFETY_DIR_PREFIX, runtime_root_for
+    from jenny.utils.locations import SAFETY_DIR_PREFIX, runtime_root_for
 
     engine, service, ws = _setup(tmp_path)
     runtime_root = runtime_root_for(ws)

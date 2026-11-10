@@ -16,7 +16,7 @@ from support.js_harness import ASSETS
 from support.kotlin_source import ANDROID_SRC, read_source
 
 from jenny.snapshot.backup import IMPORT_STAGED_FILENAME
-from jenny.snapshot.locations import backup_staging_dir_for
+from jenny.utils.locations import backup_staging_dir_for
 from jenny.webui.backup_routes import BACKUP_DATA_HEADER
 
 KOTLIN_MAIN = ANDROID_SRC / "MainActivity.kt"

@@ -83,8 +83,8 @@ class SnapshotService:
         head = await asyncio.to_thread(self._engine.list_snapshots, 1)
         self._last_snapshot_at_ms = head[0]["created_at_ms"] if head else 0
         # Pulizia best-effort delle copie di sicurezza lasciate dai restore.
-        from jenny.snapshot.locations import runtime_root_for
         from jenny.snapshot.restore_marker import sweep_safety_copies
+        from jenny.utils.locations import runtime_root_for
 
         await asyncio.to_thread(sweep_safety_copies, runtime_root_for(self._engine.root))
         self._arm_timer()
@@ -168,12 +168,12 @@ class SnapshotService:
         si toglie.
         """
         from jenny.db.restore import stage_state_from_tree
-        from jenny.snapshot.locations import (
+        from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
+        from jenny.utils.locations import (
             STAGED_DB_DIR_NAME,
             STAGED_WORKSPACE_DIR_NAME,
             runtime_root_for,
         )
-        from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
 
         runtime_root = runtime_root_for(self._engine.root)
         staged = runtime_root / STAGED_WORKSPACE_DIR_NAME

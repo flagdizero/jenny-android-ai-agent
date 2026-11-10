@@ -145,9 +145,9 @@ def alert_silently_broken_checks(
     if not checks:
         return []
 
+    from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
     from jenny.runtime.notifier import notify_delivery
     from jenny.runtime.user_text import say
-    from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
     metadata: dict[str, Any] = {
         WEBUI_MESSAGE_SOURCE_METADATA_KEY: {

@@ -1,4 +1,4 @@
-"""Layout su disco del sottosistema snapshot/backup.
+"""Layout su disco della *runtime root*: snapshot, backup, stato in SQLite.
 
 Tutto ciò che deve SOPRAVVIVERE allo swap atomico del workspace (store degli
 snapshot, staging, marker, copie di sicurezza) vive nella *runtime root*: la
@@ -72,3 +72,10 @@ def db_dir_for_runtime_root(runtime_root: Path) -> Path:
 
 def db_dir_for(workspace_path: Path) -> Path:
     return db_dir_for_runtime_root(runtime_root_for(workspace_path))
+
+
+# Dove lo stato in SQLite entra in uno snapshot (``jenny/db/shards``): voci di
+# manifest come le altre, che però non sono file del workspace. Il motore non
+# traccia mai un file vero con questo nome, e i conteggi mostrati non le
+# contano.
+STATE_ENTRY_DIR = ".jenny-state"

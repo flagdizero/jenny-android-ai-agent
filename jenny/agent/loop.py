@@ -59,7 +59,13 @@ from jenny.agent.turn_types import (
     StateTraceEntry as StateTraceEntry,
 )
 from jenny.agent.write_journal import reset_journal, set_journal
-from jenny.bus.events import INTERNAL_CHANNEL, WEBSOCKET_CHANNEL, InboundMessage, OutboundMessage
+from jenny.bus.events import (
+    INTERNAL_CHANNEL,
+    WEBSOCKET_CHANNEL,
+    WEBUI_TURN_METADATA_KEY,
+    InboundMessage,
+    OutboundMessage,
+)
 from jenny.bus.progress import build_bus_progress_callback
 from jenny.bus.queue import MessageBus
 from jenny.bus.runtime_events import (
@@ -121,7 +127,6 @@ from jenny.utils.helpers import CONTEXT_BUDGET_SAFETY_BUFFER, clip, reserved_out
 from jenny.utils.prompt_templates import render_template
 from jenny.utils.wiki_migration import restore_wiki_id
 from jenny.utils.wiki_paths import find_wiki_by_id, wiki_id, wiki_schema_file
-from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
 if TYPE_CHECKING:
     from jenny.config.schema import (

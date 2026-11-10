@@ -15,8 +15,8 @@ from jenny.config.paths import get_workspace_path
 from jenny.cron.could_not_check import is_only_markers
 from jenny.security.subagent_policy import is_config_file
 from jenny.security.workspace_access import current_tool_workspace
-from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.turn_visibility import is_silent_turn, mark_silent_turn
+from jenny.utils.path import safe_expanduser
 
 # Sentinel di default per i flag per-turno: condiviso, mai mutato. Un turno vero
 # riceve il suo dict fresco da ``start_turn()``.
@@ -157,7 +157,7 @@ class MessageTool(Tool, ContextAware):
     ):
         self._send_callback = send_callback
         self._workspace = (
-            _safe_expanduser(workspace) if workspace is not None else get_workspace_path()
+            safe_expanduser(workspace) if workspace is not None else get_workspace_path()
         )
         self._restrict_to_workspace = restrict_to_workspace
         self._default_channel: ContextVar[str] = ContextVar(
@@ -278,7 +278,7 @@ class MessageTool(Tool, ContextAware):
                 continue
             if not access.restrict_to_workspace:
                 try:
-                    path = _safe_expanduser(p)
+                    path = safe_expanduser(p)
                 except (RuntimeError, OSError):
                     path = Path(p)
                 local = p if path.is_absolute() else str(workspace / path)

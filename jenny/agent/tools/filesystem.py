@@ -38,8 +38,8 @@ from jenny.security.workspace_access import current_tool_workspace, current_turn
 from jenny.security.workspace_policy import (
     ReadOnlyTurnError,
     _path_key,
-    _safe_expanduser,
     refuse_board_write,
+    safe_expanduser,
 )
 from jenny.utils.helpers import build_image_content_blocks, detect_image_mime
 from jenny.utils.path import atomic_write
@@ -233,8 +233,8 @@ class _FsTool(Tool):
         if root is None:
             return None
         try:
-            root = _safe_expanduser(root).resolve(strict=False)
-            current = _safe_expanduser(workspace).resolve(strict=False)
+            root = safe_expanduser(root).resolve(strict=False)
+            current = safe_expanduser(workspace).resolve(strict=False)
         except (OSError, RuntimeError, TypeError, ValueError):
             return None
         if current == root or root not in current.parents:
@@ -273,8 +273,8 @@ class _FsTool(Tool):
         if self._allowed_dir is None or self._workspace is None:
             return access_allowed_root
         try:
-            allowed_dir = _safe_expanduser(self._allowed_dir).resolve(strict=False)
-            workspace = _safe_expanduser(self._workspace).resolve(strict=False)
+            allowed_dir = safe_expanduser(self._allowed_dir).resolve(strict=False)
+            workspace = safe_expanduser(self._workspace).resolve(strict=False)
         except (OSError, RuntimeError, TypeError, ValueError):
             return access_allowed_root if access_allowed_root is not None else self._allowed_dir
         if allowed_dir == workspace:

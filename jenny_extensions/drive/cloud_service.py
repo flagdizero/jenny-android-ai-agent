@@ -31,10 +31,10 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.snapshot.crypto import DEFAULT_KDF_ITERATIONS
-from jenny.snapshot.locations import runtime_root_for
 from jenny.snapshot.store import hash_content
 from jenny.snapshot.types import entry_target
 from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.locations import runtime_root_for
 from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud import (

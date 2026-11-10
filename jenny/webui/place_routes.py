@@ -77,7 +77,7 @@ class PlaceRoutes:
 
     async def _tile(self, z: int, x: int, y: int) -> Response:
         from jenny.runtime.map_tiles import TILE_TTL_S, get_tile, valid_tile
-        from jenny.snapshot.locations import map_tiles_dir_for
+        from jenny.utils.locations import map_tiles_dir_for
 
         if not valid_tile(z, x, y):
             return http_error(404, "Not Found")

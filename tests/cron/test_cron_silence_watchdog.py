@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 
+from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 from jenny.cron.could_not_check import ESCALATE_AFTER_FAILURES
 from jenny.cron.service import CronService
 from jenny.cron.silence_watchdog import (
@@ -31,7 +32,6 @@ from jenny.cron.types import (
     CronMonitorCouldNotCheckError,
     CronSchedule,
 )
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _NOW = 1_760_000_000_000
 

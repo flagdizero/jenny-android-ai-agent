@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from jenny.security.workspace_policy import _safe_expanduser
+from jenny.utils.path import safe_expanduser
 
 MARKDOWN_LOCAL_IMAGE_RE = re.compile(
     r"!\[([^\]]*)\]\((<[^>]+>|[^)\s]+)(\s+(?:\"[^\"]*\"|'[^']*'))?\)"
@@ -48,7 +48,7 @@ def rewrite_local_markdown_images(
         if Path(path_text).suffix.lower() not in INLINE_MARKDOWN_MEDIA_EXTS:
             return None
         try:
-            candidate = _safe_expanduser(path_text)
+            candidate = safe_expanduser(path_text)
         except (RuntimeError, OSError):
             candidate = Path(path_text)
         if not candidate.is_absolute():

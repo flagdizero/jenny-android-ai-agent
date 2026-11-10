@@ -20,7 +20,6 @@ from loguru import logger
 
 from jenny.snapshot.store import get_blob, iter_blob_hashes, object_path, put_blob
 from jenny.snapshot.types import (
-    STATE_ENTRY_DIR,
     FileEntry,
     SnapshotManifest,
     entry_problem,
@@ -29,6 +28,7 @@ from jenny.snapshot.types import (
     is_state_entry,
 )
 from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.locations import STATE_ENTRY_DIR
 from jenny.utils.path import atomic_write, read_json_dict
 
 # Esclusioni di default (path POSIX relativi alla radice del workspace).

@@ -32,7 +32,7 @@ from pathlib import Path
 
 from jenny.db.database import Database, SchemaError, SchemaTooNewError
 from jenny.db.schema import Schema
-from jenny.snapshot.locations import db_dir_for_runtime_root, runtime_root_for
+from jenny.utils.locations import db_dir_for_runtime_root, runtime_root_for
 
 __all__ = [
     "DATABASE_NAMES",

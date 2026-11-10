@@ -65,8 +65,8 @@ async def run(host: ExtensionHost) -> str | None:
         return None
     agent = host.get_agent()
     if agent is None:
+        from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
         from jenny.runtime.notifier import notify_delivery
-        from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
         notify_delivery(
             "Jenny has not been able to save her copy to Google Drive for "

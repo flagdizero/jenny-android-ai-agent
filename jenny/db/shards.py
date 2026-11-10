@@ -30,7 +30,7 @@ from typing import Any
 from urllib.parse import quote
 
 from jenny.db.database import META_TABLE_NAMES, META_TABLES, Database
-from jenny.snapshot.types import STATE_ENTRY_DIR
+from jenny.utils.locations import STATE_ENTRY_DIR
 
 FORMAT = 1
 SCHEMA_FILE = "schema.json"

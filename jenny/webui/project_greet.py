@@ -34,7 +34,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.bus.events import WEBSOCKET_CHANNEL, OutboundMessage
+from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_TURN_METADATA_KEY, OutboundMessage
 from jenny.providers.opencode import conversation_scope
 from jenny.session.keys import (
     project_session_key,
@@ -42,7 +42,6 @@ from jenny.session.keys import (
     webui_transcript_key,
 )
 from jenny.utils.prompt_templates import render_template
-from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 from jenny.webui.transcript_store import has_webui_transcript
 
 # Quanto aspettare il modello prima della frase fissa. Il saluto e' la prima

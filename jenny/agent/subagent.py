@@ -474,7 +474,7 @@ def _plan_metadata() -> tuple[str | None, str | None]:
     meta = ctx.metadata if ctx is not None and isinstance(ctx.metadata, dict) else {}
     if not meta:
         return None, None
-    from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+    from jenny.plan.meta import PLAN_ID_META, PLAN_STEP_META
 
     plan_id = meta.get(PLAN_ID_META)
     plan_step = meta.get(PLAN_STEP_META)
@@ -2529,7 +2529,7 @@ class SubagentManager:
         # da li eredita il passo (``_plan_metadata``). Sicuro: un turno di passo si
         # riconosce da ``injected_event``, non da queste chiavi.
         if spec_for_plan is not None and (spec_for_plan.plan_id or spec_for_plan.plan_step):
-            from jenny.plan.driver import PLAN_ID_META, PLAN_STEP_META
+            from jenny.plan.meta import PLAN_ID_META, PLAN_STEP_META
 
             if spec_for_plan.plan_id:
                 metadata[PLAN_ID_META] = spec_for_plan.plan_id

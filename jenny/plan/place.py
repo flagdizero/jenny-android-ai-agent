@@ -22,10 +22,10 @@ from dataclasses import dataclass
 from fnmatch import fnmatch
 
 from jenny.board.model import BOARD_DIR
+from jenny.bus.events import WEBUI_DEFAULT_CHAT_ID
 from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import UNIFIED_SESSION_KEY, is_project_session_key, project_name
 from jenny.utils.wiki_paths import JOURNAL_DIRNAME
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 PERSONAL = "personal"
 NOTEBOOK_PREFIX = "nb:"

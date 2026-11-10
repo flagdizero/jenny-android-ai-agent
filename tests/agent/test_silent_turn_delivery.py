@@ -26,14 +26,13 @@ from support.aio import drain_nowait
 
 from jenny.agent.loop import AgentLoop
 from jenny.agent.turn_types import TurnDisposition
-from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.bus.events import WEBUI_TURN_METADATA_KEY, InboundMessage, OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.cron.session_turns import monitor_session_key
 from jenny.providers.base import LLMResponse
 from jenny.runtime.user_text import say
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import silent_turn_metadata
-from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
 # Un turno silenzioso di lavoro interno: la sessione di un monitor del cron.
 MONITOR_SESSION_KEY = monitor_session_key("rain-check")
@@ -566,8 +565,8 @@ class TestAVisibleAnnounceHasATurnId:
         loop._run_agent_loop = run  # type: ignore[method-assign]
 
     async def _turn_ids(self, loop: AgentLoop, msg: InboundMessage) -> tuple[list, list]:
+        from jenny.bus.events import WEBUI_TURN_METADATA_KEY
         from jenny.bus.runtime_events import TurnCompleted
-        from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 
         completed: list[TurnCompleted] = []
 
@@ -615,7 +614,7 @@ class TestAVisibleAnnounceHasATurnId:
         assert first[0] != again[0]
 
     async def test_a_silent_announce_gets_none(self, tmp_path: Path) -> None:
-        from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+        from jenny.bus.events import WEBUI_TURN_METADATA_KEY
 
         loop = _make_loop(tmp_path)
         _stub_run(loop)
