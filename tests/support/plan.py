@@ -66,6 +66,15 @@ class FakeHost:
             if str(m.get("target", "")).startswith(prefix)
         ]
 
+    def journal_drafts(self, keys: frozenset[str]) -> list[dict[str, Any]]:
+        from jenny.agent.staged_writes import list_staged
+
+        return [
+            {"id": m["id"], "target": m["target"], "created_ms": m.get("created_ms")}
+            for m in list_staged(self.workspace)
+            if m.get("journal") in keys
+        ]
+
     def discard_draft(self, draft_id: str) -> bool:
         from jenny.agent.staged_writes import discard
 

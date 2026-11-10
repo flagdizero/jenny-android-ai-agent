@@ -147,6 +147,15 @@ class PlanHost(Protocol):
         """
         ...
 
+    def journal_drafts(self, keys: frozenset[str]) -> list[dict[str, Any]]:
+        """Le bozze in attesa scritte sotto uno dei registri dell'annulla *keys*.
+
+        Dove il piano non ha una cartella sua (la chat personale) una bozza è
+        del piano se l'ha scritta chi lavorava per lui: la bozza porta la chiave
+        del registro di chi l'ha scritta. Stessa forma di ``notebook_drafts``.
+        """
+        ...
+
     def discard_draft(self, draft_id: str) -> bool:
         """Butta una bozza in attesa. ``True`` se c'era."""
         ...

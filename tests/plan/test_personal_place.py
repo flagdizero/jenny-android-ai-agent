@@ -212,3 +212,52 @@ async def test_stop_does_not_call_a_personal_plan_a_notebook(
     out = await cmd_stop(ctx)
     assert out.content == say(wanted)
     assert ("quaderno" in out.content or "notebook" in out.content) is (notebook is not None)
+
+
+# ── le bozze di un passo ────────────────────────────────────────────────────
+
+
+async def test_a_personal_step_waits_for_the_drafts_written_for_it(
+    driver: PlanDriver, workspace: Path
+) -> None:
+    """Come nel quaderno: il passo non si chiude con una sua bozza in attesa.
+
+    La chat personale non ha una cartella sua, quindi la bozza è del piano per
+    chi l'ha scritta (il registro che porta), non per dove va: quella di un
+    altro lavoro, nata nello stesso momento, non lo ferma.
+    """
+    from jenny.agent import staged_writes
+    from jenny.agent.write_journal import bind_journal, journal_for
+    from jenny.plan.model import current_step
+    from jenny.plan.work import plan_journal
+    from tests.support.aio import wait_until
+
+    staged_writes.clear_change_listeners()
+    driver.watch_drafts()
+    try:
+        await start_drafting(driver, PERSONAL_KEY)
+        await propose(driver, "Riordino", _STEPS, key=PERSONAL_KEY)
+        plan = driver.store.open_plan_for("personal")
+        await driver.approve(plan.id, plan.version, [])
+        plan = driver.store.load(plan.id)
+
+        def stage(rel: str, task: str) -> str:
+            return staged_writes.stage(
+                workspace, rel, b"nuovo\n", sources=("web_fetch:example.org",), task_id=task
+            ).id
+
+        with bind_journal(journal_for(workspace, "helper-altro"), step=None):
+            stage("USER.md", "altro")
+        with bind_journal(plan_journal(workspace, plan), step=current_step(plan).id):
+            mine = stage("SOUL.md", "mio")
+
+        await driver.step_done(PERSONAL_KEY, "Fatto")
+        plan = driver.store.load(plan.id)
+        assert plan.status == "blocked" and plan.blocked["kind"] == "drafts"
+        assert plan.blocked["drafts"] == [{"id": mine, "target": "SOUL.md"}]
+
+        assert staged_writes.discard(workspace, mine)
+        await wait_until(lambda: driver.store.load(plan.id).steps[0].status == "done")
+        assert driver.store.load(plan.id).blocked is None
+    finally:
+        staged_writes.clear_change_listeners()

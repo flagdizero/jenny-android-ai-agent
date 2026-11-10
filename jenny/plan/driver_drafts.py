@@ -31,6 +31,7 @@ from jenny.plan.driver_common import (
     _UnchangedError,
 )
 from jenny.plan.model import Plan, PlanError, apply_transition, now_iso
+from jenny.plan.work import helper_keys, plan_journal_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -90,6 +91,19 @@ class StepDraftsMixin:
         async def _settle_closed(self, plan: Plan) -> Plan: ...
         def _spawn(self, coro: Any) -> None: ...
 
+    def _pending_drafts(self, plan: Plan) -> list[dict[str, Any]]:
+        """Le bozze in attesa nel posto di *plan*.
+
+        In un quaderno sono quelle che ne cambiano un file. La chat personale
+        non ha una cartella sua, e lì scrivono anche altri (un cron, un aiutante
+        di prima): una bozza è del piano se l'ha scritta chi lavorava per lui,
+        cioè sotto il registro del piano o di un aiutante dei suoi passi.
+        """
+        if plan.notebook:
+            return self.host.notebook_drafts(plan.notebook)
+        keys = frozenset((plan_journal_key(plan.id), *helper_keys(plan)))
+        return self.host.journal_drafts(keys)
+
     def _plan_drafts(self, plan: Plan) -> list[dict[str, str]]:
         """Le bozze in attesa che appartengono a *plan* (cioè al suo passo aperto).
 
@@ -108,7 +122,7 @@ class StepDraftsMixin:
         since_ms = _approved_ms(plan)
         drafts: list[dict[str, str]] = []
         try:
-            pending = self.host.notebook_drafts(plan.notebook)
+            pending = self._pending_drafts(plan)
         except Exception as exc:  # noqa: BLE001 — chi chiude un passo deve saperlo
             # Fino al 26/10 tornava ``[]``: il passo si chiudeva con le bozze in
             # attesa, cioè il difetto del 23/10 che questo metodo esiste per
@@ -238,7 +252,7 @@ class StepDraftsMixin:
         wanted = {str(d.get("id")) for d in blocked.get("drafts") or ()}
         pending = {
             str(d.get("id"))
-            for d in await asyncio.to_thread(self.host.notebook_drafts, plan.notebook)
+            for d in await asyncio.to_thread(self._pending_drafts, plan)
         }
         heard_id = str(getattr(change, "id", "") or "")
         heard_action = str(getattr(change, "action", "") or "")
