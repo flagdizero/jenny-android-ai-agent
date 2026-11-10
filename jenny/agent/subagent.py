@@ -3803,7 +3803,13 @@ class SubagentManager:
         ``python_exec`` può continuare nel suo thread: quello lo aspetta
         :meth:`undo` (``UNDO_WAIT_FOR_THREADS_S``), e se non esce rifiuta.
         """
-        live = self._live_task_for(task_id)
+        # Il tentativo vivo si cerca nel lineage, come fa :meth:`undo`: con l'id
+        # di un tentativo vecchio (una bolla rimasta aperta dopo un rilancio)
+        # quello vivo non si trovava, niente veniva fermato e l'annulla
+        # rifiutava «sta ancora lavorando».
+        resolved = self._resolve_target(task_id)
+        lineage_id = resolved[0] if resolved is not None else task_id
+        live = self._live_task_for(lineage_id) or self._live_task_for(task_id)
         if live is not None:
             await self.cancel_task(live, grace_s=grace_s, by=by)
         return await self.undo(task_id, by=by)

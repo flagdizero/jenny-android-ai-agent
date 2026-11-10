@@ -122,6 +122,28 @@ class TestLineageIdentity:
         await _settle(sm)
 
     @pytest.mark.asyncio
+    async def test_stop_and_undo_from_an_old_attempt_id_stops_the_live_one(self, tmp_path: Path):
+        """Una bolla rimasta aperta dopo un rilancio porta l'id del tentativo
+        vecchio: «Ferma e annulla» da lì deve fermare quello vivo del lineage,
+        non rifiutare «sta ancora lavorando»."""
+        sm = _manager(tmp_path)
+        block = asyncio.Event()
+        _blocking_runner(sm, block)
+
+        await sm.spawn("research X", session_key="s1")
+        first_id = next(iter(sm._task_statuses.values())).task_id
+        await sm.restart(first_id, manual=True, grace_s=0.05)
+        second_id = next(iter(sm._task_statuses.values())).task_id
+        assert second_id != first_id and sm._live_task_for(second_id) == second_id
+
+        report = await sm.cancel_and_undo(first_id, by="user", grace_s=0.05)
+
+        assert report.restored == []
+        assert sm._live_task_for(second_id) is None
+        block.set()
+        await _settle(sm)
+
+    @pytest.mark.asyncio
     async def test_announce_metadata_carries_lineage_and_attempt(self, tmp_path: Path):
         sm = _manager(tmp_path)
         _completing_runner(sm)

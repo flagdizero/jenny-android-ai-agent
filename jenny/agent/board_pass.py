@@ -193,8 +193,18 @@ class BoardPass:
         return model.first_board_hold(board) is None
 
     def _rested(self, minutes: int) -> bool:
+        """La bacheca ha riposato abbastanza dall'ultima passata.
+
+        Un ``lastPassAt`` nel futuro (un orologio corso avanti, un salto di
+        fuso) vale «non lo so», cioè riposata: letto come «appena girata»
+        fermava la passata finché l'orologio non lo raggiungeva — la stessa
+        trappola che ``gardener_schedule._age_seconds`` chiude per il giardiniere.
+        """
         last = model.parse_iso((self.board or {}).get("lastPassAt"))
-        return last is None or self.now - last >= timedelta(minutes=minutes)
+        if last is None:
+            return True
+        age = self.now - last
+        return age < timedelta(0) or age >= timedelta(minutes=minutes)
 
     def reason(self, journal_lines: int = 0) -> str | None:
         """Perché questa passata deve girare, o ``None`` se non c'è niente da fare.

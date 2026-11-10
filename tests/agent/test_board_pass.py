@@ -133,6 +133,16 @@ def test_the_brake_holds_a_reason_that_stays_true(tmp_path) -> None:
 # ── Gli strumenti ───────────────────────────────────────────────────────────
 
 
+def test_a_last_pass_in_the_future_does_not_freeze_the_board(tmp_path) -> None:
+    """Un orologio corso avanti ha scritto ``lastPassAt`` a domani: la passata
+    non aspetta che l'orologio vero lo raggiunga."""
+    ws, root = _notebook(tmp_path)
+    _seed_board(root)
+    ahead = (datetime.now().astimezone() + timedelta(days=1)).isoformat()
+    mutate_board(root, lambda b: b.__setitem__("lastPassAt", ahead), actor="jenny")
+    assert BoardPass(root, ws).reason() == "drawers"
+
+
 async def test_assign_takes_only_pages_off_the_board(tmp_path) -> None:
     ws, root = _notebook(tmp_path)
     _seed_board(root)
