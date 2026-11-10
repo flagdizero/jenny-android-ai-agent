@@ -54,19 +54,24 @@ _JOURNALED: dict[str, tuple[str, str]] = {
 }
 
 # Chi scrive e non passa dal registro, con la ragione: o non è raggiungibile da
-# un aiutante, o non scrive file del lavoro.
+# chi lavora sotto un registro, o non scrive file del lavoro. Sotto un registro
+# lavorano gli aiutanti **e** il turno di Jenny in un passo di un piano
+# (``plan-<id>``): per quel turno ``cron`` e le azioni delle app sono raggiungibili,
+# e restano fuori perché non sono file — il foglio «Torna a prima» lo dice
+# all'utente (``home.plan.rollbackSheet.sub``).
 _NOT_JOURNALED: dict[str, str] = {
     "agent/tools/cron.py": (
-        "non è nello scope di un aiutante; e cron/jobs.json lo riscrive lo scheduler: un job "
-        "si annulla togliendolo, non rimettendo il file"
+        "i job sono righe di state.sqlite, non file: il registro rimette file, e un job "
+        "si annulla togliendolo. Un job nato in un passo di un piano resta dopo il ritorno"
     ),
     "agent/tools/app_update.py": "non è nello scope di un aiutante; installa un APK",
     "agent/tools/memory_entries.py": "ci scrive solo Dream, che non è un aiutante",
     "agent/tools/ssh_jobs.py": "stato locale dei job SSH, non un file del lavoro",
     "agent/tools/ssh_transport.py": "stato locale del trasporto SSH",
     "apps/storage.py": (
-        "i dati delle app li scrivono le azioni delle app, che ha solo il turno di Jenny "
-        "(``use_app`` si sincronizza sul registro del loop principale)"
+        "i dati delle app li scrivono le azioni delle app (``use_app``), che ha solo il "
+        "turno di Jenny: sono lo stato dell'app, che l'utente cambia anche da sé, e "
+        "rimetterli indietro cancellerebbe i suoi tocchi. Restano dopo il ritorno di un piano"
     ),
     "apps/executor.py": (
         "chiede alla sola lettura per le azioni http, che non scrivono file sul telefono; "
