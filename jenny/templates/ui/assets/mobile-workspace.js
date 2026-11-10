@@ -39,6 +39,19 @@ function workspaceErrorText(err) {
   return i18n.t('workspace.error') + (err?.message || '');
 }
 
+/** Il toast di un quaderno che non si e' rinominato: i rifiuti attesi di
+ *  `project.rename`, con le stesse parole della casa (`home-app.js`). */
+function projectRenameErrorText(err, name, newName) {
+  const expected = {
+    conflict: ['home.notebook.renameBusy', { name }],
+    name_taken: ['home.notebook.renameTaken', { name: newName }],
+    not_found: ['home.notebook.renameMissing', { name }],
+    plan_running: ['home.plan.lockRename', { name }],
+  };
+  const [key, parameters] = expected[err?.code] || ['home.notebook.renameFailed', { name }];
+  return i18n.t(key, parameters);
+}
+
 /** Testo di aiuto per un path del workspace, o '' se quel file non ne ha. */
 function fileHelpText(path) {
   const key = FILE_HELP_KEYS[path];
@@ -736,14 +749,20 @@ export class WorkspaceController {
         if (!newName || newName === info.name) return;
         const base = parentPath(path);
         const newPath = base ? `${base}/${newName}` : newName;
+        /* Un quaderno si rinomina con `project.rename`, che sposta anche la
+           sua conversazione: `workspace.rename` su una radice di quaderno il
+           server lo rifiuta sempre (v. `commands.py::_rename_refusal`), e da
+           qui il rinomino non riusciva mai. Stessa porta di Elimina, sotto. */
+        const project = await this._projectAt(path);
         try {
-          await rpc.renameWorkspace(path, newPath);
+          if (project) await rpc.renameProject(project, newName);
+          else await rpc.renameWorkspace(path, newPath);
           if (this.currentPath === path) {
             this.currentPath = newPath;
           }
           await this.navigateTo(this.currentDir);
         } catch (err) {
-          showToast(workspaceErrorText(err), 'error');
+          showToast(project ? projectRenameErrorText(err, project, newName) : workspaceErrorText(err), 'error');
         }
         break;
       }
