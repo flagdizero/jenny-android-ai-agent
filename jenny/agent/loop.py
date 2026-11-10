@@ -8,6 +8,7 @@ import functools
 import json
 import time
 import uuid
+import weakref
 from collections.abc import Mapping
 from contextlib import nullcontext
 from pathlib import Path
@@ -60,7 +61,9 @@ from jenny.agent.turn_types import (
 )
 from jenny.agent.write_journal import reset_journal, set_journal
 from jenny.bus.events import (
+    FLOATING_CHANNEL,
     INTERNAL_CHANNEL,
+    NOTIFICATION_CHANNEL,
     WEBSOCKET_CHANNEL,
     WEBUI_TURN_METADATA_KEY,
     InboundMessage,
@@ -197,6 +200,11 @@ def _new_turn_id(session_key: str) -> str:
 # rimetterebbe la CPU a dormire proprio dove serve; e comunque finita, perche'
 # un wakelock eterno scarica la batteria senza dare spiegazioni.
 _TURN_WAKELOCK_TIMEOUT_S = 1800.0
+
+# I canali dove l'utente scrive: i quattro che alimentano la sessione unificata.
+_CHAT_CHANNELS = frozenset(
+    {WEBSOCKET_CHANNEL, "telegram", NOTIFICATION_CHANNEL, FLOATING_CHANNEL}
+)
 
 # I turni che il runner chiude con un avviso invece di una risposta
 # (``AgentRunner._finish_on_blank``), e il ``kind`` d'errore che quell'avviso
@@ -445,6 +453,12 @@ class AgentLoop(
         # When a session has an active task, new messages for that session
         # are routed here instead of creating a new task.
         self._pending_queues: dict[str, asyncio.Queue] = {}
+        # Il canale di chi ha aperto il turno di ogni coda: il turno risponde lì
+        # (``_from_another_chat_channel``). Per coda e non per sessione, così
+        # sparisce con lei da qualunque parte la si tolga.
+        self._queue_channels: weakref.WeakKeyDictionary[asyncio.Queue, str] = (
+            weakref.WeakKeyDictionary()
+        )
         self._cron_turns = CronTurnCoordinator(
             publish_inbound=self.bus.publish_inbound,
             dispatch=self._dispatch,
@@ -1790,6 +1804,16 @@ class AgentLoop(
                         session_key_override=effective_key,
                     )
                 try:
+                    if self._from_another_chat_channel(effective_key, msg):
+                        # Il turno in volo risponde sul canale di chi l'ha
+                        # aperto: un messaggio scritto da un altro canale, messo
+                        # lì dentro, avrebbe la risposta dove chi l'ha scritto
+                        # non guarda. Aspetta il suo turno, che risponde a lui.
+                        logger.info(
+                            "Message from {} waits for its own turn in session {}",
+                            msg.channel, effective_key,
+                        )
+                        raise asyncio.QueueFull
                     self._pending_queues[effective_key].put_nowait(pending_msg)
                 except asyncio.QueueFull:
                     logger.warning(
@@ -1815,6 +1839,7 @@ class AgentLoop(
             if effective_key not in self._pending_queues:
                 injection_queue = asyncio.Queue(maxsize=20)
                 self._pending_queues[effective_key] = injection_queue
+                self._queue_channels[injection_queue] = msg.channel
             task = asyncio.create_task(self._dispatch(msg, injection_queue))
             self._active_tasks.setdefault(effective_key, []).append(task)
             task.add_done_callback(
@@ -1823,6 +1848,22 @@ class AgentLoop(
                 if t in self._active_tasks.get(k, [])
                 else None
             )
+
+    def _from_another_chat_channel(self, session_key: str, msg: InboundMessage) -> bool:
+        """*msg* è scritto dall'utente su un canale diverso da quello del turno in volo.
+
+        La sessione unificata la alimentano quattro canali, e un turno risponde
+        su quello che l'ha aperto (più la copia nella vista della WebUI). Vale
+        solo fra canali dove l'utente scrive: il rientro di un aiutante o un
+        passo del piano (``system``) entrano nel turno in volo come prima.
+        """
+        queue = self._pending_queues.get(session_key)
+        origin = self._queue_channels.get(queue) if queue is not None else None
+        return (
+            origin in _CHAT_CHANNELS
+            and msg.channel in _CHAT_CHANNELS
+            and msg.channel != origin
+        )
 
     async def _dispatch(
         self, msg: InboundMessage, pending: "asyncio.Queue | None" = None
@@ -1868,6 +1909,7 @@ class AgentLoop(
                 if pending is None:
                     pending = asyncio.Queue(maxsize=20)
                     self._pending_queues[session_key] = pending
+                    self._queue_channels[pending] = msg.channel
                 try:
                     on_stream = on_stream_end = None
                     # Un turno silenzioso non streamma: i delta sono pubblicati
