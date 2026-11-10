@@ -110,7 +110,7 @@ class _Cron:
         self.added.append(kwargs)
         raise AssertionError("nessun job deve nascere in sola lettura")
 
-    def list_jobs(self):
+    def list_jobs(self, **_kwargs: Any):
         return []
 
     def get_job(self, _id: str):
@@ -133,10 +133,9 @@ def _cron_tool(session_key: str) -> tuple[CronTool, _Cron]:
     "params",
     [
         {"action": "add", "message": "x", "date": "2026-09-01", "time": "09:00"},
-        {"action": "list"},
         {"action": "remove", "job_id": "j1"},
     ],
-    ids=["add", "list", "remove"],
+    ids=["add", "remove"],
 )
 async def test_cron_is_closed_in_the_personal_chat_too(readonly: Path, params: dict) -> None:
     """Il passo 3 chiudeva solo i progetti; la sola lettura vale anche qui.
@@ -147,6 +146,16 @@ async def test_cron_is_closed_in_the_personal_chat_too(readonly: Path, params: d
     tool, service = _cron_tool("unified:default")
     result = await tool.execute(**params)
     assert _MARK in result
+    assert service.added == []
+
+
+async def test_listing_the_jobs_is_a_read_in_every_chat(readonly: Path) -> None:
+    """Leggere i job non scrive: in una pianificazione personale (sola lettura)
+    Jenny deve poter vedere cosa è già programmato. Era permesso solo nel
+    quaderno."""
+    tool, service = _cron_tool("unified:default")
+    result = await tool.execute(action="list")
+    assert _MARK not in result
     assert service.added == []
 
 

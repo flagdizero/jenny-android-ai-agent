@@ -335,9 +335,9 @@ def readonly_from_metadata(message_metadata: Any) -> bool:
 READONLY_TOOL_REFUSAL = (
     "Not now: this conversation is read-only, so nothing on the device can be changed "
     "(files, downloads, app data, memory, scheduled jobs, app updates). Do not look for "
-    "another tool or another path — there isn't one. Describe what you would have done, "
-    "and tell the user they can turn writing back on with the switch next to the chip "
-    "above the composer if they want it applied."
+    "another tool or another path — there isn't one. Describe what you would have done. "
+    "Lifting the read-only is the user's move, not yours: it comes from their read-only "
+    "switch, or from a plan being prepared or paused in this chat."
 )
 
 

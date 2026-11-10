@@ -16,7 +16,7 @@ final: no other path or other tool is worth trying, **running code included** �
 one to do the writing spends a whole run to collect the same refusals. If a subagent would help you *describe* the change, say so; do not send one to
 attempt it.
 
-If the change is worth applying, say so in one line and let the user flip the switch above the
-composer; it is theirs to flip, not yours to ask twice.
+If the change is worth applying, say so in one line. Lifting the read-only is the user's move —
+their read-only switch, or the plan that holds this chat — not yours to ask twice.
 
 You can still talk: answering, and messaging the user, work as always.

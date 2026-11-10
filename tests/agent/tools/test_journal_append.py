@@ -167,7 +167,7 @@ async def test_no_project_means_no_journal_and_it_says_where_one_lives(tool, tmp
         reset_workspace_scope(token)
 
     assert "No journal here" in out
-    assert "chip above the composer" in out
+    assert "from Notebooks" in out
     assert not list(plain.rglob("*.md"))
 
 

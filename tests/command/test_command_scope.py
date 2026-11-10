@@ -123,7 +123,7 @@ def test_a_project_command_outside_says_how_to_get_in() -> None:
     text = refusal(_spec("/tidy"))
 
     assert "not a project" in text
-    assert "chip above the composer" in text
+    assert "from Notebooks" in text
     assert "/tidy" in text
 
 
@@ -131,7 +131,7 @@ def test_a_personal_command_inside_a_project_says_where_to_send_it() -> None:
     text = refusal(_spec("/dream"))
 
     assert "personal chat" in text
-    assert "chip above the composer" in text
+    assert "chip" not in text
 
 
 def test_the_refusal_carries_the_note_of_that_command() -> None:

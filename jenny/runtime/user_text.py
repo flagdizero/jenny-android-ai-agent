@@ -310,12 +310,11 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.unavailable": "`{command}` is unavailable: its prompt template could not be loaded.",
         "cmd.refusal.project": (
             "`{command}` works on one project, and this conversation is not a project.\n\n"
-            "Open the project — the chip above the composer does it — and send `{command}` "
-            "there."
+            "Open the project from Notebooks and send `{command}` there."
         ),
         "cmd.refusal.personal": (
             "`{command}` does not act on this project, so it does nothing here.\n\n"
-            "Send it from the personal chat — the chip above the composer switches back."
+            "Send it from the personal chat."
         ),
         "cmd.help.new": "Stop the current task and start a fresh conversation.",
         "cmd.help.stop": (
@@ -694,12 +693,11 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.unavailable": "`{command}` non è disponibile: non riesco a caricare il suo prompt.",
         "cmd.refusal.project": (
             "`{command}` lavora su un quaderno, e questa conversazione non è un quaderno.\n\n"
-            "Apri il quaderno, con il chip sopra la casella di testo, e manda `{command}` "
-            "da lì."
+            "Apri il quaderno dai Quaderni e manda `{command}` da lì."
         ),
         "cmd.refusal.personal": (
             "`{command}` non agisce su questo quaderno, quindi qui non fa niente.\n\n"
-            "Mandalo dalla chat personale: il chip sopra la casella di testo ti riporta lì."
+            "Mandalo dalla chat personale."
         ),
         "cmd.help.new": "Ferma il lavoro in corso e inizia una conversazione nuova.",
         "cmd.help.stop": (

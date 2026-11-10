@@ -129,7 +129,7 @@ async def test_outside_a_project_it_says_where_to_go(tmp_path: Path) -> None:
     assert spec is not None
     assert published[0].content == refusal(spec)
     assert "not a project" in published[0].content
-    assert "chip above the composer" in published[0].content
+    assert "from Notebooks" in published[0].content
 
 
 def _capture(sink: list):

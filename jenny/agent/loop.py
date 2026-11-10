@@ -3050,9 +3050,9 @@ class AgentLoop(
         vive dove si prende la decisione di consegna, cioe' in ``_dispatch``.
 
         Chi l'esito lo vuole davvero chiama :meth:`process_direct_outcome`, che
-        e' lo stesso turno senza la perdita di informazione. Lo chiamava
-        l'heartbeat (ritirato il 31/10/2026), a cui serviva ``final_text``; oggi
-        lo usano solo i test che leggono l'esito di un turno silenzioso.
+        e' lo stesso turno senza la perdita di informazione: lo usa
+        ``runtime/cron_dispatch.py`` per gli annunci silenziosi, a cui serve
+        sapere se il turno ha parlato.
 
         ``visibility`` dichiara esplicitamente se il turno puo' raggiungere
         l'utente: serve a chi gira lavoro interno su un canale *utente* (il
