@@ -21,17 +21,14 @@ estensioni caricabili. Vale per tutto ``jenny/``:
 
 from __future__ import annotations
 
-import asyncio
 import sqlite3
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 from loguru import logger
-
-_T = TypeVar("_T")
 
 # Quanto un'altra connessione (un altro processo, o ``sqlite3`` lanciato a mano
 # sul telefono) può tenere il file prima che una scrittura rinunci.
@@ -161,18 +158,6 @@ class Database:
                 yield self._reader
             finally:
                 self._reader.execute("COMMIT")
-
-    async def aread(self, sql: str, params: Any = ()) -> list[sqlite3.Row]:
-        return await asyncio.to_thread(self.read, sql, params)
-
-    async def awrite(self, fn: Callable[[sqlite3.Connection], _T]) -> _T:
-        """``fn(conn)`` dentro una transazione, fuori dal loop."""
-
-        def run() -> _T:
-            with self.write() as conn:
-                return fn(conn)
-
-        return await asyncio.to_thread(run)
 
     # -- schema ---------------------------------------------------------------
 

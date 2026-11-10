@@ -438,16 +438,6 @@ class SessionManager:
             last_consolidated=loaded["last_consolidated"],
         )
 
-    @staticmethod
-    def _session_payload(session: Session) -> dict[str, Any]:
-        return {
-            "key": session.key,
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat(),
-            "metadata": session.metadata,
-            "messages": session.messages,
-        }
-
     def save(self, session: Session, *, fsync: bool = False) -> None:
         """Salva *session*: i metadati e i messaggi cambiati, in una transazione.
 

@@ -3,14 +3,12 @@
 Fino al 06/10/2026 una micro app era un ``run.py`` attaccato a un cassetto
 (``<quaderno>/board/micro/<id>/``), che l'orologio del quaderno girava dopo un
 [Tienilo] dell'utente. Adesso e' un'app generale col suo lettore (``reader`` in
-``app.json``, v. ``jenny/apps/reader.py``), e all'avvio
-``jenny/apps/migrate_micro.py`` sposta le cartelle rimaste in ``workspace/apps``.
+``app.json``, v. ``jenny/apps/reader.py``).
 
 Di questo modulo resta quello che il lettore riusa: la spec
 (:func:`normalize_spec`, che valida anche il lettore), la validazione delle
 letture, la compattazione, ``ctx.http``, il pool e il sandbox dell'esecuzione,
-il passo. In coda, quel poco che la migrazione deve ancora saper leggere: dove
-stava una micro app, e la sua approvazione da cancellare.
+il passo.
 
 **La linea di fiducia non e' la sandbox** — ``python_exec`` dice da se' di non
 esserlo. Il codice gira nello stesso ``PythonNamespace`` di ``python_exec``, con
@@ -29,14 +27,6 @@ from pathlib import Path
 from typing import Any
 
 from jenny.board import model
-from jenny.utils.path import read_json, write_json
-
-MICRO_DIRNAME = "micro"
-DRAFTS_DIRNAME = ".drafts"
-SPEC_FILE = "micro.json"
-CODE_FILE = "run.py"
-READINGS_FILE = "readings.jsonl"
-STATE_FILE = "state.json"
 
 # Il passo dell'orologio, e quindi l'intervallo minimo di una micro app.
 MIN_EVERY_MINUTES = 15
@@ -242,49 +232,6 @@ def _normalize_columns(name: str, raw: Any) -> dict[str, dict[str, Any]]:
     return cols
 
 
-# ── le micro app di prima, per la migrazione ────────────────────────────────
-
-
-def micros_dir(root: Path) -> Path:
-    return root / model.BOARD_DIR / MICRO_DIRNAME
-
-
-def micro_dir(root: Path, micro_id: str, *, draft: bool = False) -> Path:
-    base = micros_dir(root)
-    return (base / DRAFTS_DIRNAME / micro_id) if draft else (base / micro_id)
-
-
-@dataclass
-class Micro:
-    id: str
-    dir: Path
-    spec: dict[str, Any]
-    code: str
-    draft: bool = False
-
-
-def load_micro(root: Path, micro_id: str, *, draft: bool = False) -> Micro | None:
-    """La micro app *micro_id* del quaderno, o ``None`` se manca o e' rotta."""
-    if not model.is_valid_id(micro_id):
-        return None
-    d = micro_dir(root, micro_id, draft=draft)
-    raw = read_json(d / SPEC_FILE)
-    try:
-        code = (d / CODE_FILE).read_text(encoding="utf-8")
-        spec = normalize_spec(raw, micro_id=micro_id)
-    except (OSError, MicroError):
-        return None
-    return Micro(id=micro_id, dir=d, spec=spec, code=code, draft=draft)
-
-
-def list_micros(root: Path) -> list[str]:
-    base = micros_dir(root)
-    if not base.is_dir():
-        return []
-    return sorted(p.name for p in base.iterdir()
-                  if p.is_dir() and not p.name.startswith(".") and model.is_valid_id(p.name))
-
-
 # Cio' che in un ``run.py`` ha l'aria di una credenziale. Una micro app non ne
 # porta mai: il quaderno finisce nei backup e negli snapshot, e il codice si
 # mostra nel cassetto e in chat. Chi ha un segreto e' una skill installata, che
@@ -397,31 +344,6 @@ def _validate_rows(name: str, columns: dict[str, dict[str, Any]], value: Any) ->
             clean[col] = cell
         out.append(clean)
     return out
-
-
-_approvals_lock = threading.Lock()
-
-
-def approvals_path(workspace: Path) -> Path:
-    """Accanto al workspace, come la chiave SSH (``config.paths.get_ssh_dir``).
-
-    Fuori dalla radice che gli strumenti di Jenny possono leggere o scrivere
-    finche' ``restrict_to_workspace`` e' acceso: un'approvazione che stesse nel
-    quaderno la potrebbe scrivere chiunque scriva nel quaderno.
-    """
-    return Path(workspace).resolve().parent / "approvals" / "micro.json"
-
-
-def _approval_key(root: Path, micro_id: str) -> str:
-    return f"{root.name}/{micro_id}"
-
-
-def drop_approval(workspace: Path, root: Path, micro_id: str) -> None:
-    path = approvals_path(workspace)
-    with _approvals_lock:
-        data = read_json(path)
-        if isinstance(data, dict) and data.pop(_approval_key(root, micro_id), None) is not None:
-            write_json(path, data, indent=2)
 
 
 # ── la rete, solo verso gli host dichiarati ─────────────────────────────────

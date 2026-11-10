@@ -254,20 +254,6 @@ def read_token_usage_state() -> dict[str, Any]:
     return normalize_token_usage_state({"days": days, "updated_at": updated})
 
 
-def write_token_usage_state(raw: dict[str, Any]) -> dict[str, Any]:
-    """*raw* al posto dei conti salvati, in una transazione."""
-    state = normalize_token_usage_state(raw)
-    state["updated_at"] = _utc_now_iso()
-    with _db().write() as conn:
-        conn.execute("DELETE FROM token_usage_days")
-        conn.executemany(
-            "INSERT INTO token_usage_days(day, updated_at, data) VALUES (?, ?, ?)",
-            [(day, state["updated_at"], json.dumps(row, ensure_ascii=False, sort_keys=True))
-             for day, row in state["days"].items()],
-        )
-    return state
-
-
 def _write_day(day: str, row: dict[str, Any]) -> None:
     """Il giorno *day* salvato; oltre ``_MAX_DAYS_RETAINED`` giorni cadono i più vecchi."""
     with _db().write() as conn:

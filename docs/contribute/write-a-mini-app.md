@@ -153,7 +153,6 @@ There is no approval step: an app is live as soon as it exists (the trial with *
 
 - `app action=draft` / `edit` write into `apps/.drafts/<slug>/` (invisible to `scan_apps`: no tools, not in the App page), validate with `load_app`, refuse a stateful app without a `summary`, and run the reader once there. When everything passes, `promote_draft` makes it the app — a new app takes the whole folder, an existing one gets the new code and keeps its `data/` — and the after-turn tool sync tells the WebUI. When something fails, the draft stays for the next `edit` and the live app is untouched.
 - **Fence**: generic writes into an app's code are refused by `workspace_policy.refuse_board_write` → `is_app_code_path` at every file-tool and `python_exec` write path, so every change goes through those checks; `data/` and `AGENT.md` stay writable.
-- At startup `GatewayContainer._prepare_apps` promotes any valid draft left over by a version that still had trials (`promote_valid_drafts`).
 
 ## Placement and permission
 

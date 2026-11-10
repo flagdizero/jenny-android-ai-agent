@@ -177,8 +177,7 @@ def section_resolver(
             from jenny.board.cron_link import result_of
 
             job_id = str(section.get("job"))
-            legacy = {"card": ctx.get("card"), "section": section.get("id")}
-            return {"job": jobs.get(job_id), "result": result_of(results, job_id, legacy) or None}
+            return {"job": jobs.get(job_id), "result": result_of(results, job_id) or None}
         return {}
 
     return resolve

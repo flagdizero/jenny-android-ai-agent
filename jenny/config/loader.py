@@ -60,9 +60,8 @@ class ConfigWriteRefusedError(RuntimeError):
 
     Si parte lo stesso (sui default, o sul ``.bak`` in memoria): un'app che non si
     avvia l'utente non la ripara. Ma nessuna scrittura passa, perché il file
-    rotto è ancora al suo posto ed è l'unica copia delle sue impostazioni — la
-    scelta del cron, che in quel caso rifiuta (``CronService._corrupt_store_error``),
-    spostata sulle scritture invece che sull'avvio.
+    rotto è ancora al suo posto ed è l'unica copia delle sue impostazioni: il
+    rifiuto sta sulle scritture invece che sull'avvio.
     """
 
 
@@ -265,8 +264,8 @@ RETIRED_KEY_PATHS: frozenset[str] = frozenset({
     # anche i default.
     "wiki.extensions",
     # Il blocco delle pagine della casa prima del rinomino in inglese del
-    # 25/09/2026: ``casa: {schermate, ordine}``. Lo traduce in ``home`` lo schema
-    # (``Config._migrate_casa_to_home``); qui smette di esistere nel file.
+    # 25/09/2026: ``casa: {schermate, ordine}``. Nessuna release l'ha mai scritto
+    # (le pagine stanno in ``home``): se un file di sviluppo l'ha ancora, qui cade.
     "casa",
     # L'heartbeat, ritirato il 31/10/2026: un controllo periodico ora è un job
     # ``monitor`` del cron con la sua cadenza (``jenny/cron/``).

@@ -116,10 +116,6 @@ class Device:
         out = self.sh(f"ls -1 {WORKSPACE}/{rel} 2>/dev/null", check=False)
         return [line for line in out.splitlines() if line]
 
-    def mtime_size(self, rel: str) -> tuple[str, str]:
-        out = self.sh(f"stat -c '%Y %s' {WORKSPACE}/{rel} 2>/dev/null", check=False).split()
-        return (out[0], out[1]) if len(out) == 2 else ("", "")
-
     # -- app ------------------------------------------------------------------
 
     def forward(self) -> None:
@@ -330,12 +326,6 @@ class Device:
                 conn.close()
             self.push_state(local)
         return last
-
-    def job_last_run(self, job_id: str) -> int:
-        for job in self.cron_rows():
-            if job.get("id") == job_id:
-                return int((job.get("state") or {}).get("lastRunAtMs") or 0)
-        return 0
 
     # -- gateway --------------------------------------------------------------
 

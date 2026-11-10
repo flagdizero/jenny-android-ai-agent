@@ -10,7 +10,7 @@ una risposta o un avviso (``is_app_reply``), che Kotlin zittisce diversamente.
 
 Un messaggio consegnato nella chat di un quaderno porta il quaderno **nel tag**
 (``project:<nome>|<tag>``, v. ``alert_conversation``): Kotlin lo rilegge da lì
-(``NotifierBridge.conversationOfTag``) per portare il tocco in quel quaderno, e
+(``AlertConversation.ofTag``) per portare il tocco in quel quaderno, e
 ogni quaderno ha così la sua notifica invece di coalizzare con la chat personale.
 
 Segue il pattern lazy-bridge di ``jenny.webui.android_apps_api``: la classe

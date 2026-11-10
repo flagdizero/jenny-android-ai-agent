@@ -29,7 +29,6 @@ dependencies = [
     "loguru>=0.7.3,<1.0.0",
     "json-repair>=0.57.0,<1.0.0",
     "jinja2>=3.1.0,<4.0.0",
-    "filelock>=3.25.2,<4.0.0",
     "markdown>=3.5,<4.0.0",
     "pypdf>=5.0.0,<6.0.0",
     "pyyaml>=6.0,<7.0.0",

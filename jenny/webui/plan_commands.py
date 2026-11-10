@@ -2,16 +2,16 @@
 
 Come ``staged.*``, sono caricati per prefisso in ``dispatch_command`` e nessun
 tool del modello li raggiunge: **Approva, Ferma e Torna indietro sono decisioni
-dell'utente per costruzione**. Le letture vanno allo store (``plan.json`` è
-l'unica fonte); tutto ciò che muove un piano passa dal driver
+dell'utente per costruzione**. Le letture vanno allo store (le righe di
+``undo.sqlite``, ``jenny/plan/store.py``, sono l'unica fonte); tutto ciò che muove un piano passa dal driver
 (``jenny/plan/driver.py``), che senza agente non c'è — e allora la risposta è
 ``unavailable``.
 
 Il contratto (la WebUI ci scrive contro; ogni risposta riuscita ha ``ok: true``):
 
-- ``plan.get {id} | {place} | {notebook}`` → ``{ok, plan}``. ``plan`` è ``plan.json`` più
-  ``done`` (passi alle spalle: fatti e saltati), ``total`` (senza i tagliati),
-  ``current_step_id``, ``can_rollback``, ``can_undo_rollback``. ``plan.json``
+- ``plan.get {id} | {place} | {notebook}`` → ``{ok, plan}``. ``plan`` è il piano salvato
+  (``Plan.to_dict``) più ``done`` (passi alle spalle: fatti e saltati), ``total`` (senza
+  i tagliati), ``current_step_id``, ``can_rollback``, ``can_undo_rollback``. Il piano
   porta ``coverage: [{id, item, have, missing, strategy, why}]`` (``id``:
   ``c1``…``cN`` per posizione), ``assumptions: [str]``, ``steps[].done_when``
   (vuoti per un piano di prima), ``steps[].covers: [id]`` (le voci che un

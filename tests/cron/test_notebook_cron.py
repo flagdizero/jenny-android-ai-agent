@@ -234,18 +234,15 @@ async def test_a_run_tells_the_open_board(notebook, tmp_path, monkeypatch) -> No
     assert told == ["casa"]
 
 
-def test_an_old_result_key_is_read_and_moved_on_the_next_run(notebook) -> None:
+def test_a_silent_run_keeps_the_last_result_that_said_something(notebook) -> None:
     from jenny.board import cron_link
 
     _ws, root = notebook
-    old = {"notebook": "casa", "card": "annunci", "section": "s-cron"}
+    link = cron_link.make_link("casa", "annunci")
     mutate_board(root, lambda b: b.__setitem__("cronResults", {
-        "annunci/s-cron": {"at": "2026-10-01T09:00:00+02:00", "status": "ok", "text": "vecchio"}}))
-    assert cron_link.result_of(read_board(root)["cronResults"], "j1", old)["text"] == "vecchio"
-    cron_link.record_result(old, job_id="j1", status="silent", text="", job_name="Annunci")
+        "j1": {"at": "2026-10-01T09:00:00+02:00", "status": "ok", "text": "vecchio"}}))
+    cron_link.record_result(link, job_id="j1", status="silent", text="", job_name="Annunci")
     results = read_board(root)["cronResults"]
-    assert "annunci/s-cron" not in results
-    # Un giro muto non cancella l'ultimo esito che diceva qualcosa.
     assert results["j1"]["text"] == "vecchio" and results["j1"]["status"] == "silent"
 
 
@@ -273,7 +270,7 @@ async def test_removing_a_notebook_cron_from_anywhere_cleans_its_board(notebook,
                           session_key="project:casa", board=old)
     mutate_board(root, lambda b: (
         b["cards"][0]["userSections"].append({"id": "s-cron", "kind": "cron", "job": job.id}),
-        b.__setitem__("cronResults", {"annunci/s-cron": {"at": "x", "status": "ok"}})))
+        b.__setitem__("cronResults", {job.id: {"at": "x", "status": "ok"}})))
     personal = _tool(store, key="unified:default")
     out = await personal.execute(action="remove", job_id=job.id)
     assert out == f"Removed job {job.id}"

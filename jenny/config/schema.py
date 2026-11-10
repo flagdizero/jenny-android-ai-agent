@@ -146,7 +146,7 @@ class DreamConfig(Base):
     # configurazione, è una divisione per zero scritta a parole.
     #
     # E resta ``ge=1``, non ``ge=12``, pur essendo dodici il pavimento operativo
-    # (v. ``command/builtin.py::_REVIEW_CADENCE_FLOOR``). Due ragioni. Un restore
+    # (v. ``webui/worker_settings.py::REVIEW_CADENCE_FLOOR``). Due ragioni. Un restore
     # deve poter riscrivere qualunque valore storico, e un ``le=``/``ge=`` nuovo su
     # un campo già spedito non è una restrizione innocua: un `config.json` con un
     # valore fuori range diventa illeggibile, ``loader._load_with_recovery`` prova
@@ -154,8 +154,8 @@ class DreamConfig(Base):
     # default, provider e chiave API inclusi (v. ``GardenerConfig.clamp_raw``).
     # Alzare qui il minimo costerebbe la config di chi ha già `reviewEveryRuns: 1`
     # sul telefono, per una cadenza che al massimo spende token. Il pavimento vive
-    # nel comando, dove c'è una persona a cui spiegarlo e una frase con cui
-    # scavalcarlo.
+    # nelle impostazioni, dove c'è una persona a cui spiegarlo e un dialogo con cui
+    # scavalcarlo (``confirm_back_to_back``).
     review_every_runs: int = Field(
         default=12,
         ge=1,
@@ -630,8 +630,8 @@ class HomePageConfig(Base):
 
     Si chiama ``HomePageConfig``, e non solo «page», perche' nella casa le pagine
     sono due cose diverse: queste sono le pagine **della casa** (il JS le tiene in
-    ``HomePages``, `home-pages.js`), quelle di un *quaderno* sono ``NotebookPages``
-    (`home-notebook-pages.js`). Fino al 25/09/2026 si chiamavano «schermata» e
+    ``HomePages``, `home-pages.js`), quelle di un *quaderno* sono le pagine della sua
+    wiki. Fino al 25/09/2026 si chiamavano «schermata» e
     «pagina», e le due parole in due lingue non bastavano a tenerle distinte.
     """
 
@@ -736,8 +736,7 @@ class HomeConfig(Base):
         remaining: list[Any] = []
         seen: set[str] = set()
         for row in raw:
-            # ``room`` e' il nome inglese della ``stanza`` di allora (la traduce
-            # :meth:`Config._migrate_casa_to_home`): esce in silenzio come prima.
+            # ``room``, la specie ritirata il 23/09/2026: esce in silenzio come prima.
             if isinstance(row, dict) and row.get("kind") == "room":
                 continue
             try:
@@ -1123,11 +1122,6 @@ def _whole_config_version(raw: Any) -> int | None:
             return int(text)
     return None
 
-# I valori italiani del blocco ``casa`` (fino al 25/09/2026) e i loro nomi di adesso:
-# v. :meth:`Config._migrate_casa_to_home`.
-_CASA_KINDS = {"conversazione": "conversation", "stanza": "room"}
-_CASA_FIXED_IDS = {"quaderni": "notebooks", "impostazioni": "settings"}
-
 
 class Config(BaseSettings):
     """Root configuration for jenny."""
@@ -1273,14 +1267,8 @@ class Config(BaseSettings):
                 "(agents.defaults.atlas, wiki.defaultWiki)"
             )
 
-        # v3: come la v2, nessun valore cambia qui. Il blocco ``casa`` diventa
-        # ``home`` (lo traduce :meth:`_migrate_casa_to_home`, a ogni lettura finche'
-        # il file ha ancora quello vecchio) e ``casa`` e' una chiave ritirata:
-        # alzare la versione fa riscrivere il file al primo avvio, e il blocco
-        # vecchio cade subito invece che alla prima impostazione cambiata.
-        if version < 3 and 3 not in _ANNOUNCED_MIGRATIONS and "casa" in data:
-            _ANNOUNCED_MIGRATIONS.add(3)
-            logger.info("Config migration v3: the home block moves from 'casa' to 'home'")
+        # v3: nessun valore cambia. Ritirava il blocco ``casa``, che nessuna
+        # release ha mai scritto; la chiave resta in ``loader.RETIRED_KEY_PATHS``.
 
         # v4: ``contextWindowTokens`` passa da 65536 a 131072 (v. il commento sul
         # campo). Solo il default di ``agents.defaults``: un preset in
@@ -1354,53 +1342,6 @@ class Config(BaseSettings):
                     data = {**data, "tools": {**tools, web_key: web}}
                     break
         return data
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_casa_to_home(cls, data: Any) -> Any:
-        """Il blocco ``casa`` scritto fino al 25/09/2026 si legge come ``home``.
-
-        Fino a quel giorno le pagine della casa stavano in
-        ``casa: {schermate, ordine}``, con le specie e gli id fissi in italiano:
-        ``conversazione``, ``quaderni``, ``impostazioni`` (e ``stanza``, ritirata
-        il 23/09/2026). Qui si traducono chiavi **e** valori nei nomi di adesso
-        — ``home: {pages, order}``, ``conversation``, ``notebooks``, ``settings``,
-        ``room`` — e basta: la validazione vera la fanno poi, riga per riga,
-        i validatori di :class:`HomeConfig`. Per questo la traduzione non rifiuta
-        niente: una riga che non e' un oggetto, o un ordine che non e' un elenco,
-        passano come sono e costano quel che costano li' (la riga, non il file).
-
-        Se il file ha gia' ``home``, vince ``home`` e ``casa`` si ignora: e' il
-        caso di un file scritto a mano, o di una scrittura interrotta a meta'.
-        In entrambi i casi ``casa`` esce dal file alla prossima scrittura di
-        ``store.mutate``, perche' e' in ``loader.RETIRED_KEY_PATHS``.
-        """
-        if not isinstance(data, dict) or "casa" not in data:
-            return data
-        rest = {k: v for k, v in data.items() if k != "casa"}
-        if "home" in data:
-            return rest
-        old = data["casa"]
-        if not isinstance(old, dict):
-            return rest
-        home: dict[str, Any] = {}
-        if "schermate" in old:
-            rows = old["schermate"]
-            if isinstance(rows, list):
-                rows = [
-                    {**r, "kind": _CASA_KINDS.get(r["kind"], r["kind"])}
-                    if isinstance(r, dict) and isinstance(r.get("kind"), str) else r
-                    for r in rows
-                ]
-            home["pages"] = rows
-        if "ordine" in old:
-            order = old["ordine"]
-            if isinstance(order, list):
-                order = [
-                    _CASA_FIXED_IDS.get(v, v) if isinstance(v, str) else v for v in order
-                ]
-            home["order"] = order
-        return {**rest, "home": home}
 
     @model_validator(mode="after")
     def _stamp_config_version(self) -> "Config":

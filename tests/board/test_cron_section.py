@@ -46,7 +46,7 @@ async def test_a_card_cron_is_shown_from_its_job_and_goes_with_it(ctx, workspace
                            cron_jobs=jobs)
     shown = card["automations"][0]
     assert shown["name"] == "Meteo" and shown["schedule"]["every_ms"] == 3_600_000
-    assert "legacySection" not in shown and card["userSections"] == []
+    assert card["userSections"] == []
     assert build_board_view(notebook, cron_jobs=jobs)["cards"][0]["auto"] is True
 
     with_cron = dataclasses.replace(ctx, get_cron_service=lambda: service)
@@ -117,8 +117,8 @@ async def test_a_cron_section_from_before_still_shows_once_and_goes_with_it(
     job = _meteo(service, notebook, {"notebook": "piante", "card": "acero", "section": "s-cron"})
     mutate_board(notebook, lambda b: (
         b["cards"][0]["userSections"].append({"id": "s-cron", "kind": "cron", "job": job.id}),
-        b.__setitem__("cronResults", {"acero/s-cron": {"at": "2026-10-01T09:00:00+02:00",
-                                                      "status": "ok", "text": "sole"}})))
+        b.__setitem__("cronResults", {job.id: {"at": "2026-10-01T09:00:00+02:00",
+                                               "status": "ok", "text": "sole"}})))
     card = build_card_view(notebook, "acero", sections_resolver=section_resolver(workspace_root,
                                                                                notebook),
                            cron_jobs={job.id: job_snapshot(job)})

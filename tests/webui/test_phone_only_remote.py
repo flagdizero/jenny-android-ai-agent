@@ -1,6 +1,8 @@
 """Da un altro dispositivo la WebUI non comanda il telefono, e i suoi file si ricontrollano.
 
-Due regole, misurate il 15/10/2026 (``.agent/`` ha il piano, che non e' nel repo):
+Due regole, misurate il 15/10/2026. Dal Mac, col telefono nel cassetto, un'azione
+sul telefono non e' mai quel che si voleva (un installer resta aperto su uno schermo
+che nessuno guarda, un'app aperta manda Jenny in background; v. ``webui/phone_only.py``):
 
 - le route che agiscono **sul telefono** (aprire o disinstallare un'app Android,
   Info app, Accessibilita', la mascotte flottante, l'installazione di un

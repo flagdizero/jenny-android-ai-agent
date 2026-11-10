@@ -235,8 +235,8 @@ def _quiet_enough(sessions: Any, key: str, now: datetime, idle_min: int) -> bool
 def _plan_held_notebooks(workspace: Path) -> set[str]:
     """I quaderni tenuti da un piano partito (``jenny/plan/model.py::HELD_STATUSES``).
 
-    Dal disco e non dal driver: il giardiniere gira dal dispatcher del cron,
-    che il driver non lo conosce, e ``plan.json`` è comunque l'unica fonte.
+    Dallo store e non dal driver: il giardiniere gira dal dispatcher del cron,
+    che il driver non lo conosce, e le righe di ``PlanStore`` sono comunque l'unica fonte.
     """
     try:
         from jenny.plan.model import HELD_STATUSES

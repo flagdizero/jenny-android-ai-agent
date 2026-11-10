@@ -727,7 +727,6 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
             summary=summary[:SUMMARY_MAX_CHARS],
             user_messages=collect_user_messages(previous.user_messages if previous else [], compacted),
             compactions=previous.compactions + 1 if previous else 1,
-            deterministic=strategy == "deterministic",
         )
         mark_compacted(messages, state.checkpoint)
         # ``pending_usage`` qui e' solo quel che e' costato il checkpoint: si somma

@@ -342,15 +342,6 @@ class Runner:
             "calls": first_calls if first_status == state.get("lastStatus") else calls(),
         }
 
-    def _reapply_calibration(self) -> None:
-        for path, original in self.originals.items():
-            current = self.device.read(path)
-            if current == original and self.active is not None:
-                for edit in self.active.calibration:
-                    if edit.path == path:
-                        current = (current or "").replace(edit.old, edit.new)
-                self.device.write(path, current or "")
-
     def _reset_files(self) -> None:
         for path, text in self.base.items():
             if text is None:

@@ -1,7 +1,7 @@
 """La sonda dei piani a lista: «in questa sessione gira un piano?».
 
-Il piano non vive nei metadati della sessione ma in ``plan.json``, fuori dal
-workspace: una sua copia qui sarebbe la seconda verità che diverge. Il driver dei
+Il piano non vive nei metadati della sessione ma in una riga di ``undo.sqlite``
+(``jenny/plan/store.py``), fuori dal workspace: una sua copia qui sarebbe la seconda verità che diverge. Il driver dei
 piani si registra (``GatewayContainer``) e risponde dal suo indice in memoria;
 senza driver (i test, l'agente non ancora nato) nessun piano è vivo. Stesso schema
 di ``board/notify.py``: un gancio, non un import del driver.
@@ -38,16 +38,6 @@ def plan_running_in_session(session_key: str | None) -> bool:
     try:
         return bool(_plan_probe.plan_running(session_key))
     except Exception:  # noqa: BLE001 — un indice rotto non deve fermare un turno
-        return False
-
-
-def plan_open_in_session(session_key: str | None) -> bool:
-    """True se la sessione ha un piano a lista aperto (proposto, in corso, fermo)."""
-    if not session_key or _plan_probe is None:
-        return False
-    try:
-        return bool(_plan_probe.plan_open(session_key))
-    except Exception:  # noqa: BLE001
         return False
 
 

@@ -236,10 +236,6 @@ class AgentLoop(
     """
 
     @property
-    def current_iteration(self) -> int:
-        return self._current_iteration
-
-    @property
     def tool_names(self) -> list[str]:
         return self.tools.tool_names
 

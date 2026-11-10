@@ -414,26 +414,13 @@ class GatewayContainer:
         add_change_listener(staged)
 
     def _prepare_apps(self) -> None:
-        """Le app prima dell'agente: le prove rimaste, e le micro app traslocate.
+        """Le app prima dell'agente: le schede-app prendono la taglia della loro striscia.
 
-        Le micro app dei cassetti diventano app generali
-        (``jenny/apps/migrate_micro.py``); poi un'app lasciata «in prova» da
-        una versione di prima (06/10/2026) diventa vera
-        (:func:`jenny.apps.drafts.promote_valid_drafts`). Entrambe idempotenti, ed entrambe
-        prima che i tool delle app si registrino. Lo stesso ``except`` largo di ``_repair_pending_renames``:
-        un'app da sistemare non deve valere un gateway che non parte.
+        Idempotente, e prima che i tool delle app si registrino. Lo stesso ``except``
+        largo di ``_repair_pending_renames``: un'app da sistemare non deve valere un
+        gateway che non parte.
         """
         try:
-            from jenny.apps.migrate_micro import migrate_micro_apps
-
-            moved = migrate_micro_apps(self.config.workspace_path)
-            if moved:
-                logger.info("Apps: {} notebook micro apps are now general apps", moved)
-            from jenny.apps.drafts import promote_valid_drafts
-
-            kept = promote_valid_drafts(self.config.workspace_path)
-            if kept:
-                logger.info("Apps: {} left on trial are now apps: {}", len(kept), kept)
             # Le schede-app prendono la taglia della loro striscia (la prima volta
             # dopo l'aggiornamento: prima erano tutte polaroid).
             from jenny.board.place import refresh_app_cards
@@ -703,10 +690,10 @@ class GatewayContainer:
             armed = refresh_system_job(self.cron, worker, config=config)
             logger.info("{}: {}", worker.capitalize(), armed or "disabled")
 
-        # L'orologio dei quaderni: le micro app dei cassetti, le attese delle
-        # bacheche e gli eventi delle sezioni, un giro ogni quarto d'ora su tutti
-        # i quaderni (il passo e' anche l'intervallo minimo di una micro app; un
-        # giro senza niente da fare legge due JSON per quaderno). Registrato con
+        # L'orologio dei quaderni (``jenny/board/clock.py``): i lettori delle app,
+        # gli eventi delle sezioni mini app e le schede tolte, un giro ogni quarto
+        # d'ora su tutti i quaderni (il passo e' anche l'intervallo minimo di un
+        # lettore, ``board.micro.MIN_EVERY_MINUTES``). Registrato con
         # la wiki accesa; a farlo tacere quando la wiki si spegne e' il cancello
         # in ``CronDispatcher._run_reminders``, letto da disco.
         if config.wiki.enabled:

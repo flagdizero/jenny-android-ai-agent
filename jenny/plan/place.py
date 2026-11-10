@@ -74,14 +74,11 @@ def notebook_group(path: str) -> str:
 class PlaceTraits:
     holds: bool            # la cartella resta in sola lettura mentre il piano corre
     machine_check: bool    # ultimo passo ``check``, audit e fatti persi del codice
-    open_gaps: bool        # le lacune in ``raw/notes/open-gaps.md``
     answer_by_chat: bool   # da bloccato, il prossimo messaggio è la risposta
 
 
-NOTEBOOK_TRAITS = PlaceTraits(holds=True, machine_check=True, open_gaps=True,
-                              answer_by_chat=True)
-PERSONAL_TRAITS = PlaceTraits(holds=False, machine_check=False, open_gaps=False,
-                              answer_by_chat=False)
+NOTEBOOK_TRAITS = PlaceTraits(holds=True, machine_check=True, answer_by_chat=True)
+PERSONAL_TRAITS = PlaceTraits(holds=False, machine_check=False, answer_by_chat=False)
 
 
 @dataclass(frozen=True)

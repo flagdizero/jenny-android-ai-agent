@@ -203,9 +203,8 @@ def automations(
         # Un job «una volta sola» già scattato resta nello store spento: non è più niente.
         if snap.get("scope") != scope or not (snap.get("enabled") or snap.get("paused")):
             continue
-        item = {k: v for k, v in snap.items() if k != "legacySection"}
-        legacy = {"card": scope, "section": snap.get("legacySection")}
-        item["result"] = result_of(results, job_id, legacy) or None
+        item = dict(snap)
+        item["result"] = result_of(results, job_id) or None
         out.append(item)
     out.sort(key=lambda a: (a.get("nextRunAtMs") is None, a.get("nextRunAtMs") or 0, a["id"]))
     return out
