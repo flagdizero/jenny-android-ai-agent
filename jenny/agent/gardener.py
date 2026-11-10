@@ -62,6 +62,7 @@ from jenny.agent.internal_run import (
     internal_run_completed,
     internal_run_should_commit,
     prune_internal_sessions,
+    run_internal_turn,
 )
 
 # Il gancio si compone qui come sempre; il suo corpo è stato estratto in un modulo
@@ -71,7 +72,6 @@ from jenny.agent.internal_run import (
 from jenny.agent.wiki_provenance import _provenance_guard
 from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import GARDENER_SESSION_PREFIX
-from jenny.session.turn_visibility import silent_progress
 from jenny.utils.clock import local_now
 from jenny.utils.path import append_with_header
 from jenny.utils.prompt_templates import render_template
@@ -1520,13 +1520,9 @@ async def _run_pass(
 
     try:
         try:
-            resp = await agent.process_direct(
-                store.build_prompt(delta),
-                session_key=session_key,
-                ephemeral=True,
-                tools=tools,
-                on_progress=reporter.on_progress if reporter is not None else silent_progress,
-                on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
+            resp = await run_internal_turn(
+                agent, store.build_prompt(delta), session_key=session_key, tools=tools,
+                reporter=reporter,
             )
         except Exception as exc:  # noqa: BLE001 — l'esito viaggia nell'outcome
             logger.exception("gardener: pass over {} failed", store.name)

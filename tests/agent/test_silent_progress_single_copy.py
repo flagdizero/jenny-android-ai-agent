@@ -12,7 +12,7 @@ import inspect
 
 import pytest
 
-from jenny.agent import dream_cycle, dream_review, gardener
+from jenny.agent import dream_cycle, dream_review, gardener, internal_run
 from jenny.agent.dream_cycle import DreamOutcome, DreamTurnResult
 from jenny.runtime import cron_dispatch
 from jenny.session.turn_visibility import silent_progress
@@ -20,8 +20,37 @@ from jenny.session.turn_visibility import silent_progress
 
 @pytest.mark.parametrize("module", [dream_cycle, dream_review, gardener, cron_dispatch])
 def test_internal_runs_share_one_silent_progress(module) -> None:
+    """Le tre passate la prendono dal loro turno comune (``run_internal_turn``),
+    i job di sistema del cron direttamente: in ogni caso la stessa, mai una copia."""
     assert "async def _silent" not in inspect.getsource(module)
-    assert module.silent_progress is silent_progress
+    if module is cron_dispatch:
+        assert module.silent_progress is silent_progress
+    else:
+        assert module.run_internal_turn is internal_run.run_internal_turn
+
+
+async def test_the_internal_turn_is_silent_unless_someone_watches() -> None:
+    seen: dict[str, object] = {}
+
+    class _Agent:
+        async def process_direct(self, prompt: str, **kwargs: object) -> str:
+            seen.update(kwargs, prompt=prompt)
+            return "ok"
+
+    assert await internal_run.run_internal_turn(_Agent(), "p", session_key="k", tools="t") == "ok"
+    assert seen["on_progress"] is silent_progress and seen["on_retry_wait"] is None
+    assert seen["ephemeral"] is True and seen["tools"] == "t" and seen["session_key"] == "k"
+
+    class _Reporter:
+        async def on_progress(self, *_a: object, **_k: object) -> None: ...
+        async def on_retry_wait(self, *_a: object, **_k: object) -> None: ...
+
+    reporter = _Reporter()
+    await internal_run.run_internal_turn(
+        _Agent(), "p", session_key="k", tools="t", reporter=reporter
+    )
+    assert seen["on_progress"] == reporter.on_progress
+    assert seen["on_retry_wait"] == reporter.on_retry_wait
 
 
 async def test_silent_progress_takes_anything_and_says_nothing() -> None:

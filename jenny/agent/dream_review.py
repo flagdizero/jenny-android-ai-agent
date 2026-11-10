@@ -43,10 +43,10 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from jenny.agent.internal_run import run_internal_turn
 from jenny.agent.memory import MemoryStore
 from jenny.agent.memory_archive import archived_ids, summarize_archived
 from jenny.agent.memory_budget import render_gauge
-from jenny.session.turn_visibility import silent_progress
 from jenny.utils.prompt_templates import render_template
 
 if TYPE_CHECKING:
@@ -224,13 +224,9 @@ async def run_dream_review(
 
     resp = None
     try:
-        resp = await agent.process_direct(
-            prompt,
-            session_key=review_session_key(),
-            ephemeral=True,
-            tools=tools,
-            on_progress=reporter.on_progress if reporter is not None else silent_progress,
-            on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
+        resp = await run_internal_turn(
+            agent, prompt, session_key=review_session_key(), tools=tools,
+            reporter=reporter,
         )
     except Exception:  # noqa: BLE001 — l'esito viaggia nell'outcome, non in un raise
         # Un review pass è un lavoro di manutenzione: farlo esplodere in faccia
