@@ -237,7 +237,7 @@ In the personal chat:
 ```text
 ✿ jenny commands:
 /new — Stop the current task and start a fresh conversation.
-/stop — Cancel the active agent turn for this chat. Helpers working in the background keep going: stop each from its own bubble, or send /stop all to stop everything.
+/stop — Cancel the active agent turn for this chat. Mini-mes working in the background keep going: stop each from its own bubble, or send /stop all to stop everything.
 /status — Display runtime, provider, and channel status.
 /model [preset] — Show or switch the active model preset.
 /history [n] — Print the last N persisted conversation messages.

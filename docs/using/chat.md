@@ -60,7 +60,7 @@ Most real work is done by subagents rather than by the agent you're typing to (s
 
 **It shows live work, not history.** When nothing is running the panel isn't collapsed, it's absent — the header alone would cost space above the composer for no information. A card that reaches a terminal state stays for the rest of the current turn so you can see the transition, then disappears when the turn ends. Nothing from a past turn is ever shown, including after a reload.
 
-The header reads **Subagents** with a count ("2 running", or "1 running · 1 just finished") and toggles the body open and closed. It starts closed; a subagent that goes **stalled** opens it by itself, since that is precisely the moment you need to see it. If you close it again, it won't reopen for that same job.
+The header reads **Mini-mes** with a count ("2 running", or "1 running · 1 just finished") and toggles the body open and closed. It starts closed; a subagent that goes **stalled** opens it by itself, since that is precisely the moment you need to see it. If you close it again, it won't reopen for that same job.
 
 Each running job gets a card showing:
 
@@ -128,7 +128,7 @@ Scrolling to the very top of the chat automatically loads older history (infinit
 ## Related pages
 
 - [Tour of the WebUI](webui-tour.md) — the Session Info popover, the dock, and how the Console fits into the rest of the app, and the home's plainer chat.
-- [Scheduling and proactivity](scheduling.md) — why delegation is the normal path, the six subagent types, and what Jenny can do to a running subagent from her side.
+- [Scheduling and proactivity](scheduling.md) — why delegation is the normal path, the eight subagent types, and what Jenny can do to a running subagent from her side.
 - [Files and attachments](attachments.md) — sending images/files, attachment limits, and what the agent can actually read from them.
 - [Slash commands](slash-commands.md) — the command list, including `/stop` and `/new`, which commands work where, and the workshop's Commands chip that shows the ones this conversation can use.
 - [Memory and Dream](memory.md) — the difference between what stays on screen and what the model actually remembers.

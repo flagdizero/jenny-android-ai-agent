@@ -28,7 +28,7 @@ cd android
 ./gradlew app:installFossDebug
 ```
 
-`app:installFossDebug` is the canonical command (also the one used in `AGENTS.md`): it compiles the debug variant of the `foss` flavor and pushes it to the connected device over `adb` in one step, no separate `adb install` needed. The first build is slow — Gradle has to fetch the Chaquopy Python runtime and every pinned wheel, then Chaquopy compiles them per target ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`). Later builds are much faster since the toolchain and wheels are cached.
+`app:installFossDebug` is the canonical command for a contributor (`AGENTS.md`'s on-device tests use `app:installPlayDebug`, the same build plus the copy on Google Drive): it compiles the debug variant of the `foss` flavor and pushes it to the connected device over `adb` in one step, no separate `adb install` needed. The first build is slow — Gradle has to fetch the Chaquopy Python runtime and every pinned wheel, then Chaquopy compiles them per target ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`). Later builds are much faster since the toolchain and wheels are cached.
 
 ### Two flavors
 

@@ -7,8 +7,10 @@
 
 ## Setup
 1. Open `android/` in Android Studio
-2. Configure Chaquopy in `build.gradle`
-3. Requirements are loaded from `requirements-android.txt` via Chaquopy's `pip.requirements()`.
+2. Chaquopy is configured in `app/build.gradle.kts`, which installs the exact pins of
+   `requirements-android.lock.txt` (`pip { install("-r", ...) }`).
+3. Pick a flavor: `play` (adds the copy on Google Drive) or `foss` (no Google library).
+   From the command line: `./gradlew app:installPlayDebug` or `./gradlew app:installFossDebug`.
 4. Build and run
 
 ## Runtime
@@ -19,5 +21,5 @@ to the WebSocket on the same origin.
 
 ## Troubleshooting
 
-Problemi con `web_search`/`web_fetch` (WebView bridge)? Vedi
+Trouble with `web_search`/`web_fetch` (the WebView bridge)? See
 [Troubleshooting](../docs/using/troubleshooting.md).

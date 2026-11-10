@@ -57,7 +57,7 @@ A helper can stop without anyone deciding it. Its bubble then says what happened
 - After a restart she resumes from the last saved point, taken at most every 30 seconds while she works. A step done after that point is done again.
 - Her saved conversation is kept for 6 hours. Past that, or once it has grown very long, she can't be continued.
 - A helper that writes an app can't be continued after a restart. Ask Jenny again instead.
-- Inside a [plan](plans.md), the plan resumes its own helpers. You don't need to press anything.
+- Inside a [plan](plans.md), you don't continue them one by one: after a restart the plan comes back paused, and when you tap **Resume** Jenny continues the step's interrupted helpers herself.
 
 Any other failure offers **Get her back up**, which starts the job again from the beginning.
 
@@ -67,12 +67,12 @@ Any other failure offers **Get her back up**, which starts the job again from th
 
 ## Limits
 
-- Up to **3** helpers at a time by default, with one place kept for a quick job, so a normal job waits for a free place once two are running (`agents.defaults.maxConcurrentSubagents`). A plan step can use more.
+- Up to **3** helpers at a time by default, with one place kept for a quick job, so once two are running a normal job is refused until a place frees up (`agents.defaults.maxConcurrentSubagents`). A plan step can use more.
 - A helper that makes no progress for 3 minutes is flagged as stuck, never cancelled for you.
-- Jenny relaunches a failed helper on her own at most three times.
+- Jenny relaunches a failed helper on her own at most twice: three attempts in all, the first included.
 
 ## See also
 
 - [Scheduling and proactivity → Subagents](scheduling.md#subagents-spawn): kinds of helper, drafts waiting for approval, steering from the workshop.
-- [Plans](plans.md): helpers working one step at a time, with a photo of the notebook before each step.
+- [Plans](plans.md): helpers working one step at a time, with every file they write noted so the plan can go back.
 - [Security model](../internals/security-model.md#subagents-and-untrusted-content): what a helper that read the web may and may not change.

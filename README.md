@@ -97,7 +97,7 @@ rather than a plain fetch, so JavaScript-rendered pages work.
 
 **🛠️ It writes its own Android mini-apps.** Describe one in chat — "something to track my
 plants" — and the agent builds it: UI, typed actions, persistent storage, installed into its
-own app grid. Each action becomes a callable tool, so the same app is usable by you, by the
+own app grid. Each action is callable by the agent through a single `use_app` tool, so the same app is usable by you, by the
 agent in conversation, and by anything that triggers a turn, **including cron**. That last one
 is what makes "alert me if the basil needs water" work end to end.
 → [Mini-apps](https://jenny.flagdizero.com/docs/using/mini-apps/)
@@ -144,10 +144,10 @@ is served on **loopback by default** (`127.0.0.1`) — no port exposed to your n
 to reverse-proxy, no inbound attack surface unless you deliberately rebind it. The API is
 token-gated even on loopback, because Android does not isolate loopback TCP between apps.
 
-Jenny makes six kinds of outbound connection — your provider, Bing when it searches,
+Jenny makes seven kinds of outbound connection — your provider, Bing when it searches,
 `api.telegram.org` if you enabled the bridge, any URL you or the agent explicitly fetch,
-OpenRouter's attribution headers when that's your provider, and a daily check for a new
-release. **None of them carries anything about you.** (Beyond these, there are only the
+OpenRouter's attribution headers when that's your provider, the OpenStreetMap tiles of a place
+card shown in the chat, and a daily check for a new release. **None of them carries anything about you.** (Beyond these, there are only the
 connections you set up yourself: SSH to hosts you register, and the HTTP actions of mini-apps you
 install.) The update check is a plain `GET` of the
 `latest.json` published with the release: no identifier, no version, no headers of ours, no
@@ -185,10 +185,11 @@ Collected in one place rather than scattered, so you can judge before installing
   say so, but nothing updates itself behind you: Android still shows its own install prompt.
 - **Not a full launcher.** No widgets, folders, icon packs or wallpaper management.
 - **Web search is Bing-only.** A real CAPTCHA page fails rather than being solved.
-- **Subagents are a tool, not an orchestrator.** The agent *can* delegate to background
-  subagents, but nothing decomposes a request and drives it to completion on its own —
-  delegation is a per-turn decision by the model. A big job in a notebook can become a
-  step-by-step plan, which the code drives one step at a time.
+- **Delegation is the model's call.** By default the main agent works as an orchestrator: it
+  keeps the reading and control tools and hands writing, code and web work to background
+  subagents. But nothing decomposes a request and drives it to completion on its own — which
+  subagent to start, and when, is a per-turn decision by the model. A big job, in a notebook or
+  in the personal chat, can become a step-by-step plan, which the code drives one step at a time.
 - **Mini-apps can't reach authenticated servers.** Declaring `auth` in a manifest is refused
   outright until there's a credential store.
 - **Small models struggle.** The agent loop leans hard on instruction-following and

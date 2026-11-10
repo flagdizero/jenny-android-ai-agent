@@ -63,7 +63,7 @@ For a **Jenny App**:
 | Open | Same as tapping the row. |
 | Add as a page / Remove from pages | Home only. Puts the mini-app in the home's row of pages, or takes it out again. Greyed out, with the reason, when the app opens outside Jenny (an external-view app), when it is broken, or when the eight custom pages are already taken. See [Tour of the WebUI](webui-tour.md#the-pages). |
 | Edit | Not an editor: it puts a request to change the app into the chat, for Jenny to work on. |
-| Delete | Asks for confirmation, then deletes the mini-app. |
+| Delete | Moves the mini-app to the trash, data included, without asking first; for a few seconds an **Undo** puts it back, and later it can be restored from the trash. |
 
 There used to be an **Apps tab** for this, with a grid of every app, and a **Hide** action that took an app out of Jenny without uninstalling it. Both are gone: the card replaced the tab, and Hide went with it — apps you had hidden before show up in the drawer again.
 

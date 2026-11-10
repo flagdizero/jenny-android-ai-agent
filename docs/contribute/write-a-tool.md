@@ -142,7 +142,7 @@ Piece by piece:
 
 `DownloadFileTool` (`jenny/agent/tools/download.py`) is a second useful reference: it shows a tool that owns an injectable `httpx.AsyncClient` (`__init__(self, workspace, client=None)`) purely so tests can pass an `httpx.MockTransport` instead of hitting the network — a pattern worth copying for any tool that talks to the outside world.
 
-## Scopes: there are four, not two
+## Scopes: there are six, not two
 
 `_scopes` on the class controls which registries a tool ends up in. **Getting this wrong is the most common way to ship a tool that appears to work and is invisible to the agent the user talks to**, so it is worth reading before you copy a neighbour's value.
 
@@ -150,6 +150,7 @@ Piece by piece:
 - **`"core"`** — the same main loop with `orchestratorMode` set to `false`: the historical, wider scope. It is not the default any more.
 - **`"subagent"`** — spawned subagents (`spawn`, `jenny/agent/subagent.py`), which run with a *separate* `ToolRegistry` built via `ToolLoader().load(ctx, registry, scope="subagent")`, narrowed further by the agent type's `allow` list.
 - **`"remote"`** — the four SSH tools, and nothing else. **No agent loads it by default**; only the `sysadmin` subagent type asks for it.
+- **`"apps"`** and **`"notebook"`** — the same idea for two more subagent types: `apps` holds the `app-builder`'s face of `app` (`AppBuildTool`), `notebook` the `notebook-editor`'s `board` and its face of `notebook` (`NotebookEditTool`). Each type adds its scope to `subagent`, so `operator` never inherits them.
 
 So a tool with `_scopes = {"core", "subagent"}` — the common case for the write-side file tools, `python_exec`, search, download, exec sessions and the `browser_*` family — is **not** available to the default orchestrator: the work reaches it by delegation instead. If you want the agent the user talks to to have your tool, `"orchestrator"` has to be in the set.
 
@@ -192,12 +193,12 @@ What existing tests check, worth copying:
 Run the full check from [Code style](code-style.md):
 
 ```bash
-ruff check jenny/ tests/
-npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
+ruff check jenny/ jenny_extensions/ tests/
+npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 pytest -q
 ```
 
-A new tool module isn't in the blocking pyright subset (`jenny/bus`, `jenny/command`, `jenny/runtime`, `jenny/session`, `jenny/snapshot`, `jenny/gateway_runtime.py`) unless you're touching one of those packages directly, but run the full, non-blocking `npx pyright || true` too and don't introduce new errors in `jenny/agent/tools/`.
+A new tool module isn't in the blocking pyright subset (`jenny/bus`, `jenny/command`, `jenny/db`, `jenny/db_migration`, `jenny/plan`, `jenny/runtime`, `jenny/session`, `jenny/snapshot`, `jenny/gateway_runtime.py`, `jenny/extensions.py`, `jenny_extensions`) unless you're touching one of those packages directly, but run the full, non-blocking `npx pyright || true` too and don't introduce new errors in `jenny/agent/tools/`.
 
 ## See also
 

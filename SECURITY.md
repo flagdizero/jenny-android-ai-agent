@@ -59,7 +59,7 @@ The real containment lives outside the interpreter:
 executed code goes through the `http_get` / `http_post` builtins, which validate
 targets. Raw `httpx` can be re-enabled in config, accepting the risk.
 
-**If you do not trust the model, disable the tool:** `tools.python_exec.enable = false`.
+**If you do not trust the model, disable the tool:** `tools.pythonExec.enable = false`.
 That is the honest answer to "there is no sandbox" — in-process hardening is not.
 
 ## Filesystem access
@@ -185,12 +185,17 @@ persisted code.
   encryption for provider keys.
 - **Conversations, memory, wiki and app data live in the app's private
   storage** on the device.
-- **Android Auto Backup is enabled** (`allowBackup="true"`). This is a
-  deliberate choice so that users do not lose their agent's memory when they
-  change device — but it means that, if you have Google backup turned on, the
-  workspace *including `config.json` with your API keys* is copied to your
-  Google account's backup. If you do not want that, turn off backup for this app
-  in Android settings, or use the app's own encrypted backup/restore instead.
+- **Android's cloud backup takes nothing from Jenny.** The manifest keeps
+  `allowBackup="true"`, but the backup rules (`data_extraction_rules.xml`,
+  `backup_rules.xml`) exclude every domain from Google's Auto Backup, so neither
+  the workspace nor `config.json` reaches your Google account that way. To take
+  Jenny off the phone, use the app's own encrypted backup/restore.
+- **Device-to-device transfer carries everything, keys included.** On Android 12
+  and later, the phone-to-phone migration offered when you set up a new device
+  (cable or Wi-Fi) copies the app's data, `config.json` with your API keys
+  included, leaving out only what regenerates itself and temporary files. On
+  Android 11 and earlier one rule covers both paths, so that transfer takes
+  nothing either.
 - **Logs may contain sensitive content.** Redaction is applied to known secret
   fields, not to arbitrary conversation text.
 - **Your LLM provider sees your prompts.** That is the one unavoidable outbound
@@ -224,8 +229,9 @@ Stated plainly, because they are design trade-offs rather than oversights:
    model from being talked into a bad call.
 5. **No audit trail beyond the transcript and logs.** There is no tamper-evident
    security event log.
-6. **Auto Backup carries the workspace off-device** when Google backup is on
-   (see *Data at rest*).
+6. **Device-to-device transfer carries the workspace, keys included**, to the
+   new phone on Android 12 and later (see *Data at rest*). Google's cloud
+   backup takes nothing.
 
 ## What we do not claim
 

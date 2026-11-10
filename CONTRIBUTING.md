@@ -88,7 +88,10 @@ project name and logo are covered by a separate
   parameters travel in the query string or a header. Anything that writes, or
   carries content or a secret, is a command over the WebSocket
   (`jenny/webui/commands.py`, see [WebSocket protocol](docs/reference/websocket.md#commands-rpc)).
-  Do not smuggle a payload into a header.
+  Do not smuggle a payload into a header. The routes that still write — the
+  settings' switches and short fields, the helper and job buttons — predate the
+  rule and are a closed list (`tests/webui/test_http_write_routes_inventory.py`):
+  it gets shorter, and a new write is a command.
 - **Every `config.json` write goes through `jenny/config/store.py::mutate()`**
   (see [`AGENTS.md`](AGENTS.md)); calling `save_config()` directly loses other
   writers' changes silently.
