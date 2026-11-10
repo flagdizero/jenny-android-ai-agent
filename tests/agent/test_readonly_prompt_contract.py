@@ -174,7 +174,7 @@ def test_the_subagent_gets_the_same_block_included_not_copied() -> None:
 
 
 def test_the_subagent_is_told_only_when_the_turn_is_read_only() -> None:
-    src = (SRC / "agent" / "subagent.py").read_text(encoding="utf-8")
+    src = (SRC / "agent" / "subagent_prompt.py").read_text(encoding="utf-8")
     assert "readonly=not (" in src, "il valore deve venire dallo scope legato, non da un default"
     assert "current_workspace_scope()" in src
 
