@@ -34,6 +34,8 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowInsets
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.view.WindowManager
 import android.view.animation.LinearInterpolator
 import android.view.animation.OvershootInterpolator
@@ -1487,6 +1489,36 @@ object FloatingOverlayController {
                     return true
                 }
                 return super.dispatchKeyEvent(event)
+            }
+
+            /** Lo stesso Indietro, per i sistemi che non mandano più il tasto.
+             *
+             *  Con `targetSdk` 36, da Android 16 il gesto indietro non arriva
+             *  come `KEYCODE_BACK`: chi vuole sentirlo registra una callback
+             *  sul dispatcher della finestra. Registrata finché la view è
+             *  attaccata: senza chat aperta la finestra non ha il fuoco, e
+             *  l'Indietro non passa di qui. */
+            private var backCallback: Any? = null
+
+            override fun onAttachedToWindow() {
+                super.onAttachedToWindow()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val callback = OnBackInvokedCallback { if (expanded) collapse() }
+                    findOnBackInvokedDispatcher()?.registerOnBackInvokedCallback(
+                        OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback
+                    )
+                    backCallback = callback
+                }
+            }
+
+            override fun onDetachedFromWindow() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    (backCallback as? OnBackInvokedCallback)?.let {
+                        findOnBackInvokedDispatcher()?.unregisterOnBackInvokedCallback(it)
+                    }
+                }
+                backCallback = null
+                super.onDetachedFromWindow()
             }
 
             /** Il momento in cui il fuoco c'è **davvero**.

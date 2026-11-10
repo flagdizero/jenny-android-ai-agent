@@ -41,12 +41,12 @@ val hasReleaseSigning = releaseStoreFile != null &&
 
 android {
     namespace = "com.flagdizero.jenny"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.flagdizero.jenny"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         // versionCode must increase monotonically on every published build.
         // versionName tracks the Python package version in pyproject.toml —
         // keep the two in sync when releasing.
@@ -269,16 +269,16 @@ dependencies {
 
     // Multi-profile WebView (ProfileStore): la sessione di navigazione dei tool
     // browser_* tiene cookie e storage separati dal barattolo globale che usa
-    // web_fetch, e li butta alla chiusura. Verificato il 29/08: la 1.14.0 sta
-    // dentro compileSdk 34 (a differenza di WorkManager 2.10+), e il Titan 2
+    // web_fetch, e li butta alla chiusura. Verificato il 29/08: il Titan 2
     // (WebView 143) espone MULTI_PROFILE a runtime.
     implementation("androidx.webkit:webkit:1.14.0")
 
     // WorkManager: rete di sicurezza anti-doze indipendente dalle sveglie
     // (GatewayWorker). Gira sul backend JobScheduler, e i gestori batteria dei
     // produttori sono molto piu restii a interferire con un concetto di sistema
-    // che con un service nudo. Ferma alla 2.9.x di proposito: dalla 2.10 in su
-    // WorkManager richiede compileSdk 35, qui siamo a 34.
+    // che con un service nudo. Ferma alla 2.9.x finché compileSdk era 34 (dalla
+    // 2.10 WorkManager vuole il 35): ora si può alzare, con una prova sua
+    // dell'anti-doze sul telefono, non insieme al cambio di targetSdk.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // Client SSH nativo (SshBridge.kt). jsch e puro Java e client-only.

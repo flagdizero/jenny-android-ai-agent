@@ -712,6 +712,7 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null && !bornAsHome && isDefaultHome(this) && redirectToHome()) return
         pendingExportPath = savedInstanceState?.getString(STATE_PENDING_EXPORT)
         setContentView(R.layout.activity_main)
+        fitSystemBars()
 
         loadingView = findViewById(R.id.loading_view)
         errorView = findViewById(R.id.error_view)
@@ -816,9 +817,10 @@ class MainActivity : AppCompatActivity() {
      * non era nessuno dei sette temi. Con un tema chiaro il caricamento è
      * chiaro anch'esso.
      *
-     * Il contenuto rientra già da sé (il decor di AppCompat consuma l'inset
-     * della status bar: la WebView parte sotto), quindi qui non si tocca il
-     * layout — solo il *colore*. Resta fuori la starting window, i pochi
+     * Il contenuto rientra già da sé (il decor di AppCompat, o
+     * [fitSystemBars] dove la finestra è da bordo a bordo: la WebView parte
+     * sotto la status bar), quindi qui non si tocca il layout — solo il
+     * *colore*. Resta fuori la starting window, i pochi
      * istanti prima di onCreate: quella legge themes.xml e basta.
      *
      * **Solo dal thread UI.**
@@ -888,6 +890,39 @@ class MainActivity : AppCompatActivity() {
             attrs.getColor(0, 0)
         } finally {
             attrs.recycle()
+        }
+    }
+
+    /**
+     * Tiene il contenuto fuori da barre di sistema, tacca e tastiera.
+     *
+     * Con `targetSdk` 35+ su Android 15 in su la finestra è da bordo a bordo e
+     * non si può più rifiutare: il decor non consuma più gli inset, e senza
+     * questo la WebView finirebbe sotto la status bar, sotto la barra di
+     * navigazione e sotto la tastiera. Il rientro che prima faceva il decor lo
+     * fa qui la radice del contenuto, col padding; dietro le barre si vede lo
+     * sfondo della finestra, che [applyBootPalette] tiene sul colore del tema
+     * (`statusBarColor`/`navigationBarColor` lì non contano più).
+     *
+     * Gli inset si **consumano**: la WebView continua a non riceverne, quindi
+     * `env(safe-area-inset-*)` resta a zero come prima e la SPA non rientra
+     * una seconda volta. Sui sistemi dove il decor rientra ancora da sé arrivano
+     * già a zero, e il padding resta zero.
+     */
+    private fun fitSystemBars() {
+        val content = findViewById<View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(content) { v, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            v.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+            WindowInsetsCompat.CONSUMED
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Coi tre tasti il sistema stende un velo dietro la barra di
+            // navigazione: lì deve vedersi il colore del tema, come prima.
+            window.isNavigationBarContrastEnforced = false
         }
     }
 
