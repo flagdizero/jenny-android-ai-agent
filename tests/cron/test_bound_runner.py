@@ -171,8 +171,8 @@ class TestAReminderRunsInTheConversation:
     async def test_a_webui_job_survives_a_reload_as_the_one_conversation(
         self, tmp_path
     ) -> None:
-        store = tmp_path / "jobs.json"
-        tool = CronTool(CronService(store))
+        workspace = tmp_path / "workspace"
+        tool = CronTool(CronService(workspace))
         tool.set_context(
             RequestContext(
                 channel="websocket",
@@ -186,7 +186,7 @@ class TestAReminderRunsInTheConversation:
             await tool.execute(action="add", message="controlla la pioggia", every_seconds=300)
         ).startswith("Created job")
 
-        job = CronService(store).list_jobs()[0]
+        job = CronService(workspace).list_jobs()[0]
         assert job.payload.session_key == UNIFIED_SESSION_KEY
         # E resta consegnabile: l'attaccamento alla chat non e' la sessione.
         assert is_bound_cron_job(job) is True

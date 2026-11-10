@@ -125,7 +125,7 @@ class TestTheServiceCallsIt:
 
     @staticmethod
     def _service(tmp_path: Path, *, escalated: bool = False) -> tuple[CronService, str]:
-        service = CronService(tmp_path / "cron" / "jobs.json")
+        service = CronService(tmp_path / "workspace")
 
         async def on_job(job: Any) -> str | None:
             raise CronMonitorCouldNotCheckError(

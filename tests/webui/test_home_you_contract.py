@@ -45,7 +45,7 @@ def test_settings_is_a_page_and_the_avatar_is_gone() -> None:
     pagina — la porta che la tavola ha sempre disegnato.
     """
     html = INDEX.read_text(encoding="utf-8")
-    assert 'id="casa-door"' not in html, "l'avatar e' tornato in testa"
+    assert 'id="home-door"' not in html, "l'avatar e' tornato in testa"
     page = html.split('data-page="settings"', 1)[1]
     assert '<section class="home-you" id="home-you">' in page, "«Tu e Jenny» non e' nella sua pagina"
     app = _app()
@@ -185,7 +185,7 @@ def test_the_fourth_room_speaks_both_languages() -> None:
         home = data["home"]
         # Il titolo della stanza non c'e' piu': dal 23/09 la testata porta il
         # nome della pagina (361a129).
-        assert home["you"].get("workshopHint", "").strip(), f"casa.you.workshopHint manca in {locale}.json"
+        assert home["you"].get("workshopHint", "").strip(), f"home.you.workshopHint manca in {locale}.json"
         # La versione ha cambiato posto: era una riga muta in fondo alla
         # pagina, adesso e' il valore della riga che apre gli aggiornamenti.
         for key in ("title", "current", "waiting", "upToDate"):
@@ -732,7 +732,7 @@ def test_the_updates_row_carries_the_version() -> None:
     html = INDEX.read_text(encoding="utf-8")
     for el_id in ("home-row-updates", "home-updates-label", "home-updates-value"):
         assert f'id="{el_id}"' in html, f"{el_id} non esiste nel guscio"
-    assert 'id="casa-version"' not in html, (
+    assert 'id="home-version"' not in html, (
         "la riga muta della versione e' ancora li': due posti che dicono la "
         "stessa cosa, e uno dei due si dimentica"
     )

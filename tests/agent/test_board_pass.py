@@ -220,7 +220,9 @@ async def test_reminders_are_not_added_twice(tmp_path, monkeypatch) -> None:
         concime = next(cron.get_job(i) for i, j in notebook_jobs(cron, root.name).items()
                        if j["name"] == "Concime")
         assert concime.payload.why is None
-    assert not (root / "board" / "reminders.json").exists()
+    # Il promemoria sta solo nello scheduler: la bacheca non ne tiene una copia.
+    assert not [s for card in read_board(root)["cards"] for s in card.get("userSections", [])
+                if s.get("kind") == "reminder"]
 
 
 async def test_the_gardener_can_give_a_reminder_to_the_whole_notebook(tmp_path,

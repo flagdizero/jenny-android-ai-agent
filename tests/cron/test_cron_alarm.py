@@ -104,7 +104,7 @@ def alarms(monkeypatch: pytest.MonkeyPatch) -> _Alarms:
 
 async def test_alarm_is_armed_for_the_real_deadline(tmp_path, alarms: _Alarms) -> None:
     """La sveglia punta alla scadenza vera, non al tetto di ``max_sleep_ms``."""
-    service = CronService(tmp_path / "cron" / "jobs.json", max_sleep_ms=100)
+    service = CronService(tmp_path / "workspace", max_sleep_ms=100)
     await service.start()
     try:
         job = service.add_job(
@@ -126,7 +126,7 @@ async def test_alarm_is_armed_for_the_real_deadline(tmp_path, alarms: _Alarms) -
 
 async def test_no_deadline_arms_no_alarm(tmp_path, alarms: _Alarms) -> None:
     """Senza job in agenda non si sveglia il telefono per niente."""
-    service = CronService(tmp_path / "cron" / "jobs.json", max_sleep_ms=100)
+    service = CronService(tmp_path / "workspace", max_sleep_ms=100)
     await service.start()
     try:
         await _settle(service)
@@ -137,7 +137,7 @@ async def test_no_deadline_arms_no_alarm(tmp_path, alarms: _Alarms) -> None:
 
 async def test_stop_cancels_the_alarm(tmp_path, alarms: _Alarms) -> None:
     """La sveglia vive nell'AlarmManager: fermare il servizio deve smontarla."""
-    service = CronService(tmp_path / "cron" / "jobs.json", max_sleep_ms=100)
+    service = CronService(tmp_path / "workspace", max_sleep_ms=100)
     await service.start()
     service.add_job(
         name="later",
@@ -171,7 +171,7 @@ async def test_mutation_during_an_inflight_job_leaves_the_alarm_alone(
         entered.set()
         await release.wait()
 
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=on_job, max_sleep_ms=100)
+    service = CronService(tmp_path / "workspace", on_job=on_job, max_sleep_ms=100)
     await service.start()
     try:
         job_a = service.add_job(
@@ -224,7 +224,7 @@ async def test_wake_tick_runs_due_jobs_like_a_timer_tick(tmp_path, alarms: _Alar
     async def on_job(job):
         calls.append(job.id)
 
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=on_job, max_sleep_ms=100_000)
+    service = CronService(tmp_path / "workspace", on_job=on_job, max_sleep_ms=100_000)
     await service.start()
     try:
         job = service.add_job(
@@ -258,7 +258,7 @@ async def test_timer_and_wake_tick_together_run_each_job_once(tmp_path, alarms: 
     async def on_job(job):
         calls.append(job.id)
 
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=on_job, max_sleep_ms=100_000)
+    service = CronService(tmp_path / "workspace", on_job=on_job, max_sleep_ms=100_000)
     await service.start()
     try:
         job = service.add_job(
@@ -313,7 +313,7 @@ async def test_wake_tick_during_an_inflight_job_does_not_re_enter_it(
         entered.set()
         await release.wait()
 
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=on_job, max_sleep_ms=100_000)
+    service = CronService(tmp_path / "workspace", on_job=on_job, max_sleep_ms=100_000)
     await service.start()
     try:
         job = service.add_job(
@@ -365,7 +365,7 @@ async def test_disabled_alarm_driven_cron_falls_back_to_pure_asyncio(
     async def on_job(job):
         calls.append(job.id)
 
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=on_job, max_sleep_ms=50)
+    service = CronService(tmp_path / "workspace", on_job=on_job, max_sleep_ms=50)
     await service.start()
     try:
         job = service.add_job(

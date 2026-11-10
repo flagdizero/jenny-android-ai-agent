@@ -18,19 +18,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from jenny.config.loader import load_config, save_config
-from jenny.config.schema import Config, ProviderConfig
+from jenny.config.schema import ProviderConfig
 from jenny.providers.factory import provider_fingerprint
-from jenny.runtime.context import get_runtime_context
 from jenny.webui.commands import CommandContext, CommandError, dispatch_command
 from jenny.webui.settings_api import WebUISettingsError
-
-
-@pytest.fixture()
-def config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
 
 
 def _ctx(tmp_path: Path, **hooks) -> CommandContext:

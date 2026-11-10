@@ -6,6 +6,8 @@ import asyncio
 from contextlib import suppress
 from typing import Any
 
+from support.aio import queue_idle, wait_until
+
 from jenny.bus.events import OutboundMessage
 from jenny.bus.queue import MessageBus
 from jenny.channels.dispatcher import WebSocketDispatcher
@@ -26,13 +28,18 @@ class MockChannel:
         return []
 
 
-async def _pump(d: WebSocketDispatcher, until, timeout: float = 1.0) -> None:
+async def _pump(d: WebSocketDispatcher, until=None, timeout: float = 1.0) -> None:
+    """Fa girare il dispatcher finché *until()* è vero e, senza *until*, finché non
+    ha smaltito la coda ed è tornato ad aspettare (``queue_idle``): così un test
+    negativo («non è stato mandato niente») guarda un messaggio lavorato davvero.
+    Alla scadenza fallisce, invece di proseguire (v. ``support.aio``)."""
     task = asyncio.create_task(d._dispatch_outbound())
     try:
-        for _ in range(int(timeout / 0.005)):
-            if until():
-                break
-            await asyncio.sleep(0.005)
+        if until is None:
+            await wait_until(lambda: queue_idle(d.bus.outbound), timeout=timeout,
+                             msg="il dispatcher non ha smaltito la coda")
+        else:
+            await wait_until(until, timeout=timeout)
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):

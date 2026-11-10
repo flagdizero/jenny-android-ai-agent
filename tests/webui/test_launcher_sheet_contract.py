@@ -816,7 +816,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
         "la pagina App non e' piu' una delle fisse: si potrebbe togliere, e con lei il cassetto"
     )
     assert "new LauncherController(this, { builtin: true })" in _src("home-app.js")
-    assert "casa-drawer" not in home, "il bottone del cassetto e' tornato accanto a una pagina"
+    assert 'id="home-drawer"' not in home, "il bottone del cassetto e' tornato accanto a una pagina"
     assert "openLauncher" not in _src("home-pages.js"), (
         "la pista riprova ad aprire il cassetto con un gesto che il sistema "
         "non consegna"
@@ -825,7 +825,7 @@ def test_the_drawer_is_reachable_from_every_view() -> None:
     # Il modulo del cassetto non conosce gli id dei due gusci: li aggancia chi
     # li possiede. Senza questo il foglio saprebbe di stare in due case.
     assert "btn-launcher" not in _src("mobile-launcher.js")
-    assert "casa-drawer" not in _src("mobile-launcher.js")
+    assert "home-drawer" not in _src("mobile-launcher.js")
     # Tolto il solo corpo di `_setBackgroundInert`, non tutto quel che viene
     # dopo: un `split` su quel metodo lasciava fuori dal controllo metà file.
     launcher = _src("mobile-launcher.js")

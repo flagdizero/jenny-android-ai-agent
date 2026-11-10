@@ -57,14 +57,14 @@ def _disk_jobs(path: Path) -> dict[str, dict]:
 
 async def test_a_job_that_ran_is_on_disk_before_the_next_one_starts(tmp_path) -> None:
     """Un kill durante il job B faceva ripartire A: lo store si salvava a fine giro."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     disk_while_b_runs: dict[str, dict] = {}
 
     async def on_job(job):
         if job.name == "B":
-            disk_while_b_runs.update(_disk_jobs(path))
+            disk_while_b_runs.update(_disk_jobs(workspace))
 
-    service = CronService(path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await service.start()
     try:
         a = service.add_job("A", CronSchedule(kind="at", at_ms=_now() + _HOUR), "remind", **_bound())
@@ -80,16 +80,16 @@ async def test_a_job_that_ran_is_on_disk_before_the_next_one_starts(tmp_path) ->
 
 async def test_a_delivered_reminder_does_not_run_again_after_a_kill(tmp_path) -> None:
     """Il riavvio parte da quello che c'era su disco al momento del kill."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     at_kill: list[list[dict]] = []
     ran: list[str] = []
 
     async def on_job(job):
         ran.append(job.name)
         if job.name == "B":
-            at_kill.append(saved_jobs(path))
+            at_kill.append(saved_jobs(workspace))
 
-    service = CronService(path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await service.start()
     try:
         a = service.add_job("A", CronSchedule(kind="at", at_ms=_now() + _HOUR), "remind", **_bound())
@@ -99,9 +99,9 @@ async def test_a_delivered_reminder_does_not_run_again_after_a_kill(tmp_path) ->
     finally:
         service.stop()
 
-    seed_jobs(path, at_kill[0])
+    seed_jobs(workspace, at_kill[0])
     ran.clear()
-    restarted = CronService(path, on_job=on_job, max_sleep_ms=100)
+    restarted = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await restarted.start()
     try:
         await asyncio.sleep(0.3)
@@ -114,7 +114,7 @@ async def test_a_delivered_reminder_does_not_run_again_after_a_kill(tmp_path) ->
 
 
 async def _second_job_changed_while_first_runs(tmp_path, change) -> list[str]:
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     started = asyncio.Event()
     gate = asyncio.Event()
     ran: list[str] = []
@@ -125,7 +125,7 @@ async def _second_job_changed_while_first_runs(tmp_path, change) -> list[str]:
             started.set()
             await gate.wait()
 
-    service = CronService(path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await service.start()
     try:
         a = service.add_job("A", CronSchedule(kind="every", every_ms=_HOUR), "a", **_bound())
@@ -167,7 +167,7 @@ async def test_a_job_paused_and_resumed_meanwhile_waits_for_its_new_time(tmp_pat
 
 
 async def test_a_pause_during_the_job_own_run_leaves_no_next_run(tmp_path) -> None:
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     started = asyncio.Event()
     gate = asyncio.Event()
 
@@ -175,7 +175,7 @@ async def test_a_pause_during_the_job_own_run_leaves_no_next_run(tmp_path) -> No
         started.set()
         await gate.wait()
 
-    service = CronService(path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await service.start()
     try:
         job = service.add_job("x", CronSchedule(kind="every", every_ms=_HOUR), "m", **_bound())
@@ -191,7 +191,7 @@ async def test_a_pause_during_the_job_own_run_leaves_no_next_run(tmp_path) -> No
         assert live.state.last_status == "ok"
     finally:
         service.stop()
-    assert _disk_jobs(path)["x"]["state"]["nextRunAtMs"] is None
+    assert _disk_jobs(workspace)["x"]["state"]["nextRunAtMs"] is None
 
 
 # -- La cancellazione di ``stop()`` e il tetto al riavvio -----------------------
@@ -204,7 +204,7 @@ async def test_stop_during_a_job_cancels_it_instead_of_recording_an_error(tmp_pa
     il job registrava un fallimento che non aveva avuto, e il task del timer
     proseguiva il giro a servizio fermo.
     """
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     started = asyncio.Event()
     ran: list[str] = []
 
@@ -214,7 +214,7 @@ async def test_stop_during_a_job_cancels_it_instead_of_recording_an_error(tmp_pa
             started.set()
             await asyncio.Event().wait()
 
-    service = CronService(path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await service.start()
     a = service.add_job("A", CronSchedule(kind="every", every_ms=_HOUR), "a", **_bound())
     b = service.add_job("B", CronSchedule(kind="every", every_ms=_HOUR), "b", **_bound())
@@ -227,7 +227,7 @@ async def test_stop_during_a_job_cancels_it_instead_of_recording_an_error(tmp_pa
 
     assert timer.cancelled()
     assert ran == ["A"]
-    interrupted = _disk_jobs(path)["A"]
+    interrupted = _disk_jobs(workspace)["A"]
     assert interrupted["state"]["lastStatus"] is None
     assert interrupted["state"]["runHistory"] == []
     # Resta dovuto: non ha finito, e al riavvio si rifa'.
@@ -238,15 +238,15 @@ async def test_a_saved_every_deadline_beyond_one_interval_is_capped_at_restart(
     tmp_path,
 ) -> None:
     """Un orologio saltato avanti (o un intervallo accorciato) non resta per sempre."""
-    path = tmp_path / "cron" / "jobs.json"
-    service = CronService(path)
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace)
     await service.start()
     job = service.add_job("x", CronSchedule(kind="every", every_ms=_HOUR), "m", **_bound())
     service._store.jobs[0].state.next_run_at_ms = _now() + 50 * _HOUR
     service._save_store()
     service.stop()
 
-    restarted = CronService(path)
+    restarted = CronService(workspace)
     before = _now()
     await restarted.start()
     try:
@@ -257,8 +257,8 @@ async def test_a_saved_every_deadline_beyond_one_interval_is_capped_at_restart(
 
 
 async def test_a_saved_every_deadline_within_one_interval_is_kept_at_restart(tmp_path) -> None:
-    path = tmp_path / "cron" / "jobs.json"
-    service = CronService(path)
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace)
     await service.start()
     job = service.add_job("x", CronSchedule(kind="every", every_ms=_HOUR), "m", **_bound())
     saved = _now() + 10 * 60_000
@@ -266,7 +266,7 @@ async def test_a_saved_every_deadline_within_one_interval_is_kept_at_restart(tmp
     service._save_store()
     service.stop()
 
-    restarted = CronService(path)
+    restarted = CronService(workspace)
     await restarted.start()
     try:
         assert restarted.get_job(job.id).state.next_run_at_ms == saved

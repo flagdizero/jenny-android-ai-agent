@@ -27,20 +27,20 @@ GO_BASE = "https://opencode.ai/zen/go/v1"
 
 
 @pytest.fixture
-def config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def unsaved_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
     monkeypatch.setattr(get_runtime_context(), "config_path", path)
     return path
 
 
-def _probe(config_path: Path, *, api_base: str, fmt: str = "openai_compat") -> dict:
+def _probe(unsaved_config_path: Path, *, api_base: str, fmt: str = "openai_compat") -> dict:
     """Esegue la sonda per un provider e ritorna gli header che ha mandato."""
     config = Config()
     config.providers.providers = [ProviderConfig(
         name="p", format=fmt, api_key="k", api_base=api_base,
     )]
     config.providers.default = "p"
-    save_config(config, config_path)
+    save_config(config, unsaved_config_path)
 
     with patch("httpx.get") as get:
         get.return_value = MagicMock(
@@ -55,35 +55,35 @@ def _probe(config_path: Path, *, api_base: str, fmt: str = "openai_compat") -> d
 
 class TestTowardOpenCode:
 
-    def test_the_probe_identifies_itself(self, config_path: Path) -> None:
-        headers = _probe(config_path, api_base=GO_BASE)
+    def test_the_probe_identifies_itself(self, unsaved_config_path: Path) -> None:
+        headers = _probe(unsaved_config_path, api_base=GO_BASE)
         assert headers["User-Agent"].startswith("jenny/")
 
-    def test_does_not_invent_a_session(self, config_path: Path) -> None:
-        headers = _probe(config_path, api_base=GO_BASE)
+    def test_does_not_invent_a_session(self, unsaved_config_path: Path) -> None:
+        headers = _probe(unsaved_config_path, api_base=GO_BASE)
         assert SESSION_HEADER not in headers
 
-    def test_also_applies_to_the_messages_format(self, config_path: Path) -> None:
+    def test_also_applies_to_the_messages_format(self, unsaved_config_path: Path) -> None:
         # Su Go la stessa base serve anche i modelli in formato Anthropic.
-        headers = _probe(config_path, api_base=GO_BASE, fmt="anthropic")
+        headers = _probe(unsaved_config_path, api_base=GO_BASE, fmt="anthropic")
         assert headers["User-Agent"].startswith("jenny/")
         assert headers["x-api-key"] == "k"
 
-    def test_the_usual_headers_remain(self, config_path: Path) -> None:
-        headers = _probe(config_path, api_base=GO_BASE)
+    def test_the_usual_headers_remain(self, unsaved_config_path: Path) -> None:
+        headers = _probe(unsaved_config_path, api_base=GO_BASE)
         assert headers["Accept"] == "application/json"
         assert headers["Authorization"] == "Bearer k"
 
 
 class TestTowardTheOthers:
 
-    def test_openai_receives_the_previous_headers(self, config_path: Path) -> None:
-        headers = _probe(config_path, api_base="https://api.openai.com/v1")
+    def test_openai_receives_the_previous_headers(self, unsaved_config_path: Path) -> None:
+        headers = _probe(unsaved_config_path, api_base="https://api.openai.com/v1")
         assert headers == {"Accept": "application/json", "Authorization": "Bearer k"}
 
-    def test_anthropic_receives_the_previous_headers(self, config_path: Path) -> None:
+    def test_anthropic_receives_the_previous_headers(self, unsaved_config_path: Path) -> None:
         headers = _probe(
-            config_path, api_base="https://api.anthropic.com", fmt="anthropic",
+            unsaved_config_path, api_base="https://api.anthropic.com", fmt="anthropic",
         )
         assert headers == {
             "Accept": "application/json",
@@ -91,6 +91,6 @@ class TestTowardTheOthers:
             "anthropic-version": "2023-06-01",
         }
 
-    def test_openrouter_receives_the_previous_headers(self, config_path: Path) -> None:
-        headers = _probe(config_path, api_base="https://openrouter.ai/api/v1")
+    def test_openrouter_receives_the_previous_headers(self, unsaved_config_path: Path) -> None:
+        headers = _probe(unsaved_config_path, api_base="https://openrouter.ai/api/v1")
         assert "User-Agent" not in headers

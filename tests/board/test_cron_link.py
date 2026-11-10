@@ -69,7 +69,7 @@ def test_the_notebook_placeholder_survives_the_store_loader() -> None:
 
 
 def test_a_crooked_link_is_refused_at_add_not_turned_personal(tmp_path) -> None:
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     with pytest.raises(ValueError, match="invalid board link"):
         service.add_job("x", CronSchedule(kind="every", every_ms=60_000), "m",
                         session_key="project:casa", board={"notebook": "casa", "card": ""})

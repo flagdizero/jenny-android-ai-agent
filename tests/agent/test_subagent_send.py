@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from support.aio import wait_until
 
 from jenny.agent.runner import AgentRunResult, AgentRunSpec
 from jenny.agent.subagent import (
@@ -69,13 +70,19 @@ def _failing_runner(sm: SubagentManager) -> list[AgentRunSpec]:
     return seen
 
 
+# Dopo il ``gather`` il task e' finito, ma la sua pulizia (``_cleanup``, il
+# done-callback che scrive il record e toglie il task da ``_running_tasks``)
+# puo' girare dopo che il ``gather`` e' tornato: si aspetta quella, non un giro del loop.
+_NOT_CLEANED = "la pulizia del task finito non e' arrivata"
+
+
 async def _spawn_and_settle(sm: SubagentManager, **kw) -> str:
     """Spawna, aspetta la terminazione e ritorna il lineage id."""
     await sm.spawn(task=kw.pop("task", "do it"), session_key="unified:default", **kw)
     task_id = next(iter(sm._task_statuses))
     lineage = sm._task_statuses[task_id].lineage_id
     await asyncio.gather(*[t for t in sm._running_tasks.values()], return_exceptions=True)
-    await asyncio.sleep(0)
+    await wait_until(lambda: not sm._running_tasks, msg=_NOT_CLEANED)
     return lineage
 
 
@@ -217,7 +224,7 @@ class TestResume:
             await asyncio.gather(
                 *list(sm._running_tasks.values()), return_exceptions=True
             )
-            await asyncio.sleep(0)
+            await wait_until(lambda: not sm._running_tasks, msg=_NOT_CLEANED)
 
         # ``attempt`` non e avanzato, quindi il tetto dei rilanci automatici e
         # ancora intatto e lo snapshot continua a dirlo.
@@ -242,7 +249,7 @@ class TestResume:
         _completing_runner(sm, content="v2")
         await sm.send(lineage, "make it shorter")
         await asyncio.gather(*list(sm._running_tasks.values()), return_exceptions=True)
-        await asyncio.sleep(0)
+        await wait_until(lambda: not sm._running_tasks, msg=_NOT_CLEANED)
 
         second = sm._history.load(lineage)
         assert second is not None
@@ -316,7 +323,7 @@ class TestDegradeToRestart:
         _failing_runner(sm)
         await sm.restart(lineage, extra_instructions="again")
         await asyncio.gather(*list(sm._running_tasks.values()), return_exceptions=True)
-        await asyncio.sleep(0)
+        await wait_until(lambda: not sm._running_tasks, msg=_NOT_CLEANED)
         assert sm._history.load(lineage) is None
 
     async def test_corrupt_history_of_a_finished_job_refuses_the_relaunch(
@@ -406,7 +413,7 @@ class TestResumeCapacity:
         assert normal.value.reserved is True
 
         assert (await sm.send(lineage, "change the title", quick=True)).mode == "resumed"
-        await asyncio.sleep(0)
+        await wait_until(lambda: len(seen) == 2, msg="la ripresa non e' partita")
         assert len(seen) == 2
 
         release.set()

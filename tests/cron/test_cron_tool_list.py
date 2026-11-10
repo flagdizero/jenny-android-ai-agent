@@ -17,12 +17,12 @@ from jenny.cron.types import (
 
 
 def _make_tool(tmp_path) -> CronTool:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     return CronTool(service)
 
 
 def _make_tool_with_tz(tmp_path, tz: str) -> CronTool:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     return CronTool(service, default_timezone=tz)
 
 
@@ -457,7 +457,7 @@ def test_list_excludes_disabled_jobs(tmp_path) -> None:
 async def test_list_shows_a_job_paused_from_the_workshop(tmp_path) -> None:
     """Un job in pausa non e' sparito: se Jenny non lo vedesse ne creerebbe un
     doppione, credendo di doverlo rifare. La riga le dice dove si riprende."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     service._running = True
     tool = CronTool(service)
     try:

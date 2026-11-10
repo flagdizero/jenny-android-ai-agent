@@ -595,14 +595,15 @@ def test_enforce_file_cap_no_duplicate_archive_in_else_branch():
     assert len(session.messages) <= 6
 
     # Verify archived messages have NO overlap with retained
-    if archive_fn.called:
-        archived = archive_fn.call_args.args[0]
-        archived_ids = set(id(m) for m in archived)
-        retained_ids = set(id(m) for m in session.messages)
-        assert not archived_ids & retained_ids, (
-            f"Duplicate messages in archive and retained: "
-            f"overlap contents = {[m['content'] for m in archived if id(m) in retained_ids]}"
-        )
+    # Senza archiviazione le asserzioni qui sotto non avrebbero niente da guardare.
+    assert archive_fn.called, "i messaggi tolti non sono stati archiviati"
+    archived = archive_fn.call_args.args[0]
+    archived_ids = set(id(m) for m in archived)
+    retained_ids = set(id(m) for m in session.messages)
+    assert not archived_ids & retained_ids, (
+        f"Duplicate messages in archive and retained: "
+        f"overlap contents = {[m['content'] for m in archived if id(m) in retained_ids]}"
+    )
 
 
 def test_enforce_file_cap_no_message_loss_in_else_branch():
@@ -655,15 +656,17 @@ def test_enforce_file_cap_correct_archive_with_last_consolidated_in_else_branch(
     archive_fn = MagicMock()
     session.enforce_file_cap(on_archive=archive_fn, limit=4)
 
-    if archive_fn.called:
-        archived = archive_fn.call_args.args[0]
-        # Archived messages should NOT include any from the consolidated prefix
-        # (u0..u7). They should only be unconsolidated dropped messages.
-        archived_contents = [m["content"] for m in archived]
-        for c in archived_contents:
-            assert c not in [f"u{i}" for i in range(8)], (
-                f"Consolidated message {c!r} should not be raw-archived"
-            )
+    # Senza archiviazione le asserzioni qui sotto non avrebbero niente da guardare.
+    assert archive_fn.called, "i messaggi tolti non sono stati archiviati"
+    archived = archive_fn.call_args.args[0]
+    # Archived messages should NOT include any from the consolidated prefix
+    # (u0..u7). They should only be unconsolidated dropped messages.
+    archived_contents = [m["content"] for m in archived]
+    assert archived_contents, "nessun messaggio non consolidato e' stato archiviato"
+    for c in archived_contents:
+        assert c not in [f"u{i}" for i in range(8)], (
+            f"Consolidated message {c!r} should not be raw-archived"
+        )
 
 
 def test_retain_recent_legal_suffix_last_consolidated_correct_in_else_branch():

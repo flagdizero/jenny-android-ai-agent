@@ -259,9 +259,8 @@ async def test_reminder_section_creates_a_notebook_job(cron_ctx, cron, notebook:
     job = cron.get_job(out["id"])
     assert job.name == "Potatura leggera" and job.schedule.kind == "at"
     assert job.payload.board["notebook"] == "piante" and job.payload.board["card"] == "acero"
-    # Niente sezione nel cassetto, niente file: il calendario di cura la deriva dal job.
+    # Niente sezione nel cassetto: il calendario di cura la deriva dal job.
     assert model.card_by_id(read_board(notebook), "acero")["userSections"] == []
-    assert not (notebook / "board" / "reminders.json").exists()
     await dispatch_command(cron_ctx, "board.reminder.drop", {"wiki": "piante", "id": job.id})
     assert cron.get_job(job.id) is None
 

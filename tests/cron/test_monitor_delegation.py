@@ -37,7 +37,7 @@ class _Agent:
 
 
 def _monitor(tmp_path: Path, agent: _Agent) -> tuple[CronService, str]:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     async def on_job(job: Any) -> str | None:
         return await run_bound_cron_job(job, agent=agent, cron=service)
@@ -145,7 +145,7 @@ async def test_the_delegated_state_survives_a_restart(tmp_path) -> None:
     service, job_id = _monitor(tmp_path, agent)
     await service.run_job(job_id)
 
-    reloaded = CronService(tmp_path / "cron" / "jobs.json")
+    reloaded = CronService(tmp_path / "workspace")
     assert reloaded.get_job(job_id).state.pending_since_ms is not None
 
 

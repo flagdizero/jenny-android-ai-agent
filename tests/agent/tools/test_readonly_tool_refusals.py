@@ -5,7 +5,7 @@ cancelli di percorso.
 
 Questi quattro non risolvono niente con ``resolve_allowed_path``: la
 destinazione ce l'hanno scritta dentro (``downloads/``, ``apps/<nome>/data/``,
-``cron/jobs.json``, l'APK). Il cancello non li vede passare, quindi in sola
+i job in ``state.sqlite``, l'APK). Il cancello non li vede passare, quindi in sola
 lettura si fermano da soli — e chi controlla che nessuno li dimentichi è
 ``tests/security/test_readonly_write_surfaces.py``.
 

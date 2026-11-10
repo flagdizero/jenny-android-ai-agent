@@ -5,11 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from support import config_file
 
-from jenny.config.loader import save_config
-from jenny.config.schema import Config
 from jenny.runtime.context import get_runtime_context
 from jenny.webui.commands import CommandContext
+
+# La fixture condivisa con tests/webui (``support/config_file.py``), registrata qui.
+config_path = config_file.config_path
 
 PAGES = {
     "travaso-acero.md": (
@@ -43,14 +45,6 @@ def notebook(workspace_root: Path) -> Path:
     for name, text in PAGES.items():
         (root / "wiki" / name).write_text(text)
     return root
-
-
-@pytest.fixture()
-def config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
 
 
 @pytest.fixture()

@@ -105,7 +105,7 @@ async def test_a_reminder_made_in_a_tainted_turn_keeps_the_taint(tmp_path: Path)
     from jenny.agent.tools.cron import CronTool
     from jenny.cron.service import CronService
 
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     tool = CronTool(service)
     tool.set_context(MagicMock(channel="websocket", chat_id="default",
                                session_key="unified:default", metadata={}))
@@ -121,7 +121,7 @@ async def test_a_reminder_from_a_clean_turn_has_no_taint(tmp_path: Path) -> None
     from jenny.agent.tools.cron import CronTool
     from jenny.cron.service import CronService
 
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     tool = CronTool(service)
     tool.set_context(MagicMock(channel="websocket", chat_id="default",
                                session_key="unified:default", metadata={}))

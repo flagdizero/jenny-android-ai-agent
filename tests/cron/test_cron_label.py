@@ -62,7 +62,7 @@ class _Agent:
 
 
 def _service(tmp_path: Path, agent: _Agent) -> CronService:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     async def on_job(job: Any) -> str | None:
         return await run_bound_cron_job(job, agent=agent, cron=service)
@@ -125,17 +125,17 @@ async def test_an_unreadable_app_skips_the_run_without_a_turn(tmp_path, monkeypa
 
 
 def test_a_condition_on_a_one_time_job_is_refused(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     with pytest.raises(ValueError, match="recurring"):
         _add(service, date_schedule("2026-11-12", _TZ), condition=_COND)
 
 
 def test_the_label_survives_a_restart(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = _add(service, CronSchedule(kind="every", every_ms=3_600_000), condition=_COND)
     one = _add(service, date_schedule("2027-03", _TZ))
 
-    reloaded = CronService(tmp_path / "cron" / "jobs.json")
+    reloaded = CronService(tmp_path / "workspace")
     assert reloaded.get_job(job.id).payload.condition == _COND
     assert reloaded.get_job(one.id).schedule.precision == "month"
 
@@ -153,7 +153,7 @@ async def test_a_one_time_job_disappears_once_it_has_fired(tmp_path) -> None:
 
 
 def test_update_job_changes_text_and_when(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = _add(service, date_schedule("2026-11-12", _TZ))
 
     updated = service.update_job(job.id, name="ciliegio", message="dividi il ciliegio",
@@ -167,7 +167,7 @@ def test_update_job_changes_text_and_when(tmp_path) -> None:
 
 
 def _tool(tmp_path: Path, key: str = "unified:default") -> CronTool:
-    tool = CronTool(CronService(tmp_path / "cron" / "jobs.json"), default_timezone=_TZ)
+    tool = CronTool(CronService(tmp_path / "workspace"), default_timezone=_TZ)
     chat = "default" if key == "unified:default" else key
     tool.set_context(RequestContext(channel="websocket", chat_id=chat, session_key=key))
     return tool
@@ -226,7 +226,7 @@ def test_the_hour_is_a_field_of_its_own(tmp_path) -> None:
     """Il 01/11/2026, su jenny_s22, «il 20 novembre ricordami…» diventava
     ``at="…T09:00:00"``: con l'ora dentro la data il modello doveva inventarla
     per riempire un ISO. Ora l'ora è ``time``, che si omette; ``at`` non c'è."""
-    tool = CronTool(CronService(tmp_path / "cron" / "jobs.json"), default_timezone=_TZ)
+    tool = CronTool(CronService(tmp_path / "workspace"), default_timezone=_TZ)
     props = tool.parameters["properties"]
     assert "at" not in props
     assert "never pick an hour" in props["time"]["description"]
@@ -274,7 +274,7 @@ def test_a_one_time_date_already_past_is_refused_everywhere(tmp_path) -> None:
     """Il 01/11/2026, su jenny_s22, la passata della bacheca ha scritto «verso
     marzo» come ``2026-03``: il job è nato scaduto ed è suonato subito, otto mesi
     prima. Ora ``CronService`` lo rifiuta, per chiunque scriva."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     last_march = date_schedule(f"{datetime.now().year - 1}-03", _TZ)
     with pytest.raises(ValueError, match="already past"):
         _add(service, last_march)

@@ -116,7 +116,7 @@ async def test_a_removed_card_pauses_its_crons_and_undo_resumes_them(
     from jenny.cron.types import CronSchedule
 
     _seed(notebook)
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = service.add_job(
         name="Meteo", schedule=CronSchedule(kind="every", every_ms=3_600_000),
         message="guarda il meteo", session_key="project:piante", origin_channel="websocket",
@@ -151,7 +151,7 @@ async def test_a_week_later_the_removed_card_is_gone_for_good(
     from jenny.cron.types import CronSchedule
 
     _seed(notebook)
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = service.add_job(
         name="Meteo", schedule=CronSchedule(kind="every", every_ms=3_600_000),
         message="guarda il meteo", session_key="project:piante", origin_channel="websocket",

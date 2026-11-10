@@ -118,7 +118,7 @@ def _monitor(
     message: str = _MESSAGE,
 ) -> tuple[CronService, str, _FakeMonitorAgent]:
     agent = agent or _FakeMonitorAgent()
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     async def on_job(job: Any) -> str | None:
         return await run_bound_cron_job(job, agent=agent, cron=service)
@@ -643,7 +643,7 @@ class TestPersistedState:
         service, job_id, _agent = _monitor(tmp_path)
         await _cycles(service, job_id, 2)
 
-        reloaded = CronService(tmp_path / "cron" / "jobs.json").get_job(job_id)
+        reloaded = CronService(tmp_path / "workspace").get_job(job_id)
 
         assert reloaded is not None
         assert reloaded.state.last_status == "could_not_check"
@@ -657,7 +657,7 @@ class TestPersistedState:
         service, job_id, _agent = _monitor(tmp_path)
         await _cycles(service, job_id, MONITOR_ESCALATE_AFTER_FAILURES)
 
-        state = saved_jobs(tmp_path / "cron" / "jobs.json")[0]["state"]
+        state = saved_jobs(tmp_path / "workspace")[0]["state"]
         assert state["lastStatus"] == "could_not_check"
         assert state["consecutiveCouldNotCheck"] == MONITOR_ESCALATE_AFTER_FAILURES
         assert state["couldNotCheckEscalated"] is True
@@ -721,7 +721,7 @@ class TestMarkerParsing:
 async def test_a_reminder_ignores_the_marker_entirely(tmp_path: Path, mode: str) -> None:
     """Il terzo stato è un fatto dei monitor: un reminder parla sempre e basta."""
     agent = _FakeMonitorAgent()
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     async def on_job(job: Any) -> str | None:
         return await run_bound_cron_job(job, agent=agent, cron=service)

@@ -37,7 +37,7 @@ def _jobs(cron: CronService) -> dict[str, object]:
 
 
 async def test_both_scopes_follow_the_new_name_and_nothing_else_moves(tmp_path: Path) -> None:
-    cron = CronService(tmp_path / "cron" / "jobs.json")
+    cron = CronService(tmp_path / "workspace")
     await cron.start()
     try:
         card = _add(cron, "acqua", notebook=OLD, scope="basilico")
@@ -64,7 +64,7 @@ async def test_both_scopes_follow_the_new_name_and_nothing_else_moves(tmp_path: 
         assert jobs[other].payload.board["notebook"] == "frutteto"
         assert jobs[personal].payload.session_key == "unified:default"
         # Su disco, non solo in memoria.
-        reread = _jobs(CronService(tmp_path / "cron" / "jobs.json"))
+        reread = _jobs(CronService(tmp_path / "workspace"))
         assert reread[whole].payload.board["card"] == cron_link.NOTEBOOK_CARD
         assert reread[whole].payload.board["notebook"] == NEW
     finally:
@@ -74,20 +74,20 @@ async def test_both_scopes_follow_the_new_name_and_nothing_else_moves(tmp_path: 
 async def test_a_stopped_scheduler_journals_the_move_and_applies_it_at_start(
         tmp_path: Path) -> None:
     """All'avvio la ripresa di un rinomino arriva prima di ``start``."""
-    path = tmp_path / "cron" / "jobs.json"
-    seed = CronService(path)
+    workspace = tmp_path / "workspace"
+    seed = CronService(workspace)
     await seed.start()
     jid = _add(seed, "gelo", notebook=OLD)
     seed.stop()
 
-    stopped = CronService(path)
+    stopped = CronService(workspace)
     assert cron_link.follow_renamed_notebook(stopped, OLD, NEW) == [jid]
     await stopped.start()
     try:
         assert _jobs(stopped)[jid].payload.board["notebook"] == NEW
     finally:
         stopped.stop()
-    assert _jobs(CronService(path))[jid].payload.session_key == f"project:{NEW}"
+    assert _jobs(CronService(workspace))[jid].payload.session_key == f"project:{NEW}"
 
 
 def test_a_moved_job_is_alive_under_the_new_name(tmp_path: Path, monkeypatch) -> None:
@@ -99,7 +99,7 @@ def test_a_moved_job_is_alive_under_the_new_name(tmp_path: Path, monkeypatch) ->
         {"id": "basilico", "title": "Basilico", "pages": [], "pos": {"x": 1, "y": 1}}))
     monkeypatch.setattr("jenny.board.cron_link.notebook_root",
                         lambda name: root if name == NEW else None)
-    cron = CronService(tmp_path / "cron" / "jobs.json")
+    cron = CronService(tmp_path / "workspace")
     jid = _add(cron, "acqua", notebook=OLD, scope="basilico")
     assert not cron_link.link_alive(cron.get_job(jid).payload.board)
     cron_link.follow_renamed_notebook(cron, OLD, NEW)
@@ -120,7 +120,7 @@ async def test_the_rename_command_brings_the_crons_along(tmp_path: Path, monkeyp
     async def _no_pages(kind, ref, new_ref):
         return 0
 
-    cron = CronService(tmp_path / "cron" / "jobs.json")
+    cron = CronService(tmp_path / "workspace")
     await cron.start()
     try:
         jid = _add(cron, "gelo", notebook=OLD)
@@ -147,7 +147,7 @@ async def test_a_refused_rename_leaves_the_crons_alone(tmp_path: Path, monkeypat
     def _refuses(**kw):
         raise module.ProjectRenameError("taken", code="name_taken")
 
-    cron = CronService(tmp_path / "cron" / "jobs.json")
+    cron = CronService(tmp_path / "workspace")
     jid = _add(cron, "gelo", notebook=OLD)
     monkeypatch.setattr(module, "rename_project", _refuses)
     monkeypatch.setattr(commands, "_require_wiki_enabled", lambda: None)
@@ -194,7 +194,7 @@ def test_a_chat_that_follows_a_hand_renamed_folder_brings_the_crons(tmp_path: Pa
     target.mkdir(parents=True)
     monkeypatch.setattr(loop_module, "find_wiki_by_id", lambda wikis, wid: target)
     monkeypatch.setattr(loop_module, "follow_renamed_project", lambda ws, old, new: (True, ""))
-    cron = CronService(tmp_path / "cron" / "jobs.json")
+    cron = CronService(tmp_path / "workspace")
     jid = _add(cron, "gelo", notebook=OLD)
 
     agent = AgentLoop.__new__(AgentLoop)

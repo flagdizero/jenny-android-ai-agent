@@ -143,8 +143,15 @@ def test_a_wiki_without_an_id_records_nothing(loop: AgentLoop, tmp_path: Path) -
 
 
 @pytest.mark.parametrize("key", ["unified:default", "cron:update_check", ""])
-def test_nothing_is_recorded_outside_a_project(loop: AgentLoop, key: str) -> None:
+def test_nothing_is_recorded_outside_a_project(
+    loop: AgentLoop, key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ogni chiave, anche quella vuota, deve lasciare le sessioni come stanno:
+    # nessun salvataggio, e nessun metadato del progetto dove c'e' una sessione.
+    saved: list[str] = []
+    monkeypatch.setattr(loop.sessions, "save", lambda session, *a, **kw: saved.append(session.key))
     loop._remember_project_id(key)
+    assert saved == [], f"{key!r} non e' un progetto, eppure una sessione e' stata salvata"
     if key:
         assert PROJECT_WIKI_ID_KEY not in loop.sessions.get_or_create(key).metadata
 

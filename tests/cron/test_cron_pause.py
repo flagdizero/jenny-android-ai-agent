@@ -34,7 +34,7 @@ def _bound() -> dict[str, str]:
 async def running(tmp_path):
     """Un servizio che «gira» senza avviare il timer: come i test di ``run_job``.
     ``_arm_timer`` vuole un loop, quindi i test che lo usano sono ``async``."""
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=lambda _: asyncio.sleep(0))
+    service = CronService(tmp_path / "workspace", on_job=lambda _: asyncio.sleep(0))
     service._running = True
     yield service
     service.stop()
@@ -141,7 +141,7 @@ async def test_the_pause_survives_a_restart(tmp_path, running) -> None:
     service.set_paused(job.id, True)
     stamp = service.get_job(job.id).paused_at_ms
 
-    reloaded = CronService(tmp_path / "cron" / "jobs.json")
+    reloaded = CronService(tmp_path / "workspace")
     again = reloaded.get_job(job.id)
     assert again.enabled is False
     assert again.paused_at_ms == stamp
@@ -152,26 +152,26 @@ async def test_a_store_written_before_the_pause_reads_as_not_paused(tmp_path, ru
     job = service.add_job(
         name="acqua", schedule=CronSchedule(kind="every", every_ms=_HOUR), message="bevi", **_bound()
     )
-    path = tmp_path / "cron" / "jobs.json"
-    rows = saved_jobs(path)
+    workspace = tmp_path / "workspace"
+    rows = saved_jobs(workspace)
     for j in rows:
         j.pop("pausedAtMs", None)
-    seed_jobs(path, rows)
+    seed_jobs(workspace, rows)
 
-    assert CronService(path).get_job(job.id).paused_at_ms is None
+    assert CronService(workspace).get_job(job.id).paused_at_ms is None
 
 
 async def test_a_stopped_service_saves_the_pause(tmp_path, running) -> None:
     """Anche da fermo il servizio salva: chi gira la ritrova alla lettura dopo."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     live = running
     job = live.add_job(
         name="acqua", schedule=CronSchedule(kind="every", every_ms=_HOUR), message="bevi", **_bound()
     )
-    stopped = CronService(path)
+    stopped = CronService(workspace)
 
     assert stopped.set_paused(job.id, True) == "paused"
-    assert CronService(path).get_job(job.id).paused_at_ms is not None
+    assert CronService(workspace).get_job(job.id).paused_at_ms is not None
 
 
 async def test_a_paused_job_never_fires(tmp_path) -> None:
@@ -180,7 +180,7 @@ async def test_a_paused_job_never_fires(tmp_path) -> None:
     async def on_job(job) -> None:
         called.append(job.id)
 
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=on_job)
+    service = CronService(tmp_path / "workspace", on_job=on_job)
     job = service.add_job(
         name="spesso", schedule=CronSchedule(kind="every", every_ms=200), message="x", **_bound()
     )

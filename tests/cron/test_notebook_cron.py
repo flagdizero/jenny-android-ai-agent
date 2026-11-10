@@ -48,20 +48,20 @@ def notebook(tmp_path: Path, monkeypatch):
         reset_workspace_scope(token)
 
 
-def _tool(store: Path, key: str = "project:casa") -> CronTool:
-    tool = CronTool(CronService(store))
+def _tool(workspace: Path, key: str = "project:casa") -> CronTool:
+    tool = CronTool(CronService(workspace))
     tool.set_context(RequestContext(channel="websocket", chat_id=key, session_key=key))
     return tool
 
 
 async def test_a_cron_asked_in_a_notebook_lands_in_a_drawer(notebook, tmp_path) -> None:
     _ws, root = notebook
-    store = tmp_path / "cron" / "jobs.json"
-    tool = _tool(store)
+    workspace = tmp_path / "workspace"
+    tool = _tool(workspace)
     out = await tool.execute(action="add", card="annunci", message="cerca annunci nuovi",
                              cron_expr="0 9 * * 1", mode="monitor")
     assert "on the card «Annunci»" in out
-    job = CronService(store).list_jobs()[0]
+    job = CronService(workspace).list_jobs()[0]
     # Nessuna sezione nel cassetto: la bacheca lo deriva dal legame del job.
     assert read_board(root)["cards"][0]["userSections"] == []
     assert job.payload.board == {"notebook": "casa", "card": "annunci", "section": "@auto"}
@@ -73,21 +73,21 @@ async def test_a_cron_asked_in_a_notebook_lands_in_a_drawer(notebook, tmp_path) 
 
 async def test_without_a_card_the_job_is_for_the_whole_notebook(notebook, tmp_path) -> None:
     """Jenny sceglie, e non chiede: senza scheda il cron è di tutto il quaderno."""
-    store = tmp_path / "jobs.json"
-    tool = _tool(store)
+    workspace = tmp_path / "workspace"
+    tool = _tool(workspace)
     out = await tool.execute(action="add", message="guarda se gela", every_seconds=3600)
     assert "for the whole notebook" in out
-    job = CronService(store).list_jobs()[0]
+    job = CronService(workspace).list_jobs()[0]
     assert job.payload.board == {"notebook": "casa", "card": "@notebook", "section": "@auto"}
     assert "for the whole notebook" in await tool.execute(action="list")
 
 
 async def test_a_card_that_is_not_there_is_named_back(notebook, tmp_path) -> None:
-    store = tmp_path / "jobs.json"
-    out = await _tool(store).execute(action="add", card="Cantina", message="x",
+    workspace = tmp_path / "workspace"
+    out = await _tool(workspace).execute(action="add", card="Cantina", message="x",
                                      every_seconds=3600)
     assert "No card «Cantina»" in out and "«Annunci»" in out and "empty" in out
-    assert CronService(store).list_jobs() == []
+    assert CronService(workspace).list_jobs() == []
 
 
 async def test_a_card_is_found_without_its_accents_as_on_the_board_tool(notebook, tmp_path) -> None:
@@ -95,37 +95,37 @@ async def test_a_card_is_found_without_its_accents_as_on_the_board_tool(notebook
     _ws, root = notebook
     mutate_board(root, lambda b: b["cards"].append(
         {"id": "pianta-1", "title": "Ciliégio", "pages": [], "pos": {"x": 30, "y": 1}}))
-    store = tmp_path / "jobs.json"
-    out = await _tool(store).execute(action="add", card="ciliegio", message="annaffia",
+    workspace = tmp_path / "workspace"
+    out = await _tool(workspace).execute(action="add", card="ciliegio", message="annaffia",
                                      every_seconds=3600)
     assert "on the card «Ciliégio»" in out
-    assert CronService(store).list_jobs()[0].payload.board["card"] == "pianta-1"
+    assert CronService(workspace).list_jobs()[0].payload.board["card"] == "pianta-1"
 
 
 async def test_a_board_without_cards_takes_a_whole_notebook_cron(notebook, tmp_path) -> None:
     _ws, root = notebook
     mutate_board(root, lambda b: b.__setitem__("cards", []))
-    store = tmp_path / "jobs.json"
-    out = await _tool(store).execute(action="add", message="x", every_seconds=3600)
+    workspace = tmp_path / "workspace"
+    out = await _tool(workspace).execute(action="add", message="x", every_seconds=3600)
     assert out.startswith("Created job") and "for the whole notebook" in out
 
 
 async def test_a_notebook_sees_and_removes_only_its_own_jobs(notebook, tmp_path) -> None:
     _ws, root = notebook
-    store = tmp_path / "jobs.json"
-    personal = CronTool(CronService(store))
+    workspace = tmp_path / "workspace"
+    personal = CronTool(CronService(workspace))
     personal.set_context(RequestContext(channel="websocket", chat_id="default",
                                         session_key="unified:default"))
     await personal.execute(action="add", message="sveglia", every_seconds=3600)
-    tool = _tool(store)
+    tool = _tool(workspace)
     await tool.execute(action="add", card="Annunci", message="cerca", every_seconds=3600)
-    jobs = {j.payload.board is None: j for j in CronService(store).list_jobs()}
+    jobs = {j.payload.board is None: j for j in CronService(workspace).list_jobs()}
     assert jobs[True].id not in await tool.execute(action="list")
     assert "No job" in await tool.execute(action="remove", job_id=jobs[True].id)
     out = await tool.execute(action="remove", job_id=jobs[False].id)
     assert "Removed" in out or "removed" in out
     assert read_board(root)["cards"][0]["userSections"] == []
-    assert [j.id for j in CronService(store).list_jobs()] == [jobs[True].id]
+    assert [j.id for j in CronService(workspace).list_jobs()] == [jobs[True].id]
 
 
 async def test_a_notebook_without_a_board_takes_a_job_for_the_whole_notebook(
@@ -135,7 +135,7 @@ async def test_a_notebook_without_a_board_takes_a_job_for_the_whole_notebook(
     (root / "wiki").mkdir(parents=True)
     monkeypatch.setattr("jenny.board.cron_link.notebook_root",
                         lambda name: root if name == "vuoto" else None)
-    tool = _tool(tmp_path / "jobs.json", "project:vuoto")
+    tool = _tool(tmp_path / "workspace", "project:vuoto")
     token = bind_workspace_scope(build_workspace_scope(root, "restricted"))
     try:
         out = await tool.execute(action="add", message="x", every_seconds=60)
@@ -180,10 +180,10 @@ class _Recorder:
 
 async def test_the_result_comes_back_to_the_drawer(notebook, tmp_path) -> None:
     _ws, root = notebook
-    store = tmp_path / "jobs.json"
-    await _tool(store).execute(action="add", card="annunci", message="cerca annunci",
+    workspace = tmp_path / "workspace"
+    await _tool(workspace).execute(action="add", card="annunci", message="cerca annunci",
                                every_seconds=3600, mode="monitor")
-    job = CronService(store).list_jobs()[0]
+    job = CronService(workspace).list_jobs()[0]
     agent = _Agent("3 annunci nuovi in via Roma")
     await run_bound_cron_job(job, agent=agent, cron=_Recorder())
     assert agent.received[0].session_key_override == notebook_cron_session_key("casa", job.id)
@@ -195,9 +195,9 @@ async def test_the_result_comes_back_to_the_drawer(notebook, tmp_path) -> None:
 
 async def test_a_cron_whose_card_is_gone_does_not_run(notebook, tmp_path) -> None:
     _ws, root = notebook
-    store = tmp_path / "jobs.json"
-    await _tool(store).execute(action="add", card="annunci", message="cerca", every_seconds=3600)
-    job = CronService(store).list_jobs()[0]
+    workspace = tmp_path / "workspace"
+    await _tool(workspace).execute(action="add", card="annunci", message="cerca", every_seconds=3600)
+    job = CronService(workspace).list_jobs()[0]
     mutate_board(root, lambda b: b.__setitem__("cards", []))
     with pytest.raises(ValueError, match="notebook gone"):
         await run_bound_cron_job(job, agent=_Agent("x"), cron=_Recorder())
@@ -208,7 +208,7 @@ async def test_a_whole_notebook_monitor_keeps_the_notebook_fence(notebook, tmp_p
     from jenny.board import cron_link, model
     from jenny.cron.types import CronSchedule
 
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = service.add_job("annunci", CronSchedule(kind="every", every_ms=3_600_000), "cerca",
                           session_key="project:casa", origin_channel="websocket",
                           origin_chat_id="project:casa", mode="monitor",
@@ -226,9 +226,9 @@ async def test_a_run_tells_the_open_board(notebook, tmp_path, monkeypatch) -> No
         told.append(name)
 
     monkeypatch.setattr("jenny.board.notify.board_changed", note)
-    store = tmp_path / "jobs.json"
-    await _tool(store).execute(action="add", card="annunci", message="cerca", every_seconds=3600)
-    job = CronService(store).list_jobs()[0]
+    workspace = tmp_path / "workspace"
+    await _tool(workspace).execute(action="add", card="annunci", message="cerca", every_seconds=3600)
+    job = CronService(workspace).list_jobs()[0]
     told.clear()
     await run_bound_cron_job(job, agent=_Agent("x"), cron=_Recorder())
     assert told == ["casa"]
@@ -263,15 +263,15 @@ async def test_removing_a_notebook_cron_from_anywhere_cleans_its_board(notebook,
     from jenny.cron.types import CronSchedule
 
     _ws, root = notebook
-    store = tmp_path / "jobs.json"
-    service = CronService(store)
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace)
     old = {"notebook": "casa", "card": "annunci", "section": "s-cron"}
     job = service.add_job("annunci", CronSchedule(kind="every", every_ms=3_600_000), "cerca",
                           session_key="project:casa", board=old)
     mutate_board(root, lambda b: (
         b["cards"][0]["userSections"].append({"id": "s-cron", "kind": "cron", "job": job.id}),
         b.__setitem__("cronResults", {job.id: {"at": "x", "status": "ok"}})))
-    personal = _tool(store, key="unified:default")
+    personal = _tool(workspace, key="unified:default")
     out = await personal.execute(action="remove", job_id=job.id)
     assert out == f"Removed job {job.id}"
     board = read_board(root)

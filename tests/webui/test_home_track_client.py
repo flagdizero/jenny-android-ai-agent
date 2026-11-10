@@ -696,7 +696,7 @@ def test_the_dots_are_gone_and_the_row_took_their_place() -> None:
     assert "home-dots" not in html
     assert 'id="home-strip"' in html
     for name in ("home-pages.js", "home-app.js", "home-style.css"):
-        assert "casa-pallin" not in (ASSETS / name).read_text(encoding="utf-8"), name
+        assert "home-dots" not in (ASSETS / name).read_text(encoding="utf-8"), name
 
 
 def test_the_strip_does_not_try_to_open_the_drawer() -> None:

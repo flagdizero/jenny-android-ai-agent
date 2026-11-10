@@ -180,7 +180,7 @@ def test_both_shells_answer_the_tap() -> None:
     assert "new JennyMascot(" in home and "chat: {" in home
     for name, text in (("l'officina", workshop), ("la casa", home)):
         assert "bindMascotDrag" not in text, f"{name} lega di nuovo la fisica per conto suo"
-    assert not (ASSETS / "casa-mascot.js").exists(), "e' tornata la seconda mascotte"
+    assert not (ASSETS / "home-mascot.js").exists(), "e' tornata la seconda mascotte"
 
 
 def test_the_room_that_leaves_her_space_uses_her_height_and_not_her_width() -> None:

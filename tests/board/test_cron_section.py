@@ -38,7 +38,7 @@ async def test_a_card_cron_is_shown_from_its_job_and_goes_with_it(ctx, workspace
     from jenny.board.cron_link import job_snapshot, make_link
     from jenny.cron.service import CronService
 
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = _meteo(service, notebook, make_link("piante", "acero"))
     jobs = {job.id: job_snapshot(job)}
     card = build_card_view(notebook, "acero", sections_resolver=section_resolver(workspace_root,
@@ -66,7 +66,7 @@ async def test_a_pause_from_the_drawer_tells_the_home_like_the_route_and_the_too
     from jenny.cron.service import CronService
     from jenny.runtime import ui_events
 
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = _meteo(service, notebook, make_link("piante", "acero"))
     seen: list[str] = []
 
@@ -93,7 +93,7 @@ async def test_board_cron_remove_refuses_a_job_of_elsewhere(ctx, notebook, tmp_p
     from jenny.cron.service import CronService
     from jenny.cron.types import CronSchedule
 
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     other = _meteo(service, notebook, make_link("altrove", "acero"))
     personal = service.add_job("sveglia", CronSchedule(kind="every", every_ms=60_000), "m",
                                session_key="unified:default")
@@ -113,7 +113,7 @@ async def test_a_cron_section_from_before_still_shows_once_and_goes_with_it(
     from jenny.board.cron_link import job_snapshot
     from jenny.cron.service import CronService
 
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = _meteo(service, notebook, {"notebook": "piante", "card": "acero", "section": "s-cron"})
     mutate_board(notebook, lambda b: (
         b["cards"][0]["userSections"].append({"id": "s-cron", "kind": "cron", "job": job.id}),
@@ -139,7 +139,7 @@ def test_a_cards_recurring_crons_are_one_label_and_a_dated_one_is_not(notebook, 
     from jenny.cron.service import CronService
     from jenny.cron.types import CronSchedule
 
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     first = _meteo(service, notebook, make_link("piante", "acero"))
     origin = {"session_key": "project:piante", "origin_channel": "websocket",
               "origin_chat_id": "project:piante"}
@@ -173,7 +173,7 @@ def test_the_whole_notebook_label_is_free_even_without_cards(notebook, tmp_path)
     from jenny.cron.types import CronSchedule
 
     mutate_board(notebook, lambda b: b.__setitem__("cards", []))
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     job = service.add_job("Gelo", CronSchedule(kind="every", every_ms=3_600_000), "guarda",
                           session_key="project:piante", origin_channel="websocket",
                           origin_chat_id="project:piante",
@@ -194,7 +194,7 @@ def test_a_whole_notebook_once_cron_is_a_row_of_the_free_postit(notebook, tmp_pa
     from jenny.cron.types import CronSchedule
 
     mutate_board(notebook, lambda b: None)
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     once = service.add_job("Chiama il vivaio", CronSchedule(kind="at", at_ms=4_102_444_800_000),
                            "chiama", session_key="project:piante", origin_channel="websocket",
                            origin_chat_id="project:piante",
@@ -222,7 +222,7 @@ def test_a_label_that_does_not_fit_hangs_beside_its_card(notebook, tmp_path) -> 
     mutate_board(notebook, lambda b: b.__setitem__("cards", [
         {"id": "salvia", "title": "Salvia", "pages": [], "pos": {"x": 10, "y": 20}},
         {"id": "fico", "title": "Fico", "pages": [], "pos": {"x": 55, "y": 20}}]))
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     origin = {"session_key": "project:piante", "origin_channel": "websocket",
               "origin_chat_id": "project:piante"}
     notes = {}

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+from support.aio import wait_until
 from support.gateway_http import AUTH_SECRET, make_handler, make_request
 
 from jenny.agent.runner import AgentRunner, AgentRunResult, AgentRunSpec
@@ -305,10 +306,8 @@ async def _helper_killed_mid_run(
     task_id, lineage = await sm._launch(spec)
     await asyncio.wait_for(paused.wait(), timeout=5)
     # Il segnaposto e scritto in un thread, in parallelo al run.
-    for _ in range(200):
-        if _running(live):
-            break
-        await asyncio.sleep(0.01)
+    await wait_until(lambda: _running(live), timeout=2.0,
+                     msg="il segnaposto non e' sul disco: la copia non sarebbe un kill a meta'")
     dead = tmp_path / "after-kill" / "workspace"
     shutil.copytree(live.parent, dead.parent)
     await sm.drain(timeout_s=0.01)

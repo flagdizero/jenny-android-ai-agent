@@ -183,7 +183,7 @@ async def test_the_delete_removes_the_cron_jobs_of_its_cards(
     async def _no_page(kind, ref):
         return 0
 
-    cron = CronService(tmp_path / "cron" / "jobs.json")
+    cron = CronService(tmp_path / "workspace")
     await cron.start()
     try:
         every = CronSchedule(kind="every", every_ms=3_600_000)
