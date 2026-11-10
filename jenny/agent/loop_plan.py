@@ -525,7 +525,7 @@ class LoopPlanMixin:
         if not has_plans(session_key, driver):
             return
         try:
-            await driver.before_user_turn(session_key, msg.metadata)
+            await driver.before_user_turn(session_key, msg.metadata, channel=msg.channel)
         except Exception:  # noqa: BLE001
             logger.opt(exception=True).warning("Plan pre-turn hook failed for {}", session_key)
 

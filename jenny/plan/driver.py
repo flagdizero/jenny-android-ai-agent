@@ -187,6 +187,9 @@ _NO_ROUND_KINDS = frozenset({"delete", "check", "research"})
 # Per quanto un ``plan_propose`` dopo un annullamento riceve «fermati»: il turno
 # che stava pianificando, non uno di domani.
 _CANCELLED_GRACE_S = 600.0
+# Il canale che ha il tasto Piano: solo i suoi turni sono di pianificazione
+# (``_settle_drafting``).
+_PLAN_BUTTON_CHANNEL = "websocket"
 
 # Un ritorno (o il suo annullamento) partito e non finito: nell'``extra`` del
 # piano, con l'errore. Il piano resta ``done``/``stopped`` (o ``rolled_back``),
@@ -841,7 +844,9 @@ class PlanDriver:
             await self._drafting_changed(slot)
         return live
 
-    async def _settle_drafting(self, session_key: str, metadata: dict[str, Any]) -> None:
+    async def _settle_drafting(
+        self, session_key: str, metadata: dict[str, Any], *, channel: str | None = None,
+    ) -> None:
         """Prima di un turno dell'utente: apre, tiene viva o chiude la pianificazione.
 
         Un messaggio col tasto Piano la apre, se non c'è. Ogni messaggio che
@@ -852,6 +857,13 @@ class PlanDriver:
         e il blocco dice al modello di andare avanti, non di ricominciare. Un
         turno che la continua non la ricrea: se l'utente l'ha annullata nel
         frattempo, resta annullata.
+
+        Solo dal canale che ha il tasto Piano (*channel*, la WebUI): la chat
+        personale è una sessione sola per quattro canali, e una domanda fatta
+        alla mascotte, da Telegram o da una notifica mentre in casa si prepara
+        un piano resta una chat — senza, per dodici ore ogni «che tempo fa?»
+        riceveva il blocco di pianificazione e la sola lettura, e un
+        ``plan_propose`` metteva la scheda dove chi chiedeva non guardava.
         """
         slot = self._slot(session_key)
         if slot is None:
@@ -872,6 +884,8 @@ class PlanDriver:
         if entry is None:
             if metadata.get(PLAN_MODE_META) is True:
                 await self.start_drafting(session_key, revise)
+            return
+        if channel is not None and channel != _PLAN_BUTTON_CHANNEL:
             return
         from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
 
@@ -1030,7 +1044,7 @@ class PlanDriver:
             followup=followup,
             reads=reads if isinstance(reads, int) else 0,
             notebook=notebook,
-            where="in this notebook" if notebook else "in the personal chat",
+            where=f"in {place.here}" if place is not None else "in this notebook",
         )
 
     # ── tool del modello ───────────────────────────────────────────────────
@@ -1057,10 +1071,13 @@ class PlanDriver:
         slot = self._slot(session_key)
         if slot is None or session_key is None:
             return "Error: a plan can only be proposed inside a notebook chat or the personal chat."
+        place = self.place_of(session_key)
+        here = place.here if place is not None else "this notebook"
+        subject = place.subject if place is not None else "the notebook"
         held = self.held_status(session_key)
         if held is not None:
             return (
-                f"Not now: this notebook already has a plan that has started ({held}). "
+                f"Not now: {here} already has a plan that has started ({held}). "
                 "A new one can be proposed when that plan is done or stopped."
             )
         drafting = self.drafting_for(session_key)
@@ -1073,17 +1090,16 @@ class PlanDriver:
                     "short sentence that the plan is cancelled, and wait for the user."
                 )
             return (
-                "Error: nobody is preparing a plan in this notebook now: the user starts it "
+                f"Error: nobody is preparing a plan in {here} now: the user starts it "
                 "with the Plan button. Do not propose a plan; answer the user."
             )
         if not drafting.get("reads") and not self._revises_a_plan_of(slot, drafting):
             return (
-                "Not yet: look at the notebook first: read the pages and sources this job "
+                f"Not yet: look at {subject} first: read the pages and sources this job "
                 "depends on (list_dir, read_file, grep), so the plan says what is there and "
                 "what is missing. Then call plan_propose."
             )
         try:
-            place = self.place_of(session_key)
             proposal = validate_proposal(
                 title, steps, coverage, assumptions,
                 require_check=place is None or place.traits.machine_check,
@@ -1101,7 +1117,7 @@ class PlanDriver:
                 )
             except PlanConflictError as exc:
                 return (
-                    f"Not now: this notebook already has a plan that has started ({exc.status}). "
+                    f"Not now: {here} already has a plan that has started ({exc.status}). "
                     "A new one can be proposed when that plan is done or stopped."
                 )
             self._remember(plan)
@@ -1272,7 +1288,7 @@ class PlanDriver:
                 drafts = await asyncio.to_thread(self._plan_drafts, plan)
             except _DraftsUnreadableError as exc:
                 return (
-                    f"Not yet: the notebook's drafts could not be read ({exc}), and a step does "
+                    f"Not yet: the pending drafts could not be read ({exc}), and a step does "
                     "not close with drafts waiting. Try `plan_step_done` again in a moment."
                 )
             if drafts:
@@ -1357,7 +1373,7 @@ class PlanDriver:
                 drafts = await asyncio.to_thread(self._plan_drafts, plan)
             except _DraftsUnreadableError as exc:
                 return (
-                    f"Not yet: the notebook's drafts could not be read ({exc}). Try "
+                    f"Not yet: the pending drafts could not be read ({exc}). Try "
                     "`plan_blocked` again in a moment."
                 )
             if drafts:
@@ -1897,7 +1913,9 @@ class PlanDriver:
         await self._changed(plan)
         return True
 
-    async def before_user_turn(self, session_key: str, metadata: dict[str, Any]) -> None:
+    async def before_user_turn(
+        self, session_key: str, metadata: dict[str, Any], *, channel: str | None = None,
+    ) -> None:
         """Prima di un turno dell'utente nella chat di un quaderno.
 
         - piano in **pausa** → il turno è in sola lettura: si parla con Jenny,
@@ -1910,7 +1928,7 @@ class PlanDriver:
           (:meth:`_settle_drafting`).
         """
         self._bind_loop()
-        await self._settle_drafting(session_key, metadata)
+        await self._settle_drafting(session_key, metadata, channel=channel)
         live = self._index.get(session_key)
         if live is not None and live.status == "blocked":
             await self.recheck_drafts(live.plan_id)
@@ -3832,7 +3850,7 @@ def _mark_rollback_undone(
 
 def _rollback_note(plan: Plan, counts: Mapping[str, int], drafts: int = 0) -> str:
     return (
-        f'The user rolled the notebook back to before the plan "{plan.title}": '
+        f'The user rolled {place_of(plan).subject} back to before the plan "{plan.title}": '
         f"{counts.get('restored', 0)} file(s) restored, {counts.get('removed', 0)} removed, "
         f"{counts.get('left', 0)} left as they were because they changed afterwards"
         + (f", {counts['kept']} kept on purpose" if counts.get("kept") else "")
@@ -3843,7 +3861,7 @@ def _rollback_note(plan: Plan, counts: Mapping[str, int], drafts: int = 0) -> st
 
 def _undo_note(plan: Plan, counts: Mapping[str, int]) -> str:
     return (
-        f'The user undid the rollback of the plan "{plan.title}": the notebook is '
+        f'The user undid the rollback of the plan "{plan.title}": {place_of(plan).subject} is '
         f"back as the plan left it ({counts.get('restored', 0)} file(s) restored, "
         f"{counts.get('removed', 0)} removed)."
     )

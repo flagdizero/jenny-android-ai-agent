@@ -5,7 +5,8 @@ sola lettura mentre corre, chiude con un passo ``check`` che il codice verifica,
 annota le lacune in ``raw/notes/open-gaps.md`` e, da bloccato, prende come
 risposta il prossimo messaggio. Un piano personale (``personal``) vive nella
 chat principale, dove arrivano anche la mascotte, le notifiche e Telegram: non
-tiene niente, non ha un controllo di forma, e si risponde dalla scheda.
+tiene niente, non ha il controllo a macchina (il suo passo di controllo è un
+turno come gli altri), e da bloccato si risponde dalla scheda.
 
 Il driver chiede i **tratti** del posto invece di chiedersi «è un quaderno?»:
 un ramo nuovo nasce dal tratto, non da un ``if`` in più sparso.
@@ -105,6 +106,16 @@ class PlanPlace:
         le risposte del piano scritte nella sessione e mai viste).
         """
         return self.session_key if self.notebook else WEBUI_DEFAULT_CHAT_ID
+
+    @property
+    def here(self) -> str:
+        """Il posto detto al modello: i testi non scrivono «notebook» a mano."""
+        return "this notebook" if self.notebook else "the personal chat"
+
+    @property
+    def subject(self) -> str:
+        """Quel che il piano tocca, detto al modello."""
+        return "the notebook" if self.notebook else "the workspace"
 
     def shown(self, rel: str) -> str:
         """*rel* (relativo al workspace) come lo mostra la scheda."""

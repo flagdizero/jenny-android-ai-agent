@@ -367,6 +367,7 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "plan.restarted": "I restarted during step {step}: tap Resume to do it again.",
         "plan.stopped": "I stopped the plan. The notebook stays as it is now.",
+        "plan.stopped_personal": "I stopped the plan. What it did so far stays as it is now.",
         "plan.stopped_planning": "I stopped preparing the plan.",
         # Le note di un passo chiuso dalle bozze decise dall'utente (``PlanDriver``).
         "plan.drafts_installed": "change installed",
@@ -756,6 +757,7 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "plan.restarted": "Mi sono riavviata durante il passo {step}: tocca Riprendi per rifarlo.",
         "plan.stopped": "Ho fermato il piano. Il quaderno resta com'è adesso.",
+        "plan.stopped_personal": "Ho fermato il piano. Quello che ha fatto finora resta com'è.",
         "plan.stopped_planning": "Ho smesso di preparare il piano.",
         "plan.drafts_installed": "modifica installata",
         "plan.drafts_discarded": "modifica scartata",
