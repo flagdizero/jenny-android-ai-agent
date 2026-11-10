@@ -45,6 +45,7 @@ __all__ = [
     "database_for_workspace",
     "forget",
     "open_all",
+    "store_database",
 ]
 
 STATE = "state"
@@ -75,6 +76,18 @@ def database(runtime_root: Path, name: str) -> Database:
 
 def database_for_workspace(workspace: Path, name: str) -> Database:
     return database(runtime_root_for(workspace), name)
+
+
+def store_database(workspace: Path, name: str, *schemas: Schema) -> Database:
+    """Il database *name* del workspace, con le tabelle di chi lo chiede.
+
+    È l'apertura di ogni store: ``require`` è idempotente e costa una lettura
+    dopo la prima volta, quindi si chiama a ogni accesso.
+    """
+    db = database_for_workspace(Path(workspace), name)
+    for schema in schemas:
+        db.require(schema)
+    return db
 
 
 def open_all(runtime_root: Path) -> list[Database]:

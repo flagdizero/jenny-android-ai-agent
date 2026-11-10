@@ -57,9 +57,7 @@ def cron_database(workspace: Path):
     """Lo ``state.sqlite`` del workspace, con le tabelle del cron."""
     from jenny import db
 
-    database = db.database_for_workspace(workspace, db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(workspace, db.STATE, SCHEMA)
 
 
 def load_rows(database) -> list[dict[str, Any]]:

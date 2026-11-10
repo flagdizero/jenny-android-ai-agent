@@ -215,9 +215,7 @@ def subagents_database(workspace: Any):
         return None
     from jenny import db
 
-    database = db.database_for_workspace(Path(workspace), db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(workspace, db.STATE, SCHEMA)
 
 
 def rename_session_records(workspace: Any, old_key: str, new_key: str) -> int:

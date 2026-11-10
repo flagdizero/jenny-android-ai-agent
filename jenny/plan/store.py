@@ -147,8 +147,7 @@ class PlanStore:
         if self._database is None or self._database.closed:
             from jenny import db
 
-            self._database = db.database_for_workspace(self.workspace, db.UNDO)
-            self._database.require(SCHEMA)
+            self._database = db.store_database(self.workspace, db.UNDO, SCHEMA)
         return self._database
 
     # -- pianificazioni in corso (``drafting``) -----------------------------

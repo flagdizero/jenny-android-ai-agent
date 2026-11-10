@@ -71,9 +71,7 @@ SCHEMA = Schema(
 def session_database(workspace: Path):
     from jenny import db
 
-    database = db.database_for_workspace(Path(workspace), db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(workspace, db.STATE, SCHEMA)
 
 
 def load(database, key: str) -> dict[str, Any] | None:

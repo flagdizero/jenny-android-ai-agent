@@ -89,9 +89,7 @@ def _workspace() -> Path:
 def _db():
     from jenny import db
 
-    database = db.database_for_workspace(_workspace(), db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(_workspace(), db.STATE, SCHEMA)
 
 
 def default_token_usage_state() -> dict[str, Any]:

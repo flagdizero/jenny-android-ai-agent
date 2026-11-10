@@ -289,9 +289,7 @@ _UNDO_LOCK = threading.Lock()
 def _undo_db(workspace: Path):
     from jenny import db
 
-    database = db.database_for_workspace(workspace, db.UNDO)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(workspace, db.UNDO, SCHEMA)
 
 
 def objects_dir_for(workspace: Path) -> Path:

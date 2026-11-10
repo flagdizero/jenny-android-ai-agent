@@ -155,9 +155,7 @@ def sha256_of(path: Path) -> str | None:
 def _db(root: Path):
     from jenny import db
 
-    database = db.database_for_workspace(Path(root), db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(root, db.STATE, SCHEMA)
 
 
 def _meta_of(raw: str) -> dict[str, Any] | None:
