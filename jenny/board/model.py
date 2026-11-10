@@ -7,7 +7,7 @@ qualcosa che è dell'utente (:func:`ownership_violations`).
 
 **I nomi su disco sono un contratto.** ``board.json``,
 ``cards/`` e i campi qui sotto sono persistiti nel quaderno dell'utente (e nel
-suo backup): una rinomina vuole una migrazione, come ``Config._migrate_casa_to_home``.
+suo backup): una rinomina vuole una migrazione, come ``Config._migrate_by_version``.
 
 **Le chiavi che non conosciamo si conservano**, a ogni livello che normalizziamo:
 una versione vecchia dell'app che riscrive la bacheca non deve cancellare un
@@ -118,10 +118,9 @@ SUGGESTION_KINDS = (
     "add_app_card",
 )
 # ``cron`` e' un lavoro di Jenny a orario, nel cassetto della sua scheda.
-# ``micro`` e' la micro app di prima del 06/10/2026: nessuno la crea, nessuno la
-# disegna, ma ``board.json`` la deve ancora leggere perche' la migrazione
-# all'avvio (``jenny/apps/migrate_micro.py``) la trovi e la faccia diventare
-# una sezione ``app``.
+# ``micro`` e' la micro app di prima del 06/10/2026: nessuno la crea (la rifiuta
+# ``board.section.add``), nessuno la disegna; resta una specie che ``board.json``
+# sa leggere.
 SECTION_KINDS = ("note", "reminder", "app", "photo", "micro", "cron")
 CONDITION_OPS = ("<", "<=", ">", ">=", "==", "!=")
 
@@ -299,7 +298,11 @@ def _normalize_user_section(raw: Any) -> dict[str, Any] | None:
             return None
         known["reminder"] = raw["reminder"]
     elif kind == "app":
-        if not is_valid_id(raw.get("app")):
+        # La regola dei nomi delle app (``apps.manifest.SLUG_RE``), la stessa
+        # della scheda-app qui sotto: con quella degli id passava ``a--b``, che
+        # non è il nome di nessuna app.
+        slug = raw.get("app")
+        if not isinstance(slug, str) or not _APP_SLUG_RE.match(slug):
             return None
         known["app"] = raw["app"]
         params = raw.get("params")
