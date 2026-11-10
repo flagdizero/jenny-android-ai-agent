@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.bus.events import WEBSOCKET_CHANNEL, InboundMessage
-from jenny.plan.driver import PLAN_NOTES_META
+from jenny.plan.meta import PLAN_NOTES_META
 from jenny.session.keys import project_session_key
 
 if TYPE_CHECKING:
@@ -226,6 +226,17 @@ class LoopPlanHost:
                     {"id": meta["id"], "target": target, "created_ms": meta.get("created_ms")}
                 )
         return drafts
+
+    def journal_drafts(self, keys: frozenset[str]) -> list[dict[str, Any]]:
+        """Le bozze in attesa scritte sotto uno dei registri *keys* (v. ``PlanHost``)."""
+        from jenny.agent.staged_writes import list_staged
+
+        return [
+            {"id": meta["id"], "target": str(meta.get("target") or ""),
+             "created_ms": meta.get("created_ms")}
+            for meta in list_staged(Path(self._loop.workspace))
+            if meta.get("journal") in keys
+        ]
 
     def discard_draft(self, draft_id: str) -> bool:
         from jenny.agent.staged_writes import discard

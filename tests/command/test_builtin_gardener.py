@@ -103,9 +103,9 @@ class TestPickingTheProject:
         """
         out = await cmd_gardener(_ctx("unified:default"))
 
-        assert "not a project" in out.content
+        assert "not a notebook" in out.content
         assert "/gardener <project>" not in out.content
-        assert "Open the project" in out.content
+        assert "Open the notebook" in out.content
 
     async def test_inside_a_project_the_target_is_that_project(self, no_background):
         """Nessun argomento da scrivere: la conversazione in cui si è **è** il

@@ -35,16 +35,6 @@ def test_the_link_codec_round_trips_both_scopes() -> None:
     assert whole["card"] == cron_link.NOTEBOOK_CARD and whole["card"]
     assert cron_link.scope_of(card) == "annunci"
     assert cron_link.scope_of(whole) == model.NOTEBOOK
-    # I legami nuovi non hanno una sezione del cassetto, né una chiave vecchia.
-    assert cron_link.legacy_section(card) is None
-    assert cron_link.legacy_result_key(whole) is None
-
-
-def test_a_link_from_before_keeps_its_drawer_section() -> None:
-    old = {"notebook": "casa", "card": "annunci", "section": "s-cron"}
-    assert cron_link.scope_of(old) == "annunci"
-    assert cron_link.legacy_section(old) == "s-cron"
-    assert cron_link.legacy_result_key(old) == "annunci/s-cron"
 
 
 def test_the_scope_of_a_card_off_the_board_is_hidden_never_the_notebook() -> None:
@@ -79,7 +69,7 @@ def test_the_notebook_placeholder_survives_the_store_loader() -> None:
 
 
 def test_a_crooked_link_is_refused_at_add_not_turned_personal(tmp_path) -> None:
-    service = CronService(tmp_path / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     with pytest.raises(ValueError, match="invalid board link"):
         service.add_job("x", CronSchedule(kind="every", every_ms=60_000), "m",
                         session_key="project:casa", board={"notebook": "casa", "card": ""})

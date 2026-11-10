@@ -27,14 +27,6 @@ def workspace_root(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
-
-
-@pytest.fixture()
 def ctx(workspace_root: Path) -> CommandContext:
     return CommandContext(
         get_workspace_root=lambda: workspace_root,

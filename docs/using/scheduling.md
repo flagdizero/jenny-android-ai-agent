@@ -90,7 +90,7 @@ When a monitor does decide to speak, the delivery is proactive: it reaches the W
 
 **A check that couldn't run is not the same as a check that found nothing**, and Jenny keeps them apart. When a cycle can't actually perform its check — a script is missing, a device is unreachable, a tool broke — the run is recorded as `could_not_check` rather than `silenced`, and the listing adds a line like `Could not check: 3 consecutive run(s), since …`. She still says nothing the first couple of times, because a check that fails once is usually just a network blip. After **three cycles in a row** with no check at all she writes to you once, in plain terms, and then goes quiet again until something changes. So a monitor that has quietly broken can no longer look exactly like a healthy one, and a healthy one still costs you nothing.
 
-**A check handed to a helper waits for the helper.** Jenny can't run code or read the web herself, so a monitor that needs to often hands its check to a [subagent](#subagents-spawn). That run is recorded as `delegated` (in the workshop, "handed to a mini-me") until the helper's result comes back; Jenny judges it then, and the run becomes `silenced`, `ok` or `could_not_check` like any other. A verdict that never comes back is closed by the next run.
+**A check handed to a helper waits for the helper.** Jenny can't run code or read the web herself, so a monitor that needs to often hands its check to a [helper](#helpers-spawn). That run is recorded as `delegated` (in the workshop, "handed to a mini-me") until the helper's result comes back; Jenny judges it then, and the run becomes `silenced`, `ok` or `could_not_check` like any other. A verdict that never comes back is closed by the next run.
 
 **Silence saves you the notification, not the tokens.** Every monitor cycle is still a real agent turn against your provider — the check has to actually run before anything can conclude there's nothing to say. A monitor every 10 minutes is ~144 turns a day whether or not it ever speaks a word, so pick the widest interval that still catches what you care about, and remove the job once the thing you were watching is settled.
 
@@ -112,7 +112,7 @@ When you ask Jenny to list reminders, you'll also see jobs you didn't create: **
 |---|---|---|---|
 | `dream` | every **2 hours** | `agents.defaults.dream.enabled` (default on), `agents.defaults.dream.intervalH` (default `2`) | One agent run — a real turn against your provider, several calls if it uses tools — whenever there is new conversation to consolidate. Takes a snapshot first, so a bad run is undoable. |
 | `gardener` | every **30 minutes** (how often it *looks*) | `agents.defaults.gardener.enabled` (default on), `agents.defaults.gardener.intervalMin` (default `30`) | Nothing when no notebook has new journal lines, or none has been quiet long enough; otherwise one pass on that notebook, which is a real turn against your provider. See [The gardener](gardener.md). |
-| `reminders` | every **15 minutes** | registered when `wiki.enabled` is on (default on) | Nothing from your provider: it runs the apps' readers, notes when an app placed on a board changes state, and clears cards removed more than a week ago. Despite the name it announces nothing — a notebook's reminders are ordinary jobs in the list above. See [Reminders and the notebook clock](board.md#reminders-and-the-notebook-clock). |
+| `reminders` | every **15 minutes** | registered when `wiki.enabled` is on (default on) | Nothing from your provider: it runs the apps' readers, notes when an app placed on a board changes state, and clears cards removed more than a week ago. Despite the name it announces nothing — a notebook's reminders are ordinary jobs in the list above. See [Reminders](board.md#reminders). |
 | `update_check` | every **24 hours** | `updates.enabled` (default on), `updates.checkIntervalH` (default `24`) | One small HTTP request to the update manifest; a real turn only on the day a new version is first announced in chat (`updates.notifyInChat`). See [Updates](webui-tour.md#updates). |
 
 `dream` runs the memory-consolidation pass, described in [Memory and Dream](memory.md); `gardener` is described in [The gardener](gardener.md).
@@ -125,17 +125,17 @@ Your jobs live in Jenny's state database (`state.sqlite`, next to the workspace)
 
 Versions before the database kept the list in `cron/jobs.json` in the workspace. The first start after the update moves it into the database and leaves the old folder as `cron.migrated/` for 30 days, in case you go back to the older app. That folder stays on the phone: snapshots and backup files leave it out, since the database already carries the same jobs.
 
-The single case where Jenny still refuses to start is when the broken file can't be moved aside at all. Starting anyway would mean the next save overwrites it, and that file is the only copy of your reminders left.
+A job that cannot be read back is skipped and logged; it never stops Jenny from starting. An old `cron/jobs.json` that cannot be read during the move is tried from its `.bak` copy, and otherwise stays in `cron.migrated/` with the rest of the folder.
 
-## Subagents (`spawn`)
+## Helpers (`spawn`)
 
-**Delegation is not the exception, it is how Jenny works.** With `agents.defaults.orchestratorMode` at its default of `true`, the agent you talk to is an *orchestrator*: it can read files, search, schedule, message you and drive subagents, but it cannot write files, run code, or touch the web itself. Anything in those categories reaches a subagent by definition, not because Jenny judged the task big enough. What is left to judgment is *how* the work is split, not whether to split it.
+**Delegation is not the exception, it is how Jenny works.** With `agents.defaults.orchestratorMode` at its default of `true`, the agent you talk to is an *orchestrator*: it can read files, search, schedule, message you and drive helpers, but it cannot write files, run code, or touch the web itself. Anything in those categories reaches a helper by definition, not because Jenny judged the task big enough. What is left to judgment is *how* the work is split, not whether to split it.
 
-The reason is context. Everything the main agent does stays in your conversation permanently, and a page fetch or a test run is exactly the kind of large, low-value output that would sit there forever. A subagent's tool output lives and dies with the subagent; only its conclusion comes back.
+The reason is context. Everything the main agent does stays in your conversation permanently, and a page fetch or a test run is exactly the kind of large, low-value output that would sit there forever. A helper's tool output lives and dies with the helper; only its conclusion comes back.
 
-### The eight kinds of subagent
+### The eight kinds of helper
 
-`spawn` picks a **type**, and the type decides which tools that agent gets. The split is a safety boundary, not a convenience: whoever reads untrusted web pages is never also the one who runs code.
+`spawn` picks a **type**, and the type decides which tools that helper gets. The split is a safety boundary, not a convenience: whoever reads untrusted web pages is never also the one who runs code.
 
 | Type | For | Notably cannot |
 |---|---|---|
@@ -146,7 +146,7 @@ The reason is context. Everything the main agent does stays in your conversation
 | `sysadmin` | Remote machines over SSH | Use the web, or run code locally |
 | `app-builder` | Writing and testing a new version of one of your apps | Use the web, or publish what it wrote |
 | `notebook-editor` | Changing a notebook as you asked: pages, map, board | Reach the network, or run code |
-| `operator` | Everything else — the default | (holds the general subagent toolset) |
+| `operator` | Everything else — the default | (holds the general helper toolset) |
 
 Full tool lists and sampling defaults are in the [Tool reference](../reference/tools.md).
 
@@ -156,20 +156,20 @@ A helper that has read something from outside — a web page, a search, a downlo
 
 ### Watching and steering the work
 
-Because a subagent can run for minutes, the workshop's Console gives you a **Subagents panel** just above the message box: one card per running job with its type, elapsed time, idle time and current step, plus **Stop** and **Relaunch** buttons and a tap-through detail sheet showing what it actually did. It appears when work starts and disappears when the work is done. The home's chat shows the short version, where each subagent is a *mini-me* of Jenny's: a bubble saying what she is doing ("I sent a mini-me: …"), a short note when she is done, and, if she gets stuck, the reason and a button to continue or start her again. From the bubble you can also stop her, and put back the files she changed. Pressing and holding a bubble opens the workshop. See [Helpers: stop, undo, continue](helpers.md) and [Chat basics](chat.md#the-subagents-panel).
+Because a helper can run for minutes, the workshop's Console gives you a panel titled **Mini-mes** just above the message box: one card per running job with its type, elapsed time, idle time and current step, plus **Stop** and **Relaunch** buttons and a tap-through detail sheet showing what it actually did. It appears when work starts and disappears when the work is done. The home's chat shows the short version, where each helper is a *mini-me* of Jenny's: a bubble saying what she is doing ("I sent a mini-me: …"), a short note when she is done, and, if she gets stuck, the reason and a button to continue or start her again. From the bubble you can also stop her, and put back the files she changed. Pressing and holding a bubble opens the workshop. See [Helpers: stop, undo, continue](helpers.md) and [Chat basics](chat.md#the-subagents-panel).
 
-Jenny has the same controls from her side: she can check on a subagent's status, send it a correction mid-run ("no, use the other table") without restarting it, relaunch a failed one, and cancel one that's going nowhere. Those tools exist only in orchestrator mode and are never given to a subagent — a subagent cannot drive its siblings.
+Jenny has the same controls from her side: she can check on a helper's status, send it a correction mid-run ("no, use the other table") without restarting it, relaunch a failed one, and cancel one that's going nowhere. Those tools exist only in orchestrator mode and are never given to a helper — a helper cannot drive its siblings.
 
 ### How a delegation behaves
 
-- You'll see this happen as a short confirmation in chat, in Jenny's words — she tells you the job started, and her turn ends there: it does not wait for the subagent, so the chat is free for you to keep talking about anything else. On Telegram that means two messages, the confirmation now and the result later.
-- When the subagent finishes, its result is fed back in as a fresh turn of the main conversation (or folded into the turn already running, if you are talking to her at that moment): Jenny reads the outcome and summarizes it for you naturally (the announcement is explicitly told not to mention "subagent" or task IDs in the final reply, so it may just read like an ordinary answer).
-- By default up to **3** subagents can run at a time (`agents.defaults.maxConcurrentSubagents`, default `3`), and one slot is always kept free for a short job — so an ordinary delegation is refused once two are already running. Asking for one past the limit gets a plain "concurrency limit reached" reply instead of being queued.
-- A subagent is **blind to your conversation** — it only knows what task text it was handed. If a delegated task comes back disappointing, the usual cause is that the task description didn't carry enough context, not that the subagent "misunderstood."
-- Subagents use the same model/provider as your main agent and consume tokens like a full turn — delegating is not free.
-- `/stop` leaves running subagents alone: it ends the current turn, and each subagent is stopped from its own bubble. `/stop all` disowns every subagent running for that chat: their in-flight work is abandoned, and if one finishes anyway after being disowned, its stale result is silently discarded rather than injected into the chat.
-- A subagent that goes quiet for longer than `agents.defaults.subagentStallThresholdSeconds` (default 180s) is flagged as stalled. It is never cancelled for you: relaunching is a decision, and a subagent that starts making progress again is un-flagged on its own.
-- If the app process dies while a subagent is working, its conversation is saved every 30 seconds or so as it works, and the home chat offers **Let her continue** from the last saved point, for up to 6 hours (an `app-builder` is the exception: it starts over). Besides that, a small record of each attempt (task, outcome, result summary) stays in Jenny's state database, for the last 20 attempts per chat and 7 days. See [Helpers](helpers.md#when-a-helper-is-interrupted).
+- You'll see this happen as a short confirmation in chat, in Jenny's words — she tells you the job started, and her turn ends there: it does not wait for the helper, so the chat is free for you to keep talking about anything else. On Telegram that means two messages, the confirmation now and the result later.
+- When the helper finishes, its result is fed back in as a fresh turn of the main conversation (or folded into the turn already running, if you are talking to her at that moment): Jenny reads the outcome and summarizes it for you naturally (the announcement is explicitly told not to mention "subagent" or task IDs in the final reply, so it may just read like an ordinary answer).
+- By default up to **3** helpers can run at a time (`agents.defaults.maxConcurrentSubagents`, default `3`), and one slot is always kept free for a short job — so an ordinary delegation is refused once two are already running. Asking for one past the limit gets a plain "concurrency limit reached" reply instead of being queued.
+- A helper is **blind to your conversation** — it only knows what task text it was handed. If a delegated task comes back disappointing, the usual cause is that the task description didn't carry enough context, not that the helper "misunderstood."
+- Helpers use the same model/provider as your main agent and consume tokens like a full turn — delegating is not free.
+- `/stop` leaves running helpers alone: it ends the current turn, and each helper is stopped from its own bubble. `/stop all` also stops every helper running for that chat, as stopped by you. It undoes nothing: the files they already changed stay, and the bubble of one that had changed files offers to put them back (see [Helpers](helpers.md)). A helper that does not stop within a couple of seconds is abandoned, and if it finishes anyway its stale result is silently discarded rather than injected into the chat.
+- A helper that goes quiet for longer than `agents.defaults.subagentStallThresholdSeconds` (default 180s) is flagged as stalled. It is never cancelled for you: relaunching is a decision, and a helper that starts making progress again is un-flagged on its own.
+- If the app process dies while a helper is working, its conversation is saved every 30 seconds or so as it works, and the home chat offers **Let her continue** from the last saved point, for up to 6 hours (an `app-builder` is the exception: it starts over). Besides that, a small record of each attempt (task, outcome, result summary) stays in Jenny's state database, for the last 20 attempts per chat and 7 days. See [Helpers](helpers.md#when-a-helper-is-interrupted).
 
 ## Android notifications
 
@@ -181,7 +181,7 @@ None of the proactive messages above are guaranteed to make a sound — whether 
 - **You can answer from the notification.** An alert carries a **Reply** field — except one from a notebook, whose answer would land in the personal chat instead: what you type there goes to Jenny as an ordinary message in the one conversation, and her answer comes back as a system alert. If she was not running and the reply could not be delivered, a second notification, "Jenny didn't get your message", offers **Send again** with your text kept. The floating mascot has its own bubble; when it already holds a conversation its button reads **Continue in the app** and opens the app on it.
 - Two notifications from the same source (e.g. the same reminder firing twice in a row) replace each other rather than stacking — you'll only ever see the latest one for that job. Each notebook has its own notifications, separate from the personal chat's and from the other notebooks'.
 - Tapping a notification opens the chat where the message is, even if the workshop was the last thing you had open: the personal conversation, raised over the page you were on, or — for a message delivered in a notebook, a reply or a notebook cron — that notebook, with its board underneath and its chat on top. A notebook deleted in the meantime falls back to the personal chat. Pending Jenny alerts are cleared when their own conversation is actually on screen: tapping one, or coming back to the app while that chat is showing. Opening the app on another page, or on another conversation, leaves them in place.
-- **The chat message is always there regardless.** Whether or not a notification actually rang, the reply from a reminder, a monitor, or a completed subagent is written into the chat exactly the same way — the notification is only ever an added ping layered on top of a delivery that already happened.
+- **The chat message is always there regardless.** Whether or not a notification actually rang, the reply from a reminder, a monitor, or a completed helper is written into the chat exactly the same way — the notification is only ever an added ping layered on top of a delivery that already happened.
 - On Android 13 and newer, posting notifications requires the runtime `POST_NOTIFICATIONS` permission, which the app requests automatically the first time it starts. If you deny it, everything above still happens in chat — you simply never get the ringing/vibrating notification for it.
 
 ## Related pages

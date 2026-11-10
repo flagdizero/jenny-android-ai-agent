@@ -115,7 +115,6 @@ def test_a_corrupt_board_that_cannot_be_set_aside_is_not_written_over(tmp_path, 
     path = board_path(tmp_path)
     path.write_text("{ not json")
     monkeypatch.setattr("jenny.utils.path.quarantine", lambda _path: None)
-    monkeypatch.setattr("jenny.board.store.quarantine", lambda _path: None, raising=False)
 
     with pytest.raises(OSError):
         mutate_board(tmp_path, lambda b: b["cards"].append(_card("fico")))

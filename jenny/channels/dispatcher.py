@@ -18,13 +18,13 @@ from jenny.bus.events import (
     FLOATING_CHANNEL,
     NOTIFICATION_CHANNEL,
     WEBSOCKET_CHANNEL,
+    WEBUI_DEFAULT_CHAT_ID,
     OutboundMessage,
 )
 from jenny.bus.queue import MessageBus
 from jenny.config.schema import Config
 from jenny.providers import retry_notice
 from jenny.runtime.notifier import notify_delivery
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 if TYPE_CHECKING:
     from jenny.session.manager import SessionManager

@@ -151,7 +151,6 @@ __all__ = [
     "RECORD_TTL_S",
     "STOPPED_BY",
     "SUBAGENT_CANCEL_REASONS",
-    "SUBAGENTS_DIRNAME",
     "SUBAGENT_STATES",
     "SubagentRecord",
     "SubagentRecordStore",
@@ -177,11 +176,6 @@ class ActivityDigestDeleter(Protocol):
 MAX_RECORDS_PER_SESSION = 20
 RECORD_TTL_S = 7 * 24 * 60 * 60
 MAX_RESULT_SUMMARY_CHARS = 800
-
-# La cartella dove stava tutto cio che i subagent lasciavano su disco, e dove
-# resta la loro storia (``subagent_history``, fino alla 4f) e il resto che la
-# politica degli aiutanti tiene privato.
-SUBAGENTS_DIRNAME = "subagents"
 
 SCHEMA = Schema(
     "subagents",
@@ -221,9 +215,7 @@ def subagents_database(workspace: Any):
         return None
     from jenny import db
 
-    database = db.database_for_workspace(Path(workspace), db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(workspace, db.STATE, SCHEMA)
 
 
 def rename_session_records(workspace: Any, old_key: str, new_key: str) -> int:

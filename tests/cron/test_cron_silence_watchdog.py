@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 
+from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 from jenny.cron.could_not_check import ESCALATE_AFTER_FAILURES
 from jenny.cron.service import CronService
 from jenny.cron.silence_watchdog import (
@@ -31,7 +32,6 @@ from jenny.cron.types import (
     CronMonitorCouldNotCheckError,
     CronSchedule,
 )
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _NOW = 1_760_000_000_000
 
@@ -125,7 +125,7 @@ class TestTheServiceCallsIt:
 
     @staticmethod
     def _service(tmp_path: Path, *, escalated: bool = False) -> tuple[CronService, str]:
-        service = CronService(tmp_path / "cron" / "jobs.json")
+        service = CronService(tmp_path / "workspace")
 
         async def on_job(job: Any) -> str | None:
             raise CronMonitorCouldNotCheckError(

@@ -13,8 +13,8 @@ from support.gateway_http import make_handler, make_request
 
 from jenny.config.schema import SnapshotConfig
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.locations import MARKER_FILE_NAME, STAGED_WORKSPACE_DIR_NAME
 from jenny.snapshot.service import SnapshotService
+from jenny.utils.locations import MARKER_FILE_NAME, STAGED_WORKSPACE_DIR_NAME
 
 pytest.importorskip("cryptography")
 

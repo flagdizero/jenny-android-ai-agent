@@ -23,7 +23,7 @@ def _bound_chat(chat_id: str = "chat-1") -> dict[str, str]:
 
 
 def test_add_job_rejects_unknown_timezone(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     with pytest.raises(ValueError, match="unknown timezone 'America/Vancovuer'"):
         service.add_job(
@@ -47,7 +47,7 @@ def test_add_job_rejects_an_expression_that_would_never_fire(tmp_path, expr, why
     """``_compute_next_run`` inghiotte l'errore e torna ``None``: senza questo
     rifiuto il job nasceva abilitato, senza prossima esecuzione, e taceva per
     sempre."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     with pytest.raises(ValueError, match=why):
         service.add_job(
@@ -84,7 +84,7 @@ def test_validation_and_scheduling_read_the_same_timezone(monkeypatch) -> None:
 @pytest.mark.parametrize("every_ms", [0, -60_000, None])
 def test_add_job_rejects_an_interval_that_would_never_fire(tmp_path, every_ms) -> None:
     """Un intervallo nullo o negativo faceva un job abilitato e muto."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     with pytest.raises(ValueError, match="positive interval"):
         service.add_job(
@@ -104,7 +104,7 @@ async def test_the_cron_tool_reports_a_non_positive_interval_as_an_error(
     from jenny.agent.tools.context import RequestContext
     from jenny.agent.tools.cron import CronTool
 
-    tool = CronTool(CronService(tmp_path / "cron" / "jobs.json"), default_timezone="Europe/Rome")
+    tool = CronTool(CronService(tmp_path / "workspace"), default_timezone="Europe/Rome")
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
@@ -118,7 +118,7 @@ async def test_the_cron_tool_reports_a_bad_expression_as_an_error(tmp_path) -> N
     from jenny.agent.tools.context import RequestContext
     from jenny.agent.tools.cron import CronTool
 
-    tool = CronTool(CronService(tmp_path / "cron" / "jobs.json"), default_timezone="Europe/Rome")
+    tool = CronTool(CronService(tmp_path / "workspace"), default_timezone="Europe/Rome")
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")
     )
@@ -129,7 +129,7 @@ async def test_the_cron_tool_reports_a_bad_expression_as_an_error(tmp_path) -> N
 
 
 def test_add_job_accepts_valid_timezone(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     job = service.add_job(
         name="tz ok",
@@ -150,7 +150,7 @@ async def test_unbound_agent_jobs_are_disabled_on_add(tmp_path) -> None:
         called.append(job.id)
 
     service = CronService(
-        tmp_path / "cron" / "jobs.json",
+        tmp_path / "workspace",
         on_job=on_job,
     )
     job = service.add_job(
@@ -168,8 +168,8 @@ async def test_unbound_agent_jobs_are_disabled_on_add(tmp_path) -> None:
 
 
 def test_unbound_agent_jobs_are_disabled_on_load(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
-    seed_jobs(store_path, [
+    workspace = tmp_path / "workspace"
+    seed_jobs(workspace, [
         {
             "id": "unbound-1",
             "name": "Unbound reminder",
@@ -185,7 +185,7 @@ def test_unbound_agent_jobs_are_disabled_on_load(tmp_path) -> None:
         }
     ])
 
-    job = CronService(store_path).get_job("unbound-1")
+    job = CronService(workspace).get_job("unbound-1")
 
     assert job is not None
     assert job.enabled is False
@@ -195,7 +195,7 @@ def test_unbound_agent_jobs_are_disabled_on_load(tmp_path) -> None:
 
 
 def test_add_job_preserves_origin_delivery_context(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     metadata = {"thread": {"id": "1234567890.123456", "kind": "channel"}}
 
     job = service.add_job(
@@ -212,7 +212,7 @@ def test_add_job_preserves_origin_delivery_context(tmp_path) -> None:
     assert job.payload.origin_chat_id == "C123"
     assert job.payload.origin_metadata == metadata
 
-    payload = saved_jobs(tmp_path / "cron" / "jobs.json")[0]["payload"]
+    payload = saved_jobs(tmp_path / "workspace")[0]["payload"]
     assert payload["originChannel"] == "websocket"
     assert payload["originChatId"] == "C123"
     assert payload["originMetadata"] == metadata
@@ -239,8 +239,8 @@ async def test_origin_survives_reload_and_a_legacy_key_is_migrated(tmp_path) -> 
     ``origin_channel`` / ``origin_chat_id`` / ``origin_metadata`` sono
     l'attaccamento alla chat e non c'entrano con la sessione.
     """
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path)
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace)
     await service.start()
     meta = {"thread": {"id": "1234567890.123456", "kind": "channel"}}
     try:
@@ -256,13 +256,13 @@ async def test_origin_survives_reload_and_a_legacy_key_is_migrated(tmp_path) -> 
     finally:
         service.stop()
 
-    payload = saved_jobs(store_path)[0]["payload"]
+    payload = saved_jobs(workspace)[0]["payload"]
     assert payload["sessionKey"] == "websocket:C123:1234567890.123456"
     assert payload["originChannel"] == "websocket"
     assert payload["originChatId"] == "C123"
     assert payload["originMetadata"] == meta
 
-    reloaded = CronService(store_path).get_job(job.id)
+    reloaded = CronService(workspace).get_job(job.id)
     assert reloaded is not None
     assert reloaded.payload.session_key == UNIFIED_SESSION_KEY
     assert reloaded.payload.origin_channel == "websocket"
@@ -274,7 +274,7 @@ async def test_origin_survives_reload_and_a_legacy_key_is_migrated(tmp_path) -> 
 async def test_legacy_payload_with_channel_meta_key_still_loads(tmp_path) -> None:
     """Payload persistiti da versioni precedenti con la chiave rimossa
     ``channelMeta`` devono caricarsi senza errori (extra ignorato)."""
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     legacy = {
         "version": 1,
         "jobs": [
@@ -293,9 +293,9 @@ async def test_legacy_payload_with_channel_meta_key_still_loads(tmp_path) -> Non
             }
         ],
     }
-    seed_jobs(store_path, legacy["jobs"])
+    seed_jobs(workspace, legacy["jobs"])
 
-    reloaded = CronService(store_path).get_job("legacy01")
+    reloaded = CronService(workspace).get_job("legacy01")
     assert reloaded is not None
     assert reloaded.payload.message == "hello"
     # Migrata al caricamento, come ogni chiave utente della forma vecchia.
@@ -305,8 +305,8 @@ async def test_legacy_payload_with_channel_meta_key_still_loads(tmp_path) -> Non
 
 @pytest.mark.asyncio
 async def test_execute_job_records_run_history(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace, on_job=lambda _: asyncio.sleep(0))
     job = service.add_job(
         name="hist",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -326,12 +326,12 @@ async def test_execute_job_records_run_history(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_history_records_errors(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
     async def fail(_):
         raise RuntimeError("boom")
 
-    service = CronService(store_path, on_job=fail)
+    service = CronService(workspace, on_job=fail)
     job = service.add_job(
         name="fail",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -348,12 +348,12 @@ async def test_run_history_records_errors(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_history_records_skipped_jobs(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
     async def skip(_):
         raise CronJobSkippedError("missing session binding")
 
-    service = CronService(store_path, on_job=skip)
+    service = CronService(workspace, on_job=skip)
     job = service.add_job(
         name="skip",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -374,12 +374,12 @@ async def test_run_history_records_skipped_jobs(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_a_monitor_that_stayed_quiet_is_recorded_as_silenced_not_failed(tmp_path) -> None:
     """Un monitor che tace è un esito riuscito: ``silenced``, senza ``last_error``."""
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
     async def silent(_):
         raise CronJobSilencedError("nothing to report")
 
-    service = CronService(store_path, on_job=silent)
+    service = CronService(workspace, on_job=silent)
     job = service.add_job(
         name="monitor",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -408,7 +408,7 @@ async def test_silence_clears_the_error_left_by_the_previous_failed_run(tmp_path
     Senza la pulizia, un monitor sano continuerebbe a mostrare per sempre
     l'errore di un ciclo precedente e sembrerebbe guasto.
     """
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     outcomes: list[Exception | None] = [RuntimeError("provider down"), CronJobSilencedError()]
 
     async def flaky(_):
@@ -416,7 +416,7 @@ async def test_silence_clears_the_error_left_by_the_previous_failed_run(tmp_path
         if outcome is not None:
             raise outcome
 
-    service = CronService(store_path, on_job=flaky)
+    service = CronService(workspace, on_job=flaky)
     job = service.add_job(
         name="monitor",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -439,7 +439,7 @@ async def test_silence_clears_the_error_left_by_the_previous_failed_run(tmp_path
 
 def test_add_job_refuses_a_mode_it_cannot_execute(tmp_path) -> None:
     """Un modo ignoto da un chiamante vivo è un bug del chiamante: si solleva."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     with pytest.raises(ValueError, match="unknown cron mode 'telepathy'"):
         service.add_job(
@@ -455,7 +455,7 @@ def test_add_job_refuses_a_mode_it_cannot_execute(tmp_path) -> None:
 
 def test_omitting_the_mode_creates_a_reminder_without_complaining(tmp_path) -> None:
     """Il default omesso non deve mai sollevare: è il caso del 99% dei chiamanti."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     job = service.add_job(
         name="plain",
@@ -468,7 +468,7 @@ def test_omitting_the_mode_creates_a_reminder_without_complaining(tmp_path) -> N
 
 
 def test_add_job_accepts_monitor_mode(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     job = service.add_job(
         name="watcher",
@@ -483,7 +483,7 @@ def test_add_job_accepts_monitor_mode(tmp_path) -> None:
 
 def test_mode_must_be_passed_by_keyword(tmp_path) -> None:
     """``mode`` è keyword-only: un positional in più non deve finirci dentro."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
 
     with pytest.raises(TypeError):
         service.add_job(
@@ -501,12 +501,12 @@ def test_mode_must_be_passed_by_keyword(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_history_records_job_cancellation(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
     async def cancel(_):
         raise asyncio.CancelledError("turn cancelled")
 
-    service = CronService(store_path, on_job=cancel)
+    service = CronService(workspace, on_job=cancel)
     job = service.add_job(
         name="cancel",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -528,8 +528,8 @@ async def test_run_history_records_job_cancellation(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_history_trimmed_to_max(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace, on_job=lambda _: asyncio.sleep(0))
     job = service.add_job(
         name="trim",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -545,8 +545,8 @@ async def test_run_history_trimmed_to_max(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_history_persisted_to_disk(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace, on_job=lambda _: asyncio.sleep(0))
     job = service.add_job(
         name="persist",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -555,13 +555,13 @@ async def test_run_history_persisted_to_disk(tmp_path) -> None:
     )
     await service.run_job(job.id)
 
-    history = saved_jobs(store_path)[0]["state"]["runHistory"]
+    history = saved_jobs(workspace)[0]["state"]["runHistory"]
     assert len(history) == 1
     assert history[0]["status"] == "ok"
     assert "runAtMs" in history[0]
     assert "durationMs" in history[0]
 
-    fresh = CronService(store_path)
+    fresh = CronService(workspace)
     loaded = fresh.get_job(job.id)
     assert len(loaded.state.run_history) == 1
     assert loaded.state.run_history[0].status == "ok"
@@ -569,8 +569,8 @@ async def test_run_history_persisted_to_disk(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_job_disabled_does_not_flip_running_state(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace, on_job=lambda _: asyncio.sleep(0))
     job = service.add_job(
         name="disabled",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -587,8 +587,8 @@ async def test_run_job_disabled_does_not_flip_running_state(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_job_preserves_running_service_state(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace, on_job=lambda _: asyncio.sleep(0))
     service._running = True
     job = service.add_job(
         name="manual",
@@ -606,13 +606,13 @@ async def test_run_job_preserves_running_service_state(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_running_service_honors_external_disable(tmp_path) -> None:
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     called: list[str] = []
 
     async def on_job(job) -> None:
         called.append(job.id)
 
-    service = CronService(store_path, on_job=on_job)
+    service = CronService(workspace, on_job=on_job)
     job = service.add_job(
         name="external-disable",
         schedule=CronSchedule(kind="every", every_ms=200),
@@ -624,7 +624,7 @@ async def test_running_service_honors_external_disable(tmp_path) -> None:
         # Disable before yielding back to the event loop. On slower Windows CI
         # a short sleep here can overrun the 200ms schedule and let the job fire
         # before the external update is written.
-        external = CronService(store_path)
+        external = CronService(workspace)
         updated = disable_job(external, job.id)
         assert updated.enabled is False
 
@@ -635,7 +635,7 @@ async def test_running_service_honors_external_disable(tmp_path) -> None:
 
 
 def test_remove_job_refuses_system_jobs(tmp_path) -> None:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     service.register_system_job(CronJob(
         id="dream",
         name="dream",
@@ -651,16 +651,16 @@ def test_remove_job_refuses_system_jobs(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_start_server_not_jobs(tmp_path):
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     called = []
     async def on_job(job):
         called.append(job.name)
 
-    service = CronService(store_path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await service.start()
     assert len(service.list_jobs()) == 0
 
-    service2 = CronService(tmp_path / "cron" / "jobs.json")
+    service2 = CronService(tmp_path / "workspace")
     service2.add_job(
         name="hist",
         schedule=CronSchedule(kind="every", every_ms=100),
@@ -675,13 +675,13 @@ async def test_start_server_not_jobs(tmp_path):
 
 @pytest.mark.asyncio
 async def test_subsecond_job_not_delayed_to_one_second(tmp_path):
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     called = []
 
     async def on_job(job):
         called.append(job.name)
 
-    service = CronService(store_path, on_job=on_job, max_sleep_ms=5000)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=5000)
     service.add_job(
         name="fast",
         schedule=CronSchedule(kind="every", every_ms=100),
@@ -699,13 +699,13 @@ async def test_subsecond_job_not_delayed_to_one_second(tmp_path):
 @pytest.mark.asyncio
 async def test_running_service_picks_up_external_add(tmp_path):
     """A running service should detect and execute a job added by another instance."""
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     called: list[str] = []
 
     async def on_job(job):
         called.append(job.name)
 
-    service = CronService(store_path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     service.add_job(
         name="heartbeat",
         schedule=CronSchedule(kind="every", every_ms=100),
@@ -716,7 +716,7 @@ async def test_running_service_picks_up_external_add(tmp_path):
     try:
         await asyncio.sleep(0.05)
 
-        external = CronService(store_path)
+        external = CronService(workspace)
         external.add_job(
             name="external",
             schedule=CronSchedule(kind="every", every_ms=100),
@@ -732,13 +732,13 @@ async def test_running_service_picks_up_external_add(tmp_path):
 
 @pytest.mark.asyncio
 async def test_add_job_during_jobs_exec(tmp_path):
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     run_once = True
 
     async def on_job(job):
         nonlocal run_once
         if run_once:
-            service2 = CronService(store_path, on_job=lambda x: asyncio.sleep(0))
+            service2 = CronService(workspace, on_job=lambda x: asyncio.sleep(0))
             service2.add_job(
                 name="test",
                 schedule=CronSchedule(kind="every", every_ms=150),
@@ -747,7 +747,7 @@ async def test_add_job_during_jobs_exec(tmp_path):
             )
             run_once = False
 
-    service = CronService(store_path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     service.add_job(
         name="heartbeat",
         schedule=CronSchedule(kind="every", every_ms=100),
@@ -767,8 +767,8 @@ async def test_add_job_during_jobs_exec(tmp_path):
 
 @pytest.mark.asyncio
 async def test_external_update_preserves_run_history_records(tmp_path):
-    store_path = tmp_path / "cron" / "jobs.json"
-    service = CronService(store_path, on_job=lambda _: asyncio.sleep(0))
+    workspace = tmp_path / "workspace"
+    service = CronService(workspace, on_job=lambda _: asyncio.sleep(0))
     job = service.add_job(
         name="history",
         schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -777,10 +777,10 @@ async def test_external_update_preserves_run_history_records(tmp_path):
     )
     await service.run_job(job.id, force=True)
 
-    external = CronService(store_path)
+    external = CronService(workspace)
     disable_job(external, job.id)
 
-    fresh = CronService(store_path)
+    fresh = CronService(workspace)
     loaded = fresh.get_job(job.id)
     assert loaded is not None
     assert loaded.state.run_history
@@ -796,7 +796,7 @@ async def test_external_update_preserves_run_history_records(tmp_path):
 @pytest.mark.asyncio
 async def test_timer_execution_is_not_rolled_back_by_list_jobs_reload(tmp_path):
     """list_jobs() during _on_timer should not replace the active store and re-run the same due job."""
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     calls: list[str] = []
 
     async def on_job(job):
@@ -805,7 +805,7 @@ async def test_timer_execution_is_not_rolled_back_by_list_jobs_reload(tmp_path):
         service.list_jobs(include_disabled=True)
         await asyncio.sleep(0)
 
-    service = CronService(store_path, on_job=on_job)
+    service = CronService(workspace, on_job=on_job)
     service._running = True
     service._load_store()
     service._arm_timer = lambda: None
@@ -839,7 +839,7 @@ async def test_concurrent_job_mutation_does_not_cancel_inflight_job(tmp_path) ->
     which aborted it mid-execution and silently dropped its result, leaving
     next_run_at_ms stale so it double-fired on the next tick.
     """
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     entered = asyncio.Event()
     release = asyncio.Event()
     calls: list[str] = []
@@ -849,7 +849,7 @@ async def test_concurrent_job_mutation_does_not_cancel_inflight_job(tmp_path) ->
         entered.set()
         await release.wait()
 
-    service = CronService(store_path, on_job=on_job, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job, max_sleep_ms=100)
     await service.start()
     try:
         job_a = service.add_job(
@@ -924,7 +924,7 @@ async def test_list_jobs_during_on_job_does_not_cause_stale_reload(tmp_path) -> 
     """Regression: if the bot calls list_jobs (which reloads from disk) during
     on_job execution, the in-memory next_run_at_ms update must not be lost.
     Previously this caused an infinite re-trigger loop."""
-    store_path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     execution_count = 0
 
     async def on_job_that_lists(job):
@@ -933,7 +933,7 @@ async def test_list_jobs_during_on_job_does_not_cause_stale_reload(tmp_path) -> 
         # Simulate the bot calling cron(action=list) mid-execution
         service.list_jobs()
 
-    service = CronService(store_path, on_job=on_job_that_lists, max_sleep_ms=100)
+    service = CronService(workspace, on_job=on_job_that_lists, max_sleep_ms=100)
     await service.start()
 
     # Add two jobs scheduled in the past so they're immediately due
@@ -959,7 +959,7 @@ async def test_list_jobs_during_on_job_does_not_cause_stale_reload(tmp_path) -> 
     assert execution_count == 2
 
     # Verify next_run_at_ms was persisted correctly (in the future)
-    for j in saved_jobs(store_path):
+    for j in saved_jobs(workspace):
         next_run = j["state"]["nextRunAtMs"]
         assert next_run is not None
         assert next_run > now_ms, f"Job '{j['name']}' next_run should be in the future"

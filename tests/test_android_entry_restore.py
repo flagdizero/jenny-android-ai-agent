@@ -12,11 +12,11 @@ from pathlib import Path
 import pytest
 
 from jenny import android_entry
-from jenny.snapshot.locations import (
+from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
+from jenny.utils.locations import (
     SAFETY_DIR_PREFIX,
     STAGED_WORKSPACE_DIR_NAME,
 )
-from jenny.snapshot.restore_marker import write_marker, write_staging_sanity
 
 
 @pytest.fixture()

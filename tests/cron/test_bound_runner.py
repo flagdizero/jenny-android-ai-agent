@@ -21,7 +21,12 @@ from jenny.agent.tools.context import RequestContext
 from jenny.agent.tools.cron import CronTool
 from jenny.agent.tools.registry import ToolRegistry
 from jenny.agent.turn_types import TurnOutcome
-from jenny.bus.events import InboundMessage, OutboundMessage
+from jenny.bus.events import (
+    WEBUI_MESSAGE_SOURCE_METADATA_KEY,
+    WEBUI_TURN_METADATA_KEY,
+    InboundMessage,
+    OutboundMessage,
+)
 from jenny.cron.bound_runner import (
     CRON_WAKELOCK_TIMEOUT_S,
     MONITOR_KEEP_RECENT_MESSAGES,
@@ -39,7 +44,6 @@ from jenny.cron.types import CronJob, CronJobSilencedError, CronPayload
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.session.turn_visibility import is_silent_turn
 from jenny.utils.prompt_templates import render_template
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 
 def _bound_job(
@@ -167,8 +171,8 @@ class TestAReminderRunsInTheConversation:
     async def test_a_webui_job_survives_a_reload_as_the_one_conversation(
         self, tmp_path
     ) -> None:
-        store = tmp_path / "jobs.json"
-        tool = CronTool(CronService(store))
+        workspace = tmp_path / "workspace"
+        tool = CronTool(CronService(workspace))
         tool.set_context(
             RequestContext(
                 channel="websocket",
@@ -182,7 +186,7 @@ class TestAReminderRunsInTheConversation:
             await tool.execute(action="add", message="controlla la pioggia", every_seconds=300)
         ).startswith("Created job")
 
-        job = CronService(store).list_jobs()[0]
+        job = CronService(workspace).list_jobs()[0]
         assert job.payload.session_key == UNIFIED_SESSION_KEY
         # E resta consegnabile: l'attaccamento alla chat non e' la sessione.
         assert is_bound_cron_job(job) is True

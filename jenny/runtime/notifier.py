@@ -10,7 +10,7 @@ una risposta o un avviso (``is_app_reply``), che Kotlin zittisce diversamente.
 
 Un messaggio consegnato nella chat di un quaderno porta il quaderno **nel tag**
 (``project:<nome>|<tag>``, v. ``alert_conversation``): Kotlin lo rilegge da lì
-(``NotifierBridge.conversationOfTag``) per portare il tocco in quel quaderno, e
+(``AlertConversation.ofTag``) per portare il tocco in quel quaderno, e
 ogni quaderno ha così la sua notifica invece di coalizzare con la chat personale.
 
 Segue il pattern lazy-bridge di ``jenny.webui.android_apps_api``: la classe
@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from jenny.bus.events import WEBSOCKET_CHANNEL
+from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_MESSAGE_SOURCE_METADATA_KEY
 from jenny.runtime.chaquopy_bridge import BridgeCache
 from jenny.runtime.context import get_android_context
 from jenny.runtime.user_text import current_bot_name, say
@@ -34,7 +34,6 @@ from jenny.session.keys import (
 )
 from jenny.utils.helpers import clip
 from jenny.utils.plain_text import plain_text
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _BRIDGE = BridgeCache("com.flagdizero.jenny.NotifierBridge")
 
@@ -226,3 +225,17 @@ def notify_delivery(
         return
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
+
+
+def notify_alarm(text: str, label: str) -> None:
+    """Un allarme a zero token: una notifica scritta dal codice, senza turno.
+
+    Per i guasti che devono arrivare proprio quando il modello non risponde (il
+    giardiniere fermo, Dream fermo, un controllo che fallisce in silenzio, la
+    copia che non parte). *label* è l'etichetta che l'utente legge **e** il tag
+    che accorpa gli allarmi (``cron:<label>``): lo stesso allarme deve portare
+    sempre la stessa, e due allarmi diversi mai.
+    """
+    notify_delivery(
+        text, {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": label}}
+    )

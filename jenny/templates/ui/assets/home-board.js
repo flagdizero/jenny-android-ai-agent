@@ -53,7 +53,7 @@ import { DrawerPhotos, PhotoUrls } from './home-board-photos.js';
 import { automationRow, rhythmLabel } from './home-board-automation.js';
 import { agendaList, reminderForm } from './home-board-agenda.js';
 import { confirmDialog } from './shared/dialog.js';
-import { writeFailedToast } from './shared/dom.js';
+import { lockLine, writeFailedToast } from './shared/dom.js';
 
 /* Le misure del gesto, prese dal mockup e provate sul quadrato del Titan 2. */
 const LONG_PRESS_MS = 450;
@@ -1410,18 +1410,7 @@ export class HomeBoard {
   setLocked(locked) {
     this.locked = Boolean(locked);
     this.el?.classList.toggle('is-plan-locked', this.locked);
-    if (this.lockEl) {
-      this.lockEl.hidden = !this.locked;
-      this.lockEl.replaceChildren();
-      if (this.locked) {
-        const i = document.createElement('i');
-        i.className = 'ti ti-lock';
-        i.setAttribute('aria-hidden', 'true');
-        const text = document.createElement('span');
-        text.textContent = i18n.t('home.plan.lock');
-        this.lockEl.append(i, text);
-      }
-    }
+    if (this.lockEl) lockLine(this.lockEl, this.locked);
     if (this.locked) this.closeCardBar();
   }
 

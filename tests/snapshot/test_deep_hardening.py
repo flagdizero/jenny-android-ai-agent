@@ -29,13 +29,13 @@ from jenny.snapshot.crypto import (
 from jenny.snapshot.crypto_backends.base import CryptoAuthError
 from jenny.snapshot.crypto_backends.dev import DevAesGcmBackend
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.locations import (
+from jenny.snapshot.restore_marker import apply_pending_restore
+from jenny.snapshot.service import SnapshotService
+from jenny.utils.locations import (
     MARKER_FILE_NAME,
     STAGED_SNAPSHOTS_DIR_NAME,
     STAGED_WORKSPACE_DIR_NAME,
 )
-from jenny.snapshot.restore_marker import apply_pending_restore
-from jenny.snapshot.service import SnapshotService
 
 pytest.importorskip("cryptography")
 

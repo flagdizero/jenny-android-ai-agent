@@ -298,7 +298,7 @@ def test_discarding_the_view_closes_the_turn_in_flight() -> None:
     assert body, "invalidateHistory non trovato"
     head = body.group(1)
     assert "_resetStreamState()" in head
-    assert "_clearGoalBanner()" in head
+    assert "_clearRunBanner()" in head
 
 
 def test_the_mascot_releases_its_turn_on_a_switch() -> None:

@@ -169,7 +169,7 @@ def _wiki_pages(root: Path) -> list[tuple[str, str]]:
 
 
 def wiki_texts(root: Path) -> dict[str, str]:
-    """``{percorso dal quaderno: testo}`` delle pagine di adesso, come ``PlanPhotos.texts``."""
+    """``{percorso dal quaderno: testo}`` delle pagine ``.md`` di adesso sotto ``wiki/``."""
     return dict(_wiki_pages(root))
 
 

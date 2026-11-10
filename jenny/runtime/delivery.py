@@ -18,6 +18,8 @@ from jenny.bus.events import (
     COORDINATION_FLAGS,
     INTERNAL_CHANNEL,
     WEBSOCKET_CHANNEL,
+    WEBUI_DEFAULT_CHAT_ID,
+    WEBUI_TURN_METADATA_KEY,
     OutboundMessage,
 )
 from jenny.cron.session_turns import CRON_MIRROR_META
@@ -27,7 +29,6 @@ from jenny.session.keys import (
     session_key_for_channel,
 )
 from jenny.session.turn_visibility import is_silent_turn
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID, WEBUI_TURN_METADATA_KEY
 
 if TYPE_CHECKING:
     from jenny.bus.queue import MessageBus

@@ -408,9 +408,6 @@ class CloudRepository:
         if fresh:
             await asyncio.to_thread(self._save_cache)
 
-    def has_blob(self, blob_hash: str) -> bool:
-        return blob_hash in self._blobs
-
     def stored_bytes(self) -> int:
         """Quanto occupa la copia sulla destinazione: i blob noti all'indice.
 

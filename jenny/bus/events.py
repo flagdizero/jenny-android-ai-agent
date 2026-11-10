@@ -56,6 +56,16 @@ INTERNAL_CHANNEL = "internal"
 # casa. Il prefisso ``websocket:`` di un trascritto (``session.keys``) ne deriva.
 WEBSOCKET_CHANNEL = "websocket"
 
+# Chiavi dei metadati di un turno della WebUI, e la sua chat canonica. Stanno
+# qui e non in ``webui/``: le leggono canali, cron, piani e sessioni, cioè
+# pacchetti sotto la WebUI, e sono fatti del filo quanto ``WEBSOCKET_CHANNEL``.
+WEBUI_TURN_METADATA_KEY = "webui_turn_id"
+WEBUI_MESSAGE_SOURCE_METADATA_KEY = "_webui_message_source"
+
+# Chat id della vista canonica WebUI: la conversazione unificata è renderizzata
+# in questo thread qualunque sia il canale d'origine del turno.
+WEBUI_DEFAULT_CHAT_ID = "default"
+
 # Channel name della tendina delle notifiche Android: la superficie da cui si
 # risponde a un alert senza aprire l'app. Sta qui, accanto a
 # ``INTERNAL_CHANNEL`` e per lo stesso motivo, perché lo importano i due lati

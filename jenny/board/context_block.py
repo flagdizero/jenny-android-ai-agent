@@ -351,8 +351,7 @@ def _cron_lines(root: Path, scope: str, sched: _Scheduled) -> list[str]:
     lines = []
     # Un promemoria ha la sua riga («Reminder: …»): qui solo i cron che si ripetono.
     for job in sched.crons(scope):
-        last = result_of(results, job["id"],
-                         {"card": job["scope"], "section": job["legacySection"]})
+        last = result_of(results, job["id"])
         # Una citazione datata, non una frase di Jenny al presente: il testo
         # di un giro vecchio («al prossimo messaggio ci guardo») arrivava
         # come un'istruzione da eseguire adesso.

@@ -103,7 +103,7 @@ Normally nothing — the folder is the output, and a pass that wrote nothing lea
 - What a board pass did shows on the board, as *since you last looked* rows: drawers rewritten, pages put into drawers, reminders taken from the journal, corrections applied, new proposals.
 
 - Something it could not settle goes into the map's **Open** section (which every turn in a notebook without a board reads) *and* as one line in the notebook's `log/`.
-- After **three** consecutive passes that failed to record any progress, you get a notification: *"The gardener has failed N passes in a row on 'X' (status): its journal is not becoming pages. Open that project and send /gardener to see the error."* (`status` is the last pass's outcome word; the alert's English text still says *project* where the rest of the app says *notebook*.) It costs no tokens and does not depend on the model, which in that situation may be exactly what is broken — and it repeats on every further failed pass rather than only at the crossing.
+- After **three** consecutive passes that failed to record any progress, you get a notification: *"The gardener has failed N passes in a row on the notebook 'X' (status): its journal is not becoming pages. Open the notebook and ask me what's wrong."* (`status` is the last pass's outcome word.) It costs no tokens and does not depend on the model, which in that situation may be exactly what is broken — and it repeats on every further failed pass rather than only at the crossing.
 
 ## Running one by hand: `/gardener`
 

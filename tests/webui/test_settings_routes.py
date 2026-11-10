@@ -19,7 +19,6 @@ from jenny.channels.http_utils import check_api_secret, http_error, http_json_re
 from jenny.config.loader import load_config, save_config
 from jenny.config.schema import Config, ProviderConfig
 from jenny.providers.factory import provider_fingerprint
-from jenny.runtime.context import get_runtime_context
 from jenny.webui.settings_routes import WebUISettingsRouter
 
 _SECRET = "s3cr3t-settings"
@@ -40,14 +39,6 @@ def _router(**overrides) -> WebUISettingsRouter:
     )
     kwargs.update(overrides)
     return WebUISettingsRouter(**kwargs)
-
-
-@pytest.fixture()
-def config_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
 
 
 def _json(response) -> dict:

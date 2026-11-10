@@ -21,7 +21,6 @@ from websockets.http11 import Request as WsRequest
 from jenny.channels.http_utils import check_api_secret, http_error, http_json_response, parse_query
 from jenny.config.loader import load_config, save_config
 from jenny.config.schema import KEEP_AWAKE_MODES, Config
-from jenny.runtime.context import get_runtime_context
 from jenny.webui import settings_api
 from jenny.webui.settings_api import (
     WebUISettingsError,
@@ -31,14 +30,6 @@ from jenny.webui.settings_api import (
 from jenny.webui.settings_routes import WebUISettingsRouter
 
 _SECRET = "s3cr3t-power"
-
-
-@pytest.fixture
-def config_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
 
 
 # -- lettura -----------------------------------------------------------------

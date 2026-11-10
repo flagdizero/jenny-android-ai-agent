@@ -15,21 +15,12 @@ import pytest
 
 from jenny.config.loader import load_config, save_config
 from jenny.config.schema import Config
-from jenny.runtime.context import get_runtime_context
 from jenny.webui import settings_api
 from jenny.webui.settings_api import (
     WebUISettingsError,
     settings_payload,
     update_floating_settings,
 )
-
-
-@pytest.fixture
-def config_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
 
 
 @pytest.fixture

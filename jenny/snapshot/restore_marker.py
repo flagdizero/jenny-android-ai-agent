@@ -25,14 +25,14 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.snapshot.locations import (
+from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.locations import (
     MARKER_FILE_NAME,
     SAFETY_DIR_PREFIX,
     SANITY_FILE_NAME,
     STAGED_SNAPSHOTS_DIR_NAME,
     STAGED_WORKSPACE_DIR_NAME,
 )
-from jenny.utils.clock import now_ms as _now_ms
 from jenny.utils.path import atomic_write
 
 # -- marker -------------------------------------------------------------------

@@ -267,7 +267,6 @@ async def test_a_reminder_is_a_notebook_job_and_done_takes_it_away(notebook: Pat
     # Niente sezione: il calendario di cura e il post-it la derivano dal job.
     sections = model.card_by_id(read_board(notebook), "acero")["userSections"]
     assert not any(s.get("kind") == "reminder" for s in sections)
-    assert not (notebook / "board" / "reminders.json").exists()
     whole = await edit.add_reminder(notebook, "", "Porta dentro le piante",
                                     {"kind": "date", "date": "2026-12-01", "precision": "day"},
                                     cron=cron)

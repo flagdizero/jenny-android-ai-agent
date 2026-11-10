@@ -40,7 +40,6 @@ from pathlib import Path
 PACKAGE = "com.flagdizero.jenny"
 DB_DIR = "files/db"
 AVD = "jenny_s22"
-_SIDECARS = ("-wal", "-shm")
 
 
 def _adb(*args: str, stdin: bytes | None = None, check: bool = True) -> bytes:

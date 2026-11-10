@@ -133,7 +133,7 @@ def _rebuild_state(out: Path) -> Path | None:
     import shutil
 
     from jenny.db.shards import ShardsError, build
-    from jenny.snapshot.types import STATE_ENTRY_DIR
+    from jenny.utils.locations import STATE_ENTRY_DIR
 
     pieces = out / STATE_ENTRY_DIR
     if not pieces.is_dir():

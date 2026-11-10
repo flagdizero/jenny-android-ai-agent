@@ -615,6 +615,12 @@ class UpdateBridge(context: Context) {
     }
 
     private fun postConfirmationNotification(confirm: Intent): Boolean {
+        // Senza il permesso `notify` non solleva e non mostra niente: lo si dice
+        // al chiamante invece di rispondere che la conferma è a schermo.
+        if (!JennyChannels.canPostNotifications(appContext)) {
+            Log.w(TAG, "Install confirmation not posted: POST_NOTIFICATIONS is denied")
+            return false
+        }
         return try {
             // Canale dedicato e non `jenny_alerts`: quella è la voce dell'agente
             // e l'utente deve poterla silenziare senza perdersi il fatto che un

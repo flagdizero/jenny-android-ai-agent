@@ -29,7 +29,7 @@ def _notebook(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def _service(tmp_path: Path) -> CronService:
-    service = CronService(tmp_path / "workspace" / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     service._arm_timer = lambda: None  # type: ignore[method-assign]
     service._running = True
     service._load_store()

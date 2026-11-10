@@ -406,7 +406,6 @@ export class SettingsController {
 
     this.contentEl.innerHTML = [
       this._renderConfigRecovery(d),
-      this._renderCronRecovery(d),
       ...which.map((id) => sections[id]()),
     ].join('');
 
@@ -463,21 +462,6 @@ export class SettingsController {
       i18n.t(fromDefaults ? 'settings.configRecoveredDefaults' : 'settings.configRecoveredBackup'),
       info.broken_file,
       fromDefaults,
-    );
-  }
-
-  /* Stesso avviso per lo store dei job cron. Merita una riga sua e non una
-     variante di quella sopra: qui, con restored_from = "empty", a mancare sono
-     i promemoria che l'utente aveva creato — e quelli non si notano assenti,
-     si notano solo quando non suonano. */
-  _renderCronRecovery(d) {
-    const info = d.cron_recovery;
-    if (!info) return '';
-    const empty = info.restored_from === 'empty';
-    return this._recoveryNotice(
-      i18n.t(empty ? 'settings.cronRecoveredEmpty' : 'settings.cronRecoveredBackup'),
-      info.broken_file,
-      empty,
     );
   }
 
@@ -2835,10 +2819,6 @@ export class SettingsController {
     if (b.kind === 'stopped') {
       text = i18n.t('cron.banner.stopped');
       strong = true;
-    } else if (b.kind === 'recovered') {
-      const empty = b.restoredFrom === 'empty';
-      text = i18n.t(empty ? 'cron.banner.recoveredEmpty' : 'cron.banner.recoveredBackup');
-      strong = empty;
     } else if (b.kind === 'inert') {
       if (b.jobs.length === 1) {
         text = i18n.t('cron.banner.inertOne', { name: b.jobs[0] });

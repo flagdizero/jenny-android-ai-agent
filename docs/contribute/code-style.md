@@ -29,7 +29,7 @@ ruff check jenny/ jenny_extensions/ tests/
 
 ## Type checking
 
-Pyright runs in `basic` mode (`pyrightconfig.json`, `include: ["jenny"]`, excluding `jenny/templates` and `jenny/skills`). It is a static check with zero runtime impact, and it runs in two tiers with very different consequences:
+Pyright runs in `basic` mode (`pyrightconfig.json`, `include: ["jenny", "jenny_extensions"]`, excluding `jenny/templates` and `jenny/skills`). It is a static check with zero runtime impact, and it runs in two tiers with very different consequences:
 
 ```bash
 # BLOCKING subset — must stay error-clean:
@@ -39,7 +39,7 @@ npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny
 npx pyright || true
 ```
 
-`jenny/bus`, `jenny/command`, `jenny/runtime`, `jenny/session`, `jenny/snapshot` and `jenny/gateway_runtime.py` are at zero errors today and CI fails if a PR reintroduces one. The full-perimeter run surfaces the residual errors elsewhere, which are being tightened directory by directory rather than declared clean prematurely — don't add to that pile, but don't be surprised by it either.
+`jenny/bus`, `jenny/command`, `jenny/db`, `jenny/db_migration`, `jenny/plan`, `jenny/runtime`, `jenny/session`, `jenny/snapshot`, `jenny/gateway_runtime.py`, `jenny/extensions.py` and `jenny_extensions` are at zero errors today and CI fails if a PR reintroduces one. The full-perimeter run surfaces the residual errors elsewhere, which are being tightened directory by directory rather than declared clean prematurely — don't add to that pile, but don't be surprised by it either.
 
 Two config carve-outs are worth knowing:
 
@@ -57,7 +57,7 @@ CI pins the checker version (`npx --yes pyright@1.1.411`); a bare `npx pyright` 
 ## The full check before a PR
 
 ```bash
-ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
+ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q
 ```
 
 Lint, blocking type check, tests — the same sequence CI gates on. Commits also need a DCO `Signed-off-by:` line; see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).

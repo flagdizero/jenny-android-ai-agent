@@ -8,7 +8,7 @@ import android.content.SharedPreferences
  * sveglie, rete d'emergenza), chiavi nuove e basta. Due file separati sarebbero
  * due lock e due punti da ricordare al momento di un wipe. L'eccezione è la
  * mascotte flottante (`FloatingOverlayController`, `jenny_floating`): solo la
- * sua posizione, che nessun altro legge.
+ * sua taglia, i colori del tema e la bolla dell'utente, che nessun altro legge.
  *
  * Il nome lo legge anche Python, che vi trova la fotografia del battito
  * (`jenny/runtime/gap_history.py::PREFS_NAME`): prima stava scritto in quattro

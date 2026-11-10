@@ -42,9 +42,8 @@ from jenny.security.workspace_access import (
     current_turn_is_readonly,
     current_write_root,
 )
-from jenny.security.workspace_policy import _safe_expanduser
 from jenny.utils.helpers import detect_image_mime, ensure_dir, safe_filename
-from jenny.utils.path import atomic_write
+from jenny.utils.path import atomic_write, safe_expanduser
 
 # Limiti operativi.
 TIMEOUT_S = 60.0
@@ -142,7 +141,7 @@ class DownloadFileTool(Tool):
         return cls(workspace=ctx.workspace)
 
     def __init__(self, workspace: str | Path, client: httpx.AsyncClient | None = None):
-        self._workspace = _safe_expanduser(workspace)
+        self._workspace = safe_expanduser(workspace)
         # Client iniettabile per i test (httpx.MockTransport).
         self._client = client
 

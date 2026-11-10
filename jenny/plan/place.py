@@ -5,7 +5,8 @@ sola lettura mentre corre, chiude con un passo ``check`` che il codice verifica,
 annota le lacune in ``raw/notes/open-gaps.md`` e, da bloccato, prende come
 risposta il prossimo messaggio. Un piano personale (``personal``) vive nella
 chat principale, dove arrivano anche la mascotte, le notifiche e Telegram: non
-tiene niente, non ha un controllo di forma, e si risponde dalla scheda.
+tiene niente, non ha il controllo a macchina (il suo passo di controllo è un
+turno come gli altri), e da bloccato si risponde dalla scheda.
 
 Il driver chiede i **tratti** del posto invece di chiedersi «è un quaderno?»:
 un ramo nuovo nasce dal tratto, non da un ``if`` in più sparso.
@@ -21,10 +22,10 @@ from dataclasses import dataclass
 from fnmatch import fnmatch
 
 from jenny.board.model import BOARD_DIR
+from jenny.bus.events import WEBUI_DEFAULT_CHAT_ID
 from jenny.config.paths import DEFAULT_WIKIS_DIR
 from jenny.session.keys import UNIFIED_SESSION_KEY, is_project_session_key, project_name
 from jenny.utils.wiki_paths import JOURNAL_DIRNAME
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 PERSONAL = "personal"
 NOTEBOOK_PREFIX = "nb:"
@@ -73,14 +74,11 @@ def notebook_group(path: str) -> str:
 class PlaceTraits:
     holds: bool            # la cartella resta in sola lettura mentre il piano corre
     machine_check: bool    # ultimo passo ``check``, audit e fatti persi del codice
-    open_gaps: bool        # le lacune in ``raw/notes/open-gaps.md``
     answer_by_chat: bool   # da bloccato, il prossimo messaggio è la risposta
 
 
-NOTEBOOK_TRAITS = PlaceTraits(holds=True, machine_check=True, open_gaps=True,
-                              answer_by_chat=True)
-PERSONAL_TRAITS = PlaceTraits(holds=False, machine_check=False, open_gaps=False,
-                              answer_by_chat=False)
+NOTEBOOK_TRAITS = PlaceTraits(holds=True, machine_check=True, answer_by_chat=True)
+PERSONAL_TRAITS = PlaceTraits(holds=False, machine_check=False, answer_by_chat=False)
 
 
 @dataclass(frozen=True)
@@ -105,6 +103,16 @@ class PlanPlace:
         le risposte del piano scritte nella sessione e mai viste).
         """
         return self.session_key if self.notebook else WEBUI_DEFAULT_CHAT_ID
+
+    @property
+    def here(self) -> str:
+        """Il posto detto al modello: i testi non scrivono «notebook» a mano."""
+        return "this notebook" if self.notebook else "the personal chat"
+
+    @property
+    def subject(self) -> str:
+        """Quel che il piano tocca, detto al modello."""
+        return "the notebook" if self.notebook else "the workspace"
 
     def shown(self, rel: str) -> str:
         """*rel* (relativo al workspace) come lo mostra la scheda."""

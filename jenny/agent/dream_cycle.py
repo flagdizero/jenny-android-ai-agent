@@ -42,8 +42,8 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.agent import dream_review
+from jenny.agent.internal_run import run_internal_turn
 from jenny.agent.memory_budget import budget_report, make_write_size_guard
-from jenny.session.turn_visibility import silent_progress
 
 if TYPE_CHECKING:
     from jenny.agent.memory import MemoryStore
@@ -372,9 +372,8 @@ def _alert_stuck(stuck: int) -> None:
     ``jenny/agent`` non dipende da ``jenny/runtime``, e una riga di allarme non
     è una buona ragione per cominciare.
     """
-    from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.notifier import notify_alarm
     from jenny.runtime.user_text import say
-    from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
     # «Officina → Memoria» e non «Impostazioni → Officina → Memoria»: i numeri
     # stanno nel cassetto Memoria dell'officina, e il notifier tronca a 200
@@ -382,10 +381,7 @@ def _alert_stuck(stuck: int) -> None:
     # La frase è quella per l'utente, nella sua lingua. Il tag deriva
     # dall'etichetta (``cron:Memoria``/``cron:Memory``): basta che sia sempre lo
     # stesso per questo allarme, e a lingua fissata lo è.
-    notify_delivery(
-        say("alarm.dream_stuck", stuck=stuck),
-        {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": say("alarm.dream_label")}},
-    )
+    notify_alarm(say("alarm.dream_stuck", stuck=stuck), say("alarm.dream_label"))
 
 
 def format_budget(report: Sequence["FileBudget"]) -> str:
@@ -782,13 +778,9 @@ async def _run_dream_batch(
     # ``getattr``: il registry Dream espone ``file_states``, ma il contratto resta
     # tollerante verso registry di altra provenienza (e verso i doppi dei test).
     dream_file_states = getattr(dream_tools, "file_states", None)
-    resp = await agent.process_direct(
-        prompt,
-        session_key=MemoryStore.dream_session_key(),
-        ephemeral=True,
-        tools=dream_tools,
-        on_progress=reporter.on_progress if reporter is not None else silent_progress,
-        on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
+    resp = await run_internal_turn(
+        agent, prompt, session_key=MemoryStore.dream_session_key(), tools=dream_tools,
+        reporter=reporter,
     )
     advanced = MemoryStore.dream_should_advance_cursor(resp, dream_file_states)
     # Il run ha scritto, ma il batch è atterrato? Sono due domande diverse e fino

@@ -2,9 +2,9 @@
 
 Some jobs in a notebook are too big for one answer: *turn my notes on the 30 plants into one page each, with sources*, *reorganise the whole notebook by season*. For those, ask for a **plan**. Jenny reads the notebook and proposes a list of steps, and nothing changes until you approve it. Then the steps run one at a time, each one handled by her helpers. You can pause, stop, or put the notebook back as it was before the plan.
 
-The difference from asking in the chat: in a plan, **the app drives the work, not the model**. The app opens each step, waits for Jenny to close it, photographs the notebook, and only then opens the next one. A step can't be skipped by accident, and a step the app restarted in the middle of is done again.
+The difference from asking in the chat: in a plan, **the app drives the work, not the model**. The app opens each step, waits for Jenny to close it, notes which files the step changed, and only then opens the next one. A step can't be skipped by accident, and a step the app restarted in the middle of is done again.
 
-Plans exist only in a notebook's chat, in the home.
+Plans live in a notebook's chat, in the home — and, while Jenny works as an orchestrator (`agents.defaults.orchestratorMode`, on by default), in the personal chat too. Most of this page describes a notebook's plan; [In the personal chat](#in-the-personal-chat) lists what is different there.
 
 ## Asking for a plan
 
@@ -28,7 +28,7 @@ The plan arrives as a card in the chat:
 - **What it covers**: *What I already know*, *What I'll look up*, and *Stays uncovered*, each with a count. **Item by item** opens the lists.
 - **The steps**, from 2 to 12, each a one-line title in your words, with tags such as *new*, *moved*, *changed* or *trash* where they help. Every step has a checkbox. Untick one and Jenny won't do it.
 - **I decide**: the small choices Jenny made herself. Approving the plan approves them too.
-- A line reminding you that before starting, the app takes a **photo of the notebook**: the point you can always go back to.
+- A line reminding you that before starting, the app marks a **starting point**: the point you can always go back to.
 
 Under it are three buttons:
 
@@ -42,7 +42,7 @@ Under it are three buttons:
 
 <p align="center"><img src="../img/plan-running.png" alt="A plan at step 3 of 5: two steps done with their notes, the current one with a helper at work, and the Pause and Stop buttons" width="300"></p>
 
-When you approve, the app photographs the notebook and opens the first step. The card shows how far along it is (*3 of 8*), what the current step is doing and for how long, how many helpers it has at work, and the time of the last photo. A finished step shows its time and Jenny's note. Tap it to see what it wrote, changed and removed.
+When you approve, the app marks the starting point and opens the first step. The card shows how far along it is (*3 of 8*), what the current step is doing and for how long, how many helpers it has at work, and the time of the starting point. A finished step shows its time and Jenny's note. Tap it to see what it wrote, changed and removed.
 
 **The notebook is read-only while a plan runs.** From the board, the reader and every other chat, a change is refused with *Read-only while the plan runs*, and a notebook with an open plan can't be renamed or deleted. The chat is off too (*While the plan runs: Pause to talk to her*), so the steps aren't interrupted halfway.
 
@@ -50,7 +50,7 @@ When you approve, the app photographs the notebook and opens the first step. The
 - **Stop** asks what to do with the work so far:
   - **Continue**: nothing happens.
   - **Stop and keep what it did**: the plan closes halfway, and the files stay as they are.
-  - **Stop and go back to before the plan**: the notebook goes back to the photo taken at approval.
+  - **Stop and go back to before the plan**: the files the plan changed go back to how they were before it (see [Going back](#going-back)).
 
 `/stop` during a plan is the same as **Stop and keep what it did**.
 
@@ -71,15 +71,26 @@ The finished card shows how long it took and what changed: new pages, changed, r
 
 ## Going back
 
-Going back is done by the app, not by Jenny, file by file, to the photo taken at approval. Before it starts, you see the list of what will change. Checkboxes let you **keep** some groups of files as they are now.
+Going back is done by the app, not by Jenny, file by file. The app does not keep a copy of the notebook: every file the plan wrote — in Jenny's turns during the steps and in the work of each step's helpers — was noted, with what it held before, the moment it was written. Going back puts each of those files back as it was before the plan, and only if it is still as the plan left it. Before it starts, you see the list of what will change. Checkboxes let you **keep** some groups of files as they are now.
 
 - **A file you changed after the plan is left as it is**, and the list names it.
 - **The notebook's journal is never rolled back.** What you said in the chat stays said.
 - Drafts the plan left waiting are discarded.
+- **Only files go back.** A scheduled job Jenny created during the plan keeps running, and data written into a Jenny App stays: neither is a file, so going back does not touch them. Remove them by hand if you don't want them.
 
 After going back, you can **Redo the plan**, **Revise** it, or **Undo the rollback**.
 
 A closed plan can be rolled back while the app keeps it: the five most recent per notebook, for up to 30 days.
+
+## In the personal chat
+
+With orchestrator mode on, the **Plan** button is in the personal chat too, and a plan there works on the whole workspace rather than one notebook. Asking for it, the plan card with its buttons, and going back work as above, with these differences:
+
+- **Preparing a plan happens in the app.** While Jenny is preparing one, the messages you write in the app are part of it. A message from Telegram, the floating mascot or a notification reply is still an ordinary chat message.
+- **Nothing is held read-only**, and the chat stays on. A message you send while a step is working waits for that step's turn to end, then gets its own answer.
+- **There is no automatic check** and no `raw/notes/open-gaps.md`: the last check is a step Jenny does like the others.
+- **A question is answered on the plan card**, in its **Answer** field. A normal chat message is not taken as the answer.
+- When going back, the groups you can keep are the notebooks the plan touched, the apps, and everything else.
 
 ## See also
 

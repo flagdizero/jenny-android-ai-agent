@@ -41,10 +41,32 @@ OFL text and the per-font copyright notices are in `vendor/fonts/LICENSE.txt`.
 ## Bundled Python packages
 
 Chaquopy installs the wheels pinned in `requirements-android.lock.txt` into the
-APK at build time: `httpx`, `websockets`, `loguru`, `json-repair`, `jinja2`,
-`filelock`, `markdown`, `pyyaml`, `pypdf`, `typing-extensions`, `tzdata`. All are pure-Python and resolve from public PyPI — none is local or
-patched. Each is governed by its own license, available in the installed
-wheel's metadata and in its upstream repository.
+APK at build time. All resolve from public PyPI — none is local or patched. Each
+is governed by its own license, available in the installed wheel's metadata and
+in its upstream repository.
+
+| Package | Version | License |
+|---|---|---|
+| `httpx` | 0.28.1 | BSD-3-Clause |
+| `httpcore` | 1.0.9 | BSD-3-Clause |
+| `h11` | 0.16.0 | MIT |
+| `anyio` | 4.14.1 | MIT |
+| `idna` | 3.18 | BSD-3-Clause |
+| `certifi` | 2026.6.17 | MPL-2.0 |
+| `websockets` | 16.0 | BSD-3-Clause |
+| `loguru` | 0.7.3 | MIT |
+| `json-repair` | 0.61.2 | MIT |
+| `jinja2` | 3.1.6 | BSD-3-Clause |
+| `MarkupSafe` | 3.0.3 | BSD-3-Clause |
+| `markdown` | 3.10.2 | BSD-3-Clause |
+| `pyyaml` | 6.0.3 | MIT |
+| `pypdf` | 5.9.0 | BSD-3-Clause |
+| `typing-extensions` | 4.16.0 | PSF-2.0 |
+| `tzdata` | 2026.3 | Apache-2.0 |
+
+`certifi` is the one weak-copyleft entry: it ships unmodified, and its CA bundle
+is under the MPL-2.0, which applies per file and is compatible with this
+project's AGPL-3.0 grant.
 
 The APK also embeds a CPython 3.11 runtime and the Chaquopy support layer, both
 supplied by the [Chaquopy](https://chaquo.com/chaquopy/) Gradle plugin.
@@ -52,6 +74,22 @@ supplied by the [Chaquopy](https://chaquo.com/chaquopy/) Gradle plugin.
 open source since 12.0.1, with no remaining license restrictions — and CPython
 is under the Python Software Foundation License. Both are compatible with this
 project's AGPL-3.0 grant.
+
+## Bundled Android libraries
+
+Resolved from Google's Maven repository and Maven Central, and shipped inside
+the APK (`android/app/build.gradle.kts`). Both flavors carry them unless the
+table says otherwise.
+
+| Component | Version | License | Flavor |
+|---|---|---|---|
+| AndroidX `core-ktx`, `appcompat`, `constraintlayout`, `browser`, `webkit`, `work-runtime-ktx` (with the AndroidX and Kotlin libraries they pull in) | 1.12.0, 1.6.1, 2.1.4, 1.7.0, 1.14.0, 2.9.1 | Apache-2.0 | both |
+| [Markwon](https://github.com/noties/Markwon) `core`, `ext-strikethrough`, `ext-tables`, `ext-tasklist`, `linkify`, `html` | 4.6.2 | Apache-2.0 | both |
+| [commonmark-java](https://github.com/commonmark/commonmark-java) (pulled in by Markwon, with its GFM strikethrough and tables extensions) | 0.13.0 | BSD-2-Clause | both |
+| Google Play services `play-services-auth` (with the `play-services-*` libraries it pulls in) | 21.2.0 | Android Software Development Kit License (proprietary) | `play` only |
+
+The `foss` build contains no Google library; `play-services-auth` is there only
+for the encrypted copy on Google Drive.
 
 ## Bundled Android libraries — SSH
 

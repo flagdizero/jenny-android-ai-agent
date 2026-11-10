@@ -14,6 +14,7 @@ from contextlib import suppress
 from typing import Any
 
 import pytest
+from support.aio import queue_idle, wait_until
 
 from jenny.bus.events import FLOATING_CHANNEL, OutboundMessage
 from jenny.bus.queue import MessageBus
@@ -62,13 +63,18 @@ def _wired() -> tuple[WebSocketDispatcher, MockWebSocket]:
     return d, ws
 
 
-async def _pump(d: WebSocketDispatcher, until, timeout: float = 1.0) -> None:
+async def _pump(d: WebSocketDispatcher, until=None, timeout: float = 1.0) -> None:
+    """Fa girare il dispatcher finché *until()* è vero e, senza *until*, finché non
+    ha smaltito la coda ed è tornato ad aspettare (``queue_idle``): così un test
+    negativo («non è stato mandato niente») guarda un messaggio lavorato davvero.
+    Alla scadenza fallisce, invece di proseguire (v. ``support.aio``)."""
     task = asyncio.create_task(d._dispatch_outbound())
     try:
-        for _ in range(int(timeout / 0.005)):
-            if until():
-                break
-            await asyncio.sleep(0.005)
+        if until is None:
+            await wait_until(lambda: queue_idle(d.bus.outbound), timeout=timeout,
+                             msg="il dispatcher non ha smaltito la coda")
+        else:
+            await wait_until(until, timeout=timeout)
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):
@@ -106,7 +112,7 @@ async def test_a_progress_does_not_reach_the_speech_bubble(bubbles: _Bubbles) ->
             metadata={"_progress": True},
         )
     )
-    await _pump(d, lambda: False, timeout=0.15)
+    await _pump(d)
     assert bubbles.shown == []
 
 
@@ -118,7 +124,7 @@ async def test_the_turn_end_neither_draws_nor_is_projected(bubbles: _Bubbles) ->
             metadata={"_turn_end": True},
         )
     )
-    await _pump(d, lambda: False, timeout=0.15)
+    await _pump(d)
     assert bubbles.shown == []
     assert ws.sent == []
 
@@ -136,7 +142,7 @@ async def test_without_registered_channel_the_final_goes_nowhere(
     await d.bus.publish_outbound(
         OutboundMessage(channel=FLOATING_CHANNEL, chat_id="shade", content="fatto")
     )
-    await _pump(d, lambda: False, timeout=0.15)
+    await _pump(d)
 
     assert bubbles.shown == []
     assert ws.sent == []

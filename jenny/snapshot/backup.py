@@ -33,14 +33,14 @@ from jenny.snapshot.crypto import (
     decrypt_file,
     encrypt_file,
 )
-from jenny.snapshot.locations import (
+from jenny.snapshot.types import SnapshotManifest, is_snapshot_id, unsafe_entry_reason
+from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.locations import (
     STAGED_SNAPSHOTS_DIR_NAME,
     STAGED_WORKSPACE_DIR_NAME,
     backup_staging_dir_for,
     runtime_root_for,
 )
-from jenny.snapshot.types import SnapshotManifest, is_snapshot_id, unsafe_entry_reason
-from jenny.utils.clock import now_ms as _now_ms
 
 if TYPE_CHECKING:
     from jenny.snapshot.service import SnapshotService

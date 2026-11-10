@@ -8,7 +8,7 @@ e robustezza a input malformati.
 
 from __future__ import annotations
 
-from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+from jenny.bus.events import WEBUI_TURN_METADATA_KEY
 from jenny.webui.transcript_recorder import (
     WebUITranscriptRecorder,
     _build_user_transcript_event,

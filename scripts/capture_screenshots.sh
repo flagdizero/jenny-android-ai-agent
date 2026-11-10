@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 #
-# Captures the README screenshots from a real device over adb.
+# Captures the README screenshots from the jenny_s22 emulator over adb.
 #
-# Usage:  scripts/capture_screenshots.sh [shot-name ...]
+# Usage:  ANDROID_SERIAL=<serial> scripts/capture_screenshots.sh [shot-name ...]
 #         (no arguments = walk the whole shot list)
+#
+# Ogni prova sul dispositivo gira su jenny_s22 e solo lì (AGENTS.md): il seriale
+# va dato, e lo script controlla con `adb emu avd name` che sia quell'AVD, come
+# scripts/jenny_state.py. `emulator-5554` è il primo emulatore partito, anche di
+# un altro progetto, e `adb` senza seriale prende quello che trova.
 #
 # Screenshots for a mobile app have to come from the device: a desktop browser
 # pointed at the gateway renders different fonts, a different aspect ratio and
@@ -59,16 +64,32 @@ resolve_display() {
     echo "capturing display $DISPLAY_ID"
 }
 
+AVD="jenny_s22"
+
 require_device() {
     if ! command -v adb > /dev/null 2>&1; then
         echo "error: adb not found in PATH." >&2
         exit 1
     fi
+    # Niente seriale, niente cattura: ogni `adb` qui sotto lo legge da
+    # ANDROID_SERIAL, quindi va esportato prima del primo comando.
+    if [ -z "${ANDROID_SERIAL:-}" ]; then
+        echo "error: set ANDROID_SERIAL to the $AVD emulator's serial," >&2
+        echo "       e.g. ANDROID_SERIAL=emulator-5554 $0" >&2
+        exit 1
+    fi
+    export ANDROID_SERIAL
     # An offline/unauthorized device shows up in `adb devices` but cannot be
-    # captured, so match the trailing "device" state explicitly.
-    if [ "$(adb devices | grep -c -E '\sdevice$')" -eq 0 ]; then
-        echo "error: no authorised device attached. Check 'adb devices' —" >&2
-        echo "       unlock the phone and accept the USB debugging prompt." >&2
+    # captured, so ask for the "device" state of this serial explicitly.
+    if [ "$(adb get-state 2> /dev/null || true)" != "device" ]; then
+        echo "error: $ANDROID_SERIAL is not attached and authorised. Check 'adb devices'." >&2
+        exit 1
+    fi
+    # Il nome dell'AVD, non il seriale: è il solo che dice quale emulatore è.
+    local name
+    name="$(adb emu avd name 2> /dev/null | head -1 | tr -d '\r' || true)"
+    if [ "$name" != "$AVD" ]; then
+        echo "error: $ANDROID_SERIAL is not the $AVD emulator (emu avd name: ${name:-no answer})." >&2
         exit 1
     fi
 }

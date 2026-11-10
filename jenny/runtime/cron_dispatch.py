@@ -121,7 +121,7 @@ async def run_silent_alert_turn(
     tiene solo una coda cortissima, perché gli avvisi passati sono rumore.
     Torna l'esito del turno: ``spoke`` dice se ``message`` è stato chiamato.
     """
-    from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
+    from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
     outcome = await agent.process_direct_outcome(
         prompt,
@@ -168,21 +168,15 @@ def _alert_gardener_stuck(name: str, failures: int, status: str) -> None:
     Riparte a ogni passata oltre soglia e non solo all'attraversamento — per un
     allarme che significa «questo progetto è fermo» è il comportamento voluto.
     """
-    from jenny.runtime.notifier import notify_delivery
+    from jenny.runtime.notifier import notify_alarm
     from jenny.runtime.user_text import say
-    from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
     # Nella lingua dell'utente, e con un posto dove guardare che sta
     # nell'interfaccia: un comando da digitare non è una cosa che si fa dalla
     # tendina delle notifiche.
-    notify_delivery(
+    notify_alarm(
         say("alarm.gardener_stuck", failures=failures, name=name, status=status),
-        {
-            WEBUI_MESSAGE_SOURCE_METADATA_KEY: {
-                "kind": "cron",
-                "label": say("alarm.gardener_label", name=name),
-            }
-        },
+        say("alarm.gardener_label", name=name),
     )
 
 
@@ -846,9 +840,9 @@ class CronDispatcher:
             # chat aperta: l'alert implicito della consegna parte solo se il
             # turno ha davvero prodotto un messaggio. Stesso tag, quindi le due
             # notifiche si sostituiscono invece di sommarsi.
+            from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY
             from jenny.runtime.notifier import post_alert
             from jenny.runtime.user_text import say
-            from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
             await post_alert(
                 say("alarm.update_critical", version=info.version_name),

@@ -31,15 +31,10 @@ COMMANDS_JS = ASSETS / "shared" / "commands-chip.js"
 pytestmark = requires_node
 
 
-# `state.js` legge il tema da `localStorage` al caricamento del modulo, e in node
-# non esiste: lo si finge vuoto, che è anche il caso di un'installazione nuova.
-_LOCAL_STORAGE_STUB = "const localStorage = { getItem: () => null };\n"
-
-
 def _state_source() -> str:
     """`state.js` senza gli `export`, per poterlo eseguire come script."""
     src = re.sub(r"^export ", "", STATE_JS.read_text(encoding="utf-8"), flags=re.M)
-    return _LOCAL_STORAGE_STUB + src
+    return src
 
 
 def _run_js(script: str) -> None:

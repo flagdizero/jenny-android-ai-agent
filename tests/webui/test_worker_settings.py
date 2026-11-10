@@ -44,7 +44,7 @@ _SECRET = "s3cr3t-workers"
 
 
 @pytest.fixture
-def config_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
+def private_config_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """Config e **workspace** privati del test.
 
     Il workspace va isolato e non solo la config: ``config.workspace_path``
@@ -63,7 +63,7 @@ def config_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
 # -- lettura -----------------------------------------------------------------
 
 
-def test_payload_carries_both_sections(config_path) -> None:
+def test_payload_carries_both_sections(private_config_path) -> None:
     payload = settings_payload()
 
     assert payload["memory"]["enabled"] is True
@@ -71,7 +71,7 @@ def test_payload_carries_both_sections(config_path) -> None:
     assert payload["workers"]["compact_projects_when_idle"] is False
 
 
-def test_the_dead_runtime_fields_are_gone(config_path) -> None:
+def test_the_dead_runtime_fields_are_gone(private_config_path) -> None:
     """``runtime.dream`` (e il gemello poi ritirato) erano serviti e mai disegnati.
 
     Due verità sullo stesso oggetto sono la premessa di una divergenza: ora
@@ -91,7 +91,7 @@ def test_the_dead_runtime_fields_are_gone(config_path) -> None:
     ],
 )
 def test_every_number_carries_the_bounds_of_the_schema(
-    config_path, section: str, field: str, model: type, attr: str
+    private_config_path, section: str, field: str, model: type, attr: str
 ) -> None:
     """Il range non è riscritto da nessuna parte: si legge da ``model_fields``.
 
@@ -105,7 +105,7 @@ def test_every_number_carries_the_bounds_of_the_schema(
     assert payload["max"] == (int(info.le) if info.le is not None else None)
 
 
-def test_memory_numbers_carry_their_bounds_too(config_path) -> None:
+def test_memory_numbers_carry_their_bounds_too(private_config_path) -> None:
     memory = settings_payload()["memory"]
 
     assert memory["review_every_runs"]["min"] == int(
@@ -116,17 +116,17 @@ def test_memory_numbers_carry_their_bounds_too(config_path) -> None:
     assert memory["memory_budget_chars"]["max"] is None
 
 
-def test_the_review_floor_travels_with_the_payload(config_path) -> None:
+def test_the_review_floor_travels_with_the_payload(private_config_path) -> None:
     """Il dialogo di conferma lo fa il client: senza il numero terrebbe una copia sua."""
     assert settings_payload()["memory"]["review_floor"] == REVIEW_CADENCE_FLOOR
 
 
-def test_files_are_measured_in_render_order_and_say_which_exist(config_path) -> None:
+def test_files_are_measured_in_render_order_and_say_which_exist(private_config_path) -> None:
     """``count_chars`` ritorna ``0`` sia per un file vuoto sia per uno assente.
 
     Senza ``exists`` accanto, "mai scritto" e "vuoto" si leggerebbero uguale.
     """
-    workspace = Path(load_config(config_path).workspace_path)
+    workspace = Path(load_config(private_config_path).workspace_path)
     workspace.mkdir(parents=True, exist_ok=True)
     (workspace / "USER.md").write_text("undici char", encoding="utf-8")
 
@@ -140,7 +140,7 @@ def test_files_are_measured_in_render_order_and_say_which_exist(config_path) -> 
 
 
 def test_a_file_that_exists_but_cannot_be_opened_is_not_reported_as_empty(
-    config_path,
+    private_config_path,
 ) -> None:
     """Misurato sul telefono il 31/08/2026 con un ``chmod 000``.
 
@@ -149,7 +149,7 @@ def test_a_file_that_exists_but_cannot_be_opened_is_not_reported_as_empty(
     apriva — che era il punto — ma quel numero era una bugia. ``readable`` la
     toglie, e la riga sotto la barra dice "non misurabile".
     """
-    workspace = Path(load_config(config_path).workspace_path)
+    workspace = Path(load_config(private_config_path).workspace_path)
     workspace.mkdir(parents=True, exist_ok=True)
     soul = workspace / "SOUL.md"
     soul.write_text("x" * 500, encoding="utf-8")
@@ -165,7 +165,7 @@ def test_a_file_that_exists_but_cannot_be_opened_is_not_reported_as_empty(
 
 
 def test_a_file_that_cannot_be_measured_does_not_close_the_screen(
-    config_path, monkeypatch
+    private_config_path, monkeypatch
 ) -> None:
     """La misura salta, il resto no: qui si spengono i lavoratori."""
     import jenny.agent.memory_budget as memory_budget
@@ -185,41 +185,41 @@ def test_a_file_that_cannot_be_measured_does_not_close_the_screen(
 # -- scrittura ---------------------------------------------------------------
 
 
-async def test_a_gardener_number_is_persisted(config_path) -> None:
+async def test_a_gardener_number_is_persisted(private_config_path) -> None:
     payload = await update_worker_settings({"gardener_idle_min": ["45"]})
 
     assert payload["workers"]["gardener"]["idle_min"]["value"] == 45
-    assert load_config(config_path).agents.defaults.gardener.idle_min == 45
+    assert load_config(private_config_path).agents.defaults.gardener.idle_min == 45
 
 
-async def test_camel_case_alias_is_accepted(config_path) -> None:
+async def test_camel_case_alias_is_accepted(private_config_path) -> None:
     await update_worker_settings({"gardenerIdleMin": ["45"]})
 
-    assert load_config(config_path).agents.defaults.gardener.idle_min == 45
+    assert load_config(private_config_path).agents.defaults.gardener.idle_min == 45
 
 
-async def test_dream_can_be_turned_off_too(config_path) -> None:
+async def test_dream_can_be_turned_off_too(private_config_path) -> None:
     await update_memory_settings({"dream_enabled": ["false"]})
 
-    assert load_config(config_path).agents.defaults.dream.enabled is False
+    assert load_config(private_config_path).agents.defaults.dream.enabled is False
 
 
-async def test_a_budget_is_persisted(config_path) -> None:
+async def test_a_budget_is_persisted(private_config_path) -> None:
     await update_memory_settings({"soul_budget_chars": ["4000"]})
 
-    assert load_config(config_path).agents.defaults.dream.soul_budget_chars == 4000
+    assert load_config(private_config_path).agents.defaults.dream.soul_budget_chars == 4000
 
 
-async def test_a_request_without_a_field_leaves_it_alone(config_path) -> None:
+async def test_a_request_without_a_field_leaves_it_alone(private_config_path) -> None:
     await update_worker_settings({"gardener_idle_min": ["45"]})
     await update_worker_settings({"gardener_interval_min": ["10"]})
 
-    gardener = load_config(config_path).agents.defaults.gardener
+    gardener = load_config(private_config_path).agents.defaults.gardener
     assert (gardener.idle_min, gardener.interval_min) == (45, 10)
 
 
 async def test_a_value_that_did_not_change_does_not_rewrite_the_file(
-    config_path, monkeypatch
+    private_config_path, monkeypatch
 ) -> None:
     """Il ``.bak`` non deve ruotare per nulla: era il comportamento del comando."""
     from jenny.config import store
@@ -240,7 +240,7 @@ async def test_a_value_that_did_not_change_does_not_rewrite_the_file(
     assert writes == ["save"]
 
 
-async def test_compact_asks_for_a_restart_and_only_when_it_changes(config_path) -> None:
+async def test_compact_asks_for_a_restart_and_only_when_it_changes(private_config_path) -> None:
     """La legge l'agente quando parte: prima del riavvio non cambia niente."""
     assert (await update_worker_settings({"compact_projects_when_idle": ["1"]}))[
         "requires_restart"
@@ -250,7 +250,7 @@ async def test_compact_asks_for_a_restart_and_only_when_it_changes(config_path) 
     ] is False
 
 
-async def test_turning_the_gardener_off_works_from_an_out_of_range_config(config_path) -> None:
+async def test_turning_the_gardener_off_works_from_an_out_of_range_config(private_config_path) -> None:
     """La via d'uscita non deve mai fallire.
 
     Un ``intervalMin`` fuori dai tetti scritto da una versione precedente non
@@ -258,16 +258,16 @@ async def test_turning_the_gardener_off_works_from_an_out_of_range_config(config
     dentro i bound al parse, e ``store.mutate`` rilegge il file dentro il proprio
     lock — quindi la clemenza vale anche per questa scrittura.
     """
-    raw = json.loads(config_path.read_text("utf-8"))
+    raw = json.loads(private_config_path.read_text("utf-8"))
     raw.setdefault("agents", {}).setdefault("defaults", {})["gardener"] = {
         "enabled": True,
         "intervalMin": 99999,
     }
-    config_path.write_text(json.dumps(raw), encoding="utf-8")
+    private_config_path.write_text(json.dumps(raw), encoding="utf-8")
 
     await update_worker_settings({"gardener_enabled": ["0"]})
 
-    assert load_config(config_path).agents.defaults.gardener.enabled is False
+    assert load_config(private_config_path).agents.defaults.gardener.enabled is False
 
 
 # -- rifiuti -----------------------------------------------------------------
@@ -282,47 +282,47 @@ async def test_turning_the_gardener_off_works_from_an_out_of_range_config(config
     ],
 )
 async def test_out_of_range_is_refused_and_names_the_range(
-    config_path, field: str, value: str, span: str
+    private_config_path, field: str, value: str, span: str
 ) -> None:
     """Il range nel messaggio è l'unico modo in cui chi ha sforato scopre il valore ammesso."""
     with pytest.raises(WebUISettingsError, match=span):
         await update_worker_settings({field: [value]})
 
 
-async def test_a_refused_value_leaves_the_config_untouched(config_path) -> None:
+async def test_a_refused_value_leaves_the_config_untouched(private_config_path) -> None:
     await update_worker_settings({"gardener_idle_min": ["45"]})
     with pytest.raises(WebUISettingsError):
         await update_worker_settings({"gardener_idle_min": ["99999"]})
 
-    assert load_config(config_path).agents.defaults.gardener.idle_min == 45
+    assert load_config(private_config_path).agents.defaults.gardener.idle_min == 45
 
 
 @pytest.mark.parametrize("bad", ["", "molto", "12.5", "1e3"])
-async def test_a_number_that_is_not_a_number_is_refused(config_path, bad: str) -> None:
+async def test_a_number_that_is_not_a_number_is_refused(private_config_path, bad: str) -> None:
     with pytest.raises(WebUISettingsError, match="whole number"):
         await update_memory_settings({"memory_budget_chars": [bad]})
 
 
 @pytest.mark.parametrize("bad", ["", "forse", "2"])
-async def test_a_boolean_that_is_not_a_boolean_is_refused(config_path, bad: str) -> None:
+async def test_a_boolean_that_is_not_a_boolean_is_refused(private_config_path, bad: str) -> None:
     with pytest.raises(WebUISettingsError, match="boolean"):
         await update_worker_settings({"gardener_enabled": [bad]})
 
 
-async def test_the_review_floor_needs_an_explicit_confirmation(config_path) -> None:
+async def test_the_review_floor_needs_an_explicit_confirmation(private_config_path) -> None:
     with pytest.raises(WebUISettingsError, match=str(REVIEW_CADENCE_FLOOR)):
         await update_memory_settings({"review_every_runs": ["1"]})
 
-    assert load_config(config_path).agents.defaults.dream.review_every_runs == 12
+    assert load_config(private_config_path).agents.defaults.dream.review_every_runs == 12
 
 
-async def test_the_confirmation_lets_it_through(config_path) -> None:
+async def test_the_confirmation_lets_it_through(private_config_path) -> None:
     """Il percorso esiste perché misurare su un device vero è come si è scoperto il difetto."""
     await update_memory_settings(
         {"review_every_runs": ["1"], "confirm_back_to_back": ["1"]}
     )
 
-    assert load_config(config_path).agents.defaults.dream.review_every_runs == 1
+    assert load_config(private_config_path).agents.defaults.dream.review_every_runs == 1
 
 
 def test_the_floor_is_twelve_and_equals_the_shipped_default() -> None:
@@ -348,11 +348,11 @@ def test_the_schema_still_accepts_a_restored_value_below_the_floor() -> None:
     assert DreamConfig.model_validate({"reviewEveryRuns": 1}).review_every_runs == 1
 
 
-async def test_a_cadence_at_the_floor_needs_no_confirmation(config_path) -> None:
+async def test_a_cadence_at_the_floor_needs_no_confirmation(private_config_path) -> None:
     await update_memory_settings({"review_every_runs": [str(REVIEW_CADENCE_FLOOR)]})
 
     assert (
-        load_config(config_path).agents.defaults.dream.review_every_runs
+        load_config(private_config_path).agents.defaults.dream.review_every_runs
         == REVIEW_CADENCE_FLOOR
     )
 
@@ -367,7 +367,7 @@ def test_module_never_calls_save_config_directly() -> None:
     assert "save_config" not in source
 
 
-async def test_an_unknown_config_key_survives_the_write(config_path) -> None:
+async def test_an_unknown_config_key_survives_the_write(private_config_path) -> None:
     """Il test che muore se qualcuno rimpiazza ``mutate()`` con ``save_config()``.
 
     ``save_config`` riscrive il file intero dal dump dello schema: senza
@@ -379,42 +379,42 @@ async def test_an_unknown_config_key_survives_the_write(config_path) -> None:
     Portato qui da ``tests/command/test_gardener_settings_command.py`` insieme
     alla manopola: la promessa è del funnel, non della superficie che lo usa.
     """
-    raw = json.loads(config_path.read_text("utf-8"))
+    raw = json.loads(private_config_path.read_text("utf-8"))
     raw["somethingFromANewerVersion"] = {"keep": "me"}
-    config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+    private_config_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
 
     await update_worker_settings({"gardener_interval_min": ["120"]})
 
-    saved = json.loads(config_path.read_text("utf-8"))
+    saved = json.loads(private_config_path.read_text("utf-8"))
     assert saved["somethingFromANewerVersion"] == {"keep": "me"}
     assert saved["agents"]["defaults"]["gardener"]["intervalMin"] == 120
 
 
-async def test_the_write_keeps_the_file_private(config_path) -> None:
+async def test_the_write_keeps_the_file_private(private_config_path) -> None:
     """Nel file c'è la chiave del provider: un ``config.json`` leggibile a tutti è
     una regressione di sicurezza silenziosa. Il ``chmod 600`` lo ripristina
     ``save_config`` in fondo al funnel — questo test copre la strada che un
     ``chmod`` fatto a mano fuori dal funnel romperebbe (è già successo: un
     ``sed -i`` sul telefono)."""
-    config_path.chmod(0o600)
+    private_config_path.chmod(0o600)
 
     await update_worker_settings({"gardener_interval_min": ["120"]})
 
-    assert config_path.stat().st_mode & 0o777 == 0o600
+    assert private_config_path.stat().st_mode & 0o777 == 0o600
 
 
-async def test_a_read_only_request_rotates_no_backup(config_path) -> None:
+async def test_a_read_only_request_rotates_no_backup(private_config_path) -> None:
     """Una richiesta che non cambia niente non deve far ruotare il ``.bak``: il
     backup è la rete di salvataggio di ``config.json``, e riempirlo con copie
     identiche vuol dire perdere la sola versione che serviva."""
     from jenny.utils.path import backup_path as _backup_path
 
-    before = config_path.read_bytes()
+    before = private_config_path.read_bytes()
 
     await update_worker_settings({})
 
-    assert config_path.read_bytes() == before
-    assert not _backup_path(config_path).exists()
+    assert private_config_path.read_bytes() == before
+    assert not _backup_path(private_config_path).exists()
 
 
 # -- rotte e ri-armo ---------------------------------------------------------
@@ -440,14 +440,14 @@ def _router(on_jobs_changed=None) -> WebUISettingsRouter:
     "path",
     ["/api/settings/memory/update", "/api/settings/workers/update"],
 )
-async def test_routes_require_auth(config_path, path: str) -> None:
+async def test_routes_require_auth(private_config_path, path: str) -> None:
     response = await _router().dispatch(_request(f"{path}?gardener_enabled=0", token=None), path)
 
     assert response.status_code == 401
-    assert load_config(config_path).agents.defaults.gardener.enabled is True
+    assert load_config(private_config_path).agents.defaults.gardener.enabled is True
 
 
-async def test_route_persists_and_returns_the_payload(config_path) -> None:
+async def test_route_persists_and_returns_the_payload(private_config_path) -> None:
     response = await _router().dispatch(
         _request("/api/settings/workers/update?gardener_idle_min=45"),
         "/api/settings/workers/update",
@@ -457,7 +457,7 @@ async def test_route_persists_and_returns_the_payload(config_path) -> None:
     assert json.loads(response.body)["workers"]["gardener"]["idle_min"]["value"] == 45
 
 
-async def test_a_refusal_becomes_a_400(config_path) -> None:
+async def test_a_refusal_becomes_a_400(private_config_path) -> None:
     response = await _router().dispatch(
         _request("/api/settings/workers/update?gardener_idle_min=99999"),
         "/api/settings/workers/update",
@@ -476,7 +476,7 @@ async def test_a_refusal_becomes_a_400(config_path) -> None:
     ],
 )
 async def test_the_job_is_re_armed_for_what_lives_in_the_cron_store(
-    config_path, path: str, query: str, expected: list[str]
+    private_config_path, path: str, query: str, expected: list[str]
 ) -> None:
     """Interruttore e intervallo non li rilegge nessun tick: stanno nello store del cron.
 
@@ -502,7 +502,7 @@ async def test_the_job_is_re_armed_for_what_lives_in_the_cron_store(
     ],
 )
 async def test_what_every_tick_rereads_does_not_re_arm_anything(
-    config_path, path: str, query: str
+    private_config_path, path: str, query: str
 ) -> None:
     """Ri-armare per un numero che il dispatch già rilegge sposterebbe la prossima
     scadenza a ogni tocco di una manopola che non c'entra."""
@@ -513,7 +513,7 @@ async def test_what_every_tick_rereads_does_not_re_arm_anything(
     assert seen == []
 
 
-async def test_a_failing_hook_does_not_break_the_write(config_path) -> None:
+async def test_a_failing_hook_does_not_break_the_write(private_config_path) -> None:
     """Il valore è già scritto: il ri-armo è il contorno, non il piatto."""
 
     def _boom(_worker: str) -> None:
@@ -525,4 +525,4 @@ async def test_a_failing_hook_does_not_break_the_write(config_path) -> None:
     )
 
     assert response.status_code == 200
-    assert load_config(config_path).agents.defaults.gardener.enabled is False
+    assert load_config(private_config_path).agents.defaults.gardener.enabled is False

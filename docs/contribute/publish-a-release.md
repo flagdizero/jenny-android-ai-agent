@@ -253,7 +253,7 @@ Jenny has already stopped being able to tell you.
 | `sha256` | Hex digest of the APK. The client verifies the download against it and refuses to install on a mismatch, which is what makes a corrupted or substituted download fail loudly. It is *not* the main defence against a hostile APK — whoever controls the manifest controls the hash written in it. That job belongs to the signature: an in-place update whose certificate does not match the installed package is rejected by Android outright. |
 | `size` | APK size in bytes, and a load-bearing one. Before downloading, the client refuses to start unless there is room for twice this plus a 64 MB margin — the staging copy needs its own space, and discovering that halfway through is how you fill a phone's cache and fail silently. It also rejects a mismatched `Content-Length` up front and a truncated file at the end. |
 | `notes_url` | Where "what's new" points: the GitHub release page for the tag. |
-| `summary_it` / `summary_en` | One-line summary shown in the app, picked by device language. |
+| `summary_it` / `summary_en` | One-line summary shown in the app, picked by Jenny's language (`agents.defaults.language`). |
 | `min_supported_code` | Oldest `versionCode` still allowed to take this update automatically. See below. |
 | `rollout` | Percentage of devices offered this update, 0–100. `0` stops everyone, `critical` included. See below. |
 | `critical` | Whether the client is allowed to insist. See below. |

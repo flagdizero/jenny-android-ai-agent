@@ -66,8 +66,8 @@ from jenny.utils.wiki_paths import is_wiki_root, journal_page_name, wiki_journal
 _NO_PROJECT_REFUSAL = (
     "No journal here: the working journal belongs to a project, and this conversation is not "
     "one. Nothing was written. If this is worth keeping, it belongs either in the personal "
-    "memory (say so and it goes to MEMORY.md) or in a project — the chip above the composer "
-    "opens one. Do not look for another file to append to."
+    "memory (say so and it goes to MEMORY.md) or in a project — the user opens one from "
+    "Notebooks. Do not look for another file to append to."
 )
 
 # Il tetto di una riga. Una riga di diario e' un fatto, non un paragrafo: quel

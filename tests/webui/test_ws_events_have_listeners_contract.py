@@ -68,9 +68,6 @@ SHELL_WITHOUT_LISTENER = {
         # «apri nell'officina» porta dove c'e' il resto.
         "subagent_activity": "dettaglio dei subagent: solo officina",
         "subagent_unwatched": "dettaglio dei subagent: solo officina",
-        # La casa non mostra il modello in vivo: la stanza «Chi risponde» lo
-        # legge dalle impostazioni quando la apri.
-        "runtime_model_updated": "il modello si rilegge all'apertura della stanza",
     },
     "workshop.html": {
         # La bolla di lavoro e' della casa (05/10/2026). L'officina legge lo

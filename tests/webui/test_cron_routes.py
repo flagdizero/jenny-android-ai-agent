@@ -96,7 +96,7 @@ def test_a_real_service_comes_back_as_json(workspace, monkeypatch):
     from jenny.cron.service import CronService
     from jenny.cron.types import CronJob, CronPayload, CronSchedule
 
-    cron = CronService(workspace / "cron" / "jobs.json")
+    cron = CronService(workspace)
     cron.register_system_job(CronJob(
         id="dream", name="dream",
         schedule=CronSchedule(kind="every", every_ms=3_600_000),
@@ -170,7 +170,7 @@ def test_the_store_is_read_on_the_loop_not_in_the_thread(workspace, monkeypatch)
 
     from jenny.cron.service import CronService
 
-    cron = CronService(workspace / "cron" / "jobs.json")
+    cron = CronService(workspace)
     loop_thread = threading.current_thread()
     readers: list[threading.Thread] = []
     real_load_store = cron._load_store
@@ -199,7 +199,7 @@ _BOUND = {"session_key": "websocket:chat-1", "origin_channel": "websocket", "ori
 @pytest.fixture()
 def service(tmp_path: Path) -> CronService:
     # Fermo: le scritture passano dal giornale delle azioni, e il timer non parte.
-    return CronService(tmp_path / "cron" / "jobs.json")
+    return CronService(tmp_path / "workspace")
 
 
 def _job(service: CronService, **kwargs) -> str:

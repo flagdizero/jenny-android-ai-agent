@@ -42,7 +42,7 @@ def _config(tmp_path, **flags):
 
 @pytest.fixture
 def cron(tmp_path):
-    return CronService(tmp_path / "cron" / "jobs.json")
+    return CronService(tmp_path / "workspace")
 
 
 def _system(job_id: str, *, every_ms: int = 1_800_000) -> CronJob:

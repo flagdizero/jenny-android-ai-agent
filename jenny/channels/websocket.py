@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     # Solo per type-hint: nessun import runtime channels→webui (evita
     # l'inversione di layering e i cicli). Fase 8.
     from jenny.webui.gateway_services import GatewayServices
+from jenny.bus.events import WEBUI_DEFAULT_CHAT_ID
 from jenny.channels.http_utils import (
     normalize_config_path as _normalize_config_path,
 )
@@ -72,7 +73,6 @@ from jenny.utils.media_decode import (
     FileSizeExceeded,
     save_base64_data_url,
 )
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 # Per ``websockets`` una richiesta HTTP è un handshake mai concluso, e
 # ``open_timeout`` (10 s di default) lo taglia chiudendo la connessione senza

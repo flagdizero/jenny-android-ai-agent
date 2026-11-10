@@ -41,7 +41,7 @@ import {
   findContentAnchor,
   openOutsideWebView,
 } from './shared/content-link.js';
-import { writeFailedToast } from './shared/dom.js';
+import { lockLine, writeFailedToast } from './shared/dom.js';
 
 /** Un link markdown relativo risolto contro la pagina che lo contiene.
  *
@@ -181,18 +181,7 @@ export class HomeReader {
    *  salvataggio lo rifiutera' il server, dicendolo. */
   setLocked(locked) {
     this.locked = Boolean(locked);
-    if (this.lockEl) {
-      this.lockEl.hidden = !this.locked;
-      this.lockEl.replaceChildren();
-      if (this.locked) {
-        const i = document.createElement('i');
-        i.className = 'ti ti-lock';
-        i.setAttribute('aria-hidden', 'true');
-        const text = document.createElement('span');
-        text.textContent = i18n.t('home.plan.lock');
-        this.lockEl.append(i, text);
-      }
-    }
+    if (this.lockEl) lockLine(this.lockEl, this.locked);
   }
 
   /* ── Modifica ── */

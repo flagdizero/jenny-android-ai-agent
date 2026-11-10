@@ -45,7 +45,7 @@ def _future() -> int:
 def test_add_job_with_a_past_deadline_is_scheduled_not_orphaned(tmp_path) -> None:
     """Anche creato in ritardo (il modello calcola l'ora, poi il turno dura),
     il job deve avere una scadenza da onorare, non ``None``."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     at_ms = _past()
 
     job = service.add_job(
@@ -61,7 +61,7 @@ def test_add_job_with_a_past_deadline_is_scheduled_not_orphaned(tmp_path) -> Non
 
 def test_future_deadline_is_left_alone(tmp_path) -> None:
     """Il recupero non deve toccare chi non è in ritardo."""
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     at_ms = _future()
 
     job = service.add_job(
@@ -77,11 +77,11 @@ def test_future_deadline_is_left_alone(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_deadline_missed_while_the_app_was_down_runs_at_the_next_start(tmp_path) -> None:
     """Il caso vero: scadenza passata mentre il processo era morto."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     at_ms = _past()
 
     # Primo avvio: il job viene creato con scadenza futura, poi l'app muore.
-    first = CronService(path)
+    first = CronService(workspace)
     job = first.add_job(
         name="promemoria",
         schedule=CronSchedule(kind="at", at_ms=_future()),
@@ -97,7 +97,7 @@ async def test_deadline_missed_while_the_app_was_down_runs_at_the_next_start(tmp
     async def on_job(j):
         fired.append(j.id)
 
-    second = CronService(path, on_job=on_job)
+    second = CronService(workspace, on_job=on_job)
     second._arm_timer = lambda: None
     await second.start()
     try:
@@ -118,13 +118,13 @@ async def test_deadline_missed_while_the_app_was_down_runs_at_the_next_start(tmp
 async def test_a_late_one_shot_does_not_re_arm_itself_forever(tmp_path) -> None:
     """Il rischio dell'intera fix: se anche il post-esecuzione recuperasse la
     scadenza passata, il job ripartirebbe a ogni tick per sempre."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     fired: list[str] = []
 
     async def on_job(j):
         fired.append(j.id)
 
-    service = CronService(path, on_job=on_job)
+    service = CronService(workspace, on_job=on_job)
     service._arm_timer = lambda: None
     service._running = True
     service._load_store()
@@ -144,12 +144,12 @@ async def test_a_late_one_shot_does_not_re_arm_itself_forever(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_delete_after_run_still_removes_the_late_job(tmp_path) -> None:
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
     async def on_job(j):
         return None
 
-    service = CronService(path, on_job=on_job)
+    service = CronService(workspace, on_job=on_job)
     service._arm_timer = lambda: None
     service._running = True
     service._load_store()
@@ -171,10 +171,10 @@ async def test_an_already_orphaned_job_on_disk_heals_itself(tmp_path) -> None:
     """Nessuna migrazione: gli orfani scritti dalle versioni precedenti
     ripartono da soli, perché il recupero rilegge ``schedule.at_ms`` e non lo
     stato salvato."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
     at_ms = _past()
 
-    seed = CronService(path)
+    seed = CronService(workspace)
     job = seed.add_job(
         name="orfano",
         schedule=CronSchedule(kind="at", at_ms=at_ms),
@@ -187,7 +187,7 @@ async def test_an_already_orphaned_job_on_disk_heals_itself(tmp_path) -> None:
     seed._running = True
     seed._save_store()
 
-    revived = CronService(path)
+    revived = CronService(workspace)
     revived._arm_timer = lambda: None
     await revived.start()
     try:

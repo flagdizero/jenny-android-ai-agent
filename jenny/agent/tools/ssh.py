@@ -60,8 +60,8 @@ from jenny.security.workspace_access import (
 )
 from jenny.security.workspace_policy import (
     WorkspaceBoundaryError,
-    _safe_expanduser,
     resolve_allowed_path,
+    safe_expanduser,
 )
 
 _HOST_PARAM = "Alias of a registered host. Call `ssh_hosts` if you do not know the aliases."
@@ -544,7 +544,7 @@ class SshTransferTool(_SshToolMixin, Tool):
         validate: Callable[[str], tuple[bool, str]] | None = None,
     ) -> None:
         super().__init__(validate)
-        self._workspace = _safe_expanduser(workspace)
+        self._workspace = safe_expanduser(workspace)
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:

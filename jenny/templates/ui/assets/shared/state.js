@@ -1,24 +1,8 @@
 /** Shared Application State — global reactive state. */
 
-/* Il tema salvato, letto **al caricamento del modulo**, prima di tutto il
-   resto: un `localStorage` che solleva (dati del sito bloccati, anteprima)
-   qui si portava via l'intero grafo degli import, cioe' la pagina.
-   La stessa regola di `readStorage` in `utils.js`, scritta
-   qui perche' questo modulo non importa niente, e i banchi lo sanno. */
-function savedTheme() {
-  try {
-    return globalThis.localStorage.getItem('tc-theme');
-  } catch (_) {
-    return null;
-  }
-}
-
 export const AppState = {
   // Current view/mode
   currentMode: 'chat',
-
-  // Theme (the boot script in index.html migrates legacy values first)
-  theme: savedTheme() || 'synthwave',
 
   // Se il prossimo messaggio parte in sola lettura. Lo scrive soltanto
   // `write-switch.js`; lo leggono il placeholder del composer e `ws-manager`,

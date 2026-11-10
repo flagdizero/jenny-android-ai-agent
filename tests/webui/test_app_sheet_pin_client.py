@@ -42,11 +42,12 @@ export function showUndo(text, onUndo) { undos.push([text, onUndo]); return () =
 export const rpc = {
   calls: [],
   cancellate: [],
-  trashId: null,
+  /* Come `apps_commands.apps_delete`: l'app va sempre nel cestino. */
+  trashId: 'orto-20261006T101500Z',
   async apps(m, p) {
     if (m === 'delete') {
       this.cancellate.push(p.slug);
-      return this.trashId ? { ok: true, deleted: true, trashed: this.trashId } : { ok: true };
+      return { ok: true, deleted: true, trashed: this.trashId };
     }
     this.calls.push([m, p]);
     return { ok: true };
@@ -260,7 +261,8 @@ def test_deleting_from_the_workshop_needs_no_pages() -> None:
     _run(
         "await actions._handleJennySheetAction('delete', APP);\n"
         "assert.deepEqual(rpc.cancellate, ['orto']);\n"
-        "assert.deepEqual(notices.at(-1), ['apps.appDeleted', 'success']);\n",
+        "const { undos } = await import('./shared/utils.js');\n"
+        "assert.deepEqual(undos.map((u) => u[0]), ['apps.trashed']);\n",
         app=GARDEN,
         pages=None,
     )

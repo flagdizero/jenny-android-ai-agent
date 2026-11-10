@@ -83,18 +83,14 @@ class ChatText:
 def _index(workspace: Path):
     from jenny import db
 
-    database = db.database_for_workspace(Path(workspace), db.INDEX)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(workspace, db.INDEX, SCHEMA)
 
 
 def _state(workspace: Path):
     from jenny import db
     from jenny.webui.transcript_store import SCHEMA as TRANSCRIPTS
 
-    database = db.database_for_workspace(Path(workspace), db.STATE)
-    database.require(TRANSCRIPTS)
-    return database
+    return db.store_database(workspace, db.STATE, TRANSCRIPTS)
 
 
 # -- dai frame alle parole --------------------------------------------------------

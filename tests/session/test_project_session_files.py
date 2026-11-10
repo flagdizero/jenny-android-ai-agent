@@ -2,15 +2,20 @@
 
 Passo **6** del piano dei progetti.
 
-Una conversazione lascia quattro tracce su disco, e ognuna nasce da un mapping
-`chiave → nome di file` che sostituisce i caratteri scomodi con ``_``:
+Una conversazione lasciava quattro tracce su disco, ognuna col nome di file dato
+da un mapping `chiave → nome` che sostituisce i caratteri scomodi con ``_``. Oggi
+la sessione, il verbale e i record degli aiutanti sono righe di ``state.sqlite``
+sotto la chiave della conversazione (``jenny/session/project_traces.py``); un
+nome derivato dalla chiave lo portano ancora:
 
 | Traccia | Dove | Radice |
 | --- | --- | --- |
-| la sessione (quel che Jenny rilegge) | ``sessions/<stem>.jsonl`` | installazione |
-| la trascrizione (quel che vedi) | ``.jenny/webui/<stem>.jsonl`` + ``.segments/`` | installazione |
-| i record dei subagent | ``subagents/records/<stem>.jsonl`` | installazione |
+| il thread WebUI di prima del verbale | ``.jenny/webui/<stem>.json`` | installazione |
 | i risultati dei tool troppo grandi | ``.jenny/tool-results/<stem>/`` | **turno** |
+
+I test qui sotto guardano tutti e quattro i mapping (``_stems``): sono le
+funzioni che producono quei nomi, e un nome che collide resta un guasto il
+giorno che una traccia torna su file.
 
 Quel mapping non è iniettivo: ``project:a/b``, ``project:a:b`` e ``project:a_b``
 finiscono tutti su ``project_a_b``. Due conversazioni sullo stesso file

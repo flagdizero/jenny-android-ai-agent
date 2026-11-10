@@ -24,7 +24,7 @@ Jenny is Android-only. The gateway's workspace lives inside the app's own privat
 | Path | Meaning |
 |---|---|
 | `<filesDir>/workspace/config.json` | Instance configuration: providers, model defaults, tools, gateway, and runtime options |
-| `<filesDir>/workspace/` | Agent workspace: memory, sessions, uploads, cron jobs, skills, mini-apps, and generated artifacts |
+| `<filesDir>/workspace/` | Agent workspace: memory, uploads, skills, mini-apps, notebooks and generated artifacts (sessions, scheduled jobs and the WebUI's transcripts are rows of `state.sqlite`, in `<filesDir>/db/` next to the workspace) |
 
 Because the workspace is app-private storage, nothing outside the Jenny app can read or write it directly — not even other apps on the same phone — and it disappears if the app is uninstalled (see [Backup and restore](../using/backup.md) for how to get data out before that happens). The config file controls what Jenny may use; the workspace is where Jenny keeps state for that install.
 
@@ -54,7 +54,7 @@ There is one entry point and one process: `jenny.android_entry.run_gateway()`, s
 
 Providers are entries you define under `providers.providers`; the active one is the entry named by `providers.default`, otherwise the first in the list. There is no provider auto-detection and no bundled catalog of known providers or models.
 
-**Changing the active provider or model from the Settings screen applies immediately, without restarting the app.** The gateway watches for settings changes and hot-reloads the live agent's provider and model in place: whenever anything the provider is built from changes (the provider entry, including its key, base URL, API type, extra headers and CA bundle, plus the model, the context window and the generation settings), the provider is rebuilt and swapped in. You only need to relaunch the app when you hand-edit `config.json` directly (nothing watches the file for external edits) or when a specific settings change is flagged as needing a restart internally: a small set of settings (timezone, assistant name/icon, tool-hint length) are, and the Settings screens tell you when a save is one of them. See [Architecture — Providers](./architecture.md#providers) for the exact mechanism.
+**Changing the active provider or model from the Settings screen applies immediately, without restarting the app.** The gateway watches for settings changes and hot-reloads the live agent's provider and model in place: whenever anything the provider is built from changes (the provider entry, including its key, base URL, API type, extra headers and CA bundle, plus the model, the context window and the generation settings), the provider is rebuilt and swapped in. You only need to relaunch the app when you hand-edit `config.json` directly (nothing watches the file for external edits) or when a specific settings change is flagged as needing a restart internally: a small set of settings (timezone, assistant icon, tool-hint length) are — the assistant's name is not: it is read from `config.json` each time it is used — and the Settings screens tell you when a save is one of them. See [Architecture — Providers](./architecture.md#providers) for the exact mechanism.
 
 The active model should normally come from a named `modelPresets` entry selected by `agents.defaults.modelPreset`; when no preset is selected, the direct `agents.defaults.model` and related fields apply.
 
@@ -82,7 +82,7 @@ Jenny has four channels: the built-in WebSocket channel (always active — it's 
 
 Every inbound message from any channel routes into the same single unified conversation session (`unified:default`) — Jenny is a single-user assistant with one continuous thread, not a per-channel or per-device conversation. This has a sharp edge worth knowing up front: because there is only one session, `/new` issued from Telegram resets the WebUI's conversation too, and vice versa — whoever has access to the paired bot can reset the chat on the phone. Internal work (cron, Dream) runs under separate internal session keys so it never pollutes the user-visible conversation.
 
-There is one user-visible exception to "a single session": a **project** conversation (`project:<name>`), opened from the scope chip and bound to one folder under `<workspace>/wikis/`. It has its own session file, its own transcript, and its own memory rules — it is archived into `history.jsonl` under its own key, never enters the personal chat's prompt, and Dream digests it in a separate batch that can write only to `USER.md` (identity facts about you), never to `MEMORY.md` or `SOUL.md`. Only the WebSocket channel can name a project; a Telegram message stays personal whatever it contains. Session keys are therefore classified three ways, not two — `personal`, `project`, `internal` — and anything unrecognised is treated as internal rather than personal, so an unregistered kind can never reach the memory files. See [Projects](../using/projects.md) for the user-facing design.
+There is one user-visible exception to "a single session": a **project** conversation (`project:<name>`), opened from the scope chip and bound to one folder under `<workspace>/wikis/`. It has its own session, its own transcript, and its own memory rules — it is archived into `history.jsonl` under its own key, never enters the personal chat's prompt, and Dream digests it in a separate batch that can write only to `USER.md` (identity facts about you), never to `MEMORY.md` or `SOUL.md`. Only the WebSocket channel can name a project; a Telegram message stays personal whatever it contains. Session keys are therefore classified three ways, not two — `personal`, `project`, `internal` — and anything unrecognised is treated as internal rather than personal, so an unregistered kind can never reach the memory files. See [Projects](../using/projects.md) for the user-facing design.
 
 See [Telegram bridge](../using/telegram.md) for the channel-specific asymmetries (Telegram doesn't see WebUI-only turns, has no streaming, etc.).
 
@@ -100,7 +100,7 @@ Dream is a periodic consolidation job (`jenny/agent/memory.py`): every 2 hours b
 
 ## Tools and safety
 
-Tools are **not** discovered by scanning the filesystem — they are registered explicitly. A fixed list of 23 modules under `jenny/agent/tools/` each declare a `TOOLS = [...]` list of tool classes (44 in all: a few names have one class per scope — `app` has three), collected once at startup by `jenny/agent/tools/loader.py` — plus `my`, `memory` and the per-app action tools, which are built outside the loader because each needs a live reference it cannot provide; a module missing that declaration, or a name collision between two tools, is a startup error rather than a silent gap. Common tool groups include:
+Tools are **not** discovered by scanning the filesystem — they are registered explicitly. A fixed list of 27 modules under `jenny/agent/tools/` each declare a `TOOLS = [...]` list of tool classes (53 in all: a few names have one class per scope — `app` has three, `notebook` two), collected once at startup by `jenny/agent/tools/loader.py` — plus `my`, `memory` and `use_app` (the one tool every Jenny App action runs through), which are built outside the loader because each needs a live reference it cannot provide; a module missing that declaration, or a name collision between two tools, is a startup error rather than a silent gap. Common tool groups include:
 
 - file read/write/edit, search, and multi-file patching, scoped to the workspace;
 - Python code execution (`python_exec`), in-process, with a module allowlist that is explicitly not a security sandbox;
@@ -108,7 +108,7 @@ Tools are **not** discovered by scanning the filesystem — they are registered 
 - location (last-known injected into context, or an on-demand fresh GPS fix);
 - cron reminders and monitors;
 - subagent spawning;
-- dynamic per-mini-app tools, registered and unregistered as apps are created or removed.
+- `use_app`, the single tool through which every mini-app action is called, present while at least one app has an action.
 
 Tool behavior is part of the model contract: names, schemas, and error messages are effectively an interface the model has learned to use, so changing them is a compatibility-affecting change, not just a refactor. See [Architecture — Tools](./architecture.md#tools) for the full module table and [Tool reference](../reference/tools.md) for per-tool behavior and limits.
 

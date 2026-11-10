@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-from behaviour.device import Device  # noqa: E402
+from behaviour.device import Device, DeviceError  # noqa: E402
 from behaviour.runner import Runner, summarize  # noqa: E402
 from behaviour.scenarios import SCENARIOS  # noqa: E402
 
@@ -67,7 +67,8 @@ def _print_summary(table: dict, baseline: dict) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("--serial", default="emulator-5554")
+    ap.add_argument("--serial", default="emulator-5554",
+                    help="the jenny_s22 emulator's serial (checked with `emu avd name`)")
     ap.add_argument("--models", default="", help="comma list; empty = the model the app has")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--only", default="", help="comma list of scenario names")
@@ -81,6 +82,11 @@ def main() -> int:
     args = ap.parse_args()
 
     device = Device(args.serial)
+    try:
+        device.check_avd()
+    except DeviceError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     if args.restore:
         device.forward()
         device.restore()

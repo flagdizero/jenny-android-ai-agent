@@ -93,20 +93,6 @@ def scope_of(link: dict[str, Any]) -> str:
     return card if isinstance(card, str) else model.NOTEBOOK
 
 
-def legacy_section(link: dict[str, Any]) -> str | None:
-    """La sezione del cassetto di un legame scritto prima del 20/10/2026, o ``None``."""
-    section = link.get("section")
-    if scope_of(link) == model.NOTEBOOK or not isinstance(section, str) or section == NO_SECTION:
-        return None
-    return section
-
-
-def legacy_result_key(link: dict[str, Any]) -> str | None:
-    """La chiave ``carta/sezione`` con cui i legami vecchi scrivevano l'esito."""
-    section = legacy_section(link)
-    return f"{link.get('card')}/{section}" if section else None
-
-
 def notebook_root(name: Any) -> Path | None:
     """La cartella del quaderno *name*, o ``None`` se non c'e' (piu').
 
@@ -139,18 +125,11 @@ def link_alive(link: dict[str, Any]) -> bool:
     return model.scope_state(board, scope_of(link)) != model.SCOPE_HIDDEN
 
 
-def result_of(results: Any, job_id: str, link: dict[str, Any] | None = None) -> dict[str, Any]:
-    """L'ultimo esito di un job in ``board.cronResults``, o ``{}``.
-
-    Dal 20/10/2026 la chiave è l'id del job; un legame scritto prima lo teneva
-    sotto ``carta/sezione``, e lo si legge lì finché il prossimo giro non lo sposta.
-    """
+def result_of(results: Any, job_id: str) -> dict[str, Any]:
+    """L'ultimo esito di un job in ``board.cronResults`` (la chiave è l'id del job), o ``{}``."""
     if not isinstance(results, dict):
         return {}
     entry = results.get(job_id)
-    if not isinstance(entry, dict) and link is not None:
-        legacy = legacy_result_key(link)
-        entry = results.get(legacy) if legacy else None
     return entry if isinstance(entry, dict) else {}
 
 
@@ -160,23 +139,19 @@ def record_result(
     """L'esito di un giro sulla bacheca: ``cronResults`` e, se ha parlato, una riga.
 
     Scritto come Jenny, fuori dalle cose dell'utente (come ``appStates``): non
-    tocca né le sezioni né le posizioni, solo lo stato che le accompagna. La
-    chiave vecchia ``carta/sezione``, se c'è, se ne va nello stesso giro.
+    tocca né le sezioni né le posizioni, solo lo stato che le accompagna.
     """
     from jenny.board.store import mutate_board
 
     root = notebook_root(link.get("notebook"))
     if root is None:
         return
-    legacy = legacy_result_key(link)
     clean = " ".join((text or "").split())[:MAX_RESULT]
     scope = scope_of(link)
 
     def apply(board: dict[str, Any]) -> None:
         results = dict(board.get("cronResults") or {})
-        before = result_of(results, job_id, link)
-        if legacy:
-            results.pop(legacy, None)
+        before = result_of(results, job_id)
         entry = {"at": model.now_iso(), "status": status}
         if clean:
             entry["text"] = clean
@@ -249,16 +224,14 @@ async def forget_job(link: dict[str, Any], job_id: str) -> None:
     root = notebook_root(notebook)
     if root is None:
         return
-    legacy_key = legacy_result_key(link)
     scope = scope_of(link)
 
     def apply(board: dict[str, Any]) -> bool | None:
         changed = False
         results = dict(board.get("cronResults") or {})
-        for key in (job_id, legacy_key):
-            if key and key in results:
-                results.pop(key)
-                changed = True
+        if job_id in results:
+            results.pop(job_id)
+            changed = True
         board["cronResults"] = results
         card = model.card_by_id(board, scope) if scope != model.NOTEBOOK else None
         if card is not None:
@@ -414,8 +387,6 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         # Quante volte di fila un monitor non è riuscito a guardare: l'etichetta lo dice.
         "couldNotCheck": job.state.consecutive_could_not_check,
         "scope": scope_of(job.payload.board) if job.payload.board else None,
-        # Solo per ritrovare l'esito scritto da un legame vecchio (v. ``result_of``).
-        "legacySection": legacy_section(job.payload.board) if job.payload.board else None,
         "why": job.payload.why,
         "condition": job.payload.condition,
     }

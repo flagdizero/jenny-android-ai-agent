@@ -191,9 +191,6 @@ def locale(name: str) -> dict:
 
 def i18n_helpers() -> str:
     """Per un ``i18n`` finto: il ``tOr`` vero di ``shared/i18n.js``, da mettere
-    dentro l'oggetto (``const i18n = { t, ...tOr }``), e la riga che definisce
-    ``tr`` accanto. Il codice dei gusci usa tutti e due dal 03/11/2026."""
+    dentro l'oggetto (``const i18n = { t, ...tOr }``). Il codice dei gusci lo usa
+    dal 03/11/2026."""
     return member((ASSETS / "shared" / "i18n.js").read_text(encoding="utf-8"), "tOr")
-
-
-I18N_TR = "const tr = (key, params) => i18n.t(key, params);"

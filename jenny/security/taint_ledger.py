@@ -139,9 +139,7 @@ class TaintLedger:
     def _db(self):
         from jenny import db
 
-        database = db.database_for_workspace(self._root, db.STATE)
-        database.require(SCHEMA)
-        return database
+        return db.store_database(self._root, db.STATE, SCHEMA)
 
     def _save(self) -> None:
         """Il registro in memoria al posto di quello salvato (al più ``_MAX_ENTRIES`` righe)."""

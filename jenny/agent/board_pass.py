@@ -193,8 +193,18 @@ class BoardPass:
         return model.first_board_hold(board) is None
 
     def _rested(self, minutes: int) -> bool:
+        """La bacheca ha riposato abbastanza dall'ultima passata.
+
+        Un ``lastPassAt`` nel futuro (un orologio corso avanti, un salto di
+        fuso) vale «non lo so», cioè riposata: letto come «appena girata»
+        fermava la passata finché l'orologio non lo raggiungeva — la stessa
+        trappola che ``gardener_schedule._age_seconds`` chiude per il giardiniere.
+        """
         last = model.parse_iso((self.board or {}).get("lastPassAt"))
-        return last is None or self.now - last >= timedelta(minutes=minutes)
+        if last is None:
+            return True
+        age = self.now - last
+        return age < timedelta(0) or age >= timedelta(minutes=minutes)
 
     def reason(self, journal_lines: int = 0) -> str | None:
         """Perché questa passata deve girare, o ``None`` se non c'è niente da fare.
@@ -460,8 +470,7 @@ async def run_board_pass(
     *reporter* e' il ``WorkReporter`` della bolla di lavoro, se qualcuno aspetta
     la passata: riceve il progresso e i riprova del turno, al posto del silenzio.
     """
-    from jenny.agent.internal_run import internal_run_completed
-    from jenny.session.turn_visibility import silent_progress
+    from jenny.agent.internal_run import internal_run_completed, run_internal_turn
 
     t0 = time.monotonic()
     bp = BoardPass(store.root, store.workspace)
@@ -475,13 +484,9 @@ async def run_board_pass(
     for tool in build_board_tools(state):
         tools.register(tool)
     try:
-        resp = await agent.process_direct(
-            bp.build_prompt(state, journal),
-            session_key=session_key,
-            ephemeral=True,
-            tools=tools,
-            on_progress=reporter.on_progress if reporter is not None else silent_progress,
-            on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
+        resp = await run_internal_turn(
+            agent, bp.build_prompt(state, journal), session_key=session_key, tools=tools,
+            reporter=reporter,
         )
     except Exception as exc:  # noqa: BLE001 — l'esito viaggia nell'outcome
         logger.exception("board pass over {} failed: {}", store.name, exc)

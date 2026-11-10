@@ -7,13 +7,10 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from jenny.utils.locations import STATE_ENTRY_DIR
+
 _HASH_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 
-# Dove lo stato in SQLite entra in uno snapshot (``jenny/db/shards``): voci di
-# manifest come le altre, che però non sono file del workspace. Il motore non
-# traccia mai un file vero con questo nome, e i conteggi mostrati non le
-# contano.
-STATE_ENTRY_DIR = ".jenny-state"
 
 
 def is_state_entry(path: str) -> bool:

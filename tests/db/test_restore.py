@@ -25,9 +25,9 @@ from jenny.db.restore import PRE_RESTORE_SUFFIX, UNDO_OBJECTS_DIR_NAME
 from jenny.db.schema import Schema
 from jenny.snapshot.backup import BACKUP_STATE_ENTRY, BackupError, BackupManager
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
 from jenny.snapshot.restore_marker import apply_pending_restore, write_marker
 from jenny.snapshot.service import SnapshotService
+from jenny.utils.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
 
 _KV = Schema("kv", ("CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT);",))
 

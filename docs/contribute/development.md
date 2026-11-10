@@ -26,7 +26,7 @@ cd jenny
 pip install -e ".[dev]"
 ```
 
-That is what CI installs. The `dev` extra in `pyproject.toml` pins, to exact versions, pytest, pytest-asyncio and ruff plus three test-only packages. Two of them are **not optional if you intend to run the suite**:
+That is what CI installs. The `dev` extra in `pyproject.toml` pins, to exact versions, pytest, pytest-asyncio, pytest-xdist (which runs the suite on several processes, `pytest -n auto`) and ruff plus three test-only packages. Two of them are **not optional if you intend to run the suite**:
 
 - `cryptography` — the encrypted-backup tests. On Android backup crypto uses `javax.crypto` instead, so this must never end up in `requirements-android.txt` / `requirements-android.lock.txt`.
 - `asyncssh` — the desktop SSH backend raises an in-process server for the suite. Without it the SSH suites do not run: `test_ssh.py`, `test_ssh_jobs.py` and `test_ssh_backend_dev.py` (and one test in `test_ssh_api.py`) call `pytest.importorskip("asyncssh")` and **skip**, so nothing fails and the suite stays green while the SSH coverage quietly disappears. On Android the client is jsch through a native bridge, so the same rule applies: never in the Android requirements.
@@ -67,7 +67,7 @@ The high-level data flow: an async `MessageBus` (`jenny/bus/queue.py`) decouples
 
 Several large classes are decomposed into focused mixins/leaf modules composed via MRO, with behavior kept identical to a monolithic version — this is a structural pattern worth knowing before you go looking for a method and can't find it on the class you expected:
 
-- `AgentLoop` ← `turn_states` / `turn_persistence` / `loop_provider` / `loop_tasks` (+ `turn_types`)
+- `AgentLoop` ← `turn_states` / `turn_persistence` / `loop_provider` / `loop_tasks` / `loop_plan` (+ `turn_types`)
 - `AgentRunner` ← `request_execution` / `tool_execution` (+ `context_governor`, `usage_accounting`, `history_repair`, `tool_error_policy`)
 - `OpenAICompatProvider` ← `openai_compat_parsing` (+ `openai_compat_helpers`)
 - `AnthropicProvider` ← `anthropic_conversion`

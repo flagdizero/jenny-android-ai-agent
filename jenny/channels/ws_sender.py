@@ -24,6 +24,8 @@ from jenny.bus.events import (
     OUTBOUND_META_WORK_ID,
     OUTBOUND_META_WORK_START,
     OUTBOUND_META_WORK_STATUS,
+    WEBUI_DEFAULT_CHAT_ID,
+    WEBUI_TURN_METADATA_KEY,
     OutboundMessage,
 )
 from jenny.channels.subagent_activity_wire import (
@@ -39,7 +41,6 @@ from jenny.channels.subagent_activity_wire import (
 )
 from jenny.config.runtime_env import ws_send_timeout_s
 from jenny.runtime.notifier import notify_delivery
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID, WEBUI_TURN_METADATA_KEY
 
 # Timeout wall-clock per un singolo `connection.send()`. Modulo-level (non
 # per-call) così i test possono monkeypatchare `ws_sender._SEND_TIMEOUT_S` con

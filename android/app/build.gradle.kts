@@ -281,7 +281,7 @@ dependencies {
     // WorkManager richiede compileSdk 35, qui siamo a 34.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
-    // SPIKE SSH — client SSH nativo. jsch e puro Java e client-only.
+    // Client SSH nativo (SshBridge.kt). jsch e puro Java e client-only.
     // BouncyCastle NON e opzionale su Android: X25519 e entrato in Conscrypt
     // solo con Android 14 e qui il minSdk e 26, quindi senza BC lo scambio di
     // chiavi curve25519-sha256 (quello che ogni server moderno negozia) e

@@ -770,10 +770,10 @@ def _boot(workspace: Path, host: FakeHost) -> PlanDriver:
     return fresh
 
 
-async def test_death_between_the_files_and_plan_json_is_finished_at_boot(
+async def test_death_between_the_files_and_the_plan_row_is_finished_at_boot(
     workspace: Path, host: FakeHost, bus: FakeBus, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jenny.plan import driver as driver_mod
+    from jenny.plan import driver_rollback as driver_mod
 
     first = PlanDriver(PlanStore.for_workspace(workspace), bus, host)
     plan = await _finished(first, workspace)
@@ -782,9 +782,9 @@ async def test_death_between_the_files_and_plan_json_is_finished_at_boot(
     original = driver_mod.apply_transition
 
     def _killed(p: Any, wanted: str, **kw: Any) -> Any:
-        # Il gateway muore proprio mentre scrive ``plan.json``: i file sono già rimessi.
+        # Il gateway muore proprio mentre scrive la riga del piano: i file sono già rimessi.
         if wanted == "rolled_back":
-            raise KeyboardInterrupt("gateway killed before plan.json")
+            raise KeyboardInterrupt("gateway killed before the plan row")
         return original(p, wanted, **kw)
 
     monkeypatch.setattr(driver_mod, "apply_transition", _killed)
@@ -826,7 +826,7 @@ async def test_a_boot_after_a_finished_rollback_changes_nothing(
 async def test_death_mid_undo_is_finished_at_boot(
     driver: PlanDriver, workspace: Path, host: FakeHost, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jenny.plan import driver as driver_mod
+    from jenny.plan import driver_rollback as driver_mod
 
     plan = await _finished(driver, workspace)
     nb = workspace / "wikis" / "piante"
@@ -837,7 +837,7 @@ async def test_death_mid_undo_is_finished_at_boot(
 
     def _killed(p: Any, wanted: str, **kw: Any) -> Any:
         if kw.get("event") == "rollback_undone":
-            raise KeyboardInterrupt("gateway killed before plan.json")
+            raise KeyboardInterrupt("gateway killed before the plan row")
         return original(p, wanted, **kw)
 
     monkeypatch.setattr(driver_mod, "apply_transition", _killed)

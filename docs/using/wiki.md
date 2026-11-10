@@ -73,9 +73,8 @@ a chip with that card's name and opens its drawer, and a dotted link to a page
 that is on no card opens a short preview. Back from a page returns to the drawer
 you opened it from. See [Pages, from a drawer](./board.md#pages-from-a-drawer).
 
-Mermaid diagrams are the one place in Jenny's UI where they render as diagrams:
-a fenced ` ```mermaid ` block in a wiki page is drawn. Chat replies do not render
-Mermaid at all — see [Chat basics](chat.md). LaTeX renders here too, including
+Mermaid diagrams render as diagrams: a fenced ` ```mermaid ` block in a wiki page
+is drawn, as it is in a chat reply — see [Chat basics](chat.md). LaTeX renders here too, including
 `$inline$` maths, which chat deliberately leaves alone (there a `$` is a price).
 
 ## Fixing a page yourself

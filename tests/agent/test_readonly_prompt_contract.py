@@ -108,7 +108,7 @@ _READONLY_RULES: tuple[tuple[str, str, str], ...] = (
         "chi può riaccenderla",
         "la terza strada è chiedere di nuovo: senza dire di chi è l'interruttore, il "
         "modello lo chiede due volte",
-        "switch above the composer",
+        "is the user's move",
     ),
     (
         "leggere resta intatto",

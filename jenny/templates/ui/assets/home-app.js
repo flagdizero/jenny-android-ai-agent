@@ -447,6 +447,12 @@ class HomeApp {
        niente quando torna — prima riportava a schermo il modello e il nome di
        prima del salvataggio. */
     this._settingsGen = 0;
+    /* Il modello che risponde adesso, se un `/model` (o un salvataggio) l'ha
+       cambiato dopo l'avvio: `runtime_model_updated`. Un preset cambia il
+       modello a runtime senza scrivere `config.json`, quindi `/api/settings`
+       continua a dire quello di prima: questo ci si posa sopra a ogni
+       ridisegno (v. `_withRuntimeModel`). */
+    this._runtimeModel = null;
     this._running = false;
 
     /* Il cassetto, cioe' la pagina App: costruito subito perche' il suo
@@ -588,6 +594,7 @@ class HomeApp {
       this._readSubagents(e.detail);
       this._readWork(e.detail);
       this._readBoardChanged(e.detail);
+      this._readRuntimeModel(e.detail);
       this.staged.handleFrame(e.detail);
       this.plan.handleFrame(e.detail);
       this.chat.handleFrame(e.detail);
@@ -1294,7 +1301,7 @@ class HomeApp {
     this.jennyRoom.setName(data ? data.agent?.bot_name || '' : null);
     if (data) this._applyBotName(data.agent?.bot_name);
     this.you.sayJenny(this.jennyRoom.value());
-    this.modelRoom.setSettings(data);
+    this.modelRoom.setSettings(this._withRuntimeModel(data));
     this.you.sayModel(this.modelRoom.value());
     this.updatesRoom.setVersion(data?.version || null);
     this.you.sayUpdates(this.updatesRoom.value());
@@ -2788,6 +2795,42 @@ class HomeApp {
   _readBoardChanged(msg) {
     if (msg?.event !== 'board_changed' || !msg.notebook) return;
     this.board?.refreshNotebook(msg.notebook);
+  }
+
+  /* `runtime_model_updated`: chi risponde e' cambiato (un `/model`, un
+     salvataggio dall'officina). Non e' di una conversazione: lo manda il
+     gateway a tutte le connessioni, come all'officina (`mobile-chat.js`).
+     Si ridisegna da quel che si sa gia', senza richiedere `/api/settings`:
+     direbbe il modello del file, non quello che risponde. */
+  _readRuntimeModel(msg) {
+    if (msg?.event !== 'runtime_model_updated') return;
+    const model = typeof msg.model_name === 'string' ? msg.model_name.trim() : '';
+    if (!model) return;
+    this._runtimeModel = {
+      provider: msg.provider || this._runtimeModel?.provider || null,
+      model,
+    };
+    this._settings?.then?.((data) => {
+      if (!data) return;
+      this.modelRoom.setSettings(this._withRuntimeModel(data));
+      this.you.sayModel(this.modelRoom.value());
+    });
+  }
+
+  /* Il payload di `/api/settings` con sopra il modello che risponde adesso.
+     Un provider che la config non conosce non si posa: un modello suo sotto
+     la marca di un altro direbbe una cosa che non esiste. La cache non si
+     tocca — e' quel che dice il server, e una copia basta. */
+  _withRuntimeModel(data) {
+    const runtime = this._runtimeModel;
+    if (!data || !runtime) return data;
+    const providers = data.providers || [];
+    if (runtime.provider && !providers.some((p) => p.name === runtime.provider)) return data;
+    return {
+      ...data,
+      default_provider: runtime.provider || data.default_provider,
+      agent: { ...(data.agent || {}), model: runtime.model },
+    };
   }
 
   /* `goal_status` dice se un turno sta girando: e' quel che trasforma il

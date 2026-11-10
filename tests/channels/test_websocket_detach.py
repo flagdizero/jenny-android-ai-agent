@@ -20,9 +20,8 @@ import websockets
 from port_alloc import free_port, wait_listening
 from support.ws_channel import make_ws_channel
 
-from jenny.bus.events import OutboundMessage
+from jenny.bus.events import WEBUI_DEFAULT_CHAT_ID, OutboundMessage
 from jenny.channels.websocket import WebSocketChannel
-from jenny.webui.metadata import WEBUI_DEFAULT_CHAT_ID
 
 
 def _channel(port: int | None = None) -> WebSocketChannel:

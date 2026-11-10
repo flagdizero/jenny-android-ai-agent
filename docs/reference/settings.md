@@ -7,7 +7,7 @@ Settings lives in two places:
 - The home's **Settings** page, for the everyday choices: the theme, **Who answers**, **Jenny**, **Updates** and **Backup**. At the bottom of that page a **Workshop** row ("watch, tune, repair") opens the second place.
 - The **workshop**, whose dock has four entries: **Console** and three drawers, **Brain**, **Hands** and **Memory**. Each drawer is a list of named groups, always open, and a few rows in them open a panel of their own when tapped (a provider, an SSH host, Telegram, Skills, Local history, the memory budgets).
 
-There is no global Save button. Most controls save as soon as you change them and confirm with a toast. The theme and the mascot's visibility and size live entirely on the device and never touch `config.json`: those are called out below.
+There is no global Save button. Most controls save as soon as you change them and confirm with a toast. The theme and the mascot's size live entirely on the device and never touch `config.json`: those are called out below.
 
 ## How saving works
 
@@ -27,7 +27,7 @@ Most controls take effect the moment you use them. These ask you to confirm firs
 - **Replacing a host key that changed**, which asks **twice**: once in the side-by-side dialog showing the old and new fingerprints, and again in a plain confirmation. That is deliberate: a changed key is treated as a possible man-in-the-middle, not as an update.
 - **Setting the Dream review cadence below 12** (see [Memory](#memory)).
 
-**One silent restart:** changing the assistant's name flips a `requires_restart` flag on the backend, but the **Her name** Save button only says "Saved". If you rename her and she still introduces herself with the old name, restart Jenny. The other fields that flip that flag (timezone, bot icon, `tool_hint_max_length`) have no control in either screen.
+**Renaming her needs no restart:** her name is read from `config.json` each time it is used, so the next turn and the next notification already carry the new one. The fields that do flip the backend's `requires_restart` flag (timezone, bot icon, `tool_hint_max_length`) have no control in either screen.
 
 ## The home's Settings page
 
@@ -42,7 +42,7 @@ Most controls take effect the moment you use them. These ask you to confirm firs
 
 There is no language setting. The interface follows the phone's language (Italian or English, English for anything else).
 
-The theme, and the mascot's visibility and size, live in the WebView's `localStorage` on this device. They are **not** part of `config.json` and are **not** included in encrypted backups. Reinstalling the app, or clearing its data, resets them to their defaults.
+The theme, and the mascot's size, live in the WebView's `localStorage` on this device. They are **not** part of `config.json` and are **not** included in encrypted backups. Reinstalling the app, or clearing its data, resets them to their defaults.
 
 ### Who answers
 
@@ -165,12 +165,11 @@ If no usage has been recorded yet, the block shows "No usage data yet" instead o
 
 | Field | Range | Default |
 |---|---|---|
-| Search engine | dropdown | bing |
-| Max results | 1 – 10 | 5 |
+| Max results | 1 – 10 | 8 |
 | Timeout (sec) | 1 – 120 | 15 |
-| Fetch max chars | 1000 – 200000 | 50000 |
+| Fetch max chars | 1000 – 200000 | 12000 |
 
-The Search engine dropdown looks like a choice but has exactly one working option: the on-device web search tool only supports Bing, and the backend rejects any other value. All four fields save together.
+There is no search-engine choice: the on-device web search tool only supports Bing. All three fields save together.
 
 ### Location
 

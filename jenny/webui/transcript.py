@@ -48,7 +48,6 @@ from jenny.webui.transcript_store import (
 )
 
 WEBUI_TRANSCRIPT_SCHEMA_VERSION = 3
-_WEBUI_FORK_MARKER_EVENT = "fork_marker"
 _DEFAULT_TRANSCRIPT_PAGE_LIMIT = 160
 _MAX_TRANSCRIPT_PAGE_LIMIT = 1000
 
@@ -543,15 +542,6 @@ def _inject_missing_user_events_from_session(
     return out
 
 
-def _fork_boundary_message_count(lines: list[dict[str, Any]]) -> int | None:
-    """Return the replayed UI message count before the first fork marker, if any."""
-    for idx, rec in enumerate(lines):
-        if rec.get("event") != _WEBUI_FORK_MARKER_EVENT:
-            continue
-        return len(replay_transcript_to_ui_messages(lines[:idx]))
-    return None
-
-
 def _has_pending_tool_calls(lines: list[dict[str, Any]]) -> bool:
     """Return True when the selected transcript tail looks like an unfinished turn."""
     for rec in reversed(lines):
@@ -570,8 +560,6 @@ def _has_pending_tool_calls(lines: list[dict[str, Any]]) -> bool:
             "file_edit",
         }:
             return True
-        if ev in {_WEBUI_FORK_MARKER_EVENT}:
-            continue
     return False
 
 
@@ -614,7 +602,6 @@ def build_webui_thread_response(
             "page": {"has_more_before": False, "loaded_message_count": 0},
         }
     lines = _inject_missing_user_events_from_session(session_key, lines, session_messages)
-    fork_boundary = _fork_boundary_message_count(lines)
     msgs = replay_transcript_to_ui_messages(
         lines,
         augment_user_media=augment_user_media,
@@ -630,6 +617,4 @@ def build_webui_thread_response(
     if page is not None:
         page["loaded_message_count"] = len(msgs)
         payload["page"] = page
-    if fork_boundary is not None:
-        payload["fork_boundary_message_count"] = fork_boundary
     return payload

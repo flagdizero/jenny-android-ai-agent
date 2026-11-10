@@ -49,14 +49,13 @@ from jenny.agent.dream_cycle import (
 )
 from jenny.agent.dream_review import STATUS_COMPLETED, STATUS_FAILED
 from jenny.agent.tools.file_state import FileStates
-from jenny.bus.events import InboundMessage
+from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY, InboundMessage
 from jenny.command.builtin import register_builtin_commands
 from jenny.command.router import CommandContext, CommandRouter
 from jenny.config.schema import Config
 from jenny.runtime.cron_dispatch import CronDispatcher
 from jenny.runtime.notifier import alert_fields
 from jenny.runtime.user_text import say
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY
 
 _REVIEW_TARGET = "jenny.agent.dream_review.run_dream_review"
 

@@ -32,7 +32,7 @@ def _now_ms() -> int:
 
 
 def _service(tmp_path, on_job) -> CronService:
-    service = CronService(tmp_path / "cron" / "jobs.json", on_job=on_job)
+    service = CronService(tmp_path / "workspace", on_job=on_job)
     service._arm_timer = lambda: None  # type: ignore[method-assign]
     service._running = True
     service._load_store()

@@ -101,7 +101,7 @@ function makeChat() {
     _initialHistoryLoaded: false,
     _loadingInitialHistory: false,
     _resetStreamState() {},
-    _clearGoalBanner() {},
+    _clearRunBanner() {},
     /* La riga «storia non caricata» non è oggetto di questi test: qui interessa
        *chi* disegna, non cosa. Che la riga compaia solo per la conversazione
        aperta — cioè che non litighi con la generazione — sta in
@@ -142,12 +142,8 @@ function makeChat() {
     mount() {},
     label: () => 'i18n:chat.loadPrevious',
   });
-  /* Gli stessi nomi di prima: li legge il resync e li scrivono i test. */
+  /* Gli stessi nomi di `ChatController`: li legge il resync e li scrivono i test. */
   Object.defineProperties(chat, {
-    historyCursor: {
-      get: () => chat._pager.cursor,
-      set: (v) => { chat._pager.cursor = v || null; },
-    },
     hasMoreHistory: {
       get: () => chat._pager.hasMore,
       set: (v) => { chat._pager.hasMore = !!v; },
@@ -243,7 +239,7 @@ def test_the_overtaken_switch_loses_even_when_it_answers_last() -> None:
                    "l'interruttore di sola lettura è per conversazione: seguirebbe l'altra");
       assert.equal(sessionManager.currentScope?.project_path, '/w/projects/bordi',
                    'il campo condiviso è quel che legge il popover Info sessione');
-      assert.equal(chat.historyCursor, 'b-1',
+      assert.equal(chat._pager.cursor, 'b-1',
                    'il cursore di paginazione è dell\\'altra conversazione');
     """)
 
@@ -272,7 +268,7 @@ def test_three_taps_and_scrambled_answers_still_leave_the_last_one() -> None:
       assert.deepEqual(chat.rendered, ['da tre']);
       assert.equal(scopeChip.scope?.project_path, '/w/projects/tre');
       assert.equal(sessionManager.currentScope?.project_path, '/w/projects/tre');
-      assert.equal(chat.historyCursor, 't-1');
+      assert.equal(chat._pager.cursor, 't-1');
     """)
 
 
@@ -336,7 +332,7 @@ def test_a_page_of_old_history_is_not_pasted_onto_another_conversation() -> None
     _run_js("""
       const chat = makeChat();
       chat._initialHistoryLoaded = true;
-      chat.historyCursor = 'c-1';
+      chat._pager.cursor = 'c-1';
       chat.rendered = ['recente'];
 
       // Il percorso vero: lo scroll infinito chiama il pager (`bindInfiniteScroll`).

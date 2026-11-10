@@ -34,6 +34,8 @@
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
+import { el, icon } from './shared/dom.js';
+import { closeActionSheet, openActionSheet, sheetHead, sheetRow } from './shared/sheet.js';
 import { AppState } from './shared/state.js';
 import { renderMarkdown } from './shared/markdown.js';
 import { stagedSources } from './home-staged.js';
@@ -155,17 +157,6 @@ function lastHistoryAt(plan, events) {
   return hit?.at || null;
 }
 
-const el = (tag, cls, text) => {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text != null) node.textContent = text;
-  return node;
-};
-const icon = (name, cls = '') => {
-  const i = el('i', `ti ${name}${cls ? ` ${cls}` : ''}`);
-  i.setAttribute('aria-hidden', 'true');
-  return i;
-};
 /* Un testo con un pezzo in grassetto al posto di `{bold}`: i pezzi a mano,
    mai `innerHTML`, perche' titoli e note li scrive il modello. */
 function withBold(template, bold) {
@@ -978,7 +969,7 @@ export class HomePlan {
     const meta = this._meta(plan);
     if (meta) parts.push(meta);
     if (LIVE_STATUSES.has(plan.status)) parts.push(this._bar(plan));
-    if (plan.status === 'proposed') parts.push(this._photoLine());
+    if (plan.status === 'proposed') parts.push(this._startLine());
     if (plan.status === 'done' || plan.status === 'stopped') {
       const sum = this._summary(plan);
       if (sum) parts.push(sum);
@@ -1141,9 +1132,9 @@ export class HomePlan {
     }
     if (LIVE_STATUSES.has(plan.status)) {
       const at = clockOf(historyAt(plan, ['approved', 'started']));
-      const span = el('span', 'home-plan-photo');
-      span.appendChild(icon('ti-camera'));
-      span.append(at ? t('photoTaken', { time: at }) : t('photoTakenNoTime'));
+      const span = el('span', 'home-plan-start');
+      span.appendChild(icon('ti-flag'));
+      span.append(at ? t('startTaken', { time: at }) : t('startTakenNoTime'));
       meta.appendChild(span);
       return meta;
     }
@@ -1235,10 +1226,10 @@ export class HomePlan {
     return box;
   }
 
-  _photoLine() {
-    const line = el('div', 'home-plan-note home-plan-photo-line');
-    line.appendChild(icon('ti-camera'));
-    line.appendChild(withBold(t('photoLine'), t('photoWord')));
+  _startLine() {
+    const line = el('div', 'home-plan-note home-plan-start-line');
+    line.appendChild(icon('ti-flag'));
+    line.appendChild(withBold(t('startLine'), t('startWord')));
     return line;
   }
 
@@ -2043,20 +2034,11 @@ export class HomePlan {
 
   /* ── I fogli ─────────────────────────────────────────────────────────── */
 
+  /* Il disegno (maniglia, ✕, righe) e' quello della casa, `shared/sheet.js`;
+     qui restano le due cose solo del piano: l'ora d'apertura, che il tocco sul
+     velo guarda, e il fuoco tolto al campo. */
   _openSheet(children, cls = '') {
     if (!this.sheet) return null;
-    this.sheet.className = `oc-sheet home-plan-sheet ${cls}`.trim();
-    const grab = el('div', 'home-plan-sheet-grab');
-    /* Una X visibile: i fogli che si guardano e basta (cosa ha fatto un passo,
-       le modifiche, il piano completo) non hanno un Annulla, e il velo e
-       Indietro non si vedono. */
-    const close = el('button', 'home-plan-sheet-close');
-    close.type = 'button';
-    close.dataset.planAction = 'sheet-close';
-    close.setAttribute('aria-label', t('sheetClose'));
-    close.appendChild(icon('ti-x'));
-    close.addEventListener('click', () => this.closeSheet());
-    this.sheetBody.replaceChildren(grab, close, ...children.filter(Boolean));
     this._sheetOpenedAt = Date.now();
     /* Chiudendo il foglio il browser rida' il fuoco a chi l'aveva prima: se era
        il campo, senza tastiera fisica si alza la tastiera a schermo sopra la
@@ -2068,31 +2050,17 @@ export class HomePlan {
     if (!this.sheet.open && input && document.activeElement === input && !this.keyboard()) {
       input.blur();
     }
-    if (!this.sheet.open) this.sheet.showModal();
-    return this.sheet;
+    return openActionSheet(this.sheet, {
+      children,
+      cls,
+      closeLabel: t('sheetClose'),
+      closeData: { planAction: 'sheet-close' },
+      onClose: () => this.closeSheet(),
+    });
   }
 
   closeSheet() {
-    if (this.sheet?.open) this.sheet.close();
-  }
-
-  _sheetHead(title, sub = '') {
-    const nodes = [el('h2', 'home-plan-sheet-title', title)];
-    if (sub) nodes.push(el('p', 'home-plan-sheet-sub', sub));
-    return nodes;
-  }
-
-  _row(glyph, label, sub, cls, action, run) {
-    const row = el('button', `home-plan-sheet-row ${cls || ''}`.trim());
-    row.type = 'button';
-    row.dataset.planAction = action;
-    row.appendChild(icon(glyph));
-    const text = el('span', 'home-plan-row-text');
-    text.append(el('span', null, label));
-    if (sub) text.appendChild(el('span', 'home-plan-row-sub', sub));
-    row.appendChild(text);
-    row.addEventListener('click', run);
-    return row;
+    closeActionSheet(this.sheet);
   }
 
   /* Un elenco di percorsi: «+» nuovi, matita cambiati, «−» tolti. */
@@ -2133,7 +2101,7 @@ export class HomePlan {
     parts.push(added + changed + removed
       ? t('stepSheet.counts', { added, changed, removed })
       : t('stepSheet.nothing'));
-    const children = [...this._sheetHead(t('stepSheet.title', { n, title: step.title || '' }), parts.join(' '))];
+    const children = [...sheetHead(t('stepSheet.title', { n, title: step.title || '' }), parts.join(' '))];
     if (step.note) children.push(el('p', 'home-plan-sheet-note', step.note));
     const machine = machineLine(step);
     if (machine) children.push(el('p', 'home-plan-sheet-note', machine));
@@ -2182,7 +2150,7 @@ export class HomePlan {
     const start = clockOf(historyAt(plan, ['approved', 'started']));
     const end = clockOf(plan.updated_at);
     const sub = start && end ? t('changes.sub', { start, end }) : t('changes.subNoTime');
-    return this._openSheet([...this._sheetHead(t('changes.title'), sub), box], 'is-changes');
+    return this._openSheet([...sheetHead(t('changes.title'), sub), box], 'is-changes');
   }
 
   /** Ferma: tre scelte, e la prima e' non fare niente. */
@@ -2192,21 +2160,21 @@ export class HomePlan {
     const { done, total } = this._progress(plan);
     const at = clockOf(historyAt(plan, ['approved', 'started']));
     const rows = [
-      this._row('ti-player-play', t('stopSheet.continue'), t('stopSheet.continueSub'), 'is-primary',
-        'continue', () => this.closeSheet()),
-      this._row('ti-player-stop', t('stopSheet.keep'), t('stopSheet.keepSub'), '', 'keep',
+      sheetRow('ti-player-play', t('stopSheet.continue'), t('stopSheet.continueSub'), 'is-primary',
+        () => this.closeSheet(), { planAction: 'continue' }),
+      sheetRow('ti-player-stop', t('stopSheet.keep'), t('stopSheet.keepSub'), '',
         () => {
           this.closeSheet();
           this._call('stop', { id: plan.id, then: 'keep' });
-        }),
-      this._row('ti-arrow-back-up', t('stopSheet.back'),
-        at ? t('stopSheet.backSub', { time: at }) : t('stopSheet.backSubNoTime'), 'is-danger', 'back',
+        }, { planAction: 'keep' }),
+      sheetRow('ti-arrow-back-up', t('stopSheet.back'),
+        at ? t('stopSheet.backSub', { time: at }) : t('stopSheet.backSubNoTime'), 'is-danger',
         () => {
           this.closeSheet();
           this._stop(plan, 'rollback');
-        }),
+        }, { planAction: 'back' }),
     ];
-    return this._openSheet([...this._sheetHead(t('stopSheet.title'), t('stopSheet.sub', { done, total })),
+    return this._openSheet([...sheetHead(t('stopSheet.title'), t('stopSheet.sub', { done, total })),
       ...rows], 'is-stop');
   }
 
@@ -2313,7 +2281,7 @@ export class HomePlan {
     counted();
     const at = clockOf(historyAt(plan, ['approved', 'started']));
     const sub = at ? t('rollbackSheet.sub', { time: at }) : t('rollbackSheet.subNoTime');
-    return this._openSheet([...this._sheetHead(t('rollbackSheet.title'), sub), box, actions], 'is-rollback');
+    return this._openSheet([...sheetHead(t('rollbackSheet.title'), sub), box, actions], 'is-rollback');
   }
 
   async _rollback(plan, keep, expectEnd) {
@@ -2423,7 +2391,7 @@ export class HomePlan {
       body.appendChild(ul);
     }
     return this._openSheet([
-      ...this._sheetHead(out?.title || plan.title || '', t('fullSheet.sub', { version: plan.version ?? 1 })),
+      ...sheetHead(out?.title || plan.title || '', t('fullSheet.sub', { version: plan.version ?? 1 })),
       body,
     ], 'is-full');
   }

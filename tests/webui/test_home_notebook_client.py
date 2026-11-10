@@ -481,7 +481,7 @@ def test_the_refusal_keys_exist_in_both_languages() -> None:
     for language in ("it", "en"):
         notebook = locale(language)["home"]["notebook"]
         for key in ("renameBusy", "renameTaken", "renameMissing", "renameFailed"):
-            assert notebook.get(key), f"{language}: casa.notebook.{key}"
+            assert notebook.get(key), f"{language}: home.notebook.{key}"
 
 
 def test_the_sheet_gets_its_rename_row_from_the_shell() -> None:

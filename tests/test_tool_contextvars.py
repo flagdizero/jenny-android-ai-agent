@@ -107,7 +107,7 @@ async def test_spawn_tool_keeps_task_local_context() -> None:
 
 @pytest.mark.asyncio
 async def test_cron_tool_keeps_task_local_context(tmp_path) -> None:
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = CronTool(CronService(tmp_path / "workspace"))
 
     result_one, result_two = await _race(
         tool,
@@ -246,7 +246,7 @@ async def test_spawn_tool_default_values_without_set_context() -> None:
 @pytest.mark.asyncio
 async def test_cron_tool_basic_set_context_and_execute(tmp_path) -> None:
     """Single task: set_context then add job should use correct target."""
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = CronTool(CronService(tmp_path / "workspace"))
     tool.set_context(
         RequestContext(channel="websocket", chat_id="user-789", session_key="websocket:user-789")
     )
@@ -258,7 +258,7 @@ async def test_cron_tool_basic_set_context_and_execute(tmp_path) -> None:
     assert len(jobs) == 1
     # Lo store tiene quel che il tool ha scritto; la lettura lo riporta alla
     # conversazione unica (``cron.service._load_session_key``).
-    assert saved_jobs(tmp_path / "jobs.json")[0]["payload"]["sessionKey"] == "websocket:user-789"
+    assert saved_jobs(tmp_path / "workspace")[0]["payload"]["sessionKey"] == "websocket:user-789"
     assert jobs[0].payload.origin_channel == "websocket"
     assert jobs[0].payload.origin_chat_id == "user-789"
 
@@ -280,7 +280,7 @@ async def test_webui_cron_job_is_attached_to_the_chat_but_runs_in_the_conversati
     (``origin_channel`` / ``origin_chat_id``, e i metadata con cui è nato), la
     sessione è quella in cui l'utente sta parlando.
     """
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = CronTool(CronService(tmp_path / "workspace"))
 
     class _Tools:
         tool_names = ["cron"]
@@ -311,7 +311,7 @@ async def test_webui_cron_job_is_attached_to_the_chat_but_runs_in_the_conversati
 @pytest.mark.asyncio
 async def test_cron_tool_preserves_thread_scoped_session_key(tmp_path) -> None:
     """Channel-provided thread session keys should remain the cron owner."""
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = CronTool(CronService(tmp_path / "workspace"))
     tool.set_context(
         RequestContext(
             channel="websocket",
@@ -328,7 +328,7 @@ async def test_cron_tool_preserves_thread_scoped_session_key(tmp_path) -> None:
     assert len(jobs) == 1
     # Lo store tiene quel che il tool ha scritto; la lettura lo riporta alla
     # conversazione unica (``cron.service._load_session_key``).
-    assert saved_jobs(tmp_path / "jobs.json")[0]["payload"]["sessionKey"] == "websocket:C123:1700.42"
+    assert saved_jobs(tmp_path / "workspace")[0]["payload"]["sessionKey"] == "websocket:C123:1700.42"
     assert jobs[0].payload.origin_channel == "websocket"
     assert jobs[0].payload.origin_chat_id == "C123"
     assert jobs[0].payload.origin_metadata == {"thread": {"thread_ts": "1700.42"}}
@@ -337,7 +337,7 @@ async def test_cron_tool_preserves_thread_scoped_session_key(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_cron_tool_no_context_returns_error(tmp_path) -> None:
     """Without set_context, add should fail with a clear error."""
-    tool = CronTool(CronService(tmp_path / "jobs.json"))
+    tool = CronTool(CronService(tmp_path / "workspace"))
 
     result = await tool.execute(action="add", message="test", every_seconds=60)
     assert result == "Error: scheduled cron jobs must be created from a chat session"

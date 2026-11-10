@@ -27,6 +27,24 @@ from typing import Any
 from loguru import logger
 
 
+async def run_internal_turn(
+    agent: Any, prompt: str, *, session_key: str, tools: Any, reporter: Any = None
+) -> Any:
+    """Il turno effimero di una passata interna (Dream, la sua revisione, il
+    giardiniere, la bacheca): con la cassetta della passata, e il progresso alla
+    bolla di lavoro se qualcuno la guarda, a nessuno altrimenti."""
+    from jenny.session.turn_visibility import silent_progress
+
+    return await agent.process_direct(
+        prompt,
+        session_key=session_key,
+        ephemeral=True,
+        tools=tools,
+        on_progress=reporter.on_progress if reporter is not None else silent_progress,
+        on_retry_wait=reporter.on_retry_wait if reporter is not None else None,
+    )
+
+
 def internal_run_completed(resp: object | None) -> bool:
     """Return True only when an ephemeral internal agent turn completed cleanly."""
     metadata = getattr(resp, "metadata", None)

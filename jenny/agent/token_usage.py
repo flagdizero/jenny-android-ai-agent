@@ -89,9 +89,7 @@ def _workspace() -> Path:
 def _db():
     from jenny import db
 
-    database = db.database_for_workspace(_workspace(), db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(_workspace(), db.STATE, SCHEMA)
 
 
 def default_token_usage_state() -> dict[str, Any]:
@@ -252,20 +250,6 @@ def read_token_usage_state() -> dict[str, Any]:
             logger.warning("token usage of {} unreadable, skipped", row["day"])
     updated = max((row["updated_at"] for row in rows), default=None)
     return normalize_token_usage_state({"days": days, "updated_at": updated})
-
-
-def write_token_usage_state(raw: dict[str, Any]) -> dict[str, Any]:
-    """*raw* al posto dei conti salvati, in una transazione."""
-    state = normalize_token_usage_state(raw)
-    state["updated_at"] = _utc_now_iso()
-    with _db().write() as conn:
-        conn.execute("DELETE FROM token_usage_days")
-        conn.executemany(
-            "INSERT INTO token_usage_days(day, updated_at, data) VALUES (?, ?, ?)",
-            [(day, state["updated_at"], json.dumps(row, ensure_ascii=False, sort_keys=True))
-             for day, row in state["days"].items()],
-        )
-    return state
 
 
 def _write_day(day: str, row: dict[str, Any]) -> None:

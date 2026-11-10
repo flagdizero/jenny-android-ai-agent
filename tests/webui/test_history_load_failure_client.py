@@ -124,7 +124,7 @@ function makeChat() {
     _resyncingThread: false,
     _autoScroll: true,
     _resetStreamState() {},
-    _clearGoalBanner() {},
+    _clearRunBanner() {},
     _ensureIdentity() {},
     /* Il bottone «mostra la conversazione precedente» non è oggetto di questi
        test, e il metodo vero misura l'altezza di un contenitore che qui non
@@ -160,13 +160,10 @@ function makeChat() {
     mount() {},
     label: () => 'i18n:chat.loadPrevious',
   });
-  /* Gli stessi nomi di prima: `isLoadingHistory` lo legge il resync, e i test
-     leggono il cursore per dire dove il caricamento e' arrivato. */
+  /* Gli stessi nomi di `ChatController`: `isLoadingHistory` lo legge il resync.
+     Il cursore i test lo leggono dal pager, per dire dove il caricamento e'
+     arrivato. */
   Object.defineProperties(chat, {
-    historyCursor: {
-      get: () => chat._pager.cursor,
-      set: (v) => { chat._pager.cursor = v || null; },
-    },
     hasMoreHistory: {
       get: () => chat._pager.hasMore,
       set: (v) => { chat._pager.hasMore = !!v; },
@@ -289,7 +286,7 @@ def test_the_reconnect_resync_retries_a_load_that_never_landed() -> None:
       assert.equal(errorRows().length, 0,
                    'la riga d\\'errore deve sparire quando la storia arriva');
       assert.equal(chat._initialHistoryLoaded, true);
-      assert.equal(chat.historyCursor, 'b-1');
+      assert.equal(chat._pager.cursor, 'b-1');
     """)
 
 

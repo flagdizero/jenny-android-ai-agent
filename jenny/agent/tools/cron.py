@@ -272,8 +272,9 @@ class CronTool(Tool, ContextAware):
         in_notebook_chat = is_project_session_key(self._session_key.get())
         # Un job e' fra le cose piu' durature che Jenny possa creare: sopravvive
         # al turno, alla conversazione e al riavvio. In sola lettura non si tocca
-        # niente; dalla chat di un quaderno resta la lettura dei suoi job.
-        if current_turn_is_readonly() and not (action == "list" and in_notebook_chat):
+        # niente. Leggere i job non scrive: l'elenco resta, in ogni chat (in una
+        # pianificazione personale Jenny deve poter vedere cosa è già programmato).
+        if current_turn_is_readonly() and action != "list":
             return READONLY_TOOL_REFUSAL
         notebook, root, err = self._target_notebook(kwargs.get("notebook"))
         if err:

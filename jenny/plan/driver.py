@@ -26,6 +26,13 @@ Chi chiama il driver:
 Il driver non conosce ``AgentLoop``: gli parla attraverso :class:`PlanHost`
 (``LoopPlanHost`` in produzione, un finto nei test).
 
+La classe è composta per responsabilità (mixin, come ``AgentLoop``): qui restano
+l'indice, i tool del modello, i ganci del loop, i comandi dell'utente e il boot;
+la pianificazione sta in ``driver_drafting.py``, i resoconti tenuti degli
+aiutanti in ``driver_held.py``, le bozze di un passo in ``driver_drafts.py``, il
+controllo a macchina in ``driver_check.py``, il ritorno indietro in
+``driver_rollback.py``; costanti e aiuti comuni in ``driver_common.py``.
+
 Le scritture del piano passano dallo store (una transazione ciascuna); qui
 sopra un ``asyncio.Lock`` per sessione serializza le transizioni,
 perché una transizione è fatta di più passaggi (conti, scrittura, messaggio) che
@@ -39,10 +46,9 @@ import asyncio
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 from loguru import logger
 
@@ -50,15 +56,60 @@ from jenny.bus.events import InboundMessage, OutboundMessage
 from jenny.plan import work
 from jenny.plan.audit import (
     Audit,
-    audit_notebook,
-    baseline_keys,
-    empty_folders,
-    remove_empty_folders,
     render_repair,
     summary_line,
-    wiki_texts,
 )
-from jenny.plan.facts import LostFacts, lost_facts
+from jenny.plan.driver_check import MachineCheckMixin
+from jenny.plan.driver_common import (
+    _APPROVED_MS,
+    _AUDIT_BASELINE,
+    _DRAFT_OUTCOMES,
+    _EMPTY_AT_START,
+    _GAPS_LISTED,
+    _KIND_ROLLBACK,
+    _KIND_UNDO,
+    _MACHINE,
+    _MAX_NOTE,
+    _NUDGE,
+    _PENDING_NOTE,
+    _PENDING_OUTCOME,
+    _PENDING_QUESTION,
+    _PENDING_REASON,
+    _REPORTING,
+    _RESUME_TO,
+    _RUNNING,
+    OPEN_GAPS_PATH,
+    PENDING_UNDO_KEY,
+    PlanCommandError,
+    PlanHost,
+    _block,
+    _cut,
+    _DraftsUnreadableError,
+    _find,
+    _HeldResults,
+    _Live,
+    _machine_view,
+    _step_now,
+    place_of,
+)
+from jenny.plan.driver_drafting import DraftingMixin
+from jenny.plan.driver_drafts import StepDraftsMixin
+from jenny.plan.driver_held import HELD_WAKE_TEXT, HeldResultsMixin
+from jenny.plan.driver_rollback import ROLLBACK_FAILED_KEY, RollbackMixin, card_report
+from jenny.plan.facts import LostFacts
+from jenny.plan.meta import (
+    PLAN_ANSWER_META,
+    PLAN_FOLLOWUP_META,
+    PLAN_ID_META,
+    PLAN_MODE_META,
+    PLAN_NOTES_META,
+    PLAN_PROPOSE_TOOL,
+    PLAN_REVISE_META,
+    PLAN_STEP_META,
+    PLAN_STEP_TOOLS,
+    PLAN_TOOL_NAMES,
+    PLAN_WAKE_META,
+)
 from jenny.plan.model import (
     HELD_STATUSES,
     OPEN_STATUSES,
@@ -69,8 +120,6 @@ from jenny.plan.model import (
     Step,
     apply_transition,
     current_step,
-    drafting_expired,
-    drafting_view,
     names_research_gaps,
     next_pending_step,
     now_iso,
@@ -79,8 +128,8 @@ from jenny.plan.model import (
     to_research_items,
     validate_proposal,
 )
-from jenny.plan.place import PlanPlace, notebook_place, place_from_id, place_of_session
-from jenny.plan.store import PlanConflictError, PlanNotFoundError, PlanStore, slot_id
+from jenny.plan.place import PlanPlace, place_from_id, place_of_session
+from jenny.plan.store import PlanConflictError, PlanNotFoundError, PlanStore
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     PLAN_DONE_EVENT,
@@ -89,35 +138,7 @@ from jenny.session.history_meta import (
     PLAN_TURN_EVENTS,
 )
 from jenny.session.keys import PROJECT_SESSION_PREFIX, is_project_session_key
-from jenny.utils.path import atomic_write
 
-#: I quattro tool del modello. Stanno qui perché a decidere quando si vedono è
-#: il driver (``AgentLoop`` chiede :meth:`PlanDriver.step_open`).
-PLAN_PROPOSE_TOOL = "plan_propose"
-PLAN_STEP_TOOLS: frozenset[str] = frozenset({"plan_step_done", "plan_step_skip", "plan_blocked"})
-PLAN_TOOL_NAMES: frozenset[str] = frozenset({PLAN_PROPOSE_TOOL, *PLAN_STEP_TOOLS})
-
-#: Metadati del messaggio: il turno di pianificazione (il tasto Piano), la
-#: revisione di una proposta, la risposta a un piano bloccato.
-PLAN_MODE_META = "plan_mode"
-PLAN_REVISE_META = "plan_revise"
-PLAN_ANSWER_META = "plan_answer"
-PLAN_ID_META = "plan_id"
-PLAN_STEP_META = "plan_step"
-#: Messo dal server su un turno della pianificazione in corso che il client
-#: non ha marcato (la risposta a una domanda di Jenny): il blocco del turno lo
-#: dice al modello, che non ricomincia da capo.
-PLAN_FOLLOWUP_META = "_plan_drafting_followup"
-
-#: Le note di sistema che il modello legge al turno dopo (un ritorno indietro):
-#: stanno nei metadati della sessione, e il loop le consuma nel contesto.
-PLAN_NOTES_META = "plan_notes"
-
-# Lo stato del promemoria di un passo, nell'``extra`` del passo: ``sent`` è
-# partito e il suo turno non è ancora finito, ``used`` è stato speso. Un solo
-# promemoria per tratto senza aiutanti: la lezione dei nove solleciti in 45
-# secondi è che uno sprone che si ripete non sblocca niente.
-_NUDGE = "nudge"
 _NUDGE_SENT = "sent"
 _NUDGE_USED = "used"
 
@@ -145,39 +166,12 @@ _RESEARCH_LINEAGES = "research_lineages"
 # Il conto sta nell'``extra`` del piano.
 _RESEARCH_ROUNDS = "research_rounds"
 MAX_RESEARCH_ROUNDS = 2
-# I buchi che restano alla chiusura di un passo (budget finito, o un passo che
-# non apre giri) non si ereditano: fino al 26/10 andavano al passo di controllo
-# — o all'ultimo passo qualunque fosse, e sul Titan «Riscrivi i drawer» ha
-# ricevuto 7 temi di ricerca — e lì si pagava un altro giro. Ora vanno in un
-# file del quaderno, che la pianificazione successiva legge, e nelle pagine come
-# «non documentato». Scritto nel registro del piano, col passo: il ritorno lo toglie.
-OPEN_GAPS_PATH = "raw/notes/open-gaps.md"
-_GAPS_LISTED = "gaps_listed"
 # Il cancello dei fatti persi di un passo ``delete``: uno per passo, come quello dei buchi.
 _LOST_GATE = "lost_gate"
 
 
-class _DraftsUnreadableError(Exception):
-    """Le bozze del quaderno non si leggono: chi decide una chiusura rifiuta e riprova."""
 
-# Il controllo a macchina del passo ``check`` (``jenny/plan/audit.py``),
-# nell'``extra`` del passo: il giro (1 all'apertura, 2 dopo il primo rifiuto),
-# cosa ha trovato, e alla chiusura cosa resta. Nell'``extra`` del piano, la base:
-# i difetti che il quaderno aveva all'Approva, che non sono lavoro del piano.
-_MACHINE = "machine_check"
-_AUDIT_BASELINE = "audit_baseline"
-_EMPTY_AT_START = "empty_folders_at_start"
-# I giri di riparazione al massimo: il secondo controllo accetta comunque, e
-# quel che resta lo dice la nota.
-_MAX_REPAIR_ROUNDS = 2
-# Le voci rimaste che la scheda mostra, al massimo.
-_MAX_LEFT_ITEMS = 12
 
-_RUNNING = frozenset({"running", "pausing"})
-# Gli stati in cui il resoconto di un aiutante del passo si registra: anche
-# fermo su una domanda, perché gli aiutanti partiti prima del ``plan_blocked``
-# rientrano lì, e scartarli perdeva i loro buchi (Titan, 26/10).
-_REPORTING = _RUNNING | frozenset({"blocked"})
 # I passi che non aprono mai un giro di ricerca: chi cancella o controlla non ha
 # pagine da riempire, e i «buchi» dei suoi aiutanti sono condizioni da sapere,
 # non lacune della wiki (Titan, 26/10: tre ricercatori dopo la cancellazione);
@@ -188,22 +182,7 @@ _NO_ROUND_KINDS = frozenset({"delete", "check", "research"})
 # che stava pianificando, non uno di domani.
 _CANCELLED_GRACE_S = 600.0
 
-# Un ritorno (o il suo annullamento) partito e non finito: nell'``extra`` del
-# piano, con l'errore. Il piano resta ``done``/``stopped`` (o ``rolled_back``),
-# perché il quaderno è a metà fra i due; la scheda lo legge da qui e Riprova è
-# sicuro, perché la regola a tre vie vede le operazioni già fatte come «già
-# com'era». Un ritorno riuscito lo toglie.
-ROLLBACK_FAILED_KEY = "rollback_failed"
 
-# I due versi di un ritorno, nell'intestazione del journal: il boot li rilegge
-# per portare il piano dove il ritorno l'avrebbe portato.
-_KIND_ROLLBACK = "rollback"
-_KIND_UNDO = "undo"
-# Il ritorno in corso, scritto nel piano prima di toccare un file: il registro in
-# cui annota, il tipo, i gruppi tenuti. Il boot lo chiude (:meth:`_recover_undo`).
-PENDING_UNDO_KEY = "pending_undo"
-# Quanti registri di ritorno il piano ha aperto: la chiave del prossimo.
-_UNDO_COUNT = "undo_count"
 
 # I segni della lista nel turno del passo e nel contesto: corti, e uguali ai
 # nomi degli stati della scheda.
@@ -221,20 +200,7 @@ _MARKS = {
 #: comunque. È la garanzia contro un aiutante lento ma vivo, che il watchdog
 #: non marca ``stalled``.
 HELD_WAKE_AFTER_S = 600.0
-#: Messo dal driver sul turno di risveglio: ``stalled`` (i fratelli rimasti sono
-#: tutti fermi) o ``timeout`` (il tetto di sopra). Il turno è un turno di passo
-#: (``PLAN_STEP_EVENT``): stessa verifica di freschezza, stessi tool.
-PLAN_WAKE_META = "plan_wake"
-#: Il testo del risveglio. Inglese, come ogni testo per il modello.
-HELD_WAKE_TEXT = (
-    "[Plan — helper results waiting]\n\n"
-    "{held} helper result(s) of the open step are waiting in the conversation above; "
-    "{running} helper(s) of this step still running, {stalled} of them without progress "
-    "for a while. Read the results now and decide how to continue the step: wait for the "
-    "others, continue or replace a stuck one, or close the step if it is done."
-)
 
-_MAX_NOTE = 500
 # La domanda di `plan_blocked` va sulla scheda intera: oltre il tetto si
 # rifiuta, mai si taglia. Fino al 26/10 era `[:1000]` muto, e sul Titan una
 # seconda domanda era sparita dalla scheda senza che Jenny o l'utente lo
@@ -243,91 +209,14 @@ _MAX_NOTE = 500
 _MAX_QUESTION = 4000
 _MAX_ANSWER = 8000
 
-# Nell'``extra`` di un passo fermo sulle sue bozze: come il modello l'ha chiuso
-# (``done``/``skipped``) e la sua nota, per chiuderlo così quando l'utente ha
-# deciso; e cosa ha deciso per ogni bozza, per la nota scritta dal codice.
-_PENDING_OUTCOME = "pending_outcome"
-_PENDING_NOTE = "pending_note"
-_DRAFT_OUTCOMES = "draft_outcomes"
-# Una domanda che aspetta dietro le bozze del passo, e il suo motivo.
-_PENDING_QUESTION = "pending_question"
-_PENDING_REASON = "pending_reason"
-# Lo stato a cui tornare quando il blocco si scioglie: ``pausing`` se l'utente
-# aveva chiesto la Pausa prima del blocco, o durante.
-_RESUME_TO = "resume_to"
-# Nell'``extra`` del piano: l'istante dell'Approva in millisecondi.
-_APPROVED_MS = "approved_ms"
 
 
-class PlanCommandError(PlanError):
-    """Un rifiuto per l'utente, con il codice che la RPC rimanda.
-
-    Codici: ``not_found``, ``conflict`` (il mondo si è mosso: una versione più
-    nuova, un quaderno cambiato dopo il conto del ritorno), ``busy`` (un turno
-    o un aiutante in volo), ``bad_state`` (non da questo stato),
-    ``bad_request``, ``plan_running`` (un piano più nuovo tiene il quaderno),
-    ``rollback_failed`` (il ritorno è partito e si è fermato a metà).
-    """
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
-class PlanHost(Protocol):
-    """Quel che il driver chiede all'agente. In produzione è ``LoopPlanHost``."""
-
-    def turn_in_flight(self, session_key: str) -> bool: ...
-
-    def running_helpers(self, session_key: str) -> frozenset[str] | None: ...
-
-    async def cancel(self, session_key: str) -> int: ...
-
-    def notebook_root(self, notebook: str) -> Path | None: ...
-
-    def append_note(self, session_key: str, text: str) -> None: ...
-
-    def notebook_drafts(self, notebook: str) -> list[dict[str, Any]]:
-        """Le bozze in attesa (``staged_writes``) con il file da cambiare nel quaderno.
-
-        Ognuna con ``id``, ``target`` (relativo alla radice delle bozze, come lo
-        mostra ``staged.list``) e ``created_ms``.
-        """
-        ...
-
-    def discard_draft(self, draft_id: str) -> bool:
-        """Butta una bozza in attesa. ``True`` se c'era."""
-        ...
 
 
-@dataclass
-class _Live:
-    """Una voce dell'indice in memoria: il piano aperto di una sessione."""
-
-    plan_id: str
-    notebook: str
-    status: str
-    step_now: bool
 
 
-@dataclass
-class _HeldResults:
-    """I resoconti di aiutanti di una sessione scritti in storia senza turno.
-
-    Il gruppo è ``(plan_id, plan_step)`` degli aiutanti: si tengono solo
-    resoconti dello stesso gruppo, finché un fratello ``running`` lavora. Gli id
-    restano qui fino al turno che li fa vedere a Jenny (``take_held_results``):
-    è lì che il loop li marca ``handled``.
-    """
-
-    plan_id: str | None
-    plan_step: str | None
-    task_ids: list[str]
-    first_at: float
-    timer: asyncio.Task[Any] | None = None
-    #: Il risveglio di sicurezza è già partito: non se ne pubblica un secondo.
-    woken: bool = False
 
 
 def slot_of(session_key: str | None) -> str | None:
@@ -336,9 +225,6 @@ def slot_of(session_key: str | None) -> str | None:
     return place.id if place is not None else None
 
 
-def _session_of_slot(slot: str) -> str:
-    place = place_from_id(slot)
-    return place.session_key if place is not None else ""
 
 
 def notebook_of(session_key: str | None) -> str | None:
@@ -361,11 +247,6 @@ def _position(plan: Plan, step_id: str) -> int:
     return 0
 
 
-def _step_now(plan: Plan) -> Step | None:
-    for step in plan.steps:
-        if step.status == "now":
-            return step
-    return None
 
 
 def _stamp_step(metadata: dict[str, Any], plan: Plan) -> None:
@@ -400,42 +281,19 @@ def _counts(diff: Mapping[str, list[str]]) -> dict[str, int]:
     return {key: len(diff.get(key, ())) for key in ("added", "changed", "removed")}
 
 
-OUTCOMES: tuple[str, ...] = ("restored", "removed", "already", "left", "kept", "excluded")
 
 
-def place_of(plan: Plan) -> PlanPlace:
-    return place_from_id(plan.place) or notebook_place(plan.notebook)
 
 
-def card_report(report: Any, place: PlanPlace) -> dict[str, Any]:
-    """Un resoconto d'annulla (``write_journal.UndoReport``) come lo legge la scheda.
-
-    Gli esiti per lista, coi percorsi come li mostra il posto, i conti, e i conti
-    per gruppo per le caselle («Tieni le 12 ricerche»).
-    """
-    outcomes = report.outcomes()
-    data: dict[str, Any] = {
-        outcome: [place.shown(p) for p in outcomes.get(outcome, ())] for outcome in OUTCOMES
-    }
-    data["counts"] = {outcome: len(outcomes.get(outcome, ())) for outcome in OUTCOMES}
-    data["dry_run"] = bool(report.dry_run)
-    groups: dict[str, dict[str, int]] = {}
-    group_of: dict[str, str] = {}
-    for outcome in OUTCOMES:
-        for path in outcomes.get(outcome, ()):
-            group = place.group_of(path)
-            group_of[place.shown(path)] = group
-            bucket = groups.setdefault(group, {})
-            bucket[outcome] = bucket.get(outcome, 0) + 1
-    data["groups"] = groups
-    # Per la scheda: il gruppo di ogni percorso (il conto si rifà quando l'utente
-    # spunta un gruppo) e quali gruppi si possono tenere, nell'ordine.
-    data["group_of"] = group_of
-    data["keepable"] = [g for g in groups if place.keepable(g)]
-    return data
 
 
-class PlanDriver:
+class PlanDriver(
+    DraftingMixin,
+    HeldResultsMixin,
+    RollbackMixin,
+    StepDraftsMixin,
+    MachineCheckMixin,
+):
     """L'unico che muove i piani. Vedi il docstring del modulo."""
 
     def __init__(
@@ -652,246 +510,6 @@ class PlanDriver:
     # l'annullamento (``plan.cancel_drafting``, il tasto spento, ``/stop``) o
     # dopo :data:`~jenny.plan.model.DRAFTING_TTL_HOURS` ore senza turni.
 
-    def drafting_for(self, session_key: str | None) -> dict[str, Any] | None:
-        """La pianificazione in corso della sessione, o ``None`` (scaduta = finita)."""
-        slot = self._slot(session_key)
-        if slot is None:
-            return None
-        entry = self._drafting.get(slot)
-        if entry is None or drafting_expired(entry):
-            return None
-        return entry
-
-    def drafting_info(self, slot: str) -> dict[str, Any] | None:
-        """``{since, revise, reads}`` per ``plan.get``, o ``None``. *slot*: un
-        posto, o il nome di un quaderno."""
-        entry = self._drafting.get(slot_id(slot))
-        if entry is None or drafting_expired(entry):
-            return None
-        return drafting_view(entry)
-
-    async def start_drafting(
-        self, session_key: str, revise: str | None = None, *, create: bool = True
-    ) -> None:
-        """Apre (o tiene viva) la pianificazione del quaderno della sessione.
-
-        Una pianificazione già aperta tiene il suo inizio e le sue letture: il
-        ``plan: true`` che il client rimanda a ogni messaggio non la azzera. Una
-        revisione chiesta adesso vince su quella di prima. Con ``create=False``
-        tocca solo una pianificazione che c'è: un turno che la continua non la
-        fa rinascere se intanto l'utente l'ha annullata.
-        """
-        slot = self._slot(session_key)
-        if slot is None:
-            return
-        if create:
-            # Una pianificazione nuova chiude il conto dell'annullamento di prima.
-            self._cancelled_drafting.pop(slot, None)
-        stamp = now_iso()
-        created: list[bool] = []
-
-        def _apply(entry: dict[str, Any] | None) -> dict[str, Any] | None:
-            if entry is None or drafting_expired(entry):
-                if not create:
-                    return None
-                created.append(True)
-                entry = {"since": stamp, "revise": None, "reads": 0, "helpers": []}
-            if revise:
-                entry["revise"] = revise
-            entry["touched"] = stamp
-            return entry
-
-        await self._update_drafting(slot, _apply)
-        if created:
-            logger.info("Plan drafting started in slot {}", slot)
-            await self._drafting_changed(slot)
-
-    async def _update_drafting(
-        self, slot: str, fn: Callable[[dict[str, Any] | None], dict[str, Any] | None]
-    ) -> dict[str, Any] | None:
-        """Scrive la voce di *slot* e ne allinea la copia in memoria.
-
-        Sotto un lock solo per tutte le pianificazioni: la scrittura sul file e
-        la copia in memoria vanno insieme, o un annullamento che arriva fra le
-        due lascerebbe in memoria una pianificazione che sul file non c'è più.
-        """
-        async with self._drafting_lock:
-            entry = await asyncio.to_thread(self.store.drafting_update, slot, fn)
-            if entry is None:
-                self._drafting.pop(slot, None)
-            else:
-                self._drafting[slot] = entry
-            return entry
-
-    async def note_read(self, session_key: str | None) -> None:
-        """Una lettura del quaderno durante la pianificazione (il pavimento di A2)."""
-        slot = self._slot(session_key)
-        if slot is None or self.drafting_for(session_key) is None:
-            return
-        stamp = now_iso()
-
-        def _apply(entry: dict[str, Any] | None) -> dict[str, Any] | None:
-            if entry is None:
-                return None
-            reads = entry.get("reads")
-            entry["reads"] = (reads if isinstance(reads, int) else 0) + 1
-            entry["touched"] = stamp
-            return entry
-
-        await self._update_drafting(slot, _apply)
-
-    async def note_helper(self, session_key: str | None, task_id: str) -> None:
-        """Un aiutante lanciato durante la pianificazione: il suo risultato conterà."""
-        slot = self._slot(session_key)
-        if slot is None or not task_id or self.drafting_for(session_key) is None:
-            return
-
-        def _apply(entry: dict[str, Any] | None) -> dict[str, Any] | None:
-            if entry is None:
-                return None
-            helpers = [h for h in entry.get("helpers") or () if isinstance(h, str)]
-            if task_id not in helpers:
-                helpers.append(task_id)
-            entry["helpers"] = helpers[-20:]
-            return entry
-
-        await self._update_drafting(slot, _apply)
-
-    async def note_helper_result(self, session_key: str | None, task_id: Any) -> bool:
-        """Il risultato di un aiutante: è una lettura solo se l'ha lanciato la pianificazione.
-
-        Un aiutante partito prima (magari un ``researcher`` di una chat di ieri)
-        che rientra adesso non ha guardato il quaderno per questo piano: non
-        conta, o basterebbe a superare il pavimento senza aver letto niente.
-        """
-        entry = self.drafting_for(session_key)
-        if entry is None or not isinstance(task_id, str):
-            return False
-        if task_id not in (entry.get("helpers") or ()):
-            return False
-        await self.note_read(session_key)
-        return True
-
-    async def end_drafting(self, session_key: str | None, reason: str) -> bool:
-        """Chiude la pianificazione della sessione. ``True`` se ce n'era una."""
-        slot = self._slot(session_key)
-        if slot is None:
-            return False
-        return await self._drop_drafting(slot, reason)
-
-    async def cancel_drafting(self, slot: str) -> bool:
-        """``plan.cancel_drafting``: l'utente ha spento il tasto o annullato.
-
-        Ferma anche il lavoro della pianificazione: il turno in volo e gli
-        aiutanti che ha lanciato. Il 25/10 sul telefono l'annullamento chiudeva
-        solo lo stato: il turno andava avanti, ``plan_propose`` lo rifiutava, e
-        Jenny («non è partita la modalità piano, così sono andata diretta»)
-        lanciava un editor che riscriveva l'indice senza nessuna approvazione.
-        *slot*: un posto, o il nome di un quaderno.
-        """
-        slot = slot_id(slot)
-        entry = self._drafting.get(slot) or {}
-        helpers = [h for h in entry.get("helpers") or () if isinstance(h, str)]
-        dropped = await self._drop_drafting(slot, "cancelled")
-        if dropped:
-            self._cancelled_drafting[slot] = time.monotonic()
-            await self._stop_drafting_work(slot, helpers)
-        return dropped
-
-    async def _stop_drafting_work(self, slot: str, helpers: list[str]) -> None:
-        """Il turno di pianificazione in volo e gli aiutanti suoi, non gli altri.
-
-        Gli altri aiutanti della chat (una ricerca chiesta prima del tasto Piano)
-        non sono della pianificazione e restano al lavoro: per questo non è
-        ``host.cancel``, che è ``/stop all``. Metodi facoltativi dell'ospite: un
-        ospite che non li ha (i test vecchi) annulla solo lo stato, come prima.
-        """
-        session_key = _session_of_slot(slot)
-        cancel_turn: Any = getattr(self.host, "cancel_turn", None)
-        cancel_helpers: Any = getattr(self.host, "cancel_helpers", None)
-        try:
-            if cancel_turn is not None and self.host.turn_in_flight(session_key):
-                await cancel_turn(session_key)
-            running = self.host.running_helpers(session_key) or frozenset()
-            mine = [h for h in helpers if h in running]
-            if mine and cancel_helpers is not None:
-                await cancel_helpers(mine)
-        except Exception:  # noqa: BLE001 — lo stato è già annullato: il resto è un aiuto
-            logger.opt(exception=True).warning(
-                "Plan drafting in {}: work not stopped", slot
-            )
-        logger.info(
-            "Plan drafting in {} cancelled: turn stopped, {} helper(s)",
-            slot, len(helpers),
-        )
-
-    async def _drop_drafting(
-        self, slot: str, reason: str, *, announce: bool = True
-    ) -> bool:
-        async with self._drafting_lock:
-            self._drafting.pop(slot, None)
-            removed = await asyncio.to_thread(self.store.drafting_remove, slot)
-        if removed is None:
-            return False
-        # Una voce scaduta è già finita per tutti (``drafting_for`` la ignora):
-        # toglierla è pulizia, ma la scheda la vedeva già spenta.
-        live = not drafting_expired(removed)
-        logger.info("Plan drafting in {} ended: {}", slot, reason)
-        if announce:
-            await self._drafting_changed(slot)
-        return live
-
-    async def _settle_drafting(self, session_key: str, metadata: dict[str, Any]) -> None:
-        """Prima di un turno dell'utente: apre, tiene viva o chiude la pianificazione.
-
-        Un messaggio col tasto Piano la apre, se non c'è. Ogni messaggio che
-        arriva mentre c'è — col tasto o senza: il client lo rimanda finché il
-        tasto è acceso — la continua: il turno diventa di pianificazione qui,
-        nei metadati del messaggio, così il filtro dei tool, il blocco del
-        prompt e la sola lettura dello scope lo vedono tutti allo stesso modo,
-        e il blocco dice al modello di andare avanti, non di ricominciare. Un
-        turno che la continua non la ricrea: se l'utente l'ha annullata nel
-        frattempo, resta annullata.
-        """
-        slot = self._slot(session_key)
-        if slot is None:
-            return
-        entry = self._drafting.get(slot)
-        if entry is not None and drafting_expired(entry):
-            await self._drop_drafting(slot, "expired")
-            entry = None
-        if self.held_status(session_key) is not None:
-            # Un piano partito tiene il quaderno: non si pianifica sopra di lui
-            # (``plan_propose`` lo rifiuterebbe), e una pianificazione rimasta
-            # aperta non deve rendere «di pianificazione» la risposta a un blocco.
-            if entry is not None:
-                await self._drop_drafting(slot, "plan running")
-            return
-        asked = metadata.get(PLAN_REVISE_META)
-        revise = asked if isinstance(asked, str) and asked else None
-        if entry is None:
-            if metadata.get(PLAN_MODE_META) is True:
-                await self.start_drafting(session_key, revise)
-            return
-        from jenny.security.workspace_access import WORKSPACE_READONLY_METADATA_KEY
-
-        metadata[PLAN_MODE_META] = True
-        metadata[WORKSPACE_READONLY_METADATA_KEY] = True
-        metadata[PLAN_FOLLOWUP_META] = True
-        kept = entry.get("revise")
-        if revise is None and isinstance(kept, str) and kept:
-            metadata[PLAN_REVISE_META] = kept
-        await self.start_drafting(session_key, revise, create=False)
-
-    async def _drafting_changed(self, slot: str) -> None:
-        """``plan_changed`` per l'inizio o la fine di una pianificazione.
-
-        ``plan_id`` è il piano aperto del quaderno, se c'è (una revisione), o
-        ``""``: il client rilegge comunque ``plan.get {slot}``.
-        """
-        live = self._index.get(_session_of_slot(slot))
-        await self._publish_changed(slot, live.plan_id if live is not None else "")
-
     # ── contesto del turno ─────────────────────────────────────────────────
 
     def runtime_lines(self, session_key: str | None) -> list[str]:
@@ -1030,7 +648,7 @@ class PlanDriver:
             followup=followup,
             reads=reads if isinstance(reads, int) else 0,
             notebook=notebook,
-            where="in this notebook" if notebook else "in the personal chat",
+            where=f"in {place.here}" if place is not None else "in this notebook",
         )
 
     # ── tool del modello ───────────────────────────────────────────────────
@@ -1057,10 +675,13 @@ class PlanDriver:
         slot = self._slot(session_key)
         if slot is None or session_key is None:
             return "Error: a plan can only be proposed inside a notebook chat or the personal chat."
+        place = self.place_of(session_key)
+        here = place.here if place is not None else "this notebook"
+        subject = place.subject if place is not None else "the notebook"
         held = self.held_status(session_key)
         if held is not None:
             return (
-                f"Not now: this notebook already has a plan that has started ({held}). "
+                f"Not now: {here} already has a plan that has started ({held}). "
                 "A new one can be proposed when that plan is done or stopped."
             )
         drafting = self.drafting_for(session_key)
@@ -1073,17 +694,16 @@ class PlanDriver:
                     "short sentence that the plan is cancelled, and wait for the user."
                 )
             return (
-                "Error: nobody is preparing a plan in this notebook now: the user starts it "
+                f"Error: nobody is preparing a plan in {here} now: the user starts it "
                 "with the Plan button. Do not propose a plan; answer the user."
             )
         if not drafting.get("reads") and not self._revises_a_plan_of(slot, drafting):
             return (
-                "Not yet: look at the notebook first: read the pages and sources this job "
+                f"Not yet: look at {subject} first: read the pages and sources this job "
                 "depends on (list_dir, read_file, grep), so the plan says what is there and "
                 "what is missing. Then call plan_propose."
             )
         try:
-            place = self.place_of(session_key)
             proposal = validate_proposal(
                 title, steps, coverage, assumptions,
                 require_check=place is None or place.traits.machine_check,
@@ -1101,7 +721,7 @@ class PlanDriver:
                 )
             except PlanConflictError as exc:
                 return (
-                    f"Not now: this notebook already has a plan that has started ({exc.status}). "
+                    f"Not now: {here} already has a plan that has started ({exc.status}). "
                     "A new one can be proposed when that plan is done or stopped."
                 )
             self._remember(plan)
@@ -1127,45 +747,6 @@ class PlanDriver:
     async def step_done(self, session_key: str | None, note: Any) -> str:
         """``plan_step_done``."""
         return await self._close_step(session_key, "done", note)
-
-    def _plan_drafts(self, plan: Plan) -> list[dict[str, str]]:
-        """Le bozze in attesa che appartengono a *plan* (cioè al suo passo aperto).
-
-        **Una bozza è del passo se cambia un file del quaderno ed è nata dopo
-        l'Approva.** Non dal ``task_id`` degli aiutanti lanciati nel passo:
-        andrebbe registrato a ogni ``spawn`` e si perderebbe col riavvio che
-        rimette il passo da capo, mentre la regola sul quaderno regge da sola.
-        Il quaderno è tenuto dal piano dall'Approva in poi — l'utente non ci
-        scrive, il giardiniere lo salta, un cron ci gira in sola lettura — quindi
-        una bozza nuova sul quaderno può venire solo dal piano. E un passo non si
-        chiude con le sue bozze in attesa, quindi quelle che restano sono del
-        passo aperto (o di una sua corsa di prima, interrotta da un riavvio:
-        sono lo stesso lavoro). Una bozza di prima del piano non conta: non è
-        lavoro del piano, e terrebbe fermo ogni passo.
-        """
-        since_ms = _approved_ms(plan)
-        drafts: list[dict[str, str]] = []
-        try:
-            pending = self.host.notebook_drafts(plan.notebook)
-        except Exception as exc:  # noqa: BLE001 — chi chiude un passo deve saperlo
-            # Fino al 26/10 tornava ``[]``: il passo si chiudeva con le bozze in
-            # attesa, cioè il difetto del 23/10 che questo metodo esiste per
-            # evitare. Ora chi decide una chiusura rifiuta e riprova.
-            logger.opt(exception=True).warning("Plan {}: drafts not readable", plan.id)
-            raise _DraftsUnreadableError(str(exc)) from exc
-        for draft in pending:
-            created = draft.get("created_ms")
-            if isinstance(created, int) and since_ms is not None and created < since_ms:
-                continue
-            drafts.append({"id": str(draft.get("id")), "target": str(draft.get("target"))})
-        return drafts
-
-    def _drafts_or_empty(self, plan: Plan) -> list[dict[str, str]]:
-        """Le bozze del passo, o ``[]`` se non si leggono: per chi non decide una chiusura."""
-        try:
-            return self._plan_drafts(plan)
-        except _DraftsUnreadableError:
-            return []
 
     async def step_skip(self, session_key: str | None, reason: Any) -> str:
         """``plan_step_skip``."""
@@ -1272,7 +853,7 @@ class PlanDriver:
                 drafts = await asyncio.to_thread(self._plan_drafts, plan)
             except _DraftsUnreadableError as exc:
                 return (
-                    f"Not yet: the notebook's drafts could not be read ({exc}), and a step does "
+                    f"Not yet: the pending drafts could not be read ({exc}), and a step does "
                     "not close with drafts waiting. Try `plan_step_done` again in a moment."
                 )
             if drafts:
@@ -1357,7 +938,7 @@ class PlanDriver:
                 drafts = await asyncio.to_thread(self._plan_drafts, plan)
             except _DraftsUnreadableError as exc:
                 return (
-                    f"Not yet: the notebook's drafts could not be read ({exc}). Try "
+                    f"Not yet: the pending drafts could not be read ({exc}). Try "
                     "`plan_blocked` again in a moment."
                 )
             if drafts:
@@ -1389,377 +970,7 @@ class PlanDriver:
     # (``AgentLoop._hold_subagent_result``); il turno parte con l'ultimo. La rete
     # di sicurezza è qui: fratelli rimasti tutti fermi, o un tetto di tempo.
 
-    def hold_helper_result(self, session_key: str, task_id: Any) -> bool:
-        """Tiene il resoconto riuscito di *task_id* se un fratello del passo lavora.
-
-        ``True`` = il loop scrive la riga senza turno. Fratello = un aiutante
-        vivo della stessa sessione con lo stesso ``(plan_id, plan_step)``, in
-        stato ``running`` (uno ``stalled`` non si aspetta). Fuori da un piano in
-        corsa, o se il gruppo non si sa, ``False``: il turno parte come sempre.
-
-        Il gruppo vuole **piano e passo entrambi**: un aiutante senza passo
-        (lanciato da un turno dell'utente, o prima del piano) non viene tenuto e
-        non conta come fratello — senza passo non c'è un «ultimo del passo» da
-        aspettare, e due aiutanti estranei si terrebbero a vicenda.
-        """
-        live = self._index.get(session_key)
-        if (
-            not isinstance(task_id, str) or not task_id
-            or live is None or live.status not in _REPORTING
-        ):
-            return False
-        group = self._helper_group(task_id)
-        if group is None or group[0] is None or group[1] is None:
-            return False
-        held = self._held.get(session_key)
-        if held is not None and (held.plan_id, held.plan_step) != group:
-            # Un altro gruppo: non si mescolano. Il turno parte, e vede anche
-            # quelli tenuti (sono in storia).
-            return False
-        exclude = {task_id, *(held.task_ids if held is not None else ())}
-        running, _stalled = self._step_siblings(session_key, group, exclude)
-        if not running:
-            return False
-        if held is None:
-            held = _HeldResults(group[0], group[1], [], time.monotonic())
-            self._held[session_key] = held
-        if task_id not in held.task_ids:
-            held.task_ids.append(task_id)
-        # A piano fermo su una domanda si tiene senza timer: la risposta lo
-        # riarma (``_rearm_held``). Fino al 26/10 un resoconto arrivato lì non
-        # si teneva e apriva un turno senza i tool del passo.
-        if held.timer is None and not held.woken and live.status in _RUNNING:
-            held.timer = self._arm_held_timer(session_key, held)
-        logger.info(
-            "Helper result {} held for session {} ({} held, {} sibling(s) running)",
-            task_id, session_key, len(held.task_ids), running,
-        )
-        return True
-
-    def take_held_results(self, session_key: str | None) -> list[str]:
-        """Gli id tenuti per *session_key*, tolti: un turno li ha fatti vedere a Jenny.
-
-        Lo chiama il loop alla fine di ogni turno della sessione (il turno
-        dell'ultimo resoconto, il risveglio, o un turno qualunque che intanto ha
-        letto la storia): il timer si spegne qui.
-        """
-        if not session_key:
-            return []
-        held = self._held.pop(session_key, None)
-        if held is None:
-            return []
-        self._cancel_held_timer(held)
-        return list(held.task_ids)
-
-    def held_results(self, session_key: str) -> tuple[str, ...]:
-        """Gli id tenuti adesso per *session_key* (sola lettura)."""
-        held = self._held.get(session_key)
-        return tuple(held.task_ids) if held is not None else ()
-
-    def on_helpers_stalled(self, session_key: str, task_ids: Iterable[str]) -> None:
-        """Il watchdog ha marcato fermi degli aiutanti di *session_key*.
-
-        Se in quella sessione ci sono resoconti tenuti e nessun fratello lavora
-        più (i rimasti sono fermi, o spariti senza resoconto), Jenny si sveglia:
-        aspettare chi non va avanti la terrebbe ferma fino al tetto di tempo.
-        """
-        held = self._held.get(session_key)
-        if held is None or held.woken:
-            return
-        running, _stalled = self._step_siblings(
-            session_key, (held.plan_id, held.plan_step), set(held.task_ids)
-        )
-        if running:
-            return
-        try:
-            task = asyncio.get_running_loop().create_task(self._wake_held(session_key, "stalled"))
-        except RuntimeError:
-            logger.warning("Held helper results of {}: no loop to wake on", session_key)
-            return
-        # Tenuto qui: il loop tiene i task solo per riferimento debole, e lo
-        # shutdown lo cancella.
-        self._wakes.add(task)
-        task.add_done_callback(self._wakes.discard)
-
-    def on_helper_journal(self, plan_id: str, step_id: str, key: str) -> None:
-        """Un aiutante lavora per *step_id* di *plan_id* nel registro *key*."""
-
-        def _apply(p: Plan) -> None:
-            step = next((s for s in p.steps if s.id == step_id), None)
-            if step is None or key in step.helpers:
-                raise _UnchangedError
-            step.helpers.append(key)
-
-        try:
-            self.store.update(plan_id, _apply)
-        except (_UnchangedError, PlanNotFoundError):
-            return
-        except (PlanError, OSError):
-            logger.opt(exception=True).warning(
-                "Plan {}: helper journal {} not noted", plan_id, key)
-
-    def _helper_group(self, task_id: str) -> tuple[str | None, str | None] | None:
-        lookup: Any = getattr(self.host, "helper_plan_step", None)
-        if lookup is None:
-            return None
-        group = lookup(task_id)
-        if not isinstance(group, tuple) or len(group) != 2:
-            return None
-        return group[0], group[1]
-
-    def _helpers_of_step(
-        self, session_key: str, plan_id: str, *, live_step: str | None
-    ) -> frozenset[str] | None:
-        """Gli aiutanti vivi che contano per il passo aperto, o ``None`` se non si sa.
-
-        Con il registro per passo (``step_helpers``) contano quelli del passo
-        aperto e quelli **senza** passo (un turno dell'utente durante il piano:
-        la loro scrittura toccherebbe comunque il quaderno del piano, e si segnala). Un
-        aiutante di un altro passo o di un altro piano non tiene fermo questo.
-        Senza registro per passo, tutti i vivi della sessione, come prima.
-        """
-        lookup: Any = getattr(self.host, "step_helpers", None)
-        if lookup is None:
-            return self.host.running_helpers(session_key)
-        try:
-            states = dict(lookup(session_key))
-        except Exception:  # noqa: BLE001 — il registro non ha risposto: non si sa
-            logger.opt(exception=True).warning("Plan {}: helper registry unreadable", plan_id)
-            return None
-        if not states:
-            # Il registro finto dei test (e un manager senza ``live_helper_states``)
-            # danno ``{}``: vale la lista dei vivi della sessione.
-            return self.host.running_helpers(session_key)
-        step_id = live_step
-        if step_id is None:
-            try:
-                now = _step_now(self.store.load(plan_id))
-                step_id = now.id if now is not None else None
-            except PlanError:
-                step_id = None
-        mine: set[str] = set()
-        for task_id, (state, helper_plan, helper_step) in states.items():
-            if state not in ("running", "stalled"):
-                continue
-            if helper_plan == plan_id and helper_step == step_id:
-                mine.add(task_id)
-            elif helper_plan is None and helper_step is None:
-                logger.warning(
-                    "Plan {}: helper {} runs without a plan step, counted for step {}",
-                    plan_id, task_id, step_id,
-                )
-                mine.add(task_id)
-        return frozenset(mine)
-
-    def _step_siblings(
-        self,
-        session_key: str,
-        group: tuple[str | None, str | None],
-        exclude: set[str],
-    ) -> tuple[int, int]:
-        """``(running, stalled)`` fra gli aiutanti vivi del gruppo, senza *exclude*."""
-        lookup: Any = getattr(self.host, "step_helpers", None)
-        if lookup is None:
-            return 0, 0
-        running = stalled = 0
-        for task_id, (state, plan_id, plan_step) in lookup(session_key).items():
-            if task_id in exclude or (plan_id, plan_step) != group:
-                continue
-            if state == "running":
-                running += 1
-            elif state == "stalled":
-                stalled += 1
-        return running, stalled
-
-    def _arm_held_timer(self, session_key: str, held: _HeldResults) -> asyncio.Task[Any] | None:
-        if self._held_closed:
-            return None
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return None
-        delay = max(0.0, held.first_at + self.held_wake_after_s - time.monotonic())
-        return loop.create_task(self._held_timer(session_key, delay))
-
-    async def _held_timer(self, session_key: str, delay: float) -> None:
-        try:
-            await asyncio.sleep(delay)
-        except asyncio.CancelledError:
-            return
-        held = self._held.get(session_key)
-        if held is not None:
-            # Il timer ha finito da sé: non va cancellato (sarebbe lui stesso).
-            held.timer = None
-        await self._wake_held(session_key, "timeout")
-
-    @staticmethod
-    def _cancel_held_timer(held: _HeldResults) -> None:
-        timer, held.timer = held.timer, None
-        if timer is not None and not timer.done() and timer is not asyncio.current_task():
-            timer.cancel()
-
-    def _disarm_held(self, session_key: str) -> None:
-        """Il piano non è più in corsa (pausa, fermo, finito): il timer si spegne.
-
-        Gli id restano: le righe sono in storia, e il primo turno della sessione
-        li marca ``handled`` (``take_held_results``). Se il piano riprende e un
-        altro resoconto viene tenuto, il timer si riarma dal primo tenuto — un
-        risveglio subito, se il tetto è già passato.
-        """
-        held = self._held.get(session_key)
-        if held is not None:
-            self._cancel_held_timer(held)
-
-    def _rearm_held(self, session_key: str) -> None:
-        """Riarma il timer spento di resoconti ancora tenuti (piano di nuovo in corsa).
-
-        Il ritardo si conta dal primo tenuto: se il tetto è già passato, il
-        risveglio parte subito. Anche dopo un risveglio che è uscito prima di
-        pubblicare (passo non aperto in quel momento): lo stato resta riarmabile.
-        """
-        held = self._held.get(session_key)
-        if held is not None and held.timer is None and not held.woken:
-            held.timer = self._arm_held_timer(session_key, held)
-
-    async def close_held_timers(self) -> None:
-        """Shutdown: spegne i timer del risveglio e i risvegli in volo, e non ne arma altri.
-
-        Lo chiama il loop nel suo drain (``AgentLoop.shutdown``): un timer vivo
-        oltre lo shutdown pubblicherebbe su un bus che nessuno legge più.
-        """
-        self._held_closed = True
-        pending: list[asyncio.Task[Any]] = []
-        for held in self._held.values():
-            timer = held.timer
-            self._cancel_held_timer(held)
-            if timer is not None and not timer.done():
-                pending.append(timer)
-        for task in list(self._wakes):
-            if not task.done():
-                task.cancel()
-                pending.append(task)
-        if pending:
-            await asyncio.gather(*pending, return_exceptions=True)
-
-    async def _wake_held(self, session_key: str, reason: str) -> None:
-        """Pubblica il risveglio dei resoconti tenuti: un turno del passo aperto.
-
-        Uno solo per gruppo tenuto (``woken``). Il messaggio è un turno di passo
-        (``PLAN_STEP_EVENT``), così se nel frattempo il passo si è chiuso o il
-        piano si è fermato il loop lo scarta da vecchio, e il gancio di fine turno
-        lo giudica come un turno del passo, non come il promemoria.
-        """
-        held = self._held.get(session_key)
-        if held is None or held.woken or self._held_closed:
-            return
-        live = self._index.get(session_key)
-        if live is None or live.status not in _RUNNING:
-            return
-        try:
-            plan = await asyncio.to_thread(self.store.load, live.plan_id)
-        except PlanError:
-            return
-        step = _step_now(plan)
-        if plan.status not in _RUNNING or step is None:
-            return
-        # Durante la lettura un turno può aver preso i tenuti, e un resoconto
-        # nuovo averne aperto un altro gruppo: quello non è il gruppo per cui
-        # il risveglio era partito, e ha il suo timer.
-        if self._held.get(session_key) is not held or held.woken:
-            return
-        present: Any = getattr(self.host, "has_helper_results", None)
-        if callable(present) and not present(session_key, list(held.task_ids)):
-            # La conversazione è stata svuotata (``/new``): non c'è più niente
-            # di tenuto da far vedere, e il turno parlerebbe di righe sparite.
-            self._cancel_held_timer(self._held.pop(session_key))
-            logger.info("Held helper results of {} are gone; no wake-up", session_key)
-            return
-        held.woken = True
-        self._cancel_held_timer(held)
-        running, stalled = self._step_siblings(
-            session_key, (held.plan_id, held.plan_step), set(held.task_ids)
-        )
-        content = HELD_WAKE_TEXT.format(
-            held=len(held.task_ids), running=running + stalled, stalled=stalled
-        )
-        await self.bus.publish_inbound(
-            InboundMessage(
-                channel="system",
-                sender_id="plan",
-                chat_id=f"websocket:{place_of(plan).chat_id}",
-                content=content,
-                session_key_override=plan.session_key,
-                metadata={
-                    INJECTED_EVENT_META: PLAN_STEP_EVENT,
-                    PLAN_ID_META: plan.id,
-                    PLAN_STEP_META: step.id,
-                    PLAN_WAKE_META: reason,
-                },
-            )
-        )
-        logger.info(
-            "Plan {}: woke on {} held helper result(s) of step {} ({})",
-            plan.id, len(held.task_ids), step.id, reason,
-        )
-
     # ── hook del loop ──────────────────────────────────────────────────────
-
-    async def _list_gaps(self, plan: Plan, step: Step, gaps: Mapping[str, list[str]]) -> int:
-        """I buchi rimasti di *step* in ``raw/notes/open-gaps.md`` del quaderno. Quanti nuovi.
-
-        Un file solo, una sezione per passo (data, piano, passo), una riga per
-        voce; una voce già nel file (stesso testo, spazi normalizzati) non si
-        riscrive. Scritto qui, sotto il lock, nel registro del piano col passo
-        (``_journaled``) e **prima** dei conti di fine passo (``_settle_closed``):
-        è lavoro del passo, e il ritorno lo toglie.
-        Senza la radice del quaderno non si scrive niente, e lo si dice.
-        """
-        items: list[str] = []
-        for lineage_items in gaps.values():
-            for item in lineage_items:
-                if item not in items:
-                    items.append(item)
-        root = self._notebook_root(plan)
-        if root is None:
-            logger.warning("Plan {}: notebook root missing, {} gap(s) not listed", plan.id, len(items))
-            return 0
-        title, step_id, step_title = plan.title, step.id, step.title
-
-        def _write() -> int:
-            with self._journaled(plan, step_id) as journal:
-                return _write_gaps(journal)
-
-        def _write_gaps(journal: Any) -> int:
-            path = root / OPEN_GAPS_PATH
-            journal.touch(path)
-            existing = path.read_text(encoding="utf-8") if path.is_file() else ""
-            known = {_norm(line[2:]) for line in existing.splitlines() if line.startswith("- ")}
-            fresh = [item for item in items if _norm(item) not in known]
-            if not fresh:
-                return 0
-            head = "" if existing else (
-                "# Open gaps\n\nFacts the plans could not find, step by step: searched and "
-                "not found, or left for later. The pages say \"not documented\" where they "
-                "belong; the next plan reads this list and plans research for what it needs.\n"
-            )
-            section = (
-                f"\n## {now_iso()[:10]} — {title} — {step_id} «{step_title}»\n\n"
-                + "".join(f"- {item}\n" for item in fresh)
-            )
-            atomic_write(path, existing + head + section)
-            return len(fresh)
-
-        count = await asyncio.to_thread(_write)
-
-        def _apply(p: Plan) -> None:
-            _find(p, step_id).extra[_GAPS_LISTED] = items
-
-        await asyncio.to_thread(self.store.update, plan.id, _apply)
-        logger.info(
-            "Plan {}: {} gap(s) of step {} listed in {} ({} new)",
-            plan.id, len(items), step_id, OPEN_GAPS_PATH, count,
-        )
-        return len(items)
 
     def _revises_a_plan_of(self, slot: str, drafting: Mapping[str, Any]) -> bool:
         """La pianificazione rivede un piano di questo quaderno, che ha già guardato.
@@ -1897,7 +1108,9 @@ class PlanDriver:
         await self._changed(plan)
         return True
 
-    async def before_user_turn(self, session_key: str, metadata: dict[str, Any]) -> None:
+    async def before_user_turn(
+        self, session_key: str, metadata: dict[str, Any], *, channel: str | None = None,
+    ) -> None:
         """Prima di un turno dell'utente nella chat di un quaderno.
 
         - piano in **pausa** → il turno è in sola lettura: si parla con Jenny,
@@ -1910,7 +1123,7 @@ class PlanDriver:
           (:meth:`_settle_drafting`).
         """
         self._bind_loop()
-        await self._settle_drafting(session_key, metadata)
+        await self._settle_drafting(session_key, metadata, channel=channel)
         live = self._index.get(session_key)
         if live is not None and live.status == "blocked":
             await self.recheck_drafts(live.plan_id)
@@ -2365,214 +1578,6 @@ class PlanDriver:
         except PlanNotFoundError as exc:
             raise PlanCommandError("not_found", "no such plan") from exc
 
-    # ── ritorno indietro ───────────────────────────────────────────────────
-
-    def _refuse_if_held(self, plan: Plan) -> None:
-        """``plan_running`` se un piano più nuovo tiene il quaderno di *plan*.
-
-        Tornare indietro con un piano vecchio mentre uno nuovo gira riscriverebbe
-        il quaderno sotto i passi di quest'ultimo, e il suo ritorno troverebbe
-        i suoi file cambiati da un altro: è la stessa regola per cui
-        l'utente non scrive in un quaderno tenuto.
-        """
-        live = self._index.get(plan.session_key)
-        busy = (self.holds_notebook(plan.notebook) if plan.notebook else
-                live is not None and live.plan_id != plan.id and live.status in HELD_STATUSES)
-        if busy:
-            raise PlanCommandError(
-                "plan_running",
-                f"notebook {plan.notebook!r} is held by a running plan: wait for it, "
-                "or stop it first",
-            )
-
-    async def rollback_preview(self, plan_id: str) -> dict[str, Any]:
-        """Il conto del ritorno, e il gettone dei file com'erano quando è stato fatto.
-
-        ``expect_end`` è quel gettone (``write_journal.undo_set``): la conferma
-        (:meth:`rollback`) lo rifà e, se è un altro, i file sono cambiati dopo che
-        l'utente ha letto il conto — ``conflict``.
-        """
-        plan = self._load(plan_id)
-        if plan.status not in ("done", "stopped"):
-            raise PlanCommandError("bad_state", f"the plan is {plan.status}")
-        self._refuse_if_held(plan)
-        place = place_of(plan)
-        async with self._lock(plan.session_key):
-            report = await asyncio.to_thread(self._undo, plan, dry_run=True)
-        return {"report": card_report(report, place), "expect_end": report.token}
-
-    def _undo(self, plan: Plan, *, dry_run: bool = False, keep: Iterable[str] = (),
-              token: str | None = None, into: str | None = None, of: str | None = None) -> Any:
-        """Un ``undo_set`` sui registri del piano (o su quello del ritorno *of*)."""
-        from jenny.agent.write_journal import undo_set
-
-        root = self.store.workspace
-        place = place_of(plan)
-        sources = [work.journal(root, of)] if of else work.plan_journals(root, plan)
-        return undo_set(
-            sources, by="user", into=work.journal(root, into) if into else None,
-            keep_groups=keep, group_of=place.group_of, never=place.never,
-            dry_run=dry_run, token=token,
-        )
-
-    async def rollback(
-        self, plan_id: str, keep: Iterable[Any] = (), expect_end: Any = None
-    ) -> dict[str, Any]:
-        """Torna a prima: annulla il lavoro del piano in un registro suo, ``rolled_back``.
-
-        *expect_end* è il gettone che :meth:`rollback_preview` ha ritornato (i
-        file su cui l'utente ha letto il conto). Il registro del ritorno si
-        scrive nel piano **prima** di toccare un file (``pending_undo``): un
-        crollo a metà lo finisce il boot, e il piano sa dove guardare.
-        """
-        plan = self._load(plan_id)
-        keep_groups = _keep_groups(keep, place_of(plan))
-        async with self._lock(plan.session_key):
-            plan = self._load(plan_id)
-            if plan.status not in ("done", "stopped"):
-                raise PlanCommandError("bad_state", f"the plan is {plan.status}")
-            self._refuse_if_held(plan)
-            self._require_idle(plan.session_key, code="conflict")
-            if not isinstance(expect_end, str) or not expect_end:
-                raise PlanCommandError(
-                    "conflict", "the notebook changed since the summary was shown: read it again"
-                )
-            into = await asyncio.to_thread(self._start_undo, plan_id, _KIND_ROLLBACK, keep_groups)
-            report = await self._run_rollback(
-                plan, _KIND_ROLLBACK, self._undo, plan, keep=keep_groups, token=expect_end,
-                into=into,
-            )
-            counts = card_report(report, place_of(plan))["counts"]
-            plan = await asyncio.to_thread(
-                self.store.update, plan_id,
-                lambda p: _mark_rolled_back(p, journal=into, keep=keep_groups, counts=counts),
-            )
-            self._remember(plan)
-            discarded = await asyncio.to_thread(self._discard_plan_drafts, plan)
-            self.host.append_note(
-                plan.session_key, _rollback_note(plan, counts, len(discarded))
-            )
-            await asyncio.to_thread(self._journal_line, plan, "plan.journal_rolled_back")
-            logger.info("Plan {} rolled back: {}", plan_id, counts)
-        await self._changed(plan)
-        return {
-            "report": card_report(report, place_of(plan)),
-            "discarded_drafts": discarded,
-        }
-
-    def _start_undo(self, plan_id: str, kind: str, keep: Iterable[str] = ()) -> str:
-        """Il registro di un ritorno (o del suo annullamento), scritto nel piano prima
-        di toccare un file. Ritorna la sua chiave."""
-        chosen: list[str] = []
-
-        def _apply(p: Plan) -> None:
-            n = int(p.extra.get(_UNDO_COUNT) or 0) + 1
-            key = work.undo_journal_key(p.id, n)
-            p.extra[_UNDO_COUNT] = n
-            p.extra[PENDING_UNDO_KEY] = {"journal": key, "kind": kind, "keep": sorted(keep),
-                                         "of": p.rollback_journal if kind == _KIND_UNDO else None}
-            chosen.append(key)
-
-        self.store.update(plan_id, _apply)
-        return chosen[-1]
-
-    def _discard_plan_drafts(self, plan: Plan) -> list[dict[str, str]]:
-        """Butta le bozze del piano ancora in attesa (sincrono).
-
-        Dopo un ritorno il quaderno è com'era prima del piano: una bozza del
-        piano rimasta lì si potrebbe ancora installare dalla scheda delle bozze,
-        e rimetterebbe un pezzo del lavoro appena disfatto. L'annullamento del
-        ritorno non le rimette: non erano mai state installate.
-        """
-        discarded: list[dict[str, str]] = []
-        for draft in self._drafts_or_empty(plan):
-            try:
-                if self.host.discard_draft(draft["id"]):
-                    discarded.append(draft)
-            except Exception:  # noqa: BLE001 — una bozza rimasta non disfa il ritorno
-                logger.opt(exception=True).warning(
-                    "Plan {}: draft {} not discarded", plan.id, draft["id"]
-                )
-        if discarded:
-            logger.info("Plan {}: {} pending draft(s) discarded with the rollback",
-                        plan.id, len(discarded))
-        return discarded
-
-    async def undo_rollback(self, plan_id: str) -> dict[str, Any]:
-        """Annulla il ritorno: annulla il registro del ritorno, e lo stato di prima."""
-        plan = self._load(plan_id)
-        async with self._lock(plan.session_key):
-            plan = self._load(plan_id)
-            if plan.status != "rolled_back":
-                raise PlanCommandError("bad_state", f"the plan is {plan.status}")
-            if not plan.rollback_journal:
-                raise PlanCommandError("bad_state", "there is no rollback to undo")
-            self._refuse_if_held(plan)
-            self._require_idle(plan.session_key, code="conflict")
-            of = plan.rollback_journal
-            into = await asyncio.to_thread(self._start_undo, plan_id, _KIND_UNDO)
-            report = await self._run_rollback(plan, _KIND_UNDO, self._undo, plan, into=into, of=of)
-            counts = card_report(report, place_of(plan))["counts"]
-            plan = await asyncio.to_thread(
-                self.store.update, plan_id,
-                lambda p: _mark_rollback_undone(p, counts, journal=into),
-            )
-            self._remember(plan)
-            self.host.append_note(plan.session_key, _undo_note(plan, counts))
-            await asyncio.to_thread(self._journal_line, plan, "plan.journal_rollback_undone")
-        await self._changed(plan)
-        return {"report": card_report(report, place_of(plan))}
-
-    async def _run_rollback(self, plan: Plan, kind: str, fn: Any, *args: Any, **kw: Any) -> Any:
-        """Esegue un ritorno in un thread e traduce i suoi errori per la scheda.
-
-        I file cambiati dopo il conto sono ``conflict``, e niente è stato
-        toccato. Un errore a metà (il disco) resta scritto nel piano
-        (``rollback_failed``) e risponde ``rollback_failed``: i file sono a metà,
-        e la scheda lo deve dire invece di mostrare un piano finito come se
-        niente fosse.
-        """
-        from jenny.agent.write_journal import UndoConflictError
-
-        try:
-            return await asyncio.to_thread(fn, *args, **kw)
-        except UndoConflictError as exc:
-            await asyncio.to_thread(self.store.update, plan.id, _drop_pending_undo)
-            raise PlanCommandError("conflict", str(exc)) from exc
-        except Exception as exc:
-            await asyncio.to_thread(self._record_rollback_failure, plan.id, kind, str(exc))
-            await self._changed(self._load(plan.id))
-            raise PlanCommandError(
-                "rollback_failed",
-                f"the rollback stopped halfway: {exc}. The files are partly rolled back; "
-                "try again",
-            ) from exc
-
-    def _record_rollback_failure(
-        self,
-        plan_id: str,
-        kind: str,
-        error: str,
-        *,
-        applied: int | None = None,
-        total: int | None = None,
-    ) -> Plan:
-        """Scrive nel piano che un ritorno non è finito (sincrono)."""
-        stamp = now_iso()
-        failure: dict[str, Any] = {"at": stamp, "kind": kind, "error": _cut(error, 500, "error")}
-        if applied is not None:
-            failure["applied"] = applied
-        if total is not None:
-            failure["total"] = total
-
-        def _apply(p: Plan) -> None:
-            p.extra[ROLLBACK_FAILED_KEY] = failure
-            p.history.append({"at": stamp, "event": "rollback_failed", **failure})
-
-        plan = self.store.update(plan_id, _apply)
-        logger.error("Plan {}: {} did not complete: {}", plan_id, kind, error)
-        return plan
-
     # ── letture per le RPC ─────────────────────────────────────────────────
 
     def view(self, plan: Plan) -> dict[str, Any]:
@@ -2660,57 +1665,6 @@ class PlanDriver:
             logger.warning("Plan {} was {} at boot: paused at step {}", plan.id, plan.status, n)
         self.refresh_index()
         return paused
-
-    def _recover_undo(self, plan: Plan) -> Plan:
-        """Chiude al boot un ritorno (o un annullamento) rimasto a metà.
-
-        I file li ha già finiti il container, prima dell'agente
-        (``write_journal.finish_interrupted_undos``): qui si legge come è
-        andata e il piano va dove il ritorno l'avrebbe portato — ``rolled_back``,
-        o lo stato di prima per un annullamento — e Jenny ne riceve la nota,
-        come per un ritorno normale. Un annulla che il diario non conosce (un
-        ripristino da backup l'ha svuotato) lascia il piano com'è con
-        ``rollback_failed``.
-        """
-        from jenny.agent.write_journal import read_undo_state
-
-        pending = plan.extra.get(PENDING_UNDO_KEY) or {}
-        key = str(pending.get("journal") or "")
-        kind = pending.get("kind")
-        state = read_undo_state(self.store.workspace, key) if key else None
-        if state is None or state.get("state") != "done":
-            self.store.update(plan.id, _drop_pending_undo)
-            return self._failed_at_boot(plan, "the rollback was interrupted and not finished",
-                                        kind=kind)
-        from jenny.agent.write_journal import UndoReport
-
-        counts = card_report(UndoReport.from_dict(state), place_of(plan))["counts"]
-        keep = [str(g) for g in pending.get("keep") or ()]
-
-        def _settle(p: Plan) -> None:
-            if kind == _KIND_ROLLBACK and p.status in ("done", "stopped"):
-                _mark_rolled_back(p, journal=key, keep=keep, counts=counts, recovered=True)
-            elif kind == _KIND_UNDO and p.status == "rolled_back":
-                _mark_rollback_undone(p, counts, journal=key, recovered=True)
-            else:
-                p.extra.pop(PENDING_UNDO_KEY, None)
-
-        updated = self.store.update(plan.id, _settle)
-        if updated.status == plan.status:
-            return updated
-        note = _undo_note(updated, counts) if kind == _KIND_UNDO else _rollback_note(
-            updated, counts
-        )
-        try:
-            self.host.append_note(updated.session_key, note)
-        except Exception:  # noqa: BLE001 — la nota persa non vale un boot fallito
-            logger.opt(exception=True).warning("Plan {}: recovery note not saved", plan.id)
-        self._journal_line(
-            updated,
-            "plan.journal_rollback_undone" if kind == _KIND_UNDO else "plan.journal_rolled_back",
-        )
-        logger.warning("Plan {}: interrupted {} finished at boot", plan.id, kind)
-        return updated
 
     def _failed_at_boot(self, plan: Plan, error: str, *, kind: Any = None) -> Plan:
         try:
@@ -2888,167 +1842,6 @@ class PlanDriver:
             if isinstance(h, dict) and h.get("plan_id") == plan.id and h.get("plan_step") == step_id
         ]
 
-    def _audit_baseline(self, plan: Plan) -> tuple[list[str], list[str]]:
-        """I difetti del quaderno all'Approva (:func:`baseline_keys`), che non sono del
-        piano, e le sue cartelle vuote (:func:`empty_folders`), che restano.
-
-        Senza ``expect``: all'Approva le pagine attese non ci sono ancora, e
-        sono proprio il lavoro del piano. Un errore qui non ferma l'Approva: la
-        base è vuota, e il controllo chiederà anche i difetti di prima.
-        """
-        root = self._notebook_root(plan)
-        if root is None:
-            return [], []
-        try:
-            return baseline_keys(root), empty_folders(root)
-        except Exception:  # noqa: BLE001 — un aiuto al controllo, non una condizione dell'Approva
-            logger.opt(exception=True).warning("Plan {}: audit baseline not computed", plan.id)
-            return [], []
-
-    def _notebook_root(self, plan: Plan) -> Path | None:
-        """La cartella del quaderno del piano; ``None`` per un piano della chat personale.
-
-        ``host.notebook_root("")`` non dà ``None``: dà la cartella dei quaderni.
-        Il 04/11/2026 il passo «Controllo i numeri» di un piano personale ha
-        controllato quella, ha trovato 0 pagine e si è chiuso da solo con «tutto a
-        posto», senza che nessuno guardasse le cifre.
-        """
-        if not plan.notebook:
-            return None
-        return self.host.notebook_root(plan.notebook)
-
-    def _run_audit(self, plan: Plan, step: Step) -> Audit | None:
-        """Il controllo a macchina del quaderno, in un thread; ``None`` se non si può fare.
-
-        Prima toglie le cartelle vuote sotto ``wiki/``: è meccanico, e non c'è
-        motivo di chiederlo al modello. ``None`` (quaderno sparito, errore) fa
-        aprire il passo come prima, col controllo affidato al modello.
-        """
-        root = self._notebook_root(plan)
-        if root is None:
-            return None
-        try:
-            with self._journaled(plan, step.id) as journal:
-                removed = remove_empty_folders(root, plan.extra.get(_EMPTY_AT_START) or (),
-                                               before_remove=journal.touch)
-            audit = audit_notebook(
-                root,
-                expect=step.extra.get("expect") or None,
-                baseline=plan.extra.get(_AUDIT_BASELINE) or (),
-            )
-        except Exception:  # noqa: BLE001 — senza controllo il passo lo fa il modello
-            logger.opt(exception=True).warning("Plan {}: machine check failed", plan.id)
-            return None
-        audit.removed_dirs = len(removed)
-        logger.info(
-            "Plan {}: machine check of step {}: {} to repair, {} empty folder(s) removed",
-            plan.id, step.id, len(audit.findings), len(removed),
-        )
-        return audit
-
-    def _first_pages(self, plan: Plan, step: Step | None = None) -> dict[str, str] | None:
-        """Le pagine ``wiki/`` toccate dal piano (o dal passo) com'erano prima.
-
-        Chiavi relative al quaderno, come ``audit.wiki_texts``. Solo quelle
-        toccate: le altre sono com'erano, e sono già fra le pagine di adesso.
-        """
-        if not plan.notebook:
-            return None
-        place = place_of(plan)
-        root = self.store.workspace
-        journals = (work.step_journals(root, plan, step) if step is not None
-                    else work.plan_journals(root, plan))
-        texts = work.first_texts(journals, under=place.prefix + "wiki/",
-                                 step=step.id if step is not None else None)
-        return {place.shown(path): text for path, text in texts.items()}
-
-    def _lost_now(self, plan: Plan) -> int | None:
-        """Quanti fatti di prima del piano mancano adesso dalle pagine; ``None`` se non si sa.
-
-        ``None`` e non 0: un conteggio saltato non è «niente perso», e la nota lo
-        dice («not counted»).
-        """
-        lost = self._lost_facts(plan)
-        return lost.total if lost is not None else None
-
-    def _lost_since(self, plan: Plan, step: Step) -> LostFacts | None:
-        """I fatti delle pagine che il passo ha toccato, com'erano alla sua
-        apertura, che adesso non sono in nessuna pagina."""
-        return self._lost_facts(plan, step)
-
-    def _lost_facts(self, plan: Plan, step: Step | None = None) -> LostFacts | None:
-        """I fatti delle pagine di prima del piano (o del passo) che adesso non ci sono.
-
-        In un thread. Un errore qui non ferma il passo: si apre senza il blocco,
-        e il log lo dice.
-        """
-        root = self.host.notebook_root(plan.notebook) if plan.notebook else None
-        if root is None:
-            return None
-        try:
-            before = self._first_pages(plan, step)
-            if before is None:
-                return None
-            return lost_facts(before, wiki_texts(root))
-        except Exception:  # noqa: BLE001 — un aiuto al controllo, non una condizione del passo
-            logger.opt(exception=True).warning("Plan {}: lost facts not computed", plan.id)
-            return None
-
-    async def _note_machine(self, plan: Plan, step_id: str, view: dict[str, Any]) -> Plan:
-        def _apply(p: Plan) -> None:
-            _find(p, step_id).extra[_MACHINE] = view
-
-        plan = await asyncio.to_thread(self.store.update, plan.id, _apply)
-        self._remember(plan)
-        return plan
-
-    async def _close_by_machine(self, plan: Plan, step_id: str, audit: Audit) -> None:
-        """Il passo ``check`` senza niente da riparare: si chiude da solo, senza un turno."""
-        view = _machine_view(audit, round_=0, final=True)
-
-        def _close(p: Plan) -> None:
-            s = _find(p, step_id)
-            s.status = "done"
-            s.ended_at = now_iso()
-            s.note = None
-            s.extra[_MACHINE] = view
-
-        plan = await asyncio.to_thread(self.store.update, plan.id, _close)
-        self._remember(plan)
-        logger.info("Plan {}: step {} closed by the machine check", plan.id, step_id)
-        plan = await self._settle_closed(plan)
-        await self._changed(plan)
-        await self._advance(plan)
-
-    async def _recheck(self, plan: Plan, step: Step, outcome: str) -> str | None:
-        """Il ricontrollo a ``plan_step_done`` del passo ``check``: un rifiuto, o ``None``.
-
-        Al primo giro, con difetti ancora aperti, rifiuta una volta e dà la lista
-        nuova. Al secondo (o con ``plan_step_skip``) accetta, e scrive nel passo
-        quel che resta: la nota del codice, che la scheda mostra accanto a quella
-        del modello. I fatti persi non si richiedono: la macchina non sa se uno è
-        andato via apposta; se ne conta il numero.
-        """
-        machine = step.extra.get(_MACHINE)
-        if step.kind != "check" or not isinstance(machine, dict) or machine.get("final"):
-            return None
-        audit = await asyncio.to_thread(self._run_audit, plan, step)
-        if audit is None:
-            return None
-        round_ = int(machine.get("round") or 1)
-        if audit.findings and outcome == "done" and round_ < _MAX_REPAIR_ROUNDS:
-            await self._note_machine(plan, step.id, _machine_view(audit, round_=round_ + 1))
-            logger.info(
-                "Plan {}: step {} close refused, {} left after round {}",
-                plan.id, step.id, len(audit.findings), round_,
-            )
-            return _repair_refusal(audit)
-        view = _machine_view(audit, round_=round_, final=True)
-        view["lost_left"] = await asyncio.to_thread(self._lost_now, plan)
-        await self._note_machine(plan, step.id, view)
-        return None
-
-
     async def _finish(self, plan: Plan) -> None:
         def _done(p: Plan) -> None:
             apply_transition(p, "done")
@@ -3194,38 +1987,6 @@ class PlanDriver:
 
     # ── bozze di un passo ──────────────────────────────────────────────────
 
-    def watch_drafts(self) -> None:
-        """Ascolta le bozze (``staged_writes``): quelle di un passo fermo si decidono.
-
-        Lo chiama il composition root una volta. L'avviso arriva anche da un
-        thread (le RPC ``staged.*`` fanno il disco in ``to_thread``): non si
-        decide niente lì — nemmeno se c'è un piano che aspetta, perché l'indice
-        è del loop — si rientra nel loop del gateway e si decide da lui, come fa
-        il frame ``staged_changed``.
-        """
-        from jenny.agent.staged_writes import StagedChange, add_change_listener
-
-        self._bind_loop()
-
-        def heard(change: StagedChange) -> None:
-            if change.action == "staged":
-                return
-            try:
-                running: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
-            except RuntimeError:
-                running = None
-            target = self._loop
-            if running is not None and (target is None or running is target):
-                self._spawn(self._drafts_changed(change))
-            elif target is not None:
-                target.call_soon_threadsafe(lambda: self._spawn(self._drafts_changed(change)))
-            else:
-                logger.warning("Draft change {} heard with no loop to settle it", change.id)
-
-        if self._unwatch is not None:
-            self._unwatch()
-        self._unwatch = add_change_listener(heard)
-
     def _bind_loop(self) -> None:
         """Il loop del gateway, per gli avvisi che arrivano da un thread."""
         if self._loop is None:
@@ -3238,197 +1999,6 @@ class PlanDriver:
         task = asyncio.get_running_loop().create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
-
-    def _blocked_kind(self, plan_id: str) -> str | None:
-        try:
-            plan = self.store.load(plan_id)
-        except PlanError:
-            return None
-        return (plan.blocked or {}).get("kind") if plan.status == "blocked" else None
-
-    async def _drafts_changed(self, change: Any) -> None:
-        """Una bozza installata o scartata: i passi che l'aspettavano ripartono?"""
-        for session_key, live in list(self._index.items()):
-            if live.status != "blocked":
-                continue
-            try:
-                await self._settle_drafts(session_key, live.plan_id, change)
-            except Exception:  # noqa: BLE001 — un piano rotto non ferma gli altri
-                logger.opt(exception=True).error(
-                    "Plan {}: could not settle its drafts", live.plan_id
-                )
-
-    async def recheck_drafts(self, plan_id: str) -> None:
-        """La rete di sicurezza: un piano fermo sulle bozze le riguarda adesso.
-
-        Un avviso perso (un riavvio del processo fra l'installazione e
-        l'avviso, una bozza tolta a mano) lascerebbe il passo fermo per sempre
-        su bozze che non ci sono più. La rilettura costa una lista delle bozze,
-        e si fa solo per un piano fermo su di loro: alla lettura della scheda
-        (``plan.get``) e prima di un turno dell'utente.
-        """
-        live = next((v for v in self._index.values() if v.plan_id == plan_id), None)
-        if live is None or live.status != "blocked":
-            return
-        session_key = next(k for k, v in self._index.items() if v is live)
-        await self._settle_drafts(session_key, plan_id, None)
-
-    async def _settle_drafts(
-        self, session_key: str, plan_id: str, change: Any, *, advance: bool | None = None
-    ) -> None:
-        async with self._lock(session_key):
-            plan = await self._settle_drafts_locked(session_key, plan_id, change, advance=advance)
-        if plan is not None:
-            await self._changed(plan)
-
-    async def _settle_drafts_locked(
-        self,
-        session_key: str,
-        plan_id: str,
-        change: Any,
-        *,
-        advance: bool | None = None,
-    ) -> Plan | None:
-        """Se le bozze del passo fermo sono tutte decise, il passo va avanti.
-
-        Si chiude con la nota del modello più l'esito scritto dal codice
-        («modifica installata»): il passo ha fatto quel che l'utente ha deciso,
-        non quel che il modello aveva chiesto. Se dietro le bozze c'era una
-        domanda (``plan_blocked``, o il blocco per un passo lasciato a metà),
-        adesso tocca a lei. Ritorna il piano se è cambiato qualcosa da far
-        vedere, ``None`` altrimenti. Va chiamato col lock della sessione.
-
-        *advance* dice se fare i conti del passo e aprire il seguente qui: di
-        default sì, se nessun turno è in volo in quella sessione. Se ce n'è uno,
-        lo fa il suo gancio di fine turno, come per ogni passo chiuso — mai due
-        aperture dello stesso passo.
-        """
-        from jenny.runtime.user_text import say
-
-        try:
-            plan = await asyncio.to_thread(self.store.load, plan_id)
-        except PlanError:
-            return None
-        blocked = plan.blocked or {}
-        if plan.status != "blocked" or blocked.get("kind") != "drafts":
-            return None
-        step_id = str(blocked.get("step") or "")
-        wanted = {str(d.get("id")) for d in blocked.get("drafts") or ()}
-        pending = {
-            str(d.get("id"))
-            for d in await asyncio.to_thread(self.host.notebook_drafts, plan.notebook)
-        }
-        heard_id = str(getattr(change, "id", "") or "")
-        heard_action = str(getattr(change, "action", "") or "")
-        left = wanted & pending
-        if left and heard_id not in wanted:
-            return None
-        outcome_box: dict[str, str] = {}
-
-        def _apply(p: Plan) -> None:
-            if p.status != "blocked" or (p.blocked or {}).get("kind") != "drafts":
-                raise _UnchangedError
-            s = _find(p, step_id)
-            outcomes = dict(s.extra.get(_DRAFT_OUTCOMES) or {})
-            if heard_id in wanted and heard_action in ("installed", "discarded"):
-                outcomes[heard_id] = heard_action
-            s.extra[_DRAFT_OUTCOMES] = outcomes
-            if left:
-                return
-            stamp = now_iso()
-            question = s.extra.pop(_PENDING_QUESTION, None)
-            if isinstance(question, str) and question:
-                # Dietro le bozze aspettava una domanda: adesso è lei il blocco.
-                reason = str(s.extra.pop(_PENDING_REASON, "question") or "question")
-                p.blocked = {
-                    "step": step_id, "question": question, "reason": reason, "at": stamp,
-                    "kind": "question", "drafts": [],
-                }
-                p.history.append(
-                    {"at": stamp, "event": "drafts_decided", "from": "blocked", "step": step_id}
-                )
-                p.updated_at = stamp
-                outcome_box["result"] = "question"
-                return
-            kinds = {outcomes.get(i) for i in wanted}
-            suffix = say(
-                "plan.drafts_installed" if kinds == {"installed"}
-                else "plan.drafts_discarded" if kinds == {"discarded"}
-                else "plan.drafts_resolved"
-            )
-            note = str(s.extra.pop(_PENDING_NOTE, "") or "")
-            outcome = s.extra.pop(_PENDING_OUTCOME, "done")
-            resume_to = s.extra.pop(_RESUME_TO, None)
-            s.status = outcome if outcome in ("done", "skipped") else "done"
-            s.ended_at = stamp
-            s.note = _cut(f"{note} — {suffix}" if note else suffix, _MAX_NOTE, "step note")
-            s.extra.pop(_NUDGE, None)
-            apply_transition(p, "running", at=stamp, event="drafts_decided", step=step_id)
-            if resume_to == "pausing":
-                # La Pausa chiesta prima (o durante) il blocco non si perde: il
-                # passo è finito, e ``_advance`` porta il piano in pausa.
-                apply_transition(p, "pausing", at=stamp)
-            outcome_box["result"] = "closed"
-
-        try:
-            plan = await asyncio.to_thread(self.store.update, plan_id, _apply)
-        except _UnchangedError:
-            return None
-        self._remember(plan)
-        if left:
-            return None
-        logger.info("Plan {}: the drafts of step {} are decided", plan_id, step_id)
-        if outcome_box.get("result") != "closed":
-            return plan
-        if advance is None:
-            advance = not self.host.turn_in_flight(session_key)
-        if advance:
-            plan = await self._settle_closed(plan)
-            await self._advance(plan)
-            plan = self._reload(plan)
-        return plan
-
-    async def _hold_on_drafts(
-        self,
-        plan: Plan,
-        step_id: str,
-        drafts: list[dict[str, str]],
-        *,
-        outcome: str | None = None,
-        note: str = "",
-        question: str | None = None,
-        reason: str = "question",
-    ) -> Plan:
-        """Ferma il passo sulle sue bozze (col lock della sessione già preso).
-
-        *outcome*/*note*: come il modello voleva chiudere il passo, per
-        chiuderlo così quando l'utente ha deciso. *question*: una domanda che
-        aspetta dietro le bozze (``plan_blocked``, o il passo lasciato a metà);
-        allora il passo non si chiude, e dopo le bozze tocca alla domanda.
-        """
-        # Un blocco sulle bozze nasce sempre sul loop del gateway: è il momento
-        # sicuro per ricordarlo, se ``watch_drafts`` è stato chiamato fuori.
-        self._bind_loop()
-
-        def _apply(p: Plan) -> None:
-            s = _find(p, step_id)
-            for key in (_PENDING_OUTCOME, _PENDING_NOTE, _PENDING_QUESTION, _PENDING_REASON,
-                        _DRAFT_OUTCOMES):
-                s.extra.pop(key, None)
-            if question:
-                s.extra[_PENDING_QUESTION] = question
-                s.extra[_PENDING_REASON] = reason
-            else:
-                s.extra[_PENDING_OUTCOME] = outcome or "done"
-                s.extra[_PENDING_NOTE] = note
-            s.note = None
-            s.ended_at = None
-            _block_on_drafts(p, step_id, drafts)
-
-        plan = await asyncio.to_thread(self.store.update, plan.id, _apply)
-        self._remember(plan)
-        logger.info("Plan {}: step {} waits for {} draft(s)", plan.id, step_id, len(drafts))
-        return plan
 
     # ── diario ─────────────────────────────────────────────────────────────
 
@@ -3546,12 +2116,6 @@ def _research_rounds(plan: Plan) -> int:
     return raw if isinstance(raw, int) and raw >= 0 else 0
 
 
-def _cut(text: str, limit: int, what: str) -> str:
-    """*text* entro *limit*, e il taglio nel log: fino al 26/10 era muto."""
-    if len(text) <= limit:
-        return text
-    logger.info("Plan: {} cut from {} to {} characters", what, len(text), limit)
-    return text[:limit]
 
 
 def _lost_refusal(lost: LostFacts) -> str:
@@ -3569,9 +2133,6 @@ def _lost_refusal(lost: LostFacts) -> str:
     return "\n".join(lines)
 
 
-def _norm(text: str) -> str:
-    """Una voce normalizzata per il confronto: spazi compressi, minuscole."""
-    return " ".join(text.replace("**", "").split()).strip().lower()
 
 
 def _left_after_check(plan: Plan, step_id: str) -> int:
@@ -3580,41 +2141,8 @@ def _left_after_check(plan: Plan, step_id: str) -> int:
     return int(machine.get("left") or 0) if isinstance(machine, dict) else 0
 
 
-def _machine_view(audit: Audit, *, round_: int, final: bool = False) -> dict[str, Any]:
-    """Il controllo a macchina nell'``extra`` del passo: conteggi, e alla fine cosa resta."""
-    view: dict[str, Any] = {
-        "round": round_,
-        "pages": audit.pages,
-        "cards": audit.cards,
-        "open_reminders": audit.open_reminders,
-        "counts": audit.counts(),
-        "preexisting": audit.preexisting,
-        "not_documented": audit.not_documented,
-        "removed_dirs": audit.removed_dirs,
-    }
-    if final:
-        view["final"] = True
-        view["left"] = len(audit.findings)
-        view["left_items"] = [
-            f"{f.path}: {f.detail}" for f in audit.findings[:_MAX_LEFT_ITEMS]
-        ]
-    return view
 
 
-def _repair_refusal(audit: Audit) -> str:
-    """Il rifiuto del primo giro: cosa resta, raggruppato per pagina, e che è l'ultimo giro."""
-    lines = [
-        "Not closed yet: the code checked the notebook again, and these are still wrong "
-        f"(or new). {summary_line(audit)}",
-    ]
-    for group in render_repair(audit):
-        lines.append(f"- {group['path']}")
-        lines.extend(f"  - {item}" for item in group["items"])
-    lines.append(
-        "Repair only these, then call `plan_step_done` again. This is the last round: "
-        "after it the step closes, and what is still wrong goes in the plan's report."
-    )
-    return "\n".join(lines)
 
 
 def _open_gaps(step: Step) -> dict[str, list[str]]:
@@ -3668,51 +2196,10 @@ def _gaps_budget_used(gaps: Mapping[str, list[str]]) -> str:
     return "\n".join(lines)
 
 
-def _find(plan: Plan, step_id: str) -> Step:
-    for step in plan.steps:
-        if step.id == step_id:
-            return step
-    raise PlanError(f"plan {plan.id} has no step {step_id}")
 
 
-def _block(
-    plan: Plan,
-    step_id: str,
-    question: str,
-    reason: str,
-    *,
-    kind: str = "question",
-    drafts: list[dict[str, str]] | None = None,
-) -> None:
-    step = _find(plan, step_id)
-    step.status = "blocked"
-    step.extra.pop(_NUDGE, None)
-    if plan.status == "pausing":
-        # La Pausa chiesta prima del blocco si ricorda: sciolto il blocco, il
-        # passo finisce e il piano va in pausa, invece di ripartire.
-        step.extra[_RESUME_TO] = "pausing"
-    stamp = now_iso()
-    apply_transition(plan, "blocked", at=stamp, step=step_id, reason=reason)
-    plan.blocked = {
-        "step": step_id,
-        "question": question,
-        "reason": reason,
-        "at": stamp,
-        "kind": kind,
-        "drafts": [dict(d) for d in drafts or ()],
-    }
 
 
-def _block_on_drafts(plan: Plan, step_id: str, drafts: list[dict[str, str]]) -> None:
-    """Il passo aspetta le sue bozze. La domanda è un ripiego in inglese: la
-    scheda ha le sue frasi, e mostra le bozze con Installa e Scarta."""
-    targets = ", ".join(d["target"] for d in drafts[:3])
-    if len(drafts) > 3:
-        targets += f" and {len(drafts) - 3} more"
-    question = (
-        f"Jenny wants to change {targets}: look at the change and install it or discard it."
-    )
-    _block(plan, step_id, question, "drafts", kind="drafts", drafts=drafts)
 
 
 def _journal_now() -> datetime:
@@ -3745,18 +2232,6 @@ def _resume_to(plan: Plan) -> str | None:
     return None
 
 
-def _approved_ms(plan: Plan) -> int | None:
-    """L'istante dell'Approva, in millisecondi: annotato all'Approva, o dalla storia."""
-    stamp = plan.extra.get(_APPROVED_MS)
-    if isinstance(stamp, int) and not isinstance(stamp, bool):
-        return stamp
-    for entry in reversed(plan.history):
-        if entry.get("event") == "approved":
-            try:
-                return int(datetime.fromisoformat(str(entry.get("at"))).timestamp() * 1000)
-            except (TypeError, ValueError):
-                return None
-    return None
 
 
 def _cut_ids(plan: Plan, cut: Iterable[Any]) -> set[str]:
@@ -3775,85 +2250,20 @@ def _cut_ids(plan: Plan, cut: Iterable[Any]) -> set[str]:
     return ids
 
 
-def _keep_groups(keep: Iterable[Any], place: PlanPlace) -> set[str]:
-    if keep is None:
-        return set()
-    if isinstance(keep, (str, bytes)) or not isinstance(keep, Iterable):
-        raise PlanCommandError("bad_request", "keep must be a list of groups")
-    groups = set()
-    for value in keep:
-        if not isinstance(value, str) or not place.keepable(value):
-            raise PlanCommandError("bad_request", f"unknown group: {str(value)[:40]!r}")
-        groups.add(str(value))
-    return groups
 
 
-class _UnchangedError(Exception):
-    """Il piano è già nello stato che la scrittura gli darebbe."""
 
 
-def _drop_pending_undo(plan: Plan) -> None:
-    plan.extra.pop(PENDING_UNDO_KEY, None)
 
 
-def _mark_rolled_back(
-    plan: Plan,
-    *,
-    journal: str,
-    keep: Iterable[str],
-    counts: Mapping[str, int],
-    recovered: bool = False,
-) -> None:
-    """Il piano dopo un ritorno: il suo registro, ``rolled_back``. Lo stesso dal vivo e al boot."""
-    plan.rollback_journal = journal
-    plan.undo_journal = None
-    plan.extra.pop(PENDING_UNDO_KEY, None)
-    plan.extra.pop(ROLLBACK_FAILED_KEY, None)
-    details: dict[str, Any] = {"keep": sorted(keep), "counts": dict(counts)}
-    if recovered:
-        details["recovered"] = True
-    apply_transition(plan, "rolled_back", **details)
 
 
-def _mark_rollback_undone(
-    plan: Plan, counts: Mapping[str, int], *, journal: str, recovered: bool = False
-) -> None:
-    """Il piano dopo «Annulla il ritorno»: lo stato di prima, e il registro dell'annullamento."""
-    previous = _status_before_rollback(plan)
-    plan.rollback_journal = None
-    plan.undo_journal = journal
-    plan.extra.pop(PENDING_UNDO_KEY, None)
-    plan.extra.pop(ROLLBACK_FAILED_KEY, None)
-    details: dict[str, Any] = {"counts": dict(counts)}
-    if recovered:
-        details["recovered"] = True
-    apply_transition(plan, previous, event="rollback_undone", **details)
 
 
-def _rollback_note(plan: Plan, counts: Mapping[str, int], drafts: int = 0) -> str:
-    return (
-        f'The user rolled the notebook back to before the plan "{plan.title}": '
-        f"{counts.get('restored', 0)} file(s) restored, {counts.get('removed', 0)} removed, "
-        f"{counts.get('left', 0)} left as they were because they changed afterwards"
-        + (f", {counts['kept']} kept on purpose" if counts.get("kept") else "")
-        + (f", {drafts} pending draft(s) of the plan discarded" if drafts else "")
-        + "."
-    )
 
 
-def _undo_note(plan: Plan, counts: Mapping[str, int]) -> str:
-    return (
-        f'The user undid the rollback of the plan "{plan.title}": the notebook is '
-        f"back as the plan left it ({counts.get('restored', 0)} file(s) restored, "
-        f"{counts.get('removed', 0)} removed)."
-    )
 
 
-def _status_before_rollback(plan: Plan) -> str:
-    for entry in reversed(plan.history):
-        if entry.get("event") == "rolled_back" and entry.get("from") in ("done", "stopped"):
-            return str(entry["from"])
-    return "done"
 
 
 def _shorten(text: str, limit: int) -> str:

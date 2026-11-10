@@ -5,13 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from jenny.snapshot.locations import (
-    MARKER_FILE_NAME,
-    SAFETY_DIR_PREFIX,
-    SANITY_FILE_NAME,
-    STAGED_SNAPSHOTS_DIR_NAME,
-    STAGED_WORKSPACE_DIR_NAME,
-)
 from jenny.snapshot.restore_marker import (
     apply_pending_restore,
     clear_marker,
@@ -19,6 +12,13 @@ from jenny.snapshot.restore_marker import (
     sweep_safety_copies,
     write_marker,
     write_staging_sanity,
+)
+from jenny.utils.locations import (
+    MARKER_FILE_NAME,
+    SAFETY_DIR_PREFIX,
+    SANITY_FILE_NAME,
+    STAGED_SNAPSHOTS_DIR_NAME,
+    STAGED_WORKSPACE_DIR_NAME,
 )
 
 

@@ -692,7 +692,7 @@ body.home {
 }
 .home-plan-meta b { color: var(--text); font-weight: 600; }
 .home-plan-meta .ti { margin-right: 4px; }
-.home-plan-photo .ti { color: var(--ok); }
+.home-plan-start .ti { color: var(--ok); }
 .home-plan .home-work-seg.is-blocked { background: var(--warning); box-shadow: none; }
 
 .home-plan-note {
@@ -702,8 +702,8 @@ body.home {
 }
 .home-plan-note b { color: var(--text); }
 .home-plan-note.is-error { display: flex; gap: 6px; align-items: flex-start; color: var(--error); }
-.home-plan-photo-line { display: flex; gap: 8px; align-items: flex-start; }
-.home-plan-photo-line > .ti { flex: none; color: var(--ok); font-size: 16px; margin-top: 1px; }
+.home-plan-start-line { display: flex; gap: 8px; align-items: flex-start; }
+.home-plan-start-line > .ti { flex: none; color: var(--ok); font-size: 16px; margin-top: 1px; }
 
 .home-plan-list {
   list-style: none;

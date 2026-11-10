@@ -1,8 +1,8 @@
 """La pianificazione in corso (``drafting``): nasce col tasto, dura più turni, finisce.
 
 Il driver è vero, con l'ospite e il bus finti dei suoi test; lo stato vive nello
-store (``plans/drafting.json``), quindi qui si prova anche che regge a un riavvio
-e che le RPC lo leggono senza agente.
+store (la tabella ``plan_drafting`` di ``undo.sqlite``), quindi qui si prova anche
+che regge a un riavvio e che le RPC lo leggono senza agente.
 """
 
 from __future__ import annotations

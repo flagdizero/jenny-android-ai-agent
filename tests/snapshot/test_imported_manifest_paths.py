@@ -20,9 +20,9 @@ import pytest
 from jenny.config.schema import SnapshotConfig
 from jenny.snapshot.backup import BackupError, BackupManager
 from jenny.snapshot.engine import SnapshotEngine
-from jenny.snapshot.locations import STAGED_SNAPSHOTS_DIR_NAME
 from jenny.snapshot.service import SnapshotService
 from jenny.snapshot.store import put_blob
+from jenny.utils.locations import STAGED_SNAPSHOTS_DIR_NAME
 
 _HASH = "a" * 64
 

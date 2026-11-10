@@ -31,10 +31,10 @@ from jenny.config.tool_schemas import AndroidWebSearchConfig
 from jenny.providers.opencode import catalog_headers
 from jenny.providers.tls import CaBundleError, build_ssl_context
 from jenny.security.workspace_access import workspace_sandbox_status
-from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.keys import UNIFIED_SESSION_KEY
 from jenny.utils.errors import StatusError
 from jenny.utils.helpers import validate_timezone_name
+from jenny.utils.path import safe_expanduser
 
 # Fasi che il layer di installazione può dichiarare. Serve a non far arrivare
 # alla UI una stringa che nessuna traduzione conosce (`i18n.t` stamperebbe la
@@ -928,7 +928,7 @@ def settings_payload(
             "available": _android_context() is not None and not on_remote_listener(),
         },
         "runtime": {
-            "config_path": str(_safe_expanduser(get_config_path())),
+            "config_path": str(safe_expanduser(get_config_path())),
             "workspace_path": str(config.workspace_path),
             "gateway_host": config.gateway.host,
             "gateway_port": config.gateway.port,
@@ -974,7 +974,7 @@ def _config_recovery_payload() -> dict[str, Any] | None:
     quarantine = ctx.config_quarantine_path
     return {
         "restored_from": ctx.config_recovered_from,
-        "broken_file": str(_safe_expanduser(quarantine)) if quarantine else None,
+        "broken_file": str(safe_expanduser(quarantine)) if quarantine else None,
     }
 
 

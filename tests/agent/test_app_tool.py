@@ -504,18 +504,6 @@ async def test_a_published_app_brings_its_tools_into_the_same_turn(personal: Pat
     assert "portafoglio" in syncer.apps() and registry.get("use_app") is not None
 
 
-def test_startup_publishes_only_migrated_drafts(ws: Path) -> None:
-    from jenny.apps import drafts
-
-    for slug in ("costruttore", "migrata"):
-        d = drafts.draft_dir(ws, slug)
-        d.mkdir(parents=True)
-        (d / "app.json").write_text(json.dumps(SPESA))
-    (drafts.draft_dir(ws, "migrata") / drafts.MIGRATED_MARKER).write_text("")
-    assert drafts.promote_valid_drafts(ws) == ["migrata"]
-    assert drafts.draft_dir(ws, "costruttore").exists()
-
-
 def test_each_registry_gets_its_face_of_the_tool(ws: Path) -> None:
     from types import SimpleNamespace
 

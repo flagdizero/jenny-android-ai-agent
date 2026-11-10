@@ -112,7 +112,10 @@ async def test_the_webui_receives_the_whole_text_after_drops() -> None:
 
     task = asyncio.create_task(dispatcher._dispatch_outbound())
     try:
-        await publishing
+        # Con un tetto: il 10/11/2026 questo test ha fermato la suite intera per
+        # dieci minuti a CPU zero, due volte, e senza tetto non dice dove — il
+        # finale che non entra in coda, o il dispatcher che non si ferma.
+        await asyncio.wait_for(publishing, timeout=15.0)
         # Il tetto e' largo apposta: lo ``stream_end`` arriva di sicuro, ma il
         # dispatcher scrive anche il verbale (SQLite, in un thread), e sotto il
         # carico della suite intera i 2 s di prima non bastavano (03/11/2026,
@@ -128,7 +131,7 @@ async def test_the_webui_receives_the_whole_text_after_drops() -> None:
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):
-            await task
+            await asyncio.wait_for(task, timeout=15.0)
 
     frames = [json.loads(c.args[0]) for c in ws.send.await_args_list]
     shown = "".join(f["text"] for f in frames if f["event"] == "delta")

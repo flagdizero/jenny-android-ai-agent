@@ -129,16 +129,15 @@ object FloatingOverlayController {
     private const val MASCOT_MAX_PX = 600
 
     /**
-     * I due ancoraggi orizzontali, in frazioni del lato dello sprite.
+     * L'ancoraggio orizzontale a riposo, in frazione del lato dello sprite.
      *
-     * Copiati da `mobile-style.css` (`.jenny-duo` e `.jenny-duo.out`), dove la
-     * mascotte in chat vive con gli stessi due numeri: a riposo poco meno di
-     * metà quadrato resta fuori schermo, e quando è attiva rientra a un quarto.
-     * Sono frazioni e non pixel per la stessa ragione scritta là: la stessa
-     * camminata deve finire esattamente sul bordo a ogni taglia.
+     * Copiato da `mobile-style.css` (`.jenny-duo`), dove la mascotte in chat
+     * vive con lo stesso numero: a riposo poco meno di metà quadrato resta
+     * fuori schermo. È una frazione e non pixel per la stessa ragione scritta
+     * là: la stessa camminata deve finire esattamente sul bordo a ogni taglia.
+     * L'altro ancoraggio, a chat aperta, è il cap della pillola ([parkX]).
      */
     private const val DOCKED_OUT_RATIO = 0.469f
-    private const val OUT_RATIO = 0.25f
 
     /** Quanto dura lo scivolamento fra i due ancoraggi. `.jenny-duo` usa
      *  0,3 s con questa curva, ed è la stessa transizione. */
@@ -973,8 +972,8 @@ object FloatingOverlayController {
     // Montaggio e smontaggio                                              //
     // ------------------------------------------------------------------ //
 
-    private fun applyVisibility(): Boolean {
-        val ctx = appContext ?: return false
+    private fun applyVisibility() {
+        val ctx = appContext ?: return
         // Il service è la condizione che teardown() toglieva spegnendo
         // [enabled]: senza di lui la finestra raccoglierebbe domande per un
         // gateway che il sistema sta smontando. Tenerla qui invece che nel
@@ -982,24 +981,23 @@ object FloatingOverlayController {
         val wanted = enabled && GatewayService.isRunning && !MainActivity.isInForeground
         if (!wanted) {
             if (root != null) detach()
-            return enabled
+            return
         }
-        if (root != null) return true
+        if (root != null) return
         if (!canDrawOverlays(ctx)) {
             Log.i(TAG, "Overlay requested but SYSTEM_ALERT_WINDOW is not granted")
-            return false
+            return
         }
-        return attach(ctx)
+        attach(ctx)
     }
 
-    private fun canDrawOverlays(ctx: Context): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(ctx)
+    private fun canDrawOverlays(ctx: Context): Boolean = Settings.canDrawOverlays(ctx)
 
     @SuppressLint("ClickableViewAccessibility")
     private fun attach(ctx: Context): Boolean {
         val wm = ctx.getSystemService(WindowManager::class.java) ?: return false
         return try {
-            loadParkPosition(ctx)
+            loadStoredLook(ctx)
             expanded = false
             val container = buildViews(ctx)
             val lp = stageParams()
@@ -1107,13 +1105,7 @@ object FloatingOverlayController {
     // Le due taglie della finestra                                        //
     // ------------------------------------------------------------------ //
 
-    private fun overlayType(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
+    private fun overlayType(): Int = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
     /**
      * Il palco: **schermo intero, a (0,0), per sempre**.
@@ -2735,7 +2727,7 @@ object FloatingOverlayController {
      *  il passaggio alla finestra piccola non la sposta di un pixel. */
     private fun endFlight(ctx: Context) {
         flight = null
-        saveParkPosition(ctx)
+        saveMascotSize(ctx)
         syncFace()
         // La camminata finisce esattamente sull'ancoraggio docked: la maniglia
         // ci si rimette sopra e torna piccola, e lei riappare lì dentro. Con
@@ -3040,11 +3032,10 @@ object FloatingOverlayController {
      * l'asse del corpo ([AXIS_RATIO]) cade sul centro del cap — la pallina
      * d'invio, a destra.
      *
-     * «Out» senza chat oggi non capita: il fumetto di risposta da solo non
+     * «Out» senza chat non ha un posto suo: il fumetto di risposta da solo non
      * esiste più (la conversazione sta nella colonna del composer), e ogni
-     * chiamante con `out = true` ha già la chat aperta. Il ramo con
-     * [OUT_RATIO] — a un quarto dal bordo — resta come ripiego per un
-     * chiamante futuro che la chiedesse fuori a chat chiusa.
+     * chiamante con `out = true` ha già la chat aperta. A chat chiusa, `out`
+     * o no, sta al bordo.
      */
     private fun parkX(ctx: Context, out: Boolean = false): Int {
         val size = mascotSize(ctx)
@@ -3055,7 +3046,7 @@ object FloatingOverlayController {
             val cap = dp(ctx, BAR_PAD_DP) + dp(ctx, SEND_DP) / 2
             return pillLeft + pillW - cap - (size * AXIS_RATIO).toInt()
         }
-        val hidden = (size * if (out) OUT_RATIO else DOCKED_OUT_RATIO).toInt()
+        val hidden = (size * DOCKED_OUT_RATIO).toInt()
         return width - size + hidden
     }
 
@@ -3199,14 +3190,15 @@ object FloatingOverlayController {
     /** Le preferenze della mascotte flottante (`jenny_floating`). */
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun loadParkPosition(ctx: Context) {
+    /** Taglia, colori e bolla salvati, per una mascotte appena montata. */
+    private fun loadStoredLook(ctx: Context) {
         val prefs = prefs(ctx)
         if (mascotPx <= 0) mascotPx = prefs.getInt(PREF_SIZE, 0)
         storedPalette(prefs.getString(PREF_PALETTE, null))?.let { palette = it }
         parseBubble(prefs.getString(PREF_BUBBLE, null))?.let { userBubble = it }
     }
 
-    private fun saveParkPosition(ctx: Context) {
+    private fun saveMascotSize(ctx: Context) {
         prefs(ctx)
             .edit()
             // La taglia può essere arrivata dalla SPA prima che ci fosse un

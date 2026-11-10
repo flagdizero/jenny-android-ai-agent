@@ -84,7 +84,7 @@ Everything about how the agent talks to the model and manages its own context.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `agents.defaults.idleCompactAfterMinutes` | int ≥ 0 | `15` | Minutes of idle time before the session context is proactively compacted (summary + the most recent messages, rewritten into the session file). `0` disables it, leaving only the token-driven consolidation that never rewrites the file. Accepted under its legacy name `sessionTtlMinutes` too. |
+| `agents.defaults.idleCompactAfterMinutes` | int ≥ 0 | `15` | Minutes of idle time before the session context is proactively compacted (summary + the most recent messages, rewritten into the stored session). `0` disables it, leaving only the token-driven consolidation that never rewrites the stored session. Accepted under its legacy name `sessionTtlMinutes` too. |
 | `agents.defaults.maxMessages` | int ≥ 0 | `120` | Upper bound on live messages kept in the session before consolidation kicks in. |
 | `agents.defaults.consolidationRatio` | float 0.1–0.95 | `0.5` | Fraction of the live context consolidated when a consolidation runs. |
 | `agents.defaults.honestContextEstimate` | bool | `true` | Count reasoning and tool calls, not only the text, when estimating how big the conversation is, so consolidation starts before the prompt outgrows the window. Turn it off only to go back to the old estimate. |
@@ -216,11 +216,12 @@ Defaults — allowed: `os`, `sys`, `pathlib`, `json`, `re`, `math`, `datetime`, 
 | `tools.androidWeb.search.maxResults` | int | `8` | Results per search. The UI validates 1–10. |
 | `tools.androidWeb.search.timeout` | int | `15` | Seconds per search. The UI validates 1–120. After a search runs out of time, every search gives up at once for the next minute. |
 | `tools.androidWeb.fetch.timeout` | int | `15` | Seconds per page read; a page that does not arrive in time is retried in the browser. |
-| `tools.androidWeb.fetch.maxChars` | int | `50000` | Max characters extracted per page. The UI validates 1000–200000. |
+| `tools.androidWeb.fetch.maxChars` | int | `12000` | Max characters extracted per page. The UI validates 1000–200000. |
 | `tools.androidWeb.browser.timeout` | int | `30` | Seconds per browser action. |
 | `tools.androidWeb.browser.maxSnapshotChars` | int | `2500` | Cap on a `browser_snapshot` payload. |
 | `tools.androidWeb.browser.maxReadChars` | int | `4000` | Cap on a `browser_read` payload. |
 | `tools.androidWeb.browser.idleCloseS` | int | `300` | Seconds of inactivity after which an open session is reaped on its own — an open browser costs ~100 MB of RAM. |
+| `tools.androidWeb.browser.maxSessions` | int 1–10 | `3` | How many browser sessions (each a WebView in its own profile) can be open at once: Jenny's, the helpers', and the short browser retries of `web_fetch`. |
 
 ### tools.location
 
@@ -259,7 +260,7 @@ Access to remote machines. Both gates are closed by default and **both are neces
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `tools.ssh.enable` | bool | **`false`** | Master switch. **Asymmetric**: turning it off is checked on every single call, so it applies instantly (it is the emergency stop); turning it on only registers the tools at the next gateway start. |
+| `tools.ssh.enable` | bool | **`false`** | Master switch. No restart either way: turning it off is checked on every single call, so it applies instantly (it is the emergency stop); turning it on takes effect for the next `sysadmin` subagent, which builds its tools from the current configuration when it starts. |
 | `tools.ssh.hosts[]` | array | `[]` | The registered machines. An empty list means no SSH tools even with `enable: true` — the agent can only name an alias from here, never an address. |
 | `tools.ssh.connectTimeoutS` | float 1–60 | `15.0` | Connection timeout. |
 | `tools.ssh.commandTimeoutS` | int 1–300 | `60` | Ceiling for a single `ssh_exec`, and for the short launch/poll/stop commands `ssh_job` issues. Low on purpose, and the wake lock added in 0.6.6 is not a reason to raise it: a wake lock keeps the CPU awake, not the connection. A long command waited for on an open SSH channel still dies when the phone walks from wifi to mobile data, or when the gateway restarts. Long work belongs to `ssh_job`, which detaches it. A `timeout_s` passed by the model can only lower this, never raise it. |
@@ -364,7 +365,7 @@ Local versioning of the workspace, plus the key derivation used by encrypted bac
 | `snapshots.pbkdf2Iterations` | int 100000–10000000 | `600000` | PBKDF2 iterations for the exported `.jbk` backup key. The ceiling mirrors the container format's own limit. |
 | `snapshots.excludeGlobs` | string[] | see below | Paths never captured. |
 
-Default excludes: `ui/**`, `logs/**`, `.jenny/logs/**`, `.jenny/snapshots/**`, `.jenny/backup_staging/**`, `**/__pycache__/**`, `*.tmp`, `*.tmp.*`. See [Backup and restore](../using/backup.md).
+Default excludes: `ui/**`, `logs/**`, `.jenny/logs/**`, `.jenny/snapshots/**`, `.jenny/backup_staging/**`, `.jenny/ssh_jobs/**`, `**/__pycache__/**`, `*.tmp`, `*.tmp.*`. See [Backup and restore](../using/backup.md).
 
 ## extensions
 

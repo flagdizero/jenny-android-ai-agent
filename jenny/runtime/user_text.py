@@ -203,11 +203,11 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "cmd.dream.demoted_more": ", and {more} more",
         "cmd.gardener.moved": (
-            "A pass runs on the project you are in: open it and send `/gardener` there."
+            "A pass runs on the notebook you are in: open it and send `/gardener` there."
         ),
         "cmd.gardener.started": "Gardening {name}...",
         "cmd.gardener.not_a_project": (
-            "`{name}` is not a project I can garden: I look for `{path}`, and there is "
+            "`{name}` is not a notebook I can garden: I look for `{path}`, and there is "
             "nothing there."
         ),
         "cmd.gardener.error": "The gardener failed: {error}",
@@ -269,7 +269,7 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "cmd.gardener.already_running": (
             "A pass on {name} is already running, so this one did not start — the gardener "
-            "works on one project one pass at a time, or two passes overwrite each other's "
+            "works on one notebook one pass at a time, or two passes overwrite each other's "
             "pages. Try again once it has finished."
         ),
         "cmd.gardener.no_write": (
@@ -309,13 +309,12 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.help.header": "✿ jenny commands:",
         "cmd.unavailable": "`{command}` is unavailable: its prompt template could not be loaded.",
         "cmd.refusal.project": (
-            "`{command}` works on one project, and this conversation is not a project.\n\n"
-            "Open the project — the chip above the composer does it — and send `{command}` "
-            "there."
+            "`{command}` works on one notebook, and this conversation is not a notebook.\n\n"
+            "Open the notebook from Notebooks and send `{command}` there."
         ),
         "cmd.refusal.personal": (
-            "`{command}` does not act on this project, so it does nothing here.\n\n"
-            "Send it from the personal chat — the chip above the composer switches back."
+            "`{command}` does not act on this notebook, so it does nothing here.\n\n"
+            "Send it from the personal chat."
         ),
         "cmd.help.new": "Stop the current task and start a fresh conversation.",
         "cmd.help.stop": (
@@ -330,28 +329,28 @@ _TEXT: dict[str, dict[str, str]] = {
             "in Settings → Workshop → Memory."
         ),
         "cmd.help.gardener": (
-            "Inside a project: turn its new journal lines into pages and update its map — or, "
+            "Inside a notebook: turn its new journal lines into pages and update its map — or, "
             "with nothing new to promote, bring an oversized map back under its ceiling. The "
             "periodic pass is set in Settings → Workshop → Memory."
         ),
         "cmd.help.skill": "List enabled skills and their descriptions.",
         "cmd.help.tidy": (
-            "Inside a project: restructure its wiki now — split what has outgrown the per-turn "
+            "Inside a notebook: restructure its wiki now — split what has outgrown the per-turn "
             "budget, move prose out of an oversized map, realign the page list. Runs in this "
             "conversation, with its pages and your answers in hand; the gardener's periodic pass "
             "cannot do that."
         ),
-        "cmd.help.init": "Inside a project: read the wiki and write its AGENTS.md.",
+        "cmd.help.init": "Inside a notebook: read the wiki and write its AGENTS.md.",
         "cmd.help.help": "List available slash commands.",
         "cmd.scope_note.model": (
-            "It switches the preset for the whole installation, not for one project."
+            "It switches the preset for the whole installation, not for one notebook."
         ),
         "cmd.scope_note.dream": (
-            "It consolidates the personal memory. A project conversation feeds it only with what "
-            "it says about you, and only into USER.md: the rest stays in that project's pages."
+            "It consolidates the personal memory. A notebook conversation feeds it only with what "
+            "it says about you, and only into USER.md: the rest stays in that notebook's pages."
         ),
         "cmd.scope_note.gardener": "The periodic pass is set in Settings → Workshop → Memory.",
-        "cmd.scope_note.skill": "It lists what the installation has, not what this project holds.",
+        "cmd.scope_note.skill": "It lists what the installation has, not what this notebook holds.",
         # Piano a lista (``jenny/plan/driver.py``).
         "plan.stalled": (
             "I stopped without saying whether this step is finished. Tell me how to go on, "
@@ -367,6 +366,7 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "plan.restarted": "I restarted during step {step}: tap Resume to do it again.",
         "plan.stopped": "I stopped the plan. The notebook stays as it is now.",
+        "plan.stopped_personal": "I stopped the plan. What it did so far stays as it is now.",
         "plan.stopped_planning": "I stopped preparing the plan.",
         # Le note di un passo chiuso dalle bozze decise dall'utente (``PlanDriver``).
         "plan.drafts_installed": "change installed",
@@ -378,12 +378,12 @@ _TEXT: dict[str, dict[str, str]] = {
             "[system] notebook back as the plan «{title}» left it (rollback undone)"
         ),
         # Un progetto la cui cartella non torna (``AgentLoop._refuse_*``).
-        "project.reincarnated": "This conversation belongs to a different `{name}` from the one that is there now.\n\nThe folder was replaced — deleted and created again, or restored from somewhere else — so what I remember here is another project's. I have not read your message and I have changed nothing, because answering out of the wrong history is the one mistake you could not check.\n\nTwo ways out. If the folder now at `{name}` is the one you want, delete that project from the workspace file browser — hold it and pick Delete — and create it again: that clears this history too, and tells you what it is removing first. If instead the old folder should come back, put it back and this chat is exactly where you left it.",
-        "project.missing_busy": "The folder for project `{name}` is not there any more, and I am still finishing the previous message in this chat, so I have not read this one.\n\nI will look for where the folder went as soon as that is done — send this again then. If you renamed the folder, renaming it back to `{name}` also fixes it. Or pick another project, or the personal chat, from the chip above the message box.",
+        "project.reincarnated": "This conversation belongs to a different `{name}` from the one that is there now.\n\nThe folder was replaced — deleted and created again, or restored from somewhere else — so what I remember here is another notebook's. I have not read your message and I have changed nothing, because answering out of the wrong history is the one mistake you could not check.\n\nTwo ways out. If the folder now at `{name}` is the one you want, delete that notebook from the workspace file browser — hold it and pick Delete — and create it again: that clears this history too, and tells you what it is removing first. If instead the old folder should come back, put it back and this chat is exactly where you left it.",
+        "project.missing_busy": "The folder for notebook `{name}` is not there any more, and I am still finishing the previous message in this chat, so I have not read this one.\n\nI will look for where the folder went as soon as that is done — send this again then. If you renamed the folder, renaming it back to `{name}` also fixes it. Or pick another notebook, or the personal chat, from the chip above the message box.",
         "project.renamed": "The folder `{name}` was renamed to `{moved_to}`, so I moved this conversation's history there — nothing was lost, and I have not read your message.\n\nOpen `{moved_to}` from the chip above the message box and it is all where you left it.",
-        "project.unopenable": "The folder for project `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI found where it went — it is now called `{unopenable}` — but that cannot be the name of a conversation, so I left this chat's history under `{name}` rather than moving it somewhere nothing could open it. Nothing is lost.\n\nRename the folder using letters, numbers, dot, dash and underscore only, no spaces and no accents, and this chat follows it — renaming it back to `{name}` works too. Then pick the project from the chip above the message box.",
-        "project.split": "The folder for project `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI could not move this conversation to where the folder went{detail}. So part of its history is under a new name and part is still under the old one — nothing has been deleted, but the chat is not all in one place until those two halves are joined. Restart me and that happens on the way up; then open the project from the chip above the message box.",
-        "project.missing": "The folder for project `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI could not find where it went{detail}. Nothing is lost: the chat is still here, and it comes back as soon as the folder does. If you renamed it, renaming it back to `{name}` is the fix — a project's address is its folder name. Otherwise pick another project, or the personal chat, from the chip above the message box.",
+        "project.unopenable": "The folder for notebook `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI found where it went — it is now called `{unopenable}` — but that cannot be the name of a conversation, so I left this chat's history under `{name}` rather than moving it somewhere nothing could open it. Nothing is lost.\n\nRename the folder using letters, numbers, dot, dash and underscore only, no spaces and no accents, and this chat follows it — renaming it back to `{name}` works too. Then pick the notebook from the chip above the message box.",
+        "project.split": "The folder for notebook `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI could not move this conversation to where the folder went{detail}. So part of its history is under a new name and part is still under the old one — nothing has been deleted, but the chat is not all in one place until those two halves are joined. Restart me and that happens on the way up; then open the notebook from the chip above the message box.",
+        "project.missing": "The folder for notebook `{name}` is not there any more, so this conversation has nothing to work on and I have not read your message.\n\nI could not find where it went{detail}. Nothing is lost: the chat is still here, and it comes back as soon as the folder does. If you renamed it, renaming it back to `{name}` is the fix — a notebook's address is its folder name. Otherwise pick another notebook, or the personal chat, from the chip above the message box.",
         # Il bot Telegram.
         "telegram.paired": "✅ Paired! You can now talk to Jenny from this chat.",
         "telegram.welcome": "Message me like a normal chat and Jenny replies.\n\n• /new — start a new conversation\n• 📎 Photos, files, voice notes and videos reach Jenny. She can see\n  photos; the rest arrive as files she cannot listen to or watch.",
@@ -693,12 +693,11 @@ _TEXT: dict[str, dict[str, str]] = {
         "cmd.unavailable": "`{command}` non è disponibile: non riesco a caricare il suo prompt.",
         "cmd.refusal.project": (
             "`{command}` lavora su un quaderno, e questa conversazione non è un quaderno.\n\n"
-            "Apri il quaderno, con il chip sopra la casella di testo, e manda `{command}` "
-            "da lì."
+            "Apri il quaderno dai Quaderni e manda `{command}` da lì."
         ),
         "cmd.refusal.personal": (
             "`{command}` non agisce su questo quaderno, quindi qui non fa niente.\n\n"
-            "Mandalo dalla chat personale: il chip sopra la casella di testo ti riporta lì."
+            "Mandalo dalla chat personale."
         ),
         "cmd.help.new": "Ferma il lavoro in corso e inizia una conversazione nuova.",
         "cmd.help.stop": (
@@ -756,6 +755,7 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "plan.restarted": "Mi sono riavviata durante il passo {step}: tocca Riprendi per rifarlo.",
         "plan.stopped": "Ho fermato il piano. Il quaderno resta com'è adesso.",
+        "plan.stopped_personal": "Ho fermato il piano. Quello che ha fatto finora resta com'è.",
         "plan.stopped_planning": "Ho smesso di preparare il piano.",
         "plan.drafts_installed": "modifica installata",
         "plan.drafts_discarded": "modifica scartata",
@@ -766,12 +766,12 @@ _TEXT: dict[str, dict[str, str]] = {
             "(ritorno annullato)"
         ),
         # Un progetto la cui cartella non torna (``AgentLoop._refuse_*``).
-        "project.reincarnated": "Questa conversazione appartiene a un `{name}` diverso da quello che c'è adesso.\n\nLa cartella è stata sostituita — cancellata e ricreata, o ripristinata da un'altra parte — quindi quello che ricordo qui è di un altro progetto. Non ho letto il tuo messaggio e non ho cambiato niente, perché rispondere partendo dalla storia sbagliata è l'unico errore che non potresti controllare.\n\nCi sono due strade. Se la cartella che ora si chiama `{name}` è quella che vuoi, elimina quel progetto dal file browser del workspace — tienilo premuto e scegli Elimina — e ricrealo: così si cancella anche questa storia, e prima ti dice cosa sta togliendo. Se invece deve tornare la cartella di prima, rimettila al suo posto e ritrovi questa chat esattamente dove l'avevi lasciata.",
-        "project.missing_busy": "La cartella del progetto `{name}` non c'è più, e sto ancora finendo il messaggio precedente in questa chat, quindi questo non l'ho letto.\n\nAppena ho finito cerco dov'è finita la cartella: rimandamelo allora. Se l'hai rinominata, anche rinominarla di nuovo in `{name}` risolve. Oppure scegli un altro progetto, o la chat personale, dal chip sopra la casella del messaggio.",
+        "project.reincarnated": "Questa conversazione appartiene a un `{name}` diverso da quello che c'è adesso.\n\nLa cartella è stata sostituita — cancellata e ricreata, o ripristinata da un'altra parte — quindi quello che ricordo qui è di un altro quaderno. Non ho letto il tuo messaggio e non ho cambiato niente, perché rispondere partendo dalla storia sbagliata è l'unico errore che non potresti controllare.\n\nCi sono due strade. Se la cartella che ora si chiama `{name}` è quella che vuoi, elimina quel quaderno dal file browser del workspace — tienilo premuto e scegli Elimina — e ricrealo: così si cancella anche questa storia, e prima ti dice cosa sta togliendo. Se invece deve tornare la cartella di prima, rimettila al suo posto e ritrovi questa chat esattamente dove l'avevi lasciata.",
+        "project.missing_busy": "La cartella del quaderno `{name}` non c'è più, e sto ancora finendo il messaggio precedente in questa chat, quindi questo non l'ho letto.\n\nAppena ho finito cerco dov'è finita la cartella: rimandamelo allora. Se l'hai rinominata, anche rinominarla di nuovo in `{name}` risolve. Oppure scegli un altro quaderno, o la chat personale, dal chip sopra la casella del messaggio.",
         "project.renamed": "La cartella `{name}` è stata rinominata in `{moved_to}`, quindi ho spostato lì la storia di questa conversazione — non si è perso niente, e il tuo messaggio non l'ho letto.\n\nApri `{moved_to}` dal chip sopra la casella del messaggio e trovi tutto dove l'avevi lasciato.",
-        "project.unopenable": "La cartella del progetto `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nHo trovato dov'è finita — ora si chiama `{unopenable}` — ma quello non può essere il nome di una conversazione, quindi ho lasciato la storia di questa chat sotto `{name}` invece di spostarla dove niente potrebbe aprirla. Non si è perso niente.\n\nRinomina la cartella usando solo lettere, numeri, punto, trattino e trattino basso, senza spazi e senza accenti, e questa chat la segue — va bene anche rinominarla di nuovo in `{name}`. Poi scegli il progetto dal chip sopra la casella del messaggio.",
-        "project.split": "La cartella del progetto `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nNon sono riuscita a spostare questa conversazione dove è finita la cartella{detail}. Così una parte della sua storia è sotto un nome nuovo e una parte è ancora sotto quello vecchio — non è stato cancellato niente, ma la chat non è tutta in un posto finché le due metà non si riuniscono. Riavviami e succede durante l'avvio; poi apri il progetto dal chip sopra la casella del messaggio.",
-        "project.missing": "La cartella del progetto `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nNon ho trovato dov'è finita{detail}. Non si è perso niente: la chat è ancora qui, e torna appena torna la cartella. Se l'hai rinominata, rinominarla di nuovo in `{name}` è la soluzione — l'indirizzo di un progetto è il nome della sua cartella. Altrimenti scegli un altro progetto, o la chat personale, dal chip sopra la casella del messaggio.",
+        "project.unopenable": "La cartella del quaderno `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nHo trovato dov'è finita — ora si chiama `{unopenable}` — ma quello non può essere il nome di una conversazione, quindi ho lasciato la storia di questa chat sotto `{name}` invece di spostarla dove niente potrebbe aprirla. Non si è perso niente.\n\nRinomina la cartella usando solo lettere, numeri, punto, trattino e trattino basso, senza spazi e senza accenti, e questa chat la segue — va bene anche rinominarla di nuovo in `{name}`. Poi scegli il quaderno dal chip sopra la casella del messaggio.",
+        "project.split": "La cartella del quaderno `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nNon sono riuscita a spostare questa conversazione dove è finita la cartella{detail}. Così una parte della sua storia è sotto un nome nuovo e una parte è ancora sotto quello vecchio — non è stato cancellato niente, ma la chat non è tutta in un posto finché le due metà non si riuniscono. Riavviami e succede durante l'avvio; poi apri il quaderno dal chip sopra la casella del messaggio.",
+        "project.missing": "La cartella del quaderno `{name}` non c'è più, quindi questa conversazione non ha niente su cui lavorare e il tuo messaggio non l'ho letto.\n\nNon ho trovato dov'è finita{detail}. Non si è perso niente: la chat è ancora qui, e torna appena torna la cartella. Se l'hai rinominata, rinominarla di nuovo in `{name}` è la soluzione — l'indirizzo di un quaderno è il nome della sua cartella. Altrimenti scegli un altro quaderno, o la chat personale, dal chip sopra la casella del messaggio.",
         # Il bot Telegram.
         "telegram.paired": "✅ Collegato! Da ora puoi parlare con Jenny da questa chat.",
         "telegram.welcome": "Scrivimi come in una chat normale e ti risponde Jenny.\n\n• /new — inizia una nuova conversazione\n• 📎 Foto, file, vocali e video: arrivano a Jenny. Le foto le vede;\n  gli altri li riceve come file, senza ascoltarli o guardarli.",

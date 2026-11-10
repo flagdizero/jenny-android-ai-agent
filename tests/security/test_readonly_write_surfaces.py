@@ -158,7 +158,7 @@ _ASKS_FOR_ITSELF = {
         "un'azione http che non e' GET cambia lo stato di un'app dell'utente fuori dai file "
         "(annaffia, accendi): non e' ssh_exec, e in sola lettura si rifiuta"
     ),
-    "agent/tools/cron.py": "scrive cron/jobs.json, che non è un file dell'utente",
+    "agent/tools/cron.py": "scrive i job in state.sqlite, che non è un file dell'utente",
     "agent/tools/app_update.py": "installa un APK: non è una scrittura, è una sostituzione",
     "agent/tools/journal.py": (
         "appende al diario del progetto: non passa dai tool file, ha il suo gate"

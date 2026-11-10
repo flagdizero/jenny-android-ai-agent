@@ -77,9 +77,6 @@ COVERAGE_STRATEGIES: tuple[str, ...] = ("notebook", "web", "ask", "leave")
 # una domanda.
 BLOCK_KINDS: tuple[str, ...] = ("question", "drafts")
 
-# Tag che il codice dà ai passi di una versione nuova rispetto alla precedente.
-STEP_TAGS: tuple[str, ...] = ("new", "moved", "changed")
-
 # Le transizioni ammesse. Una tabella e non una catena di ``if`` perché la
 # domanda «da qui posso andare là?» se la fanno il driver, le RPC e i test, e
 # deve avere una risposta sola.
@@ -158,16 +155,12 @@ class PlanValidationError(PlanError, ValueError):
 
 
 class PlanFormatError(PlanError, ValueError):
-    """Un ``plan.json`` che non si può leggere come piano."""
+    """Una riga dello store (``plan/store.py``) che non si può leggere come piano."""
 
 
 def now_iso() -> str:
     """Adesso, in UTC, al secondo: il formato di tutti i timestamp del piano."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def is_open_status(status: str) -> bool:
-    return status in OPEN_STATUSES
 
 
 # ── Dati ─────────────────────────────────────────────────────────────────────
@@ -261,7 +254,7 @@ class Step:
 
 
 def _read_covers(raw: Any) -> list[str]:
-    """I ``covers`` letti da ``plan.json``: solo testo, una lista malformata è vuota."""
+    """I ``covers`` letti dal piano salvato: solo testo, una lista malformata è vuota."""
     if not isinstance(raw, list):
         return []
     return [str(c) for c in raw if isinstance(c, str) and c]
@@ -424,7 +417,7 @@ class Plan:
 
 
 def _read_blocked(raw: Any) -> dict[str, Any] | None:
-    """Il blocco letto da ``plan.json``, con ``kind`` e ``drafts`` sempre presenti.
+    """Il blocco letto dal piano salvato, con ``kind`` e ``drafts`` sempre presenti.
 
     Un blocco scritto prima delle bozze di un passo non ha né l'uno né l'altro:
     è una domanda, senza bozze. Normalizzarlo qui, alla lettura, vuol dire che
@@ -453,7 +446,7 @@ def coverage_id(position: int) -> str:
 
 
 def _read_coverage(raw: Any) -> list[dict[str, str]]:
-    """La copertura letta da ``plan.json``: voci con le sei chiavi, tutte testo.
+    """La copertura letta dal piano salvato: voci con le sei chiavi, tutte testo.
 
     Tollerante come il resto della lettura: un piano di prima della copertura
     ne ha una vuota, e una voce malformata si salta invece di rendere

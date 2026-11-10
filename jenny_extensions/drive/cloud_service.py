@@ -31,10 +31,10 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.snapshot.crypto import DEFAULT_KDF_ITERATIONS
-from jenny.snapshot.locations import runtime_root_for
 from jenny.snapshot.store import hash_content
 from jenny.snapshot.types import entry_target
 from jenny.utils.clock import now_ms as _now_ms
+from jenny.utils.locations import runtime_root_for
 from jenny.utils.path import atomic_write, read_json_dict
 
 from .cloud import (
@@ -393,6 +393,13 @@ class CloudBackupService:
                 bad = await asyncio.to_thread(_mismatches, work, manifest.files)
             except DriveConsentError:
                 return {"ok": False, "error": "consent_needed"}
+            except WrongKeyError:
+                # La chiave di questo telefono non apre la copia: non è rotta, e
+                # segnarla rotta farebbe ricaricare tutto alla prossima. Gli
+                # stessi codici di ``run``.
+                return {"ok": False, "error": "wrong_key"}
+            except RepoNotFoundError:
+                return {"ok": False, "error": "backup_missing"}
             except CloudBackupError as exc:
                 # La copia c'è ma non si ricostruisce (pacco rovinato, blob che
                 # manca o non torna): è rotta, non irraggiungibile.

@@ -117,7 +117,6 @@ def test_the_file_promoted_from_the_backup_is_private(tmp_path) -> None:
 def _stuck_quarantine(monkeypatch) -> None:
     """Il rename di lato fallisce (filesystem in sola lettura, nome occupato...)."""
     monkeypatch.setattr("jenny.utils.path.quarantine", lambda _path: None)
-    monkeypatch.setattr("jenny.config.loader.quarantine", lambda _path: None, raising=False)
 
 
 async def test_a_broken_config_that_cannot_be_set_aside_is_never_written_over(

@@ -46,13 +46,13 @@ def test_every_drawer_has_name_and_subtitle(language: str, drawer: str) -> None:
     """Le tre stringhe che compongono l'intestazione, in tutte e due le lingue.
 
     Una chiave che manca non rompe niente: `i18n.t` restituisce la chiave
-    grezza, e a schermo compare «officina.sub.mani». E' cosi' che una
+    grezza, e a schermo compare «workshop.sub.mani». E' cosi' che una
     traduzione mancante si presenta, ed e' indistinguibile da un difetto.
     """
     d = _i18n(language)
     assert d["nav"][drawer].strip(), f"{language}: nav.{drawer} vuoto"
     sub = d["workshop"]["sub"][drawer]
-    assert sub.strip(), f"{language}: officina.sub.{drawer} vuoto"
+    assert sub.strip(), f"{language}: workshop.sub.{drawer} vuoto"
     # Una soprascritta che e' anche il sottotitolo vuol dire che qualcuno ha
     # riempito la riga per far passare il banco.
     assert sub != d["workshop"]["eyebrow"]
@@ -326,7 +326,7 @@ def test_the_new_overlines_are_translated(language: str) -> None:
     """I cinque gruppi che il ritaglio ha creato hanno un nome vero."""
     groups = _i18n(language)["workshop"]["groups"]
     for key in ("whoThinks", "parameters", "howMuchItRemembers", "dream", "gardener"):
-        assert groups.get(key, "").strip(), f"{language}: officina.groups.{key} manca"
+        assert groups.get(key, "").strip(), f"{language}: workshop.groups.{key} manca"
 
 
 def test_the_fine_cut_has_arrived() -> None:

@@ -192,7 +192,7 @@ The command takes no arguments. The three file budgets, the review cadence, and 
 
 Inside a [notebook](./projects.md), `/gardener` runs one [gardener](./gardener.md) pass on that notebook right now: it acknowledges with `Gardening <name>...` and follows up when the pass finishes. It takes no arguments — the notebook you are in *is* the subject.
 
-Outside a notebook it is refused, and the refusal says to open one. There is no way to garden a notebook from the personal chat: that is deliberate, and it matches the tool layer, where the journal has no argument for reaching another notebook either. (The command layer's English texts still call a notebook a *project*, its older name: see the refusal quoted under `/init` below.)
+Outside a notebook it is refused, and the refusal says to open one. There is no way to garden a notebook from the personal chat: that is deliberate, and it matches the tool layer, where the journal has no argument for reaching another notebook either.
 
 The periodic pass — whether it runs at all, how often it looks, how much silence it waits for, how long before it returns to the same notebook — is in the workshop's **Memory** drawer, in the *Gardener* group. Turning it off there leaves `/gardener` working by hand. `/gardener settings` and the other old words answer with a line saying where they went.
 
@@ -204,15 +204,15 @@ Only inside a notebook, and like `/init` it is not answered by the command layer
 
 Only inside a notebook. Unlike everything else on this page it is not answered by the command layer: it is expanded into a full agent turn that reads `wiki/index.md`, the pages, the recent `log/` entries and the existing instructions file, and then writes that notebook's `AGENTS.md` — scope, the conventions the pages already follow, and the open questions. If the file already has content it is updated rather than replaced. What you see in the chat stays `/init`.
 
-Outside a notebook, the same refusal every notebook command gives. The server still words it with the older name, *project*, and mentions the chip that only the workshop has; in the home the equivalent is the **Notebooks** page:
+Outside a notebook, the same refusal every notebook command gives:
 
 ```text
-`/init` works on one project, and this conversation is not a project.
+`/init` works on one notebook, and this conversation is not a notebook.
 
-Open the project — the chip above the composer does it — and send `/init` there.
+Open the notebook from Notebooks and send `/init` there.
 ```
 
-The other direction is refused the same way: `/dream`, `/model` or `/skill` sent from inside a notebook answer that the command does not act on this project and should be sent from the personal chat.
+The other direction is refused the same way: `/dream`, `/model` or `/skill` sent from inside a notebook answer that the command does not act on this notebook and should be sent from the personal chat.
 
 ### `/skill` — list enabled skills
 
@@ -237,7 +237,7 @@ In the personal chat:
 ```text
 ✿ jenny commands:
 /new — Stop the current task and start a fresh conversation.
-/stop — Cancel the active agent turn for this chat. Helpers working in the background keep going: stop each from its own bubble, or send /stop all to stop everything.
+/stop — Cancel the active agent turn for this chat. Mini-mes working in the background keep going: stop each from its own bubble, or send /stop all to stop everything.
 /status — Display runtime, provider, and channel status.
 /model [preset] — Show or switch the active model preset.
 /history [n] — Print the last N persisted conversation messages.

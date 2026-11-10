@@ -15,7 +15,7 @@ import pytest
 from jenny.db.database import Database
 from jenny.db.schema import Schema
 from jenny.db.shards import ShardsError, build, export
-from jenny.snapshot.types import STATE_ENTRY_DIR
+from jenny.utils.locations import STATE_ENTRY_DIR
 
 _JOBS = Schema("jobs", (
     "CREATE TABLE jobs (id TEXT PRIMARY KEY, data TEXT NOT NULL, raw BLOB);\n"

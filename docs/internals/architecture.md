@@ -32,7 +32,7 @@ Main files:
 | Area | Files |
 |---|---|
 | Message events and queue | `jenny/bus/events.py`, `jenny/bus/queue.py` |
-| Turn orchestration | `jenny/agent/loop.py` (+ mixins: `turn_states.py`, `turn_persistence.py`, `loop_provider.py`, `loop_tasks.py`) |
+| Turn orchestration | `jenny/agent/loop.py` (+ mixins: `turn_states.py`, `turn_persistence.py`, `loop_provider.py`, `loop_tasks.py`, `loop_plan.py`) |
 | Provider/tool conversation loop | `jenny/agent/runner.py` (+ mixins: `request_execution.py`, `tool_execution.py`) |
 | Context construction | `jenny/agent/context.py` |
 | Session storage and compaction | `jenny/session/manager.py`, `jenny/agent/autocompact.py` |
@@ -126,7 +126,7 @@ Tools are **explicitly registered**, not discovered by scanning the filesystem. 
 | 3 | `android_web.py` | `AndroidWebSearchTool`, `AndroidWebFetchTool` | Web search/fetch via a hidden Android WebView |
 | 4 | `browser.py` | `BrowserOpenTool`, `BrowserSnapshotTool`, `BrowserDoTool`, `BrowserReadTool`, `BrowserCloseTool` | An interactive second WebView with persistent cookies, for pages `web_fetch` cannot handle. Gated on the same `tools.androidWeb.enable` as search/fetch |
 | 5 | `download.py` | `DownloadFileTool` | Downloads a URL into the turn root's `downloads/` (`<project>/downloads/` inside a notebook, `workspace/downloads/` otherwise), per-hop SSRF-checked |
-| 6 | `location.py` | `GetLocationTool` | On-demand fresh GPS fix (distinct from the last-known location injected into every turn's context) |
+| 6 | `location.py` | `GetLocationTool`, `FindPlaceTool` | On-demand fresh GPS fix (distinct from the last-known location injected into every turn's context), and `find_place`: a place's coordinates from its name and address, with Android's `Geocoder` |
 | 7 | `screen.py` | `ScreenTool` | The screen as it was when the user tapped the floating mascot. Listed in the personal chat; it reads only in the turn of the tap |
 | 8 | `spawn.py` | `SpawnTool` | Spawns a subagent, blind to the parent conversation |
 | 9 | `subagent_control.py` | `SubagentStatusTool`, `SubagentCancelTool`, `SubagentRestartTool`, `SubagentSendTool` | Drive running subagents (status/cancel/restart/send). The only module whose tools are `orchestrator`-scope **only** — never `core`, never `subagent` |
@@ -153,7 +153,7 @@ The numbering is the load order in `_HARDCODED_TOOL_MODULES`, which is the order
 
 `self.py`'s module-level `TOOLS` list is deliberately empty. `MyTool` (the `my` introspection/self-check tool) needs a live reference to the running `AgentLoop`, which the generic loader can't provide, so it is instantiated and registered by hand in `AgentLoop._register_default_tools()`, gated on `tools.my.enable`. Two other tool classes are built outside the loader for the same reason — `memory` (`MemoryEntryTool`) needs the memory store, and is registered only in Dream's own registry (`MemoryStore.build_dream_tools`), never in a conversation agent's; and `use_app` (`UseAppTool`, `app_actions.py`), the one tool every Jenny App action runs through, is registered and synced per turn by `AppToolsSyncer` — so this list is not a complete inventory of the tool surface.
 
-`ToolLoader.discover()` therefore returns 51 tool classes across those 27 modules — 48 names, since `app` has three classes and `notebook` two, one per scope — plus the manually-registered `MyTool`: 49 built-in tools a conversation agent can draw on. Not all of them are necessarily *registered* at runtime, and no single agent ever sees all 49: `ToolLoader.load()` filters by the caller's `scope` against each tool's `_scopes` (`core`, `orchestrator`, `subagent`, `remote`), then optionally by an `allow` list of names (that is how agent types narrow their toolset), then checks each tool's `enabled(ctx)` against the current config. The live tool count for a given install therefore depends on the config toggles *and* on which agent is asking. On top of the built-ins, Jenny Apps add `use_app` while at least one app has an action (`AppToolsSyncer`) — see [Mini-apps](../using/mini-apps.md) and [Tool reference](../reference/tools.md) for the full, toggle-aware picture.
+`ToolLoader.discover()` therefore returns 53 tool classes across those 27 modules — 50 names, since `app` has three classes and `notebook` two, one per scope — plus the manually-registered `MyTool`: 51 built-in tools a conversation agent can draw on. Not all of them are necessarily *registered* at runtime, and no single agent ever sees all 51: `ToolLoader.load()` filters by the caller's `scope` against each tool's `_scopes` (`core`, `orchestrator`, `subagent`, `remote`, `apps`, `notebook`), then optionally by an `allow` list of names (that is how agent types narrow their toolset), then checks each tool's `enabled(ctx)` against the current config. The live tool count for a given install therefore depends on the config toggles *and* on which agent is asking. On top of the built-ins, Jenny Apps add `use_app` while at least one app has an action (`AppToolsSyncer`) — see [Mini-apps](../using/mini-apps.md) and [Tool reference](../reference/tools.md) for the full, toggle-aware picture.
 
 Tool behavior is part of the model contract: user-visible tool names, schemas, and error messages should be treated as an interface — changing them affects how the model uses the tool, so keep changes intentional and covered by tests.
 
@@ -173,7 +173,8 @@ Defaults (all relative to the workspace root unless noted):
 | Memory | `<workspace>/memory/` (`MEMORY.md`, `history.jsonl`) |
 | Cron store | Tables `cron_jobs` and `cron_runs` in `<runtime_root>/db/state.sqlite` (`jenny/cron/store.py`), written in one transaction per save; a row that cannot be read is skipped and logged. The 2.x `cron/jobs.json` is imported once by `jenny/db_migration/cron.py` |
 | Uploads (chat attachments) | `<workspace>/uploads/` |
-| Runtime data (media, WebUI display threads) | `<workspace>/.jenny/` (`media/`, `webui/`) — migrated automatically from the legacy `.minijenny/`/`.nanobot/` names if found. Runtime logs are **not** written here; they only live in the in-memory ring buffer the `get_recent_logs` tool reads (see Tools below) |
+| WebUI display threads | Table `transcript_rows` of `<runtime_root>/db/state.sqlite` (`jenny/webui/transcript_store.py`): one row per frame. The 2.x `.jenny/webui/*.jsonl` are imported once by `jenny/db_migration/transcripts.py` |
+| Runtime data (media) | `<workspace>/.jenny/` (`media/`) — migrated automatically from the legacy `.minijenny/`/`.nanobot/` names if found. Runtime logs are **not** written here; they only live in the in-memory ring buffer the `get_recent_logs` tool reads (see Tools below) |
 | Snapshots (workspace version history) | Sibling of the workspace directory, so a restore's atomic swap doesn't take snapshot history with it |
 
 The schema accepts both camelCase and snake_case keys on read, but every write (`jenny/config/store.py::mutate()`, which serialises through `save_config()` in `loader.py`) puts `config.json` back out with camelCase aliases — the free-form `websocket` block is the one exception, kept as written.
@@ -221,8 +222,8 @@ Prefer the existing explicit-registration patterns over ad hoc wiring — this c
 Common checks:
 
 ```bash
-ruff check jenny/ tests/
-npx pyright jenny/bus jenny/command jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py
+ruff check jenny/ jenny_extensions/ tests/
+npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 pytest -q
 ```
 

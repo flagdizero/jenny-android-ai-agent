@@ -93,7 +93,7 @@ A subagent reads things you did not write — web pages, search results, downloa
 
 **What every subagent is refused, whatever it read.** `config.json` and its copies (snapshots, backup staging), the provenance ledger and the pending drafts are never read or written by a subagent; Jenny's prompts and interface (`agent/`, `ui/`) are never written by one. See [What the agent can and cannot do](#what-the-agent-can-and-cannot-do-on-the-phone).
 
-**Two flags per job.** A job becomes *untrusted* when it reads content you did not write: a `web_search`, `web_fetch` or `browser_*` result, an `http_get`/`http_post` response inside `python_exec`, a file under `downloads/` or among saved tool outputs, or any file an untrusted job wrote. It becomes *private* when it reads your personal data: `memory/`, `USER.md`, `SOUL.md`, `sessions/`, the WebUI threads, `get_location`, `get_recent_logs`. Neither flag blocks anything by itself.
+**Two flags per job.** A job becomes *untrusted* when it reads content you did not write: a `web_search`, `web_fetch` or `browser_*` result, an `http_get`/`http_post` response inside `python_exec`, a file under `downloads/` or among saved tool outputs, or any file an untrusted job wrote. It becomes *private* when it reads your personal data: `memory/`, `USER.md`, `SOUL.md`, `sessions/`, the WebUI threads, `get_location`, `find_place` (its answer says how far a place is from you), `get_recent_logs`. Neither flag blocks anything by itself.
 
 **J1 — at the junction, data leaves only for the task's sites.** A job that is both untrusted and private holds two legs of the "lethal trifecta", and a hostile page could ask it for the third — sending your data out. From that moment only:
 
@@ -178,7 +178,7 @@ Every WebUI API call and the WebSocket handshake require a per-install secret (`
 
 Android hands this secret to the WebView as a **URL fragment** (`#bs=<secret>`), never as a query parameter — fragments aren't sent to the server and aren't logged the way query strings can be. The WebView's JavaScript reads the fragment locally and exchanges it once, over `/webui/bootstrap`, for the actual WebSocket URL.
 
-Operations that carry content — saving a workspace file, closing an audit with a note — run as
+Operations that carry content — saving a workspace file, opening an audit with a note — run as
 **commands over the WebSocket** (`rpc` frames, see the [WebSocket protocol](../reference/websocket.md#commands-rpc)),
 because the HTTP surface cannot carry a request body at all. So do the workspace writes
 (`workspace.delete`, `workspace.rename`, `workspace.copy`), which do not belong on a surface of

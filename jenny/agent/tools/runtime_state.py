@@ -19,9 +19,6 @@ class RuntimeState(Protocol):
     def max_iterations(self) -> int: ...
 
     @property
-    def current_iteration(self) -> int: ...
-
-    @property
     def tool_names(self) -> list[str]: ...
 
     @property

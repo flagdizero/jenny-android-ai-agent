@@ -10,7 +10,7 @@ Jenny is a lightweight AI agent framework written in Python with a built-in mobi
 
 ```bash
 pytest tests/config/ -v
-ruff check jenny/ jenny_extensions/
+ruff check jenny/ jenny_extensions/ tests/
 ```
 
 The gateway is started by the Android runtime via `jenny.android_entry.run_gateway()`.
@@ -82,7 +82,7 @@ Messages flow through an async `MessageBus` (`jenny/bus/queue.py`) that decouple
 
 ### Decomposed subsystems (mixins/leaf modules)
 
-Large classes are split into focused mixins/leaf modules composed via MRO (behavior-identical): `AgentLoop` ← `turn_states`/`turn_persistence`/`loop_provider`/`loop_tasks`/`loop_plan` (+ `turn_types`); `AgentRunner` ← `request_execution`/`tool_execution` (+ `context_governor`, `usage_accounting`, `history_repair`, `tool_error_policy`); `OpenAICompatProvider` ← `openai_compat_parsing` (+ `openai_compat_helpers`); `AnthropicProvider` ← `anthropic_conversion`; `WebSocketChannel` ← `ws_sender` (+ `ws_parsing`); `transcript` → `transcript_store`/`transcript_recorder`/`transcript_replay`/`transcript_markdown`/`transcript_tool_events`; `ws_http` → `*_routes` families.
+Large classes are split into focused mixins/leaf modules composed via MRO (behavior-identical): `AgentLoop` ← `turn_states`/`turn_persistence`/`loop_provider`/`loop_tasks`/`loop_plan` (+ `turn_types`); `PlanDriver` ← `driver_drafting`/`driver_held`/`driver_drafts`/`driver_check`/`driver_rollback` (+ `driver_common`); `AgentRunner` ← `request_execution`/`tool_execution` (+ `context_governor`, `usage_accounting`, `history_repair`, `tool_error_policy`); `OpenAICompatProvider` ← `openai_compat_parsing` (+ `openai_compat_helpers`); `AnthropicProvider` ← `anthropic_conversion`; `WebSocketChannel` ← `ws_sender` (+ `ws_parsing`); `transcript` → `transcript_store`/`transcript_recorder`/`transcript_replay`/`transcript_markdown`/`transcript_tool_events`; `ws_http` → `*_routes` families.
 
 ### Config & security
 
@@ -143,7 +143,7 @@ See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution flow and PR guidelin
 - Line length: 100.
 - Linting: `ruff` with rules E, F, I, N, W (E501 ignored).
 - pytest with `asyncio_mode = "auto"`.
-- Language convention: every Markdown file under `jenny/` (skills, their references, prompt templates) is English only — examples, frontmatter and `{# … #}` Jinja comments included — because the model reads them and imitates their language; `tests/skills/test_prompt_markdown_is_english.py` enforces it, and a bundled skill's localized `user_summary` lives in the i18n JSON (`skills.userSummary.<name>`). Otherwise, docstrings/comments in Italian for new code; inherited upstream code keeps English — do not translate existing text. Identifiers, log messages and commit-facing strings: English. User-facing WebUI strings are localized via i18n JSON files (`jenny/templates/ui/assets/i18n/{it,en}.json`), not hardcoded. "Identifiers" includes the WebUI's vocabulary — CSS classes, element ids, `data-*` attributes, i18n keys — and file names; the two shells are the home (`index.html`, `home-*.js`) and the workshop (`workshop.html`, `mobile-*.js`), and the home's own pages are `HomePages` while a notebook's pages are `NotebookPages`. A name that is persisted or on the wire (`config.json`, `localStorage`, an `/api/` field, an RPC, a `postMessage` type) does not change without a migration: see `Config._migrate_casa_to_home` and `RENAMED_KEYS` in `shared/mascot.js`.
+- Language convention: every Markdown file under `jenny/` (skills, their references, prompt templates) is English only — examples, frontmatter and `{# … #}` Jinja comments included — because the model reads them and imitates their language; `tests/skills/test_prompt_markdown_is_english.py` enforces it, and a bundled skill's localized `user_summary` lives in the i18n JSON (`skills.userSummary.<name>`). Otherwise, docstrings/comments in Italian for new code; inherited upstream code keeps English — do not translate existing text. Identifiers, log messages and commit-facing strings: English. User-facing WebUI strings are localized via i18n JSON files (`jenny/templates/ui/assets/i18n/{it,en}.json`), not hardcoded. "Identifiers" includes the WebUI's vocabulary — CSS classes, element ids, `data-*` attributes, i18n keys — and file names; the two shells are the home (`index.html`, `home-*.js`) and the workshop (`workshop.html`, `mobile-*.js`), and the home's own pages are `HomePages`. A name that is persisted or on the wire (`config.json`, `localStorage`, an `/api/` field, an RPC, a `postMessage` type) does not change without a migration: see `RENAMED_KEYS` in `shared/mascot.js`.
 
 ## Verification Commands
 

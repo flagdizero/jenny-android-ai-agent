@@ -20,14 +20,12 @@ in Chromium, a mano (v. il rapporto della correzione).
 from __future__ import annotations
 
 import json
-import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
-import pytest
-from support.js_harness import ASSETS, NODE, member, requires_node, run_js, run_module
+from support.home_dom import requires_jsdom
+from support.js_harness import ASSETS, member, requires_node, run_js, run_module
 
 MARKDOWN_JS = ASSETS / "shared" / "markdown.js"
 CONTENT_LINK_JS = ASSETS / "shared" / "content-link.js"
@@ -35,18 +33,6 @@ PURIFY = ASSETS / "vendor" / "dompurify@3" / "purify.min.js"
 MARKED = ASSETS / "vendor" / "marked@15.0.7" / "marked.min.js"
 
 pytestmark = requires_node
-
-
-def _has_jsdom() -> bool:
-    if NODE is None:
-        return False
-    proc = subprocess.run(
-        [NODE, "-e", "require('jsdom')"], capture_output=True, text=True, env=os.environ.copy()
-    )
-    return proc.returncode == 0
-
-
-requires_jsdom = pytest.mark.skipif(not _has_jsdom(), reason="jsdom non disponibile (NODE_PATH)")
 
 
 # ── La configurazione, col solo node ─────────────────────────────────────────

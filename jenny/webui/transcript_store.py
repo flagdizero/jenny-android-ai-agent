@@ -209,9 +209,7 @@ def _db(workspace: Path | None = None):
     """
     from jenny import db
 
-    database = db.database_for_workspace(Path(workspace) if workspace else _workspace(), db.STATE)
-    database.require(SCHEMA)
-    return database
+    return db.store_database(workspace if workspace else _workspace(), db.STATE, SCHEMA)
 
 
 def _rows(where: str, params: tuple) -> list[tuple[int, dict[str, Any]]]:

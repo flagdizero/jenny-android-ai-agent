@@ -17,7 +17,7 @@ def test_agent_loop_registers_cron_tool_with_configured_timezone(tmp_path: Path)
         provider=provider,
         workspace=tmp_path,
         model="test-model",
-        cron_service=CronService(tmp_path / "cron" / "jobs.json"),
+        cron_service=CronService(tmp_path / "workspace"),
         timezone="Asia/Shanghai",
     )
 

@@ -31,16 +31,16 @@ def _now_ms() -> int:
 @pytest.mark.asyncio
 async def test_restart_does_not_push_the_deadline_forward(tmp_path) -> None:
     """Due avvii ravvicinati non rimandano la scadenza di altre 12 ore."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
-    first = CronService(path)
+    first = CronService(workspace)
     first.register_system_job(_dream_job())
     await first.start()
     deadline = first.get_job("dream").state.next_run_at_ms
     first.stop()
 
     # Riavvio: stesso store su disco, stesso job di sistema.
-    second = CronService(path)
+    second = CronService(workspace)
     second.register_system_job(_dream_job())
     await second.start()
     try:
@@ -52,9 +52,9 @@ async def test_restart_does_not_push_the_deadline_forward(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_missed_deadline_is_recovered_not_rescheduled(tmp_path) -> None:
     """Una scadenza passata a app spenta resta passata: la recupera il tick."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
-    first = CronService(path)
+    first = CronService(workspace)
     first.register_system_job(_dream_job())
     first.stop()
 
@@ -62,7 +62,7 @@ async def test_missed_deadline_is_recovered_not_rescheduled(tmp_path) -> None:
     first.get_job("dream").state.next_run_at_ms = overdue
     first._save_store()
 
-    second = CronService(path)
+    second = CronService(workspace)
     second.register_system_job(_dream_job())
     await second.start()
     try:
@@ -74,15 +74,15 @@ async def test_missed_deadline_is_recovered_not_rescheduled(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_shorter_interval_applies_immediately(tmp_path) -> None:
     """Accorciare l'intervallo vale subito, non dopo la vecchia scadenza."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
-    first = CronService(path)
+    first = CronService(workspace)
     first.register_system_job(_dream_job(interval_h=12))
     await first.start()
     long_deadline = first.get_job("dream").state.next_run_at_ms
     first.stop()
 
-    second = CronService(path)
+    second = CronService(workspace)
     second.register_system_job(_dream_job(interval_h=2))
     await second.start()
     try:
@@ -96,9 +96,9 @@ async def test_shorter_interval_applies_immediately(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_user_recurring_job_also_keeps_its_deadline(tmp_path) -> None:
     """La correzione non riguarda solo i job di sistema."""
-    path = tmp_path / "cron" / "jobs.json"
+    workspace = tmp_path / "workspace"
 
-    first = CronService(path)
+    first = CronService(workspace)
     await first.start()
     job = first.add_job(
         name="promemoria",
@@ -111,7 +111,7 @@ async def test_user_recurring_job_also_keeps_its_deadline(tmp_path) -> None:
     deadline = job.state.next_run_at_ms
     first.stop()
 
-    second = CronService(path)
+    second = CronService(workspace)
     await second.start()
     try:
         assert second.get_job(job.id).state.next_run_at_ms == deadline

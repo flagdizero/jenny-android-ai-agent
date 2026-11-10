@@ -58,7 +58,7 @@ Loading is designed to never raise: `load_app()` (`jenny/apps/manifest.py`) alwa
 | `server` | no | `{"baseUrl": "http://..."}` (or `https://`) — required if any action has `kind: "http"`, or if `view.kind` is `"external"`. Do **not** add an `auth` block: it is rejected at load time (see [below](#serverauth-is-rejected-not-implemented)). |
 | `actions` | no | Array of actions (see below). May be omitted or empty: an app whose only job is to draw a screen has nothing agent-facing to declare. Names must be unique. |
 | `view` | no | `{"kind": "external"}` — the app's screen is the UI of its own `server.baseUrl`, served through a loopback proxy (`jenny/apps/proxy.py`), instead of `app/index.html`. `"external"` is the only accepted kind. |
-| `summary` | for stateful apps | How the app shows on its card on a board. See [Summary](#summary-summary) below. `section` is its older name, still read. |
+| `summary` | for stateful apps | How the app shows on its card on a board. See [Summary](#summary-summary--the-strip) below. `section` is its older name, still read. |
 | `reader` | no | A `run.py` the clock runs every N minutes with no model. See [Reader](#reader-reader--runpy) below. |
 
 The folder name itself is the slug and must match `^[a-z0-9]+(-[a-z0-9]+)*$`, **max 32 characters** (`MAX_SLUG_LEN` in `manifest.py`) — a folder that doesn't match is loaded as broken with `"folder name '<slug>' is not a valid slug"`.
@@ -153,7 +153,6 @@ There is no approval step: an app is live as soon as it exists (the trial with *
 
 - `app action=draft` / `edit` write into `apps/.drafts/<slug>/` (invisible to `scan_apps`: no tools, not in the App page), validate with `load_app`, refuse a stateful app without a `summary`, and run the reader once there. When everything passes, `promote_draft` makes it the app — a new app takes the whole folder, an existing one gets the new code and keeps its `data/` — and the after-turn tool sync tells the WebUI. When something fails, the draft stays for the next `edit` and the live app is untouched.
 - **Fence**: generic writes into an app's code are refused by `workspace_policy.refuse_board_write` → `is_app_code_path` at every file-tool and `python_exec` write path, so every change goes through those checks; `data/` and `AGENT.md` stay writable.
-- At startup `GatewayContainer._prepare_apps` promotes any valid draft left over by a version that still had trials (`promote_valid_drafts`).
 
 ## Placement and permission
 
@@ -246,7 +245,7 @@ The tool is kept in sync by `AppToolsSyncer`, invoked once per agent turn rather
 
 ## Testing
 
-Runtime unit tests live at `tests/apps/` (mirroring `jenny/apps/`) — write manifests to a `tmp_path` fixture and call `execute_action()`/`load_app()` directly rather than going through the gateway. `tests/agent/test_apps_tool_sync.py` is the reference for exercising `AppToolsSyncer`: it writes an `app.json`, calls `sync(registry)`, and asserts on the actions it reports, a tool list that stays the same across syncs, and cleanup after deleting the app folder — copy that pattern if you change sync behavior; `tests/agent/test_app_action_tool.py` covers `use_app` itself. As with any tool, run `ruff check jenny/ tests/`, the pyright subset, and `pytest -q` before opening a PR — see [Code style](code-style.md).
+Runtime unit tests live at `tests/apps/` (mirroring `jenny/apps/`) — write manifests to a `tmp_path` fixture and call `execute_action()`/`load_app()` directly rather than going through the gateway. `tests/agent/test_apps_tool_sync.py` is the reference for exercising `AppToolsSyncer`: it writes an `app.json`, calls `sync(registry)`, and asserts on the actions it reports, a tool list that stays the same across syncs, and cleanup after deleting the app folder — copy that pattern if you change sync behavior; `tests/agent/test_app_action_tool.py` covers `use_app` itself. As with any tool, run `ruff check jenny/ jenny_extensions/ tests/`, the pyright subset, and `pytest -q` before opening a PR — see [Code style](code-style.md).
 
 ## See also
 

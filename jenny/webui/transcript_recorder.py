@@ -15,8 +15,8 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.bus.events import WEBUI_TURN_METADATA_KEY
 from jenny.utils.clock import now_ms as _now_ms
-from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
 from jenny.webui.transcript_store import append_transcript_object, transcript_revision
 
 _WEBUI_TURN_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")

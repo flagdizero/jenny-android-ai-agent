@@ -20,6 +20,20 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 
+def safe_expanduser(path: str | Path) -> Path:
+    """Return an expanded path, gracefully handling platforms without HOME."""
+    p = Path(path)
+    try:
+        return p.expanduser()
+    except (RuntimeError, OSError):
+        if p.is_absolute():
+            return p.resolve()
+        first = str(p)
+        if first.startswith("~"):
+            return Path(first[1:].lstrip("/") if first.startswith("~/") else "")
+        return p
+
+
 def abbreviate_path(path: str | Path, max_len: int = 40) -> str:
     """Abbreviate a file path or URL, preserving basename and key directories.
 

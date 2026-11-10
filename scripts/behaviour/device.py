@@ -27,6 +27,9 @@ PACKAGE = "com.flagdizero.jenny"
 WORKSPACE = "files/workspace"
 GATEWAY = "http://127.0.0.1:18790"
 PERSONAL_CHAT = "default"
+# L'unico emulatore su cui si prova (AGENTS.md). Il seriale non lo dice:
+# ``emulator-5554`` è il primo emulatore partito, anche di un altro progetto.
+AVD = "jenny_s22"
 
 #: Quel che uno scenario puo' cambiare, fotografato a inizio suite e rimesso a
 #: fine suite. Le sessioni si rimettono a app ferma: il gateway le tiene in
@@ -58,10 +61,33 @@ class Device:
     def __init__(self, serial: str = "emulator-5554") -> None:
         self.serial = serial
         self._secret: str | None = None
+        self._avd_checked = False
 
     # -- adb ------------------------------------------------------------------
 
+    def check_avd(self) -> None:
+        """Rifiuta un seriale che non sia l'AVD :data:`AVD`, prima di ogni comando.
+
+        Lo stesso controllo di ``scripts/jenny_state.py::_check_device``: lo script
+        scrive nell'app (impostazioni, semi, foto dello stato), e su un emulatore
+        di un altro progetto scriverebbe lì. Si fa una volta per istanza.
+        """
+        if self._avd_checked:
+            return
+        proc = subprocess.run(["adb", "-s", self.serial, "emu", "avd", "name"],
+                              capture_output=True, check=False)
+        lines = proc.stdout.decode("utf-8", errors="replace").splitlines()
+        name = lines[0].strip() if lines else ""
+        if proc.returncode != 0 or name != AVD:
+            detail = name or proc.stderr.decode(errors="replace").strip() or "nessuna risposta"
+            raise DeviceError(
+                f"{self.serial} non è l'emulatore {AVD} ({detail}): le prove girano solo lì. "
+                f"Avvialo e passa il suo seriale con --serial."
+            )
+        self._avd_checked = True
+
     def adb(self, *args: str, input_bytes: bytes | None = None, check: bool = True) -> str:
+        self.check_avd()
         proc = subprocess.run(["adb", "-s", self.serial, *args], input=input_bytes,
                               capture_output=True, check=False)
         if check and proc.returncode != 0:
@@ -115,10 +141,6 @@ class Device:
     def listdir(self, rel: str) -> list[str]:
         out = self.sh(f"ls -1 {WORKSPACE}/{rel} 2>/dev/null", check=False)
         return [line for line in out.splitlines() if line]
-
-    def mtime_size(self, rel: str) -> tuple[str, str]:
-        out = self.sh(f"stat -c '%Y %s' {WORKSPACE}/{rel} 2>/dev/null", check=False).split()
-        return (out[0], out[1]) if len(out) == 2 else ("", "")
 
     # -- app ------------------------------------------------------------------
 
@@ -189,6 +211,7 @@ class Device:
 
     def pull_state(self, dest: Path) -> None:
         """Una copia di ``state.sqlite`` in *dest*, col suo ``-wal`` dentro."""
+        self.check_avd()
         for suffix in ("", "-wal"):
             command = f"cat {STATE_DB}{suffix} 2>/dev/null"
             proc = subprocess.run(
@@ -330,12 +353,6 @@ class Device:
                 conn.close()
             self.push_state(local)
         return last
-
-    def job_last_run(self, job_id: str) -> int:
-        for job in self.cron_rows():
-            if job.get("id") == job_id:
-                return int((job.get("state") or {}).get("lastRunAtMs") or 0)
-        return 0
 
     # -- gateway --------------------------------------------------------------
 

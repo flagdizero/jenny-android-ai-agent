@@ -3,7 +3,7 @@
 Dal 31/10/2026 un promemoria del quaderno è un singolo dello scheduler che,
 scattato, se ne va: il vecchio «Waiting on» non aveva più niente da dire. Al suo
 posto, la chat personale sa cosa sta per suonare nei quaderni — dallo scheduler
-vivo, mai da ``jobs.json``.
+vivo, mai dallo store letto a parte.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def wikis(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def cron(tmp_path: Path) -> CronService:
-    return CronService(tmp_path / "jobs.json")
+    return CronService(tmp_path / "workspace")
 
 
 def _roots(wikis: Path) -> dict[str, Path]:
@@ -80,8 +80,6 @@ def test_the_rows_come_from_the_live_service(cron, wikis) -> None:
     when = NOW + timedelta(days=1, hours=2)
     assert first.time == when.strftime("%H:%M")
     assert (second.precision, second.time) == ("day", None)
-    # Niente file: un job che lo scheduler non ha non c'è.
-    assert not (wikis.parent / "cron" / "jobs.json").exists()
 
 
 def test_what_is_not_a_date_coming_up_stays_out(cron, wikis) -> None:

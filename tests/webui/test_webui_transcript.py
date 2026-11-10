@@ -128,25 +128,6 @@ def test_delete_webui_transcript_removes_every_chunk(tmp_path, monkeypatch) -> N
     assert delete_webui_transcript(key) is False
 
 
-def test_build_response_reports_fork_boundary_from_legacy_marker(tmp_path, monkeypatch) -> None:
-    """Transcripts written before fork removal may still contain marker rows."""
-    monkeypatch.setattr("jenny.config.paths.get_data_dir", lambda: tmp_path)
-    key = "websocket:fork"
-    for ev in (
-        {"event": "user", "chat_id": "fork", "text": "round1"},
-        {"event": "message", "chat_id": "fork", "text": "answer1"},
-        {"event": "fork_marker", "chat_id": "fork"},
-        {"event": "user", "chat_id": "fork", "text": "new branch"},
-    ):
-        append_transcript_object(key, ev)
-
-    out = build_webui_thread_response(key)
-
-    assert out is not None
-    assert [m["content"] for m in out["messages"]] == ["round1", "answer1", "new branch"]
-    assert out["fork_boundary_message_count"] == 2
-
-
 def test_replay_delta_and_turn_end(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("jenny.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t2"

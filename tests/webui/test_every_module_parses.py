@@ -71,7 +71,7 @@ def test_every_ui_module_parses_as_an_es_module() -> None:
     )
 
 
-def test_the_check_catches_the_one_that_shipped() -> None:
+def test_the_check_catches_the_one_that_shipped(tmp_path: Path) -> None:
     """La prova che il banco non e' una formalita'.
 
     Si ricostruisce la forma del difetto vero — la coda di un metodo duplicata
@@ -90,7 +90,7 @@ export class Try {
   }
 }
 """
-    fake = Path("/tmp/jenny-parse-rotto.js")
+    fake = tmp_path / "jenny-parse-rotto.js"
     fake.write_text(broken, encoding="utf-8")
     try:
         proc = subprocess.run(
@@ -104,7 +104,7 @@ export class Try {
         fake.unlink(missing_ok=True)
 
 
-def test_node_check_would_not_have_caught_it() -> None:
+def test_node_check_would_not_have_caught_it(tmp_path: Path) -> None:
     """**Il motivo per cui questo file esiste.**
 
     `node --check` era il controllo che usavo, ed e' quello che mi ha lasciato
@@ -117,7 +117,7 @@ def test_node_check_would_not_have_caught_it() -> None:
     lo vede il banco si salta dicendolo, invece di fallire: il controllo che
     conta e' ``test_the_check_catches_the_one_that_shipped``, e resta obbligatorio.
     """
-    fake = Path("/tmp/jenny-parse-rotto2.js")
+    fake = tmp_path / "jenny-parse-rotto2.js"
     fake.write_text(
         "export class P {\n  a() {\n    document.body.x();\n  }\n\n"
         "    document.body.x();\n  }\n}\n",

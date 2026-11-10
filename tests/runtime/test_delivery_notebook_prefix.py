@@ -255,7 +255,7 @@ def _reminder(tmp_path, *, notebook: bool) -> CronJob:
     origin = (notebook_delivery("piante") if notebook else
               {"session_key": UNIFIED_SESSION_KEY, "origin_channel": "websocket",
                "origin_chat_id": "default"})
-    return CronService(tmp_path / "jobs.json").add_job(
+    return CronService(tmp_path / "workspace").add_job(
         "annaffia", CronSchedule(kind="every", every_ms=3_600_000), "annaffia il basilico",
         board=make_link("piante", NOTEBOOK) if notebook else None, **origin,
     )

@@ -133,6 +133,16 @@ def test_the_brake_holds_a_reason_that_stays_true(tmp_path) -> None:
 # ── Gli strumenti ───────────────────────────────────────────────────────────
 
 
+def test_a_last_pass_in_the_future_does_not_freeze_the_board(tmp_path) -> None:
+    """Un orologio corso avanti ha scritto ``lastPassAt`` a domani: la passata
+    non aspetta che l'orologio vero lo raggiunga."""
+    ws, root = _notebook(tmp_path)
+    _seed_board(root)
+    ahead = (datetime.now().astimezone() + timedelta(days=1)).isoformat()
+    mutate_board(root, lambda b: b.__setitem__("lastPassAt", ahead), actor="jenny")
+    assert BoardPass(root, ws).reason() == "drawers"
+
+
 async def test_assign_takes_only_pages_off_the_board(tmp_path) -> None:
     ws, root = _notebook(tmp_path)
     _seed_board(root)
@@ -210,7 +220,9 @@ async def test_reminders_are_not_added_twice(tmp_path, monkeypatch) -> None:
         concime = next(cron.get_job(i) for i, j in notebook_jobs(cron, root.name).items()
                        if j["name"] == "Concime")
         assert concime.payload.why is None
-    assert not (root / "board" / "reminders.json").exists()
+    # Il promemoria sta solo nello scheduler: la bacheca non ne tiene una copia.
+    assert not [s for card in read_board(root)["cards"] for s in card.get("userSections", [])
+                if s.get("kind") == "reminder"]
 
 
 async def test_the_gardener_can_give_a_reminder_to_the_whole_notebook(tmp_path,

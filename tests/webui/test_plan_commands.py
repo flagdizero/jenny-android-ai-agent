@@ -12,11 +12,8 @@ from typing import Any
 
 import pytest
 
-from jenny.config.loader import save_config
-from jenny.config.schema import Config
 from jenny.plan.driver import PlanDriver
 from jenny.plan.store import PlanStore
-from jenny.runtime.context import get_runtime_context
 from jenny.webui.commands import CommandContext, CommandError, dispatch_command
 from tests.support.plan import KEY, STEPS, FakeBus, FakeHost, plan_write, propose, write_file
 
@@ -28,14 +25,6 @@ def workspace(tmp_path: Path) -> Path:
     write_file(nb, "AGENTS.md", "id: piante")
     write_file(nb, "wiki/index.md", "# indice")
     return ws
-
-
-@pytest.fixture()
-def config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
 
 
 @pytest.fixture()

@@ -343,7 +343,7 @@ async def _old_phone_backup(tmp_path: Path) -> tuple[MemorySink, bytes, str]:
 
 
 async def test_new_phone_opens_the_copy_with_the_password_and_restores(tmp_path: Path) -> None:
-    from jenny.snapshot.locations import MARKER_FILE_NAME, STAGED_WORKSPACE_DIR_NAME
+    from jenny.utils.locations import MARKER_FILE_NAME, STAGED_WORKSPACE_DIR_NAME
 
     sink, key, snapshot_id = await _old_phone_backup(tmp_path)
     new = _env(tmp_path / "new", sink=sink)
@@ -377,7 +377,7 @@ async def test_the_copy_on_drive_carries_the_state_too(tmp_path: Path) -> None:
     from jenny import db as jdb
     from jenny.db import shards
     from jenny.db.schema import Schema
-    from jenny.snapshot.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
+    from jenny.utils.locations import STAGED_DB_DIR_NAME, STAGED_WORKSPACE_DIR_NAME
 
     kv = Schema("kv", ("CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT);",))
     old = _env(tmp_path / "old")
@@ -527,7 +527,7 @@ async def test_the_password_never_reaches_disk(tmp_path: Path) -> None:
 
 
 async def test_restoring_an_unknown_copy_writes_nothing(tmp_path: Path) -> None:
-    from jenny.snapshot.locations import MARKER_FILE_NAME
+    from jenny.utils.locations import MARKER_FILE_NAME
 
     sink, _key, _ = await _old_phone_backup(tmp_path)
     new = _env(tmp_path / "new", sink=sink)
@@ -624,6 +624,23 @@ async def test_a_damaged_copy_is_found_said_and_redone(tmp_path: Path) -> None:
     snap = (await other.list_snapshots())[0]
     await other.restore(snap, tmp_path / "back")
     assert (tmp_path / "back" / "USER.md").read_text(encoding="utf-8") == "l'utente"
+
+
+async def test_a_key_that_does_not_open_the_copy_is_not_a_damaged_copy(tmp_path: Path) -> None:
+    """La copia è sana e la chiave del telefono è un'altra: ``verify`` lo dice
+    con il codice di ``run``, e non la segna rotta (che la farebbe ricaricare
+    da capo appena la chiave torna giusta)."""
+    env = _env(tmp_path)
+    await env.service.enable(PW)
+    await env.service.run()
+    good = env.service.key_path.read_bytes()
+    env.service.key_path.write_bytes(bytes(b ^ 0xFF for b in good))
+
+    checked = await env.service.verify()
+
+    assert checked == {"ok": False, "error": "wrong_key"}
+    status = env.service.status()
+    assert status["last_error"] == "" and not status.get("force_fresh")
 
 
 async def test_a_check_that_could_not_finish_is_not_a_damaged_copy(tmp_path: Path) -> None:

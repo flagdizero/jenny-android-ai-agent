@@ -19,7 +19,7 @@ from jenny.cron.types import CronSchedule
 
 
 def _make_tool_with_tz(tmp_path, tz: str) -> CronTool:
-    service = CronService(tmp_path / "cron" / "jobs.json")
+    service = CronService(tmp_path / "workspace")
     tool = CronTool(service, default_timezone=tz)
     tool.set_context(
         RequestContext(channel="websocket", chat_id="chat-1", session_key="websocket:chat-1")

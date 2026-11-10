@@ -7,12 +7,12 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.security.workspace_policy import _safe_expanduser
 from jenny.session.history_meta import (
     INJECTED_EVENT_META,
     LENGTH_RECOVERY_EVENT,
 )
 from jenny.utils.helpers import stringify_text_blocks
+from jenny.utils.path import safe_expanduser
 
 _MAX_REPEAT_EXTERNAL_LOOKUPS = 2
 
@@ -233,7 +233,7 @@ def workspace_violation_signature(
 def _normalize_violation_target(raw: str) -> str:
     """Normalize *raw* path so that equivalent spellings collide on the same key."""
     try:
-        normalized = _safe_expanduser(raw).resolve().as_posix()
+        normalized = safe_expanduser(raw).resolve().as_posix()
     except Exception:
         normalized = raw.replace("\\", "/")
     return f"violation:{normalized}".lower()

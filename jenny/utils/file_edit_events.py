@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jenny.security.workspace_policy import _safe_expanduser
+from jenny.utils.path import safe_expanduser
 
 TRACKED_FILE_EDIT_TOOLS = frozenset({"write_file", "edit_file", "apply_patch"})
 _MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
@@ -243,8 +243,8 @@ def _resolve_raw_file_edit_path(
         except Exception:
             return None
     if workspace is None:
-        return _safe_expanduser(raw_path).resolve()
-    return _safe_expanduser(workspace / raw_path).resolve()
+        return safe_expanduser(raw_path).resolve()
+    return safe_expanduser(workspace / raw_path).resolve()
 
 
 def build_file_edit_start_event(

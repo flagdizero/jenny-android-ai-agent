@@ -204,9 +204,22 @@ class SpawnTool(Tool, ContextAware):
             and request.metadata.get("plan_mode") is True
             and wanted not in PLANNING_HELPER_TYPES
         ):
+            # Il rifiuto non nomina una via che il posto rifiuta: l'editore
+            # esiste solo nella chat di un quaderno (v. sotto).
+            from jenny.session.keys import is_project_session_key
+
+            if is_project_session_key(self._session_key.get() or ""):
+                look = (
+                    "now you only look at the notebook. A notebook-editor can take stock "
+                    "of it for you (read-only)."
+                )
+            else:
+                look = (
+                    "now you only look, with your own read tools (list_dir, read_file, "
+                    "grep): no helper runs while a plan is prepared here."
+                )
             return (
-                f"Cannot spawn a '{wanted}' while preparing a plan: now you only look at the "
-                "notebook. A notebook-editor can take stock of it for you (read-only). What "
+                f"Cannot spawn a '{wanted}' while preparing a plan: {look} What "
                 "must be searched on the web goes into the plan as a `research` step, with "
                 "the item marked `web` in the coverage."
             )

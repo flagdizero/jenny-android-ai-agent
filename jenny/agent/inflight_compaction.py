@@ -100,7 +100,6 @@ class InFlightCheckpoint:
     summary: str
     user_messages: list[str] = field(default_factory=list)
     compactions: int = 1
-    deterministic: bool = False
 
     def render(self) -> str:
         count = "once" if self.compactions == 1 else f"{self.compactions} times"

@@ -1,7 +1,9 @@
 # Chaquopy
 -keep class com.chaquo.python.** { *; }
 
-# Keep Python entry point module
+# Tutte le classi dell'app: i bridge li chiama Python per nome (Chaquopy) e i
+# metodi @JavascriptInterface la WebView, cioè riferimenti che R8 non vede.
+# Il prezzo: R8 non toglie codice morto da questo package.
 -keep class com.flagdizero.jenny.** { *; }
 
 # SSH (jsch + BouncyCastle).

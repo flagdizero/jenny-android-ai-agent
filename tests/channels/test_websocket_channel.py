@@ -795,7 +795,7 @@ async def test_proactive_delivery_frames_form_one_closed_turn() -> None:
     ``_annotate_turn`` esce subito e il turno resta aperto sia sul filo che sul
     disco.
     """
-    from jenny.webui.metadata import WEBUI_TURN_METADATA_KEY
+    from jenny.bus.events import WEBUI_TURN_METADATA_KEY
     from jenny.webui.transcript import read_transcript_lines
 
     bus = MagicMock()

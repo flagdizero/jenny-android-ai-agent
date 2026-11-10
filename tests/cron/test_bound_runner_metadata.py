@@ -7,8 +7,8 @@ di un turn id residuo su qualunque canale, e non-mutazione dell'input.
 
 from __future__ import annotations
 
+from jenny.bus.events import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 from jenny.cron.bound_runner import cron_proactive_delivery_metadata
-from jenny.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 
 
 def test_websocket_channel_adds_turn_id_and_source_with_label() -> None:

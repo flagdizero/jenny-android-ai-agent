@@ -15,14 +15,14 @@ def test_a_jsonl_reader_keeps_the_objects_and_names_the_rest() -> None:
 
 
 def test_the_backup_follows_only_a_file_that_still_reads(tmp_path: Path) -> None:
-    path = tmp_path / "jobs.json"
+    path = tmp_path / "board.json"
     rotate_valid_json_backup(path)
-    assert not (tmp_path / "jobs.json.bak").exists()
+    assert not (tmp_path / "board.json.bak").exists()
     path.write_text('{"v": 1}', encoding="utf-8")
     rotate_valid_json_backup(path)
     path.write_text("{rotto", encoding="utf-8")
     rotate_valid_json_backup(path)
-    assert (tmp_path / "jobs.json.bak").read_text(encoding="utf-8") == '{"v": 1}'
+    assert (tmp_path / "board.json.bak").read_text(encoding="utf-8") == '{"v": 1}'
 
 
 def test_two_quarantines_in_the_same_second_keep_both(tmp_path: Path) -> None:

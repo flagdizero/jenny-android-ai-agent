@@ -17,10 +17,9 @@ and from them.
   Never run a `sudo` that would ask for a password — it will hang and time out, not
   prompt. If a task genuinely needs a password, stop and tell the user.
 - Anything that could take more than a minute goes to `ssh_job`, not `ssh_exec`:
-  upgrades, builds, backups, large copies. Jenny runs as a foreground service with
-  no WakeLock, so with the screen off the CPU can suspend and a synchronous command
-  dies half-way with no way to tell how far it got. A job survives that, the
-  connection dropping and the gateway restarting.
+  upgrades, builds, backups, large copies. A synchronous command lives only as
+  long as its connection and this turn: if either drops, it dies half-way with no
+  way to tell how far it got. A job survives that, and the gateway restarting.
 - Follow a job with `poll`, which returns only what is new since your last poll.
   Do not go back for the whole log, and do not poll in a tight loop: when it is
   still running, say so and poll again when the work next comes up.

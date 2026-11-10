@@ -19,8 +19,6 @@ from pathlib import Path
 import pytest
 
 from jenny.config.loader import load_config, save_config
-from jenny.config.schema import Config
-from jenny.runtime.context import get_runtime_context
 from jenny.webui.commands import (
     MAX_WRITE_BYTES,
     CommandContext,
@@ -42,14 +40,6 @@ def workspace_root(tmp_path: Path) -> Path:
     root = tmp_path / "workspace"
     root.mkdir()
     return root
-
-
-@pytest.fixture()
-def config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    path = tmp_path / "config.json"
-    save_config(Config(), path)
-    monkeypatch.setattr(get_runtime_context(), "config_path", path)
-    return path
 
 
 @pytest.fixture()

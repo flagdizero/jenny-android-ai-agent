@@ -15,7 +15,7 @@
     "attach": "Allega",
     "send": "Manda",
     "wsError": "WebSocket non connesso. In attesa di riconnessione...",
-    "agentRunning": "Agent in esecuzione",
+    "agentRunning": "Jenny sta lavorando",
     "copy": "Copia",
     "copied": "Copiato!",
     "copyFailed": "Copia non riuscita",
@@ -200,8 +200,6 @@
     "system": "Sistema",
     "configRecoveredBackup": "Le impostazioni sono state recuperate dall'ultimo backup valido: all'avvio config.json non era leggibile.",
     "configRecoveredDefaults": "config.json non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita dai valori predefiniti — la chiave API va rimessa. Il file illeggibile è stato messo da parte qui:",
-    "cronRecoveredBackup": "I promemoria programmati sono stati recuperati dall'ultimo backup valido: all'avvio l'elenco dei job non era leggibile. Controlla che ci siano tutti.",
-    "cronRecoveredEmpty": "L'elenco dei promemoria programmati non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita senza nessuno: quelli che avevi creato non suoneranno più e vanno ricreati. Il file illeggibile è stato messo da parte qui:",
     "themeLabel": "Tema",
     "mascotSize": "Dimensione mascotte",
     "mascotSizeSmall": "Piccola",
@@ -222,7 +220,7 @@
     "temperaturePlaceholder": "0.0 – 2.0",
     "reasoningEffort": "Sforzo di ragionamento",
     "mainReasoningEffort": "Ragionamento di Jenny",
-    "mainReasoningEffortSame": "Come gli aiutanti",
+    "mainReasoningEffortSame": "Come le mini-me",
     "addProvider": "Aggiungi provider",
     "noProviders": "Nessun provider configurato.",
     "edit": "Modifica",
@@ -383,7 +381,7 @@
       },
       "keepAwakeCost": {
         "off": "Batteria al massimo, ma lavori programmati e promemoria possono slittare di ore.",
-        "turns": "Sveglia il processore per un turno, un cron o un comando SSH, poi lo rilascia: a riposo non costa niente.",
+        "turns": "Sveglia il processore per un turno, un promemoria, un'automazione o un comando SSH, poi lo rilascia: a riposo non costa niente.",
         "always": "Niente ritardi, ma consuma batteria di continuo: ha senso per un telefono in carica."
       },
       "keepAwakeHint": "L'esenzione dice ad Android di non rallentare Jenny; questa scelta decide se Jenny tiene sveglio il processore da sé. A schermo spento la CPU si sospende e i timer non scattano.",
@@ -596,7 +594,7 @@
     "folderEmpty": "Questa cartella è vuota",
     "fileHelp": {
       "open": "Apri comunque nell'editor",
-      "agents": "Le convenzioni di lavoro di questo workspace: preferenze di progetto e modi di procedere che si ripetono. Le sezioni compaiono man mano che le concordi con Jenny; un titolo senza niente sotto non ci sta bene.\n\nNon qui: i fatti su di te (USER.md), il carattere e le regole di comportamento (SOUL.md), il contesto dei progetti (memory/MEMORY.md), le procedure con passi e formati precisi (le Skill, nella sezione App).",
+      "agents": "Le convenzioni di lavoro di questo workspace: preferenze di progetto e modi di procedere che si ripetono. Le sezioni compaiono man mano che le concordi con Jenny; un titolo senza niente sotto non ci sta bene.\n\nNon qui: i fatti su di te (USER.md), il carattere e le regole di comportamento (SOUL.md), il contesto dei progetti (memory/MEMORY.md), le procedure con passi e formati precisi (le Skill, in Impostazioni → Officina → Mani).",
       "user": "Quello che Jenny sa di te: identità, lingua, stile di comunicazione, abitudini e interessi. Si riempie man mano che ti conosce, non c'è niente da precompilare.\n\nNon qui: il contesto dei progetti (memory/MEMORY.md), le regole di comportamento (SOUL.md), le procedure ripetibili (le Skill). E nemmeno ora, fuso orario o posizione: il runtime li misura da sé a ogni turno, mentre una copia scritta qui non la aggiorna nessuno ed è già vecchia appena salvata.",
       "soul": "Chi è Jenny e come si comporta: il carattere, il modo di parlare, quello che fa e quello che non fa mai. E le regole fisse che le hai dato tu — come rivolgersi a te, cosa evitare, dove andarci piano.\n\nLo mantiene Dream, la consolidazione che gira dopo le conversazioni: una correzione che le fai a voce finisce qui. Puoi leggerlo e sistemarlo, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill). E nemmeno come si comporta l'app: cosa accetta uno strumento, cosa rifiuta la sandbox, dov'è un limite — è uguale su ogni installazione e glielo dice già il prompt di sistema.",
       "memory": "La memoria a lungo termine: quello che deve restare da una sessione all'altra — contesto dei progetti, fatti utili, note da ricordare.\n\nLa mantiene Dream, la consolidazione che gira dopo le conversazioni. Puoi leggerla e correggerla, ma di solito non serve scriverci a mano.\n\nNon qui: i fatti su di te (USER.md), le convenzioni di lavoro (AGENTS.md), le procedure ripetibili (le Skill)."
@@ -608,7 +606,8 @@
     "deleteProjectBusy": "Sto ancora lavorando in «{name}»: eliminalo quando ho finito.",
     "deletedProject": "Quaderno “{name}” eliminato, conversazione compresa",
     "nameTaken": "C’è già qualcosa con questo nome: scegline un altro.",
-    "changedOnDisk": "Il file è cambiato da quando l’hai aperto: non ho salvato niente. Chiudi l’editor e riaprilo per vedere com’è ora."
+    "changedOnDisk": "Il file è cambiato da quando l’hai aperto: non ho salvato niente. Chiudi l’editor e riaprilo per vedere com’è ora.",
+    "planRunning": "Un piano sta lavorando su questo quaderno: aspetta che finisca, o fermalo dalla casa."
   },
   "launcher": {
     "kindSkill": "Skill",
@@ -640,7 +639,6 @@
     "uninstalledMany": "Disinstallate: {names}",
     "launchFailed": "Impossibile avviare {name}: forse è stata disinstallata o disattivata.",
     "deleteFailed": "Eliminazione non riuscita",
-    "appDeleted": "App eliminata",
     "editAppPrompt": "Voglio modificare la Jenny App \"{name}\" (slug: {slug}). Puoi aiutarmi?",
     "chatAboutApp": "Parliamo dell'app \"{name}\": {text}",
     "frameCleartextBlocked": "{host} non si carica: usa http e la policy di rete dell'app permette il traffico in chiaro solo verso il gateway locale. Servono un server in https, oppure un'app di tipo vista esterna.",
@@ -761,7 +759,7 @@
   },
   "cron": {
     "asOf": "Aggiornato alle {time}",
-    "empty": "Nessuna attività programmata.",
+    "empty": "Nessun promemoria e nessuna automazione.",
     "notStarted": "La programmazione non è ancora partita: succede durante la configurazione iniziale.",
     "failed": "Non riesco a leggere lo stato della programmazione.",
     "unit": {
@@ -802,9 +800,7 @@
     "banner": {
       "stopped": "Lo scheduler è fermo: le scadenze qui sotto non sono state rimesse, e quelle passate restano nel passato.",
       "inertOne": "{name} è armato ma non fa niente: la configurazione lo dice spento.",
-      "inertMany": "{names} sono armati ma non fanno niente: la configurazione li dice spenti.",
-      "recoveredBackup": "Questo elenco è stato ricostruito dall'ultimo backup valido all'avvio. Controlla che ci siano tutti.",
-      "recoveredEmpty": "All'avvio l'elenco non era leggibile e non c'era un backup utilizzabile: i promemoria che avevi creato non ci sono più."
+      "inertMany": "{names} sono armati ma non fanno niente: la configurazione li dice spenti."
     },
     "job": {
       "protected": "di sistema",
@@ -815,7 +811,7 @@
       "noNext": "nessuna scadenza",
       "runs": "Ultime esecuzioni",
       "noRuns": "Nessuna esecuzione registrata.",
-      "text": "Testo del promemoria",
+      "text": "Cosa deve fare",
       "paused": "in pausa",
       "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi.",
       "inNotebook": "Sta nel quaderno {place}: lo trovi anche sulla sua bacheca.",
@@ -906,7 +902,7 @@
     "createFailed": "Creazione fallita: {error}",
     "createRejected": "Non ho potuto creare “{name}”: o esiste già, o una cartella con quel nome è di mezzo e non è un quaderno.",
     "createSeedTooLong": "La riga di presentazione è troppo lunga: accorciala e riprova.",
-    "createWikiOff": "Le wiki sono spente in config.json (wiki.enabled), e un quaderno è una wiki: riaccendile lì e riprova.",
+    "createWikiOff": "I quaderni sono spenti in config.json (wiki.enabled): riaccendili lì e riprova.",
     "createInternal": "Creazione non riuscita per un errore del gateway. Riprova.",
     "created": "Quaderno “{name}” creato",
     "askAbout": "Chiedi qualcosa su {name}...",
@@ -1012,10 +1008,10 @@
       "untitled": "Piano",
       "steps": "{count} passi",
       "stepsCut": "{count} passi su {total}",
-      "photoLine": "Prima di cominciare l'app segna un {bold}: è il punto a cui puoi sempre tornare.",
-      "photoWord": "punto di partenza",
-      "photoTaken": "punto di partenza {time}",
-      "photoTakenNoTime": "punto di partenza segnato",
+      "startLine": "Prima di cominciare l'app segna un {bold}: è il punto a cui puoi sempre tornare.",
+      "startWord": "punto di partenza",
+      "startTaken": "punto di partenza {time}",
+      "startTakenNoTime": "punto di partenza segnato",
       "version": "v{version}",
       "reviewing": "in revisione",
       "progress": "{done} di {total}",
@@ -1090,10 +1086,10 @@
       "redo": "Rifai il piano",
       "redoMessage": "Rifai il piano «{title}» da capo.",
       "undoRollback": "Annulla il ritorno",
-      "undone": "Ritorno annullato: il quaderno è com'era dopo il piano.",
-      "rolledBack": "Il quaderno è tornato a prima del piano: {count} file rimessi a posto.",
-      "rolledBackNote": "Quaderno com'era alla foto delle {bold}.",
-      "rolledBackNoteNoTime": "Quaderno com'era prima del piano.",
+      "undone": "Ritorno annullato: tutto è com'era dopo il piano.",
+      "rolledBack": "Tutto è tornato a prima del piano: {count} file rimessi a posto.",
+      "rolledBackNote": "File com'erano alle {bold}, prima del piano.",
+      "rolledBackNoteNoTime": "File com'erano prima del piano.",
       "close": "Togli la scheda",
       "more": "e altri {count}",
       "badge": "Piano {done}/{total}",
@@ -1102,11 +1098,11 @@
       "lockDelete": "«{name}» ha un piano aperto: si elimina quando è chiuso.",
       "waitTurn": "Aspetta che Jenny finisca: poi lo faccio da sola.",
       "stopRollbackFailed": "Il piano è fermo, ma il ritorno a prima non è riuscito.",
-      "stopRollbackConflict": "Il piano è fermo, ma il quaderno era cambiato: il ritorno a prima non è partito.",
-      "rollbackHalf": "Il ritorno si è fermato a metà ({applied} file su {total}): il quaderno può essere tornato a prima del piano solo in parte. Riprovare è sicuro.",
-      "rollbackHalfNoCount": "Il ritorno si è fermato a metà: il quaderno può essere tornato a prima del piano solo in parte. Riprovare è sicuro.",
-      "undoHalf": "L'annullamento del ritorno si è fermato a metà ({applied} file su {total}): il quaderno può essere com'era dopo il piano solo in parte. Riprovare è sicuro.",
-      "undoHalfNoCount": "L'annullamento del ritorno si è fermato a metà: il quaderno può essere com'era dopo il piano solo in parte. Riprovare è sicuro.",
+      "stopRollbackConflict": "Il piano è fermo, ma i file erano cambiati: il ritorno a prima non è partito.",
+      "rollbackHalf": "Il ritorno si è fermato a metà ({applied} file su {total}): i file possono essere tornati a prima del piano solo in parte. Riprovare è sicuro.",
+      "rollbackHalfNoCount": "Il ritorno si è fermato a metà: i file possono essere tornati a prima del piano solo in parte. Riprovare è sicuro.",
+      "undoHalf": "L'annullamento del ritorno si è fermato a metà ({applied} file su {total}): i file possono essere com'erano dopo il piano solo in parte. Riprovare è sicuro.",
+      "undoHalfNoCount": "L'annullamento del ritorno si è fermato a metà: i file possono essere com'erano dopo il piano solo in parte. Riprovare è sicuro.",
       "rollbackRetry": "Riprova a tornare indietro",
       "undoRetry": "Riprova ad annullare",
       "sheetClose": "Chiudi",
@@ -1123,16 +1119,16 @@
         "title": "Passo {n} · {title}",
         "when": "Fatto alle {time}.",
         "counts": "Ha scritto {added} file, ne ha cambiati {changed}, tolti {removed}.",
-        "nothing": "Non ha cambiato file del quaderno."
+        "nothing": "Non ha cambiato nessun file."
       },
       "changes": {
         "title": "Cosa ha cambiato il piano",
-        "sub": "Dalla foto delle {start} a quella delle {end}. Lo calcola l'app confrontando le due foto.",
-        "subNoTime": "Lo calcola l'app confrontando la foto di prima con quella di dopo.",
+        "sub": "Dalle {start} alle {end}. Lo calcola l'app da quello che il piano ha scritto.",
+        "subNoTime": "Lo calcola l'app da quello che il piano ha scritto.",
         "added": "{count} nuovi in {group}",
         "changed": "{count} cambiati in {group}",
         "removed": "{count} tolti da {group}",
-        "none": "Il quaderno è com'era prima del piano."
+        "none": "Tutto è com'era prima del piano."
       },
       "group": {
         "pages": "pagine",
@@ -1155,13 +1151,13 @@
         "keep": "Ferma e tieni quello che ha fatto",
         "keepSub": "il piano si chiude a metà, i file restano",
         "back": "Ferma e torna a prima del piano",
-        "backSub": "l'app rimette il quaderno com'era alle {time}",
-        "backSubNoTime": "l'app rimette il quaderno com'era prima del piano"
+        "backSub": "l'app rimette i file com'erano alle {time}",
+        "backSubNoTime": "l'app rimette i file com'erano prima del piano"
       },
       "rollbackSheet": {
         "title": "Torno a prima del piano?",
-        "sub": "L'app rimette il quaderno com'era alla foto delle {time}. Jenny non c'entra: lo fa il codice, file per file.",
-        "subNoTime": "L'app rimette il quaderno com'era prima del piano. Jenny non c'entra: lo fa il codice, file per file.",
+        "sub": "L'app rimette i file com'erano alle {time}. Jenny non c'entra: lo fa il codice, file per file. Promemoria, automazioni e dati delle app nati dal piano non si annullano.",
+        "subNoTime": "L'app rimette i file com'erano prima del piano. Jenny non c'entra: lo fa il codice, file per file. Promemoria, automazioni e dati delle app nati dal piano non si annullano.",
         "restored": "Tornano {count} file com'erano",
         "restoredOne": "Torna 1 file com'era",
         "removed": "Vanno via {count} file nuovi",
@@ -1623,8 +1619,8 @@
         "reminder_due": "È il momento: {text}.",
         "app_event": "{title}: {app} è {state}.",
         "other": "Qualcosa è cambiato in bacheca.",
-        "micro_kept": "{title}: la micro app {app} è nel cassetto e gira da sola.",
-        "micro_fixed": "{title}: ho sistemato la micro app {app}.",
+        "micro_kept": "{title}: la mini app {app} è nel cassetto e gira da sola.",
+        "micro_fixed": "{title}: ho sistemato la mini app {app}.",
         "cron_result": "{title}: {app} ha qualcosa da dirti.",
         "cron_result_notebook": "{app} ha qualcosa da dirti."
       }
@@ -1698,7 +1694,7 @@
     },
     "reminder": {
       "done": "Fatto",
-      "edit": "Correggi",
+      "edit": "Modifica",
       "drop": "Togli",
       "dropConfirm": "Togliere «{text}»?",
       "actions": "Altro su «{text}»"
@@ -1763,7 +1759,7 @@
         "photo": "Foto",
         "other": "Altro",
         "micro": "App",
-        "cron": "Cron"
+        "cron": "Automazione"
       },
       "addFab": "Aggiungi al cassetto"
     },
@@ -1796,7 +1792,7 @@
       "costs": "lo fa Jenny (usa il modello)",
       "last": "Ultimo esito ({when}): {text}",
       "quiet": "Ultimo giro {when}: niente da dirti.",
-      "changePrompt": "Nel cassetto {card}, il cron «{name}»: vorrei ",
+      "changePrompt": "Nel cassetto {card}, l'automazione «{name}»: vorrei ",
       "prompt": "Nel cassetto {card}, ogni ",
       "removeConfirm": "Togliere «{name}»? Jenny smette di farlo.",
       "changeNotebookPrompt": "Nelle automazioni di tutto il quaderno, «{name}»: vorrei "
@@ -1913,7 +1909,7 @@
     },
     "wiki": {
       "integrated": "✓ nella wiki",
-      "pending": "in attesa della wiki"
+      "pending": "da integrare nel quaderno"
     }
   },
   "place": {

@@ -6,9 +6,9 @@ Concrete scenarios showing when and how to use the my tool effectively.
 
 ### "Why can't you search the web?"
 ```
-→ my(action="check", key="web_config.enable")
+→ my(action="check", key="android_web_config.enable")
   → False
-→ "Web search is disabled. Add web.enable: true to your config to enable it."
+→ "Web search is off. You can turn it on in Settings."
 ```
 
 ### "Why did you stop?"
