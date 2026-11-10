@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from jenny.agent.hook import AgentHook, ToolResultHookContext
+from jenny.agent.tools.result import is_error_text
 from jenny.cron.session_turns import is_cron_turn
 from jenny.plan.driver import PlanDriver, notebook_of
 from jenny.plan.meta import (
@@ -166,7 +167,7 @@ def is_planning_turn(
 def _counts_as_read(context: ToolResultHookContext) -> bool:
     if context.error is not None:
         return False
-    if isinstance(context.result, str) and context.result.startswith("Error"):
+    if is_error_text(context.result):
         return False
     if context.name in PLANNING_READ_TOOLS:
         return True

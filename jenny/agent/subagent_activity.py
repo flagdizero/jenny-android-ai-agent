@@ -72,6 +72,7 @@ from urllib.parse import urlparse
 from loguru import logger
 
 from jenny.agent.subagent_records import subagents_database
+from jenny.agent.tools.result import is_error_text
 from jenny.utils.helpers import clip
 from jenny.utils.path import abbreviate_path
 
@@ -493,7 +494,7 @@ def classify_tool_result(tool: str, result: Any, error: Any = None) -> str:
         return STATUS_ERROR
     if isinstance(result, str):
         stripped = result.lstrip()
-        if stripped.startswith("Error"):
+        if is_error_text(stripped):
             return STATUS_ERROR
         if tool in _JSON_ERROR_TOOLS and stripped.startswith('{"error"'):
             return STATUS_ERROR

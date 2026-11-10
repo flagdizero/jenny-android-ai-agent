@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
 from jenny.agent.tools.base import Tool
-from jenny.agent.tools.result import ToolResult
+from jenny.agent.tools.result import ToolResult, is_error_text, render_for_model
 
 if TYPE_CHECKING:
     from jenny.agent.tools.file_state import FileStates
@@ -200,12 +200,9 @@ class ToolRegistry:
             # Tool migrati: esito strutturato → decisione su .ok (niente più
             # mis-classificazione di output legittimi che iniziano per "Error").
             if isinstance(result, ToolResult):
-                rendered = result.render()
-                if not result.ok and isinstance(rendered, str):
-                    return rendered + hint
-                return rendered
-            # Tool legacy: vecchia convenzione stringly-typed.
-            if isinstance(result, str) and result.startswith("Error"):
+                rendered = render_for_model(result)
+                return rendered if result.ok else rendered + hint
+            if is_error_text(result):
                 return result + hint
             return result
         except Exception as e:
