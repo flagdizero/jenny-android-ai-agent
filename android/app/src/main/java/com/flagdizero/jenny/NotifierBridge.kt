@@ -547,6 +547,12 @@ class NotifierBridge(context: Context) {
     }
 
     private fun post(title: String, body: String, tag: String): Boolean {
+        // Senza il permesso `notify` non solleva: scarta in silenzio, e a Python
+        // tornava `true` per un avviso che l'utente non ha mai visto.
+        if (!JennyChannels.canPostNotifications(appContext)) {
+            Log.w(TAG, "Alert not posted: POST_NOTIFICATIONS is denied")
+            return false
+        }
         // Se su questo tag è già aperto un filo, questa è la sua continuazione e
         // non una scheda nuova. È il caso normale di una risposta: la domanda
         // l'utente l'ha scritta *dentro* quella notifica, e la risposta deve
