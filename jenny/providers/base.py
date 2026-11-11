@@ -23,6 +23,7 @@ from jenny.providers.message_repair import (
 from jenny.providers.retry_policy import (
     extract_error_type_code,
     is_arrearage_response,
+    is_overloaded_response,
     is_transient_response,
 )
 
@@ -326,6 +327,11 @@ class LLMProvider(ABC):
     provider_name: str | None = None
 
     _CHAT_RETRY_DELAYS = (1, 2, 4)
+    # Server a monte sovraccarico (``retry_policy.is_overloaded_response``): gli
+    # stessi tre tentativi, più distanti. Il 05/11/2026 OpenCode Go rispondeva
+    # «overloaded» con ``Retry-After: 2``, e tre attese da 2 s finivano in 8 s,
+    # dentro il sovraccarico. Qui il ``Retry-After`` è un minimo, non l'attesa.
+    _OVERLOAD_RETRY_DELAYS = (4, 8, 16)
     # Modalità ``background``: chi chiama non ha un utente che aspetta (un
     # aiutante), e arrendersi costa il lavoro fatto. Nella riprova del 25/10 un
     # 429 di OpenCode Go durava più dei 7 secondi della scala standard: nove
@@ -975,8 +981,15 @@ class LLMProvider(ABC):
                     await on_retry_wait(retry_notice.gave_up(attempt))
                 break
 
-            base_delay = delays[min(attempt - 1, len(delays) - 1)]
-            delay = self._extract_retry_after_from_response(response) or base_delay
+            hinted = self._extract_retry_after_from_response(response)
+            if retry_mode == "standard" and is_overloaded_response(response):
+                base_delay = self._OVERLOAD_RETRY_DELAYS[
+                    min(attempt, len(self._OVERLOAD_RETRY_DELAYS)) - 1
+                ]
+                delay = max(hinted or 0, base_delay)
+            else:
+                base_delay = delays[min(attempt - 1, len(delays) - 1)]
+                delay = hinted or base_delay
             # Il ``Retry-After`` del server ha un tetto in entrambe le modalità:
             # in standard si prendeva alla lettera, e un ``3600`` teneva la
             # sessione ferma tre ore (tre tentativi) prima dell'errore.

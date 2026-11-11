@@ -61,3 +61,58 @@ async def test_a_huge_retry_after_is_capped_in_standard_mode(monkeypatch) -> Non
     assert response.finish_reason == "error"
     # Prima: 3 × 3600 s. Ora ogni attesa si ferma a un minuto al massimo.
     assert sum(slept) <= 60 * len(LLMProvider._CHAT_RETRY_DELAYS)
+
+
+# ── Un server sovraccarico non è un rate limit ────────────────────────────────
+
+_OPENCODE_OVERLOADED = (
+    'Error calling LLM: HTTP 429 from https://opencode.ai/zen/go/v1/chat/completions: '
+    '{"error":{"type":"server_error","message":"Upstream request failed: [overloaded] '
+    'the server is overloaded; retry shortly"}}'
+)
+
+
+def _overloaded(**extra) -> LLMResponse:
+    return LLMResponse(
+        content=_OPENCODE_OVERLOADED, finish_reason="error", error_status_code=429,
+        error_type="server_error", **extra,
+    )
+
+
+async def test_an_overloaded_429_waits_longer_than_its_retry_after(monkeypatch) -> None:
+    """Il 05/11/2026 OpenCode Go mandava «overloaded» con ``Retry-After: 2``: tre
+    attese da 2 s, otto secondi in tutto, e il turno perso dentro il sovraccarico."""
+
+    class _Overloaded(LLMProvider):
+        async def chat(self, **_kwargs):
+            return _overloaded(error_retry_after_s=2.0)
+
+        def get_default_model(self) -> str:
+            return "m"
+
+    slept: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("jenny.providers.base.asyncio.sleep", _fake_sleep)
+    await _Overloaded().chat_with_retry(messages=[{"role": "user", "content": "x"}])
+
+    assert slept == list(LLMProvider._OVERLOAD_RETRY_DELAYS)
+    assert len(slept) == len(LLMProvider._CHAT_RETRY_DELAYS)
+
+
+def test_an_overloaded_429_is_told_as_the_providers_trouble() -> None:
+    from jenny.providers.retry_policy import classify_user_error, is_overloaded_response
+
+    assert is_overloaded_response(_overloaded())
+    assert classify_user_error(_overloaded()) == "server"
+    rate_limited = LLMResponse(
+        content="Error: rate limit exceeded", finish_reason="error", error_status_code=429,
+    )
+    assert not is_overloaded_response(rate_limited)
+    assert classify_user_error(rate_limited) == "rate_limit"
+    bad_request = LLMResponse(
+        content="Error: overloaded", finish_reason="error", error_status_code=400,
+    )
+    assert not is_overloaded_response(bad_request)

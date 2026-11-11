@@ -140,6 +140,33 @@ def is_transient_response(response: "LLMResponse") -> bool:
     return is_transient_error(response.content)
 
 
+OVERLOADED_ERROR_TOKENS = frozenset({"overloaded_error", "overloaded"})
+
+
+def is_overloaded_response(response: "LLMResponse") -> bool:
+    """Il server a monte è sovraccarico: non abbiamo chiesto troppo, è pieno lui.
+
+    È il 529 di Anthropic, ma anche un 429 come quello di OpenCode Go del
+    05/11/2026 (``"[overloaded] the server is overloaded; retry shortly"``,
+    ``type=server_error``): uno status di rate limit con dentro un sovraccarico.
+    Passa in qualche decina di secondi, non in un minuto di quota, e chi legge
+    la chat non ha mandato troppe richieste. Il testo vale solo con uno status
+    di rate limit o di server (o senza status): su un 400 non è un sovraccarico.
+    """
+    status = response.error_status_code
+    if status is not None and int(status) == 529:
+        return True
+    if status is not None and int(status) != 429 and int(status) < 500:
+        return False
+    tokens = {
+        normalize_error_token(response.error_type),
+        normalize_error_token(response.error_code),
+    }
+    if tokens & OVERLOADED_ERROR_TOKENS:
+        return True
+    return "overloaded" in (response.content or "").lower()
+
+
 def is_arrearage_response(response: "LLMResponse") -> bool:
     """Detect API-key arrearage / quota / billing errors that won't clear on retry."""
     if response.error_status_code is not None and int(response.error_status_code) == 402:
@@ -172,6 +199,10 @@ def classify_user_error(response: "LLMResponse") -> str:
     """
     if is_arrearage_response(response):
         return "credit"
+    # Prima del 429: un sovraccarico con lo status del rate limit diceva
+    # «hai mandato troppe richieste», e il problema era del provider.
+    if is_overloaded_response(response):
+        return "server"
     status = response.error_status_code
     if status is not None:
         code = int(status)
