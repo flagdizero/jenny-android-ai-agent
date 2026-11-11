@@ -96,6 +96,7 @@ object GatewayStarter {
         reason: String,
         wakeTick: Boolean = false,
         alarmFallback: Boolean = false,
+        wakeCode: Int = 0,
     ): Boolean {
         val appContext = context.applicationContext
         Log.i(TAG, "Ensuring gateway is up (reason=$reason, wakeTick=$wakeTick)")
@@ -106,6 +107,7 @@ object GatewayStarter {
             val intent = Intent(appContext, GatewayService::class.java)
             if (wakeTick) {
                 intent.putExtra(GatewayService.EXTRA_WAKE_TICK, true)
+                intent.putExtra(GatewayService.EXTRA_WAKE_CODE, wakeCode)
             }
             appContext.startForegroundService(intent)
             true

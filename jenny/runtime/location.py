@@ -431,3 +431,38 @@ async def get_location(cfg: Any, *, precise: bool) -> LocationFix | None:
     if _CURRENT is not None:
         return _CURRENT
     return await _fetch_fix(cfg, precise=False)
+
+
+# ── per la sentinella delle zone (``jenny/cron/zone_watch.py``) ─────────────
+
+# Gli stati di ``LocationBridge.backgroundState``, più ``off`` fuori da Android.
+BACKGROUND_STATES = ("ok", "blind", "no_permission", "off")
+
+
+async def read_fresh_fix(*, low_power: bool, timeout_s: float) -> LocationFix | None:
+    """Una lettura di adesso, o ``None``: mai il last-known al suo posto.
+
+    ``low_power``: prima la posizione da rete, il GPS solo se manca (v.
+    ``LocationBridge.getFreshFrom``). Niente reverse geocoding e niente
+    ``_CURRENT``: la sentinella vuole solo un punto e la sua precisione, e una
+    lettura ogni pochi minuti non deve accendere il Geocoder ogni volta.
+    """
+    context = get_android_context()
+    raw = await _BRIDGE.call(_get_bridge, context, "getFreshFrom", bool(low_power),
+                             int(timeout_s * 1000), timeout=timeout_s + 5, level="DEBUG")
+    return _parse_fix(raw, source="network" if low_power else "gps")
+
+
+async def background_state() -> str:
+    """Se la posizione si può leggere a schermo spento: uno di ``BACKGROUND_STATES``.
+
+    ``blind`` è il caso che conta: dopo un riavvio o un aggiornamento il
+    servizio gira senza il tipo ``location`` finché l'app non torna in primo
+    piano, e ogni lettura fallisce. ``off`` fuori da Android, o se il bridge
+    non risponde.
+    """
+    context = get_android_context()
+    raw = await _BRIDGE.call(_get_bridge, context, "backgroundState",
+                             timeout=_BRIDGE_TIMEOUT_S, level="DEBUG")
+    state = str(raw) if raw is not None else "off"
+    return state if state in BACKGROUND_STATES else "off"

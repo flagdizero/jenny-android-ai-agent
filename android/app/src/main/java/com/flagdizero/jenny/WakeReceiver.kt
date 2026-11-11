@@ -47,7 +47,7 @@ class WakeReceiver : BroadcastReceiver() {
         // Sveglia senza request code: PendingIntent creato da una versione
         // precedente e sopravvissuto all'aggiornamento dell'APK. Trattarla come
         // recovery è il ripiego che non perde nulla (rimette su il service).
-        when (intent.getIntExtra(PowerBridge.EXTRA_REQUEST_CODE, RECOVERY_FALLBACK)) {
+        when (val code = intent.getIntExtra(PowerBridge.EXTRA_REQUEST_CODE, RECOVERY_FALLBACK)) {
             Watchdog.REQUEST_CODE -> Watchdog.onAlarm(context)
             // Senza questo ramo la sveglia da 8 ore cadrebbe nell'`else` e
             // verrebbe scambiata per un tick di lavoro: il gateway ripartirebbe
@@ -58,11 +58,14 @@ class WakeReceiver : BroadcastReceiver() {
             PowerBridge.REQUEST_CODE_SERVICE_RESTART ->
                 GatewayStarter.ensureUp(context, reason = "wake-alarm/restart")
             // Tutto il resto è una sveglia di LAVORO armata da Python (request
-            // code sotto 9000): una scadenza cron da onorare adesso.
+            // code sotto 9000): una scadenza cron, o il giro della sentinella
+            // delle zone. Il code va fino a Python, che sveglia solo chi l'ha chiesta.
             // `wakeTick`: v. `GatewayStarter.ensureUp`. Niente `alarmFallback`:
             // siamo già dentro la finestra di allowlist di una sveglia (col FGS
             // se era esatta; se no un'altra sveglia non cambierebbe niente).
-            else -> GatewayStarter.ensureUp(context, reason = "wake-alarm/work", wakeTick = true)
+            else -> GatewayStarter.ensureUp(
+                context, reason = "wake-alarm/work", wakeTick = true, wakeCode = code,
+            )
         }
     }
 
