@@ -59,6 +59,10 @@ Releases before 1.0 are described only on their
 
 ### Fixed
 
+- **A busy provider gets more time.** When the model's server answers that it is overloaded, Jenny
+  now waits longer between her three tries — 4, 8 and 16 seconds, never less than what the server
+  asks — instead of giving up within a few seconds. If it still fails, she says the trouble is on
+  the provider's side, not that you sent too many requests.
 - **Reminders follow you when you change timezone.** Jenny read the phone's timezone only when the app
   started, and a recurring reminder kept the one it was created in: after a flight, "every day at 7"
   still rang at 7 at home. Now every reminder keeps its clock time wherever the phone is, from the
