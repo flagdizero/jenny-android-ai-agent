@@ -234,6 +234,19 @@ class CronTool(Tool, ContextAware):
         """Restore previous cron context."""
         self._in_cron_context.reset(token)
 
+    def _in_scheduled_run(self) -> bool:
+        """Se questo turno l'ha aperto un job (e non l'utente in chat).
+
+        Lo dice il messaggio del turno, che porta ``CRON_TRIGGER_META``: il
+        ContextVar di ``set_cron_context`` da solo non basta, perché il runner lo
+        accende nel suo task e il turno gira in quello della coda dell'agente
+        (``AgentLoop.submit_cron_turn``), dove non arriva. Visto sul telefono
+        l'11/11/2026: tre job creati da un turno di cron, nessuno firmato.
+        """
+        from jenny.cron.session_turns import CRON_TRIGGER_META
+
+        return self._in_cron_context.get() or CRON_TRIGGER_META in (self._origin_metadata.get() or {})
+
     @staticmethod
     def _validate_timezone(tz: str) -> str | None:
         # Degrada (accetta) quando il database tzdata manca del tutto.
@@ -397,7 +410,7 @@ class CronTool(Tool, ContextAware):
         # Svegliata da un job, Jenny si mette quel che le serve (dall'11/11/2026
         # senza limiti: prima da lì passava solo una zona «una volta»). Il job
         # nasce firmato, così l'utente vede cosa si è messa da sola.
-        autonomous = self._in_cron_context.get()
+        autonomous = self._in_scheduled_run()
         if notebook is None:
             if why:
                 return "Error: `why` is a page of a notebook's wiki; it needs `notebook`."

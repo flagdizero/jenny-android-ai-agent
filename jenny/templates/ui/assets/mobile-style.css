@@ -5317,12 +5317,12 @@ dialog.image-lightbox::backdrop { background: transparent; }
   font-weight: 500;
   color: var(--text);
 }
+/* Va a capo, non si tronca: in fondo alla riga stanno la scadenza («fino a…») e
+   la firma, che con i puntini sparivano proprio quando c'erano. */
 .cron-row-sched {
   font-size: 12px;
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 /* La firma di un job che Jenny si e' messa da sola: piccola, a mano. */
 .cron-row-sign { margin-left: 8px; font-family: var(--font-hand); font-size: 14px; color: var(--flower); }

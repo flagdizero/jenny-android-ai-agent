@@ -79,6 +79,21 @@ async def test_from_a_scheduled_run_she_sets_whatever_she_needs(tool, service) -
     assert all(j.payload.autonomous for j in jobs)
 
 
+async def test_the_turn_s_own_message_says_it_is_a_scheduled_run(service) -> None:
+    """Il turno di un job gira nel task della coda dell'agente, dove il ContextVar
+    del runner non arriva: la firma si legge dal messaggio del turno."""
+    from jenny.cron.session_turns import CRON_TRIGGER_META
+
+    t = CronTool(service, default_timezone="Europe/Rome")
+    t.set_context(RequestContext(channel="websocket", chat_id="chat-1",
+                                 session_key="unified:default",
+                                 metadata={CRON_TRIGGER_META: {"job_id": "abc"}}))
+    out = await t.execute(action="add", name="treno", message="x", date=_day(1), time="13:50")
+    assert out.startswith("Created job")
+    [job] = service.list_jobs()
+    assert job.payload.autonomous is True
+
+
 async def test_what_the_user_asks_in_chat_is_not_signed(tool, service) -> None:
     await tool.execute(action="add", name="piante", message="annaffia", every_seconds=3600)
     [job] = service.list_jobs()
