@@ -183,20 +183,41 @@ def _start_command(*, log_dir: str, log_path: str, rc_path: str, command: str) -
 def _poll_command(job: SshJob, *, limit: int) -> str:
     """Intestazione + delta di log in un solo comando.
 
-    L'ordine dei campi conta: la dimensione si legge PRIMA del delta, così il
-    cursore avanza al massimo di quanto era davvero disponibile. Se il file
-    cresce nel frattempo il peggio che succede è rileggere qualche byte al poll
-    successivo — duplicare output è recuperabile, perderlo no.
+    Due regole, e l'ordine dei passi le tiene tutte e due.
+
+    **Ogni byte si consegna una volta sola.** Il delta si ferma alla dimensione
+    letta prima di lui: ``n = min(limit, s - cursore)``, gli stessi byte di cui
+    ``SshJobStore.poll`` fa avanzare il cursore. Prima arrivava fino in fondo al
+    file: quel che il job scriveva fra ``wc`` e ``tail`` usciva in questo poll
+    senza essere contato, e il poll dopo lo ridava — un pezzo doppio a ogni
+    confine, per un job che scrive di continuo. Quei byte ora restano per il
+    poll dopo.
+
+    **Il poll che dice «finito» consegna tutto.** Per questo la dimensione si
+    legge per ULTIMA: prima se il processo è vivo, poi il codice di uscita (che
+    il wrapper scrive prima di uscire: morto a ``kill -0`` vuol dire file già
+    scritto), e solo allora ``wc``. Letta prima, un job che scriveva e usciva
+    nel mezzo dava «finito» con la dimensione vecchia, e il suo output restava
+    oltre la fine annunciata, dove nessuno va più a chiederlo.
+
+    Shell POSIX, perché è la shell di login di un server che non è nostro:
+    ``$(( ))`` e ``[``, niente di bash. ``$s`` entra nell'aritmetica senza
+    virgolette perché il ``wc`` di macOS stampa spazi davanti al numero. Il
+    ``head`` si salta quando non c'è niente da leggere: quello BSD rifiuta
+    ``-c 0``.
     """
     log = shlex.quote(job.log_path)
     rc = shlex.quote(job.rc_path)
     return (
-        f"s=$(wc -c < {log} 2>/dev/null) || s=0; "
         f"if kill -0 {job.pid} 2>/dev/null; then a=1; else a=0; fi; "
         f"r=$(cat {rc} 2>/dev/null); "
+        f"s=$(wc -c < {log} 2>/dev/null) || s=0; "
         f'printf "%s\\n%s\\n%s\\n{_MARKER}\\n" "$s" "$a" "$r"; '
+        f"n=$(( $s - {job.cursor} )); "
+        f"if [ $n -gt {limit} ]; then n={limit}; fi; "
         # ``tail -c +N`` è 1-based: il cursore è un conteggio di byte consumati.
-        f"tail -c +{job.cursor + 1} {log} 2>/dev/null | head -c {limit}"
+        # Un log più corto del cursore (troncato) dà ``n`` negativo: niente.
+        f"if [ $n -gt 0 ]; then tail -c +{job.cursor + 1} {log} 2>/dev/null | head -c $n; fi"
     )
 
 
