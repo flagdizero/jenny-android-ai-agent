@@ -738,3 +738,36 @@ class TestWakelock:
             )
 
         assert [e[0] for e in events] == ["enter", "exit"]
+
+
+class TestAZoneArrivalSaysWhereNotWhen:
+    """Una zona non è un'ora che arriva: il turno dice il posto, e il ritardo se c'è."""
+
+    def _zone_job(self, *, entered_ago_ms: int = 0) -> CronJob:
+        from jenny.cron.types import CronSchedule
+        from jenny.utils.clock import now_ms
+
+        job = _bound_job(job_id="zone-1", name="binario", message="dimmi il binario")
+        job.schedule = CronSchedule(kind="zone", lat=45.0, lng=9.0, radius_m=200,
+                                    zone_name="Stazione Centrale")
+        job.state.zone_entered_at_ms = now_ms() - entered_ago_ms
+        job.state.zone_fix = {"lat": 45.0003, "lng": 9.0, "accuracy": 25.0, "timeMs": 0}
+        return job
+
+    async def test_the_prompt_names_the_place(self) -> None:
+        agent = _FakeAgent()
+        await run_bound_cron_job(self._zone_job(), agent=agent, cron=_FakeCronRecorder())
+
+        [msg] = agent.received
+        assert "just arrived at Stazione Centrale" in msg.content
+        assert "about 30 m" in msg.content and "about 25 m" in msg.content
+        assert "dimmi il binario" in msg.content
+        assert "scheduled time" not in msg.content
+        assert "45.0" not in msg.content, "mai le coordinate al modello"
+        assert "minutes ago" not in msg.content
+
+    async def test_a_late_delivery_says_so(self) -> None:
+        agent = _FakeAgent()
+        job = self._zone_job(entered_ago_ms=25 * 60_000)
+        await run_bound_cron_job(job, agent=agent, cron=_FakeCronRecorder())
+        assert "25 minutes ago" in agent.received[0].content

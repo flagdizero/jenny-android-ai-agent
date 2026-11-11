@@ -65,6 +65,7 @@ def add_notebook_job(
     why: str | None = None,
     condition: dict[str, Any] | None = None,
     origin_metadata: dict[str, Any] | None = None,
+    delete_after_run: bool = False,
 ) -> Any:
     """Un job nuovo del quaderno *notebook*, su una scheda (*scope*) o sul quaderno intero.
 
@@ -81,6 +82,7 @@ def add_notebook_job(
         why=why,
         condition=condition,
         origin_metadata=origin_metadata or {},
+        delete_after_run=delete_after_run,
         **notebook_delivery(notebook),
     )
 
