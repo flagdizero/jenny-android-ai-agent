@@ -100,6 +100,15 @@ _TEXT: dict[str, dict[str, str]] = {
             "{count} checks in '{name}' have not completed for up to {runs} runs in a "
             "row. Ask me in chat what's wrong."
         ),
+        "alarm.zones_label": "Places",
+        "alarm.zones_blind": (
+            "I can't see where you are with the screen off, so your \"when you arrive\" "
+            "reminders are on hold. Open Jenny once to wake them up."
+        ),
+        "alarm.zones_no_permission": (
+            "Your \"when you arrive\" reminders are on hold: Jenny no longer has the "
+            "location permission. Allow it again in the app settings."
+        ),
         "alarm.dream_label": "Memory",
         "alarm.dream_stuck": (
             "My memory is stuck: for {stuck} runs in a row nothing could be saved, "
@@ -475,6 +484,15 @@ _TEXT: dict[str, dict[str, str]] = {
         "alarm.checks_silent": (
             "{count} controlli di «{name}» non riescono da fino a {runs} volte di fila. "
             "Chiedimi in chat cosa non va."
+        ),
+        "alarm.zones_label": "Luoghi",
+        "alarm.zones_blind": (
+            "A schermo spento non vedo dove sei, quindi i promemoria «quando arrivi» "
+            "sono fermi. Apri Jenny una volta per riattivarli."
+        ),
+        "alarm.zones_no_permission": (
+            "I promemoria «quando arrivi» sono fermi: Jenny non ha più il permesso di "
+            "posizione. Riattivalo nelle impostazioni dell'app."
         ),
         "alarm.dream_label": "Memoria",
         "alarm.dream_stuck": (

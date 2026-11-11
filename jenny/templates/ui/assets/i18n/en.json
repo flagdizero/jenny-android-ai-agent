@@ -781,7 +781,10 @@
       "daily": "every day at {time}",
       "weekly": "every {days} at {time}",
       "weekdays": "on weekdays at {time}",
-      "monthly": "on day {days} of every month at {time}"
+      "monthly": "on day {days} of every month at {time}",
+      "zone": "when you arrive at {place}",
+      "zoneUntil": "when you arrive at {place}, until {until}",
+      "zonePlace": "a place"
     },
     "when": {
       "now": "now",
@@ -837,6 +840,12 @@
       },
       "expired": "It was a one-time reminder and its time has passed: it can only be deleted.",
       "failed": "I couldn't do it. Try again in a moment."
+    },
+    "zone": {
+      "waiting": "waiting for you to arrive",
+      "blind": "on hold: open Jenny to wake it up",
+      "noPermission": "on hold: no location permission",
+      "off": "on hold: location is off"
     }
   },
   "onboarding": {
@@ -1697,7 +1706,8 @@
       "edit": "Edit",
       "drop": "Remove",
       "dropConfirm": "Remove “{text}”?",
-      "actions": "More on “{text}”"
+      "actions": "More on “{text}”",
+      "zone": "on arrival at {place}"
     },
     "app": {
       "open": "Open the app",

@@ -38,6 +38,7 @@ _SYSTEM_PROMPT_TEMPLATES = [
     "agent/subagent_announce.md", "agent/skills_section.md", "agent/apps_section.md",
     "agent/diary_section.md",
     "agent/platform_policy.md", "agent/cron_reminder.md", "agent/cron_monitor.md",
+    "agent/cron_zone.md",
     "agent/max_iterations_message.md", "agent/consolidator_archive.md",
     "agent/inflight_checkpoint.md", "agent/consolidator_handoff.md",
     "agent/dream.md", "agent/dream_project.md", "agent/dream_review.md",

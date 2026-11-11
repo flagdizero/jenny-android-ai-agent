@@ -9,11 +9,14 @@ from typing import Any
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.context import ContextAware, RequestContext
 from jenny.agent.tools.schema import (
+    BooleanSchema,
     IntegerSchema,
+    NumberSchema,
     ObjectSchema,
     StringSchema,
     tool_parameters_schema,
 )
+from jenny.cron import zones as _zone_rules
 from jenny.cron.purposes import system_job_purpose
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronJobState, CronSchedule, job_display_name
@@ -27,6 +30,10 @@ from jenny.utils.helpers import safe_zoneinfo, validate_timezone_name
 # Modi accettati da action='add'. Vive qui e non in cron/types.py perché è la
 # lista che il tool valida e mostra all'LLM; il tipo canonico resta CronPayload.
 _JOB_MODES = ("reminder", "monitor")
+# Una zona resta armata al massimo un anno; armata da un turno di cron, una
+# settimana (v. ``CronTool._cron_turn_zone_refusal``).
+_MAX_ZONE_DAYS = 366
+_CRON_TURN_ZONE_DAYS = 7
 _DEFAULT_JOB_MODE = "reminder"
 
 # Il «dove» di un job decide solo il recinto e la chat in cui consegna, non come
@@ -100,6 +107,47 @@ _CRON_PARAMETERS = tool_parameters_schema(
         ),
         required=["app", "field", "op", "value"],
     ),
+    zone=ObjectSchema(
+        {
+            "name": StringSchema("The place, as the user calls it ('Fushimi Inari', 'the gym')."),
+            "latitude": NumberSchema(description="From find_place or get_location.",
+                                     minimum=-90, maximum=90),
+            "longitude": NumberSchema(description="From find_place or get_location.",
+                                      minimum=-180, maximum=180),
+            "radius_m": IntegerSchema(
+                description=(
+                    f"Metres around the point that count as arrived: default "
+                    f"{_zone_rules.DEFAULT_RADIUS_M}; larger for a big place (a park, a "
+                    f"station, a district). From {_zone_rules.MIN_RADIUS_M} to "
+                    f"{_zone_rules.MAX_RADIUS_M}."
+                ),
+                minimum=_zone_rules.MIN_RADIUS_M, maximum=_zone_rules.MAX_RADIUS_M,
+            ),
+        },
+        description=(
+            "Instead of a time: the job fires when the phone ARRIVES at this place ('when I get "
+            "to the station', 'when I'm at the supermarket'). The code watches the position; "
+            "you are woken only on arrival. Take latitude and longitude from find_place, or from "
+            "get_location for 'here': never guess them. Not with every_seconds, cron_expr, date, "
+            "time or condition; it always speaks on arrival. If the phone is already there when you arm it, "
+            "it fires on the next arrival, after leaving."
+        ),
+        required=["name", "latitude", "longitude"],
+    ),
+    every_arrival=BooleanSchema(
+        description=(
+            "Only with `zone`: true fires at every arrival ('every time I get to the gym'); "
+            "false (default) fires once and the job goes away."
+        ),
+    ),
+    until_date=StringSchema(
+        "Only with `zone`: the last day it is armed, 'YYYY-MM-DD' (the whole day counts). "
+        "Default for a one-time zone: tonight (tomorrow night if it is already late). An "
+        "every-arrival zone without it never expires."
+    ),
+    until_time=StringSchema(
+        "Only with until_date, and only if the user said an hour: 'HH:MM', 24-hour."
+    ),
     why=StringSchema(
         "Only for a notebook job: the wiki page (path under wiki/) that explains why this "
         "matters. The job reads it when it fires, to say what and why."
@@ -120,7 +168,8 @@ _CRON_PARAMETERS = tool_parameters_schema(
     required=["action"],
     description=(
         "Action-specific parameters: add requires a non-empty message plus one schedule "
-        "(every_seconds, cron_expr, or date with an optional time); remove, pause and resume "
+        "(every_seconds, cron_expr, date with an optional time, or zone); remove, pause and "
+        "resume "
         "require job_id; "
         "list only needs action. "
         "Per-action requirements are enforced at runtime (see field descriptions) so the "
@@ -209,8 +258,10 @@ class CronTool(Tool, ContextAware):
     def description(self) -> str:
         return (
             "Schedule reminders and recurring tasks. Actions: add, list, remove, pause, resume. "
-            "Two kinds only: one-time (date, plus time only if the user said one) and recurring "
-            "(every_seconds or cron_expr). A one-time job disappears once it has fired. "
+            "Three kinds: one-time (date, plus time only if the user said one), recurring "
+            "(every_seconds or cron_expr), and on arrival at a place (zone: fires when the phone "
+            "gets there, once or at every arrival, until an end date). A one-time job disappears "
+            "once it has fired. "
             "mode='reminder' (default) always speaks when it fires; mode='monitor' is a recurring "
             "check that runs silently and speaks only when something changed or is worth "
             "reporting (needs every_seconds or cron_expr, never date). A recurring job can carry a "
@@ -253,6 +304,30 @@ class CronTool(Tool, ContextAware):
             errors.append(
                 "a condition needs every_seconds or cron_expr: the cadence it is checked at"
             )
+        errors.extend(self._zone_param_errors(params, mode=mode))
+        return errors
+
+    @staticmethod
+    def _zone_param_errors(params: dict[str, Any], *, mode: str) -> list[str]:
+        """Le regole di una zona che lo schema non sa dire."""
+        errors: list[str] = []
+        zone = params.get("zone")
+        until_day = str(params.get("until_date") or "").strip()
+        if not zone:
+            if until_day or str(params.get("until_time") or "").strip() \
+                    or params.get("every_arrival"):
+                errors.append("until_date, until_time and every_arrival go with a zone")
+            return errors
+        clash = [k for k in ("every_seconds", "cron_expr", "date", "time", "condition")
+                 if params.get(k)]
+        if clash:
+            errors.append(
+                f"a zone is its own 'when': not together with {', '.join(clash)}"
+            )
+        if mode == "monitor":
+            errors.append("a zone always speaks on arrival: use mode='reminder' (the default)")
+        if str(params.get("until_time") or "").strip() and not until_day:
+            errors.append("until_time needs until_date")
         return errors
 
     async def execute(
@@ -292,20 +367,114 @@ class CronTool(Tool, ContextAware):
             return await self._pause_job(job, paused=action == "pause")
         if action != "add":
             return f"Unknown action: {action}"
-        if self._in_cron_context.get():
-            return "Error: cannot schedule new jobs from within a cron job execution"
-        try:
-            schedule = self._schedule(every_seconds, cron_expr, tz, date, time, mode)
-        except ValueError as exc:
-            return f"Error: {exc}"
+        zone = kwargs.get("zone") or None
+        every_arrival = bool(kwargs.get("every_arrival"))
+        if zone:
+            if refusal := self._zone_refusal():
+                return refusal
+            try:
+                schedule = self._zone_schedule(zone, kwargs.get("until_date"),
+                                               kwargs.get("until_time"), every_arrival)
+            except ValueError as exc:
+                return f"Error: {exc}"
+            if self._in_cron_context.get() and (refusal := self._cron_turn_zone_refusal(
+                    schedule, every_arrival)):
+                return refusal
+        elif self._in_cron_context.get():
+            return (
+                "Error: cannot schedule new timed jobs from within a cron job execution; "
+                "from here you can only arm a one-time zone (zone, ending within "
+                f"{_CRON_TURN_ZONE_DAYS} days)"
+            )
+        else:
+            try:
+                schedule = self._schedule(every_seconds, cron_expr, tz, date, time, mode)
+            except ValueError as exc:
+                return f"Error: {exc}"
         condition = kwargs.get("condition") or None
         why = str(kwargs.get("why") or "").strip() or None
+        once = schedule.kind == "zone" and not every_arrival
         if notebook is None:
             if why:
                 return "Error: `why` is a page of a notebook's wiki; it needs `notebook`."
-            return self._add_personal_job(name, message, schedule, mode, condition=condition)
+            return self._add_personal_job(name, message, schedule, mode, condition=condition,
+                                          once=once)
         return await self._add_notebook_job(notebook, root, kwargs.get("card"), name, message,
-                                            schedule, mode, condition=condition, why=why)
+                                            schedule, mode, condition=condition, why=why,
+                                            once=once)
+
+    # ── zone ────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _zone_refusal() -> str | None:
+        """Perché una zona non si può armare qui, o ``None``.
+
+        Il tool resta in lista anche dove le zone non vanno (una condizione è un
+        rifiuto, mai un tool nascosto: la lista dei tool non cambia fra un turno
+        e l'altro).
+        """
+        from jenny.runtime.context import get_android_context
+
+        if get_android_context() is None:
+            return "Error: a zone needs the phone's position, and this is not running on the phone."
+        try:
+            from jenny.config.loader import load_config
+
+            enabled = bool(load_config().tools.location.enable)
+        except Exception:  # noqa: BLE001 — un config illeggibile non arma niente
+            enabled = False
+        if not enabled:
+            return ("Error: the position is switched off (Settings → Hands → Position), and a "
+                    "zone needs it. Tell the user; do not arm it another way.")
+        return None
+
+    def _zone_schedule(self, zone: Any, until_date: Any, until_time: Any,
+                       every_arrival: bool) -> CronSchedule:
+        """Il «quando» di una zona. Solleva ``ValueError`` col testo per il modello."""
+        from jenny.cron.dates import default_zone_until, zone_until
+        from jenny.utils.clock import now_ms
+
+        if not isinstance(zone, dict):
+            raise ValueError("zone must be an object with name, latitude and longitude")
+        try:
+            lat, lng = float(zone["latitude"]), float(zone["longitude"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("zone needs numeric latitude and longitude (from find_place)") from None
+        radius = zone.get("radius_m") or _zone_rules.DEFAULT_RADIUS_M
+        try:
+            radius = float(radius)
+        except (TypeError, ValueError):
+            raise ValueError("zone.radius_m must be a number of metres") from None
+        day = str(until_date or "").strip()
+        now = now_ms()
+        if day:
+            until = zone_until(day, self._default_timezone, str(until_time or "").strip() or None)
+        elif every_arrival:
+            until = None
+        else:
+            until = default_zone_until(now, self._default_timezone)
+        if until is not None and until - now > _MAX_ZONE_DAYS * 86_400_000:
+            raise ValueError(f"a zone can stay armed at most {_MAX_ZONE_DAYS} days")
+        return CronSchedule(kind="zone", lat=lat, lng=lng, radius_m=radius,
+                            zone_name=str(zone.get("name") or "").strip(), until_ms=until)
+
+    @staticmethod
+    def _cron_turn_zone_refusal(schedule: CronSchedule, every_arrival: bool) -> str | None:
+        """Da un turno di cron si arma solo una zona «una volta» che finisce presto.
+
+        Una sveglia del mattino che arma le zone delle tappe del giorno: sì. Una
+        catena di job che si generano a vicenda, o una zona che resta per
+        sempre, no: quelle le arma l'utente, in chat.
+        """
+        from jenny.utils.clock import now_ms
+
+        limit = _CRON_TURN_ZONE_DAYS * 86_400_000
+        if every_arrival or schedule.until_ms is None or schedule.until_ms - now_ms() > limit:
+            return (
+                "Error: from a scheduled run you can arm only a one-time zone ending within "
+                f"{_CRON_TURN_ZONE_DAYS} days (every_arrival false, until_date close)"
+            )
+        return None
 
     def _target_notebook(self, requested: Any) -> tuple[str | None, Any, str | None]:
         """Il quaderno del job: ``(nome, cartella, errore)``; tutto ``None`` = personale.
@@ -375,7 +544,7 @@ class CronTool(Tool, ContextAware):
 
     async def _add_notebook_job(self, notebook: str, root: Any, card_ref: Any, name: str | None,
                                 message: str, schedule: CronSchedule, mode: str | None, *,
-                                condition: Any, why: str | None) -> str:
+                                condition: Any, why: str | None, once: bool = False) -> str:
         """Un job del quaderno: su una scheda o sul quaderno intero, da qualunque chat."""
         from jenny.board.cron_link import add_notebook_job
         from jenny.board.model import NOTEBOOK
@@ -400,7 +569,7 @@ class CronTool(Tool, ContextAware):
             job = add_notebook_job(
                 self._cron, notebook, card["id"] if card else NOTEBOOK,
                 name=(name or "").strip(), message=message, schedule=schedule, mode=job_mode,
-                why=why, condition=condition,
+                why=why, condition=condition, delete_after_run=once,
             )
         except ValueError as exc:
             return f"Error: {exc}"
@@ -430,6 +599,7 @@ class CronTool(Tool, ContextAware):
         mode: str | None = None,
         *,
         condition: Any = None,
+        once: bool = False,
     ) -> str:
         if not message:
             return (
@@ -464,6 +634,7 @@ class CronTool(Tool, ContextAware):
                 origin_chat_id=origin_chat_id,
                 origin_metadata=origin_metadata,
                 condition=condition,
+                delete_after_run=once,
             )
         except ValueError as exc:
             # Il rifiuto del servizio (un'espressione che non si legge o non
@@ -480,6 +651,8 @@ class CronTool(Tool, ContextAware):
         non ha mai dato. Per questo un giorno dice che l'ora non c'è.
         """
         head = f"Created job '{job.name}' (id: {job.id})" if job.name else f"Created job (id: {job.id})"
+        if job.schedule.kind == "zone":
+            return f"{head}, {self._format_timing(job.schedule)}. {self._zone_now(job)}"
         if job.schedule.kind != "at":
             return head
         if job.schedule.precision in ("day", "month"):
@@ -500,6 +673,11 @@ class CronTool(Tool, ContextAware):
             if ms % 1000 == 0:
                 return f"every {ms // 1000}s"
             return f"every {ms}ms"
+        if schedule.kind == "zone":
+            until = (f", until {self._format_timestamp(schedule.until_ms, self._default_timezone)}"
+                     if schedule.until_ms else ", no end date")
+            return (f"on arrival at {schedule.zone_name or 'the place'} "
+                    f"(within {int(schedule.radius_m or 0)} m){until}")
         if schedule.kind == "at" and schedule.at_ms:
             if schedule.precision in ("day", "month"):
                 from jenny.cron.dates import schedule_date
@@ -531,9 +709,44 @@ class CronTool(Tool, ContextAware):
             lines.append(note)
         if state.pending_since_ms:
             lines.append("  The last check was handed to a helper; waiting for its result")
+        if schedule.kind == "zone":
+            where = {True: "inside the zone now", False: "outside the zone",
+                     None: "not known yet"}[state.zone_inside]
+            lines.append(f"  Phone: {where}")
+            if state.next_run_at_ms:
+                lines.append("  An arrival is being delivered")
+            return lines
         if state.next_run_at_ms:
             lines.append(f"  Next run: {self._format_timestamp(state.next_run_at_ms, display_tz)}")
         return lines
+
+    def _zone_now(self, job: CronJob) -> str:
+        """Dov'è il telefono rispetto a una zona appena armata, per la risposta all'utente."""
+        from jenny.cron.zone_watch import current_state
+        from jenny.runtime.location import cached_location, distance_m
+
+        state = current_state()
+        if state == "blind":
+            return ("Note: right now the phone cannot read its position with the screen off; "
+                    "it will once the user opens Jenny. Tell them.")
+        if state == "no_permission":
+            return ("Note: Jenny has no location permission, so the zone cannot fire until "
+                    "the user allows it again. Tell them.")
+        try:
+            from jenny.config.loader import load_config
+
+            here = cached_location(load_config().tools.location)
+        except Exception:  # noqa: BLE001 — la risposta non dipende dalla posizione
+            here = None
+        s = job.schedule
+        if here is None or s.lat is None or s.lng is None:
+            return "Watching from now."
+        d = distance_m(here.latitude, here.longitude, s.lat, s.lng)
+        if d <= (s.radius_m or 0):
+            return ("The phone looks already there: it fires on the next arrival, after "
+                    "leaving. Say so.")
+        km = f"{d / 1000:.1f} km" if d >= 1000 else f"{int(d)} m"
+        return f"The phone is about {km} away now."
 
     @staticmethod
     def _system_job_purpose(job: CronJob) -> str:

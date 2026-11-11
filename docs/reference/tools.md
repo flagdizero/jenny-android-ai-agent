@@ -365,12 +365,13 @@ Config: `tools.ssh.maxTransferBytes`, `security.restrictToWorkspace` (the local 
 
 ### cron
 
-Schedules everything Jenny does later. Actions: `add`, `list`, `remove`, `pause`, `resume`. There are two kinds of job only, one-time and recurring.
+Schedules everything Jenny does later. Actions: `add`, `list`, `remove`, `pause`, `resume`. There are two kinds of timed job, one-time and recurring, and one more that fires on arrival at a place (`zone`).
 
 - `add` requires a `message` (the instruction Jenny executes when the job fires) plus **exactly one** schedule:
   - `every_seconds` — recurring interval.
   - `cron_expr` — a cron expression (`"0 9 * * *"`), optionally with an explicit `tz` (IANA name). `tz` is **only** accepted alongside `cron_expr` — passing it with `every_seconds` or `date` is an error.
   - `date` — a one-time job: the day (`"YYYY-MM-DD"`) or just the month (`"YYYY-MM"`, "around March"), plus `time` (`"HH:MM"`) only when the user said a time. Without `time` a day rings at 09:00 and a month at 09:00 on the 1st, and both are shown as a day or a month; with `time` it rings then. The job deletes itself after it fires. The hour is a field of its own so that the model leaves it out rather than inventing one: there is no `at` any more, and a call that sends it, or hides a time inside `date`, is refused with the shape to use.
+- `zone` — `{name, latitude, longitude, radius_m}` instead of a time: the job fires when the phone arrives within `radius_m` (default 200, from 100 to 50,000) of the point. Coordinates come from `find_place` or `get_location`. By default it fires once and goes away, ending tonight (tomorrow night if it is late); `every_arrival=true` fires at each arrival and may have no end; `until_date` (`"YYYY-MM-DD"`, the whole day) and `until_time` set the end, at most 366 days ahead. Not with `every_seconds`, `cron_expr`, `date`, `time`, `condition` or `mode="monitor"`. Refused off the phone and with the location toggle off. The reply says how far the phone is now, or that it is already inside (then it fires on the next arrival). The position is watched in code ([Arriving at a place](../using/scheduling.md#arriving-at-a-place)); the arrival turn is told the place, the distance and the delay, never the coordinates.
 - A recurring job may carry a `condition` — `{app, params, field, op, value}` — on a mini app's latest value. At each run the app's reader runs and the value is compared in code, before any model call: the turn starts only when the condition has just become true, and not again until it goes back to false. Refused on a one-time job.
 - `notebook` and `card` place the job in a notebook (on one card, or on the whole notebook when `card` is empty); in a notebook chat the notebook is the default. A notebook job runs inside that notebook and delivers in its chat, wherever it was asked. `why` names the notebook's wiki page that explains the job, which the run reads to say what is due and why.
 - `add` also takes an optional `name`, a short human label for the job in the user's language: it is what the notification title shows. Without one the job has no name (lists fall back to the start of the `message`, the notification title never does).
@@ -384,7 +385,7 @@ Schedules everything Jenny does later. Actions: `add`, `list`, `remove`, `pause`
 - `remove`, `pause` and `resume` need a `job_id` from `list`.
 - `list` also shows a job the user paused from the workshop (Hands), marked as paused since a given time, so Jenny does not recreate it; a one-time job that already fired is gone.
 - System-managed jobs show up in `list` for transparency but are **protected** — removal is refused with an explanation, not silently ignored. `list` prints the purpose of each next to it: `dream` (memory consolidation), the [gardener](../using/gardener.md), the notebook clock (`reminders`) and the update check. Each is registered only if its own config enables it — `agents.defaults.dream.enabled`, `agents.defaults.gardener.enabled`, `wiki.enabled`, `updates.enabled` — so a disabled one is absent from `list` rather than present and idle.
-- Jobs cannot be created from inside another cron job's own execution (no self-scheduling chains).
+- Jobs cannot be created from inside another cron job's own execution (no self-scheduling chains), with one exception: a one-time `zone` ending within 7 days, so a morning job can arm the day's places.
 - In a notebook conversation, `list` and `remove` see only that notebook's jobs. `cron` is closed on a read-only turn, wherever that turn happens.
 
 Config: no direct user toggle; the default timezone comes from the device/config, not a tool setting.

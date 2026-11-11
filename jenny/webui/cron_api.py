@@ -32,7 +32,7 @@ from dataclasses import asdict
 from typing import Any
 
 from jenny.cron.purposes import system_job_purpose
-from jenny.cron.service import next_run_on_resume
+from jenny.cron.service import can_resume
 from jenny.cron.types import CronJob, job_display_name, schedule_payload
 from jenny.utils.clock import now_ms as _now_ms
 
@@ -141,6 +141,12 @@ def _effective(job: CronJob, *, config: Any) -> str:
     return "active"
 
 
+def _zone_watch_state() -> str | None:
+    from jenny.cron.zone_watch import current_state
+
+    return current_state()
+
+
 def _job_actions(job: CronJob, now_ms: int) -> list[str]:
     """Cosa l'officina puo' fare di questo job: le route di ``cron_routes``.
 
@@ -152,7 +158,7 @@ def _job_actions(job: CronJob, now_ms: int) -> list[str]:
     if _job_kind(job) != "user":
         return []
     if job.paused_at_ms is not None:
-        return ["resume", "remove"] if next_run_on_resume(job, now_ms) is not None else ["remove"]
+        return ["resume", "remove"] if can_resume(job, now_ms) else ["remove"]
     if job.enabled:
         return ["pause", "remove"]
     return ["remove"]
@@ -197,6 +203,8 @@ def _job_payload(
         # Il filtro di un ricorrente su un'app: il turno parte solo quando e' vero.
         "condition": _condition_payload(job),
         "next_run_at_ms": job.state.next_run_at_ms,
+        # Solo per una zona: se la sentinella ci vede (``zone_watch.STATES``).
+        **({"watch": _zone_watch_state()} if job.schedule.kind == "zone" else {}),
         "last_run_at_ms": job.state.last_run_at_ms,
         "last_status": job.state.last_status,
         "last_error": job.state.last_error,

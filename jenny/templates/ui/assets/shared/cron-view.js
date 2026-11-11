@@ -141,7 +141,23 @@ export function describeSchedule(schedule, { tr, locale, timeZone } = {}) {
     const when = formatAbsolute(schedule.at_ms, { locale, timeZone, precision: schedule.precision });
     return tr(schedule.precision === 'month' ? 'cron.schedule.atMonth' : 'cron.schedule.at', { when });
   }
+  /* Una zona non ha un'ora: ha un posto, e forse una fine («fino a stasera»). */
+  if (kind === 'zone' && schedule.zone) {
+    const place = schedule.zone.name || tr('cron.schedule.zonePlace');
+    if (!Number.isFinite(schedule.until_ms)) return tr('cron.schedule.zone', { place });
+    const until = formatAbsolute(schedule.until_ms, { locale, timeZone, precision: 'exact' });
+    return tr('cron.schedule.zoneUntil', { place, until });
+  }
   return tr('cron.schedule.unknown');
+}
+
+/** Lo stato di una zona, al posto del «prossimo giro» che non ha: aspetta
+ *  l'arrivo, o è ferma perché la posizione non si legge (v. `zone_watch.STATES`). */
+export function zoneWatchText(watch, tr) {
+  if (watch === 'blind') return tr('cron.zone.blind');
+  if (watch === 'no_permission') return tr('cron.zone.noPermission');
+  if (watch === 'off') return tr('cron.zone.off');
+  return tr('cron.zone.waiting');
 }
 
 /** La forma di un'espressione cron comune a parole («ogni domenica alle 18:30»).
@@ -337,6 +353,8 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
       health: jobHealth(job),
       monitor: job.mode === 'monitor',
       oneShot: job.one_shot,
+      /* Una zona non ha un prossimo giro: al suo posto, se aspetta o è ferma. */
+      zoneWatch: job.schedule?.kind === 'zone' ? (job.watch || 'ok') : null,
       /* Un cron del quaderno dice dove sta: «piante › acero». */
       place: placeText(job.place),
       messagePreview: job.message_preview,

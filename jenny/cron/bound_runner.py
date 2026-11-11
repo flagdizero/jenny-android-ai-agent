@@ -268,6 +268,51 @@ def _prune_monitor_session(agent: BoundCronAgent, session_key: str) -> None:
     agent.sessions.save(session)
 
 
+def _timed_prompt(job: CronJob, *, monitor: bool, escalate: bool, observed: Any) -> str:
+    """Il prompt di un job a orario: promemoria o controllo."""
+    return render_template(
+        "agent/cron_monitor.md" if monitor else "agent/cron_reminder.md",
+        strip=True,
+        message=job.payload.message,
+        # Assenti per un job senza filtro e senza perché: il prompt resta quello.
+        condition=describe_condition(job.payload.condition) if job.payload.condition else "",
+        observed=observed,
+        why_page=_why_page(job),
+        # Assenti dal template del reminder e falsi sul monitor normale: il
+        # prompt reso resta byte-identico a prima finché non c'è un guasto.
+        escalate=escalate,
+        failed_runs=job.state.consecutive_could_not_check if escalate else 0,
+        # Mutuamente esclusivo con ``escalate`` per costruzione, e nel template
+        # è l'``elif`` dello stesso ``if``.
+        already_warned=monitor and has_already_warned_could_not_check(job.state),
+    )
+
+
+def _zone_vars(job: CronJob) -> dict[str, Any]:
+    """Cosa sa il turno di un arrivo: dove, a che distanza, con che precisione, quanto fa.
+
+    Mai le coordinate: il modello non ne ha bisogno, e finirebbero nel messaggio.
+    """
+    from jenny.runtime.location import distance_m
+
+    s, state = job.schedule, job.state
+    fix = state.zone_fix or {}
+    distance = "close"
+    if s.lat is not None and s.lng is not None and "lat" in fix and "lng" in fix:
+        metres = distance_m(float(fix["lat"]), float(fix["lng"]), s.lat, s.lng)
+        distance = f"about {int(round(metres, -1))} m"
+    accuracy = fix.get("accuracy")
+    late_ms = _now_ms() - state.zone_entered_at_ms if state.zone_entered_at_ms else 0
+    return {
+        "place": s.zone_name or "the place",
+        "distance": distance,
+        "accuracy": f"{int(accuracy)} m" if isinstance(accuracy, (int, float)) else "",
+        # Sotto i 5 minuti è il giro normale del timer, non un ritardo da dire.
+        "minutes_late": late_ms // 60_000 if late_ms >= 5 * 60_000 else 0,
+        "message": job.payload.message,
+    }
+
+
 async def run_bound_cron_job(
     job: CronJob,
     *,
@@ -336,22 +381,14 @@ async def _run_bound_cron_job(
     # il modello, dentro il turno, sa se il controllo è riuscito adesso, ed è
     # anche l'unico che possa consegnare (tool ``message``).
     escalate = monitor and should_escalate_could_not_check(job.state)
-    prompt = render_template(
-        "agent/cron_monitor.md" if monitor else "agent/cron_reminder.md",
-        strip=True,
-        message=job.payload.message,
-        # Assenti per un job senza filtro e senza perché: il prompt resta quello.
-        condition=describe_condition(job.payload.condition) if job.payload.condition else "",
-        observed=observed,
-        why_page=_why_page(job),
-        # Assenti dal template del reminder e falsi sul monitor normale: il
-        # prompt reso resta byte-identico a prima finché non c'è un guasto.
-        escalate=escalate,
-        failed_runs=job.state.consecutive_could_not_check if escalate else 0,
-        # Mutuamente esclusivo con ``escalate`` per costruzione, e nel template
-        # è l'``elif`` dello stesso ``if``.
-        already_warned=monitor and has_already_warned_could_not_check(job.state),
-    )
+    if job.schedule.kind == "zone":
+        # Non è un'ora che arriva, è un posto: il turno lo deve sapere, e deve
+        # sapere se la consegna è in ritardo (rete assente all'arrivo).
+        prompt = render_template(
+            "agent/cron_zone.md", strip=True, why_page=_why_page(job), **_zone_vars(job),
+        )
+    else:
+        prompt = _timed_prompt(job, monitor=monitor, escalate=escalate, observed=observed)
     prompt_ref = _cron_prompt_ref(prompt, monitor=monitor)
     run_id = f"{job.id}:{_now_ms()}:{uuid.uuid4().hex[:8]}"
     channel, chat_id, metadata = _bound_session_delivery_context(

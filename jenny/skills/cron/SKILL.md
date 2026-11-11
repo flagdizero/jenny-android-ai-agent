@@ -10,7 +10,7 @@ Use the `cron` tool to schedule work. Every scheduled job runs a full agent turn
 
 ## One-time or recurring
 
-There are only two kinds of job:
+There are two kinds of timed job (a third, `zone`, fires on arrival at a place: below):
 
 - **One-time**: `date`, the day (`"YYYY-MM-DD"`) or just the month (`"YYYY-MM"`,
   "around March"), and `time` (`"HH:MM"`) only when the user said a time or a delay
@@ -97,6 +97,30 @@ cron(action="remove", job_id="abc123")
 
 `action="list"` reports each job's last status. `silenced` there means a monitor
 ran fine and had nothing to say — it is a success, not an error.
+
+## On arrival at a place
+
+A `zone` fires when the phone **arrives** at a place, instead of at a time: "when I
+get to the station tell me the platform", "every time I'm at the supermarket give me
+the shopping list". The phone's position is compared in code, at no cost; you are
+woken only on arrival.
+
+- Coordinates come from `find_place` (or `get_location` for "here"). Never guess them.
+- `radius_m`: 200 by default; larger for a big place (a park, a station, a district).
+- Once by default: it fires on the first arrival and goes away, and it expires at
+  `until_date` (tonight if not given, tomorrow night if it is already late).
+  `every_arrival=true` fires at each arrival and may have no end date.
+- If the phone is already there when you arm it, it fires on the next arrival, after
+  leaving: say so.
+- Not with `every_seconds`, `cron_expr`, `date`, `condition` or `mode="monitor"`.
+- From a scheduled run (a morning job planning the day) you may arm only one-time
+  zones ending within 7 days.
+
+```
+cron(action="add", message="Tell me which platform my train leaves from", zone={"name": "Central Station", "latitude": 45.4861, "longitude": 9.2042, "radius_m": 300})
+cron(action="add", message="Read me the shopping list", zone={"name": "Supermarket", "latitude": 45.47, "longitude": 9.18}, every_arrival=true)
+cron(action="add", message="Tell me the story of the shrine", zone={"name": "Fushimi Inari", "latitude": 34.9671, "longitude": 135.7727, "radius_m": 400}, until_date="2027-04-12")
+```
 
 ## Notebook jobs
 

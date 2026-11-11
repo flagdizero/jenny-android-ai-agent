@@ -50,6 +50,9 @@ class GatewayContainer:
         self._provider_fingerprint: str | None = None
         self.session_manager: Any = None
         self.cron: Any = None
+        self.zone_watch: Any = None
+        # Gli avvisi alle bacheche quando la sentinella delle zone cambia stato.
+        self._zone_notices: set[asyncio.Task] = set()
         # I rinomini di quaderno ripresi all'avvio, ``(vecchio, nuovo)``: la
         # ripresa arriva prima dello scheduler, e i cron li seguono appena c'è.
         self._resumed_renames: list[tuple[str, str]] = []
@@ -105,6 +108,23 @@ class GatewayContainer:
             logger.info("{}: re-armed for {}", worker.capitalize(), schedule)
         else:
             logger.info("{}: disabled", worker.capitalize())
+
+    def _zones_state_changed(self, state: str) -> None:
+        """La sentinella delle zone è diventata cieca (o ci vede di nuovo).
+
+        Le bacheche che hanno zone lo mostrano sulla loro riga
+        (``cron_link.job_snapshot``): si ridisegnano.
+        """
+        from jenny.board.notify import board_changed
+
+        notebooks = {job.notebook for job in self.cron.zone_jobs() if job.notebook}
+        for notebook in notebooks:
+            try:
+                task = asyncio.get_running_loop().create_task(board_changed(notebook))
+            except RuntimeError:
+                return
+            self._zone_notices.add(task)
+            task.add_done_callback(self._zone_notices.discard)
 
     def _on_settings_changed(self) -> None:
         """Hot-reload model/provider when WebUI settings change."""
@@ -564,6 +584,13 @@ class GatewayContainer:
         self._wire_ui_events()
 
         self.cron = CronService(config.workspace_path)
+        # La sentinella delle zone («quando arrivi lì»): legge la posizione solo
+        # se ci sono zone accese, e a un arrivo rende dovuto il job. Parte dopo
+        # lo scheduler (``run``), che è quello che poi esegue gli arrivi.
+        from jenny.cron.zone_watch import build_watcher
+
+        self.zone_watch = build_watcher(self.cron, on_state_change=self._zones_state_changed)
+        self.cron.on_zones_changed = self.zone_watch.poke
         # Il seguito dei rinomini ripresi qui sopra: lo scheduler non gira ancora,
         # ma salva lo stesso, e ``start`` lo ritrova.
         from jenny.board.cron_link import follow_renamed_notebook
@@ -933,6 +960,8 @@ class GatewayContainer:
             from jenny.runtime.gap_history import record_startup_gap
             await record_startup_gap()
             await self.cron.start()
+            if self.zone_watch is not None:
+                await self.zone_watch.start()
             await self.snapshot.start()
             self._maintenance = asyncio.create_task(self._database_maintenance())
             tasks = [self.channels.start()]
@@ -947,6 +976,8 @@ class GatewayContainer:
             logger.opt(exception=True).error("Gateway crashed unexpectedly")
             raise
         finally:
+            if self.zone_watch is not None:
+                await self.zone_watch.stop()
             self.cron.stop()
             self.snapshot.stop()
             if self._agent:

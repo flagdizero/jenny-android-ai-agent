@@ -64,7 +64,7 @@ ALLOWED: dict[str, str] = {
     "jenny/runtime/notifier.py:_BRIDGE.lock": "reset_notifier_state",
     "jenny/runtime/power.py:_BRIDGE.lock": "reset_power_state",
     "jenny/runtime/power.py:_STATE_LOCK": "reset_power_state",
-    "jenny/runtime/power.py:_WAKE_EVENT": "reset_power_state",
+    "jenny/runtime/power.py:_MOTION.lock": "reset_power_state",
     "jenny/runtime/power.py:_WAKE_LOOP": "reset_power_state",
     "jenny/runtime/native_input.py:_LOOP": "reset_native_input",
     "jenny/webui/android_apps_api.py:_BRIDGE.lock": "reset_installed_apps_state",

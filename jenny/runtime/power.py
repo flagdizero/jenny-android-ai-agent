@@ -65,13 +65,33 @@ _CALL_TIMEOUT_S = 10.0
 # significherebbe che un ``cancel_wake`` del cron smonta in silenzio una delle
 # reti di sicurezza che devono girare anche quando Python non c'è più.
 WAKE_REQUEST_CODE_CRON = 8001
+# La sentinella delle zone (``jenny/cron/zone_watch.py``): il suo giro di
+# lettura, e il sensore di movimento che la sveglia quando il telefono riparte.
+WAKE_REQUEST_CODE_ZONE = 8002
+WAKE_REQUEST_CODE_MOTION = 8003
 
-# Loop ed evento su cui recapitare i tick di sveglia che arrivano da Kotlin.
-# Sono globali di modulo, non stato di un oggetto, perché il chiamante è
-# ``GatewayService.deliverWakeTick`` via Chaquopy: entra da un thread di lavoro
-# JNI e ha in mano solo il nome del modulo, nessun riferimento a un'istanza.
+# Chi aspetta i tick di quale sveglia. Un codice che non è qui (0: una sveglia
+# armata da una versione precedente, o un Kotlin che non passa il codice)
+# sveglia tutti: un risveglio in più è innocuo, uno perso no.
+_CONSUMER_OF: dict[int, str] = {
+    WAKE_REQUEST_CODE_CRON: "cron",
+    WAKE_REQUEST_CODE_ZONE: "zone",
+    WAKE_REQUEST_CODE_MOTION: "zone",
+}
+
+# Loop ed eventi su cui recapitare i tick di sveglia che arrivano da Kotlin,
+# uno per consumatore. Sono globali di modulo, non stato di un oggetto, perché
+# il chiamante è ``GatewayService.deliverWakeTick`` via Chaquopy: entra da un
+# thread di lavoro JNI e ha in mano solo il nome del modulo, nessun riferimento
+# a un'istanza.
 _WAKE_LOOP: asyncio.AbstractEventLoop | None = None
-_WAKE_EVENT: asyncio.Event | None = None
+_WAKE_EVENTS: dict[str, asyncio.Event] = {}
+# L'ultimo codice arrivato a ciascun consumatore: la sentinella delle zone vuole
+# sapere se l'ha svegliata la sua sveglia (8002) o il sensore di movimento (8003).
+_LAST_CODES: dict[str, int] = {}
+
+# Il sensore di movimento significativo (``MotionBridge.kt``), per la sentinella.
+_MOTION = BridgeCache("com.flagdizero.jenny.MotionBridge")
 
 
 def reset_power_state() -> None:
@@ -86,8 +106,10 @@ def reset_power_state() -> None:
     rilasci da solo. Qui si azzera solo la contabilità, così un gateway fresco
     non parte credendo di tenere un lock che non tiene.
     """
-    global _STATE_LOCK, _WAKE_LOOP, _WAKE_EVENT
+    global _STATE_LOCK, _WAKE_LOOP
     _BRIDGE.reset()
+    _MOTION.reset()
+    _LAST_CODES.clear()
     _STATE_LOCK = asyncio.Lock()
     _REFCOUNTS.clear()
     _HELD.clear()
@@ -96,7 +118,7 @@ def reset_power_state() -> None:
     # una coda che nessuno drena). Chi vuole i tick li ri-aggancia con
     # ``bind_wake_loop`` a loop nuovo avviato.
     _WAKE_LOOP = None
-    _WAKE_EVENT = None
+    _WAKE_EVENTS.clear()
 
 
 def _resolve_bridge_class() -> Any:
@@ -308,7 +330,7 @@ def alarm_driven_cron_enabled() -> bool:
     return bool(getattr(_power_config(), "alarm_driven_cron", True))
 
 
-def bind_wake_loop() -> asyncio.Event:
+def bind_wake_loop(consumer: str = "cron") -> asyncio.Event:
     """Aggancia il loop corrente ai tick di sveglia e ritorna l'evento da attendere.
 
     Da chiamare **dal** loop del gateway (``CronService.start``): il
@@ -317,17 +339,19 @@ def bind_wake_loop() -> asyncio.Event:
     entrerà da un thread JNI, dove ``get_running_loop`` non esiste e ``Event``
     non è toccabile in sicurezza.
 
-    Ri-agganciare sostituisce l'evento precedente: un solo consumatore per
-    volta, l'ultimo che si registra vince. Un evento orfano non fa danni, resta
-    semplicemente senza nessuno che lo setti.
+    Un evento per *consumer* (``cron``, ``zone``): ri-agganciare lo stesso
+    consumatore sostituisce il suo evento precedente, l'ultimo che si registra
+    vince. Un evento orfano non fa danni, resta semplicemente senza nessuno che
+    lo setti.
     """
-    global _WAKE_LOOP, _WAKE_EVENT
+    global _WAKE_LOOP
     _WAKE_LOOP = asyncio.get_running_loop()
-    _WAKE_EVENT = asyncio.Event()
-    return _WAKE_EVENT
+    event = asyncio.Event()
+    _WAKE_EVENTS[consumer] = event
+    return event
 
 
-def on_wake_tick() -> bool:
+def on_wake_tick(code: int = 0) -> bool:
     """Sveglia il gateway: chiamata da Kotlin, da un thread di lavoro.
 
     Punto d'ingresso di ``GatewayService.deliverWakeTick`` (Chaquopy
@@ -342,13 +366,23 @@ def on_wake_tick() -> bool:
     agganciato: il gateway sta ancora partendo (o è appena morto). Il tick va
     perso di proposito, perché la scadenza mancata la recupera
     ``CronService.start`` al primo giro di timer.
+
+    *code* è il request code della sveglia (``GatewayService.EXTRA_WAKE_CODE``):
+    sveglia solo il suo consumatore, se è agganciato; altrimenti tutti.
     """
     loop = _WAKE_LOOP
-    event = _WAKE_EVENT
-    if loop is None or event is None or loop.is_closed():
+    target = _CONSUMER_OF.get(int(code or 0))
+    events = dict(_WAKE_EVENTS)
+    if target in events:
+        events = {target: events[target]}
+    if loop is None or not events or loop.is_closed():
         return False
+    for consumer in events:
+        # Prima del ``set``: chi si sveglia legge il codice subito dopo.
+        _LAST_CODES[consumer] = int(code or 0)
     try:
-        loop.call_soon_threadsafe(event.set)
+        for event in events.values():
+            loop.call_soon_threadsafe(event.set)
     except RuntimeError:
         # Loop chiuso fra il controllo e la chiamata: nessun destinatario.
         logger.opt(exception=True).debug("Wake tick could not reach the event loop")
@@ -394,3 +428,28 @@ async def schedule_wake(at_ms: int, request_code: int) -> bool:
 async def cancel_wake(request_code: int) -> bool:
     """Annulla il risveglio programmato con quel ``request_code``."""
     return await _call("cancelWake", int(request_code))
+
+
+def last_wake_code(consumer: str) -> int:
+    """Il codice dell'ultimo tick arrivato a *consumer* (0 se nessuno, o senza codice)."""
+    return _LAST_CODES.get(consumer, 0)
+
+
+async def _motion_bridge(context: Any) -> Any:
+    return await _MOTION.get(context, resolve=_MOTION.resolve_class)
+
+
+async def arm_motion() -> bool:
+    """Arma il sensore di movimento: sveglia la sentinella quando il telefono riparte.
+
+    ``False`` fuori da Android, senza il sensore, o su un rifiuto: la sentinella
+    allora non allunga la cadenza oltre ``zones.STILL_CAP_NO_SENSOR_S``.
+    """
+    return bool(await _MOTION.call(_motion_bridge, get_android_context(), "arm",
+                                   timeout=_CALL_TIMEOUT_S, default=False, level="DEBUG"))
+
+
+async def disarm_motion() -> bool:
+    """Disarma il sensore di movimento. Mai solleva."""
+    return bool(await _MOTION.call(_motion_bridge, get_android_context(), "disarm",
+                                   timeout=_CALL_TIMEOUT_S, default=False, level="DEBUG"))

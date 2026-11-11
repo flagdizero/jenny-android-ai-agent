@@ -103,6 +103,60 @@ class LocationBridge(context: Context) {
             manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
             else -> return getLastKnown()
         }
+        return try {
+            requestOne(manager, provider, timeoutMs)?.let(::format) ?: getLastKnown()
+        } catch (e: SecurityException) {
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "getFresh failed", e)
+            getLastKnown()
+        }
+    }
+
+    /**
+     * Un fix fresco per la sentinella delle zone, **senza ripiego** sul
+     * last-known: la sentinella deve sapere che la lettura è fallita (al
+     * chiuso, senza permesso, a service cieco), non ricevere una posizione
+     * vecchia spacciata per adesso.
+     *
+     * `lowPower`: prima la rete (wifi e celle), che costa pochissimo e basta per
+     * una zona da 200 m; il GPS solo se la rete non c'è. Senza `lowPower`, il
+     * GPS (poi la rete). `null` se nessun provider risponde entro `timeoutMs`.
+     */
+    fun getFreshFrom(lowPower: Boolean, timeoutMs: Long): String? {
+        if (!hasPermission()) return null
+        val manager = lm ?: return null
+        val gps = manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val net = manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        val provider = when {
+            lowPower && net -> LocationManager.NETWORK_PROVIDER
+            gps -> LocationManager.GPS_PROVIDER
+            net -> LocationManager.NETWORK_PROVIDER
+            else -> return null
+        }
+        return try {
+            requestOne(manager, provider, timeoutMs)?.let(::format)
+        } catch (e: Exception) {
+            Log.w(TAG, "getFreshFrom($provider) failed: ${e.javaClass.simpleName}")
+            null
+        }
+    }
+
+    /**
+     * Può la sentinella leggere la posizione a schermo spento?
+     * `no_permission` senza permesso; `blind` col permesso ma col service senza
+     * il tipo `location` (avviato dal background: v.
+     * `GatewayService.locationTypeHeld`); `ok` altrimenti.
+     */
+    fun backgroundState(): String = when {
+        !hasPermission() -> "no_permission"
+        !GatewayService.locationTypeHeld -> "blind"
+        else -> "ok"
+    }
+
+    /** Una sola lettura da *provider*, entro `timeoutMs`; `null` se non arriva.
+     *  Solleva `SecurityException` se il permesso manca o l'app-op è negata. */
+    private fun requestOne(manager: LocationManager, provider: String, timeoutMs: Long): Location? {
         val latch = CountDownLatch(1)
         val holder = arrayOfNulls<Location>(1)
         val listener = object : LocationListener {
@@ -117,20 +171,14 @@ class LocationBridge(context: Context) {
                 latch.countDown()
             }
         }
-        return try {
+        try {
             // Looper del main: il chiamante è un thread di lavoro Python senza
             // Looper proprio, e requestLocationUpdates ne pretende uno.
             manager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
             val got = latch.await(timeoutMs, TimeUnit.MILLISECONDS)
-            manager.removeUpdates(listener)
-            if (got && holder[0] != null) format(holder[0]) else getLastKnown()
-        } catch (e: SecurityException) {
+            return if (got) holder[0] else null
+        } finally {
             runCatching { manager.removeUpdates(listener) }
-            null
-        } catch (e: Exception) {
-            Log.w(TAG, "getFresh failed", e)
-            runCatching { manager.removeUpdates(listener) }
-            getLastKnown()
         }
     }
 

@@ -77,3 +77,49 @@ def schedule_date(schedule: CronSchedule, tz_name: str | None) -> str | None:
     if schedule.precision == "day":
         return when.strftime("%Y-%m-%d")
     return when.isoformat(timespec="minutes")
+
+
+# ── la scadenza di una zona ─────────────────────────────────────────────────
+
+# L'ora a cui finisce un giorno detto senza ora: «fino a domenica» vale tutta
+# la domenica.
+END_OF_DAY = time(23, 59)
+# Una zona «una volta» senza scadenza detta: fino a stasera; ma se a stasera
+# mancano meno di così, fino a domani sera (detta alle 22, «stasera» è niente).
+_SHORT_EVENING_MS = 6 * 60 * 60 * 1000
+
+
+def zone_until(day: str, tz_name: str | None, time_of_day: str | None = None) -> int:
+    """La fine di una zona detta come giorno (``YYYY-MM-DD``) e ora facoltativa, in ms.
+
+    Senza ora vale la fine di quel giorno, non le 9 di ``date_schedule``.
+
+    Raises:
+        ValueError: un giorno o un'ora che non si leggono.
+    """
+    from jenny.utils.helpers import safe_zoneinfo
+
+    raw, clock = (day or "").strip(), (time_of_day or "").strip()
+    if not _DAY.match(raw):
+        raise ValueError(f"invalid until_date {day!r}: use YYYY-MM-DD")
+    if clock and not _TIME.match(clock):
+        raise ValueError(f"invalid until_time {time_of_day!r}: use HH:MM, 24-hour")
+    at = time.fromisoformat(clock) if clock else END_OF_DAY
+    tz = safe_zoneinfo(tz_name) if tz_name else datetime.now().astimezone().tzinfo
+    when = datetime.combine(datetime.strptime(raw, "%Y-%m-%d").date(), at, tzinfo=tz)
+    return int(when.timestamp() * 1000)
+
+
+def default_zone_until(now_ms: int, tz_name: str | None) -> int:
+    """La scadenza di una zona «una volta» senza scadenza detta: stasera, o domani sera."""
+    from datetime import timedelta
+
+    from jenny.utils.helpers import safe_zoneinfo
+
+    tz = safe_zoneinfo(tz_name) if tz_name else datetime.now().astimezone().tzinfo
+    today = datetime.fromtimestamp(now_ms / 1000, tz=tz).date()
+    tonight = int(datetime.combine(today, END_OF_DAY, tzinfo=tz).timestamp() * 1000)
+    if tonight - now_ms >= _SHORT_EVENING_MS:
+        return tonight
+    tomorrow = datetime.combine(today + timedelta(days=1), END_OF_DAY, tzinfo=tz)
+    return int(tomorrow.timestamp() * 1000)

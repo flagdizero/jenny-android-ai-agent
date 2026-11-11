@@ -6,6 +6,7 @@ Anything for later is a `cron` job: one-time or recurring. Picking the wrong kin
 - Recurring → `every_seconds` or `cron_expr`, and one of two modes:
   - `mode='reminder'`: speaks every time it fires.
   - `mode='monitor'`: runs silently and speaks only when there is something to report. The only way its runs reach the user is the `message` tool, so an uneventful run produces no message at all.
+- On arrival → `zone`: "when I get to…" fires when the phone gets there.
 
 Any request phrased as a condition — "only tell me if…", "warn me when…", "check every 10 minutes whether it's back up" — is a `monitor`, never a plain reminder. When the condition is a mini app's value, give the recurring job a `condition` instead: it is checked in code at each run, and the job speaks only when it becomes true. Use the cadence the user said; if none, pick one and always say it in your reply.
 

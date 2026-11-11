@@ -44,6 +44,7 @@ import { shortDate } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
+import { zoneWatchText } from './shared/cron-view.js';
 import { ensureVendor, escapeHtml, showToast, showUndo } from './shared/utils.js';
 import { sanitizeContent } from './shared/markdown.js';
 import { WikiSearchIndex, foldText } from './shared/wiki-search.js';
@@ -80,6 +81,13 @@ export function tintFor(id) {
 export function whenLabel(when, locale = i18n.locale) {
   if (!when) return '';
   if (when.kind === 'condition') return `${when.field} ${when.op} ${when.value}`;
+  /* «Quando arrivi a…»: un posto, non un giorno. Ferma (posizione illeggibile)
+     lo dice subito, o il post-it promette un arrivo che nessuno guarda. */
+  if (when.kind === 'zone') {
+    const label = i18n.t('board.reminder.zone', { place: when.name || '' });
+    const stuck = when.watch === 'blind' || when.watch === 'no_permission' || when.watch === 'off';
+    return stuck ? `${label} · ${zoneWatchText(when.watch, (k, p) => i18n.t(k, p))}` : label;
+  }
   const [y, m, d] = String(when.date || '').split('-').map(Number);
   if (!y || !m) return '';
   const day = new Date(y, m - 1, d || 1);

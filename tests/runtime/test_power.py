@@ -451,6 +451,34 @@ class TestWakeTick:
         assert fresh.is_set() is True
         assert stale.is_set() is False
 
+    async def test_a_coded_tick_wakes_only_its_consumer(self):
+        cron = power.bind_wake_loop("cron")
+        zone = power.bind_wake_loop("zone")
+
+        assert power.on_wake_tick(power.WAKE_REQUEST_CODE_ZONE) is True
+        await asyncio.sleep(0)
+        assert zone.is_set() and not cron.is_set()
+
+        zone.clear()
+        power.on_wake_tick(power.WAKE_REQUEST_CODE_MOTION)
+        await asyncio.sleep(0)
+        assert zone.is_set() and not cron.is_set()
+
+    async def test_an_uncoded_tick_wakes_everyone(self):
+        cron = power.bind_wake_loop("cron")
+        zone = power.bind_wake_loop("zone")
+
+        power.on_wake_tick()
+        await asyncio.sleep(0)
+        assert cron.is_set() and zone.is_set()
+
+    async def test_a_coded_tick_without_its_consumer_wakes_the_rest(self):
+        cron = power.bind_wake_loop("cron")
+
+        assert power.on_wake_tick(power.WAKE_REQUEST_CODE_ZONE) is True
+        await asyncio.sleep(0)
+        assert cron.is_set()
+
     async def test_reset_unbinds_the_loop(self):
         power.bind_wake_loop()
         power.reset_power_state()

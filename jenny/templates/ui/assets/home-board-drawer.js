@@ -530,7 +530,9 @@ export class BoardDrawer {
     what.placeholder = i18n.t('board.section.reminderWhat');
     what.setAttribute('aria-label', what.placeholder);
     if (rem) what.value = rem.text;
-    const dated = !rem || rem.when?.kind !== 'condition';
+    /* Una a condizione o a un posto si corregge solo nel testo: la soglia si
+       cambia dalla sua app, il posto chiedendolo a Jenny (servono le coordinate). */
+    const dated = !rem || (rem.when?.kind !== 'condition' && rem.when?.kind !== 'zone');
     const when = el('input', 'home-board-input');
     when.type = 'date';
     when.setAttribute('aria-label', i18n.t('board.section.reminderWhen'));

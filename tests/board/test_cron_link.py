@@ -137,3 +137,19 @@ def test_a_link_without_a_notebook_is_not_the_notebook_called_none(
     assert not cron_link.link_alive(link)
     job = CronJob(id="j1", name="x", payload=CronPayload(board=link, why="perche.md"))
     assert _why_page(job) == ""
+
+
+def test_a_one_time_zone_is_a_post_it_and_every_arrival_a_label() -> None:
+    from jenny.board.cron_link import is_note, note_of, note_words
+
+    assert is_note("zone", None, once=True)
+    assert not is_note("zone", None, once=False)
+    note = note_of(job_id="z1", scope="@notebook", text="binario", kind="zone",
+                   zone={"name": "Stazione", "radiusM": 200}, until_ms=5, once=True,
+                   watch="blind")
+    assert note is not None
+    assert note["when"] == {"kind": "zone", "name": "Stazione", "radiusM": 200,
+                            "untilMs": 5, "watch": "blind"}
+    assert note_words(note) == "on arrival at Stazione"
+    assert note_of(job_id="z2", scope="@notebook", text="x", kind="zone",
+                   zone={"name": "Stazione"}, once=False) is None

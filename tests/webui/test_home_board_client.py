@@ -245,6 +245,7 @@ _PURE = """
 import assert from 'node:assert/strict';
 const i18n = { locale: 'it', t: (k, p) => (k === 'board.since.kind.card_added' ? `${p.title} ok` : k), __T_OR__ };
 __TINT__
+__ZONEWATCH__
 __WHEN__
 __SINCE__
 __CLASSIFY__
@@ -258,6 +259,10 @@ assert.notDeepEqual(tintFor('acero'), tintFor('monstera'));
 assert.match(whenLabel({ kind: 'date', date: '2027-03-01', precision: 'month' }, 'it'), /2027/);
 assert.doesNotMatch(whenLabel({ kind: 'date', date: '2026-10-10' }, 'it'), /2026/);
 assert.equal(whenLabel({ kind: 'condition', field: 'umidita', op: '<', value: 30 }), 'umidita < 30');
+// Una zona scrive il posto; ferma, lo dice accanto.
+assert.equal(whenLabel({ kind: 'zone', name: 'Stazione', watch: 'ok' }), 'board.reminder.zone');
+assert.equal(whenLabel({ kind: 'zone', name: 'Stazione', watch: 'blind' }),
+  'board.reminder.zone · cron.zone.blind');
 
 // Una riga di «dall'ultima volta» di un tipo sconosciuto non esce come chiave.
 assert.equal(sinceText({ kind: 'card_added', title: 'Ginkgo' }), 'Ginkgo ok');
@@ -292,9 +297,11 @@ def test_the_pure_helpers_of_the_board() -> None:
     board = (ASSETS / "home-board.js").read_text(encoding="utf-8")
     reader = (ASSETS / "home-reader.js").read_text(encoding="utf-8")
     drawer = (ASSETS / "home-board-drawer.js").read_text(encoding="utf-8")
+    cron_view = (ASSETS / "shared" / "cron-view.js").read_text(encoding="utf-8")
     script = (
         _PURE.replace("__T_OR__", i18n_helpers())
         .replace("__TINT__", function(board, "tintFor"))
+        .replace("__ZONEWATCH__", function(cron_view, "zoneWatchText"))
         .replace("__WHEN__", function(board, "whenLabel"))
         .replace("__SINCE__", function(board, "sinceText"))
         .replace("__CLASSIFY__", function(reader, "classifyBoardLink"))

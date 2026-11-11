@@ -11,6 +11,7 @@ from loguru import logger
 
 from jenny.board.model import CONDITION_OPS
 from jenny.cron import store as cron_store
+from jenny.cron import zones as zone_rules
 from jenny.cron.session_turns import is_bound_cron_job
 from jenny.cron.silence_watchdog import alert_silently_broken_checks
 from jenny.cron.types import (
@@ -89,6 +90,44 @@ def _load_condition(raw: Any) -> dict[str, Any] | None:
             "field": field, "op": op, "value": raw.get("value")}
 
 
+def _load_number(raw: Any) -> float | None:
+    """Un numero finito dal disco, o ``None`` (un bool non è un numero)."""
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    value = float(raw)
+    return value if value == value and abs(value) != float("inf") else None
+
+
+def _parse_schedule(raw: dict[str, Any]) -> CronSchedule:
+    """La schedulazione di un job dello store. Solleva se non è usabile.
+
+    Una ``zone`` senza centro o raggio solleva: un Jenny più vecchio, che non
+    conosce le zone, riscrive lo store perdendo i campi che non sa leggere, e
+    una zona senza cerchio non si può né guardare né raccontare. Il job resta
+    nel database, non letto, con un ERROR nel log (``_load_store``).
+    """
+    kind = raw["kind"]
+    schedule = CronSchedule(
+        kind=kind,
+        at_ms=raw.get("atMs"),
+        every_ms=raw.get("everyMs"),
+        expr=raw.get("expr"),
+        tz=raw.get("tz"),
+        precision=_load_precision(raw.get("precision")),
+    )
+    if kind != "zone":
+        return schedule
+    lat, lng, radius = (_load_number(raw.get(k)) for k in ("lat", "lng", "radiusM"))
+    if lat is None or lng is None or radius is None:
+        raise ValueError("zone schedule without its circle")
+    until = raw.get("untilMs")
+    name = raw.get("zoneName")
+    schedule.lat, schedule.lng, schedule.radius_m = lat, lng, radius
+    schedule.zone_name = name if isinstance(name, str) and name.strip() else None
+    schedule.until_ms = until if isinstance(until, int) and not isinstance(until, bool) else None
+    return schedule
+
+
 def _validate_label_for_add(
     schedule: CronSchedule, *, why: Any, condition: Any,
 ) -> tuple[str | None, dict[str, Any] | None]:
@@ -98,6 +137,9 @@ def _validate_label_for_add(
     cond = _load_condition(condition)
     if condition is not None and cond is None:
         raise ValueError(f"invalid condition: {condition!r}")
+    if cond is not None and schedule.kind == "zone":
+        # La zona scatta all'arrivo: è già lei la condizione.
+        raise ValueError("a condition cannot go on a zone")
     if cond is not None and schedule.kind == "at":
         # Un singolo scatta una volta: con un filtro falso in quel momento non
         # direbbe mai niente. La condizione si guarda a una cadenza.
@@ -105,6 +147,11 @@ def _validate_label_for_add(
     if schedule.precision is not None and schedule.kind != "at":
         raise ValueError("precision is only for a one-time date")
     return (why.strip() if isinstance(why, str) else None), cond
+
+
+def _load_inside(raw: Any) -> bool | None:
+    """``zoneInside``: vero, falso, o ``None`` per «non si sa» (e per qualunque altro valore)."""
+    return raw if isinstance(raw, bool) else None
 
 
 def _parse_mode(raw: Any) -> Literal["reminder", "monitor"]:
@@ -195,6 +242,20 @@ def next_run_on_resume(job: CronJob, now_ms: int) -> int | None:
     return _compute_next_run(job.schedule, now_ms)
 
 
+def can_resume(job: CronJob, now_ms: int) -> bool:
+    """*job* in pausa si può riprendere adesso.
+
+    Un job a orario se ha ancora una prossima esecuzione
+    (:func:`next_run_on_resume`); una zona, che un'ora non ce l'ha, se non è
+    scaduta. Una regola sola per ``CronService.set_paused`` e per il pannello
+    (``webui/cron_api.py``), così «Riprendi» non compare dove il server rifiuterebbe.
+    """
+    if job.schedule.kind == "zone":
+        until = job.schedule.until_ms
+        return until is None or until > now_ms
+    return next_run_on_resume(job, now_ms) is not None
+
+
 def _next_run_with_catch_up(schedule: CronSchedule, now_ms: int) -> int | None:
     """``_compute_next_run``, ma un one-shot già scaduto non si perde.
 
@@ -243,6 +304,25 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
     if schedule.kind == "every" and (not schedule.every_ms or schedule.every_ms <= 0):
         raise ValueError("an interval schedule needs a positive interval")
 
+    if schedule.kind == "zone":
+        _validate_zone(schedule)
+    elif schedule.until_ms is not None:
+        raise ValueError("an end date (until) is only for a zone")
+
+
+def _validate_zone(schedule: CronSchedule) -> None:
+    """Il cerchio di una zona nuova: centro sulla Terra, raggio fra i limiti, un nome."""
+    lat, lng, radius = schedule.lat, schedule.lng, schedule.radius_m
+    if lat is None or lng is None or not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        raise ValueError("a zone needs a latitude in [-90, 90] and a longitude in [-180, 180]")
+    if radius is None or not (zone_rules.MIN_RADIUS_M <= radius <= zone_rules.MAX_RADIUS_M):
+        raise ValueError(
+            f"a zone radius goes from {zone_rules.MIN_RADIUS_M} to "
+            f"{zone_rules.MAX_RADIUS_M} metres"
+        )
+    if not (schedule.zone_name or "").strip():
+        raise ValueError("a zone needs the name of the place")
+
 
 # Quanto nel passato puo' cadere un singolo appena creato. Un giorno: un'ora
 # calcolata e poi arrivata tardi (un turno lungo) suona comunque, e cosi' un
@@ -265,6 +345,10 @@ def _refuse_past_one_time(schedule: CronSchedule, now_ms: int) -> None:
     modello riprova con l'anno giusto. Solo alla creazione: i job gia' salvati e
     scaduti a telefono spento devono ancora recuperare.
     """
+    if schedule.kind == "zone":
+        if schedule.until_ms is not None and schedule.until_ms <= now_ms:
+            raise ValueError("that end date is already past: a zone needs a future one")
+        return
     if schedule.kind != "at" or not schedule.at_ms or schedule.at_ms >= now_ms - _PAST_GRACE_MS:
         return
     today = datetime.fromtimestamp(now_ms / 1000).date().isoformat()
@@ -377,6 +461,18 @@ class CronService:
         # dal dispatcher — arriva dal bus — e senza questo aggancio l'esito di un
         # monitor delegato non avrebbe nessuna strada per tornare nel suo job.
         self.monitor_followup: "MonitorFollowup | None" = None
+        # Chiamata quando le zone cambiano (aggiunta, tolta, pausa, ripresa,
+        # scaduta): la sentinella (``zone_watch.ZoneWatcher.poke``) rilegge
+        # subito invece di aspettare il suo giro. ``None`` fuori dal gateway.
+        self.on_zones_changed: Callable[[], None] | None = None
+
+    def _zones_changed(self) -> None:
+        if self.on_zones_changed is None:
+            return
+        try:
+            self.on_zones_changed()
+        except Exception:  # noqa: BLE001 — un aggancio rotto non rompe lo scheduler
+            logger.exception("Cron: zone watcher not notified")
 
     def _is_unbound_agent_job(self, job: CronJob) -> bool:
         return job.payload.kind == "agent_turn" and not is_bound_cron_job(job)
@@ -421,14 +517,7 @@ class CronService:
             id=j["id"],
             name=j["name"],
             enabled=j.get("enabled", True),
-            schedule=CronSchedule(
-                kind=j["schedule"]["kind"],
-                at_ms=j["schedule"].get("atMs"),
-                every_ms=j["schedule"].get("everyMs"),
-                expr=j["schedule"].get("expr"),
-                tz=j["schedule"].get("tz"),
-                precision=_load_precision(j["schedule"].get("precision")),
-            ),
+            schedule=_parse_schedule(j["schedule"]),
             payload=CronPayload(
                 kind=j["payload"].get("kind", "agent_turn"),
                 mode=_parse_mode(j["payload"].get("mode")),
@@ -462,6 +551,9 @@ class CronService:
                 ),
                 pending_since_ms=j.get("state", {}).get("pendingSinceMs"),
                 condition_notified=bool(j.get("state", {}).get("conditionNotified")),
+                zone_inside=_load_inside(j.get("state", {}).get("zoneInside")),
+                zone_entered_at_ms=j.get("state", {}).get("zoneEnteredAtMs"),
+                zone_fix=j.get("state", {}).get("zoneFix") or None,
                 run_history=[
                     CronRunRecord(
                         run_at_ms=r["runAtMs"],
@@ -528,6 +620,14 @@ class CronService:
                 "expr": j.schedule.expr,
                 "tz": j.schedule.tz,
                 **({"precision": j.schedule.precision} if j.schedule.precision else {}),
+                # Solo per una zona: gli store senza zone restano identici.
+                **({
+                    "lat": j.schedule.lat,
+                    "lng": j.schedule.lng,
+                    "radiusM": j.schedule.radius_m,
+                    "zoneName": j.schedule.zone_name,
+                    "untilMs": j.schedule.until_ms,
+                } if j.schedule.kind == "zone" else {}),
             },
             "payload": {
                 "kind": j.payload.kind,
@@ -554,6 +654,11 @@ class CronService:
                 "couldNotCheckEscalatedAtMs": j.state.could_not_check_escalated_at_ms,
                 "pendingSinceMs": j.state.pending_since_ms,
                 "conditionNotified": j.state.condition_notified,
+                **({
+                    "zoneInside": j.state.zone_inside,
+                    "zoneEnteredAtMs": j.state.zone_entered_at_ms,
+                    "zoneFix": j.state.zone_fix,
+                } if j.schedule.kind == "zone" else {}),
                 "runHistory": [
                     {
                         "runAtMs": r.run_at_ms,
@@ -626,6 +731,12 @@ class CronService:
             if self._enforce_agent_binding(job):
                 continue
             if not job.enabled:
+                continue
+            if job.schedule.kind == "zone":
+                # Una zona non ha un'ora: il ``next_run_at_ms`` salvato è un
+                # arrivo da consegnare (o da riprovare), e va consegnato anche
+                # se l'app è stata giù nel mezzo. Lo mette e lo toglie solo
+                # ``fire_zone`` / ``_settle_zone``.
                 continue
             computed = _compute_next_run(job.schedule, now)
             # Solo ``every`` è relativo, quindi solo ``every`` poteva perdersi
@@ -964,6 +1075,8 @@ class CronService:
 
         if job.schedule.kind == "at":
             await self._settle_one_shot(job, now_ms=end_ms)
+        elif job.schedule.kind == "zone":
+            await self._settle_zone(job, now_ms=end_ms)
         elif job.paused_at_ms is None:
             # Compute next run
             job.state.next_run_at_ms = _compute_next_run(job.schedule, _now_ms())
@@ -1003,14 +1116,60 @@ class CronService:
                 "Cron: one-shot job '{}' ({}) never rang: its time passed more than a day "
                 "ago ({}), giving up", job.name, job.id, job.state.last_error or "",
             )
-        self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
+        await self._drop_job(job)
+
+    async def _drop_job(self, job: CronJob) -> None:
+        """Toglie *job* dallo store in memoria e, se era di un quaderno, il suo esito.
+
+        Il salvataggio lo fa chi chiama (``_on_timer`` dopo ogni job,
+        ``drop_expired_zones`` alla fine).
+        """
+        if self._store is not None:
+            self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
         if job.payload.board:
             from jenny.board.cron_link import forget_job
 
             try:
                 await forget_job(dict(job.payload.board), job.id)
             except Exception:  # noqa: BLE001 — il job è già andato, la bacheca è contorno
-                logger.exception("Cron: board not cleaned after one-shot {}", job.id)
+                logger.exception("Cron: board not cleaned after job {}", job.id)
+
+    async def _settle_zone(self, job: CronJob, *, now_ms: int) -> None:
+        """Cosa resta di una zona dopo che il suo arrivo è stato consegnato (o no).
+
+        * Ha suonato: «una volta» (``delete_after_run``) se ne va; «ogni
+          arrivo» resta, senza scadenza in agenda, e aspetta il prossimo arrivo
+          (che per la sentinella vuol dire: prima uscire, poi rientrare).
+        * Non ha suonato (``skipped``/``error``: niente rete, agente non pronto):
+          riprova fra ``_ONE_SHOT_RETRY_MS`` finché l'arrivo ha meno di
+          ``ZONE_RETRY_WINDOW_MS``. Dopo, non è più «sei appena arrivato»: niente
+          più tentativi, un WARNING, e la zona **resta armata** — ``zone_inside``
+          è vero, quindi riscatta al prossimo arrivo. Niente si perde in silenzio.
+        """
+        rang = job.state.last_status not in ("skipped", "error")
+        if rang:
+            if job.delete_after_run:
+                await self._drop_job(job)
+                self._zones_changed()
+            else:
+                job.state.next_run_at_ms = None
+            return
+        entered = job.state.zone_entered_at_ms or now_ms
+        if now_ms - entered <= zone_rules.ZONE_RETRY_WINDOW_MS:
+            if job.paused_at_ms is None:
+                job.state.next_run_at_ms = now_ms + _ONE_SHOT_RETRY_MS
+            logger.warning(
+                "Cron: zone job '{}' ({}) did not ring ({}): retrying in {}s",
+                job.name, job.id, job.state.last_status, _ONE_SHOT_RETRY_MS // 1000,
+            )
+            return
+        job.state.next_run_at_ms = None
+        logger.warning(
+            "Cron: zone job '{}' ({}) arrival not delivered within {} min ({}): "
+            "it stays armed for the next arrival",
+            job.name, job.id, zone_rules.ZONE_RETRY_WINDOW_MS // 60_000,
+            job.state.last_error or "",
+        )
 
     # ========== Public API ==========
 
@@ -1054,6 +1213,16 @@ class CronService:
         _refuse_past_one_time(schedule, _now_ms())
         mode = _validate_mode_for_add(mode)
         why, condition = _validate_label_for_add(schedule, why=why, condition=condition)
+        is_zone = schedule.kind == "zone"
+        if is_zone and mode != "reminder":
+            # All'arrivo si parla sempre: un monitor che tace all'arrivo è un
+            # arrivo perso.
+            raise ValueError("a zone is a reminder: it always speaks on arrival")
+        if is_zone and len(self.zone_jobs()) >= zone_rules.MAX_ZONES:
+            raise ValueError(
+                f"too many zones: at most {zone_rules.MAX_ZONES} can be armed; "
+                "remove or pause one first"
+            )
         # Un legame storto, qui, non torna ``None`` in silenzio come al caricamento:
         # un cron del quaderno diventerebbe personale, e un monitor perderebbe il
         # recinto del quaderno. Chi chiama sbaglia, e lo deve sapere.
@@ -1089,6 +1258,8 @@ class CronService:
         store.jobs.append(job)
         self._save_store()
         self._arm_timer()
+        if is_zone:
+            self._zones_changed()
 
         logger.info("Cron: added job '{}' ({})", name, job.id)
         return job
@@ -1135,14 +1306,24 @@ class CronService:
         if new_cond != job.payload.condition:
             job.payload.condition = new_cond
             job.state.condition_notified = False
+        zones_touched = job.schedule.kind == "zone" or (
+            schedule is not None and schedule.kind == "zone"
+        )
         if schedule is not None:
             job.schedule = schedule
             job.delete_after_run = job.delete_after_run or schedule.kind == "at"
+            # Un cerchio nuovo (o un'ora al posto di un cerchio): dove si era
+            # non vale più, e un arrivo in sospeso non è di questo posto.
+            job.state.zone_inside = None
+            job.state.zone_entered_at_ms = None
+            job.state.zone_fix = None
             if job.paused_at_ms is None:
                 job.state.next_run_at_ms = _next_run_with_catch_up(schedule, now)
         job.updated_at_ms = now
         self._save_store()
         self._arm_timer()
+        if zones_touched:
+            self._zones_changed()
         logger.info("Cron: updated job '{}' ({})", job.name, job.id)
         return job
 
@@ -1200,6 +1381,8 @@ class CronService:
         if removed:
             self._save_store()
             self._arm_timer()
+            if job.schedule.kind == "zone":
+                self._zones_changed()
             # I record di esecuzione sono indicizzati per id del job, e nessuno
             # li potava: restavano dietro al job per sempre. Non e' la
             # reincarnazione che colpiva i progetti (gli id dei job sono opachi,
@@ -1250,17 +1433,97 @@ class CronService:
         else:
             if job.paused_at_ms is None:
                 return "unchanged"
-            next_run = next_run_on_resume(job, now)
-            if next_run is None:
+            if not can_resume(job, now):
                 return "expired"
             job.enabled = True
             job.paused_at_ms = None
-            job.state.next_run_at_ms = next_run
+            if job.schedule.kind == "zone":
+                # Ripresa: come appena armata. Dove si è adesso lo dice la
+                # prossima lettura, e se si è già dentro non scatta.
+                job.state.zone_inside = None
+                job.state.next_run_at_ms = None
+            else:
+                job.state.next_run_at_ms = next_run_on_resume(job, now)
         job.updated_at_ms = now
         self._save_store()
         self._arm_timer()
+        if job.schedule.kind == "zone":
+            self._zones_changed()
         logger.info("Cron: {} job '{}' ({})", "paused" if paused else "resumed", job.name, job.id)
         return "paused" if paused else "resumed"
+
+    # ========== Zone (v. jenny/cron/zones.py, jenny/cron/zone_watch.py) ==========
+
+    def zone_jobs(self) -> list[CronJob]:
+        """Le zone accese (non in pausa), lette adesso dallo store.
+
+        Chi le guarda (la sentinella) non tiene questi oggetti attraverso un
+        ``await``: lo store si può rileggere nel mezzo, e un oggetto vecchio
+        mutato andrebbe perso. Torna sempre per id.
+        """
+        store = self._load_store()
+        return [j for j in store.jobs if j.enabled and j.schedule.kind == "zone"]
+
+    def _zone(self, job_id: str) -> CronJob | None:
+        store = self._load_store()
+        return next(
+            (j for j in store.jobs
+             if j.id == job_id and j.enabled and j.schedule.kind == "zone"),
+            None,
+        )
+
+    def set_zone_inside(self, job_id: str, inside: bool | None) -> bool:
+        """Dove si è rispetto alla zona *job_id*, senza scattare. ``False`` se non c'è."""
+        job = self._zone(job_id)
+        if job is None:
+            return False
+        if job.state.zone_inside is inside:
+            return True
+        job.state.zone_inside = inside
+        self._save_store()
+        return True
+
+    def fire_zone(
+        self, job_id: str, *, entered_at_ms: int, fix: dict[str, Any] | None = None,
+    ) -> bool:
+        """Si è appena entrati nella zona *job_id*: il job diventa dovuto adesso.
+
+        La sentinella non esegue niente: rende il job dovuto, e lo esegue il
+        timer come qualunque altro (stesso runner, stesso esito, stessa
+        consegna). ``run_job`` non andrebbe bene: non alza ``_timer_active``, e
+        uno store riletto a metà turno perderebbe lo stato del job.
+        """
+        job = self._zone(job_id)
+        if job is None:
+            return False
+        job.state.zone_inside = True
+        job.state.zone_entered_at_ms = entered_at_ms
+        job.state.zone_fix = dict(fix) if fix else None
+        job.state.next_run_at_ms = _now_ms()
+        job.updated_at_ms = job.state.next_run_at_ms
+        self._save_store()
+        self._arm_timer()
+        logger.info("Cron: arrived in zone '{}' ({})", job.name, job.id)
+        return True
+
+    async def drop_expired_zones(self, now_ms: int) -> list[str]:
+        """Toglie le zone (accese o in pausa) la cui scadenza è passata; ritorna gli id."""
+        store = self._load_store()
+        expired = [
+            j for j in store.jobs
+            if j.schedule.kind == "zone"
+            and j.schedule.until_ms is not None and j.schedule.until_ms <= now_ms
+            # Un arrivo ancora da consegnare si consegna: scade al giro dopo.
+            and not (j.enabled and j.state.next_run_at_ms is not None)
+        ]
+        if not expired:
+            return []
+        for job in expired:
+            logger.info("Cron: zone '{}' ({}) expired", job.name, job.id)
+            await self._drop_job(job)
+        self._save_store()
+        self._arm_timer()
+        return [j.id for j in expired]
 
     def move_notebook(
         self, old: str, new: str, *, old_session: str, new_session: str

@@ -730,7 +730,7 @@ def reminder_job(cron: Any, root: Path, rid: str) -> Any:
         raise BoardEditError("not_found", f"no reminder `{rid}` in this notebook")
     # Un ricorrente di questo quaderno c'è, ma non è un promemoria: dirgli «non
     # esiste» manda a cercarlo altrove (jenny_s22, 01/11/2026).
-    if not is_note(job.schedule.kind, job.payload.condition):
+    if not is_note(job.schedule.kind, job.payload.condition, job.delete_after_run):
         raise BoardEditError(
             "bad_request",
             f"`{rid}` is a recurring job, not a reminder: change it with the cron tool")
@@ -782,6 +782,10 @@ async def update_reminder(root: Path, rid: str, *, cron: Any, text: Any = None,
     page = await asyncio.to_thread(_why_page, root, why)
     if not (body or when is not None or every_ms is not None or page or clear_why):
         raise BoardEditError("bad_request", "nothing to change")
+    if job.schedule.kind == "zone" and (when is not None or every_ms is not None):
+        # Il posto di una zona lo cambia Jenny col tool ``cron`` (servono le
+        # coordinate); dalla bacheca se ne cambia solo il testo.
+        raise BoardEditError("bad_request", "a place reminder changes only its text here")
     changes: dict[str, Any] = {}
     if body:
         changes.update(name=body, message=body)

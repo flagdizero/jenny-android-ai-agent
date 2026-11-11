@@ -226,6 +226,9 @@ _ALLOWED: dict[str, str] = {
     "tool cron.parameters.properties.condition": (
         "idem — dice con quali schedulazioni vale il filtro, non dove va un lavoro"
     ),
+    "tool cron.parameters.properties.zone": (
+        "idem — dice con quali altri «quando» una zona non si combina, non dove va un lavoro"
+    ),
 }
 
 

@@ -781,7 +781,10 @@
       "daily": "ogni giorno alle {time}",
       "weekly": "ogni {days} alle {time}",
       "weekdays": "nei giorni feriali alle {time}",
-      "monthly": "il {days} di ogni mese alle {time}"
+      "monthly": "il {days} di ogni mese alle {time}",
+      "zone": "quando arrivi a {place}",
+      "zoneUntil": "quando arrivi a {place}, fino a {until}",
+      "zonePlace": "un posto"
     },
     "when": {
       "now": "adesso",
@@ -837,6 +840,12 @@
       },
       "expired": "Era un promemoria per una volta sola e la sua ora è passata: si può solo eliminare.",
       "failed": "Non ci sono riuscita. Riprova fra poco."
+    },
+    "zone": {
+      "waiting": "aspetta che arrivi",
+      "blind": "ferma: apri Jenny per riattivarla",
+      "noPermission": "ferma: manca il permesso di posizione",
+      "off": "ferma: la posizione è spenta"
     }
   },
   "onboarding": {
@@ -1697,7 +1706,8 @@
       "edit": "Modifica",
       "drop": "Togli",
       "dropConfirm": "Togliere «{text}»?",
-      "actions": "Altro su «{text}»"
+      "actions": "Altro su «{text}»",
+      "zone": "all'arrivo a {place}"
     },
     "app": {
       "open": "Apri l'app",

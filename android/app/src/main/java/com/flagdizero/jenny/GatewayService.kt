@@ -46,6 +46,23 @@ class GatewayService : Service() {
          *  una sveglia di lavoro, non un semplice "assicurati che sia su". */
         const val EXTRA_WAKE_TICK = "com.flagdizero.jenny.extra.WAKE_TICK"
 
+        /** Il request code della sveglia che ha portato il tick: Python lo usa
+         *  per svegliare solo chi l'aveva chiesta (il cron, la sentinella delle
+         *  zone). Assente (0) vale «tutti», come prima che esistesse. */
+        const val EXTRA_WAKE_CODE = "com.flagdizero.jenny.extra.WAKE_CODE"
+
+        /**
+         * Il service gira col tipo `location`? Del processo, come `isRunning`:
+         * lo legge `LocationBridge.backgroundState` da un thread di Python,
+         * dove nessuna istanza è a portata di mano. Senza quel tipo (avvio dal
+         * background: boot, aggiornamento, sveglia, watchdog) le letture di
+         * posizione a schermo spento falliscono, e la sentinella delle zone è
+         * cieca finché l'app non torna in primo piano (v. `MainActivity`).
+         */
+        @Volatile
+        var locationTypeHeld: Boolean = false
+            private set
+
         /** Testo scritto dall'utente nella tendina, da consegnare al gateway.
          *  Lo mette `ReplyReceiver`. */
         const val EXTRA_REPLY_TEXT = "com.flagdizero.jenny.extra.REPLY_TEXT"
@@ -321,6 +338,10 @@ class GatewayService : Service() {
      * la notifica non si ri-posta affatto.
      */
     private var hasLocationType = false
+        set(value) {
+            field = value
+            locationTypeHeld = value
+        }
 
     override fun onCreate() {
         super.onCreate()
@@ -392,7 +413,7 @@ class GatewayService : Service() {
         // processo vivo ma con Python morto non riavvierebbe proprio niente.
         startGateway()
         if (intent?.getBooleanExtra(EXTRA_WAKE_TICK, false) == true) {
-            deliverWakeTick()
+            deliverWakeTick(intent.getIntExtra(EXTRA_WAKE_CODE, 0))
         }
         // `START_STICKY` riconsegna un intent **nullo** a un riavvio di
         // sistema, mai il nostro: una risposta non può quindi essere consegnata
@@ -418,7 +439,7 @@ class GatewayService : Service() {
      * il tick si perde di proposito: `startGateway` lo sta alzando adesso e il
      * recupero della scadenza mancata è già lavoro di `CronService.start`.
      */
-    private fun deliverWakeTick() {
+    private fun deliverWakeTick(code: Int) {
         thread(name = "jenny-wake-tick") {
             try {
                 if (!Python.isStarted()) {
@@ -426,8 +447,8 @@ class GatewayService : Service() {
                     return@thread
                 }
                 val module = Python.getInstance().getModule("jenny.runtime.power")
-                val delivered = module.callAttr("on_wake_tick").toBoolean()
-                Log.i(TAG, "Wake tick delivered=$delivered")
+                val delivered = module.callAttr("on_wake_tick", code).toBoolean()
+                Log.i(TAG, "Wake tick delivered=$delivered (code=$code)")
             } catch (e: Exception) {
                 Log.e(TAG, "Wake tick delivery failed", e)
             } finally {
@@ -515,6 +536,7 @@ class GatewayService : Service() {
         // il watchdog deve vedere "giù". Lasciarlo a `true` su un service
         // distrutto è l'unico modo in cui il flag statico può mentire.
         isRunning = false
+        locationTypeHeld = false
         // La mascotte flottante non sopravvive al gateway che le dà la voce: è
         // una finestra che accetta domande, e senza nessuno che risponda
         // resterebbe a schermo a raccogliere testo per un agente che non c'è.
