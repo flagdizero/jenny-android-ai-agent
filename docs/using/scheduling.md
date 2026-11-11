@@ -131,7 +131,7 @@ What you get instead is that it shows:
 - **An end.** A recurring job can carry one, and Jenny is told to give it whenever the thing ends by itself, so a flight check does not outlive the flight.
 - **A count of wake-ups.** Every time a job starts a run of the model, it is counted. When the last 24 hours hold 50 or more, a pill appears above the message field: **"N wake-ups today · Check"**. Tapping it opens a sheet with the jobs that wake Jenny most, in order, each with a pause button (tap a row to remove it instead). **That's fine** closes the pill until the count doubles; it comes back by itself the next time the count climbs past 50 after having dropped below.
 
-The count covers your jobs and hers alike, and it is a notice, not a limit: a job that runs every minute because you asked for it keeps running. What the notice cannot do is stop a mistake while you sleep — it tells you the next time you look.
+The count covers your jobs and hers alike, but only those still on: once you remove or pause a job, its wake-ups stop counting, so the pill goes away as soon as nothing is left to check. A one-time job that keeps setting another one just like it ("check again in 10 minutes") counts as one, as long as the last one is waiting. It is a notice, not a limit: a job that runs every minute because you asked for it keeps running. What the notice cannot do is stop a mistake while you sleep — it tells you the next time you look.
 
 ### Notebook crons
 

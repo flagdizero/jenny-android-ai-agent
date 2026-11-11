@@ -199,7 +199,40 @@ def test_the_payload_carries_the_count_and_the_threshold(service) -> None:
     wakes = webui_cron_payload(service, config=object())["wakes"]
     assert wakes["total"] == 2 and wakes["threshold"] == WAKES_ALERT
     assert wakes["jobs"] == [{"id": job.id, "name": "volo", "autonomous": True, "count": 2,
-                              "last_ms": wakes["jobs"][0]["last_ms"]}]
+                              "last_ms": wakes["jobs"][0]["last_ms"], "active": True}]
+
+
+def test_removed_and_paused_jobs_leave_the_count(service) -> None:
+    gone = service.add_job(name="ritardi", message="x", **_bound_chat(),
+                           schedule=CronSchedule(kind="every", every_ms=60_000))
+    paused = service.add_job(name="meteo", message="x", **_bound_chat(),
+                             schedule=CronSchedule(kind="every", every_ms=60_000))
+    kept = service.add_job(name="piante", message="x", **_bound_chat(),
+                           schedule=CronSchedule(kind="every", every_ms=60_000))
+    for job, n in ((gone, 3), (paused, 2), (kept, 1)):
+        for _ in range(n):
+            service.note_wake(job)
+    service.remove_job(gone.id)
+    service.set_paused(paused.id, True)
+    wakes = webui_cron_payload(service, config=object())["wakes"]
+    assert wakes["total"] == 1
+    assert {j["name"]: j["active"] for j in wakes["jobs"]} == {
+        "ritardi": False, "meteo": False, "piante": True}
+    service.remove_job(kept.id)
+    assert webui_cron_payload(service, config=object())["wakes"]["total"] == 0
+
+
+def test_a_chain_of_one_time_jobs_counts_while_its_last_link_is_armed(service) -> None:
+    for _ in range(3):
+        link = service.add_job(name="ricontrolla", message="x", **_bound_chat(),
+                               autonomous=True,
+                               schedule=CronSchedule(kind="at", at_ms=_now_ms() + 60_000))
+        service.note_wake(link)
+        service.remove_job(link.id)
+    assert webui_cron_payload(service, config=object())["wakes"]["total"] == 0
+    service.add_job(name="ricontrolla", message="x", **_bound_chat(), autonomous=True,
+                    schedule=CronSchedule(kind="at", at_ms=_now_ms() + 60_000))
+    assert webui_cron_payload(service, config=object())["wakes"]["total"] == 3
 
 
 def test_a_cron_without_the_count_still_lists(service) -> None:

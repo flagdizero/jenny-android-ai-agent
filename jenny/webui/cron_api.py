@@ -280,18 +280,40 @@ def _read_wakes(cron: Any, now_ms: int) -> list[dict[str, Any]]:
         return []
 
 
+def _armed(cron: Any) -> tuple[set[str], set[str]]:
+    """Id e nomi dei job ancora accesi: quelli su cui la pastiglia ha un gesto."""
+    try:
+        jobs = [j for j in cron.list_jobs(include_disabled=True) if j.enabled]
+    except Exception:  # noqa: BLE001 — come per ``_read_wakes``
+        return set(), set()
+    return {j.id for j in jobs}, {job_display_name(j) for j in jobs}
+
+
 def _wakes_payload(cron: Any, now_ms: int) -> dict[str, Any]:
     rows = _read_wakes(cron, now_ms)
+    ids, names = _armed(cron)
+
+    # Conta solo chi sveglia ancora. La pastiglia dice «controlla»: dopo che
+    # l'utente ha tolto o messo in pausa i job, i risvegli che hanno lasciato
+    # sono storia, non qualcosa da controllare, e senza questo filtro la
+    # pastiglia restava su per 24 ore senza un gesto possibile. Anche per nome,
+    # non solo per id: un singolo che a ogni giro ne mette un altro uguale (il
+    # «ricontrolla fra 10 minuti») cambia id ogni volta ma e' la stessa cosa, e
+    # va contato tutto finche' l'ultimo anello e' acceso.
+    def active(row: dict[str, Any]) -> bool:
+        return row.get("job_id") in ids or (row.get("name") or "") in names
+
     return {
         "window_ms": WAKES_WINDOW_MS,
         "threshold": WAKES_ALERT,
-        "total": sum(int(r.get("count") or 0) for r in rows),
+        "total": sum(int(r.get("count") or 0) for r in rows if active(r)),
         # Per job, dal piu' frequente. ``id`` puo' non essere piu' nell'elenco
         # dei job: un singolo scattato se n'e' andato, e resta qui col suo nome.
+        # ``active`` dice se la riga entra nel conto.
         "jobs": [
             {"id": r.get("job_id"), "name": r.get("name") or "",
              "autonomous": bool(r.get("autonomous")), "count": int(r.get("count") or 0),
-             "last_ms": r.get("last_ms")}
+             "last_ms": r.get("last_ms"), "active": active(r)}
             for r in rows
         ],
     }
