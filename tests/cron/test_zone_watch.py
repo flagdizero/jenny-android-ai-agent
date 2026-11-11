@@ -283,3 +283,83 @@ async def test_the_cron_pokes_the_watcher_when_zones_change(cron, phone) -> None
     cron.on_zones_changed = watcher.poke
     _arm(cron)
     assert watcher._poke.is_set()
+
+
+# ── telefono fermo ──────────────────────────────────────────────────────────
+
+
+class _Motion:
+    def __init__(self, available: bool = True) -> None:
+        self.available = available
+        self.armed = False
+        self.arms = 0
+        self.fired = False
+
+    async def arm(self) -> bool:
+        self.arms += 1
+        self.armed = self.available
+        return self.available
+
+    async def disarm(self) -> None:
+        self.armed = False
+
+
+def _still_watcher(cron, phone, motion: _Motion) -> ZoneWatcher:
+    watcher = _watcher(cron, phone)
+    watcher._arm_motion = motion.arm
+    watcher._disarm_motion = motion.disarm
+    watcher._woke_by_motion = lambda: motion.fired
+    return watcher
+
+
+async def test_a_still_phone_reads_ever_less_and_arms_the_sensor(cron, phone) -> None:
+    _arm(cron)
+    phone.north_m = 1_000.0                     # vicino: 2 minuti
+    motion = _Motion()
+    watcher = _still_watcher(cron, phone, motion)
+
+    waits = [await watcher.check_once() for _ in range(6)]
+
+    assert waits[0] == zones.MIN_CHECK_S
+    assert waits[1:4] == [240, 480, 960]
+    assert waits[-1] == zones.MAX_CHECK_S
+    assert motion.armed and motion.arms == 1
+
+
+async def test_without_the_sensor_a_still_phone_stops_at_ten_minutes(cron, phone) -> None:
+    _arm(cron)
+    phone.north_m = 1_000.0
+    watcher = _still_watcher(cron, phone, _Motion(available=False))
+    waits = [await watcher.check_once() for _ in range(8)]
+    assert max(waits) == zones.STILL_CAP_NO_SENSOR_S
+
+
+async def test_moving_again_resets_the_cadence_and_disarms(cron, phone) -> None:
+    _arm(cron)
+    phone.north_m = 1_000.0
+    motion = _Motion()
+    watcher = _still_watcher(cron, phone, motion)
+    for _ in range(3):
+        await watcher.check_once()
+    assert motion.armed
+
+    phone.north_m = 700.0                       # si è mosso di 300 m
+    assert await watcher.check_once() == zones.MIN_CHECK_S
+    assert not motion.armed
+
+
+async def test_a_motion_wake_counts_as_moving(cron, phone) -> None:
+    _arm(cron)
+    phone.north_m = 1_000.0
+    motion = _Motion()
+    watcher = _still_watcher(cron, phone, motion)
+    for _ in range(3):
+        await watcher.check_once()
+
+    motion.fired = True
+    watcher._wake_event = asyncio.Event()
+    watcher._wake_event.set()
+    await watcher._wait(1.0)
+
+    assert watcher.stats.wakes == {"motion": 1}
+    assert watcher._still == 0 and not watcher._motion_armed

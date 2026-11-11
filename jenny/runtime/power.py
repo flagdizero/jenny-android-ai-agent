@@ -86,6 +86,12 @@ _CONSUMER_OF: dict[int, str] = {
 # a un'istanza.
 _WAKE_LOOP: asyncio.AbstractEventLoop | None = None
 _WAKE_EVENTS: dict[str, asyncio.Event] = {}
+# L'ultimo codice arrivato a ciascun consumatore: la sentinella delle zone vuole
+# sapere se l'ha svegliata la sua sveglia (8002) o il sensore di movimento (8003).
+_LAST_CODES: dict[str, int] = {}
+
+# Il sensore di movimento significativo (``MotionBridge.kt``), per la sentinella.
+_MOTION = BridgeCache("com.flagdizero.jenny.MotionBridge")
 
 
 def reset_power_state() -> None:
@@ -102,6 +108,8 @@ def reset_power_state() -> None:
     """
     global _STATE_LOCK, _WAKE_LOOP
     _BRIDGE.reset()
+    _MOTION.reset()
+    _LAST_CODES.clear()
     _STATE_LOCK = asyncio.Lock()
     _REFCOUNTS.clear()
     _HELD.clear()
@@ -369,6 +377,9 @@ def on_wake_tick(code: int = 0) -> bool:
         events = {target: events[target]}
     if loop is None or not events or loop.is_closed():
         return False
+    for consumer in events:
+        # Prima del ``set``: chi si sveglia legge il codice subito dopo.
+        _LAST_CODES[consumer] = int(code or 0)
     try:
         for event in events.values():
             loop.call_soon_threadsafe(event.set)
@@ -417,3 +428,28 @@ async def schedule_wake(at_ms: int, request_code: int) -> bool:
 async def cancel_wake(request_code: int) -> bool:
     """Annulla il risveglio programmato con quel ``request_code``."""
     return await _call("cancelWake", int(request_code))
+
+
+def last_wake_code(consumer: str) -> int:
+    """Il codice dell'ultimo tick arrivato a *consumer* (0 se nessuno, o senza codice)."""
+    return _LAST_CODES.get(consumer, 0)
+
+
+async def _motion_bridge(context: Any) -> Any:
+    return await _MOTION.get(context, resolve=_MOTION.resolve_class)
+
+
+async def arm_motion() -> bool:
+    """Arma il sensore di movimento: sveglia la sentinella quando il telefono riparte.
+
+    ``False`` fuori da Android, senza il sensore, o su un rifiuto: la sentinella
+    allora non allunga la cadenza oltre ``zones.STILL_CAP_NO_SENSOR_S``.
+    """
+    return bool(await _MOTION.call(_motion_bridge, get_android_context(), "arm",
+                                   timeout=_CALL_TIMEOUT_S, default=False, level="DEBUG"))
+
+
+async def disarm_motion() -> bool:
+    """Disarma il sensore di movimento. Mai solleva."""
+    return bool(await _MOTION.call(_motion_bridge, get_android_context(), "disarm",
+                                   timeout=_CALL_TIMEOUT_S, default=False, level="DEBUG"))

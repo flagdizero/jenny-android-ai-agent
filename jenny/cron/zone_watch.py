@@ -109,6 +109,9 @@ class ZoneWatcher:
         keep_awake: Callable[..., AbstractAsyncContextManager[Any]] | None = None,
         bind_wake: Callable[[], asyncio.Event | None] | None = None,
         on_state_change: Callable[[str], None] | None = None,
+        arm_motion: Callable[[], Awaitable[bool]] | None = None,
+        disarm_motion: Callable[[], Awaitable[Any]] | None = None,
+        woke_by_motion: Callable[[], bool] | None = None,
         now_ms: Callable[[], int] = _now_ms,
     ) -> None:
         self._cron = cron
@@ -121,7 +124,15 @@ class ZoneWatcher:
         self._keep_awake = keep_awake
         self._bind_wake = bind_wake
         self._on_state_change = on_state_change
+        self._arm_motion = arm_motion
+        self._disarm_motion = disarm_motion
+        self._woke_by_motion = woke_by_motion
         self._now = now_ms
+        # Telefono fermo: l'ultimo fix, quanti giri di fila nello stesso punto, e
+        # se il sensore di movimento è armato (lo sveglia quando riparte).
+        self._last_fix: Any = None
+        self._still = 0
+        self._motion_armed = False
         self.state = "ok"
         self.stats = ZoneStats(since_ms=now_ms())
         self._failures = 0
@@ -155,6 +166,7 @@ class ZoneWatcher:
             await self._cancel_wake()
         except Exception:  # noqa: BLE001
             logger.opt(exception=True).debug("Zones: wake not cancelled on stop")
+        await self._set_motion(False)
         self._log_stats(force=True)
         if _CURRENT is self:
             _CURRENT = None
@@ -188,6 +200,8 @@ class ZoneWatcher:
             # Niente da guardare: niente letture, niente episodio cieco in corso.
             self._failures = 0
             self._end_blind_episode()
+            self._last_fix, self._still = None, 0
+            await self._set_motion(False)
             return None
         self.stats.rounds += 1
         armed = [_zone_of(job) for job in jobs]
@@ -219,7 +233,43 @@ class ZoneWatcher:
             after.append(zones.Zone(zone.job_id, zone.lat, zone.lng, zone.radius_m,
                                     inside, zone.every_arrival))
         self._log_stats()
-        return zones.next_check_s(after, fix)
+        return await self._stretch_if_still(fix, zones.next_check_s(after, fix))
+
+    # ── telefono fermo ──────────────────────────────────────────────────────
+
+    async def _stretch_if_still(self, fix: Any, delay: float) -> float:
+        """A telefono fermo la cadenza si allunga: niente si avvicina a niente.
+
+        Due fix di fila nello stesso punto (``zones.is_still``): il ritardo
+        raddoppia a ogni giro fermo e si arma il sensore di movimento, che
+        sveglia la sentinella appena il telefono riparte; il tetto è
+        ``MAX_CHECK_S``. Senza sensore il raddoppio si ferma a
+        ``STILL_CAP_NO_SENSOR_S``: nessuno avviserebbe della ripartenza.
+        Senza, una zona fissa a 500 m da casa farebbe leggere ogni 2 minuti
+        per sempre.
+        """
+        if zones.is_still(self._last_fix, fix):
+            self._still += 1
+        else:
+            self._still = 0
+            await self._set_motion(False)
+        self._last_fix = fix
+        if self._still == 0:
+            return delay
+        armed = await self._set_motion(True)
+        cap = zones.MAX_CHECK_S if armed else zones.STILL_CAP_NO_SENSOR_S
+        return max(delay, min(float(cap), delay * 2 ** self._still))
+
+    async def _set_motion(self, on: bool) -> bool:
+        try:
+            if on and not self._motion_armed and self._arm_motion is not None:
+                self._motion_armed = bool(await self._arm_motion())
+            elif not on and self._motion_armed and self._disarm_motion is not None:
+                await self._disarm_motion()
+                self._motion_armed = False
+        except Exception:  # noqa: BLE001 — senza sensore si va solo più piano
+            logger.opt(exception=True).debug("Zones: motion sensor not switched")
+        return self._motion_armed
 
     async def _read(self, armed: list[zones.Zone]) -> Any:
         """La rete prima; il GPS se la rete non risponde o non basta a decidere."""
@@ -322,6 +372,12 @@ class ZoneWatcher:
                 waiter.cancel()
         for task in done:
             cause = waiters[task]
+            if cause == "alarm" and self._woke_by_motion is not None and self._woke_by_motion():
+                # Il telefono è ripartito: il sensore (one-shot) si è già
+                # disarmato da sé, e il prossimo giro conta da capo.
+                cause = "motion"
+                self._still = 0
+                self._motion_armed = False
             self.stats.wakes[cause] = self.stats.wakes.get(cause, 0) + 1
         # Azzerati prima del giro, non dopo: un poke che arriva durante il giro
         # deve provocarne un altro, non essere mangiato.
@@ -386,6 +442,9 @@ def build_watcher(
         keep_awake=power.keep_awake,
         bind_wake=bind,
         on_state_change=on_state_change,
+        arm_motion=power.arm_motion,
+        disarm_motion=power.disarm_motion,
+        woke_by_motion=lambda: power.last_wake_code("zone") == power.WAKE_REQUEST_CODE_MOTION,
     )
 
 
