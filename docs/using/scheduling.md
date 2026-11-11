@@ -45,6 +45,7 @@ You don't create these from a screen — you just ask, in plain language, and Je
 - "Remind me to renew the passport in March."
 - "Every day at 9am, ask me how I slept."
 - "Every 2 hours, check if my site is up and tell me only if it's down."
+- "When I get to the station, tell me which platform my train leaves from."
 - "List my reminders."
 - "Cancel the pizza reminder."
 
@@ -99,6 +100,20 @@ Monitor mode only makes sense on a repeating schedule, so **it cannot be combine
 ### Conditions on an app's value
 
 When what you are waiting for is a number one of your [apps](board.md#app) already reads — the soil humidity of a plant, a price, a sensor — a recurring job can carry a **condition** on it: "every 6 hours, check whether the basil's humidity is below 15 and tell me". At each run the app is read and compared **in code**, before any model call: while the condition is false the run ends there and costs nothing. When it becomes true, one turn starts with the value just read, and the job then stays quiet until the condition goes back to false — you are told once, not every six hours. The cadence is yours: if you don't say how often to check, Jenny asks. The workshop shows the condition in front of the schedule, like "humidity < 15 · every 6 hours".
+
+### Arriving at a place
+
+Some things are about *where*, not *when*: "when I get to the station, tell me the platform", "every time I'm at the supermarket, read me the shopping list". For these Jenny arms a **zone**: a circle around a place (200 m by default, wider for a park or a district), found with `find_place` or taken from where you are now. When the phone arrives inside it, the job fires like a reminder, and Jenny's message says where you arrived.
+
+- **Once or every time.** By default a zone fires on the first arrival and goes away, and it expires at the end of the day (the next day if you ask late in the evening); you can give it an end date. "Every time" zones fire at each arrival, after you have left and come back, and may never expire.
+- **Already there.** A zone armed while you are inside it does not fire until you leave and come back: "when I get to the supermarket", said at the supermarket, does not ring at once.
+- **No model in the loop.** The position is compared with the zones in code, at no cost; Jenny wakes up only on an arrival. With no zone armed the position is never read for this.
+- **How often it looks.** The cadence follows the distance: rarely when the nearest zone is far (at most every 30 minutes), every 2 minutes when you are close. While the phone lies still, it looks less and less, and the phone's motion sensor wakes it as soon as you move. It reads the position from the network first (Wi-Fi and cell towers, cheap) and switches the GPS on only when that is not precise enough. Expect an arrival to be noticed within a couple of minutes; indoors, where the GPS does not reach, it can take longer.
+- **No network on arrival.** If the message cannot go out (no connection, the model not answering), it is tried again every 5 minutes for an hour, and the message says how late it is. After that the zone stays armed for the next arrival.
+- **On hold after a restart.** Android lets Jenny read the position with the screen off only after the app has been opened once since the phone (or Jenny) restarted. Until then zones are on hold: the workshop and the board say so, and after 30 minutes a notification asks you to open Jenny. Opening it is enough.
+- **Limits.** At most 20 zones at a time. A morning job may arm the day's zones itself, but only one-time zones ending within a week. The board shows a one-time zone as a sticky-note line ("on arrival at…"), an "every time" zone as an automation; from the board you can change its text, while its place is changed by asking Jenny. An older version of the app opening the same data drops the zones' circles.
+
+Zones use the location permission Jenny already has: nothing new to grant. See [Location](location.md).
 
 ### Notebook crons
 

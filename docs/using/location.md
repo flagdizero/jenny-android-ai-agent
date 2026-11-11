@@ -34,6 +34,10 @@ The passive context line, on the other hand, fails silently by design: it is jus
 
 Jenny never requests background location access (`ACCESS_BACKGROUND_LOCATION`) — reads only happen while the app's foreground service is alive, which on Android is the same lifetime as the gateway itself (see [Android permissions](../reference/android-permissions.md)).
 
+## Place reminders (zones)
+
+The one case in which Jenny reads the position on her own is a reminder about a place ("when I get to the station…"), described in [Arriving at a place](scheduling.md#arriving-at-a-place). While at least one zone is armed, the code reads the position from time to time — from the network first, the GPS only when needed — and compares it with the zones on the phone: the readings are not sent anywhere and cost no model call. Only an arrival starts a turn, and that turn is told the place you arrived at, not your coordinates. With no zone armed, nothing is read. Both gates above apply: with the toggle off Jenny refuses to arm a zone, and without the permission the zones are on hold.
+
 ## Say it plainly: this reaches your LLM provider every turn
 
 If the toggle is on and the permission is granted, **your approximate location is sent to whichever LLM provider you've configured on every single message you send** — not just when you explicitly ask about your location. It rides along in the same context block as the current time and other runtime info. This is the trade-off of the "always available" design: Jenny can answer location-aware questions naturally, but that also means a steady stream of your whereabouts leaves the device on every turn, going wherever your configured provider (and, if applicable, its own subprocessors) sends inference traffic.
